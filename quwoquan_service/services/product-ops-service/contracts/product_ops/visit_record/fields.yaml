@@ -1,0 +1,85 @@
+fields:
+- name: userId
+  source: userId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: targetType
+  source: targetType
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: page/post/circle/user
+  role: authoritative_state
+- name: targetKey
+  source: targetKey
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: visitCount
+  source: visitCount
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_1
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: lastSeenAt
+  source: lastSeenAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: sessionId
+  source: sessionId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: 超前
+  role: authoritative_state
+- name: source
+  source: source
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: feed/search/share/notification（超前）
+  role: authoritative_state
+- name: timestamp
+  source: timestamp
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state

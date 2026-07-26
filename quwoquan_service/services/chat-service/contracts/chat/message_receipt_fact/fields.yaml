@@ -1,0 +1,55 @@
+description: 消息已读回执（仅 receiptEnabled 会话启用）
+fields:
+- name: _id
+  source: _id
+  type: ObjectId
+  constraints:
+  - PK
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: append_only_fact
+- name: messageId
+  source: messageId
+  type: ObjectId
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+  reference: true
+- name: conversationId
+  source: conversationId
+  type: ObjectId
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+  reference: true
+- name: userId
+  source: userId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+  reference: true
+- name: readAt
+  source: readAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact

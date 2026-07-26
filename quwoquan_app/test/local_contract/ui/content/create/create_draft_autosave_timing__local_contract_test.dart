@@ -1,9 +1,9 @@
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md#gwt-002
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
@@ -14,6 +14,7 @@ import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provi
 import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 class _CreateHostApp extends StatelessWidget {
   const _CreateHostApp();
@@ -40,7 +41,7 @@ Widget _buildApp() {
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
       ...mockContentFacetOverrides(MockContentRepository()),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
@@ -59,7 +60,7 @@ Widget _buildCreatePageApp({String? initialTabKey}) {
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
       ...mockContentFacetOverrides(MockContentRepository()),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),

@@ -2,14 +2,17 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
-import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
@@ -29,6 +32,7 @@ class _CareerTagOption {
     required this.parentTagRef,
     required this.parentLabel,
     required this.categoryId,
+    required this.taxonomyReleaseId,
   });
 
   final String tagRef;
@@ -36,25 +40,28 @@ class _CareerTagOption {
   final String parentTagRef;
   final String parentLabel;
   final String categoryId;
+  final String taxonomyReleaseId;
 }
 
 class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
   static const double _pagePadding = AppSpacing.containerMd;
-  static const double _gridSpacing = 10;
-  static const double _tagTileHeight = AppSpacing.minInteractiveSize + 10;
+  static const double _gridSpacing = AppSpacing.ten;
+  static const double _tagTileHeight =
+      AppSpacing.minInteractiveSize + AppSpacing.ten;
 
   final Map<String, _CareerTagOption> _tagByRef = <String, _CareerTagOption>{};
   final Map<String, List<_CareerTagOption>> _interestByCategory =
       <String, List<_CareerTagOption>>{};
   List<_CareerTagOption> _occupationOptions = const <_CareerTagOption>[];
   List<String> _initialInterestRefs = const <String>[];
+  String _taxonomyReleaseId = '';
   String _initialOccupationRef = '';
   String _occupationTagRef = '';
   List<String> _interestTagRefs = const <String>[];
   String _selectedCategoryId =
       UserProfileUIConfig.careerInterestCatalog.defaultInterestCategoryId;
   bool _loading = true;
-  bool _loadFailed = false;
+  Object? _loadError;
   bool _saving = false;
   bool _scrolling = false;
 
@@ -62,23 +69,63 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       _occupationTagRef != _initialOccupationRef ||
       !_sameOrderedList(_interestTagRefs, _initialInterestRefs);
 
+  late final DateTime _enteredAt;
+  JourneyEventTracker? _journeyTracker;
+
   @override
   void initState() {
     super.initState();
+    _enteredAt = DateTime.now();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _journeyTracker = ref.read(journeyEventTrackerProvider);
+      unawaited(
+        _journeyTracker!.trackAction(
+          journey: 'career_interest',
+          action: 'enter',
+          pageName: 'CareerInterestPage',
+        ),
+      );
+    });
     unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    final tracker = _journeyTracker;
+    if (tracker != null) {
+      unawaited(
+        tracker.trackAction(
+          journey: 'career_interest',
+          action: 'exit',
+          pageName: 'CareerInterestPage',
+          payload: <String, Object?>{
+            'durationMs': DateTime.now().difference(_enteredAt).inMilliseconds,
+          },
+        ),
+      );
+    }
+    super.dispose();
   }
 
   Future<void> _load() async {
     setState(() {
       _loading = true;
-      _loadFailed = false;
+      _loadError = null;
     });
     try {
-      final userRepo = ref.read(userProfileRepositoryProvider);
-      final tagRepo = ref.read(tagRepositoryProvider);
-      final snapshot = await userRepo.getProfileEditSnapshot();
+      final profileEditQuery = ref.read(
+        profileEditQueryProvider(AppUiSurfaces.profileCareerInterests),
+      );
+      final tagRepo = ref.read(tagCatalogQueryProvider);
+      final snapshot = await profileEditQuery.getProfileEditSnapshot();
       final occupationOptions = await _loadOccupationOptions(tagRepo);
       final interestByCategory = await _loadInterestOptions(tagRepo);
+      final taxonomyReleaseId = _requireSingleTaxonomyReleaseId(
+        occupationOptions.followedBy(
+          interestByCategory.values.expand((options) => options),
+        ),
+      );
       final tagByRef = <String, _CareerTagOption>{};
       for (final option in occupationOptions) {
         tagByRef[option.tagRef] = option;
@@ -88,7 +135,12 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
           tagByRef[option.tagRef] = option;
         }
       }
-      await _resolveMissingSelectedTags(tagRepo, snapshot, tagByRef);
+      await _resolveMissingSelectedTags(
+        tagRepo,
+        snapshot,
+        tagByRef,
+        taxonomyReleaseId,
+      );
       if (!mounted) {
         return;
       }
@@ -104,22 +156,23 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
         _occupationTagRef = _initialOccupationRef;
         _initialInterestRefs = _dedupe(snapshot.interestTagRefs);
         _interestTagRefs = List<String>.from(_initialInterestRefs);
+        _taxonomyReleaseId = taxonomyReleaseId;
         _loading = false;
-        _loadFailed = false;
+        _loadError = null;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
         _loading = false;
-        _loadFailed = true;
+        _loadError = error;
       });
     }
   }
 
   Future<List<_CareerTagOption>> _loadOccupationOptions(
-    TagRepository tagRepo,
+    TagCatalogQuery tagRepo,
   ) async {
     final catalog = UserProfileUIConfig.careerInterestCatalog;
     final options = <_CareerTagOption>[];
@@ -134,6 +187,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
             parentTagRef: category.tagRef,
             parentLabel: parentLabel,
             categoryId: category.id,
+            taxonomyReleaseId: child.releaseId,
           ),
         );
       }
@@ -142,7 +196,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
   }
 
   Future<Map<String, List<_CareerTagOption>>> _loadInterestOptions(
-    TagRepository tagRepo,
+    TagCatalogQuery tagRepo,
   ) async {
     final catalog = UserProfileUIConfig.careerInterestCatalog;
     final result = <String, List<_CareerTagOption>>{};
@@ -160,6 +214,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
             parentTagRef: category.tagRef,
             parentLabel: parentLabel,
             categoryId: category.id,
+            taxonomyReleaseId: child.releaseId,
           ),
       ];
     }
@@ -172,9 +227,10 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
   }
 
   Future<void> _resolveMissingSelectedTags(
-    TagRepository tagRepo,
+    TagCatalogQuery tagRepo,
     ProfileEditSnapshotData snapshot,
     Map<String, _CareerTagOption> tagByRef,
+    String taxonomyReleaseId,
   ) async {
     final refs = <String>[
       if (snapshot.occupationTagRef.trim().isNotEmpty)
@@ -193,6 +249,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
         parentTagRef: parentRef,
         parentLabel: _leafLabel(parentRef),
         categoryId: parentRef,
+        taxonomyReleaseId: taxonomyReleaseId,
       );
     }
   }
@@ -252,17 +309,27 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
         ..._interestTagRefs,
       ];
       final validation = await ref
-          .read(tagRepositoryProvider)
-          .validateRefs(refs);
+          .read(tagCatalogQueryProvider)
+          .validateRefs(
+            expectedTaxonomyReleaseId: _taxonomyReleaseId,
+            tagRefs: refs,
+          );
       if (validation.invalid.isNotEmpty) {
-        throw StateError(validation.invalid.join(','));
+        // 结构化校验失败：走 TAG.USER.invalid_tag_ref 语义（对齐对象级 errors.yaml），
+        // 不抛裸 StateError（军规 R18）。
+        throw CloudErrorMapper.invalidResponse(
+          message: UITextConstants.careerInterestInvalidTagToast,
+          requestPath: 'career-interest/validate',
+          functionModule: 'career_interest_page',
+        );
       }
       await ref
-          .read(userProfileRepositoryProvider)
-          .updateProfile(
-            ProfileEditUpdatePayload(
+          .read(profileCommandWriterProvider)
+          .updateUserProfile(
+            UpdateUserProfileCommand(
               occupationTagRef: _occupationTagRef,
               interestTagRefs: _interestTagRefs,
+              expectedTaxonomyReleaseId: _taxonomyReleaseId,
             ),
           );
       if (!mounted) {
@@ -321,6 +388,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
           .where((ref) => ref != tagRef)
           .toList(growable: false);
     });
+    _reportTagFeedback(tagRef: tagRef, action: 'ignore');
   }
 
   void _addInterest(String tagRef) {
@@ -335,6 +403,24 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
     setState(() {
       _interestTagRefs = <String>[..._interestTagRefs, tagRef];
     });
+    _reportTagFeedback(tagRef: tagRef, action: 'click');
+  }
+
+  /// 标签添加/移除动作产出 TagFeedback 事实（fire-and-forget，不阻断编辑）。
+  void _reportTagFeedback({required String tagRef, required String action}) {
+    unawaited(
+      ref
+          .read(tagFeedbackCommandWriterProvider)
+          .reportTagFeedback(
+            ReportTagFeedbackCommand(tagRef: tagRef, action: action),
+          )
+          .catchError((Object error) {
+            if (kDebugMode) {
+              debugPrint('tag feedback degraded: $error');
+            }
+            return const TagFeedbackAck(accepted: false);
+          }),
+    );
   }
 
   void _reorderInterest(int oldIndex, int newIndex) {
@@ -409,12 +495,19 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
     if (_loading) {
       return const Center(child: CupertinoActivityIndicator());
     }
-    if (_loadFailed) {
-      return Center(
-        child: CupertinoButton(
-          onPressed: () => unawaited(_load()),
-          child: const Text(UITextConstants.careerInterestLoadingFailed),
+    if (_loadError != null) {
+      return AppPageErrorState(
+        semantic: UiErrorSemanticResolver.resolve(
+          context,
+          error: _loadError!,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
         ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry) {
+            await _load();
+          }
+        },
       );
     }
     return NotificationListener<ScrollNotification>(
@@ -529,7 +622,9 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       padding: const EdgeInsets.all(AppSpacing.containerXs),
       decoration: BoxDecoration(
         color: AppColors.iosSystemBackground(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTen + 2),
+        borderRadius: BorderRadius.circular(
+          AppSpacing.radiusTen + AppSpacing.two,
+        ),
         border: Border.all(
           color: AppColors.iosSeparator(context).withValues(alpha: 0.45),
         ),
@@ -633,6 +728,28 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       return _leafLabel(_occupationTagRef);
     }
     return '${option.parentLabel} · ${option.label}';
+  }
+
+  static String _requireSingleTaxonomyReleaseId(
+    Iterable<_CareerTagOption> options,
+  ) {
+    final releaseIds = <String>{};
+    for (final option in options) {
+      final releaseId = option.taxonomyReleaseId.trim();
+      if (releaseId.isEmpty) {
+        throw const FormatException(
+          'career interest tag is missing taxonomyReleaseId',
+        );
+      }
+      releaseIds.add(releaseId);
+    }
+    if (releaseIds.length != 1) {
+      throw FormatException(
+        'career interest catalog must use one taxonomy release; '
+        'found ${releaseIds.length}',
+      );
+    }
+    return releaseIds.single;
   }
 
   static BoxDecoration _cardDecoration(BuildContext context) => BoxDecoration(

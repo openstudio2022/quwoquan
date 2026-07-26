@@ -14,10 +14,12 @@
 ///   - 关注主体横滑                    <- following_subject_strip_test
 ///
 /// gamma-local 数据现状（诚实标注，影响可在 App 内演示的范围）：
-///   1) 推荐频道 feedQuery = {category: micro, identity: moment}（content-service 走
-///      identity=moment 的 repository 分页 ListPublished 按 createdAt DESC 扫描，绕过
-///      引擎）。已按 env-seed-first 向 gamma quwoquan_content 注入 24 条多形态 moment
-///      （applier=quwoquan_service/services/seed-box/scripts/apply_content_moment_channel_seed.py，
+///   1) 推荐频道已收口频道语义（B1）：feedQuery = {channel: recommend}，服务端
+///      GET /content/feed?channelId=recommend 进推荐引擎（FeedDiscovery + home
+///      surface + channelId 归因），identity/type 不再参与；seed 内容经引擎
+///      PostProjectionSource 兜底召回仍可返回。已按 env-seed-first 向 gamma
+///      quwoquan_content 注入 24 条多形态 moment
+///      （applier=quwoquan_service/services/content-service/cmd/jobs/seed-moment-channel/main.py，
 ///      fixture=contracts/metadata/_shared/test_fixtures/
 ///      content_recommendation_moment_channel.gamma_seed.json；全新非抑制作者 +
 ///      全新 id t4hrec_moment_* + 既有 archived-* 媒体 object key，createdAt 递减唯一
@@ -52,10 +54,10 @@ library;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
-import 'package:quwoquan_app/core/constants/app_strings.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
+import 'package:quwoquan_app/l10n/app_localizations_zh.dart';
 
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
@@ -180,7 +182,7 @@ void main() {
       expect(openedMore, isTrue, reason: '应能点击首卡「更多」入口');
       await $.pump(const Duration(milliseconds: 400));
 
-      final notInterested = $(find.text(AppStrings.notInterested));
+      final notInterested = $(find.text(AppLocalizationsZh().notInterested));
       await notInterested.waitUntilVisible(timeout: const Duration(seconds: 6));
       await notInterested.tap();
       await $.pump(const Duration(milliseconds: 400));

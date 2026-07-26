@@ -26,17 +26,17 @@ class _ChatPageState extends ConsumerState<ChatPage>
   }
 
   static const List<String> _messageSubTabs = [
-    UITextConstants.contactsTabAll,
-    UITextConstants.unread,
-    UITextConstants.groupChat,
-    UITextConstants.chatPrivateMessages,
-    UITextConstants.chatNotifications,
+    ChatText.contactsTabAll,
+    ChatText.unread,
+    ChatText.groupChat,
+    ChatText.chatPrivateMessages,
+    ChatText.chatNotifications,
   ];
   static const List<String> _contactsSubTabs = [
-    UITextConstants.contactsTabAll,
-    UITextConstants.contactsTabMutualFollow,
-    UITextConstants.contactsTabCircles,
-    UITextConstants.contactsTabGroups,
+    ChatText.contactsTabAll,
+    ChatText.contactsTabMutualFollow,
+    ChatText.contactsTabCircles,
+    ChatText.contactsTabGroups,
   ];
   void _onScroll() {
     final y = _scrollController.hasClients ? _scrollController.offset : 0.0;
@@ -200,7 +200,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
   ) {
     final tabs = <TabItem>[
       TabItem(id: 'messages', label: AppConceptConstants.messages),
-      TabItem(id: 'contacts', label: UITextConstants.chatPrimaryContacts),
+      TabItem(id: 'contacts', label: ChatText.chatPrimaryContacts),
     ];
     final activeTabId = _mainTabIndex == 0 ? 'messages' : 'contacts';
 
@@ -262,9 +262,18 @@ class _ChatPageState extends ConsumerState<ChatPage>
       numberBadges = {};
       dotBadges = {};
 
-      final unreadIndex = _messageSubTabs.indexOf(UITextConstants.unread);
+      final unreadIndex = _messageSubTabs.indexOf(ChatText.unread);
       if (unreadIndex != -1 && unreadCount != null && unreadCount > 0) {
         numberBadges[unreadIndex] = unreadCount;
+      }
+      final notificationUnread = ref
+          .watch(appMessageUnreadCountProvider)
+          .maybeWhen(data: (count) => count, orElse: () => 0);
+      final notificationIndex = _messageSubTabs.indexOf(
+        ChatText.chatNotifications,
+      );
+      if (notificationIndex != -1 && notificationUnread > 0) {
+        numberBadges[notificationIndex] = notificationUnread;
       }
     }
 
@@ -294,6 +303,15 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final messageFilter = _messageHomeFilterForSubTab(
       _messageSubTabs[_subTabIndex],
     );
+    if (messageFilter == 'notification') {
+      return _buildNotificationInboxContent(
+        context,
+        fgPrimary,
+        fgSecondary,
+        listItemBackground,
+        listDividerColor,
+      );
+    }
     final messageRows = ref.watch(messageHomeRowsStateProvider(messageFilter));
     final greetingInbox = ref.watch(chatGreetingInboxProvider(20));
     final pendingGreetings = greetingInbox.maybeWhen(
@@ -377,7 +395,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
             fgSecondary: fgSecondary,
             backgroundColor: listItemBackground,
             dividerColor: listDividerColor,
-            onTap: () => _showGreetingInboxSheet(context, pendingGreetings),
+            onTap: () => context.push(AppRoutePaths.greetingInbox),
           );
         }
         final itemIndex = shouldShowGreetingInbox
@@ -391,14 +409,99 @@ class _ChatPageState extends ConsumerState<ChatPage>
           backgroundColor: listItemBackground,
           dividerColor: listDividerColor,
           onTap: () {
-            if (item.isNotification) {
-              return;
-            }
             context.push(AppRoutePaths.chatDetail(id: item.id));
           },
         );
       },
     );
+  }
+
+  Widget _buildNotificationInboxContent(
+    BuildContext context,
+    Color fgPrimary,
+    Color fgSecondary,
+    Color listItemBackground,
+    Color listDividerColor,
+  ) {
+    final inbox = ref.watch(notificationInboxProvider);
+    return inbox.when(
+      loading: () => Center(
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.lg),
+          child: CupertinoActivityIndicator(),
+        ),
+      ),
+      error: (error, _) => AppPageErrorState(
+        semantic: _chatListBlockingErrorSemantic(context, error),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            ref.invalidate(notificationInboxProvider);
+          }
+        },
+      ),
+      data: (messages) {
+        if (messages.isEmpty) {
+          return _buildConversationEmptyState(
+            fgSecondary: fgSecondary,
+            subTab: ChatText.chatNotifications,
+          );
+        }
+        return ListView.builder(
+          controller: _scrollController,
+          padding: EdgeInsets.only(
+            bottom:
+                MediaQuery.viewPaddingOf(context).bottom +
+                AppSpacing.bottomNavBarHeight(context),
+          ),
+          itemCount: messages.length,
+          itemBuilder: (context, index) {
+            final message = messages[index];
+            return _NotificationInboxTile(
+              message: message,
+              fgPrimary: fgPrimary,
+              fgSecondary: fgSecondary,
+              backgroundColor: listItemBackground,
+              dividerColor: listDividerColor,
+              onTap: () => _openNotificationMessage(context, message),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _openNotificationMessage(
+    BuildContext context,
+    AppMessage message,
+  ) async {
+    unawaited(
+      ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'notification_inbox',
+            action: 'notification_row_tap',
+            pageName: 'chat_list',
+            targetType: message.target.targetType,
+            targetKey: message.messageId,
+          ),
+    );
+    final navigation = AppMessageNavigationTarget.fromMessage(message);
+    if (navigation != null && context.mounted) {
+      context.push(navigation.location);
+    }
+    if (!message.read) {
+      try {
+        await markAppMessageReadAndRefresh(ref, message.messageId);
+      } catch (error, stackTrace) {
+        developer.log(
+          'mark app message read failed',
+          name: 'notification_inbox',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
   }
 
   UiErrorSemantic _chatListBlockingErrorSemantic(
@@ -414,8 +517,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
     return UiErrorSemantic(
       category: base.category,
       scope: base.scope,
-      title: UITextConstants.chatListLoadFailedTitle,
-      message: UITextConstants.chatListLoadFailedMessage,
+      title: ChatText.chatListLoadFailedTitle,
+      message: ChatText.chatListLoadFailedMessage,
       secondaryMessage: base.secondaryMessage,
       primaryAction: base.primaryAction,
       secondaryAction: base.secondaryAction,
@@ -444,8 +547,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
     return UiErrorSemantic(
       category: base.category,
       scope: base.scope,
-      title: UITextConstants.chatListLoadFailedTitle,
-      message: UITextConstants.chatListCacheFallback,
+      title: ChatText.chatListLoadFailedTitle,
+      message: ChatText.chatListCacheFallback,
       secondaryMessage: base.secondaryMessage,
       primaryAction: base.primaryAction,
       secondaryAction: base.secondaryAction,
@@ -459,67 +562,25 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 
-  void _showGreetingInboxSheet(
-    BuildContext context,
-    List<GreetingRequestDto> greetings,
-  ) {
-    showAppBottomModal<void>(
-      context: context,
-      builder: (sheetContext) => _GreetingInboxSheet(
-        greetings: greetings,
-        onReply: (request) async {
-          final result = await ref
-              .read(greetingRepositoryProvider)
-              .replyGreeting(request.id);
-          ref.invalidate(chatGreetingInboxProvider);
-          if (!context.mounted) {
-            return;
-          }
-          final conversationId = result.conversationId.trim();
-          if (conversationId.isNotEmpty) {
-            await dismissAppModalAndRun(
-              sheetContext,
-              action: () {
-                if (!context.mounted) {
-                  return;
-                }
-                context.push(AppRoutePaths.chatDetail(id: conversationId));
-              },
-            );
-          } else if (sheetContext.mounted) {
-            Navigator.of(sheetContext).pop();
-          }
-        },
-        onIgnore: (request) async {
-          await ref.read(greetingRepositoryProvider).ignoreGreeting(request.id);
-          ref.invalidate(chatGreetingInboxProvider);
-          if (sheetContext.mounted) {
-            Navigator.of(sheetContext).pop();
-          }
-        },
-      ),
-    );
-  }
-
   Widget _buildConversationEmptyState({
     required Color fgSecondary,
     required String subTab,
   }) {
-    var title = UITextConstants.noConversations;
-    var subtitle = UITextConstants.startChatHint;
+    var title = ChatText.noConversations;
+    var subtitle = ChatText.startChatHint;
 
-    if (subTab == UITextConstants.unread) {
-      title = UITextConstants.noUnreadMessages;
-      subtitle = UITextConstants.noUnreadHint;
-    } else if (subTab == UITextConstants.groupChat) {
-      title = '暂无讨论消息';
-      subtitle = '加入讨论后的最近动态会出现在这里';
-    } else if (subTab == UITextConstants.chatPrivateMessages) {
-      title = '暂无私聊消息';
-      subtitle = '与互关用户或已建立连接的人交流后会出现在这里';
-    } else if (subTab == UITextConstants.chatNotifications) {
-      title = UITextConstants.noReminderMessages;
-      subtitle = UITextConstants.noReminderHint;
+    if (subTab == ChatText.unread) {
+      title = ChatText.noUnreadMessages;
+      subtitle = ChatText.noUnreadHint;
+    } else if (subTab == ChatText.groupChat) {
+      title = ChatText.chatEmptyGroupTitle;
+      subtitle = ChatText.chatEmptyGroupSubtitle;
+    } else if (subTab == ChatText.chatPrivateMessages) {
+      title = ChatText.chatEmptyDirectTitle;
+      subtitle = ChatText.chatEmptyDirectSubtitle;
+    } else if (subTab == ChatText.chatNotifications) {
+      title = ChatText.noReminderMessages;
+      subtitle = ChatText.noReminderHint;
     }
 
     return Center(
@@ -561,10 +622,10 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
   String _messageHomeFilterForSubTab(String subTab) {
     return switch (subTab) {
-      UITextConstants.unread => 'unread',
-      UITextConstants.groupChat => 'group',
-      UITextConstants.chatPrivateMessages => 'direct',
-      UITextConstants.chatNotifications => 'notification',
+      ChatText.unread => 'unread',
+      ChatText.groupChat => 'group',
+      ChatText.chatPrivateMessages => 'direct',
+      ChatText.chatNotifications => 'notification',
       _ => 'all',
     };
   }
@@ -611,8 +672,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
             ),
           );
         }
-        if (sub == UITextConstants.contactsTabAll ||
-            sub == UITextConstants.contactsTabMutualFollow) {
+        if (sub == ChatText.contactsTabAll ||
+            sub == ChatText.contactsTabMutualFollow) {
           return _ContactsListWithIndex(
             items: list,
             fgPrimary: fgPrimary,
@@ -633,7 +694,24 @@ class _ChatPageState extends ConsumerState<ChatPage>
             return CupertinoButton(
               padding: EdgeInsets.zero,
               minimumSize: Size.zero,
-              onPressed: () => row.open(context),
+              onPressed: () {
+                unawaited(
+                  ref
+                      .read(journeyEventTrackerProvider)
+                      .trackAction(
+                        journey: 'relationship',
+                        action: 'open_contact',
+                        pageName: 'ChatPage',
+                        targetType: row.kind.name,
+                        targetKey: row.id,
+                        payload: <String, dynamic>{
+                          'source': row.source,
+                          'relationState': row.relationState,
+                        },
+                      ),
+                );
+                row.open(context);
+              },
               child: Container(
                 key: ValueKey<String>('chat-contact-row-${row.id}'),
                 color: listItemBackground,

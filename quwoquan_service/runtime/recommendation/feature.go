@@ -39,9 +39,6 @@ type UserFeatureVector struct {
 	SearchTopObjectAffinities map[string]float64 `json:"searchTopObjectAffinities,omitempty"`
 	SearchTermHeat            float64            `json:"searchTermHeat,omitempty"`
 
-	// Source distribution
-	SourceDistribution map[string]int `json:"sourceDistribution,omitempty"`
-
 	// Social features
 	CircleTagAffinities map[string]float64 `json:"circleTagAffinities,omitempty"`
 	SocialInterestScore float64            `json:"socialInterestScore"`
@@ -51,7 +48,7 @@ type UserFeatureVector struct {
 	// outrank the affinity channel in ranking fusion; AffinityIntersectionScore
 	// is advisory only and never overrides a confirmed fact intersection.
 	// Sourced from rm_recommend_feature.socialFeatures.intersection.* and kept
-	// in lockstep with services/rec-model-service/scripts/feature_registry.yaml content_feed.user_features.
+	// in lockstep with services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/feature_registry.yaml content_feed.user_features.
 	SharedFolloweesCount      int     `json:"sharedFolloweesCount"`
 	SharedCircleCount         int     `json:"sharedCircleCount"`
 	CoCommentedCount          int     `json:"coCommentedCount"`

@@ -13,9 +13,17 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[3]
-ASSISTANT_RUN = ROOT / "quwoquan_service" / "contracts" / "metadata" / "assistant" / "assistant_run"
+ASSISTANT_RUN = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "assistant-service"
+    / "contracts"
+    / "assistant"
+    / "assistant_run"
+)
 FIELDS_PATH = ASSISTANT_RUN / "fields.yaml"
-SERVICE_PATH = ASSISTANT_RUN / "service.yaml"
+OPERATIONS_PATH = ASSISTANT_RUN / "operations.yaml"
 
 
 def load_yaml(path: Path) -> dict:
@@ -36,8 +44,8 @@ def field_map(entity: dict) -> dict[str, dict]:
     return out
 
 
-def route_map(service: dict) -> dict[str, dict]:
-    routes = service.get("api_routes")
+def route_map(operations: dict) -> dict[str, dict]:
+    routes = operations.get("api_routes")
     if not isinstance(routes, list):
         return {}
     out: dict[str, dict] = {}
@@ -72,11 +80,11 @@ def assert_field(
 def main() -> int:
     failures: list[str] = []
     fields = load_yaml(FIELDS_PATH)
-    service = load_yaml(SERVICE_PATH)
+    operations = load_yaml(OPERATIONS_PATH)
 
-    entities = fields.get("entities")
+    entities = fields.get("types")
     if not isinstance(entities, dict):
-        print("FAIL: assistant_run/fields.yaml missing entities mapping", file=sys.stderr)
+        print("FAIL: assistant_run/fields.yaml missing types mapping", file=sys.stderr)
         return 1
 
     required_entities = [
@@ -107,14 +115,15 @@ def main() -> int:
     assert_field(failures, entities, "AssistantConsentMatrix", "canReadConversation", "bool")
     assert_field(failures, entities, "AssistantConsentMatrix", "canDeliverProactively", "bool")
 
-    for citation_field in ("url", "deepLink", "score", "recallSource", "objectTypeRef"):
+    for citation_field in ("destination", "score", "recallSource", "objectTypeRef"):
         assert_field(failures, entities, "AssistantSearchCitationView", citation_field)
+    assert_field(failures, entities, "CitationDestination", "url", "string")
 
-    routes = route_map(service)
+    routes = route_map(operations)
     for operation in ("SearchXiaoquResults", "ReportPageContext"):
         route = routes.get(operation)
         if not isinstance(route, dict):
-            failures.append(f"service.yaml missing operation {operation}")
+            failures.append(f"operations.yaml missing operation {operation}")
             continue
         request_fields = route.get("request_fields")
         if not isinstance(request_fields, list) or "contextSnapshot" not in request_fields:

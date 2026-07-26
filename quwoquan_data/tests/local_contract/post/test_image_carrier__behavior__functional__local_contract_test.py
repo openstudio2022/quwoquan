@@ -49,9 +49,10 @@ from content.post.article.route_analysis import analyze_route_ref  # noqa: E402
 from content.post.article.route_compose import build_route_writing_pack  # noqa: E402
 from content.post.article.route_review import review_route_draft  # noqa: E402
 from support.helpers.agent_draft_kit import gallery_article  # noqa: E402
+from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
-EXECUTION_ID = "20260711--travel-image-image-carrier--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260711--travel-image-carrier--test-region-a--pilot-001"
 ENTITIES = ["雅拉雪山", "黑石城", "莲花湖", "墨石公园"]
 
 
@@ -215,6 +216,7 @@ def test_image_compose_brief_uses_structural_image_contract():
 
 
 def test_image_writing_pack_trims_asset_caption_to_publish_limit():
+    build_execution_fixture(EXECUTION_ID)
     long_caption = "山川湖海 " * 80
     pack = build_generic_writing_pack(
         ref="图片作品",
@@ -297,7 +299,7 @@ def test_image_compose_payload_keeps_public_title_empty_when_source_title_absent
 def test_declared_image_asset_ref_reports_safety_block_separately_from_missing_asset():
     global EXECUTION_ID
     old_task = EXECUTION_ID
-    EXECUTION_ID = "20260711--travel-image-image-carrier--cn-zhejiang--canary-002"
+    EXECUTION_ID = "20260711--travel-image-carrier--test-region-a--pilot-002"
     try:
         _seed()
         target = ENTITIES[0]

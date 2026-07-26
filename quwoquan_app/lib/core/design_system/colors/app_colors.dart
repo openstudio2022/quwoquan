@@ -164,14 +164,13 @@ class AppColors {
   static const Color profileIntersectionStoneDark = Color(0xFFC3CAD2);
 
   // ==================== 欢迎页语义色 ====================
-  static const Color welcomeBackground = primaryColor;
-  static const Color welcomeGradientStart = brandBlue500;
-  static const Color welcomeGradientEnd = Color(0xFF1554D1);
-  static const Color welcomeForeground = Colors.white;
-  static const Color welcomeForegroundMuted = brandBlue50;
-  static const Color welcomeButtonBg = Color(0x1AFFFFFF);
-  static const Color welcomeButtonBgHover = Color(0x33FFFFFF);
-  static const Color welcomeButtonBorder = Color(0x33FFFFFF);
+  // 图一高保品牌深蓝：上部明亮、下部稳定加深；深浅色系统模式统一使用，
+  // 不叠加纹理、光斑或循环动画。
+  static const Color welcomeGradientStart = Color(0xFF0B70F5);
+  static const Color welcomeBackground = Color(0xFF075DE7);
+  static const Color welcomeGradientEnd = Color(0xFF053FC2);
+  static const Color welcomeForeground = Color(0xFFF7FAFF);
+  static const Color welcomeForegroundMuted = Color(0xFFD5E7FF);
   static const Color welcomePetalOrange = Color(0xFFFB923C);
   static const Color welcomePetalYellow = Color(0xFFFDE047);
   static const Color welcomePetalLime = Color(0xFFA3E635);
@@ -182,6 +181,12 @@ class AppColors {
   static const Color welcomePetalRose = Color(0xFFFB7185);
   static const Color welcomeTitleGradientMid = Color(0xFF67E8F9); // cyan-300
   static const Color welcomeTitleGradientEnd = Color(0xFFC084FC); // purple-400
+
+  // RTC 来电/去电舞台独立语义色；禁止复用 welcome token，避免品牌页调色
+  // 意外改变通话页面。
+  static const Color callStageGradientStartLight = Color(0xFF1491FF);
+  static const Color callStageGradientEndLight = Color(0xFF1554D1);
+  static const Color callStageForeground = Colors.white;
   static const Color webPcWelcomeCopySecondary = Color(0xB8FFFFFF);
   static const Color webPcWelcomeCopyTertiary = Color(0x7AFFFFFF);
   static const Color webPcWelcomeDownloadPanelBackground = Color(0x14FFFFFF);
@@ -284,12 +289,10 @@ class AppColors {
   static Color webPcToolbarSurface(BuildContext context) =>
       iosGroupedSurface(context).withValues(alpha: 0.96);
 
-  /// 欢迎页 — 系统深色外观（与浅色同源色相，压低亮度，S6 对称深色）
-  static const Color welcomeBackgroundDark = Color(0xFF0F172A);
+  /// 深色系统外观下的深蓝渐变端点（RTC 呼出页等深色场景复用）。
+  /// 欢迎页深浅色统一走 `welcomeGradientStart/End`，不再消费本组。
   static const Color welcomeGradientStartDark = Color(0xFF1E3A8A);
   static const Color welcomeGradientEndDark = Color(0xFF020617);
-  static const Color welcomeForegroundMutedDark = Color(0xFFBFDBFE);
-  static const Color welcomeButtonBgDark = Color(0x33FFFFFF);
 
   // ==================== 作品频道专用色 ====================
   /// 墨浆蓝 #0A0E14 — 作品频道背景（强制深色）
@@ -748,9 +751,11 @@ class AppColorsFunctional {
       case ColorType.callStageGradientStart:
         return isDark
             ? const Color(0xFF1D4ED8)
-            : AppColors.welcomeGradientStart;
+            : AppColors.callStageGradientStartLight;
       case ColorType.callStageGradientEnd:
-        return isDark ? const Color(0xFF1E1B4B) : AppColors.welcomeGradientEnd;
+        return isDark
+            ? const Color(0xFF1E1B4B)
+            : AppColors.callStageGradientEndLight;
       // WebView / 壳层信息卡：替代裸 white + black(alpha) 边框
       case ColorType.chromeInfoCardBackground:
         return getColor(isDark, ColorType.surfaceElevated);

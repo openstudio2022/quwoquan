@@ -8,6 +8,7 @@ import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
@@ -500,7 +501,7 @@ class _WebPrimaryActions extends StatelessWidget {
         ),
         _WebPrimaryActionButton(
           destination: MainTabDestination.chat,
-          label: UITextConstants.webPcPrimaryMessages,
+          label: ChatText.webPcPrimaryMessages,
           selected: selected == MainTabDestination.chat,
           customIcon: (color, filled) => AppMessagesIcon(
             size: AppSpacing.webPcToolbarActionIconSize,
@@ -724,8 +725,8 @@ class _WebCreateWorkspace extends ConsumerWidget {
       _CreateCardSpec(
         id: 'group-chat',
         icon: CupertinoIcons.chat_bubble_2,
-        title: UITextConstants.webPcCreateGroupChatTitle,
-        subtitle: UITextConstants.webPcCreateGroupChatSubtitle,
+        title: ChatText.webPcCreateGroupChatTitle,
+        subtitle: ChatText.webPcCreateGroupChatSubtitle,
         action: () => GlobalQuickActionSheet.openStartGroupChat(context),
       ),
       _CreateCardSpec(

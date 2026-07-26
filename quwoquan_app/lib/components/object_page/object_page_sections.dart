@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_content_preview.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_content_preview.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_relation_edge.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 

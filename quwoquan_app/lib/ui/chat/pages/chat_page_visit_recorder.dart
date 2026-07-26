@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -18,4 +20,18 @@ void recordChatPageVisit(WidgetRef ref, int mainTabIndex, int subTabIndex) {
           _ => 'chat_contacts_groups',
         };
   ref.read(visitRecorderServiceProvider).recordVisit(VisitTarget.page(pageId));
+  if (mainTabIndex == 1) {
+    unawaited(
+      ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'relationship',
+            action: 'view_contact_filter',
+            pageName: 'ChatPage',
+            targetType: 'contact_filter',
+            targetKey: pageId,
+            payload: <String, dynamic>{'subTabIndex': subTabIndex},
+          ),
+    );
+  }
 }

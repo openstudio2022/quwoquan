@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from core.cursor_model import CursorModelSelection
 from core.cursor_startup_cache import cached_cursor_startup_probe
 from core.python_environment import (
     DEFAULT_CURSOR_STARTUP_MODEL,
@@ -19,7 +20,7 @@ def environment_preflight(
     endpoints: Iterable[str] | None = None,
     timeout_seconds: float | None = None,
     check_cursor_startup: bool = False,
-    cursor_startup_model: str | None = None,
+    cursor_startup_model: str | CursorModelSelection | None = None,
     cursor_startup_runtime: str | None = None,
     cursor_startup_timeout_seconds: float | None = None,
 ) -> dict:
@@ -30,7 +31,7 @@ def environment_preflight(
         if timeout_seconds is not None
         else policy.preflight_network_timeout_seconds
     )
-    effective_startup_model = cursor_startup_model or policy.cursor_model
+    effective_startup_model = cursor_startup_model or policy.cursor_model_selection
     effective_startup_runtime = cursor_startup_runtime or policy.cursor_runtime.value
     effective_startup_timeout_seconds = float(
         cursor_startup_timeout_seconds
@@ -93,7 +94,10 @@ def environment_preflight(
             "ready": True,
             "started": False,
             "runtime": effective_startup_runtime,
-            "model": effective_startup_model,
+            "model": CursorModelSelection.from_value(effective_startup_model).model_id,
+            "modelParameters": CursorModelSelection.from_value(
+                effective_startup_model
+            ).parameters_document(),
             "issues": [],
             "skipReason": (
                 "disabled"

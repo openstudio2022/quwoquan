@@ -1,9 +1,9 @@
 """CV and OCR backends for image safety assessment."""
 from __future__ import annotations
 import struct
-import warnings
 import zlib
 from pathlib import Path
+from core.image_decode import probe_image_path
 from core.image_safety import (
     COPYRIGHT_SYMBOL_TERMS, OCR_MAX_PIXELS, OCR_TIMEOUT_SECONDS,
     RIGHTS_CONTEXT_TERMS, WATERMARK_TERMS, _CV_OK, _HANDLE_RE, _HASH_OK,
@@ -54,15 +54,8 @@ def _detect_faces(path: Path) -> int:
     return confirmed
 
 def _image_dimensions(path: Path) -> tuple[int, int] | None:
-    if not _HASH_OK:
-        return None
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", Image.DecompressionBombWarning)
-            with Image.open(path) as im:
-                return int(im.width), int(im.height)
-    except Exception:
-        return None
+    probe = probe_image_path(path)
+    return (probe.width, probe.height) if probe.succeeded else None
 
 def _ocr_text_and_ratio(path: Path) -> tuple[str, float, bool]:
     """返回 (ocr_text, text_area_ratio, ocr_ran)。ocr_ran=False 表示未能跑 OCR。"""

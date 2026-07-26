@@ -1,0 +1,96 @@
+schema: content-release-readiness
+policyId: content-release
+# 每个能力必须声明其强制 probe 来源：healthScope（health 报告内该 scope 至少一个已执行探针）
+# 或 doctor: true（仅 commercial 阶段由完整环境 doctor 承担）。
+# 端口、URL、Secret 与部署配置保持在 topology/port manifest 等原真相源，不复制到本策略。
+capabilityProbes:
+  content_api:
+    healthScope: edge
+  content_media:
+    healthScope: media
+  content_services:
+    healthScope: content-import
+  app_consumer:
+    healthScope: content-consumer
+  telemetry_sls:
+    doctor: true
+  trace_query:
+    doctor: true
+  slo_query:
+    doctor: true
+  legal_approval:
+    doctor: true
+phases:
+  import:
+    alpha:
+      target: alpha-local
+      workload: content-release
+      healthScope: content-import
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+    beta:
+      target: beta-local
+      workload: content-release
+      healthScope: content-import
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+    gamma:
+      target: gamma-local
+      workload: content-release
+      healthScope: content-import
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+  consumer:
+    gamma:
+      target: gamma-local
+      workload: content-release
+      healthScope: content-consumer
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
+  commercial:
+    beta:
+      target: beta-local
+      workload: full
+      healthScope: full
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
+        - telemetry_sls
+        - trace_query
+        - slo_query
+    gamma:
+      target: gamma-local
+      workload: full
+      healthScope: full
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
+        - telemetry_sls
+        - trace_query
+        - slo_query
+    prod:
+      target: prod-hosted
+      workload: full
+      healthScope: full
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
+        - telemetry_sls
+        - trace_query
+        - slo_query
+        - legal_approval

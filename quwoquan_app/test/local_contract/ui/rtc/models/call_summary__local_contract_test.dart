@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 
 void main() {
@@ -92,6 +93,20 @@ void main() {
           connected: true,
         ),
         UITextConstants.callSummaryNoAnswer,
+      );
+    });
+  });
+
+  group('多人通话摘要', () {
+    test('超过 6 人时以 +N 表达未展开人数', () {
+      expect(callParticipantOverflowCount(6), 0);
+      expect(callParticipantOverflowCount(7), 1);
+      expect(callParticipantOverflowCount(12), 6);
+      expect(
+        UITextConstants.callAdditionalParticipants(
+          callParticipantOverflowCount(12),
+        ),
+        '+6',
       );
     });
   });

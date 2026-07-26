@@ -37,7 +37,7 @@ constraints: BoxConstraints(minWidth: AppSpacing.buttonHeight, minHeight: AppSpa
 import '../../ui/discovery/pages/discovery_page.dart';
 import '../components/media_post_card.dart';
 
-// ✅ 必须（按领域 lib/ui/{domain}/，见 specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN）
+// ✅ 必须（按目标特性树领域归属进入 lib/ui/{domain}/）
 import 'package:quwoquan_app/ui/discovery/pages/discovery_page.dart';
 import 'package:quwoquan_app/components/media_post_card.dart';
 ```
@@ -56,7 +56,7 @@ if (msg['senderId'] == AppConceptConstants.assistantSenderId) { }
 
 ### 1.4 错误码与用户文案
 
-错误码和用户可见文案由 `quwoquan_service/contracts/metadata/*/errors.yaml` 定义，经 codegen 生成 `*ErrorCode` 枚举。禁止硬编码 code 字符串或文案。
+错误码和用户可见文案由所属服务 `contracts/<context>/<object>/errors.yaml` 定义，经 codegen 生成 `*ErrorCode` 枚举。禁止硬编码 code 字符串或文案。
 
 ```dart
 // ❌ 禁止
@@ -124,7 +124,7 @@ expect(actual.code, IntegrationLocationErrorCode.upstreamTimeout.code)
 - **A 类**（分组列表/表单）：`SettingsInsetFormPageScaffold` + `SettingsInsetGroupedSection` / `SettingsInsetFormRow` / `SettingsInsetFormSectionDivider`（`lib/components/settings_form/`）。
 - **B 类**（成员选择 + 内嵌搜索）：`SettingsInsetMemberPickerPageScaffold`（与 A **同源顶栏/灰底**）。
 - **禁止**内页返回使用 `GlobalTopBarIconButton`；禁止新建 `pageBackground` + `selectionToolbarBackground` + 白顶栏作为未登记的第三套组合。
-- 新增或移动受控页必须在同 PR 更新 [`quwoquan_app/scripts/settings/settings_canonical_manifest.yaml`](quwoquan_app/scripts/settings/settings_canonical_manifest.yaml)；例外页须在文件前部注释 `settings-canonical-exception: <理由> <CR-id>`（见 `specs/ux/page-layout-semantics.md` §4.3）。
+- 新增或移动受控页必须在同 PR 更新 [`quwoquan_app/scripts/settings/settings_canonical_manifest.yaml`](quwoquan_app/scripts/settings/settings_canonical_manifest.yaml)；例外页须在文件前部注释 owner、理由和失效条件，并遵循 `runtime/runtime-client-foundation/page-layout-semantics/spec.md`。
 - **门禁**：`python3 quwoquan_app/scripts/settings/verify_settings_canonical.py`（`gate_repo.sh` app 阶段已接入）。
 
 ---
@@ -259,12 +259,12 @@ if ((parsed['schema'] as String?) != 'assistant_turn') {
 
 ---
 
-## 6. UI 层约束（按领域，见 specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN）
+## 6. UI 层约束（按目标特性树领域归属）
 
 - `lib/ui/{domain}/` 必须包含 `pages/` 子目录（禁止在 `lib/features/` 下新建）
 - UI 模块不允许直接 import 其他 UI 模块内部文件（通过 `core/` 或 `cloud/` 共享）
 - Provider 必须使用 Riverpod 标准模式
-- 更新特性树 `acceptance.yaml` 与 traceability 路径
+- 规格行为变化时更新对应 `spec.md` 的 REQ/GWT/SIT/UAT，并让测试 `spec_ref` 指向稳定锚点
 - 选择器/创作等 Cupertino 页面遵循 iOS 语义 v1：Modal leading 统一 `CupertinoIcons.xmark`，Stack 子页使用 `CupertinoIcons.back/chevron_back`
 - `CupertinoPageScaffold` 场景禁止混用 Material 交互组件（如 `Checkbox`、`SnackBar`）；选择态使用 Cupertino 或语义化自绘组件
 - 禁止跨域借用文案 key（如图片编辑的“完成”用于圈子选择页）

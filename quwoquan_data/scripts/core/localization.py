@@ -131,7 +131,6 @@ _TRAD_TO_SIMP: dict[str, str] = {
     "裡": "里",
     "裏": "里",
     "麗": "丽",
-    "嵋": "眉",
     "環": "环",
 }
 _FOLD_TABLE = str.maketrans(_TRAD_TO_SIMP)

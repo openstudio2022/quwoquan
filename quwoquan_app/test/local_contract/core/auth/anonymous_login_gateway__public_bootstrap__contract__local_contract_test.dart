@@ -7,9 +7,20 @@ import 'package:http/testing.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
-import 'package:quwoquan_app/core/di/login_dependencies.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart'
+    show accountSessionLoginCommandWriterProvider;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
+  test('anonymous bootstrap allows a cold mobile TLS handshake', () {
+    final contract =
+        appCloudOperationContracts[AppCloudOperationIds
+            .userAccountSessionLoginAnonymous]!;
+
+    expect(contract.timeoutMilliseconds, 10000);
+    expect(contract.maxAttempts, 2);
+  });
+
   test(
     'anonymous bootstrap uses a public client without a bearer session',
     () async {
@@ -33,25 +44,25 @@ void main() {
         }),
       );
       final container = ProviderContainer(
-        overrides: [
-          unauthenticatedCloudHttpClientProvider.overrideWithValue(httpClient),
-        ],
+        overrides: [cloudHttpClientProvider.overrideWithValue(httpClient)],
       );
       addTearDown(container.dispose);
 
       final result = await container
-          .read(anonymousLoginGatewayProvider)
+          .read(accountSessionLoginCommandWriterProvider)
           .loginAnonymous(
-            installId: 'patrol-install',
-            deviceFingerprintHash: 'patrol-fingerprint',
-            platform: 'ios',
-            appVersion: 'local-e2e',
+            LoginAnonymousCommand(
+              installId: 'patrol-install',
+              deviceFingerprintHash: 'patrol-fingerprint',
+              platform: 'ios',
+              appVersion: 'local-e2e',
+            ),
           );
 
       expect(captured.url.path, UserApiMetadata.loginAnonymousPath);
       expect(captured.headers.containsKey('authorization'), isFalse);
       expect(result.ownerId, 'anonymous-owner');
-      expect(result.activeSub?['subAccountId'], 'anonymous-persona');
+      expect(result.activeSub?.subAccountId, 'anonymous-persona');
     },
   );
 }

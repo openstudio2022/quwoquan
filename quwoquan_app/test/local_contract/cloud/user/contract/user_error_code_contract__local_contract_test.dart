@@ -56,7 +56,15 @@ void main() {
         UserErrorCode.greetingAlreadyContact.code,
         'USER.GREETING.already_contact',
       );
-      expect(UserErrorCode.inviteExpired.code, 'USER.INVITE.expired');
+      // B3 关系与个人投影：新对象错误码同源覆盖（invite_record 已删除）。
+      expect(
+        UserErrorCode.relationshipFollowBlocked.code,
+        'USER.RELATIONSHIP.follow_blocked',
+      );
+      expect(
+        UserErrorCode.subjectFollowInvalidSubjectType.code,
+        'USER.SUBJECT_FOLLOW.invalid_subject_type',
+      );
       expect(UserErrorCode.userNotFound.code, 'USER.USER.not_found');
       expect(UserErrorCode.unauthorized.code, 'USER.USER.unauthorized');
       expect(UserErrorCode.forbidden.code, 'USER.USER.forbidden');
@@ -77,8 +85,16 @@ void main() {
         'USER.SUB_ACCOUNT.retired_guard',
       );
       expect(
-        UserErrorCode.deleteEmptySubAccountOnly.code,
-        'USER.SUB_ACCOUNT.delete_empty_only',
+        UserErrorCode.primarySubAccountGuard.code,
+        'USER.SUB_ACCOUNT.primary_guard',
+      );
+      expect(
+        UserErrorCode.activeSubAccountGuard.code,
+        'USER.SUB_ACCOUNT.active_guard',
+      );
+      expect(
+        UserErrorCode.lastSubAccount.code,
+        'USER.SUB_ACCOUNT.last_sub_account',
       );
       expect(
         UserErrorCode.subAccountHandleTaken.code,
@@ -101,8 +117,8 @@ void main() {
         UserErrorCode.greetingAlreadyContact,
       );
       expect(
-        UserErrorCode.fromCode('USER.INVITE.expired'),
-        UserErrorCode.inviteExpired,
+        UserErrorCode.fromCode('USER.SUBJECT_FOLLOW.invalid_subject_type'),
+        UserErrorCode.subjectFollowInvalidSubjectType,
       );
       expect(
         UserErrorCode.fromCode('USER.SYSTEM.internal_error'),
@@ -114,7 +130,8 @@ void main() {
       expect(UserErrorCode.contactDiscoveryRateLimited.httpStatus, 429);
       expect(UserErrorCode.tooManyContacts.httpStatus, 400);
       expect(UserErrorCode.greetingAlreadyContact.httpStatus, 409);
-      expect(UserErrorCode.inviteExpired.httpStatus, 410);
+      expect(UserErrorCode.relationshipFollowBlocked.httpStatus, 403);
+      expect(UserErrorCode.subjectFollowInvalidSubjectType.httpStatus, 400);
       expect(UserErrorCode.userNotFound.httpStatus, 404);
       expect(UserErrorCode.unauthorized.httpStatus, 401);
       expect(UserErrorCode.forbidden.httpStatus, 403);
@@ -125,7 +142,9 @@ void main() {
       expect(UserErrorCode.otpExpired.httpStatus, 400);
       expect(UserErrorCode.subAccountNotFound.httpStatus, 404);
       expect(UserErrorCode.retiredSubAccountGuard.httpStatus, 400);
-      expect(UserErrorCode.deleteEmptySubAccountOnly.httpStatus, 400);
+      expect(UserErrorCode.primarySubAccountGuard.httpStatus, 400);
+      expect(UserErrorCode.activeSubAccountGuard.httpStatus, 400);
+      expect(UserErrorCode.lastSubAccount.httpStatus, 400);
       expect(UserErrorCode.subAccountHandleTaken.httpStatus, 409);
       expect(UserErrorCode.internalError.httpStatus, 500);
     });
@@ -144,7 +163,10 @@ void main() {
         UserErrorCode.greetingAlreadyContact.defaultMessage,
         contains('正式私信'),
       );
-      expect(UserErrorCode.inviteExpired.defaultMessage, contains('邀请'));
+      expect(
+        UserErrorCode.relationshipFollowBlocked.defaultMessage,
+        contains('关注'),
+      );
       expect(
         UserErrorCode.contactDiscoveryRateLimited.defaultMessage,
         contains('通讯录'),
@@ -158,9 +180,14 @@ void main() {
         contains('退役'),
       );
       expect(
-        UserErrorCode.deleteEmptySubAccountOnly.defaultMessage,
-        contains('直接删除'),
+        UserErrorCode.primarySubAccountGuard.defaultMessage,
+        contains('主分身'),
       );
+      expect(
+        UserErrorCode.activeSubAccountGuard.defaultMessage,
+        contains('切换'),
+      );
+      expect(UserErrorCode.lastSubAccount.defaultMessage, contains('最后一个账号'));
       expect(
         UserErrorCode.subAccountHandleTaken.defaultMessage,
         contains('分身号'),

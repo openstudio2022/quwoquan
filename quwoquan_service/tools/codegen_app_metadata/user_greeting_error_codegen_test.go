@@ -8,7 +8,7 @@ import (
 
 func TestUserGreetingErrorGeneration_matchesFormalDirectMessagingContract(t *testing.T) {
 	metadataDir := initializeTestContractGraph(t)
-	errorsPath := filepath.Join(metadataDir, "user", "greeting_request", "errors.yaml")
+	errorsPath := filepath.Join(metadataDir, "user", "relationship", "greeting_request", "errors.yaml")
 	ef, err := readErrors(errorsPath)
 	if err != nil {
 		t.Fatalf("read errors: %v", err)

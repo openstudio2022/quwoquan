@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 验证多云 kustomization 可构建（quwoquan_ops/environments/kustomization/${CLOUD_PROVIDER}-integration）
+# 验证四个环境装配入口均可独立构建。
 # kustomize 或 kubectl 未安装时跳过
 set -euo pipefail
 
@@ -19,17 +19,17 @@ elif command -v kubectl &>/dev/null; then
 fi
 
 FAIL=0
-for cloud in aliyun volcengine huaweicloud; do
-  kf="quwoquan_ops/environments/kustomization/${cloud}-integration"
-  if [[ ! -d "$kf" ]]; then
-    echo "[verify] FAIL: missing $kf" >&2
+for env_name in alpha beta gamma prod; do
+  environment_root="quwoquan_ops/environments/${env_name}"
+  if [[ ! -d "$environment_root" ]]; then
+    echo "[verify] FAIL: missing $environment_root" >&2
     FAIL=1
     continue
   fi
-  if $BUILDER "$kf" >/dev/null 2>&1; then
-    echo "[verify] OK: $kf builds"
+  if $BUILDER "$environment_root" >/dev/null 2>&1; then
+    echo "[verify] OK: $environment_root builds"
   else
-    echo "[verify] FAIL: $kf build failed" >&2
+    echo "[verify] FAIL: $environment_root build failed" >&2
     FAIL=1
   fi
 done

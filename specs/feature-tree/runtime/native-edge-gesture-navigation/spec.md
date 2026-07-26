@@ -1,44 +1,89 @@
-# 原生边缘手势导航规格
+# L2 Business Capability：原生边缘手势导航规格 (`native-edge-gesture-navigation`)
 
-## 定位
+> 所属领域：[`runtime`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-`native-edge-gesture-navigation` 是 `runtime` 领域服务下的业务能力，负责 iOS / Android 屏幕左右边缘手势在不同页面层级中的导航安全、冲突仲裁和用户可感知体验。
+## 1. 能力目标
 
-## 范围
+让用户在 iOS 与 Android 上通过符合平台习惯的边缘手势返回、退出或保持沉浸内容，并避免与翻页手势冲突。
+
+## 2. 范围与非目标
 
 ### In Scope
 
-- 全局普通二级/三级页面的原生边缘手势返回上一页。
-- 沉浸式媒体浏览器边缘滑动返回上一页。
-- 主页根页第一次边缘滑动提示再次滑动退出。
-- 主页根页第二次边缘滑动在保护窗口内退出或交给系统返回。
-- iOS 与 Android 的手势区域、触发阈值、系统返回动画和提示差异。
-- 媒体左右切换与边缘返回手势的冲突仲裁。
-- 路由 Page 工厂、防腐策略层与根壳返回状态机的统一契约。
+- global route edge pop contract
+- immersive media edge swipe back
+- home edge swipe exit guard
 
 ### Out of Scope
 
-- 单个内容类型的媒体翻页业务规则。
-- Android/iOS 系统级手势设置本身。
-- 非根页业务表单未保存退出保护。
-- iOS 根页主动退出 App；iOS 原生语义下根页无可 pop 栈时不模拟退出。
+- system-level OS gesture settings
 
-## Story 列表
+## 3. Journey / Scenario 贡献
 
-- `global-route-edge-pop-contract`：无底栏页面通过平台原生边缘手势返回上一页。
-- `immersive-media-edge-swipe-back`：沉浸式媒体浏览器边缘滑动返回。
-- `home-edge-swipe-exit-guard`：主页根页边缘滑动退出保护。
+- [`JNY-006 / SCN-006`](../../spec.md#scn-006)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：iOS/Android 边缘手势导航能力 SIT，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-006 / SCN-021`](../../spec.md#scn-021)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：iOS/Android 边缘手势导航能力 SIT，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-006 / SCN-022`](../../spec.md#scn-022)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：iOS/Android 边缘手势导航能力 SIT，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
 
-## 平台口径
+## 4. Story
 
-- iOS：遵循 `UINavigationController.interactivePopGestureRecognizer` 的 leading-edge pop。中文 LTR 场景为左边缘返回；根页不主动退出应用。
-- Android：遵循系统手势导航与 predictive back，左右边缘均可触发 back；底栏根页需要二次返回保护。
-- Flutter：业务页面不直接判断平台。页面只声明路由类型和可选返回 guard，平台差异由 `NativeBackNavigationPolicy` 与路由 Page 工厂屏蔽。
 
-## SIT 关注点
 
-- 平台差异：iOS interactive pop 与 Android predictive back / back dispatcher。
-- 状态机：idle -> firstEdgeSwipeWarned -> secondSwipeExit -> reset。
+- [`global-route-edge-pop-contract`](./global-route-edge-pop-contract/spec.md)：普通非 shell 页面通过 AppRoutePageFactory 构造平台 Page。
+- [`home-edge-swipe-exit-guard`](./home-edge-swipe-exit-guard/spec.md)：第二次边缘滑动在保护窗口内退出或交给系统返回。
+- [`immersive-media-edge-swipe-back`](./immersive-media-edge-swipe-back/spec.md)：iOS 与 Android 均验证边缘返回成功。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 边缘手势导航能力 SIT
+
+- Ordinary non-bottom-nav pages can return to the previous route through platform-native back gestures.
+- iOS leading-edge pop and Android left/right back gestures follow platform expectations.
+- Android home root exit guard blocks accidental first exit.
+- Immersive media viewer returns without misfiring media page swipe.
+
+<a id="req-002"></a>
+### REQ-002 路由 Page 工厂、防腐策略层与根壳返回状态机的统一契约
+
+- 路由 Page 工厂、防腐策略层与根壳返回状态机的统一契约。
 - 路由承载：普通页面必须经统一 Page 工厂生成原生路由，禁止新增普通页面绕过工厂使用默认 `GoRoute.builder`。
-- 冲突仲裁：媒体横滑翻页优先级低于系统边缘返回热区。
-- 性能：边缘滑动首反馈延迟、返回动画 jank、误触率。
+
+## 6. 契约与依赖
+
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 边缘手势导航能力 SIT
+
+- GIVEN 执行“边缘手势导航能力”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“边缘手势导航能力”对应动作。
+- THEN Ordinary non-bottom-nav pages can return to the previous route through platform-native back gestures.
+- THEN iOS leading-edge pop and Android left/right back gestures follow platform expectations.
+- THEN Android home root exit guard blocks accidental first exit.
+- THEN Immersive media viewer returns without misfiring media page swipe.
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 边缘手势导航能力 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Ordinary non-bottom-nav pages can return to the previous route through platform-native back gestures.
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

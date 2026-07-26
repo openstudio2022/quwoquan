@@ -11,6 +11,9 @@ SERVICE_ROOT = Path(__file__).resolve().parents[2]
 TOOLS_ROOT = SERVICE_ROOT / "tools"
 
 REQUIRED_SOURCE_IMPORT = "quwoquan_service/internal/metadata/codegen"
+RESOURCE_GENERATORS = {
+    "codegen_rec_policy": "services/content-service/resources/policies/",
+}
 FORBIDDEN_PATTERNS = {
     r"\bLoadFromDirectory\s*\(": "旧 registry 目录加载器",
     r"\bcompiler\.(?:Build|RequireValid)\s*\(": "绕过统一 codegen Source",
@@ -37,7 +40,11 @@ def check_generator(directory: Path, failures: list[str]) -> None:
     merged = "\n".join(path.read_text(encoding="utf-8") for path in sources)
     relative = directory.relative_to(SERVICE_ROOT).as_posix()
 
-    if REQUIRED_SOURCE_IMPORT not in merged:
+    required_resource = RESOURCE_GENERATORS.get(directory.name)
+    if required_resource:
+        if required_resource not in merged:
+            failures.append(f"{relative}: resource generator 未消费服务本地权威资源")
+    elif REQUIRED_SOURCE_IMPORT not in merged:
         failures.append(f"{relative}: generator 未消费统一 ContractGraph Source")
 
     for pattern, reason in FORBIDDEN_PATTERNS.items():

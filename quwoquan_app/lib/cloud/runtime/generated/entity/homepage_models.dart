@@ -1,26 +1,25 @@
-// 混合维护：壳层预览/认领记录等由 entity/homepage/projections/*.yaml 生成（*.g.dart）再 export；
+// 混合维护：壳层预览/认领记录等由 entity/entity_homepage/homepage/projections/*.yaml 生成（*.g.dart）再 export；
 // 继承链（CanonicalReference/Summary/Detail）、HomepageShellData、Draft 仍手写；wire 收窄见 [HomepageWireCodec]。
-// 字段与 quwoquan_service/contracts/metadata/entity/homepage/fields.yaml 对齐。
+// 字段与 quwoquan_service/contracts/metadata/entity/entity_homepage/homepage/fields.yaml 对齐。
 // 路由与 operation 常量：entity_api_metadata.g.dart、entity_request_page_ids.g.dart
 // 审核类写请求体：entity_homepage_mutation_wires.g.dart（由 service.yaml writable_fields 生成）。
 // 契约测试：test/cloud/entity/contract/homepage_repository_contract_test.dart
 
 import 'package:quwoquan_app/cloud/runtime/codec/homepage_wire_codec.dart';
 
-import 'homepage_content_preview.g.dart';
-import 'homepage_geo_point.g.dart';
-import 'homepage_question_preview.g.dart';
-import 'homepage_related_group_summary.g.dart';
-import 'homepage_review_summary_data.g.dart';
+import 'entity_homepage/homepage_content_preview.g.dart';
+import 'entity_homepage/homepage_geo_point.g.dart';
+import 'entity_homepage/homepage_question_preview.g.dart';
+import 'entity_homepage/homepage_related_group_summary.g.dart';
+import 'entity_homepage/homepage_review_summary_data.g.dart';
 
-export 'homepage_claim_request_record.g.dart';
-export 'homepage_content_preview.g.dart';
-export 'homepage_geo_point.g.dart';
-export 'homepage_question_preview.g.dart';
-export 'homepage_related_group_summary.g.dart';
-export 'homepage_review_dimension_score.g.dart';
-export 'homepage_review_summary_data.g.dart';
-export 'homepage_status_report_record.g.dart';
+export 'entity_homepage/homepage_claim_request_record.g.dart';
+export 'entity_homepage/homepage_content_preview.g.dart';
+export 'entity_homepage/homepage_geo_point.g.dart';
+export 'entity_homepage/homepage_question_preview.g.dart';
+export 'entity_homepage/homepage_related_group_summary.g.dart';
+export 'entity_homepage/homepage_review_summary_data.g.dart';
+export 'entity_homepage/homepage_status_report_record.g.dart';
 
 class HomepageCanonicalReference {
   const HomepageCanonicalReference({
@@ -446,7 +445,7 @@ class HomepageClaimRequestDraft {
     this.identityCardFrontUrl = '',
     this.identityCardBackUrl = '',
     this.note = '',
-    this.requesterUserId = '',
+    this.requesterPersonaId = '',
   });
 
   final String claimTier;
@@ -455,7 +454,7 @@ class HomepageClaimRequestDraft {
   final String identityCardFrontUrl;
   final String identityCardBackUrl;
   final String note;
-  final String requesterUserId;
+  final String requesterPersonaId;
 
   Map<String, dynamic> toMap() => <String, dynamic>{
     'claimTier': claimTier,
@@ -467,8 +466,6 @@ class HomepageClaimRequestDraft {
     if (identityCardBackUrl.trim().isNotEmpty)
       'identityCardBackUrl': identityCardBackUrl.trim(),
     if (note.trim().isNotEmpty) 'note': note.trim(),
-    if (requesterUserId.trim().isNotEmpty)
-      'requesterUserId': requesterUserId.trim(),
   };
 }
 
@@ -511,19 +508,17 @@ class HomepageStatusReportDraft {
     required this.reason,
     this.description = '',
     this.evidenceUrls = const <String>[],
-    this.reporterUserId = '',
+    this.reporterPersonaId = '',
   });
 
   final String reason;
   final String description;
   final List<String> evidenceUrls;
-  final String reporterUserId;
+  final String reporterPersonaId;
 
   Map<String, dynamic> toMap() => <String, dynamic>{
     'reason': reason,
     if (description.trim().isNotEmpty) 'description': description.trim(),
     if (evidenceUrls.isNotEmpty) 'evidenceUrls': evidenceUrls,
-    if (reporterUserId.trim().isNotEmpty)
-      'reporterUserId': reporterUserId.trim(),
   };
 }

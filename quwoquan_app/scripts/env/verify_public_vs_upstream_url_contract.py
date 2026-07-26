@@ -108,7 +108,7 @@ def main() -> int:
             )
 
     service_configs = sorted(
-        ROOT.glob("quwoquan_service/services/*/configs/*/config.yaml")
+        ROOT.glob("quwoquan_service/services/*/environments/*/config.yaml")
     )
     for cfg in service_configs:
         env_name = cfg.parent.name

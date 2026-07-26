@@ -1,32 +1,68 @@
-# 主页边缘滑动退出保护 Story
+# L3 Story：主页边缘滑动退出保护 Story (`home-edge-swipe-exit-guard`)
 
-## 最小价值点
+> 所属能力：[`native-edge-gesture-navigation`](../spec.md)
+>
+> Journey / Scenario：[`JNY-006 / SCN-006`](../../../spec.md#scn-006)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-用户停留在主页根页面时，第一次 iOS / Android 屏幕边缘滑动不直接退出 App，而是提示再次滑动退出；第二次在保护窗口内触发退出或交给系统返回。
+## 1. 用户价值
 
-## 归属
+作为开发、测试或运维角色，我希望主页根页边缘滑动退出保护，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-- 领域服务：`runtime`
-- 业务能力：`native-edge-gesture-navigation`
-- 关联 Scenario：`home-edge-swipe-exit-guard`
+## 2. 范围与非目标
 
-## 行为规则
+### In Scope
 
-- Given：用户位于主页根路由，当前没有可 pop 的子页面。
-- When：用户第一次从屏幕边缘发起返回手势。
-- Then：App 显示退出保护提示，不退出。
-- When：用户在保护窗口内第二次发起边缘返回。
-- Then：App 退出或交给系统返回。
+- first edge swipe guard prompt
+- second edge swipe exit within guard window
+- guard timeout reset
 
-## 接口契约
+### Out of Scope
+
+- unsaved form leave protection
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 主页首次边缘滑动提示，二次边缘滑动退出
+
+- 第二次边缘滑动在保护窗口内退出或交给系统返回。
+- 保护窗口超时后再次滑动重新显示提示。
+
+<a id="req-002"></a>
+### REQ-002 Root route contract：主页根路由必须能声明不可直接 pop
 
 - Root route contract：主页根路由必须能声明不可直接 pop。
 - Exit guard contract：首次提示、保护窗口、二次退出状态必须统一。
-- Telemetry contract：记录 firstGuard、secondExit、guardTimeout。
 
-## 验收关注点
+## 4. 契约引用
 
-- iOS 与 Android 均覆盖。
-- 左右边缘均覆盖。
-- 保护窗口超时后再次滑动应重新提示。
-- 提示反馈及时且不阻塞主页交互。
+- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#isBottomNavRootLocation`
+- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#rootExitGuardWindow`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 主页首次边缘滑动提示，二次边缘滑动退出
+
+- GIVEN 用户位于主页根路由，当前没有可 pop 的子页面。
+- WHEN 用户第一次从屏幕左边缘或右边缘发起返回手势。
+- THEN App 显示再次滑动退出提示，且不退出。
+
+## 6. 依赖
+
+- 前置要求：[`native-edge-gesture-navigation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 主页首次边缘滑动提示，二次边缘滑动退出
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：第二次边缘滑动在保护窗口内退出或交给系统返回。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效

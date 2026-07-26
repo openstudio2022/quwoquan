@@ -1,0 +1,65 @@
+kind: aggregate_root
+description: Persona 或 Assistant 成员在 Conversation 内的角色、加入与移除生命周期聚合。
+identity:
+  fields:
+  - _id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: command_facade
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: conversation
+  on_delete: tombstone
+  reference_fields:
+  - conversationId
+  target_object: chat.Conversation
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: avatarAsset
+  on_delete: detach
+  reference_fields:
+  - avatarAssetId
+  target_object: content.MediaAsset
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: persona
+  on_delete: cascade
+  reference_fields:
+  - userId
+  target_object: user.Persona
+local_identity_reasons:
+  assistantSkillId: stable catalog or release key; resolved through its typed catalog reader and never
+    used as an aggregate Store identity
+capabilities:
+- commandable
+- queryable
+- idempotent_commands
+business_rules:
+- identity 固定为 conversationId + memberType + memberId
+- direct conversation 只能拥有两个 persona 成员
+- group conversation 必须至少保留一个 owner，转移 owner 与角色变更原子提交
+- 私建 group 的 AddMembers 操作者必须是活跃成员；新成员与操作者互关且无屏蔽
+- circleGroupId 非空的会话只接受 CircleGroupMembership durable projector 写入；普通 Chat AddMembers、RemoveMember、LeaveConversation、TransferOwnership
+  与管理员角色修改统一拒绝为 circle_group_managed_by_circle
+- 私建 group 的 RemoveMember 仅 owner/admin；owner 可移出任何非 owner 成员，admin 只能移出普通成员
+- 私建 group 的自愿退出走 LeaveConversation（left 终态）；owner 退出前必须完成 TransferOwnership
+- 成员进入 left 或 removed 终态时，必须在同一事务删除其 ConversationUserState，令 ChatInbox、 本地离线副本与未读投影均不再拥有该会话；迟到的 MessageSent
+  投影不得重建该状态
+- Assistant 成员必须绑定有效 skill consent，移除不删除历史消息
+- membership 变化只发布事件，不直接写 Conversation memberCount 投影
+lifecycle:
+  states:
+  - active
+  - left
+  - removed
+  optimistic_concurrency: version
+  idempotency: command_receipt

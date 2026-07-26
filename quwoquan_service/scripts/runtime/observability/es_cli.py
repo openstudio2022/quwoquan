@@ -19,7 +19,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[4]
-COMPOSE_FILE = ROOT / "deploy" / "observability" / "es" / "docker-compose.yml"
+COMPOSE_FILE = ROOT / "quwoquan_ops" / "observability" / "es" / "docker-compose.yml"
 ES_URL = os.environ.get("QUWOQUAN_ES_URL", "http://localhost:9200").rstrip("/")
 PRODUCT_OPS_BASE_URL = os.environ.get("PRODUCT_OPS_BASE_URL", "").rstrip("/")
 PLATFORM_OPS_BASE_URL = os.environ.get("PLATFORM_OPS_BASE_URL", "").rstrip("/")

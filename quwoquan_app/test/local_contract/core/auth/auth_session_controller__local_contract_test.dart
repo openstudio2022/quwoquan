@@ -1,27 +1,94 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger.dart';
+import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart'
+    show accountSessionLifecycleCommandWriterProvider;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../support/runtime_failure_fixtures.dart';
 
-AuthSessionRefreshExecutor _refreshExecutor(
-  Future<AuthLoginResultDto> Function(
-    String refreshToken,
-    Future<void>? abortTrigger,
-  )
-  run,
-) {
-  return (String refreshToken, {Future<void>? abortTrigger}) =>
-      run(refreshToken, abortTrigger);
-}
+AccountSessionLifecycleCommandWriter _lifecycleWriter(
+  Future<TokenRefreshGrant> Function(RefreshTokenCommand command) refresh,
+) => _StubAccountSessionLifecycleWriter(refresh);
 
 void main() {
+  test('账号注销本地清理回执加密持久化并在成功后物理删除', () async {
+    FlutterSecureStorage.setMockInitialValues(<String, String>{});
+    const store = SecureTerminalAccountCleanupReceiptStore();
+    const receipt = TerminalAccountCleanupReceipt(
+      accountId: 'owner-recovery',
+      personaId: 'persona-recovery',
+      installId: 'install-recovery',
+    );
+
+    await store.save(receipt);
+    final restored = await store.read();
+    expect(restored?.accountId, receipt.accountId);
+    expect(restored?.personaId, receipt.personaId);
+
+    await store.clear();
+    expect(await store.read(), isNull);
+  });
+
+  test('终态本地清理三次失败保留回执，后续恢复成功才删除', () async {
+    final receiptStore = _MemoryTerminalCleanupReceiptStore()
+      ..receipt = const TerminalAccountCleanupReceipt(
+        accountId: 'owner-recovery',
+        personaId: 'persona-recovery',
+        installId: 'install-recovery',
+      );
+    var shouldFail = true;
+    var purgeCalls = 0;
+    final container = ProviderContainer(
+      overrides: [
+        terminalAccountCleanupReceiptStoreProvider.overrideWithValue(
+          receiptStore,
+        ),
+        accountClosureLocalDataPurgerForActorProvider.overrideWith((
+          ref,
+          actor,
+        ) {
+          return AccountClosureLocalDataPurger(
+            clearBehaviorQueue: () async {
+              purgeCalls += 1;
+              if (shouldFail) {
+                throw StateError('transient cleanup failure');
+              }
+            },
+            clearTelemetryQueue: () async {},
+            clearRebuildableUserData: () async {},
+            purgePushAndIncomingCallState: () async {},
+            clearDraftsAndAccountPreferences: () async {},
+          );
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+    final recover = container.read(accountClosureLocalCleanupRecoveryProvider);
+
+    await recover();
+    expect(purgeCalls, 3);
+    expect(await receiptStore.read(), isNotNull);
+    expect(receiptStore.clearCalls, 0);
+
+    shouldFail = false;
+    await recover();
+    expect(purgeCalls, 4);
+    expect(await receiptStore.read(), isNull);
+    expect(receiptStore.clearCalls, 1);
+  });
+
   test('restore 遇到陈旧会话时静默 refresh 成功并保留 owner/sub 快照', () async {
     final store = _MemoryAuthSessionStore(
       stored: const StoredAuthSession(
@@ -40,16 +107,16 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          _refreshExecutor((refreshToken, _) async {
-            expect(refreshToken, 'old-refresh');
-            return AuthLoginResultDto.fromMap(<String, dynamic>{
-              'accessToken': 'new-access',
-              'refreshToken': 'new-refresh',
-            });
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((command) async {
+            expect(command.refreshToken, 'old-refresh');
+            return const TokenRefreshGrant(
+              accessToken: 'new-access',
+              refreshToken: 'new-refresh',
+              sessionRememberTtlSeconds: 0,
+            );
           }),
         ),
       ],
@@ -72,11 +139,10 @@ void main() {
     final store = _MemoryAuthSessionStore.authenticated();
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          _refreshExecutor((_, _) async {
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async {
             throw CloudException(
               type: CloudErrorType.unauthorized,
               message: 'expired',
@@ -103,15 +169,123 @@ void main() {
     expect(state.promptReason, AuthPromptReason.sessionExpired);
   });
 
+  test('静默 refresh 返回 account_suspended 时清除凭证并保留受限原因', () async {
+    final store = _MemoryAuthSessionStore.authenticated();
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async {
+            throw CloudException(
+              type: CloudErrorType.forbidden,
+              message: 'account restricted',
+              code: 'USER.AUTH.account_suspended',
+              statusCode: 403,
+              runtimeFailure: testRuntimeFailure(
+                code: 'USER.AUTH.account_suspended',
+                kind: RuntimeFailureKind.auth,
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final refreshed = await container
+        .read(authSessionControllerProvider.notifier)
+        .refreshSessionIfNeeded(force: true);
+
+    expect(refreshed, isFalse);
+    final state = container.read(authSessionControllerProvider);
+    expect(state.isAuthenticated, isFalse);
+    expect(state.promptReason, AuthPromptReason.accountSuspended);
+    expect(state.errorMessage, isNotEmpty);
+    final persisted = await store.read();
+    expect(persisted.accessToken, isEmpty);
+    expect(persisted.refreshToken, isEmpty);
+  });
+
+  test('静默 refresh 返回 account_deleted 410 时清除本地可换发凭证', () async {
+    final store = _MemoryAuthSessionStore.authenticated();
+    final cleanupReceiptStore = _MemoryTerminalCleanupReceiptStore();
+    var localPurgeCalls = 0;
+    AccountClosureLocalActorContext? purgedActor;
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        terminalAccountCleanupReceiptStoreProvider.overrideWithValue(
+          cleanupReceiptStore,
+        ),
+        accountClosureLocalDataPurgerForActorProvider.overrideWith((
+          ref,
+          actor,
+        ) {
+          purgedActor = actor;
+          return AccountClosureLocalDataPurger(
+            clearBehaviorQueue: () async {
+              localPurgeCalls += 1;
+            },
+            clearTelemetryQueue: () async {},
+            clearRebuildableUserData: () async {},
+            purgePushAndIncomingCallState: () async {},
+            clearDraftsAndAccountPreferences: () async {},
+          );
+        }),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async {
+            throw CloudException(
+              type: CloudErrorType.unknown,
+              message: 'account deleted',
+              code: UserErrorCode.accountDeleted.code,
+              statusCode: 410,
+              runtimeFailure: testRuntimeFailure(
+                code: UserErrorCode.accountDeleted.code,
+                kind: RuntimeFailureKind.auth,
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    container.read(accountClosureLocalCleanupLifecycleProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final refreshed = await container
+        .read(authSessionControllerProvider.notifier)
+        .refreshSessionIfNeeded(force: true);
+
+    expect(refreshed, isFalse);
+    final state = container.read(authSessionControllerProvider);
+    expect(state.isAuthenticated, isFalse);
+    expect(state.promptReason, AuthPromptReason.accountClosed);
+    final persisted = await store.read();
+    expect(persisted.accessToken, isEmpty);
+    expect(persisted.refreshToken, isEmpty);
+    expect(persisted.manualLoggedOut, isTrue);
+    await Future<void>.delayed(Duration.zero);
+    expect(localPurgeCalls, 1);
+    expect(purgedActor?.accountId, 'owner-1');
+    expect(purgedActor?.personaId, 'sub-1');
+    expect(cleanupReceiptStore.saveCalls, 1);
+    expect(cleanupReceiptStore.clearCalls, 1);
+    expect(await cleanupReceiptStore.read(), isNull);
+  });
+
   test('静默 refresh 网络失败时保留登录态，避免误登出', () async {
     final store = _MemoryAuthSessionStore.authenticated();
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          _refreshExecutor((_, _) async {
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async {
             throw CloudException(
               type: CloudErrorType.network,
               message: 'offline',
@@ -157,17 +331,15 @@ void main() {
       ),
     );
     final refreshStarted = Completer<void>();
-    final delayedResult = Completer<AuthLoginResultDto>();
+    final delayedResult = Completer<TokenRefreshGrant>();
     final cancellation = Completer<void>();
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          _refreshExecutor((_, abortTrigger) async {
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) {
             refreshStarted.complete();
-            await abortTrigger;
             return delayedResult.future;
           }),
         ),
@@ -191,10 +363,11 @@ void main() {
       'old-access',
     );
     delayedResult.complete(
-      AuthLoginResultDto.fromMap(<String, dynamic>{
-        'accessToken': 'late-access',
-        'refreshToken': 'late-refresh',
-      }),
+      const TokenRefreshGrant(
+        accessToken: 'late-access',
+        refreshToken: 'late-refresh',
+        sessionRememberTtlSeconds: 0,
+      ),
     );
     await Future<void>.delayed(Duration.zero);
 
@@ -228,11 +401,16 @@ void main() {
       );
       final container = ProviderContainer(
         overrides: [
-          appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
           startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
           authSessionStoreProvider.overrideWithValue(store),
-          authSessionRefreshExecutorProvider.overrideWithValue(
-            _refreshExecutor((_, _) async => AuthLoginResultDto()),
+          accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+            _lifecycleWriter(
+              (_) async => const TokenRefreshGrant(
+                accessToken: 'unused-access',
+                refreshToken: 'unused-refresh',
+                sessionRememberTtlSeconds: 0,
+              ),
+            ),
           ),
         ],
       );
@@ -276,11 +454,16 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          _refreshExecutor((_, _) async => AuthLoginResultDto()),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter(
+            (_) async => const TokenRefreshGrant(
+              accessToken: 'unused-access',
+              refreshToken: 'unused-refresh',
+              sessionRememberTtlSeconds: 0,
+            ),
+          ),
         ),
       ],
     );
@@ -302,14 +485,49 @@ void main() {
   });
 }
 
-final class _MockRemoteMode extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.remote;
-}
-
 final class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
   @override
   bool build() => true;
+}
+
+final class _StubAccountSessionLifecycleWriter
+    implements AccountSessionLifecycleCommandWriter {
+  const _StubAccountSessionLifecycleWriter(this._refresh);
+
+  final Future<TokenRefreshGrant> Function(RefreshTokenCommand command)
+  _refresh;
+
+  @override
+  Future<TokenRefreshGrant> refreshToken(RefreshTokenCommand command) {
+    return _refresh(command);
+  }
+
+  @override
+  Future<LogoutAck> logout(LogoutCommand command) async {
+    return const LogoutAck(revoked: true);
+  }
+}
+
+final class _MemoryTerminalCleanupReceiptStore
+    implements TerminalAccountCleanupReceiptStore {
+  TerminalAccountCleanupReceipt? receipt;
+  int saveCalls = 0;
+  int clearCalls = 0;
+
+  @override
+  Future<TerminalAccountCleanupReceipt?> read() async => receipt;
+
+  @override
+  Future<void> save(TerminalAccountCleanupReceipt receipt) async {
+    saveCalls += 1;
+    this.receipt = receipt;
+  }
+
+  @override
+  Future<void> clear() async {
+    clearCalls += 1;
+    receipt = null;
+  }
 }
 
 final class _MemoryAuthSessionStore implements AuthSessionStore {
@@ -339,8 +557,8 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
   Future<StoredAuthSession> read() async => stored;
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -348,13 +566,10 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {
     stored = StoredAuthSession(
-      accessToken: accessToken,
-      refreshToken: refreshToken,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
       ownerId: stored.ownerId,
       activeSubAccountId: stored.activeSubAccountId,
       accountState: stored.accountState,
@@ -362,6 +577,13 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
       installId: stored.installId,
       lastRefreshAtEpochMs: DateTime.now().millisecondsSinceEpoch,
       lastForegroundAuthCheckAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedLoginIdentifier: stored.rememberedLoginIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+      sessionRememberTtlSeconds: result.sessionRememberTtlSeconds,
       manualLoggedOut: false,
       launchPromptDismissed: false,
     );
@@ -369,7 +591,7 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override

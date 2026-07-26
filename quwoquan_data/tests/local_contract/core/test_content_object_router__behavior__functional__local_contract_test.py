@@ -29,8 +29,8 @@ from content.post import object_index as co  # noqa: E402
 from core.paths import execution_root  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
-_TASK = "20260711--travel-article-routing--cn-sichuan--canary-001"
-_IMAGE_TASK = "20260711--travel-image-routing--cn-sichuan--canary-002"
+_TASK = "20260711--travel-article-routing--test-region-b--pilot-001"
+_IMAGE_TASK = "20260711--travel-image-routing--test-region-b--pilot-002"
 _BATCH = _TASK
 
 
@@ -163,7 +163,7 @@ def test_register_content_object_rejects_cross_carrier_execution():
 
 def test_register_content_object_requires_execution_manifest():
     unseeded = "--".join(
-        ("20260711", "travel-article-unseeded", "cn-sichuan", "canary-999")
+        ("20260711", "travel-article-unseeded", "test-region-b", "pilot-999")
     )
     try:
         co.register_content_object(

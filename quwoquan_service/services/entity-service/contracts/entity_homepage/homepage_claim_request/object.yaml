@@ -1,0 +1,64 @@
+kind: aggregate_root
+description: '共享主页认领申请。拥有申请、审核与审计生命周期；仅通过 homepageId 引用 Homepage，
+
+  不作为 Homepage 的无界 owned member。
+
+  '
+identity:
+  fields:
+  - claimRequestId
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: command_facade
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: homepage
+  on_delete: restrict
+  reference_fields:
+  - homepageId
+  target_object: entity.Homepage
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: requester
+  on_delete: retain
+  reference_fields:
+  - requesterPersonaId
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: reviewerAccount
+  on_delete: retain
+  reference_fields:
+  - reviewerAccountId
+  target_object: user.UserAccount
+capabilities:
+- auditable
+business_rules:
+- requester persona 与 homepageId 创建后不可变
+- 同一 requester 对同一 homepage 只能有一个 pending 申请
+- reviewer 不能是 requester，且必须具备 claim review 权限
+- approved 或 rejected 后不可再次裁决
+lifecycle:
+  states:
+  - pending_review
+  - approved
+  - rejected
+  transitions:
+  - from: pending_review
+    command: ReviewHomepageClaimRequest.approve
+    to: approved
+  - from: pending_review
+    command: ReviewHomepageClaimRequest.reject
+    to: rejected
+  optimistic_concurrency: version
+  idempotency: command_receipt

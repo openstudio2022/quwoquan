@@ -11,11 +11,14 @@ import 'package:quwoquan_app/cloud/rtc/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
+import 'package:quwoquan_app/app/shell/flows/pip_call_hangup_flow.dart';
 import 'package:quwoquan_app/app/shell/web_app_install_banner.dart';
 import 'package:quwoquan_app/app/shell/web_main_app_shell.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/active_call_bar.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/pip_call_overlay.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
@@ -91,8 +94,13 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     context.push(path);
   }
 
-  void _hangupActiveCall() {
-    ref.read(activeCallProvider.notifier).endCall();
+  Future<void> _hangupActiveCall() async {
+    final callSession = ref.read(callSessionProvider.notifier);
+    final activeCall = ref.read(activeCallProvider.notifier);
+    await runPipHangupFlow(
+      hangup: () => callSession.hangupCall(clearActiveCall: false),
+      clearActiveCall: activeCall.endCall,
+    );
   }
 
   void _cachePageAccessDependencies() {
@@ -127,6 +135,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       writeAppPageAccessOpen(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
+        navigationStartedAt: _currentPageEnterAt,
         visitRecorder: ref.read(visitRecorderServiceProvider),
         telemetryReporter: ref.read(appTelemetryReporterProvider),
       );
@@ -152,6 +161,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       writeAppPageAccessOpen(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
+        navigationStartedAt: _currentPageEnterAt,
         visitRecorder: ref.read(visitRecorderServiceProvider),
         telemetryReporter: ref.read(appTelemetryReporterProvider),
       );
@@ -219,6 +229,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         capabilities.wideScreenLayout && AppSpacing.isWideLayout(context);
     final showInstallBanner =
         capabilities.promotesAppInstall && !useWebWideShell;
+    final activeSpeaker = ref.watch(callParticipantsProvider).activeSpeaker;
 
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -315,6 +326,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
             ),
           ),
           PipCallOverlay(
+            activeSpeaker: activeSpeaker,
             onReturnToCall: _returnToActiveCall,
             onHangup: _hangupActiveCall,
           ),

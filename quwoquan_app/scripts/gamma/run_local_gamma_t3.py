@@ -27,6 +27,10 @@ from quwoquan_ops.cli.lib.local_environment_auth import (  # noqa: E402
     open_local_acceptance_session,
 )
 from quwoquan_ops.cli.lib.output_paths import env_run_dir  # noqa: E402
+from quwoquan_ops.cli.lib.compose_layout import (  # noqa: E402
+    compose_file_args,
+    gamma_compose_files,
+)
 
 MANIFEST = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
 METADATA_ROOT = ROOT / "quwoquan_service/contracts/metadata"
@@ -37,6 +41,7 @@ GAMMA_RUN_ROOT = Path(
     or env_run_dir("gamma", "local-gamma-t3", target="gamma-local")
 )
 COMPOSE_FILE = ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+COMPOSE_FILES = gamma_compose_files(ROOT)
 COMPOSE_PROJECT = os.environ.get("LOCAL_GAMMA_COMPOSE_PROJECT") or os.environ.get(
     "COMPOSE_PROJECT_NAME", "quwoquan_service"
 )
@@ -60,6 +65,7 @@ DISPLAY_STATEMENT_BANNED_FRAGMENTS = (
     "最近在看这些",
 )
 DISPLAY_OBJECT_TARGET_TYPES = {"user", "circle", "homepage", "post", "task"}
+DEFAULT_ENABLED_DOMAINS = ("content", "chat", "circle", "entity", "user")
 _ACTIVE_SESSION: Optional[LocalGammaAcceptanceSession] = None
 
 
@@ -204,10 +210,25 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
         device_info.setdefault("imageHeight", height)
     if duration_ms > 0:
         device_info.setdefault("durationMs", duration_ms)
+    revision_source = json.dumps(
+        {
+            "postId": post_id,
+            "contentType": post.get("contentType") or post.get("type", ""),
+            "title": post.get("title", ""),
+            "body": post.get("body", ""),
+            "mediaUrls": media_urls,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
     doc = {
         "_id": post_id,
         "postId": post_id,
         "postRef": post_id,
+        "version": 1,
+        "contentDigest": "sha256:"
+        + hashlib.sha256(revision_source.encode("utf-8")).hexdigest(),
         "authorId": post.get("authorId", ""),
         "subAccountId": post.get("subAccountId") or post.get("authorId", ""),
         "authorDisplayNameSnapshot": post.get("displayName", ""),
@@ -251,7 +272,7 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def gamma_domain_fixture_spec(domain: str) -> Tuple[str, List[str]]:
-    """Return the (metadata-relative fixturePath, refs) for a seed domain."""
+    """Return the (repository-relative fixturePath, refs) for a seed domain."""
     manifest = load_manifest()
     item = next(
         (item for item in manifest.get("seedRefs", []) if item.get("domain") == domain),
@@ -268,7 +289,7 @@ def gamma_domain_fixture_spec(domain: str) -> Tuple[str, List[str]]:
 
 def gamma_content_fixture_spec() -> Tuple[Path, List[str]]:
     fixture_rel, refs = gamma_domain_fixture_spec("content")
-    return METADATA_ROOT / fixture_rel, refs
+    return ROOT / fixture_rel, refs
 
 
 def mongo_published_port() -> str:
@@ -281,8 +302,7 @@ def compose_command(*args: str) -> List[str]:
         "compose",
         "-p",
         COMPOSE_PROJECT,
-        "-f",
-        str(COMPOSE_FILE),
+        *compose_file_args(COMPOSE_FILES),
         *args,
     ]
 
@@ -412,9 +432,9 @@ def seed_chat() -> Dict[str, Any]:
 def seed_entity(base_url: str) -> Dict[str, Any]:
     """Publish an entity homepage through the runtime API and return its id.
 
-    Homepage detail/bundle reads come from the homepage-state snapshot, so we
-    seed through the real candidate -> publish flow (drift-proof) instead of
-    writing private snapshot state directly. The published id resolves the
+    Homepage detail/bundle reads come from the authoritative homepages
+    collection, so we seed through the real candidate -> publish flow instead
+    of writing private aggregate state directly. The published id resolves the
     `{homepageId}` template in the manifest verifiedEndpoints.
 
     introductionMarkdown/introductionAssets 与数据工程 page.md 三段结构同构
@@ -472,10 +492,72 @@ def seed_entity(base_url: str) -> Dict[str, Any]:
         return {"status": "failed", "error": str(exc)}
 
 
+def fixture_author_impact_evidence_to_doc(raw: Dict[str, Any]) -> Dict[str, Any]:
+    string_fields = (
+        "authorId",
+        "impactId",
+        "sourceEventId",
+        "actorId",
+        "contentId",
+        "contentType",
+        "helpType",
+        "action",
+        "intersectionDimension",
+        "tagRef",
+        "source",
+        "occurredAt",
+        "createdAt",
+    )
+    doc = {field: str(raw.get(field) or "").strip() for field in string_fields}
+    required = (
+        "authorId",
+        "impactId",
+        "sourceEventId",
+        "contentId",
+        "contentType",
+        "helpType",
+        "action",
+        "intersectionDimension",
+        "source",
+        "occurredAt",
+        "createdAt",
+    )
+    missing = [field for field in required if not doc[field]]
+    if missing:
+        raise ValueError(
+            "authorImpactEvidence is missing required fields: "
+            + ", ".join(missing)
+        )
+    if not doc["sourceEventId"].startswith("fixture_content_author_impact_"):
+        raise ValueError(
+            "authorImpactEvidence.sourceEventId must use the "
+            "fixture_content_author_impact_ reset scope"
+        )
+    expected_impact_id = hashlib.sha1(
+        "|".join(
+            (
+                doc["authorId"],
+                doc["helpType"],
+                doc["action"],
+                doc["intersectionDimension"],
+                doc["tagRef"],
+                doc["source"],
+            )
+        ).encode("utf-8")
+    ).hexdigest()[:20]
+    if doc["impactId"] != expected_impact_id:
+        raise ValueError(
+            "authorImpactEvidence.impactId does not match the canonical "
+            f"aggregation key: {doc['sourceEventId']}"
+        )
+    return doc
+
+
 def seed_content() -> Dict[str, Any]:
     fixture_path, refs = gamma_content_fixture_spec()
     fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
     docs_by_id: Dict[str, Dict[str, Any]] = {}
+    evidence_by_source_event: Dict[str, Dict[str, Any]] = {}
     for ref in refs:
         seed_set = fixture.get("seedSets", {}).get(ref)
         if not isinstance(seed_set, dict):
@@ -483,45 +565,138 @@ def seed_content() -> Dict[str, Any]:
         for post in seed_set.get("posts", []) or []:
             doc = fixture_post_to_doc(post)
             docs_by_id[str(doc["_id"])] = doc
+        for raw_evidence in seed_set.get("authorImpactEvidence", []) or []:
+            if not isinstance(raw_evidence, dict):
+                raise ValueError(
+                    f"seed set {ref} contains non-object authorImpactEvidence"
+                )
+            evidence = fixture_author_impact_evidence_to_doc(raw_evidence)
+            evidence_by_source_event[evidence["sourceEventId"]] = evidence
     docs = list(docs_by_id.values())
+    evidence_docs = list(evidence_by_source_event.values())
     js_path = GAMMA_RUN_ROOT / "seed-content.js"
     js_path.parent.mkdir(parents=True, exist_ok=True)
     js_path.write_text(
         """
 const docs = %s;
+const evidenceDocs = %s;
 const dateFields = ["createdAt", "updatedAt", "publishedAt", "lastActiveAt"];
 for (const doc of docs) {
   for (const key of dateFields) {
     if (doc[key]) doc[key] = new Date(doc[key]);
   }
 }
+for (const evidence of evidenceDocs) {
+  evidence.occurredAt = new Date(evidence.occurredAt);
+  evidence.createdAt = new Date(evidence.createdAt);
+}
 const dbh = db.getSiblingDB("quwoquan_content");
 const ids = docs.map((doc) => doc._id);
+const feedDocs = docs.map((doc) => ({
+  postId: doc._id,
+  authorId: doc.authorId || "",
+  creatorProfileId: doc.subAccountId || doc.authorId || "",
+  creatorDisclosure: {},
+  experienceClaimMode: "",
+  authorQualitySignals: {},
+  contentType: doc.contentType || "",
+  contentIdentity: doc.contentIdentity || "",
+  title: doc.title || "",
+  tagRefs: Array.isArray(doc.tags) ? doc.tags : [],
+  coverUrl: doc.coverUrl || "",
+  thumbnailUrl: doc.thumbnailUrl || "",
+  videoUrl: doc.videoUrl || "",
+  coverStrategy: "",
+  coverFrameTimeMs: 0,
+  durationMs: Number(doc.durationMs || 0),
+  width: Number(doc.width || 0),
+  height: Number(doc.height || 0),
+  mediaItems: Array.isArray(doc.mediaItems) ? doc.mediaItems : [],
+  status: "published",
+  visibility: "public",
+  assistantUsePolicy: doc.assistantUsePolicy || "allow",
+  entityRefs: [],
+  semanticMentions: null,
+  contentVertical: "",
+  sourceTaskId: "",
+  conditionProfile: {},
+  likeCount: Number(doc.likeCount || 0),
+  commentCount: Number(doc.commentCount || 0),
+  shareCount: Number(doc.shareCount || 0),
+  viewCount: 0,
+  createdAt: doc.createdAt,
+  publishedAt: doc.publishedAt,
+  updatedAt: doc.updatedAt,
+}));
 try {
   // The Gamma fixture set includes stable non-fixture IDs. Remove precisely
-  // this execution's IDs before insertion so a rerun is idempotent and every
-  // Mongo write failure terminates mongosh with a non-zero status.
+  // this execution's Posts and their derived feed rows before insertion so a
+  // rerun is idempotent. The content seed writes both objects atomically at
+  // the script level: a public Post without its rm_discovery_feed row makes
+  // the comment-count relay retry forever and therefore breaks readiness.
   const deleted = ids.length > 0
     ? dbh.posts.deleteMany({_id: {$in: ids}})
     : {deletedCount: 0};
+  const deletedFeed = ids.length > 0
+    ? dbh.rm_discovery_feed.deleteMany({postId: {$in: ids}})
+    : {deletedCount: 0};
+  const deletedEvidence = dbh.rm_author_impact_evidence.deleteMany({
+    sourceEventId: /^fixture_content_author_impact_/,
+  });
   if (docs.length > 0) dbh.posts.insertMany(docs, {ordered: true});
+  if (feedDocs.length > 0) dbh.rm_discovery_feed.insertMany(feedDocs, {ordered: true});
+  for (const evidence of evidenceDocs) {
+    dbh.rm_author_impact_evidence.replaceOne(
+      {sourceEventId: evidence.sourceEventId},
+      evidence,
+      {upsert: true},
+    );
+  }
   const storedCount = ids.length > 0
     ? dbh.posts.countDocuments({_id: {$in: ids}})
     : 0;
+  const storedFeedCount = ids.length > 0
+    ? dbh.rm_discovery_feed.countDocuments({postId: {$in: ids}})
+    : 0;
   if (storedCount !== docs.length) {
     throw new Error(`seed verification failed: stored ${storedCount}/${docs.length}`);
+  }
+  if (storedFeedCount !== feedDocs.length) {
+    throw new Error(`feed seed verification failed: stored ${storedFeedCount}/${feedDocs.length}`);
+  }
+  const evidenceSourceEventIds = evidenceDocs.map(
+    (evidence) => evidence.sourceEventId,
+  );
+  const storedEvidenceCount = evidenceSourceEventIds.length > 0
+    ? dbh.rm_author_impact_evidence.countDocuments({
+        sourceEventId: {$in: evidenceSourceEventIds},
+      })
+    : 0;
+  if (storedEvidenceCount !== evidenceDocs.length) {
+    throw new Error(
+      `author-impact evidence seed verification failed: stored ${storedEvidenceCount}/${evidenceDocs.length}`,
+    );
   }
   printjson({
     insertedCount: docs.length,
     deletedCount: deleted.deletedCount || 0,
     storedCount,
+    feedInsertedCount: feedDocs.length,
+    feedDeletedCount: deletedFeed.deletedCount || 0,
+    storedFeedCount,
+    authorImpactEvidenceInsertedCount: evidenceDocs.length,
+    authorImpactEvidenceDeletedCount: deletedEvidence.deletedCount || 0,
+    storedEvidenceCount,
   });
 } catch (error) {
   print(error && error.stack ? error.stack : String(error));
   quit(1);
 }
 """
-        % json.dumps(docs, ensure_ascii=False),
+        % (
+            json.dumps(docs, ensure_ascii=False),
+            json.dumps(evidence_docs, ensure_ascii=False),
+        ),
         encoding="utf-8",
     )
     cmd = compose_command(
@@ -543,6 +718,9 @@ try {
     return {
         "status": "passed" if result.returncode == 0 else "failed",
         "insertedCount": len(docs) if result.returncode == 0 else 0,
+        "authorImpactEvidenceCount": (
+            len(evidence_docs) if result.returncode == 0 else 0
+        ),
         "output": result.stdout[-2000:],
     }
 
@@ -554,7 +732,7 @@ def seed_content_social_graph(viewer_id: str) -> Dict[str, Any]:
     report_path = GAMMA_RUN_ROOT / "content_social_graph_seed_report.json"
     cmd = [
         "python3",
-        "quwoquan_service/services/seed-box/scripts/apply_content_social_graph_seed.py",
+        "quwoquan_service/services/content-service/cmd/jobs/seed-social-graph/main.py",
         "--container",
         "quwoquan_service-mongodb-1",
         "--db",
@@ -585,16 +763,92 @@ def seed_content_social_graph(viewer_id: str) -> Dict[str, Any]:
     return payload
 
 
+def seed_content_object_cards(viewer_id: str) -> Dict[str, Any]:
+    """N2-2：应用混合对象卡（entity_homepage）验收种子（亲和/想去/实体档案/homepage 锚点）。"""
+    viewer_id = viewer_id.strip()
+    if not viewer_id:
+        return {"status": "failed", "error": "authenticated persona id is required"}
+    report_path = GAMMA_RUN_ROOT / "content_object_cards_seed_report.json"
+    cmd = [
+        "python3",
+        "quwoquan_service/services/content-service/cmd/jobs/seed-object-cards/main.py",
+        "--container",
+        "quwoquan_service-mongodb-1",
+        "--db",
+        "quwoquan_content",
+        "--report",
+        str(report_path),
+        "--viewer-id",
+        viewer_id,
+    ]
+    result = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    payload: Dict[str, Any] = {
+        "status": "passed" if result.returncode == 0 else "failed",
+        "output": result.stdout[-2000:],
+        "report": str(report_path.relative_to(ROOT)),
+    }
+    if report_path.exists():
+        try:
+            payload["applied"] = json.loads(report_path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            payload["applied"] = {"status": "unparseable"}
+    return payload
+
+
+def seed_content_moment_channel() -> Dict[str, Any]:
+    """应用 manifest supplementary fixture，保证推荐频道有新鲜可召回内容。"""
+    report_path = GAMMA_RUN_ROOT / "content_moment_channel_seed_report.json"
+    cmd = [
+        "python3",
+        "quwoquan_service/services/content-service/cmd/jobs/seed-moment-channel/main.py",
+        "--container",
+        "quwoquan_service-mongodb-1",
+        "--redis-container",
+        "quwoquan_service-redis-1",
+        "--db",
+        "quwoquan_content",
+        "--report",
+        str(report_path),
+    ]
+    result = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    payload: Dict[str, Any] = {
+        "status": "passed" if result.returncode == 0 else "failed",
+        "output": result.stdout[-2000:],
+        "report": str(report_path.relative_to(ROOT)),
+    }
+    if report_path.exists():
+        try:
+            payload["applied"] = json.loads(report_path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            payload["applied"] = {"status": "unparseable"}
+    return payload
+
+
 def setup_comment_thread(base_url: str) -> Dict[str, Any]:
     """Create runtime-only comment fixtures through the public API.
 
-    The local gamma mirror hydrates posts from Mongo, while comments live in the
-    content-service process. Creating the thread via API keeps T3 aligned with
-    runtime behavior instead of writing private in-process state.
+    Posts are fixture-seeded read data, while Comments remain content-service
+    aggregate state. Creating the thread through the generated public contract
+    exercises Comment persistence, outbox and projections instead of writing
+    Mongo documents behind the service boundary.
     """
     try:
         status, body = http_request(
-            base_url.rstrip() + "/content/posts/fixture_photo_001/comments",
+            base_url.rstrip() + "/content/content/posts/fixture_photo_001/comments",
             method="POST",
             body={"content": "主评论示例"},
             timeout=8,
@@ -602,7 +856,6 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
         )
         parent_resp = json.loads(body.decode("utf-8"))
         parent_id = str(parent_resp.get("id") or "").strip()
-        parent_version = int(parent_resp.get("version") or 0)
         if not parent_id:
             return {
                 "status": "failed",
@@ -610,7 +863,7 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
                 "error": "CreateComment did not return parent comment id",
             }
         reply_status, reply_body = http_request(
-            base_url.rstrip() + "/content/posts/fixture_photo_001/comments",
+            base_url.rstrip() + "/content/content/posts/fixture_photo_001/comments",
             method="POST",
             body={"content": "回复示例", "replyToCommentId": parent_id},
             timeout=8,
@@ -625,19 +878,16 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
                 "error": "CreateComment did not return reply comment id",
             }
         reaction_status, _ = http_request(
-            base_url.rstrip() + f"/content/comments/{parent_id}/reaction",
+            base_url.rstrip() + f"/content/content/comments/{parent_id}/reaction",
             method="POST",
             body={"reaction": "like"},
             timeout=8,
             headers={"Idempotency-Key": gamma_probe_idempotency_key("comment-reaction")},
         )
         bind_status, bind_body = http_request(
-            base_url.rstrip() + f"/content/comments/{parent_id}/media:bind",
+            base_url.rstrip() + f"/content/content/comments/{parent_id}/media:bind",
             method="POST",
-            body={
-                "version": parent_version,
-                "attachmentMediaIds": [],
-            },
+            body={"attachmentMediaIds": []},
             timeout=8,
             headers={"Idempotency-Key": gamma_probe_idempotency_key("comment-media-bind")},
         )
@@ -673,16 +923,25 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
 
 def setup_runtime_fixtures(base_url: str, viewer_id: str) -> Dict[str, Any]:
     comment = setup_comment_thread(base_url)
+    moment_channel = seed_content_moment_channel()
     social_graph = seed_content_social_graph(viewer_id)
+    object_cards = seed_content_object_cards(viewer_id)
     status = "passed"
-    if comment.get("status") == "failed" or social_graph.get("status") == "failed":
+    if (
+        comment.get("status") == "failed"
+        or moment_channel.get("status") == "failed"
+        or social_graph.get("status") == "failed"
+        or object_cards.get("status") == "failed"
+    ):
         status = "failed"
     return {
         "status": status,
         "parentCommentId": comment.get("parentCommentId", ""),
         "replyCommentId": comment.get("replyCommentId", ""),
         "commentThread": comment,
+        "momentChannelSeed": moment_channel,
         "socialGraphSeed": social_graph,
+        "objectCardsSeed": object_cards,
     }
 
 
@@ -1104,6 +1363,31 @@ def assert_circle_members_page(payload: Any, _: Dict[str, Any]) -> None:
     expect_non_empty_string(first.get("role"), "circle_members_page.items[0].role")
 
 
+def assert_home_feed_object_cards(payload: Any, _: Dict[str, Any]) -> None:
+    """N2-2：gamma-local 开启 objectCards 后，首页 recommend feed envelope 必须
+    注入可点的 entity_homepage 卡（策略 everyN 锚点 + homepageId 可路由）。"""
+    page = expect_dict(payload, "home_feed")
+    items = expect_list(page.get("items"), "home_feed.items")
+    if not items:
+        raise AssertionError("home_feed.items must be non-empty before object cards can anchor")
+    cards = expect_list(page.get("objectCards"), "home_feed.objectCards")
+    if not cards:
+        raise AssertionError(
+            "home_feed.objectCards must be non-empty (policy overlay enabled + object cards seed applied)"
+        )
+    for index, raw in enumerate(cards):
+        card = expect_dict(raw, f"home_feed.objectCards[{index}]")
+        if card.get("objectKind") != "entity_homepage":
+            raise AssertionError(
+                f"objectCards[{index}].objectKind must be entity_homepage, got {card.get('objectKind')!r}"
+            )
+        expect_non_empty_string(card.get("objectId"), f"objectCards[{index}].objectId")
+        expect_non_empty_string(card.get("title"), f"objectCards[{index}].title")
+        anchor = card.get("anchorIndex")
+        if not isinstance(anchor, int) or anchor <= 0:
+            raise AssertionError(f"objectCards[{index}].anchorIndex must be positive, got {anchor!r}")
+
+
 def assert_circle_feed_page(payload: Any, _: Dict[str, Any]) -> None:
     page = expect_dict(payload, "circle_feed_page")
     items = expect_list(page.get("items"), "circle_feed_page.items")
@@ -1141,6 +1425,7 @@ STRICT_ASSERTIONS = {
     "circle_impact_summary": assert_circle_impact_summary,
     "circle_members_page": assert_circle_members_page,
     "circle_feed_page": assert_circle_feed_page,
+    "home_feed_object_cards": assert_home_feed_object_cards,
     "object_intersections_homepage": assert_object_intersections,
     "object_intersections_circle": assert_object_intersections,
 }
@@ -1286,13 +1571,20 @@ def strict_endpoint_checks(
     return checks
 
 
-def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict[str, Any]]:
+def run_flutter_contracts(
+    base_url: str,
+    product_ops_base_url: str,
+    enabled_domains: Set[str],
+    *,
+    include_product_ops: bool,
+) -> List[Dict[str, Any]]:
     checks = []  # type: List[Dict[str, Any]]
     flutter_base_url = flutter_contract_base_url(base_url)
     flutter_product_ops_base_url = flutter_contract_base_url(product_ops_base_url)
     cases = [
         {
             "name": "content_api_contract",
+            "domain": "content",
             "path": "test/api_integration/cloud/content/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
@@ -1303,6 +1595,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict
         },
         {
             "name": "chat_api_contract",
+            "domain": "chat",
             "path": "test/api_integration/cloud/chat/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
@@ -1311,7 +1604,18 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict
             ],
         },
         {
+            "name": "user_identity_api_contract",
+            "domain": "user",
+            "path": "test/api_integration/cloud/user/user_api_contract_runner.dart",
+            "defines": [
+                "--dart-define=API_CONTRACT_ENV=gamma",
+                f"--dart-define=API_CONTRACT_BASE_URL={flutter_base_url}",
+                "--dart-define=API_CONTRACT_ALLOW_BAD_CERT=true",
+            ],
+        },
+        {
             "name": "product_ops_api_contract",
+            "domain": "product_ops",
             "path": "test/api_integration/cloud/ops/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
@@ -1322,6 +1626,11 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict
         },
     ]
     for case in cases:
+        if case["domain"] == "product_ops":
+            if not include_product_ops:
+                continue
+        elif case["domain"] not in enabled_domains:
+            continue
         if case["name"] == "chat_api_contract":
             chat_inbox = endpoint_contract_summary("chat", "/chat/inbox", "GET")
             if chat_inbox.get("commercialStatus") == "blocked":
@@ -1376,13 +1685,16 @@ def main() -> int:
     parser.add_argument(
         "--enabled-domain",
         action="append",
-        default=["content", "chat", "circle", "entity", "user"],
+        default=None,
     )
     parser.add_argument("--skip-seed", action="store_true")
     parser.add_argument(
         "--seed-only",
         action="store_true",
-        help="Only run Mongo content seed (no health wait or flutter contracts).",
+        help=(
+            "Seed content plus the authenticated user-profile prerequisite "
+            "(no health wait or Flutter contracts)."
+        ),
     )
     parser.add_argument("--skip-flutter-contracts", action="store_true")
     parser.add_argument("--strict-all", action="store_true")
@@ -1394,7 +1706,8 @@ def main() -> int:
     parser.add_argument("--wait-seconds", type=int, default=45)
     args = parser.parse_args()
 
-    enabled_domains = set(args.enabled_domain)
+    enabled_domain_scope_selected = args.enabled_domain is not None
+    enabled_domains = set(args.enabled_domain or DEFAULT_ENABLED_DOMAINS)
     manifest = load_manifest()
     scope_name = args.verification_scope.strip()
     scope = resolve_verification_scope(manifest, scope_name) if scope_name else None
@@ -1433,14 +1746,40 @@ def main() -> int:
 
     if args.seed_only:
         report["seed"] = seed_content()
-        report["status"] = "passed" if report["seed"].get("status") == "passed" else "failed"
+        # Gamma's environment health probe authenticates as the canonical
+        # acceptance principal and calls /user/sync. Seed its typed profile
+        # before reporting startup success; otherwise the proxy is healthy
+        # while the authenticated B1 path fails with USER.USER.not_found.
+        if (
+            report["seed"].get("status") == "passed"
+            and "user" in enabled_domains
+        ):
+            report["domainSeeds"]["user"] = seed_user()
+        user_seed_failed = (
+            report["domainSeeds"].get("user", {}).get("status") == "failed"
+        )
+        report["status"] = (
+            "passed"
+            if (
+                report["seed"].get("status") == "passed"
+                and not user_seed_failed
+            )
+            else "failed"
+        )
     else:
         report["health"] = wait_url(args.base_url.rstrip("/") + "/healthz", args.wait_seconds)
-        report["productOpsHealth"] = wait_url(
-            args.product_ops_base_url.rstrip("/") + "/healthz",
-            args.wait_seconds,
+        report["productOpsHealth"] = (
+            {"status": "skipped", "reason": "domain_scoped_verification"}
+            if enabled_domain_scope_selected
+            else wait_url(
+                args.product_ops_base_url.rstrip("/") + "/healthz",
+                args.wait_seconds,
+            )
         )
-        if report["health"].get("status") != "passed" or report["productOpsHealth"].get("status") != "passed":
+        if report["health"].get("status") != "passed" or (
+            not enabled_domain_scope_selected
+            and report["productOpsHealth"].get("status") != "passed"
+        ):
             report["status"] = "gate_block"
         else:
             try:
@@ -1509,6 +1848,8 @@ def main() -> int:
                 else run_flutter_contracts(
                     args.base_url,
                     args.product_ops_base_url,
+                    enabled_domains,
+                    include_product_ops=not enabled_domain_scope_selected,
                 )
             )
             failed = any(item.get("status") == "failed" for item in report["endpoints"])

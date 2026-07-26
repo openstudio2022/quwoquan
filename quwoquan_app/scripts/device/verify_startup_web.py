@@ -219,6 +219,20 @@ def first_frame_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
     )
 
 
+def startup_event(
+    events: list[dict[str, Any]],
+    event_name: str,
+) -> dict[str, Any] | None:
+    return next(
+        (
+            event
+            for event in reversed(events)
+            if event.get("eventName") == event_name
+        ),
+        None,
+    )
+
+
 def run_once(
     *,
     chrome: Path,
@@ -296,6 +310,33 @@ def run_once(
     terminal = terminal_event(events)
     shell = shell_event(events)
     overlay_removed = overlay_removed_event(events)
+    flutter_first_frame = startup_event(events, "flutter_first_frame")
+    safe_terminal = startup_event(events, "startup_safe_terminal")
+    dart_attempt = startup_event(events, "startup_attempt_started")
+    race_dismissed = startup_event(
+        events,
+        "web_startup_safe_terminal_race_dismissed",
+    )
+    native_recovery = startup_event(events, "web_first_frame_timeout") or startup_event(
+        events,
+        "web_startup_safe_terminal_timeout",
+    )
+    failure_code = next(
+        (
+            str(event["failureCode"])
+            for event in events
+            if event.get("failureCode")
+        ),
+        "",
+    )
+    attempt_id = next(
+        (
+            str(event["attemptId"])
+            for event in events
+            if event.get("attemptId")
+        ),
+        None,
+    )
     return {
         "run": run_index,
         "chromeExitCode": chrome_exit_code,
@@ -307,8 +348,48 @@ def run_once(
         ),
         "replayCount": terminal.get("replayCount") if terminal else None,
         "exitReason": terminal.get("exitReason") if terminal else None,
-        "motionSpecVersion": terminal.get("motionSpecVersion") if terminal else None,
+        "motionSpec": terminal.get("motionSpec") if terminal else None,
         "eventCount": len(events),
+        "attemptId": (
+            str(dart_attempt["attemptId"])
+            if dart_attempt and dart_attempt.get("attemptId")
+            else attempt_id
+        ),
+        "launchMode": dart_attempt.get("launchMode") if dart_attempt else None,
+        "hotRestart": dart_attempt.get("hotRestart") if dart_attempt else None,
+        "runtimeConfigurationState": (
+            dart_attempt.get("configurationState") if dart_attempt else None
+        ),
+        "missingDefineKeys": (
+            dart_attempt.get("missingDefineKeys") if dart_attempt else None
+        ),
+        "failureCode": failure_code,
+        "rendererFirstFrameMs": (
+            flutter_first_frame.get("elapsedMs") if flutter_first_frame else None
+        ),
+        "safeTerminalMs": (
+            safe_terminal.get("elapsedMs") if safe_terminal else None
+        ),
+        "reportedSafeTerminalMs": (
+            safe_terminal.get("elapsedMs") if safe_terminal else None
+        ),
+        "nativeReceivedSafeTerminalMs": (
+            safe_terminal.get("elapsedMs") if safe_terminal else None
+        ),
+        "watchdogOutcome": (
+            "race_dismissed"
+            if race_dismissed is not None
+            else "native_recovery"
+            if native_recovery is not None
+            else "not_triggered"
+        ),
+        "canonicalTerminal": (
+            "routerShell"
+            if shell is not None and overlay_removed is not None
+            else "nativeRecovery"
+            if native_recovery is not None
+            else "unresolved"
+        ),
         "screenshot": str(screenshot),
         "events": str(events_path),
     }
@@ -358,6 +439,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ttid-p95-ms", type=int, default=2000)
     parser.add_argument("--shell-p95-ms", type=int, default=3000)
     parser.add_argument("--welcome-exit-hard-ms", type=int, default=6000)
+    parser.add_argument(
+        "--runtime-env",
+        choices=("alpha", "beta", "gamma", "prod"),
+        default="",
+    )
+    parser.add_argument("--matrix-evidence-root", default="")
     return parser
 
 
@@ -396,7 +483,7 @@ def main() -> int:
     exits = [sample["welcomeExitMs"] for sample in samples]
     overlay_removals = [sample["overlayRemovedMs"] for sample in samples]
     motion_spec_current = all(
-        sample.get("motionSpecVersion") == "petal_bloom_v2" for sample in samples
+        sample.get("motionSpec") == "petal_bloom" for sample in samples
     )
     ttid_p50 = percentile(ttid_values, 0.5)
     ttid_p95 = percentile(ttid_values, 0.95)
@@ -430,7 +517,7 @@ def main() -> int:
     report = {
         "schema": "startup-web-report",
         "platform": "web",
-        "motionSpecVersion": "petal_bloom_v2",
+        "motionSpec": "petal_bloom",
         "motionSpecCurrent": motion_spec_current,
         "runs": args.runs,
         "passed": passed,
@@ -461,6 +548,94 @@ def main() -> int:
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    if args.matrix_evidence_root:
+        if not args.runtime_env:
+            raise ValueError("--runtime-env is required with --matrix-evidence-root")
+        attempt_ids = [
+            str(sample["attemptId"])
+            for sample in samples
+            if sample.get("attemptId")
+        ]
+        renderer_values = [
+            int(sample["rendererFirstFrameMs"])
+            for sample in samples
+            if sample.get("rendererFirstFrameMs") is not None
+        ]
+        safe_values = [
+            int(sample["safeTerminalMs"])
+            for sample in samples
+            if sample.get("safeTerminalMs") is not None
+        ]
+        evidence = {
+            "runtimeEnv": args.runtime_env,
+            "platform": "web",
+            "attemptId": attempt_ids[0] if attempt_ids else None,
+            "attemptIds": attempt_ids,
+            "rendererFirstFrameMs": max(renderer_values) if renderer_values else None,
+            "safeTerminalMs": max(safe_values) if safe_values else None,
+            "reportedSafeTerminalMs": max(safe_values) if safe_values else None,
+            "nativeReceivedSafeTerminalMs": max(safe_values) if safe_values else None,
+            "launchMode": next(
+                (
+                    sample.get("launchMode")
+                    for sample in samples
+                    if sample.get("launchMode")
+                ),
+                None,
+            ),
+            "runtimeConfigurationState": next(
+                (
+                    sample.get("runtimeConfigurationState")
+                    for sample in samples
+                    if sample.get("runtimeConfigurationState")
+                ),
+                None,
+            ),
+            "missingDefineKeys": next(
+                (
+                    sample.get("missingDefineKeys")
+                    for sample in samples
+                    if sample.get("missingDefineKeys")
+                ),
+                None,
+            ),
+            "failureCode": next(
+                (
+                    sample.get("failureCode")
+                    for sample in samples
+                    if sample.get("failureCode")
+                ),
+                "",
+            ),
+            "watchdogOutcome": (
+                "native_recovery"
+                if any(
+                    sample.get("watchdogOutcome") == "native_recovery"
+                    for sample in samples
+                )
+                else "race_dismissed"
+                if any(
+                    sample.get("watchdogOutcome") == "race_dismissed"
+                    for sample in samples
+                )
+                else "not_triggered"
+            ),
+            "canonicalTerminal": (
+                "routerShell"
+                if all(
+                    sample.get("canonicalTerminal") == "routerShell"
+                    for sample in samples
+                )
+                else "unresolved"
+            ),
+            "sourceReport": str(report_path),
+        }
+        matrix_dir = Path(args.matrix_evidence_root) / args.runtime_env
+        matrix_dir.mkdir(parents=True, exist_ok=True)
+        (matrix_dir / "web.json").write_text(
+            json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if passed else 1
 

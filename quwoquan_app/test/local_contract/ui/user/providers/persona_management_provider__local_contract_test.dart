@@ -1,10 +1,11 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
-import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/providers/persona_management_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../support/fakes/test_persona_facets.dart';
 
 class _FakeAnalyticsService extends AnalyticsService {
   _FakeAnalyticsService() : super.forTesting();
@@ -29,9 +30,11 @@ void main() {
   group('PersonaManagementNotifier telemetry', () {
     test('create / activate / retire / quota reached 记录成功事件', () async {
       final analytics = _FakeAnalyticsService();
+      final persona = TestPersonaFacets();
       final container = ProviderContainer(
         overrides: [
-          userRepositoryProvider.overrideWithValue(MockUserRepository()),
+          personaQueryProvider.overrideWith((ref, surface) => persona),
+          personaCommandWriterProvider.overrideWithValue(persona),
           analyticsProvider.overrideWithValue(analytics),
         ],
       );
@@ -39,9 +42,11 @@ void main() {
 
       final notifier = container.read(personaManagementProvider.notifier);
 
-      await notifier.createPersona(displayName: '摄影分身');
-      await notifier.activatePersona('persona_1');
-      await notifier.retirePersona('persona_2');
+      final created = await notifier.createPersona(displayName: '测试新分身');
+      expect(created, isNotNull);
+      await notifier.activatePersona('persona_photo');
+      await notifier.activatePersona('persona_primary');
+      await notifier.retirePersona('persona_photo');
       await notifier.trackQuotaReached(5);
 
       expect(

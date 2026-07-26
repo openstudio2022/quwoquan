@@ -15,10 +15,7 @@ class ConversationMembersState {
 
   static final ChatGroupSettingsDto _defaultGroupSettings =
       ChatGroupSettingsDto(
-        qrCodeJoinEnabled: true,
-        joinRequiresApproval: false,
         nameEditableByAdminOnly: false,
-        privacyShieldAdminOnly: false,
         conversationType: 'group',
       );
 
@@ -67,12 +64,17 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
   final String _conversationId;
   int _pendingWrites = 0;
 
-  ChatRepository get _repo => ref.read(chatRepositoryProvider);
+  ChatMemberRepository get _memberRepo =>
+      ref.read(chatMemberRepositoryProvider);
+  ChatGroupAdminRepository get _adminRepo =>
+      ref.read(chatGroupAdminRepositoryProvider);
+  ChatConversationRepository get _conversationRepo =>
+      ref.read(chatConversationRepositoryProvider);
   String get _currentUserId => ref.read(currentUserIdProvider);
 
   @override
   ConversationMembersState build() {
-    ref.watch(chatRepositoryProvider);
+    ref.watch(chatMemberRepositoryProvider);
     ref.watch(currentUserIdProvider);
     Future<void>.microtask(load);
     return ConversationMembersState(isLoading: true);
@@ -83,12 +85,12 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final results = await Future.wait([
-        _repo.listMembers(
+        _memberRepo.listMembers(
           conversationId: _conversationId,
           limit: 200,
           sort: 'joined_asc',
         ),
-        _repo.getGroupSettings(_conversationId),
+        _adminRepo.getGroupSettings(_conversationId),
       ]);
       // 若有乐观写操作进行中，跳过覆盖，避免竞态
       if (_pendingWrites > 0) return;
@@ -120,7 +122,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
     _pendingWrites++;
     state = state.copyWith(members: _applyAdminChange(state.members, adminIds));
     try {
-      await _repo.updateGroupAdmins(_conversationId, adminIds);
+      await _adminRepo.updateGroupAdmins(_conversationId, adminIds);
     } catch (e) {
       state = previous;
       rethrow;
@@ -137,7 +139,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
       members: _applyOwnerTransfer(state.members, newOwnerId),
     );
     try {
-      await _repo.transferOwnership(_conversationId, newOwnerId);
+      await _adminRepo.transferOwnership(_conversationId, newOwnerId);
     } catch (e) {
       state = previous;
       rethrow;
@@ -148,7 +150,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
 
   /// 更新群会话展示名（与会话资源对齐，不经群开关 PATCH）。
   Future<void> updateGroupDisplayTitle(String newTitle) async {
-    await _repo.updateConversationTitle(_conversationId, newTitle);
+    await _conversationRepo.updateConversationTitle(_conversationId, newTitle);
   }
 
   /// 乐观更新群组设置；失败时回滚
@@ -156,7 +158,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
     final previous = state;
     state = state.copyWith(groupSettings: next);
     try {
-      await _repo.updateGroupSettings(_conversationId, next);
+      await _adminRepo.updateGroupSettings(_conversationId, next);
     } catch (e) {
       state = previous;
       rethrow;
@@ -165,17 +167,30 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
 
   /// 添加成员后从云端刷新 roster。
   Future<void> addMembers(List<String> userIds) async {
-    await _repo.addMembers(conversationId: _conversationId, userIds: userIds);
+    await _memberRepo.addMembers(
+      conversationId: _conversationId,
+      userIds: userIds,
+    );
     await load();
   }
 
-  /// 移除成员后从云端刷新 roster。
+  /// 移出成员（群治理动作，仅 owner/admin）后从云端刷新 roster。
   Future<void> removeMember(String userId) async {
-    await _repo.removeMember(
+    await _memberRepo.removeMember(
       conversationId: _conversationId,
       userId: userId,
     );
     await load();
+  }
+
+  /// 主动退出群聊（自愿离开语义；owner 须先转让）。
+  Future<void> leaveConversation() async {
+    await _memberRepo.leaveConversation(_conversationId);
+  }
+
+  /// 更新群公告（owner/admin；发布即触达）。
+  Future<void> updateAnnouncement(String announcement) async {
+    await _adminRepo.updateAnnouncement(_conversationId, announcement);
   }
 
   static List<ChatConversationMemberDto> _applyAdminChange(

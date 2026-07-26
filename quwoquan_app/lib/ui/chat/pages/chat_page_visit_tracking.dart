@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
@@ -50,17 +50,17 @@ mixin ChatPageVisitTrackingMixin<T extends ConsumerStatefulWidget>
   }
 
   static const List<String> _messageSubTabs = [
-    UITextConstants.contactsTabAll,
-    UITextConstants.unread,
-    UITextConstants.groupChat,
-    UITextConstants.chatPrivateMessages,
-    UITextConstants.chatNotifications,
+    ChatText.contactsTabAll,
+    ChatText.unread,
+    ChatText.groupChat,
+    ChatText.chatPrivateMessages,
+    ChatText.chatNotifications,
   ];
 
   static const List<String> _contactsSubTabs = [
-    UITextConstants.contactsTabAll,
-    UITextConstants.contactsTabMutualFollow,
-    UITextConstants.contactsTabCircles,
-    UITextConstants.contactsTabGroups,
+    ChatText.contactsTabAll,
+    ChatText.contactsTabMutualFollow,
+    ChatText.contactsTabCircles,
+    ChatText.contactsTabGroups,
   ];
 }

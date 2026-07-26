@@ -3,7 +3,9 @@ part of 'create_page.dart';
 extension _CreatePageStateMediaHelpers on _CreatePageState {
   Future<void> _publish() async {
     // 防御性二次拦截：发布是需登录写动作。创作页已被路由守卫保护，这里再兜底一次。
-    if (!await requireLogin(ref, context, AuthGateReason.createPost)) {
+    if (!await _requireCreateActionLogin(
+      CreateActionContinuationKind.publish,
+    )) {
       return;
     }
     if (!mounted) return;
@@ -12,7 +14,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       return;
     }
     if (!_canPublish(state)) {
-      AppToast.show(context, '先写点内容');
+      AppToast.show(context, CreatePageText.writeSomethingFirst);
       return;
     }
     if (_useImmersiveArticleExperience(state)) {
@@ -39,66 +41,193 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       return;
     }
     final publishState = state.copyWith(settings: confirmedSettings);
+    final expectedContentType =
+        buildPostPublicationPayloadMap(
+          publishState,
+        )['contentType']?.toString().trim() ??
+        'unknown';
+    final hasMediaUpload =
+        publishState.editorKind == CreateEditorKind.media &&
+        (publishState.hasVideo || publishState.imagePaths.isNotEmpty);
+    final cancellationSignal = ContentMediaUploadCancellationSignal();
+    final publishStopwatch = Stopwatch()..start();
+    LocalPostPublicationIntent? mediaPreparationIntent;
     ref.read(createEditorProvider.notifier).setSettings(confirmedSettings);
-    _setMountedState(() => _isPublishing = true);
+    _setMountedState(() {
+      _isPublishing = true;
+      _publishUploadProgress = hasMediaUpload ? 0 : null;
+      _publicationCancellationSignal = hasMediaUpload
+          ? cancellationSignal
+          : null;
+    });
     try {
+      await reportCreateEditorSurfaceEvent(
+        ref,
+        'create_publish_started',
+        <String, Object?>{'contentType': expectedContentType},
+      );
       await _saveDraft(silent: true, flushReason: 'pre_publish');
       final localDraftId = _activeDraftId;
       if (localDraftId == null) {
         throw StateError('local draft id unavailable');
       }
+      final activePersona = await ref.read(activePersonaContextProvider.future);
+      final publicationQueue = ref.read(
+        postPublicationIntentQueueProvider.notifier,
+      );
+      if (hasMediaUpload) {
+        final preparationCommand =
+            await attachActivePersonaToPostPublicationCommand(
+              ref,
+              buildPostPublicationMediaPreparationPayload(publishState),
+              localDraftId: localDraftId,
+              activePersona: activePersona,
+            );
+        mediaPreparationIntent = await publicationQueue.beginMediaPreparation(
+          command: preparationCommand,
+          authorPersonaId: activePersona.subAccountId,
+          circleIds: confirmedSettings.isPublic
+              ? confirmedSettings.circleIds
+              : const <String>[],
+        );
+      }
       final media = ref.read(createContentMediaFacetProvider);
       final preparedPayload = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
-        fileStorageGateway: ref.read(fileStorageGatewayProvider),
         state: publishState,
-        uploadObject: ref.read(contentMediaObjectUploadProvider),
+        sourceReader: ref.read(contentMediaSourceReaderProvider),
+        uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
+        telemetry: ref.read(appTelemetryReporterProvider),
+        cancellationSignal: hasMediaUpload ? cancellationSignal : null,
+        mediaPreparationIdentity: hasMediaUpload ? localDraftId : null,
+        preparedMediaAssets:
+            mediaPreparationIntent?.preparedMediaAssets ??
+            const <ContentMediaPreparationCheckpoint>[],
+        onMediaPrepared: hasMediaUpload
+            ? (checkpoint) => publicationQueue.recordPreparedMediaAsset(
+                localDraftId,
+                checkpoint,
+              )
+            : null,
+        onUploadProgress: (progress) {
+          if (!mounted ||
+              !identical(_publicationCancellationSignal, cancellationSignal)) {
+            return;
+          }
+          _setMountedState(
+            () => _publishUploadProgress = progress.clamp(0.0, 1.0),
+          );
+        },
       );
+      cancellationSignal.throwIfCancelled();
+      if (mounted) {
+        _setMountedState(() {
+          _publicationCancellationSignal = null;
+          _publishUploadProgress = null;
+        });
+      }
       final command = await attachActivePersonaToPostPublicationCommand(
         ref,
         preparedPayload,
         localDraftId: localDraftId,
+        activePersona: activePersona,
       );
-      final activePersona = await ref.read(activePersonaContextProvider.future);
-      final receipt = await ref
-          .read(postPublicationIntentQueueProvider.notifier)
-          .submit(
-            command: command,
-            authorPersonaId: activePersona.subAccountId,
-            circleIds: confirmedSettings.isPublic
-                ? confirmedSettings.circleIds
-                : const <String>[],
-          );
+      final receipt = await publicationQueue.submit(
+        command: command,
+        authorPersonaId: activePersona.subAccountId,
+        circleIds: confirmedSettings.isPublic
+            ? confirmedSettings.circleIds
+            : const <String>[],
+      );
       final postId = receipt.postId;
       if (postId.isEmpty) {
         throw StateError('missing post id');
       }
+      final resultState = switch (ContentPostPublicationState.fromWire(
+        receipt.state,
+      )) {
+        ContentPostPublicationState.published =>
+          CreatePublishResultState.published,
+        ContentPostPublicationState.pendingReview =>
+          CreatePublishResultState.pendingReview,
+        ContentPostPublicationState.rejected => throw StateError(
+          'rejected state is not an accepted receipt',
+        ),
+      };
       await reportCreateEditorSurfaceEvent(
         ref,
-        'create_publish_success',
-        createEditorSurfaceExtrasPublishSuccess(preparedPayload.payload),
+        resultState == CreatePublishResultState.published
+            ? 'create_publish_success'
+            : 'create_publish_pending_review',
+        <String, Object?>{
+          ...createEditorSurfaceExtrasPublishSuccess(preparedPayload.payload),
+          'durationMs': publishStopwatch.elapsedMilliseconds,
+          'correlationHash': publicationCorrelationHash(
+            receipt.publishIntentId,
+          ),
+        },
       );
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.publishAction);
-      _doClose();
-    } on PostPublicationQueuedException {
-      await reportCreateEditorSurfaceEvent(ref, 'create_publish_queued');
+      if (resultState == CreatePublishResultState.published) {
+        ref.read(contentPublicationEpochProvider.notifier).notifyCommitted();
+      }
+      await _showPublicationResult(state: resultState, postId: postId);
+    } on ContentMediaUploadCancelledException {
+      await reportCreateEditorSurfaceEvent(
+        ref,
+        'create_publish_cancelled',
+        <String, Object?>{
+          'contentType': expectedContentType,
+          'durationMs': publishStopwatch.elapsedMilliseconds,
+          'correlationHash': mediaPreparationIntent == null
+              ? null
+              : publicationCorrelationHash(
+                  mediaPreparationIntent.command.publishIntentId,
+                ),
+        },
+      );
+      if (mounted) {
+        AppToast.show(context, CreatePageText.uploadCancelledDraftSaved);
+      }
+    } on PostPublicationQueuedException catch (queued) {
+      await reportCreateEditorSurfaceEvent(
+        ref,
+        'create_publish_queued',
+        <String, Object?>{
+          'contentType': expectedContentType,
+          'durationMs': publishStopwatch.elapsedMilliseconds,
+          'correlationHash': publicationCorrelationHash(queued.publishIntentId),
+        },
+      );
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.publishQueued);
-      _doClose();
+      await _showPublicationResult(state: CreatePublishResultState.queued);
     } catch (error) {
-      await reportCreateEditorSurfaceEvent(ref, 'create_publish_failure');
+      final failure = runtimeFailureFromError(error);
+      await reportCreateEditorSurfaceEvent(
+        ref,
+        'create_publish_failure',
+        <String, Object?>{
+          'contentType': expectedContentType,
+          'durationMs': publishStopwatch.elapsedMilliseconds,
+          'failReasonCode': failure?.code ?? error.runtimeType.toString(),
+        },
+      );
       if (mounted) {
-        final semantic = '$error'.contains('active persona context')
+        _setMountedState(() {
+          _isPublishing = false;
+          _publicationCancellationSignal = null;
+          _publishUploadProgress = null;
+        });
+        final semantic = error is ActivePersonaContextUnavailableFailure
             ? UiErrorSemantic(
                 category: UiErrorCategory.submit,
                 scope: UiErrorScope.global,
-                title: '发布未完成',
-                message: '当前分身上下文还没准备好，稍后可以再试一次。',
+                title: CreatePageText.publishNotCompleted,
+                message: CreatePageText.activePersonaContextNotReady,
                 primaryAction: const UiErrorAction(
                   type: UiErrorActionType.retry,
                   label: UITextConstants.tryAgain,
@@ -124,9 +253,52 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       }
     } finally {
       if (mounted) {
-        _setMountedState(() => _isPublishing = false);
+        _setMountedState(() {
+          _isPublishing = false;
+          _publicationCancellationSignal = null;
+          _publishUploadProgress = null;
+        });
       }
     }
+  }
+
+  void _cancelPublicationUpload() {
+    _publicationCancellationSignal?.cancel();
+  }
+
+  Future<void> _showPublicationResult({
+    required CreatePublishResultState state,
+    String? postId,
+  }) async {
+    final action = await showCreatePublishResultSheet(
+      context,
+      state: state,
+      postId: postId,
+    );
+    if (!mounted) {
+      return;
+    }
+    final normalizedPostId = postId?.trim() ?? '';
+    if (action == CreatePublishResultAction.viewWork &&
+        normalizedPostId.isNotEmpty &&
+        GoRouter.maybeOf(context) != null) {
+      context.pushReplacement(
+        AppRoutePaths.workBrowser(
+          workId: normalizedPostId,
+          source: ReferralSource.publishResult.value,
+        ),
+        extra: const WorkBrowserEntryRouteExtra(
+          referralSource: ReferralSource.publishResult,
+        ),
+      );
+      return;
+    }
+    if (action == CreatePublishResultAction.viewPublicationTasks &&
+        GoRouter.maybeOf(context) != null) {
+      context.pushReplacement(AppRoutePaths.localDrafts);
+      return;
+    }
+    _doClose();
   }
 
   Widget _buildTextEditor(CreateEditorState state) {
@@ -288,9 +460,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         final addEnabled = state.editorKind == CreateEditorKind.text
             ? true
             : _canAddMoreImages(state);
-        final addLabel = state.editorKind == CreateEditorKind.text
-            ? '添加图片'
-            : (items.isEmpty ? '添加' : '添加图片');
+        const addLabel = UITextConstants.addImage;
         if (isVideo) {
           final videoWidth = math
               .min(tileWidth * 1.2, constraints.maxWidth)

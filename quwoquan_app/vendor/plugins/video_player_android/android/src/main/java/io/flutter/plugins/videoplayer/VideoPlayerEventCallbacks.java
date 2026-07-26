@@ -68,4 +68,42 @@ final class VideoPlayerEventCallbacks implements VideoPlayerCallbacks {
   public void onAudioTrackChanged(@Nullable String selectedTrackId) {
     eventSink.success(new AudioTrackChangedEvent(selectedTrackId));
   }
+
+  @Override
+  public void onPlaybackDiagnostics(
+      @NonNull String rendererMode,
+      @NonNull String decoderQueueMode,
+      boolean decoderFallbackEnabled) {
+    eventSink.success(
+        new PlaybackDiagnosticsEvent(
+            rendererMode, decoderQueueMode, decoderFallbackEnabled));
+  }
+
+  @Override
+  public void onRenderedFirstFrame(long ttffMs) {
+    eventSink.success(new RenderedFirstFrameEvent(ttffMs));
+  }
+
+  @Override
+  public void onSeekSettled(long targetPositionMs, long settledPositionMs, long settleMs) {
+    eventSink.success(new SeekSettledEvent(targetPositionMs, settledPositionMs, settleMs));
+  }
+
+  @Override
+  public void onDroppedVideoFrames(int droppedFrames, long elapsedMs) {
+    eventSink.success(new DroppedVideoFramesEvent((long) droppedFrames, elapsedMs));
+  }
+
+  @Override
+  public void onAudioUnderrun(
+      int bufferSize, long bufferSizeMs, long elapsedSinceLastFeedMs) {
+    eventSink.success(
+        new AudioUnderrunEvent(
+            (long) bufferSize, bufferSizeMs, elapsedSinceLastFeedMs));
+  }
+
+  @Override
+  public void onVideoFrameProcessing(int processedFrames) {
+    eventSink.success(new VideoFrameProcessingEvent((long) processedFrames));
+  }
 }

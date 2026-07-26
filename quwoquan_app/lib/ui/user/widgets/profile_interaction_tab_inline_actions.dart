@@ -265,7 +265,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
     }
     setState(() => _directMessageInFlight.add(item.activityId));
     try {
-      final chat = ref.read(chatRepositoryProvider);
+      final chat = ref.read(chatConversationRepositoryProvider);
       final conversation = await chat.createConversation(
         type: 'direct',
         initialMemberIds: <String>[userId],
@@ -284,9 +284,9 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
               content: UITextConstants.profileInteractionThanksLikeMessage,
               senderDisplayNameSnapshot: activeContext.displayName,
               senderAvatarUrlSnapshot: activeContext.avatarUrl,
-              personaContextVersion: _positivePersonaVersion(
-                activeContext.contextVersion,
-              ),
+              personaContextVersion: activeContext.contextVersion > 0
+                  ? activeContext.contextVersion
+                  : null,
               clientMsgId: 'profile-interaction-thanks-${item.activityId}',
             ),
           );
@@ -318,10 +318,5 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
         );
       }
     }
-  }
-
-  int? _positivePersonaVersion(String raw) {
-    final parsed = int.tryParse(raw.trim());
-    return parsed != null && parsed > 0 ? parsed : null;
   }
 }

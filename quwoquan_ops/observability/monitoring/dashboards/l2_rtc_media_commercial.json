@@ -1,0 +1,83 @@
+{
+  "dashboard": {
+    "title": "L2 — RTC 通话与媒体商用健康度",
+    "uid": "qwq-l2-rtc-media",
+    "tags": ["quwoquan", "l2", "rtc", "livekit", "commercial"],
+    "timezone": "browser",
+    "refresh": "15s",
+    "panels": [
+      {
+        "title": "LiveKit SFU 可用性",
+        "type": "stat",
+        "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "max(up{job=\"livekit-sfu\"})",
+            "legendFormat": "SFU up"
+          }
+        ]
+      },
+      {
+        "title": "活跃房间与参与者",
+        "type": "timeseries",
+        "gridPos": { "h": 6, "w": 10, "x": 6, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(livekit_room_total{job=\"livekit-sfu\"})",
+            "legendFormat": "rooms"
+          },
+          {
+            "expr": "sum(livekit_participant_total{job=\"livekit-sfu\"})",
+            "legendFormat": "participants"
+          }
+        ]
+      },
+      {
+        "title": "LiveKit 媒体流 P95 丢包率",
+        "type": "timeseries",
+        "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(livekit_packet_loss_percent_bucket{job=\"livekit-sfu\"}[5m])) by (le))",
+            "legendFormat": "P95 packet loss %"
+          }
+        ]
+      },
+      {
+        "title": "LiveKit 媒体质量 P50/P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(livekit_quality_score_bucket{job=\"livekit-sfu\"}[5m])) by (le))",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(livekit_quality_score_bucket{job=\"livekit-sfu\"}[5m])) by (le))",
+            "legendFormat": "P95"
+          }
+        ]
+      },
+      {
+        "title": "RTC API P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"rtc-service\",route=~\"/rtc/calls(/.*)?\"}[5m])) by (le, route))",
+            "legendFormat": "{{ route }}"
+          }
+        ]
+      },
+      {
+        "title": "端侧 RTC QoE 权威回读",
+        "type": "text",
+        "gridPos": { "h": 6, "w": 24, "x": 0, "y": 14 },
+        "options": {
+          "mode": "markdown",
+          "content": "端侧黄金指标由 product-ops `GetRtcMediaQoeSummary` 直接读取 `rtc_media_qoe` 权威原始事实，并在 Product Ops 业务总览展示 24 个 UTC 小时桶、有效媒体接通率、建连 P95、`connection_lost` 比率与水位；`app-product-telemetry-rtc-qoe-hourly` 负责长期小时聚合。关联告警：`product-rtc-media-connect-rate-low`、`product-rtc-media-connect-p95-high`、`product-rtc-unexpected-disconnect-rate-high`。Gamma/Prod 未产生真实 series 时不得用于准出。"
+        }
+      }
+    ]
+  }
+}

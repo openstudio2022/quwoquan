@@ -1,0 +1,36 @@
+dart_class: AssistantTurnEnvelopeWire
+library_path: assistant/generated/contracts/assistant_turn_envelope.g.dart
+output_path: assistant/generated/contracts/assistant_turn_envelope.g.dart
+contract: assistant_turn_envelope
+kind: entity_wire_contract
+imports:
+  - package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart
+fields:
+  - { name: turnId, type: string, required: true }
+  - { name: conversationId, type: string, required: true }
+  - { name: turnType, type: string, default: user }
+  - { name: status, type: string, default: created }
+  - { name: skillId, type: string, default: '' }
+  - { name: domainId, type: string, default: '' }
+  - { name: input, type: object, ref: turn_input, default: {} }
+  - { name: trigger, type: object, ref: turn_trigger, default: {} }
+  - { name: streamState, type: object, ref: stream_state, default: {} }
+  - { name: terminalSnapshot, type: object, ref: AssistantRunTerminalSnapshotView }
+  - { name: traceId, type: string, default: '' }
+  - { name: createdAt, type: string, required: true }
+  - { name: completedAt, type: string, default: '' }
+subcontracts:
+  turn_input:
+    class_name: AssistantTurnInputWire
+    fields:
+      - { name: text, type: string, default: '' }
+  turn_trigger:
+    class_name: AssistantTurnTriggerWire
+    fields:
+      - { name: type, type: string, default: user_message }
+  stream_state:
+    class_name: AssistantTurnStreamStateWire
+    fields:
+      - { name: lastSeq, type: int, default: 0 }
+      - { name: completed, type: bool, default: false }
+      - { name: resumeToken, type: string, default: '' }

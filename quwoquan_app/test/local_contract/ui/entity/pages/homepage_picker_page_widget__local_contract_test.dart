@@ -4,8 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
+import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
@@ -39,6 +40,7 @@ void main() {
 
     expect(find.text('西湖景区'), findsWidgets);
     expect(find.textContaining('景点'), findsWidgets);
+    expect(find.textContaining('4.7 · 328 条评分'), findsWidgets);
     expect(find.byKey(TestKeys.homepagePickerConfirmButton), findsOneWidget);
     expect(find.byKey(TestKeys.homepagePickerClearSelectionTile), findsNothing);
   });
@@ -47,9 +49,12 @@ void main() {
     await tester.pumpWidget(
       _buildApp(
         _HomepagePickerHarness(
-          initialSelection: HomepageSummary.fromDetail(
-            HomepageMockData.homepageDetailTemplates.first,
-          ).canonicalReference,
+          initialSelection: const HomepageCanonicalReference(
+            id: 'homepage_sight_west_lake',
+            homepageType: 'sight',
+            title: '西湖景区',
+            canonicalEntityId: 'entity:sight:west_lake',
+          ),
         ),
       ),
     );
@@ -81,7 +86,12 @@ void main() {
 }
 
 Widget _buildApp(Widget home) {
-  return ProviderScope(child: MaterialApp(home: home));
+  return ProviderScope(
+    overrides: [
+      homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
+    ],
+    child: MaterialApp(home: home),
+  );
 }
 
 class _HomepagePickerHarness extends StatefulWidget {

@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 
@@ -48,7 +48,7 @@ class ChatListItemViewModel {
     return ChatListItemViewModel(
       id: dto.id,
       title: dto.title.trim().isEmpty
-          ? UITextConstants.untitledConversation
+          ? ChatText.untitledConversation
           : dto.title.trim(),
       subtitle: preview.text,
       timeLabel: dto.lastMessageTime == null
@@ -73,7 +73,7 @@ class ChatListItemViewModel {
     return ChatListItemViewModel(
       id: id,
       title: dto.title.trim().isEmpty
-          ? UITextConstants.untitledConversation
+          ? ChatText.untitledConversation
           : dto.title.trim(),
       subtitle: preview.text,
       timeLabel: dto.lastActiveAt == null
@@ -98,14 +98,14 @@ class ChatListItemViewModel {
         return _ResolvedPreview(
           icon: CupertinoIcons.photo_fill_on_rectangle_fill,
           text: preview.trim().isEmpty
-              ? UITextConstants.chatPreviewImage
+              ? ChatText.chatPreviewImage
               : preview.trim(),
         );
       case 'video':
         return _ResolvedPreview(
           icon: CupertinoIcons.videocam_fill,
           text: preview.trim().isEmpty
-              ? UITextConstants.chatPreviewVideo
+              ? ChatText.chatPreviewVideo
               : preview.trim(),
         );
       case 'voice':
@@ -113,29 +113,30 @@ class ChatListItemViewModel {
         return _ResolvedPreview(
           icon: CupertinoIcons.mic_fill,
           text: preview.trim().isEmpty
-              ? UITextConstants.chatPreviewVoice
+              ? ChatText.chatPreviewVoice
               : preview.trim(),
         );
       case 'call':
       case 'phone':
+      case 'system_call_log':
         return _ResolvedPreview(
           icon: CupertinoIcons.phone_fill,
           text: preview.trim().isEmpty
-              ? UITextConstants.chatPreviewCall
+              ? ChatText.chatPreviewCall
               : preview.trim(),
         );
       case 'card':
         return _ResolvedPreview(
           icon: CupertinoIcons.person_crop_rectangle_fill,
           text: preview.trim().isEmpty
-              ? UITextConstants.chatPreviewCard
+              ? ChatText.chatPreviewCard
               : preview.trim(),
         );
       case 'recalled':
       case 'recall':
         return const _ResolvedPreview(
           icon: null,
-          text: UITextConstants.chatPreviewRecalled,
+          text: ChatText.chatPreviewRecalled,
         );
       case 'text':
       default:

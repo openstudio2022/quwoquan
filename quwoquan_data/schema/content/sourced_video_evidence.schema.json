@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "assetRef",
+    "sourceRef",
+    "rightsRef",
+    "mediaProbeRef",
+    "watermarkEvidenceRef",
+    "audioRightsEvidenceRef",
+    "sha256",
+    "isOriginal",
+    "originalCreatorName",
+    "platform",
+    "sourcePostUrl",
+    "originalAssetUrl",
+    "attributionText",
+    "rightsBasis",
+    "commercialAuthorizationStatus",
+    "publicationAdmission",
+    "watermarkStatus",
+    "audioRightsStatus",
+    "modelReleaseStatus",
+    "propertyReleaseStatus",
+    "collectedAt",
+    "takedownPolicy",
+    "directDownload",
+    "accessControlBypassed",
+    "drmDetected"
+  ],
+  "properties": {
+    "assetRef": { "type": "string", "minLength": 1 },
+    "sourceRef": { "type": "string", "minLength": 1 },
+    "rightsRef": { "type": "string", "minLength": 1 },
+    "mediaProbeRef": { "type": "string", "minLength": 1 },
+    "watermarkEvidenceRef": { "type": "string", "minLength": 1 },
+    "audioRightsEvidenceRef": { "type": "string", "minLength": 1 },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "isOriginal": { "type": "boolean" },
+    "originalCreatorId": { "type": ["string", "null"] },
+    "originalCreatorName": { "type": "string", "minLength": 1 },
+    "originalCreatorProfileUrl": { "type": ["string", "null"] },
+    "platform": { "type": "string", "minLength": 1 },
+    "sourcePostUrl": { "type": "string", "minLength": 1 },
+    "originalAssetUrl": { "type": "string", "minLength": 1 },
+    "attributionText": { "type": "string", "minLength": 1 },
+    "rightsBasis": { "type": "string", "minLength": 1 },
+    "commercialAuthorizationStatus": { "type": "string", "minLength": 1 },
+    "publicationAdmission": {
+      "enum": ["commercial_release", "risk_accepted_attribution_only"]
+    },
+    "authorizationProofUrl": { "type": ["string", "null"] },
+    "termsUrl": { "type": ["string", "null"] },
+    "riskAcceptanceId": { "type": ["string", "null"] },
+    "watermarkStatus": { "const": "absent" },
+    "audioRightsStatus": {
+      "enum": [
+        "licensed",
+        "original_authorized",
+        "replaced_with_licensed_track",
+        "no_audio"
+      ]
+    },
+    "modelReleaseStatus": { "type": "string", "minLength": 1 },
+    "propertyReleaseStatus": { "type": "string", "minLength": 1 },
+    "collectedAt": { "type": "string", "minLength": 1 },
+    "takedownPolicy": { "type": "string", "minLength": 1 },
+    "directDownload": { "const": true },
+    "accessControlBypassed": { "const": false },
+    "drmDetected": { "const": false }
+  },
+  "additionalProperties": false
+}

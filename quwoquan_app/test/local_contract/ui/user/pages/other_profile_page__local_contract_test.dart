@@ -6,11 +6,11 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 class _FakeHttpOverrides extends HttpOverrides {
   @override
@@ -230,8 +230,8 @@ void main() {
   Widget buildTestApp() {
     return ProviderScope(
       overrides: [
-        userProfileRepositoryProvider.overrideWithValue(
-          const MockUserProfileRepository(),
+        profileQueryProvider.overrideWith(
+          (ref, surface) => const MockUserProfileRepository(),
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _ThrowingCapabilityRepository(),
@@ -273,8 +273,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          userProfileRepositoryProvider.overrideWithValue(
-            const MockUserProfileRepository(),
+          profileQueryProvider.overrideWith(
+            (ref, surface) => const MockUserProfileRepository(),
           ),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
             _ThrowingCapabilityRepository(),

@@ -92,7 +92,7 @@ def test_stage_gate_serializes_typed_issues_without_fallback_double_truth() -> N
     )
 
     report = build_gate_report(
-        execution_id="20260712--travel-article-quality--cn-zhejiang--canary-001",
+        execution_id="20260712--travel-article-quality--test-region-a--pilot-001",
         command="post",
         step="review",
         ref="post-1",

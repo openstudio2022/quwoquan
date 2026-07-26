@@ -13,9 +13,9 @@ description: 按 D0/F1 扩展 metadata、Object Facade/Data Ports、adapter 与�
 权威来源：
 
 - `specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md`
-- `specs/feature-tree/runtime/system-architecture-and-engineering-guide/acceptance.yaml`
+- `specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md` 中的 REQ/SIT
 - `quwoquan_service/contracts/metadata/DESIGN.md`
-- 执行场景：`specs/runtime_extension_catalog.md`
+- 执行场景：本命令下列 EX01–EX11 映射；禁止再维护场景目录副本
 
 ## 使用方式
 
@@ -23,7 +23,7 @@ description: 按 D0/F1 扩展 metadata、Object Facade/Data Ports、adapter 与�
 /extend <scenario> [目标与约束]
 ```
 
-场景必须映射到扩展目录中的 EX01–EX11：
+场景必须映射到本命令的 EX01–EX11：
 
 - `new-object` / `add-member`
 - `add-command` / `add-query`
@@ -44,7 +44,7 @@ description: 按 D0/F1 扩展 metadata、Object Facade/Data Ports、adapter 与�
 2. `Pre-work Reflection`：确认 metadata-first、runtime error、Mock 隔离、页面质量、
    四环境、E2E 与第二真相源风险。
 3. 目标对象的 metadata 基线存在；若不存在，先完成对象边界设计。
-4. 对应 acceptance 已声明测试意图，且不会用本命令临时发明架构。
+4. 对应 spec 已声明验收意图，且不会用本命令临时发明架构。
 
 缺任一项时输出 `GATE_BLOCK`，返回规格或设计阶段。
 
@@ -90,14 +90,10 @@ URL、DTO、handler 名和存储类型都不能替代该裁决。
 标准命令：
 
 ```bash
-cd quwoquan_service
-go run ./tools/qwq_contract validate \
-  --metadata-dir contracts/metadata \
-  --profile commercial
+make verify-metadata
 make codegen
 make codegen-app
 make verify-contract-graph-commercial
-cd ..
 make gate
 ```
 
@@ -122,11 +118,11 @@ make gate
 2. 执行：
 
 ```bash
-make new-service SERVICE=<name>-service PORT=<port>
+make new-service SERVICE=<name>-service CONTEXT=<domain.context> OBJECT=<business-object> LANGUAGE=go|python
 ```
 
-3. 同批更新 process/domain/plane/module/workload topology 真相源。
-4. 新服务使用根 Go module，并以显式 composition root 装配对象 Facade 与 adapter。
+3. context/object 必须已在 metadata 中存在，且对象尚无 source owner。
+4. 脚手架不创建 registry、README、独立 Makefile 或空目录；交付前由服务自己的 `deploy/base` 与 `environments/<env>/deploy` 声明 workload，Ops 只做动态装配和外部依赖。
 
 ### `migrate-storage`
 

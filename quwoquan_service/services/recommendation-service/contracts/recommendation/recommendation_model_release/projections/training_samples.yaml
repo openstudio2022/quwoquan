@@ -1,0 +1,60 @@
+read_model: TrainingSamples
+description: '推荐训练样本集合。由 SampleJoiner 从 rec_learning_events 拼接 impression 与 engagement，
+
+  带 scenario、用户/物品/交叉特征快照、多目标标签。训练脚本读取生成 rec_datasets。
+
+  该集合是可删除投影而非不可变留存事实：UserAccountClosed 按 userId 删除，且
+
+  SampleJoiner 必须以 closed_account_subjects tombstone 拒绝晚到或重放事实，防止注销后复活。
+
+  '
+storage_backend: mongodb
+collection: rec_training_samples
+producers:
+- recommendation-service
+consumers:
+- recommendation-service
+fields:
+- name: _id
+  type: ObjectId
+- name: scenario
+  type: string
+- name: userId
+  type: string
+- name: targetId
+  type: string
+- name: requestId
+  type: string
+  description: feedRequestId；样本按 requestId+targetId 聚合，禁止跨曝光批次合并
+- name: userFeatures
+  type: object
+- name: itemFeatures
+  type: object
+- name: contextFeatures
+  type: object
+- name: labels
+  type: object
+  description: 多目标标签如 click
+  like: null
+  dwell_s: null
+- name: ts
+  type: timestamp
+- name: featureSnapshotAt
+  type: timestamp
+  description: 在线评分快照时刻，必须来自曝光事实而非 join 时回查
+- name: featureLagSeconds
+  type: float
+  description: ts-featureSnapshotAt；负值表示未来快照并由训练/evaluate/replay/embedding 统一 fail-closed 拒绝
+indexes:
+- name: idx_scenario_ts
+  keys:
+    scenario: 1
+    ts: -1
+- name: idx_user_ts
+  keys:
+    userId: 1
+    ts: -1
+privacy_lifecycle:
+  owner_field: userId
+  on_user_account_closed: delete
+  anti_resurrection_guard: closed_account_subjects

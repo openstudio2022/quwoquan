@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/article_post_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -13,17 +9,99 @@ import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
-import 'package:quwoquan_app/ui/circle/widgets/section_interaction.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../typed_circle_query_test_double.dart';
+
+CircleFeedPageSlice _defaultCircleFeedFixture(CircleFeedQuery query) {
+  if (query.circleId == 'empty') {
+    return CircleFeedPageSlice(items: const <CircleFeedPostProjection>[]);
+  }
+  return CircleFeedPageSlice(
+    items: <CircleFeedPostProjection>[
+      CircleFeedPostProjection(
+        circleId: query.circleId,
+        placementId: 'fixture-placement-photo-1',
+        post: ContentPostProjection(
+          postId: 'fixture_photo_1',
+          contentType: 'image',
+          contentIdentity: 'work',
+          authorId: 'fixture_user_photo',
+          authorDisplayName: '契约摄影师',
+          body: '山路晨雾',
+          coverUrl: 'media/image/fixture_photo_1.jpg',
+          mediaUrls: const <String>['media/image/fixture_photo_1.jpg'],
+          likeCount: 12,
+        ),
+      ),
+    ],
+  );
+}
+
+CircleFeedPageSlice _articleCircleFeedFixture(CircleFeedQuery query) {
+  return CircleFeedPageSlice(
+    items: <CircleFeedPostProjection>[
+      CircleFeedPostProjection(
+        circleId: query.circleId,
+        placementId: 'fixture-placement-article-cover',
+        post: ContentPostProjection(
+          postId: 'fixture_article_with_cover',
+          contentType: 'article',
+          contentIdentity: 'work',
+          authorId: 'fixture_user_photo',
+          authorDisplayName: '契约摄影师',
+          title: '山路晨雾手账',
+          body: '把徒步笔记做成可翻页的旅途册。',
+          summary: '把徒步笔记做成可翻页的旅途册。',
+          coverUrl: 'media/image/fixture_article_with_cover.jpg',
+          articleTemplate: 'journal',
+          articleFontPreset: 'handwritten',
+          likeCount: 164,
+          commentCount: 12,
+          shareCount: 11,
+        ),
+      ),
+      CircleFeedPostProjection(
+        circleId: query.circleId,
+        placementId: 'fixture-placement-article-text',
+        post: ContentPostProjection(
+          postId: 'fixture_article_text_only',
+          contentType: 'article',
+          contentIdentity: 'work',
+          authorId: 'fixture_user_owner',
+          authorDisplayName: '纸上居',
+          body: '没有标题也没封面，只保留真正想被圈友读到的正文。',
+          summary: '没有标题也没封面，只保留真正想被圈友读到的正文。',
+          articleTemplate: 'gentle',
+          articleFontPreset: 'clean',
+          likeCount: 88,
+          commentCount: 6,
+          shareCount: 4,
+        ),
+      ),
+    ],
+  );
+}
 
 Widget _wrap(
   Widget child, {
   double textScaleFactor = 1.0,
-  CircleRepository? repository,
+  CircleQueryReader? circleQuery,
+  CircleFeedQueryReader? feedQuery,
+  CirclePostPlacementCommandWriter? placementWriter,
 }) => ProviderScope(
   overrides: [
-    circleRepositoryProvider.overrideWithValue(
-      repository ?? MockCircleRepository(),
+    circleDetailQueryProvider.overrideWithValue(
+      circleQuery ?? CircleQueryReaderTestDouble(),
+    ),
+    circlesListQueryProvider.overrideWithValue(
+      circleQuery ?? CircleQueryReaderTestDouble(),
+    ),
+    circleDetailFeedQueryProvider.overrideWithValue(
+      feedQuery ?? CircleFeedQueryTestDouble(_defaultCircleFeedFixture),
+    ),
+    circleDetailPostPlacementCommandWriterProvider.overrideWithValue(
+      placementWriter ?? _CirclePostPlacementFixture(),
     ),
     circleDetailFileCommandWriterProvider.overrideWithValue(
       _CircleFileFixture(),
@@ -105,6 +183,66 @@ void main() {
       expect(find.text('长文'), findsWidgets);
     });
 
+    testWidgets('owner 长按创作可置顶并从同一 placement 投影显示徽标', (tester) async {
+      var pinned = false;
+      final placementWriter = _CirclePostPlacementFixture(
+        onPin: (command) => pinned = command.enabled,
+      );
+      final feedQuery = CircleFeedQueryTestDouble(
+        (query) => CircleFeedPageSlice(
+          items: <CircleFeedPostProjection>[
+            CircleFeedPostProjection(
+              circleId: query.circleId,
+              placementId: 'fixture-placement-photo-1',
+              pinned: pinned,
+              post: ContentPostProjection(
+                postId: 'fixture_photo_1',
+                contentType: 'image',
+                contentIdentity: 'work',
+                body: '山路晨雾',
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpWidget(
+        _wrap(
+          const SizedBox(
+            height: 800,
+            child: SectionCreations(
+              circleId: 'fixture_circle_photo',
+              isDark: false,
+              role: CircleRole.owner,
+            ),
+          ),
+          feedQuery: feedQuery,
+          placementWriter: placementWriter,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.longPress(
+        find.byKey(
+          const ValueKey<String>('circle-record-grid-fixture_photo_1'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(UITextConstants.circlePostPinAction), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.circlePostPinAction));
+      await tester.pumpAndSettle();
+      expect(placementWriter.lastPin?.placementId, 'fixture-placement-photo-1');
+      expect(placementWriter.lastPin?.enabled, isTrue);
+      expect(
+        find.byKey(
+          const ValueKey<String>('circle-post-presentation-fixture_photo_1-置顶'),
+        ),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('空数据安全渲染', (tester) async {
       await tester.pumpWidget(
         _wrap(
@@ -161,7 +299,7 @@ void main() {
     });
 
     testWidgets('owner 模式可切换列表视图', (tester) async {
-      final repository = _ArticleFixtureCircleRepository();
+      final circleQuery = _ArticleFixtureCircleQuery();
       await tester.pumpWidget(
         _wrap(
           const SizedBox(
@@ -172,7 +310,8 @@ void main() {
               role: CircleRole.owner,
             ),
           ),
-          repository: repository,
+          circleQuery: circleQuery,
+          feedQuery: CircleFeedQueryTestDouble(_articleCircleFeedFixture),
         ),
       );
       await tester.pumpAndSettle();
@@ -222,7 +361,7 @@ void main() {
     });
 
     testWidgets('笔记双列区分封面卡与文字卡并展示频道推荐', (tester) async {
-      final repository = _ArticleFixtureCircleRepository();
+      final circleQuery = _ArticleFixtureCircleQuery();
       await tester.pumpWidget(
         _wrap(
           const SizedBox(
@@ -233,7 +372,8 @@ void main() {
               role: CircleRole.owner,
             ),
           ),
-          repository: repository,
+          circleQuery: circleQuery,
+          feedQuery: CircleFeedQueryTestDouble(_articleCircleFeedFixture),
         ),
       );
       await tester.pumpAndSettle();
@@ -326,26 +466,58 @@ void main() {
       expect(find.text(UITextConstants.noData), findsOneWidget);
     });
   });
+}
 
-  group('SectionInteraction — Widget 契约', () {
-    testWidgets('正常渲染', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          SectionInteraction(circleId: 'fixture_circle_photo', isDark: false),
-        ),
-      );
-      await tester.pump();
-      expect(find.byType(SectionInteraction), findsOneWidget);
-    });
+final class _CirclePostPlacementFixture
+    implements CirclePostPlacementCommandWriter {
+  _CirclePostPlacementFixture({this.onPin});
 
-    testWidgets('空数据安全渲染', (tester) async {
-      await tester.pumpWidget(
-        _wrap(SectionInteraction(circleId: 'empty', isDark: false)),
-      );
-      await tester.pump();
-      expect(find.byType(SectionInteraction), findsOneWidget);
-    });
-  });
+  final void Function(PinCirclePostCommand command)? onPin;
+  PinCirclePostCommand? lastPin;
+
+  @override
+  Future<CirclePostPlacementCommandResult> setPinned(
+    PinCirclePostCommand command,
+  ) async {
+    lastPin = command;
+    onPin?.call(command);
+    return CirclePostPlacementCommandResult(
+      placementId: command.placementId,
+      version: 2,
+      state: 'active',
+      idempotentReplay: false,
+    );
+  }
+
+  @override
+  Future<CirclePostPlacementCommandResult> setFeatured(
+    FeatureCirclePostCommand command,
+  ) async => CirclePostPlacementCommandResult(
+    placementId: command.placementId,
+    version: 2,
+    state: 'active',
+    idempotentReplay: false,
+  );
+
+  @override
+  Future<CirclePostPlacementCommandResult> placePost(
+    PlaceCirclePostCommand command,
+  ) async => const CirclePostPlacementCommandResult(
+    placementId: 'fixture-placement-created',
+    version: 1,
+    state: 'active',
+    idempotentReplay: false,
+  );
+
+  @override
+  Future<CirclePostPlacementCommandResult> removePost(
+    RemoveCirclePostCommand command,
+  ) async => CirclePostPlacementCommandResult(
+    placementId: command.placementId,
+    version: 2,
+    state: 'removed',
+    idempotentReplay: false,
+  );
 }
 
 final class _CircleFileFixture
@@ -394,77 +566,17 @@ final class _CircleFileFixture
       throw UnimplementedError();
 }
 
-class _ArticleFixtureCircleRepository extends MockCircleRepository {
+class _ArticleFixtureCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleDetailPayload> getCircle(String circleId) async {
-    return CircleDetailPayload.fromWire(<String, dynamic>{
-      'id': circleId,
-      'name': '契约摄影社',
-      'ownerId': 'fixture_user_owner',
-      'categoryId': 'photography',
-      'visibility': 'public',
-      'joinPolicy': 'approval',
-      'createdAt': '2026-05-06T00:00:00Z',
-      'updatedAt': '2026-05-06T00:00:00Z',
-      'sectionConfig': const <Map<String, dynamic>>[],
-    });
-  }
-
-  @override
-  Future<List<PostBaseDto>> getCircleFeed(
-    String circleId, {
-    String? identity,
-    String? type,
-    String? cursor,
-    int limit = 20,
-    String sort = 'latest',
-  }) async {
-    final rows = <Map<String, dynamic>>[
-      {
-        'postId': 'fixture_article_with_cover',
-        'id': 'fixture_article_with_cover',
-        'contentType': 'article',
-        'type': 'article',
-        'contentIdentity': 'work',
-        'identity': 'work',
-        'authorId': 'fixture_user_photo',
-        'authorDisplayName': '契约摄影师',
-        'authorAvatarUrl': 'media/avatar/fixture_user_photo.png',
-        'title': '山路晨雾手账',
-        'summary': '把徒步笔记做成可翻页的旅途册。',
-        'body': '把徒步笔记做成可翻页的旅途册。',
-        'coverUrl': 'media/image/fixture_article_with_cover.jpg',
-        'articleTemplate': 'journal',
-        'articleFontPreset': 'handwritten',
-        'likeCount': 164,
-        'commentCount': 12,
-        'shareCount': 11,
-        'circleId': circleId,
-        'createdAt': '2026-05-13T00:00:00Z',
-      },
-      {
-        'postId': 'fixture_article_text_only',
-        'id': 'fixture_article_text_only',
-        'contentType': 'article',
-        'type': 'article',
-        'contentIdentity': 'work',
-        'identity': 'work',
-        'authorId': 'fixture_user_owner',
-        'authorDisplayName': '纸上居',
-        'authorAvatarUrl': 'media/avatar/fixture_user_owner.png',
-        'title': '',
-        'summary': '没有标题也没封面，只保留真正想被圈友读到的正文。',
-        'body': '没有标题也没封面，只保留真正想被圈友读到的正文。',
-        'coverUrl': '',
-        'articleTemplate': 'gentle',
-        'articleFontPreset': 'clean',
-        'likeCount': 88,
-        'commentCount': 6,
-        'shareCount': 4,
-        'circleId': circleId,
-        'createdAt': '2026-05-13T01:00:00Z',
-      },
-    ];
-    return rows.map(ArticlePostDto.fromMap).toList(growable: false);
-  }
+  Future<CircleProjection> get(CircleDetailQuery query) async =>
+      CircleProjection(
+        circleId: query.circleId,
+        name: '契约摄影社',
+        ownerId: 'fixture_user_owner',
+        category: 'photography',
+        visibility: 'public',
+        joinPolicy: 'approval',
+        createdAt: DateTime.utc(2026, 5, 6),
+        updatedAt: DateTime.utc(2026, 5, 6),
+      );
 }

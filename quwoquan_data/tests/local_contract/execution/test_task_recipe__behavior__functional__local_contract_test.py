@@ -1,254 +1,338 @@
-"""Contract tests for the single-work-package content facade."""
+"""Contract tests for the generic single-work-package content facade."""
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 
-DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+DATA_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "quwoquan_data"
+)
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
 for path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from core.paths import FAMILIES_ROOT, iter_family_files  # noqa: E402
 from content.execution import recipe  # noqa: E402
-from content.execution.identity import build_execution_id, parse_execution_id, validate_execution_id  # noqa: E402
+from content.execution.identity import (  # noqa: E402
+    build_execution_id,
+    parse_execution_id,
+    validate_execution_id,
+)
+from core.paths import FAMILIES_ROOT, iter_family_files  # noqa: E402
 
 
-EXECUTION_ID = "20260711--travel-homepage-coverage--cn-zhejiang--canary-901"
+EXECUTION_ID = "20260722--travel-homepage-coverage--test-region-a--pilot-001"
 
 
-def test_execution_id_is_readable_and_strict():
+def test_execution_id_is_readable_and_strict() -> None:
     identity = parse_execution_id(EXECUTION_ID)
+
     assert identity.vertical == "travel"
-    assert identity.content_type == "homepage"
-    assert identity.scope == "cn-zhejiang"
-    assert identity.milestone == "canary"
-    assert identity.sequence == 901
+    assert identity.content_type.value == "homepage"
+    assert identity.scope == "test-region-a"
+    assert identity.phase.value == "pilot"
+    assert identity.sequence == 1
     assert build_execution_id(
-        run_date="20260711",
+        run_date="20260722",
         vertical="travel",
         content_type="homepage",
         intent="coverage",
-        scope="cn-sichuan",
-        milestone="m1",
+        scope="test-region-b",
+        phase="scale",
         sequence=3,
-    ) == "20260711--travel-homepage-coverage--cn-sichuan--m1-003"
+    ) == "20260722--travel-homepage-coverage--test-region-b--scale-003"
+    assert build_execution_id(
+        run_date="20260722",
+        vertical="travel",
+        content_type="video",
+        intent="supply",
+        scope="test-region-b",
+        phase="full",
+        sequence=4,
+    ) == "20260722--travel-video-supply--test-region-b--full-004"
     try:
         validate_execution_id("task-a__batch-b")
-        raise AssertionError("retired task/batch identity must fail")
     except ValueError:
         pass
+    else:
+        raise AssertionError("retired task/batch identity must fail")
 
 
-def test_all_family_recipes_lint_clean():
-    refs = [str(path.relative_to(FAMILIES_ROOT))[: -len(".recipe.yaml")] for path in iter_family_files(".recipe.yaml")]
+def test_all_family_recipes_lint_clean() -> None:
+    refs = [
+        str(path.relative_to(FAMILIES_ROOT))[: -len(".recipe.yaml")]
+        for path in iter_family_files(".recipe.yaml")
+    ]
     assert refs
     for ref in refs:
-        loaded = recipe.load_recipe(ref)
-        assert loaded["recipeId"] == ref
+        assert recipe.load_recipe(ref)["recipeId"] == ref
 
 
-def test_execution_facade_invokes_the_canonical_data_cli():
+def test_execution_facade_invokes_the_canonical_data_cli() -> None:
     assert recipe._CLI_PATH == SCRIPTS_ROOT / "cli.py"
     assert recipe._CLI_PATH.is_file()
 
 
-def test_readiness_calls_only_single_execution_gate():
+def test_readiness_calls_only_single_execution_gate() -> None:
     calls: list[list[str]] = []
     recipe._readiness(
-        {"execution": {"maxWorkers": 1}, "readiness": {"requireReviewed": True}},
+        {"readiness": {"requireReviewed": True, "minPassRate": 0.9, "mode": "commercial", "failOnNoGo": True}},
         EXECUTION_ID,
         lambda argv: calls.append(list(argv)) or 0,
     )
-    assert calls == [["verify", "execution-readiness", "--execution-id", EXECUTION_ID, "--require-reviewed"]]
+
+    assert calls == [[
+        "verify", "execution-readiness", "--execution-id", EXECUTION_ID,
+        "--require-reviewed",
+        "--min-pass-rate", "0.9",
+        "--mode", "commercial",
+        "--fail-on-no-go",
+    ]]
 
 
-def test_readiness_accepts_recipe_bounded_parallel_execution():
-    calls: list[list[str]] = []
-    recipe._readiness(
-        {"execution": {"maxWorkers": 3}},
-        EXECUTION_ID,
-        lambda argv: calls.append(argv) or 0,
+def test_execution_readiness_cli_registers_recipe_contract_options() -> None:
+    import argparse
+
+    from verify.handler import register_parser
+
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    register_parser(commands)
+    args = parser.parse_args(
+        [
+            "verify",
+            "execution-readiness",
+            "--execution-id",
+            EXECUTION_ID,
+            "--require-reviewed",
+            "--min-pass-rate",
+            "0.9",
+            "--mode",
+            "commercial",
+            "--fail-on-no-go",
+        ]
     )
-    assert calls == [["verify", "execution-readiness", "--execution-id", EXECUTION_ID]]
+
+    assert args.execution_id == EXECUTION_ID
+    assert args.require_reviewed is True
+    assert args.min_pass_rate == 0.9
+    assert args.mode == "commercial"
+    assert args.fail_on_no_go is True
 
 
-def test_preflight_evidence_belongs_to_execution_work_package():
-    argv = recipe._env_ready_argv(EXECUTION_ID)
+def test_preflight_evidence_belongs_to_execution_work_package() -> None:
+    argv = recipe._runtime_preflight_argv(EXECUTION_ID)
     report_path = Path(argv[argv.index("--report-out") + 1])
+
     assert argv[:2] == ["task", "preflight"]
-    assert "--json" not in argv
-    assert report_path == recipe.execution_root(EXECUTION_ID) / "evidence" / "environment_readiness.json"
+    assert report_path == recipe.execution_root(EXECUTION_ID) / "evidence" / "runtime_preflight.json"
 
 
-def test_execute_uses_rollout_contract_with_only_execution_identity():
+def test_execute_freezes_generic_runtime_request(monkeypatch, tmp_path: Path) -> None:
+    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-a"
+    reference_root.mkdir(parents=True)
     received: dict[str, object] = {}
-    original = recipe._run_execution
-
-    def _capture(args: argparse.Namespace, invoke=None) -> None:
-        received.update(vars(args))
-
-    recipe._run_execution = _capture
-    try:
-        recipe.handle_execute(
-            argparse.Namespace(
-                execution_id=EXECUTION_ID,
-                retry_of=None,
-                rollout=recipe.HOMEPAGE_ROLLOUT,
-                stage="plan-only",
-                recover_stage=None,
-                recovery_reason=None,
-            )
-        )
-    finally:
-        recipe._run_execution = original
-    assert received["execution_id"] == EXECUTION_ID
-    assert received["rollout"] == recipe.HOMEPAGE_ROLLOUT
-    assert received["region"] == "中国/浙江省"
-    assert received["discovery"] == "quwoquan_data/verticals/travel/coverage/中国/浙江省"
-    assert "recipe" not in received and "batch" not in received and "plan" not in received
-
-
-def test_execute_routes_cold_start_identity_to_policy_targets(monkeypatch):
-    from governance.coverage.cold_start_supply import ColdStartExecutionParameters
-
-    execution_id = "20260718--travel-article-cold-start--cn-sichuan--m3-001"
-    received: dict[str, object] = {}
-    monkeypatch.setattr(
-        "governance.coverage.cold_start_supply.cold_start_execution_parameters",
-        lambda **_kwargs: ColdStartExecutionParameters(
-            province="四川省",
-            target_names=("海螺沟", "九寨沟"),
-        ),
-    )
-    monkeypatch.setattr(
-        recipe,
-        "_run_execution",
-        lambda args, invoke=None: received.update(vars(args)),
-    )
+    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(recipe, "_run_execution", lambda args, invoke=None: received.update(vars(args)))
 
     recipe.handle_execute(
         argparse.Namespace(
-            execution_id=execution_id,
+            execution_id=EXECUTION_ID,
             retry_of=None,
-            rollout="travel-cold-start-supply",
+            family="content/travel/homepage/homepage",
+            region_ref="test-region-a",
+            selector="source-ready-priority",
+            count=2,
+            target_names=["测试实体甲", "测试实体乙"],
+            topic=None,
+            source_providers=[],
+            homepage_execution_id=None,
             stage="plan-only",
             recover_stage=None,
             recovery_reason=None,
         )
     )
 
-    assert received["execution_id"] == execution_id
-    assert received["region"] == "中国/四川省"
-    assert received["limit"] == 2
-    assert received["mandatory"] == "海螺沟,九寨沟"
+    assert received["family"] == "content/travel/homepage/homepage"
+    assert received["region_ref"] == "test-region-a"
+    assert received["count"] == 2
+    assert received["target_names"] == ("测试实体甲", "测试实体乙")
+    assert received["vertical"] == "travel"
+    assert received["content_type"] == "homepage"
+    assert received["intent"] == "coverage"
+    assert "rollout" not in received
 
 
-def test_execute_rejects_an_unpaired_recovery_request(monkeypatch):
-    monkeypatch.setattr(recipe, "load_recipe", lambda _ref: {})
+def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) -> None:
+    args = argparse.Namespace(
+        execution_id=EXECUTION_ID,
+        retry_of=None,
+        family="content/travel/homepage/homepage",
+        region_ref="test-region-a",
+        selector="source-ready-priority",
+        count=1,
+        topic=None,
+        source_providers=(),
+        homepage_execution_id=None,
+        stage="plan-only",
+        recover_stage=None,
+        recovery_reason=None,
+    )
+    monkeypatch.setattr(recipe, "load_recipe", lambda _ref: {"recipeId": args.family})
 
+    from content.execution.agent import agent_conflicts
+
+    def _blocked(*_args, **_kwargs) -> None:
+        raise agent_conflicts.ManagedWorkspaceConflictError("execution_output_cleanup pid=42")
+
+    monkeypatch.setattr(agent_conflicts, "assert_managed_workspace_available", _blocked)
+    try:
+        recipe._run_execution(args)
+    except SystemExit as exc:
+        assert "execution_output_cleanup pid=42" in str(exc)
+    else:
+        raise AssertionError("plan-only must reject an active output cleanup")
+
+
+def test_post_execute_requires_explicit_homepage_execution(monkeypatch, tmp_path: Path) -> None:
+    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-b"
+    reference_root.mkdir(parents=True)
+    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(recipe, "_run_execution", lambda *_args, **_kwargs: None)
+    args = argparse.Namespace(
+        execution_id="20260722--travel-article-supply--test-region-b--pilot-001",
+        retry_of=None,
+        family="content/travel/article/article",
+        region_ref="test-region-b",
+        selector="all",
+        count=1,
+        topic="test-topic-a",
+        source_providers=[],
+        homepage_execution_id=None,
+        stage="plan-only",
+        recover_stage=None,
+        recovery_reason=None,
+    )
+
+    try:
+        recipe.handle_execute(args)
+    except SystemExit as exc:
+        assert "homepage-execution-id" in str(exc)
+    else:
+        raise AssertionError("post execution without homepage binding must block")
+
+
+def test_homepage_execute_requires_source_ready_selection(monkeypatch, tmp_path: Path) -> None:
+    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-a"
+    reference_root.mkdir(parents=True)
+    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(recipe, "_run_execution", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not execute")))
+
+    args = argparse.Namespace(
+        execution_id=EXECUTION_ID,
+        retry_of=None,
+        family="content/travel/homepage/homepage",
+        region_ref="test-region-a",
+        selector="all",
+        count=1,
+        target_names=[],
+        topic=None,
+        source_providers=[],
+        homepage_execution_id=None,
+        stage="plan-only",
+        recover_stage=None,
+        recovery_reason=None,
+    )
+
+    try:
+        recipe.handle_execute(args)
+    except SystemExit as exc:
+        assert "source-ready-priority" in str(exc)
+    else:
+        raise AssertionError("homepage execution must require source-ready selection")
+
+
+def test_execute_rejects_an_unpaired_recovery_request() -> None:
     try:
         recipe._run_execution(
             argparse.Namespace(
                 execution_id=EXECUTION_ID,
-                retry_of=None,
-                rollout=recipe.HOMEPAGE_ROLLOUT,
-                stage="run",
-                recover_stage="build_homepage",
+                family="content/travel/homepage/homepage",
+                recover_stage="download_fetch",
                 recovery_reason=None,
             )
         )
-        raise AssertionError("unpaired recovery request must fail")
     except SystemExit as exc:
         assert "recover-stage" in str(exc)
+    else:
+        raise AssertionError("unpaired recovery request must fail")
 
 
-def test_existing_execution_resume_uses_frozen_manifest_inputs(monkeypatch):
-    frozen_params = {
-        "region": "中国/浙江省",
-        "discovery": "quwoquan_data/verticals/travel/coverage/中国/浙江省",
-        "name": "浙江省主页m1",
-        "title": "浙江省主页m1",
-        "intentLabel": "浙江省景区主页m1",
-        "category": "景区",
-        "limit": 100,
-        "mandatory": "冻结对象",
-        "entityHomepagesPerTarget": 1,
-        "entityArticlesPerTarget": 0,
-        "imageWorksPerTarget": 0,
-        "videoWorksPerTarget": 0,
+def test_frozen_runtime_request_rejects_unknown_or_unordered_fields() -> None:
+    request = {
+        "familyRef": "content/travel/homepage/homepage",
+        "regionRef": "test-region-a",
+        "selector": "all",
+        "count": 1,
+        "topic": None,
+        "sourceProviders": ["provider-b", "provider-a"],
+        "homepageExecutionId": None,
+        "targetNames": [],
     }
-    monkeypatch.setattr(recipe, "load_recipe", lambda _ref: {"runtimeProfile": "profile"})
-    monkeypatch.setattr(recipe, "_apply_runtime_env", lambda _recipe: None)
-    monkeypatch.setattr(recipe, "execution_manifest_path", lambda _execution_id: Path("manifest.json"))
-    monkeypatch.setattr(Path, "is_file", lambda self: self.name == "manifest.json")
-    monkeypatch.setattr(
-        recipe,
-        "load_execution_manifest",
-        lambda _execution_id: {
-            "recipe": {"ref": recipe.HOMEPAGE_RECIPE},
-            "resolvedParams": frozen_params,
-            "retryOf": "20260711--travel-homepage-coverage--cn-zhejiang--canary-900",
-        },
-    )
-
-    captured: dict[str, object] = {}
-
-    def fake_create_execution_manifest(**kwargs):
-        captured.update(kwargs)
-        raise RuntimeError("stop after manifest validation")
-
-    monkeypatch.setattr(
-        "content.execution.create_execution_manifest",
-        fake_create_execution_manifest,
-    )
-    monkeypatch.setattr(
-        "content.execution.runner.preflight_execution_models",
-        lambda _recipe: {},
-    )
-    monkeypatch.setattr(
-        "content.execution.runner.write_execution_model_readiness",
-        lambda *_args: None,
-    )
-    monkeypatch.setattr(
-        "content.execution.recipe._ensure_execution_spec",
-        lambda *_args, **_kwargs: EXECUTION_ID,
-    )
-    monkeypatch.setattr(
-        "content.release.canonical.rollout_milestone.assert_rollout_start",
-        lambda _execution_id: None,
-    )
-    monkeypatch.setattr(
-        "content.execution.workspace.frozen_target_set_sha256",
-        lambda _execution_id: "digest",
-    )
-
     try:
-        recipe._run_execution(
-            argparse.Namespace(
-                execution_id=EXECUTION_ID,
-                retry_of=None,
-                rollout=recipe.HOMEPAGE_ROLLOUT,
-                stage="run",
-                recover_stage="download_fetch",
-                recovery_reason="transport_repaired",
-            )
-        )
-        raise AssertionError("test must stop at manifest validation")
-    except RuntimeError as exc:
-        assert str(exc) == "stop after manifest validation"
+        recipe.RuntimeExecutionRequest.from_document(request)
+    except SystemExit as exc:
+        assert "deduplicated and sorted" in str(exc)
+    else:
+        raise AssertionError("unordered frozen provider IDs must fail")
+    request["sourceProviders"] = []
+    request["unexpected"] = "value"
+    try:
+        recipe.RuntimeExecutionRequest.from_document(request)
+    except SystemExit as exc:
+        assert "keys must be exactly" in str(exc)
+    else:
+        raise AssertionError("unknown frozen request keys must fail")
 
-    assert captured["resolved_params"] == frozen_params
-    assert captured["retry_of"] == (
-        "20260711--travel-homepage-coverage--cn-zhejiang--canary-900"
+
+def test_execute_rejects_a_provider_outside_the_vertical_policy(monkeypatch, tmp_path: Path) -> None:
+    class RejectingProviderPolicy:
+        def require_declared(self, provider_ids: tuple[str, ...]) -> None:
+            raise ValueError(f"undeclared provider IDs: {provider_ids}")
+
+    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-a"
+    reference_root.mkdir(parents=True)
+    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(recipe, "load_provider_policy", lambda _vertical: RejectingProviderPolicy())
+    args = argparse.Namespace(
+        execution_id=EXECUTION_ID,
+        retry_of=None,
+        family="content/travel/homepage/homepage",
+        region_ref="test-region-a",
+        selector="source-ready-priority",
+        count=1,
+        topic=None,
+        source_providers=["provider-a"],
+        homepage_execution_id=None,
+        stage="plan-only",
+        recover_stage=None,
+        recovery_reason=None,
     )
+    try:
+        recipe.handle_execute(args)
+    except SystemExit as exc:
+        assert "undeclared provider IDs" in str(exc)
+    else:
+        raise AssertionError("undeclared provider must fail before execution")
 
 
-def test_task_facade_exposes_only_durable_commands():
+def test_task_facade_exposes_only_durable_commands() -> None:
     result = subprocess.run(
         [sys.executable, str(SCRIPTS_ROOT / "cli.py"), "task", "--help"],
         text=True,
@@ -256,11 +340,12 @@ def test_task_facade_exposes_only_durable_commands():
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    command_rows = [line.strip().split(maxsplit=1)[0] for line in result.stdout.splitlines() if line.startswith("    ")]
-    assert command_rows == ["preflight", "execute"]
+    choices = re.search(r"^  \{([^}]+)\}$", result.stdout, flags=re.MULTILINE)
+    assert choices is not None
+    assert choices.group(1).split(",") == ["preflight", "execute"]
 
 
-def test_execute_cli_has_no_selection_or_runtime_overrides():
+def test_execute_cli_accepts_only_explicit_generic_request_parameters() -> None:
     result = subprocess.run(
         [sys.executable, str(SCRIPTS_ROOT / "cli.py"), "task", "execute", "--help"],
         text=True,
@@ -268,19 +353,7 @@ def test_execute_cli_has_no_selection_or_runtime_overrides():
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    forbidden = ("--limit", "--region", "--discovery", "--max-workers", "--runtime")
-    assert not any(option in result.stdout for option in forbidden)
-    assert "travel-homepage-coverage" in result.stdout
-    assert "travel-cold-start-supply" in result.stdout
-
-
-if __name__ == "__main__":
-    failures = 0
-    for name, fn in sorted((name, fn) for name, fn in globals().items() if name.startswith("test_") and callable(fn)):
-        try:
-            fn()
-            print(f"PASS {name}")
-        except Exception as exc:  # noqa: BLE001
-            failures += 1
-            print(f"FAIL {name}: {exc}")
-    raise SystemExit(1 if failures else 0)
+    for option in ("--family", "--region-ref", "--selector", "--count", "--target"):
+        assert option in result.stdout
+    for retired in ("--rollout", "--province", "--mandatory", "--max-workers"):
+        assert retired not in result.stdout

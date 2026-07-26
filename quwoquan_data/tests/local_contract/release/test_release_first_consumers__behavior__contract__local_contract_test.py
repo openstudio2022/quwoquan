@@ -80,7 +80,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         },
     }
     for name, payload_doc in {
-        "release.json": {"schema": "quwoquan_data.release", "releaseId": "release-a", "releaseKind": "content", "executionIds": ["20260715--travel-homepage-coverage--cn-zhejiang--m1-001"]},
+        "release.json": {"schema": "quwoquan_data.release", "releaseId": "release-a", "releaseKind": "content", "executionIds": ["20260715--travel-homepage-coverage--test-region-a--scale-001"]},
         "desired_state.json": desired,
         "sample_bundle.json": {"schema": "quwoquan_data.release_sample", "tags": ["Topic/旅行"]},
         "index/objects.json": {
@@ -135,10 +135,10 @@ def test_release_first_consumer_closure_and_deterministic_index(tmp_path: Path) 
     assert "cdnUrl" not in json.dumps(media)
 
 
-def test_release_consumer_rejects_legacy_and_create_once_drift(tmp_path: Path) -> None:
+def test_release_consumer_rejects_noncanonical_schema_and_create_once_drift(tmp_path: Path) -> None:
     canonical, release = _fixture(tmp_path)
-    legacy = {"schema": "quwoquan.data_env_release", "environment": "gamma"}
-    report = scan_release_contract(legacy, publish_root=canonical, release_root=release)
+    noncanonical = {"schema": "invalid.release", "environment": "gamma"}
+    report = scan_release_contract(noncanonical, publish_root=canonical, release_root=release)
     assert report["status"] == "failed"
     assert report["blockingIssues"][0]["code"] == "release_contract_schema_invalid"
 

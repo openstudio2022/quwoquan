@@ -1,0 +1,65 @@
+read_model: ProfileSocialRelationRowWire
+description: 'listFollowing（关注列表）/ listFollowers（粉丝列表）列表元素 wire，
+
+  与 ProfileSocialRelationRowViewData 对齐。
+
+  '
+source_entities:
+- PersonaRelationship
+consumers:
+- app
+client_projection:
+  dart_class: ProfileSocialRelationRowWireDto
+  base_class: ''
+  output_path: cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart
+  fields:
+  - name: subAccountId
+    dart_type: String
+    nullable: false
+    source: subAccountId
+    default: ''''''
+  - name: username
+    dart_type: String
+    nullable: false
+    source: username
+    default: ''''''
+  - name: userHandle
+    dart_type: String
+    nullable: false
+    source: userHandle
+    default: ''''''
+  - name: displayName
+    dart_type: String
+    nullable: false
+    source: displayName
+    default: ''''''
+  - name: avatarUrl
+    dart_type: String
+    nullable: false
+    source: avatarUrl
+    default: ''''''
+  - name: avatarVersion
+    dart_type: int
+    nullable: false
+    source: avatarVersion
+    default: '0'
+  - name: profileVisibility
+    dart_type: String
+    nullable: false
+    source: profileVisibility
+    default: '''public'''
+  - name: relationState
+    dart_type: String
+    nullable: false
+    source: relationState
+    default: '''not_following'''
+  - name: followedAt
+    dart_type: DateTime
+    nullable: true
+    source: followedAt
+    default: 'null'
+  - name: relationshipCapability
+    dart_type: Map<String, dynamic>
+    nullable: true
+    source: relationshipCapability
+    default: 'null'

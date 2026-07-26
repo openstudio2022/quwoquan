@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
@@ -178,7 +179,7 @@ class _MyIntersectionInboxPageState
     return resolveIntersectionDetailErrorSemantic(
       context,
       error: error,
-      title: '${DiscoveryFeedText.myIntersectionsTitle}暂不可用',
+      title: UITextConstants.objectIntersectionsUnavailableTitle,
     );
   }
 
@@ -213,9 +214,17 @@ class _MyIntersectionInboxPageState
   Widget _buildBody(BuildContext context, MyIntersectionListState state) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final items = _visibleItems(state.items);
-    final impactState = ref.watch(
-      authorImpactProvider(ref.watch(currentUserIdProvider)),
-    );
+    final children = _selectedTab == _IntersectionDetailTab.impact
+        ? _buildImpactTimelineChildren(
+            ref.watch(
+              authorImpactProvider((
+                subAccountId: ref.watch(currentUserIdProvider),
+                surface: AppUiSurfaces.myIntersections,
+              )),
+            ),
+            isDark,
+          )
+        : _buildIntersectionTimelineChildren(state, items, isDark);
     return ListView(
       padding: EdgeInsets.fromLTRB(
         SettingsSemanticConstants.insetFormListHorizontalPadding,
@@ -223,12 +232,7 @@ class _MyIntersectionInboxPageState
         SettingsSemanticConstants.insetFormListHorizontalPadding,
         AppSpacing.containerLg,
       ),
-      children: <Widget>[
-        if (_selectedTab == _IntersectionDetailTab.impact)
-          ..._buildImpactTimelineChildren(impactState, isDark)
-        else
-          ..._buildIntersectionTimelineChildren(state, items, isDark),
-      ],
+      children: children,
     );
   }
 
@@ -532,9 +536,7 @@ class _IntersectionNavSwitchItem extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: AppTypography.iosNavTitle,
-                fontWeight: selected
-                    ? AppTypography.semiBold
-                    : AppTypography.regular,
+                fontWeight: AppTypography.regular,
                 color: color,
               ),
             ),

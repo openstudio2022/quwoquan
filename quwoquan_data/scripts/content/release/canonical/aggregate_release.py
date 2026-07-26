@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.control_types import ContentType, EXECUTION_MILESTONES, RolloutMilestone
+from core.control_types import ContentType
 from core.media_asset_url import build_release_media_manifest, copy_release_media_objects
 from core.release_layout import (
     attestation_root,
@@ -18,9 +17,8 @@ from core.release_layout import (
     payload_root,
 )
 from core.schema import assert_valid
-from core.source_digest import SourceDigest, SourceDigestError, current_source_digest
+from core.source_digest import SourceDigest, SourceDigestError
 from core.tree_integrity import tree_integrity_stats
-from governance.coverage.cold_start_supply import load_cold_start_supply_policy
 from content.execution.identity import parse_execution_id
 from content.release.canonical.object_transaction_audit import validate_canonical_publish
 from content.release.canonical.release_attestation import ReleaseAttestation
@@ -36,15 +34,11 @@ from content.release.canonical.object_transaction_contract import (
     _write_json,
     assert_environment_neutral,
 )
-from content.release.canonical.two_province_closure import expected_entity_refs
 from content.release.environment.consistency import scan_release_contract
 from content.release.model import ReleaseKind
 
 
 OBJECT_KINDS = ("creators", "entities", "posts", "tags")
-CONTENT_MILESTONES = (*EXECUTION_MILESTONES, RolloutMilestone.LAUNCH)
-
-
 @dataclass(frozen=True, slots=True)
 class ExecutionPublishClosure:
     execution_id: str
@@ -64,41 +58,56 @@ def _normalized_refs(value: object, *, label: str) -> tuple[str, ...]:
     return refs
 
 
-def _execution_publish_closure(root: Path) -> ExecutionPublishClosure:
-    manifest = _read_json(root / "execution_manifest.json")
-    execution_id = _execution_id(str(manifest.get("executionId") or ""))
-    if root.name != execution_id:
-        raise ObjectTransactionError("aggregate execution root identity mismatch")
-    publish_ref = _read_json(root / "publish_ref.json")
-    try:
-        assert_valid(
-            publish_ref,
-            "execution",
-            "publish_ref",
-            label=f"publish_ref:{execution_id}",
-        )
-    except (FileNotFoundError, ValueError) as exc:
-        raise ObjectTransactionError(str(exc)) from exc
-    if publish_ref.get("executionId") != execution_id:
-        raise ObjectTransactionError(f"{execution_id}: publish_ref identity mismatch")
-    refs = publish_ref["publishedRefs"]
-    entity_refs = _normalized_refs(
-        refs["entities"], label=f"{execution_id}.publishedRefs.entities"
-    )
-    post_refs = _normalized_refs(
-        refs["posts"], label=f"{execution_id}.publishedRefs.posts"
-    )
+def _execution_publish_closure(
+    execution_id: str,
+    *,
+    publish_root: Path,
+) -> ExecutionPublishClosure:
+    execution_id = _execution_id(execution_id)
     identity = parse_execution_id(execution_id)
+    matched_refs: dict[str, list[str]] = {"entities": [], "posts": []}
+    matched_digests: list[SourceDigest] = []
+    for kind in ("entities", "posts"):
+        objects_root = publish_root / kind
+        if not objects_root.is_dir():
+            continue
+        for manifest_path in sorted(objects_root.rglob("manifest.json")):
+            manifest = _read_json(manifest_path)
+            if str(manifest.get("executionId") or "") != execution_id:
+                continue
+            ref = _safe_rel(
+                manifest_path.parent.relative_to(objects_root).as_posix(),
+                label=f"{kind}Ref",
+            ).as_posix()
+            try:
+                source_digest = SourceDigest.from_document(manifest.get("sourceDigest"))
+            except SourceDigestError as exc:
+                raise ObjectTransactionError(
+                    f"{execution_id}: canonical {kind}/{ref} lacks a valid frozen sourceDigest"
+                ) from exc
+            matched_refs[kind].append(ref)
+            matched_digests.append(source_digest)
+    entity_refs = tuple(sorted(matched_refs["entities"]))
+    post_refs = tuple(sorted(matched_refs["posts"]))
     if identity.content_type is ContentType.HOMEPAGE and post_refs:
-        raise ObjectTransactionError(f"{execution_id}: homepage execution published posts")
+        raise ObjectTransactionError(f"{execution_id}: homepage execution has canonical posts")
     if identity.content_type is not ContentType.HOMEPAGE and entity_refs:
-        raise ObjectTransactionError(f"{execution_id}: post execution published entities")
+        raise ObjectTransactionError(f"{execution_id}: post execution has canonical entities")
+    if identity.content_type is not ContentType.HOMEPAGE:
+        for ref in post_refs:
+            manifest = _read_json(_object_root(publish_root, "posts", ref) / "manifest.json")
+            if str(manifest.get("contentType") or "") != identity.content_type.value:
+                raise ObjectTransactionError(
+                    f"{execution_id}: canonical post contentType does not match execution identity"
+                )
     if not entity_refs and not post_refs:
-        raise ObjectTransactionError(f"{execution_id}: publish_ref has no canonical objects")
-    try:
-        source_digest = SourceDigest.from_document(manifest.get("sourceDigest"))
-    except SourceDigestError as exc:
-        raise ObjectTransactionError(f"{execution_id}: {exc}") from exc
+        raise ObjectTransactionError(
+            f"{execution_id}: canonical publish has no objects bound to this execution"
+        )
+    source_digests = {item.digest for item in matched_digests}
+    if len(source_digests) != 1:
+        raise ObjectTransactionError(f"{execution_id}: canonical object source digests drift")
+    source_digest = matched_digests[0]
     return ExecutionPublishClosure(execution_id, entity_refs, post_refs, source_digest)
 
 
@@ -170,43 +179,6 @@ def _reference_closure(
     return sorted(creator_refs), sorted(tag_refs)
 
 
-def _assert_launch_contract(
-    publish_root: Path,
-    *,
-    entity_refs: set[str],
-    post_refs: set[str],
-) -> None:
-    expected_entities = set().union(*expected_entity_refs().values())
-    if entity_refs != expected_entities:
-        raise ObjectTransactionError(
-            "launch entity closure must exactly equal Zhejiang/Sichuan master coverage: "
-            f"actual={len(entity_refs)} expected={len(expected_entities)}"
-        )
-    policy = load_cold_start_supply_policy()
-    if len(post_refs) != policy.expected_post_count:
-        raise ObjectTransactionError(
-            "launch post closure does not match cold-start policy: "
-            f"actual={len(post_refs)} expected={policy.expected_post_count}"
-        )
-    actual_mix: Counter[ContentType] = Counter()
-    for ref in sorted(post_refs):
-        manifest = _read_json(_object_root(publish_root, "posts", ref) / "manifest.json")
-        try:
-            actual_mix[ContentType(str(manifest.get("contentType") or ""))] += 1
-        except ValueError as exc:
-            raise ObjectTransactionError(f"post contentType invalid: {ref}") from exc
-    target_count = len(policy.targets)
-    expected_mix = {
-        ContentType.ARTICLE: target_count * policy.content_mix.article,
-        ContentType.IMAGE: target_count * policy.content_mix.image,
-        ContentType.VIDEO: target_count * policy.content_mix.video,
-    }
-    if dict(actual_mix) != expected_mix:
-        raise ObjectTransactionError(
-            f"launch post content mix mismatch: actual={dict(actual_mix)} expected={expected_mix}"
-        )
-
-
 def _existing_refs(release_root: Path) -> dict[str, list[str]]:
     desired = _read_json(payload_file(release_root, "desired_state.json"))
     refs = desired.get("desiredRefs")
@@ -220,38 +192,30 @@ def build_aggregate_release(
     publish_root: Path,
     release_root: Path,
     release_id: str,
-    execution_roots: list[Path],
-    rollout_milestone: str,
+    execution_ids: list[str],
 ) -> dict[str, Any]:
-    """Create one immutable release from exact execution publish refs."""
+    """Create one immutable release from canonical objects bound to execution IDs."""
     release_id = _safe_id(release_id, label="releaseId")
-    try:
-        milestone = RolloutMilestone(str(rollout_milestone or "").strip())
-    except ValueError as exc:
-        raise ObjectTransactionError("rolloutMilestone is invalid") from exc
-    if milestone not in CONTENT_MILESTONES:
-        raise ObjectTransactionError("rolloutMilestone is not a content milestone")
-    closures = tuple(_execution_publish_closure(root) for root in execution_roots)
+    closures = tuple(
+        _execution_publish_closure(execution_id, publish_root=publish_root)
+        for execution_id in execution_ids
+    )
     execution_ids = sorted({closure.execution_id for closure in closures})
     if len(execution_ids) != len(closures):
-        raise ObjectTransactionError("aggregate execution roots are duplicated")
-    source_digests = {closure.source_digest.digest for closure in closures}
-    if len(source_digests) != 1:
-        raise ObjectTransactionError("aggregate execution source digests drift")
-    source_digest = closures[0].source_digest
-    if source_digest != current_source_digest():
-        raise ObjectTransactionError(
-            "aggregate execution source digest does not match the frozen repository inputs"
+        raise ObjectTransactionError("aggregate execution IDs are duplicated")
+    source_digests = tuple(
+        sorted(
+            {closure.source_digest for closure in closures},
+            key=lambda source_digest: source_digest.digest,
         )
+    )
+    source_digest_documents = [
+        source_digest.to_document() for source_digest in source_digests
+    ]
     entity_refs = {ref for closure in closures for ref in closure.entity_refs}
     post_refs = {ref for closure in closures for ref in closure.post_refs}
-    if not entity_refs:
-        raise ObjectTransactionError("aggregate release has no canonical entity")
-    if milestone is RolloutMilestone.LAUNCH:
-        _assert_launch_contract(publish_root, entity_refs=entity_refs, post_refs=post_refs)
-    elif post_refs:
-        raise ObjectTransactionError("homepage rollout release must not include cold-start posts")
-
+    if not entity_refs and not post_refs:
+        raise ObjectTransactionError("aggregate release has no canonical object")
     canonical_closure = validate_canonical_publish(publish_root)
     if canonical_closure["status"] != "passed":
         raise ObjectTransactionError(
@@ -274,7 +238,7 @@ def build_aggregate_release(
     final_root = release_root / release_id
     if final_root.exists():
         header = _read_json(payload_file(final_root, "release.json"))
-        aggregate = _read_json(attestation_root(final_root) / "aggregate.json")
+        aggregate = _read_json(attestation_root(final_root) / "release.json")
         selected_merkle = object_closure_digest(final_root)
         if (
             header.get("releaseId") == release_id
@@ -282,9 +246,8 @@ def build_aggregate_release(
             and _existing_refs(final_root) == desired
             and header.get("canonicalMerkle") == selected_merkle
             and header.get("releaseKind") == ReleaseKind.CONTENT
-            and header.get("rolloutMilestone") == milestone.value
-            and header.get("sourceDigest") == source_digest.to_document()
-            and aggregate.get("sourceDigest") == source_digest.to_document()
+            and header.get("sourceDigests") == source_digest_documents
+            and aggregate.get("sourceDigests") == source_digest_documents
             and aggregate.get("payloadSha256") == payload_digest(final_root)
         ):
             return {
@@ -296,7 +259,6 @@ def build_aggregate_release(
                 "postCount": len(post_refs),
                 "creatorCount": len(creator_refs),
                 "canonicalMerkle": selected_merkle,
-                "rolloutMilestone": milestone.value,
                 "idempotent": True,
             }
         raise ObjectTransactionError(f"aggregate release create-once conflict: {final_root}")
@@ -320,8 +282,7 @@ def build_aggregate_release(
                 "releaseKind": ReleaseKind.CONTENT,
                 "canonicalMerkle": selected_merkle,
                 "executionIds": execution_ids,
-                "rolloutMilestone": milestone.value,
-                "sourceDigest": source_digest.to_document(),
+                "sourceDigests": source_digest_documents,
             },
         )
         _write_json(
@@ -374,27 +335,26 @@ def build_aggregate_release(
                     for item in consistency["blockingIssues"][:5]
                 )
             )
-        aggregate_attestation = ReleaseAttestation(
+        release_attestation = ReleaseAttestation(
             release_id=release_id,
             release_kind=ReleaseKind.CONTENT,
             execution_ids=tuple(execution_ids),
-            rollout_milestone=milestone,
             entity_count=len(entity_refs),
             post_count=len(post_refs),
             creator_count=len(creator_refs),
             tag_count=len(tag_refs),
             canonical_merkle=selected_merkle,
-            source_digest=source_digest,
+            source_digests=source_digests,
             payload_sha256=payload_digest(staging),
             recorded_at=_now(),
         ).to_document()
         assert_valid(
-            aggregate_attestation,
+            release_attestation,
             "release",
-            "aggregate_release_attestation",
-            label=f"aggregate_release_attestation:{release_id}",
+            "release_attestation",
+            label=f"release_attestation:{release_id}",
         )
-        _write_json(attestation_root(staging) / "aggregate.json", aggregate_attestation)
+        _write_json(attestation_root(staging) / "release.json", release_attestation)
         assert_environment_neutral(staging)
         staging.replace(final_root)
         return {
@@ -406,7 +366,6 @@ def build_aggregate_release(
             "postCount": len(post_refs),
             "creatorCount": len(creator_refs),
             "canonicalMerkle": selected_merkle,
-            "rolloutMilestone": milestone.value,
             "idempotent": False,
         }
     except Exception:

@@ -10,28 +10,38 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
     });
     try {
       final circleState = ref.read(circleStateProvider(widget.circleId));
-      final repo = ref.read(circleRepositoryProvider);
       final query = _feedQueryForState(circleState);
-      String? circleCategoryId;
-      try {
-        final circleDetail = await repo.getCircle(widget.circleId);
-        circleCategoryId = circleDetail.categoryId;
-      } catch (_) {
-        // 频道推荐标签只是增强信息；未知圈子或详情缺失不应阻断作品区本体，
-        // 否则空态场景会被误打成错误态。
-        circleCategoryId = null;
+      final page = await ref
+          .read(circleDetailFeedQueryProvider)
+          .feed(
+            CircleFeedQuery(
+              circleId: widget.circleId,
+              identity: query.identity,
+              type: query.type,
+              sort: circleState.sortMode.name,
+            ),
+          );
+      final entries = page.items
+          .map(
+            (projection) =>
+                CircleHubFeedPostEntry.fromProjection(projection: projection),
+          )
+          .toList(growable: false);
+      var circleCategoryId = circleState.circleData?.category;
+      if (circleCategoryId == null || circleCategoryId.trim().isEmpty) {
+        try {
+          final circleDetail = await ref
+              .read(circleDetailQueryProvider)
+              .get(CircleDetailQuery(circleId: widget.circleId));
+          circleCategoryId = circleDetail.category;
+        } on Object {
+          // 推荐标签是增强信息；详情暂不可用时仍应展示强类型作品流。
+          circleCategoryId = null;
+        }
       }
-      final items = await repo.getCircleFeed(
-        widget.circleId,
-        identity: query.identity,
-        type: query.type,
-        sort: circleState.sortMode.name,
-      );
       if (mounted) {
         setState(() {
-          _feedEntries = items
-              .map(CircleHubFeedPostEntry.fromPostDto)
-              .toList(growable: false);
+          _feedEntries = entries;
           _circleCategoryId = circleCategoryId;
           _isLoading = false;
         });
@@ -179,7 +189,7 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
     return AppSpacing.threeHundredTwenty + AppSpacing.buttonHeight * 2;
   }
 
-  Widget _rawArticleTemplateBadge(Map<String, dynamic> item) {
+  Widget _articleTemplateBadge(String articleTemplate) {
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -190,9 +200,7 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
         borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
       ),
       child: Text(
-        articleTemplatePresetFromString(
-          item['articleTemplate']?.toString(),
-        ).label,
+        articleTemplatePresetFromString(articleTemplate).label,
         style: TextStyle(
           color: AppColors.white,
           fontSize: AppTypography.xs,

@@ -21,33 +21,36 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaUploadSessionCommandResult> initUpload(
     InitContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) => client.contentMediaUploadSessionInitMediaUpload(
     command,
-    context: invocationContext(
+    context: _uploadCommandContext(
       ContentRequestPageIds.initMediaUpload,
-      command: true,
+      context,
     ),
   );
 
   @override
   Future<ContentMediaUploadSessionCommandResult> completeUpload(
     CompleteContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) => client.contentMediaUploadSessionCompleteMediaUpload(
     command,
-    context: invocationContext(
+    context: _uploadCommandContext(
       ContentRequestPageIds.completeMediaUpload,
-      command: true,
+      context,
     ),
   );
 
   @override
   Future<ContentMediaUploadSessionCommandResult> abortUpload(
     AbortContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) => client.contentMediaUploadSessionAbortMediaUpload(
     command,
-    context: invocationContext(
+    context: _uploadCommandContext(
       ContentRequestPageIds.abortMediaUpload,
-      command: true,
+      context,
     ),
   );
 
@@ -74,6 +77,18 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   );
 
   @override
+  Future<ContentMediaAssetDiscardResult> discardMediaAsset(
+    DiscardContentMediaAssetCommand command,
+    ContentMediaAssetCommandContext context,
+  ) => client.contentMediaAssetDiscardMediaAsset(
+    command,
+    context: _commandContext(
+      ContentRequestPageIds.discardMediaAsset,
+      idempotencyKey: context.idempotencyKey,
+    ),
+  );
+
+  @override
   Future<ContentMediaOriginalAccessGrant> requestOriginalAccess(
     RequestContentMediaOriginalAccessCommand command,
   ) => client.contentMediaOriginalAccessFactRequestOriginalImageAccess(
@@ -87,23 +102,57 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaCoverSelectionResult> selectAutoCover(
     SelectAutoContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
   ) => client.contentMediaAssetSelectAutoVideoCover(
     command,
-    context: invocationContext(
+    context: _commandContext(
       ContentRequestPageIds.selectAutoVideoCover,
-      command: true,
+      idempotencyKey: context.idempotencyKey,
     ),
   );
 
   @override
   Future<ContentMediaCoverSelectionResult> selectManualCover(
     SelectManualContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
   ) => client.contentMediaAssetSelectManualVideoCover(
     command,
-    context: invocationContext(
+    context: _commandContext(
       ContentRequestPageIds.selectManualVideoCover,
-      command: true,
+      idempotencyKey: context.idempotencyKey,
     ),
   );
 
+  CloudOperationInvocationContext _uploadCommandContext(
+    String clientPageId,
+    ContentMediaUploadCommandContext upload,
+  ) {
+    return _commandContext(
+      clientPageId,
+      idempotencyKey: upload.idempotencyKey,
+      cancellation: upload.cancellation,
+    );
+  }
+
+  CloudOperationInvocationContext _commandContext(
+    String clientPageId, {
+    required String idempotencyKey,
+    CloudOperationCancellationSignal? cancellation,
+  }) {
+    final base = invocationContext(clientPageId, command: true);
+    return CloudOperationInvocationContext(
+      surfaceId: base.surfaceId,
+      clientPageId: base.clientPageId,
+      routeId: base.routeId,
+      referralSource: base.referralSource,
+      feedRequestId: base.feedRequestId,
+      shareId: base.shareId,
+      modelId: base.modelId,
+      experimentBucket: base.experimentBucket,
+      actor: base.actor,
+      idempotencyKey: idempotencyKey,
+      deadlineAt: base.deadlineAt,
+      cancellation: cancellation,
+    );
+  }
 }

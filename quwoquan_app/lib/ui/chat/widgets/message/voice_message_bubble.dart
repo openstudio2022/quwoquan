@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -145,7 +145,7 @@ class VoiceMessageBubble extends ConsumerWidget {
                               ? playback.error!
                               : (canPlay
                                     ? _durationText
-                                    : UITextConstants.chatVoiceSending),
+                                    : ChatText.chatVoiceSending),
                           style: TextStyle(
                             fontSize: AppTypography.xs,
                             color: textColor.withValues(alpha: 0.7),

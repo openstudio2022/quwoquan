@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:record/record.dart';
 
 /// Recording state machine: idle → recording → paused → stopped.
@@ -39,6 +40,8 @@ class VoiceRecorder {
 
   Timer? _amplitudeTimer;
   Timer? _maxDurationTimer;
+  bool _amplitudeFailureReported = false;
+  bool _cleanupFailureReported = false;
 
   final _stateController = StreamController<VoiceRecordState>.broadcast();
   Stream<VoiceRecordState> get onStateChange => _stateController.stream;
@@ -70,6 +73,8 @@ class VoiceRecorder {
     _state = VoiceRecordState.recording;
     _startTime = DateTime.now();
     _amplitudes.clear();
+    _amplitudeFailureReported = false;
+    _cleanupFailureReported = false;
     _stateController.add(_state);
 
     _amplitudeTimer = Timer.periodic(
@@ -133,8 +138,18 @@ class VoiceRecorder {
       final amplitude = await _recorder.getAmplitude();
       _amplitudes.add(amplitude.current);
       _amplitudeController.add(List.unmodifiable(_amplitudes));
-    } catch (_) {
-      /* best-effort: 采样录音振幅用于波形展示，单次读取失败仅丢一帧采样，不影响录音 */
+    } catch (error, stackTrace) {
+      // 单帧采样失败不影响录音；一轮录音只上报一次，避免 100ms 定时器放大故障。
+      if (!_amplitudeFailureReported) {
+        _amplitudeFailureReported = true;
+        unawaited(
+          AppExceptionTelemetryService.instance.recordHandledException(
+            source: 'chat.voice_recorder.collect_amplitude',
+            error: error,
+            stackTrace: stackTrace,
+          ),
+        );
+      }
     }
   }
 
@@ -142,13 +157,24 @@ class VoiceRecorder {
     if (_filePath != null) {
       try {
         File(_filePath!).deleteSync();
-      } catch (_) {
-        /* best-effort: 删除已取消录音的临时文件，删除失败由系统临时目录回收，可安全忽略 */
+      } catch (error, stackTrace) {
+        // 删除失败由系统临时目录最终回收；当前录音生命周期只上报一次。
+        if (!_cleanupFailureReported) {
+          _cleanupFailureReported = true;
+          unawaited(
+            AppExceptionTelemetryService.instance.recordHandledException(
+              source: 'chat.voice_recorder.cleanup_temp_file',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          );
+        }
       }
     }
     _filePath = null;
     _startTime = null;
     _amplitudes.clear();
+    _amplitudeFailureReported = false;
   }
 
   /// Normalizes raw dBFS amplitudes to 0.0–1.0 range.

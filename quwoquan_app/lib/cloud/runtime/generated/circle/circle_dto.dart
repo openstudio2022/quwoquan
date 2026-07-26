@@ -2,12 +2,14 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_section_confi
 
 /// 圈子聚合根 DTO。
 ///
-/// 字段对齐：contracts/metadata/social/circle/fields.yaml Circle；
-/// Dart/JSON 映射约定见 `quwoquan_service/contracts/metadata/social/circle/dart_type_mapping.yaml`。
+/// 字段对齐：contracts/metadata/circle/circle/circle/fields.yaml Circle；
+/// Dart/JSON 映射约定见 `quwoquan_service/contracts/metadata/circle/circle/circle/dart_type_mapping.yaml`。
 class CircleDto {
   final String id;
   final String name;
   final String? description;
+  final String? rulesText;
+  final String? welcomeMessage;
   final String? coverUrl;
 
   /// 圈子独立头像（头部头像簇主体）；缺省由 UI 回退 coverUrl。
@@ -39,6 +41,8 @@ class CircleDto {
     required this.id,
     required this.name,
     this.description,
+    this.rulesText,
+    this.welcomeMessage,
     this.coverUrl,
     this.iconUrl,
     required this.ownerId,
@@ -70,6 +74,8 @@ class CircleDto {
       id: (m['id'] ?? '').toString(),
       name: (m['name'] ?? '').toString(),
       description: m['description'] as String?,
+      rulesText: m['rulesText'] as String?,
+      welcomeMessage: m['welcomeMessage'] as String?,
       coverUrl: m['coverUrl'] as String?,
       iconUrl: m['iconUrl'] as String?,
       ownerId: (m['ownerId'] ?? '').toString(),
@@ -109,6 +115,8 @@ class CircleDto {
     'id': id,
     'name': name,
     if (description != null) 'description': description,
+    if (rulesText != null) 'rulesText': rulesText,
+    if (welcomeMessage != null) 'welcomeMessage': welcomeMessage,
     if (coverUrl != null) 'coverUrl': coverUrl,
     if (iconUrl != null) 'iconUrl': iconUrl,
     'ownerId': ownerId,
@@ -146,6 +154,8 @@ class CircleDto {
     String? id,
     String? name,
     String? description,
+    String? rulesText,
+    String? welcomeMessage,
     String? coverUrl,
     String? iconUrl,
     String? ownerId,
@@ -175,6 +185,8 @@ class CircleDto {
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
+      rulesText: rulesText ?? this.rulesText,
+      welcomeMessage: welcomeMessage ?? this.welcomeMessage,
       coverUrl: coverUrl ?? this.coverUrl,
       iconUrl: iconUrl ?? this.iconUrl,
       ownerId: ownerId ?? this.ownerId,

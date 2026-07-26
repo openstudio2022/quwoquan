@@ -119,6 +119,8 @@ def _make_asset(
         "licenseSnapshot",
         "authorizationProof",
         "usageScope",
+        "rightsAuditStatus",
+        "rightsAuditIssues",
     ):
         value = candidate.get(field)
         if value not in (None, ""):

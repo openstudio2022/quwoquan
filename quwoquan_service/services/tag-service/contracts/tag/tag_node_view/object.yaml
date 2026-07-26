@@ -1,0 +1,33 @@
+kind: projection
+description: 'TagTaxonomyRelease 激活事件构建的路径制标签节点只读投影。唯一真相源为数据工程
+
+  control_plane/governance/taxonomy
+
+  （四分组 Topic/Audience/Format/Entity，tagRef = 目录路径）。
+
+  tag-service 只读消费离线导入产物，提供 resolve / shared-tags / inverted 查询，
+
+  不接收命令、不产生领域事件；节点数量不进入 TagTaxonomyRelease 聚合一致性边界。
+
+  '
+identity:
+  fields:
+  - releaseId
+  - tagRef
+  version_source: checkpoint
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: releaseEvents
+  on_delete: tombstone
+  reference_fields:
+  - releaseId
+  target_object: tag.TagTaxonomyRelease
+capabilities:
+- queryable

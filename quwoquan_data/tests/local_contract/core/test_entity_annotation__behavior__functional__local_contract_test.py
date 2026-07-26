@@ -40,7 +40,7 @@ from content.review.annotation.entity_annotation import (  # noqa: E402
 from governance.coverage.entity_extract import homepage_exists  # noqa: E402
 from core.paths import execution_entity_object_dir, ensure_execution_layout  # noqa: E402
 
-TASK = "20260711--travel-article-annotation--cn-sichuan--canary-001"
+TASK = "20260711--travel-article-annotation--test-region-b--pilot-001"
 BATCH = TASK
 
 
@@ -52,47 +52,67 @@ def _seed_homepage(name: str, domain: str = "地点", etype: str = "景区") -> 
 
 
 def test_build_dictionary_grounds_on_homepage():
-    _seed_homepage("海螺沟")  # 有主页
+    _seed_homepage("测试实体丙")  # 有主页
     brief = {"entityRefs": ["地点/景区/九寨沟"], "subject": {"type": "地点/景区"}}
     draft_meta = {
         "extractedEntities": [
             "字符串候选只进入治理线，不得直接进可点击词典",
-            {"name": "海螺沟", "type": "景区"},
+            {"name": "测试实体丙", "type": "景区"},
             {"name": "无主页实体", "type": "景区"},
         ]
     }
     dictionary, required = build_entity_dictionary(TASK, brief, draft_meta)
     assert dictionary["九寨沟"] == "/entity/地点/景区/九寨沟"
-    assert dictionary["海螺沟"] == "/entity/地点/景区/海螺沟"
+    assert dictionary["测试实体丙"] == "/entity/地点/景区/测试实体丙"
     assert "无主页实体" not in dictionary, "无主页实体不得进词典（grounding）"
     assert required == ["/entity/地点/景区/九寨沟"]
-    assert homepage_exists("地点", "景区", "海螺沟", TASK) is True
+    assert homepage_exists("地点", "景区", "测试实体丙", TASK) is True
 
 
 def test_annotate_inline_first_occurrence_and_frontmatter_safe():
     article = (
         "---\ntitle: 九寨沟看水攻略\n---\n\n"
-        "九寨沟的水很美，海螺沟也值得一去。后文再次提到九寨沟时不应重复标注。"
+        "九寨沟的水很美，测试实体丙也值得一去。后文再次提到九寨沟时不应重复标注。"
     )
     dictionary = {
         "九寨沟": "/entity/地点/景区/九寨沟",
-        "海螺沟": "/entity/地点/景区/海螺沟",
+        "测试实体丙": "/entity/地点/景区/测试实体丙",
     }
     new_article, annotated = annotate_inline(article, dictionary)
     assert "title: 九寨沟看水攻略" in new_article, "frontmatter 不得被标注破坏"
     assert new_article.count("[九寨沟](/entity/地点/景区/九寨沟)") == 1, "仅首次出现标注"
-    assert "[海螺沟](/entity/地点/景区/海螺沟)" in new_article
-    assert annotated == {"/entity/地点/景区/九寨沟", "/entity/地点/景区/海螺沟"}
+    assert "[测试实体丙](/entity/地点/景区/测试实体丙)" in new_article
+    assert annotated == {"/entity/地点/景区/九寨沟", "/entity/地点/景区/测试实体丙"}
     # 幂等：再次标注不变。
     again, _ = annotate_inline(new_article, dictionary)
     assert again == new_article
 
 
+def test_annotate_inline_preserves_asset_references_and_annotates_prose():
+    asset_id = "云和梯田_cover_source_image_11_c50391d0"
+    article = (
+        ":::figure id=\"cover\"\n"
+        f"asset://{asset_id}\n"
+        "云和梯田的灌水期适合清晨到访。\n"
+        ":::\n"
+    )
+
+    annotated_article, annotated = annotate_inline(
+        article,
+        {"云和梯田": "/entity/地点/景区/云和梯田"},
+    )
+
+    assert f"asset://{asset_id}" in annotated_article
+    assert "asset://[云和梯田]" not in annotated_article
+    assert "[云和梯田](/entity/地点/景区/云和梯田)的灌水期" in annotated_article
+    assert annotated == {"/entity/地点/景区/云和梯田"}
+
+
 def test_merge_entity_refs_unions_and_dedup():
     brief = {"entityRefs": ["地点/景区/九寨沟"], "subject": {"type": "地点/景区"}}
-    meta = {"annotatedEntityRefs": ["/entity/地点/景区/海螺沟", "地点/景区/九寨沟"]}
+    meta = {"annotatedEntityRefs": ["/entity/地点/景区/测试实体丙", "地点/景区/九寨沟"]}
     refs = merge_entity_refs(brief, meta)
-    assert set(refs) == {"/entity/地点/景区/九寨沟", "/entity/地点/景区/海螺沟"}
+    assert set(refs) == {"/entity/地点/景区/九寨沟", "/entity/地点/景区/测试实体丙"}
     assert len(refs) == 2, "去重"
     assert merge_entity_refs(brief, {}) == ["/entity/地点/景区/九寨沟"], "未标注退化为仅主实体"
 
@@ -136,10 +156,10 @@ def test_publish_issues_soft_and_registration():
 
 
 def test_parse_entity_links():
-    links = parse_entity_links("[九寨沟](/entity/地点/景区/九寨沟) 和 [海螺沟](/entity/地点/景区/海螺沟)")
+    links = parse_entity_links("[九寨沟](/entity/地点/景区/九寨沟) 和 [测试实体丙](/entity/地点/景区/测试实体丙)")
     assert links == [
         ("九寨沟", "/entity/地点/景区/九寨沟"),
-        ("海螺沟", "/entity/地点/景区/海螺沟"),
+        ("测试实体丙", "/entity/地点/景区/测试实体丙"),
     ]
 
 

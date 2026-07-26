@@ -6,11 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import '../../../support/cloud_services/assistant_facet_overrides.dart';
 import '../../../support/fixtures/assistant/assistant_eval_scenario_fixtures.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
@@ -36,7 +37,7 @@ void main() {
         ProviderScope(
           overrides: [
             if (runtimeEnv == 'alpha')
-              assistantRepositoryProvider.overrideWithValue(
+              ...alphaAssistantFacetOverrides(
                 ScenarioEvalMockAssistantRepository(pack: scenarioPack),
               ),
           ],
@@ -68,12 +69,12 @@ void main() {
         ).read(personalAssistantStreamControllerProvider);
         final durationMs = DateTime.now().difference(started).inMilliseconds;
         final eventTypes = state.events
-            .map((event) => event.eventType)
+            .map((event) => event.eventType.wireName)
             .toList(growable: false);
         final selectedSkillIds = <String>{
           for (final event in state.events)
             if (_looksLikeSkillSelection(event.payload))
-              (event.payload['skillId'] ?? '').toString(),
+              _processString(event.payload, 'skillId'),
         }..remove('');
         final toolNames = <String>{
           for (final event in state.events) _toolNameForEvent(event.payload),
@@ -244,8 +245,7 @@ double _scoreVerticalQaRun({
   )) {
     score += 1.5;
   }
-  if (eventTypes.contains('final_answer') ||
-      eventTypes.contains('assistant.answer.final')) {
+  if (eventTypes.contains('completed')) {
     score += 1;
   }
   return score;
@@ -305,7 +305,7 @@ void _expectScreenClass(WidgetTester tester) {
 }
 
 String _toolNameForEvent(Map<String, dynamic> payload) {
-  final raw = payload['toolUse'];
+  final raw = payload['process'];
   if (raw is Map) {
     return (raw['toolName'] ?? '').toString();
   }
@@ -313,9 +313,16 @@ String _toolNameForEvent(Map<String, dynamic> payload) {
 }
 
 bool _looksLikeSkillSelection(Map<String, dynamic> payload) {
-  return payload.containsKey('skillId') &&
-      payload.containsKey('domainId') &&
-      payload.containsKey('promptPolicy');
+  final raw = payload['process'];
+  return raw is Map &&
+      raw['stage'] == 'skill_selection' &&
+      raw.containsKey('skillId') &&
+      raw.containsKey('domainId');
+}
+
+String _processString(Map<String, dynamic> payload, String key) {
+  final raw = payload['process'];
+  return raw is Map ? (raw[key] ?? '').toString() : '';
 }
 
 void _printEvalResult(Map<String, dynamic> result) {

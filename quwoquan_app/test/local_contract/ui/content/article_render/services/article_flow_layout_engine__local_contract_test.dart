@@ -60,10 +60,24 @@ void main() {
 
   test('computeRuns does not emit one run per image by count alone', () {
     final doc = ArticleDocumentData(
-      body: 'intro',
-      assets: <ArticleDocumentAsset>[
-        ArticleDocumentAsset(id: 'i1', offset: 5, imageUrl: '/a.jpg'),
-        ArticleDocumentAsset(id: 'i2', offset: 5, imageUrl: '/b.jpg'),
+      nodes: const <ArticleDocumentNode>[
+        ArticleDocumentNode(
+          id: 'paragraph_0',
+          type: ArticleDocumentNodeType.paragraph,
+          text: 'intro',
+        ),
+        ArticleDocumentNode(
+          id: 'i1',
+          type: ArticleDocumentNodeType.figure,
+          assetId: 'i1',
+          imageUrl: '/a.jpg',
+        ),
+        ArticleDocumentNode(
+          id: 'i2',
+          type: ArticleDocumentNodeType.figure,
+          assetId: 'i2',
+          imageUrl: '/b.jpg',
+        ),
       ],
     );
     const metrics = ArticleCanvasMetrics(
@@ -97,10 +111,28 @@ void main() {
 
   test('buildPageSlicesForViewport returns unified slice ids and bindings', () {
     final doc = ArticleDocumentData(
-      title: '统一分页标题',
-      body: '第一页正文\n第二页正文\n第三页正文',
-      assets: const <ArticleDocumentAsset>[
-        ArticleDocumentAsset(id: 'asset_1', offset: 5, imageUrl: '/demo.jpg'),
+      nodes: const <ArticleDocumentNode>[
+        ArticleDocumentNode(
+          id: 'document_title',
+          type: ArticleDocumentNodeType.documentTitle,
+          text: '统一分页标题',
+        ),
+        ArticleDocumentNode(
+          id: 'paragraph_0',
+          type: ArticleDocumentNodeType.paragraph,
+          text: '第一页正文',
+        ),
+        ArticleDocumentNode(
+          id: 'asset_1',
+          type: ArticleDocumentNodeType.figure,
+          assetId: 'asset_1',
+          imageUrl: '/demo.jpg',
+        ),
+        ArticleDocumentNode(
+          id: 'paragraph_1',
+          type: ArticleDocumentNodeType.paragraph,
+          text: '第二页正文\n第三页正文',
+        ),
       ],
     );
     const metrics = ArticleCanvasMetrics(
@@ -138,8 +170,18 @@ void main() {
 
   test('first page keeps title with body when there is no cover', () {
     final doc = ArticleDocumentData(
-      title: '首屏标题',
-      body: '首段正文必须和标题同页。\n\n第二段正文进入连续分页。',
+      nodes: const <ArticleDocumentNode>[
+        ArticleDocumentNode(
+          id: 'document_title',
+          type: ArticleDocumentNodeType.documentTitle,
+          text: '首屏标题',
+        ),
+        ArticleDocumentNode(
+          id: 'paragraph_0',
+          type: ArticleDocumentNodeType.paragraph,
+          text: '首段正文必须和标题同页。\n\n第二段正文进入连续分页。',
+        ),
+      ],
     );
     const metrics = ArticleCanvasMetrics(
       aspectRatio: 0.72,
@@ -175,10 +217,23 @@ void main() {
 
   test('first page keeps title cover and first paragraph together', () {
     final doc = ArticleDocumentData(
-      title: '有封面标题',
-      body: '有封面时首段正文仍应出现在第一页。\n\n后续正文继续分页。',
-      assets: const <ArticleDocumentAsset>[
-        ArticleDocumentAsset(id: 'cover', offset: 0, imageUrl: '/cover.jpg'),
+      nodes: const <ArticleDocumentNode>[
+        ArticleDocumentNode(
+          id: 'document_title',
+          type: ArticleDocumentNodeType.documentTitle,
+          text: '有封面标题',
+        ),
+        ArticleDocumentNode(
+          id: 'cover',
+          type: ArticleDocumentNodeType.figure,
+          assetId: 'cover',
+          imageUrl: '/cover.jpg',
+        ),
+        ArticleDocumentNode(
+          id: 'paragraph_0',
+          type: ArticleDocumentNodeType.paragraph,
+          text: '有封面时首段正文仍应出现在第一页。\n\n后续正文继续分页。',
+        ),
       ],
     );
     const metrics = ArticleCanvasMetrics(
@@ -216,11 +271,21 @@ void main() {
 
   test('long paragraph is split into multiple body runs', () {
     final doc = ArticleDocumentData(
-      title: '连续分页',
-      body: List<String>.generate(
-        80,
-        (index) => '第$index句正文用于验证单个超长段落也能继续分页。',
-      ).join(''),
+      nodes: <ArticleDocumentNode>[
+        const ArticleDocumentNode(
+          id: 'document_title',
+          type: ArticleDocumentNodeType.documentTitle,
+          text: '连续分页',
+        ),
+        ArticleDocumentNode(
+          id: 'paragraph_0',
+          type: ArticleDocumentNodeType.paragraph,
+          text: List<String>.generate(
+            80,
+            (index) => '第$index句正文用于验证单个超长段落也能继续分页。',
+          ).join(),
+        ),
+      ],
     );
     const metrics = ArticleCanvasMetrics(
       aspectRatio: 0.72,
@@ -251,20 +316,35 @@ void main() {
 
   test('wrap fragments keep independent body bindings', () {
     final doc = ArticleDocumentData(
-      title: '标题',
-      body: '第一段第二段',
-      assets: const <ArticleDocumentAsset>[
-        ArticleDocumentAsset(
+      nodes: const <ArticleDocumentNode>[
+        ArticleDocumentNode(
+          id: 'document_title',
+          type: ArticleDocumentNodeType.documentTitle,
+          text: '标题',
+        ),
+        ArticleDocumentNode(
           id: 'asset_a',
-          offset: 0,
+          type: ArticleDocumentNodeType.figure,
+          assetId: 'asset_a',
           imageUrl: '/a.jpg',
           imageLayout: 'wrapLeft',
         ),
-        ArticleDocumentAsset(
+        ArticleDocumentNode(
+          id: 'paragraph_0',
+          type: ArticleDocumentNodeType.paragraph,
+          text: '第一',
+        ),
+        ArticleDocumentNode(
           id: 'asset_b',
-          offset: 2,
+          type: ArticleDocumentNodeType.figure,
+          assetId: 'asset_b',
           imageUrl: '/b.jpg',
           imageLayout: 'wrapLeft',
+        ),
+        ArticleDocumentNode(
+          id: 'paragraph_1',
+          type: ArticleDocumentNodeType.paragraph,
+          text: '段第二段',
         ),
       ],
     );

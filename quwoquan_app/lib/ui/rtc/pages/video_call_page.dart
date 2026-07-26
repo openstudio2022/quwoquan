@@ -4,12 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
-import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_layout_mode.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
@@ -24,6 +20,8 @@ import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_stage_banner.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/participant_list_sheet.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/speaker_highlight_layout.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/video_call_screen_share_status.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/video_call_screen_share_surface.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/video_grid_layout.dart';
 
 class VideoCallPage extends ConsumerStatefulWidget {
@@ -38,6 +36,7 @@ class VideoCallPage extends ConsumerStatefulWidget {
 class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   CallLayoutMode _layoutMode = CallLayoutMode.grid;
   bool _controlsVisible = true;
+  bool _controlsLocked = false;
   Timer? _controlsHideTimer;
 
   @override
@@ -62,13 +61,40 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   void _startControlsHideTimer() {
     _controlsHideTimer?.cancel();
     _controlsHideTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _controlsVisible = false);
+      if (mounted && !_controlsLocked) {
+        setState(() => _controlsVisible = false);
+      }
     });
   }
 
   void _toggleControls() {
+    if (_controlsLocked) return;
     setState(() => _controlsVisible = !_controlsVisible);
     if (_controlsVisible) _startControlsHideTimer();
+  }
+
+  void _toggleControlsLock() {
+    setState(() {
+      _controlsLocked = !_controlsLocked;
+      _controlsVisible = true;
+    });
+    if (_controlsLocked) {
+      _controlsHideTimer?.cancel();
+    } else {
+      _startControlsHideTimer();
+    }
+  }
+
+  CallParticipantPickerRouteExtra _invitePickerExtra(
+    CallSessionState session,
+    int currentParticipantCount,
+  ) {
+    return CallParticipantPickerRouteExtra.existingCallInvite(
+      callId: widget.callId,
+      currentParticipantCount: currentParticipantCount,
+      maxParticipants: session.session?.maxParticipants ?? 32,
+      conversationId: session.session?.conversationId,
+    );
   }
 
   @override
@@ -88,9 +114,49 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
       }
     });
 
+    final backdrop = AppColorsFunctional.getColor(
+      CupertinoTheme.of(context).brightness == Brightness.dark,
+      ColorType.fullBleedMediaBackdrop,
+    );
+    if (session.isLoading && session.session == null) {
+      return AppScaffold(
+        backgroundColor: backdrop,
+        child: const Center(child: CupertinoActivityIndicator()),
+      );
+    }
+    if (session.failure case final failure? when session.session == null) {
+      return AppScaffold(
+        backgroundColor: backdrop,
+        child: SafeArea(
+          child: AppPageErrorState(
+            semantic: runtimeErrorSemantic(
+              context,
+              error: failure,
+              category: UiErrorCategory.pageLoad,
+              scope: UiErrorScope.page,
+            ),
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry ||
+                  action.type == UiErrorActionType.resubmit) {
+                await ref
+                    .read(callSessionProvider.notifier)
+                    .joinCall(widget.callId);
+              }
+            },
+          ),
+        ),
+      );
+    }
+
     final participants = participantsState.connectedParticipants.isNotEmpty
         ? participantsState.connectedParticipants
         : participantsState.participants;
+    final declaredParticipantCount = session.session?.participantCount ?? 0;
+    final observedParticipantCount = participantsState.participants.length;
+    final currentParticipantCount =
+        declaredParticipantCount > observedParticipantCount
+        ? declaredParticipantCount
+        : observedParticipantCount;
 
     return PopScope(
       canPop: false,
@@ -105,14 +171,12 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
         }
       },
       child: AppScaffold(
-        backgroundColor: AppColorsFunctional.getColor(
-          CupertinoTheme.of(context).brightness == Brightness.dark,
-          ColorType.fullBleedMediaBackdrop,
-        ),
+        backgroundColor: backdrop,
         child: GestureDetector(
           onTap: _toggleControls,
           behavior: HitTestBehavior.opaque,
           onScaleUpdate: (details) {
+            if (_controlsLocked) return;
             if (details.scale > 1.2 && _layoutMode == CallLayoutMode.grid) {
               setState(() => _layoutMode = CallLayoutMode.speaker);
             } else if (details.scale < 0.8 &&
@@ -123,9 +187,16 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _buildVideoArea(participants, participantsState),
-              _buildOverlayControls(session),
+              _buildVideoArea(participants, participantsState, session),
+              _buildOverlayControls(session, currentParticipantCount),
               _buildStageBanner(),
+              VideoCallScreenShareStatus(
+                visible: session.session?.isScreenSharing == true,
+                canStop: session.isLocalScreenSharing,
+                onStop: () => unawaited(
+                  ref.read(callSessionProvider.notifier).stopScreenShare(),
+                ),
+              ),
             ],
           ),
         ),
@@ -138,9 +209,12 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
       top: MediaQuery.paddingOf(context).top + AppSpacing.xl * 3,
       left: AppSpacing.md,
       right: AppSpacing.md,
-      child: const Align(
+      child: Align(
         alignment: Alignment.topCenter,
-        child: CallStageBanner(),
+        child: CallStageBanner(
+          onRetry: () =>
+              ref.read(callSessionProvider.notifier).retryCurrentCall(),
+        ),
       ),
     );
   }
@@ -148,7 +222,36 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   Widget _buildVideoArea(
     List<CallParticipant> participants,
     CallParticipantsState state,
+    CallSessionState session,
   ) {
+    if (session.session?.isScreenSharing == true) {
+      final declaredSharerId = session.session?.screenShareUserId;
+      CallParticipant? sharer;
+      for (final participant in participants) {
+        if (participant.userId == declaredSharerId) {
+          sharer = participant;
+          break;
+        }
+        if (sharer == null && participant.hasScreenShareTrack) {
+          sharer = participant;
+        }
+      }
+      final shareSurface = VideoCallScreenShareSurface(
+        track: sharer?.screenShareTrack,
+      );
+      if (sharer == null) {
+        return shareSurface;
+      }
+      return SpeakerHighlightLayout(
+        participants: participants,
+        activeSpeaker: sharer,
+        lockedSpeakerId: state.lockedSpeakerId,
+        highlightedContent: shareSurface,
+        onTapThumbnail: (userId) {
+          ref.read(callParticipantsProvider.notifier).lockSpeaker(userId);
+        },
+      );
+    }
     if (_layoutMode == CallLayoutMode.speaker) {
       return SpeakerHighlightLayout(
         participants: participants,
@@ -166,7 +269,7 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
     );
   }
 
-  Widget _buildOverlayControls(CallSessionState session) {
+  Widget _buildOverlayControls(CallSessionState session, int participantCount) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final topFadeBase = AppColorsFunctional.getColor(
       isDark,
@@ -202,41 +305,6 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
                 ),
                 child: Row(
                   children: [
-                    if (session.isRecording)
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                          vertical: AppSpacing.xs,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.smallBorderRadius,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: AppSpacing.sm,
-                              height: AppSpacing.sm,
-                              decoration: const BoxDecoration(
-                                color: AppColors.welcomeForeground,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            SizedBox(width: AppSpacing.xs),
-                            Text(
-                              UITextConstants.callRecordingBadge,
-                              style: TextStyle(
-                                color: AppColors.welcomeForeground,
-                                fontSize: AppTypography.xs,
-                                fontWeight: AppTypography.semiBold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     const Spacer(),
                     const CallDurationBadge(showBackground: true),
                     const Spacer(),
@@ -245,18 +313,19 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
                 ),
               ),
             ),
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + AppSpacing.xl * 2,
-              right: AppSpacing.md,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildParticipantListButton(session),
-                  SizedBox(width: AppSpacing.sm),
-                  _buildLayoutToggle(),
-                ],
+            if (!_controlsLocked)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + AppSpacing.xl * 2,
+                right: AppSpacing.md,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildParticipantListButton(session, participantCount),
+                    SizedBox(width: AppSpacing.sm),
+                    _buildLayoutToggle(),
+                  ],
+                ),
               ),
-            ),
             Positioned(
               left: 0,
               right: 0,
@@ -264,17 +333,20 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
               child: CallControlsBar(
                 callType: CallType.video,
                 autoHide: false,
-                onHangup: () {
-                  ref.read(callSessionProvider.notifier).hangupCall();
-                  ref.read(callTimerProvider.notifier).reset();
+                interactionLocked: _controlsLocked,
+                onToggleInteractionLock: _toggleControlsLock,
+                onHangup: () async {
+                  final result = await ref
+                      .read(callSessionProvider.notifier)
+                      .hangupCall();
+                  if (result.succeeded) {
+                    ref.read(callTimerProvider.notifier).reset();
+                  }
                 },
                 onInvite: () {
                   context.push(
                     AppRoutePaths.rtcPickParticipants,
-                    extra: CallParticipantPickerRouteExtra(
-                      callId: widget.callId,
-                      maxParticipants: session.session?.maxParticipants ?? 32,
-                    ),
+                    extra: _invitePickerExtra(session, participantCount),
                   );
                 },
               ),
@@ -315,7 +387,10 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
     );
   }
 
-  Widget _buildParticipantListButton(CallSessionState session) {
+  Widget _buildParticipantListButton(
+    CallSessionState session,
+    int participantCount,
+  ) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final fg = AppColorsFunctional.getColor(
       isDark,
@@ -338,10 +413,7 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
                     }
                     context.push(
                       AppRoutePaths.rtcPickParticipants,
-                      extra: CallParticipantPickerRouteExtra(
-                        callId: widget.callId,
-                        maxParticipants: session.session?.maxParticipants ?? 32,
-                      ),
+                      extra: _invitePickerExtra(session, participantCount),
                     );
                   },
                 ),
@@ -350,18 +422,52 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
           ),
         );
       },
-      child: Container(
-        width: AppSpacing.minInteractiveSize,
-        height: AppSpacing.minInteractiveSize,
-        decoration: BoxDecoration(
-          color: glass.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(AppSpacing.sm),
-        ),
-        child: Icon(
-          CupertinoIcons.person_2,
-          color: fg,
-          size: AppSpacing.iconMedium,
-        ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: AppSpacing.minInteractiveSize,
+            height: AppSpacing.minInteractiveSize,
+            decoration: BoxDecoration(
+              color: glass.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(AppSpacing.sm),
+            ),
+            child: Icon(
+              CupertinoIcons.person_2,
+              color: fg,
+              size: AppSpacing.iconMedium,
+            ),
+          ),
+          if (callParticipantOverflowCount(participantCount) case final count
+              when count > 0)
+            Positioned(
+              key: const ValueKey('video-call-participant-overflow'),
+              top: -AppSpacing.xs,
+              right: -AppSpacing.xs,
+              child: Container(
+                constraints: BoxConstraints(
+                  minWidth: AppSpacing.iconMedium,
+                  minHeight: AppSpacing.iconMedium,
+                ),
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                decoration: BoxDecoration(
+                  color: AppColors.error,
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.largeBorderRadius,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  UITextConstants.callAdditionalParticipants(count),
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: AppTypography.xs,
+                    fontWeight: AppTypography.semiBold,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

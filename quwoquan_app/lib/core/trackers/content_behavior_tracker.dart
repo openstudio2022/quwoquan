@@ -6,6 +6,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
+part 'content_behavior_tracker_effective_playback.dart';
+part 'content_behavior_tracker_event_normalization.dart';
+
 /// 批量行为缓冲 + 自动 flush Tracker。
 ///
 /// 负责将散落的行为事件（impression/dwell/click/dislike/share 等）
@@ -343,6 +346,36 @@ class ContentBehaviorTracker {
     );
   }
 
+  /// 记录列表入口「查看更多」展开交集列表（intersection_expand）。
+  ///
+  /// behaviors.yaml 已登记（weight 0.2 弱正信号）、云侧 `SignalWeights` 已受支持；
+  /// 本方法补齐端侧执行链（B6）。payload 契约（behaviors.yaml payload_fields）：
+  /// intersectionId/dimension/class/sourceRef + surfaceId（经 sourceSurface 承载）。
+  /// 展开动作不绑定具体 post，contentId 传交集主体对象 id（无则空串走弱信号观测）。
+  void trackIntersectionExpand({
+    String? contentId,
+    String? intersectionId,
+    String? intersectionDimension,
+    String? intersectionClass,
+    String? intersectionSourceRef,
+    String? surfaceId,
+    ReferralSource? referralSource,
+  }) {
+    _add(
+      BehaviorEvent(
+        contentId: contentId ?? '',
+        action: BehaviorAction.intersectionExpand,
+        state: 'interaction',
+        referralSource: referralSource,
+        sourceSurface: surfaceId,
+        intersectionId: intersectionId,
+        intersectionDimension: intersectionDimension,
+        intersectionClass: intersectionClass,
+        intersectionSourceRef: intersectionSourceRef,
+      ),
+    );
+  }
+
   /// 记录「不感兴趣」（dislike）。
   void trackDislike(
     String contentId, {
@@ -366,6 +399,41 @@ class ContentBehaviorTracker {
         state: 'negative',
         contentType: contentType,
         tags: tags,
+        authorId: authorId,
+        feedRequestId: feedRequestId,
+        position: position,
+        referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
+      ),
+    );
+  }
+
+  /// 撤销短时窗口内的「不感兴趣」；只恢复当前内容的精确负反馈。
+  void trackUndoDislike(
+    String contentId, {
+    String? contentType,
+    String? authorId,
+    String? feedRequestId,
+    int? position,
+    ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
+  }) {
+    _add(
+      BehaviorEvent(
+        contentId: contentId,
+        action: BehaviorAction.undoDislike,
+        state: 'interaction',
+        contentType: contentType,
         authorId: authorId,
         feedRequestId: feedRequestId,
         position: position,
@@ -530,32 +598,8 @@ class ContentBehaviorTracker {
     );
   }
 
-  /// 记录评论完成（comment）。
-  void trackComment(
-    String contentId, {
-    String? contentType,
-    int? commentLength,
-    List<String>? tags,
-    String? feedRequestId,
-    ReferralSource? referralSource,
-    String? channelId,
-    String? rankingVersion,
-  }) {
-    _add(
-      BehaviorEvent(
-        contentId: contentId,
-        action: BehaviorAction.comment,
-        state: 'interaction',
-        contentType: contentType,
-        tags: tags,
-        feedRequestId: feedRequestId,
-        commentLength: commentLength,
-        referralSource: referralSource,
-        channelId: channelId,
-        rankingVersion: rankingVersion,
-      ),
-    );
-  }
+  // N0-3：trackComment 已删除。comment 信号由云侧 CommentCreated outbox 事实
+  // 权威注入（服务端确认、防伪造），端侧不再补报评论行为。
 
   /// 记录关注完成（follow）。关注是交集行动，回流带 dimension + tagRefs（B3 归因）。
   void trackFollow(
@@ -655,6 +699,29 @@ class ContentBehaviorTracker {
       BehaviorEvent(
         contentId: '',
         action: BehaviorAction.assistantInterest,
+        state: 'interaction',
+        tags: normalized,
+      ),
+    );
+  }
+
+  /// 记录新用户首启兴趣采集（onboarding_interest，W11 interest-onboarding-prior）。
+  ///
+  /// 四维标签选择（topic/audience/format/entity）合成上报；不绑定具体 post，
+  /// 仅回流路径制 tagRefs。云侧强正权重（2.5）写入 HotPath tag weights +
+  /// rm_recommend_feature 先验，首刷 TagRecall 立即可用。独立 action 使
+  /// onboarding 转化漏斗可与对话兴趣（assistant_interest）分开归因。
+  void trackOnboardingInterest(List<String> tagRefs) {
+    final normalized = tagRefs
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (normalized.isEmpty) return;
+    _add(
+      BehaviorEvent(
+        contentId: '',
+        action: BehaviorAction.onboardingInterest,
         state: 'interaction',
         tags: normalized,
       ),
@@ -845,102 +912,6 @@ class ContentBehaviorTracker {
     _buffer.add(normalized);
     if (_buffer.length >= _maxBatchSize) {
       flush();
-    }
-  }
-
-  BehaviorEvent _withClientEventId(BehaviorEvent event) {
-    if ((event.clientEventId ?? '').isNotEmpty) return event;
-    final now = DateTime.now().toUtc().microsecondsSinceEpoch;
-    final safeContent = event.contentId.isEmpty ? 'none' : event.contentId;
-    final feed = event.feedRequestId?.trim();
-    final suffix = feed == null || feed.isEmpty ? now.toString() : feed;
-    return BehaviorEvent(
-      clientEventId: 'beh:${event.action.wireValue}:$safeContent:$suffix:$now',
-      state: event.state ?? _stateForAction(event.action),
-      contentId: event.contentId,
-      action: event.action,
-      contentType: event.contentType,
-      objectId: event.objectId,
-      objectKind: event.objectKind,
-      displayName: event.displayName,
-      sourceSurface: event.sourceSurface,
-      tags: event.tags,
-      duration: event.duration,
-      feedRequestId: event.feedRequestId,
-      position: event.position,
-      channelId: event.channelId,
-      rankingVersion: event.rankingVersion,
-      reasonVersion: event.reasonVersion,
-      recallPath: event.recallPath,
-      contentVertical: event.contentVertical,
-      supplySource: event.supplySource,
-      commentLength: event.commentLength,
-      authorId: event.authorId,
-      referralSource: event.referralSource,
-      engagementDepth: event.engagementDepth,
-      consumedRatio: event.consumedRatio,
-      totalUnits: event.totalUnits,
-      entityRefs: event.entityRefs,
-      pageVisitId: event.pageVisitId,
-      intersectionDimension: event.intersectionDimension,
-      intersectionSourceRef: event.intersectionSourceRef,
-      intersectionTagRefs: event.intersectionTagRefs,
-      intersectionId: event.intersectionId,
-      intersectionClass: event.intersectionClass,
-      intersectionEvidenceId: event.intersectionEvidenceId,
-      subjectId: event.subjectId,
-      feedbackKind: event.feedbackKind,
-      motionDirection: event.motionDirection,
-      motionProfile: event.motionProfile,
-      settleMs: event.settleMs,
-      reducedMotion: event.reducedMotion,
-      committed: event.committed,
-    );
-  }
-
-  String _dedupKey(BehaviorEvent event) {
-    final feed = event.feedRequestId ?? '';
-    // subjectId + feedbackKind 纳入去重键：交集负反馈不绑定 post（contentId 恒空），
-    // 若仅按 contentId/action/state 去重会把不同 subject / 不同 kind 的负反馈误合并成一条，
-    // 导致多主体降权 / 冷却丢失（F 推荐差异化）。非交集事件二者为空，去重语义不变。
-    final subject = event.subjectId ?? '';
-    final kind = event.feedbackKind ?? '';
-    final motion =
-        '${event.motionDirection ?? ''}|${event.motionProfile ?? ''}|'
-        '${event.settleMs ?? ''}|${event.reducedMotion ?? ''}|'
-        '${event.committed ?? ''}';
-    return '$feed|${event.contentId}|${event.action.wireValue}|${event.state ?? ''}|$subject|$kind|$motion';
-  }
-
-  String _stateForAction(BehaviorAction action) {
-    switch (action) {
-      case BehaviorAction.impression:
-        return 'impressed';
-      case BehaviorAction.dwell:
-        return 'dwell';
-      case BehaviorAction.dislike:
-      case BehaviorAction.hideAuthor:
-      case BehaviorAction.hideContentType:
-      case BehaviorAction.report:
-      case BehaviorAction.skip:
-      case BehaviorAction.intersectionFeedback:
-      case BehaviorAction.wishlistRemove:
-        return 'negative';
-      case BehaviorAction.click:
-      case BehaviorAction.like:
-      case BehaviorAction.share:
-      case BehaviorAction.comment:
-      case BehaviorAction.follow:
-      case BehaviorAction.authorView:
-      case BehaviorAction.entityPageView:
-      case BehaviorAction.tagClick:
-      case BehaviorAction.playProgress:
-      case BehaviorAction.contentDepth:
-      case BehaviorAction.joinCircle:
-      case BehaviorAction.addContact:
-      case BehaviorAction.assistantInterest:
-      case BehaviorAction.wishlistAdd:
-        return 'interaction';
     }
   }
 

@@ -24,5 +24,5 @@
 规则（never）：
 - 禁止虚构 assetId 或引用素材清单之外的 id（会被 generatorProvenance 门拦截）。
 - 禁止把 `:::figuregroup ...:::` 拆成多个 `:::figure:::`，或把多张独立图硬塞进一个组。
-- 禁止删掉底稿已有的 figure / figuregroup fence 导致图文丢失（这正是上一轮「图文混排丢失」的根因）。
+- 禁止删除底稿已有的 figure / figuregroup fence；正文与图片编排必须共同保留。
 </figure_contract>

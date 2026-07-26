@@ -35,41 +35,54 @@ REPO_ROOT = os.path.dirname(
 # 每个客户端可见域：cloud errors.yaml（一个或多个）-> 生成的客户端枚举文件。
 CLIENT_DOMAINS = {
     "content": {
-        "cloud": ["quwoquan_service/contracts/metadata/content/post/errors.yaml"],
+        "cloud": [
+            "quwoquan_service/services/content-service/contracts/content/post/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/content/comment/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/content/content_reaction/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/content/deleted_post_tombstone/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/media/filter_catalog_release/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/media/media_asset/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/media/media_original_access_fact/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/media/media_upload_session/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/content/outbound_share_fact/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/trust_safety/post_moderation_case/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/trust_safety/report/errors.yaml",
+        ],
         "dart": "quwoquan_app/lib/cloud/content/generated/content_errors.g.dart",
     },
     "chat": {
-        "cloud": ["quwoquan_service/contracts/metadata/messages/conversation/errors.yaml"],
+        "cloud": ["quwoquan_service/services/chat-service/contracts/chat/conversation/errors.yaml"],
         "dart": "quwoquan_app/lib/cloud/chat/generated/chat_errors.g.dart",
     },
     "user": {
-        "cloud": [
-            "quwoquan_service/contracts/metadata/user/user_profile/errors.yaml",
-            "quwoquan_service/contracts/metadata/user/contact_discovery/errors.yaml",
-            "quwoquan_service/contracts/metadata/user/greeting_request/errors.yaml",
-            "quwoquan_service/contracts/metadata/user/invite_record/errors.yaml",
-            "quwoquan_service/contracts/metadata/user/profile_update_proposal/errors.yaml",
-        ],
+        # user-service 的 errors.yaml 均属于客户端可见域，直接由目录发现，
+        # 避免对象归位后还要人工同步第二份路径清单。
+        "cloud_root": "quwoquan_service/services/user-service/contracts",
         "dart": "quwoquan_app/lib/cloud/runtime/generated/user/user_errors.g.dart",
     },
     "integration_location": {
-        "cloud": ["quwoquan_service/contracts/metadata/integration/location/errors.yaml"],
+        "cloud": ["quwoquan_service/services/integration-service/contracts/external_integration/location/errors.yaml"],
         "dart": "quwoquan_app/lib/cloud/runtime/generated/integration/integration_location_errors.g.dart",
     },
     "rtc": {
-        "cloud": ["quwoquan_service/contracts/metadata/rtc/call_session/errors.yaml"],
+        "cloud": ["quwoquan_service/services/rtc-service/contracts/rtc/call_session/errors.yaml"],
         "dart": "quwoquan_app/lib/cloud/rtc/generated/rtc_errors.g.dart",
     },
     "assistant": {
-        "cloud": ["quwoquan_service/contracts/metadata/assistant/assistant_run/errors.yaml"],
+        "cloud": ["quwoquan_service/services/assistant-service/contracts/assistant/assistant_run/errors.yaml"],
         "dart": "quwoquan_app/lib/cloud/assistant/generated/assistant_errors.g.dart",
     },
     "circle": {
-        "cloud": ["quwoquan_service/contracts/metadata/social/circle/errors.yaml"],
+        "cloud": ["quwoquan_service/services/circle-service/contracts/circle_management/circle/errors.yaml"],
         "dart": "quwoquan_app/lib/cloud/circle/generated/circle_errors.g.dart",
     },
     "entity": {
-        "cloud": ["quwoquan_service/contracts/metadata/entity/homepage/errors.yaml"],
+        "cloud": [
+            "quwoquan_service/services/entity-service/contracts/entity_homepage/homepage/errors.yaml",
+            "quwoquan_service/services/entity-service/contracts/entity_homepage/homepage_claim_request/errors.yaml",
+            "quwoquan_service/services/entity-service/contracts/entity_homepage/homepage_review/errors.yaml",
+            "quwoquan_service/services/entity-service/contracts/entity_homepage/homepage_status_report/errors.yaml",
+        ],
         "dart": "quwoquan_app/lib/cloud/entity/generated/entity_errors.g.dart",
     },
 }
@@ -77,9 +90,8 @@ CLIENT_DOMAINS = {
 # 不直接回给客户端的 server-internal 错误码域（integration provider/中间件链路）。
 # 仅作审计登记：这些域不要求生成客户端枚举。新增 server-internal 域在此声明。
 SERVER_INTERNAL_DOMAINS = {
-    "integration/external_interaction": "外部交互 provider 中间件错误，服务间使用，不直接回客户端",
-    "integration/push_delivery": "推送投递 provider 错误，服务内编排，不直接回客户端",
-    "integration/sms_otp": "短信 OTP provider 错误，在 user-service 边界映射为 USER.AUTH 后才回客户端",
+    "integration/external_integration/external_interaction": "外部交互 provider 中间件错误，服务间使用，不直接回客户端",
+    "integration/external_integration/push_delivery": "推送投递 provider 错误，服务内编排，不直接回客户端",
 }
 
 CLOUD_CODE_RE = re.compile(r"^\s*-?\s*code:\s*([A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*\.[a-z0-9_]+)\s*$")
@@ -105,6 +117,31 @@ def read_cloud_codes(rel_paths: list[str]) -> tuple[set[str], list[str]]:
     return codes, missing
 
 
+def resolve_cloud_paths(config: dict[str, object]) -> tuple[list[str], list[str]]:
+    configured = config.get("cloud")
+    if isinstance(configured, list):
+        return [str(path) for path in configured], []
+    cloud_root = config.get("cloud_root")
+    if not isinstance(cloud_root, str) or not cloud_root:
+        return [], ["cloud/cloud_root not configured"]
+    absolute_root = os.path.join(REPO_ROOT, cloud_root)
+    if not os.path.isdir(absolute_root):
+        return [], [cloud_root]
+    discovered: list[str] = []
+    for dirpath, _dirnames, filenames in os.walk(absolute_root):
+        if "errors.yaml" not in filenames:
+            continue
+        discovered.append(
+            os.path.relpath(
+                os.path.join(dirpath, "errors.yaml"),
+                REPO_ROOT,
+            ).replace("\\", "/")
+        )
+    if not discovered:
+        return [], [f"{cloud_root}/**/errors.yaml"]
+    return sorted(discovered), []
+
+
 def read_dart_codes(rel_path: str) -> tuple[set[str], bool]:
     path = os.path.join(REPO_ROOT, rel_path)
     if not os.path.isfile(path):
@@ -118,7 +155,9 @@ def read_dart_codes(rel_path: str) -> tuple[set[str], bool]:
 def main() -> int:
     failed = False
     for domain, cfg in sorted(CLIENT_DOMAINS.items()):
-        cloud_codes, missing_cloud = read_cloud_codes(cfg["cloud"])
+        cloud_paths, discovery_errors = resolve_cloud_paths(cfg)
+        cloud_codes, missing_cloud = read_cloud_codes(cloud_paths)
+        missing_cloud = discovery_errors + missing_cloud
         if missing_cloud:
             print(f"[{domain}] 云侧 errors.yaml 缺失: {', '.join(missing_cloud)}")
             failed = True

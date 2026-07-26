@@ -1,0 +1,126 @@
+aggregate: UserProfile
+description: 'UserProfile 实体端侧 UI 可配置项声明。
+
+  codegen 从本文件生成 Dart UserProfileUIConfig（DO NOT EDIT），
+
+  端侧个人主页通过 UserProfileUIConfig 消费配置，消除主页 Tab/子筛选硬编码。
+
+  '
+header_layout:
+  base_height_ratio: 0.25
+  max_stretch_height_ratio: 0.333
+  avatar_overlap_ratio: 0.333
+scroll_motion:
+  compact_identity_bar: true
+  primary_tab_sticky_below_toolbar: true
+  secondary_tab_inline_scroll: true
+  rebound_curve: easeOutBack
+  collapse_curve: easeOutCubic
+career_interest_catalog:
+  occupation_root_ref: Audience/用户/职业
+  interest_root_ref: Audience/用户/兴趣偏好
+  max_interest_count: 30
+  default_interest_category_id: all
+  occupation_categories:
+  - id: product_ops
+    tag_ref: Audience/用户/职业/产品运营
+    label_key: career_occupation_category_product_ops
+    order: 0
+  - id: engineering
+    tag_ref: Audience/用户/职业/研发技术
+    label_key: career_occupation_category_engineering
+    order: 1
+  - id: design
+    tag_ref: Audience/用户/职业/设计创意
+    label_key: career_occupation_category_design
+    order: 2
+  - id: student
+    tag_ref: Audience/用户/职业/学生
+    label_key: career_occupation_category_student
+    order: 3
+  - id: freelance
+    tag_ref: Audience/用户/职业/自由职业
+    label_key: career_occupation_category_freelance
+    order: 4
+  interest_categories:
+  - id: all
+    tag_ref: ''
+    label_key: career_interest_category_all
+    order: 0
+  - id: travel_photo
+    tag_ref: Audience/用户/兴趣偏好/旅行摄影
+    label_key: career_interest_category_travel_photo
+    order: 1
+  - id: campus
+    tag_ref: Audience/用户/兴趣偏好/校园
+    label_key: career_interest_category_campus
+    order: 2
+  - id: life
+    tag_ref: Audience/用户/兴趣偏好/生活
+    label_key: career_interest_category_life
+    order: 3
+  - id: art
+    tag_ref: Audience/用户/兴趣偏好/艺术
+    label_key: career_interest_category_art
+    order: 4
+  - id: tech
+    tag_ref: Audience/用户/兴趣偏好/科技
+    label_key: career_interest_category_tech
+    order: 5
+profile_tabs:
+- id: creations
+  label_key: profile_tab_creations
+  order: 0
+  default: true
+  sub_tabs:
+  - id: all
+    label_key: creation_sub_all
+    content_type: null
+    order: 0
+  - id: image
+    label_key: creation_sub_image
+    content_type: image
+    order: 1
+  - id: video
+    label_key: creation_sub_video
+    content_type: video
+    order: 2
+  - id: article
+    label_key: creation_sub_text
+    content_type: article
+    order: 3
+  visibility_filter:
+    mine:
+    - all
+    - public
+    - private
+    other:
+    - all
+    - public
+- id: interaction
+  label_key: profile_tab_interaction
+  order: 1
+  sub_tabs:
+  - id: likes
+    label_key: interaction_sub_likes
+    order: 0
+    default: true
+  - id: comments
+    label_key: interaction_sub_comments
+    order: 1
+  - id: shares
+    label_key: interaction_sub_shares
+    order: 2
+    modes:
+    - mine
+  direction_filter:
+    mine:
+    - received
+    - sent
+    other:
+    - received
+- id: footprint
+  label_key: profile_tab_footprint
+  order: 2
+  modes:
+  - mine

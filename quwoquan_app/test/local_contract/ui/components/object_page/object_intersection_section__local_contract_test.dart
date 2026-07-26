@@ -254,16 +254,18 @@ void main() {
     );
     await tester.pump();
 
-    expect(
-      displayConfigReads,
-      1,
-      reason: 'loading 首帧必须建立稳定配置依赖，禁止在 data 回包帧首次订阅',
-    );
+    expect(displayConfigReads, greaterThanOrEqualTo(1));
+    final readsBeforeData = displayConfigReads;
     expect(find.byType(ObjectIntersectionCardSkeleton), findsOneWidget);
     expect(find.byType(ObjectIntersectionCard), findsNothing);
 
     completer.complete(const <IntersectionReason>[]);
     await tester.pumpAndSettle();
+    expect(
+      displayConfigReads,
+      readsBeforeData,
+      reason: 'data 回包不得首次建立或重复建立配置依赖',
+    );
   });
 
   testWidgets('data 有交集 → 展示交集卡，骨架消失', (tester) async {

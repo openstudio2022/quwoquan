@@ -1,0 +1,47 @@
+backend: mongodb
+collections:
+  app_messages:
+    entity: Notification
+    description: Notification aggregate authoritative store。
+    indexes:
+    - name: uq_app_messages_idempotency
+      keys:
+        idempotencyKey: 1
+      unique: true
+    - name: idx_app_messages_owner_created
+      keys:
+        userId: 1
+        createdAt: -1
+        _id: -1
+    - name: idx_app_messages_owner_read
+      keys:
+        userId: 1
+        read: 1
+        createdAt: -1
+    - name: ttl_app_messages_created
+      keys:
+        createdAt: 1
+      expireAfterSeconds: 7776000
+  notification_user_account_closed_inbox:
+    entity: Notification
+    role: projection
+    description: UserAccountClosed 的幂等 inbox，仅保存不可逆摘要；通知、投递和外部账本清理完成后才确认。
+    indexes:
+    - name: idx_notification_user_account_closed_inbox_event
+      keys:
+        eventDigest: 1
+  notification_user_account_closed_failures:
+    entity: Notification
+    role: projection
+    description: UserAccountClosed 有限重试状态，只保存 source stream/message reference、
+      event/error digest、attempts 与时间戳，禁止保存 payload 或主体标识。普通失败按 expireAt
+      回收；terminal DLQ marker 必须移除 expireAt，原 source PEL 只能由受控恢复释放。
+    indexes:
+    - name: idx_notification_user_account_closed_failure_event
+      keys:
+        eventDigest: 1
+    - name: ttl_notification_user_account_closed_failures
+      keys:
+        expireAt: 1
+      expireAfterSeconds: 0
+role: authoritative

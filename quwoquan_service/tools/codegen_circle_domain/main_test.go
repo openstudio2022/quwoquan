@@ -8,10 +8,11 @@ import (
 
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 	"quwoquan_service/internal/metadata/validate"
+	"quwoquan_service/internal/testsupport/contractsview"
 )
 
 func TestCircleModelCodegen_PreservesObjectBoundaries(t *testing.T) {
-	metadataDir := filepath.Join("..", "..", "contracts", "metadata")
+	metadataDir := contractsview.Build(t)
 	if _, err := os.Stat(metadataDir); err != nil {
 		t.Fatalf("metadata dir is required: %v", err)
 	}
@@ -20,15 +21,6 @@ func TestCircleModelCodegen_PreservesObjectBoundaries(t *testing.T) {
 		t.Fatalf("compile ContractGraph: %v", err)
 	}
 	out := t.TempDir()
-	generator := contractcodegen.NewDomainGenerator(
-		source,
-		out,
-		contractcodegen.WithTypedEnums(),
-		contractcodegen.WithSliceEntityRefs(),
-		contractcodegen.WithSkipViewEntities(),
-		contractcodegen.WithGoFieldIDSuffix(),
-		contractcodegen.WithBusinessObjectEntitiesOnly(),
-	)
 	objects := map[string][]string{
 		"Circle":              {"type Circle struct", "SubCategory", "Kind", "DisplaySubjectType", "FollowEnabled", "DefaultPublicGroupID", "LinkedHomepageID", "type CircleJoinPolicy", "CircleJoinPolicyInviteOnly", "[]CircleSectionConfig"},
 		"CircleFile":          {"type CircleFile struct", "type CircleFileStatus", "type CircleFileType"},
@@ -37,13 +29,23 @@ func TestCircleModelCodegen_PreservesObjectBoundaries(t *testing.T) {
 		"CirclePostPlacement": {"type CirclePostPlacement struct", "OwnerPersonaID", "PinnedAt"},
 	}
 	paths := map[string]string{
-		"Circle":              filepath.Join("domain", "circle", "model", "circle.go"),
-		"CircleFile":          filepath.Join("domain", "circle", "circle_file", "model", "circle_file.go"),
-		"CircleGroup":         filepath.Join("domain", "circle", "circle_group", "model", "circle_group.go"),
-		"CircleMembership":    filepath.Join("domain", "circle", "circle_membership", "model", "circle_membership.go"),
-		"CirclePostPlacement": filepath.Join("domain", "circle", "circle_post_placement", "model", "circle_post_placement.go"),
+		"Circle":              filepath.Join("circle", "contract", "model", "circle.go"),
+		"CircleFile":          filepath.Join("circle_file", "contract", "model", "circle_file.go"),
+		"CircleGroup":         filepath.Join("circle_group", "contract", "model", "circle_group.go"),
+		"CircleMembership":    filepath.Join("circle_membership", "contract", "model", "circle_membership.go"),
+		"CirclePostPlacement": filepath.Join("circle_post_placement", "contract", "model", "circle_post_placement.go"),
 	}
 	for object, needles := range objects {
+		generator := contractcodegen.NewDomainGenerator(
+			source,
+			filepath.Join(out, contractcodegen.CamelToSnake(object)),
+			contractcodegen.WithTypedEnums(),
+			contractcodegen.WithSliceEntityRefs(),
+			contractcodegen.WithSkipViewEntities(),
+			contractcodegen.WithGoFieldIDSuffix(),
+			contractcodegen.WithBusinessObjectEntitiesOnly(),
+			contractcodegen.WithObjectFirstRoot(),
+		)
 		if err := generator.GenerateDomainModel(object); err != nil {
 			t.Fatalf("GenerateDomainModel(%s): %v", object, err)
 		}

@@ -172,23 +172,75 @@ func writeOpenAPICLIFixture(t *testing.T, metadataDir string) {
 	)
 	writeFixtureFile(
 		t,
-		filepath.Join(metadataDir, "content", "post", "aggregate.yaml"),
+		filepath.Join(metadataDir, "content", "content", "context.yaml"),
 		`
-domain: content
-aggregate_root: Post
-object_kind: aggregate_root
-description: CLI fixture
-storage_backend: mongodb
-members: []
+role: core
+access:
+  commands: aggregate_facade_only
+  queries: named_reader_slice_only
+  child_objects: aggregate_root_only
+  cross_context: public_contract_only
 `,
 	)
 	writeFixtureFile(
 		t,
-		filepath.Join(metadataDir, "content", "post", "service.yaml"),
+		filepath.Join(metadataDir, "content", "content", "post", "object.yaml"),
 		`
-service:
-  name: content-service
-  domain: content
+kind: aggregate_root
+description: CLI fixture
+identity:
+  fields: [id]
+  version_source: immutable
+access:
+  commands: aggregate_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships: []
+`,
+	)
+	writeFixtureFile(
+		t,
+		filepath.Join(metadataDir, "content", "content", "post", "fields.yaml"),
+		`
+description: CLI fixture fields
+fields:
+  - name: id
+    type: string
+    constraints: [PK, NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+types:
+  PostView:
+    fields:
+      - name: id
+        type: string
+  PublishPostRequest:
+    fields:
+      - name: id
+        type: string
+  PublishPostResult:
+    fields:
+      - name: id
+        type: string
+`,
+	)
+	writeFixtureFile(
+		t,
+		filepath.Join(metadataDir, "content", "content", "post", "storage.yaml"),
+		`
+backend: mongodb
+collections:
+  posts:
+    entity: Post
+`,
+	)
+	writeFixtureFile(
+		t,
+		filepath.Join(metadataDir, "content", "content", "post", "operations.yaml"),
+		`
 api_routes:
   - method: GET
     path: /content/posts/{postId}

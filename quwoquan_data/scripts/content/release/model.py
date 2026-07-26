@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from core.control_types import DeploymentEnvironment, RolloutMilestone
+from core.control_types import DeploymentEnvironment
 
 
 class ImportMode(StrEnum):
@@ -25,44 +25,22 @@ class ReleaseKind(StrEnum):
     EMPTY_BASELINE = "empty_baseline"
 
 
-class ReleaseRunKind(StrEnum):
-    APPLY = "apply"
-    ROLLBACK = "rollback"
-    VERIFY = "verify"
-
-
-class ReleaseRunStatus(StrEnum):
-    COMPLETED = "completed"
-    DRY_RUN = "dry_run"
-
-
 class EvidenceStatus(StrEnum):
     PASSED = "passed"
     FAILED = "failed"
 
 
-ROLLOUT_MILESTONES = (
-    RolloutMilestone.CANARY,
-    RolloutMilestone.M1,
-    RolloutMilestone.M2,
-    RolloutMilestone.M3,
-    RolloutMilestone.LAUNCH,
-)
-FULL_SYNC_MILESTONES = (RolloutMilestone.BASELINE, *ROLLOUT_MILESTONES)
+FULL_SYNC_RELEASE_KINDS = (ReleaseKind.CONTENT, ReleaseKind.EMPTY_BASELINE)
 DEPLOYMENT_ENVIRONMENTS = tuple(DeploymentEnvironment)
 
 
 __all__ = [
     "DEPLOYMENT_ENVIRONMENTS",
-    "FULL_SYNC_MILESTONES",
-    "ROLLOUT_MILESTONES",
+    "FULL_SYNC_RELEASE_KINDS",
     "DataSourceOwner",
     "DeletePolicy",
     "DeploymentEnvironment",
     "EvidenceStatus",
     "ImportMode",
     "ReleaseKind",
-    "ReleaseRunKind",
-    "ReleaseRunStatus",
-    "RolloutMilestone",
 ]

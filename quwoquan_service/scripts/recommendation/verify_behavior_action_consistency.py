@@ -29,8 +29,9 @@ SERVICE_ROOT = REPO_ROOT
 
 BEHAVIORS_YAML = (
     SERVICE_ROOT
+    / "services"
+    / "content-service"
     / "contracts"
-    / "metadata"
     / "content"
     / "post"
     / "behaviors.yaml"

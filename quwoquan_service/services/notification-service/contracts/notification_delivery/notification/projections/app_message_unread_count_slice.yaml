@@ -1,0 +1,28 @@
+read_model: AppMessageUnreadCountSlice
+description: '当前账户未读数量查询切片。由 AppMessageUnreadCountReader 在
+
+  app_messages 权威集合上按 userId + read=false 实时计数，不维护独立计数器，
+
+  因而不存在双写或最终一致性窗口。
+
+  '
+storage_backend: mongodb
+collection: app_messages
+projection_mode: authoritative_query
+source_entities:
+- Notification
+consumers:
+- notification-service
+- app
+client_projection:
+  dart_class: AppMessageUnreadCountSlice
+  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/notification/app_message_contracts.dart
+fields:
+- name: unreadCount
+  type: int64
+indexes:
+- name: idx_app_message_owner_unread
+  keys:
+    userId: 1
+    read: 1
+    createdAt: -1

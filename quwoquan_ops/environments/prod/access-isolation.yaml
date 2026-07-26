@@ -1,0 +1,228 @@
+schema: prod-plane-access-isolation
+description: >
+  prod-hosted 远端唯一托管目标的「访问隔离层」单一真相源（去 root · 四平面）。
+  本文件只描述「谁（Linux service 账号）用哪份凭据、登录到哪条固定路径、操作哪个运行时平面、在哪些 rollout stage 生效」，
+  不重新定义平面、不重新定义 workload、不存任何凭据明文。
+  - 运行时平面真相源：quwoquan_ops/environments/prod/runtime.yaml（subnets: edge/media/service/data）。
+  - workload 来自服务/external/platform 的 prod deploy 入口扫描，plane 由运行职责推导。
+  本层只引用上述 workload id，把运行时四平面映射到 prod ECS 上的最小权限 Linux service 账号，远端唯一托管目标为 prod-hosted（backend=ssh-hosted）。
+  成本约束保留项：gray-initial 与 full 共享同一物理 ECS/集群；隔离强度为「账号 + rollout stage + compose 项目命名空间」级逻辑隔离，非物理隔离。
+
+# 远端唯一托管目标：取消远端 gamma 后，只有 prod-hosted 一个远端访问面。
+target: prod-hosted
+
+# 非 root 中转/bootstrap 账号：仅用于 SSH 登录、按平面分发凭据、触发受限发布命令；无日常 root。
+relayAccount:
+  name: prod-ops
+  home: /home/prod-ops
+  sshKeySecret: PROD_OPS_SSH_KEY
+  bootstrapPath: /home/prod-ops/bootstrap
+  sudoScope: "仅限 bootstrap_prod_plane_accounts.sh 中枚举的 useradd/loginctl enable-linger，不授予通用 root"
+  notes: 只在一次性 bootstrap 与凭据分发时使用；日常发布由各平面账号自登录完成。
+
+# rollout stage 维度（对齐 stackctl up --rollout-mode 与 prod rolloutStagePolicy）。
+# gray-initial：取同集群一个实例验证，承接原远端 gamma 的真实远端集成验证职责。
+rolloutStages: [gray-initial, carry-on, full]
+
+# 四平面 × 账号 × 固定路径 × 凭据 × 治理 workload（单一映射，禁止第二套）。
+planes:
+  - plane: edge
+    account: prod-edge-svc
+    home: /home/prod-edge-svc
+    composeProjectRoot: /home/prod-edge-svc/stack
+    credentialsPath: /home/prod-edge-svc/credentials
+    sshKeySecret: PROD_EDGE_SSH_KEY
+    access: read-write
+    runtimeContainer: rootless-podman
+    workloadDeployPlane: edge
+    governedWorkloads: [realtime-gateway]
+    rootlessComposeTemplate: quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml
+    rootlessGovernedComposeServices: [realtime-gateway, rtc-service]
+    rootlessSupportComposeServices: []
+    rootlessConfigServices: [realtime-gateway, rtc-service]
+    rootlessRuntimeLayout:
+      composeFile: docker-compose.prod-hosted.yaml
+      envFile: stack.env
+      configRoot: runtime/config-root
+      caddyfile: runtime/Caddyfile
+      mediaStateRef: process/volumes/media
+      modelCacheRoot: runtime/model-cache
+    appliesToStages: [gray-initial, carry-on, full]
+    summary: >-
+      实时长连接与 RTC 控制面使用独立 rootless compose 项目；镜像由 source package
+      provenance、SPDX SBOM 和本地/远端 content digest 同一发布步骤校验，只操作
+      realtime-gateway 与 rtc-service。
+
+  - plane: media
+    account: prod-media-svc
+    home: /home/prod-media-svc
+    composeProjectRoot: /home/prod-media-svc/stack
+    credentialsPath: /home/prod-media-svc/credentials
+    sshKeySecret: PROD_MEDIA_SSH_KEY
+    access: read-write
+    runtimeContainer: rootless-podman
+    workloadDeployPlane: media
+    governedWorkloads: [livekit, coturn, rtc-service]
+    rootlessGovernedComposeServices: []
+    rootlessSupportComposeServices: []
+    appliesToStages: [gray-initial, carry-on, full]
+    summary: 媒体转发面（SFU/TURN，UDP），独立 compose 项目，仅操作本平面工作负载。
+
+  - plane: service
+    account: prod-service-svc
+    home: /home/prod-service-svc
+    composeProjectRoot: /home/prod-service-svc/stack
+    credentialsPath: /home/prod-service-svc/credentials
+    sshKeySecret: PROD_SERVICE_SSH_KEY
+    access: read-write
+    runtimeContainer: rootless-podman
+    workloadDeployPlane: service
+    governedWorkloads:
+      - assistant-service
+      - chat-service
+      - circle-service
+      - content-service
+      - entity-service
+      - integration-service
+      - notification-service
+      - platform-ops-service
+      - recommendation-service
+      - product-ops-service
+      - search-service
+      - tag-service
+      - user-service
+    rootlessComposeTemplate: quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml
+    rootlessGovernedComposeServices:
+      - recommendation-service
+      - content-service
+      - chat-service
+      - circle-service
+      - user-service
+      - assistant-service
+      - product-ops-service
+      - platform-ops-service
+      - search-service
+      - tag-service
+      - entity-service
+      - integration-service
+      - notification-service
+    # rootless compose 是 topology workload 的运行投影，不重新定义 domain 归属。
+    rootlessProjectionBindings:
+      - composeService: recommendation-service
+        ownerWorkload: recommendation-service
+        runtimeRole: model-runtime
+      - composeService: content-service
+        ownerWorkload: content-service
+      - composeService: chat-service
+        ownerWorkload: chat-service
+      - composeService: circle-service
+        ownerWorkload: circle-service
+      - composeService: user-service
+        ownerWorkload: user-service
+      - composeService: assistant-service
+        ownerWorkload: assistant-service
+      - composeService: product-ops-service
+        ownerWorkload: product-ops-service
+      - composeService: platform-ops-service
+        ownerWorkload: platform-ops-service
+      - composeService: search-service
+        ownerWorkload: search-service
+      - composeService: tag-service
+        ownerWorkload: tag-service
+      - composeService: entity-service
+        ownerWorkload: entity-service
+      - composeService: integration-service
+        ownerWorkload: integration-service
+      - composeService: notification-service
+        ownerWorkload: notification-service
+    rootlessSupportComposeServices:
+      - gamma-proxy
+    rootlessConfigServices:
+      - recommendation-service
+      - content-service
+      - chat-service
+      - circle-service
+      - user-service
+      - assistant-service
+      - product-ops-service
+      - platform-ops-service
+      - search-service
+      - tag-service
+      - entity-service
+      - integration-service
+      - notification-service
+    rootlessRuntimeCredentials:
+      integration-service:
+        envFile: integration/push.env
+        files:
+          apnsKey: integration/apns-auth-key.p8
+          fcmServiceAccount: integration/fcm-service-account.json
+    # 观测栈与 service plane 共享 rootless 网络，镜像、通知 URL、数据面 DSN
+    # 均只从受限账号的 credentialsPath 读取；渲染工件不携带密钥或环境值。
+    rootlessObservabilityRuntime:
+      composeDirectory: observability
+      composeFile: docker-compose.prod.yml
+      systemdUnitFile: quwoquan-observability.service
+      runtimeEnvFile: runtime.env
+      serviceNetworkName: quwoquan-prod-service
+      credentialsEnvFile: observability/monitoring.env
+      requiredEnvironment:
+        - ALERTMANAGER_WEBHOOK_SECRET_FILE
+        - ALERT_INGEST_TOKEN_SECRET_FILE
+        - PODMAN_SOCKET_PATH
+        - MONGODB_EXPORTER_URI
+        - POSTGRES_EXPORTER_DSN
+        - REDIS_EXPORTER_ADDR
+        - OTEL_TRACE_BACKEND_ENDPOINT
+        - OBSERVABILITY_PROMETHEUS_IMAGE
+        - OBSERVABILITY_ALERTMANAGER_IMAGE
+        - OBSERVABILITY_OTEL_COLLECTOR_IMAGE
+        - OBSERVABILITY_NODE_EXPORTER_IMAGE
+        - OBSERVABILITY_PODMAN_EXPORTER_IMAGE
+        - OBSERVABILITY_MONGODB_EXPORTER_IMAGE
+        - OBSERVABILITY_POSTGRES_EXPORTER_IMAGE
+        - OBSERVABILITY_REDIS_EXPORTER_IMAGE
+      healthURLs:
+        - http://127.0.0.1:9090/-/ready
+        - http://127.0.0.1:9093/-/ready
+        - http://127.0.0.1:13133/
+    rootlessRuntimeLayout:
+      composeFile: docker-compose.prod-hosted.yaml
+      envFile: stack.env
+      configRoot: runtime/config-root
+      caddyfile: runtime/Caddyfile
+      mediaStateRef: process/volumes/media
+      modelCacheRoot: runtime/model-cache
+    appliesToStages: [gray-initial, carry-on, full]
+    summary: >
+      当前 prod-hosted 首波 rootless 接管按 onebox split-services 真实运行面落地：
+      governed compose services = recommendation/content/chat/circle/user/assistant/product-ops/platform-ops/search/tag/entity/integration/notification，
+      support compose services = gamma-proxy；数据面继续复用现有 host 上的 19400/19410/19420 服务，不在 service plane 内复制一套空 DB。
+      integration-service 的 APNs/FCM 凭据仅从 credentialsPath 下的 rootlessRuntimeCredentials 文件读取，
+      不进入仓库、渲染产物、stack.env、日志或 provenance。
+      媒体面只消费 prod-hosted 自有持久卷；禁止复用 gamma-local 输出或把可清理 runtime 目录当作媒体真相源。
+
+  - plane: data
+    account: prod-data-svc
+    home: /home/prod-data-svc
+    composeProjectRoot: null
+    credentialsPath: /home/prod-data-svc/credentials
+    sshKeySecret: PROD_DATA_SSH_KEY
+    access: read-only-audit
+    runtimeContainer: none
+    workloadDeployPlane: null
+    governedWorkloads: []
+    appliesToStages: []
+    summary: >
+      默认只读审计账号；environment topology 当前无 data-plane workload，
+      不授予写权限、不纳入 deploy rollout，仅用于审计/巡检只读访问。
+
+# 不变量（供 verify 脚本断言，保证单一解释、最小权限、与四环境一致）。
+invariants:
+  - 每个平面有且仅有一个账号；账号名必须为 prod-<plane>-svc。
+  - 每个读写平面必须声明 composeProjectRoot 与非空 governedWorkloads；data 平面必须只读且 governedWorkloads 为空。
+  - 每个平面 sshKeySecret 唯一，命名 PROD_<PLANE>_SSH_KEY；relay 为 PROD_OPS_SSH_KEY；禁止复用单一全权 secret。
+  - planes 的 plane 集合必须等于 prod/runtime.yaml subnets 的四平面 edge/media/service/data。
+  - 每个 governedWorkloads 条目必须能从 prod deploy 入口扫描得到，且其 plane 必须等于本平面 workloadDeployPlane。
+  - rootlessRuntimeCredentials 只允许声明 credentialsPath 下的相对路径；发布渲染物只保留路径引用，不得复制或记录凭据内容。
+  - 已退役：PROD_KUBECONFIG 单一全权凭据、远端 gamma 目标。远端访问面只有 prod-hosted。

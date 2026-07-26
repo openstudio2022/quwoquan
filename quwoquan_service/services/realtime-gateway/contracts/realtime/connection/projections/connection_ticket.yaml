@@ -1,0 +1,17 @@
+read_model: ConnectionTicket
+description: '短期一次性连接凭据（transport-only 回执，不进任何持久化业务集合）。
+
+  Redis rt:ticket:{ticket} 存储，SETNX 签发、GETDEL 一次性消费；
+
+  WS/LongPoll 升级 query 只携带该 ticket，禁止携带长期 access token。
+
+  '
+source_entities:
+- Connection
+consumers:
+- app
+fields:
+- name: ticket
+  type: string
+- name: expiresAt
+  type: datetime

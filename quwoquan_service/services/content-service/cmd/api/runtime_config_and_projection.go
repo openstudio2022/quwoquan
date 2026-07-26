@@ -3,20 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
-	"path/filepath"
+	configrelease "quwoquan_service/runtime/configrelease"
 	"strconv"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
-	"quwoquan_service/services/content-service/internal/application/ports"
-	postapp "quwoquan_service/services/content-service/internal/application/post"
-	"quwoquan_service/services/content-service/internal/infrastructure/placeindex"
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
-	"quwoquan_service/services/content-service/internal/infrastructure/searchindex"
+	runtimeconfig "quwoquan_service/runtime/config"
+	postapp "quwoquan_service/services/content-service/internal/content/post/application"
+	embeddingapp "quwoquan_service/services/content-service/internal/content/post/application/embedding"
+	"quwoquan_service/services/content-service/internal/content/post/application/ports"
+	embeddinginfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/embedding"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/placeindex"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
 )
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
@@ -61,18 +63,6 @@ func getenvOrDefault(key, fallback string) string {
 	return fallback
 }
 
-func loadConfig(path string) config {
-	cfg := config{}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return cfg
-	}
-	if err := yaml.Unmarshal(raw, &cfg); err != nil {
-		log.Printf("content-service config parse failed: %v", err)
-	}
-	return cfg
-}
-
 func mergeConfigFile(cfg *config, path string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -86,54 +76,14 @@ func mergeConfigFile(cfg *config, path string) error {
 
 func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
 	cfg := config{}
-
-	// External mounted config root mode:
-	//   <root>/configs/<service>/default/config.yaml
-	//   <root>/configs/<service>/<env>/config.yaml
-	//   <root>/quwoquan_service/services/<service>/configs/releases/<version>.yaml
-	if strings.TrimSpace(configRoot) != "" {
-		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
-		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-
-		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
-			return config{}, fmt.Errorf("read default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, envFile); err != nil {
-			return config{}, fmt.Errorf("read env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
-			if err := mergeConfigFile(&cfg, versionFile); err != nil {
-				return config{}, fmt.Errorf("read version config: %w", err)
-			}
-		}
-		return cfg, nil
+	path, err := configrelease.File(configRoot, serviceName, appEnv)
+	if err != nil {
+		return config{}, err
 	}
-
-	// Workspace local mode (service-relative):
-	//   configs/default/config.yaml + configs/<env>/config.yaml (+ optional version under releases/)
-	localDefault := filepath.Join("configs", "default", "config.yaml")
-	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	if _, err := os.Stat(localDefault); err == nil {
-		if err := mergeConfigFile(&cfg, localDefault); err != nil {
-			return config{}, fmt.Errorf("read local default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, localEnv); err != nil {
-			return config{}, fmt.Errorf("read local env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
-			if _, err := os.Stat(versionFile); err == nil {
-				if err := mergeConfigFile(&cfg, versionFile); err != nil {
-					return config{}, fmt.Errorf("read local version config: %w", err)
-				}
-			}
-		}
-		return cfg, nil
+	if err := mergeConfigFile(&cfg, path); err != nil {
+		return config{}, fmt.Errorf("read generated runtime config: %w", err)
 	}
-
-	// Current fallback mode.
-	return loadConfig(filepath.Join("configs", "config.yaml")), nil
+	return cfg, nil
 }
 
 func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
@@ -169,8 +119,20 @@ func preflightConfig(cfg config, appEnv string) error {
 	if resolveMongoURI(cfg) == "" {
 		return fmt.Errorf("%s content runtime requires mongo.uri/MONGO_URI", appEnv)
 	}
+	if err := validateAccountSecurityAuthorityConfig(cfg, appEnv); err != nil {
+		return err
+	}
+	if err := validateTagServiceConfig(cfg, appEnv); err != nil {
+		return err
+	}
 	if resolveReportDSN(cfg) == "" {
 		return fmt.Errorf("%s content runtime requires postgres.report_dsn/REPORT_DATABASE_URL", appEnv)
+	}
+	if err := validateCommentRateLimitConfig(cfg, appEnv); err != nil {
+		return err
+	}
+	if err := validateIPLocationConfig(cfg, appEnv, time.Now().UTC()); err != nil {
+		return err
 	}
 	requiredOSS := []struct {
 		name  string
@@ -187,8 +149,146 @@ func preflightConfig(cfg config, appEnv string) error {
 			return fmt.Errorf("%s content runtime requires %s", appEnv, item.name)
 		}
 	}
+	if appEnv != "alpha" &&
+		strings.TrimSpace(os.Getenv(accountClosureSubjectHMACEnv)) == "" {
+		return fmt.Errorf(
+			"%s content runtime requires %s",
+			appEnv,
+			accountClosureSubjectHMACEnv,
+		)
+	}
 	if cfg.ES.Enabled && len(cfg.ES.Endpoints) == 0 {
 		return fmt.Errorf("%s content runtime enables search projection but has no es.endpoints/SEARCH_ES_ENDPOINTS", appEnv)
+	}
+	if appEnv != "alpha" && cfg.Embedding.Enabled {
+		if _, err := resolveContentEmbeddingGateway(appEnv); err != nil {
+			return fmt.Errorf("%s content runtime embedding binding: %w", appEnv, err)
+		}
+	}
+	return nil
+}
+
+func resolveContentEmbeddingGateway(
+	appEnv string,
+) (embeddingapp.EmbeddingGateway, error) {
+	return embeddinginfra.LoadEmbeddingGateway(
+		appEnv,
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+}
+
+func validateAccountSecurityAuthorityConfig(cfg config, appEnv string) error {
+	if strings.TrimSpace(cfg.AccountSecurityAuthority.BaseURL) == "" {
+		return fmt.Errorf(
+			"%s content runtime requires accountSecurityAuthority.baseUrl",
+			appEnv,
+		)
+	}
+	if cfg.AccountSecurityAuthority.TimeoutMS <= 0 {
+		return fmt.Errorf(
+			"%s content runtime requires positive accountSecurityAuthority.timeoutMs",
+			appEnv,
+		)
+	}
+	return nil
+}
+
+func validateTagServiceConfig(cfg config, appEnv string) error {
+	if strings.TrimSpace(cfg.TagService.URL) == "" {
+		return fmt.Errorf(
+			"%s content runtime requires tag_service.url",
+			appEnv,
+		)
+	}
+	if cfg.TagService.TimeoutMs <= 0 {
+		return fmt.Errorf(
+			"%s content runtime requires positive tag_service.timeout_ms",
+			appEnv,
+		)
+	}
+	return nil
+}
+
+func validateCommentRateLimitConfig(cfg config, appEnv string) error {
+	rateLimit := cfg.CommentRateLimit
+	if rateLimit.BurstWindowSeconds <= 0 ||
+		rateLimit.BurstMax <= 0 ||
+		rateLimit.DailyWindowSeconds <= 0 ||
+		rateLimit.DailyMax <= 0 {
+		return fmt.Errorf(
+			"%s content runtime requires positive comment_rate_limit windows and maxima",
+			appEnv,
+		)
+	}
+	if rateLimit.BurstWindowSeconds >= rateLimit.DailyWindowSeconds {
+		return fmt.Errorf(
+			"%s content runtime requires comment_rate_limit burst window shorter than daily window",
+			appEnv,
+		)
+	}
+	if rateLimit.BurstMax > rateLimit.DailyMax {
+		return fmt.Errorf(
+			"%s content runtime requires comment_rate_limit burst_max <= daily_max",
+			appEnv,
+		)
+	}
+	return nil
+}
+
+func validateIPLocationConfig(cfg config, appEnv string, now time.Time) error {
+	provider := strings.ToLower(strings.TrimSpace(cfg.IPLocation.Provider))
+	if appEnv == "alpha" {
+		if provider != "deterministic" {
+			return fmt.Errorf(
+				"alpha content runtime requires ip_location.provider=deterministic, got %q",
+				cfg.IPLocation.Provider,
+			)
+		}
+		return nil
+	}
+	if provider != "ip2region" {
+		return fmt.Errorf(
+			"%s content runtime requires ip_location.provider=ip2region, got %q",
+			appEnv,
+			cfg.IPLocation.Provider,
+		)
+	}
+	if strings.TrimSpace(cfg.IPLocation.IPv4DatabasePath) == "" {
+		return fmt.Errorf(
+			"%s content runtime requires ip_location.ipv4_database_path",
+			appEnv,
+		)
+	}
+	if strings.TrimSpace(cfg.IPLocation.IPv6DatabasePath) == "" {
+		return fmt.Errorf(
+			"%s content runtime requires ip_location.ipv6_database_path",
+			appEnv,
+		)
+	}
+	dataVersion := strings.TrimSpace(cfg.IPLocation.DataVersion)
+	versionDate, err := time.Parse("2006-01-02", dataVersion)
+	if err != nil {
+		return fmt.Errorf(
+			"%s content runtime requires ip_location.data_version in YYYY-MM-DD format: %w",
+			appEnv,
+			err,
+		)
+	}
+	age := now.Sub(versionDate)
+	if age < -48*time.Hour {
+		return fmt.Errorf(
+			"%s content runtime ip_location.data_version %s is in the future",
+			appEnv,
+			dataVersion,
+		)
+	}
+	if age > 45*24*time.Hour {
+		return fmt.Errorf(
+			"%s content runtime ip_location database is stale: version=%s age=%s",
+			appEnv,
+			dataVersion,
+			age.Round(time.Hour),
+		)
 	}
 	return nil
 }
@@ -256,6 +356,15 @@ func compareSemver(a, b string) int {
 // RecModelService overrides:
 //
 //	REC_MODEL_SERVICE_URL, REC_MODEL_SERVICE_ENABLED, REC_MODEL_SERVICE_TIMEOUT_MS
+//
+// Tag taxonomy endpoint material:
+//
+//	TAG_SERVICE_URL, TAG_SERVICE_TIMEOUT_MS
+//
+// IP location overrides:
+//
+//	CONTENT_IP_LOCATION_PROVIDER, CONTENT_IP_LOCATION_IPV4_DATABASE_PATH,
+//	CONTENT_IP_LOCATION_IPV6_DATABASE_PATH, CONTENT_IP_LOCATION_DATA_VERSION
 func applyEnvOverrides(cfg *config) {
 	applyRedisSceneEnv("CONTENT_REDIS_REC", &cfg.Redis.Rec)
 	applyRedisSceneEnv("CONTENT_REDIS_GENERAL", &cfg.Redis.General)
@@ -265,6 +374,20 @@ func applyEnvOverrides(cfg *config) {
 	// MongoDB
 	if v := os.Getenv("MONGO_URI"); v != "" {
 		cfg.Mongo.URI = v
+	}
+
+	// Comment IP location offline database.
+	if v := os.Getenv("CONTENT_IP_LOCATION_PROVIDER"); v != "" {
+		cfg.IPLocation.Provider = v
+	}
+	if v := os.Getenv("CONTENT_IP_LOCATION_IPV4_DATABASE_PATH"); v != "" {
+		cfg.IPLocation.IPv4DatabasePath = v
+	}
+	if v := os.Getenv("CONTENT_IP_LOCATION_IPV6_DATABASE_PATH"); v != "" {
+		cfg.IPLocation.IPv6DatabasePath = v
+	}
+	if v := os.Getenv("CONTENT_IP_LOCATION_DATA_VERSION"); v != "" {
+		cfg.IPLocation.DataVersion = v
 	}
 
 	// RecModelService
@@ -279,6 +402,15 @@ func applyEnvOverrides(cfg *config) {
 			cfg.RecModelService.TimeoutMs = ms
 		}
 	}
+	if v := os.Getenv("TAG_SERVICE_URL"); v != "" {
+		cfg.TagService.URL = v
+	}
+	if v := os.Getenv("TAG_SERVICE_TIMEOUT_MS"); v != "" {
+		if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
+			cfg.TagService.TimeoutMs = ms
+		}
+	}
+
 }
 
 // applyRedisSceneEnv reads env vars with the given prefix and writes them into cfg.
@@ -314,6 +446,7 @@ type projectorAdapter struct {
 	discovery *recinfra.DiscoveryFeedProjector
 	recommend *recinfra.RecommendFeatureProjector
 	premium   *recinfra.PremiumPoolProjector
+	embedding *recinfra.EmbeddingProjector
 	search    *searchindex.Projector
 	place     *placeindex.PlaceProjector
 }
@@ -338,6 +471,11 @@ func (a *projectorAdapter) Project(ctx context.Context, event ports.ProjectorEve
 	}
 	if a.premium != nil {
 		if err := a.premium.Project(ctx, projectorEvent); err != nil {
+			return err
+		}
+	}
+	if a.embedding != nil {
+		if err := a.embedding.Project(ctx, projectorEvent); err != nil {
 			return err
 		}
 	}

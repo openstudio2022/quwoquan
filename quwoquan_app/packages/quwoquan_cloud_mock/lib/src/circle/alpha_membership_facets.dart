@@ -1,7 +1,11 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class AlphaCircleMembershipFacet
-    implements CircleMembershipCommandWriter, CircleMembershipQuery {
+    implements
+        CircleMembershipCommandWriter,
+        CircleMembershipModerationWriter,
+        CircleMembershipQuery,
+        PendingCircleMembershipQuery {
   final Map<String, CircleMembershipSlice> _memberships =
       <String, CircleMembershipSlice>{};
 
@@ -85,11 +89,63 @@ final class AlphaCircleMembershipFacet
   }
 
   @override
+  Future<CircleMembershipCommandResult> approve(
+    DecideCircleMembershipCommand command,
+  ) async {
+    final current = _memberships[command.circleId];
+    if (current == null || current.personaId != command.personaId) {
+      throw StateError('alpha CircleMembership not found');
+    }
+    if (current.state == CircleMembershipState.active) {
+      return _result(current, replayed: true);
+    }
+    if (current.state != CircleMembershipState.pending) {
+      throw StateError('alpha CircleMembership is not pending');
+    }
+    final approved = _withState(current, CircleMembershipState.active);
+    _memberships[command.circleId] = approved;
+    return _result(approved, replayed: false);
+  }
+
+  @override
+  Future<CircleMembershipCommandResult> reject(
+    DecideCircleMembershipCommand command,
+  ) async {
+    final current = _memberships[command.circleId];
+    if (current == null || current.personaId != command.personaId) {
+      throw StateError('alpha CircleMembership not found');
+    }
+    if (current.state == CircleMembershipState.rejected) {
+      return _result(current, replayed: true);
+    }
+    if (current.state != CircleMembershipState.pending) {
+      throw StateError('alpha CircleMembership is not pending');
+    }
+    final rejected = _withState(current, CircleMembershipState.rejected);
+    _memberships[command.circleId] = rejected;
+    return _result(rejected, replayed: false);
+  }
+
+  @override
   Future<CircleMembershipPageSlice> listMemberships(
     CircleMembershipListQuery query,
   ) async => CircleMembershipPageSlice(
     items: _memberships.values
         .where((item) => item.circleId == query.circleId)
+        .take(query.limit)
+        .toList(growable: false),
+  );
+
+  @override
+  Future<CircleMembershipPageSlice> listPendingMemberships(
+    PendingCircleMembershipListQuery query,
+  ) async => CircleMembershipPageSlice(
+    items: _memberships.values
+        .where(
+          (item) =>
+              item.circleId == query.circleId &&
+              item.state == CircleMembershipState.pending,
+        )
         .take(query.limit)
         .toList(growable: false),
   );
@@ -120,4 +176,25 @@ final class AlphaCircleMembershipFacet
     role: membership.role,
     idempotentReplay: replayed,
   );
+
+  CircleMembershipSlice _withState(
+    CircleMembershipSlice current,
+    CircleMembershipState state,
+  ) {
+    final now = DateTime.utc(2026, 1, 1);
+    return CircleMembershipSlice(
+      membershipId: current.membershipId,
+      version: current.version + 1,
+      circleId: current.circleId,
+      personaId: current.personaId,
+      role: current.role,
+      state: state,
+      joinedAt: current.joinedAt,
+      leftAt: state == CircleMembershipState.left ? now : current.leftAt,
+      lastActiveAt: current.lastActiveAt,
+      contribution: current.contribution,
+      createdAt: current.createdAt,
+      updatedAt: now,
+    );
+  }
 }

@@ -121,11 +121,24 @@ def test_clean_source_markdown_keeps_gfm_table_and_drops_attr_residue() -> None:
     assert "正文段落保持原样" in cleaned
 
 
+def test_clean_source_markdown_keeps_history_that_starts_with_ordinal_and_year() -> None:
+    raw = (
+        "== 城墙沿革 ==\n\n"
+        "第一次是在清末，1847年重修城墙。第二次是在日军占领时期，城墙再次受损。"
+    )
+
+    cleaned = clean_source_markdown(raw, raw_format="mediawiki_api_json")
+
+    assert "## 城墙沿革" in cleaned
+    assert "第一次是在清末，1847年重修城墙" in cleaned
+
+
 def _run() -> None:
     test_definition_list_renders_as_list_items_without_semicolon_residue()
     test_simple_rectangular_table_preserved_as_gfm_matrix()
     test_unquoted_and_typo_cell_attributes_stripped()
     test_clean_source_markdown_keeps_gfm_table_and_drops_attr_residue()
+    test_clean_source_markdown_keeps_history_that_starts_with_ordinal_and_year()
     print("OK: source structure fidelity contract passed")
 
 

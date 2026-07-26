@@ -29,7 +29,7 @@ from core.paths import (  # noqa: E402
     execution_root,
     ensure_execution_layout,
 )
-from core.io import write_json  # noqa: E402
+from core.io import read_json, write_json  # noqa: E402
 from core.data_issue import (  # noqa: E402
     DataIssueCode,
     DataIssueStage,
@@ -38,15 +38,19 @@ from core.data_issue import (  # noqa: E402
     data_issue,
 )
 from content.source.source_unit import iter_source_units, write_source_unit  # noqa: E402
+from content.source.source_inputs import curated_sources_for_entity  # noqa: E402
 from content.source.gate import (  # noqa: E402
     DownloadRequirements,
     download_requirements,
     gate_download,
 )
 from content.execution.recovery.download_gate import _download_repair_active_issues  # noqa: E402
+from governance.content_supply_policy import load_content_supply_policy  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
+from support.image_fixture import jpeg_bytes  # noqa: E402
 
-TASK = "20260711--travel-homepage-download-gate--cn-sichuan--canary-001"
+TASK = "20260711--travel-homepage-download-gate--test-region-b--pilot-001"
+VIDEO_TASK = "20260711--travel-video-download-gate--test-region-b--pilot-001"
 
 
 @pytest.fixture(autouse=True)
@@ -71,26 +75,40 @@ def test_homepage_only_download_requires_one_verified_text_source(monkeypatch):
     assert requirements.min_article_base_sources == 0
 
 
+def test_video_download_uses_source_frame_policy_not_rendered_segment_count(monkeypatch):
+    fixture = ExecutionFixtureBuilder(VIDEO_TASK)
+    monkeypatch.setattr(
+        "content.execution.store.load_spec_model",
+        lambda _execution_id: fixture.spec(),
+    )
+
+    requirements = download_requirements(VIDEO_TASK)
+    delivery = load_content_supply_policy("travel").video_delivery
+
+    assert requirements.min_video_frames == delivery.minimum_source_frames
+    assert requirements.min_video_frames < delivery.minimum_segment_count
+
+
 def test_download_repair_active_issues_only_decodes_typed_records():
     issue = data_issue(
         DataIssueCode.SOURCE_RETAINED_SHORTFALL,
         stage=DataIssueStage.DOWNLOAD_FETCH,
-        ref="普陀山",
+        ref="测试实体甲",
         lane=DataIssueLane.HOMEPAGE,
         recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
         message="retained source requirement is not met",
     )
-    ctx = SimpleNamespace(entity_ids=["普陀山"])
+    ctx = SimpleNamespace(entity_ids=["测试实体甲"])
 
     assert _download_repair_active_issues(
         ctx,
-        {"entityId": "普陀山", "issueRecords": [issue.as_dict()]},
+        {"entityId": "测试实体甲", "issueRecords": [issue.as_dict()]},
     ) == [str(issue)]
 
     with pytest.raises(ValueError, match="typed issueRecords"):
         _download_repair_active_issues(
             ctx,
-            {"entityId": "普陀山", "issues": ["legacy message-only issue"]},
+            {"entityId": "测试实体甲", "issues": ["legacy message-only issue"]},
         )
 
 
@@ -124,6 +142,7 @@ def _attach_image(unit_dir: Path, name: str) -> None:
                     "sourceUrl": "https://example.com/image.jpg",
                     "termsUrl": "https://example.com/terms",
                     "usageScope": "commercial_editorial",
+                    "rightsAuditStatus": "verified",
                 }
             ]
         },
@@ -136,13 +155,20 @@ def _write_verified_homepage_source(
     entity_name: str,
     source_id: str,
     asset_name: str,
+    source_title: str | None = None,
+    qualified_authority_title: str = "",
 ) -> None:
+    source_payload = (
+        {"qualifiedAuthorityTitle": qualified_authority_title}
+        if qualified_authority_title
+        else None
+    )
     write_source_unit(
         entity_dir,
         ordinal=1,
         source_id=source_id,
         source_md=(
-            f"# {entity_name}\n\n{entity_name}位于四川省。"
+            f"# {entity_name}\n\n{entity_name}位于test-region-b。"
             f"{entity_name}主峰海拔三千余米。"
             f"{entity_name}是中国著名山岳景区。"
             f"{entity_name}景区包括多条登山步道。"
@@ -155,8 +181,9 @@ def _write_verified_homepage_source(
         policy_revision="encyclopedia-primary",
         research_lane="homepage",
         url=f"https://zh.wikipedia.org/wiki/{entity_name}",
-        title=entity_name,
+        title=source_title or entity_name,
         target_ref=f"/entity/地点/景区/{entity_name}",
+        source=source_payload,
     )
     _attach_image(entity_dir / f"1.download/sources/01.{source_id}", asset_name)
 
@@ -186,6 +213,77 @@ def test_gate_download_passes_object_first_sources():
     issues = gate_download(TASK)
     assert issues == [], issues
     assert (execution_root(TASK) / "entities").is_dir()
+
+
+def test_gate_download_accepts_frozen_authority_title_alias():
+    """Frozen selection and downloaded source units must use one authority binding."""
+    ensure_execution_layout(TASK)
+    entity_dir = execution_entity_object_dir(TASK, "地点", "打卡地", "嘉兴梅湾街")
+    _write_verified_homepage_source(
+        entity_dir,
+        entity_name="嘉兴梅湾街",
+        source_id="home_wikipedia",
+        asset_name="meiwan_1",
+        source_title="梅湾街",
+        qualified_authority_title="梅湾街",
+    )
+
+    issues = gate_download(TASK)
+
+    assert issues == [], issues
+
+
+def test_frozen_authority_title_survives_plan_to_source_unit_projection():
+    """The bound authority title must survive the actual plan-to-unit adapter."""
+    ensure_execution_layout(TASK)
+    entity_dir = execution_entity_object_dir(TASK, "地点", "打卡地", "嘉兴梅湾街")
+    plan_path = entity_dir / "1.download" / "homepage_source_plan.json"
+    write_json(
+        plan_path,
+        {
+            "sources": [
+                {
+                    "source_id": "home_wikipedia",
+                    "platform": "维基百科",
+                    "url": "https://zh.wikipedia.org/wiki/%E6%A2%85%E6%B9%BE%E8%A1%97",
+                    "sourceKind": "wikipedia",
+                    "sourceTitle": "梅湾街",
+                    "qualifiedAuthorityTitle": "梅湾街",
+                    "extractor": "wikipedia_api",
+                    "policyRevision": "encyclopedia-primary",
+                    "category": "encyclopedia",
+                    "sourceRole": "primary",
+                }
+            ]
+        },
+    )
+
+    sources = curated_sources_for_entity(
+        TASK,
+        "嘉兴梅湾街",
+        "地点/打卡地",
+        research_lane="homepage",
+    )
+
+    assert sources[0]["qualifiedAuthorityTitle"] == "梅湾街"
+    manifest = write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="home_wikipedia",
+        source_md="# 梅湾街\n\n梅湾街位于嘉兴市，是当地历史街区。",
+        quality={"sourceId": "home_wikipedia", "quality": "B-fact", "score": 5},
+        platform="Wikipedia",
+        source_category="encyclopedia",
+        source_kind="wikipedia",
+        extractor="wikipedia_api",
+        policy_revision="encyclopedia-primary",
+        research_lane="homepage",
+        url=sources[0]["url"],
+        title="梅湾街",
+        target_ref="/entity/地点/打卡地/嘉兴梅湾街",
+        source=sources[0],
+    )
+    assert manifest["qualifiedAuthorityTitle"] == "梅湾街"
 
 
 def test_gate_download_blocks_single_source_unit():
@@ -444,7 +542,7 @@ def test_gate_download_image_only_ignores_text_source_bundle_sidecar(monkeypatch
     assert issues == []
 
 
-def test_gate_download_reports_rights_and_source_shortfall(monkeypatch):
+def test_gate_download_records_unverified_rights_without_blocking_travel(monkeypatch):
     ensure_execution_layout(TASK)
     monkeypatch.setattr(
         "content.source.gate.download_requirements",
@@ -470,14 +568,19 @@ def test_gate_download_reports_rights_and_source_shortfall(monkeypatch):
         url="https://example.com/a1",
         title="权利风险景区攻略",
         target_ref="/entity/地点/景区/权利风险景区",
-        images=[{"bytes": b"not-a-real-image", "url": "https://example.com/risky.jpg"}],
+        images=[{"bytes": jpeg_bytes(seed=1), "url": "https://example.com/risky.jpg"}],
         build_variants=False,
     )
 
     issues = gate_download(TASK)
 
-    assert any(issue.code is DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE for issue in issues), issues
+    assert not any(
+        issue.code is DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE for issue in issues
+    ), issues
     assert any(issue.code is DataIssueCode.SOURCE_RETAINED_SHORTFALL for issue in issues), issues
+    unit = iter_source_units(entity_dir)[0]
+    assets = read_json(unit / "assets/index.json")["assets"]
+    assert assets[0]["rightsAuditStatus"] == "unverified"
 
 
 def test_gate_download_blocks_homepage_source_without_base_draft_facts():
@@ -514,7 +617,7 @@ def test_gate_download_blocks_homepage_source_without_base_draft_facts():
         platform="百度百科",
         source_category="encyclopedia",
         source_kind="baidu_baike",
-        extractor="baidu_baike_openapi",
+        extractor="baidu_baike_html",
         policy_revision="encyclopedia-primary",
         research_lane="homepage",
         source_use_mode="factual_reference_only",
@@ -552,7 +655,7 @@ def test_gate_download_blocks_target_entity_without_sources_dir():
         entity_dir,
         ordinal=1,
         source_id="overview_baike",
-        source_md="# 峨眉山\n\n峨眉山位于四川省，是中国著名山岳型景区。",
+        source_md="# 峨眉山\n\n峨眉山位于test-region-b，是中国著名山岳型景区。",
         quality={"sourceId": "overview_baike", "quality": "B-fact", "score": 5},
         platform="baike",
         source_category="overview_baike",

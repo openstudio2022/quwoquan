@@ -68,6 +68,13 @@ final class GetContentMediaAssetQuery {
   final String mediaId;
 }
 
+final class DiscardContentMediaAssetCommand {
+  DiscardContentMediaAssetCommand({required String mediaId})
+    : mediaId = _requiredText(mediaId, 'mediaId');
+
+  final String mediaId;
+}
+
 final class RequestContentMediaOriginalAccessCommand {
   RequestContentMediaOriginalAccessCommand({
     required String mediaId,
@@ -116,9 +123,7 @@ final class ContentMediaUploadSessionCommandResult {
     required this.sessionId,
     required this.assetId,
     required this.status,
-    required this.objectKey,
     required this.uploadUrl,
-    required this.cdnUrl,
     required this.expiresAt,
     required this.replayed,
   });
@@ -126,9 +131,7 @@ final class ContentMediaUploadSessionCommandResult {
   final String sessionId;
   final String? assetId;
   final ContentMediaUploadStatus status;
-  final String? objectKey;
   final Uri? uploadUrl;
-  final Uri? cdnUrl;
   final DateTime expiresAt;
   final bool replayed;
 }
@@ -137,7 +140,7 @@ final class ContentMediaUploadSessionSlice {
   const ContentMediaUploadSessionSlice({
     required this.sessionId,
     required this.version,
-    required this.objectKey,
+    required this.assetId,
     required this.mediaType,
     required this.contentType,
     required this.fileSize,
@@ -149,7 +152,7 @@ final class ContentMediaUploadSessionSlice {
 
   final String sessionId;
   final int version;
-  final String objectKey;
+  final String? assetId;
   final ContentMediaType mediaType;
   final String contentType;
   final int fileSize;
@@ -169,6 +172,13 @@ final class ContentMediaAssetSlice {
     required this.status,
     required this.accessPolicy,
     required this.cdnUrl,
+    this.imageWidth,
+    this.imageHeight,
+    this.imageDeliveryContentType,
+    this.imageDominantColor,
+    this.imageLqip,
+    this.imageContentProfile,
+    this.imageDerivativePolicyVersion,
   });
 
   final String assetId;
@@ -179,6 +189,25 @@ final class ContentMediaAssetSlice {
   final ContentMediaProcessingStatus status;
   final ContentMediaAccessPolicy accessPolicy;
   final Uri cdnUrl;
+  final int? imageWidth;
+  final int? imageHeight;
+  final String? imageDeliveryContentType;
+  final String? imageDominantColor;
+  final String? imageLqip;
+  final String? imageContentProfile;
+  final int? imageDerivativePolicyVersion;
+}
+
+final class ContentMediaAssetDiscardResult {
+  const ContentMediaAssetDiscardResult({
+    required this.mediaId,
+    required this.status,
+    required this.replayed,
+  });
+
+  final String mediaId;
+  final ContentMediaProcessingStatus status;
+  final bool replayed;
 }
 
 final class ContentMediaOriginalAccessGrant {
@@ -257,6 +286,12 @@ CloudOperationRequestPayload encodeGetContentMediaAssetQuery(
   pathParameters: <String, String>{'mediaId': query.mediaId},
 );
 
+CloudOperationRequestPayload encodeDiscardContentMediaAssetCommand(
+  DiscardContentMediaAssetCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'mediaId': command.mediaId},
+);
+
 CloudOperationRequestPayload encodeRequestContentMediaOriginalAccessCommand(
   RequestContentMediaOriginalAccessCommand command,
 ) => CloudOperationRequestPayload(
@@ -287,9 +322,7 @@ decodeContentMediaUploadSessionCommandResult(Object? value) {
     sessionId: _string(map, 'sessionId'),
     assetId: _optionalString(map, 'assetId'),
     status: _uploadStatus(map, 'status'),
-    objectKey: _optionalString(map, 'objectKey'),
     uploadUrl: _optionalUri(map, 'uploadUrl'),
-    cdnUrl: _optionalUri(map, 'cdnUrl'),
     expiresAt: _timestamp(map, 'expiresAt'),
     replayed: _boolean(map, 'replayed'),
   );
@@ -302,7 +335,7 @@ ContentMediaUploadSessionSlice decodeContentMediaUploadSessionSlice(
   return ContentMediaUploadSessionSlice(
     sessionId: _string(map, 'sessionId'),
     version: _positiveInteger(map, 'version'),
-    objectKey: _string(map, 'objectKey'),
+    assetId: _optionalString(map, 'assetId'),
     mediaType: _mediaType(map, 'mediaType'),
     contentType: _string(map, 'contentType'),
     fileSize: _positiveInteger(map, 'fileSize'),
@@ -324,6 +357,31 @@ ContentMediaAssetSlice decodeContentMediaAssetSlice(Object? value) {
     status: _processingStatus(map, 'status'),
     accessPolicy: _accessPolicy(map, 'accessPolicy'),
     cdnUrl: _uri(map, 'cdnUrl'),
+    imageWidth: _optionalPositiveInteger(map, 'imageWidth'),
+    imageHeight: _optionalPositiveInteger(map, 'imageHeight'),
+    imageDeliveryContentType: _optionalString(map, 'imageDeliveryContentType'),
+    imageDominantColor: _optionalString(map, 'imageDominantColor'),
+    imageLqip: _optionalString(map, 'imageLqip'),
+    imageContentProfile: _optionalString(map, 'imageContentProfile'),
+    imageDerivativePolicyVersion: _optionalPositiveInteger(
+      map,
+      'imageDerivativePolicyVersion',
+    ),
+  );
+}
+
+ContentMediaAssetDiscardResult decodeContentMediaAssetDiscardResult(
+  Object? value,
+) {
+  final map = _object(value, 'ContentMediaAssetDiscardResult');
+  final status = _processingStatus(map, 'status');
+  if (status != ContentMediaProcessingStatus.deleted) {
+    throw FormatException('status must be deleted, got ${status.name}');
+  }
+  return ContentMediaAssetDiscardResult(
+    mediaId: _string(map, 'mediaId'),
+    status: status,
+    replayed: _boolean(map, 'replayed'),
   );
 }
 
@@ -395,6 +453,13 @@ int _positiveInteger(Map<String, Object?> map, String key) {
   return value;
 }
 
+int? _optionalPositiveInteger(Map<String, Object?> map, String key) {
+  if (!map.containsKey(key) || map[key] == null) {
+    return null;
+  }
+  return _positiveInteger(map, key);
+}
+
 int _nonNegativeInteger(Map<String, Object?> map, String key) {
   final value = _integer(map, key);
   if (value < 0) throw FormatException('$key must be >= 0');
@@ -429,17 +494,6 @@ Uri? _optionalUri(Map<String, Object?> map, String key) {
     throw FormatException('$key must be an absolute URL');
   }
   return uri;
-}
-
-List<String> _stringList(Map<String, Object?> map, String key) {
-  final value = map[key];
-  if (value is! List || value.any((item) => item is! String)) {
-    throw FormatException('$key must be a string array');
-  }
-  return value
-      .cast<String>()
-      .map((item) => _requiredText(item, key))
-      .toList(growable: false);
 }
 
 ContentMediaType _mediaType(Map<String, Object?> map, String key) =>

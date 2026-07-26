@@ -5,7 +5,7 @@
   "properties": {
     "executionId": {
       "type": "string",
-      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
     "title": {
       "type": "string",
@@ -79,6 +79,16 @@
                 "type": "array",
                 "items": {"type": "string", "minLength": 1},
                 "uniqueItems": true
+              },
+              "qualifiedHomepageSource": {
+                "type": "object",
+                "required": ["provider", "title", "url"],
+                "additionalProperties": false,
+                "properties": {
+                  "provider": {"enum": ["wikipedia", "baidu_baike", "toutiao_baike"]},
+                  "title": {"type": "string", "minLength": 1},
+                  "url": {"type": "string", "pattern": "^https://"}
+                }
               }
             }
           }
@@ -142,6 +152,7 @@
                 "open_license_publish",
                 "licensed_provider_publish",
                 "ai_generated_original",
+                "attribution_audited_publish",
                 "reference_only_no_image_release"
               ]
             },

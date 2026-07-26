@@ -1,0 +1,13 @@
+kind: append_only_fact
+description: 启动或运行时不可恢复异常的匿名十字段诊断事实；复用现有 runtime log store，不生成客户端诊断标识或异常指纹。
+identity:
+  fields: [occurredAt, buildNumber, errorSource, errorType]
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: none
+  queries: existing_runtime_log_reader
+relationships: []
+capabilities: [append_only, queryable]
+taggable: false
+vector_enabled: false

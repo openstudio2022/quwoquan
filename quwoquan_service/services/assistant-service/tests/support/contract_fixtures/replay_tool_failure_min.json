@@ -1,0 +1,77 @@
+{
+  "replayCaseId": "replay_tool_failure_min",
+  "title": "Tool failure maps to runtime failure",
+  "request": {
+    "conversationId": "acv_replay_failure",
+    "turnId": "atn_replay_failure",
+    "userId": "u_replay",
+    "inputText": "Search current market news.",
+    "clientContext": {
+      "surfaceId": "assistant.personal"
+    }
+  },
+  "fakeModelScript": [
+    {
+      "stage": "reasoning",
+      "text": "Need market search evidence.",
+      "structuredDelta": {
+        "nextAction": "call_tool",
+        "toolName": "mock_search"
+      },
+      "finishReason": "tool_use"
+    }
+  ],
+  "fakeToolScript": [
+    {
+      "toolName": "mock_search",
+      "input": {
+        "query": "current market news"
+      },
+      "failure": {
+        "code": "ASSISTANT.MIDDLEWARE.tool_failed",
+        "origin": "remoteDependency",
+        "kind": "tool",
+        "nature": "transient",
+        "messageKey": "assistant.error.tool_failed",
+        "recoveryAction": "retry_later",
+        "disruptionLevel": "turn_failed",
+        "traceId": "trace_replay_failure",
+        "context": {
+          "toolName": "mock_search"
+        }
+      }
+    }
+  ],
+  "expectedStreamEvents": [
+    {
+      "eventType": "run_started"
+    },
+    {
+      "eventType": "process_replace"
+    },
+    {
+      "eventType": "failed"
+    }
+  ],
+  "expectedRunResponse": {
+    "conversationId": "acv_replay_failure",
+    "turnId": "atn_replay_failure",
+    "status": "failed",
+    "finalText": "",
+    "summary": "Tool failure stopped the turn.",
+    "runtimeFailure": {
+      "code": "ASSISTANT.MIDDLEWARE.tool_failed",
+      "origin": "remoteDependency",
+      "kind": "tool",
+      "nature": "transient",
+      "messageKey": "assistant.error.tool_failed",
+      "recoveryAction": "retry_later",
+      "disruptionLevel": "turn_failed",
+      "traceId": "trace_replay_failure",
+      "context": {
+        "toolName": "mock_search"
+      }
+    },
+    "completedAt": "2026-04-29T00:02:02Z"
+  }
+}

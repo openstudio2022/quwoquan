@@ -45,9 +45,9 @@ def test_expand_runtime_dir_uses_canonical_data_runtime_root(monkeypatch, tmp_pa
 
 
 def test_normalize_name_strips_scenic_suffix_variants():
-    assert normalize_name("普陀山风景名胜区") == "普陀山"
-    assert normalize_name("普陀山景区") == "普陀山"
-    assert normalize_name(" 普陀山 ") == "普陀山"
+    assert normalize_name("测试实体甲风景名胜区") == "测试实体甲"
+    assert normalize_name("测试实体甲景区") == "测试实体甲"
+    assert normalize_name(" 测试实体甲 ") == "测试实体甲"
     # 后缀本身即全名时不剥（护栏：len 检查）
     assert normalize_name("景区") == "景区"
 
@@ -227,7 +227,7 @@ def test_wiki_category_members_keeps_ns0_pages_and_ns14_subcats():
     2026-07-09 生产回归：两省 discover 批 wiki_category 全程 0 条目产出，
     根因即该 falsy 陷阱（子分类 ns=14 truthy 不受影响，掩盖了问题）。
     """
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
 
     class _Bridge:
         @staticmethod
@@ -242,14 +242,15 @@ def test_wiki_category_members_keeps_ns0_pages_and_ns14_subcats():
                 }
             }
 
-    pages, subcats = mod._wiki_category_members(_Bridge(), "Category:杭州旅游景点")
+    pages, subcats, ok = mod._wiki_category_members(_Bridge(), "Category:杭州旅游景点")
+    assert ok is True
     assert pages == ["西湖", "灵隐寺"], "ns=0 条目页必须保留"
     assert subcats == ["Category:杭州园林"]
 
 
 def test_wiki_api_with_retry_backs_off_on_empty_response(monkeypatch):
     """限流返回空体时必须退避重试，不得静默空产。"""
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
 
     responses = iter([{}, {}, {"query": {"categorymembers": []}}])
     calls = {"n": 0}
@@ -270,13 +271,14 @@ def test_wiki_api_with_retry_backs_off_on_empty_response(monkeypatch):
 
 def test_overpass_query_distinguishes_empty_result_from_failure(monkeypatch):
     """空 elements=[]（真空区县）ok=True；无 elements（限流/失败）重试后 ok=False。"""
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
 
     monkeypatch.setattr(mod.time, "sleep", lambda s: None)
 
     class _OkBridge:
         @staticmethod
-        def curl_json(url, timeout=90):
+        def post_form_json(url, *, fields, timeout=90):
+            assert fields["data"] == "q"
             return {"elements": []}
 
     elements, ok = mod._overpass_query(_OkBridge(), "q")
@@ -286,13 +288,279 @@ def test_overpass_query_distinguishes_empty_result_from_failure(monkeypatch):
         calls = 0
 
         @classmethod
-        def curl_json(cls, url, timeout=90):
+        def post_form_json(cls, url, *, fields, timeout=90):
             cls.calls += 1
             return {}
 
     elements, ok = mod._overpass_query(_FailBridge(), "q", retries=3)
     assert ok is False and elements == []
     assert _FailBridge.calls == 3, "失败必须重试满 retries 次"
+
+
+def test_osm_discovery_admits_travel_signals_for_later_cross_source_confirmation():
+    import governance.coverage.discovery as mod
+
+    for tags in (
+        {"tourism": "attraction"},
+        {"historic": "memorial"},
+        {"leisure": "garden"},
+        {"natural": "cave_entrance"},
+        {"amenity": "place_of_worship"},
+    ):
+        assert mod._osm_strong_signal({"tags": tags})
+    assert not mod._osm_strong_signal({"tags": {"amenity": "parking"}})
+
+
+def test_osm_discovery_splits_heavy_query_and_scopes_duplicate_district_names(
+    monkeypatch,
+):
+    import governance.coverage.discovery as mod
+
+    monkeypatch.setattr(mod, "admin_geo_ref", lambda *_args: "province-ref")
+    monkeypatch.setattr(
+        mod,
+        "admin_children",
+        lambda ref: ["舟山市"] if ref == "province-ref" else ["普陀区"],
+    )
+    monkeypatch.setattr(mod, "city_is_district_level", lambda *_args: False)
+    monkeypatch.setattr(mod.time, "sleep", lambda _seconds: None)
+
+    class _Bridge:
+        queries: list[str] = []
+
+        @classmethod
+        def post_form_json(cls, _url, *, fields, timeout):
+            assert timeout > 0
+            query = fields["data"]
+            cls.queries.append(query)
+            if '"tourism"' not in query:
+                return {"elements": []}
+            return {
+                "elements": [
+                    {
+                        "type": "node",
+                        "id": 1,
+                        "lat": 29.95,
+                        "lon": 122.30,
+                        "tags": {"name": "东港海滨公园", "tourism": "attraction"},
+                    }
+                ]
+            }
+
+    failed: list[str] = []
+    progress: list[tuple[object, ...]] = []
+    candidates = mod.discover_osm_candidates(
+        "浙江省",
+        cities=["舟山市"],
+        bridge=_Bridge(),
+        failed_districts=failed,
+        sleep_seconds=0,
+        shard_progress=lambda *values: progress.append(values),
+    )
+
+    assert len(_Bridge.queries) == len(mod._OSM_QUERY_GROUPS)
+    assert all('area["name"="浙江省"]' in query for query in _Bridge.queries)
+    assert all('area(area.p)["name"="舟山市"]' in query for query in _Bridge.queries)
+    assert all('area(area.c)["name"="普陀区"]' in query for query in _Bridge.queries)
+    assert failed == []
+    assert len(candidates) == 1
+    assert candidates[0]["district"] == "普陀区"
+    assert candidates[0]["typeTagRefs"] == ["Entity/地点/打卡地"]
+    assert progress == [
+        (
+            "osm_poi",
+            "浙江省",
+            "舟山市",
+            "普陀区",
+            candidates,
+            None,
+        )
+    ]
+
+    _Bridge.queries.clear()
+    assert mod.discover_osm_candidates(
+        "浙江省",
+        cities=["舟山市"],
+        bridge=_Bridge(),
+        sleep_seconds=0,
+        skip_shards={("浙江省", "舟山市", "普陀区", "osm_poi")},
+    ) == []
+    assert _Bridge.queries == []
+
+
+def test_wikidata_bindings_produce_stable_typed_geo_candidates():
+    import governance.coverage.discovery as mod
+
+    bindings = [
+        {
+            "item": {"value": "http://www.wikidata.org/entity/Q123"},
+            "itemLabel": {"value": "西湖博物馆"},
+            "itemDescription": {"value": "浙江省杭州市的博物馆"},
+            "coord": {"value": "Point(120.145 30.251)"},
+            "travelRoot": {"value": "http://www.wikidata.org/entity/Q33506"},
+        },
+        {
+            "item": {"value": "http://www.wikidata.org/entity/Q123"},
+            "itemLabel": {"value": "西湖博物馆"},
+            "coord": {"value": "Point(120.145 30.251)"},
+            "travelRoot": {"value": "http://www.wikidata.org/entity/Q570116"},
+        },
+    ]
+
+    candidates = mod._wikidata_candidates_from_bindings(
+        bindings,
+        province="浙江省",
+        city="杭州市",
+        district="西湖区",
+    )
+
+    assert candidates == [
+        {
+            "name": "西湖博物馆",
+            "province": "浙江省",
+            "city": "杭州市",
+            "district": "西湖区",
+            "source": "wikidata_geo",
+            "identityRefs": {"qid": "Q123"},
+            "coordinates": {"lat": 30.251, "lon": 120.145},
+            "typeTagRefs": ["Entity/地点/博物馆", "Entity/地点/打卡地"],
+            "extract": "浙江省杭州市的博物馆",
+        }
+    ]
+
+
+def test_wikidata_query_retries_and_distinguishes_empty_success(monkeypatch):
+    import governance.coverage.discovery as mod
+
+    monkeypatch.setattr(mod.time, "sleep", lambda _seconds: None)
+
+    class _Bridge:
+        calls = 0
+
+        @classmethod
+        def post_form_json(cls, url, *, fields, timeout):
+            cls.calls += 1
+            assert url.startswith("https://")
+            assert "SELECT DISTINCT" in fields["query"]
+            assert fields["format"] == "json"
+            return (
+                {}
+                if cls.calls == 1
+                else {"results": {"bindings": []}}
+            )
+
+    rows, ok = mod._wikidata_bindings(
+        _Bridge(),
+        mod._wikidata_district_query(
+            province="浙江省",
+            district="西湖区",
+            limit=500,
+            offset=0,
+        ),
+        retries=2,
+    )
+
+    assert ok is True
+    assert rows == []
+    assert _Bridge.calls == 2
+
+
+def test_baike_corroboration_preserves_discovery_identity(monkeypatch):
+    import governance.coverage.discovery as mod
+    from content.source.research import baidu_baike
+
+    monkeypatch.setattr(
+        baidu_baike,
+        "resolve_baidu_baike_page",
+        lambda entity_id, **_kwargs: baidu_baike.BaiduBaikeResolution(
+            url="https://baike.baidu.com/item/%E8%A5%BF%E6%B9%96",
+            title=entity_id,
+            matched_term=entity_id,
+            match_confidence=0.94,
+        ),
+    )
+    candidates = [
+        {
+            "name": "西湖",
+            "province": "浙江省",
+            "city": "杭州市",
+            "district": "西湖区",
+            "source": "wikidata_geo",
+            "identityRefs": {"qid": "Q12566"},
+            "coordinates": {"lat": 30.24, "lon": 120.14},
+            "typeTagRefs": ["Entity/地点/自然景观/水体"],
+        },
+        {
+            "name": "西湖",
+            "province": "浙江省",
+            "source": "wiki_category",
+            "identityRefs": {"qid": "Q12566", "wikipediaPageId": 1},
+        },
+    ]
+
+    corroborations = mod.discover_baike_corroborations(
+        candidates,
+        source="baidu_baike_search",
+    )
+
+    assert len(corroborations) == 1
+    assert corroborations[0]["source"] == "baidu_baike_search"
+    assert corroborations[0]["identityRefs"] == {"qid": "Q12566"}
+    assert corroborations[0]["sourceUrl"].startswith("https://baike.baidu.com/item/")
+
+
+def test_coverage_discover_keeps_typed_block_visible_without_failing_minimum_probe(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    import argparse
+
+    import governance.coverage.discovery as discovery
+    import governance.coverage.coverage_matrix as matrix
+    from governance.coverage.handler import handle_coverage_discover
+
+    monkeypatch.setattr(
+        matrix,
+        "prepare_coverage_matrix",
+        lambda **_kwargs: {
+            "runDir": str(tmp_path),
+            "status": {"provinces": {}},
+        },
+    )
+    monkeypatch.setattr(
+        discovery,
+        "discover_candidates",
+        lambda *_args, **_kwargs: {
+            "files": [],
+            "counts": {"浙江省": 1},
+            "uniqueCounts": {"浙江省": 1},
+            "sourceGaps": [
+                {
+                    "source": "baidu_baike_search",
+                    "status": "typed_blocked",
+                    "reason": "public_index_not_exhaustible",
+                }
+            ],
+        },
+    )
+
+    handle_coverage_discover(
+        argparse.Namespace(
+            provinces="浙江省",
+            sources="baidu_baike_search",
+            cities="",
+            limit=1,
+            run_id="typed-block-probe",
+            resume=False,
+            prepare_only=False,
+            until_saturated=False,
+        )
+    )
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["minimumTargetReached"] is True
+    assert report["discovery"]["sourceGaps"][0]["status"] == "typed_blocked"
 
 
 def test_merge_gap_when_type_and_district_unresolvable(monkeypatch):

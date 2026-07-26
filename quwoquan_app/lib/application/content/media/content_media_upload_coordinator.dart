@@ -1,14 +1,13 @@
-import 'package:crypto/crypto.dart';
-import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:developer' as developer;
 
-typedef ContentMediaObjectUpload =
-    Future<void> Function(
-      Uri uploadUri,
-      List<int> bytes, {
-      required String contentType,
-      required String expectedSha256,
-    });
+import 'package:crypto/crypto.dart';
+import 'package:quwoquan_app/application/content/media/generated/content_media_upload_policy.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 typedef ContentMediaStreamObjectUpload =
     Future<void> Function(
@@ -17,7 +16,60 @@ typedef ContentMediaStreamObjectUpload =
       required int contentLength,
       required String contentType,
       required String expectedSha256,
+      Future<void>? abortTrigger,
     });
+
+typedef ContentMediaUploadProgressCallback =
+    void Function(int uploadedBytes, int totalBytes);
+
+final class ContentMediaUploadCancellationSignal {
+  final Completer<void> _cancelled = Completer<void>();
+
+  bool get isCancelled => _cancelled.isCompleted;
+  Future<void> get whenCancelled => _cancelled.future;
+
+  void cancel() {
+    if (!_cancelled.isCompleted) {
+      _cancelled.complete();
+    }
+  }
+
+  void throwIfCancelled() {
+    if (isCancelled) {
+      throw const ContentMediaUploadCancelledException();
+    }
+  }
+
+  Future<void> waitOrCancel(Duration duration) async {
+    throwIfCancelled();
+    await Future.any<void>(<Future<void>>[
+      Future<void>.delayed(duration),
+      whenCancelled,
+    ]);
+    throwIfCancelled();
+  }
+}
+
+final class ContentMediaUploadCancelledException implements Exception {
+  const ContentMediaUploadCancelledException();
+}
+
+final class ContentMediaObjectUploadException implements Exception {
+  const ContentMediaObjectUploadException({
+    required this.retryable,
+    this.statusCode,
+    this.cause,
+  });
+
+  final bool retryable;
+  final int? statusCode;
+  final Object? cause;
+
+  @override
+  String toString() =>
+      'ContentMediaObjectUploadException('
+      'retryable: $retryable, statusCode: $statusCode)';
+}
 
 final class PreparedContentMediaSource {
   const PreparedContentMediaSource({
@@ -31,74 +83,255 @@ final class PreparedContentMediaSource {
   final Stream<List<int>> Function() openRead;
 }
 
+enum ContentMediaPreparationPhase {
+  initializing,
+  uploading,
+  completing,
+  completed,
+  cancelling,
+  aborted,
+  deleting,
+  deleted,
+}
+
+/// Durable, path-free checkpoint for one source slot in a publication draft.
+///
+/// The draft owns the local path; this record owns only immutable source
+/// identity and server-side upload state. It is persisted before init so a
+/// restart, cancellation, or lost complete response always resumes from the
+/// authoritative upload session instead of creating another MediaAsset.
+final class ContentMediaPreparationCheckpoint {
+  const ContentMediaPreparationCheckpoint({
+    required this.slot,
+    required this.mediaType,
+    required this.sha256Digest,
+    required this.assetId,
+    required this.initIdempotencyKey,
+    required this.completeIdempotencyKey,
+    required this.abortIdempotencyKey,
+    required this.discardIdempotencyKey,
+    this.expiresAt,
+    this.sessionId = '',
+    this.phase = ContentMediaPreparationPhase.initializing,
+    this.attempt = 0,
+  });
+
+  final String slot;
+  final ContentMediaType mediaType;
+  final String sha256Digest;
+  final String assetId;
+  final String initIdempotencyKey;
+  final String completeIdempotencyKey;
+  final String abortIdempotencyKey;
+  final String discardIdempotencyKey;
+  final DateTime? expiresAt;
+  final String sessionId;
+  final ContentMediaPreparationPhase phase;
+  final int attempt;
+
+  bool get isCompleted =>
+      phase == ContentMediaPreparationPhase.completed && assetId.isNotEmpty;
+
+  factory ContentMediaPreparationCheckpoint.forSource({
+    required String preparationIdentity,
+    required String slot,
+    required ContentMediaType mediaType,
+    required String sha256Digest,
+    int attempt = 0,
+  }) {
+    final identity =
+        '$preparationIdentity|$slot|${mediaType.name}|$sha256Digest|$attempt';
+    String commandKey(String transition) {
+      final digest = sha256.convert(utf8.encode('$transition|$identity'));
+      return 'media-upload-$transition-$digest';
+    }
+
+    return ContentMediaPreparationCheckpoint(
+      slot: slot,
+      mediaType: mediaType,
+      sha256Digest: sha256Digest,
+      assetId: '',
+      initIdempotencyKey: commandKey('init'),
+      completeIdempotencyKey: commandKey('complete'),
+      abortIdempotencyKey: commandKey('abort'),
+      discardIdempotencyKey: commandKey('discard'),
+      attempt: attempt,
+    );
+  }
+
+  bool matches({
+    required String expectedSlot,
+    required ContentMediaType expectedMediaType,
+    required String expectedSha256Digest,
+  }) {
+    return slot == expectedSlot &&
+        mediaType == expectedMediaType &&
+        sha256Digest == expectedSha256Digest;
+  }
+
+  ContentMediaPreparationCheckpoint copyWith({
+    String? assetId,
+    String? sessionId,
+    DateTime? expiresAt,
+    ContentMediaPreparationPhase? phase,
+    int? attempt,
+  }) {
+    return ContentMediaPreparationCheckpoint(
+      slot: slot,
+      mediaType: mediaType,
+      sha256Digest: sha256Digest,
+      assetId: assetId ?? this.assetId,
+      initIdempotencyKey: initIdempotencyKey,
+      completeIdempotencyKey: completeIdempotencyKey,
+      abortIdempotencyKey: abortIdempotencyKey,
+      discardIdempotencyKey: discardIdempotencyKey,
+      expiresAt: expiresAt ?? this.expiresAt,
+      sessionId: sessionId ?? this.sessionId,
+      phase: phase ?? this.phase,
+      attempt: attempt ?? this.attempt,
+    );
+  }
+
+  ContentMediaPreparationCheckpoint restartAfterAbort() {
+    final nextAttempt = attempt + 1;
+    String retryKey(String currentKey) {
+      final digest = sha256.convert(
+        utf8.encode('retry|$nextAttempt|$currentKey'),
+      );
+      return 'media-upload-retry-$digest';
+    }
+
+    return ContentMediaPreparationCheckpoint(
+      slot: slot,
+      mediaType: mediaType,
+      sha256Digest: sha256Digest,
+      assetId: '',
+      initIdempotencyKey: retryKey(initIdempotencyKey),
+      completeIdempotencyKey: retryKey(completeIdempotencyKey),
+      abortIdempotencyKey: retryKey(abortIdempotencyKey),
+      discardIdempotencyKey: retryKey(discardIdempotencyKey),
+      expiresAt: null,
+      phase: ContentMediaPreparationPhase.initializing,
+      attempt: nextAttempt,
+    );
+  }
+
+  Map<String, Object?> toStorageMap() => <String, Object?>{
+    'slot': slot,
+    'mediaType': mediaType.name,
+    'sha256Digest': sha256Digest,
+    'assetId': assetId,
+    'initIdempotencyKey': initIdempotencyKey,
+    'completeIdempotencyKey': completeIdempotencyKey,
+    'abortIdempotencyKey': abortIdempotencyKey,
+    'discardIdempotencyKey': discardIdempotencyKey,
+    'expiresAt': expiresAt?.toUtc().toIso8601String(),
+    'sessionId': sessionId,
+    'phase': phase.name,
+    'attempt': attempt,
+  };
+
+  static ContentMediaPreparationCheckpoint? tryParse(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    final slot = value['slot']?.toString().trim() ?? '';
+    final digest = value['sha256Digest']?.toString().trim() ?? '';
+    final assetId = value['assetId']?.toString().trim() ?? '';
+    final initIdempotencyKey =
+        value['initIdempotencyKey']?.toString().trim() ?? '';
+    final completeIdempotencyKey =
+        value['completeIdempotencyKey']?.toString().trim() ?? '';
+    final abortIdempotencyKey =
+        value['abortIdempotencyKey']?.toString().trim() ?? '';
+    final discardIdempotencyKey =
+        value['discardIdempotencyKey']?.toString().trim() ?? '';
+    final sessionId = value['sessionId']?.toString().trim() ?? '';
+    final expiresAt = DateTime.tryParse(
+      value['expiresAt']?.toString().trim() ?? '',
+    )?.toUtc();
+    final mediaType = ContentMediaType.values.where(
+      (candidate) => candidate.name == value['mediaType']?.toString(),
+    );
+    final phase = ContentMediaPreparationPhase.values.where(
+      (candidate) => candidate.name == value['phase']?.toString(),
+    );
+    if (slot.isEmpty ||
+        digest.isEmpty ||
+        mediaType.isEmpty ||
+        initIdempotencyKey.isEmpty ||
+        completeIdempotencyKey.isEmpty ||
+        abortIdempotencyKey.isEmpty ||
+        discardIdempotencyKey.isEmpty ||
+        phase.isEmpty) {
+      return null;
+    }
+    return ContentMediaPreparationCheckpoint(
+      slot: slot,
+      mediaType: mediaType.first,
+      sha256Digest: digest,
+      assetId: assetId,
+      initIdempotencyKey: initIdempotencyKey,
+      completeIdempotencyKey: completeIdempotencyKey,
+      abortIdempotencyKey: abortIdempotencyKey,
+      discardIdempotencyKey: discardIdempotencyKey,
+      expiresAt: expiresAt,
+      sessionId: sessionId,
+      phase: phase.first,
+      attempt: (value['attempt'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 abstract interface class ContentMediaSourceReader {
   Future<PreparedContentMediaSource> prepare(String localPath);
 }
 
+Future<PreparedContentMediaSource> prepareContentMediaSource({
+  required int fileSize,
+  required Stream<List<int>> Function() openRead,
+}) async {
+  if (fileSize <= 0) {
+    throw StateError('media source is empty');
+  }
+  final digest = await sha256.bind(openRead()).single;
+  return PreparedContentMediaSource(
+    fileSize: fileSize,
+    sha256Digest: digest.toString(),
+    openRead: openRead,
+  );
+}
+
 final class UploadedContentMedia {
-  const UploadedContentMedia({
-    required this.sessionId,
-    required this.assetId,
-    required this.cdnUrl,
-  });
+  const UploadedContentMedia({required this.sessionId, required this.assetId});
 
   final String sessionId;
   final String assetId;
-  final Uri? cdnUrl;
 }
 
 /// Application coordinator for the upload-session aggregate and its external
 /// object-storage grant. It computes the immutable byte contract before
-/// opening the session and aborts the authoritative session on every failure.
+/// opening the session, retries only repeatable object writes, and reconciles a
+/// possibly committed complete response before deciding whether abort is safe.
 final class ContentMediaUploadCoordinator {
   const ContentMediaUploadCoordinator({
     required this.media,
-    required this.fileStorage,
-    required this.uploadObject,
+    this.telemetry,
+    this.maxObjectUploadAttempts = 3,
+    this.maxCompleteAttempts = 2,
+    this.objectUploadRetryBaseDelay = const Duration(milliseconds: 250),
   });
 
+  /// 上传三段式（init/直传/complete）的 operation_result + performance_sample
+  /// 观测锚点（R22 端侧性能打点）。
+  static const String uploadOperationId =
+      'content.media_upload_session.UploadMedia';
+
   final ContentMediaFacet media;
-  final FileStorageGateway fileStorage;
-  final ContentMediaObjectUpload uploadObject;
-
-  Future<UploadedContentMedia> uploadLocalPath({
-    required String localPath,
-    required ContentMediaType mediaType,
-    ContentMediaAccessPolicy accessPolicy = ContentMediaAccessPolicy.ownerOnly,
-  }) async {
-    final path = localPath.trim();
-    if (path.isEmpty) throw StateError('media source path is empty');
-    final bytes = await fileStorage.readAsBytes(path);
-    if (bytes.isEmpty) throw StateError('media source is empty');
-    return uploadBytes(
-      bytes: bytes,
-      mediaType: mediaType,
-      contentType: contentMediaTypeForPath(path, mediaType),
-      accessPolicy: accessPolicy,
-    );
-  }
-
-  Future<UploadedContentMedia> uploadBytes({
-    required List<int> bytes,
-    required ContentMediaType mediaType,
-    required String contentType,
-    ContentMediaAccessPolicy accessPolicy = ContentMediaAccessPolicy.ownerOnly,
-  }) async {
-    if (bytes.isEmpty) throw StateError('media source is empty');
-    return _upload(
-      mediaType: mediaType,
-      contentType: contentType,
-      fileSize: bytes.length,
-      expectedSha256: sha256.convert(bytes).toString(),
-      accessPolicy: accessPolicy,
-      writeObject: (uploadUrl, digest) => uploadObject(
-        uploadUrl,
-        bytes,
-        contentType: contentType,
-        expectedSha256: digest,
-      ),
-    );
-  }
+  final AppTelemetryRecorder? telemetry;
+  final int maxObjectUploadAttempts;
+  final int maxCompleteAttempts;
+  final Duration objectUploadRetryBaseDelay;
 
   Future<UploadedContentMedia> uploadPreparedSource({
     required PreparedContentMediaSource source,
@@ -106,21 +339,112 @@ final class ContentMediaUploadCoordinator {
     required String contentType,
     required ContentMediaStreamObjectUpload uploadStream,
     ContentMediaAccessPolicy accessPolicy = ContentMediaAccessPolicy.ownerOnly,
+    ContentMediaUploadProgressCallback? onProgress,
+    ContentMediaUploadCancellationSignal? cancellationSignal,
+    ContentMediaPreparationCheckpoint? checkpoint,
+    Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+    onCheckpoint,
   }) async {
     if (source.fileSize <= 0) throw StateError('media source is empty');
+    validateContentMediaUploadPolicy(
+      mediaType: mediaType,
+      contentType: contentType,
+      fileSize: source.fileSize,
+    );
+    cancellationSignal?.throwIfCancelled();
     return _upload(
       mediaType: mediaType,
       contentType: contentType,
       fileSize: source.fileSize,
       expectedSha256: source.sha256Digest,
       accessPolicy: accessPolicy,
-      writeObject: (uploadUrl, digest) => uploadStream(
-        uploadUrl,
-        source.openRead(),
-        contentLength: source.fileSize,
-        contentType: contentType,
-        expectedSha256: digest,
+      cancellationSignal: cancellationSignal,
+      checkpoint:
+          checkpoint ??
+          ContentMediaPreparationCheckpoint.forSource(
+            preparationIdentity: 'standalone',
+            slot: 'standalone',
+            mediaType: mediaType,
+            sha256Digest: source.sha256Digest,
+          ),
+      onCheckpoint: onCheckpoint,
+      writeObject: (uploadUrl, digest) => _writeObjectWithRetry(
+        writeObject: () => uploadStream(
+          uploadUrl,
+          _trackedUploadStream(
+            source.openRead(),
+            contentLength: source.fileSize,
+            onProgress: onProgress,
+            cancellationSignal: cancellationSignal,
+          ),
+          contentLength: source.fileSize,
+          contentType: contentType,
+          expectedSha256: digest,
+          abortTrigger: cancellationSignal?.whenCancelled,
+        ),
+        cancellationSignal: cancellationSignal,
       ),
+    );
+  }
+
+  /// Reconciles a persisted cancellation before its draft may be discarded.
+  ///
+  /// A locally cancelled request is not authoritative: the server session may
+  /// already have completed. Callers must retain the returned checkpoint when
+  /// the transition remains [ContentMediaPreparationPhase.cancelling].
+  Future<ContentMediaPreparationCheckpoint> cancelPreparedCheckpoint(
+    ContentMediaPreparationCheckpoint checkpoint, {
+    Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+    onCheckpoint,
+  }) async {
+    var resolved = checkpoint;
+    Future<void> persist(ContentMediaPreparationCheckpoint updated) async {
+      resolved = updated;
+      await onCheckpoint?.call(updated);
+    }
+
+    if (resolved.phase == ContentMediaPreparationPhase.deleted) {
+      return resolved;
+    }
+    if (resolved.assetId.trim().isNotEmpty &&
+        (resolved.phase == ContentMediaPreparationPhase.completed ||
+            resolved.phase == ContentMediaPreparationPhase.deleting)) {
+      await _discardCompletedAsset(resolved, onCheckpoint: persist);
+      return resolved;
+    }
+    await _reconcileAndAbortPendingSession(resolved, onCheckpoint: persist);
+    if (resolved.assetId.trim().isNotEmpty &&
+        resolved.phase == ContentMediaPreparationPhase.completed) {
+      await _discardCompletedAsset(resolved, onCheckpoint: persist);
+    }
+    return resolved;
+  }
+
+  Future<void> _discardCompletedAsset(
+    ContentMediaPreparationCheckpoint checkpoint, {
+    required Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)
+    onCheckpoint,
+  }) async {
+    final mediaID = checkpoint.assetId.trim();
+    if (mediaID.isEmpty) {
+      throw StateError('completed media checkpoint is missing assetId');
+    }
+    final deleting = checkpoint.copyWith(
+      phase: ContentMediaPreparationPhase.deleting,
+    );
+    await onCheckpoint(deleting);
+    final result = await media.discardMediaAsset(
+      DiscardContentMediaAssetCommand(mediaId: mediaID),
+      ContentMediaAssetCommandContext(
+        idempotencyKey: checkpoint.discardIdempotencyKey,
+      ),
+    );
+    if (result.mediaId != mediaID ||
+        result.status != ContentMediaProcessingStatus.deleted) {
+      throw StateError('media discard response does not match checkpoint');
+    }
+    await onCheckpoint(
+      deleting.copyWith(phase: ContentMediaPreparationPhase.deleted),
     );
   }
 
@@ -130,45 +454,480 @@ final class ContentMediaUploadCoordinator {
     required int fileSize,
     required String expectedSha256,
     required ContentMediaAccessPolicy accessPolicy,
+    required ContentMediaPreparationCheckpoint checkpoint,
+    Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+    onCheckpoint,
     required Future<void> Function(Uri uploadUrl, String expectedSha256)
     writeObject,
+    ContentMediaUploadCancellationSignal? cancellationSignal,
   }) async {
-    final init = await media.initUpload(
-      InitContentMediaUploadCommand(
+    final startedAt = DateTime.now();
+    try {
+      final uploaded = await _uploadWithoutTelemetry(
         mediaType: mediaType,
         contentType: contentType,
         fileSize: fileSize,
         expectedSha256: expectedSha256,
-      ),
-    );
-    final sessionId = init.sessionId.trim();
-    if (sessionId.isEmpty) throw StateError('media upload session is missing');
-    try {
-      final uploadUrl = init.uploadUrl;
-      if (uploadUrl == null) {
-        throw StateError('media upload session is missing object upload URL');
-      }
-      await writeObject(uploadUrl, expectedSha256);
-      final completed = await media.completeUpload(
-        CompleteContentMediaUploadCommand(
-          sessionId: sessionId,
-          accessPolicy: accessPolicy,
-        ),
+        accessPolicy: accessPolicy,
+        checkpoint: checkpoint,
+        onCheckpoint: onCheckpoint,
+        writeObject: writeObject,
+        cancellationSignal: cancellationSignal,
       );
-      final assetId = (completed.assetId ?? '').trim();
-      if (assetId.isEmpty) {
-        throw StateError('completed media upload is missing assetId');
-      }
-      return UploadedContentMedia(
-        sessionId: sessionId,
-        assetId: assetId,
-        cdnUrl: completed.cdnUrl,
+      await _recordUploadOutcome(
+        result: 'success',
+        durationMs: DateTime.now().difference(startedAt).inMilliseconds,
       );
-    } catch (_) {
-      await media.abortUpload(
-        AbortContentMediaUploadCommand(sessionId: sessionId),
+      return uploaded;
+    } on ContentMediaUploadCancelledException {
+      await _recordUploadOutcome(
+        result: 'cancelled',
+        durationMs: DateTime.now().difference(startedAt).inMilliseconds,
       );
       rethrow;
+    } catch (error) {
+      await _recordUploadOutcome(
+        result: 'failure',
+        durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        failReasonCode: error.runtimeType.toString(),
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> _recordUploadOutcome({
+    required String result,
+    required int durationMs,
+    String? failReasonCode,
+  }) async {
+    final recorder = telemetry;
+    if (recorder == null) return;
+    // 观测失败不得影响上传结果（观测面板缺一条样本可接受，上传语义不可变）。
+    try {
+      await recorder.record(
+        AppTelemetryPayload.operationResult(
+          operationId: uploadOperationId,
+          result: result,
+          durationMs: durationMs,
+          failReasonCode: failReasonCode,
+        ),
+      );
+      await recorder.record(
+        AppTelemetryPayload.performanceSample(
+          operationId: uploadOperationId,
+          durationMs: durationMs,
+          result: result,
+          failReasonCode: failReasonCode,
+        ),
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Media upload telemetry recording failed',
+        name: 'ContentMediaUploadCoordinator',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<UploadedContentMedia> _uploadWithoutTelemetry({
+    required ContentMediaType mediaType,
+    required String contentType,
+    required int fileSize,
+    required String expectedSha256,
+    required ContentMediaAccessPolicy accessPolicy,
+    required ContentMediaPreparationCheckpoint checkpoint,
+    Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+    onCheckpoint,
+    required Future<void> Function(Uri uploadUrl, String expectedSha256)
+    writeObject,
+    ContentMediaUploadCancellationSignal? cancellationSignal,
+  }) async {
+    cancellationSignal?.throwIfCancelled();
+    final operationCancellation = _operationCancellation(cancellationSignal);
+    var durable = checkpoint;
+
+    Future<void> persist(ContentMediaPreparationCheckpoint next) async {
+      durable = next;
+      await onCheckpoint?.call(next);
+    }
+
+    late ContentMediaUploadSessionCommandResult init;
+    while (true) {
+      final recovered = await _recoverCompletedSession(
+        durable,
+        onCheckpoint: persist,
+      );
+      if (recovered != null) {
+        return recovered;
+      }
+      if (_checkpointGrantExpired(durable)) {
+        await _reconcileAndAbortPendingSession(durable, onCheckpoint: persist);
+        if (durable.phase == ContentMediaPreparationPhase.completed) {
+          return UploadedContentMedia(
+            sessionId: durable.sessionId,
+            assetId: durable.assetId,
+          );
+        }
+        if (durable.phase == ContentMediaPreparationPhase.aborted) {
+          await persist(durable.restartAfterAbort());
+          continue;
+        }
+      }
+
+      final candidate = await media.initUpload(
+        InitContentMediaUploadCommand(
+          mediaType: mediaType,
+          contentType: contentType,
+          fileSize: fileSize,
+          expectedSha256: expectedSha256,
+        ),
+        ContentMediaUploadCommandContext(
+          idempotencyKey: durable.initIdempotencyKey,
+          cancellation: operationCancellation,
+        ),
+      );
+      final candidateSessionId = candidate.sessionId.trim();
+      if (candidateSessionId.isEmpty) {
+        throw StateError('media upload session is missing');
+      }
+      await persist(
+        durable.copyWith(
+          sessionId: candidateSessionId,
+          expiresAt: candidate.expiresAt,
+          phase: ContentMediaPreparationPhase.uploading,
+        ),
+      );
+      if (_checkpointGrantExpired(durable)) {
+        continue;
+      }
+      init = candidate;
+      break;
+    }
+    final sessionId = init.sessionId.trim();
+    if (sessionId.isEmpty) throw StateError('media upload session is missing');
+    if (init.status == ContentMediaUploadStatus.completed) {
+      final completed = _uploadedFromCompletedResult(sessionId, init);
+      await persist(
+        durable.copyWith(
+          sessionId: completed.sessionId,
+          assetId: completed.assetId,
+          expiresAt: init.expiresAt,
+          phase: ContentMediaPreparationPhase.completed,
+        ),
+      );
+      return completed;
+    }
+    final uploadUrl = init.uploadUrl;
+    if (uploadUrl == null) {
+      await _reconcileAndAbortPendingSession(durable, onCheckpoint: persist);
+      throw StateError('media upload session is missing object upload URL');
+    }
+    try {
+      cancellationSignal?.throwIfCancelled();
+      await writeObject(uploadUrl, expectedSha256);
+      cancellationSignal?.throwIfCancelled();
+    } catch (error, stackTrace) {
+      await _reconcileAndAbortPendingSession(durable, onCheckpoint: persist);
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    await persist(
+      durable.copyWith(phase: ContentMediaPreparationPhase.completing),
+    );
+    try {
+      final completed = await _completeWithReconciliation(
+        sessionId: sessionId,
+        accessPolicy: accessPolicy,
+        completeIdempotencyKey: durable.completeIdempotencyKey,
+        operationCancellation: operationCancellation,
+        cancellationSignal: cancellationSignal,
+      );
+      await persist(
+        durable.copyWith(
+          sessionId: completed.sessionId,
+          assetId: completed.assetId,
+          expiresAt: init.expiresAt,
+          phase: ContentMediaPreparationPhase.completed,
+        ),
+      );
+      return completed;
+    } on ContentMediaUploadCancelledException {
+      await _reconcileAndAbortPendingSession(durable, onCheckpoint: persist);
+      rethrow;
+    } catch (error, stackTrace) {
+      await _reconcileAndAbortPendingSession(durable, onCheckpoint: persist);
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<UploadedContentMedia> _completeWithReconciliation({
+    required String sessionId,
+    required ContentMediaAccessPolicy accessPolicy,
+    required String completeIdempotencyKey,
+    CloudOperationCancellationSignal? operationCancellation,
+    ContentMediaUploadCancellationSignal? cancellationSignal,
+  }) async {
+    final attempts = maxCompleteAttempts < 1 ? 1 : maxCompleteAttempts;
+    Object? lastError;
+    StackTrace? lastStackTrace;
+    for (var attempt = 1; attempt <= attempts; attempt++) {
+      cancellationSignal?.throwIfCancelled();
+      try {
+        final completed = await media.completeUpload(
+          CompleteContentMediaUploadCommand(
+            sessionId: sessionId,
+            accessPolicy: accessPolicy,
+          ),
+          ContentMediaUploadCommandContext(
+            idempotencyKey: completeIdempotencyKey,
+            cancellation: operationCancellation,
+          ),
+        );
+        return _uploadedFromCompletedResult(sessionId, completed);
+      } catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+      }
+
+      final session = await _readUploadSessionForReconciliation(sessionId);
+      if (session == null) {
+        Error.throwWithStackTrace(lastError, lastStackTrace);
+      }
+      if (session.status == ContentMediaUploadStatus.completed) {
+        final assetId = (session.assetId ?? '').trim();
+        if (assetId.isEmpty) {
+          throw StateError(
+            'completed media upload session is missing recoverable assetId',
+          );
+        }
+        return UploadedContentMedia(sessionId: sessionId, assetId: assetId);
+      }
+      if (session.status == ContentMediaUploadStatus.aborted) {
+        Error.throwWithStackTrace(lastError, lastStackTrace);
+      }
+      if (attempt < attempts) {
+        final delay = objectUploadRetryBaseDelay * (1 << (attempt - 1));
+        if (cancellationSignal == null) {
+          await Future<void>.delayed(delay);
+        } else {
+          await cancellationSignal.waitOrCancel(delay);
+        }
+      }
+    }
+    Error.throwWithStackTrace(lastError!, lastStackTrace!);
+  }
+
+  UploadedContentMedia _uploadedFromCompletedResult(
+    String sessionId,
+    ContentMediaUploadSessionCommandResult completed,
+  ) {
+    final assetId = (completed.assetId ?? '').trim();
+    if (assetId.isEmpty) {
+      throw StateError('completed media upload is missing assetId');
+    }
+    return UploadedContentMedia(sessionId: sessionId, assetId: assetId);
+  }
+
+  Future<ContentMediaUploadSessionSlice?> _readUploadSessionForReconciliation(
+    String sessionId,
+  ) async {
+    try {
+      return await media.getUploadSession(
+        GetContentMediaUploadSessionQuery(sessionId: sessionId),
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Media upload completion reconciliation failed',
+        name: 'ContentMediaUploadCoordinator',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
+  Future<UploadedContentMedia?> _recoverCompletedSession(
+    ContentMediaPreparationCheckpoint checkpoint, {
+    required Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)
+    onCheckpoint,
+  }) async {
+    if (checkpoint.isCompleted) {
+      return UploadedContentMedia(
+        sessionId: checkpoint.sessionId,
+        assetId: checkpoint.assetId,
+      );
+    }
+    final sessionId = checkpoint.sessionId.trim();
+    if (sessionId.isEmpty) {
+      return null;
+    }
+    final session = await _readUploadSessionForReconciliation(sessionId);
+    if (session == null) {
+      return null;
+    }
+    if (checkpoint.expiresAt?.toUtc() != session.expiresAt.toUtc()) {
+      await onCheckpoint(checkpoint.copyWith(expiresAt: session.expiresAt));
+    }
+    if (session.status == ContentMediaUploadStatus.completed) {
+      final assetId = (session.assetId ?? '').trim();
+      if (assetId.isEmpty) {
+        throw StateError(
+          'completed media upload session is missing recoverable assetId',
+        );
+      }
+      await onCheckpoint(
+        checkpoint.copyWith(
+          assetId: assetId,
+          expiresAt: session.expiresAt,
+          phase: ContentMediaPreparationPhase.completed,
+        ),
+      );
+      return UploadedContentMedia(sessionId: sessionId, assetId: assetId);
+    }
+    if (session.status == ContentMediaUploadStatus.aborted) {
+      await onCheckpoint(checkpoint.restartAfterAbort());
+    }
+    return null;
+  }
+
+  Future<void> _reconcileAndAbortPendingSession(
+    ContentMediaPreparationCheckpoint checkpoint, {
+    required Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)
+    onCheckpoint,
+  }) async {
+    final sessionId = checkpoint.sessionId.trim();
+    if (sessionId.isEmpty) {
+      await onCheckpoint(
+        checkpoint.copyWith(phase: ContentMediaPreparationPhase.aborted),
+      );
+      return;
+    }
+    await onCheckpoint(
+      checkpoint.copyWith(phase: ContentMediaPreparationPhase.cancelling),
+    );
+    final beforeAbort = await _readUploadSessionForReconciliation(sessionId);
+    if (beforeAbort?.status == ContentMediaUploadStatus.completed) {
+      final assetId = (beforeAbort?.assetId ?? '').trim();
+      if (assetId.isNotEmpty) {
+        await onCheckpoint(
+          checkpoint.copyWith(
+            assetId: assetId,
+            phase: ContentMediaPreparationPhase.completed,
+          ),
+        );
+      }
+      return;
+    }
+    if (beforeAbort?.status == ContentMediaUploadStatus.aborted) {
+      await onCheckpoint(
+        checkpoint.copyWith(phase: ContentMediaPreparationPhase.aborted),
+      );
+      return;
+    }
+    Object? abortError;
+    StackTrace? abortStackTrace;
+    try {
+      final aborted = await media.abortUpload(
+        AbortContentMediaUploadCommand(sessionId: sessionId),
+        ContentMediaUploadCommandContext(
+          idempotencyKey: checkpoint.abortIdempotencyKey,
+        ),
+      );
+      if (aborted.status == ContentMediaUploadStatus.completed) {
+        final assetId = (aborted.assetId ?? '').trim();
+        if (assetId.isNotEmpty) {
+          await onCheckpoint(
+            checkpoint.copyWith(
+              assetId: assetId,
+              phase: ContentMediaPreparationPhase.completed,
+            ),
+          );
+          return;
+        }
+      }
+      if (aborted.status == ContentMediaUploadStatus.aborted) {
+        await onCheckpoint(
+          checkpoint.copyWith(phase: ContentMediaPreparationPhase.aborted),
+        );
+        return;
+      }
+      abortError = StateError(
+        'media abort response did not reach a terminal state',
+      );
+      abortStackTrace = StackTrace.current;
+    } catch (error, stackTrace) {
+      abortError = error;
+      abortStackTrace = stackTrace;
+    }
+    final afterAbort = await _readUploadSessionForReconciliation(sessionId);
+    if (afterAbort?.status == ContentMediaUploadStatus.completed) {
+      final assetId = (afterAbort?.assetId ?? '').trim();
+      if (assetId.isNotEmpty) {
+        await onCheckpoint(
+          checkpoint.copyWith(
+            assetId: assetId,
+            phase: ContentMediaPreparationPhase.completed,
+          ),
+        );
+      }
+      return;
+    }
+    if (afterAbort?.status == ContentMediaUploadStatus.aborted) {
+      await onCheckpoint(
+        checkpoint.copyWith(phase: ContentMediaPreparationPhase.aborted),
+      );
+      return;
+    }
+    Error.throwWithStackTrace(abortError, abortStackTrace);
+  }
+
+  bool _checkpointGrantExpired(ContentMediaPreparationCheckpoint checkpoint) {
+    final expiresAt = checkpoint.expiresAt;
+    if (expiresAt == null ||
+        checkpoint.sessionId.trim().isEmpty ||
+        checkpoint.phase == ContentMediaPreparationPhase.completed ||
+        checkpoint.phase == ContentMediaPreparationPhase.aborted ||
+        checkpoint.phase == ContentMediaPreparationPhase.deleted) {
+      return false;
+    }
+    return !DateTime.now().toUtc().isBefore(expiresAt.toUtc());
+  }
+
+  CloudOperationCancellationSignal? _operationCancellation(
+    ContentMediaUploadCancellationSignal? cancellation,
+  ) {
+    if (cancellation == null) {
+      return null;
+    }
+    final signal = CloudOperationCancellationSignal();
+    unawaited(cancellation.whenCancelled.then((_) => signal.cancel()));
+    return signal;
+  }
+
+  Future<void> _writeObjectWithRetry({
+    required Future<void> Function() writeObject,
+    ContentMediaUploadCancellationSignal? cancellationSignal,
+  }) async {
+    final attempts = maxObjectUploadAttempts < 1 ? 1 : maxObjectUploadAttempts;
+    for (var attempt = 1; attempt <= attempts; attempt++) {
+      cancellationSignal?.throwIfCancelled();
+      try {
+        await writeObject();
+        return;
+      } on ContentMediaUploadCancelledException {
+        rethrow;
+      } on ContentMediaObjectUploadException catch (error) {
+        if (!error.retryable || attempt == attempts) {
+          rethrow;
+        }
+        final multiplier = 1 << (attempt - 1);
+        final delay = objectUploadRetryBaseDelay * multiplier;
+        if (cancellationSignal == null) {
+          await Future<void>.delayed(delay);
+        } else {
+          await cancellationSignal.waitOrCancel(delay);
+        }
+      }
     }
   }
 }
@@ -185,11 +944,84 @@ String contentMediaTypeForPath(String path, ContentMediaType mediaType) {
     ContentMediaType.image => 'image/jpeg',
     ContentMediaType.video when lower.endsWith('.mov') => 'video/quicktime',
     ContentMediaType.video when lower.endsWith('.m4v') => 'video/x-m4v',
-    ContentMediaType.video when lower.endsWith('.webm') => 'video/webm',
     ContentMediaType.video => 'video/mp4',
-    ContentMediaType.audio when lower.endsWith('.wav') => 'audio/wav',
     ContentMediaType.audio when lower.endsWith('.aac') => 'audio/aac',
+    ContentMediaType.audio when lower.endsWith('.m4a') => 'audio/x-m4a',
+    ContentMediaType.audio when lower.endsWith('.mp4') => 'audio/mp4',
     ContentMediaType.audio => 'audio/mpeg',
     ContentMediaType.file => 'application/octet-stream',
   };
+}
+
+void validateContentMediaUploadPolicy({
+  required ContentMediaType mediaType,
+  required String contentType,
+  required int fileSize,
+}) {
+  final policy = ContentMediaUploadPolicy.mediaTypes[mediaType.name];
+  final normalizedContentType = contentType.trim().toLowerCase();
+  if (policy == null ||
+      normalizedContentType.isEmpty ||
+      (!policy.allowedContentTypes.contains('*/*') &&
+          !policy.allowedContentTypes.contains(normalizedContentType))) {
+    throw _localUploadPolicyFailure(
+      code: ContentMediaUploadPolicy.unsupportedTypeErrorCode,
+      reason: 'media_type_unsupported',
+      transportStatus: 415,
+      kind: RuntimeFailureKind.unsupported,
+    );
+  }
+  if (fileSize > policy.maxFileSizeBytes) {
+    throw _localUploadPolicyFailure(
+      code: ContentMediaUploadPolicy.fileTooLargeErrorCode,
+      reason: 'media_file_too_large',
+      transportStatus: 413,
+      kind: RuntimeFailureKind.validation,
+    );
+  }
+}
+
+RuntimeFailure _localUploadPolicyFailure({
+  required String code,
+  required String reason,
+  required int transportStatus,
+  required RuntimeFailureKind kind,
+}) => RuntimeFailure(
+  code: code,
+  semanticReason: reason,
+  transportStatus: transportStatus,
+  origin: RuntimeFailureOrigin.localClient,
+  kind: kind,
+  nature: RuntimeFailureNature.requiresUserAction,
+  location: const RuntimeFailureLocation(
+    businessObject: 'content.media_upload_session',
+    functionModule: 'content_media_upload_coordinator',
+  ),
+  context: const RuntimeFailureContext(),
+);
+
+Stream<List<int>> _trackedUploadStream(
+  Stream<List<int>> source, {
+  required int contentLength,
+  ContentMediaUploadProgressCallback? onProgress,
+  ContentMediaUploadCancellationSignal? cancellationSignal,
+}) async* {
+  var uploadedBytes = 0;
+  onProgress?.call(0, contentLength);
+  await for (final chunk in source) {
+    cancellationSignal?.throwIfCancelled();
+    if (chunk.isEmpty) {
+      continue;
+    }
+    uploadedBytes += chunk.length;
+    if (uploadedBytes > contentLength) {
+      throw StateError('media upload source exceeded declared content length');
+    }
+    yield chunk;
+    onProgress?.call(uploadedBytes, contentLength);
+  }
+  cancellationSignal?.throwIfCancelled();
+  if (uploadedBytes != contentLength) {
+    throw StateError('media upload source length changed');
+  }
 }

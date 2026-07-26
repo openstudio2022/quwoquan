@@ -9,6 +9,7 @@ import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart
 import '../../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../../support/cloud_services/test_content_post_reaction_facet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../../support/cloud_services/content/mock_content_repository.dart';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ void main() {
       expect(feed.appendError, isNull);
     });
 
-    test('appendNextPage 会在存在 nextCursor 时追加下一页并清空 cursor', () async {
+    test('appendNextPage 会在存在 nextCursor 时追加下一页并推进 cursor', () async {
       final container = _container(MockContentRepository());
       addTearDown(container.dispose);
 
@@ -99,7 +100,8 @@ void main() {
       final afterCount = afterFeed?.items.length ?? 0;
 
       expect(afterCount, greaterThan(beforeCount));
-      expect(afterFeed?.hasMore, isFalse);
+      expect(afterFeed?.isLoading, isFalse);
+      expect(afterFeed?.nextCursor, isNot(beforeFeed?.nextCursor));
       expect(afterFeed?.error, isNull);
     });
 
@@ -211,6 +213,7 @@ class _FailingContentRepository extends MockContentRepository {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
+    String? channelId,
     String? identity,
     String? type,
     String? subCategory,
@@ -245,6 +248,7 @@ class _ControllableContentRepository extends MockContentRepository {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
+    String? channelId,
     String? identity,
     String? type,
     String? subCategory,
@@ -258,6 +262,7 @@ class _ControllableContentRepository extends MockContentRepository {
   }) async {
     final page = await super.listDiscoveryFeedPage(
       category: category,
+      channelId: channelId,
       identity: identity,
       type: type,
       subCategory: subCategory,

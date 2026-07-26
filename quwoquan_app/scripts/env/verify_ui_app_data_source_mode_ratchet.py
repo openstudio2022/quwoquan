@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UI 层 AppDataSourceMode / appDataSourceModeProvider 引用棘轮（见 mock_data_cloud_integration_policy.md）。
+UI 层 AppDataSourceMode / appDataSourceModeProvider 引用只减不增棘轮。
 
 扫描：quwoquan_app/lib/ui/**/*.dart
 豁免（不计入）：开发者设置页须保留数据源切换 UI。
@@ -9,7 +9,7 @@ UI 层 AppDataSourceMode / appDataSourceModeProvider 引用棘轮（见 mock_dat
   - mock_enum_hits: 非注释行中子串 `AppDataSourceMode.mock` 出现次数
   - provider_hits: 非注释行中子串 `appDataSourceModeProvider` 出现次数
 
-行为：与 specs/gates/ui_app_data_source_mode_baseline.json 比较，任一指标严格大于基线 → exit 1。
+行为：与 quwoquan_ops/policies/gates/ui_app_data_source_mode_baseline.json 比较，任一指标严格大于基线 → exit 1。
 --write-baseline：覆盖基线（有意收口或 bump 时用）。
 """
 
@@ -23,7 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 LIB = ROOT / "quwoquan_app" / "lib"
 UI_ROOT = LIB / "ui"
-DEFAULT_BASELINE = ROOT / "specs" / "gates" / "ui_app_data_source_mode_baseline.json"
+DEFAULT_BASELINE = ROOT / "quwoquan_ops" / "policies" / "gates" / "ui_app_data_source_mode_baseline.json"
 
 # Paths relative to lib/ — excluded from ratchet (permanent carve-out).
 EXEMPT_REL = frozenset(
@@ -153,7 +153,7 @@ def main() -> int:
     if baseline is None:
         print(
             f"ERROR: missing or invalid baseline: {baseline_path}\n"
-            "Run: python3 scripts/verify_ui_app_data_source_mode_ratchet.py --write-baseline",
+            "Run: python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py --write-baseline",
             file=sys.stderr,
         )
         return 1

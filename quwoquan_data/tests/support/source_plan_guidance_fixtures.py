@@ -52,7 +52,7 @@ from content.source.research.source_quality import (  # noqa: E402
     _article_base_candidate_limit,
     _candidate_gate,
     _collection_gate,
-    _collection_publishable_image_urls,
+    _collection_admissible_image_urls,
     _license_allows_app_publish,
     _select_article_plan_sources,
 )

@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from core.runtime_policy import active_runtime_policy
+from core.image_decode import ImageDecodeFailure, probe_image_path
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 
 # ─── 后端探测 ──────────────────────────────────────────────────────
@@ -138,6 +139,7 @@ _OCR_MIN_CONF = 45
 _PLACEHOLDER_MAX_EDGE_DELTA = 7.0
 OCR_TIMEOUT_SECONDS = active_runtime_policy().ocr_timeout_seconds
 MAX_ASSESS_PIXELS = MEDIA_PROCESSING_POLICY.max_assessment_image_pixels
+ASSESSMENT_JPEG_QUALITY = MEDIA_PROCESSING_POLICY.assessment_jpeg_quality
 MAX_PUBLISHABLE_PIXELS = MEDIA_PROCESSING_POLICY.max_publishable_image_pixels
 OCR_MAX_PIXELS = MEDIA_PROCESSING_POLICY.ocr_image_pixels
 
@@ -241,11 +243,20 @@ def _assessment_image(
         max(1, math.floor(height * scale)),
     )
     with tempfile.TemporaryDirectory(prefix="qwq-image-assessment-") as temp_dir:
-        assessment_path = Path(temp_dir) / "assessment.png"
+        assessment_path = Path(temp_dir) / "assessment.jpg"
         try:
             with Image.open(path) as image:
-                image.thumbnail(target_size, Image.Resampling.LANCZOS)
-                image.save(assessment_path, format="PNG")
+                # CV/OCR only need a bounded visual sample. Re-encoding a large
+                # photo as PNG is both lossless and disproportionately expensive.
+                # Preserve source bytes and use a policy-owned JPEG assessment copy.
+                assessment = image.convert("RGB") if image.mode != "RGB" else image
+                assessment.thumbnail(target_size, Image.Resampling.LANCZOS)
+                assessment.save(
+                    assessment_path,
+                    format="JPEG",
+                    quality=ASSESSMENT_JPEG_QUALITY,
+                    optimize=False,
+                )
         except (OSError, ValueError):
             yield None, "assessment_resize_failed"
             return
@@ -301,21 +312,26 @@ def assess_image(path: str | Path, *, require_ocr: bool = True) -> ImageVerdict:
     if content_hash and cache_key in _ASSESS_CACHE:
         return replace(_ASSESS_CACHE[cache_key], path=str(p))
 
-    dims = _image_dimensions(p)
-    if dims is None:
+    probe = probe_image_path(p)
+    if not probe.succeeded:
+        status = (
+            STATUS_UNSAFE
+            if probe.failure is ImageDecodeFailure.PIXEL_LIMIT_EXCEEDED
+            else STATUS_NEEDS_REVIEW
+        )
         verdict = ImageVerdict(
             path=str(p),
-            status=STATUS_NEEDS_REVIEW,
-            faces=-1,
+            status=status,
+            faces=0 if status == STATUS_UNSAFE else -1,
             has_watermark=False,
             text_area_ratio=0.0,
-            reasons=("image_dimensions_unreadable",),
+            reasons=(f"image_decode_{probe.failure.value}",),
             backends=backends,
         )
         if content_hash:
             _ASSESS_CACHE[cache_key] = verdict
         return verdict
-    width, height = dims
+    width, height = probe.width, probe.height
     pixels = width * height
     if pixels > MAX_PUBLISHABLE_PIXELS:
         verdict = ImageVerdict(
@@ -497,18 +513,23 @@ def assess_image_publish_prefilter(path: str | Path) -> ImageVerdict:
             reasons=("file_missing",),
             backends=backends,
         )
-    dims = _image_dimensions(p)
-    if dims is None:
+    probe = probe_image_path(p)
+    if not probe.succeeded:
+        status = (
+            STATUS_UNSAFE
+            if probe.failure is ImageDecodeFailure.PIXEL_LIMIT_EXCEEDED
+            else STATUS_NEEDS_REVIEW
+        )
         return ImageVerdict(
             path=str(p),
-            status=STATUS_NEEDS_REVIEW,
-            faces=-1,
+            status=status,
+            faces=0 if status == STATUS_UNSAFE else -1,
             has_watermark=False,
             text_area_ratio=0.0,
-            reasons=("image_dimensions_unreadable",),
+            reasons=(f"image_decode_{probe.failure.value}",),
             backends=backends,
         )
-    width, height = dims
+    width, height = probe.width, probe.height
     pixels = width * height
     if pixels > MAX_PUBLISHABLE_PIXELS:
         return ImageVerdict(

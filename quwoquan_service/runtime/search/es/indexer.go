@@ -98,6 +98,22 @@ func DocumentToIndex(doc rtsearch.Document) map[string]any {
 	if doc.Geo != nil {
 		out["geo"] = map[string]any{"lat": doc.Geo.Lat, "lon": doc.Geo.Lng}
 	}
+	// Payload is a presentation-only slice retained in _source with indexing
+	// disabled by the mapping. This keeps every object self-contained on the
+	// result path without creating dynamic ES fields or synchronous source-service
+	// backfill calls.
+	if len(doc.Fields) > 0 {
+		payload := make(map[string]any, len(doc.Fields))
+		for key, value := range doc.Fields {
+			if strings.TrimSpace(key) == "" {
+				continue
+			}
+			payload[key] = value
+		}
+		if len(payload) > 0 {
+			out["payload"] = payload
+		}
+	}
 	// Reverse-lookup anchor fields enable ids/names resolution without type.
 	for _, key := range anchorFieldKeys {
 		if v := strings.TrimSpace(doc.Fields[key]); v != "" {
@@ -134,7 +150,7 @@ func IndexToDocument(src map[string]any) rtsearch.Document {
 	if g, ok := src["geo"].(map[string]any); ok {
 		doc.Geo = &rtsearch.GeoPoint{Lat: asFloat(g["lat"]), Lng: asFloat(g["lon"])}
 	}
-	fields := map[string]string{}
+	fields := payloadFields(src["payload"])
 	for _, key := range anchorFieldKeys {
 		if v := asString(src[key]); v != "" {
 			fields[key] = v
@@ -144,6 +160,23 @@ func IndexToDocument(src map[string]any) rtsearch.Document {
 		doc.Fields = fields
 	}
 	return doc
+}
+
+func payloadFields(value any) map[string]string {
+	fields := map[string]string{}
+	switch payload := value.(type) {
+	case map[string]any:
+		for key, raw := range payload {
+			if text, ok := raw.(string); ok {
+				fields[key] = text
+			}
+		}
+	case map[string]string:
+		for key, text := range payload {
+			fields[key] = text
+		}
+	}
+	return fields
 }
 
 // IndexToCandidate wraps a reconstructed Document with the ES relevance score so

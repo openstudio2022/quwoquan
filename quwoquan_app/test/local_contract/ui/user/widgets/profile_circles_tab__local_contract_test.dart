@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 /// 圈子已从主页一级 Tab 收口到统计区入口。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
@@ -26,8 +27,17 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
 Widget _scopedApp() {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(
-        const MockUserProfileRepository(),
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      authorImpactQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      contentRuntimeConfigProvider.overrideWithValue(
+        buildAlphaContentRuntimeConfigDefaults(),
+      ),
+      intersectionRepositoryProvider.overrideWithValue(
+        AlphaIntersectionRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
@@ -67,7 +77,7 @@ void main() {
     await tester.pumpWidget(_scopedApp());
     await _pumpFrames(tester);
 
-    expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
+    expect(find.text(ChatText.contactsTabCircles), findsOneWidget);
     expect(find.text('极简摄影俱乐部'), findsNothing);
   });
 }

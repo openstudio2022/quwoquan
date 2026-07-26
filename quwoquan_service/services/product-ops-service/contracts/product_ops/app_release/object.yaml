@@ -1,0 +1,26 @@
+kind: aggregate_root
+description: iOS 与 Android 当前已发布应用版本、受信恢复地址和 Android 正式 APK 校验事实的唯一发布根。
+identity:
+  fields:
+  - platform
+  version_field: latestBuild
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships: []
+capabilities:
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- 每个平台同时只有一个 current release，Build 为正十进制整数且只增不减
+- iOS 更新地址只能是 Apple 官方 App Store HTTPS 产品页
+- Android updateUrl 只能是趣我圈官网 HTTPS 下载端点，APK URL 只能属于官方 CDN 白名单
+- Android latest 指针只能在生产签名、包名、Build、证书摘要、文件大小和 SHA-256 全部验证后切换
+lifecycle:
+  states:
+  - current
+  optimistic_concurrency: compare_and_swap
+  idempotency: release_build

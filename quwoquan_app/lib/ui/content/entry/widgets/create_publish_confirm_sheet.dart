@@ -25,12 +25,14 @@ class CreatePublishConfirmSheet extends ConsumerStatefulWidget {
     required this.locationCoordinator,
     required this.joinedCircles,
     required this.recommendedCircles,
+    this.circleLoadUnavailable = false,
   });
 
   final PublishSettings initialSettings;
   final CreateLocationCoordinator locationCoordinator;
   final List<CreateCircleOption> joinedCircles;
   final List<CreateCircleOption> recommendedCircles;
+  final bool circleLoadUnavailable;
 
   @override
   ConsumerState<CreatePublishConfirmSheet> createState() =>
@@ -120,7 +122,7 @@ class _CreatePublishConfirmSheetState
           PublishConfirmSettingRow(
             title: UITextConstants.attachHomepageTitle,
             value: !_settings.isPublic
-                ? '仅公开内容可关联'
+                ? UITextConstants.createPublishHomepagePublicOnlyHint
                 : _settings.homepage == null
                 ? UITextConstants.attachHomepageNone
                 : _settings.homepage!.title,
@@ -131,11 +133,15 @@ class _CreatePublishConfirmSheetState
           PublishConfirmSettingRow(
             title: UITextConstants.selectPublishCirclesLabel,
             value: !_settings.isPublic
-                ? '仅公开内容可选'
+                ? UITextConstants.createPublishCirclesPublicOnlyHint
+                : widget.circleLoadUnavailable
+                ? UITextConstants.createPublishCirclesUnavailable
                 : _settings.circleNames.isEmpty
-                ? '未选圈子'
+                ? UITextConstants.createPublishNoCirclesSelected
                 : _settings.circleNames.join('、'),
-            onTap: _settings.isPublic ? _pickCircles : null,
+            onTap: _settings.isPublic && !widget.circleLoadUnavailable
+                ? _pickCircles
+                : null,
             borderRadius: BorderRadius.vertical(
               bottom: Radius.circular(AppSpacing.radiusTwentyEight),
             ),
@@ -148,7 +154,7 @@ class _CreatePublishConfirmSheetState
   Widget _buildPublishBottomBar(BuildContext context) {
     return IosSelectionBottomBar(
       confirmButtonKey: TestKeys.createPublishConfirmButton,
-      confirmLabel: '确认发布',
+      confirmLabel: UITextConstants.createPublishConfirmButton,
       onConfirm: () => Navigator.of(context).pop(_settings),
     );
   }

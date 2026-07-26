@@ -6,6 +6,13 @@ void main() {
       'media/avatar/s/avatar-primary-0001/persona/persona-primary/avatar.png';
 
   group('resolveAvatarImageUrl', () {
+    test('未注入运行时端点时不构造头像网络候选', () {
+      expect(
+        resolveAvatarImageUrlCandidates(avatarKey, avatarCdnBaseUrl: ''),
+        isEmpty,
+      );
+    });
+
     test('只使用注入的 avatar endpoint，不生成 gateway 候选', () {
       expect(
         resolveAvatarImageUrlCandidates(

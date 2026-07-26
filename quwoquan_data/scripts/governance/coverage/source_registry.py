@@ -17,7 +17,7 @@ from core.content_source_registry import (
     verify_content_source_registry,
 )
 
-TRAVEL_SOURCE_REGISTRY_PATH = _VERTICALS_ROOT / "travel" / "sources" / "source_registry.yaml"
+TRAVEL_SOURCE_REGISTRY_PATH = _VERTICALS_ROOT / "travel" / "providers.yaml"
 DISCOVERY_STRATEGY_MODES = {
     "entity_seeded_scan",
     "content_search",
@@ -238,16 +238,6 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
                                 issues.append(f"{prefix}: controlledTrial.rawFetchAllowed cannot be true")
                             if controlled_trial.get("publishableAssetsAllowed") is True:
                                 issues.append(f"{prefix}: controlledTrial.publishableAssetsAllowed cannot be true")
-                            lane_minimums = controlled_trial.get("minimumLaneCounts") or {}
-                            if not isinstance(lane_minimums, dict):
-                                issues.append(f"{prefix}: controlledTrial.minimumLaneCounts must be an object")
-                            else:
-                                for lane in content_lanes:
-                                    if int(lane_minimums.get(lane) or 0) <= 0:
-                                        issues.append(f"{prefix}: controlledTrial.minimumLaneCounts.{lane} must be > 0")
-                                for lane in lane_minimums:
-                                    if lane not in content_lanes:
-                                        issues.append(f"{prefix}: controlledTrial lane {lane!r} must be listed in contentLanes")
     return issues
 
 

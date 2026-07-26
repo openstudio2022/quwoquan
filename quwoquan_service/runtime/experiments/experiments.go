@@ -18,7 +18,10 @@ type Resolver interface {
 	Resolve(ctx context.Context, experimentID string, subjectKey string) (Assignment, error)
 }
 
-// StaticResolver offers deterministic integration fallback before provider rollout.
+// StaticResolver offers a deterministic default for tests and explicitly
+// disabled experiments. Production recommendation/search traffic uses
+// HashResolver (or AssignBucket through recpolicy); Product Ops assignment facts
+// are intentionally not a second runtime resolver.
 type StaticResolver struct {
 	DefaultBucket string
 }
@@ -49,7 +52,8 @@ type BucketDef struct {
 	WeightPct  int
 }
 
-// HashResolver assigns buckets based on consistent hashing.
+// HashResolver is the canonical runtime bucketing implementation shared by
+// recommendation and search.
 type HashResolver struct {
 	mu          sync.RWMutex
 	experiments map[string]*Experiment

@@ -1,104 +1,35 @@
 part of 'image_editor_page.dart';
 
 extension _ImageEditorPageProTools on _ImageEditorPageState {
-  void _handleBack() {
-    _onDone();
-  }
-
-  List<_ProToolboxEntry> _buildProToolboxEntries() {
-    return <_ProToolboxEntry>[
-      _ProToolboxEntry(
-        icon: Icons.tune,
-        label: UITextConstants.imageEditorProTabOverall,
-        category: kImageEditorProCategoryOverall,
-      ),
-      _ProToolboxEntry(
-        icon: Icons.place_outlined,
-        label: UITextConstants.imageEditorProTabLocal,
-        category: kImageEditorProCategoryLocal,
-      ),
-      _ProToolboxEntry(
-        icon: Icons.circle_outlined,
-        label: UITextConstants.imageEditorProHsl,
-        category: kImageEditorProCategoryHsl,
-        semanticIconKey: kEditorIconHslSolid,
-      ),
-      _ProToolboxEntry(
-        icon: Icons.crop_16_9_outlined,
-        label: UITextConstants.imageEditorProBwLevels,
-        category: kImageEditorProCategoryBwLevels,
-        semanticIconKey: kEditorIconBwLevels,
-      ),
-      _ProToolboxEntry(
-        icon: Icons.show_chart,
-        label: UITextConstants.imageEditorProCurve,
-        category: kImageEditorProCategoryCurve,
-      ),
-      _ProToolboxEntry(
-        icon: Icons.wb_sunny_outlined,
-        label: UITextConstants.imageEditorProWhiteBalance,
-        category: kImageEditorProCategoryWhiteBalance,
-      ),
-      _ProToolboxEntry(
-        icon: Icons.crop_free,
-        label: UITextConstants.imageEditorProPerspective,
-        category: kImageEditorProCategoryPerspective,
-      ),
-      _ProToolboxEntry(
-        icon: Icons.healing_outlined,
-        label: UITextConstants.imageEditorProHeal,
-        category: kImageEditorProCategoryPerspective,
-        placeholderTitle: UITextConstants.imageEditorProHeal,
-      ),
-      _ProToolboxEntry(
-        icon: Icons.tonality_outlined,
-        label: UITextConstants.imageEditorProToneContrast,
-        category: kImageEditorProCategoryPerspective,
-        placeholderTitle: UITextConstants.imageEditorProToneContrast,
-      ),
-      _ProToolboxEntry(
-        icon: Icons.auto_awesome_outlined,
-        label: UITextConstants.imageEditorProGlamourGlow,
-        category: kImageEditorProCategoryPerspective,
-        placeholderTitle: UITextConstants.imageEditorProGlamourGlow,
-      ),
-      _ProToolboxEntry(
-        icon: Icons.shutter_speed_outlined,
-        label: UITextConstants.imageEditorProSharpen,
-        category: kImageEditorProCategoryPerspective,
-        placeholderTitle: UITextConstants.imageEditorProSharpen,
-      ),
-    ];
-  }
-
-  void _openProEditorFromToolbox(_ProToolboxEntry entry) {
+  void _openProEditorFromToolbox(ImageEditorProToolEntry entry) {
     _setEditorState(() {
       _showProToolbox = false;
       _selectedToolIndex = kImageEditorToolPro;
-      _selectedProCategory = entry.category;
-      _proPlaceholderTitle = entry.placeholderTitle;
+      _selectedProCategory = entry.categoryIndex;
       _hslPickerActive = false;
       _hslPickerPoint = null;
       _localShowAnchorMenu = false;
       _localRangeVisible = false;
       _localAddMode = false;
       _isComparingSessionBaseline = false;
-      if (entry.category == kImageEditorProCategoryHsl) {
+      if (entry.categoryIndex == kImageEditorProCategoryHsl) {
         _resetHslSessionHistory();
       }
-      if (entry.category == kImageEditorProCategoryBwLevels) {
+      if (entry.categoryIndex == kImageEditorProCategoryBwLevels) {
         _resetBwSessionHistory();
       }
-      if (entry.category == kImageEditorProCategoryOverall ||
-          entry.category == kImageEditorProCategoryLocal) {
+      if (entry.categoryIndex == kImageEditorProCategoryOverall ||
+          entry.categoryIndex == kImageEditorProCategoryLocal) {
         _resetLocalSessionHistory();
+      }
+      if (entry.categoryIndex == kImageEditorProCategoryCurve) {
+        _prepareCurveSession();
       }
       _prepareProPanelSnapshot();
     });
   }
 
   Widget _buildProToolboxOverlay(double bottomPad) {
-    final entries = _buildProToolboxEntries();
     final borderColor = AppColors.white.withValues(alpha: 0.10);
     final popupBottom = bottomPad + AppSpacing.bottomNavHeight + AppSpacing.sm;
     return Positioned.fill(
@@ -140,7 +71,7 @@ extension _ImageEditorPageProTools on _ImageEditorPageState {
                 ),
                 child: GridView.builder(
                   shrinkWrap: true,
-                  itemCount: entries.length,
+                  itemCount: kImageEditorProCategoryEntries.length,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 5,
@@ -149,7 +80,7 @@ extension _ImageEditorPageProTools on _ImageEditorPageState {
                     childAspectRatio: 1.02,
                   ),
                   itemBuilder: (context, index) {
-                    final entry = entries[index];
+                    final entry = kImageEditorProCategoryEntries[index];
                     final unselectedColor = AppColors.white.withValues(
                       alpha: 0.6,
                     );

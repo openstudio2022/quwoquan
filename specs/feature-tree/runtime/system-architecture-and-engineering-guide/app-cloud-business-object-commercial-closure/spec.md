@@ -1,85 +1,204 @@
-# L3：App Cloud 业务对象商用闭环
+# L3 Story：App Cloud 业务对象商用闭环 (`app-cloud-business-object-commercial-closure`)
 
-## 最小价值点
+> 所属能力：[`system-architecture-and-engineering-guide`](../spec.md)
 
-App 通过同一份不可变 ContractGraph，只调用具名业务对象 Facet 和类型化 operation；服务端以可信 principal 执行认证、授权和对象级 BOLA，alpha 与 production 装配物理隔离。任一受影响 Journey 都不再依赖动态 Repository、客户端身份头、Mock fallback 或第二套接口真相源。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-## 归属
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- 领域服务：`runtime`
-- 业务能力：`system-architecture-and-engineering-guide`
-- Story：`app-cloud-business-object-commercial-closure`
-- AppRoot UAT：`UAT_BUSINESS_OBJECT_COMMERCIALIZATION`
-- 关联 Scenario：
-  - `identity-entry-persona-continuation`
-  - `content-feed-open-detail`
-  - `global-search-query-and-filter`
-  - `global-route-edge-pop-contract`
-  - `message-direct-and-greeting-upgrade`
-  - `circle-entity-group-handoff`
-  - `assistant-context-grounded-answering`
-  - `outbound-object-share-distribution`
-  - `intersection-action-deepening-on-object`
-  - `profile-share-interaction-history`
+## 1. 用户价值
 
-## 行为范围
+作为维护端云契约的开发者，
+我希望从服务本地 contracts 幂等生成并校验 App 与服务共用的业务对象合同，
+从而避免手写类型和派生索引成为第二真相源。
+
+## 2. 范围与非目标
 
 ### In Scope
 
-- 业务对象 command owner、query Reader/Slice、Facet、operation 和三层模型边界。
-- ContractGraph 固定 bundle、Go 服务端执行 descriptor/guard、Dart operation-specific client。
-- 服务端可信 Principal/ActorContext、operation authorization、对象 owner/member/BOLA。
-- App Cloud 分层、Remote/alpha adapter、production/alpha composition 与 Mock/fixture 物理隔离。
-- deadline、cancel、retry/idempotency、RuntimeFailure、telemetry 与 SLO 合同。
-- 十条 Scenario 的 local_contract、api_integration、user_acceptance 和四环境证据。
-- clean checkout、generated manifest、AOT/SBOM、灰度与回滚准出。
+- “App Cloud 业务对象商用闭环”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 通用 CRUD、事件溯源、分布式事务或通用 Saga。
+- 推荐、内容生产和 edge-media 内部算法。
 
 ### Out of Scope
 
-- 替各业务领域决定 aggregate、owned entity、value object 或业务状态机。
-- 建设通用 CRUD Repository、运行时 metadata registry、事件溯源框架、分布式事务或通用 Saga。
-- 修改推荐算法、内容正文生产算法和 edge-media 内部媒体算法。
-- 用本 Story 代替各业务对象自己的 L1/L2/L3 验收。
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-## 业务对象与读写规则
+## 3. 行为要求
 
-- 每个 command 只绑定一个 canonical aggregate owner；对象不变量由 domain behavior 执行，application 不直接修改公开字段。
-- 每个 query 只绑定一个具名 Reader 与 typed Slice；query 不加载 write aggregate。
-- AggregateStore 是对象专属 `Load + Commit` 端口，Commit 原子持久化 state/version、幂等 receipt 与同库 outbox。
-- owned entity 不拥有独立 Store；append-only fact 只允许 typed append/dedupe；projection 可重建且只由 projector 写入。
-- 读写分离是模型、端口和执行链分离，不强制独立数据库；跨 aggregate/domain 默认 outbox/inbox 最终一致。
+<a id="req-001"></a>
+### REQ-001 App Cloud 业务对象商用闭环
+
+- ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
+
+<a id="req-002"></a>
+### REQ-002 App 只消费业务对象类型化 ContractGraph
+
+- ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
+- canonical object 与 App-exposed operation coverage 均为 100%。
+
+<a id="req-003"></a>
+### REQ-003 服务端从可信 principal 执行 operation 与对象授权
+
+- required operation 服务端 guard 覆盖率为 100%。
+- RTC/Realtime、Chat/Content Media、Assistant consent、Behavior/Ops 的跨 actor 拒绝语义必须有直接负向测试证据。
+- production 缺 JWT key/issuer/audience 时启动失败且不存在默认 secret。
+
+<a id="req-004"></a>
+### REQ-004 production Remote 与 alpha Mock 物理隔离
+
+- App 内 Mock 顶层类、fixture runtime loader、空 Remote 和 fallback 数量为 0。
+- prod/alpha dependency resolution、kernel/AOT/SBOM 与 production wiring 必须由可执行门禁直接证明。
+
+<a id="req-005"></a>
+### REQ-005 Runtime 对 deadline cancellation retry error telemetry 语义唯一
+
+- Cloud 只有一条 context/config/transport/error/telemetry 执行链。
+- Runtime import DAG、generated-client-only 与 `RuntimeFailure` 零旁路必须由可执行门禁直接证明。
+
+<a id="req-006"></a>
+### REQ-006 十条真实 Remote Scenario 完成商业准出
+
+- local_contract、api_integration、user_acceptance 均有真实 CaseResult。
+- retired/Mock/fixture/empty Remote/reverse import/dynamic skip/path-UAT 全部为 0。
+- production AOT/SBOM、Web release、OHOS HAP、SLO、灰度和回滚证据绑定同一候选版本。
+
+<a id="req-007"></a>
+### REQ-007 L3 Story 与 AppRoot 十条 Scenario 双向可追踪
+
+- 父 L2 的 Story 列表与目录一致，AppRoot Scenario 与参与 L1 双向引用。
+- 本 Story 只保留 `spec.md`，设计归属上收到 L2 DEC。
+- 测试 `spec_ref` 必须指向现存 GWT/SIT/UAT 锚点。
+
+<a id="req-008"></a>
+### REQ-008 App application coordinator 只组合无需原子一致的少量 capability；稳定排序、统一权限或复用页面 Slice 由服务端 projection owner 提供
+
 - App application coordinator 只组合无需原子一致的少量 capability；稳定排序、统一权限或复用页面 Slice 由服务端 projection owner 提供。
+- command 仅在 metadata 声明幂等且具有 key 时允许重试。
+- deadline 使用剩余预算并向 HTTP、数据库、对象存储和消息执行传播。
+- 取消后不得继续产生副作用。
 
-## 端云执行规则
+## 4. 契约引用
 
-### Command
+- canonical：[`L2 DEC-001`](../design.md#dec-001)
+- canonical：`quwoquan_service/contracts/metadata`
+- canonical：`quwoquan_service/contracts/metadata/_schemas/context.schema.json`
+- canonical：`quwoquan_service/contracts/metadata/_schemas/object.schema.json`
+- canonical：`quwoquan_service/contracts/metadata/_schemas/operations.schema.json`
+- canonical：`quwoquan_service/contracts/metadata/_schemas/contract_graph.schema.json`
+- canonical：`specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md`
+- canonical：`quwoquan_service/runtime/auth`
+- canonical：`quwoquan_ops/environments`
+- canonical：本文件 `REQ-004`、`GWT-004` 与 `OPEN-004`
+- policy exception：`quwoquan_ops/policies/gates/mock_production_class_allowlist.yaml`
+- canonical：`quwoquan_app/packages/quwoquan_cloud_contracts`
+- canonical：`quwoquan_app/lib/cloud/runtime`
+- canonical：[`AppRoot UAT`](../../../spec.md#uat-001)
+- canonical：`quwoquan_ops/environments/gamma/validation_suites.json`
 
-`generated decoder -> typed command + trusted actor -> Command Facet -> aggregate behavior -> AggregateStore.Commit`
+## 5. 验收场景
 
-### Query
+<a id="gwt-001"></a>
+### GWT-001 App Cloud 业务对象商用闭环
 
-`generated decoder -> Query Facet -> named Reader -> typed Slice`
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“App Cloud 业务对象商用闭环”对应的公开行为。
+- THEN ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
 
-### App
+<a id="gwt-002"></a>
+### GWT-002 App 只消费业务对象类型化 ContractGraph
 
-`pure contracts -> runtime executor -> thin Remote adapter -> application coordinator -> capability Provider -> UI state`
+- GIVEN App 需要访问服务业务对象。
+- WHEN 端侧生成并装配业务对象客户端。
+- THEN canonical object 与 App-exposed operation coverage 均为 100%，且不保留手写业务类型副本。
 
-- UI/Provider/Repository 不传 operationId、path、surfaceId、routeId 或 actor 字符串；这些由 `OperationInvocationContext` 和 metadata 生成链注入。
-- Remote adapter 不维护 URL、headers、decoder、retry 或 error 的第二套规则。
-- production composition 只引用 Remote；Mock/fixture/alpha override 只存在于独立 mock package 和 alpha runner。
+<a id="gwt-003"></a>
+### GWT-003 服务端从可信 principal 执行 operation 与对象授权
 
-## 安全与可靠性
+- GIVEN 请求携带可验证 principal 或缺失、过期、越权身份。
+- WHEN 服务端执行业务 operation。
+- THEN 仅可信 principal 可通过对应 guard，拒绝结果使用 canonical failure 且不产生业务写入。
 
-- required operation 缺失或非法 credential 返回结构化 401；actor/scope/role 不满足返回 403；对象防枚举可返回 404。
-- 服务端先清除客户端 identity headers，再验证 JWT/device ticket 的 issuer、audience、exp、nbf/iat、scope 与 token version，并重建唯一 ActorContext。
-- route guard 之后仍由 application 校验 owner/member/participant/admin；客户端 guard 不是安全边界。
-- command 仅在 metadata 声明幂等且具有 key 时允许重试；deadline 使用剩余预算并向 HTTP、数据库、对象存储和消息执行传播；取消后不得继续产生副作用。
-- 错误链固定为 metadata error -> Service RuntimeErrorResponse -> App CloudException/RuntimeFailure -> UI recovery -> telemetry/alert。
+<a id="gwt-004"></a>
+### GWT-004 production Remote 与 alpha Mock 物理隔离
 
-## 测试与准出
+- GIVEN 分别装配 production 与 alpha/test 运行入口。
+- WHEN 构建依赖图、kernel/AOT 与 SBOM。
+- THEN production 只包含 Remote 和真实基础设施，Mock 与 fixture 仅由 alpha/test package 注入。
 
-- `local_contract`：对象边界、生成合同、依赖方向、alpha/Remote 行为同构、default-deny 与反设计门禁。
-- `api_integration`：Dart generated adapter 经 Gateway/直连服务访问真实存储，验证认证、BOLA、幂等、outbox、deadline/cancel 和结构化错误。
-- `user_acceptance`：十条真实 Remote Scenario 在 gamma-local/设备上执行，不接受路径存在、动态 skip、自 seed 或 Memory adapter 作为主证据。
-- 商业准出要求同一 commit 与 Graph hash 的 production AOT/SBOM、Web/OHOS 能力门、实时 SLO、灰度和故障注入回滚证据。
+<a id="gwt-005"></a>
+### GWT-005 Runtime 对 deadline cancellation retry error telemetry 语义唯一
 
+- GIVEN Cloud 请求经过 context、config、transport、error 与 telemetry 链。
+- WHEN 请求超时、取消、重试或失败。
+- THEN 运行时只使用一条可追踪执行链，并按 canonical failure 和恢复语义结束。
+
+<a id="gwt-006"></a>
+### GWT-006 十条真实 Remote Scenario 完成商业准出
+
+- GIVEN 候选版本已部署到声明环境。
+- WHEN 十条 Remote Scenario 分别执行 local_contract、api_integration 与 user_acceptance。
+- THEN 三层结果、制品摘要、SLO、灰度与回滚证据可关联到同一候选版本。
+
+## 6. 依赖
+
+- 前置要求：[`system-architecture-and-engineering-guide`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 DDD/CQRS 业务对象架构硬门
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Account/Persona/Relationship、Content/Media/TrustSafety、Circle、Chat、Assistant、Notification、Search、Tag、Recommendation、Ops、RTC/Realtime/Integration 的对象与强/最终一致性有唯一裁决。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 App 只消费业务对象类型化 ContractGraph
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-003"></a>
+### OPEN-003 服务端从可信 principal 执行 operation 与对象授权
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：required operation 服务端 guard 覆盖率为 100%。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-004"></a>
+### OPEN-004 production Remote 与 alpha Mock 物理隔离
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：App 内 Mock 顶层类、fixture runtime loader、空 Remote 和 fallback 数量为 0。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-005"></a>
+### OPEN-005 Runtime 对 deadline cancellation retry error telemetry 语义唯一
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Cloud 只有一条 context/config/transport/error/telemetry 执行链。
+- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-006"></a>
+### OPEN-006 十条真实 Remote Scenario 完成商业准出
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：local_contract、api_integration、user_acceptance 均有真实 CaseResult。
+- 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效。

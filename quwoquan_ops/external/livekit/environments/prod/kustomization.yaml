@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+namespace: quwoquan-prod
+patches:
+  - target:
+      kind: Deployment
+      name: livekit-sfu
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --rtc.use_external_ip
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: livekit-sfu
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 4

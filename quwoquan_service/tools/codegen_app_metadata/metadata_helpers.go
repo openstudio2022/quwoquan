@@ -29,6 +29,13 @@ func nonEmpty(v, fallback string) string {
 	return v
 }
 
+func metadataSourceLabel(value string) string {
+	if relative, err := metadataDocumentPath(value); err == nil {
+		return filepath.ToSlash(relative)
+	}
+	return filepath.ToSlash(value)
+}
+
 func dartStringLiteral(v string) string {
 	return fmt.Sprintf("%q", v)
 }

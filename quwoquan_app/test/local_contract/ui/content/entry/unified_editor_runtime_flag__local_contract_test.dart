@@ -1,15 +1,16 @@
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/spec.md#gwt-001
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
   setUp(() {
@@ -23,7 +24,7 @@ void main() {
       ProviderScope(
         overrides: [
           ...mockContentFacetOverrides(MockContentRepository()),
-          circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+          circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
           contentFeatureFlagProvider(
             'enable_unified_create_editor',
           ).overrideWith((ref) => false),

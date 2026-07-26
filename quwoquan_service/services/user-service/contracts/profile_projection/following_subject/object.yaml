@@ -1,0 +1,24 @@
+kind: projection
+description: '当前身份关注对象的统一读模型。它聚合用户关注、圈子加入/关注、地点和事物主页关注，
+
+  供首页关注频道顶部“关注动态”横向列表消费。该模型不替代各对象域的关系写入，
+
+  只维护 viewer 维度访问水位与未读变化投影。
+
+  '
+identity:
+  fields:
+  - viewerSubAccountId
+  - subjectType
+  - subjectId
+  version_source: checkpoint
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: named_reader
+relationships: []
+local_identity_reasons:
+  targetObjectId: navigation projection identifier derived from the typed subject reference and never
+    used for aggregate access
+  targetRouteId: generated route, surface, or operation registry key used only for navigation or telemetry
+    attribution

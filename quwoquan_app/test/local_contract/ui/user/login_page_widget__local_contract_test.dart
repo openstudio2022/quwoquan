@@ -5,30 +5,31 @@ import 'package:flutter/material.dart' show Icons, Theme, ThemeData;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/one_tap_login_hint_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/owner_credential_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
-import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/auth/one_tap_login_channel.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/di/login_dependencies.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
+import 'package:quwoquan_app/core/platform/one_tap_login_native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart'
+    show
+        accountSessionLifecycleCommandWriterProvider,
+        accountSessionLoginCommandWriterProvider,
+        authenticationChallengeCommandWriterProvider;
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:simple_icons/simple_icons.dart';
 import '../../../support/runtime_failure_fixtures.dart';
 import '../../../support/recording_app_telemetry_recorder.dart';
@@ -178,11 +179,20 @@ void main() {
 
   testWidgets('关闭登录页会清理待续接动作并回到宿主安全态', (tester) async {
     var dismissed = false;
+    final authFacets = _RecordingAuthFacets();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           authSessionStoreProvider.overrideWithValue(_GuestLoginStore()),
-          authRepositoryProvider.overrideWithValue(_RecordingAuthRepository()),
+          accountSessionLoginCommandWriterProvider.overrideWithValue(
+            authFacets,
+          ),
+          accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+            authFacets,
+          ),
+          authenticationChallengeCommandWriterProvider.overrideWithValue(
+            authFacets,
+          ),
           oneTapLoginClientProvider.overrideWithValue(
             const _UnavailableOneTapLoginClient(),
           ),
@@ -207,8 +217,11 @@ void main() {
     container
         .read(authContinuationProvider.notifier)
         .set(
-          const SubmitCommentContinuation(content: '待续接评论'),
-          ownerToken: 'comment-entry',
+          const StartDirectCallContinuation(
+            targetUserId: 'target-persona',
+            callType: 'video',
+          ),
+          ownerToken: 'profile-call-entry',
         );
     expect(container.read(authContinuationProvider), isNotNull);
 
@@ -247,7 +260,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
       nativeAuthBridge: const _TestNativeAuthBridge(),
       capabilities: CapabilityProfile.mobile,
@@ -272,7 +285,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _SoftLoggedOutStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
       nativeAuthBridge: const _TestNativeAuthBridge(),
       capabilities: CapabilityProfile.mobile,
@@ -298,7 +311,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GhostSummaryStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
     );
     await tester.pump(const Duration(milliseconds: 50));
@@ -317,7 +330,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _IncompleteProbeOneTapLoginClient(),
     );
     await tester.pump(const Duration(milliseconds: 50));
@@ -347,7 +360,7 @@ void main() {
       await _pumpLogin(
         tester,
         authStore: _SoftLoggedOutStore(),
-        authRepository: _RecordingAuthRepository(),
+        authRepository: _RecordingAuthFacets(),
         oneTapClient: const _UnavailableOneTapLoginClient(),
         nativeAuthBridge: const _TestNativeAuthBridge(),
         capabilities: CapabilityProfile.mobile,
@@ -367,7 +380,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
       nativeAuthBridge: const _TestNativeAuthBridge(),
       capabilities: CapabilityProfile.mobile,
@@ -435,7 +448,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
       nativeAuthBridge: const _TestNativeAuthBridge(),
       capabilities: CapabilityProfile.mobile,
@@ -657,7 +670,7 @@ void main() {
   });
 
   testWidgets('最近账号摘要存在时展示 returningAccount，同构主按钮不本地直进', (tester) async {
-    final repo = _RecordingAuthRepository();
+    final repo = _RecordingAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _RememberedLoginStore(),
@@ -699,7 +712,7 @@ void main() {
   });
 
   testWidgets('软退出后凭证有效期内：returning 主按钮为继续登录、refresh 成功无红字', (tester) async {
-    final repo = _RecordingAuthRepository();
+    final repo = _RecordingAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _SoftLoggedOutStore(),
@@ -727,7 +740,7 @@ void main() {
   });
 
   testWidgets('过期摘要无可执行恢复动作：不展示返回账号，直接回退手机号', (tester) async {
-    final repo = _RecordingAuthRepository();
+    final repo = _RecordingAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _ExpiredQuickLoginStore(),
@@ -750,7 +763,7 @@ void main() {
   });
 
   testWidgets('彻底退出后无凭证和摘要：直接进入手机号验证码登录', (tester) async {
-    final repo = _RecordingAuthRepository();
+    final repo = _RecordingAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _HardLoggedOutStore(),
@@ -768,7 +781,7 @@ void main() {
   });
 
   testWidgets('过期 returning 记住手机号 + 已勾协议：只预填，用户显式点击后发码', (tester) async {
-    final repo = _RecordingAuthRepository();
+    final repo = _RecordingAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _ExpiredPhoneOtpStore(),
@@ -808,7 +821,7 @@ void main() {
   });
 
   testWidgets('过期 returning 记住手机号 + 未勾协议：点主按钮预填但不自动发码并提示勾选', (tester) async {
-    final repo = _RecordingAuthRepository();
+    final repo = _RecordingAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _ExpiredPhoneOtpStore(),
@@ -834,7 +847,7 @@ void main() {
   testWidgets('其他手机号入口仍为空号手动输入：不预填、不自动发码', (tester) async {
     await tester.binding.setSurfaceSize(const Size(430, 932));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final repo = _RecordingAuthRepository();
+    final repo = _RecordingAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _ExpiredPhoneOtpStore(),
@@ -863,7 +876,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
     );
     await tester.pump(const Duration(milliseconds: 50));
@@ -875,8 +888,8 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(
-        hint: OneTapLoginHintDto.fromMap(<String, dynamic>{
+      authRepository: _RecordingAuthFacets(
+        hint: decodeOneTapLoginHint(<String, dynamic>{
           'state': 'new_phone',
           'maskedPhone': '180****3901',
           'registered': false,
@@ -904,8 +917,8 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(
-        hint: OneTapLoginHintDto.fromMap(<String, dynamic>{
+      authRepository: _RecordingAuthFacets(
+        hint: decodeOneTapLoginHint(<String, dynamic>{
           'state': 'registered',
           'maskedPhone': '180****3902',
           'registered': true,
@@ -935,7 +948,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _HangingOneTapLoginClient(),
     );
 
@@ -951,7 +964,7 @@ void main() {
   });
 
   testWidgets('运营商 hint 返回受限账号时进入阻断面，不降级为手机号创建', (tester) async {
-    final repo = _SuspendedHintAuthRepository();
+    final repo = _SuspendedHintAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
@@ -981,8 +994,8 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(
-        hint: OneTapLoginHintDto.fromMap(<String, dynamic>{
+      authRepository: _RecordingAuthFacets(
+        hint: decodeOneTapLoginHint(<String, dynamic>{
           'state': 'new_phone',
           'maskedPhone': '180****3901',
           'registered': false,
@@ -1010,7 +1023,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _RememberedLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
     );
     await tester.pump(const Duration(milliseconds: 50));
@@ -1027,8 +1040,8 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(
-        hint: OneTapLoginHintDto.fromMap(<String, dynamic>{
+      authRepository: _RecordingAuthFacets(
+        hint: decodeOneTapLoginHint(<String, dynamic>{
           'state': 'new_phone',
           'maskedPhone': '180****3901',
           'registered': false,
@@ -1063,8 +1076,8 @@ void main() {
       await _pumpLogin(
         tester,
         authStore: _GuestLoginStore(),
-        authRepository: _RecordingAuthRepository(
-          hint: OneTapLoginHintDto.fromMap(<String, dynamic>{
+        authRepository: _RecordingAuthFacets(
+          hint: decodeOneTapLoginHint(<String, dynamic>{
             'state': 'new_phone',
             'maskedPhone': '180****3901',
             'registered': false,
@@ -1093,7 +1106,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
       nativeAuthBridge: const _TestNativeAuthBridge(),
       capabilities: CapabilityProfile.mobile,
@@ -1115,8 +1128,8 @@ void main() {
 
   testWidgets('勾选协议后提交 one-tap，保存 remembered summary', (tester) async {
     final store = _MutableAuthStore();
-    final repo = _RecordingAuthRepository(
-      hint: OneTapLoginHintDto.fromMap(<String, dynamic>{
+    final repo = _RecordingAuthFacets(
+      hint: decodeOneTapLoginHint(<String, dynamic>{
         'state': 'new_phone',
         'maskedPhone': '180****3901',
         'registered': false,
@@ -1150,7 +1163,7 @@ void main() {
 
   testWidgets('手机号 OTP 支持发码、粘贴六位验证码后显式登录', (tester) async {
     final store = _MutableAuthStore();
-    final repo = _RecordingAuthRepository();
+    final repo = _RecordingAuthFacets();
     await _pumpLogin(
       tester,
       authStore: store,
@@ -1200,7 +1213,7 @@ void main() {
   });
 
   testWidgets('发码后折叠手机号输入，点击更换手机号本地清空 challenge 展示', (tester) async {
-    final repo = _RecordingAuthRepository();
+    final repo = _RecordingAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _MutableAuthStore(),
@@ -1232,7 +1245,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _MutableAuthStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
     );
     await tester.pump(const Duration(milliseconds: 50));
@@ -1251,7 +1264,7 @@ void main() {
   });
 
   testWidgets('验证码已送达后重发失败仍保留验证码步骤与用户输入', (tester) async {
-    final repo = _FailSecondOtpSendRepository();
+    final repo = _FailSecondOtpSendFacets();
     await _pumpLogin(
       tester,
       authStore: _MutableAuthStore(),
@@ -1290,7 +1303,7 @@ void main() {
   });
 
   testWidgets('手机号 OTP 输入首位后保持焦点，可连续输入而不需重新点按', (tester) async {
-    final repo = _RecordingAuthRepository();
+    final repo = _RecordingAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _MutableAuthStore(),
@@ -1376,7 +1389,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _MutableAuthStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
     );
     await tester.pump(const Duration(milliseconds: 50));
@@ -1794,7 +1807,7 @@ void main() {
   });
 
   testWidgets('继续登录 refresh 失败不进死路：无红字降级短信、保留可操作出口', (tester) async {
-    final repo = _FailingRefreshAuthRepository();
+    final repo = _FailingRefreshAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _RememberedLoginStore(),
@@ -1819,7 +1832,7 @@ void main() {
   });
 
   testWidgets('运营商一键登录失败降级到手机号输入并解释原因', (tester) async {
-    final repo = _CarrierMismatchAuthRepository();
+    final repo = _CarrierMismatchAuthFacets();
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
@@ -1857,7 +1870,7 @@ void main() {
 
   testWidgets('运营商 token 失效时在同一次显式提交内刷新一次并完成登录', (tester) async {
     final store = _MutableAuthStore();
-    final repo = _ExpiredThenFreshOneTapRepository();
+    final repo = _ExpiredThenFreshOneTapFacets();
     final client = _RefreshingOneTapLoginClient();
     await _pumpLogin(
       tester,
@@ -1883,7 +1896,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
       nativeAuthBridge: const _CancellingWechatNativeAuthBridge(),
       capabilities: CapabilityProfile.mobile,
@@ -1913,7 +1926,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _SocialFailingAuthRepository(message),
+      authRepository: _SocialFailingAuthFacets(message),
       oneTapClient: const _UnavailableOneTapLoginClient(),
       nativeAuthBridge: const _TestNativeAuthBridge(),
       capabilities: CapabilityProfile.mobile,
@@ -1963,7 +1976,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
       nativeAuthBridge: const _WechatOnlyNativeAuthBridge(),
       capabilities: CapabilityProfile.mobile,
@@ -1992,7 +2005,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
     );
     await tester.pump(const Duration(milliseconds: 50));
@@ -2016,7 +2029,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _RememberedLoginStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
     );
     await tester.pump(const Duration(milliseconds: 50));
@@ -2045,7 +2058,7 @@ void main() {
     await _pumpLogin(
       tester,
       authStore: _MutableAuthStore(),
-      authRepository: _RecordingAuthRepository(),
+      authRepository: _RecordingAuthFacets(),
       oneTapClient: const _UnavailableOneTapLoginClient(),
       textScaler: const TextScaler.linear(2),
       viewInsets: const EdgeInsets.only(bottom: 260),
@@ -2063,7 +2076,7 @@ void main() {
 Future<void> _pumpLogin(
   WidgetTester tester, {
   required AuthSessionStore authStore,
-  required AuthRepository authRepository,
+  required _LoginAuthTestFacets authRepository,
   required OneTapLoginClient oneTapClient,
   RecordingAppTelemetryRecorder? telemetryRecorder,
   PlatformCapabilities? capabilities,
@@ -2078,7 +2091,15 @@ Future<void> _pumpLogin(
     ProviderScope(
       overrides: [
         authSessionStoreProvider.overrideWithValue(authStore),
-        authRepositoryProvider.overrideWithValue(authRepository),
+        accountSessionLoginCommandWriterProvider.overrideWithValue(
+          authRepository,
+        ),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          authRepository,
+        ),
+        authenticationChallengeCommandWriterProvider.overrideWithValue(
+          authRepository,
+        ),
         oneTapLoginClientProvider.overrideWithValue(oneTapClient),
         loginJourneyEventTrackerProvider.overrideWithValue(
           JourneyEventTracker(telemetryReporter: ops),
@@ -2362,38 +2383,37 @@ class _CancellingWechatNativeAuthBridge extends _WechatOnlyNativeAuthBridge {
   }
 }
 
-class _RecordingAuthRepository implements AuthRepository {
-  _RecordingAuthRepository({OneTapLoginHintDto? hint})
-    : hint =
-          hint ?? OneTapLoginHintDto(state: 'unavailable', expiresInSeconds: 0);
+abstract interface class _LoginAuthTestFacets
+    implements
+        AccountSessionCommandWriter,
+        AuthenticationChallengeCommandWriter {}
 
-  final OneTapLoginHintDto hint;
+class _RecordingAuthFacets implements _LoginAuthTestFacets {
+  _RecordingAuthFacets({OneTapLoginHint? hint})
+    : hint =
+          hint ??
+          const OneTapLoginHint(
+            state: 'unavailable',
+            maskedPhone: '',
+            registered: false,
+            expiresInSeconds: 0,
+          );
+
+  final OneTapLoginHint hint;
   int loginOneTapCalls = 0;
   int refreshTokenCalls = 0;
   int sendOtpCalls = 0;
   int phoneLoginCalls = 0;
 
   @override
-  Future<OneTapLoginHintDto> resolveOneTapLoginHint({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    String? appVersion,
-  }) async => hint;
+  Future<OneTapLoginHint> resolveOneTapLoginHint(
+    ResolveOneTapLoginHintCommand command,
+  ) async => hint;
 
   @override
-  Future<AuthLoginResultDto> loginOneTap({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    String? appVersion,
-    required String agreementVersion,
-    required String privacyVersion,
-  }) async {
+  Future<AuthSessionGrant> loginOneTap(LoginOneTapCommand command) async {
     loginOneTapCalls += 1;
-    return AuthLoginResultDto.fromMap(<String, dynamic>{
+    return decodeAuthSessionGrant(<String, dynamic>{
       'accessToken': 'access',
       'refreshToken': 'refresh',
       'ownerId': 'owner',
@@ -2409,39 +2429,22 @@ class _RecordingAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<OtpSendResultData> sendOtp({
-    required String phone,
-    String? deviceId,
-    String? platform,
-    String? appVersion,
-    String? sourceOperation,
-  }) async {
+  Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
     sendOtpCalls += 1;
-    return OtpSendResultData(
+    return const OtpChallengeIssueResult(
       maskedPhone: '180****3909',
       expiresInSeconds: 300,
       deliveryStatus: 'queued',
+      retryAfterSeconds: 0,
       requestId: 'request-1',
       challengeId: 'challenge-1',
     );
   }
 
   @override
-  Future<AuthLoginResultDto> login({
-    required String credentialType,
-    required String credentialKey,
-    String? otpCode,
-    String? displayLabel,
-    String? deviceId,
-    String? platform,
-    String? appVersion,
-    String? agreementVersion,
-    String? privacyVersion,
-  }) async {
-    if (credentialType == 'phone') {
-      phoneLoginCalls += 1;
-    }
-    return AuthLoginResultDto.fromMap(<String, dynamic>{
+  Future<AuthSessionGrant> loginWithPhone(LoginWithPhoneCommand command) async {
+    phoneLoginCalls += 1;
+    return decodeAuthSessionGrant(<String, dynamic>{
       'accessToken': 'phone_access',
       'refreshToken': 'phone_refresh',
       'ownerId': 'phone_owner',
@@ -2457,111 +2460,51 @@ class _RecordingAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthLoginResultDto> loginWechat({
-    required String wechatCode,
-    required String deviceId,
-    required String platform,
-  }) => throw UnimplementedError();
+  Future<AuthSessionGrant> loginWithWechat(LoginWithWechatCommand command) =>
+      throw UnimplementedError();
 
   @override
-  Future<AuthLoginResultDto> loginAlipay({
-    required String alipayAuthCode,
-    required String deviceId,
-    required String platform,
-  }) => throw UnimplementedError();
+  Future<AuthSessionGrant> loginWithAlipay(LoginWithAlipayCommand command) =>
+      throw UnimplementedError();
 
   @override
-  Future<AuthLoginResultDto> loginQq({
-    required String qqAuthCode,
-    required String deviceId,
-    required String platform,
-  }) => throw UnimplementedError();
+  Future<AuthSessionGrant> loginWithQq(LoginWithQqCommand command) =>
+      throw UnimplementedError();
 
   @override
-  Future<AuthLoginResultDto> loginAnonymous({
-    required String installId,
-    required String deviceFingerprintHash,
-    required String platform,
-    required String appVersion,
-  }) => throw UnimplementedError();
+  Future<AuthSessionGrant> loginAnonymous(LoginAnonymousCommand command) =>
+      throw UnimplementedError();
 
   @override
-  Future<AuthLoginResultDto> refreshToken(String refreshToken) async {
+  Future<TokenRefreshGrant> refreshToken(RefreshTokenCommand command) async {
     refreshTokenCalls += 1;
-    return AuthLoginResultDto.fromMap(<String, dynamic>{
-      'accessToken': 'refreshed_access',
-      'refreshToken': 'refreshed_refresh',
-      'ownerId': 'owner',
-      'activeSub': <String, dynamic>{'subAccountId': 'sub'},
-      'accountState': 'active',
-      'identityOrigin': 'phone',
-      'subAccountCount': 1,
-      'accountHint': <String, dynamic>{
-        'displayName': _defaultNicknameSample,
-        'maskedPhone': '138****3909',
-      },
-    });
+    return const TokenRefreshGrant(
+      accessToken: 'refreshed_access',
+      refreshToken: 'refreshed_refresh',
+      sessionRememberTtlSeconds: 0,
+    );
   }
 
   @override
-  Future<void> logout({String? refreshToken, String? deviceId}) async {}
+  Future<LogoutAck> logout(LogoutCommand command) async =>
+      const LogoutAck(revoked: true);
 
   @override
-  Future<void> bindCredential({
-    required String credentialType,
-    required String credentialKey,
-    String? displayLabel,
-  }) async {}
-
-  @override
-  Future<void> bindPhoneWithOtp({
-    required String phone,
-    required String otpCode,
-    String? displayLabel,
-  }) async {}
-
-  @override
-  Future<void> bindCarrierPhone({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    String? displayLabel,
-  }) async {}
-
-  @override
-  Future<void> unbindCredential(String credentialType) async {}
-
-  @override
-  Future<List<OwnerCredentialRowDto>> listCredentials() async =>
-      <OwnerCredentialRowDto>[];
-
-  @override
-  Future<List<PersonaManagementItemViewData>> listPersonas() async =>
-      <PersonaManagementItemViewData>[];
-
-  @override
-  Future<PersonaManagementItemViewData> createPersona({
-    required String displayName,
-    String isolationLevel = 'open',
-  }) => throw UnimplementedError();
-
-  @override
-  Future<void> activatePersona(String subAccountId) async {}
-
-  @override
-  Future<void> deletePersona(String subAccountId) async {}
+  Future<AlipayAuthorizationGrant> createAlipayAuthorizationRequest(
+    CreateAlipayAuthorizationRequestCommand command,
+  ) async {
+    return const AlipayAuthorizationGrant(
+      authorizationPayload: 'test-alipay-authorization',
+      expiresAt: '2099-01-01T00:00:00Z',
+    );
+  }
 }
 
-class _SuspendedHintAuthRepository extends _RecordingAuthRepository {
+class _SuspendedHintAuthFacets extends _RecordingAuthFacets {
   @override
-  Future<OneTapLoginHintDto> resolveOneTapLoginHint({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    String? appVersion,
-  }) {
+  Future<OneTapLoginHint> resolveOneTapLoginHint(
+    ResolveOneTapLoginHintCommand command,
+  ) {
     throw CloudException(
       type: CloudErrorType.forbidden,
       message: 'account is suspended',
@@ -2573,17 +2516,13 @@ class _SuspendedHintAuthRepository extends _RecordingAuthRepository {
   }
 }
 
-class _SocialFailingAuthRepository extends _RecordingAuthRepository {
-  _SocialFailingAuthRepository(this.userMessage);
+class _SocialFailingAuthFacets extends _RecordingAuthFacets {
+  _SocialFailingAuthFacets(this.userMessage);
 
   final String userMessage;
 
   @override
-  Future<AuthLoginResultDto> loginWechat({
-    required String wechatCode,
-    required String deviceId,
-    required String platform,
-  }) {
+  Future<AuthSessionGrant> loginWithWechat(LoginWithWechatCommand command) {
     throw CloudException(
       type: CloudErrorType.server,
       message: 'provider rejected authorization',
@@ -2596,10 +2535,10 @@ class _SocialFailingAuthRepository extends _RecordingAuthRepository {
   }
 }
 
-class _ExpiredThenFreshOneTapRepository extends _RecordingAuthRepository {
-  _ExpiredThenFreshOneTapRepository()
+class _ExpiredThenFreshOneTapFacets extends _RecordingAuthFacets {
+  _ExpiredThenFreshOneTapFacets()
     : super(
-        hint: OneTapLoginHintDto.fromMap(<String, dynamic>{
+        hint: decodeOneTapLoginHint(<String, dynamic>{
           'state': 'new_phone',
           'maskedPhone': '180****3901',
           'registered': false,
@@ -2608,16 +2547,8 @@ class _ExpiredThenFreshOneTapRepository extends _RecordingAuthRepository {
       );
 
   @override
-  Future<AuthLoginResultDto> loginOneTap({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    String? appVersion,
-    required String agreementVersion,
-    required String privacyVersion,
-  }) {
-    if (carrierToken == 'expired_token') {
+  Future<AuthSessionGrant> loginOneTap(LoginOneTapCommand command) {
+    if (command.carrierToken == 'expired_token') {
       loginOneTapCalls += 1;
       throw CloudException(
         type: CloudErrorType.server,
@@ -2628,30 +2559,16 @@ class _ExpiredThenFreshOneTapRepository extends _RecordingAuthRepository {
         ),
       );
     }
-    return super.loginOneTap(
-      vendor: vendor,
-      carrierToken: carrierToken,
-      deviceId: deviceId,
-      platform: platform,
-      appVersion: appVersion,
-      agreementVersion: agreementVersion,
-      privacyVersion: privacyVersion,
-    );
+    return super.loginOneTap(command);
   }
 }
 
-class _FailSecondOtpSendRepository extends _RecordingAuthRepository {
+class _FailSecondOtpSendFacets extends _RecordingAuthFacets {
   @override
-  Future<OtpSendResultData> sendOtp({
-    required String phone,
-    String? deviceId,
-    String? platform,
-    String? appVersion,
-    String? sourceOperation,
-  }) async {
+  Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
     if (sendOtpCalls == 0) {
       sendOtpCalls += 1;
-      return const OtpSendResultData(
+      return const OtpChallengeIssueResult(
         maskedPhone: '180****3909',
         expiresInSeconds: 300,
         retryAfterSeconds: 1,
@@ -2674,9 +2591,9 @@ class _FailSecondOtpSendRepository extends _RecordingAuthRepository {
 }
 
 /// 最近账号二次登录（服务端 refresh）失败：用于验证不进死路。
-class _FailingRefreshAuthRepository extends _RecordingAuthRepository {
+class _FailingRefreshAuthFacets extends _RecordingAuthFacets {
   @override
-  Future<AuthLoginResultDto> refreshToken(String refreshToken) async {
+  Future<TokenRefreshGrant> refreshToken(RefreshTokenCommand command) async {
     throw CloudException(
       type: CloudErrorType.server,
       message: 'refresh failed',
@@ -2687,10 +2604,10 @@ class _FailingRefreshAuthRepository extends _RecordingAuthRepository {
 }
 
 /// 运营商一键登录返回号码不一致（surface），用于验证降级到手机号输入。
-class _CarrierMismatchAuthRepository extends _RecordingAuthRepository {
-  _CarrierMismatchAuthRepository()
+class _CarrierMismatchAuthFacets extends _RecordingAuthFacets {
+  _CarrierMismatchAuthFacets()
     : super(
-        hint: OneTapLoginHintDto.fromMap(<String, dynamic>{
+        hint: decodeOneTapLoginHint(<String, dynamic>{
           'state': 'new_phone',
           'maskedPhone': '180****3901',
           'registered': false,
@@ -2699,15 +2616,7 @@ class _CarrierMismatchAuthRepository extends _RecordingAuthRepository {
       );
 
   @override
-  Future<AuthLoginResultDto> loginOneTap({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    String? appVersion,
-    required String agreementVersion,
-    required String privacyVersion,
-  }) async {
+  Future<AuthSessionGrant> loginOneTap(LoginOneTapCommand command) async {
     throw CloudException(
       type: CloudErrorType.server,
       message: 'carrier phone mismatch',
@@ -2898,8 +2807,8 @@ class _MutableAuthStore implements AuthSessionStore {
   );
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -2911,14 +2820,11 @@ class _MutableAuthStore implements AuthSessionStore {
   }
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override

@@ -11,18 +11,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = (
     ROOT
-    / "quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.lite.json"
+    / "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.lite.json"
 )
 GENERATED = (
     ROOT
-    / "quwoquan_app/lib/cloud/services/content/mock/generated/home_showcase_core_fixture.g.dart"
+    / "quwoquan_app/test/support/cloud_services/content/home_showcase_core_fixture.g.dart"
 )
 
 
 def _render_generated(posts_json: str, sha: str) -> str:
     return (
         "// GENERATED CODE - DO NOT MODIFY BY HAND.\n"
-        "// Source: quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.lite.json\n"
+        "// Source: quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.lite.json\n"
         "// Seed set: home_showcase_core.posts\n\n"
         f"const String kHomeShowcaseCorePostsSha256 = '{sha}';\n\n"
         f"const String kHomeShowcaseCorePostsJson = r'''{posts_json}''';\n"

@@ -1,0 +1,20 @@
+kind: external_reference
+description: '百度、阿里等外部位置查询能力引用。Location 不拥有业务生命周期；
+
+  LocationPoi 是 nearby/search 返回的标准化 value/read model。
+
+  '
+identity:
+  fields:
+  - locationRef
+  version_source: external
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: external_port
+relationships: []
+capabilities:
+- queryable
+- searchable
+taggable: false
+vector_enabled: false

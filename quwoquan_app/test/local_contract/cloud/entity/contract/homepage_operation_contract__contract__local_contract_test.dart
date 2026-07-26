@@ -70,6 +70,46 @@ void main() {
       );
     });
 
+    test('认领与状态上报结果只接受 metadata canonical 业务键', () {
+      final claim = decodeHomepageClaimRequestView(<String, Object?>{
+        'claimRequestId': 'claim-1',
+        'homepageId': 'homepage-1',
+        'requesterPersonaId': 'persona-1',
+        'claimTier': 'verified',
+        'status': 'pending_review',
+      });
+      final report = decodeHomepageStatusReportView(<String, Object?>{
+        'reportId': 'report-1',
+        'homepageId': 'homepage-1',
+        'reporterPersonaId': 'persona-2',
+        'reason': 'offline',
+        'status': 'pending_review',
+      });
+
+      expect(claim.claimRequestId, 'claim-1');
+      expect(report.reportId, 'report-1');
+      expect(
+        () => decodeHomepageClaimRequestView(<String, Object?>{
+          'id': 'retired-claim-key',
+          'homepageId': 'homepage-1',
+          'requesterPersonaId': 'persona-1',
+          'claimTier': 'verified',
+          'status': 'pending_review',
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => decodeHomepageStatusReportView(<String, Object?>{
+          'id': 'retired-report-key',
+          'homepageId': 'homepage-1',
+          'reporterPersonaId': 'persona-2',
+          'reason': 'offline',
+          'status': 'pending_review',
+        }),
+        throwsFormatException,
+      );
+    });
+
     test('搜索、对象页和关联群组均返回不可变强类型投影', () {
       final search = decodeHomepageSearchSlice(<String, Object?>{
         'items': <Object?>[

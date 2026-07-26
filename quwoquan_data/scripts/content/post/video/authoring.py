@@ -38,7 +38,8 @@ from core.data_issue import (
 )
 from core.io import write_json
 from core.prompt_render import render as render_prompt
-from governance.coverage.cold_start_supply import load_cold_start_supply_policy
+from governance.content_supply_policy import load_content_supply_policy
+from content.execution.identity import parse_execution_id
 
 
 VIDEO_SCRIPT_FILE = "video_script.json"
@@ -83,10 +84,13 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
         )
         for message in admission_failures
     ]
-    minimum_frames = (
-        load_cold_start_supply_policy().video_delivery.minimum_segment_count
-    )
-    if len(pack.source_frames) < minimum_frames:
+    delivery = load_content_supply_policy(
+        parse_execution_id(execution_id).vertical
+    ).video_delivery
+    if (
+        pack.source_video is None
+        and len(pack.source_frames) < delivery.minimum_source_frames
+    ):
         frame_issues.append(
             _issue(
                 DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
@@ -96,7 +100,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
                 message="video source frame count is below delivery policy",
                 attributes={
                     "actual": len(pack.source_frames),
-                    "required": minimum_frames,
+                    "required": delivery.minimum_source_frames,
                 },
             )
         )
@@ -110,9 +114,13 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
             task_vars={
                 "content_ref": ref,
                 "entity_name": pack.primary_entity,
-                "segment_count": minimum_frames,
+                "segment_count": delivery.minimum_segment_count,
                 "source_frames_json": json.dumps(
-                    pack_payload["sourceFrames"],
+                    (
+                        pack_payload["sourceVideo"]
+                        if pack.source_video is not None
+                        else pack_payload["sourceFrames"]
+                    ),
                     ensure_ascii=False,
                     indent=2,
                 ),
@@ -142,6 +150,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
     quality_payload = {
         "recommendation": "compose",
         "carrier": "video",
+        "sourceMode": pack_payload["sourceMode"],
         "sourceFrameCount": len(pack.source_frames),
         "sourcePaths": list(pack.source_paths),
         "sourceUrls": list(pack.source_urls),
@@ -162,6 +171,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
         issues=tuple(frame_issues),
         evidence_summary={
             "carrier": "video",
+            "sourceMode": pack_payload["sourceMode"],
             "sourceFrameCount": len(pack.source_frames),
         },
         next_step="compose_brief" if not frame_issues else None,
@@ -182,6 +192,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
         issues=tuple(frame_issues),
         evidence_summary={
             "carrier": "video",
+            "sourceMode": pack_payload["sourceMode"],
             "sourceFrameCount": len(pack.source_frames),
         },
         next_step="agent_compose" if not frame_issues else None,
@@ -220,9 +231,9 @@ def video_author_issues(
             ),
         )
     issues: list[DataIssue] = []
-    required_lines = (
-        load_cold_start_supply_policy().video_delivery.minimum_segment_count
-    )
+    required_lines = load_content_supply_policy(
+        parse_execution_id(execution_id).vertical
+    ).video_delivery.minimum_segment_count
     if len(draft.script_lines) != required_lines:
         issues.append(
             _issue(
@@ -322,7 +333,19 @@ def finalize_video_author_meta(
         created_at=meta.created_at or now,
         updated_at=now,
     )
-    write_json(draft_meta_path(execution_id, ref), finalized.to_dict())
+    from content.execution.runtime_contract import stage_execution_context
+
+    write_json(
+        draft_meta_path(execution_id, ref),
+        {
+            "schema": "quwoquan_data.draft_meta",
+            "stage": "4.draft",
+            **stage_execution_context(execution_id),
+            "objectRef": ref,
+            "provider": "cursor_sdk",
+            **finalized.to_dict(),
+        },
+    )
     return True
 
 
@@ -343,6 +366,16 @@ def _compose_payload(
         "sourceUrls": list(pack.source_urls),
         "sourcePaths": list(pack.source_paths),
         "sourceFrames": [frame.to_dict() for frame in pack.source_frames],
+        "sourceMode": (
+            "sourced_video"
+            if pack.source_video is not None
+            else "rights_cleared_image_sequence"
+        ),
+        **(
+            {"sourceVideo": pack.source_video.to_dict()}
+            if pack.source_video is not None
+            else {}
+        ),
         "storySpine": pack.to_dict()["storySpine"],
         "publishLayout": "video",
         "publishAngle": "体验",

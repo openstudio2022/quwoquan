@@ -1,0 +1,6 @@
+system:
+  required: []
+  optional: []
+task:
+  required: [execution_id, object_ref, object_dir, output_path, media_policy]
+  optional: []

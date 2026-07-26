@@ -20,13 +20,9 @@ class MoreActionReadingOption {
 class MediaPostMoreActionConfig {
   final bool showShareAction;
   final bool showViewOriginalAction;
-  final VoidCallback? onReward;
-  final VoidCallback? onMessage;
   final VoidCallback? onCopyLink;
   final VoidCallback? onViewOriginal;
-  final VoidCallback? onFontSettings;
   final VoidCallback? onThemeToggle;
-  final VoidCallback? onFeedback;
   final VoidCallback? onNotInterested;
   final VoidCallback? onBlockUser;
   final VoidCallback? onBlockWords;
@@ -34,6 +30,7 @@ class MediaPostMoreActionConfig {
   final VoidCallback? onShare;
   final bool showDeleteAction;
   final VoidCallback? onDelete;
+  final ValueChanged<String>? onActionInvoked;
 
   /// 作品形态筛选（全部作品/图片/视频/文章）；空列表则不渲染“内容过滤”入口。
   final List<MoreActionFilterOption> filterOptions;
@@ -52,13 +49,9 @@ class MediaPostMoreActionConfig {
   const MediaPostMoreActionConfig({
     this.showShareAction = false,
     this.showViewOriginalAction = false,
-    this.onReward,
-    this.onMessage,
     this.onCopyLink,
     this.onViewOriginal,
-    this.onFontSettings,
     this.onThemeToggle,
-    this.onFeedback,
     this.onNotInterested,
     this.onBlockUser,
     this.onBlockWords,
@@ -66,6 +59,7 @@ class MediaPostMoreActionConfig {
     this.onShare,
     this.showDeleteAction = false,
     this.onDelete,
+    this.onActionInvoked,
     this.filterOptions = const <MoreActionFilterOption>[],
     this.selectedFilterIds = const <String>[],
     this.onFilterSelectionChanged,

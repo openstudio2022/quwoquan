@@ -14,12 +14,78 @@ func main() {
 	var contractGraphPath string
 	var contractGraphLockPath string
 	var generatedManifestPath string
+	var assistantRuntimeEnumsGoOutput string
+	var checkAssistantRuntimeEnumsGo bool
+	var citationDestinationsGoOutput string
+	var checkCitationDestinationsGo bool
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&appDir, "app-dir", "../quwoquan_app", "app root directory")
 	flag.StringVar(&contractGraphPath, "contract-graph", "generated/contract_graph.json", "fixed ContractGraph JSON bundle")
 	flag.StringVar(&contractGraphLockPath, "contract-graph-lock", "../quwoquan_app/tool/cloud_codegen/contract_graph.lock.json", "accepted App ContractGraph lock")
 	flag.StringVar(&generatedManifestPath, "generated-manifest", "../quwoquan_app/tool/cloud_codegen/generated_manifest.json", "App generated output manifest")
+	flag.StringVar(
+		&assistantRuntimeEnumsGoOutput,
+		"assistant-runtime-enums-go-output",
+		"",
+		"write Assistant runtime Go enums to this service-owned generated file",
+	)
+	flag.BoolVar(
+		&checkAssistantRuntimeEnumsGo,
+		"check-assistant-runtime-enums-go",
+		false,
+		"verify the Assistant runtime Go enum output is current",
+	)
+	flag.StringVar(
+		&citationDestinationsGoOutput,
+		"citation-destinations-go-output",
+		"",
+		"write metadata-registered citation destinations to this Go file",
+	)
+	flag.BoolVar(
+		&checkCitationDestinationsGo,
+		"check-citation-destinations-go",
+		false,
+		"verify the citation destination Go output is current",
+	)
 	flag.Parse()
+	if checkAssistantRuntimeEnumsGo && assistantRuntimeEnumsGoOutput == "" {
+		exitErr(fmt.Errorf(
+			"--check-assistant-runtime-enums-go requires --assistant-runtime-enums-go-output",
+		))
+	}
+	if checkCitationDestinationsGo && citationDestinationsGoOutput == "" {
+		exitErr(fmt.Errorf(
+			"--check-citation-destinations-go requires --citation-destinations-go-output",
+		))
+	}
+	serviceOutputRequested :=
+		assistantRuntimeEnumsGoOutput != "" || citationDestinationsGoOutput != ""
+	if serviceOutputRequested {
+		if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
+			exitErr(err)
+		}
+	}
+	if assistantRuntimeEnumsGoOutput != "" {
+		if err := generateAssistantRuntimeEnumsGo(
+			metadataDir,
+			assistantRuntimeEnumsGoOutput,
+			checkAssistantRuntimeEnumsGo,
+		); err != nil {
+			exitErr(err)
+		}
+	}
+	if citationDestinationsGoOutput != "" {
+		if err := generateCitationDestinationsGo(
+			metadataDir,
+			citationDestinationsGoOutput,
+			checkCitationDestinationsGo,
+		); err != nil {
+			exitErr(err)
+		}
+	}
+	if serviceOutputRequested {
+		return
+	}
 	if err := initializeContractGraphBundle(
 		metadataDir,
 		contractGraphPath,
@@ -28,6 +94,7 @@ func main() {
 		exitErr(err)
 	}
 	beginGeneratedManifest(appDir, activeContractSHA256)
+	removeRetiredGeneratedOutputs(appDir)
 	shared, err := readShared(filepath.Join(metadataDir, "_shared", "types.yaml"))
 	if err != nil {
 		exitErr(err)
@@ -56,7 +123,13 @@ func main() {
 		exitErr(fmt.Errorf("read app_pages.yaml: %w", err))
 	}
 	telemetryCatalog, err := readTelemetryEventCatalog(
-		filepath.Join(metadataDir, "ops", "event_record", "event_catalog.yaml"),
+		filepath.Join(
+			metadataDir,
+			"ops",
+			"product_ops",
+			"event_record",
+			"event_catalog.yaml",
+		),
 	)
 	if err != nil {
 		exitErr(fmt.Errorf("read telemetry event_catalog.yaml: %w", err))
@@ -72,17 +145,17 @@ func main() {
 	if err != nil && !os.IsNotExist(err) {
 		exitErr(err)
 	}
-	// Domain-centric path: contracts/metadata/content/post/
-	postDir := filepath.Join(metadataDir, "content", "post")
+	// Domain-centric path: services/content-service/contracts/content/post/
+	postDir := filepath.Join(metadataDir, "content", "content", "post")
 	fields, err := readFields(filepath.Join(postDir, "fields.yaml"))
 	if err != nil {
 		exitErr(err)
 	}
-	service, err := readService(filepath.Join(postDir, "service.yaml"))
+	service, err := readService(filepath.Join(postDir, "operations.yaml"))
 	if err != nil {
 		exitErr(err)
 	}
-	// discovery_feed projection: contracts/metadata/content/post/projections/
+	// discovery_feed projection: services/content-service/contracts/content/post/projections/
 	feedProjPath := filepath.Join(postDir, "projections", "discovery_feed.yaml")
 	projection, err := readProjection(feedProjPath)
 	if err != nil {
@@ -139,7 +212,6 @@ func main() {
 	}
 
 	contentGenDir := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content")
-	writeFile(filepath.Join(contentGenDir, "post_search_item_view_dto.g.dart"), renderPostSearchItemViewDtoDart())
 	writeFile(filepath.Join(contentGenDir, "report_create_request_wire.g.dart"), renderCreateReportRequestWireDart())
 
 	if err := writePostReadPresentationArtifacts(appDir, filepath.Join(postDir, "projections")); err != nil {
@@ -147,14 +219,16 @@ func main() {
 	}
 	writeContentAppConfigClientDart(filepath.Join(contentGenDir, "content_app_config_client_dto.g.dart"))
 
-	// 3a. 生成 content_errors.g.dart（ContentErrorCode enum + messages）
-	if errsDef, err := readErrors(filepath.Join(postDir, "errors.yaml")); err == nil {
+	// 3a. 生成 content_errors.g.dart（ContentErrorCode enum + messages）。
+	// content 域错误码按对象目录拆分登记，此处按固定顺序合并为域级客户端枚举；
+	// code 必须全域唯一（由 verify_error_code_endcloud_parity 与 codegen 共同锁定）。
+	if errsDef, err := readMergedErrors(contentDomainErrorsPaths(metadataDir)); err == nil {
 		out := renderContentErrorsDart(errsDef)
 		writeFile(filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_errors.g.dart"), out)
 	}
 
 	// 3a2. 生成 chat_errors.g.dart（ChatErrorCode enum + messages）
-	chatConversationDir := filepath.Join(metadataDir, "messages", "conversation")
+	chatConversationDir := filepath.Join(metadataDir, "chat", "chat", "conversation")
 	if chatErrsDef, err := readErrors(filepath.Join(chatConversationDir, "errors.yaml")); err == nil {
 		out := renderChatErrorsDart(chatErrsDef)
 		writeFile(filepath.Join(appDir, "lib", "cloud", "chat", "generated", "chat_errors.g.dart"), out)
@@ -163,34 +237,64 @@ func main() {
 	// 3a3. 生成 assistant/circle/entity 客户端 *ErrorCode 枚举（端云错误码全集一致）。
 	// 这三个域此前缺少客户端 typed enum，导致端侧只能硬编码字符串比对错误码；
 	// 统一通过 renderSimpleErrorsDart 生成，唯一真相源各自 errors.yaml。
-	if assistantErrs, err := readErrors(filepath.Join(metadataDir, "assistant", "assistant_run", "errors.yaml")); err == nil {
+	if assistantErrs, err := readErrors(filepath.Join(metadataDir, "assistant", "assistant", "assistant_run", "errors.yaml")); err == nil {
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "assistant", "generated", "assistant_errors.g.dart"),
-			renderSimpleErrorsDart("AssistantErrorCode", "assistant/assistant_run/errors.yaml", "找私助暂时不可用，请稍后重试", assistantErrs),
+			renderSimpleErrorsDart("AssistantErrorCode", "assistant/assistant/assistant_run/errors.yaml", "找私助暂时不可用，请稍后重试", assistantErrs),
 		)
 	}
-	if circleErrs, err := readErrors(filepath.Join(metadataDir, "social", "circle", "errors.yaml")); err == nil {
+	if circleErrs, err := readErrors(filepath.Join(metadataDir, "circle", "circle_management", "circle", "errors.yaml")); err == nil {
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "circle", "generated", "circle_errors.g.dart"),
-			renderSimpleErrorsDart("CircleErrorCode", "social/circle/errors.yaml", "圈子服务异常，请稍后重试", circleErrs),
+			renderSimpleErrorsDart("CircleErrorCode", "circle/circle_management/circle/errors.yaml", "圈子服务异常，请稍后重试", circleErrs),
 		)
 	}
-	if entityErrs, err := readErrors(filepath.Join(metadataDir, "entity", "homepage", "errors.yaml")); err == nil {
+	if entityErrs, err := readMergedErrors([]string{
+		filepath.Join(metadataDir, "entity", "entity_homepage", "homepage", "errors.yaml"),
+		filepath.Join(metadataDir, "entity", "entity_homepage", "homepage_claim_request", "errors.yaml"),
+		filepath.Join(metadataDir, "entity", "entity_homepage", "homepage_review", "errors.yaml"),
+		filepath.Join(metadataDir, "entity", "entity_homepage", "homepage_status_report", "errors.yaml"),
+	}); err == nil {
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "entity", "generated", "entity_errors.g.dart"),
-			renderSimpleErrorsDart("EntityErrorCode", "entity/homepage/errors.yaml", "主页服务异常，请稍后重试", entityErrs),
+			renderSimpleErrorsDart("EntityErrorCode", "entity/*/errors.yaml", "主页服务异常，请稍后重试", entityErrs),
+		)
+	}
+	if notificationErrs, err := readErrors(filepath.Join(metadataDir, "notification", "notification_delivery", "notification", "errors.yaml")); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "notification", "notification_errors.g.dart"),
+			renderSimpleErrorsDart("NotificationErrorCode", "notification/notification_delivery/notification/errors.yaml", "通知服务异常，请稍后重试", notificationErrs),
 		)
 	}
 	opsEventErrs, err := readErrors(
-		filepath.Join(metadataDir, "ops", "event_record", "errors.yaml"),
+		filepath.Join(metadataDir, "ops", "product_ops", "event_record", "errors.yaml"),
 	)
 	if err != nil {
 		exitErr(fmt.Errorf("read ops event-record errors: %w", err))
 	}
 	writeFile(
 		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "ops", "ops_event_record_errors.g.dart"),
-		renderSimpleErrorsDart("OpsEventRecordErrorCode", "ops/event_record/errors.yaml", "启动诊断暂时不可用，请稍后重试", opsEventErrs),
+		renderSimpleErrorsDart("OpsEventRecordErrorCode", "ops/product_ops/event_record/errors.yaml", "启动诊断暂时不可用，请稍后重试", opsEventErrs),
 	)
+	if searchErrs, err := readMergedErrors([]string{
+		filepath.Join(metadataDir, "search", "search", "search_query", "errors.yaml"),
+		filepath.Join(metadataDir, "search", "search", "recent_search_state", "errors.yaml"),
+	}); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "search", "search_errors.g.dart"),
+			renderSimpleErrorsDart("SearchErrorCode", "search/**/errors.yaml", "搜索服务异常，请稍后重试", searchErrs),
+		)
+	}
+	if tagErrs, err := readMergedErrors([]string{
+		filepath.Join(metadataDir, "tag", "tag", "tag_node_view", "errors.yaml"),
+		filepath.Join(metadataDir, "tag", "tag", "tag_feedback", "errors.yaml"),
+		filepath.Join(metadataDir, "tag", "tag", "tag_taxonomy_release", "errors.yaml"),
+	}); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "tag", "tag_errors.g.dart"),
+			renderSimpleErrorsDart("TagErrorCode", "tag/**/errors.yaml", "标签服务异常，请稍后重试", tagErrs),
+		)
+	}
 
 	// 3b. 生成 content_behaviors.g.dart（ContentBehaviorTracker）
 	if behDef, err := readBehaviors(filepath.Join(postDir, "behaviors.yaml")); err == nil {
@@ -205,7 +309,10 @@ func main() {
 	}
 
 	// 3d. 生成 content_ui_config.g.dart（ContentUIConfig + DiscoveryTabConfig）
-	uiDef, uiErr := readUIConfig(filepath.Join(postDir, "ui_config.yaml"))
+	uiDef, uiErr := readUIConfig(
+		filepath.Join(postDir, "ui_config.yaml"),
+		true,
+	)
 	if uiErr != nil {
 		exitErr(fmt.Errorf("read ui_config.yaml: %w", uiErr))
 	}
@@ -214,21 +321,81 @@ func main() {
 		writeFile(filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_ui_config.g.dart"), out)
 	}
 
-	prefabUserDef, err := readPrefabUserProvenance(
-		filepath.Join(metadataDir, "_shared", "prefab_user_provenance.yaml"),
+	publicationPolicy, policyErr := readContentPublicationPolicy(
+		filepath.Join(postDir, "publication_policy.yaml"),
 	)
-	if err != nil {
-		exitErr(fmt.Errorf("read _shared/prefab_user_provenance.yaml: %w", err))
+	if policyErr != nil {
+		exitErr(fmt.Errorf("read content publication policy: %w", policyErr))
 	}
 	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "user", "generated", "prefab_user_metadata.g.dart"),
-		renderPrefabUserMetadataDart(prefabUserDef),
+		filepath.Join(
+			appDir,
+			"lib",
+			"cloud",
+			"content",
+			"generated",
+			"content_publication_policy.g.dart",
+		),
+		renderContentPublicationPolicyDart(publicationPolicy),
 	)
 
-	userProfileDir := filepath.Join(metadataDir, "user", "user_profile")
-	userUIDef, userUIErr := readUIConfig(filepath.Join(userProfileDir, "ui_config.yaml"))
+	mediaUploadPolicy, mediaUploadPolicyErr := readContentMediaUploadPolicy(
+		filepath.Join(
+			metadataDir,
+			"content",
+			"media",
+			"media_upload_session",
+			"upload_policy.yaml",
+		),
+	)
+	if mediaUploadPolicyErr != nil {
+		exitErr(fmt.Errorf("read content media upload policy: %w", mediaUploadPolicyErr))
+	}
+	writeFile(
+		filepath.Join(
+			appDir,
+			"lib",
+			"application",
+			"content",
+			"media",
+			"generated",
+			"content_media_upload_policy.g.dart",
+		),
+		renderContentMediaUploadPolicyDart(mediaUploadPolicy),
+	)
+
+	imageVariantPolicy, imageVariantPolicyErr := readContentImageVariantPolicy(
+		filepath.Join(
+			metadataDir,
+			"content",
+			"media",
+			"media_asset",
+			"image_variant_policy.yaml",
+		),
+	)
+	if imageVariantPolicyErr != nil {
+		exitErr(fmt.Errorf("read content image variant policy: %w", imageVariantPolicyErr))
+	}
+	writeFile(
+		filepath.Join(
+			appDir,
+			"lib",
+			"application",
+			"content",
+			"media",
+			"generated",
+			"content_image_variant_policy.g.dart",
+		),
+		renderContentImageVariantPolicyDart(imageVariantPolicy),
+	)
+
+	userProfileDir := filepath.Join(metadataDir, "user", "account", "user_account")
+	userUIDef, userUIErr := readUIConfig(
+		filepath.Join(userProfileDir, "ui_config.yaml"),
+		false,
+	)
 	if userUIErr != nil && !os.IsNotExist(userUIErr) {
-		exitErr(fmt.Errorf("read user/user_profile/ui_config.yaml: %w", userUIErr))
+		exitErr(fmt.Errorf("read user/account/user_account/ui_config.yaml: %w", userUIErr))
 	}
 	if userUIDef != nil {
 		out := renderUserProfileUIConfigDart(userUIDef)
@@ -242,22 +409,22 @@ func main() {
 		)
 	}
 
-	// 2b. 生成 integration/location 元数据（路径、response key）
-	locDir := filepath.Join(metadataDir, "integration", "location")
-	if locSvc, err := readIntegrationLocationService(filepath.Join(locDir, "service.yaml")); err == nil {
+	// 2b. 生成 integration/external_integration/location 元数据（路径、response key）
+	locDir := filepath.Join(metadataDir, "integration", "external_integration", "location")
+	if locSvc, err := readIntegrationLocationService(filepath.Join(locDir, "operations.yaml")); err == nil {
 		locOut := renderIntegrationLocationMetadataDart(locSvc)
 		writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "integration", "integration_location_metadata.g.dart"), locOut)
 
 	}
 
-	// 2b2. 生成 integration/location 客户端 errors；Service 产物由领域 codegen 所有。
+	// 2b2. 生成 integration/external_integration/location 客户端 errors；Service 产物由领域 codegen 所有。
 	if locErrs, err := readErrors(filepath.Join(locDir, "errors.yaml")); err == nil {
 		locErrOut := renderIntegrationLocationErrorsDart(locErrs)
 		writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "integration", "integration_location_errors.g.dart"), locErrOut)
 	}
 
-	// 2c. 生成 integration/location projections（无 base_class 的 standalone DTO，如 LocationPoiDto）
-	for _, projectionPath := range metadataDocumentPaths("integration/location/projections", ".yaml") {
+	// 2c. 生成 integration/external_integration/location projections（无 base_class 的 standalone DTO，如 LocationPoiDto）
+	for _, projectionPath := range metadataDocumentPaths("integration/external_integration/location/projections", ".yaml") {
 		p, err := readProjection(projectionPath)
 		if err != nil || len(p.ClientProjection.Fields) == 0 {
 			continue
@@ -266,7 +433,7 @@ func main() {
 			continue
 		}
 		sourcePath := fmt.Sprintf(
-			"integration/location/projections/%s",
+			"integration/external_integration/location/projections/%s",
 			filepath.Base(projectionPath),
 		)
 		out := renderStandaloneDtoDart(p.ClientProjection, sourcePath)
@@ -279,8 +446,8 @@ func main() {
 	}
 
 	// 3. 生成带 base_class 的 typed post DTOs（photo/video/article/moment）
-	// 规范路径：contracts/metadata/content/post/projections/
-	for _, projectionPath := range metadataDocumentPaths("content/post/projections", ".yaml") {
+	// 规范路径：services/content-service/contracts/content/post/projections/
+	for _, projectionPath := range metadataDocumentPaths("content/content/post/projections", ".yaml") {
 		if filepath.Base(projectionPath) == "discovery_feed.yaml" {
 			continue // already handled above
 		}
@@ -312,9 +479,9 @@ func main() {
 
 	// 3b. 生成其他 domain projections（无 base_class 的 standalone DTO，如 chat inbox）。
 	// 用户域 Auth/Invite/Greeting 等 wire 读模型见：
-	//   user/user_profile/projections/*.yaml
+	//   user/account/user_account/projections/*.yaml
 	//   user/invite_record/projections/*.yaml
-	//   user/greeting_request/projections/*.yaml
+	//   user/relationship/greeting_request/projections/*.yaml
 	for _, path := range metadataDocumentPaths("", ".yaml") {
 		if filepath.Base(filepath.Dir(path)) != "projections" {
 			continue
@@ -387,7 +554,7 @@ func main() {
 		exitErr(err)
 	}
 	// RTC 客户端 errors；Service 产物由领域 codegen 所有。
-	if rtcErrs, err := readErrors(filepath.Join(metadataDir, "rtc", "call_session", "errors.yaml")); err == nil {
+	if rtcErrs, err := readErrors(filepath.Join(metadataDir, "rtc", "rtc", "call_session", "errors.yaml")); err == nil {
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "rtc", "generated", "rtc_errors.g.dart"),
 			renderRtcErrorsDart(rtcErrs),
@@ -412,7 +579,7 @@ func main() {
 		}
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "link_templates.g.dart"),
-			renderLinkTemplatesDart(linkTemplates),
+			renderLinkTemplatesDart(linkTemplates, appRoutes),
 		)
 	}
 	if uiSurfaces != nil {
@@ -462,6 +629,45 @@ func main() {
 	writeGeneratedOperationContracts(appDir, activeContractLock)
 	if err := writeGeneratedManifest(generatedManifestPath); err != nil {
 		exitErr(err)
+	}
+}
+
+func removeRetiredGeneratedOutputs(appDir string) {
+	retired := []string{
+		filepath.Join("lib", "cloud", "user", "generated", "prefab_user_metadata.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "content", "post_publication_receipt_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_claim_request_record.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_content_preview.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_geo_point.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_introduction.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_introduction_asset.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_introduction_section.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_introduction_timeline_item.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_question_preview.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_related_group_summary.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_review_summary_data.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_source.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_status_report_record.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "integration", "location_poi_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "contact_discovery_match_wire_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "following_subject_item_view_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "following_subject_visit_result_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_create_request_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_lifecycle_guard_wire_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_management_item_wire_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_management_quota_wire_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_management_summary_wire_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_update_request_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "user_profile_stats_wire_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "content", "post_search_item_view_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "profile_interaction_activity_wire_dto.g.dart"),
+		filepath.Join("lib", "assistant", "generated", "enums", "assistant_runtime_enums.g.dart"),
+	}
+	for _, relativePath := range retired {
+		path := filepath.Join(appDir, relativePath)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			exitErr(fmt.Errorf("remove retired generated output %s: %w", path, err))
+		}
 	}
 }
 

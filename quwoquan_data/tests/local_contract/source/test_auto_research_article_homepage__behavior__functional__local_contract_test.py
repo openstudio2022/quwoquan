@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import pytest
+from urllib.parse import quote
 
 
 from support.source_plan_guidance_fixtures import *  # noqa: F401,F403
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 from core.data_issue import DataIssueCode, DataRecoveryAction  # noqa: E402
+from content.source.research.baike_com import BaikePageResolution  # noqa: E402
 
 
 def _build_execution(execution_id: str, entity_name: str) -> None:
@@ -19,20 +21,35 @@ def _build_execution(execution_id: str, entity_name: str) -> None:
 def _isolate_canonical_baike_network(monkeypatch: pytest.MonkeyPatch):
     """Local contracts use explicit source fixtures; live resolution is integration evidence."""
     import content.source.research.auto_plan_writer as research_mod
+    import content.source.research.homepage_authority as authority_mod
 
     monkeypatch.setattr(
-        research_mod,
+        authority_mod,
         "resolve_toutiao_baike_page",
         lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        authority_mod,
+        "resolve_baidu_baike_page",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        authority_mod,
+        "_wiki_title_for_entity",
+        lambda host, entity_id, *, entity_aliases=(): research_mod._wiki_title_for_entity(
+            host,
+            entity_id,
+            entity_aliases=entity_aliases,
+        ),
     )
 
 
 def test_homepage_auto_research_discovers_runtime_wikipedia_source():
     import content.source.research.auto_plan_writer as research_mod
 
-    task = "20260712--travel-homepage-source-url--cn-zhejiang--m1-001"
-    entity = "普陀山"
-    validated_url = "https://zh.wikipedia.org/wiki/%E6%99%AE%E9%99%80%E5%B1%B1"
+    task = "20260712--travel-homepage-source-url--test-region-a--scale-001"
+    entity = "测试实体甲"
+    validated_url = f"https://zh.wikipedia.org/wiki/{quote(entity)}"
     image = {
         "url": "https://upload.wikimedia.org/wikipedia/commons/1/11/Putuo_sample.jpg",
         "license": "CC BY-SA 4.0",
@@ -49,11 +66,10 @@ def test_homepage_auto_research_discovers_runtime_wikipedia_source():
         "licenseSnapshot": "CC BY-SA 4.0 snapshot",
         "usageScope": "app_publish",
     }
-    spec = ExecutionFixtureBuilder(
+    ExecutionFixtureBuilder(
         task,
         targets=({"entityType": "地点/景区", "name": entity},),
-    ).spec_payload()
-    store.save_spec(spec)
+    ).build()
     originals = {
         name: getattr(research_mod, name)
         for name in (
@@ -61,7 +77,6 @@ def test_homepage_auto_research_discovers_runtime_wikipedia_source():
             "_wiki_related_titles_for_entity",
             "_known_official_website",
             "_official_website",
-            "_verified_homepage_sources_from_source_units",
             "_mediawiki_page_images",
             "_discover_open_license_image_pools",
             "_verified_image_collections_from_prior_plans",
@@ -79,7 +94,6 @@ def test_homepage_auto_research_discovers_runtime_wikipedia_source():
         research_mod._wiki_related_titles_for_entity = lambda *_args, **_kwargs: []
         research_mod._known_official_website = lambda *_args, **_kwargs: ""
         research_mod._official_website = lambda *_args, **_kwargs: ""
-        research_mod._verified_homepage_sources_from_source_units = lambda *_args, **_kwargs: []
         research_mod._mediawiki_page_images = lambda *_args, **_kwargs: [image]
         research_mod._verified_image_collections_from_prior_plans = lambda *_args, **_kwargs: []
         research_mod._wikidata_item_for_zhwiki = lambda _title: ""
@@ -114,9 +128,83 @@ def test_homepage_auto_research_discovers_runtime_wikipedia_source():
     payload = read_json(plan)["payload"]
     assert payload["primaryEvidenceRef"] == "home_wikipedia"
     source = next(source for source in payload["sources"] if source["source_id"] == "home_wikipedia")
+    assert [source["source_id"] for source in payload["sources"]] == ["home_wikipedia"]
     assert source["url"] == validated_url
     assert source["discoveryProvider"] == "mediawiki_exact_title"
     assert source["sourceRole"] == "primary"
+
+
+def test_homepage_auto_research_uses_frozen_toutiao_authority_without_reselection():
+    import content.source.research.auto_plan_writer as research_mod
+
+    task = "20260724--travel-homepage-source-recovery--test-region-a--scale-001"
+    entity = "测试百科实体"
+    ExecutionFixtureBuilder(
+        task,
+        targets=(
+            {
+                "entityType": "地点/景区",
+                "name": entity,
+                "geoTagRef": "Topic/地理/行政区/中国/测试省/测试市",
+                "qualifiedHomepageSource": {
+                    "provider": "toutiao_baike",
+                    "title": entity,
+                    "url": "https://www.baike.com/wikiid/test-entity",
+                },
+            },
+        ),
+    ).build()
+    originals = {
+        name: getattr(research_mod, name)
+        for name in (
+            "_wiki_title_for_entity",
+            "_wiki_related_titles_for_entity",
+            "_known_official_website",
+            "_official_website",
+            "_mediawiki_page_images",
+            "_discover_open_license_image_pools",
+            "_verified_image_collections_from_prior_plans",
+            "_wikidata_item_for_zhwiki",
+            "_wikidata_item_for_entity_search",
+            "_wikidata_entity_aliases",
+        )
+    }
+    try:
+        research_mod._wiki_title_for_entity = lambda *_args, **_kwargs: ""
+        research_mod._wiki_related_titles_for_entity = lambda *_args, **_kwargs: []
+        research_mod._known_official_website = lambda *_args, **_kwargs: ""
+        research_mod._official_website = lambda *_args, **_kwargs: ""
+        research_mod._mediawiki_page_images = lambda *_args, **_kwargs: []
+        research_mod._discover_open_license_image_pools = lambda *_args, **_kwargs: {
+            "commons": [],
+            "hint_commons": [],
+            "wikidata_commons": [],
+            "openverse": [],
+            "wiki_page_images": [],
+            "voyage_page_images": [],
+        }
+        research_mod._verified_image_collections_from_prior_plans = lambda *_args, **_kwargs: []
+        research_mod._wikidata_item_for_zhwiki = lambda *_args, **_kwargs: ""
+        research_mod._wikidata_item_for_entity_search = lambda *_args, **_kwargs: ""
+        research_mod._wikidata_entity_aliases = lambda *_args, **_kwargs: []
+        report = write_auto_research_plans(
+            task,
+            [entity],
+            entity_type="地点/景区",
+            force=True,
+            lanes={"homepage"},
+            max_workers=2,
+        )
+    finally:
+        for name, value in originals.items():
+            setattr(research_mod, name, value)
+    plan = (
+        resolve_entity_object_dir(task, entity, etype_hint="地点/景区")
+        / "1.download"
+        / "homepage_source_plan.json"
+    )
+    sources = read_json(plan)["payload"]["sources"]
+    assert [source["source_id"] for source in sources] == ["home_toutiao_baike"]
 
 
 
@@ -125,7 +213,7 @@ def test_parallel_image_auto_research_writes_availability_report():
     import content.source.research.auto_plan_writer as research_mod
 
     spec = ExecutionFixtureBuilder(
-        "20260711--travel-image-live-discovery--cn-zhejiang--canary-001",
+        "20260711--travel-image-live-discovery--test-region-a--pilot-001",
         targets=(
             {"entityType": "地点/景区", "name": "可用景区"},
             {"entityType": "地点/景区", "name": "缺源景区"},
@@ -241,8 +329,9 @@ def test_parallel_image_auto_research_writes_availability_report():
         for name, value in article_originals.items():
             setattr(article_mod, name, value)
     availability = report["sourceAvailability"]
-    assert availability["readyTargets"] == ["可用景区"], availability
-    assert [item["entityId"] for item in availability["ineligibleTargets"]] == ["缺源景区"], availability
+    assert availability["readyTargets"] == ["可用景区", "缺源景区"], availability
+    assert availability["ineligibleTargets"] == [], availability
+    assert [row["entityId"] for row in availability["imageSoftWarnings"]] == ["缺源景区"]
     assert report["throughput"]["maxWorkers"] == 2
     assert progress_events[0]["status"] == "running"
     assert progress_events[-1]["status"] == "succeeded"
@@ -251,8 +340,7 @@ def test_parallel_image_auto_research_writes_availability_report():
     assert progress["status"] == "succeeded"
     assert progress["entityCount"] == 2
     assert progress["workers"] == 2
-    persisted = read_json(execution_root(task) / "_shared" / "source_unavailable_targets.json")
-    assert persisted["ineligibleTargets"][0]["entityId"] == "缺源景区"
+    assert not (execution_root(task) / "_shared" / "source_unavailable_targets.json").exists()
     missing_image_plan = (
         resolve_entity_object_dir(task, "缺源景区", etype_hint="景区")
         / "1.download"
@@ -262,7 +350,8 @@ def test_parallel_image_auto_research_writes_availability_report():
     assert missing_payload["sourceUnavailable"][0]["lane"] == "image"
     diagnostics = missing_payload["imageDiscoveryDiagnostics"]
     assert diagnostics["desiredImageWorks"] >= 1
-    assert diagnostics["requiredImageWorks"] == 0
+    # 图作品批次为 hard_quota：图即产出本体，缺源实体必须按需求量（≥1）判不就绪。
+    assert diagnostics["requiredImageWorks"] == 1
     assert diagnostics["poolCounts"]["acceptedCollections"] == 0
     assert diagnostics["sourceUnavailable"][0]["code"] == DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE.value
     assert diagnostics["sourceUnavailable"][0]["recovery"] == DataRecoveryAction.STOP.value
@@ -273,7 +362,14 @@ def test_parallel_auto_research_persists_incremental_report_on_interrupt(monkeyp
     import time
     import content.source.research.auto_plan_public as public_mod
 
-    task = "20260711--travel-homepage-interrupt--cn-zhejiang--canary-002"
+    task = "20260711--travel-homepage-interrupt--test-region-a--pilot-002"
+    ExecutionFixtureBuilder(
+        task,
+        targets=(
+            {"entityType": "地点/景区", "name": "快景区"},
+            {"entityType": "地点/景区", "name": "慢景区"},
+        ),
+    ).build()
     shared = execution_root(task) / "_shared"
     shared.mkdir(parents=True, exist_ok=True)
     write_json(
@@ -345,7 +441,7 @@ def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_cate
     import content.source.research.auto_plan_article as article_mod
     import content.source.research.auto_plan_writer as research_mod
 
-    task = "20260711--travel-article-museum-source--cn-zhejiang--canary-003"
+    task = "20260711--travel-article-museum-source--test-region-a--pilot-003"
     entity = "三星堆博物馆"
     _build_execution(task, entity)
     good_image = {
@@ -457,7 +553,7 @@ def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_cate
 def test_homepage_only_auto_research_runs_media_but_skips_article_discovery():
     import content.source.research.auto_plan_writer as research_mod
 
-    task = "20260711--travel-homepage-lightweight--cn-zhejiang--canary-004"
+    task = "20260711--travel-homepage-lightweight--test-region-a--pilot-004"
     entity = "故宫博物院"
     _build_execution(task, entity)
     wiki_image = {
@@ -550,111 +646,12 @@ def test_homepage_only_auto_research_runs_media_but_skips_article_discovery():
         for source in sources
     )
 
-def test_homepage_related_wiki_hydrates_same_source_images():
-    import content.source.research.auto_plan_writer as research_mod
-
-    task = "20260711--travel-homepage-wiki-images--cn-zhejiang--canary-005"
-    entity = "武侯祠"
-    _build_execution(task, entity)
-    support_title = "成都武侯祠"
-    support_url = "https://zh.wikipedia.org/wiki/%E6%88%90%E9%83%BD%E6%AD%A6%E4%BE%AF%E7%A5%A0"
-    support_image = {
-        "url": "https://upload.wikimedia.org/wikipedia/commons/bb/Chengdu_Wuhou_Shrine.jpg",
-        "license": "CC BY-SA 4.0",
-        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-        "authorizationProof": "https://commons.wikimedia.org/wiki/File:Chengdu_Wuhou_Shrine.jpg",
-        "width": 1600,
-        "height": 1000,
-        "caption": support_title,
-        "relevance": support_title,
-        "creator": "Wiki contributor",
-        "collectionPageUrl": support_url,
-        "platform": "维基百科",
-        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Chengdu_Wuhou_Shrine.jpg",
-        "licenseSnapshot": "CC BY-SA 4.0 snapshot",
-        "usageScope": "app_publish",
-    }
-    originals = {
-        "_wiki_title_for_entity": research_mod._wiki_title_for_entity,
-        "_wiki_related_titles_for_entity": research_mod._wiki_related_titles_for_entity,
-        "_wikidata_item_for_zhwiki": research_mod._wikidata_item_for_zhwiki,
-        "_wikidata_item_for_entity_search": research_mod._wikidata_item_for_entity_search,
-        "_wikidata_entity_aliases": research_mod._wikidata_entity_aliases,
-        "_official_website": research_mod._official_website,
-        "_known_official_website": research_mod._known_official_website,
-        "_verified_image_collections_from_prior_plans": research_mod._verified_image_collections_from_prior_plans,
-        "_discover_open_license_image_pools": research_mod._discover_open_license_image_pools,
-        "_trusted_external_links": research_mod._trusted_external_links,
-        "_qunar_travelogue_sources": research_mod._qunar_travelogue_sources,
-        "_mediawiki_page_images": research_mod._mediawiki_page_images,
-    }
-
-    def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("homepage-only repair must not run article discovery")
-
-    def empty_image_pools(*_args, **_kwargs):
-        return {
-            "commons": [],
-            "hint_commons": [],
-            "wikidata_commons": [],
-            "openverse": [],
-            "wiki_page_images": [],
-            "voyage_page_images": [],
-        }
-
-    try:
-        research_mod._wiki_title_for_entity = lambda host, entity_id, entity_aliases=(): ""
-        research_mod._wiki_related_titles_for_entity = (
-            lambda host, entity_id, entity_aliases=():
-            [support_title] if entity_id == entity else []
-        )
-        research_mod._wikidata_item_for_zhwiki = lambda title: ""
-        research_mod._wikidata_item_for_entity_search = lambda entity_id: ""
-        research_mod._wikidata_entity_aliases = lambda qid: []
-        research_mod._official_website = lambda qid: ""
-        research_mod._known_official_website = lambda entity_id: ""
-        research_mod._verified_image_collections_from_prior_plans = lambda *_args, **_kwargs: []
-        research_mod._discover_open_license_image_pools = empty_image_pools
-        research_mod._trusted_external_links = fail_if_called
-        research_mod._qunar_travelogue_sources = fail_if_called
-        research_mod._mediawiki_page_images = (
-            lambda host, title, entity_id, limit=8: [support_image]
-            if host == "zh.wikipedia.org" and title == support_title and entity_id == entity
-            else []
-        )
-        report = write_auto_research_plans(
-            task,
-            [entity],
-            entity_type="景区",
-            force=True,
-            lanes={"homepage"},
-        )
-    finally:
-        for name, value in originals.items():
-            setattr(research_mod, name, value)
-
-    assert report["issues"] == []
-    plan = (
-        resolve_entity_object_dir(task, entity, etype_hint="景区")
-        / "1.download"
-        / "homepage_source_plan.json"
-    )
-    sources = read_json(plan)["payload"]["sources"]
-    support_source = next(
-        source
-        for source in sources
-        if source.get("source_id") == "home_related_encyclopedia_support_1"
-    )
-    assert support_source["discoveryProvider"] == "mediawiki_related_title"
-    assert support_source["imageEvidenceMode"] == "same_source"
-    assert [item["url"] for item in support_source["imageUrls"]] == [support_image["url"]]
-
-
 def test_homepage_registry_sources_without_same_source_images_use_independent_media():
     import content.source.research.auto_plan_homepage as homepage_mod
     import content.source.research.auto_plan_writer as research_mod
+    import content.source.research.homepage_authority as authority_mod
 
-    task = "20260711--travel-homepage-wiki-no-image--cn-zhejiang--canary-006"
+    task = "20260711--travel-homepage-wiki-no-image--test-region-a--pilot-006"
     entity = "瓦屋山"
     _build_execution(task, entity)
     homepage_url = "https://zh.wikipedia.org/wiki/%E7%93%A6%E5%B1%8B%E5%B1%B1"
@@ -671,8 +668,10 @@ def test_homepage_registry_sources_without_same_source_images_use_independent_me
         "_trusted_external_links": research_mod._trusted_external_links,
         "_qunar_travelogue_sources": research_mod._qunar_travelogue_sources,
         "_mediawiki_page_images": research_mod._mediawiki_page_images,
-        "resolve_baidu_baike_page": research_mod.resolve_baidu_baike_page,
-        "resolve_toutiao_baike_page": research_mod.resolve_toutiao_baike_page,
+    }
+    authority_originals = {
+        "resolve_baidu_baike_page": authority_mod.resolve_baidu_baike_page,
+        "resolve_toutiao_baike_page": authority_mod.resolve_toutiao_baike_page,
     }
     original_hydrate = homepage_mod._hydrate_mediawiki_same_source_images
 
@@ -721,8 +720,8 @@ def test_homepage_registry_sources_without_same_source_images_use_independent_me
         research_mod._trusted_external_links = lambda *_args, **_kwargs: []
         research_mod._qunar_travelogue_sources = lambda *_args, **_kwargs: []
         research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=8: []
-        research_mod.resolve_baidu_baike_page = lambda *_args, **_kwargs: None
-        research_mod.resolve_toutiao_baike_page = lambda *_args, **_kwargs: None
+        authority_mod.resolve_baidu_baike_page = lambda *_args, **_kwargs: None
+        authority_mod.resolve_toutiao_baike_page = lambda *_args, **_kwargs: None
         homepage_mod._hydrate_mediawiki_same_source_images = (
             lambda source, *, entity_id: source
         )
@@ -736,6 +735,8 @@ def test_homepage_registry_sources_without_same_source_images_use_independent_me
     finally:
         for name, value in originals.items():
             setattr(research_mod, name, value)
+        for name, value in authority_originals.items():
+            setattr(authority_mod, name, value)
         homepage_mod._hydrate_mediawiki_same_source_images = original_hydrate
 
     assert report["issues"] == []

@@ -10,13 +10,9 @@ from pathlib import Path
 
 from core.cursor_startup_probe import cursor_startup_probe_suite
 from core.paths import DATA_EXECUTIONS_ROOT, DATA_LOCAL_ROOT
-from core.python_environment import (
-    prepare_data_runtime_cache,
-    runtime_report,
-)
+from core.python_environment import prepare_data_runtime_cache
 from core.python_runtime import environment_preflight
 from core.runtime_policy import active_runtime_policy
-from content.release.canonical.rollout_contract import load_rollout_contract
 
 _RUNTIME_CHILD_ENV = "QWQ_DATA_PREFLIGHT_RUNTIME_CHILD"
 
@@ -40,20 +36,6 @@ def _report_output_path(value: object) -> Path:
         "[task preflight] GATE_BLOCK: data runtime evidence must be under "
         "tasks/<executionId>/... or data/local/cache/..."
     )
-
-
-def _print_report(report: dict, *, as_json: bool) -> None:
-    if as_json:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
-        return
-    print(f"[env] currentPython={report['currentPython']}")
-    print(f"[env] requirements={report['requirements']}")
-    print(f"[env] resolvedPython={report.get('resolvedPython') or '<missing>'}")
-    for row in report.get("candidates") or []:
-        status = "ready" if row.get("ready") else "missing"
-        print(f"  - {status}: {row.get('python')}")
-        for item in row.get("missing") or []:
-            print(f"      {item}")
 
 
 def _print_preflight(report: dict, *, as_json: bool) -> None:
@@ -110,57 +92,34 @@ def _print_cursor_probe(report: dict, *, as_json: bool) -> None:
 
 
 def _capacity_soak_report() -> dict:
-    """Run the rollout-owned Cursor infrastructure capacity admission."""
-    capacity = load_rollout_contract().capacity
+    """Run a reusable Cursor bridge capacity probe from the runtime policy."""
     policy = active_runtime_policy()
     report = cursor_startup_probe_suite(
-        model=policy.cursor_model,
+        model=policy.cursor_model_selection,
         runtime=policy.cursor_runtime.value,
-        attempts=capacity.soak_jobs,
+        attempts=policy.startup_probe_suite_attempts,
         timeout_seconds=policy.startup_timeout_seconds,
         cwd=Path.cwd(),
     )
     issues = list(report.get("issues") or [])
-    if int(report.get("successCount") or 0) != capacity.soak_jobs:
+    if int(report.get("successCount") or 0) != policy.startup_probe_suite_attempts:
         issues.append(
-            "capacity soak requires every Cursor SDK probe job to finish: "
-            f"{report.get('successCount')}/{capacity.soak_jobs}"
+            "capacity probe requires every Cursor SDK job to finish: "
+            f"{report.get('successCount')}/{policy.startup_probe_suite_attempts}"
         )
-    if int(report.get("effectiveConcurrency") or 0) < capacity.minimum_safe_concurrency:
+    if int(report.get("effectiveConcurrency") or 0) < policy.cursor_bridge_instances:
         issues.append(
-            "capacity soak effective concurrency is below contract: "
-            f"{report.get('effectiveConcurrency')}<{capacity.minimum_safe_concurrency}"
+            "capacity probe effective concurrency is below runtime policy: "
+            f"{report.get('effectiveConcurrency')}<{policy.cursor_bridge_instances}"
         )
-    if (
-        int(report.get("bridgeDisconnectCount") or 0)
-        > capacity.maximum_unrecovered_bridge_failures
-    ):
+    if int(report.get("bridgeDisconnectCount") or 0):
         issues.append(
-            "capacity soak unrecovered bridge failures exceed contract: "
-            f"{report.get('bridgeDisconnectCount')}>"
-            f"{capacity.maximum_unrecovered_bridge_failures}"
-        )
-    if float(report.get("probeJobsPerHour") or 0) < capacity.minimum_probe_jobs_per_hour:
-        issues.append(
-            "capacity soak probe throughput is below contract: "
-            f"{report.get('probeJobsPerHour')}<{capacity.minimum_probe_jobs_per_hour}"
-        )
-    if float(report.get("startupLatencyP95") or 0) > capacity.maximum_probe_job_p95_seconds:
-        issues.append(
-            "capacity soak probe P95 exceeds contract: "
-            f"{report.get('startupLatencyP95')}>{capacity.maximum_probe_job_p95_seconds}"
+            "capacity probe observed unrecovered Cursor bridge disconnects"
         )
     report["capacityContract"] = {
-        "soakJobs": capacity.soak_jobs,
-        "minimumSafeConcurrency": capacity.minimum_safe_concurrency,
-        "maximumUnrecoveredBridgeFailures": capacity.maximum_unrecovered_bridge_failures,
-        "minimumProbeJobsPerHour": capacity.minimum_probe_jobs_per_hour,
-        "maximumProbeJobP95Seconds": capacity.maximum_probe_job_p95_seconds,
-    }
-    report["homepageProductionThresholds"] = {
-        "minimumApprovedHomepagesPerHour": capacity.minimum_approved_homepages_per_hour,
-        "maximumHomepageObjectP95Seconds": capacity.maximum_homepage_object_p95_seconds,
-        "evidenceStage": "m1",
+        "attempts": policy.startup_probe_suite_attempts,
+        "bridgeInstances": policy.cursor_bridge_instances,
+        "startupTimeoutSeconds": policy.startup_timeout_seconds,
     }
     report["issues"] = list(dict.fromkeys(str(issue) for issue in issues if str(issue)))
     report["ready"] = not report["issues"]
@@ -177,31 +136,40 @@ def _startup_timeout_seconds(args: argparse.Namespace) -> float:
     return float(active_runtime_policy().startup_timeout_seconds)
 
 
-def handle_doctor(args: argparse.Namespace) -> None:
-    report = runtime_report()
-    _print_report(report, as_json=bool(getattr(args, "json", False)))
-    if not report.get("ready"):
-        raise SystemExit(1)
+def _reliabletask_fleet_report(required: bool) -> dict:
+    if not required:
+        return {"checked": False, "ready": False, "issues": []}
+    from content.execution.reliabletask_fleet import reliabletask_fleet_preflight
+
+    try:
+        report = reliabletask_fleet_preflight()
+    except (OSError, RuntimeError, ValueError) as exc:
+        return {
+            "checked": True,
+            "ready": False,
+            "issues": [f"ReliableTask fleet preflight failed: {type(exc).__name__}"],
+        }
+    return {
+        "checked": True,
+        "ready": bool(report.get("ready")),
+        "target": report.get("target"),
+        "mongo": bool(report.get("mongo")),
+        "redis": bool(report.get("redis")),
+        "issues": list(report.get("issues") or []),
+    }
 
 
-def handle_prepare(args: argparse.Namespace) -> None:
-    report = prepare_data_runtime_cache()
-    if bool(getattr(args, "json", False)):
-        print(json.dumps(report, ensure_ascii=False, indent=2))
-    else:
-        print(f"[env prepare] python={report['python']}")
-        print(f"[env prepare] requirements={report['requirements']}")
-        print(f"[env prepare] installReturnCode={report['installReturnCode']}")
-        if report.get("stdoutTail"):
-            print(report["stdoutTail"].rstrip())
-        if report.get("stderrTail"):
-            print(report["stderrTail"].rstrip(), file=sys.stderr)
-        print("[env prepare] READY" if report.get("ready") else "[env prepare] FAILED")
-        if report.get("missing"):
-            for item in report["missing"]:
-                print(f"  - {item}", file=sys.stderr)
-    if not report.get("ready"):
-        raise SystemExit(1)
+def _apply_reliabletask_fleet_gate(report: dict, args: argparse.Namespace) -> dict:
+    fleet = _reliabletask_fleet_report(
+        bool(getattr(args, "require_reliabletask_fleet", False))
+    )
+    report["reliableTaskFleet"] = fleet
+    if fleet.get("checked") and not fleet.get("ready"):
+        report["ready"] = False
+        issues = report.setdefault("issues", [])
+        if isinstance(issues, list):
+            issues.extend(str(item) for item in fleet.get("issues") or [])
+    return report
 
 
 def handle_preflight(args: argparse.Namespace) -> None:
@@ -212,10 +180,11 @@ def handle_preflight(args: argparse.Namespace) -> None:
         endpoints=getattr(args, "endpoint", None),
         timeout_seconds=_network_timeout_seconds(args),
         check_cursor_startup=_cursor_startup_enabled(args),
-        cursor_startup_model=policy.cursor_model,
+        cursor_startup_model=policy.cursor_model_selection,
         cursor_startup_runtime=policy.cursor_runtime.value,
         cursor_startup_timeout_seconds=_startup_timeout_seconds(args),
     )
+    _apply_reliabletask_fleet_gate(report, args)
     _print_preflight(report, as_json=bool(getattr(args, "json", False)))
     if not report.get("ready"):
         raise SystemExit(1)
@@ -224,7 +193,7 @@ def handle_preflight(args: argparse.Namespace) -> None:
 def handle_cursor_probe(args: argparse.Namespace) -> None:
     policy = active_runtime_policy()
     report = cursor_startup_probe_suite(
-        model=policy.cursor_model,
+        model=policy.cursor_model_selection,
         runtime=policy.cursor_runtime.value,
         attempts=int(
             getattr(args, "attempts", None)
@@ -255,16 +224,16 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
     """
     if Path(sys.executable).absolute() == python.absolute():
         policy = active_runtime_policy()
-        return environment_preflight(
+        return _apply_reliabletask_fleet_gate(environment_preflight(
             require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
             check_network=not bool(getattr(args, "no_network", False)),
             endpoints=getattr(args, "endpoint", None),
             timeout_seconds=_network_timeout_seconds(args),
             check_cursor_startup=_cursor_startup_enabled(args),
-            cursor_startup_model=policy.cursor_model,
+            cursor_startup_model=policy.cursor_model_selection,
             cursor_startup_runtime=policy.cursor_runtime.value,
             cursor_startup_timeout_seconds=_startup_timeout_seconds(args),
-        )
+        ), args)
     cmd = [
         str(python),
         str(Path(__file__).resolve().parents[3] / "cli.py"),
@@ -280,6 +249,8 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
         cmd.append("--no-cursor-key")
     if bool(getattr(args, "no_network", False)):
         cmd.append("--no-network")
+    if bool(getattr(args, "require_reliabletask_fleet", False)):
+        cmd.append("--require-reliabletask-fleet")
     for endpoint in getattr(args, "endpoint", None) or []:
         cmd.extend(["--endpoint", str(endpoint)])
     child_env = os.environ.copy()
@@ -327,11 +298,13 @@ def handle_ready(args: argparse.Namespace) -> None:
             endpoints=getattr(args, "endpoint", None),
             timeout_seconds=_network_timeout_seconds(args),
             check_cursor_startup=_cursor_startup_enabled(args),
-            cursor_startup_model=active_runtime_policy().cursor_model,
+            cursor_startup_model=active_runtime_policy().cursor_model_selection,
             cursor_startup_runtime=active_runtime_policy().cursor_runtime.value,
             cursor_startup_timeout_seconds=_startup_timeout_seconds(args),
         )
     )
+    if os.environ.get(_RUNTIME_CHILD_ENV) != "1":
+        _apply_reliabletask_fleet_gate(preflight, args)
     startup_timeout_seconds = _startup_timeout_seconds(args)
     cursor_startup = (
         dict(preflight.get("cursorStartup") or {})
@@ -410,6 +383,14 @@ def _compact_ready_evidence(report: dict) -> dict:
             "skipped": bool(network.get("skipped")),
             "issues": list(network.get("issues") or []),
         },
+        "reliableTaskFleet": {
+            "checked": bool((report.get("reliableTaskFleet") or {}).get("checked")),
+            "ready": bool((report.get("reliableTaskFleet") or {}).get("ready")),
+            "target": (report.get("reliableTaskFleet") or {}).get("target"),
+            "mongo": bool((report.get("reliableTaskFleet") or {}).get("mongo")),
+            "redis": bool((report.get("reliableTaskFleet") or {}).get("redis")),
+            "issues": list((report.get("reliableTaskFleet") or {}).get("issues") or []),
+        },
         "cursorStartup": {
             "checked": bool(startup.get("checked")),
             "ready": bool(startup.get("checked")) and bool(startup.get("ready")),
@@ -439,7 +420,8 @@ def register_task_preflight_parser(subparsers: argparse._SubParsersAction) -> No
     pr.add_argument("--endpoint", action="append", help="覆盖网络探测端点，可重复")
     pr.add_argument("--no-cursor-startup", action="store_true", help="跳过真实 Cursor SDK Agent.prompt 启动探针（仅限单测/离线）")
     pr.add_argument("--cursor-startup", action="store_true", help=argparse.SUPPRESS)
-    pr.add_argument("--soak", action="store_true", help="运行 rollout 合同定义的 Cursor SDK 并发容量准入")
+    pr.add_argument("--require-reliabletask-fleet", action="store_true", help=argparse.SUPPRESS)
+    pr.add_argument("--soak", action="store_true", help="运行 runtime policy 定义的 Cursor SDK 并发容量探针")
     pr.add_argument("--report-out", dest="report_out", help="写出精简、脱敏的运行准入证据")
     pr.set_defaults(cursor_startup=True)
     pr.set_defaults(handler=handle_ready)

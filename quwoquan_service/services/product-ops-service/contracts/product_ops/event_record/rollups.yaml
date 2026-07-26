@@ -1,0 +1,214 @@
+entity: EventRecord
+description: 'Product telemetry rollup algebra shared by the SLS Scheduled SQL and the postgres_telemetry_local
+  rollup worker. A backend may change execution syntax, but may not change the row identity, late-arrival,
+  privacy, or percentile semantics.
+
+  '
+common:
+  source_time_field: ingestedAt
+  business_time_field: occurredAt
+  business_window: '[businessHour,businessHour+1h)'
+  destination_time_field: businessHour
+  row_identity:
+    fields:
+    - _batchKey
+    - _batchIndex
+    digest: sha256_hex_256_bits
+    duplicate_policy: keep_one_complete_row
+  output:
+    row_kind_field: rowKind
+    freshness_field: freshness
+    generated_through_field: generatedThrough
+    lag_seconds_field: lagSeconds
+  privacy:
+    forbidden_fields:
+    - sessionId
+    - userId
+    - callStack
+    - _batchKey
+    - _batchIndex
+jobs:
+- row_kind: event_dimensions
+  source: raw_records
+  dimensions:
+  - logType
+  - eventType
+  - pageName
+  - appVersion
+  - networkClass
+  - deviceManufacturer
+  - deviceModel
+  - journey
+  - action
+  - result
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+  - name: sessionHll
+    algebra: mergeable_hll(sessionId)
+    error_bound: 0.02
+- row_kind: performance
+  source: raw_records
+  filter: (eventType = performance_sample OR eventType = app_startup)
+  dimensions:
+  - eventType
+  - operationId
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+  - name: durationHistogram
+    algebra: fixed_histogram(durationMs)
+    buckets_ms:
+    - 0
+    - 50
+    - 100
+    - 250
+    - 500
+    - 1000
+    - 2000
+    - 3000
+    - 5000
+    - 10000
+    - 30000
+  - name: errorCount
+    algebra: count_distinct_row_identity_where(hasError = true)
+- row_kind: video_qoe
+  source: raw_records
+  filter: eventType = video_playback_qoe
+  dimensions:
+  - playbackMode
+  - result
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - seekEvidenceSource
+  measures:
+  - name: readyCount
+    algebra: count_distinct_row_identity
+  - name: readyHistogram
+    algebra: fixed_histogram(readyMs)
+    buckets_ms:
+    - 0
+    - 100
+    - 250
+    - 500
+    - 1000
+    - 2000
+    - 3000
+    - 5000
+    - 10000
+    - 30000
+  - name: ttffHistogram
+    algebra: fixed_histogram(ttffMs)
+    buckets_ms:
+    - 0
+    - 100
+    - 250
+    - 500
+    - 1000
+    - 2000
+    - 3000
+    - 5000
+    - 10000
+    - 30000
+  - name: rebufferCount
+    algebra: sum(rebufferCount)
+  - name: rebufferMs
+    algebra: sum(rebufferMs)
+  - name: seekCount
+    algebra: sum(seekCount)
+  - name: seekFailureCount
+    algebra: sum(seekFailureCount)
+  - name: seekCommandHistogram
+    algebra: fixed_histogram(seekCommandMaxMs)
+    buckets_ms:
+    - 0
+    - 25
+    - 50
+    - 100
+    - 250
+    - 500
+    - 1000
+    - 2000
+    - 5000
+  - name: seekSettleHistogram
+    algebra: fixed_histogram(seekSettleMaxMs)
+    buckets_ms:
+    - 0
+    - 25
+    - 50
+    - 100
+    - 250
+    - 500
+    - 1000
+    - 2000
+    - 5000
+- row_kind: rtc_qoe
+  source: raw_records
+  filter: eventType = rtc_media_qoe
+  dimensions:
+  - callType
+  - result
+  - mediaConnected
+  - networkQuality
+  - disconnectReason
+  - failReasonCode
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+  - name: connectTimeHistogram
+    algebra: fixed_histogram(connectTimeMs)
+    buckets_ms:
+    - 0
+    - 250
+    - 500
+    - 1000
+    - 2000
+    - 3000
+    - 5000
+    - 8000
+    - 10000
+    - 30000
+  - name: reconnectCount
+    algebra: sum(reconnectCount)
+- row_kind: error_dimensions
+  source: raw_records
+  filter: logType = error
+  dimensions:
+  - errorCode
+  - operationId
+  - httpStatus
+  - pageName
+  - appVersion
+  - deviceManufacturer
+  - deviceModel
+  - networkClass
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+- row_kind: runtime_diagnostics
+  source: runtime_records
+  dimensions:
+  - logKind
+  - severity
+  - signal
+  - errorCode
+  - fingerprint
+  - resourceSourceType
+  - resourceService
+  - resourceAppVersion
+  - resourceServiceVersion
+  - resourceEnvironment
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+late_arrival:
+  accepted_window_hours: 72
+  policy: emit_increment_for_business_hour
+  recomputation:
+    mode: overwrite
+    run_identity:
+    - job
+    - ingest_window
+    - dimension_digest
+    lock: advisory_lock

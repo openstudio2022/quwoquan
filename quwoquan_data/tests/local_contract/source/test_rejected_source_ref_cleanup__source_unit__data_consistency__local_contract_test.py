@@ -15,6 +15,7 @@ from content.source.handler_images import _move_rejected_source_unit  # noqa: E4
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from core.paths import execution_root  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
+from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
 def test_rejected_source_unit_removes_consumable_object_ref(tmp_path: Path) -> None:
@@ -56,10 +57,11 @@ def test_rejected_source_unit_removes_consumable_object_ref(tmp_path: Path) -> N
 
 
 def test_source_unit_without_images_keeps_empty_asset_index() -> None:
-    execution_id = "20260715--travel-homepage-empty-asset-index--cn-zhejiang--canary-001"
+    execution_id = "20260715--travel-homepage-empty-asset-index--test-region-a--pilot-001"
     root = execution_root(execution_id)
     shutil.rmtree(root, ignore_errors=True)
     try:
+        build_execution_fixture(execution_id)
         object_dir = resolve_entity_object_dir(
             execution_id,
             "无图来源景区",

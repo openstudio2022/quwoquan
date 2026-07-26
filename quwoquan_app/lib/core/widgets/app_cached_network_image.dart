@@ -57,6 +57,44 @@ class AppAvatarImage extends StatelessWidget {
   }
 }
 
+/// 圆形头像统一入口：复用头像候选 URL、缓存分层、失败负缓存与加载观测。
+class AppCircularAvatar extends StatelessWidget {
+  const AppCircularAvatar({
+    super.key,
+    required this.imageUrl,
+    required this.size,
+    required this.backgroundColor,
+    this.fallback,
+  });
+
+  final String? imageUrl;
+  final double size;
+  final Color backgroundColor;
+  final Widget? fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalizedUrl = imageUrl?.trim() ?? '';
+    final fallbackSurface = ColoredBox(
+      color: backgroundColor,
+      child: Center(child: fallback ?? const SizedBox.shrink()),
+    );
+    return ClipOval(
+      child: SizedBox.square(
+        dimension: size,
+        child: normalizedUrl.isEmpty
+            ? fallbackSurface
+            : AppAvatarImage(
+                imageUrl: normalizedUrl,
+                size: size,
+                placeholder: fallbackSurface,
+                errorWidget: fallbackSurface,
+              ),
+      ),
+    );
+  }
+}
+
 class AppCachedNetworkImage extends ConsumerWidget {
   final String imageUrl;
   final List<String>? imageUrlCandidates;
@@ -97,20 +135,11 @@ class AppCachedNetworkImage extends ConsumerWidget {
       }
       switch (cdnPreset) {
         case CdnImagePreset.thumbnail:
-          processed.add(
-            CdnImageUrlBuilder.thumbnail(
-              normalized,
-              width: (width ?? 400).toInt(),
-            ),
-          );
+          processed.add(CdnImageUrlBuilder.thumbnail(normalized));
         case CdnImagePreset.cover:
-          processed.add(
-            CdnImageUrlBuilder.cover(normalized, width: (width ?? 750).toInt()),
-          );
+          processed.add(CdnImageUrlBuilder.cover(normalized));
         case CdnImagePreset.inline:
-          processed.add(
-            CdnImageUrlBuilder.cover(normalized, width: (width ?? 900).toInt()),
-          );
+          processed.add(CdnImageUrlBuilder.display(normalized));
         case CdnImagePreset.avatar:
           processed.add(
             CdnImageUrlBuilder.avatar(normalized, size: (width ?? 120).toInt()),

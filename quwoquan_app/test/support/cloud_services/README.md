@@ -1,5 +1,6 @@
-# `test/local_contract/cloud/services/` — 与 `lib/cloud/services/` 路径镜像
+# 测试侧 Cloud 替身
 
-迁移 `Mock*Repository` 时，在此目录下保持与 `lib` **相同的相对路径**（例如 `circle/circle_repository_mock.dart`），便于对照与 code review。
+本目录只保存 production `lib/**` 不可达的测试适配与统一 re-export。测试通过 [`repository_mock_reexports.dart`](repository_mock_reexports.dart) 引用替身，不从业务代码导入 Mock。
 
-当前实现仍在 `lib/`；[`repository_mock_reexports.dart`](repository_mock_reexports.dart) 统一从 `package:quwoquan_app/...` 再导出，供测试逐步改用短 import。
+- assistant：[`assistant_facets_mock.dart`](assistant_facets_mock.dart) 提供 `AlphaAssistantFacets` 与强类型 fixture，provider 覆盖位于 [`assistant_facet_overrides.dart`](assistant_facet_overrides.dart)。
+- chat：状态和 fixture 解析由 `quwoquan_cloud_mock` 的 `AlphaChatStateEngine` 持有；测试 mapper 由 `generate_chat_test_adapter.py` 生成，`verify_chat_mock_remote_parity.py` 阻断 Mock/Remote 语义漂移。

@@ -1,0 +1,79 @@
+kind: aggregate_root
+description: '对显式 image MediaAsset 集合执行一次可暂停、可恢复、可回滚的 descriptor
+
+  重处理。它只编排同一 MediaAsset 内的 descriptor revision，不创建 variant
+
+  MediaAsset，也不替代上传后首轮 media-processing 状态机。
+
+  '
+identity:
+  fields:
+  - runId
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: command_facade
+  cardinality: N:N
+  consistency: eventual
+  kind: reference
+  name: targetAssets
+  on_delete: retain
+  reference_fields:
+  - assetIds
+  - assetId
+  target_object: content.MediaAsset
+capabilities:
+- queryable
+- versioned
+- auditable
+- idempotent_commands
+business_rules:
+- runId、assetIds、targetDerivativePolicyVersion 在创建后不可变；assetIds 必须去重、非空且数量为 1..500
+- 仅显式传入的 processing=ready image MediaAsset 可进入 run；非 image、未 ready 或 deleted asset 必须被拒绝
+- worker 只在 running 状态处理新 asset、在 rolling_back 状态处理已激活 asset 的逆序回滚；paused、completed、failed、rolled_back
+  状态绝不处理新 asset
+- 每个候选 descriptor 必须先完成私有 normalized baseline 验证与 public slice readback，才可用 MediaAsset CAS 激活
+- 单 asset 激活原子写入旧 revision、候选 revision、active revision 指针与审计事实；失败不得改变旧 active descriptor
+- rollback 仅恢复本 run 已激活 asset 的 previousRevision；必须在 MediaAsset CAS 下执行，不能覆盖后续独立激活
+- 旧 public slice 只在成功激活后登记 cleanup candidate；删除前必须通过 Post 引用审计和保留期，run 不直接删除对象
+- pause/resume/rollback 与 worker 处理使用 command receipt + expectedVersion 保证幂等和并发安全
+lifecycle:
+  states:
+  - running
+  - paused
+  - rolling_back
+  - completed
+  - failed
+  - rolled_back
+  initial: running
+  transitions:
+  - - running
+    - paused
+    - PauseMediaImageReprocessRun
+  - - paused
+    - running
+    - ResumeMediaImageReprocessRun
+  - - running
+    - completed
+    - CompleteMediaImageReprocessRun
+  - - running
+    - failed
+    - FailMediaImageReprocessRun
+  - - paused
+    - rolling_back
+    - RollbackMediaImageReprocessRun
+  - - completed
+    - rolling_back
+    - RollbackMediaImageReprocessRun
+  - - failed
+    - rolling_back
+    - RollbackMediaImageReprocessRun
+  - - rolling_back
+    - rolled_back
+    - CompleteMediaImageReprocessRollback
+  optimistic_concurrency: version
+  idempotency: command_receipt

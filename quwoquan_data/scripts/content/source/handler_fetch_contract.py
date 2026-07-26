@@ -1,6 +1,7 @@
 """Typed source-fetch identity, rights, and media-count helpers."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from typing import Any, Mapping
 
@@ -12,24 +13,53 @@ from core.data_issue import (
     DataRecoveryAction,
     data_issue,
 )
+from content.source.contracts import SourceCandidate
 
 
-def resolved_source_title_matches_entity(
+@dataclass(frozen=True, slots=True)
+class HomepageBaseDraftAdmission:
+    """Typed homepage base-draft verdict shared by fetch and source gates."""
+
+    accepted: bool
+    fact_count: int
+    issue_code: DataIssueCode | None
+
+
+def homepage_base_draft_admission(
     source: Mapping[str, Any],
     *,
-    resolved_title: str,
+    source_text: str,
     entity_id: str,
-) -> bool:
-    """Validate a resolved wiki title against the frozen candidate identity."""
-    from content.source.research.text_match import _wiki_resolved_title_matches_entity
+    resolved_title: str,
+) -> HomepageBaseDraftAdmission:
+    """Apply the sole homepage base-draft admission contract after fetch."""
+    from content.homepage.homepage_text import homepage_base_draft_readiness
 
-    candidate_title = str(source.get("sourceTitle") or "").strip()
-    return _wiki_resolved_title_matches_entity(
-        resolved_title,
-        entity_id,
-    ) or bool(
-        candidate_title
-        and _wiki_resolved_title_matches_entity(resolved_title, candidate_title)
+    source_meta = dict(source)
+    if resolved_title:
+        source_meta["resolvedTitle"] = resolved_title
+    authority_title = str(
+        source_meta.get("qualifiedAuthorityTitle")
+        or source_meta.get("sourceTitle")
+        or ""
+    ).strip()
+    readiness = homepage_base_draft_readiness(
+        source_meta,
+        source_text,
+        entity_name=entity_id,
+        aliases=(authority_title,) if authority_title else (),
+    )
+    fact_count = int(readiness.get("factCount") or 0)
+    if bool(readiness.get("ready")):
+        return HomepageBaseDraftAdmission(
+            accepted=True,
+            fact_count=fact_count,
+            issue_code=None,
+        )
+    return HomepageBaseDraftAdmission(
+        accepted=False,
+        fact_count=fact_count,
+        issue_code=DataIssueCode.SOURCE_CONTENT_INCOMPLETE,
     )
 
 
@@ -57,6 +87,14 @@ def source_fetch_failure_issue(
             "detail": str(error)[:240],
         },
     )
+
+
+def require_source_candidate_admission(source: Mapping[str, Any]) -> SourceCandidate:
+    """Decode a planned candidate and refuse a rejected match before fetch."""
+
+    candidate = SourceCandidate.from_mapping(source)
+    candidate.require_accepted()
+    return candidate
 
 
 def canonicalize_source_url(url: str) -> str:
@@ -101,9 +139,10 @@ def publishable_homepage_source_image_count(images: list[dict[str, Any]]) -> int
 
 __all__ = [
     "canonicalize_source_url",
+    "homepage_base_draft_admission",
     "is_non_open_baike_source",
     "publishable_homepage_source_image_count",
     "requires_factual_compression",
-    "resolved_source_title_matches_entity",
+    "require_source_candidate_admission",
     "source_fetch_failure_issue",
 ]

@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -12,13 +12,14 @@ import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/pages/scan_contact_qr_page.dart';
 import 'package:quwoquan_app/ui/user/services/contact_qr_image_analyzer.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 Future<void> _pumpScanPage(
   WidgetTester tester, {
   PlatformCapabilities capabilities = CapabilityProfile.mobile,
   ImagePickGateway? imagePicker,
   ContactQrImageAnalyzer? imageAnalyzer,
-  UserProfileRepository? userProfileRepository,
+  ProfileEditQuery? profileEditQuery,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -28,9 +29,9 @@ Future<void> _pumpScanPage(
           imagePickGatewayProvider.overrideWithValue(imagePicker),
         if (imageAnalyzer != null)
           contactQrImageAnalyzerProvider.overrideWithValue(imageAnalyzer),
-        if (userProfileRepository != null)
-          userProfileRepositoryProvider.overrideWithValue(
-            userProfileRepository,
+        if (profileEditQuery != null)
+          profileEditQueryProvider.overrideWith(
+            (ref, surface) => profileEditQuery,
           ),
       ],
       child: MaterialApp.router(
@@ -90,7 +91,7 @@ void main() {
       capabilities: CapabilityProfile.mobile.copyWith(camera: false),
       imagePicker: const _FakeImagePickGateway('/tmp/alice_qr.png'),
       imageAnalyzer: analyzer,
-      userProfileRepository: repository,
+      profileEditQuery: repository,
     );
 
     await tester.tap(find.text(UITextConstants.scanQrAlbum));
@@ -108,7 +109,7 @@ void main() {
       capabilities: CapabilityProfile.mobile.copyWith(camera: false),
       imagePicker: const _FakeImagePickGateway('/tmp/not_qr.png'),
       imageAnalyzer: const _FakeContactQrImageAnalyzer(raw: ''),
-      userProfileRepository: _ResolvingUserProfileRepository(),
+      profileEditQuery: _ResolvingUserProfileRepository(),
     );
 
     await tester.tap(find.text(UITextConstants.scanQrAlbum));

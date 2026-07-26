@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+
 class SearchResultTabIds {
   const SearchResultTabIds._();
 
@@ -33,33 +35,33 @@ class SearchResultTabSpec {
   static const List<SearchResultTabSpec> fixedTabs = <SearchResultTabSpec>[
     SearchResultTabSpec(
       id: SearchResultTabIds.xiaoqu,
-      label: '小趣',
-      description: '理解这个搜索词，并给出下一步方向',
+      label: UITextConstants.searchXiaoquTab,
+      description: UITextConstants.searchXiaoquTabDescription,
     ),
     SearchResultTabSpec(
       id: SearchResultTabIds.all,
-      label: '全部',
-      description: '已连接优先，未连接按类别比例发现',
+      label: UITextConstants.searchAllTab,
+      description: UITextConstants.searchAllTabDescription,
     ),
     SearchResultTabSpec(
       id: SearchResultTabIds.intersection,
-      label: '交集',
-      description: '突出最值得连接的结果',
+      label: UITextConstants.searchIntersectionTab,
+      description: UITextConstants.searchIntersectionTabDescription,
     ),
     SearchResultTabSpec(
       id: SearchResultTabIds.image,
-      label: '图片',
-      description: '双列浏览图片结果',
+      label: UITextConstants.searchImageTab,
+      description: UITextConstants.searchImageTabDescription,
     ),
     SearchResultTabSpec(
       id: SearchResultTabIds.video,
-      label: '视频',
-      description: '双列浏览视频结果',
+      label: UITextConstants.searchVideoTab,
+      description: UITextConstants.searchVideoTabDescription,
     ),
     SearchResultTabSpec(
       id: SearchResultTabIds.article,
-      label: '长文',
-      description: '单列阅读长文结果',
+      label: UITextConstants.searchArticleTab,
+      description: UITextConstants.searchArticleTabDescription,
     ),
   ];
 

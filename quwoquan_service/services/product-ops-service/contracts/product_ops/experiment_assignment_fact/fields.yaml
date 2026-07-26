@@ -1,0 +1,91 @@
+fields:
+- name: id
+  source: id
+  type: string
+  constraints:
+  - PK
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: experimentId
+  source: experimentId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+  reference: true
+- name: subjectKey
+  source: subjectKey
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: hash
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: variant
+  source: variant
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: policyVersion
+  source: policyVersion
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: assignedAt
+  source: assignedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+types:
+  ExperimentStatsSlice:
+    fields:
+    - name: experimentId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: policyVersion
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: status
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: variantStats
+      type: object
+      constraints:
+      - NOT_NULL
+    - name: assignedSubjects
+      type: int
+      constraints:
+      - NOT_NULL
+unique_constraints:
+- columns:
+  - experimentId
+  - policyVersion
+  - subjectKey
+  description: 同一实验策略版本内的分配确定性

@@ -1,0 +1,92 @@
+kind: aggregate_root
+description: '助手执行契约入口。记录每次小趣助手执行的上下文与输入输出。
+
+  会话、订阅、授权和画像提案均有独立生命周期，不属于 AssistantRun 聚合成员；
+
+  轮次是由执行事件投影出的 AssistantTurnView，交互事件与评分卡通过 typed
+
+  append-only sink 写入，也不嵌入 AssistantRun 一致性边界。
+
+  MongoDB 存储，支撑高频写入和灵活 schema（LLM 输出多变）。
+
+  '
+identity:
+  fields:
+  - _id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: conversation
+  on_delete: retain
+  reference_fields:
+  - conversationId
+  target_object: assistant.AssistantConversation
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: accountOwner
+  on_delete: retain
+  reference_fields:
+  - userId
+  target_object: user.UserAccount
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: personaActor
+  on_delete: retain
+  reference_fields:
+  - subAccountId
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: pageObject
+  on_delete: tombstone
+  reference_fields:
+  - pageType
+  - pageObjectId
+  target_objects:
+  - content.Post
+  - content.Comment
+  - circle.Circle
+  - entity.Homepage
+  - chat.Conversation
+  - chat.Message
+  - user.Persona
+  - integration.Location
+local_identity_reasons:
+  skillId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity
+  sourceSurfaceId: generated route, surface, or operation registry key used only for navigation or telemetry
+    attribution
+capabilities:
+- queryable
+- aggregatable
+taggable: false
+vector_enabled: false
+business_rules:
+- run 必须绑定 actor persona、conversationId、输入摘要与当前 consent snapshot
+- run 创建时必须原子读取并固化最多 16 个 session 与 16 个 long_term active 偏好快照
+- 同一 clientRequestId 只启动一个 run，重放返回同一 run identity
+- run 只能从 queued 进入 running，再进入 completed、failed 或 cancelled
+- tool 调用必须经过 operation allowlist 与目标上下文公开 Facade
+- 交互反馈、评分卡和 Turn 仅由事件产生，不嵌入 Run 聚合
+lifecycle:
+  states:
+  - queued
+  - running
+  - completed
+  - failed
+  - cancelled
+  optimistic_concurrency: version
+  idempotency: command_receipt

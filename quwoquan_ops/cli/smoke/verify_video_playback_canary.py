@@ -77,6 +77,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--auth-token-env", default="PROD_TEST_AUTH_TOKEN")
     parser.add_argument("--rollout-stage-env", default="PROD_ROLLOUT_STAGE")
+    parser.add_argument("--report", default="")
     return parser
 
 
@@ -122,20 +123,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"GATE_BLOCK: release video TLS/origin probe failed: {exc}")
         return 2
 
+    report = {
+        "status": "passed",
+        "target": args.target,
+        "rolloutStage": stage,
+        "publicSliceKey": key,
+        "videoAuthority": base,
+        "rangeStatus": status,
+        "contentType": content_type,
+    }
+    if args.report:
+        report_path = Path(args.report)
+        if not report_path.is_absolute():
+            report_path = ROOT / report_path
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(
+            json.dumps(report, ensure_ascii=False, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     print(
         json.dumps(
-            {
-                "status": "passed",
-                "target": args.target,
-                "rolloutStage": stage,
-                "publicSliceKey": key,
-                "videoAuthority": base,
-                "rangeStatus": status,
-                "contentType": content_type,
-            },
+            report,
             ensure_ascii=False,
             sort_keys=True,
-        )
+        ),
     )
     return 0
 

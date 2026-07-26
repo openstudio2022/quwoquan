@@ -17,8 +17,15 @@ from quwoquan_ops.gate.verify_observability_layout import layout_issues
 def main() -> int:
     failures = Failures()
     failures.require_path(
-        ROOT / "quwoquan_service" / "contracts" / "metadata" / "event_catalog.yaml",
-        "event catalog",
+        ROOT
+        / "quwoquan_service"
+        / "services"
+        / "product-ops-service"
+        / "contracts"
+        / "product_ops"
+        / "event_record"
+        / "event_catalog.yaml",
+        "telemetry event catalog",
     )
     failures.require_path(
         ROOT / "quwoquan_service" / "contracts" / "metadata" / "log_kv_policy.yaml",

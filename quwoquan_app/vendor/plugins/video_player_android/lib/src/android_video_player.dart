@@ -23,6 +23,59 @@ Stream<PlatformVideoEvent> _productionVideoEventStreamProvider(
   return pigeon.videoEvents(instanceName: streamIdentifier);
 }
 
+/// Native playback evidence that is not expressible via [VideoEventType].
+///
+/// App session code may listen without treating [VideoPlayerController.seekTo]
+/// completion as visual settle.
+@immutable
+class AndroidVideoNativePlaybackSignal {
+  /// Creates a native playback signal for one opaque app playback session.
+  const AndroidVideoNativePlaybackSignal({
+    required this.sessionToken,
+    required this.kind,
+    this.ttffMs,
+    this.targetPositionMs,
+    this.settledPositionMs,
+    this.settleMs,
+    this.droppedFrames,
+    this.processedFrames,
+    this.rendererMode,
+    this.decoderQueueMode,
+    this.decoderFallbackEnabled,
+  });
+
+  /// Per-controller opaque token supplied by the app platform boundary.
+  final String sessionToken;
+
+  /// Signal kind.
+  final AndroidVideoNativePlaybackSignalKind kind;
+
+  final int? ttffMs;
+
+  /// Requested seek target, when [kind] is seekSettled.
+  final int? targetPositionMs;
+
+  /// Observed position at settle, when [kind] is seekSettled.
+  final int? settledPositionMs;
+
+  final int? settleMs;
+  final int? droppedFrames;
+  final int? processedFrames;
+  final String? rendererMode;
+  final String? decoderQueueMode;
+  final bool? decoderFallbackEnabled;
+}
+
+/// Kinds of Android-native playback evidence.
+enum AndroidVideoNativePlaybackSignalKind {
+  playbackDiagnostics,
+  renderedFirstFrame,
+  seekSettled,
+  droppedVideoFrames,
+  audioUnderrun,
+  videoFrameProcessing,
+}
+
 /// An Android implementation of [VideoPlayerPlatform] that uses the
 /// Pigeon-generated [VideoPlayerApi].
 class AndroidVideoPlayer extends VideoPlayerPlatform {
@@ -37,6 +90,78 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
        _playerApiProvider = playerApiProvider ?? _productionApiProvider,
        _videoEventStreamProvider =
            videoEventStreamProvider ?? _productionVideoEventStreamProvider;
+
+  /// App-private header removed before a media request reaches the network.
+  static const String nativePlaybackSignalTokenHeader =
+      'X-QWQ-Native-Playback-Signal-Token';
+
+  static final Map<String, List<AndroidVideoNativePlaybackSignal>>
+  _pendingNativePlaybackSignals =
+      <String, List<AndroidVideoNativePlaybackSignal>>{};
+  static final Map<String, StreamController<AndroidVideoNativePlaybackSignal>>
+  _nativePlaybackSignalControllers =
+      <String, StreamController<AndroidVideoNativePlaybackSignal>>{};
+
+  /// Returns an opaque-token scoped stream and replays native events queued
+  /// before the Flutter controller finishes initialization.
+  static Stream<AndroidVideoNativePlaybackSignal> nativePlaybackSignalsFor(
+    String sessionToken,
+  ) => _nativePlaybackSignalControllerFor(sessionToken).stream;
+
+  static StreamController<AndroidVideoNativePlaybackSignal>
+  _nativePlaybackSignalControllerFor(String sessionToken) {
+    return _nativePlaybackSignalControllers.putIfAbsent(sessionToken, () {
+      late final StreamController<AndroidVideoNativePlaybackSignal> controller;
+      controller = StreamController<AndroidVideoNativePlaybackSignal>.broadcast(
+        onListen: () {
+          final pending = _pendingNativePlaybackSignals.remove(sessionToken);
+          if (pending == null) {
+            return;
+          }
+          for (final signal in pending) {
+            controller.add(signal);
+          }
+        },
+      );
+      return controller;
+    });
+  }
+
+  @visibleForTesting
+  static void debugEmitNativePlaybackSignal(
+    AndroidVideoNativePlaybackSignal signal,
+  ) {
+    _emitNativePlaybackSignal(signal);
+  }
+
+  static void _emitNativePlaybackSignal(
+    AndroidVideoNativePlaybackSignal signal,
+  ) {
+    final controller = _nativePlaybackSignalControllers[signal.sessionToken];
+    if (controller != null && controller.hasListener) {
+      controller.add(signal);
+      return;
+    }
+    _pendingNativePlaybackSignals
+        .putIfAbsent(
+          signal.sessionToken,
+          () => <AndroidVideoNativePlaybackSignal>[],
+        )
+        .add(signal);
+  }
+
+  static Future<void> _disposeNativePlaybackSignals(
+    String? sessionToken,
+  ) async {
+    if (sessionToken == null) {
+      return;
+    }
+    _pendingNativePlaybackSignals.remove(sessionToken);
+    final controller = _nativePlaybackSignalControllers.remove(sessionToken);
+    if (controller != null) {
+      await controller.close();
+    }
+  }
 
   final AndroidVideoPlayerApi _api;
   // A method to create VideoPlayerInstanceApi instances, which can be
@@ -64,6 +189,7 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
     final _PlayerInstance? player = _players.remove(playerId);
     await player?.dispose();
     await _api.dispose(playerId);
+    await _disposeNativePlaybackSignals(player?.nativePlaybackSignalToken);
   }
 
   @override
@@ -84,7 +210,12 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
 
     String? uri;
     PlatformVideoFormat? formatHint;
-    final Map<String, String> httpHeaders = dataSource.httpHeaders;
+    final Map<String, String> httpHeaders = Map<String, String>.of(
+      dataSource.httpHeaders,
+    );
+    final String? nativePlaybackSignalToken = httpHeaders.remove(
+      nativePlaybackSignalTokenHeader,
+    );
     final String? userAgent = _userAgentFromHeaders(httpHeaders);
     switch (dataSource.sourceType) {
       case DataSourceType.asset:
@@ -129,7 +260,11 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
         playerId = await _api.createForPlatformView(pigeonCreationOptions);
         state = const VideoPlayerPlatformViewState();
     }
-    ensurePlayerInitialized(playerId, state);
+    ensurePlayerInitialized(
+      playerId,
+      state,
+      nativePlaybackSignalToken: nativePlaybackSignalToken,
+    );
 
     return playerId;
   }
@@ -150,11 +285,17 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
   /// Returns the player instance for [playerId], creating it if it doesn't
   /// already exist.
   @visibleForTesting
-  void ensurePlayerInitialized(int playerId, VideoPlayerViewState viewState) {
+  void ensurePlayerInitialized(
+    int playerId,
+    VideoPlayerViewState viewState, {
+    String? nativePlaybackSignalToken,
+  }) {
     _players.putIfAbsent(playerId, () {
       return _PlayerInstance(
+        playerId,
         _playerApiProvider(playerId),
         viewState,
+        nativePlaybackSignalToken: nativePlaybackSignalToken,
         videoEventStream: _videoEventStreamProvider(playerId.toString()),
       );
     });
@@ -292,8 +433,10 @@ class _PlayerInstance {
   /// Creates a new instance of [_PlayerInstance] corresponding to the given
   /// API instance.
   _PlayerInstance(
+    this.playerId,
     this._api,
     this.viewState, {
+    this.nativePlaybackSignalToken,
     required Stream<PlatformVideoEvent> videoEventStream,
   }) {
     _eventSubscription = videoEventStream.listen(
@@ -305,7 +448,9 @@ class _PlayerInstance {
     );
   }
 
+  final int playerId;
   final VideoPlayerInstanceApi _api;
+  final String? nativePlaybackSignalToken;
   final StreamController<VideoEvent> _eventStreamController =
       StreamController<VideoEvent>();
   late final StreamSubscription<dynamic> _eventSubscription;
@@ -487,7 +632,65 @@ class _PlayerInstance {
             !_audioTrackSelectionCompleter!.isCompleted) {
           _audioTrackSelectionCompleter!.complete();
         }
+      case PlaybackDiagnosticsEvent _:
+        _emitNativePlaybackSignal(
+          AndroidVideoNativePlaybackSignal(
+            sessionToken: nativePlaybackSignalToken ?? '',
+            kind: AndroidVideoNativePlaybackSignalKind.playbackDiagnostics,
+            rendererMode: event.rendererMode,
+            decoderQueueMode: event.decoderQueueMode,
+            decoderFallbackEnabled: event.decoderFallbackEnabled,
+          ),
+        );
+      case RenderedFirstFrameEvent _:
+        _emitNativePlaybackSignal(
+          AndroidVideoNativePlaybackSignal(
+            sessionToken: nativePlaybackSignalToken ?? '',
+            kind: AndroidVideoNativePlaybackSignalKind.renderedFirstFrame,
+            ttffMs: event.ttffMs,
+          ),
+        );
+      case SeekSettledEvent _:
+        _emitNativePlaybackSignal(
+          AndroidVideoNativePlaybackSignal(
+            sessionToken: nativePlaybackSignalToken ?? '',
+            kind: AndroidVideoNativePlaybackSignalKind.seekSettled,
+            targetPositionMs: event.targetPositionMs,
+            settledPositionMs: event.settledPositionMs,
+            settleMs: event.settleMs,
+          ),
+        );
+      case DroppedVideoFramesEvent _:
+        _emitNativePlaybackSignal(
+          AndroidVideoNativePlaybackSignal(
+            sessionToken: nativePlaybackSignalToken ?? '',
+            kind: AndroidVideoNativePlaybackSignalKind.droppedVideoFrames,
+            droppedFrames: event.droppedFrames,
+          ),
+        );
+      case AudioUnderrunEvent _:
+        _emitNativePlaybackSignal(
+          AndroidVideoNativePlaybackSignal(
+            sessionToken: nativePlaybackSignalToken ?? '',
+            kind: AndroidVideoNativePlaybackSignalKind.audioUnderrun,
+          ),
+        );
+      case VideoFrameProcessingEvent _:
+        _emitNativePlaybackSignal(
+          AndroidVideoNativePlaybackSignal(
+            sessionToken: nativePlaybackSignalToken ?? '',
+            kind: AndroidVideoNativePlaybackSignalKind.videoFrameProcessing,
+            processedFrames: event.processedFrames,
+          ),
+        );
     }
+  }
+
+  void _emitNativePlaybackSignal(AndroidVideoNativePlaybackSignal signal) {
+    if (nativePlaybackSignalToken == null) {
+      return;
+    }
+    AndroidVideoPlayer._emitNativePlaybackSignal(signal);
   }
 
   // Turns a single buffer position, which is what ExoPlayer reports, into the

@@ -6,8 +6,8 @@
 校验三条：
 A. scripts/ 内禁止 import 外部 LLM SDK、或出现 LLM 服务 HTTP 端点字面量
    （会话 agent 是唯一模型执行者，不得旁路到外部模型服务）。
-B. 交付正文 generator 必须为 agent：materialize 保留"非 agent 拒绝落地"逻辑，
-   draft_io 暴露 GENERATOR_AGENT/PENDING（占位与脚本拼接不得进交付面）。
+B. 交付正文 generator 必须由 ContentGenerator 闭集控制：materialize 保留
+   "非 agent 拒绝落地"逻辑，draft_io 暴露 AGENT/PENDING 状态。
 C. 脚本占位主页（_stub_entity_page）必须带透明占位标记，不得冒充模型创作内容。
 
 本模块为纯静态扫描（无运行期副作用、确定性），供 test/verify 调用。
@@ -104,7 +104,10 @@ def scan_agent_executor_contract(scripts_root: Path | None = None) -> list[str]:
         _require_substring(
             root,
             "content/post/materialize_apply.py",
-            ('!= "agent"',),
+            (
+                "ContentGenerator.IMAGE_EVIDENCE_PACK.value",
+                "ContentGenerator.AGENT.value",
+            ),
             "materialize 必须拒绝非 agent generator 落地交付面",
         )
     )
@@ -112,7 +115,10 @@ def scan_agent_executor_contract(scripts_root: Path | None = None) -> list[str]:
         _require_substring(
             root,
             "content/post/article/draft_io.py",
-            ('GENERATOR_AGENT = "agent"', "GENERATOR_PENDING"),
+            (
+                "GENERATOR_AGENT = ContentGenerator.AGENT.value",
+                "GENERATOR_PENDING = ContentGenerator.PENDING.value",
+            ),
             "draft_io 必须冻结 agent/pending generator 契约",
         )
     )

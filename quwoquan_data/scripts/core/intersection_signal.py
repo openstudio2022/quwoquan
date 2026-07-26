@@ -1,7 +1,7 @@
 """交集信号 intersectionHints ——「明」：讲清楚一篇内容凭什么被推荐。
 
 四原则之「明」：结合推荐与规划，从「交集」角度说明为什么推荐这条内容。
-云侧 read model `IntersectionReason`（contracts/metadata/recommendation/model_release/projections/
+云侧 read model `IntersectionReason`（recommendation-service/contracts/recommendation/recommendation_model_release/projections/
 intersection_reason.yaml）是跨会话真相源：端只读展示、禁止本地拼装文案。
 
 post 是内容生产期、没有具体用户，因此只预生成「内容侧可交集锚点」intersectionHints——
@@ -15,18 +15,16 @@ post 是内容生产期、没有具体用户，因此只预生成「内容侧可
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
 from typing import Any, Mapping
 
 import yaml
 
+from core.paths import service_contracts_root
+
 INTERSECTION_CONTRACT_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "quwoquan_service"
-    / "contracts"
-    / "metadata"
+    service_contracts_root("recommendation-service")
     / "recommendation"
-    / "model_release"
+    / "recommendation_model_release"
     / "projections"
     / "intersection_reason.yaml"
 )

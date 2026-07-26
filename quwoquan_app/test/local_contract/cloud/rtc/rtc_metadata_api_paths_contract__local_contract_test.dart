@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_api_metadata.g.dart';
 
-/// 与 `contracts/metadata/rtc/call_session/service.yaml` 经 codegen 生成的路径常量对齐（防漂移）。
+/// 与 `quwoquan_service/services/rtc-service/contracts/rtc/call_session/operations.yaml` 经 codegen 生成的路径常量对齐（防漂移）。
 void main() {
   group('RtcApiMetadata — 与 rtc-service 契约', () {
     test('核心 operation 路径与方法', () {

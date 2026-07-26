@@ -1,5 +1,0 @@
-service:
-  name: legal-static
-config:
-  env: prod
-  version: "v2026.07.08.0"

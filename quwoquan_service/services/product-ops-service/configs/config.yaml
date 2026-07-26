@@ -1,4 +1,0 @@
-service:
-  name: product-ops-service
-  http:
-    addr: ":18086"

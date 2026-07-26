@@ -1,17 +1,22 @@
 import 'package:flutter/foundation.dart' show ValueGetter, setEquals;
 
 export 'package:quwoquan_app/core/models/search_hit_payload.dart';
-export 'package:quwoquan_app/cloud/runtime/generated/content/post_search_item_view_dto.g.dart';
+export 'package:quwoquan_app/core/models/search_post_item_view.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
 export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show LocationPoiDto;
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/recent_search_entry_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show LocationPoiDto;
+    show
+        LocationPoiDto,
+        SocialRelationSearchItemProjection,
+        SocialRelationshipCapabilityProjection;
+part 'search_models_presentation.dart';
 part 'search_models_selection.dart';
 
 /// 与集合迭代顺序无关的稳定 hash（用于 [SearchObjectSelection.hashCode]）。
@@ -39,11 +44,11 @@ enum SearchScope {
   };
 
   String get label => switch (this) {
-    SearchScope.all => '全部',
-    SearchScope.content => '内容',
-    SearchScope.socialRelation => '社交关系',
-    SearchScope.messages => '聊天',
-    SearchScope.circles => '讨论',
+    SearchScope.all => UITextConstants.searchAllTab,
+    SearchScope.content => UITextConstants.searchScopeContent,
+    SearchScope.socialRelation => UITextConstants.searchScopeSocialRelation,
+    SearchScope.messages => UITextConstants.searchScopeMessages,
+    SearchScope.circles => UITextConstants.searchScopeDiscussions,
   };
 
   static SearchScope fromWire(String? raw) {
@@ -77,10 +82,10 @@ enum SearchObjectTarget {
   };
 
   String get label => switch (this) {
-    SearchObjectTarget.contacts => '联系人',
-    SearchObjectTarget.directChats => '单聊',
-    SearchObjectTarget.groupChats => '讨论',
-    SearchObjectTarget.circles => '讨论',
+    SearchObjectTarget.contacts => UITextConstants.searchTargetContacts,
+    SearchObjectTarget.directChats => UITextConstants.searchTargetDirectChats,
+    SearchObjectTarget.groupChats => UITextConstants.searchTargetGroupChats,
+    SearchObjectTarget.circles => UITextConstants.searchScopeDiscussions,
   };
 
   static SearchObjectTarget? fromWire(String raw) {
@@ -113,10 +118,10 @@ enum SearchContentTypeFilter {
   };
 
   String get label => switch (this) {
-    SearchContentTypeFilter.article => '文章',
-    SearchContentTypeFilter.image => '图片',
-    SearchContentTypeFilter.video => '视频',
-    SearchContentTypeFilter.micro => '微趣',
+    SearchContentTypeFilter.article => UITextConstants.searchContentTypeArticle,
+    SearchContentTypeFilter.image => UITextConstants.searchCategoryImage,
+    SearchContentTypeFilter.video => UITextConstants.searchCategoryVideo,
+    SearchContentTypeFilter.micro => UITextConstants.searchContentTypeMicro,
   };
 
   String get identity => switch (this) {
@@ -257,9 +262,16 @@ class SocialRelationshipCapabilityView {
     );
   }
 
-  factory SocialRelationshipCapabilityView.fromMap(Map<String, dynamic> map) {
-    return SocialRelationshipCapabilityView.fromSocialRelationshipCapabilityWire(
-      SocialRelationshipCapabilityWireDto.fromMap(map),
+  factory SocialRelationshipCapabilityView.fromProjection(
+    SocialRelationshipCapabilityProjection projection,
+  ) {
+    return SocialRelationshipCapabilityView(
+      relationState: projection.relationState,
+      canFollow: projection.canFollow,
+      canUnfollow: projection.canUnfollow,
+      canOpenConversation: projection.canOpenConversation,
+      canStartVoiceCall: projection.canStartVoiceCall,
+      canStartVideoCall: projection.canStartVideoCall,
     );
   }
 }
@@ -285,29 +297,16 @@ class SocialRelationSearchItemView {
   final bool chatAvailable;
   final SocialRelationshipCapabilityView relationshipCapability;
 
-  /// [row] 为整行 JSON（与 [SocialRelationSearchItemWireDto.fromMap] 同源），用于 capability 嵌套缺失时回退。
   factory SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
     SocialRelationSearchItemWireDto w,
-    Map<String, dynamic> row,
   ) {
     final subAccountId = w.subAccountId;
     final displayName = w.displayName.isNotEmpty ? w.displayName : subAccountId;
     final username = w.username.isNotEmpty ? w.username : subAccountId;
-    final nested = w.relationshipCapability;
-    final Map<String, dynamic> effectiveCap =
-        (nested != null && nested.isNotEmpty)
-        ? Map<String, dynamic>.from(nested)
-        : row;
-    final cap = SocialRelationshipCapabilityWireDto.fromMap(effectiveCap);
-    final canOpen = cap.canOpenConversation || w.chatAvailable;
-    final capView = SocialRelationshipCapabilityView(
-      relationState: cap.relationState,
-      canFollow: cap.canFollow,
-      canUnfollow: cap.canUnfollow,
-      canOpenConversation: canOpen,
-      canStartVoiceCall: cap.canStartVoiceCall,
-      canStartVideoCall: cap.canStartVideoCall,
-    );
+    final capView =
+        SocialRelationshipCapabilityView.fromSocialRelationshipCapabilityWire(
+          w.relationshipCapability ?? SocialRelationshipCapabilityWireDto(),
+        );
     return SocialRelationSearchItemView(
       subAccountId: subAccountId,
       username: username,
@@ -317,16 +316,116 @@ class SocialRelationSearchItemView {
           : resolveAvatarImageUrl(w.avatarUrl, avatarVersion: w.avatarVersion),
       avatarVersion: w.avatarVersion,
       headline: w.headline,
-      chatAvailable: w.chatAvailable || capView.canOpenConversation,
+      chatAvailable: capView.canOpenConversation,
       relationshipCapability: capView,
     );
   }
 
-  factory SocialRelationSearchItemView.fromMap(Map<String, dynamic> map) {
-    return SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
-      SocialRelationSearchItemWireDto.fromMap(map),
-      map,
+  factory SocialRelationSearchItemView.fromProjection(
+    SocialRelationSearchItemProjection projection,
+  ) {
+    final subAccountId = projection.subAccountId;
+    final displayName = projection.displayName.isNotEmpty
+        ? projection.displayName
+        : subAccountId;
+    final username = projection.username.isNotEmpty
+        ? projection.username
+        : (projection.userHandle.isNotEmpty
+              ? projection.userHandle
+              : subAccountId);
+    final capability = projection.relationshipCapability;
+    final capView = capability == null
+        ? const SocialRelationshipCapabilityView(
+            relationState: 'not_following',
+            canFollow: false,
+            canUnfollow: false,
+            canOpenConversation: false,
+            canStartVoiceCall: false,
+            canStartVideoCall: false,
+          )
+        : SocialRelationshipCapabilityView.fromProjection(capability);
+    return SocialRelationSearchItemView(
+      subAccountId: subAccountId,
+      username: username,
+      displayName: displayName,
+      avatarUrl: projection.avatarUrl == null
+          ? null
+          : resolveAvatarImageUrl(
+              projection.avatarUrl,
+              avatarVersion: projection.avatarVersion,
+            ),
+      avatarVersion: projection.avatarVersion,
+      headline: projection.headline,
+      chatAvailable: projection.chatAvailable || capView.canOpenConversation,
+      relationshipCapability: capView,
     );
+  }
+}
+
+/// 联系人本地检索结果行（chat 本地检索单轨 ViewModel）。
+///
+/// 历史上曾是 `SearchContacts` 云端 operation 的 generated wire DTO；
+/// B5 收敛为本地 sqlite 检索单轨后随 operation 一并去 wire 化，保留类名
+/// 以稳定本地检索链（record/hit payload/coordinator）的类型引用。
+class ChatContactSearchItemDto {
+  const ChatContactSearchItemDto({
+    this.contactId = '',
+    this.displayName = '',
+    this.avatarUrl,
+    this.conversationId,
+    this.conversationType,
+    this.source,
+    this.subtitle,
+    this.highlightText,
+    this.matchedField,
+  });
+
+  final String contactId;
+  final String displayName;
+  final String? avatarUrl;
+  final String? conversationId;
+  final String? conversationType;
+  final String? source;
+  final String? subtitle;
+  final String? highlightText;
+  final String? matchedField;
+
+  ChatContactSearchItemDto copyWith({
+    String? contactId,
+    String? displayName,
+    String? avatarUrl,
+    String? conversationId,
+    String? conversationType,
+    String? source,
+    String? subtitle,
+    String? highlightText,
+    String? matchedField,
+  }) {
+    return ChatContactSearchItemDto(
+      contactId: contactId ?? this.contactId,
+      displayName: displayName ?? this.displayName,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      conversationId: conversationId ?? this.conversationId,
+      conversationType: conversationType ?? this.conversationType,
+      source: source ?? this.source,
+      subtitle: subtitle ?? this.subtitle,
+      highlightText: highlightText ?? this.highlightText,
+      matchedField: matchedField ?? this.matchedField,
+    );
+  }
+
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
+      'contactId': contactId,
+      'displayName': displayName,
+      'avatarUrl': avatarUrl,
+      'conversationId': conversationId,
+      'conversationType': conversationType,
+      'source': source,
+      'subtitle': subtitle,
+      'highlightText': highlightText,
+      'matchedField': matchedField,
+    };
   }
 }
 
@@ -357,21 +456,20 @@ class ConversationSearchItemView {
   final String? highlightText;
   final String? matchedField;
 
-  factory ConversationSearchItemView.fromMap(Map<String, dynamic> map) {
-    return ConversationSearchItemView(
-      conversationId: (map['conversationId'] ?? '').toString().trim(),
-      type: (map['type'] ?? 'direct').toString().trim(),
-      title: (map['title'] ?? '').toString().trim(),
-      avatarUrl: _optionalString(map['avatarUrl']),
-      lastMessagePreview: map['lastMessagePreview']?.toString(),
-      lastMessageTime: _parseDateTime(map['lastMessageTime']),
-      memberCount: (map['memberCount'] as num?)?.toInt() ?? 0,
-      circleId: map['circleId']?.toString(),
-      circleGroupId: map['circleGroupId']?.toString(),
-      highlightText: map['highlightText']?.toString(),
-      matchedField: map['matchedField']?.toString(),
-    );
-  }
+  Map<String, Object?> toMap() => <String, Object?>{
+    'conversationId': conversationId,
+    'type': type,
+    'title': title,
+    if (avatarUrl != null) 'avatarUrl': avatarUrl,
+    if (lastMessagePreview != null) 'lastMessagePreview': lastMessagePreview,
+    if (lastMessageTime != null)
+      'lastMessageTime': lastMessageTime!.toUtc().toIso8601String(),
+    'memberCount': memberCount,
+    if (circleId != null) 'circleId': circleId,
+    if (circleGroupId != null) 'circleGroupId': circleGroupId,
+    if (highlightText != null) 'highlightText': highlightText,
+    if (matchedField != null) 'matchedField': matchedField,
+  };
 }
 
 class MessageSearchItemView {
@@ -405,23 +503,22 @@ class MessageSearchItemView {
   final String? highlightText;
   final String? matchedField;
 
-  factory MessageSearchItemView.fromMap(Map<String, dynamic> map) {
-    return MessageSearchItemView(
-      messageId: (map['messageId'] ?? '').toString().trim(),
-      conversationId: (map['conversationId'] ?? '').toString().trim(),
-      conversationTitle: map['conversationTitle']?.toString(),
-      conversationAvatarUrl: map['conversationAvatarUrl']?.toString(),
-      senderPersonaId: map['senderPersonaId']?.toString(),
-      senderDisplayName: map['senderDisplayName']?.toString(),
-      senderAvatarUrl: map['senderAvatarUrl']?.toString(),
-      messageType: (map['messageType'] ?? 'text').toString().trim(),
-      contentPreview: (map['contentPreview'] ?? '').toString().trim(),
-      seq: (map['seq'] as num?)?.toInt(),
-      timestamp: _parseDateTime(map['timestamp']) ?? DateTime.now(),
-      highlightText: map['highlightText']?.toString(),
-      matchedField: map['matchedField']?.toString(),
-    );
-  }
+  Map<String, Object?> toMap() => <String, Object?>{
+    'messageId': messageId,
+    'conversationId': conversationId,
+    if (conversationTitle != null) 'conversationTitle': conversationTitle,
+    if (conversationAvatarUrl != null)
+      'conversationAvatarUrl': conversationAvatarUrl,
+    if (senderPersonaId != null) 'senderPersonaId': senderPersonaId,
+    if (senderDisplayName != null) 'senderDisplayName': senderDisplayName,
+    if (senderAvatarUrl != null) 'senderAvatarUrl': senderAvatarUrl,
+    'messageType': messageType,
+    'contentPreview': contentPreview,
+    if (seq != null) 'seq': seq,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    if (highlightText != null) 'highlightText': highlightText,
+    if (matchedField != null) 'matchedField': matchedField,
+  };
 }
 
 class RecentSearchEntryView {
@@ -469,22 +566,6 @@ class RecentSearchEntryView {
     );
   }
 
-  factory RecentSearchEntryView.fromMap(Map<String, dynamic> map) {
-    return RecentSearchEntryView.fromRecentSearchEntryWire(
-      RecentSearchEntryWireDto.fromMap(map),
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'entryId': entryId,
-      'query': query,
-      'scope': scope.wireValue,
-      'facet': facet,
-      'updatedAt': updatedAt.toIso8601String(),
-    };
-  }
-
   RecentSearchEntryView copyWith({
     String? entryId,
     String? query,
@@ -500,499 +581,4 @@ class RecentSearchEntryView {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
-}
-
-enum SearchViewMode { historyBrowse, historyManage, liveSuggestions }
-
-enum SearchSuggestionSectionKind {
-  contacts,
-  chatRecords,
-  circles,
-  locations,
-  followedPeople,
-  network;
-
-  String get title => switch (this) {
-    SearchSuggestionSectionKind.contacts => '联系人',
-    SearchSuggestionSectionKind.chatRecords => '聊天记录',
-    SearchSuggestionSectionKind.circles => '已加入圈子',
-    SearchSuggestionSectionKind.locations => '已关注地点',
-    SearchSuggestionSectionKind.followedPeople => '人',
-    SearchSuggestionSectionKind.network => '搜索网络结果',
-  };
-}
-
-enum MostUsedTargetKind { contact, chatRecord, circle }
-
-class MostUsedSearchItem {
-  const MostUsedSearchItem({
-    required this.itemId,
-    required this.targetKind,
-    required this.title,
-    required this.subtitle,
-    this.avatarUrl,
-    this.conversationId,
-    this.conversationType,
-    this.circleId,
-    this.messageAnchorId,
-    this.timestamp,
-    this.matchCount = 0,
-    this.usageScore = 0,
-  });
-
-  final String itemId;
-  final MostUsedTargetKind targetKind;
-  final String title;
-  final String subtitle;
-  final String? avatarUrl;
-  final String? conversationId;
-  final String? conversationType;
-  final String? circleId;
-  final String? messageAnchorId;
-  final DateTime? timestamp;
-  final int matchCount;
-  final int usageScore;
-}
-
-class ContactSearchSuggestion {
-  const ContactSearchSuggestion({
-    required this.contactId,
-    required this.displayName,
-    required this.conversationId,
-    this.avatarUrl,
-    this.subtitle,
-  });
-
-  final String contactId;
-  final String displayName;
-  final String conversationId;
-  final String? avatarUrl;
-  final String? subtitle;
-}
-
-class ChatRecordSearchSuggestion {
-  const ChatRecordSearchSuggestion({
-    required this.conversationId,
-    required this.conversationTitle,
-    required this.conversationType,
-    required this.matchedPreview,
-    required this.matchCount,
-    this.avatarUrl,
-    this.messageAnchorId,
-    this.timestamp,
-  });
-
-  final String conversationId;
-  final String conversationTitle;
-  final String conversationType;
-  final String matchedPreview;
-  final int matchCount;
-  final String? avatarUrl;
-  final String? messageAnchorId;
-  final DateTime? timestamp;
-}
-
-class NetworkSearchSuggestion {
-  const NetworkSearchSuggestion({
-    required this.query,
-    this.title,
-    this.subtitle,
-    this.initialTabId,
-    this.homepageId,
-    this.coverUrl,
-  });
-
-  final String query;
-  final String? title;
-  final String? subtitle;
-  final String? initialTabId;
-  final String? homepageId;
-  final String? coverUrl;
-
-  String get displayTitle => title ?? query;
-  bool get isHomepagePreview => homepageId?.trim().isNotEmpty == true;
-}
-
-class SearchHighlightSpan {
-  const SearchHighlightSpan({required this.text, this.isMatch = false});
-
-  final String text;
-  final bool isMatch;
-
-  static List<SearchHighlightSpan> build({
-    required String text,
-    required String keyword,
-  }) {
-    final source = text;
-    final query = keyword.trim();
-    if (source.isEmpty || query.isEmpty) {
-      return <SearchHighlightSpan>[SearchHighlightSpan(text: source)];
-    }
-    final lowerSource = source.toLowerCase();
-    final lowerQuery = query.toLowerCase();
-    final spans = <SearchHighlightSpan>[];
-    var cursor = 0;
-    while (cursor < source.length) {
-      final index = lowerSource.indexOf(lowerQuery, cursor);
-      if (index < 0) {
-        spans.add(SearchHighlightSpan(text: source.substring(cursor)));
-        break;
-      }
-      if (index > cursor) {
-        spans.add(SearchHighlightSpan(text: source.substring(cursor, index)));
-      }
-      final end = index + query.length;
-      spans.add(
-        SearchHighlightSpan(text: source.substring(index, end), isMatch: true),
-      );
-      cursor = end;
-    }
-    return spans.where((span) => span.text.isNotEmpty).toList(growable: false);
-  }
-}
-
-class SearchHomeState {
-  const SearchHomeState({
-    this.history = const <RecentSearchEntryView>[],
-    this.guessKeywords = const <NetworkSearchSuggestion>[],
-    this.hotCircles = const <SearchInspirationCardView>[],
-    this.hotLocations = const <SearchInspirationCardView>[],
-  });
-
-  final List<RecentSearchEntryView> history;
-  final List<NetworkSearchSuggestion> guessKeywords;
-  final List<SearchInspirationCardView> hotCircles;
-  final List<SearchInspirationCardView> hotLocations;
-}
-
-class SearchLocalMatchesState {
-  const SearchLocalMatchesState({
-    this.contacts = const <SearchSuggestionEntry>[],
-    this.chatRecords = const <SearchSuggestionEntry>[],
-    this.circles = const <SearchSuggestionEntry>[],
-    this.places = const <SearchSuggestionEntry>[],
-    this.people = const <SearchSuggestionEntry>[],
-    this.keywordTerms = const <SearchSuggestionEntry>[],
-  });
-
-  final List<SearchSuggestionEntry> contacts;
-  final List<SearchSuggestionEntry> chatRecords;
-  final List<SearchSuggestionEntry> circles;
-  final List<SearchSuggestionEntry> places;
-  final List<SearchSuggestionEntry> people;
-  final List<SearchSuggestionEntry> keywordTerms;
-}
-
-enum UnifiedSearchResultItemKind {
-  intersection,
-  circle,
-  place,
-  person,
-  article,
-  image,
-  video,
-  relatedSearchTerms,
-}
-
-class RelatedSearchTermCardView {
-  const RelatedSearchTermCardView({required this.terms});
-
-  final List<NetworkSearchSuggestion> terms;
-
-  RelatedSearchTermCardView limited() {
-    return RelatedSearchTermCardView(
-      terms: terms.take(5).toList(growable: false),
-    );
-  }
-}
-
-class UnifiedSearchResultStream {
-  const UnifiedSearchResultStream({
-    this.connectedGroups = const <Object>[],
-    this.globalMixedGroups = const <Object>[],
-    this.tabSpecificCollections = const <String, List<Object>>{},
-  });
-
-  final List<Object> connectedGroups;
-  final List<Object> globalMixedGroups;
-  final Map<String, List<Object>> tabSpecificCollections;
-}
-
-enum SearchSuggestionEntryKind {
-  contact,
-  chatRecord,
-  circle,
-  location,
-  followedPerson,
-  network,
-}
-
-class SearchSuggestionEntry {
-  const SearchSuggestionEntry._({required this.kind, required this.payload});
-
-  final SearchSuggestionEntryKind kind;
-  final Object payload;
-
-  const SearchSuggestionEntry.contact(ContactSearchSuggestion value)
-    : this._(kind: SearchSuggestionEntryKind.contact, payload: value);
-  const SearchSuggestionEntry.chatRecord(ChatRecordSearchSuggestion value)
-    : this._(kind: SearchSuggestionEntryKind.chatRecord, payload: value);
-  const SearchSuggestionEntry.circle(CircleSearchItemView value)
-    : this._(kind: SearchSuggestionEntryKind.circle, payload: value);
-  const SearchSuggestionEntry.location(LocationPoiDto value)
-    : this._(kind: SearchSuggestionEntryKind.location, payload: value);
-  const SearchSuggestionEntry.followedPerson(SocialRelationSearchItemView value)
-    : this._(kind: SearchSuggestionEntryKind.followedPerson, payload: value);
-  const SearchSuggestionEntry.network(NetworkSearchSuggestion value)
-    : this._(kind: SearchSuggestionEntryKind.network, payload: value);
-
-  T cast<T>() => payload as T;
-}
-
-class SearchSuggestionSection {
-  const SearchSuggestionSection({
-    required this.kind,
-    required this.items,
-    this.expanded = false,
-    this.collapsedItemCount,
-    this.moreLabel,
-    this.titleOverride,
-  });
-
-  final SearchSuggestionSectionKind kind;
-  final List<SearchSuggestionEntry> items;
-  final bool expanded;
-  final int? collapsedItemCount;
-  final String? moreLabel;
-  final String? titleOverride;
-
-  String get title => titleOverride ?? kind.title;
-
-  List<SearchSuggestionEntry> get visibleItems {
-    final limit = collapsedItemCount;
-    if (expanded || limit == null || items.length <= limit) {
-      return items;
-    }
-    return items.take(limit).toList(growable: false);
-  }
-
-  bool get showsMoreEntry {
-    final limit = collapsedItemCount;
-    return !expanded && limit != null && items.length > limit;
-  }
-
-  SearchSuggestionSection copyWith({
-    SearchSuggestionSectionKind? kind,
-    List<SearchSuggestionEntry>? items,
-    bool? expanded,
-    int? collapsedItemCount,
-    String? moreLabel,
-    String? titleOverride,
-  }) {
-    return SearchSuggestionSection(
-      kind: kind ?? this.kind,
-      items: items ?? this.items,
-      expanded: expanded ?? this.expanded,
-      collapsedItemCount: collapsedItemCount ?? this.collapsedItemCount,
-      moreLabel: moreLabel ?? this.moreLabel,
-      titleOverride: titleOverride ?? this.titleOverride,
-    );
-  }
-}
-
-class SearchInspirationChipView {
-  const SearchInspirationChipView({
-    required this.title,
-    required this.subtitle,
-    this.query,
-  });
-
-  final String title;
-  final String subtitle;
-  final String? query;
-}
-
-class SearchInspirationCardView {
-  const SearchInspirationCardView({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    this.coverUrl,
-    this.query,
-  });
-
-  final String id;
-  final String title;
-  final String subtitle;
-  final String? coverUrl;
-  final String? query;
-}
-
-class SearchInspirationPersonView {
-  const SearchInspirationPersonView({
-    required this.id,
-    required this.displayName,
-    required this.headline,
-    required this.reason,
-    this.avatarUrl,
-  });
-
-  final String id;
-  final String displayName;
-  final String headline;
-  final String reason;
-  final String? avatarUrl;
-}
-
-class SearchInspirationState {
-  const SearchInspirationState({
-    this.todayIntersections = const <SearchInspirationChipView>[],
-    this.guessKeywords = const <NetworkSearchSuggestion>[],
-    this.guessBatchIndex = 0,
-    this.hotCircles = const <SearchInspirationCardView>[],
-    this.hotLocations = const <SearchInspirationCardView>[],
-    this.people = const <SearchInspirationPersonView>[],
-    this.isLoading = false,
-  });
-
-  final List<SearchInspirationChipView> todayIntersections;
-  final List<NetworkSearchSuggestion> guessKeywords;
-  final int guessBatchIndex;
-  final List<SearchInspirationCardView> hotCircles;
-  final List<SearchInspirationCardView> hotLocations;
-  final List<SearchInspirationPersonView> people;
-  final bool isLoading;
-
-  bool get isEmpty =>
-      todayIntersections.isEmpty &&
-      guessKeywords.isEmpty &&
-      hotCircles.isEmpty &&
-      hotLocations.isEmpty &&
-      people.isEmpty;
-
-  SearchInspirationState copyWith({
-    List<SearchInspirationChipView>? todayIntersections,
-    List<NetworkSearchSuggestion>? guessKeywords,
-    int? guessBatchIndex,
-    List<SearchInspirationCardView>? hotCircles,
-    List<SearchInspirationCardView>? hotLocations,
-    List<SearchInspirationPersonView>? people,
-    bool? isLoading,
-  }) {
-    return SearchInspirationState(
-      todayIntersections: todayIntersections ?? this.todayIntersections,
-      guessKeywords: guessKeywords ?? this.guessKeywords,
-      guessBatchIndex: guessBatchIndex ?? this.guessBatchIndex,
-      hotCircles: hotCircles ?? this.hotCircles,
-      hotLocations: hotLocations ?? this.hotLocations,
-      people: people ?? this.people,
-      isLoading: isLoading ?? this.isLoading,
-    );
-  }
-}
-
-class SearchSessionState {
-  const SearchSessionState({
-    required this.launchContext,
-    this.query = '',
-    this.scope = SearchScope.all,
-    this.selection = const SearchObjectSelection(),
-    this.suggestionSections = const <SearchSuggestionSection>[],
-    this.recentSearches = const <RecentSearchEntryView>[],
-    this.inspiration = const SearchInspirationState(),
-    this.isLoading = false,
-    this.isNetworkLoading = false,
-    this.isSlow = false,
-    this.isPartial = false,
-    this.failure,
-    this.isHydratingHistory = false,
-    this.isManagingHistory = false,
-    this.isHistoryExpanded = false,
-    this.areContactsExpanded = false,
-    this.areChatRecordsExpanded = false,
-  });
-
-  final SearchLaunchContext launchContext;
-  final String query;
-  final SearchScope scope;
-  final SearchObjectSelection selection;
-  final List<SearchSuggestionSection> suggestionSections;
-  final List<RecentSearchEntryView> recentSearches;
-  final SearchInspirationState inspiration;
-  final bool isLoading;
-  final bool isNetworkLoading;
-  final bool isSlow;
-  final bool isPartial;
-  final Object? failure;
-  final bool isHydratingHistory;
-  final bool isManagingHistory;
-  final bool isHistoryExpanded;
-  final bool areContactsExpanded;
-  final bool areChatRecordsExpanded;
-
-  bool get hasQuery => query.trim().isNotEmpty;
-  SearchViewMode get viewMode {
-    if (hasQuery) {
-      return SearchViewMode.liveSuggestions;
-    }
-    return isManagingHistory
-        ? SearchViewMode.historyManage
-        : SearchViewMode.historyBrowse;
-  }
-
-  SearchSessionState copyWith({
-    SearchLaunchContext? launchContext,
-    String? query,
-    SearchScope? scope,
-    SearchObjectSelection? selection,
-    List<SearchSuggestionSection>? suggestionSections,
-    List<RecentSearchEntryView>? recentSearches,
-    SearchInspirationState? inspiration,
-    bool? isLoading,
-    bool? isNetworkLoading,
-    bool? isSlow,
-    bool? isPartial,
-    ValueGetter<Object?>? failure,
-    bool? isHydratingHistory,
-    bool? isManagingHistory,
-    bool? isHistoryExpanded,
-    bool? areContactsExpanded,
-    bool? areChatRecordsExpanded,
-  }) {
-    return SearchSessionState(
-      launchContext: launchContext ?? this.launchContext,
-      query: query ?? this.query,
-      scope: scope ?? this.scope,
-      selection: selection ?? this.selection,
-      suggestionSections: suggestionSections ?? this.suggestionSections,
-      recentSearches: recentSearches ?? this.recentSearches,
-      inspiration: inspiration ?? this.inspiration,
-      isLoading: isLoading ?? this.isLoading,
-      isNetworkLoading: isNetworkLoading ?? this.isNetworkLoading,
-      isSlow: isSlow ?? this.isSlow,
-      isPartial: isPartial ?? this.isPartial,
-      failure: failure != null ? failure() : this.failure,
-      isHydratingHistory: isHydratingHistory ?? this.isHydratingHistory,
-      isManagingHistory: isManagingHistory ?? this.isManagingHistory,
-      isHistoryExpanded: isHistoryExpanded ?? this.isHistoryExpanded,
-      areContactsExpanded: areContactsExpanded ?? this.areContactsExpanded,
-      areChatRecordsExpanded:
-          areChatRecordsExpanded ?? this.areChatRecordsExpanded,
-    );
-  }
-}
-
-String? _optionalString(Object? value) {
-  final s = value?.toString().trim() ?? '';
-  return s.isEmpty ? null : s;
-}
-
-DateTime? _parseDateTime(Object? value) {
-  if (value is DateTime) {
-    return value;
-  }
-  if (value is String && value.trim().isNotEmpty) {
-    return DateTime.tryParse(value);
-  }
-  return null;
 }

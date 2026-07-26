@@ -1,12 +1,6 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from core.runtime_policy import active_runtime_policy
-from content.execution.support import Any, ExecutionContext, ExecutionStateTransition, Mapping, Path, datetime, execution_root, load_execution_state, re, read_json, store, write_json
-from content.execution.controller.token_ledger import (
-    build_token_ledger_payload,
-    dedupe_agent_runs,
-    required_creator_profile_id,
-)
+from content.execution.support import Any, ExecutionContext, ExecutionStateTransition, Mapping, Path, datetime, execution_root, load_execution_state, re, read_json, store
 
 def _parse_iso_seconds(value: object) -> float | None:
     text = str(value or "").strip()
@@ -18,21 +12,6 @@ def _parse_iso_seconds(value: object) -> float | None:
         return datetime.fromisoformat(text).timestamp()
     except ValueError:
         return None
-
-def _estimate_tokens(*parts: object) -> int:
-    text = "\n".join(str(part or "") for part in parts if part is not None)
-    compact_len = len(re.sub(r"\s+", "", text))
-    # Chinese-heavy prompts average below one token per visible character, but
-    # use a conservative integer estimate so scale reports are not optimistic.
-    return max(1, int((compact_len + 1) / 1.5))
-
-def _read_text_if_file(path: Path) -> str:
-    if not path.is_file():
-        return ""
-    try:
-        return path.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return ""
 
 def _batch_file_elapsed_seconds(root: Path) -> float | None:
     mtimes: list[float] = []
@@ -49,6 +28,45 @@ def _batch_file_elapsed_seconds(root: Path) -> float | None:
         return None
     elapsed = max(mtimes) - min(mtimes)
     return elapsed if elapsed > 0 else None
+
+def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
+    report_path = root / "evidence/reliabletask/publish_fleet_report.json"
+    if not report_path.is_file():
+        return None
+    from core.schema import assert_valid
+
+    report = read_json(report_path)
+    assert_valid(
+        report,
+        "release",
+        "reliabletask_fleet_report",
+        label="reliabletask_fleet_report",
+    )
+    if (
+        report.get("passed") is not True
+        or report.get("acceptedContentThroughputStatus") != "MEASURED"
+    ):
+        raise ValueError(
+            "ReliableTask publish fleet report 未形成 commercial accepted throughput"
+        )
+    return {
+        "measurementMode": "reliabletask_commercial_accepted",
+        "backend": str(report.get("backend") or ""),
+        "publishedObjectCount": int(report.get("commercialAcceptedCount") or 0),
+        "objectsPerHour": float(
+            report.get("acceptedContentThroughputPerHour") or 0.0
+        ),
+        "controlPlaneTasksPerHour": float(
+            report.get("controlPlaneTaskThroughputPerHour") or 0.0
+        ),
+        "finalizedWithinStageBudgetRate": float(
+            report.get("finalizedWithinStageBudgetRate") or 0.0
+        ),
+        "automaticRecoveryRate": float(
+            report.get("automaticRecoveryRate") or 0.0
+        ),
+        "reportRef": report_path.relative_to(root).as_posix(),
+    }
 
 def _review_repaired_refs(ctx: ExecutionContext) -> set[str]:
     from content.post import object_index as content_object
@@ -73,35 +91,28 @@ def _review_repaired_refs(ctx: ExecutionContext) -> set[str]:
     return repaired
 
 def _agent_active_throughput(state: ExecutionStateTransition) -> dict[str, Any]:
-    runs: list[Any] = list(state.agent_run_history or [])
-    last = state.last_agent_run
-    if isinstance(last, Mapping):
-        runs.append(last)
-    agent_runs = dedupe_agent_runs(runs)
-    source_stage = "post_author"
-    author_runs = [row for row in agent_runs if str(row.get("stage") or "") == source_stage]
+    from content.execution.agent.history import state_managed_agent_runs
+    from core.control_types import ExecutionStage
+
+    agent_runs = state_managed_agent_runs(state)
+    source_stage = ExecutionStage.POST_AUTHOR
+    author_runs = [row for row in agent_runs if row.stage is source_stage]
     if not author_runs:
-        source_stage = "build_homepage"
-        author_runs = [row for row in agent_runs if str(row.get("stage") or "") == source_stage]
+        source_stage = ExecutionStage.BUILD_HOMEPAGE
+        author_runs = [row for row in agent_runs if row.stage is source_stage]
     elapsed = 0.0
     finished = 0
     infra_failures = 0
     planned = 0
     max_worker_count = 0
     for row in author_runs:
-        scheduler = row.get("scheduler") if isinstance(row.get("scheduler"), Mapping) else {}
-        try:
-            elapsed += float((scheduler or {}).get("elapsedSeconds") or 0)
-        except (TypeError, ValueError):
-            pass
-        try:
-            worker_count = int((scheduler or {}).get("effectiveWorkerCount") or 0)
-        except (TypeError, ValueError):
-            worker_count = 0
+        scheduler = row.scheduler
+        elapsed += scheduler.elapsed_seconds
+        worker_count = scheduler.effective_worker_count
         max_worker_count = max(max_worker_count, worker_count)
-        finished += int(row.get("finishedCount") or 0)
-        infra_failures += int(row.get("infrastructureFailures") or 0)
-        planned += int(row.get("plannedJobCount") or row.get("jobCount") or 0)
+        finished += row.finished_count
+        infra_failures += row.infrastructure_failures
+        planned += row.planned_job_count
     aggregate_per_hour = round((finished / elapsed) * 3600, 4) if elapsed > 0 else 0.0
     # Per-worker unit rate is the aggregate author throughput divided by the
     # concurrency actually realized during the trial.  It is the only rate that
@@ -110,8 +121,8 @@ def _agent_active_throughput(state: ExecutionStateTransition) -> dict[str, Any]:
     per_worker_per_hour = round(aggregate_per_hour / realized_workers, 4) if aggregate_per_hour else 0.0
     return {
         "measurementMode": "agent_run_history",
-        "sourceStage": source_stage,
-        "jobKind": "homepage" if source_stage == "build_homepage" else "author",
+        "sourceStage": source_stage.value,
+        "jobKind": "homepage" if source_stage is ExecutionStage.BUILD_HOMEPAGE else "author",
         "authorRunCount": len(author_runs),
         "authorActiveSeconds": round(elapsed, 3),
         "plannedAuthorJobs": planned,
@@ -176,27 +187,22 @@ def _homepage_agent_review_stats(
             run_id = str(meta.get("agentRunId") or "").strip()
             if run_id:
                 run_id_to_entity[run_id] = meta_path.parent.parent.name
-    rows: list[Any] = list(state.agent_run_history or [])
-    last = state.last_agent_run
-    if isinstance(last, Mapping):
-        rows.append(last)
+    from content.execution.agent.history import state_managed_agent_runs
+    from core.control_types import ExecutionStage
+
     attempts_by_entity: dict[str, list[str]] = {}
-    for row in dedupe_agent_runs(rows):
-        if str(row.get("stage") or "") != "build_homepage":
+    for row in state_managed_agent_runs(state):
+        if row.stage is not ExecutionStage.BUILD_HOMEPAGE:
             continue
-        outcomes = row.get("outcomes") or []
-        if not isinstance(outcomes, list):
-            continue
-        for outcome in outcomes:
-            if not isinstance(outcome, Mapping):
+        for job_outcome in row.outcomes:
+            if not job_outcome.succeeded:
                 continue
-            if str(outcome.get("status") or "") != "finished":
-                continue
-            run_id = str(outcome.get("runId") or "").strip()
-            entity = run_id_to_entity.get(run_id) or _homepage_result_entity_name(outcome.get("result"))
+            outcome = job_outcome.outcome
+            run_id = outcome.run_id
+            entity = run_id_to_entity.get(run_id) or _homepage_result_entity_name(outcome.result_text)
             if not entity:
                 continue
-            marker = run_id or f"{row.get('finishedAt') or ''}:{outcome.get('jobIndex') or ''}"
+            marker = run_id or f"{row.finished_at}:{job_outcome.job_index}"
             markers = attempts_by_entity.setdefault(entity, [])
             if marker not in markers:
                 markers.append(marker)
@@ -218,102 +224,14 @@ def _homepage_agent_review_stats(
 def _write_execution_metrics(ctx: ExecutionContext, state: ExecutionStateTransition) -> None:
     """Persist production-readiness metrics derived from batch artifacts and real usage."""
     from content.post import object_index as content_object
-    from content.post.article.draft_io import (
-        draft_article_path,
-        draft_package_dir,
-        is_placeholder,
-        prompt_path,
-        read_writing_pack,
-        writing_pack_path,
-    )
     from content.release.canonical.runtime_integrity import scan_runtime_batch_integrity
-    from content.execution.production_contracts import build_token_ledger_entry
-    if isinstance(state.agent_run_history, list):
-        state.agent_run_history = list(dedupe_agent_runs(state.agent_run_history))[-20:]
+    from content.execution.agent.history import state_managed_agent_runs
+
+    state.agent_run_history = [
+        run.to_document() for run in state_managed_agent_runs(state)[-20:]
+    ]
     root = execution_root(ctx.execution_id)
-    shared = root / "_shared"
-    shared.mkdir(parents=True, exist_ok=True)
     refs = content_object.iter_content_refs(ctx.execution_id)
-    entries: list[dict[str, Any]] = []
-    default_budget = active_runtime_policy().default_object_token_budget
-    for ref in refs:
-        coords = content_object.content_coords(ctx.execution_id, ref) or {}
-        prompt = _read_text_if_file(prompt_path(ctx.execution_id, ref))
-        author_packet_path = draft_package_dir(ctx.execution_id, ref) / "author_job_packet.json"
-        author_packet = _read_text_if_file(author_packet_path)
-        pack = author_packet or _read_text_if_file(writing_pack_path(ctx.execution_id, ref))
-        draft = _read_text_if_file(draft_article_path(ctx.execution_id, ref))
-        content_type = str(coords.get("contentType") or "article")
-        writing_pack = read_writing_pack(ctx.execution_id, ref) or {}
-        deterministic_image = (
-            content_type == "image"
-            and str(writing_pack.get("carrier") or "") == "image"
-            and not author_packet
-            and is_placeholder(draft)
-        )
-        used = 0 if deterministic_image else _estimate_tokens(prompt, pack, draft)
-        entries.append(
-            build_token_ledger_entry(
-                execution_id=ctx.execution_id,
-                job_id=f"artifact:{ref}",
-                run_id=f"artifact:{ref}",
-                creator_profile_id=required_creator_profile_id(
-                    writing_pack,
-                    ref=ref,
-                ),
-                content_type=content_type,
-                budget_tokens=max(default_budget, used),
-                used_tokens=used,
-                cache_hits={
-                    "sopSummary": False,
-                    "creatorProfileSummary": False,
-                    "evidencePackSummary": bool(author_packet),
-                },
-                cost_usd=0.0,
-                provider="estimated",
-            )
-        )
-    # homepage 实体对象不在 content refs 索引里；当前 Cursor SDK 本地 bridge
-    # 不回传 usage（result 无 usage 字段、事件流无 turn-ended usage），若不按
-    # 实体 draft 产物估算，homepage-only 批次会落出 entries=0 的空账本。
-    from core.entity_object import collect_execution_entity_objects
-    for row in collect_execution_entity_objects(ctx.execution_id):
-        entity_dir = Path(row["entityDir"])
-        # collect 的 page.md marker 会把 4.draft/ 等 stage 子目录误判为实体根；
-        # 计量只认真实实体对象（有 _entity.json），避免同一实体重复入账。
-        if not (entity_dir / "_entity.json").is_file():
-            continue
-        prompt = _read_text_if_file(entity_dir / "4.draft" / "prompt.md")
-        draft = _read_text_if_file(entity_dir / "4.draft" / "page.md") or _read_text_if_file(
-            entity_dir / "page.md"
-        )
-        if not prompt and not draft:
-            continue
-        entity_payload = read_json(entity_dir / "_entity.json")
-        used = _estimate_tokens(prompt, draft)
-        entries.append(
-            build_token_ledger_entry(
-                execution_id=ctx.execution_id,
-                job_id=f"artifact:{row['entityRel']}",
-                run_id=f"artifact:{row['entityRel']}",
-                creator_profile_id=required_creator_profile_id(
-                    entity_payload,
-                    ref=str(row["entityRel"]),
-                ),
-                content_type="homepage",
-                budget_tokens=max(default_budget, used),
-                used_tokens=used,
-                cost_usd=0.0,
-                provider="estimated",
-            )
-        )
-    ledger = build_token_ledger_payload(
-        ctx,
-        state,
-        estimated_entries=entries,
-        default_budget=default_budget,
-    )
-    write_json(shared / "token_ledger.json", ledger)
     runtime_report = scan_runtime_batch_integrity(ctx.execution_id)
     stats = runtime_report.get("stats") if isinstance(runtime_report, Mapping) else {}
     post_count = int((stats or {}).get("postCount") or 0)
@@ -336,6 +254,12 @@ def _write_execution_metrics(ctx: ExecutionContext, state: ExecutionStateTransit
         "maxWorkers": int(ctx.max_workers or 1),
         "agentActive": _agent_active_throughput(state),
     }
+    reliabletask_throughput = _reliabletask_accepted_throughput(root)
+    if reliabletask_throughput is not None:
+        state.throughput = {
+            **state.throughput,
+            **reliabletask_throughput,
+        }
     repaired = _review_repaired_refs(ctx)
     homepage_review = _homepage_agent_review_stats(
         ctx.execution_id,

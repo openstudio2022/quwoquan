@@ -1,12 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
-import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
-
-import '../../../../../../support/recording_app_telemetry_recorder.dart';
+import 'package:quwoquan_app/core/observability/runtime_log_ports.dart';
+import 'package:quwoquan_app/core/observability/runtime_log_record.dart';
+import 'package:quwoquan_app/core/observability/runtime_logger.dart';
 
 void main() {
-  test('Reporter 未绑定时异常采集安全跳过且不维护第二套队列', () async {
+  RuntimeLogger logger(InMemoryRuntimeLogBuffer buffer) => RuntimeLogger(
+    resource: const RuntimeLogResource(
+      sourceType: 'app',
+      environment: 'alpha',
+      service: 'quwoquan_app',
+      appVersion: 'test',
+    ),
+    buffer: buffer,
+  );
+
+  test('Logger 未绑定时异常采集安全跳过', () async {
     final service = AppExceptionTelemetryService();
 
     await service.recordGlobalException(
@@ -19,11 +28,9 @@ void main() {
     expect(service.lastFlushFailure, isNull);
   });
 
-  test('Reporter 拒绝时记录结构化 delivery degradation', () async {
-    final recorder = RecordingAppTelemetryRecorder(
-      recordResult: AppTelemetryRecordResult.rateLimited,
-    );
-    final service = AppExceptionTelemetryService(reporter: recorder);
+  test('全局异常进入统一加密缓冲而不写产品行为遥测', () async {
+    final buffer = InMemoryRuntimeLogBuffer();
+    final service = AppExceptionTelemetryService(logger: logger(buffer));
 
     await service.recordGlobalException(
       source: 'widget_test',
@@ -32,13 +39,16 @@ void main() {
           'Widget.build (/Users/test/private.dart:1)\n#1 token_12345678901234567890',
     );
 
-    expect(service.lastFlushFailure?.errorType, 'rateLimited');
-    expect(service.lastFlushFailure?.queueDepth, 0);
+    final record = (await buffer.pending()).single;
+    expect(record.signal, 'app.exception.flutter');
+    expect(record.kind, RuntimeLogKind.exception);
+    expect(record.errorCode, 'APP.RUNTIME.uncaught_exception');
+    expect(service.lastFlushFailure, isNull);
   });
 
-  test('异常使用 runtime_exception 强类型字段并裁剪方法栈', () async {
-    final recorder = RecordingAppTelemetryRecorder();
-    final service = AppExceptionTelemetryService(reporter: recorder);
+  test('异常以稳定指纹去重且不保存原始调用栈', () async {
+    final buffer = InMemoryRuntimeLogBuffer();
+    final service = AppExceptionTelemetryService(logger: logger(buffer));
     final stack = List<String>.generate(
       12,
       (index) =>
@@ -56,25 +66,45 @@ void main() {
       stackText: stack,
     );
 
-    expect(recorder.recorded, hasLength(1));
-    final event = recorder.recorded.single;
-    expect(event.eventType, 'runtime_exception');
-    expect(event.extensions['errorCode'], 'APP.RUNTIME.uncaught_exception');
-    final methods = event.extensions['callStack']! as List<String>;
-    expect(methods, hasLength(10));
-    expect(methods.join('\n'), isNot(contains('/private/')));
+    final record = (await buffer.pending()).single;
+    expect(record.fingerprint, isNotEmpty);
+    expect(record.fingerprint, isNot(contains('/private/')));
+    expect(record.attributes.toWire()['stackFrameCount'], '10');
     expect(service.lastFlushFailure, isNull);
   });
 
-  test('统一 Reporter flush 延迟时保留结构化失败状态', () async {
-    final recorder = RecordingAppTelemetryRecorder(
-      flushResult: AppTelemetryFlushResult.deferred,
-    );
-    final service = AppExceptionTelemetryService(reporter: recorder);
+  test('已捕获异常携带结构化 RuntimeFailure 语义', () async {
+    final buffer = InMemoryRuntimeLogBuffer();
+    final service = AppExceptionTelemetryService(logger: logger(buffer));
 
+    await service.recordHandledException(
+      source: 'chat.send_outbox.init',
+      error: StateError('storage unavailable'),
+      stackTrace: StackTrace.current,
+      operationId: 'SendMessage',
+    );
+
+    final record = (await buffer.pending()).single;
+    final attributes = record.attributes.toWire();
+    expect(record.correlation.operationId, 'SendMessage');
+    expect(attributes['exceptionType'], 'StateError');
+    expect(attributes['kind'], 'contract');
+    expect(attributes['failurePoint'], 'APP.CONTRACT.invalid_response');
+    expect(attributes['reason'], 'APP.CONTRACT.invalid_response');
+  });
+
+  test('无远端 exporter 时 flush 保留本地诊断记录', () async {
+    final buffer = InMemoryRuntimeLogBuffer();
+    final service = AppExceptionTelemetryService(logger: logger(buffer));
+
+    await service.recordGlobalException(
+      source: 'widget_test',
+      exceptionText: 'boom',
+      stackText: 'stack',
+    );
     await service.flushPending();
 
-    expect(recorder.flushCount, 1);
-    expect(service.lastFlushFailure?.errorType, 'deferred');
+    expect(await buffer.pending(), hasLength(1));
+    expect(service.lastFlushFailure, isNull);
   });
 }

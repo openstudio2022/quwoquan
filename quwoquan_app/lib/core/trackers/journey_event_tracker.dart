@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/core/trackers/runtime_failure_telemetry_dimensions.dart';
 
 /// 无推荐反馈语义的关键产品动作统一投影到 `product_action` 目录事件。
 class JourneyEventTracker {
@@ -17,20 +18,54 @@ class JourneyEventTracker {
     String targetKey = '',
     String entityType = '',
     String entityId = '',
+    String surfaceId = '',
+    String reasonId = '',
+    String environment = '',
     String? pageVisitId,
     Map<String, dynamic> payload = const {},
+    Object? error,
   }) async {
     final duration = payload['durationMs'];
     final result = (payload['result'] ?? '').toString().trim();
-    final failReasonCode = (payload['failReasonCode'] ?? '').toString().trim();
+    final dimensions = RuntimeFailureTelemetryDimensions.from(error);
+    final explicitFailReason = (payload['failReasonCode'] ?? '')
+        .toString()
+        .trim();
+    final explicitRecoveryAction = (payload['recoveryAction'] ?? '')
+        .toString()
+        .trim();
+    final explicitRequestId = (payload['requestId'] ?? '').toString().trim();
+    final explicitTraceId = (payload['traceId'] ?? '').toString().trim();
+    final failReasonCode = explicitFailReason.isNotEmpty
+        ? explicitFailReason
+        : dimensions.sourceCode;
+    final recoveryAction = explicitRecoveryAction.isNotEmpty
+        ? explicitRecoveryAction
+        : dimensions.recoveryAction;
+    final requestId = explicitRequestId.isNotEmpty
+        ? explicitRequestId
+        : dimensions.requestId;
+    final traceId = explicitTraceId.isNotEmpty
+        ? explicitTraceId
+        : dimensions.traceId;
     try {
       await telemetryReporter.record(
         AppTelemetryPayload.productAction(
           journey: journey,
           action: action,
+          surfaceId: surfaceId.isEmpty ? pageName : surfaceId,
+          objectType: entityType.isEmpty ? null : entityType,
+          objectId: entityId.isEmpty ? null : entityId,
+          reasonId: reasonId.isEmpty ? null : reasonId,
+          targetType: targetType.isEmpty ? null : targetType,
+          targetId: targetKey.isEmpty ? null : targetKey,
+          environment: environment.isEmpty ? null : environment,
           durationMs: duration is num ? duration.round() : null,
           result: result.isEmpty ? null : result,
           failReasonCode: failReasonCode.isEmpty ? null : failReasonCode,
+          recoveryAction: recoveryAction.isEmpty ? null : recoveryAction,
+          requestId: requestId.isEmpty ? null : requestId,
+          traceId: traceId.isEmpty ? null : traceId,
         ),
         pageName: pageName,
       );

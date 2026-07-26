@@ -14,7 +14,9 @@ import 'package:quwoquan_app/cloud/services/realtime/transport/longpoll_transpor
 void main() {
   group('Realtime transport contract', () {
     test('fromGateway derives websocket url from generated metadata', () {
-      final config = RealtimeConfig.fromGateway();
+      final config = RealtimeConfig.fromGateway(
+        gatewayBaseUrl: 'https://gateway.example',
+      );
 
       expect(config.wsUrl, endsWith(RealtimeApiMetadata.webSocketUpgradePath));
       expect(
@@ -23,27 +25,61 @@ void main() {
       );
     });
 
-    test('websocket credential carries only trusted token identity', () async {
+    test('websocket credential 先换一次性 ticket，URL 只携带 ticket', () async {
+      http.Request? ticketRequest;
+      final client = MockClient((request) async {
+        ticketRequest = request;
+        return http.Response(
+          jsonEncode({
+            'ticket': 'one-time-ticket',
+            'expiresAt': '2026-07-19T00:00:30Z',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
       final credential = await RealtimeConnectionCredential.resolveWebSocket(
         const _TokenProvider('jwt-token'),
-        runtimeEnvironment: 'gamma',
+        gatewayBaseUrl: 'https://gateway.example',
+        client: client,
       );
       final uri = credential!.authorizeWebSocket(
         Uri.parse('wss://gateway.example/realtime/ws'),
       );
 
-      expect(uri.queryParameters['access_token'], 'jwt-token');
+      expect(
+        ticketRequest!.url.path,
+        RealtimeApiMetadata.issueConnectionTicketPath,
+      );
+      expect(ticketRequest!.headers['Authorization'], 'Bearer jwt-token');
+      expect(uri.queryParameters['ticket'], 'one-time-ticket');
+      expect(uri.queryParameters.containsKey('access_token'), isFalse);
       expect(uri.queryParameters.containsKey('userId'), isFalse);
       expect(uri.queryParameters.containsKey('topics'), isFalse);
     });
 
-    test('prod websocket 无短期 ticket contract 时失败关闭', () async {
-      final credential = await RealtimeConnectionCredential.resolveWebSocket(
-        const _TokenProvider('jwt-token'),
-        runtimeEnvironment: 'prod',
+    test('ticket 签发失败或未登录时失败关闭', () async {
+      final rejectingClient = MockClient(
+        (_) async =>
+            http.Response('{"code":"REALTIME.USER.unauthorized"}', 401),
       );
-
-      expect(credential, isNull);
+      expect(
+        await RealtimeConnectionCredential.resolveWebSocket(
+          const _TokenProvider('jwt-token'),
+          gatewayBaseUrl: 'https://gateway.example',
+          client: rejectingClient,
+        ),
+        isNull,
+      );
+      expect(
+        await RealtimeConnectionCredential.resolveWebSocket(
+          const _TokenProvider(null),
+          gatewayBaseUrl: 'https://gateway.example',
+          client: rejectingClient,
+        ),
+        isNull,
+      );
     });
 
     test('prod long poll 仍使用可信 Bearer credential', () async {

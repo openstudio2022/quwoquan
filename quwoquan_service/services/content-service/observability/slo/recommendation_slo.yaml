@@ -1,0 +1,406 @@
+version: 1
+# 推荐 feed SLI/SLO 声明。
+# 本文件是推荐体验目标的单一真相源：开发前先冻结 objective，再由实现阶段补齐真实指标源、
+# 告警与看板。已经存在的 HTTP 边界指标来自 runtime/observability；业务指标若暂未接入
+# Prometheus，必须保持 objective_only/observe_only，禁止在验收中宣称已完成。
+service: content-service
+domain: recommendation
+capability: feed-orchestration-recommendation
+commercial_maturity:
+  status: specified
+  plan: docs/recommendation-commercial-maturity-plan.md
+  deep_learning_required_for_maturity: false
+  dimensions:
+    recall_maturity:
+      objective: 多路召回 + 协同 i2i/u2i + 复活召回，不退化为纯时间流。
+      primary_slis:
+        - content_coverage_rate
+        - collaborative_recall_lift
+    ranking_maturity:
+      objective: 规则/LightGBM + 分数校准 + 分群 + 时间加权统计量。
+      primary_slis:
+        - ranking_calibration_error
+        - time_decay_feature_freshness
+    exposure_maturity:
+      objective: served/impressed/visible/dwell/interaction/negative 七态分离、跨会话疲劳、维度频控、near-dup、动态曝光预算、生命周期复活，过滤去全量化满足并发容量。
+      primary_slis:
+        - repeat_exposure_rate
+        - exposure_gini
+        - resurfaced_exposure_rate
+        - exposure_filter_smembers_fallback_rate
+    flywheel_maturity:
+      objective: 强负反馈即时生效、显式标签反馈、在线 AB 与真实流量训练晋升证据。
+      primary_slis:
+        - negative_feedback_rate
+        - ab_experiment_validity
+    evaluation_maturity:
+      objective: replay + NDCG/Recall@K/MAP/覆盖率/多样性 + 最小样本量口径。
+      primary_slis:
+        - offline_ndcg_at_k
+        - offline_recall_at_k
+        - offline_diversity_rate
+    observability_maturity:
+      objective: KPI SLI、曝光健康、看板、告警和回滚层级齐备；含端云抗冲击 ingest/drop 容量指标。
+      primary_slis:
+        - click_through_rate
+        - completion_rate
+        - recommendation_feed_availability
+        - behavior_ingest_drop_rate
+        - hotpath_buffer_drop_total
+        - recommendation_attribution_bucket_coverage
+        - attribution_negative_feedback_rate
+        - attribution_ctr_by_recall_path
+        - scenario_consumption_rate
+        - supply_source_share_floor
+    operations_maturity:
+      objective: 人工加权、置顶、精品、热点与违规下架实时剔除具备入口和审计。
+      primary_slis:
+        - ops_intervention_audit_coverage
+        - policy_takedown_ejection_latency
+    cold_start_maturity:
+      objective: 内容质量分投影、新用户兴趣先验和探索保底可用。
+      primary_slis:
+        - cold_start_non_empty_rate
+        - quality_score_coverage
+
+routes:
+  content_feed: /content/feed
+  content_behaviors: /content/behaviors
+
+dashboards:
+  recommendation_commercial_maturity: quwoquan_ops/observability/monitoring/dashboards/l2_recommendation_commercial_maturity.json
+
+alerts:
+  recommendation_commercial_alerting:
+    source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model
+    rules:
+      - RecommendationAttributionUnknownRateHigh
+      - RecommendationAttributionNegativeFeedbackBySupplySourceHigh
+      - RecommendationAttributionCTRByRecallPathLow
+      - RecommendationScenarioConsumptionRateLow
+      - RecommendationSupplySourceShareImbalance
+
+metrics:
+  http_requests_total: http_server_requests_total
+  http_duration_seconds: http_server_duration_seconds
+  http_error_codes_total: http_server_error_codes_total
+
+  # P0 已接入真实 emitter 的业务指标：runtime/recommendation/observability.go。
+  # 未接入的 P1/P2 指标仍保留 objective_only/observe_only，不得据此宣称已触发告警。
+  # 管线请求/空结果/模型回退口径由 rec_pipeline_* 真实 emitter 承载（observability.go
+  # RecordPipelineResult/RecordModelTimeoutMetric），与 quwoquan_alerts.yaml 同名，不再
+  # 引用不存在的 recommendation_feed_requests/empty/fallback_total。
+  feed_requests_total: rec_pipeline_requests_total
+  feed_empty_total: rec_pipeline_empty_results_total
+  feed_model_hits_total: rec_pipeline_model_hits_total
+  feed_rule_hits_total: rec_pipeline_rule_hits_total
+  feed_model_timeouts_total: rec_pipeline_model_timeouts_total
+  feed_served_total: recommendation_feed_served_total
+  feed_served_by_attribution_total: recommendation_feed_served_by_attribution_total
+  feed_impressed_total: recommendation_feed_impressed_total
+  feed_duplicate_exposure_total: recommendation_feed_duplicate_exposure_total
+  feed_negative_feedback_total: recommendation_feed_negative_feedback_total
+  feed_engagement_total: recommendation_feed_engagement_total
+  feed_completion_total: recommendation_feed_completion_total
+  # exposure_gini 为 objective_only：per-content 分布评估走离线 replay 报表，
+  # 不注册在线 Prometheus 指标（避免死告警与高基数序列）。
+  feed_resurfaced_total: recommendation_feed_resurfaced_total
+  feed_dynamic_budget_total: recommendation_feed_dynamic_budget_total
+  feed_frequency_capped_total: recommendation_feed_frequency_capped_total
+  feed_near_dup_filtered_total: recommendation_feed_near_dup_filtered_total
+  feed_collaborative_recall_total: recommendation_feed_collaborative_recall_total
+  feed_quality_score_missing_total: recommendation_feed_quality_score_missing_total
+  feed_cold_start_requests_total: recommendation_feed_cold_start_requests_total
+  feed_ab_experiment_validity_total: recommendation_feed_ab_experiment_validity_total
+  feed_policy_takedown_ejection_seconds: recommendation_feed_policy_takedown_ejection_seconds
+  feed_ops_intervention_audit_total: recommendation_feed_ops_intervention_audit_total
+  offline_eval_metric_value: recommendation_offline_eval_metric_value
+
+  # 七态状态分离 + 端云抗冲击容量指标。
+  feed_visible_total: recommendation_feed_visible_total
+  feed_dwell_total: recommendation_feed_dwell_total
+  feed_interaction_total: recommendation_feed_interaction_total
+  feed_training_sample_total: recommendation_feed_training_sample_total
+  behavior_ingest_total: recommendation_behavior_ingest_total
+  behavior_ingest_dropped_total: recommendation_behavior_ingest_dropped_total
+  behavior_by_attribution_total: recommendation_behavior_by_attribution_total
+  hotpath_dropped_total: rec_hotpath_dropped_total
+  exposure_filter_smembers_fallback_total: recommendation_exposure_filter_smembers_fallback_total
+  exposure_redis_payload_bytes: recommendation_exposure_redis_payload_bytes
+  model_score_cache_hit_total: rec_model_score_cache_hit_total
+  model_score_batch_total: rec_model_score_batch_total
+  dynamic_budget_selected_total: recommendation_dynamic_budget_selected_total
+  frequency_cap_filter_total: recommendation_frequency_cap_filter_total
+  near_dup_filter_total: recommendation_near_dup_filter_total
+
+north_star:
+  id: effective_content_consumption
+  description: 有效内容消费 = 完成/深度停留/正向互动的组合指标；作为早期推荐体验北极星。
+  objective_only: true
+  objectives:
+    day1_retention_min: 0.30
+    effective_dwell_seconds_per_user_min: 180
+    completion_rate_min: 0.35
+    negative_feedback_rate_max: 0.08
+    repeat_exposure_rate_max: 0.01
+    content_coverage_rate_min: 0.30
+
+slis:
+  - id: recommendation_feed_latency
+    description: 内容 feed 读路由用户感知延迟，分位数取自 http_server histogram。
+    source: http_server_duration_seconds
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route="/content/feed"}[5m])) by (le))
+    objectives:
+      p50_ms: 80
+      p95_ms: 200
+      p99_ms: 400
+
+  - id: recommendation_feed_availability
+    description: feed 读路由可用性 = 1 - 5xx 错误率。
+    source: http_server_requests_total
+    sli: 1 - sum(rate(http_server_requests_total{service="content-service", route="/content/feed", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="content-service", route="/content/feed"}[5m]))
+    objective: 0.995
+
+  - id: behavior_ingest_latency
+    description: 行为上报入口 HTTP 延迟；HotPath 真正生效延迟由 Phase 1 业务指标补齐。
+    source: http_server_duration_seconds
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route="/content/behaviors"}[5m])) by (le))
+    objectives:
+      p95_ms: 100
+
+  - id: empty_feed_rate
+    description: feed 空结果率。真实 emitter rec_pipeline_*，与 RecEmptyFeedRateHigh 告警同名。
+    source: rec_pipeline_empty_results_total / rec_pipeline_requests_total
+    objective_max: 0.001
+    measured: true
+
+  - id: model_fallback_rate
+    description: 模型 scorer 故障/超时降级 RuleScorer 的请求占比（N0-1 语义修正：
+      只统计真实降级 rec_pipeline_model_fallback_total；分桶主动走 rule 不计入）。
+    source: rec_pipeline_model_fallback_total / rec_pipeline_requests_total
+    objective_max: 0.05
+    measured: true
+
+  - id: repeat_exposure_rate
+    description: served/impressed 窗口内重复曝光占比；曝光过滤拦截量喂 duplicate_exposure_total。
+    source: recommendation_feed_duplicate_exposure_total / recommendation_feed_served_total
+    objective_max: 0.01
+    measured: true
+
+  - id: content_coverage_rate
+    description: 推荐窗口覆盖的可推荐内容占比，避免少数内容过度集中。
+    source: recommendation_feed_served_total by content_id / eligible_feed_item_count
+    objective_min: 0.30
+    objective_only: true
+
+  - id: exposure_gini
+    description: 内容曝光分布基尼系数；越高说明曝光过度集中。评估通道为离线
+      replay 报表（per-content 分布，不进在线 Prometheus），无在线告警。
+    source: offline_replay_report
+    objective_max: 0.65
+    objective_only: true
+
+  - id: resurfaced_exposure_rate
+    description: 生命周期复活召回在总 served 中的占比；用于观察优质老内容是否被触发式激活。
+    source: recommendation_feed_resurfaced_total / recommendation_feed_served_total
+    observe_only: true
+
+  - id: dynamic_budget_share
+    description: 动态曝光预算分配命中的 served 占比，按 pool / experiment_bucket 切分。
+    source: recommendation_feed_dynamic_budget_total / recommendation_feed_served_total
+    observe_only: true
+
+  - id: frequency_cap_filter_rate
+    description: 作者/标签/话题频控过滤或降权触发占比。
+    source: recommendation_feed_frequency_capped_total / recommendation_feed_served_total
+    observe_only: true
+
+  - id: near_dup_filter_rate
+    description: near-dup 去重过滤占比，用于识别相似内容重复推送风险。
+    source: recommendation_feed_near_dup_filtered_total / recommendation_feed_served_total
+    observe_only: true
+
+  - id: collaborative_recall_lift
+    description: 协同召回候选相对非协同召回的 CTR/完成率增益。N1-1 诚实化：证据通道
+      为 CI 训练管线（eval_report artifact + rec_model_registry.metrics），Go 侧
+      ReplayReport.Emit 无生产调度，Prometheus 无该序列，禁止按 measured 验收。
+    source: ci://ml_training_pipeline/eval_report_*.json#collaborative_recall_lift
+    objective_only: true
+    objective_min: 0.05
+
+  - id: recommendation_attribution_bucket_coverage
+    description: 推荐 served 与 behavior 事件具备可用归因分桶的比例；P0+ 指标按 channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class 切分。
+    source: 1 - sum(rate(recommendation_behavior_by_attribution_total{channel="unknown",recall_path="unknown"}[5m])) / sum(rate(recommendation_behavior_by_attribution_total[5m]))
+    objective_min: 0.95
+    measured: true
+
+  - id: attribution_negative_feedback_rate
+    description: P0+ bounded attribution 维度上的负反馈率，按 channel/vertical/supply_source 切分，用于定位 UGC 与数据工程供给质量异常。
+    source: sum(rate(recommendation_behavior_by_attribution_total{state="negative"}[30m])) by (channel, vertical, supply_source) / sum(rate(recommendation_behavior_by_attribution_total{state="impressed"}[30m])) by (channel, vertical, supply_source)
+    objective_max: 0.08
+    measured: true
+
+  - id: attribution_ctr_by_recall_path
+    description: P0+ bounded attribution 维度上的 CTR，按 channel/vertical/recall_path 切分，用于定位协同召回、热门、新内容和兜底召回的效果退化。
+    source: sum(rate(recommendation_behavior_by_attribution_total{state="click"}[30m])) by (channel, vertical, recall_path) / sum(rate(recommendation_behavior_by_attribution_total{state="impressed"}[30m])) by (channel, vertical, recall_path)
+    objective_min: 0.03
+    measured: true
+
+  - id: scenario_consumption_rate
+    description: 旅行与精品场景中 click/dwell 相对 served 的消费率，用于发现垂类或精品沉浸流断崖。
+    source: sum(rate(recommendation_behavior_by_attribution_total{state=~"click|dwell",channel=~"travel|premium_stream"}[30m])) by (channel) / sum(rate(recommendation_feed_served_by_attribution_total{channel=~"travel|premium_stream"}[30m])) by (channel)
+    objective_min: 0.02
+    measured: true
+
+  - id: supply_source_share_floor
+    description: UGC 与数据工程供给在 served 中的最低 share，用于发现单一供给来源异常吞没推荐池。
+    source: min(sum(rate(recommendation_feed_served_by_attribution_total{supply_source=~"ugc|data_engineering"}[1h])) by (supply_source)) / sum(rate(recommendation_feed_served_by_attribution_total{supply_source=~"ugc|data_engineering"}[1h]))
+    objective_min: 0.05
+    measured: true
+
+  # N1-1 诚实化：offline_* 评估证据通道为 CI 训练管线（evaluate.py →
+  # eval_report artifact + rec_model_registry.metrics + promote gate），Go 侧
+  # ReplayReport.Emit 无生产调度、Prometheus 无 recommendation_offline_eval_metric_value
+  # 数据。以下五项一律 objective_only；接入在线序列前禁止翻回 measured。
+  - id: ranking_calibration_error
+    description: 推荐预估分与真实点击/完成率的校准误差，按 channel/segment/scorer_variant 切分。
+    source: ci://ml_training_pipeline/eval_report_*.json#calibration_error
+    objective_only: true
+    objective_max: 0.08
+
+  - id: time_decay_feature_freshness
+    description: 时间加权统计特征的新鲜度，衡量 CTR/完成率等统计是否过期。
+    source: ci://ml_training_pipeline/eval_report_*.json#time_decay_feature_freshness
+    objective_only: true
+    objective_min: 0.95
+
+  - id: offline_ndcg_at_k
+    description: replay 离线评估 NDCG@K，作为排序质量回归门（CI promote gate 消费）。
+    source: ci://ml_training_pipeline/eval_report_*.json#ndcg_at_k
+    objective_only: true
+    objective_min: 0.20
+
+  - id: offline_recall_at_k
+    description: replay 离线评估 Recall@K，作为召回质量回归门（CI promote gate 消费）。
+    source: ci://ml_training_pipeline/eval_report_*.json#recall_at_k
+    objective_only: true
+    objective_min: 0.25
+
+  - id: offline_diversity_rate
+    description: replay 离线评估多样性，覆盖作者、标签、内容类型和交集维度。
+    source: ci://ml_training_pipeline/eval_report_*.json#diversity_rate
+    objective_only: true
+    objective_min: 0.30
+
+  - id: ab_experiment_validity
+    description: 在线 AB 实验样本量、分桶稳定性（SRM）和显著性口径是否达标；准入校验由
+      AB 准入后台周期任务（N1-3）调用 EvaluateAndRecordABAdmission 喂
+      recommendation_feed_ab_experiment_validity_total{result}。
+    source: recommendation_feed_ab_experiment_validity_total{result="valid"} / sum(recommendation_feed_ab_experiment_validity_total)
+    measured: true
+    objective_min: 0.95
+
+  - id: policy_takedown_ejection_latency
+    description: 内容违规/下架后从推荐池剔除的端到端延迟。
+    source: recommendation_feed_policy_takedown_ejection_seconds
+    objective_only: true
+    objectives:
+      p95_seconds: 60
+
+  - id: ops_intervention_audit_coverage
+    description: 人工加权、置顶、精品、热点等运营干预是否有审计记录。
+    source: recommendation_feed_ops_intervention_audit_total / ops_intervention_total
+    objective_only: true
+    objective_min: 1.0
+
+  - id: cold_start_non_empty_rate
+    description: 无行为新用户首刷非空率。
+    source: 1 - recommendation_feed_empty_total{segment="cold_start"} / recommendation_feed_cold_start_requests_total
+    objective_only: true
+    objective_min: 0.999
+
+  - id: quality_score_coverage
+    description: 可推荐内容中具备质量分/recScore 的比例，修复 recScore 恒 0 风险。
+    source: 1 - recommendation_feed_quality_score_missing_total / eligible_feed_item_count
+    objective_only: true
+    objective_min: 0.95
+
+  - id: click_through_rate
+    description: feed 点击率，七态 click 作为分子；P0+ 后可按 channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class 切分。
+    source: recommendation_feed_engagement_total{action="click"} / recommendation_feed_impressed_total
+    objective_min: 0.05
+    measured: true
+
+  - id: completion_rate
+    description: 内容完成率或深度停留达标率（content_depth L3+ 或播放 >=90%），按 content_type/channel 可切分。
+    source: recommendation_feed_completion_total / recommendation_feed_impressed_total
+    objective_min: 0.35
+    measured: true
+
+  - id: negative_feedback_rate
+    description: dislike/report/hide_author/hide_content_type 等负反馈占比。
+    source: recommendation_feed_negative_feedback_total / recommendation_feed_impressed_total
+    objective_max: 0.08
+    measured: true
+
+  - id: behavior_ingest_drop_rate
+    description: 行为入口 FeedbackIngestor 限流/背压丢弃占比；衡量端侧上报抗冲击对云侧的影响。
+    source: recommendation_behavior_ingest_dropped_total / recommendation_behavior_ingest_total
+    objective_max: 0.01
+    measured: true
+
+  - id: hotpath_buffer_drop_total
+    description: BufferedHotPath 缓冲溢出丢弃量；必须暴露而非静默丢弃。
+    source: rec_hotpath_dropped_total
+    objective_max: 0
+    measured: true
+
+  - id: exposure_filter_smembers_fallback_rate
+    description: 曝光过滤回退到全量 SMembers 的占比。守护性 tripwire：生产
+      FilterCandidates 主路径为 per-candidate SIsMember 点查、无 SMembers 回退
+      分支，本序列恒 0 即健康事实；任何未来引入的回退分支必须调用
+      RecordExposureSMembersFallback 记账，否则告警失守。
+    source: recommendation_exposure_filter_smembers_fallback_total / rec_pipeline_requests_total
+    objective_max: 0.01
+    measured: true
+
+  - id: model_score_cache_hit_rate
+    description: recommendation-service 打分/特征缓存命中率，用于评估容量优化收益（实现前仅冻结指标名）。
+    source: rec_model_score_cache_hit_total / (rec_model_score_cache_hit_total + rec_pipeline_model_hits_total)
+    observe_only: true
+
+# N1-1 收敛：只登记有真实实现机制的回滚层（mechanism 指向可执行入口），
+# 删除无实现的 disable_resurface_source（复活召回源不存在）与
+# fallback_to_hot_and_new_content_sources（无专用开关，属多层组合动作）。
+rollback_layers:
+  - id: force_rule_scorer
+    mechanism: "policy 热更：rec_model_vs_rule buckets → rule weightPct 100（policy.yaml，无需重启）"
+  - id: disable_remote_model_scorer
+    mechanism: "配置：recModelService.enabled=false（cmd/api config，重启生效；beta/gamma/prod fail-fast 要求先切 policy）"
+  - id: disable_exposure_dynamic_budget
+    mechanism: "policy 热更：exposureGovernance.dynamicBudget.enabled=false"
+  - id: disable_collaborative_recall_sources
+    mechanism: "env：QWQ_DISABLE_COLLABORATIVE_RECALL_SOURCES=1（装配级，重启）或 policy collaborativeRecall.enabled=false（热更）"
+  - id: disable_premium_pool_source
+    mechanism: "env：QWQ_DISABLE_PREMIUM_POOL_SOURCE=1（装配级，重启；premium 请求 fail-closed 空池）"
+  - id: disable_ops_intervention_boost
+    mechanism: "policy 热更：opsIntervention.enabled=false"
+  - id: disable_intersection_affinity_signal
+    mechanism: "policy 热更：scorer.intersectionAffinityFactor=0"
+  - id: disable_object_cards
+    mechanism: "policy 热更：objectCards.enabled=false（混合对象卡零成本关闭）"
+  - id: disable_recall_fusion
+    mechanism: "policy 热更：recallFusion.enabled=false（回退无配额/无 boost 原始合并）"
+
+ab:
+  segmentation_labels:
+    - channel
+    - user_segment
+    - recall_path
+    - scorer_variant
+    - exposure_pool
+    - lifecycle_state
+    - activity_segment
+    - experiment_bucket
+
+alerts_source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model

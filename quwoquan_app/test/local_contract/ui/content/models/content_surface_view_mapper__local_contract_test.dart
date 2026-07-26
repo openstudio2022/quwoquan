@@ -1,8 +1,27 @@
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
+
+final _mediaResolver = MediaDeliveryResolver(
+  MediaEndpointConfig(
+    avatarBaseUrl: 'https://avatar.example.test',
+    imageBaseUrl: 'https://image.example.test',
+    videoBaseUrl: 'https://video.example.test',
+    attachmentBaseUrl: 'https://attachment.example.test',
+  ),
+);
+final _unavailableMediaResolver = MediaDeliveryResolver(
+  MediaEndpointConfig.tryCreateAvailable(
+    avatarBaseUrl: '',
+    imageBaseUrl: '',
+    videoBaseUrl: '',
+    attachmentBaseUrl: '',
+  )!,
+);
 
 void main() {
   group('ContentSurfaceViewMapper.fromDto — 四媒体类型投影契约 (T1)', () {
@@ -25,7 +44,10 @@ void main() {
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
-      final view = ContentSurfaceViewMapper.fromDto(dto);
+      final view = ContentSurfaceViewMapper.fromDto(
+        dto,
+        mediaResolver: _mediaResolver,
+      );
 
       expect(view.postId, 'photo1');
       expect(view.kind, ContentSurfaceKind.image);
@@ -60,7 +82,10 @@ void main() {
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
-      final view = ContentSurfaceViewMapper.fromDto(dto);
+      final view = ContentSurfaceViewMapper.fromDto(
+        dto,
+        mediaResolver: _mediaResolver,
+      );
 
       expect(view.kind, ContentSurfaceKind.video);
       expect(view.hasVideo, isTrue);
@@ -94,7 +119,10 @@ void main() {
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
-      final view = ContentSurfaceViewMapper.fromDto(dto);
+      final view = ContentSurfaceViewMapper.fromDto(
+        dto,
+        mediaResolver: _mediaResolver,
+      );
 
       expect(view.kind, ContentSurfaceKind.video);
       expect(
@@ -131,6 +159,7 @@ void main() {
 
       final view = ContentSurfaceViewMapper.fromDto(
         dto,
+        mediaResolver: _mediaResolver,
         wire: <String, dynamic>{
           'articleTemplate': 'modern',
           'articleFontPreset': 'serif',
@@ -173,6 +202,32 @@ void main() {
       expect(view.hasImages, isFalse);
       expect(view.hasVideo, isFalse);
       expect(view.cover, isNull);
+    });
+
+    test('媒体端点不可用时仍保留 typed 内容事实且不伪造 URL', () {
+      final dto = PhotoPostDto.fromMap(<String, dynamic>{
+        'id': 'photo-without-endpoint',
+        'type': 'image',
+        'identity': 'work',
+        'authorId': 'a5',
+        'displayName': '作者戊',
+        'avatarUrl': 'media/avatar/s/fixture/a5/v1/avatar.png',
+        'imageUrls': <String>[
+          'media/image/s/fixture/photo-without-endpoint/v1/1.jpg',
+        ],
+        'createdAt': '2026-01-01T00:00:00.000Z',
+      });
+
+      final view = ContentSurfaceViewMapper.fromDto(
+        dto,
+        mediaResolver: _unavailableMediaResolver,
+      );
+
+      expect(view.kind, ContentSurfaceKind.image);
+      expect(view.postId, 'photo-without-endpoint');
+      expect(view.images, isEmpty);
+      expect(view.cover, isNull);
+      expect(view.author.avatar, isNull);
     });
 
     test('intersectionReasons 透传到统一 model', () {

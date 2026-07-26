@@ -1,128 +1,181 @@
-# L3 Scenario: creation-tagging-ia
+# L3 Story：创作打标信息架构 (`creation-tagging-ia`)
 
-## 节点定位
+> 所属能力：[`content-type-framework`](../spec.md)
+>
+> Journey / Scenario：[`JNY-004 / SCN-001`](../../../spec.md#scn-001)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- `L1_domain_service`: `discovery-content`
-- `L2_business_capability`: `content-type-framework`
-- `L3_story`: `creation-tagging-ia`
+## 1. 用户价值
 
-本场景冻结**创作侧打标信息架构（IA）**：在内容创作流提供 tagRef 打标入口，使 `content.tagRefs` 成为「交集」归因的可信输入。打标对全部内容类型（image/video/article/micro）**可选、不强制**，由**自动打标（转发识别 + 内容识别）辅助**，手动 UI 作为对自动结果的**确认/修正层**。打标真相源唯一为数据工程 `control_plane/governance/taxonomy`（路径制 tagRef）；端侧只通过 tag-service serving projection 查询，不维护静态子集。
+作为内容创作者或浏览者，我希望冻结创作侧打标 IA：各类型编辑页内联打标区，打标全类型可选、不强制，由自动打标（转发识别+内容识别）辅助，手动 UI 作确认/修正层，从而完成可恢复的内容创作、发现或互动。
 
-## 背景与动机
+## 2. 范围与非目标
 
-「交集」是产品北极星：用户因共同的地点/事物/标签连接。`Post.tagRefs`（路径制 tagRef，E4 已硬切）+ `entityRefs`（POI）是交集召回与归因的核心输入。当前创作流（`create_page` / 各类型编辑页）**无打标入口**——`CreatePost.writable_fields` 已支持 `tagRefs`（payload 通道就绪），但端侧无 UI 注入，导致用户内容 `tagRefs` 长期为空、交集稀疏、归因链断裂。
+### In Scope
 
-带地点/事物的内容（如绑定 POI 的图文）尤其需要"地点 + 维度（旅行/摄影/美食…）"标签。因此创作打标 IA 是交集呈现的硬前置之一。
+- 各类型编辑页内联打标区（图文/视频），打标可选不拦截发布
+- 自动打标建议 suggestedTagRefs 消费 + 可编辑/可删除芯片（确认/修正层）
+- 交互形态：tag-service 常用标签 + 自动建议多选 ≤5；搜索入口由 flag 控制
+- 端侧不维护标签 catalog 或首发子集
+- tagRefs 经 CreatePost/UpdatePost writable_fields 注入（已通）
 
-## 目标用户与核心问题
+### Out of Scope
 
-- **创作者**：发布内容时以最低摩擦标注主题/维度，让内容被同好/同地/同事物的人看到。
-- **核心问题**：在不增加发布负担的前提下，让 `content.tagRefs` 被有效填充且噪声可控，使「打标 → content.tagRefs → 交集归因」可还原。
+- 自动打标模型/管线（转发识别、内容识别）实现（属 ML/数据工程）
+- taxonomy 治理与发布导入（属数据工程与 tag-service）
+- 标签运营后台/治理
+- pageflip 受控文件
 
-## 范围（In Scope）
+## 3. 行为要求
 
-### F1. 打标可选（全类型，无强制门槛）— 冻结
-- 图文（image/video/article）、微趣（micro）创作均**可选打标**；发布不因缺标签被拦截。
-- 不引入"发布前至少 N 标签"硬门槛；标签密度由自动打标 + 推荐芯片自然提升。
+<a id="req-001"></a>
+### REQ-001 各类型编辑页内联打标区，打标可选不拦截发布
 
-### F2. 入口：各类型编辑页内联打标区 — 冻结
-- 打标区**内联在各类型编辑页**（图文/视频编辑页内），与既有发布前选择器（location/circle 独立页）形态区分：打标是编辑态内联、低摩擦勾选，不单开一页。
-- 绑定 POI 的内容编辑页打标区与 POI 选择联动（POI 自动带出地点维度建议）。
+- 各类型编辑页必须提供可选的内联打标区，用户不选择标签时仍可发布。
 
-### F3. 自动打标辅助（确认/修正层）— 冻结 IA 契约
-- 创作页消费**自动打标建议** `suggestedTagRefs`（来源：转发识别 reshare-derived + 内容识别 content-recognition）。
-- 自动建议以**可编辑/可删除芯片**呈现；用户一键勾选/取消/删除，避免错误标签进入交集召回。
-- 自动打标的模型/管线（ML/数据工程）**不在本场景**；本场景只冻结端侧消费 `suggestedTagRefs` 的 IA 契约与可修正语义。
+<a id="req-002"></a>
+### REQ-002 芯片集来自首发 launch 子集 + 自动建议，多选上限 5
 
-### F4. 交互形态：推荐芯片 + 搜索补充 — 冻结
-- UI 展示 tag-service 返回的常用标签与 `自动建议芯片`，多选上限 5；端侧不内置标签 catalog。
-- 芯片下方「搜索更多标签」入口查询 tag-service serving projection；功能开关只控制入口曝光，不改变标签真相源。
+- 标签芯片只能来自 launch 子集与自动建议，用户最多选择 5 个。
 
-### F5. 标签查询边界 — 冻结
+<a id="req-003"></a>
+### REQ-003 自动建议芯片可勾选/取消/删除，修正后 tagRefs 正确
+
+- 用户可勾选、取消或删除自动建议，最终提交的 `tagRefs` 必须反映用户确认后的选择。
+
+<a id="req-004"></a>
+### REQ-004 选定 tagRefs 经 CreatePost 注入，发布后 content.tagRefs 一致
+
+- `CreatePost` 必须携带用户确认的 `tagRefs`，发布后的内容投影必须保持一致。
+
+<a id="req-005"></a>
+### REQ-005 tagRefs 进召回与交集归因，打标→交集可还原
+
+- 已发布内容的 `tagRefs` 必须进入召回与交集归因，并能还原到原始标签事实。
+
+<a id="req-006"></a>
+### REQ-006 搜索补充由 flag 控制，查询源唯一为 tag-service serving projection
+
+- 搜索补充关闭时不得发起标签搜索；开启时只能查询 tag-service serving projection。
+
+<a id="req-007"></a>
+### REQ-007 常用标签、搜索结果和自动建议必须返回可由 tag-service 解析的 tagRef
+
 - 常用标签、搜索结果和自动建议必须返回可由 tag-service 解析的 tagRef。
-- 不在端侧另建第二套标签列表；离线态只展示本次草稿已选标签，不伪造 catalog。
-
-### F6. payload 注入与归因可还原 — 冻结
-- 选定 tagRefs 经 `CreatePost`/`UpdatePost`（draft）的 `writable_fields.tagRefs` 注入（已通）。
-- 验收口径：发布后 `content.tagRefs` 含用户选定 + 已确认的自动标签；该 tagRefs 进入推荐召回与 `IntersectionReason` 归因，使「打标 → content.tagRefs → 交集」可还原。
-
-## 验收映射（A1~An → 三层测试）
-
-| 验收 | 描述 | 证据层 |
-|---|---|---|
-| A1 | 各类型编辑页有内联打标区；打标可选，缺标签不拦截发布 | local_contract widget |
-| A2 | 芯片集合来自 tag-service 查询 + 自动建议 `suggestedTagRefs`，多选上限 5 | local_contract widget |
-| A3 | 自动建议芯片可勾选/取消/删除，修正后 tagRefs 正确 | local_contract widget |
-| A4 | 选定 tagRefs 经 CreatePost 注入，发布后 content.tagRefs 一致 | local_contract 契约 + local_contract |
-| A5 | tagRefs 进召回与 IntersectionReason，打标→交集归因可还原 | local_contract + api_integration |
-| A6 | 搜索补充由 flag 控制入口曝光，查询源唯一为 tag-service serving projection | local_contract（flag 关时不渲染） |
-
-## SLO / KPI
-
-| 指标 | 门槛 |
-|---|---|
-| 打标区渲染 TTI | ≤ 编辑页首屏预算内（不阻塞编辑） |
-| 自动建议拉取超时降级 | 超时则保留已选标签，不阻断发布，不伪造标签 catalog |
-| 发布内容带 ≥1 tagRef 比例（首发尖刀垂类） | 运营观测 KPI（非硬门槛） |
-
-## 权限边界与数据生命周期
-
 - 打标随内容生命周期：draft 可改 tagRefs，published 不可变（与既有内容一致）。
 - 自动建议为辅助态，未经用户确认不得静默写入 published 内容的 tagRefs（避免不可控归因）。
-- tagRef 真相源唯一为 `control_plane/governance/taxonomy`；端侧不持久化第二套标签字典。
-
-## 迁移 / 灰度 / 回滚
-
-- 纯增量端侧能力（编辑页加打标区），不改写链路契约（payload 已通）。
-- 灰度：打标区曝光 + 搜索补充各自 flag；自动建议拉取失败时保留已选标签并允许无标签发布。
-- 回滚：关闭打标区 flag 即回到无打标态，content.tagRefs 退化为空（与现状一致），无数据损失。
-
-## Out of Scope
-
-- 自动打标模型/管线（转发识别、内容识别）的实现——属 ML/数据工程；本场景只冻结消费 `suggestedTagRefs` 的 IA 契约。
-- taxonomy 的治理与发布导入——属数据工程与 tag-service。
-- 标签运营后台、标签合并/治理。
-- pageflip 受控文件。
-
-## 约束
-
-- tagRef 唯一真相源 `control_plane/governance/taxonomy`（路径制，以 `Topic/Audience/Format/Entity` 开头）；端侧只消费 tag-service serving projection，不另立第二套。
-- payload 注入复用 `CreatePost.writable_fields.tagRefs`，不新增端点、不硬编码 path/operation/surface（01-arch-constraints §2.2.1）。
-- 遵循 13-coding-discipline：R06 元数据驱动、R15 Mock 隔离（标签 mock 走 Repository/fixture）、R20 创作页埋点（打标曝光/选择/自动建议确认）。
-
-## 验收重点
-
-1. 各类型编辑页内联打标区已落，打标可选、不拦截发布。
-2. 芯片集合来自 tag-service 查询 + 自动建议，多选 ≤5，自动建议可修正。
-3. 选定 tagRefs 经 CreatePost 注入，发布后 content.tagRefs 一致。
-4. tagRefs 进召回与交集归因，"打标 → content.tagRefs → 交集"可还原。
-5. 搜索补充由 flag 控制曝光，查询源唯一为 tag-service serving projection。
-
-## 设计决策（冻结）
-
-> L3 故事的 design 细节并入本 spec（feature-tree 约定 L3 仅 `spec.md`+`acceptance.yaml`）。
-
-### B3-D1 打标可选
-全类型可选、不设强制门槛；标签密度靠自动打标 + 推荐芯片自然提升，而非发布拦截。
-
-### B3-D2 入口形态
-内联各类型编辑页（区别于 location/circle 的独立发布前选择页）；绑定 POI 的内容编辑页打标区与 POI 选择联动。
-
-### B3-D3 自动打标辅助
-端侧消费 `suggestedTagRefs`（reshare-derived + content-recognition），以可编辑/可删除芯片呈现作为确认/修正层；模型/管线属 ML，本场景只冻结 IA 契约与"未确认不静默写入"语义。
-
-### B3-D4 交互形态
-- tag-service 常用标签 + `自动建议芯片` 多选 ≤5；搜索入口由 flag 控制。
 - 取舍：统一查询 serving projection，避免端侧首发子集与全量 taxonomy 形成双真相源。
 
-### B3-D5 标签来源
-常用标签和搜索结果只由 tag-service 返回，端侧不另建标签列表。
+## 4. 契约引用
 
-### B3-D6 payload 注入与归因
-tagRefs 经 `CreatePost`/`UpdatePost` 注入（已通）；验收以"发布后 content.tagRefs 一致 + 进召回/IntersectionReason"为准。
+- canonical：`quwoquan_service/services/tag-service/contracts/tag/tag_node_view/operations.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/operations.yaml`
 
-### B3-D7 实施顺序（slices：metadata 复用 → 端侧 IA → 测试）
-1. 复用既有 metadata（tagRefs 字段 + writable_fields 已就绪，无 metadata 增量；若需 `suggestedTagRefs` 读契约再 metadata-first 增量）。
-2. 端侧：编辑页内联打标区（芯片多选 ≤5）+ 自动建议消费 + Repository/fixture 标签源（Mock 隔离）。
-3. 灰度 flag：打标区曝光 + 搜索补充。
-4. 测试：local_contract payload 注入契约 / local_contract 打标 widget（可选/上限/修正/降级）/ api_integration 召回与交集归因。
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 各类型编辑页内联打标区，打标可选不拦截发布
+
+- GIVEN 用户在图文/视频编辑页创作。
+- WHEN 未选任何标签直接发布。
+- THEN 发布成功，不因缺标签被拦截；打标区为可选内联区域。
+
+<a id="gwt-002"></a>
+### GWT-002 芯片集来自首发 launch 子集 + 自动建议，多选上限 5
+
+- GIVEN 编辑页打标区渲染。
+- WHEN 加载首发 launch 子集芯片与 suggestedTagRefs 自动建议芯片。
+- THEN 芯片集合=launch 子集∪自动建议
+- AND 多选最多 5
+- AND 超限禁选。
+
+<a id="gwt-003"></a>
+### GWT-003 自动建议芯片可勾选/取消/删除，修正后 tagRefs 正确
+
+- GIVEN 自动打标产出 suggestedTagRefs。
+- WHEN 用户勾选/取消/删除自动建议芯片。
+- THEN 未确认的自动建议不静默写入；最终 tagRefs 反映用户修正结果。
+
+<a id="gwt-004"></a>
+### GWT-004 选定 tagRefs 经 CreatePost 注入，发布后 content.tagRefs 一致
+
+- GIVEN 用户选定若干 tagRef。
+- WHEN 提交 CreatePost / UpdatePost(draft)。
+- THEN content.tagRefs 含用户选定 + 已确认自动标签，与提交一致。
+
+<a id="gwt-005"></a>
+### GWT-005 tagRefs 进召回与交集归因，打标→交集可还原
+
+- GIVEN 已发布内容含 tagRefs。
+- WHEN 进入推荐召回与 IntersectionReason 生成。
+- THEN tagRefs 参与召回；标签维度交集理由可还原。
+
+<a id="gwt-006"></a>
+### GWT-006 搜索补充由 flag 控制，查询源唯一为 tag-service serving projection
+
+- GIVEN 搜索补充 feature flag 关闭。
+- WHEN 渲染打标区。
+- THEN 不渲染搜索入口；保留自动建议和已选标签。flag 开启后查询源唯一为 tag-service serving projection。
+
+## 6. 依赖
+
+- 前置要求：[`content-type-framework`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 各类型编辑页内联打标区，打标可选不拦截发布
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：各类型编辑页打标可选路径 widget 测试通过。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 芯片集来自首发 launch 子集 + 自动建议，多选上限 5
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：芯片来源与上限 widget 测试通过。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 自动建议芯片可勾选/取消/删除，修正后 tagRefs 正确
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：自动建议修正路径 widget 测试通过。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 选定 tagRefs 经 CreatePost 注入，发布后 content.tagRefs 一致
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：payload 注入契约 + widget 测试通过。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-005"></a>
+### OPEN-005 tagRefs 进召回与交集归因，打标→交集可还原
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：召回与交集归因集成测试覆盖。
+- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-006"></a>
+### OPEN-006 搜索补充由 flag 控制，查询源唯一为 tag-service serving projection
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：flag 开关两态 widget 测试通过。
+- 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 
 from governance.creators.candidates.review import main as review_candidates_main
 from governance.creators.candidates.state import STATUSES
@@ -36,6 +38,38 @@ def handle_governance(args: argparse.Namespace) -> None:
 
         handle_coverage_command(args)
         return
+    if cmd == "media-probe":
+        from governance.media_probe import (
+            prepare_media_probe_assets,
+            validate_media_probe_assets,
+        )
+
+        output_root = Path(args.output_root).expanduser().resolve()
+        asset_ids = {
+            value.strip()
+            for value in str(args.asset_ids or "").split(",")
+            if value.strip()
+        }
+        if args.media_probe_command == "prepare":
+            result = prepare_media_probe_assets(
+                output_root=output_root,
+                asset_ids=asset_ids or None,
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return
+        if args.media_probe_command == "validate":
+            issues = validate_media_probe_assets(
+                output_root=output_root,
+                asset_ids=asset_ids or None,
+            )
+            if issues:
+                print("[governance media-probe] FAIL")
+                for issue in issues:
+                    print(f"  - {issue}")
+                raise SystemExit(1)
+            print("[governance media-probe] OK")
+            return
+        raise SystemExit("[governance media-probe] subcommand required")
     if cmd == "review-candidates":
         argv: list[str] = []
         if getattr(args, "root", None):
@@ -63,6 +97,22 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     creators_sub.add_parser("list")
     register_taxonomy_parser(sub)
     register_coverage_parser(sub)
+
+    media_probe = sub.add_parser(
+        "media-probe",
+        help="生成或校验受控视频播放 probe 与 storyboard",
+    )
+    media_probe_sub = media_probe.add_subparsers(
+        dest="media_probe_command",
+        required=True,
+    )
+    for command in ("prepare", "validate"):
+        action = media_probe_sub.add_parser(command)
+        action.add_argument("--output-root", required=True)
+        action.add_argument(
+            "--asset-ids",
+            help="逗号分隔 assetId；缺省处理 profile 全集",
+        )
 
     review = sub.add_parser("review-candidates", help="Apply or list isolated governance candidate reviews")
     review.add_argument("--root")

@@ -23,6 +23,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
 
+from core import image_safety as I  # noqa: E402
 from content.post.article.route_review_checks import (  # noqa: E402
     _check_image_gate,
     _check_image_fidelity,
@@ -33,11 +34,6 @@ from content.post.article.route_review_checks import (  # noqa: E402
 )
 from content.post.article.route_core import _image_caption_from_article  # noqa: E402
 
-FIXTURE_MEDIA = (
-    DATA_ROOT.parent
-    / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media"
-)
-FACE_FIXTURE = FIXTURE_MEDIA / "avatar/user/fixture_user_article/v1/avatar.png"
 _TMP = Path(tempfile.mkdtemp(prefix="review_img_"))
 
 
@@ -54,10 +50,6 @@ def _watermark(path: Path) -> Path:
     cv2.putText(img, "tripadvisor", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 3)
     cv2.imwrite(str(path), img)
     return path
-
-
-def _face_fixture() -> Path | None:
-    return FACE_FIXTURE if FACE_FIXTURE.is_file() else None
 
 
 def test_clean_assets_pass():
@@ -104,12 +96,20 @@ def test_unsafe_blocks_revision():
     assert fallback == "agent_compose"
 
 
-def test_face_requires_human_review():
+def test_face_signal_requires_human_review():
     """新 HITL 契约：含人脸图片不再硬阻断 review，而是标记 humanReview 并记入账本，
     由发布门 + annotate 在发布前裁决（存疑必须人确认）。"""
-    face = _face_fixture()
-    assert face is not None, f"缺少仓库固定人脸 fixture: {FACE_FIXTURE}"
-    gate = _check_image_gate({"assets": [{"assetId": "f", "sourcePath": str(face)}]})
+    face_signal_input = _clean(_TMP / "face-signal-input.jpg")
+    original_detector = I._detect_faces
+    I._ASSESS_CACHE.clear()
+    try:
+        I._detect_faces = lambda _: 1
+        gate = _check_image_gate(
+            {"assets": [{"assetId": "f", "sourcePath": str(face_signal_input)}]}
+        )
+    finally:
+        I._detect_faces = original_detector
+        I._ASSESS_CACHE.clear()
     # 不因人脸阻断 review（无 unsafe/重复时 passed=True）
     assert gate["passed"] is True, gate["issues"]
     assert gate["humanReview"] is True
@@ -178,8 +178,9 @@ def test_carrier_consistency_image_tracks_pack_assets():
         ':::',
     ])
     gate = _check_carrier_consistency(
-        {
-            "carrier": "image",
+            {
+                "carrier": "image",
+                "vertical": "travel",
             "articleMarkdown": article,
             "assets": [
                 {"assetId": "a1", "sourceCollectionId": "collection-a"},
@@ -242,6 +243,7 @@ def test_image_fidelity_blocks_multi_creator_and_missing_provenance():
     gate = _check_image_fidelity(
         {
             "carrier": "image",
+            "vertical": "travel",
             "title": "九寨沟夏末倒影",
             "caption": "湖面倒影与彩林一起出现。",
             "storySpine": {"primaryEntity": "九寨沟", "sourceCollectionId": "pin-001", "beats": ["九寨沟倒影", "彩林"]},
@@ -253,6 +255,7 @@ def test_image_fidelity_blocks_multi_creator_and_missing_provenance():
                     "license": "attribution_no_watermark",
                     "authorizationProof": "https://img.example.com/1.jpg",
                     "creator": "作者甲",
+                    "rightsAuditStatus": "verified",
                     "title": "九寨沟倒影",
                 },
                 {
@@ -262,12 +265,14 @@ def test_image_fidelity_blocks_multi_creator_and_missing_provenance():
                     "license": "attribution_no_watermark",
                     "authorizationProof": "https://img.example.com/2.jpg",
                     "creator": "作者乙",
+                    "rightsAuditStatus": "verified",
                     "title": "九寨沟彩林",
                 },
                 {
                     "assetId": "a3",
                     "sourceCollectionId": "pin-001",
                     "license": "attribution_no_watermark",
+                    "rightsAuditStatus": "unverified",
                     "title": "缺少出处字段",
                 },
             ],
@@ -282,6 +287,7 @@ def test_image_fidelity_blocks_rewrite_drift_and_routes_to_compose_brief():
     gate = _check_image_fidelity(
         {
             "carrier": "image",
+            "vertical": "travel",
             "title": "城市咖啡馆夜谈",
             "caption": "深夜创业者的都市神经漫游与电车轰鸣。",
             "storySpine": {"primaryEntity": "九寨沟", "sourceCollectionId": "pin-002", "beats": ["九寨沟瀑布", "原始森林"]},
@@ -293,6 +299,7 @@ def test_image_fidelity_blocks_rewrite_drift_and_routes_to_compose_brief():
                     "license": "attribution_no_watermark",
                     "authorizationProof": "https://img.example.com/21.jpg",
                     "creator": "作者甲",
+                    "rightsAuditStatus": "verified",
                     "title": "九寨沟瀑布",
                     "caption": "原始森林与瀑布",
                 }

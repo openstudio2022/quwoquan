@@ -19,6 +19,8 @@ class AppToast {
     BuildContext context,
     String message, {
     Duration duration = const Duration(seconds: 3),
+    String? actionLabel,
+    VoidCallback? onAction,
   }) {
     final overlay = Overlay.maybeOf(context);
     if (overlay == null) {
@@ -37,7 +39,11 @@ class AppToast {
       _currentEntry?.remove();
       _timer?.cancel();
       _currentEntry = OverlayEntry(
-        builder: (context) => _ToastWidget(message: message),
+        builder: (context) => _ToastWidget(
+          message: message,
+          actionLabel: actionLabel,
+          onAction: onAction,
+        ),
       );
       liveOverlay.insert(_currentEntry!);
       _timer = Timer(duration, () {
@@ -65,9 +71,11 @@ class AppToast {
 }
 
 class _ToastWidget extends StatelessWidget {
-  const _ToastWidget({required this.message});
+  const _ToastWidget({required this.message, this.actionLabel, this.onAction});
 
   final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +103,33 @@ class _ToastWidget extends StatelessWidget {
               fontSize: AppTypography.base,
               fontWeight: FontWeight.w400,
             ),
-            child: Text(message, textAlign: TextAlign.center),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Flexible(child: Text(message, textAlign: TextAlign.center)),
+                if (actionLabel != null && onAction != null) ...<Widget>[
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  CupertinoButton(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerSm,
+                    ),
+                    minimumSize: Size.zero,
+                    onPressed: () {
+                      AppToast.dismiss();
+                      onAction?.call();
+                    },
+                    child: Text(
+                      actionLabel!,
+                      style: TextStyle(
+                        color: CupertinoColors.activeBlue,
+                        fontSize: AppTypography.base,
+                        fontWeight: AppTypography.semiBold,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),

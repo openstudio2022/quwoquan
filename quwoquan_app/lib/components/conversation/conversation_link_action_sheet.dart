@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 enum ConversationLinkAction { openInBrowser, copyLink }
@@ -10,7 +11,7 @@ Future<ConversationLinkAction?> showConversationLinkActionSheet(
 }) {
   return showAppActionSheet<ConversationLinkAction>(
     context,
-    title: UITextConstants.assistantReferenceActionTitle,
+    title: AssistantText.assistantReferenceActionTitle,
     message: url,
     sections: [
       AppActionSheetSection<ConversationLinkAction>(
@@ -18,12 +19,12 @@ Future<ConversationLinkAction?> showConversationLinkActionSheet(
           if (allowOpenInBrowser)
             const AppActionSheetItem<ConversationLinkAction>(
               value: ConversationLinkAction.openInBrowser,
-              label: UITextConstants.assistantReferenceOpenInBrowser,
+              label: AssistantText.assistantReferenceOpenInBrowser,
               icon: CupertinoIcons.compass,
             ),
           const AppActionSheetItem<ConversationLinkAction>(
             value: ConversationLinkAction.copyLink,
-            label: UITextConstants.assistantReferenceCopyLink,
+            label: AssistantText.assistantReferenceCopyLink,
             icon: CupertinoIcons.link,
           ),
         ],

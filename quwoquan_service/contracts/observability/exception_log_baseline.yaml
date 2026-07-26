@@ -1,6 +1,6 @@
 name: exception_log_baseline
-schema: 2
-description: Short exception log schema written to dedicated error sink.
+catalog: observability.slim
+description: Canonical exception runtime log written to the dedicated error sink.
 enums:
   origin:
     - app.http
@@ -14,62 +14,33 @@ enums:
     - inbound
     - outbound
 required_fields:
-  - ts
-  - level
-  - err
-  - msg
-optional_fields:
-  - req
-  - trace
-  - debug
-  - stackHash
-  - failurePoint
-  - businessObject
-  - functionModule
-  - io.inputKv
-  - io.outputKv
-collector_context:
-  app_labels:
-    - platform
-    - appVersion
-    - sessionHash
-  service_labels:
-    - service
-    - instanceId
-  run_manifest:
-    - env
-    - runId
-    - releaseId
-io_kv:
-  input_field: io.inputKv
-  output_field: io.outputKv
-  source: metadata_driven
-  default_strategy: minimal
-forbidden_fields:
   - schema
-  - signal
+  - occurredAt
+  - observedAt
   - logKind
-  - env
-  - sourceType
-  - service
-  - component
-  - instanceId
-  - runId
+  - severity
+  - signal
+  - message
+  - resource
+  - errorCode
+optional_fields:
+  - recordId
+  - correlation
+  - fingerprint
+  - attributes
+resource_fields:
+  required: [sourceType, service]
+  optional: [environment, component, appVersion, service.version]
+forbidden_fields:
+  - schemaVersion
+  - eventVersion
+  - contractVersion
   - releaseId
   - dataReleaseId
   - sessionId
-  - timestamp
-  - severity
-  - message
-  - requestId
-  - traceId
-  - spanId
   - headers
   - statusCode
   - logType
-  - phase
-  - parentTraceId
-  - causationId
 error_code_format: "MODULE.KIND.REASON"
 notes:
   - "exception_log always goes to dedicated error sink."

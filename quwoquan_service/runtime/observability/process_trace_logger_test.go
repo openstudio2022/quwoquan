@@ -59,19 +59,22 @@ func TestProcessTraceLogger_LevelControl(t *testing.T) {
 	if err := logger.Write(entry, "Message", "create", map[string]any{"content": "hello"}, map[string]any{"messageId": "m-1"}); err != nil {
 		t.Fatalf("write failed: %v", err)
 	}
-	if !strings.Contains(standard.String(), `"inputKv":{"content":"***"}`) {
-		t.Fatalf("expected metadata filtered input kv in payload: %s", standard.String())
+	if !strings.Contains(standard.String(), `"inputKv":"{\"content\":\"***\"}"`) {
+		t.Fatalf("expected string-only filtered input kv in payload: %s", standard.String())
 	}
-	if strings.Contains(standard.String(), "schema"+"Version") || strings.Contains(standard.String(), "requestId") {
-		t.Fatalf("process log should use compact fields: %s", standard.String())
+	if strings.Contains(standard.String(), "schema"+"Version") ||
+		strings.Contains(standard.String(), `"sessionId"`) {
+		t.Fatalf("process log must not contain forbidden fields: %s", standard.String())
 	}
-	if !strings.Contains(standard.String(), ",db_write,ok,") {
-		t.Fatalf("expected delimited runtime event/result fields: %s", standard.String())
+	if !strings.Contains(standard.String(), `"event":"db_write"`) ||
+		!strings.Contains(standard.String(), `"result":"ok"`) {
+		t.Fatalf("expected canonical runtime event/result fields: %s", standard.String())
 	}
-	if strings.Contains(standard.String(), `"req":`) {
-		t.Fatalf("process log should not use json request field: %s", standard.String())
+	if !strings.Contains(standard.String(), `"requestId":"SVC.chat.message.create.l9z1y4.2f8k"`) {
+		t.Fatalf("process log must preserve request correlation: %s", standard.String())
 	}
-	if !strings.Contains(standard.String(), "persist_message attrs=") {
-		t.Fatalf("expected attrs to be appended to final message field: %s", standard.String())
+	if !strings.Contains(standard.String(), `"message":"persist_message"`) ||
+		!strings.Contains(standard.String(), `"attributes":`) {
+		t.Fatalf("expected structured message and attributes: %s", standard.String())
 	}
 }

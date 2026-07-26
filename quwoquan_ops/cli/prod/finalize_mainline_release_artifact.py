@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""把构建输出摘要封装为可部署、可复核的不可变发布清单。"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+from pathlib import Path
+from typing import Any
+
+
+DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--artifact-dir", required=True, type=Path)
+    parser.add_argument("--image-descriptors-dir", required=True, type=Path)
+    return parser.parse_args()
+
+
+def canonical_bytes(payload: dict[str, Any]) -> bytes:
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{path} must contain an object")
+    return payload
+
+
+def load_image_descriptors(directory: Path) -> dict[str, dict[str, Any]]:
+    descriptors: dict[str, dict[str, Any]] = {}
+    for path in sorted(directory.glob("*.json")):
+        descriptor = load_json(path)
+        service = str(descriptor.get("service") or "").strip()
+        if not service:
+            raise ValueError(f"{path} missing service")
+        if service in descriptors:
+            raise ValueError(f"duplicate image descriptor for {service}")
+        descriptors[service] = descriptor
+    return descriptors
+
+
+def validate_descriptor(
+    service: str,
+    descriptor: dict[str, Any],
+    *,
+    expected_repository: str,
+    expected_tag: str,
+) -> dict[str, Any]:
+    repository = str(descriptor.get("repository") or "").strip()
+    tag = str(descriptor.get("tag") or "").strip()
+    digest = str(descriptor.get("digest") or "").strip()
+    if repository != expected_repository:
+        raise ValueError(
+            f"{service} repository mismatch: {repository!r} != {expected_repository!r}"
+        )
+    if tag != expected_tag:
+        raise ValueError(f"{service} tag mismatch: {tag!r} != {expected_tag!r}")
+    if DIGEST_PATTERN.fullmatch(digest) is None:
+        raise ValueError(f"{service} missing immutable OCI digest")
+    expected_ref = f"{repository}@{digest}"
+    if str(descriptor.get("ref") or "") != expected_ref:
+        raise ValueError(f"{service} digest ref mismatch")
+    attestations = descriptor.get("attestations")
+    if not isinstance(attestations, dict):
+        raise ValueError(f"{service} missing attestations")
+    for attestation_type in ("spdxSbom", "slsaProvenance"):
+        value = str(attestations.get(attestation_type) or "").strip()
+        if value != f"oci://{expected_ref}#{attestation_type}":
+            raise ValueError(f"{service} missing {attestation_type} attestation reference")
+    return {
+        "repository": repository,
+        "tag": tag,
+        "digest": digest,
+        "ref": expected_ref,
+        "attestations": attestations,
+    }
+
+
+def finalize(artifact_dir: Path, descriptors_dir: Path) -> dict[str, Any]:
+    manifest_path = artifact_dir / "manifest.json"
+    manifest = load_json(manifest_path)
+    if manifest.get("schema") != "mainline-release-artifact":
+        raise ValueError("release artifact schema mismatch")
+
+    required = manifest.get("requiredImages")
+    repositories = manifest.get("imageRepositories")
+    versions = manifest.get("versions")
+    if not isinstance(required, list) or not all(isinstance(item, str) for item in required):
+        raise ValueError("requiredImages must be a string list")
+    if not isinstance(repositories, dict) or not isinstance(versions, dict):
+        raise ValueError("release artifact is missing image repositories or versions")
+    image_version = str(versions.get("imageVersion") or "").strip()
+    if not image_version:
+        raise ValueError("release artifact is missing imageVersion")
+
+    descriptors = load_image_descriptors(descriptors_dir)
+    required_set = set(required)
+    if set(descriptors) != required_set:
+        missing = sorted(required_set - set(descriptors))
+        extra = sorted(set(descriptors) - required_set)
+        raise ValueError(f"image descriptor set mismatch: missing={missing}, extra={extra}")
+
+    images = {
+        service: validate_descriptor(
+            service,
+            descriptors[service],
+            expected_repository=str(repositories.get(service) or ""),
+            expected_tag=image_version,
+        )
+        for service in required
+    }
+
+    release_files = manifest.get("releaseFiles")
+    release_digests = manifest.get("releaseFileDigests")
+    if not isinstance(release_files, dict) or not isinstance(release_digests, dict):
+        raise ValueError("release artifact is missing config file digests")
+    for service, relative in release_files.items():
+        path = artifact_dir / str(relative)
+        if not path.is_file():
+            raise ValueError(f"release config missing for {service}: {relative}")
+        if release_digests.get(service) != sha256_file(path):
+            raise ValueError(f"release config digest mismatch for {service}")
+
+    manifest["images"] = images
+    manifest["status"] = "deployable"
+    manifest.pop("manifestDigest", None)
+    manifest["manifestDigest"] = (
+        "sha256:" + hashlib.sha256(canonical_bytes(manifest)).hexdigest()
+    )
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        manifest = finalize(args.artifact_dir.resolve(), args.image_descriptors_dir.resolve())
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"FAIL: {error}")
+        return 1
+    print(
+        "OK: deployable release artifact "
+        f"{manifest['manifestDigest']} includes {len(manifest['images'])} immutable images"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

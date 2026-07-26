@@ -130,7 +130,7 @@ def test_homepage_only_freshness_ignores_disabled_article_and_image_plans(
 
 
 def test_typed_source_failure_url_enters_research_reject_memory(tmp_path, monkeypatch):
-    execution_id = "20260711--travel-homepage-source-recovery--cn-zhejiang--canary-001"
+    execution_id = "20260711--travel-homepage-source-recovery--test-region-a--pilot-001"
     entity = "南雁荡山"
     source_url = "https://zh.wikipedia.org/wiki/%E5%8D%97%E9%9B%81%E8%8D%A1%E5%B1%B1"
     draft_dir = tmp_path / "entities" / "地点" / "自然景观" / entity / "4.draft"

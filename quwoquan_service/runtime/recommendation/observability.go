@@ -36,6 +36,10 @@ type PipelineMetrics struct {
 }
 
 var (
+	// attributionLabelNames 是 P0+ bounded attribution 的低基数 label 集。
+	// N1-3 增补 experiment_bucket：served 侧由 engine 传真实 scoring 分桶；
+	// behavior 侧由服务端按同一 policy hash 重算（BehaviorSignal.ExperimentBucket），
+	// 缺失时收敛为 "unknown"（bounded 语义，不产生高基数）。
 	attributionLabelNames = []string{
 		"channel",
 		"vertical",
@@ -44,6 +48,7 @@ var (
 		"ranking_version",
 		"reason_version",
 		"intersection_class",
+		"experiment_bucket",
 	}
 
 	pipelineRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
@@ -64,7 +69,14 @@ var (
 		Namespace: "rec",
 		Subsystem: "pipeline",
 		Name:      "rule_hits_total",
-		Help:      "Pipeline requests served by the rule fallback path.",
+		Help:      "Pipeline requests served by the rule path (bucketed or fallback).",
+	})
+
+	pipelineModelFallbackTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "model_fallback_total",
+		Help:      "Pipeline requests where the model scorer failed and RuleScorer served the result.",
 	})
 
 	pipelineEmptyResultsTotal = promauto.NewCounter(prometheus.CounterOpts{
@@ -177,6 +189,20 @@ var (
 		Help: "Total explicit negative feedback events reported by clients.",
 	})
 
+	feedNegativeCandidateSuppressedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "recommendation_feed_negative_candidate_suppressed_total",
+			Help: "Future-window candidates removed by exact explicit negative feedback.",
+		},
+	)
+
+	negativeFeedbackUndoTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "recommendation_negative_feedback_undo_total",
+			Help: "Short-window explicit-negative compensation events.",
+		},
+	)
+
 	behaviorIngestTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "recommendation_behavior_ingest_total",
 		Help: "Total behavior events accepted by FeedbackIngestor.",
@@ -275,7 +301,155 @@ var (
 		Name: "recommendation_feed_patch_emit_failed_total",
 		Help: "Realtime feed patch emission failures by type and stage (validate/marshal/publish). Should stay near zero.",
 	}, []string{"patch_type", "stage"})
+
+	// --- N1-2 新能力观测：二期能力（objectCards/edge/embedding/gate/shadow/
+	// per-source 召回/Redis 降级/policy reload）此前零指标，故障静默。 ---
+
+	// objectCardsTotal 混合对象卡装配结果：assembled（注入卡数）/ provider_error
+	// （召回失败，静默降级为无卡）。
+	objectCardsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_object_cards_total",
+		Help: "Feed object card assembly outcomes (assembled cards / provider errors).",
+	}, []string{"outcome"})
+
+	// edgeMaterializerRunsTotal 关系边物化任务结果（success/failure，按 edge 类型）。
+	edgeMaterializerRunsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_edge_materializer_runs_total",
+		Help: "Object relation edge materializer run outcomes by edge type.",
+	}, []string{"edge_type", "outcome"})
+
+	// edgeMaterializerLastSuccess 最近一次物化成功的 Unix 秒；边表 TTL 14 天，
+	// 该 gauge 停滞超过 TTL 即边表清空风险（告警消费）。
+	edgeMaterializerLastSuccess = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "recommendation_edge_materializer_last_success_timestamp_seconds",
+		Help: "Unix timestamp of the last successful edge materialization; staleness beyond edge TTL means the edge table is draining.",
+	})
+
+	// embeddingProjectionTotal embedding 写入管线结果（success/api_error/budget_exhausted/skipped）。
+	embeddingProjectionTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_embedding_projection_total",
+		Help: "Embedding projection outcomes (success/api_error/budget_exhausted/skipped).",
+	}, []string{"outcome"})
+
+	// feedGateFilteredTotal fail-closed 场景门控拦截的候选数（follow/premium）。
+	feedGateFilteredTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_feed_gate_filtered_total",
+		Help: "Candidates blocked by fail-closed scenario gates (follow feed / premium stream).",
+	}, []string{"gate"})
+
+	// shadowScoreTotal shadow 打分结果（attempted/succeeded/failed）；shadow 覆盖率 =
+	// succeeded / rec_pipeline_requests_total，LTR S1 爬坡的样本积累证据。
+	shadowScoreTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_shadow_score_total",
+		Help: "Shadow scoring outcomes (attempted/succeeded/failed) for LTR sample accumulation.",
+	}, []string{"outcome"})
+
+	// recallSourceFailuresTotal per-source 召回失败计数（并行召回单源失败静默跳过，
+	// 必须暴露而非吞掉）。
+	recallSourceFailuresTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_recall_source_failures_total",
+		Help: "Per-source recall failures inside the parallel recall stage.",
+	}, []string{"source"})
+
+	// redisDegradedTotal HotPath Redis 操作失败降级计数（按操作类别）。
+	redisDegradedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_redis_degraded_total",
+		Help: "HotPath Redis operation failures that degraded to fail-open behavior.",
+	}, []string{"op"})
+
+	// policyReloadTotal policy 热更结果（success/failure）。
+	policyReloadTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_policy_reload_total",
+		Help: "Recommendation policy hot-reload outcomes.",
+	}, []string{"outcome"})
+
+	// policyVersionInfo 当前生效的 policy 版本（value 恒 1，版本经 label 暴露）。
+	policyVersionInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "recommendation_policy_version_info",
+		Help: "Currently active recommendation policy version (value is always 1; version via label).",
+	}, []string{"version"})
 )
+
+// RecordObjectCardsAssembled 记录一次 feed 响应注入的对象卡数量。
+func RecordObjectCardsAssembled(count int) {
+	if count > 0 {
+		objectCardsTotal.WithLabelValues("assembled").Add(float64(count))
+	}
+}
+
+// RecordObjectCardsProviderError 记录对象卡召回失败（静默降级为无卡，必须可观测）。
+func RecordObjectCardsProviderError() {
+	objectCardsTotal.WithLabelValues("provider_error").Inc()
+}
+
+// RecordEdgeMaterializerRun 记录一次关系边物化任务结果。
+func RecordEdgeMaterializerRun(edgeType string, err error) {
+	outcome := "success"
+	if err != nil {
+		outcome = "failure"
+	}
+	if strings.TrimSpace(edgeType) == "" {
+		edgeType = "all"
+	}
+	edgeMaterializerRunsTotal.WithLabelValues(edgeType, outcome).Inc()
+	if err == nil {
+		edgeMaterializerLastSuccess.SetToCurrentTime()
+	}
+}
+
+// RecordEmbeddingProjection 记录 embedding 写入管线结果。
+func RecordEmbeddingProjection(outcome string) {
+	if strings.TrimSpace(outcome) == "" {
+		outcome = "unknown"
+	}
+	embeddingProjectionTotal.WithLabelValues(outcome).Inc()
+}
+
+// RecordFeedGateFiltered 记录 fail-closed 场景门控拦截的候选数。
+func RecordFeedGateFiltered(gate string, count int) {
+	if count <= 0 {
+		return
+	}
+	if strings.TrimSpace(gate) == "" {
+		gate = "unknown"
+	}
+	feedGateFilteredTotal.WithLabelValues(gate).Add(float64(count))
+}
+
+// RecordShadowScore 记录 shadow 打分结果（attempted/succeeded/failed）。
+func RecordShadowScore(outcome string) {
+	shadowScoreTotal.WithLabelValues(outcome).Inc()
+}
+
+// RecordRecallSourceFailure 记录单召回源失败（并行召回内静默跳过的必须记账）。
+func RecordRecallSourceFailure(source string) {
+	if strings.TrimSpace(source) == "" {
+		source = "unknown"
+	}
+	recallSourceFailuresTotal.WithLabelValues(source).Inc()
+}
+
+// RecordRedisDegraded 记录 HotPath Redis 操作失败降级。
+func RecordRedisDegraded(op string) {
+	if strings.TrimSpace(op) == "" {
+		op = "unknown"
+	}
+	redisDegradedTotal.WithLabelValues(op).Inc()
+}
+
+// RecordPolicyReload 记录 policy 热更结果；成功时同步刷新版本 gauge。
+func RecordPolicyReload(version string, err error) {
+	if err != nil {
+		policyReloadTotal.WithLabelValues("failure").Inc()
+		return
+	}
+	policyReloadTotal.WithLabelValues("success").Inc()
+	policyVersionInfo.Reset()
+	if strings.TrimSpace(version) == "" {
+		version = "unknown"
+	}
+	policyVersionInfo.WithLabelValues(version).Set(1)
+}
 
 // RecordFeedPatchEmitted 记录一次成功发射的实时 patch（patch 类型 + 原因码）。
 func RecordFeedPatchEmitted(patchType, reason string) {
@@ -352,6 +526,9 @@ func RecordMetrics(m PipelineMetrics) {
 	switch modelUsed {
 	case "rule", "":
 		pipelineRuleHitsTotal.Inc()
+	case "rule_fallback":
+		pipelineRuleHitsTotal.Inc()
+		pipelineModelFallbackTotal.Inc()
 	default:
 		pipelineModelHitsTotal.Inc()
 	}
@@ -401,7 +578,7 @@ func RecordServedItems(count int) {
 	}
 }
 
-func RecordServedItemsByAttribution(items []FeedItem, channelID string, rankingVersion string, reasonVersion string) {
+func RecordServedItemsByAttribution(items []FeedItem, channelID string, rankingVersion string, reasonVersion string, experimentBucket string) {
 	for _, item := range items {
 		feedServedByAttributionTotal.WithLabelValues(attributionLabels(
 			channelID,
@@ -411,11 +588,17 @@ func RecordServedItemsByAttribution(items []FeedItem, channelID string, rankingV
 			rankingVersion,
 			reasonVersion,
 			"",
+			experimentBucket,
 		)...).Inc()
 	}
 }
 
 func RecordBehaviorIngest(signal BehaviorSignal) {
+	if strings.TrimSpace(strings.ToLower(signal.Action)) == "undo_dislike" {
+		behaviorIngestTotal.Inc()
+		negativeFeedbackUndoTotal.Inc()
+		return
+	}
 	state := normalizeFeedbackState(signal)
 	if state == "" {
 		state = "unknown"
@@ -459,10 +642,11 @@ func attributionLabelsFromSignal(signal BehaviorSignal) []string {
 		signal.RankingVersion,
 		signal.ReasonVersion,
 		signal.IntersectionClass,
+		signal.ExperimentBucket,
 	)
 }
 
-func attributionLabels(channelID, vertical, supplySource, recallPath, rankingVersion, reasonVersion, intersectionClass string) []string {
+func attributionLabels(channelID, vertical, supplySource, recallPath, rankingVersion, reasonVersion, intersectionClass, experimentBucket string) []string {
 	return []string{
 		boundedAttributionLabel(channelID, "unknown"),
 		boundedAttributionLabel(vertical, "general"),
@@ -471,6 +655,7 @@ func attributionLabels(channelID, vertical, supplySource, recallPath, rankingVer
 		boundedAttributionLabel(rankingVersion, "unknown"),
 		boundedAttributionLabel(reasonVersion, "unknown"),
 		boundedAttributionLabel(intersectionClass, "none"),
+		boundedAttributionLabel(experimentBucket, "unknown"),
 	}
 }
 

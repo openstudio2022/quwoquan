@@ -54,7 +54,7 @@ void main() {
       expect(
         visibleFeedCard,
         isTrue,
-        reason: 'At least one remote gamma feed card must be visible after load',
+        reason: 'At least one gamma-local feed card must be visible after load',
       );
     },
   );

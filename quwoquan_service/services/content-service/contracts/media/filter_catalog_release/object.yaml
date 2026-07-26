@@ -1,0 +1,97 @@
+kind: aggregate_root
+description: '图片编辑滤镜目录的一次不可变发布。FilterCategoryDefinition 与
+
+  FilterPresetDefinition 是有界聚合成员，只能随 release 一次性 Stage；
+
+  App 只经 ActiveFilterCatalogReader 读取当前 active release。
+
+  '
+identity:
+  fields:
+  - releaseId
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: aggregate_root
+  cardinality: 1:N
+  consistency: strong
+  kind: owned
+  name: categories
+  on_delete: cascade
+  reference_fields: []
+  target_object: content.FilterCategoryDefinition
+- access: aggregate_root
+  cardinality: 1:N
+  consistency: strong
+  kind: owned
+  name: presets
+  on_delete: cascade
+  reference_fields: []
+  target_object: content.FilterPresetDefinition
+- access: aggregate_root
+  cardinality: 1:N
+  consistency: strong
+  kind: owned
+  name: adjustments
+  on_delete: cascade
+  reference_fields: []
+  target_object: content.FilterAdjustmentValues
+local_identity_reasons:
+  recommendedFallbackPresetIds: 同一 FilterCatalogRelease 内预设排序选择器，随聚合校验并不可变，不是跨对象业务引用
+capabilities:
+- queryable
+- versioned
+- auditable
+- idempotent_commands
+business_rules:
+- releaseId、canonicalDigest、categories、presets 与 recommendedFallbackPresetIds 在 Stage 成功后不可变
+- categories 数量 1..32、presets 数量 1..256，categoryId、category sort 与 presetId 分别全局唯一
+- 每个 enabled preset 必须引用同 release 内 enabled category；同分类 sort 唯一
+- original preset 必须存在、defaultStrength 为 0 且全部 adjustment 值为 0
+- defaultStrength 范围 0..100；全部 adjustment 值范围 -100..100
+- recommendedFallbackPresetIds 必须去重且全部引用 enabled preset
+- canonicalDigest 必须等于 canonical categories/presets/recommended payload 的 SHA-256
+- 同一环境只允许一个 active release；Activate 和 Rollback 必须在单一 Mongo 事务内切换旧新状态
+- 目标已 active 的 Activate/Rollback 为 no-op receipt，不递增 version、不生成伪事件
+- public Reader 只返回完整 active release，不返回 staged、retired 或半写入目录
+lifecycle:
+  states:
+  - staged
+  - active
+  - retired
+  initial: staged
+  transitions:
+  - - staged
+    - active
+    - ActivateFilterCatalogRelease
+  - - active
+    - retired
+    - ActivateFilterCatalogRelease
+  - - retired
+    - active
+    - RollbackFilterCatalogRelease
+  - - active
+    - retired
+    - RollbackFilterCatalogRelease
+  optimistic_concurrency: version
+  idempotency: command_receipt
+members:
+  FilterCategoryDefinition:
+    kind: owned_entity
+    cardinality: 1:N
+    max_cardinality: 32
+    description: release 内有界分类定义，不允许独立 Store/Facade。
+  FilterPresetDefinition:
+    kind: owned_entity
+    cardinality: 1:N
+    max_cardinality: 256
+    description: release 内有界预设定义，不允许独立 Store/Facade。
+  FilterAdjustmentValues:
+    kind: value_object
+    cardinality: 1:N
+    max_cardinality: 256
+    description: 预设的强类型 15 项调整参数，不允许任意键 Map。

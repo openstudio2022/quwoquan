@@ -10,7 +10,12 @@ SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from core.source_digest import SourceDigest, SourceDigestError, current_source_digest  # noqa: E402
+from core.source_digest import (  # noqa: E402
+    SourceDigest,
+    SourceDigestError,
+    _iter_files,
+    current_source_digest,
+)
 
 
 def test_source_digest__execution_release__contract__local_contract() -> None:
@@ -20,6 +25,7 @@ def test_source_digest__execution_release__contract__local_contract() -> None:
     assert ".qwq_output" not in document["inputs"]
     assert "quwoquan_data/control_plane" in document["inputs"]
     assert "quwoquan_data/verticals/travel" in document["inputs"]
+    assert not any(input_path.startswith("quwoquan_ops/") for input_path in document["inputs"])
 
 
 def test_source_digest__rejects_runtime_output_as_input__contract__local_contract() -> None:
@@ -32,3 +38,13 @@ def test_source_digest__rejects_runtime_output_as_input__contract__local_contrac
         assert "fixed repository inputs" in str(exc)
     else:
         raise AssertionError("runtime output must never become a source digest input")
+
+
+def test_source_digest__ignores_empty_directory_markers__contract__local_contract(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".gitkeep").touch()
+    source = tmp_path / "policy.yaml"
+    source.write_text("enabled: true\n", encoding="utf-8")
+
+    assert _iter_files(tmp_path) == (source,)

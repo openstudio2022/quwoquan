@@ -1,0 +1,23 @@
+read_model: MyReportItemSlice
+description: '当前举报人私有可见的举报进度分页单项。只返回举报对象、原因与生命周期状态，
+
+  不暴露 reviewerId、内部处置细节或其他举报人的任何信息。
+
+  '
+source_entities:
+- Report
+consumers:
+- app
+client_projection:
+  dart_class: ContentMyReportItem
+  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/report_queries.dart
+fields:
+- id
+- targetType
+- targetId
+- reason
+- description
+- status
+- createdAt
+- updatedAt
+- resolvedAt

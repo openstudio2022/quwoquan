@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
@@ -14,7 +16,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
 /// 影响明细分页拉取闭包（DI）：由展示面（持有 `ref`）从
-/// `userProfileRepositoryProvider.listAuthorImpactEvidence` 构造并下沉，使 sheet 保持
+/// `authorImpactQueryProvider.listAuthorImpactEvidence` 构造并下沉，使 sheet 保持
 /// 纯展示、无 Riverpod / Repository 耦合，便于横切复用与组件测试。
 typedef AuthorImpactEvidenceFetcher =
     Future<AuthorImpactEvidencePage> Function({String cursor});
@@ -167,6 +169,7 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
   bool _loadingFirst = true;
   bool _loadingMore = false;
   bool _firstFailed = false;
+  bool _loadMoreFailed = false;
 
   @override
   void initState() {
@@ -190,8 +193,16 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
         _hasMore = page.hasMore;
         _loadingFirst = false;
       });
-    } catch (_) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'author_impact_evidence.load_first',
+          error: error,
+          stackTrace: stackTrace,
+          operationId: ContentApiMetadata.listAuthorImpactEvidenceOperation,
+        ),
+      );
       // 结构化降级：保留头部 + 样本兜底，不崩溃、不编造（R17）。
       setState(() {
         _loadingFirst = false;
@@ -202,7 +213,10 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
 
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
-    setState(() => _loadingMore = true);
+    setState(() {
+      _loadingMore = true;
+      _loadMoreFailed = false;
+    });
     try {
       final page = await widget.fetchEvidence(cursor: _cursor);
       if (!mounted) return;
@@ -212,9 +226,20 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
         _hasMore = page.hasMore;
         _loadingMore = false;
       });
-    } catch (_) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      setState(() => _loadingMore = false);
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'author_impact_evidence.load_more',
+          error: error,
+          stackTrace: stackTrace,
+          operationId: ContentApiMetadata.listAuthorImpactEvidenceOperation,
+        ),
+      );
+      setState(() {
+        _loadingMore = false;
+        _loadMoreFailed = true;
+      });
     }
   }
 
@@ -356,7 +381,9 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
         padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
         onPressed: _loadMore,
         child: Text(
-          DiscoveryFeedText.impactEvidenceSheetLoadMore,
+          _loadMoreFailed
+              ? UITextConstants.tryAgain
+              : DiscoveryFeedText.impactEvidenceSheetLoadMore,
           style: TextStyle(fontSize: AppTypography.iosFootnote),
         ),
       ),

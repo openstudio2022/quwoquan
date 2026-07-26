@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.quwoquan.com/content/media-asset/preview-track-manifest.schema.json",
+  "title": "PreviewTrackManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assetId",
+    "assetVersion",
+    "trackVersion",
+    "processorProfile",
+    "accessPolicy",
+    "frameIntervalMs",
+    "sprites",
+    "frames"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan.content.preview_track_manifest"
+    },
+    "assetId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "assetVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "trackVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "processorProfile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "accessPolicy": {
+      "enum": [
+        "owner_only",
+        "referenced_post",
+        "public"
+      ]
+    },
+    "frameIntervalMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 30000
+    },
+    "sprites": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/sprite"
+      }
+    },
+    "frames": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": {
+        "$ref": "#/$defs/frame"
+      }
+    }
+  },
+  "$defs": {
+    "sprite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spriteId",
+        "publicSliceKey",
+        "mimeType",
+        "sha256",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "spriteId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "publicSliceKey": {
+          "type": "string",
+          "pattern": "^media/video/s/"
+        },
+        "mimeType": {
+          "enum": [
+            "image/webp",
+            "image/jpeg"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        }
+      }
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timeMs",
+        "spriteId",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "timeMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600000
+        },
+        "spriteId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "x": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1920
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1080
+        }
+      }
+    }
+  }
+}

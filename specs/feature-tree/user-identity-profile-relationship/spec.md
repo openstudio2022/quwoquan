@@ -1,86 +1,155 @@
-# L1 规格：用户身份画像与关系
+# L1 Domain Service：用户身份画像与关系 (`user-identity-profile-relationship`)
 
-## 目标用户
-- 轻度用户：仅需要一个默认账号即可完成浏览、发帖、评论、加好友与进圈。
-- 重度用户：需要把匿名表达、职业身份、运营职责、私密社交、小圈层互动彼此隔离的用户。
-- 平台运营与客服：需要在不破坏外部隔离感知的前提下完成恢复、申诉、风控、生命周期经营与多账号治理。
+> 一句话定位：为用户提供账号、Persona、公开资料、关系图谱、设置与账号安全的唯一身份边界。
 
-## 核心问题
-- 现有主流社交产品通常把“登录身份”和“应用内发言身份”绑定在一起，导致工作身份、生活身份、匿名表达、运营职责互相污染。
-- 单账号模型难以同时满足公开社交、私密表达、圈子运营、职业沟通、拉新邀请与账号恢复等多种场景。
+## 1. 目标与用户价值
+
+让用户以默认账号或明确选择的 Persona 安全进入应用、维护公开资料和设置、建立或解除关系，并在所有业务领域获得一致的主体与权限语义。
+
+## 2. 领域边界
+
+### 本领域拥有
+
+- 拥有 `UserAccount`、`SubAccount/Persona`、资料快照、关注与拉黑关系、设备端点、用户设置和账号生命周期的写入决定权。
+- 只能通过本领域公开 command 修改其拥有事实。
+
+### 本领域不拥有
+
+- 不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
+- 不复制 metadata 中的字段、path、错误码和 wire 语义。
+
+### 上下游协作
+
+- 上游：AppRoot Journey 与公开输入事实。
+- 下游：直接 L2 能力以及协作 L1 的公开结果。
+- 跨域写入：目标领域公开 command；禁止直写目标存储。
+- 跨域读取：目标领域公开 query/projection。
+
+## 3. Journey / Scenario 职责
+
+- [`JNY-001 / SCN-004`](../spec.md#scn-004)
+  - 本领域负责：在“欢迎、授权、商业登录、Persona 与原动作续接”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：用户发起“欢迎、授权、商业登录、Persona 与原动作续接”且身份、输入与权限前置成立。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `runtime` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-003 / SCN-009`](../spec.md#scn-009)
+  - 本领域负责：在“内容详情跳转作者主页”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：`discovery-content` 已交付其公开结果。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `shared-homepage-network` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-004 / SCN-001`](../spec.md#scn-001)
+  - 本领域负责：在“写文字创建、可靠发布与结果回流”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：`discovery-content` 已交付其公开结果。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `circle-community` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-004 / SCN-002`](../spec.md#scn-002)
+  - 本领域负责：在“照片创建、像素编辑、原图可靠上传与发布回流”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：`discovery-content` 已交付其公开结果。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `circle-community` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-004 / SCN-003`](../spec.md#scn-003)
+  - 本领域负责：在“视频创建、转码处理、发布与结果回流”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：`discovery-content` 已交付其公开结果。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `circle-community` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-007 / SCN-012`](../spec.md#scn-012)
+  - 本领域负责：在“1v1 私信与打招呼升级”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：`chat-conversation` 已交付其公开结果。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，形成该场景中本领域负责的终态。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-007 / SCN-016`](../spec.md#scn-016)
+  - 本领域负责：在“会话内音视频通话与离线来电可靠送达”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：`chat-conversation` 已交付其公开结果。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `runtime` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-009 / SCN-017`](../spec.md#scn-017)
+  - 本领域负责：在“内容与页面上下文感知问答”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：`discovery-content` 已交付其公开结果。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `global-search-experience` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-009 / SCN-020`](../spec.md#scn-020)
+  - 本领域负责：在“小趣主动订阅与用户/会话投递”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：`runtime` 已交付其公开结果。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，形成该场景中本领域负责的终态。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-010 / SCN-023`](../spec.md#scn-023)
+  - 本领域负责：在“对象对外分享分发”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：`discovery-content` 已交付其公开结果。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `circle-community` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-011 / SCN-027`](../spec.md#scn-027)
+  - 本领域负责：在“附近同趣·结伴同行·线下局”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：`recommendation-platform` 已交付其公开结果。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `chat-conversation` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-011 / SCN-028`](../spec.md#scn-028)
+  - 本领域负责：在“派生称谓与联系人标签驱动连接”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：用户发起“派生称谓与联系人标签驱动连接”且身份、输入与权限前置成立。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `chat-conversation` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+- [`JNY-012 / SCN-010`](../spec.md#scn-010)
+  - 本领域负责：在“我的主页转发互动双向历史”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 进入条件：用户发起“我的主页转发互动双向历史”且身份、输入与权限前置成立。
+  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `discovery-content` 继续处理。
+  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
+
+## 4. 业务能力
+
+- [`auth-profile-snapshot`](./auth-profile-snapshot/spec.md)：认证、refresh token、owner/subAccount 快照与凭证管理的能力级 SIT 验收。
+- [`onboarding-and-identity-entry`](./onboarding-and-identity-entry/spec.md)：负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路。
+- [`persona-follow-graph`](./persona-follow-graph/spec.md)：本能力统一分身生命周期、公开身份、关系隔离与跨域透传。
+- [`profile-homepage-redesign`](./profile-homepage-redesign/spec.md)：统一个人主页的信息架构、状态模型与跨页面互动一致性。
+- [`settings-and-device-token`](./settings-and-device-token/spec.md)：为已登录账号提供可真实读写的通知、隐私、通话和外观设置，并管理设备推送端点与登录凭证。
+- [`user-service-cloud-delivery`](./user-service-cloud-delivery/spec.md)：让用户资料、统计、设置和关系状态由 user-service 持久化，并通过正式远端契约在 App 各页面一致展示和更新。
+
+## 5. 领域要求
+
+<a id="req-001"></a>
+### REQ-001 用户身份画像与关系领域边界与不变量
+
+- 领域边界、上下游依赖、工程映射和服务治理清晰。
+
+<a id="req-002"></a>
+### REQ-002 平台缺少一个统一的身份基线去承载多方式登录、子账号切换、强隔离关系网络、通讯录发现、邀请归因与用户生命周期经营
+
 - 平台缺少一个统一的身份基线去承载多方式登录、子账号切换、强隔离关系网络、通讯录发现、邀请归因与用户生命周期经营。
-
-## 范围
-- 欢迎页入口、并行登录、账号建立、画像快照、子账号管理、关系网络、设置与设备 token。
-- `OwnerAccount / 主控账号` 与 `SubAccount / 子账号` 双层身份模型。
-- 通讯录匹配、邀请归因、增长经营与恢复治理在用户域侧的边界定义。
-
-## 功能说明
 - 提供从欢迎页到登录后身份建立的统一入口流程，支持手机号、微信、Apple 并行登录。
-- 提供 `OwnerAccount` 作为登录容器、安全恢复、设备管理、通讯录匹配与子账号管理的主控身份。
-- 提供 `SubAccount` 作为应用内真实使用主体，承载主页、好友、圈子、群、关注、发帖、评论、私信、邀请归因等行为。
-- 提供多子账号强隔离能力，确保外部世界默认无法感知它们属于同一主控账号。
-- 提供系统设置与设备 token 注册能力，保障通知、隐私与多端一致。
-
-## 关键术语
-- `OwnerAccount / 主控账号`：登录凭证、设备、恢复、风控、通讯录匹配、子账号创建与切换的管理容器。
-- `SubAccount / 子账号`：应用内真实身份主体，可承担匿名、职业、运营、私密、小圈层等任意角色，不预设是否公开。
-- `ContactDiscovery / 通讯录发现`：归属于 `OwnerAccount` 的匹配能力，用于识别已加入或未加入的联系人。
-- `Invite Attribution / 邀请归因`：归属于具体 `SubAccount` 的拉新、关系扩散与奖励归因能力。
-
-## 约束
 - 欢迎页（`welcome_screen.dart`）作为登录前后入口，必须归于本 L1。
-- `OwnerAccount` 不是应用世界的默认主体；应用侧的社交、内容、群聊、圈子、邀请、关系默认归属于 `SubAccount`。
 - 多个 `SubAccount` 允许共享同一 `OwnerAccount` 与登录态容器，但对外不可见关联。
 - 通讯录匹配归 `OwnerAccount`；一旦转为好友、圈子、群或社交关系，必须落到具体 `SubAccount`。
-- 邀请归因与奖励默认归属于发起邀请的 `SubAccount`；`OwnerAccount` 只提供管理与汇总视角。
-- 认证、session、资料提案与恢复状态流转采用强一致约束。
 - 子账号切换必须可追踪并透传到推荐、聊天、评论、圈子、助手、通知等下游上下文。
 - API path、operation、decoder context、route、surface、请求头上下文必须以 metadata 为唯一真相源。
+- 子账号切换后，评论、发帖、聊天、圈子、好友、邀请主体必须立即一致切换。
+- 登录、验证码、欢迎页落点、子账号创建、资料编辑、关系建立与邀请操作失败后必须可重试并恢复上下文。
+- 外部默认不可推断两个 `SubAccount` 归属于同一 `OwnerAccount`。
 
-## 对标输入
-- 微信：多方式登录、通讯录建链、多设备安全、恢复与强关系链路。
-- 小红书：用户主页经营、身份表达、创作者成长、内容人格化展示。
-- 微博：公开身份体系、粉丝关系传播、运营账号心智、申诉恢复与社交扩散。
+## 6. 领域验收
 
-## 吸收结论
-- 借鉴点：微信的登录安全与通讯录链路、小红书的主页经营与身份表达、微博的关系传播与运营账号心智。
-- 不借鉴点：不把全部身份压缩为一个单账号世界观，也不照搬“主号+小号”缺少主控管理平面的粗放模型。
-- 适用边界：适用于轻度单账号用户和重度多身份隔离用户共存的产品形态。
+<a id="dom-001"></a>
+### DOM-001 user identity profile relationship 领域边界验收
 
-## 非功能目标
-- 实时性：
-  - 子账号切换后，评论、发帖、聊天、圈子、好友、邀请主体必须立即一致切换。
-  - 登录态刷新、设备注册、资料更新、关系建立与邀请归因需保证强一致或准实时可见。
-- 弱网：
-  - 登录、验证码、欢迎页落点、子账号创建、资料编辑、关系建立与邀请操作失败后必须可重试并恢复上下文。
-- 隐私与安全：
-  - 外部默认不可推断两个 `SubAccount` 归属于同一 `OwnerAccount`。
-  - PII/SENSITIVE/SECRET 字段必须按 metadata 分级、脱敏、加密、保留与审计。
-- 并发/容量：
-  - 支持登录高峰、短信验证码峰值、通讯录匹配批量导入、邀请裂变与多账号切换高频场景。
-- 弹性/回滚：
-  - 登录方式、欢迎页路由、子账号能力、邀请策略、通讯录发现策略都必须支持灰度与回滚。
+- 条件：本领域收到有效输入且前置领域事实成立。
+- 可观察结果：领域边界、上下游依赖、工程映射和服务治理清晰。
+- 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
 
-## 四层测试责任
-- local_contract：身份模型、service/openapi/control-plane 元数据、错误码、字段分级、请求上下文与 codegen 一致性。
-- local_contract：欢迎页入口、登录注册、子账号切换、编辑资料、关系建立、邀请发起、通讯录发现等模块与交互测试。
-- api_integration：注册后查看主页、切换子账号后发评论/进群/加圈、通讯录发现转好友、邀请归因、恢复后重新登录等端云联调。
-- user_acceptance：真实设备上的验证码自动填充、微信/Apple 登录、通讯录权限、推送 token、多设备会话与弱网恢复。
+## 7. 工程归属
 
-## 角色分工
-- 产品：定义 `OwnerAccount / SubAccount` 世界观、场景优先级、对标目标与不可打折的体验基线。
-- 架构：定义主控账号与子账号边界、metadata 真相源、隔离策略、恢复与风控边界。
-- 开发：按 metadata-first 落地登录、会话、子账号、关系、邀请与恢复能力。
-- 测试：建立身份链路、隔离链路、邀请归因与恢复链路的 三层测试 证据。
-- 发布：负责登录方式、邀请策略、通讯录发现策略与恢复流程的灰度放量与回滚。
+- App：`quwoquan_app/lib/ui/user`、`quwoquan_app/lib/ui/welcome`、`quwoquan_app/lib/ui/settings`、`quwoquan_app/lib/cloud/services/user`
+- Contracts：`quwoquan_service/services/user-service/contracts`
+- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/tag-service/contracts`
+- Service：`quwoquan_service/services/user-service`、`quwoquan_service/services/tag-service`
+- 测试：
+  - `local_contract`：`quwoquan_service/services/user-service/tests`
+  - `api_integration`：`quwoquan_service/services/user-service/tests`
+  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
 
-## 验收标准（L1 重点）
-- A1：欢迎页到认证再到身份建立链路完整，支持多方式登录与登录后落点一致。
-- A2：`OwnerAccount / SubAccount` 双层模型与边界冻结，且不会把 `OwnerAccount` 暴露为应用世界的默认主体。
-- A3：会话、资料提案、恢复与登录态状态机具备幂等和回滚策略。
-- A4：子账号强隔离成立，外部默认无法从主页、评论、好友、群、圈子、邀请等路径推断跨账号关联。
-- A5：通讯录发现、关系建立、邀请归因的归属边界清晰：匹配归 `OwnerAccount`，应用与拉新归 `SubAccount`。
-- A6：PII/SENSITIVE 字段分级、脱敏、加密与保留策略生效。
-- A7：用户域与增长域的 metadata 边界清晰，可进入 `/design` 做 schema 与对象拆分。
-- A8：核心身份流程自动化测试职责与灰度/回滚条件明确。
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 user identity profile relationship 领域边界验收
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：领域边界、上下游依赖、工程映射和服务治理清晰。
+- 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效

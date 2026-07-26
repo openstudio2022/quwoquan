@@ -3,13 +3,17 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[3]
-METADATA_ROOT = ROOT / "quwoquan_service/contracts/metadata/content"
+CONTRACT_ROOT = (
+    ROOT / "quwoquan_service/services/content-service/contracts"
+)
 
-post_fields = (METADATA_ROOT / "post/fields.yaml").read_text()
-media_asset_fields = (METADATA_ROOT / "media_asset/fields.yaml").read_text()
-post_service = (METADATA_ROOT / "post/service.yaml").read_text()
+post_fields = (CONTRACT_ROOT / "content/post/fields.yaml").read_text()
+media_asset_fields = (
+    CONTRACT_ROOT / "media/media_asset/fields.yaml"
+).read_text()
+post_service = (CONTRACT_ROOT / "content/post/operations.yaml").read_text()
 original_access_service = (
-    METADATA_ROOT / "media_original_access_fact/service.yaml"
+    CONTRACT_ROOT / "media/media_original_access_fact/operations.yaml"
 ).read_text()
 
 required_post_fields = (

@@ -23,7 +23,7 @@ ROLLOUT_MODE="${APP_ROLLOUT_MODE:-}"
 usage() {
   cat <<EOF
 Usage:
-  scripts/start_app_instance.sh --env <alpha|beta|gamma|prod> --device-id <id> [options]
+  quwoquan_app/scripts/device/start_app_instance.sh --env <alpha|beta|gamma|prod> --device-id <id> [options]
 
 Options:
   --gateway-base-url <url>        Override CLOUD_GATEWAY_BASE_URL.
@@ -227,6 +227,7 @@ define_cmd=(
   --format json
   --app-instance-id "$INSTANCE_ID"
   --app-instance-namespace "$INSTANCE_NAMESPACE"
+  --launch-mode canonical_launcher
 )
 if [[ -n "$GATEWAY_BASE_URL" ]]; then
   define_cmd+=(--gateway-base-url "$GATEWAY_BASE_URL")
@@ -257,6 +258,14 @@ if [[ -n "$ROLLOUT_MODE" ]]; then
 fi
 
 DEFINES_JSON="$("${define_cmd[@]}")"
+python3 "$ROOT_DIR/quwoquan_app/scripts/device/verify_flutter_run_defines.py" \
+  --env "$ENV_NAME" \
+  --defines-json "$DEFINES_JSON"
+export QWQ_APP_RUNTIME_ENV="$ENV_NAME"
+export QWQ_APP_LAUNCH_MODE="canonical_launcher"
+if [[ -t 0 && -e /dev/tty ]]; then
+  export QWQ_APP_INSTANCE_PRESERVE_TTY="${QWQ_APP_INSTANCE_PRESERVE_TTY:-1}"
+fi
 
 echo "[app-instance] env=$ENV_NAME device=$DEVICE_ID namespace=$INSTANCE_NAMESPACE mode=$SERVICE_MODE"
 
@@ -306,10 +315,18 @@ signal.signal(signal.SIGTERM, forward_signal)
 signal.signal(signal.SIGHUP, forward_signal)
 
 try:
+    preserve_terminal = os.environ.get("QWQ_APP_INSTANCE_PRESERVE_TTY") == "1"
+    terminal_fd = None
+    if preserve_terminal:
+        try:
+            terminal_fd = os.open("/dev/tty", os.O_RDWR)
+        except OSError:
+            terminal_fd = None
     child = subprocess.Popen(
         command,
         cwd=app_dir,
-        start_new_session=True,
+        stdin=terminal_fd,
+        start_new_session=not preserve_terminal,
     )
     payload = {
         "schema": "app-instance-state",
@@ -330,4 +347,6 @@ try:
     raise SystemExit(child.wait())
 finally:
     cleanup_state()
+    if terminal_fd is not None:
+        os.close(terminal_fd)
 PY

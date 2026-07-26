@@ -21,8 +21,6 @@ func TestAssistantM2ContractSchemasGovernance(t *testing.T) {
 	}
 	allowedMapFields := map[string]bool{
 		"runtime_failure.context":                            true,
-		"assistant_turn_envelope.input":                      true,
-		"assistant_turn_envelope.trigger":                    true,
 		"device_context.device_context_facts.coarseLocation": true,
 		"tool_use.input":                                     true,
 		"tool_use.result":                                    true,
@@ -32,6 +30,15 @@ func TestAssistantM2ContractSchemasGovernance(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.domain+"/"+tc.name, func(t *testing.T) {
 			schemaPath := filepath.Join(metadataDir, tc.domain, tc.name, "schema.yaml")
+			if tc.name == "assistant_conversation" || tc.name == "skill_subscription" {
+				schemaPath = filepath.Join(
+					metadataDir,
+					tc.domain,
+					"assistant",
+					tc.name,
+					"schema.yaml",
+				)
+			}
 			schema, err := readAssistantContractSchema(schemaPath)
 			if err != nil {
 				t.Fatalf("read schema: %v", err)

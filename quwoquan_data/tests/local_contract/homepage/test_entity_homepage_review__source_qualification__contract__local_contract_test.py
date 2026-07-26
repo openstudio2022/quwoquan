@@ -16,7 +16,7 @@ from content.homepage.homepage_review import _entity_review_payload  # noqa: E40
 def test_entity_homepage_review__source_qualification__contract__local_contract() -> None:
     payload = _entity_review_payload(
         issues=[],
-        source_paths=["1.download/sources/普陀山__wikipedia/source.md"],
+        source_paths=["1.download/sources/测试实体甲__wikipedia/source.md"],
         base_draft_exists=True,
     )
 

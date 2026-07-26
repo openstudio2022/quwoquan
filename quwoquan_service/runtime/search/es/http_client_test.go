@@ -3,6 +3,7 @@ package es
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,8 @@ import (
 type fakeCluster struct {
 	created     bool
 	createBody  map[string]any
+	mappingBody map[string]any
+	mappingCode int
 	lastSearch  map[string]any
 	upserts     map[string]map[string]any
 	deletes     []string
@@ -27,7 +30,11 @@ type fakeCluster struct {
 }
 
 func newFakeCluster() *fakeCluster {
-	return &fakeCluster{upserts: map[string]map[string]any{}, searchScore: 1.5}
+	return &fakeCluster{
+		upserts:     map[string]map[string]any{},
+		searchScore: 1.5,
+		mappingCode: http.StatusOK,
+	}
 }
 
 func (f *fakeCluster) handler() http.Handler {
@@ -47,6 +54,16 @@ func (f *fakeCluster) handler() http.Handler {
 			_ = json.Unmarshal(body, &f.createBody)
 			f.created = true
 			writeJSON(w, http.StatusOK, map[string]any{"acknowledged": true})
+		case r.Method == http.MethodPut && r.URL.Path == "/"+DefaultIndex+"/_mapping":
+			body, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(body, &f.mappingBody)
+			if f.mappingCode == http.StatusOK {
+				writeJSON(w, http.StatusOK, map[string]any{"acknowledged": true})
+			} else {
+				writeJSON(w, f.mappingCode, map[string]any{
+					"error": "mapper conflict",
+				})
+			}
 		case r.Method == http.MethodPost && r.URL.Path == "/"+DefaultIndex+"/_search":
 			body, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(body, &f.lastSearch)
@@ -125,7 +142,7 @@ func TestClientEnsureIndexCreatesWithAnalyzer(t *testing.T) {
 		t.Fatalf("target field should be keyword, got %#v", target)
 	}
 
-	// Second call must be a no-op (index already exists -> HEAD 200, no re-create).
+	// Existing indexes must reconcile mappings without re-creating the index.
 	fc.createBody = nil
 	if err := c.EnsureIndex(context.Background()); err != nil {
 		t.Fatalf("EnsureIndex(2) err=%v", err)
@@ -133,22 +150,41 @@ func TestClientEnsureIndexCreatesWithAnalyzer(t *testing.T) {
 	if fc.createBody != nil {
 		t.Fatalf("EnsureIndex should be idempotent, re-created index")
 	}
+	mappingProperties, _ := fc.mappingBody["properties"].(map[string]any)
+	payload, _ := mappingProperties["payload"].(map[string]any)
+	if payload["type"] != "object" || payload["enabled"] != false {
+		t.Fatalf("existing index did not receive disabled payload mapping: %#v", payload)
+	}
+}
+
+func TestClientEnsureIndexRejectsIncompatibleExistingMapping(t *testing.T) {
+	cluster := newFakeCluster()
+	cluster.created = true
+	cluster.mappingCode = http.StatusBadRequest
+	server := httptest.NewServer(cluster.handler())
+	defer server.Close()
+	client := newTestClient(t, server)
+
+	err := client.EnsureIndex(context.Background())
+	if !errors.Is(err, ErrIndexSchemaIncompatible) {
+		t.Fatalf("incompatible mapping error=%v", err)
+	}
 }
 
 func TestClientSearchMapsHitsToCandidates(t *testing.T) {
 	fc := newFakeCluster()
 	fc.searchScore = 2.25
 	fc.searchSrc = []map[string]any{{
-		"objectType": rtsearch.ObjectTypeContentPost,
-		"objectId":   "post_1",
-		"title":      "洱海骑行攻略",
-		"summary":    "环湖一日",
+		"objectType":  rtsearch.ObjectTypeContentPost,
+		"objectId":    "post_1",
+		"title":       "洱海骑行攻略",
+		"summary":     "环湖一日",
 		"contentType": "video",
-		"target":     string(rtsearch.TargetVideo),
-		"visibility": "public",
-		"tags":       []any{"骑行", "洱海"},
-		"authorId":   "user_9",
-		"authorName": "alice",
+		"target":      string(rtsearch.TargetVideo),
+		"visibility":  "public",
+		"tags":        []any{"骑行", "洱海"},
+		"authorId":    "user_9",
+		"authorName":  "alice",
 	}}
 	srv := httptest.NewServer(fc.handler())
 	defer srv.Close()
@@ -243,7 +279,10 @@ func TestIndexToDocumentRoundTrip(t *testing.T) {
 		Entities:    []string{"洱海"},
 		Popularity:  3.5,
 		Freshness:   time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
-		Fields:      map[string]string{"authorId": "u7", "authorName": "bob", "entityName": "洱海"},
+		Fields: map[string]string{
+			"authorId": "u7", "authorName": "bob", "entityName": "洱海",
+			"coverUrl": "https://cdn.example/cover.webp", "likeCount": "12",
+		},
 	}
 	indexed := DocumentToIndex(orig)
 	// JSON round-trip to mimic ES storing/returning _source ([]string -> []any).
@@ -261,6 +300,10 @@ func TestIndexToDocumentRoundTrip(t *testing.T) {
 	}
 	if got.Fields["authorName"] != "bob" || got.Fields["entityName"] != "洱海" {
 		t.Fatalf("anchor round-trip mismatch: %#v", got.Fields)
+	}
+	if got.Fields["coverUrl"] != "https://cdn.example/cover.webp" ||
+		got.Fields["likeCount"] != "12" {
+		t.Fatalf("presentation payload round-trip mismatch: %#v", got.Fields)
 	}
 	if !got.Freshness.Equal(orig.Freshness) {
 		t.Fatalf("freshness round-trip mismatch: %v", got.Freshness)

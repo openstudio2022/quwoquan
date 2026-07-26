@@ -1,0 +1,52 @@
+description: 跨对象搜索索引统一投影
+fields:
+- name: objectType
+  type: string
+  constraints:
+  - NOT_NULL
+  role: projection
+- name: objectId
+  type: string
+  constraints:
+  - NOT_NULL
+  role: projection
+- name: title
+  type: string
+  constraints:
+  - NOT_NULL
+  role: projection
+- name: summary
+  type: string
+  constraints:
+  - NULLABLE
+  role: projection
+- name: payload
+  type: object
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  description: 各对象公开展示切片；ES 仅保存在 _source 且禁止参与动态字段索引，结果页不得回源拼装
+  role: projection
+- name: tagRefs
+  type: array
+  constraints:
+  - NULLABLE
+  role: projection
+- name: visibility
+  type: string
+  constraints:
+  - NOT_NULL
+  role: projection
+- name: sourceVersion
+  type: int
+  constraints:
+  - NOT_NULL
+  role: projection
+- name: indexedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  role: projection

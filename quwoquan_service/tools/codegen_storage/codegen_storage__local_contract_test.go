@@ -10,33 +10,167 @@ func TestSourceRoutesGeneratedOwnershipToObjectPacket(t *testing.T) {
 	t.Parallel()
 
 	source := Source{
+		ObjectPath: "persona/profile_update_proposal",
 		DomainPkg:  "profile_update_proposal",
-		DomainPath: "persona/profile_update_proposal",
+		DomainPath: "model",
 	}
-	if got, want := source.modelImport("example/internal"), "example/internal/domain/persona/profile_update_proposal/model"; got != want {
+	ctx := &genContext{
+		manifest: &Manifest{OutputDir: "services/user-service/generated", ModulePath: "example/generated"},
+		source:   source,
+	}
+	if got, want := source.modelImport(ctx.modulePath()), "example/generated/persona/profile_update_proposal/contract/model"; got != want {
 		t.Fatalf("model import = %q, want %q", got, want)
 	}
-	if got, want := filepath.ToSlash(source.infrastructurePath("persistence")), "infrastructure/persona/profile_update_proposal/persistence"; got != want {
+	if got, want := filepath.ToSlash(source.infrastructurePath("persistence")), "persistence/model/persistence"; got != want {
 		t.Fatalf("persistence path = %q, want %q", got, want)
+	}
+	if got, want := filepath.ToSlash(ctx.outputDir()), "services/user-service/generated/persona/profile_update_proposal"; got != want {
+		t.Fatalf("object output = %q, want %q", got, want)
+	}
+	if got, want := filepath.ToSlash(ctx.migrationDir()), "services/user-service/resources/migrations/persona/profile_update_proposal"; got != want {
+		t.Fatalf("object migration directory = %q, want %q", got, want)
 	}
 }
 
-func TestManifestRejectsDomainPathTraversal(t *testing.T) {
+func TestFieldTypeToGoTypeAcceptsCanonicalStringSlice(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "manifest.yaml")
-	if err := os.WriteFile(path, []byte(`
-service: user-service
-output_dir: services/user-service/internal
-module_path: example/internal
-sources:
-  - metadata: user/profile_update_proposal
-    domain_pkg: profile_update_proposal
-    domain_path: ../../outside
-`), 0o600); err != nil {
+	if got := fieldTypeToGoType(nil, "Persona", "OverriddenProfileFields", "[]string", false); got != "[]string" {
+		t.Fatalf("canonical []string mapped to %q, want []string", got)
+	}
+}
+
+func TestFieldTypeToGoTypePreservesInt64ProjectionVersion(t *testing.T) {
+	t.Parallel()
+
+	if got := fieldTypeToGoType(
+		nil,
+		"ObjectTagIndex",
+		"sourceAggregateVersion",
+		"int64",
+		false,
+	); got != "int64" {
+		t.Fatalf("canonical int64 mapped to %q, want int64", got)
+	}
+}
+
+func TestEntityHasFieldDoesNotInventCreatedAtForAppendOnlyFact(t *testing.T) {
+	t.Parallel()
+
+	ctx := &genContext{fields: &FieldsYAML{Entities: map[string]EntityFieldsDef{
+		"DeletedPostTombstone": {Fields: []FieldDef{
+			{Name: "deletedAt"},
+			{Name: "expireAt"},
+		}},
+	}}}
+	if entityHasField(ctx, "DeletedPostTombstone", "createdAt") {
+		t.Fatal("Mongo codegen must not assign an undeclared createdAt field")
+	}
+}
+
+func TestGenerationPlanIsDerivedFromObjectStorageContract(t *testing.T) {
+	t.Parallel()
+
+	serviceDir := filepath.Join(t.TempDir(), "sample-service")
+	writeStorageTestFile(t, filepath.Join(serviceDir, "contracts", "domain.yaml"), "domain: sample\n")
+	writeStorageTestFile(t, filepath.Join(serviceDir, "contracts", "catalog", "item_view", "storage.yaml"), `
+backend: mongodb
+role: projection
+collections:
+  items:
+    entity: ItemView
+codegen:
+  enabled: true
+`)
+
+	plan, err := deriveGenerationPlan(serviceDir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loadManifest(path); err == nil {
+	if got, want := plan.Service, "sample-service"; got != want {
+		t.Fatalf("service = %q, want %q", got, want)
+	}
+	if len(plan.Sources) != 1 {
+		t.Fatalf("sources = %d, want 1", len(plan.Sources))
+	}
+	source := plan.Sources[0]
+	if got, want := source.Metadata, "sample/catalog/item_view"; got != want {
+		t.Fatalf("metadata = %q, want %q", got, want)
+	}
+	if got, want := source.ObjectPath, "catalog/item_view"; got != want {
+		t.Fatalf("object path = %q, want %q", got, want)
+	}
+	if got, want := source.RootEntity, "ItemView"; got != want {
+		t.Fatalf("root entity = %q, want %q", got, want)
+	}
+}
+
+func TestObjectStorageCodegenRejectsDomainPathTraversal(t *testing.T) {
+	t.Parallel()
+
+	serviceDir := filepath.Join(t.TempDir(), "sample-service")
+	writeStorageTestFile(t, filepath.Join(serviceDir, "contracts", "domain.yaml"), "domain: sample\n")
+	writeStorageTestFile(t, filepath.Join(serviceDir, "contracts", "catalog", "item", "storage.yaml"), `
+backend: postgres
+role: authoritative
+tables:
+  items:
+    entity: Item
+codegen:
+  enabled: true
+  domain_path: ../../outside
+`)
+	if _, err := deriveGenerationPlan(serviceDir); err == nil {
 		t.Fatal("domain_path traversal must be rejected")
+	}
+}
+
+func TestPGStoreRejectsEntitylessBusinessTable(t *testing.T) {
+	t.Parallel()
+
+	ctx := &genContext{
+		manifest: &Manifest{OutputDir: t.TempDir()},
+		source: Source{
+			DomainPkg: "user",
+		},
+	}
+	err := generatePGStore(ctx, "greeting_request_outbox", TableDef{})
+	if err == nil {
+		t.Fatal("entityless table must not generate pg__store.g.go")
+	}
+}
+
+func TestModelGenerationRejectsEntitylessBusinessTableBeforeWriting(t *testing.T) {
+	t.Parallel()
+
+	outputDir := t.TempDir()
+	ctx := &genContext{
+		manifest: &Manifest{OutputDir: outputDir},
+		source: Source{
+			DomainPkg: "user",
+		},
+		storage: &StorageYAML{
+			Backend: "postgresql",
+			Tables: map[string]TableDef{
+				"greeting_request_outbox": {},
+			},
+		},
+		fields: &FieldsYAML{},
+	}
+	if err := generateModels(ctx); err == nil {
+		t.Fatal("entityless table must fail before model generation")
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "domain/user/model/.g.go")); !os.IsNotExist(err) {
+		t.Fatalf("empty-name model must not be written, stat err=%v", err)
+	}
+}
+
+func writeStorageTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

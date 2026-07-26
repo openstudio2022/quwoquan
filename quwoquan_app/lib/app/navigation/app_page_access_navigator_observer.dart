@@ -40,17 +40,15 @@ class AppPageAccessNavigatorObserver extends NavigatorObserver {
     final loc = routeLocationFromSettings(route);
     if (loc == null || isShellTabLocation(loc)) return;
     final visitId = AppTraceContextStore.instance.newPageVisitId();
+    final enterAt = DateTime.now();
     _overlayStack.add(
-      _TrackedOverlay(
-        location: loc,
-        pageVisitId: visitId,
-        enterAt: DateTime.now(),
-      ),
+      _TrackedOverlay(location: loc, pageVisitId: visitId, enterAt: enterAt),
     );
     unawaited(
       writeAppPageAccessOpen(
         location: loc,
         pageVisitId: visitId,
+        navigationStartedAt: enterAt,
         visitRecorder: _visitRecorder,
         telemetryReporter: _telemetryReporter,
       ),

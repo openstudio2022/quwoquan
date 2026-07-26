@@ -3,7 +3,7 @@
 阻断 quwoquan_app/lib 引用 test/ 树（防止「测试实现」混入发布编译单元）。
 
 用法（仓库根）:
-  python3 scripts/verify_lib_no_import_test_tree.py
+  python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py
 """
 
 from __future__ import annotations

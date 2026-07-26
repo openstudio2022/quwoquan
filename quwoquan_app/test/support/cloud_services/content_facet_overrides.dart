@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'test_content_post_reaction_facet.dart';
+import 'content/mock_content_repository.dart';
 
 /// 测试注入 Content 的窄 Facet。Comment 已从聚合 Repository 彻底拆除，
 /// 只有评论用例可显式传入强类型 [commentFacet]。
@@ -13,7 +14,7 @@ List<Override> mockContentFacetOverrides(
   ContentPostReactionFacet? postReactionFacet,
 }) {
   return <Override>[
-    contentReadRepositoryProvider.overrideWithValue(adapter),
+    contentDiscoveryFeedQueryProvider.overrideWithValue(adapter),
     workBrowserContentPostDetailReaderProvider.overrideWithValue(adapter),
     globalSearchContentPostDetailReaderProvider.overrideWithValue(adapter),
     userProfileContentAuthorPostsReaderProvider.overrideWithValue(adapter),

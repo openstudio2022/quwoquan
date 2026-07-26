@@ -77,8 +77,9 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
         return;
       }
       final hint = await ref
-          .read(authRepositoryProvider)
+          .read(authenticationChallengeCommandWriterProvider)
           .resolveOneTapLoginHint(
+            ResolveOneTapLoginHintCommand(
             vendor: probe.vendor,
             carrierToken: probe.carrierToken,
             deviceId: session.installId.isNotEmpty
@@ -86,6 +87,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
                 : stored.installId,
             platform: CloudRequestHeaders.platform(),
             appVersion: CloudRequestHeaders.appVersion,
+            ),
           )
           .timeout(_LoginFrameHostState._probeTimeout);
       if (!mounted || generation != _entryResolutionGeneration) return;
@@ -125,8 +127,14 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
     if (_activeAttempt == attempt) _activeAttempt = null;
   }
 
-  void _applyCarrierHint(OneTapLoginProbe probe, OneTapLoginHintDto hint) {
-    final accountHint = LoginAccountHint.fromMap(hint.accountHint);
+  void _applyCarrierHint(OneTapLoginProbe probe, OneTapLoginHint hint) {
+    final typedHint = hint.accountHint;
+    final accountHint = LoginAccountHint(
+      displayName: typedHint?.displayName ?? '',
+      avatarUrl: typedHint?.avatarUrl ?? '',
+      maskedPhone: typedHint?.maskedPhone ?? '',
+      identityOrigin: typedHint?.identityOrigin ?? '',
+    );
     final carrierHint = CarrierPhoneHint(
       vendor: probe.vendor,
       carrierToken: probe.carrierToken,
@@ -392,15 +400,17 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
         return;
       }
       final result = await ref
-          .read(authRepositoryProvider)
+          .read(authenticationChallengeCommandWriterProvider)
           .sendOtp(
+            SendOtpCommand(
             phone: state.phone,
             deviceId: session.installId.isNotEmpty
                 ? session.installId
                 : stored.installId,
             platform: CloudRequestHeaders.platform(),
             appVersion: CloudRequestHeaders.appVersion,
-            sourceOperation: 'LoginPhoneOtp',
+            sourceOperation: 'login',
+            ),
           );
       if (!_isCurrentLoginAttempt(attempt)) {
         return;
@@ -468,14 +478,11 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
         return;
       }
       final result = await ref
-          .read(authRepositoryProvider)
-          .login(
-            credentialType: 'phone',
-            credentialKey: state.phone,
+          .read(accountSessionLoginCommandWriterProvider)
+          .loginWithPhone(
+            LoginWithPhoneCommand(
+            phone: state.phone,
             otpCode: state.code,
-            displayLabel: state.maskedPhone.isEmpty
-                ? _maskPhone(state.phone)
-                : state.maskedPhone,
             deviceId: session.installId.isNotEmpty
                 ? session.installId
                 : stored.installId,
@@ -483,13 +490,14 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
             appVersion: CloudRequestHeaders.appVersion,
             agreementVersion: AuthLegalConfig.agreementVersion,
             privacyVersion: AuthLegalConfig.privacyVersion,
+            ),
           );
       if (!_isCurrentLoginAttempt(attempt)) {
         return;
       }
       await ref
           .read(authSessionControllerProvider.notifier)
-          .applyRememberedLoginResult(
+          .applyRememberedLoginGrant(
             result,
             rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
             rememberedLoginMaskedIdentifier: _maskPhone(state.phone),

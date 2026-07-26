@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_visit_repository.dart';
+import 'package:quwoquan_app/cloud/services/ops/ops_visit_append_writer.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/services/hive_runtime.dart';
 
@@ -12,17 +12,15 @@ const String kVisitPendingSyncBoxName = 'visit_records_pending_sync';
 const Duration kVisitDedupWindow = Duration(minutes: 5);
 
 class VisitRecorderService {
-  VisitRecorderService({
-    String? boxName,
-    this._remoteRepository,
-    String currentUserId = '',
-  }) : _boxName = boxName ?? kVisitRecordsBoxName,
-       _currentUserId = currentUserId.trim();
+  VisitRecorderService({String? boxName, OpsVisitAppendWriter? remoteWriter})
+    : this._(boxName ?? kVisitRecordsBoxName, remoteWriter);
+
+  VisitRecorderService._(this._boxName, this._remoteWriter);
 
   final String _boxName;
-  final OpsVisitRepository? _remoteRepository;
-  final String _currentUserId;
+  final OpsVisitAppendWriter? _remoteWriter;
   Timer? _pendingFlushTimer;
+  bool _terminallyPurged = false;
 
   Future<Box<String>?> _ensurePendingBox() async {
     return HiveRuntime.openStringBoxOrNull(kVisitPendingSyncBoxName);
@@ -33,9 +31,15 @@ class VisitRecorderService {
   }
 
   Future<void> recordVisit(VisitTarget target) async {
+    if (_terminallyPurged) {
+      return;
+    }
     final box = await _ensureBox();
+    if (_terminallyPurged) {
+      return;
+    }
     if (box == null) {
-      if (_remoteRepository != null) {
+      if (_remoteWriter != null) {
         unawaited(_syncRemote(target));
       }
       return;
@@ -127,56 +131,84 @@ class VisitRecorderService {
     }
   }
 
+  /// 为本次真实访问派生稳定幂等键：网络重试与断网补传复用同一 key，
+  /// 服务端据此不重复累加 visitCount。
+  static String _newVisitIdempotencyKey(String targetKey) {
+    final micros = DateTime.now().microsecondsSinceEpoch;
+    final targetHash = targetKey.codeUnits.fold<int>(
+      17,
+      (hash, unit) => (hash * 31 + unit) & 0x7fffffff,
+    );
+    return 'visit_${micros}_$targetHash';
+  }
+
   Future<void> _syncRemote(VisitTarget target) async {
-    final repository = _remoteRepository;
-    if (repository == null) {
+    if (_terminallyPurged) {
+      return;
+    }
+    final writer = _remoteWriter;
+    if (writer == null) {
       return;
     }
     final trace = AppTraceContextStore.instance;
-    final userId = _currentUserId.isNotEmpty ? _currentUserId : 'anonymous';
     final input = OpsVisitReportInput(
-      userId: userId,
+      idempotencyKey: _newVisitIdempotencyKey(target.targetKey),
       targetType: _targetTypeFor(target),
       targetKey: target.targetKey,
       sessionId: trace.sessionId,
       source: _sourceFor(target),
     );
     try {
-      await repository.recordVisit(input: input);
-      _schedulePendingFlush(repository, delay: const Duration(seconds: 4));
+      await writer.recordVisit(input);
+      if (_terminallyPurged) {
+        return;
+      }
+      _schedulePendingFlush(writer, delay: const Duration(seconds: 4));
     } catch (_) {
+      if (_terminallyPurged) {
+        return;
+      }
       await _enqueuePending(input);
-      _schedulePendingFlush(repository, delay: const Duration(seconds: 12));
+      _schedulePendingFlush(writer, delay: const Duration(seconds: 12));
     }
   }
 
   void _schedulePendingFlush(
-    OpsVisitRepository repository, {
+    OpsVisitAppendWriter writer, {
     Duration delay = const Duration(seconds: 8),
   }) {
+    if (_terminallyPurged) {
+      return;
+    }
     _pendingFlushTimer?.cancel();
     _pendingFlushTimer = Timer(delay, () {
       _pendingFlushTimer = null;
-      unawaited(_flushPending(repository));
+      unawaited(_flushPending(writer));
     });
   }
 
-  Future<void> _flushPending(OpsVisitRepository repository) async {
+  Future<void> _flushPending(OpsVisitAppendWriter writer) async {
+    if (_terminallyPurged) {
+      return;
+    }
     final box = await _ensurePendingBox();
-    if (box == null) {
+    if (_terminallyPurged || box == null) {
       return;
     }
     final keys = box.keys.map((key) => key.toString()).toList(growable: false)
       ..sort();
     for (final key in keys) {
+      if (_terminallyPurged) {
+        break;
+      }
       final raw = box.get(key);
       if (raw == null || raw.isEmpty) {
         await box.delete(key);
         continue;
       }
       try {
-        await repository.recordVisit(
-          input: OpsVisitReportInput.fromJson(
+        await writer.recordVisit(
+          OpsVisitReportInput.fromStorageJson(
             jsonDecode(raw) as Map<String, dynamic>,
           ),
         );
@@ -188,12 +220,15 @@ class VisitRecorderService {
   }
 
   Future<void> _enqueuePending(OpsVisitReportInput input) async {
+    if (_terminallyPurged) {
+      return;
+    }
     final box = await _ensurePendingBox();
-    if (box == null) {
+    if (_terminallyPurged || box == null) {
       return;
     }
     final key = DateTime.now().microsecondsSinceEpoch.toString();
-    await box.put(key, jsonEncode(input.toJson()));
+    await box.put(key, jsonEncode(input.toStorageJson()));
     const maxBacklog = 200;
     if (box.length > maxBacklog) {
       final keys =
@@ -202,6 +237,24 @@ class VisitRecorderService {
       final overflow = box.length - maxBacklog;
       for (var i = 0; i < overflow; i++) {
         await box.delete(keys[i]);
+      }
+    }
+  }
+
+  Future<void> clearForTerminalAccountClosure() async {
+    _terminallyPurged = true;
+    _pendingFlushTimer?.cancel();
+    _pendingFlushTimer = null;
+    for (final boxName in <String>[_boxName, kVisitPendingSyncBoxName]) {
+      final box = await HiveRuntime.openStringBoxOrNull(boxName);
+      if (box == null) {
+        continue;
+      }
+      await box.clear();
+      if (box.isNotEmpty) {
+        throw StateError(
+          'visit state cleanup verification failed for $boxName',
+        );
       }
     }
   }

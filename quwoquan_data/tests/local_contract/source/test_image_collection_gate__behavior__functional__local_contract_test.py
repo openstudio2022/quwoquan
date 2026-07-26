@@ -3,12 +3,24 @@ from __future__ import annotations
 
 
 from support.source_plan_guidance_fixtures import *  # noqa: F401,F403
+from content.source.handler_fetch_media import _source_collection_title
 
+
+
+
+def test_image_collection_source_title_never_falls_back_to_internal_identity():
+    image = {
+        "sourceCollectionId": "open_license_file:test-entity:internal-digest",
+        "caption": "测试实体甲山谷中的溪流",
+    }
+
+    assert _source_collection_title(image) == ""
+    assert _source_collection_title({**image, "title": "山谷溪流"}) == "山谷溪流"
 
 
 def test_image_collection_gate_rejects_mixed_creators():
     collection = {
-        "sourceCollectionId": "commons:九寨沟:mixed",
+        "sourceCollectionId": "commons:测试实体甲:mixed",
         "creator": "A",
         "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:A.jpg",
         "license": "CC-BY-SA 4.0",
@@ -18,24 +30,26 @@ def test_image_collection_gate_rejects_mixed_creators():
             {
                 "url": "https://img.example/a.jpg",
                 "creator": "A",
-                "caption": "九寨沟 A",
-                "relevance": "九寨沟 A",
+                "caption": "测试实体甲 A",
+                "relevance": "测试实体甲 A",
             },
             {
                 "url": "https://img.example/b.jpg",
                 "creator": "B",
-                "caption": "九寨沟 B",
-                "relevance": "九寨沟 B",
+                "caption": "测试实体甲 B",
+                "relevance": "测试实体甲 B",
             },
         ],
     }
-    verdict = _collection_gate(collection, entity_id="九寨沟")
+    verdict = _collection_gate(
+        collection, entity_id="测试实体甲", vertical="travel"
+    )
     assert not verdict["passed"]
     assert any("multiple creators" in issue for issue in verdict["issues"])
 
 def test_image_collection_gate_rejects_constructed_relevance_without_real_match():
     collection = {
-        "sourceCollectionId": "commons:花溪谷:false-positive",
+        "sourceCollectionId": "commons:测试实体甲:false-positive",
         "creator": "A",
         "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E7%B2%97%E5%9D%91.jpg",
         "license": "CC BY 4.0",
@@ -46,17 +60,19 @@ def test_image_collection_gate_rejects_constructed_relevance_without_real_match(
                 "url": "https://upload.wikimedia.org/wikipedia/commons/b/b9/%E7%B2%97%E5%9D%91.jpg",
                 "creator": "A",
                 "caption": "粗坑在蘇澳永樂里境內",
-                "relevance": "花溪谷 Openverse 授权图片",
+                "relevance": "测试实体甲 Openverse licensed image",
             }
         ],
     }
-    verdict = _collection_gate(collection, entity_id="花溪谷")
+    verdict = _collection_gate(
+        collection, entity_id="测试实体甲", vertical="travel"
+    )
     assert not verdict["passed"]
     assert any("relevance" in issue for issue in verdict["issues"])
 
 def test_image_collection_gate_rejects_prior_collection_id_only_match():
     collection = {
-        "sourceCollectionId": "open_license_file:嵖岈山旅游景区:henan_icon",
+        "sourceCollectionId": "open_license_file:测试实体甲:regional_icon",
         "creator": "Waltigs",
         "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Henan-icon09.jpg",
         "platform": "Wikimedia Commons",
@@ -77,51 +93,51 @@ def test_image_collection_gate_rejects_prior_collection_id_only_match():
 
     verdict = _collection_gate(
         collection,
-        entity_id="嵖岈山旅游景区",
+        entity_id="测试实体甲",
         allow_verified_collection_id_match=False,
+        vertical="travel",
     )
     assert not verdict["passed"]
     assert any("relevance" in issue for issue in verdict["issues"])
-    assert not _collection_publishable_image_urls(
+    assert not _collection_admissible_image_urls(
         [collection],
-        entity_id="嵖岈山旅游景区",
+        entity_id="测试实体甲",
+        vertical="travel",
     )
 
-def test_image_collection_gate_rejects_known_same_name_wrong_place():
+def test_image_collection_gate_rejects_same_name_from_other_region():
     collection = {
-        "sourceCollectionId": "open_license_file:剑门关:hangzhou_wrong_place",
-        "creator": "Panoramio user",
-        "collectionPageUrl": (
-            "https://commons.wikimedia.org/wiki/"
-            "File:20120430%E6%9D%AD%E5%B7%9E%E4%B8%B4%E5%AE%89"
-            "%E6%B5%99%E8%A5%BF%E5%A4%A7%E5%B3%A1%E8%B0%B7"
-            "%E5%89%91%E9%97%A8%E5%85%B3%E6%B0%B4%E5%BA%93.jpg"
-        ),
+        "sourceCollectionId": "open_license_file:测试实体甲:other-region",
+        "creator": "Example creator",
+        "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Other_region.jpg",
         "platform": "Wikimedia Commons",
         "license": "CC BY-SA 3.0",
         "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
         "authorizationProof": "https://commons.wikimedia.org/wiki/File:wrong.jpg",
         "usageScope": "app_publish",
+        "modelReleaseStatus": "not_required",
         "images": [
             {
                 "url": "https://upload.wikimedia.org/wikipedia/commons/wrong.jpg",
-                "creator": "Panoramio user",
-                "caption": "20120430杭州临安浙西大峡谷剑门关水库",
-                "relevance": "20120430杭州临安浙西大峡谷剑门关水库",
+                "creator": "Example creator",
+                "caption": "other-region reservoir with a duplicated local name",
+                "relevance": "other-region reservoir with a duplicated local name",
                 "width": 1600,
                 "height": 900,
             }
         ],
     }
 
-    verdict = _collection_gate(collection, entity_id="剑门关")
+    verdict = _collection_gate(
+        collection, entity_id="测试实体甲", vertical="travel"
+    )
 
     assert not verdict["passed"]
     assert any("relevance" in issue for issue in verdict["issues"])
 
 def test_image_collection_gate_rejects_garbled_500px_caption():
     collection = {
-        "sourceCollectionId": "open_license_file:光雾山:garbled_500px",
+        "sourceCollectionId": "open_license_file:测试实体甲:garbled_caption",
         "creator": "无相",
         "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E5%85%89%E9%9B%BE%E5%B1%B1.jpg",
         "platform": "Wikimedia Commons",
@@ -141,14 +157,16 @@ def test_image_collection_gate_rejects_garbled_500px_caption():
         ],
     }
 
-    verdict = _collection_gate(collection, entity_id="光雾山")
+    verdict = _collection_gate(
+        collection, entity_id="测试实体甲", vertical="travel"
+    )
 
     assert not verdict["passed"]
     assert any("imageCaption" in issue for issue in verdict["issues"])
 
 def test_image_collection_gate_rejects_oversized_assets_before_fetch():
     collection = {
-        "sourceCollectionId": "commons:巨幅图:oversized",
+        "sourceCollectionId": "commons:测试实体甲:oversized",
         "creator": "A",
         "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Oversized.jpg",
         "platform": "Wikimedia Commons",
@@ -160,22 +178,84 @@ def test_image_collection_gate_rejects_oversized_assets_before_fetch():
             {
                 "url": "https://upload.wikimedia.org/wikipedia/commons/oversized.jpg",
                 "creator": "A",
-                "caption": "巨幅图 scenic view",
-                "relevance": "巨幅图 scenic view",
+                "caption": "测试实体甲 scenic view",
+                "relevance": "测试实体甲 scenic view",
                 "width": 12000,
                 "height": 9000,
             }
         ],
     }
 
-    verdict = _collection_gate(collection, entity_id="巨幅图")
+    verdict = _collection_gate(
+        collection, entity_id="测试实体甲", vertical="travel"
+    )
 
     assert not verdict["passed"]
     assert any("pixelCount" in issue for issue in verdict["issues"])
 
+
+def test_image_collection_gate_rejects_non_place_specimen_subject():
+    collection = {
+        "sourceCollectionId": "commons:entity-a:specimen",
+        "creator": "Research contributor",
+        "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Specimen.jpg",
+        "platform": "Wikimedia Commons",
+        "license": "CC BY 4.0",
+        "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "authorizationProof": "https://commons.wikimedia.org/wiki/File:Specimen.jpg",
+        "usageScope": "app_publish",
+        "images": [
+            {
+                "url": "https://upload.wikimedia.org/wikipedia/commons/specimen.jpg",
+                "creator": "Research contributor",
+                "caption": "Test Entity A holotype in dorsal view",
+                "relevance": "Test Entity A scientific specimen",
+                "width": 1512,
+                "height": 1382,
+            }
+        ],
+    }
+
+    verdict = _collection_gate(
+        collection, entity_id="Test Entity A", vertical="travel"
+    )
+
+    assert not verdict["passed"]
+    assert any("not representative" in issue for issue in verdict["issues"])
+
+
+def test_image_collection_gate_accepts_place_habitat_despite_species_context():
+    collection = {
+        "sourceCollectionId": "commons:entity-a:habitat",
+        "creator": "Research contributor",
+        "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Habitat.jpg",
+        "platform": "Wikimedia Commons",
+        "license": "CC BY 4.0",
+        "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "authorizationProof": "https://commons.wikimedia.org/wiki/File:Habitat.jpg",
+        "usageScope": "app_publish",
+        "modelReleaseStatus": "not_required",
+        "images": [
+            {
+                "url": "https://upload.wikimedia.org/wikipedia/commons/habitat.jpg",
+                "creator": "Research contributor",
+                "caption": "Test Entity A habitat landscape and forest stream",
+                "relevance": "type locality habitat of a species sp. nov.",
+                "width": 1512,
+                "height": 1071,
+            }
+        ],
+    }
+
+    verdict = _collection_gate(
+        collection, entity_id="Test Entity A", vertical="travel"
+    )
+
+    assert verdict["passed"], verdict
+
 def test_image_collection_gate_accepts_verified_entity_alias():
     collection = {
-        "sourceCollectionId": "commons:三苏祠:south-gate",
+        "sourceCollectionId": "commons:collection-a:main-entrance",
         "creator": "A",
         "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:South_gate_of_Sansu_Shrine.jpg",
         "license": "CC BY-SA 4.0",
@@ -187,21 +267,28 @@ def test_image_collection_gate_accepts_verified_entity_alias():
             {
                 "url": "https://img.example/south-gate.jpg",
                 "creator": "A",
-                "caption": "South gate of Sansu Shrine",
-                "relevance": "South gate of Sansu Shrine",
+                "caption": "Main entrance of Example Landmark",
+                "relevance": "Main entrance of Example Landmark",
             }
         ],
     }
 
-    without_alias = _collection_gate(collection, entity_id="三苏祠")
-    with_alias = _collection_gate(collection, entity_id="三苏祠", entity_aliases=["Sansu Shrine"])
+    without_alias = _collection_gate(
+        collection, entity_id="subject-z", vertical="travel"
+    )
+    with_alias = _collection_gate(
+        collection,
+        entity_id="subject-z",
+        entity_aliases=["Example Landmark"],
+        vertical="travel",
+    )
 
     assert not without_alias["passed"]
     assert with_alias["passed"], with_alias
 
-def test_image_collection_gate_rejects_configured_cross_entity_alias_collision():
+def test_image_collection_gate_rejects_unmatched_alias_collision():
     collection = {
-        "sourceCollectionId": "commons:故宫博物院:national-palace-taiwan",
+        "sourceCollectionId": "commons:测试实体甲:other-target",
         "creator": "A",
         "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:NationalPalace_MuseumFrontView.jpg",
         "platform": "Wikimedia Commons",
@@ -209,29 +296,31 @@ def test_image_collection_gate_rejects_configured_cross_entity_alias_collision()
         "termsUrl": "https://creativecommons.org/licenses/by/3.0/",
         "authorizationProof": "https://commons.wikimedia.org/wiki/File:NationalPalace_MuseumFrontView.jpg",
         "usageScope": "app_publish",
+        "modelReleaseStatus": "not_required",
         "images": [
             {
                 "url": "https://upload.wikimedia.org/wikipedia/commons/b/b4/NationalPalace_MuseumFrontView.jpg",
                 "creator": "A",
-                "caption": "National Palace Museum, Taiwan.",
-                "relevance": "National Palace Museum, Taiwan.",
+                "caption": "Other Target Museum, remote region.",
+                "relevance": "Other Target Museum, remote region.",
             }
         ],
     }
 
     verdict = _collection_gate(
         collection,
-        entity_id="故宫博物院",
-        entity_aliases=["Palace Museum"],
+        entity_id="测试实体甲",
+        entity_aliases=["Test Entity A Museum"],
+        vertical="travel",
     )
 
     assert not verdict["passed"]
     assert any("relevance" in issue for issue in verdict["issues"])
 
 def test_image_collection_gate_accepts_core_name_from_english_scenic_alias():
-    aliases = _expanded_entity_aliases(["Wutaishan Scenic Area"])
+    aliases = _expanded_entity_aliases(["Test Entity Alias Scenic Area"])
     collection = {
-        "sourceCollectionId": "commons:五台山风景名胜区:air",
+        "sourceCollectionId": "commons:entity-a:air",
         "creator": "A",
         "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Wutai_Shan_from_the_air.jpg",
         "license": "CC BY-SA 4.0",
@@ -243,17 +332,18 @@ def test_image_collection_gate_accepts_core_name_from_english_scenic_alias():
             {
                 "url": "https://upload.wikimedia.org/wikipedia/commons/7/70/Wutai_Shan_from_the_air.jpg",
                 "creator": "A",
-                "caption": "Wutai Shan from the air",
-                "relevance": "Wutai Shan from the air",
+                "caption": "Test Entity Alias from the air",
+                "relevance": "Test Entity Alias from the air",
             }
         ],
     }
 
-    assert "Wutaishan" in aliases
+    assert "Test Entity Alias" in aliases
     verdict = _collection_gate(
         collection,
-        entity_id="五台山风景名胜区",
+        entity_id="entity-a",
         entity_aliases=aliases,
+        vertical="travel",
     )
     assert verdict["passed"], verdict
 
@@ -331,9 +421,31 @@ def test_article_candidate_warns_on_bad_optional_image_but_image_lane_blocks_it(
         ),
         entity_id="九寨沟",
         lane="article",
+        vertical="travel",
     )
     assert article_verdict["passed"]
     assert any("unsupported license" in issue for issue in article_verdict["warnings"]), article_verdict
+    travel_image_verdict = _candidate_gate(
+        _source(
+            source_id="image_audit_only_license",
+            platform="Wikimedia Commons",
+            url="https://commons.wikimedia.org/wiki/File:Jiuzhai.jpg",
+            category="open_license",
+            discovery_provider="test",
+            match_confidence=0.94,
+            source_role="supporting",
+            images=[image],
+            image_evidence_mode="same_source",
+        ),
+        entity_id="九寨沟",
+        lane="image",
+        vertical="travel",
+    )
+    assert travel_image_verdict["passed"], travel_image_verdict
+    assert any(
+        "unsupported license" in issue
+        for issue in travel_image_verdict["warnings"]
+    ), travel_image_verdict
     verdict = _candidate_gate(
         _source(
             source_id="image_bad_license",
@@ -348,6 +460,7 @@ def test_article_candidate_warns_on_bad_optional_image_but_image_lane_blocks_it(
         ),
         entity_id="九寨沟",
         lane="image",
+        vertical="photography",
     )
     assert not verdict["passed"]
     assert any("unsupported license" in issue for issue in verdict["issues"]), verdict

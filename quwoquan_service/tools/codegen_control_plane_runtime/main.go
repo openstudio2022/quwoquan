@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"go/format"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,6 +21,16 @@ type artifact struct {
 	data      any
 }
 
+type generatedOperationSecurity struct {
+	domain      string
+	objectType  string
+	operation   string
+	method      string
+	path        string
+	scopes      []string
+	idempotency string
+}
+
 var compileContractSource = contractcodegen.NewSource
 
 func main() {
@@ -29,7 +40,7 @@ func main() {
 
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&goOutDir, "go-out-dir", "generated/control_plane", "Go output directory")
-	flag.StringVar(&pythonOutDir, "python-out-dir", "services/rec-model-service/generated/control_plane", "Python output directory")
+	flag.StringVar(&pythonOutDir, "python-out-dir", "services/recommendation-service/internal/recommendation/recommendation_model_release/generated/python/control_plane", "Python output directory")
 	flag.Parse()
 
 	source, err := compileContractSource(metadataDir, validate.ProfileBaseline)
@@ -43,6 +54,10 @@ func main() {
 		writeGoArtifact(filepath.Join(goOutDir, item.fileName+".go"), item.constName, item.data)
 		writePythonArtifact(filepath.Join(pythonOutDir, item.fileName+".py"), strings.ToUpper(item.fileName), item.data)
 	}
+	writeGoOperationSecurity(
+		filepath.Join(goOutDir, "operation_security.go"),
+		collectOperationSecurity(artifacts),
+	)
 	writePythonIndex(filepath.Join(pythonOutDir, "__init__.py"), artifacts)
 }
 
@@ -67,34 +82,23 @@ func collectArtifacts(source *contractcodegen.Source) []artifact {
 			data:      readYAMLAny(source, filepath.Join(controlRoot, "portal_menu.yaml")),
 		},
 	}
-	if source.Has(filepath.Join(controlRoot, "domain_onboarding_schema.yaml")) {
-		items = append(items, artifact{
-			fileName:  "domain_onboarding_schema",
-			constName: "DomainOnboardingSchema",
-			data:      readYAMLAny(source, filepath.Join(controlRoot, "domain_onboarding_schema.yaml")),
-		})
-	}
-	if len(source.Paths(filepath.Join(controlRoot, "domains"), ".yaml")) > 0 {
-		items = append(items, artifact{
-			fileName:  "domain_onboarding_domains",
-			constName: "DomainOnboardingDomains",
-			data:      readOnboardingDomains(source, filepath.Join(controlRoot, "domains")),
-		})
-	}
-
 	for _, domain := range []string{"platform", "product"} {
 		baseDir := filepath.Join(controlRoot, domain)
 		if len(source.Paths(baseDir, ".yaml")) == 0 {
 			continue
 		}
 
+		configPath := filepath.Join(baseDir, "config.yaml")
+		if domain == "platform" {
+			configPath = filepath.Join("platform", "config.yaml")
+		}
 		for _, def := range []struct {
 			fileName  string
 			constName string
 			path      string
 		}{
 			{fileName: domain + "_control_plane", constName: toPascalCase(domain) + "ControlPlane", path: filepath.Join(baseDir, "control_plane.yaml")},
-			{fileName: domain + "_config_schema", constName: toPascalCase(domain) + "ConfigSchema", path: filepath.Join(baseDir, "config_schema.yaml")},
+			{fileName: domain + "_config", constName: toPascalCase(domain) + "Config", path: configPath},
 			{fileName: domain + "_workflow", constName: toPascalCase(domain) + "Workflow", path: filepath.Join(baseDir, "workflow.yaml")},
 			{fileName: domain + "_audit_schema", constName: toPascalCase(domain) + "AuditSchema", path: filepath.Join(baseDir, "audit_schema.yaml")},
 		} {
@@ -122,24 +126,6 @@ func collectArtifacts(source *contractcodegen.Source) []artifact {
 		return items[i].fileName < items[j].fileName
 	})
 	return items
-}
-
-func readOnboardingDomains(source *contractcodegen.Source, dir string) any {
-	out := map[string]any{}
-	for _, path := range source.Paths(dir, ".yaml") {
-		data := readYAMLAny(source, path)
-		doc, ok := data.(map[string]any)
-		if !ok {
-			continue
-		}
-		domain := fmt.Sprint(doc["domain"])
-		if strings.TrimSpace(domain) == "" {
-			name := filepath.Base(path)
-			domain = strings.TrimSuffix(name, filepath.Ext(name))
-		}
-		out[domain] = doc
-	}
-	return out
 }
 
 func readYAMLAny(source *contractcodegen.Source, path string) any {
@@ -194,6 +180,139 @@ func MustLoad%s() map[string]any {
 }
 `, constName, string(payload), constName, constName)
 	writeFile(path, content)
+}
+
+func collectOperationSecurity(artifacts []artifact) []generatedOperationSecurity {
+	out := make([]generatedOperationSecurity, 0)
+	for _, item := range artifacts {
+		if item.fileName != "platform_control_plane" &&
+			item.fileName != "product_control_plane" {
+			continue
+		}
+		document, ok := item.data.(map[string]any)
+		if !ok {
+			continue
+		}
+		domain := textValue(document["domain"])
+		prefix := "/control-plane/" + domain + "/"
+		objectTypes, _ := document["object_types"].([]any)
+		for _, rawObject := range objectTypes {
+			object, _ := rawObject.(map[string]any)
+			objectType := textValue(object["object_type"])
+			operations, _ := object["operations"].([]any)
+			for _, rawOperation := range operations {
+				operation, _ := rawOperation.(map[string]any)
+				if textValue(operation["contract_operation_id"]) != "" {
+					continue
+				}
+				if authMode := textValue(operation["auth_mode"]); authMode != "" && authMode != "operator_oidc" {
+					continue
+				}
+				path := textValue(operation["path"])
+				if !strings.HasPrefix(path, prefix) {
+					continue
+				}
+				out = append(out, generatedOperationSecurity{
+					domain: domain, objectType: objectType,
+					operation:   textValue(operation["operation"]),
+					method:      strings.ToUpper(textValue(operation["method"])),
+					path:        path,
+					scopes:      stringSlice(operation["scopes"]),
+					idempotency: textValue(operation["idempotency"]),
+				})
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].domain == out[j].domain {
+			return out[i].operation < out[j].operation
+		}
+		return out[i].domain < out[j].domain
+	})
+	return out
+}
+
+func writeGoOperationSecurity(path string, operations []generatedOperationSecurity) {
+	byDomain := map[string][]generatedOperationSecurity{}
+	for _, operation := range operations {
+		byDomain[operation.domain] = append(byDomain[operation.domain], operation)
+	}
+	domains := make([]string, 0, len(byDomain))
+	for domain := range byDomain {
+		domains = append(domains, domain)
+	}
+	sort.Strings(domains)
+
+	var content strings.Builder
+	content.WriteString("// Code generated by codegen_control_plane_runtime. DO NOT EDIT.\n\n")
+	content.WriteString("package control_plane\n\n")
+	content.WriteString("import (\n")
+	content.WriteString("\toperationsecurity \"quwoquan_service/generated/operationsecurity\"\n")
+	content.WriteString("\trtauth \"quwoquan_service/runtime/auth\"\n")
+	content.WriteString(")\n\n")
+	for _, domain := range domains {
+		fmt.Fprintf(
+			&content,
+			"var %sOperationSecurityDescriptors = []rtauth.OperationSecurityDescriptor{\n",
+			toPascalCase(domain),
+		)
+		for _, operation := range byDomain[domain] {
+			kind := "query"
+			mutationTarget := ""
+			idempotency := operation.idempotency
+			if idempotency == "" {
+				idempotency = "none"
+			}
+			if operation.method != "GET" {
+				kind = "command"
+				mutationTarget = operation.objectType
+			}
+			fmt.Fprintf(&content, "\t{\n")
+			fmt.Fprintf(
+				&content,
+				"\t\tCanonicalOperationID: %q,\n",
+				"control_plane."+operation.domain+"."+operation.objectType+"."+operation.operation,
+			)
+			fmt.Fprintf(&content, "\t\tContractGraphSHA256: operationsecurity.ContractGraphSHA256,\n")
+			fmt.Fprintf(&content, "\t\tMethod: %q,\n", operation.method)
+			fmt.Fprintf(&content, "\t\tPathTemplate: %q,\n", operation.path)
+			fmt.Fprintf(&content, "\t\tOperationKind: %q,\n", kind)
+			fmt.Fprintf(&content, "\t\tMutationTarget: %q,\n", mutationTarget)
+			fmt.Fprintf(&content, "\t\tInvariantTarget: %q,\n", mutationTarget)
+			fmt.Fprintf(&content, "\t\tAuthMode: %q,\n", "required")
+			fmt.Fprintf(&content, "\t\tActorRequirement: %q,\n", "account")
+			fmt.Fprintf(&content, "\t\tPrincipal: %q,\n", "operator")
+			fmt.Fprintf(&content, "\t\tScopes: %#v,\n", operation.scopes)
+			fmt.Fprintf(&content, "\t\tOwnershipPolicy: %q,\n", "operator_scope")
+			fmt.Fprintf(&content, "\t\tTimeoutMilliseconds: %d,\n", 5000)
+			fmt.Fprintf(&content, "\t\tIdempotency: %q,\n", idempotency)
+			fmt.Fprintf(&content, "\t\tCommercialStatus: %q,\n", "ready")
+			content.WriteString("\t},\n")
+		}
+		content.WriteString("}\n\n")
+	}
+	formatted, err := format.Source([]byte(content.String()))
+	must(err)
+	writeFile(path, string(formatted))
+}
+
+func stringSlice(value any) []string {
+	raw, _ := value.([]any)
+	out := make([]string, 0, len(raw))
+	for _, item := range raw {
+		text := strings.TrimSpace(fmt.Sprint(item))
+		if text != "" {
+			out = append(out, text)
+		}
+	}
+	return out
+}
+
+func textValue(value any) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
 }
 
 func writePythonArtifact(path, constName string, data any) {

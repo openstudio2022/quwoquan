@@ -25,18 +25,27 @@ class _MemberSelectSheet extends ConsumerStatefulWidget {
 
 class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final Set<String> _seenCursors = <String>{};
   List<StartGroupPickableMember> _members = const <StartGroupPickableMember>[];
-  bool _loading = true;
+  String? _nextCursor;
   String _query = '';
+  bool _loading = true;
+  bool _loadingMore = false;
   UiErrorSemantic? _errorSemantic;
+  UiErrorSemantic? _appendErrorSemantic;
+  int _requestVersion = 0;
+
+  bool get _hasMore => (_nextCursor ?? '').trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_maybeLoadMore);
     // post-frame 触发首帧加载，避免在 build/initState 期间 setState。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _loadMembers();
+        unawaited(_reloadMembers());
       }
     });
   }
@@ -44,35 +53,53 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadMembers() async {
-    if (!mounted) {
+  void _onSearchChanged(String value) {
+    setState(() => _query = value);
+    unawaited(_reloadMembers());
+  }
+
+  void _maybeLoadMore() {
+    if (!_scrollController.hasClients ||
+        _scrollController.position.extentAfter > AppSpacing.xl) {
       return;
     }
+    unawaited(_loadMoreMembers());
+  }
+
+  Future<void> _reloadMembers() async {
+    final requestVersion = ++_requestVersion;
+    final query = _query.trim();
+    _seenCursors.clear();
     setState(() {
+      _members = const <StartGroupPickableMember>[];
+      _nextCursor = null;
       _loading = true;
+      _loadingMore = false;
       _errorSemantic = null;
+      _appendErrorSemantic = null;
     });
     try {
-      final wizard = ref.read(
-        startGroupMemberWizardProvider(widget.wizardId),
+      final wizard = ref.read(startGroupMemberWizardProvider(widget.wizardId));
+      final page = await loadGroupContactMemberPage(
+        ref.read(chatGroupSelectionRepositoryProvider),
+        group: widget.group,
+        lockedMemberIds: wizard.lockedMemberIds,
+        query: query.isEmpty ? null : query,
       );
-      final members = await loadGroupContactMembers(
-        ref.read(chatRepositoryProvider),
-        widget.group,
-        wizard.lockedMemberIds,
-      );
-      if (!mounted) {
+      if (!mounted || requestVersion != _requestVersion) {
         return;
       }
       setState(() {
-        _members = members;
+        _members = page.members;
+        _nextCursor = _acceptNextCursor(page.nextCursor);
         _loading = false;
       });
     } catch (error) {
-      if (!mounted) {
+      if (!mounted || requestVersion != _requestVersion) {
         return;
       }
       setState(() {
@@ -85,6 +112,57 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
         );
       });
     }
+  }
+
+  Future<void> _loadMoreMembers() async {
+    final cursor = _nextCursor;
+    if (_loading || _loadingMore || cursor == null || cursor.trim().isEmpty) {
+      return;
+    }
+    final requestVersion = _requestVersion;
+    final query = _query.trim();
+    setState(() {
+      _loadingMore = true;
+      _appendErrorSemantic = null;
+    });
+    try {
+      final wizard = ref.read(startGroupMemberWizardProvider(widget.wizardId));
+      final page = await loadGroupContactMemberPage(
+        ref.read(chatGroupSelectionRepositoryProvider),
+        group: widget.group,
+        lockedMemberIds: wizard.lockedMemberIds,
+        query: query.isEmpty ? null : query,
+        cursor: cursor,
+      );
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
+      setState(() {
+        _members = mergeStartGroupContactMemberPages(_members, page.members);
+        _nextCursor = _acceptNextCursor(page.nextCursor);
+        _loadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
+      setState(() {
+        _loadingMore = false;
+        _appendErrorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.listAppend,
+          scope: UiErrorScope.section,
+        );
+      });
+    }
+  }
+
+  String? _acceptNextCursor(String? candidate) {
+    final normalized = candidate?.trim() ?? '';
+    return normalized.isEmpty || !_seenCursors.add(normalized)
+        ? null
+        : normalized;
   }
 
   String _memberId(StartGroupPickableMember member) {
@@ -149,9 +227,8 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final rowBackground = SettingsSemanticConstants.conversationSheetCardSurface(
-      isDark,
-    );
+    final rowBackground =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final rowDividerColor =
         SettingsSemanticConstants.conversationSheetDividerColor(
           isDark,
@@ -160,23 +237,13 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
         SettingsSemanticConstants.memberPickerNavigationBarBackground(isDark);
     final listHorizontalPadding =
         SettingsSemanticConstants.insetFormListHorizontalPadding;
-    final normalizedQuery = _query.trim().toLowerCase();
-    final filtered = _members
-        .where((member) {
-          if (normalizedQuery.isEmpty) {
-            return true;
-          }
-          return pinyinMatches(member.displayName, normalizedQuery) ||
-              _memberId(member).toLowerCase().contains(normalizedQuery);
-        })
-        .toList(growable: false);
     final allSelected = _allSelected(wizardState);
     final hasSelectableMembers = _members.any((member) {
       final id = _memberId(member);
       return id.isNotEmpty && !wizardState.isLocked(id);
     });
     final selectedCount = wizardState.selectedMembers.length;
-    final title = UITextConstants.startGroupChatGroupMemberTitle(
+    final title = ChatText.startGroupChatGroupMemberTitle(
       widget.group.title,
       widget.group.friendCount,
     );
@@ -198,7 +265,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
             child: AppSearchField(
               controller: _searchController,
               placeholder: UITextConstants.search,
-              onChanged: (value) => setState(() => _query = value),
+              onChanged: _onSearchChanged,
             ),
           ),
           Expanded(
@@ -207,7 +274,6 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
               fgSecondary: fgSecondary,
               rowBackground: rowBackground,
               rowDividerColor: rowDividerColor,
-              filtered: filtered,
               wizardState: wizardState,
             ),
           ),
@@ -249,12 +315,10 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                         enabled: hasSelectableMembers,
                       ),
                       Text(
-                        UITextConstants.selectAll,
+                        ChatText.selectAll,
                         style: TextStyle(
                           fontSize: AppTypography.lg,
-                          color: hasSelectableMembers
-                              ? fgPrimary
-                              : fgSecondary,
+                          color: hasSelectableMembers ? fgPrimary : fgSecondary,
                         ),
                       ),
                     ],
@@ -268,7 +332,8 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                     vertical:
                         SettingsSemanticConstants.actionButtonPaddingVertical,
                   ),
-                  color: SettingsSemanticConstants.actionButtonPrimaryBackground,
+                  color:
+                      SettingsSemanticConstants.actionButtonPrimaryBackground,
                   disabledColor:
                       SettingsSemanticConstants.actionButtonDisabledBackground(
                         isDark,
@@ -284,7 +349,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                     SettingsSemanticConstants.actionButtonHeightMedium,
                   ),
                   child: Text(
-                    '${UITextConstants.selectAction}（$selectedCount）',
+                    '${ChatText.selectAction}（$selectedCount）',
                     style: TextStyle(
                       fontSize: AppTypography.lg,
                       fontWeight: FontWeight.w500,
@@ -310,7 +375,6 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
     required Color fgSecondary,
     required Color rowBackground,
     required Color rowDividerColor,
-    required List<StartGroupPickableMember> filtered,
     required StartGroupMemberWizardState wizardState,
   }) {
     if (_loading) {
@@ -322,26 +386,27 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
         onAction: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
-            await _loadMembers();
+            await _reloadMembers();
           }
         },
       );
     }
-    if (filtered.isEmpty) {
+    if (_members.isEmpty) {
       return Center(
         child: Text(
-          UITextConstants.startGroupChatNoMatchedMembers,
+          ChatText.startGroupChatNoMatchedMembers,
           style: TextStyle(fontSize: AppTypography.base, color: fgSecondary),
         ),
       );
     }
     return ListView(
+      controller: _scrollController,
       padding: EdgeInsets.only(bottom: AppSpacing.lg),
       children: [
-        for (var index = 0; index < filtered.length; index++) ...[
+        for (var index = 0; index < _members.length; index++) ...[
           Builder(
             builder: (context) {
-              final member = filtered[index];
+              final member = _members[index];
               final memberId = _memberId(member);
               final selected = wizardState.isSelected(memberId);
               final locked = wizardState.isLocked(memberId);
@@ -372,6 +437,26 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
             },
           ),
         ],
+        if (_loadingMore)
+          const Padding(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: Center(child: CupertinoActivityIndicator()),
+          )
+        else if (_appendErrorSemantic != null)
+          AppListAppendErrorFooter(
+            semantic: _appendErrorSemantic!,
+            onAction: (_) async => _loadMoreMembers(),
+          )
+        else if (_hasMore)
+          Center(
+            child: CupertinoButton(
+              key: const ValueKey<String>(
+                'start-group-member-picker-load-more',
+              ),
+              onPressed: () => unawaited(_loadMoreMembers()),
+              child: const Text(UITextConstants.loadMore),
+            ),
+          ),
       ],
     );
   }

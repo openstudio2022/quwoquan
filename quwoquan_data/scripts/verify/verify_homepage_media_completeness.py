@@ -232,6 +232,8 @@ def _manifest_issues(
                 attrs={"roles": ",".join(invalid_roles)},
             )
         )
+    if not assets:
+        return issues
     covers = [row for row in assets if row.get("role") == "cover"]
     if len(covers) != 1:
         issues.append(

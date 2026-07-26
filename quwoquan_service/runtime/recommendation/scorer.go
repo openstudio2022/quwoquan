@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"strings"
@@ -12,9 +13,10 @@ import (
 
 // ScoredCandidate is a candidate with a model-assigned score.
 type ScoredCandidate struct {
-	Candidate ContentCandidate
-	Score     float64
-	Detail    map[string]float64 // individual feature contributions (for explainability/debugging)
+	Candidate      ContentCandidate
+	Score          float64
+	Detail         map[string]float64 // individual feature contributions (for explainability/debugging)
+	ModelReleaseID string             // 实际命中的模型发布；规则分或模型降级为空
 }
 
 // ScoringFeatures packages all inputs needed by a scorer.
@@ -22,6 +24,10 @@ type ScoringFeatures struct {
 	Session *SessionState
 	User    *UserFeatureVector
 	Weights ScoringWeights
+	// FeatureSnapshotAt 是本次请求读取用户/候选特征后的统一快照时刻。
+	// 在线评分与训练曝光事实必须消费同一时刻，禁止各自在调用点重新取 now，
+	// 否则 ageHours 会形成难以复现的训练/在线偏斜。
+	FeatureSnapshotAt time.Time
 	// Scorer carries the secondary coefficients (popularity sub-weights,
 	// freshness half-life, formula mix factors) resolved from the policy.
 	// Never hand-coded in the scorer; sourced from recpolicy.
@@ -46,7 +52,10 @@ type ModelScorer interface {
 type RuleScorer struct{}
 
 func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, candidates []ContentCandidate) ([]ScoredCandidate, error) {
-	now := time.Now()
+	now := features.FeatureSnapshotAt
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
 	w := features.Weights
 	sc := features.Scorer
 	// Half-life is policy-validated > 0; guard only against a zero-value
@@ -115,10 +124,7 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		detail["popularity"] = popularity
 
 		// Freshness: exponential decay, half-life from policy
-		ageHours := now.Sub(c.PublishedAt).Hours()
-		if ageHours < 0 {
-			ageHours = 0
-		}
+		ageHours := candidateAgeHoursAt(c.PublishedAt, now)
 		freshness := math.Exp(-ageHours / halfLife)
 		detail["freshness"] = freshness
 
@@ -381,31 +387,36 @@ type ModelPredictRequest struct {
 
 // CandidateInput is the candidate feature vector sent to the model.
 type CandidateInput struct {
-	ContentID                   string   `json:"contentId"`
-	ContentType                 string   `json:"contentType"`
-	AuthorID                    string   `json:"authorId"`
-	Tags                        []string `json:"tagRefs"`
-	EntityRefs                  []string `json:"entityRefs,omitempty"`
-	AgeHours                    float64  `json:"ageHours"`
-	ViewCount                   int64    `json:"viewCount"`
-	LikeCount                   int64    `json:"likeCount"`
-	CommentCount                int64    `json:"commentCount"`
-	ShareCount                  int64    `json:"shareCount"`
-	RecallPath                  string   `json:"recallPath"`
-	QualityScore                float64  `json:"qualityScore,omitempty"`
-	ContentVertical             string   `json:"contentVertical,omitempty"`
-	SupplySource                string   `json:"supplySource,omitempty"`
-	IntersectionFactStrength    float64  `json:"intersectionFactStrength,omitempty"`
-	IntersectionFreshness       float64  `json:"intersectionFreshness,omitempty"`
-	AffinityIntersectionScore   float64  `json:"affinityIntersectionScore,omitempty"`
-	IntersectionSourceRefTop    string   `json:"intersectionSourceRefTop,omitempty"`
-	IntersectionConfidenceLabel string   `json:"intersectionConfidenceLabel,omitempty"`
-	IntersectionClass           string   `json:"intersectionClass,omitempty"`
+	ContentID   string   `json:"contentId"`
+	ContentType string   `json:"contentType"`
+	AuthorID    string   `json:"authorId"`
+	Tags        []string `json:"tagRefs"`
+	EntityRefs  []string `json:"entityRefs,omitempty"`
+	AgeHours    float64  `json:"ageHours"`
+	// PublishHour（N3-3）：发布时刻的 UTC 小时（0-23；publishedAt 缺失为 -1）。
+	// 服务端派生随请求下发，与训练侧 itemFeatures.publishHour 同源，消除
+	// 该特征的训练-在线偏斜（此前在线恒 0）。
+	PublishHour                 int     `json:"publishHour"`
+	ViewCount                   int64   `json:"viewCount"`
+	LikeCount                   int64   `json:"likeCount"`
+	CommentCount                int64   `json:"commentCount"`
+	ShareCount                  int64   `json:"shareCount"`
+	RecallPath                  string  `json:"recallPath"`
+	QualityScore                float64 `json:"qualityScore,omitempty"`
+	ContentVertical             string  `json:"contentVertical,omitempty"`
+	SupplySource                string  `json:"supplySource,omitempty"`
+	IntersectionFactStrength    float64 `json:"intersectionFactStrength,omitempty"`
+	IntersectionFreshness       float64 `json:"intersectionFreshness,omitempty"`
+	AffinityIntersectionScore   float64 `json:"affinityIntersectionScore,omitempty"`
+	IntersectionSourceRefTop    string  `json:"intersectionSourceRefTop,omitempty"`
+	IntersectionConfidenceLabel string  `json:"intersectionConfidenceLabel,omitempty"`
+	IntersectionClass           string  `json:"intersectionClass,omitempty"`
 }
 
 // ModelPredictResponse is the model service response.
 type ModelPredictResponse struct {
-	Scores []CandidateScore `json:"scores"`
+	Scores         []CandidateScore `json:"scores"`
+	ModelReleaseID string           `json:"modelReleaseId,omitempty"`
 }
 
 // CandidateScore is a per-candidate score from the model.
@@ -435,35 +446,13 @@ func (s *RemoteModelScorer) WithModelVersion(v string) *RemoteModelScorer {
 }
 
 func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFeatures, candidates []ContentCandidate) ([]ScoredCandidate, error) {
-	now := time.Now()
+	now := features.FeatureSnapshotAt
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
 	inputs := make([]CandidateInput, len(candidates))
 	for i, c := range candidates {
-		ageHours := now.Sub(c.PublishedAt).Hours()
-		if ageHours < 0 {
-			ageHours = 0
-		}
-		inputs[i] = CandidateInput{
-			ContentID:                   c.ContentID,
-			ContentType:                 c.ContentType,
-			AuthorID:                    c.AuthorID,
-			Tags:                        c.Tags,
-			EntityRefs:                  c.EntityRefs,
-			AgeHours:                    ageHours,
-			ViewCount:                   c.ViewCount,
-			LikeCount:                   c.LikeCount,
-			CommentCount:                c.CommentCount,
-			ShareCount:                  c.ShareCount,
-			RecallPath:                  c.RecallPath,
-			QualityScore:                c.QualityScore,
-			ContentVertical:             c.ContentVertical,
-			SupplySource:                c.SupplySource,
-			IntersectionFactStrength:    c.IntersectionFactStrength,
-			IntersectionFreshness:       c.IntersectionFreshness,
-			AffinityIntersectionScore:   c.AffinityIntersectionScore,
-			IntersectionSourceRefTop:    c.IntersectionSourceRefTop,
-			IntersectionConfidenceLabel: c.IntersectionConfidenceLabel,
-			IntersectionClass:           c.IntersectionClass,
-		}
+		inputs[i] = candidateInputAt(c, now)
 	}
 
 	session := features.Session
@@ -471,9 +460,14 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 		session = &SessionState{}
 	}
 
-	var reqCtx map[string]any
+	// 上下文时间特征与训练侧 Python datetime.weekday() 保持同构：
+	// requestDayOfWeek 使用 Monday=0..Sunday=6，而 Go time.Weekday 是 Sunday=0。
+	reqCtx := map[string]any{
+		"requestHour":      now.Hour(),
+		"requestDayOfWeek": (int(now.Weekday()) + 6) % 7,
+	}
 	if s.ModelVersion != "" {
-		reqCtx = map[string]any{"modelVersion": s.ModelVersion}
+		reqCtx["modelVersion"] = s.ModelVersion
 	}
 
 	resp, err := s.client.Predict(ctx, &ModelPredictRequest{
@@ -489,10 +483,36 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 	if err != nil {
 		return nil, err
 	}
+	if resp == nil {
+		return nil, fmt.Errorf("model scorer returned an empty response")
+	}
+	if len(candidates) > 0 && strings.TrimSpace(resp.ModelReleaseID) == "" {
+		// 模型服务允许用 NULL 表达“未命中激活发布”；这对 transport 合法，
+		// 但不能被线上引擎误报成 model 成功。返回错误交给 CascadeScorer 的
+		// RuleScorer 兜底，保证 fallback 指标与曝光 modelReleaseId 都诚实。
+		return nil, fmt.Errorf("model scorer returned no active model release")
+	}
 
 	scoreMap := make(map[string]CandidateScore, len(resp.Scores))
+	expected := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		expected[candidate.ContentID] = struct{}{}
+	}
 	for _, cs := range resp.Scores {
+		if _, ok := expected[cs.ContentID]; !ok {
+			return nil, fmt.Errorf("model scorer returned unknown candidate %q", cs.ContentID)
+		}
+		if _, duplicate := scoreMap[cs.ContentID]; duplicate {
+			return nil, fmt.Errorf("model scorer returned duplicate candidate %q", cs.ContentID)
+		}
 		scoreMap[cs.ContentID] = cs
+	}
+	if len(scoreMap) != len(expected) {
+		return nil, fmt.Errorf(
+			"model scorer returned %d/%d candidate scores",
+			len(scoreMap),
+			len(expected),
+		)
 	}
 
 	result := make([]ScoredCandidate, 0, len(candidates))
@@ -502,13 +522,60 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 			continue
 		}
 		result = append(result, ScoredCandidate{
-			Candidate: c,
-			Score:     cs.Score,
-			Detail:    cs.Detail,
+			Candidate:      c,
+			Score:          cs.Score,
+			Detail:         cs.Detail,
+			ModelReleaseID: resp.ModelReleaseID,
 		})
 	}
 
 	return result, nil
+}
+
+// candidateAgeHoursAt 是规则评分、在线模型输入与训练曝光快照共用的发布时间派生。
+// 缺少发布时间必须收敛到稳定的 0 值，不能把 Go 零值时间解释为数十万小时的伪陈旧内容。
+func candidateAgeHoursAt(publishedAt, snapshotAt time.Time) float64 {
+	if publishedAt.IsZero() || snapshotAt.IsZero() {
+		return 0
+	}
+	ageHours := snapshotAt.Sub(publishedAt).Hours()
+	if ageHours < 0 {
+		return 0
+	}
+	return ageHours
+}
+
+// candidateInputAt 是在线模型请求与曝光训练快照共用的候选特征装配真相源。
+// 任何新增/退役候选特征都必须只在此处完成一次，并由两条链路共同消费。
+func candidateInputAt(c ContentCandidate, snapshotAt time.Time) CandidateInput {
+	ageHours := candidateAgeHoursAt(c.PublishedAt, snapshotAt)
+	publishHour := -1
+	if !c.PublishedAt.IsZero() {
+		publishHour = c.PublishedAt.UTC().Hour()
+	}
+	return CandidateInput{
+		ContentID:                   c.ContentID,
+		ContentType:                 c.ContentType,
+		AuthorID:                    c.AuthorID,
+		Tags:                        append([]string(nil), c.Tags...),
+		EntityRefs:                  append([]string(nil), c.EntityRefs...),
+		AgeHours:                    ageHours,
+		PublishHour:                 publishHour,
+		ViewCount:                   c.ViewCount,
+		LikeCount:                   c.LikeCount,
+		CommentCount:                c.CommentCount,
+		ShareCount:                  c.ShareCount,
+		RecallPath:                  c.RecallPath,
+		QualityScore:                c.QualityScore,
+		ContentVertical:             c.ContentVertical,
+		SupplySource:                c.SupplySource,
+		IntersectionFactStrength:    c.IntersectionFactStrength,
+		IntersectionFreshness:       c.IntersectionFreshness,
+		AffinityIntersectionScore:   c.AffinityIntersectionScore,
+		IntersectionSourceRefTop:    c.IntersectionSourceRefTop,
+		IntersectionConfidenceLabel: c.IntersectionConfidenceLabel,
+		IntersectionClass:           c.IntersectionClass,
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -534,6 +601,19 @@ func NewCascadeScorer(primary, fallback ModelScorer, timeout time.Duration) *Cas
 }
 
 func (c *CascadeScorer) ScoreBatch(ctx context.Context, features *ScoringFeatures, candidates []ContentCandidate) ([]ScoredCandidate, error) {
+	result, _, err := c.ScoreBatchWithPath(ctx, features, candidates)
+	return result, err
+}
+
+// ScoreBatchWithPath 与 ScoreBatch 同语义，额外返回本次是否发生了降级
+// （usedFallback=true 表示 Primary 失败、结果来自 Fallback）。engine 据此
+// 上报真实的 scorer 路径（model / rule_fallback），修正 model_fallback_rate
+// 的语义（此前误用实验分桶名，降级不可测）。
+func (c *CascadeScorer) ScoreBatchWithPath(
+	ctx context.Context,
+	features *ScoringFeatures,
+	candidates []ContentCandidate,
+) ([]ScoredCandidate, bool, error) {
 	scoreCtx := ctx
 	if c.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -543,7 +623,7 @@ func (c *CascadeScorer) ScoreBatch(ctx context.Context, features *ScoringFeature
 
 	result, err := c.Primary.ScoreBatch(scoreCtx, features, candidates)
 	if err == nil {
-		return result, nil
+		return result, false, nil
 	}
 
 	if c.Logger != nil {
@@ -556,5 +636,6 @@ func (c *CascadeScorer) ScoreBatch(ctx context.Context, features *ScoringFeature
 		RecordModelTimeoutMetric()
 	}
 
-	return c.Fallback.ScoreBatch(ctx, features, candidates)
+	fallbackResult, fallbackErr := c.Fallback.ScoreBatch(ctx, features, candidates)
+	return fallbackResult, true, fallbackErr
 }

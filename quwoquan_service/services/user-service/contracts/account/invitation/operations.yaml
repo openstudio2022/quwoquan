@@ -1,0 +1,175 @@
+api_routes:
+- method: POST
+  path: /user/invites
+  operation: GenerateInvitation
+  actor: persona
+  application:
+    kind: command
+    facet: InvitationCommandFacade
+    method: generateInvitation
+    aggregate_owner: Invitation
+    mutation_target: Invitation
+    invariant_target: Invitation
+  description: 为当前受信 Account 所拥有的 Persona 生成或复用邀请
+  writable_fields: [subAccountId, channel, inviteePhone]
+  response_entity: Invitation
+  response_fields: [id, inviterSubAccountId, channel, linkCode, status, expireAt, generatedAt]
+  authorization:
+    principal: persona
+    ownership_policy: current_account_owns_inviter_persona
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes: [USER.USER.unauthorized, USER.USER.forbidden, USER.USER.invalid_argument, USER.INVITATION.daily_limit_exceeded, USER.SYSTEM.internal_error]
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_invitation_command
+    trace: true
+    attributes: [operation, channel, outcome, error_code]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+- method: GET
+  path: /user/invites
+  operation: ListInvitations
+  actor: persona
+  application:
+    kind: query
+    facet: InvitationQueryFacade
+    method: listInvitations
+    reader: InvitationListReader
+    slice: InvitationListSlice
+  description: 查询当前 Account 所拥有 Persona 发出的邀请
+  query_params: [subAccountId, status, limit, offset]
+  response_entity: Invitation
+  response_fields: [id, inviterSubAccountId, channel, linkCode, status, expireAt, generatedAt, acceptedAt, convertedAt]
+  authorization:
+    principal: persona
+    ownership_policy: current_account_owns_inviter_persona
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes: [USER.USER.unauthorized, USER.USER.forbidden, USER.USER.invalid_argument, USER.SYSTEM.internal_error]
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_invitation_query
+    trace: true
+    attributes: [operation, outcome, error_code]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+- method: GET
+  path: /invites/{linkCode}
+  operation: GetInvitationByCode
+  actor: none
+  application:
+    kind: query
+    facet: InvitationQueryFacade
+    method: getInvitationByCode
+    reader: InvitationByCodeReader
+    slice: InvitationPublicSlice
+  description: 根据邀请码读取最小公开邀请信息并记录首次送达
+  path_params: [linkCode]
+  response_entity: Invitation
+  response_fields: [id, inviterSubAccountId, channel, status, expireAt, generatedAt]
+  authorization:
+    principal: public
+    ownership_policy: public_link_code
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes: [USER.INVITATION.not_found, USER.INVITATION.expired, USER.SYSTEM.internal_error]
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: PUBLIC
+    log_policy: metadata_only
+  telemetry:
+    metric: user_invitation_query
+    trace: true
+    attributes: [operation, channel, outcome, error_code]
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  security:
+    auth_mode: public
+    principal: public
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+- method: POST
+  path: /invites/{linkCode}/accept
+  operation: AcceptInvitation
+  actor: account
+  application:
+    kind: command
+    facet: InvitationCommandFacade
+    method: acceptInvitation
+    aggregate_owner: Invitation
+    mutation_target: Invitation
+    invariant_target: Invitation
+  description: 当前已认证 Account 幂等接受仍有效的邀请
+  path_params: [linkCode]
+  response_entity: Invitation
+  response_fields: [id, inviterSubAccountId, channel, status, expireAt, acceptedAt]
+  authorization:
+    principal: account
+    ownership_policy: authenticated_invitee
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes: [USER.USER.unauthorized, USER.INVITATION.not_found, USER.INVITATION.expired, USER.SYSTEM.internal_error]
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_invitation_command
+    trace: true
+    attributes: [operation, channel, outcome, error_code]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: account
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private

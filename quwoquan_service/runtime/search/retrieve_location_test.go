@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md#gwt-001
 package search
 
 import "testing"

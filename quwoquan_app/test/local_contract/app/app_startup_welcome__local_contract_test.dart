@@ -9,7 +9,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -21,19 +20,28 @@ import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../support/runtime_failure_fixtures.dart';
 import '../../support/recording_app_telemetry_recorder.dart';
+import '../../support/cloud_services/content_facet_overrides.dart';
+import '../../support/cloud_services/content/mock_content_repository.dart';
 
-AuthSessionRefreshExecutor _refreshExecutor(
-  Future<AuthLoginResultDto> Function(
-    String refreshToken,
-    Future<void>? abortTrigger,
-  )
-  run,
-) {
-  return (String refreshToken, {Future<void>? abortTrigger}) =>
-      run(refreshToken, abortTrigger);
+/// 以固定行为代理 refresh 的会话生命周期写面（logout 不参与启动链路断言）。
+final class _StubSessionLifecycleWriter
+    implements AccountSessionLifecycleCommandWriter {
+  _StubSessionLifecycleWriter(this._onRefresh);
+
+  final Future<TokenRefreshGrant> Function(RefreshTokenCommand command)
+  _onRefresh;
+
+  @override
+  Future<TokenRefreshGrant> refreshToken(RefreshTokenCommand command) =>
+      _onRefresh(command);
+
+  @override
+  Future<LogoutAck> logout(LogoutCommand command) async =>
+      const LogoutAck(revoked: true);
 }
 
 void main() {
@@ -59,6 +67,7 @@ void main() {
     List<Override> extra = const [],
   }) {
     return [
+      ...mockContentFacetOverrides(MockContentRepository()),
       appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
       authSessionStoreProvider.overrideWithValue(authStore),
       appTelemetryReporterProvider.overrideWithValue(
@@ -111,6 +120,40 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
+  testWidgets('Patrol bootstrap 在首帧后走同一 router handoff', (tester) async {
+    suppressExpectedErrors();
+    AppStartupRuntime.instance.resetForTesting();
+    resetAppRouterLibraryLoaderForTesting();
+    addTearDown(() {
+      AppStartupRuntime.instance.resetForTesting();
+      resetAppRouterLibraryLoaderForTesting();
+    });
+
+    await tester.pumpWidget(
+      wrapRoot(
+        ProviderScope(
+          overrides: startupOverrides(authStore: _BlockingAuthSessionStore()),
+          child: const QuWoQuanAppRoot(autoCompleteStartupWelcomeForTest: true),
+        ),
+      ),
+    );
+
+    for (var index = 0; index < 20; index++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      if (find.byType(MainAppShell).evaluate().isNotEmpty) {
+        break;
+      }
+    }
+
+    expect(find.byType(MainAppShell), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+    expect(find.byType(WelcomeScreen), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
   testWidgets('原生时钟晚于 Dart 启动时立即收紧 Root 绝对 deadline', (tester) async {
     suppressExpectedErrors();
     final routerNeverCompletes = Completer<void>();
@@ -146,7 +189,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text(UITextConstants.startupRecoveryTitle), findsOneWidget);
-    expect(find.byKey(const ValueKey('startup-welcome-frozen')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('startup-welcome-frozen')),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
@@ -209,9 +255,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
-  testWidgets('产品水合前置任务超时或永久 pending 不得阻断认证恢复', (
-    tester,
-  ) async {
+  testWidgets('产品水合前置任务超时或永久 pending 不得阻断认证恢复', (tester) async {
     suppressExpectedErrors();
     final productHydrateNeverCompletes = Completer<void>();
     final store = _BlockingAuthSessionStore();
@@ -235,9 +279,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
-  testWidgets('post-frame plugin barrier 与产品水合不得在安全终态前启动', (
-    tester,
-  ) async {
+  testWidgets('post-frame plugin barrier 与产品水合不得在安全终态前启动', (tester) async {
     suppressExpectedErrors();
     const deferredPluginsChannel = MethodChannel(
       'quwoquan/startup/deferred_plugins',
@@ -379,13 +421,14 @@ void main() {
           overrides: startupOverrides(
             authStore: store,
             extra: [
-              authSessionRefreshExecutorProvider.overrideWithValue(
-                _refreshExecutor((refreshToken, _) async {
-                  expect(refreshToken, 'stale-refresh');
-                  return AuthLoginResultDto.fromMap(<String, dynamic>{
-                    'accessToken': 'fresh-access',
-                    'refreshToken': 'fresh-refresh',
-                  });
+              accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+                _StubSessionLifecycleWriter((command) async {
+                  expect(command.refreshToken, 'stale-refresh');
+                  return const TokenRefreshGrant(
+                    accessToken: 'fresh-access',
+                    refreshToken: 'fresh-refresh',
+                    sessionRememberTtlSeconds: 2592000,
+                  );
                 }),
               ),
             ],
@@ -401,7 +444,7 @@ void main() {
     expect(store.savedRefreshAccessToken, 'fresh-access');
     expect(store.savedRefreshToken, 'fresh-refresh');
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('静默 refresh 判定为 token 失效时，清理会话进入重登态', (tester) async {
@@ -428,8 +471,8 @@ void main() {
           overrides: startupOverrides(
             authStore: store,
             extra: [
-              authSessionRefreshExecutorProvider.overrideWithValue(
-                _refreshExecutor((_, _) async {
+              accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+                _StubSessionLifecycleWriter((_) async {
                   throw CloudException(
                     type: CloudErrorType.unauthorized,
                     message: 'expired',
@@ -490,8 +533,8 @@ final class _BlockingAuthSessionStore implements AuthSessionStore {
   }
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -499,14 +542,11 @@ final class _BlockingAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override
@@ -536,8 +576,8 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
   Future<StoredAuthSession> read() async => stored;
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -545,15 +585,12 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {
-    savedRefreshAccessToken = accessToken;
-    savedRefreshToken = refreshToken;
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {
+    savedRefreshAccessToken = result.accessToken;
+    savedRefreshToken = result.refreshToken;
     stored = StoredAuthSession(
-      accessToken: accessToken,
-      refreshToken: refreshToken,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
       ownerId: stored.ownerId,
       activeSubAccountId: stored.activeSubAccountId,
       accountState: stored.accountState,
@@ -568,7 +605,7 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override

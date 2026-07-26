@@ -1,219 +1,46 @@
-# realtime-gateway 设计方案
+# L2 Design：实时通信网关 (`realtime-gateway`)
 
-## 设计动因
+> 对应规格：[L2 spec](./spec.md)
 
-当前实时推送完全依赖 SSE（runtime/streaming），仅支持 AI Assistant 单向流式输出，无法满足聊天双向实时、在线感知、大群 fanout 和外部渠道接入需求。飞书/Discord/Slack 均采用独立 WebSocket 网关与业务服务解耦的架构。
+> 设计触发原因：“提供有状态的双向实时会话、重连与投递确认”需要 `realtime-channel-delivery` 共享状态 owner、契约或质量边界。
 
-## 上游输入评审
+## 1. 背景、目标与非目标
 
-- spec.md：清晰完整，V1 功能 G1~G12 已明确，自适应传输状态机、系统配置参数、连接资源预算均已基线化
-- acceptance.yaml：G-A1~G-A13 + G-A10b 覆盖全链路，可测量
-- 依赖项：runtime-redis（realtime scene 提供 Pub/Sub + 在线状态） — 已 design 基线
-- 无阻断项
+- 设计目标：提供有状态的双向实时会话、重连与投递确认。
+- 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
-## 对标输入分析
+## 2. Story 协作与状态流
 
-| 对标 | 借鉴 | 不借鉴 | 适用边界 |
-|---|---|---|---|
-| Discord Gateway | goroutine-per-conn + epoll + topic 扇出 | 私有压缩协议（我们用 JSON 帧） | 10K~100K 连接/节点 |
-| 飞书长连接网关 | JWT 鉴权 + 心跳超时 + 多节点 Redis Pub/Sub | 私有 protobuf 帧（V1 先用 JSON，V2 可选 msgpack） | 企业级可靠性 |
-| Socket.io | Namespace/Room 概念 → Topic 路由 | 自动降级到 polling 的粗粒度策略 | 我们用**活跃度自适应**替代粗粒度降级 |
-| Slack RTM | 统一帧格式 + 事件类型枚举 | 单 WebSocket 无 topic 过滤 | 我们按 topic 精准订阅 |
+- [`realtime-channel-delivery`](./realtime-channel-delivery/spec.md)：连接状态必须由 Redis 支撑多节点查询；网关只消费 owner 事件，不直接写业务 MongoDB。
 
-## 方案对比
+## 3. 端云与数据流
 
-### 方案 A：独立 Go 服务 + goroutine-per-conn + Redis Pub/Sub 跨节点（选定）
+- 上游能力：[`gateway-orchestrator-foundation`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-realtime-gateway 作为独立 Go 服务，使用 gorilla/websocket + goroutine-per-conn，
-跨节点消息通过 Redis Pub/Sub 广播，在线状态存 Redis。
+## 4. 关键决策
 
-**优点**：
-- Go 天然适合高并发长连接（goroutine 轻量）
-- 与 chat-service 完全解耦，独立扩缩
-- Redis Pub/Sub 跨节点路由成熟可靠
-- 自适应传输状态机在 gateway 层统一管理，业务服务无感知
+<a id="dec-001"></a>
+### DEC-001 自适应传输状态机在 gateway 层统一管理，业务服务无感知
+- 决策：自适应传输状态机在 gateway 层统一管理，业务服务无感知。
+- 理由：提供有状态的双向实时会话、重连与投递确认。
+- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 关联要求：`REQ-001`
+- 影响 Story：[`realtime-channel-delivery`](./realtime-channel-delivery/spec.md)
+- 关联验收：`SIT-001`
 
-**缺点**：
-- 新增独立服务，运维复杂度 +1
-- 跨节点 fanout 有 Redis 中转延迟（< 1ms 可接受）
-- 需要处理 WebSocket 连接状态一致性
+## 5. 失败与恢复
 
-**适用条件**：需要 > 10K 并发连接、多服务共用实时通道
+- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
+- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
+- 恢复动作：调用方按 canonical recovery action 重试、刷新或停止；不得自行合成成功结果。
+- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
 
-### 方案 B：chat-service 内嵌 WebSocket（不选）
+## 6. 质量与观测
 
-在 chat-service 中直接处理 WebSocket。
-
-**优点**：无需新服务，少一跳
-**缺点**：
-- chat-service 既做消息持久化又做连接管理，职责混乱
-- 无法为其他服务（外部渠道、运营配置）提供实时通道
-- 连接与业务耦合，无法独立扩缩
-- 违背 spec 约束"realtime-gateway 必须独立部署"
-
-## 选型决策
-
-**选定方案 A**：独立 Go 服务 + Redis Pub/Sub。
-
-理由：realtime-gateway 定位为平台级基础设施，不仅服务聊天，还承载外部渠道和运营配置。
-独立服务允许连接层和业务层独立扩缩，符合 spec 中"平台级"和"独立部署"约束。
-
-## 关键设计决策
-
-### KD-1：服务结构
-
-```
-services/realtime-gateway/
-├── cmd/api/main.go
-├── internal/
-│   ├── domain/
-│   │   ├── connection.go         # Connection 实体（connId, userId, topics, transport, writeBuffer）
-│   │   ├── connection_events.go  # 连接事件（Connected, Disconnected, TopicSubscribed）
-│   │   └── topic.go              # Topic 实体（pattern, subscribers）
-│   ├── application/
-│   │   ├── hub_service.go        # Hub：连接注册/注销 + topic 路由 + fanout
-│   │   └── transport_service.go  # 自适应传输状态管理
-│   ├── adapters/
-│   │   ├── http/
-│   │   │   ├── ws_handler.go     # WebSocket Upgrade + 帧读写
-│   │   │   ├── poll_handler.go   # Long-polling 端点 GET /realtime/poll
-│   │   │   └── channel_webhook_handler.go  # 外部渠道 Webhook 入口
-│   │   └── mq/
-│   │       └── redis_subscriber.go  # Redis Pub/Sub 消费 → Hub.Broadcast
-│   └── infrastructure/
-│       ├── persistence/
-│       │   └── redis_presence.go  # 在线状态存储（presence:user:{uid}）
-│       └── cache/
-│           └── transport_state_cache.go  # 用户传输状态缓存
-├── configs/config.yaml
-├── go.mod
-└── Makefile
-```
-
-### KD-2：Hub 核心数据结构
-
-```go
-type Hub struct {
-    mu          sync.RWMutex
-    connections map[string]*Connection          // connId → Connection
-    userConns   map[string]map[string]struct{}   // userId → {connId set}
-    topicSubs   map[string]map[string]struct{}   // topic → {connId set}
-    
-    config      *RealtimeConfig
-    presence    PresenceStore
-    metrics     *Metrics
-}
-```
-
-- `Register(conn)` → 检查 per-user 限制 → 踢最早连接 → 注册
-- `Unregister(connId)` → 清理 topic 订阅 → 更新 presence
-- `Subscribe(connId, topic)` → 加入 topicSubs
-- `Broadcast(topic, payload)` → 遍历 topicSubs[topic] → 逐连接 write
-
-### KD-3：自适应传输实现
-
-```
-Transport State Machine (per-user, per-device)
-┌─────────────────────────────────────────────────┐
-│  TransportState: IDLE | ACTIVE | BACKGROUND      │
-│  CurrentTransport: WEBSOCKET | LONG_POLL | NONE  │
-└─────────────────────────────────────────────────┘
-```
-
-**服务端职责**：
-- 维护 presence（在线/离线/transport 类型）
-- Long-polling 端点：hold 连接 ≤ poll_interval_sec，有消息立即返回，超时 204
-- WebSocket 端点：正常帧读写 + 心跳
-- 用户的 topic 订阅在 transport 切换时迁移（WebSocket → poll 时 topic 收窄为 inbox+system）
-
-**端侧职责**：
-- 状态机驱动 transport 切换（进入聊天页/离开/后台等触发）
-- WebSocket idle 计时器（ws_idle_timeout_sec）
-- Long-polling 自动重连循环
-
-### KD-4：Long-polling 实现
-
-```go
-func (h *PollHandler) HandlePoll(w http.ResponseWriter, r *http.Request) {
-    userId := auth.UserIdFromContext(r.Context())
-    topics := r.URL.Query()["topics"]  // inbox,system
-    lastSeq := r.URL.Query().Get("lastSeq")
-    timeout := parseTimeout(r.URL.Query().Get("timeout"), h.config.PollIntervalSec)
-    
-    // 创建临时通道
-    ch := h.hub.CreatePollChannel(userId, topics)
-    defer h.hub.RemovePollChannel(userId, ch)
-    
-    select {
-    case msgs := <-ch:
-        json.NewEncoder(w).Encode(PollResponse{Messages: msgs})
-    case <-time.After(timeout):
-        w.WriteHeader(http.StatusNoContent) // 204 = 无新消息 = 心跳
-    case <-r.Context().Done():
-        return
-    }
-}
-```
-
-### KD-5：写缓冲背压
-
-每个 Connection 维护 `writeBuffer chan []byte`（带缓冲），
-write goroutine 消费 → WebSocket write：
-
-| 阶段 | 条件 | 处理 |
-|---|---|---|
-| 正常 | buffer len < warn | 直接 write |
-| 预警 | warn ≤ buffer len < max | 合并同 topic 消息，只推最新 seq |
-| 溢出 | buffer len ≥ max 且持续 10s | 关闭连接，端侧回落 long-polling |
-
-### KD-6：外部渠道 Adapter SPI
-
-```go
-type ChannelAdapter interface {
-    Name() string                              // "feishu", "dingtalk", ...
-    ValidateWebhook(r *http.Request) error     // 签名/Token 验证
-    ParsePayload(body []byte) (*UnifiedFrame, error) // 转换为统一帧
-    TargetTopic(frame *UnifiedFrame) string    // 路由到哪个 topic
-}
-```
-
-V1 实现 `FeishuAdapter`，其余 adapter 按需注册。
-
-### KD-7：可观测指标
-
-| 指标 | 类型 | 标签 |
-|---|---|---|
-| `realtime_connections_active` | gauge | transport={ws,poll}, node |
-| `realtime_messages_sent_total` | counter | topic_type, transport |
-| `realtime_message_fanout_duration_seconds` | histogram | topic_type |
-| `realtime_heartbeat_timeouts_total` | counter | — |
-| `realtime_write_buffer_overflows_total` | counter | — |
-| `realtime_poll_requests_total` | counter | status={200,204} |
-| `realtime_transport_transitions_total` | counter | from, to |
-
-## Story 与测试层映射
-
-| Story | 内容 | 测试层 |
-|---|---|---|
-| S1 | WebSocket 生命周期（建连/鉴权/心跳/断线） | L2：Go test ws.Dial + auth + heartbeat |
-| S2 | Topic 订阅 + 消息 fanout | L2：订阅 → publish → assert receive |
-| S3 | 跨节点 Redis Pub/Sub 路由 | L2：2 实例 + miniredis |
-| S4 | Long-polling 端点 | L2：poll + timeout + 消息即时返回 |
-| S5 | 自适应传输状态机 | L2+L3：状态转换序列测试 |
-| S6 | per-user / per-node 资源限制 | L2：超限踢连接 + 503 |
-| S7 | 写缓冲背压 | L2：慢客户端 → 合并 → 断连 |
-| S8 | 飞书 Webhook Adapter | L2：POST webhook → ws receive |
-| S9 | 端侧 RealtimeConnectionManager | L3：Dart unit test 状态机 |
-| S10 | 可观测指标 | L2：/metrics 端点验证 |
-
-## 未来演进
-
-- **protobuf/msgpack 压缩帧**：触发 JSON 帧占带宽 > 30% 时
-- **连接迁移（无损漂移）**：触发需节点滚动更新频率 > 1 次/天
-- **多区域就近接入**：触发海外用户 > 10% DAU
-- **config-push V2**：运营配置推送完整实现（feature flag / UI 配置 / 策略热更新）
-
-## 存量带规划任务
-
-- config-push V2 实现（与 树内任务文档 搁置任务对应）
-- 消息压缩从 JSON 升级到 protobuf（与性能优化迭代对应）
+- 连接状态存入 Redis 以支持多节点在线查询；网关不得以进程内状态作为集群真相源。
+- 指标至少区分连接数、重连、投递确认、重放、积压、跨节点路由失败和外部渠道失败。
+- 外部渠道通过 `ChannelAdapter` SPI 接入；运营配置推送不与业务消息共用未声明的帧语义。
+- 四环境装配只引用服务自身环境入口与 external/platform workload，不维护人工拓扑注册表。

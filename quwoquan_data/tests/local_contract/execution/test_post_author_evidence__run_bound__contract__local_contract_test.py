@@ -1,0 +1,304 @@
+"""Post author evidence must bind one real output to the stable queue job."""
+from __future__ import annotations
+
+import shutil
+import sys
+from pathlib import Path
+
+DATA_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "quwoquan_data"
+)
+for path in (DATA_ROOT / "scripts", DATA_ROOT / "tests"):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
+
+from content.execution.agent.outcome import AgentRunOutcome  # noqa: E402
+from content.execution.context import ExecutionContext  # noqa: E402
+from content.execution.controller.post_author_evidence import (  # noqa: E402
+    write_post_author_evidence,
+)
+from content.execution.handoff import build_author_job_packet  # noqa: E402
+from content.execution.production_contracts import (  # noqa: E402
+    sha256_file,
+    validate_agent_result_envelope,
+)
+from content.execution.queue.core import _read_job, stable_job_id  # noqa: E402
+from content.execution.queue.jobs import enqueue_ref_job  # noqa: E402
+from content.execution.reliabletask_worker import (  # noqa: E402
+    DataContentWorkItem,
+    execute_work_item,
+)
+from content.execution.reliabletask_fleet import build_fleet_request  # noqa: E402
+from content.post import object_index as content_object  # noqa: E402
+from content.post.article.draft_io import (  # noqa: E402
+    draft_article_path,
+    draft_meta_path,
+    draft_package_dir,
+    write_prompt,
+    write_writing_pack,
+)
+from core.io import read_json, write_json  # noqa: E402
+from core.control_types import (  # noqa: E402
+    QueueBackend,
+    QueueJobStage,
+    QueueJobState,
+)
+from core.paths import OUTPUT_ROOT, execution_root  # noqa: E402
+from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
+
+EXECUTION_ID = (
+    "20260720--travel-article-reliabletask-evidence--"
+    "test-region-b--pilot-901"
+)
+
+
+def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(EXECUTION_ID)
+    fixture.build()
+    ref = "article-source-unit-001"
+    brief = {
+        "titleHint": "都江堰行前安排",
+        "carrier": "article",
+        "writingIntent": "planning_consultation",
+        "entityRefs": ["/entity/地点/景区/都江堰"],
+    }
+    content_object.write_brief_object(
+        EXECUTION_ID,
+        ref,
+        brief,
+        content_type="article",
+    )
+    writing_pack = {
+        **brief,
+        "baseSourceRef": "source-unit-001",
+        "sourcePaths": [],
+        "sourceUrls": ["https://example.com/dujiangyan"],
+        "assets": [],
+    }
+    write_writing_pack(EXECUTION_ID, ref, writing_pack)
+    prompt = write_prompt(
+        EXECUTION_ID,
+        ref,
+        "依据冻结底稿创作都江堰行前安排，不得虚构。",
+    )
+    packet = build_author_job_packet(
+        execution_id=EXECUTION_ID,
+        ref=ref,
+        brief=brief,
+        writing_pack=writing_pack,
+        prompt_rel="4.draft/prompt.md",
+        content_object_rel=content_object.content_object_rel(EXECUTION_ID, ref),
+    )
+    write_json(
+        draft_package_dir(EXECUTION_ID, ref) / "author_job_packet.json",
+        packet,
+    )
+    article = draft_article_path(EXECUTION_ID, ref)
+    article.write_text(
+        "# 都江堰行前安排\n\n"
+        "都江堰位于岷江上游，出发前应核对开放时间与交通接驳。"
+        "游览时按离堆公园、宝瓶口和鱼嘴的顺序理解水利工程关系。",
+        encoding="utf-8",
+    )
+    write_json(
+        draft_meta_path(EXECUTION_ID, ref),
+        {
+            "ref": ref,
+            "generator": "agent",
+            "status": "completed",
+            "model": "composer-2.5",
+            "agentRunId": "cursor-run-post-001",
+            "promptSha256": sha256_file(prompt),
+            "draftSha256": sha256_file(article),
+        },
+    )
+    ctx = ExecutionContext(
+        execution_id=EXECUTION_ID,
+        entity_ids=("测试实体",),
+        spec=fixture.spec(),
+        managed=True,
+        runtime="local",
+        max_workers=1,
+        model="composer-2.5",
+        agent_provider="cursor_sdk",
+    )
+    envelope_path = write_post_author_evidence(
+        ctx,
+        ref=ref,
+        outcome=AgentRunOutcome.finished(
+            run_id="cursor-run-post-001",
+            agent_id="agent-post-001",
+        ),
+    )
+    envelope = read_json(envelope_path)
+    assert envelope["jobId"] == stable_job_id(EXECUTION_ID, ref, "author")
+    assert envelope["ref"] == ref
+    assert envelope["stage"] == "author"
+    assert envelope["agent"]["runId"] == "cursor-run-post-001"
+    assert validate_agent_result_envelope(
+        envelope,
+        workspace_root=envelope_path.parent,
+    ) == []
+    job = enqueue_ref_job(
+        EXECUTION_ID,
+        ref,
+        "author",
+        mutex_key="source-unit-001",
+        meta={
+            "contentType": "article",
+            "carrier": "article",
+            "entityRef": "/entity/地点/景区/都江堰",
+            "sourceRevision": "sha256:" + ("1" * 64),
+            "sourceUnitId": "source-unit-001",
+            "contentObjectDir": content_object.content_object_rel(
+                EXECUTION_ID,
+                ref,
+            ),
+            "authorId": "builtin_highland_travel_blogger",
+            "creatorProfileId": "qwq_creator_highland_travel_blogger_001",
+            "creatorArchetype": "travel_blogger",
+            "creatorProfileVersion": "1.0.0",
+            "creatorDisclosure": {
+                "type": "platform_virtual_creator",
+                "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+                "visible": True,
+            },
+            "experienceClaimMode": "editorial_synthesis",
+            "authorQualitySignals": {
+                "qualityScore": 0.86,
+                "fatigueScore": 0.2,
+                "riskTier": "low",
+            },
+        },
+        queue_backend=QueueBackend.RELIABLE_TASK,
+    )
+    reliable_ref = job.reliable_task_ref_document()
+    assert reliable_ref is not None
+    payload = reliable_ref["payload"]
+    assert isinstance(payload, dict)
+    author_request = build_fleet_request(
+        EXECUTION_ID,
+        QueueJobStage.AUTHOR,
+    )
+    assert author_request["requireCommercial"] is False
+    assert author_request["jobs"] == [
+        {
+            "entityRef": "/entity/地点/景区/都江堰",
+                "carrier": "article",
+                "sourceRevision": "sha256:" + ("1" * 64),
+                "idempotencyKey": payload["idempotencyKey"],
+                "jobId": job.job_id,
+            "executionId": EXECUTION_ID,
+            "ref": ref,
+            "stage": "author",
+            "partitionKey": "source-unit-001",
+        }
+    ]
+    result = execute_work_item(
+        DataContentWorkItem.from_document(
+            {
+                "runtimeTaskId": "reliabletask-runtime-001",
+                **payload,
+            }
+        )
+    )
+    completed = _read_job(EXECUTION_ID, job.job_id)
+    assert completed.state is QueueJobState.SUCCEEDED
+    assert completed.agent_run_id == "cursor-run-post-001"
+    assert result["acceptanceClass"] == "stage_completed"
+    assert result["resultEnvelopeRef"] == envelope_path.relative_to(
+        OUTPUT_ROOT
+    ).as_posix()
+    apply_report = (
+        OUTPUT_ROOT
+        / "data/local/workspace/object-transactions"
+        / "post-worker-transaction-001"
+        / "apply_report.json"
+    )
+    write_json(
+        apply_report,
+        {
+            "schema": "quwoquan_data.object_transaction_apply",
+            "status": "applied",
+            "executionId": EXECUTION_ID,
+            "transactionId": "post-worker-transaction-001",
+        },
+    )
+
+    def fake_promote_post_object(
+        execution_id: str,
+        post_ref: str,
+    ) -> dict[str, str]:
+        assert execution_id == EXECUTION_ID
+        assert post_ref == content_object.content_object_rel(EXECUTION_ID, ref)
+        return {
+            "transactionId": "post-worker-transaction-001",
+            "applyReportRef": apply_report.relative_to(OUTPUT_ROOT).as_posix(),
+            "canonicalObjectRef": "posts/article/行前安排/都江堰/1",
+            "canonicalObjectSha256": "sha256:" + ("2" * 64),
+            "objectClosureDigest": "sha256:" + ("3" * 64),
+        }
+
+    from content.release.canonical import post_promotion
+
+    monkeypatch.setattr(
+        post_promotion,
+        "promote_post_object",
+        fake_promote_post_object,
+    )
+    publish_job = enqueue_ref_job(
+        EXECUTION_ID,
+        ref,
+        "publish",
+        mutex_key="canonical-publish",
+        meta={
+            "contentType": "article",
+            "carrier": "article",
+            "entityRef": "/entity/地点/景区/都江堰",
+            "sourceRevision": "sha256:" + ("4" * 64),
+            "contentObjectDir": content_object.content_object_rel(
+                EXECUTION_ID,
+                ref,
+            ),
+        },
+        queue_backend=QueueBackend.RELIABLE_TASK,
+    )
+    publish_reliable_ref = publish_job.reliable_task_ref_document()
+    assert publish_reliable_ref is not None
+    publish_payload = publish_reliable_ref["payload"]
+    assert isinstance(publish_payload, dict)
+    publish_request = build_fleet_request(
+        EXECUTION_ID,
+        QueueJobStage.PUBLISH,
+    )
+    assert publish_request["requireCommercial"] is True
+    assert publish_request["jobs"] == [
+        {
+            "entityRef": "/entity/地点/景区/都江堰",
+                "carrier": "article",
+                "sourceRevision": "sha256:" + ("4" * 64),
+                "idempotencyKey": publish_payload["idempotencyKey"],
+                "jobId": publish_job.job_id,
+            "executionId": EXECUTION_ID,
+            "ref": ref,
+            "stage": "publish",
+            "partitionKey": "canonical-publish",
+        }
+    ]
+    publish_result = execute_work_item(
+        DataContentWorkItem.from_document(
+            {
+                "runtimeTaskId": "reliabletask-runtime-publish-001",
+                **publish_payload,
+            }
+        )
+    )
+    completed_publish = _read_job(EXECUTION_ID, publish_job.job_id)
+    assert completed_publish.state is QueueJobState.SUCCEEDED
+    assert publish_result["acceptanceClass"] == "commercial_canonical"
+    assert publish_result["objectTransactionId"] == "post-worker-transaction-001"
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+    shutil.rmtree(apply_report.parents[0], ignore_errors=True)

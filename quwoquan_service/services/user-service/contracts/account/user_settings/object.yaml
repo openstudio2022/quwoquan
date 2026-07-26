@@ -1,0 +1,45 @@
+kind: aggregate_root
+description: Account 级通知、隐私、通话和外观默认值的版本化设置聚合。
+identity:
+  fields:
+  - userId
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: command_facade
+  cardinality: '1:1'
+  consistency: eventual
+  kind: reference
+  name: account
+  on_delete: cascade
+  reference_fields:
+  - userId
+  target_object: user.UserAccount
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: defaultRingtone
+  on_delete: detach
+  reference_fields:
+  - defaultIncomingCallRingtoneId
+  target_object: content.MediaAsset
+capabilities:
+- commandable
+- queryable
+- idempotent_commands
+business_rules:
+- identity 固定为 accountId，同一账号只有一个 UserSettings
+- Persona override 与 account default 分离，读取时由 named Reader 组装
+- quiet hours、privacy 和 call policy 必须通过各自强类型命令校验
+- 更新由服务端读取当前 version 后执行内部 CAS，且不接受动态 Map patch
+- 同值重写为幂等 no-op，不接收调用方幂等键；设置变更审计事实与状态在同一事务经 outbox 提交
+lifecycle:
+  states:
+  - active
+  - deleted
+  optimistic_concurrency: version
+  idempotency: version_cas_last_write_wins

@@ -9,24 +9,40 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
+import 'package:quwoquan_app/core/widgets/app_action_sheet.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/components/media/image/editor/models/image_editor_step.dart';
+import 'package:quwoquan_app/components/media/image/editor/models/image_editor_step_payload.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page_params.dart';
+import 'package:quwoquan_app/components/media/image/editor/shared/image_editor_export_engine.dart';
+import 'package:quwoquan_app/components/media/image/editor/shared/image_editor_step_stack.dart';
 import 'package:quwoquan_app/components/media/image/editor/top_bar/image_editor_top_bar.dart';
 import 'package:quwoquan_app/components/media/image/editor/bottom_bar/image_editor_bottom_bar.dart';
 import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';
-import 'package:quwoquan_app/components/media/image/editor/panels/image_editor_curve_overlay_bar.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_feature_extractor.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_recommendation_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_recommender.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_matrix.dart';
+import 'package:quwoquan_app/components/media/image/editor/panels/curves/image_editor_curve_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/panels/hsl/image_editor_hsl_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/panels/local/image_editor_local_models.dart';
+import 'package:quwoquan_app/components/media/image/editor/panels/mosaic/image_editor_mosaic_models.dart';
+import 'package:quwoquan_app/components/media/image/editor/panels/text/image_editor_text_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/panels/image_editor_operation_panel.dart';
 import 'package:quwoquan_app/components/media/image/editor/panels/image_editor_rotate_overlay.dart';
 import 'package:quwoquan_app/components/media/image/editor/shared/editor_session_ops_strip.dart';
@@ -39,6 +55,8 @@ part 'image_editor_page_history_logic.dart';
 part 'image_editor_page_pro_tools.dart';
 part 'image_editor_page_pro_adjustments.dart';
 part 'image_editor_page_crop_rotate.dart';
+part 'image_editor_page_curve_wb.dart';
+part 'image_editor_page_mosaic_text.dart';
 part 'image_editor_page_preview_layers.dart';
 part 'image_editor_page_completion.dart';
 part 'image_editor_page_color_matrices.dart';
@@ -48,7 +66,7 @@ part 'image_editor_page_crop_overlay.dart';
 /// 图片编辑器页面（三段式布局：顶栏、中部图片、底栏工具）
 ///
 /// 路由：/create/edit-image?path=...&source=...&index=...&total=...
-/// 返回：context.pop(editedPath) 或 context.pop() 取消
+/// 返回：顶栏「完成」pop(editedPath / payload)；back 有修改时确认后 pop(null) 放弃。
 ///
 /// 嵌入式使用：传入 [onBack]/[onDone] 时不再 pop，由回调处理（用于创作页内全屏编辑、底部栏隐退）
 class ImageEditorPage extends ConsumerStatefulWidget {
@@ -61,6 +79,7 @@ class ImageEditorPage extends ConsumerStatefulWidget {
     this.imagePaths,
     this.initialFilterPresetId,
     this.initialFilterStrength,
+    this.filterRepository,
     this.onBack,
     this.onDone,
   });
@@ -74,6 +93,7 @@ class ImageEditorPage extends ConsumerStatefulWidget {
   final List<String>? imagePaths;
   final String? initialFilterPresetId;
   final double? initialFilterStrength;
+  final ImageEditorFilterRepository? filterRepository;
 
   /// 嵌入式时使用：返回/取消时调用，不执行 context.pop
   final VoidCallback? onBack;
@@ -87,44 +107,70 @@ class ImageEditorPage extends ConsumerStatefulWidget {
 
 class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   static const int _kLocalAnchorMaxCount = 10;
+  static const String _kPageName = 'media.image_editor';
+  static const String _kSurfaceId = 'imageEditor';
+
   List<String> _paths = const [];
+  List<String> _initialPaths = const [];
+  int _currentIndex = 0;
+  PageController? _pageController;
+  ScrollController? _thumbScrollController;
+
+  late final PageLifecycleObservability _observability;
+  late final AnalyticsService _analytics;
+  DateTime? _pageEnterTime;
+
+  void _setEditorState(VoidCallback fn) => setState(fn);
 
   Future<void> _showEditorActionFailure({
     required String title,
     String? message,
   }) async {
+    _observability.recordPageState(
+      pageName: _kPageName,
+      phase: 'failure',
+      surface: _kSurfaceId,
+      copyKey: title,
+    );
     if (!mounted) {
       return;
     }
-    await AppActionErrorFeedback.show(
+    await showAppActionSheet<bool>(
       context,
-      semantic: UiErrorSemantic(
-        category: UiErrorCategory.submit,
-        scope: UiErrorScope.global,
-        title: title,
-        message: message ?? UITextConstants.operationFailed,
-        primaryAction: const UiErrorAction(
-          type: UiErrorActionType.dismiss,
-          label: UITextConstants.confirm,
+      title: title,
+      message: message ?? UITextConstants.operationFailed,
+      sections: const <AppActionSheetSection<bool>>[
+        AppActionSheetSection<bool>(
+          items: <AppActionSheetItem<bool>>[
+            AppActionSheetItem<bool>(
+              label: UITextConstants.confirm,
+              value: true,
+            ),
+          ],
         ),
-        dismissible: true,
-      ),
+      ],
     );
   }
-
-  int _currentIndex = 0;
-  PageController? _pageController;
-  ScrollController? _thumbScrollController;
-
-  void _setEditorState(VoidCallback fn) => setState(fn);
 
   @override
   void initState() {
     super.initState();
+    _filterRepository =
+        widget.filterRepository ?? ref.read(imageEditorFilterRepositoryProvider);
+    _observability = ref.read(pageLifecycleObservabilityProvider);
+    _analytics = ref.read(analyticsProvider);
+    _pageEnterTime = DateTime.now();
     _syncPaths(resetIndex: true);
+    _initialPaths = List<String>.of(_paths);
     _primeInitialFilterSelection();
     _loadImageAspectRatio(_currentPath);
     _initFilterConfig();
+    _observability.recordPageState(
+      pageName: _kPageName,
+      phase: 'enter',
+      surface: _kSurfaceId,
+      itemCount: _paths.length,
+    );
   }
 
   void _primeInitialFilterSelection() {
@@ -145,16 +191,30 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         oldWidget.imagePaths != widget.imagePaths ||
         oldWidget.index != widget.index) {
       _syncPaths(resetIndex: true);
+      _initialPaths = List<String>.of(_paths);
+      _stepStack.clear();
     }
   }
 
   @override
   void dispose() {
+    final enterTime = _pageEnterTime;
+    _observability.recordPageState(
+      pageName: _kPageName,
+      phase: 'exit',
+      surface: _kSurfaceId,
+      durationMs: enterTime == null
+          ? null
+          : DateTime.now().difference(enterTime).inMilliseconds,
+      itemCount: _stepStack.length,
+    );
     _pageController?.dispose();
     _thumbScrollController?.dispose();
     _proToolScrollController.dispose();
     _cropRatioScrollController.dispose();
     _filterTemplateScrollController.dispose();
+    _disposeCurveSessionResources();
+    _disposeMosaicSessionResources();
     super.dispose();
   }
 
@@ -195,11 +255,12 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     }
   }
 
-  /// 是否在图片下方展示曲线调节蒙皮（专业修图-曲线子工具选中时）
-  bool get _showCurveOverlayBelowImage => false;
+  /// 已提交步骤 + 撤销/重做栈（文件快照语义）。
+  final ImageEditorStepStack _stepStack = ImageEditorStepStack();
 
-  /// 编辑步骤栈（Snapseed 式记录）
-  final List<ImageEditorStep> _steps = [];
+  /// 提交转码去重缓存与防重入标记。
+  final Map<String, String> _deliveryJpegCache = <String, String>{};
+  bool _submittingDone = false;
 
   int? _selectedToolIndex;
 
@@ -227,8 +288,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   final Map<String, double> _filterStrengthByPresetId = <String, double>{};
   final Map<String, int> _filterUsageCountByPresetId = <String, int>{};
   Map<String, double> _filterSnapshotStrengthByPresetId = <String, double>{};
-  final ImageEditorFilterRepository _filterRepository =
-      ImageEditorFilterRepository();
+  late final ImageEditorFilterRepository _filterRepository;
+  bool _filterCatalogLoading = true;
+  bool _filterCatalogLoadFailed = false;
   final ImageEditorFilterFeatureExtractor _filterFeatureExtractor =
       const ImageEditorFilterFeatureExtractor();
   final ImageEditorFilterRecommender _filterRecommender =
@@ -250,25 +312,26 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   ImageEditorFilterImageFeatures? _filterImageFeatures;
   String? _filterImageFeaturesPath;
 
-  /// 马赛克：类型索引、笔刷大小 0~1
-  int _mosaicTypeIndex = 0;
+  /// 马赛克会话：类型、笔刷大小（滑杆 0..1）、笔画列表与预览资源
+  ImageEditorMosaicType _mosaicType = ImageEditorMosaicType.pixelate;
   double _mosaicBrushSize = 0.5;
+  final List<ImageEditorMosaicStroke> _mosaicStrokes =
+      <ImageEditorMosaicStroke>[];
+  ImageEditorMosaicStroke? _activeMosaicStroke;
+  ui.Image? _mosaicPreviewPixelated;
+  ui.Image? _mosaicPreviewBlurred;
+  bool _mosaicPreviewLoading = false;
 
-  /// 相框：模板索引
-  int _frameTemplateIndex = 0;
-
-  /// 文字：样式/颜色索引（占位）
-  int _textStyleIndex = 0;
-  int _textColorIndex = 0;
+  /// 文字会话：图上文字项与选中态
+  final List<ImageEditorTextItem> _textItems = <ImageEditorTextItem>[];
+  int? _selectedTextItemId;
+  int _textIdSeed = 0;
 
   /// 旋转：当前角度（度）
   int _rotateDegrees = 0;
 
-  /// 专业修图：当前二级分组（整体/局部/HSL/曲线）
+  /// 专业修图：当前二级分组（整体/局部/HSL/曲线/白平衡/黑白色阶）
   int _selectedProCategory = kImageEditorProCategoryOverall;
-
-  /// 专业修图：当前选中的工具索引（为空表示停留在工具列表面板）
-  int? _selectedProToolIndex;
 
   /// 专业修图基础分组：当前选中的调节项索引（默认光感）
   int _selectedProBaseToolIndex = 0;
@@ -323,20 +386,29 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   int _proCategorySnapshot = kImageEditorProCategoryOverall;
   int _proBaseToolSnapshot = 0;
   bool _showProToolbox = false;
-  String? _proPlaceholderTitle;
+
+  /// 曲线会话：状态、通道、预览资源与直方图
+  ImageEditorCurvesState _curvesState = ImageEditorCurvesState();
+  ImageEditorCurvesState _curvesSnapshot = ImageEditorCurvesState();
+  ImageEditorCurveChannel _curveChannel = ImageEditorCurveChannel.rgb;
+  ui.Image? _curvePreviewBase;
+  Uint8List? _curvePreviewBaseRgba;
+  ui.Image? _curvePreviewImage;
+  List<int>? _curveHistogram;
+  bool _curvePreviewDirty = false;
+  bool _curvePreviewComputing = false;
+
+  /// 白平衡会话：色温/色调（-100..100）
+  double _wbTemperature = 0;
+  double _wbTint = 0;
+  double _wbSnapshotTemperature = 0;
+  double _wbSnapshotTint = 0;
 
   /// 专业修图工具横向滚动控制器
   final ScrollController _proToolScrollController = ScrollController();
 
   /// 剪裁比例列表横向滚动，重置时滚回「原始」
   final ScrollController _cropRatioScrollController = ScrollController();
-
-  /// 曲线参数（简化：亮度/对比度占位）
-  double _curveBrightness = 0.5;
-  double _curveContrast = 0.5;
-
-  /// 白平衡参数（色温占位）
-  double _whiteBalanceTemp = 0.5;
 
   /// 黑白色阶参数（-100..100）
   double _bwWhiteLevel = 0;
@@ -411,46 +483,19 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                     positionText:
                         '${_currentIndex + 1}/${_paths.isEmpty ? widget.total : _paths.length}',
                     onBack: _handleBack,
+                    canUndo: _stepStack.canUndo,
+                    canRedo: _stepStack.canRedo,
+                    onUndo: _undoLastStep,
+                    onRedo: _redoLastUndoneStep,
                     onHistory: _showHistorySheet,
-                    historyEnabled: _steps.isNotEmpty,
+                    historyEnabled: _stepStack.length > 0,
+                    onDone: () => _onDone(),
                   )
                 else
                   const SizedBox.shrink(),
                 // 2. 中部：工具编辑页仅对当前图编辑、不可左右滑动；主界面可多图滑动
                 Expanded(
-                  child: _showCurveOverlayBelowImage
-                      ? Column(
-                          children: [
-                            Expanded(child: _buildMiddleImage(fgSecondary)),
-                            ImageEditorCurveOverlayBar(
-                              backgroundColor: panelBg,
-                              foregroundColor: fg,
-                              foregroundSecondary: fgSecondary,
-                              brightness: _curveBrightness,
-                              contrast: _curveContrast,
-                              onBrightnessChanged: (v) =>
-                                  setState(() => _curveBrightness = v),
-                              onContrastChanged: (v) =>
-                                  setState(() => _curveContrast = v),
-                              onCancel: () =>
-                                  setState(() => _selectedProToolIndex = null),
-                              onConfirm: () {
-                                _pushStep(
-                                  ImageEditorStep(
-                                    type: 'proTools',
-                                    params: {
-                                      'subType': 'curve',
-                                      'curveBrightness': _curveBrightness,
-                                      'curveContrast': _curveContrast,
-                                    },
-                                  ),
-                                );
-                                setState(() => _selectedProToolIndex = null);
-                              },
-                            ),
-                          ],
-                        )
-                      : _selectedToolIndex != null
+                  child: _selectedToolIndex != null
                       ? _buildMiddleImage(fgSecondary)
                       : _isMultiImage && _pageController != null
                       ? PageView.builder(
@@ -474,25 +519,18 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                 // 多图时仅在主界面显示缩略图；工具编辑页不左右滑动
                 if (_isMultiImage && _selectedToolIndex == null)
                   _buildThumbnailStrip(panelBg, fgSecondary),
-                if (_selectedToolIndex != null && !_showCurveOverlayBelowImage)
+                if (_selectedToolIndex != null)
                   ImageEditorOperationPanel(
                     backgroundColor: panelBg,
                     foregroundColor: fg,
                     foregroundSecondary: fgSecondary,
                     bottomInset: bottomPad,
                     toolIndex: _selectedToolIndex ?? kImageEditorToolCrop,
-                    selectedProToolIndex: _selectedProToolIndex,
                     selectedProCategory: _selectedProCategory,
-                    proPlaceholderTitle: _proPlaceholderTitle,
                     proToolScrollController: _proToolScrollController,
-                    onSelectProTool: (index) => setState(() {
-                      _selectedProToolIndex = index;
-                      _selectedProBaseToolIndex = index;
-                    }),
                     onSelectProCategory: (index) {
                       setState(() {
                         _selectedProCategory = index;
-                        _proPlaceholderTitle = null;
                         _hslPickerActive = false;
                         _hslPickerPoint = null;
                         _localShowAnchorMenu = false;
@@ -508,19 +546,23 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                             index == kImageEditorProCategoryLocal) {
                           _resetLocalSessionHistory();
                         }
+                        if (index == kImageEditorProCategoryCurve) {
+                          _prepareCurveSession();
+                        }
                       });
                     },
-                    onProToolScrollSync: (viewportWidth, itemWidth) {},
                     onExitProPanel: _cancelProPanel,
                     onConfirmProPanel: _confirmProPanel,
-                    onCancelProTool: () => _cancelProPanel(),
-                    onConfirmProTool: _confirmProPanel,
                     onCancelPanel: _selectedToolIndex == kImageEditorToolCrop
                         ? _cancelCropAndExit
                         : _selectedToolIndex == kImageEditorToolRotate
                         ? _cancelRotateAndExit
                         : _selectedToolIndex == kImageEditorToolFilter
                         ? _cancelFilterAndExit
+                        : _selectedToolIndex == kImageEditorToolMosaic
+                        ? _cancelMosaicAndExit
+                        : _selectedToolIndex == kImageEditorToolText
+                        ? _cancelTextAndExit
                         : _closePanel,
                     onConfirmPanel: _selectedToolIndex == kImageEditorToolCrop
                         ? _confirmCropAndExit
@@ -546,21 +588,23 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                         _filterTemplateScrollController,
                     onFilterVisibleRangeChanged: _onFilterVisibleRangeChanged,
                     onFilterRemove: _onFilterRemove,
-                    mosaicTypeIndex: _mosaicTypeIndex,
+                    filterCatalogLoading: _filterCatalogLoading,
+                    filterCatalogLoadFailed: _filterCatalogLoadFailed,
+                    onFilterCatalogRetry: _initFilterConfig,
+                    mosaicType: _mosaicType,
                     mosaicBrushSize: _mosaicBrushSize,
-                    onMosaicTypeChanged: (i) =>
-                        setState(() => _mosaicTypeIndex = i),
+                    onMosaicTypeChanged: (type) =>
+                        setState(() => _mosaicType = type),
                     onMosaicBrushSizeChanged: (v) =>
                         setState(() => _mosaicBrushSize = v),
-                    frameTemplateIndex: _frameTemplateIndex,
-                    onFrameTemplateChanged: (i) =>
-                        setState(() => _frameTemplateIndex = i),
-                    textStyleIndex: _textStyleIndex,
-                    textColorIndex: _textColorIndex,
-                    onTextStyleChanged: (i) =>
-                        setState(() => _textStyleIndex = i),
-                    onTextColorChanged: (i) =>
-                        setState(() => _textColorIndex = i),
+                    mosaicHasStrokes: _mosaicStrokes.isNotEmpty,
+                    onMosaicUndoStroke: _undoLastMosaicStroke,
+                    textItems: _textItems,
+                    selectedTextItem: _selectedTextItem,
+                    onTextAdd: _promptAddTextItem,
+                    onTextStyleChanged: _updateSelectedTextStyle,
+                    onTextColorChanged: _updateSelectedTextColor,
+                    onTextDelete: _deleteSelectedTextItem,
                     rotateDegrees: _rotateDegrees,
                     rotateFineDegrees: _rotateFineDegrees,
                     flipHorizontal: _flipHorizontal,
@@ -578,15 +622,20 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                         setState(() => _flipVertical = !_flipVertical),
                     showRotateReset: _isRotateEdited,
                     onRotateReset: _resetRotateState,
-                    curveBrightness: _curveBrightness,
-                    curveContrast: _curveContrast,
-                    whiteBalanceTemp: _whiteBalanceTemp,
-                    onCurveBrightnessChanged: (v) =>
-                        setState(() => _curveBrightness = v),
-                    onCurveContrastChanged: (v) =>
-                        setState(() => _curveContrast = v),
-                    onWhiteBalanceTempChanged: (v) =>
-                        setState(() => _whiteBalanceTemp = v),
+                    curvesState: _curvesState,
+                    curveChannel: _curveChannel,
+                    curveHistogram: _curveHistogram,
+                    onCurveChannelChanged: (channel) =>
+                        setState(() => _curveChannel = channel),
+                    onCurvesChanged: _onCurvesChanged,
+                    onCurveResetChannel: _resetCurrentCurveChannel,
+                    wbTemperature: _wbTemperature,
+                    wbTint: _wbTint,
+                    onWbTemperatureChanged: (v) =>
+                        setState(() => _wbTemperature = v.clamp(-100.0, 100.0)),
+                    onWbTintChanged: (v) =>
+                        setState(() => _wbTint = v.clamp(-100.0, 100.0)),
+                    onWbAuto: _applyAutoWhiteBalance,
                     bwWhiteLevel: _bwWhiteLevel,
                     bwBlackLevel: _bwBlackLevel,
                     onBwWhiteLevelChanged: (v) =>
@@ -646,40 +695,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                         ? kImageEditorToolPro
                         : _selectedToolIndex,
                     onNextStep: () => _onDone(action: 'continueToCreate'),
-                    onToolSelected: (index) {
-                      setState(() {
-                        _showProToolbox = false;
-                        _selectedToolIndex = index;
-                        _selectedProToolIndex = null;
-                        if (index == kImageEditorToolCrop) {
-                          _prepareCropSnapshot();
-                        }
-                        if (index == kImageEditorToolRotate) {
-                          _applyRotateReset();
-                        }
-                        if (index == kImageEditorToolFilter) {
-                          _prepareFilterSnapshot();
-                          _clearFilterPreviewCache();
-                          _ensureFilterSelectionForEditing();
-                        }
-                        if (index == kImageEditorToolPro) {
-                          _selectedToolIndex = null;
-                          _selectedProCategory = kImageEditorProCategoryOverall;
-                          _selectedProToolIndex = null;
-                          _proPlaceholderTitle = null;
-                          _hslPickerActive = false;
-                          _hslPickerPoint = null;
-                          _localAddMode = false;
-                          _localShowAnchorMenu = false;
-                          _localRangeVisible = false;
-                          _showProToolbox = true;
-                          _prepareProPanelSnapshot();
-                        }
-                      });
-                      if (index == kImageEditorToolFilter) {
-                        _rebuildFilterData();
-                      }
-                    },
+                    onToolSelected: _onBottomToolSelected,
                   ),
               ],
             ),
@@ -689,6 +705,44 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         ),
       ),
     );
+  }
+
+  void _onBottomToolSelected(int index) {
+    setState(() {
+      _showProToolbox = false;
+      _selectedToolIndex = index;
+      if (index == kImageEditorToolCrop) {
+        _prepareCropSnapshot();
+      }
+      if (index == kImageEditorToolRotate) {
+        _applyRotateReset();
+      }
+      if (index == kImageEditorToolFilter) {
+        _prepareFilterSnapshot();
+        _clearFilterPreviewCache();
+        _ensureFilterSelectionForEditing();
+      }
+      if (index == kImageEditorToolMosaic) {
+        _prepareMosaicSession();
+      }
+      if (index == kImageEditorToolText) {
+        _prepareTextSession();
+      }
+      if (index == kImageEditorToolPro) {
+        _selectedToolIndex = null;
+        _selectedProCategory = kImageEditorProCategoryOverall;
+        _hslPickerActive = false;
+        _hslPickerPoint = null;
+        _localAddMode = false;
+        _localShowAnchorMenu = false;
+        _localRangeVisible = false;
+        _showProToolbox = true;
+        _prepareProPanelSnapshot();
+      }
+    });
+    if (index == kImageEditorToolFilter) {
+      _rebuildFilterData();
+    }
   }
 }
 
@@ -731,22 +785,6 @@ class _LocalAnchorRingPainter extends CustomPainter {
   bool shouldRepaint(covariant _LocalAnchorRingPainter oldDelegate) {
     return oldDelegate.value != value || oldDelegate.selected != selected;
   }
-}
-
-class _ProToolboxEntry {
-  const _ProToolboxEntry({
-    required this.icon,
-    required this.label,
-    required this.category,
-    this.placeholderTitle,
-    this.semanticIconKey,
-  });
-
-  final IconData icon;
-  final String label;
-  final int category;
-  final String? placeholderTitle;
-  final String? semanticIconKey;
 }
 
 enum _CropEdge { left, right, top, bottom }

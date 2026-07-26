@@ -1,0 +1,20 @@
+kind: projection
+description: ChatInboxView 的领域对象契约。
+identity:
+  fields:
+  - conversationId
+  version_source: checkpoint
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: conversationEvents
+  on_delete: tombstone
+  reference_fields:
+  - conversationId
+  target_object: chat.Conversation

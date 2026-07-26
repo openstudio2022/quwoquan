@@ -1,4 +1,6 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/regenerate_options_popup.dart';
 
@@ -36,35 +38,35 @@ class AssistantAnswerToolbar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
           _ToolbarIcon(
-            icon: feedbackStatus == 'helpful'
+            icon: feedbackStatus == 'useful'
                 ? CupertinoIcons.hand_thumbsup_fill
                 : CupertinoIcons.hand_thumbsup,
-            color: feedbackStatus == 'helpful' ? activeColor : iconColor,
+            color: feedbackStatus == 'useful' ? activeColor : iconColor,
             onTap: onFeedbackHelpful,
-            semanticLabel: '有帮助',
+            semanticLabel: AssistantText.assistantFeedbackHelpful,
           ),
           SizedBox(width: AppSpacing.intraGroupMd),
           _ToolbarIcon(
-            icon: feedbackStatus == 'unhelpful'
+            icon: feedbackStatus == 'irrelevant'
                 ? CupertinoIcons.hand_thumbsdown_fill
                 : CupertinoIcons.hand_thumbsdown,
-            color: feedbackStatus == 'unhelpful' ? activeColor : iconColor,
+            color: feedbackStatus == 'irrelevant' ? activeColor : iconColor,
             onTap: onFeedbackUnhelpful,
-            semanticLabel: '没帮助',
+            semanticLabel: AssistantText.assistantFeedbackUnhelpful,
           ),
           SizedBox(width: AppSpacing.intraGroupMd),
           _ToolbarIcon(
             icon: CupertinoIcons.doc_on_doc,
             color: iconColor,
             onTap: onCopyAnswer,
-            semanticLabel: '复制',
+            semanticLabel: ChatText.messageActionCopy,
           ),
           SizedBox(width: AppSpacing.intraGroupMd),
           _ToolbarIcon(
             icon: CupertinoIcons.arrowshape_turn_up_right,
             color: iconColor,
             onTap: onShareAnswer,
-            semanticLabel: '转发',
+            semanticLabel: ChatText.messageActionForward,
           ),
           SizedBox(width: AppSpacing.intraGroupMd),
           _RegenerateButton(

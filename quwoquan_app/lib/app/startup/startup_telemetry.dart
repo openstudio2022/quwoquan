@@ -246,6 +246,8 @@ final class StartupJournal {
   }
 
   Future<String> proof() async {
+    // proof 只用于匿名入口限流/校验；服务端按每批 canonical body 计算
+    // batch digest，不能把该长期凭据当作跨批幂等键。
     final existing = (await _store.readProof())?.trim() ?? '';
     if (StartupTelemetrySupport.isValidProof(existing)) {
       return existing;

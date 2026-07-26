@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 
 class AssistantChatMessage {
   final String id;
@@ -25,10 +25,7 @@ class AssistantCard {
   final String title;
   final String body;
 
-  const AssistantCard({
-    required this.title,
-    required this.body,
-  });
+  const AssistantCard({required this.title, required this.body});
 }
 
 class AssistantChatStore {
@@ -54,13 +51,18 @@ class AssistantChatStore {
     messages.value = normalized;
   }
 
+  static void clearForTerminalAccountClosure() {
+    messages.value = const <AssistantChatMessage>[];
+  }
+
   static void ensureSummaryForContext({
     required String contextId,
     required String summaryText,
     required List<AssistantCard> cards,
   }) {
     final current = List<AssistantChatMessage>.from(messages.value);
-    final hasSummary = current.isNotEmpty && current.last.contextId == contextId;
+    final hasSummary =
+        current.isNotEmpty && current.last.contextId == contextId;
     if (hasSummary) return;
     current.add(
       AssistantChatMessage(
@@ -106,16 +108,16 @@ class AssistantChatStore {
   static List<AssistantCard> buildSummaryCards() {
     return const [
       AssistantCard(
-        title: UITextConstants.assistantCardHighlightsTitle,
-        body: UITextConstants.assistantCardHighlightsBody,
+        title: AssistantText.assistantCardHighlightsTitle,
+        body: AssistantText.assistantCardHighlightsBody,
       ),
       AssistantCard(
-        title: UITextConstants.assistantCardCommentsTitle,
-        body: UITextConstants.assistantCardCommentsBody,
+        title: AssistantText.assistantCardCommentsTitle,
+        body: AssistantText.assistantCardCommentsBody,
       ),
       AssistantCard(
-        title: UITextConstants.assistantCardRecommendationsTitle,
-        body: UITextConstants.assistantCardRecommendationsBody,
+        title: AssistantText.assistantCardRecommendationsTitle,
+        body: AssistantText.assistantCardRecommendationsBody,
       ),
     ];
   }
@@ -126,15 +128,19 @@ class AssistantChatStore {
     required String caption,
   }) {
     if (title.isEmpty && caption.isEmpty) {
-      return UITextConstants.assistantInitialSummaryNoContent;
+      return AssistantText.assistantInitialSummaryNoContent;
     }
     final buffer = StringBuffer();
-    buffer.write(UITextConstants.assistantInitialSummaryPrefix);
+    buffer.write(AssistantText.assistantInitialSummaryPrefix);
     if (title.isNotEmpty) {
-      buffer.write('\n${UITextConstants.assistantInitialSummaryTitleLabel}$title');
+      buffer.write(
+        '\n${AssistantText.assistantInitialSummaryTitleLabel}$title',
+      );
     }
     if (caption.isNotEmpty) {
-      buffer.write('\n${UITextConstants.assistantInitialSummaryCaptionLabel}$caption');
+      buffer.write(
+        '\n${AssistantText.assistantInitialSummaryCaptionLabel}$caption',
+      );
     }
     return buffer.toString();
   }

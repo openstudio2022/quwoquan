@@ -38,6 +38,27 @@ void main() {
       );
     });
 
+    test('installs for iOS Simulator non-release local HTTPS bases', () {
+      expect(
+        LocalDevHttpsTrust.shouldInstallForRuntime(
+          isReleaseMode: false,
+          isAndroid: false,
+          isIos: true,
+          runtimeBases: const <String>['https://gamma-api.localhost:19000'],
+        ),
+        isTrue,
+      );
+      expect(
+        LocalDevHttpsTrust.shouldInstallForRuntime(
+          isReleaseMode: true,
+          isAndroid: false,
+          isIos: true,
+          runtimeBases: const <String>['https://gamma-api.localhost:19000'],
+        ),
+        isFalse,
+      );
+    });
+
     test(
       'does not install for release, non-Android, public bases, or cleartext',
       () {
@@ -123,5 +144,29 @@ void main() {
         isFalse,
       );
     });
+
+    test(
+      'projects canonical signed target URLs to loopback without reclassifying install plane',
+      () {
+        const signedUploadUrl =
+            'https://beta-upload.quwoquan-env.test:18100/upload/session';
+        expect(
+          LocalDevHttpsTrust.shouldResolveThroughLocalLoopback(signedUploadUrl),
+          isTrue,
+        );
+        expect(
+          LocalDevHttpsTrust.isLocalHttpsTransportBase(signedUploadUrl),
+          isFalse,
+          reason:
+              'canonical authority alone must not trigger local CA installation',
+        );
+        expect(
+          LocalDevHttpsTrust.shouldResolveThroughLocalLoopback(
+            'https://media.quwoquan.com/upload/session',
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 }

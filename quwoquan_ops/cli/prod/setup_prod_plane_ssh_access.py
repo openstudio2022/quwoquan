@@ -24,16 +24,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
+from quwoquan_ops.cli.lib.output_paths import deployment_target_path
 
 
-ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
+ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh" / "quwoquan-prod"
-DEFAULT_STATE_DIR = Path(
-    os.environ.get(
-        "QWQ_OUTPUT_ROOT",
-        str(ROOT / ".qwq_output"),
-    )
-) / "env" / "prod-hosted" / "pki" / "prod-ssh"
+DEFAULT_STATE_DIR = deployment_target_path("prod-hosted", "ssh-bootstrap")
 RETIRED_GITHUB_ACTION_SECRETS = (
     "PROD_KUBECONFIG",
     "PROD_SSH_HOST",
@@ -567,17 +563,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mapping-out",
         default=str(DEFAULT_STATE_DIR / "plane_key_map.json"),
-        help="输出账号/host/key 路径映射 JSON（默认 QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/pki/prod-ssh）",
+        help="输出账号/host/key 路径映射 JSON（默认仓外 QWQ_DEPLOY_WORK_ROOT/prod-hosted/ssh-bootstrap）",
     )
     parser.add_argument(
         "--instructions-out",
         default=str(DEFAULT_STATE_DIR / "runner_key_setup.md"),
-        help="输出 self-hosted runner / 导出说明 Markdown（默认 QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/pki/prod-ssh）",
+        help="输出 self-hosted runner / 导出说明 Markdown（默认仓外 QWQ_DEPLOY_WORK_ROOT/prod-hosted/ssh-bootstrap）",
     )
     parser.add_argument(
         "--host",
         default=None,
-        help="覆盖 prod-hosted 目标 host；默认从 environment_topology_manifest.yaml 解析",
+        help="覆盖 prod-hosted 目标 host；默认从 prod/runtime.yaml 解析",
     )
     parser.add_argument(
         "--include-relay",
@@ -632,7 +628,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bundle-out",
         default=str(DEFAULT_STATE_DIR / "prod_ssh_keys.tar.enc"),
-        help="加密 bundle 输出路径（默认 QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/pki/prod-ssh/prod_ssh_keys.tar.enc）",
+        help="加密 bundle 输出路径（默认仓外 QWQ_DEPLOY_WORK_ROOT/prod-hosted/ssh-bootstrap/prod_ssh_keys.tar.enc）",
     )
     parser.add_argument(
         "--bundle-passphrase-env",

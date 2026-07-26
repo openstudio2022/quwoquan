@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# K8s integration overlay 构建（beta/gamma 共用），由 deploy_beta_k8s.sh / deploy_gamma_k8s.sh 调用
+# K8s 环境装配入口构建，由 deploy_beta_k8s.sh / deploy_gamma_k8s.sh 调用。
 # DEPLOY_ENV 必须由调用方设置（beta|gamma）
 set -euo pipefail
 
@@ -7,18 +7,20 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 
 DEPLOY_ENV="${DEPLOY_ENV:?DEPLOY_ENV must be set to beta or gamma}"
+if [[ "$DEPLOY_ENV" != "beta" && "$DEPLOY_ENV" != "gamma" ]]; then
+  echo "FAIL: DEPLOY_ENV must be beta or gamma, got: $DEPLOY_ENV" >&2
+  exit 1
+fi
 export APP_RUNTIME_ENV="${DEPLOY_ENV}"
 bash "$ROOT/quwoquan_ops/cli/shared/verify_cdn_domain_injection.sh"
-CLOUD_PROVIDER="${CLOUD_PROVIDER:-aliyun}"
-KUSTOMIZATION="quwoquan_ops/environments/kustomization/${CLOUD_PROVIDER}-integration"
+KUSTOMIZATION="quwoquan_ops/environments/${DEPLOY_ENV}"
 
 if [[ ! -d "$KUSTOMIZATION" ]]; then
   echo "FAIL: kustomization not found: $KUSTOMIZATION" >&2
-  echo "CLOUD_PROVIDER must be one of: aliyun, volcengine, huaweicloud" >&2
   exit 1
 fi
 
-echo "[deploy] ${DEPLOY_ENV} integration (CLOUD_PROVIDER=$CLOUD_PROVIDER)"
+echo "[deploy] ${DEPLOY_ENV} autonomous environment assembly"
 echo "[deploy] building: $KUSTOMIZATION"
 
 if command -v kustomize &>/dev/null; then

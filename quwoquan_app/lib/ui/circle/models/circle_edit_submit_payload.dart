@@ -1,11 +1,13 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_section_config_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_write_wire_dtos.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// 圈子编辑页提交体；仅在调用 Repository 时转为 wire map。
+/// 圈子编辑页强类型提交体；页面不接触动态 wire map。
 class CircleEditSubmitPayload {
   const CircleEditSubmitPayload({
     required this.name,
     required this.description,
+    required this.rulesText,
+    required this.welcomeMessage,
     required this.tags,
     required this.visibility,
     required this.joinPolicy,
@@ -18,6 +20,8 @@ class CircleEditSubmitPayload {
 
   final String name;
   final String description;
+  final String rulesText;
+  final String welcomeMessage;
   final List<String> tags;
   final String visibility;
   final String joinPolicy;
@@ -27,25 +31,47 @@ class CircleEditSubmitPayload {
   final String? categoryId;
   final List<CircleSectionConfigDto> sectionConfig;
 
-  /// 与 [CircleRepository.updateCircle] 的 PATCH 体对齐。
-  CircleUpdateWireDto toUpdateWireDto() =>
-      CircleUpdateWireDto.fromMap(toWire());
+  CreateCircleCommand toCreateCommand() => CreateCircleCommand(
+    name: name,
+    description: description,
+    rulesText: rulesText,
+    welcomeMessage: welcomeMessage,
+    coverUrl: coverUrl,
+    iconUrl: avatarUrl,
+    category: categoryId,
+    tags: tags,
+    visibility: visibility,
+    joinPolicy: joinPolicy,
+    autoSyncChat: autoSyncChat,
+  );
 
-  Map<String, dynamic> toWire() {
-    return <String, dynamic>{
-      'name': name,
-      'description': description,
-      'tags': tags,
-      'visibility': visibility,
-      'joinPolicy': joinPolicy,
-      'autoSyncChat': autoSyncChat,
-      'coverUrl': coverUrl,
-      'cover': coverUrl,
-      'avatarUrl': avatarUrl,
-      'avatar': avatarUrl,
-      if (categoryId != null && categoryId!.isNotEmpty) 'categoryId': categoryId,
-      if (categoryId != null && categoryId!.isNotEmpty) 'category': categoryId,
-      'sectionConfig': sectionConfig.map((s) => s.toMap()).toList(growable: false),
-    };
-  }
+  UpdateCircleCommand toUpdateCommand(String circleId) => UpdateCircleCommand(
+    circleId: circleId,
+    name: name,
+    description: description,
+    rulesText: rulesText,
+    welcomeMessage: welcomeMessage,
+    coverUrl: coverUrl,
+    iconUrl: avatarUrl,
+    category: categoryId,
+    tags: tags,
+    visibility: visibility,
+    joinPolicy: joinPolicy,
+    autoSyncChat: autoSyncChat,
+  );
+
+  UpdateCircleSectionsCommand toSectionsCommand(String circleId) =>
+      UpdateCircleSectionsCommand(
+        circleId: circleId,
+        sections: sectionConfig
+            .map(
+              (section) => CircleSectionConfigInput(
+                sectionType: section.sectionType,
+                visible: section.visible,
+                order: section.order,
+                customTitle: section.customTitle,
+              ),
+            )
+            .toList(growable: false),
+      );
 }

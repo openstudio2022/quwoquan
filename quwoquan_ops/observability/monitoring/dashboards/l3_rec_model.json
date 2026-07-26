@@ -1,6 +1,6 @@
 {
   "dashboard": {
-    "title": "L3 — 推荐模型服务 (rec-model-service)",
+    "title": "L3 — 推荐模型服务 (recommendation-service)",
     "uid": "qwq-l3-rec-model",
     "tags": ["quwoquan", "l3", "rec-model", "prometheus"],
     "timezone": "browser",

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 /// Pulsating avatar animation for outgoing/incoming call screens.
 /// Shows 3 concentric rings expanding and fading around a center avatar.
@@ -35,22 +36,21 @@ class _CallerAvatarPulseState extends State<CallerAvatarPulse>
   void initState() {
     super.initState();
     _controllers = List.generate(_ringCount, (i) {
-      return AnimationController(
-        vsync: this,
-        duration: _duration,
-      );
+      return AnimationController(vsync: this, duration: _duration);
     });
 
     _scaleAnimations = _controllers.map((c) {
-      return Tween<double>(begin: 1.0, end: 2.2).animate(
-        CurvedAnimation(parent: c, curve: Curves.easeOut),
-      );
+      return Tween<double>(
+        begin: 1.0,
+        end: 2.2,
+      ).animate(CurvedAnimation(parent: c, curve: Curves.easeOut));
     }).toList();
 
     _opacityAnimations = _controllers.map((c) {
-      return Tween<double>(begin: 0.6, end: 0.0).animate(
-        CurvedAnimation(parent: c, curve: Curves.easeOut),
-      );
+      return Tween<double>(
+        begin: 0.6,
+        end: 0.0,
+      ).animate(CurvedAnimation(parent: c, curve: Curves.easeOut));
     }).toList();
 
     for (var i = 0; i < _ringCount; i++) {
@@ -92,8 +92,9 @@ class _CallerAvatarPulseState extends State<CallerAvatarPulse>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppColors.white
-                            .withValues(alpha: _opacityAnimations[i].value),
+                        color: AppColors.white.withValues(
+                          alpha: _opacityAnimations[i].value,
+                        ),
                         width: AppSpacing.oneHalf,
                       ),
                     ),
@@ -101,24 +102,20 @@ class _CallerAvatarPulseState extends State<CallerAvatarPulse>
                 );
               },
             ),
-          CircleAvatar(
-            radius: avatarRadius,
+          AppCircularAvatar(
+            imageUrl: widget.avatarUrl,
+            size: avatarRadius * 2,
             backgroundColor: AppColors.primaryColor.withValues(alpha: 0.4),
-            backgroundImage: widget.avatarUrl != null
-                ? NetworkImage(widget.avatarUrl!)
-                : null,
-            child: widget.avatarUrl == null
-                ? Text(
-                    widget.displayName.isNotEmpty
-                        ? widget.displayName[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      color: AppColors.white,
-                      fontSize: AppTypography.xxxl,
-                      fontWeight: AppTypography.semiBold,
-                    ),
-                  )
-                : null,
+            fallback: Text(
+              widget.displayName.isNotEmpty
+                  ? widget.displayName[0].toUpperCase()
+                  : '?',
+              style: TextStyle(
+                color: AppColors.white,
+                fontSize: AppTypography.xxxl,
+                fontWeight: AppTypography.semiBold,
+              ),
+            ),
           ),
         ],
       ),

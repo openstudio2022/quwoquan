@@ -10,7 +10,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/bootstrap_recovery.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
+import 'package:quwoquan_app/app/recovery/recovery_surface.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
@@ -18,30 +20,27 @@ import 'package:quwoquan_app/app/startup_init_scheduler.dart';
 import 'package:quwoquan_app/app/startup_screen_util_scope.dart';
 import 'package:quwoquan_app/app/startup/startup_state_machine.dart';
 import 'package:quwoquan_app/app/startup_welcome_appearance.dart';
+import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger_provider.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
+import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/core/services/app_permission_lifecycle_binding.dart';
-import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/core/platform/app_recovery_native_bridge.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
     show
+        appTelemetryReporterProvider,
         appResourceCacheProfileProvider,
         cacheTelemetrySinkProvider,
         mediaDownloadCacheProvider,
         postObjectCacheProvider,
         realtimeConnectionManagerProvider;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
 import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_motion_timeline.dart';
-import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 part 'quwoquan_app_shell_runtime_support.dart';
 
@@ -49,9 +48,15 @@ part 'quwoquan_app_shell_runtime_support.dart';
 class QuWoQuanAppRoot extends ConsumerStatefulWidget {
   const QuWoQuanAppRoot({
     super.key,
+    this.autoCompleteStartupWelcomeForTest = false,
     this.postFirstFrameTasks,
     this.authNetworkPrerequisites,
   });
+
+  /// Patrol bootstrap 专用：首帧完成后走与 WelcomeScreen 相同的 router handoff。
+  ///
+  /// 默认入口始终为 false；生产欢迎动效与完成时序不受此测试注入影响。
+  final bool autoCompleteStartupWelcomeForTest;
 
   /// 首帧已实际绘制后才创建的非关键水合任务。
   ///
@@ -78,8 +83,6 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   bool _routerShellFirstPainted = false;
   Timer? _welcomeOverlayRemovalTimer;
   Timer? _startupDeadlineTimer;
-  Timer? _routerLoadDeadlineTimer;
-  Completer<void>? _routerLoadDeadline;
   Future<void>? _routerPreload;
   final Completer<void> _disposeSignal = Completer<void>();
   late final StartupInitScheduler _startupInitScheduler;
@@ -89,6 +92,11 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 在欢迎页首帧之前安装全局异常和帧时序采集，避免冷启动阶段的诊断空窗。
+    AppPageExperienceTracker.instance.attachReporter(
+      ref.read(appTelemetryReporterProvider),
+    );
+    ref.read(runtimeDiagnosticsProvider).install();
     _startupStateMachine = StartupStateMachine();
     _startupInitScheduler = StartupInitScheduler(
       ref: ref,
@@ -102,6 +110,15 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppStartupRuntime.instance.markFirstFramePainted();
     });
+    if (widget.autoCompleteStartupWelcomeForTest) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        scheduleMicrotask(() {
+          if (mounted) {
+            _completeStartupWelcome();
+          }
+        });
+      });
+    }
   }
 
   @override
@@ -112,7 +129,6 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     _startupInitScheduler.dispose();
     _welcomeOverlayRemovalTimer?.cancel();
     _startupDeadlineTimer?.cancel();
-    _cancelRouterLoadDeadline();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -274,6 +290,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(accountClosureLocalCleanupLifecycleProvider);
     final startup = _startupStateMachine.snapshot;
     if (startup.phase == StartupRootPhase.welcome) {
       return _buildStartupWelcomeApp(startupWelcomeAppearanceSnapshot());
@@ -444,9 +461,10 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
               'safe startup terminal was not reached before deadline',
           stackText: StackTrace.current.toString(),
         );
-        _enterSafeRecovery(
-          BootstrapFailure.deadline(),
-          source: 'startup_absolute_deadline',
+        _recordStartupPhase(
+          phase: 'startup_deadline_observed',
+          result: 'performance_only',
+          deadlineOrigin: 'dart_process',
         );
       },
     );
@@ -539,7 +557,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     _startRouterLoad();
   }
 
-  void _startRouterLoad({bool retry = false}) {
+  void _startRouterLoad() {
     if (!mounted ||
         _startupStateMachine.snapshot.phase == StartupRootPhase.routerShell) {
       return;
@@ -548,31 +566,13 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     setState(() {
       // 状态已经在 StartupStateMachine 中推进。
     });
-    unawaited(_awaitRouterLoad(attempt: attempt, retry: retry));
+    unawaited(_awaitRouterLoad(attempt: attempt));
   }
 
-  Future<void> _awaitRouterLoad({
-    required int attempt,
-    required bool retry,
-  }) async {
-    final remaining =
-        StartupWelcomeTiming.production.hardEntryDeadline -
-        AppStartupRuntime.instance.deadlineElapsedSinceProcessStart;
-    final budget = retry
-        ? const Duration(seconds: 3)
-        : remaining <= Duration.zero
-        ? const Duration(milliseconds: 1)
-        : remaining;
-    final deadline = _startRouterLoadDeadline(budget);
+  Future<void> _awaitRouterLoad({required int attempt}) async {
     try {
-      _recordStartupPhase(
-        phase: 'router_loading',
-        result: retry ? 'retry' : 'started',
-      );
-      await Future.any<void>([
-        ensureAppRouterLibraryLoaded(retry: retry),
-        deadline.future,
-      ]);
+      _recordStartupPhase(phase: 'router_loading', result: 'started');
+      await ensureAppRouterLibraryLoaded();
       unawaited(_hydrateNativeStartupSegments());
       if (!mounted || !_startupStateMachine.markRouterReady(attempt)) {
         return;
@@ -613,32 +613,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         failureSource: 'router',
       );
       _showSafeRecovery();
-    } finally {
-      _cancelRouterLoadDeadline(deadline);
     }
-  }
-
-  Completer<void> _startRouterLoadDeadline(Duration budget) {
-    _cancelRouterLoadDeadline();
-    final deadline = Completer<void>();
-    _routerLoadDeadline = deadline;
-    _routerLoadDeadlineTimer = Timer(budget, () {
-      if (!deadline.isCompleted) {
-        deadline.completeError(
-          TimeoutException('router library load timed out', budget),
-        );
-      }
-    });
-    return deadline;
-  }
-
-  void _cancelRouterLoadDeadline([Completer<void>? deadline]) {
-    if (deadline != null && !identical(_routerLoadDeadline, deadline)) {
-      return;
-    }
-    _routerLoadDeadlineTimer?.cancel();
-    _routerLoadDeadlineTimer = null;
-    _routerLoadDeadline = null;
   }
 
   Future<void> _hydrateNativeStartupSegments() async {
@@ -706,6 +681,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   }
 
   void _showSafeRecovery() {
+    unawaited(AppRecoveryNativeBridge().recordFatalStartup());
     _welcomeOverlayRemovalTimer?.cancel();
     _welcomeOverlayRemovalTimer = null;
     _startupDeadlineTimer?.cancel();
@@ -722,13 +698,6 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         }
       });
     }
-  }
-
-  void _retryRouterLoad() {
-    if (!mounted) {
-      return;
-    }
-    _startRouterLoad(retry: true);
   }
 
   void _recordStartupPhase({
@@ -785,28 +754,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   }
 
   Widget _buildRouterChildRecovery() {
-    return AppScaffold(
-      body: AppPageErrorState(
-        semantic: UiErrorSemantic(
-          category: UiErrorCategory.pageLoad,
-          scope: UiErrorScope.global,
-          title: UITextConstants.startupRecoveryTitle,
-          message: UITextConstants.startupRecoveryMessage,
-          sourceCode: OpsEventRecordErrorCode.startupRouterUnavailable.code,
-          presentation: UiErrorPresentation.emptyPage,
-          tone: UiErrorTone.critical,
-          primaryAction: UiErrorAction(
-            type: UiErrorActionType.retry,
-            label: UITextConstants.startupRecoveryRetry,
-          ),
-        ),
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry) {
-            _retryRouterLoad();
-          }
-        },
-      ),
-    );
+    return const StartupRecoveryPage();
   }
 
   Widget _buildStartupFallbackApp(
@@ -834,32 +782,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
           child: child ?? _buildRouterChildRecovery(),
         ),
       ),
-      home: AppScaffold(
-        body: AppPageErrorState(
-          semantic: UiErrorSemantic(
-            category: UiErrorCategory.pageLoad,
-            scope: UiErrorScope.global,
-            title: UITextConstants.startupRecoveryTitle,
-            message: failure.errorCode.defaultMessage,
-            secondaryMessage: UITextConstants.startupRecoverySupportHint,
-            sourceCode: failure.errorCode.code,
-            failureKind: failure.runtimeFailure.kind,
-            recoveryAction: RuntimeRecoveryAction.retry,
-            copyKey: 'startupRecovery',
-            presentation: UiErrorPresentation.emptyPage,
-            tone: UiErrorTone.critical,
-            primaryAction: UiErrorAction(
-              type: UiErrorActionType.retry,
-              label: UITextConstants.startupRecoveryRetry,
-            ),
-          ),
-          onAction: (action) async {
-            if (action.type == UiErrorActionType.retry) {
-              _retryRouterLoad();
-            }
-          },
-        ),
-      ),
+      home: const StartupRecoveryPage(),
     );
   }
 
@@ -902,7 +825,8 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       if (!mounted) {
         return;
       }
-      if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      final currentSession = ref.read(authSessionControllerProvider);
+      if (!currentSession.isAuthenticated) {
         ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
         if (!isAppRouterLibraryLoaded) {
           return;
@@ -910,11 +834,19 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         final router = ref.read(deferredAppRouterProvider);
         final currentLocation = router.routerDelegate.currentConfiguration.uri
             .toString();
+        final requiresSafeHome =
+            currentSession.promptReason == AuthPromptReason.accountSuspended ||
+            currentSession.promptReason == AuthPromptReason.accountClosed;
+        final safeLocation = requiresSafeHome
+            ? AppRoutePaths.home
+            : currentLocation;
         router.go(
           buildLoginRouteLocation(
-            reasonName: AuthPromptReason.sessionExpired.name,
+            reasonName:
+                (currentSession.promptReason ?? AuthPromptReason.sessionExpired)
+                    .name,
             redirect: currentLocation,
-            dismissFallback: currentLocation,
+            dismissFallback: safeLocation,
             dismissPolicy: LoginDismissPolicy.safeFallback,
           ),
         );

@@ -1,0 +1,49 @@
+kind: append_only_fact
+description: RecommendationSignalFact 的领域对象契约。
+identity:
+  fields:
+  - signalId
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: query
+  on_delete: retain
+  reference_fields:
+  - searchRequestId
+  target_object: search.SearchQuery
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: persona
+  on_delete: retain
+  reference_fields:
+  - userId
+  target_object: user.Persona
+- access: event
+  cardinality: N:N
+  consistency: eventual
+  kind: event_source
+  name: clickedObjects
+  on_delete: retain
+  reference_fields:
+  - engagedObjectIds
+  target_objects:
+  - content.Post
+  - content.Comment
+  - circle.Circle
+  - entity.Homepage
+  - chat.Conversation
+  - chat.Message
+  - user.Persona
+  - integration.Location
+local_identity_reasons:
+  sessionId: runtime session correlation key injected by OperationInvocationContext, not an aggregate
+    reference

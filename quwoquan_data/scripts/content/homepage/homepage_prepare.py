@@ -104,8 +104,8 @@ def prepare_entity_pages(execution_id: str, spec: dict[str, Any]) -> tuple[Path,
             "editingInstruction": (
                 "把 primaryEvidenceRef 作为**唯一**底稿骨架与主题锚点（单底稿零参考，禁止引用其它来源）。"
                 "在底稿基础上做适度润色、事实校正、PII/平台痕迹清理与人设适配（licensed_adaptation 与 "
-                "factual_reference_only 同等以底稿为骨架轻改、保留底稿信息顺序与关键事实细节、"
-                "多数语句在底稿原句上做最小改动）；"
+                "factual_reference_only 同等以底稿为骨架轻改、保留底稿信息顺序与关键事实细节；"
+                "首稿主动改写约 20%-30% 的句子，不得连续逐句照搬）；"
                 "不得脱离底稿从零另写，也不得整篇零加工照搬。"
                 "结构尊重底稿真实内容——规范化章节只作参考（用于章节命名与归类对齐），"
                 "不是必须逐节填满的清单：仅『概况』必备，其余章节有真实内容才写、无内容直接省略、禁止硬凑，"
@@ -167,4 +167,3 @@ def prepare_entity_pages(execution_id: str, spec: dict[str, Any]) -> tuple[Path,
     results_dir = execution_root(execution_id) / "entities"
     write_assistant_task(manifest_path, step="entity_page", input_dir=inputs_root, result_dir=results_dir, refs=refs)
     return inputs_root, refs
-

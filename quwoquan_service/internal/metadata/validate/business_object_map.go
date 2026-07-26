@@ -21,6 +21,7 @@ type fieldsDocument struct {
 	Entity   string                  `json:"entity"`
 	Fields   []fieldDocument         `json:"fields"`
 	Entities map[string]entityFields `json:"entities"`
+	Members  map[string]entityFields `json:"members"`
 }
 
 type entityFields struct {
@@ -35,6 +36,12 @@ type registeredBoundary struct {
 	Domain  string
 	Context string
 	Object  ast.BusinessObjectBoundary
+}
+
+type registeredMember struct {
+	OwnerID string
+	Context string
+	Kind    ast.ObjectKind
 }
 
 func validateBusinessObjectMaps(contractGraph *graph.ContractGraph) []Issue {
@@ -110,45 +117,31 @@ func validateBusinessObjectMaps(contractGraph *graph.ContractGraph) []Issue {
 			}
 		}
 	}
-	ownedByRelationship := map[string]string{}
-	for _, boundary := range boundaries {
-		for _, relationship := range boundary.Object.Relationships {
-			if relationship.Kind != "owned" {
-				continue
-			}
-			ownedByRelationship[relationship.TargetObject] = canonicalObjectID(
-				boundary.Domain,
-				boundary.Object.CanonicalObject,
-			)
-		}
-	}
-	for canonicalID, boundary := range boundaries {
-		if boundary.Object.ObjectKind != ast.ObjectKindOwnedEntity {
+	members := map[string]registeredMember{}
+	for _, object := range contractGraph.Objects {
+		ownerID := canonicalObjectID(object.Domain, object.Name)
+		owner, exists := boundaries[ownerID]
+		if !exists {
 			continue
 		}
-		ownerID := canonicalObjectID(
-			boundary.Domain,
-			boundary.Object.AggregateOwner,
-		)
-		owner, exists := boundaries[ownerID]
-		if !exists || owner.Context != boundary.Context ||
-			owner.Object.ObjectKind != ast.ObjectKindAggregateRoot {
-			issues = append(issues, issue(
-				"CONTRACT.OBJECT_REGISTRY.INVALID_CHILD_OWNER",
-				boundary.Object.SourceDocument,
-				"owned entity %q must name an aggregate root in the same bounded context, got %q",
-				canonicalID,
-				boundary.Object.AggregateOwner,
-			))
-		}
-		if relationshipOwner := ownedByRelationship[canonicalID]; relationshipOwner != ownerID {
-			issues = append(issues, issue(
-				"CONTRACT.OBJECT_REGISTRY.MISSING_OWNED_RELATIONSHIP",
-				boundary.Object.SourceDocument,
-				"owned entity %q must be reached by exactly one owned relationship from %q",
-				canonicalID,
-				ownerID,
-			))
+		for _, member := range object.Members {
+			memberID := canonicalObjectID(object.Domain, member.Name)
+			if previous, duplicate := members[memberID]; duplicate {
+				issues = append(issues, issue(
+					"CONTRACT.MEMBER.DUPLICATE_ID",
+					object.SourcePath,
+					"aggregate member %q is owned by both %q and %q",
+					memberID,
+					previous.OwnerID,
+					ownerID,
+				))
+				continue
+			}
+			members[memberID] = registeredMember{
+				OwnerID: ownerID,
+				Context: owner.Context,
+				Kind:    member.Kind,
+			}
 		}
 	}
 	for _, object := range contractGraph.Objects {
@@ -157,7 +150,7 @@ func validateBusinessObjectMaps(contractGraph *graph.ContractGraph) []Issue {
 			issues = append(issues, issue(
 				"CONTRACT.OBJECT_REGISTRY.UNREGISTERED_DOMAIN",
 				object.SourcePath,
-				"domain %q has ContractGraph objects but no business_object_map.yaml",
+				"domain %q has ContractGraph objects but no derived object index",
 				object.Domain,
 			))
 			continue
@@ -179,6 +172,7 @@ func validateBusinessObjectMaps(contractGraph *graph.ContractGraph) []Issue {
 				documents,
 				canonicalObjects,
 				boundaries,
+				members,
 				operationsByLocalID,
 			)...,
 		)
@@ -196,6 +190,7 @@ func validateBusinessObjectMap(
 	documents map[string]ast.SourceDocument,
 	canonicalObjects map[string]ast.Object,
 	boundaries map[string]registeredBoundary,
+	members map[string]registeredMember,
 	operationsByLocalID map[string]ast.Operation,
 ) []Issue {
 	var issues []Issue
@@ -239,6 +234,7 @@ func validateBusinessObjectMap(
 			objectMap.Domain,
 			object,
 			boundaries,
+			members,
 		)...)
 		if _, exists := seenCanonicalObjects[object.CanonicalObject]; exists {
 			issues = append(issues, issue(
@@ -457,7 +453,10 @@ func validateObjectSemantics(
 		))
 	}
 	if object.ObjectKind == ast.ObjectKindAggregateRoot {
-		if len(object.MutationEntrypoints) == 0 && len(object.EventConsumers) == 0 {
+		declared, declaredExists := canonicalObjects[domainObjectKey(domain, object.CanonicalObject)]
+		deferredRoot := declaredExists && len(declared.DeferredOperations) > 0
+		if len(object.MutationEntrypoints) == 0 && len(object.EventConsumers) == 0 &&
+			!deferredRoot {
 			issues = append(issues, issue(
 				"CONTRACT.OBJECT_REGISTRY.ZERO_ENTRYPOINT_ROOT",
 				sourcePath,
@@ -690,6 +689,7 @@ func validateObjectRelationships(
 	domain string,
 	object ast.BusinessObjectBoundary,
 	boundaries map[string]registeredBoundary,
+	members map[string]registeredMember,
 ) []Issue {
 	var issues []Issue
 	seen := map[string]struct{}{}
@@ -767,7 +767,7 @@ func validateObjectRelationships(
 				))
 				continue
 			}
-			target, exists := boundaries[targetIDs[0]]
+			target, exists := members[targetIDs[0]]
 			if !exists {
 				issues = append(issues, issue(
 					"CONTRACT.RELATIONSHIP.UNKNOWN_TARGET",
@@ -779,10 +779,10 @@ func validateObjectRelationships(
 				))
 				continue
 			}
-			sameContext := target.Domain == domain && target.Context == object.BoundedContext
+			ownerID := canonicalObjectID(domain, object.CanonicalObject)
 			if object.ObjectKind != ast.ObjectKindAggregateRoot ||
-				!sameContext ||
-				!oneOf(target.Object.ObjectKind, ast.ObjectKindOwnedEntity, ast.ObjectKindValueObject) ||
+				target.Context != object.BoundedContext || target.OwnerID != ownerID ||
+				!oneOf(target.Kind, ast.ObjectKindOwnedEntity, ast.ObjectKindValueObject) ||
 				relationship.Consistency != "strong" ||
 				relationship.Access != "aggregate_root" ||
 				!oneOf(relationship.OnDelete, "cascade", "restrict") {
@@ -806,6 +806,18 @@ func validateObjectRelationships(
 			))
 		}
 		for _, targetID := range targetIDs {
+			if member, isMember := members[targetID]; isMember {
+				issues = append(issues, issue(
+					"CONTRACT.RELATIONSHIP.DIRECT_CHILD_ACCESS",
+					sourcePath,
+					"relationship %s.%s targets aggregate member %q owned by %q",
+					object.CanonicalObject,
+					relationship.Name,
+					targetID,
+					member.OwnerID,
+				))
+				continue
+			}
 			target, exists := boundaries[targetID]
 			if !exists {
 				issues = append(issues, issue(
@@ -819,16 +831,6 @@ func validateObjectRelationships(
 				continue
 			}
 			sameContext := target.Domain == domain && target.Context == object.BoundedContext
-			if oneOf(target.Object.ObjectKind, ast.ObjectKindOwnedEntity, ast.ObjectKindValueObject) {
-				issues = append(issues, issue(
-					"CONTRACT.RELATIONSHIP.DIRECT_CHILD_ACCESS",
-					sourcePath,
-					"relationship %s.%s targets child object %q outside its owning aggregate",
-					object.CanonicalObject,
-					relationship.Name,
-					targetID,
-				))
-			}
 			if !sameContext && relationship.Access == "aggregate_root" {
 				issues = append(issues, issue(
 					"CONTRACT.RELATIONSHIP.CROSS_CONTEXT_DIRECT_ACCESS",

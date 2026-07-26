@@ -41,9 +41,11 @@ type entityDef struct {
 
 type fieldsFile struct {
 	Entities map[string]entityDef `yaml:"entities"`
+	Fields   []fieldDef           `yaml:"fields"`
+	Types    map[string]entityDef `yaml:"types"`
 }
 
-// ── post/service.yaml ─────────────────────────────────────────────────────────
+// ── post/operations.yaml ─────────────────────────────────────────────────────────
 
 type routeSecurity struct {
 	AuthMode        string   `yaml:"auth_mode"`
@@ -95,7 +97,7 @@ type serviceFile struct {
 	APIRoutes []routeDef  `yaml:"api_routes"`
 }
 
-// integration/location/service.yaml 专用，含 response_list_key
+// integration/external_integration/location/operations.yaml 专用，含 response_list_key
 type integrationLocationServiceFile struct {
 	ResponseListKey string     `yaml:"response_list_key"`
 	APIRoutes       []routeDef `yaml:"api_routes"`
@@ -353,12 +355,14 @@ type uiConfigFile struct {
 	DiscoveryRails                 []discoveryRailDef                 `yaml:"discovery_rails"`
 	CreationIdentityFilters        []identityFilterDef                `yaml:"creation_identity_filters"`
 	WorkFormatFilters              []workFormatFilterDef              `yaml:"work_format_filters"`
+	OnboardingInterestCatalog      onboardingInterestCatalogDef       `yaml:"onboarding_interest_catalog"`
 	HeaderLayout                   profileHeaderLayoutDef             `yaml:"header_layout"`
 	ScrollMotion                   profileScrollMotionDef             `yaml:"scroll_motion"`
 	CareerInterestCatalog          careerInterestCatalogDef           `yaml:"career_interest_catalog"`
 	ProfileTabs                    []profileTabDef                    `yaml:"profile_tabs"`
 	HomepageTabs                   []homepageTabDef                   `yaml:"homepage_tabs"`
 	HomepageSubTabs                []homepageSubTabDef                `yaml:"homepage_sub_tabs"`
+	HomepageWishlistTypes          []string                           `yaml:"homepage_wishlist_types"`
 	CircleTabs                     []circleTabDef                     `yaml:"circle_tabs"`
 	CircleSections                 []circleSectionDef                 `yaml:"circle_sections"`
 	ShareTemplateProfiles          []shareTemplateProfileDef          `yaml:"share_template_profiles"`
@@ -385,6 +389,23 @@ type careerInterestCategoryDef struct {
 	TagRef   string `yaml:"tag_ref"`
 	LabelKey string `yaml:"label_key"`
 	Order    int    `yaml:"order"`
+}
+
+type onboardingInterestCatalogDef struct {
+	Version           string                           `yaml:"version"`
+	TaxonomyReleaseID string                           `yaml:"taxonomy_release_id"`
+	MinSelectionCount int                              `yaml:"min_selection_count"`
+	MaxSelectionCount int                              `yaml:"max_selection_count"`
+	Dimensions        []onboardingInterestDimensionDef `yaml:"dimensions"`
+}
+
+type onboardingInterestDimensionDef struct {
+	ID            string `yaml:"id"`
+	TagRef        string `yaml:"tag_ref"`
+	DisplayLabel  string `yaml:"display_label"`
+	MinSelections int    `yaml:"min_selections"`
+	MaxSelections int    `yaml:"max_selections"`
+	Order         int    `yaml:"order"`
 }
 
 // ── _shared/request_context.yaml ──────────────────────────────────────────────
@@ -419,7 +440,7 @@ type uiSurfacesFile struct {
 	Surfaces []uiSurfaceDef `yaml:"surfaces"`
 }
 
-// ── _shared/app_pages.yaml + ops/event_record/event_catalog.yaml ────────────
+// ── _shared/app_pages.yaml + ops/product_ops/event_record/event_catalog.yaml ────────────
 
 type appPageDef struct {
 	PageName          string `yaml:"page_name"`
@@ -456,11 +477,82 @@ type telemetryEventDef struct {
 }
 
 type telemetryEventCatalogFile struct {
-	LogTypes        []string                         `yaml:"log_types"`
-	NetworkClasses  []string                         `yaml:"network_classes"`
-	CommonFields    []string                         `yaml:"common_fields"`
-	ExtensionFields map[string]telemetryExtensionDef `yaml:"extension_fields"`
-	Events          []telemetryEventDef              `yaml:"events"`
+	LogTypes          []string                         `yaml:"log_types"`
+	NetworkClasses    []string                         `yaml:"network_classes"`
+	CommonFields      []string                         `yaml:"common_fields"`
+	ContextExtensions []string                         `yaml:"context_extensions"`
+	ExtensionFields   map[string]telemetryExtensionDef `yaml:"extension_fields"`
+	Events            []telemetryEventDef              `yaml:"events"`
+}
+
+type contentPublicationPolicyFile struct {
+	Schema               string                            `yaml:"schema"`
+	TextLimits           contentPublicationTextLimitsDef   `yaml:"text_limits"`
+	FormatRecommendation contentPublicationFormatPolicyDef `yaml:"format_recommendation"`
+	RateLimit            contentPublicationRateLimitDef    `yaml:"rate_limit"`
+	Safety               contentPublicationSafetyPolicyDef `yaml:"safety"`
+}
+
+type contentPublicationTextLimitsDef struct {
+	TitleMaxRunes            int `yaml:"title_max_runes"`
+	MicroBodyMaxRunes        int `yaml:"micro_body_max_runes"`
+	ArticleMarkdownMaxRunes  int `yaml:"article_markdown_max_runes"`
+	SummaryMaxRunes          int `yaml:"summary_max_runes"`
+	SemanticMentionsMaxItems int `yaml:"semantic_mentions_max_items"`
+}
+
+type contentPublicationFormatPolicyDef struct {
+	ArticleBodyMinRunes      int  `yaml:"article_body_min_runes"`
+	ArticleParagraphMinCount int  `yaml:"article_paragraph_min_count"`
+	ArticleWhenTitlePresent  bool `yaml:"article_when_title_present"`
+	ArticleWhenMediaPresent  bool `yaml:"article_when_media_present"`
+	UserConfirmationRequired bool `yaml:"user_confirmation_required"`
+}
+
+type contentPublicationRateLimitDef struct {
+	PersonaWindowSeconds   int    `yaml:"persona_window_seconds"`
+	PersonaMaxPublications int    `yaml:"persona_max_publications"`
+	DependencyFailure      string `yaml:"dependency_failure"`
+}
+
+type contentPublicationSafetyPolicyDef struct {
+	Required             bool     `yaml:"required"`
+	DependencyFailure    string   `yaml:"dependency_failure"`
+	Decisions            []string `yaml:"decisions"`
+	UnavailableAction    string   `yaml:"unavailable_action"`
+	RejectErrorCode      string   `yaml:"reject_error_code"`
+	UnavailableErrorCode string   `yaml:"unavailable_error_code"`
+}
+
+type contentMediaUploadPolicyFile struct {
+	Schema            string                               `yaml:"schema"`
+	StreamingRequired bool                                 `yaml:"streaming_required"`
+	MediaTypes        map[string]contentMediaUploadTypeDef `yaml:"media_types"`
+	Errors            contentMediaUploadErrorDef           `yaml:"errors"`
+}
+
+type contentMediaUploadTypeDef struct {
+	MaxFileSizeBytes    int      `yaml:"max_file_size_bytes"`
+	AllowedContentTypes []string `yaml:"allowed_content_types"`
+}
+
+type contentMediaUploadErrorDef struct {
+	FileTooLarge    string `yaml:"file_too_large"`
+	UnsupportedType string `yaml:"unsupported_type"`
+}
+
+type contentImageVariantPolicyFile struct {
+	Schema                  string                                   `yaml:"schema"`
+	DerivativePolicyVersion int                                      `yaml:"derivative_policy_version"`
+	Profiles                map[string]contentImageVariantProfileDef `yaml:"profiles"`
+}
+
+type contentImageVariantProfileDef struct {
+	Width      int    `yaml:"width"`
+	Format     string `yaml:"format"`
+	Quality    int    `yaml:"quality"`
+	Scene      string `yaml:"scene"`
+	Processing string `yaml:"processing"`
 }
 
 type searchNamedValueDef struct {

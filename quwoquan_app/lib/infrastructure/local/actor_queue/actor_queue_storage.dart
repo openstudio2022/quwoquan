@@ -157,6 +157,10 @@ final class ActorQueueStorage {
       await Hive.deleteBoxFromDisk(boxName);
     }
     await _keyStore.delete(_keyName(partition, queueName));
+    if (await Hive.boxExists(boxName) ||
+        await _keyStore.read(_keyName(partition, queueName)) != null) {
+      throw StateError('actor queue purge verification failed: $queueName');
+    }
   }
 
   Future<List<int>?> _loadOrCreateKey(

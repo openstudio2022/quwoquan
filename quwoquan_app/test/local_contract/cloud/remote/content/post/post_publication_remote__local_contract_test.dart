@@ -15,54 +15,57 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('RemoteContentPostPublicationWriter local contract', () {
-    test('atomic publication uses one operation and stable intent key', () async {
-      http.Request? captured;
-      final writer = RemoteContentPostPublicationWriter(
-        client: _client((request) {
-          captured = request;
-          return <String, Object?>{
-            'publishIntentId': 'publish-draft-1',
-            'localDraftId': 'draft-1',
-            'postId': 'post-created',
-            'state': 'published',
-            'committedVersion': 1,
-            'acceptedAt': '2026-07-13T10:00:00Z',
-          };
-        }),
-        invocationContext: _context,
-      );
+    test(
+      'atomic publication uses one operation and stable intent key',
+      () async {
+        http.Request? captured;
+        final writer = RemoteContentPostPublicationWriter(
+          client: _client((request) {
+            captured = request;
+            return <String, Object?>{
+              'publishIntentId': 'publish-draft-1',
+              'localDraftId': 'draft-1',
+              'postId': 'post-created',
+              'state': 'published',
+              'committedVersion': 1,
+              'acceptedAt': '2026-07-13T10:00:00Z',
+            };
+          }),
+          invocationContext: _context,
+        );
 
-      final result = await writer.submitPostPublication(
-        SubmitContentPostPublicationCommand(
-          publishIntentId: 'publish-draft-1',
-          localDraftId: 'draft-1',
-          contentType: ContentPostType.article,
-          contentIdentity: ContentPostIdentity.work,
-          title: '对象闭环',
-          articleMarkdown: '# 对象闭环',
-          mediaAssetIds: const <String>['asset-1'],
-          visibility: ContentPostVisibility.public,
-        ),
-      );
-      final request = captured;
-      expect(request, isNotNull);
+        final result = await writer.submitPostPublication(
+          SubmitContentPostPublicationCommand(
+            publishIntentId: 'publish-draft-1',
+            localDraftId: 'draft-1',
+            contentType: ContentPostType.article,
+            contentIdentity: ContentPostIdentity.work,
+            title: '对象闭环',
+            articleMarkdown: '# 对象闭环',
+            mediaAssetIds: const <String>['asset-1'],
+            visibility: ContentPostVisibility.public,
+          ),
+        );
+        final request = captured;
+        expect(request, isNotNull);
 
-      expect(request!.method, 'POST');
-      expect(request.url.path, '/content/posts:publish');
-      expect(
-        request.headers['X-Client-Operation-Id'],
-        AppCloudOperationIds.contentPostSubmitPostPublication,
-      );
-      expect(request.headers['X-Client-Surface-Id'], 'createWorkspace');
-      expect(request.headers['Idempotency-Key'], 'publish-draft-1');
-      expect(request.headers['authorization'], 'Bearer post-command-token');
-      final body = jsonDecode(request.body) as Map<String, dynamic>;
-      expect(body['publishIntentId'], 'publish-draft-1');
-      expect(body['localDraftId'], 'draft-1');
-      expect(body['mediaAssetIds'], <Object?>['asset-1']);
-      expect(body, isNot(contains('circleIds')));
-      expect(result.postId, 'post-created');
-    });
+        expect(request!.method, 'POST');
+        expect(request.url.path, '/content/posts:publish');
+        expect(
+          request.headers['X-Client-Operation-Id'],
+          AppCloudOperationIds.contentPostSubmitPostPublication,
+        );
+        expect(request.headers['X-Client-Surface-Id'], 'createWorkspace');
+        expect(request.headers['Idempotency-Key'], 'publish-draft-1');
+        expect(request.headers['authorization'], 'Bearer post-command-token');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['publishIntentId'], 'publish-draft-1');
+        expect(body['localDraftId'], 'draft-1');
+        expect(body['mediaAssetIds'], <Object?>['asset-1']);
+        expect(body, isNot(contains('circleIds')));
+        expect(result.postId, 'post-created');
+      },
+    );
   });
 }
 

@@ -5,23 +5,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
-import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 import '../../../../support/runtime_failure_fixtures.dart';
 import '../../../../support/recording_app_telemetry_recorder.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 void _suppressImageErrors() {
   final original = FlutterError.onError;
@@ -93,10 +94,11 @@ ProviderContainer _buildContainer(
   RecordingAppTelemetryRecorder? telemetryRecorder,
 }) {
   final container = ProviderContainer(
+    retry: (_, _) => null,
     overrides: [
-      chatRepositoryProvider.overrideWithValue(repository),
-      userProfileRepositoryProvider.overrideWithValue(
-        const MockUserProfileRepository(),
+      chatRepositoryCompositionProvider.overrideWithValue(repository),
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
       ),
       if (analytics != null) analyticsProvider.overrideWithValue(analytics),
       if (telemetryRecorder != null)
@@ -105,53 +107,6 @@ ProviderContainer _buildContainer(
   );
   addTearDown(container.dispose);
   return container;
-}
-
-Map<String, dynamic> _groupConversation(
-  String id,
-  String title, {
-  String avatarUrl = '',
-  int memberCount = 2,
-}) {
-  final now = DateTime.utc(2026, 1, 1).toIso8601String();
-  return <String, dynamic>{
-    'id': id,
-    'type': 'group',
-    'title': title,
-    'avatarUrl': avatarUrl,
-    'creatorId': chatCurrentUserProfileId(),
-    'maxSeq': 0,
-    'memberCount': memberCount,
-    'maxGroupSize': 500,
-    'receiptEnabled': true,
-    'lastMessagePreview': '',
-    'lastMessageTime': now,
-    'messageCount': 0,
-    'status': 'active',
-    'createdAt': now,
-    'updatedAt': now,
-  };
-}
-
-Map<String, dynamic> _member(
-  String userId, {
-  required int order,
-  String role = 'member',
-  bool isCurrentUser = false,
-  String? avatarUrl,
-}) {
-  return <String, dynamic>{
-    'userId': userId,
-    'displayName': chatDisplayNameFor(userId),
-    'avatarUrl': avatarUrl ?? chatAvatarUrlFor(userId),
-    'role': role,
-    'isCurrentUser': isCurrentUser,
-    'joinedAt': DateTime.utc(
-      2026,
-      1,
-      1,
-    ).add(Duration(seconds: order)).toIso8601String(),
-  };
 }
 
 /// 模拟服务端互关/拉黑/上限校验失败：createConversation 抛出携带结构化
@@ -165,11 +120,6 @@ class _RejectingCreateChatRepository extends MockChatRepository {
   Future<ChatConversationCreatedDto> createConversation({
     required String type,
     String? title,
-    String? circleId,
-    String? circleGroupId,
-    String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   }) async {
@@ -197,30 +147,75 @@ class _SelectableGroupChatRepository extends MockChatRepository {
   _SelectableGroupChatRepository({
     required this.groups,
     required this.membersByConversation,
+    this.pageSize = CloudApiDefaults.pageLimit,
   });
 
   final List<SelectableGroupConversationRowDto> groups;
   final Map<String, List<ChatContactRowDto>> membersByConversation;
+  final int pageSize;
+  final List<String?> groupQueries = <String?>[];
+  final List<String?> memberQueries = <String?>[];
 
   @override
-  Future<List<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRowDto>>
   listSelectableGroupConversations({
     String? query,
+    ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
+    String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return groups.take(limit).toList(growable: false);
+    groupQueries.add(query);
+    final normalizedQuery = query?.trim().toLowerCase() ?? '';
+    final rows = groups
+        .where(
+          (row) =>
+              (source == ChatSelectableGroupSource.all ||
+                  (source == ChatSelectableGroupSource.group &&
+                      row.circleId.isEmpty) ||
+                  (source == ChatSelectableGroupSource.circle &&
+                      row.circleId.isNotEmpty)) &&
+              (normalizedQuery.isEmpty ||
+                  row.title.toLowerCase().contains(normalizedQuery)),
+        )
+        .toList(growable: false);
+    return _page(rows, cursor: cursor, limit: limit);
   }
 
   @override
-  Future<List<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
+    String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return (membersByConversation[conversationId] ??
-            const <ChatContactRowDto>[])
-        .take(limit)
-        .toList(growable: false);
+    memberQueries.add(query);
+    final normalizedQuery = query?.trim().toLowerCase() ?? '';
+    final rows =
+        (membersByConversation[conversationId] ?? const <ChatContactRowDto>[])
+            .where(
+              (member) =>
+                  normalizedQuery.isEmpty ||
+                  member.displayName.toLowerCase().contains(normalizedQuery),
+            )
+            .toList(growable: false);
+    return _page(rows, cursor: cursor, limit: limit);
+  }
+
+  CursorPage<T> _page<T>(
+    List<T> items, {
+    required String? cursor,
+    required int limit,
+  }) {
+    final start = cursor == null
+        ? 0
+        : int.parse(cursor.substring('offset:'.length));
+    final normalizedLimit = limit <= 0 ? 1 : limit;
+    final effectiveLimit = pageSize.clamp(1, normalizedLimit);
+    final end = (start + effectiveLimit).clamp(0, items.length);
+    return CursorPage<T>(
+      items: items.sublist(start, end),
+      nextCursor: end < items.length ? 'offset:$end' : null,
+    );
   }
 }
 
@@ -253,10 +248,7 @@ void main() {
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(UITextConstants.startGroupChatSelectedCount(1)),
-      findsOneWidget,
-    );
+    expect(find.text(ChatText.startGroupChatSelectedCount(1)), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.person_fill), findsAtLeastNWidgets(3));
   });
 
@@ -282,17 +274,17 @@ void main() {
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.startGroupChatActionCount(1)));
+    await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
     await tester.pumpAndSettle();
 
     // 标题为发起群聊语境，正文透出服务端 userMessage（端云错误链路闭合）
     expect(
-      find.text(UITextConstants.startGroupChatCreateIncompleteTitle),
+      find.text(ChatText.startGroupChatCreateIncompleteTitle),
       findsOneWidget,
     );
     expect(find.text(serverMessage), findsOneWidget);
     // 创建失败不应跳转到新会话路由
-    expect(find.textContaining('chat:conv_new_'), findsNothing);
+    expect(find.textContaining('chat:fixture_conv_created_'), findsNothing);
   });
 
   testWidgets('发起群聊曝光/加载/提交成功均上报页面观测事件', (tester) async {
@@ -313,7 +305,7 @@ void main() {
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.startGroupChatActionCount(1)));
+    await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
     await tester.pumpAndSettle();
 
     // 转化成功事件，携带本次群成员数
@@ -354,7 +346,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.startGroupChatCompanionContextTitle),
+      find.text(ChatText.startGroupChatCompanionContextTitle),
       findsOneWidget,
     );
     await tester.pumpAndSettle();
@@ -367,14 +359,19 @@ void main() {
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.startGroupChatActionCount(1)));
+    await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
     await tester.pumpAndSettle();
 
     final createEvents = ops.recorded
-        .where((event) => event.action == 'create_success')
+        .where(
+          (event) =>
+              event.eventType == 'chat_interaction_outcome' &&
+              event.extensions['chatAction'] == 'group_create' &&
+              event.extensions['chatOutcome'] == 'succeeded',
+        )
         .toList(growable: false);
     expect(createEvents, isNotEmpty);
-    expect(createEvents.last.extensions['journey'], 'start_group_chat');
+    expect(createEvents.last.extensions['memberCountBucket'], 'one');
     expect(
       createEvents.last.extensions.containsKey('intersectionEvidenceId'),
       isFalse,
@@ -405,7 +402,7 @@ void main() {
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.startGroupChatActionCount(1)));
+    await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
     await tester.pumpAndSettle();
 
     final failed = analytics.pageLifecycleEvents('submitFailure');
@@ -423,56 +420,37 @@ void main() {
     await _pumpStartGroupChatPage(tester, container: container);
 
     expect(find.byType(StartGroupChatPage), findsOneWidget);
-    expect(
-      find.text(UITextConstants.startGroupChatActionCount(1)),
-      findsNothing,
-    );
+    expect(find.text(ChatText.startGroupChatActionCount(1)), findsNothing);
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(UITextConstants.startGroupChatActionCount(1)),
-      findsOneWidget,
-    );
+    expect(find.text(ChatText.startGroupChatActionCount(1)), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.startGroupChatActionCount(1)));
+    await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('chat:conv_new_'), findsOneWidget);
+    expect(find.textContaining('chat:fixture_conv_created_'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('添加成员向导只展示服务端过滤后的候选成员', (tester) async {
     _suppressImageErrors();
 
-    final repository = MockChatRepository(
-      seedConversations: <Map<String, dynamic>>[
-        _groupConversation('conv_existing', '当前群'),
-        _groupConversation('conv_source', '候选群'),
-      ],
-      seedMembers: <String, List<Map<String, dynamic>>>{
-        'conv_existing': <Map<String, dynamic>>[
-          _member(
-            chatCurrentUserProfileId(),
-            order: 0,
-            role: 'owner',
-            isCurrentUser: true,
-          ),
-          _member('user_002', order: 1),
-        ],
-        'conv_source': <Map<String, dynamic>>[
-          _member(
-            chatCurrentUserProfileId(),
-            order: 0,
-            role: 'owner',
-            isCurrentUser: true,
-          ),
-          _member('user_002', order: 1),
-          _member('user_003', order: 2),
-        ],
-      },
-    );
+    final repository = _SeededGroupCandidatesChatRepository(<ChatContactRowDto>[
+      ChatContactRowDto(
+        userId: 'user_003',
+        displayName: '张华',
+        relationState: 'mutual',
+        source: 'mutual',
+      ),
+      ChatContactRowDto(
+        userId: 'user_004',
+        displayName: '李青',
+        relationState: 'mutual',
+        source: 'mutual',
+      ),
+    ]);
     final container = _buildContainer(repository);
     await _pumpStartGroupChatPage(
       tester,
@@ -509,7 +487,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('${UITextConstants.addMember}（1）'), findsOneWidget);
+    expect(find.text('${ChatText.addMember}（1）'), findsOneWidget);
 
     // 选中后再滚动校验尾部候选李青仍可进入视口。
     await scrollUntilFound(find.text('李青'));
@@ -519,7 +497,22 @@ void main() {
   testWidgets('拼音搜索输入 li 命中姓李的联系人且隐藏字母索引', (tester) async {
     _suppressImageErrors();
 
-    final container = _buildContainer(MockChatRepository());
+    final container = _buildContainer(
+      _SeededGroupCandidatesChatRepository(<ChatContactRowDto>[
+        ChatContactRowDto(
+          userId: 'user_li_ming',
+          displayName: '李明',
+          relationState: 'mutual',
+          source: 'mutual',
+        ),
+        ChatContactRowDto(
+          userId: 'user_zhang_hua',
+          displayName: '张华',
+          relationState: 'mutual',
+          source: 'mutual',
+        ),
+      ]),
+    );
     await _pumpStartGroupChatPage(tester, container: container);
 
     // 默认列表展示全部 mutual 候选。
@@ -548,10 +541,7 @@ void main() {
     // 选中第一个候选。
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
-    expect(
-      find.text(UITextConstants.startGroupChatSelectedCount(1)),
-      findsOneWidget,
-    );
+    expect(find.text(ChatText.startGroupChatSelectedCount(1)), findsOneWidget);
 
     // 点击选中横向条里的头像 → 取消并 toast。
     final selectedAvatar = find
@@ -565,10 +555,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 取消后已选区块整体隐藏（count 标签不再展示）。
-    expect(
-      find.text(UITextConstants.startGroupChatSelectedCount(1)),
-      findsNothing,
-    );
+    expect(find.text(ChatText.startGroupChatSelectedCount(1)), findsNothing);
     expect(find.textContaining('已移除'), findsOneWidget);
 
     // 等待 toast 自动消失计时器结束，避免 pending timer 残留。
@@ -583,7 +570,7 @@ void main() {
     await _pumpStartGroupChatPage(tester, container: container);
 
     // 点击「从群聊中选择」入口进入图四。
-    await tester.tap(find.text(UITextConstants.startGroupChatPickFromGroup));
+    await tester.tap(find.text(ChatText.startGroupChatPickFromGroup));
     await tester.pumpAndSettle();
 
     expect(
@@ -591,10 +578,7 @@ void main() {
       findsOneWidget,
     );
     // 图四标题与至少一个群行（含「个朋友」计数）。
-    expect(
-      find.text(UITextConstants.startGroupChatGroupPickerTitle),
-      findsOneWidget,
-    );
+    expect(find.text(ChatText.startGroupChatGroupPickerTitle), findsOneWidget);
     expect(find.textContaining('个朋友）'), findsWidgets);
 
     // 进入第一个群（图五）。
@@ -617,10 +601,78 @@ void main() {
     expect(find.textContaining('个朋友）'), findsWidgets);
   });
 
+  testWidgets('从圈子中选择联系人：只展示圈子绑定群并复用成员多选链', (tester) async {
+    _suppressImageErrors();
+
+    final repository = _SelectableGroupChatRepository(
+      groups: <SelectableGroupConversationRowDto>[
+        SelectableGroupConversationRowDto(
+          conversationId: 'conv_private',
+          title: '私建同行群',
+          circleId: '',
+          friendMemberCount: 1,
+          memberCount: 3,
+        ),
+        SelectableGroupConversationRowDto(
+          conversationId: 'conv_circle',
+          title: '摄影圈交流群',
+          circleId: 'circle_photo',
+          friendMemberCount: 1,
+          memberCount: 8,
+        ),
+      ],
+      membersByConversation: <String, List<ChatContactRowDto>>{
+        'conv_circle': <ChatContactRowDto>[
+          ChatContactRowDto(
+            userId: 'user_circle_friend',
+            displayName: '圈友',
+            relationState: 'mutual',
+            source: 'circle',
+          ),
+        ],
+      },
+    );
+    final container = _buildContainer(repository);
+    await _pumpStartGroupChatPage(tester, container: container);
+
+    await tester.tap(find.text(ChatText.startGroupChatPickFromCircle));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('start-group-circle-picker-sheet')),
+      findsOneWidget,
+    );
+    expect(find.text(ChatText.startGroupChatCirclePickerTitle), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_circle')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_private')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_circle')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('start-group-member-select-sheet')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('start-group-candidate-row-user_circle_friend'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('建群聊成功后同时刷新消息列表与群聊列表', (tester) async {
     _suppressImageErrors();
 
-    final container = _buildContainer(MockChatRepository());
+    final repository = MockChatRepository();
+    final container = _buildContainer(repository);
     final keepAlive = container.listen(chatInboxListProvider, (_, _) {});
     addTearDown(keepAlive.close);
     await _pumpStartGroupChatPage(tester, container: container);
@@ -632,34 +684,43 @@ void main() {
         .map((item) => item.id)
         .toSet();
     final beforeFunGroups = await container.read(
-      chatContactsRowsForSubTabProvider(
-        UITextConstants.contactsTabGroups,
-      ).future,
+      chatContactsRowsForSubTabProvider(ChatText.contactsTabGroups).future,
     );
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.startGroupChatActionCount(1)));
+    await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
     await tester.pumpAndSettle();
 
+    final repositoryInbox = await repository.listInbox(limit: 100);
+    expect(
+      repositoryInbox.any(
+        (item) => item.id.startsWith('fixture_conv_created_'),
+      ),
+      isTrue,
+      reason:
+          'Mock 状态引擎应先暴露新会话，实际：'
+          '${repositoryInbox.map((item) => item.id).join(',')}',
+    );
     final inboxItems = container.read(chatInboxListProvider).items;
     expect(
       inboxItems.any(
         (item) =>
-            item.id.startsWith('conv_new_') &&
+            item.id.startsWith('fixture_conv_created_') &&
             !beforeInboxIds.contains(item.id),
       ),
       isTrue,
+      reason:
+          'chatInboxListProvider 应刷新新会话，实际：'
+          '${inboxItems.map((item) => item.id).join(',')}',
     );
     final afterFunGroups = await container.read(
-      chatContactsRowsForSubTabProvider(
-        UITextConstants.contactsTabGroups,
-      ).future,
+      chatContactsRowsForSubTabProvider(ChatText.contactsTabGroups).future,
     );
     expect(afterFunGroups.length, greaterThanOrEqualTo(beforeFunGroups.length));
     expect(
       afterFunGroups.any(
-        (row) => (row.conversationId ?? '').startsWith('conv_new_'),
+        (row) => (row.conversationId ?? '').startsWith('fixture_conv_created_'),
       ),
       isTrue,
     );
@@ -670,6 +731,7 @@ void main() {
   testWidgets('图五选「选择(N)」直接关闭图四+图五回主页并并入已选成员', (tester) async {
     _suppressImageErrors();
 
+    final ops = RecordingAppTelemetryRecorder();
     final repository = _SelectableGroupChatRepository(
       groups: <SelectableGroupConversationRowDto>[
         SelectableGroupConversationRowDto(
@@ -692,11 +754,11 @@ void main() {
         ],
       },
     );
-    final container = _buildContainer(repository);
+    final container = _buildContainer(repository, telemetryRecorder: ops);
     await _pumpStartGroupChatPage(tester, container: container);
 
     // 进入图四群列表。
-    await tester.tap(find.text(UITextConstants.startGroupChatPickFromGroup));
+    await tester.tap(find.text(ChatText.startGroupChatPickFromGroup));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey<String>('start-group-group-picker-sheet')),
@@ -720,7 +782,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 点击「选择(1)」→ 直接关闭图五与图四，回到发起群聊主页。
-    await tester.tap(find.text('${UITextConstants.selectAction}（1）'));
+    await tester.tap(find.text('${ChatText.selectAction}（1）'));
     await tester.pumpAndSettle();
 
     expect(
@@ -733,10 +795,142 @@ void main() {
     );
     expect(find.byType(StartGroupChatPage), findsOneWidget);
     // 主页已选区块展示新并入成员。
+    expect(find.text(ChatText.startGroupChatSelectedCount(1)), findsOneWidget);
     expect(
-      find.text(UITextConstants.startGroupChatSelectedCount(1)),
+      ops.recorded.any(
+        (event) =>
+            event.eventType == 'chat_interaction_outcome' &&
+            event.extensions['chatAction'] == 'candidate_source_open' &&
+            event.extensions['chatSource'] == 'group',
+      ),
+      isTrue,
+    );
+    expect(
+      ops.recorded.any(
+        (event) =>
+            event.eventType == 'chat_interaction_outcome' &&
+            event.extensions['chatAction'] == 'candidate_source_select' &&
+            event.extensions['chatSource'] == 'group',
+      ),
+      isTrue,
+    );
+
+    await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
+    await tester.pumpAndSettle();
+    final createEvent = ops.recorded.lastWhere(
+      (event) =>
+          event.eventType == 'chat_interaction_outcome' &&
+          event.extensions['chatAction'] == 'group_create' &&
+          event.extensions['chatOutcome'] == 'succeeded',
+    );
+    expect(createEvent.extensions['memberCountBucket'], 'one');
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('群与成员选择器按 cursor 加载更多并保序去重', (tester) async {
+    _suppressImageErrors();
+
+    final repository = _SelectableGroupChatRepository(
+      pageSize: 2,
+      groups: <SelectableGroupConversationRowDto>[
+        SelectableGroupConversationRowDto(
+          conversationId: 'conv_page_1',
+          title: '分页群一',
+          friendMemberCount: 3,
+          memberCount: 4,
+        ),
+        SelectableGroupConversationRowDto(
+          conversationId: 'conv_page_2',
+          title: '分页群二',
+          friendMemberCount: 3,
+          memberCount: 4,
+        ),
+        SelectableGroupConversationRowDto(
+          conversationId: 'conv_page_3',
+          title: '分页群三',
+          friendMemberCount: 3,
+          memberCount: 4,
+        ),
+      ],
+      membersByConversation: <String, List<ChatContactRowDto>>{
+        'conv_page_3': <ChatContactRowDto>[
+          ChatContactRowDto(
+            userId: 'user_page_1',
+            displayName: '分页成员一',
+            relationState: 'mutual',
+            source: 'group',
+          ),
+          ChatContactRowDto(
+            userId: 'user_page_2',
+            displayName: '分页成员二',
+            relationState: 'mutual',
+            source: 'group',
+          ),
+          ChatContactRowDto(
+            userId: 'user_page_3',
+            displayName: '分页成员三',
+            relationState: 'mutual',
+            source: 'group',
+          ),
+        ],
+      },
+    );
+    final container = _buildContainer(repository);
+    await _pumpStartGroupChatPage(tester, container: container);
+
+    await tester.tap(find.text(ChatText.startGroupChatPickFromGroup));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_page_3')),
+      findsNothing,
+    );
+
+    final groupSearch = find.byType(CupertinoSearchTextField).last;
+    await tester.enterText(groupSearch, '分页群三');
+    await tester.pumpAndSettle();
+    expect(repository.groupQueries.last, '分页群三');
+    expect(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_page_3')),
       findsOneWidget,
     );
+    await tester.enterText(groupSearch, '');
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('start-group-group-picker-load-more')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_page_3')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_page_3')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        const ValueKey<String>('start-group-candidate-row-user_page_3'),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('start-group-member-picker-load-more')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        const ValueKey<String>('start-group-candidate-row-user_page_3'),
+      ),
+      findsOneWidget,
+    );
+    final memberSearch = find.byType(CupertinoSearchTextField).last;
+    await tester.enterText(memberSearch, '分页成员三');
+    await tester.pumpAndSettle();
+    expect(repository.memberQueries.last, '分页成员三');
   });
 
   testWidgets('图四超长群名 + 朋友数不触发 RenderFlex overflow', (tester) async {
@@ -768,7 +962,7 @@ void main() {
     final container = _buildContainer(repository);
     await _pumpStartGroupChatPage(tester, container: container);
 
-    await tester.tap(find.text(UITextConstants.startGroupChatPickFromGroup));
+    await tester.tap(find.text(ChatText.startGroupChatPickFromGroup));
     await tester.pumpAndSettle();
 
     // 长群名行已渲染，且未抛出布局溢出异常。

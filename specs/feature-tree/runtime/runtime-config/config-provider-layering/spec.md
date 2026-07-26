@@ -1,141 +1,136 @@
-# L3 组件：config-provider-layering
+# L3 Story：配置 Provider 分层 (`config-provider-layering`)
 
-## 功能定位
+> 所属能力：[`runtime-config`](../spec.md)
 
-统一定义服务配置加载与覆盖的分层模型，确保云侧当前环境集合（如 alpha、beta、gamma、prod）以同一逻辑运行，避免配置漂移与服务内重复实现。端侧 App 构建环境为 alpha、beta、gamma、prod；生产只有一个 App 包，灰度由应用市场分发策略、端侧上下文与云侧灰度策略共同决定。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-本节点作为 `runtime-config` 的核心子组件，承载配置来源优先级、环境识别、版本兼容校验与发布化接入约束。
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-## 目标能力
+## 1. 用户价值
+
+作为开发、测试或运维角色，
+我希望统一目录结构：`default/` + `alpha/` + `beta/` + `gamma/` + `prod/`，
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- “配置 Provider 分层”的输入、可观察主路径、失败语义以及与父能力的交接。
+- sys/ops 配置定义与覆盖。
+- alpha/beta/gamma/prod 环境约束。
+- topology 到 deploymentRef 的闭环。
+- process-domain 和 module-package 登记。
+- 第五环境或旧目录兼容。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 配置 Provider 分层
+
+- 统一目录结构：`default/` + `alpha/` + `beta/` + `gamma/` + `prod/`。
+
+<a id="req-002"></a>
+### REQ-002 统一目录结构：default/ + alpha/ + beta/ + gamma/ + prod/
 
 - 统一目录结构：`default/` + `alpha/` + `beta/` + `gamma/` + `prod/`
-- 统一覆盖顺序：默认配置 -> 环境配置 -> 环境变量覆盖
-- 显式环境识别：`APP_ENV=alpha|beta|gamma|prod`
-- 配置发布版本：`CONFIG_VERSION` 与 `IMAGE_VERSION` 兼容校验
-- 运行前校验：关键字段合法性与依赖连通性（如 Redis ping）
+- 统一覆盖顺序：默认配置 -> 环境配置 -> 环境变量覆盖。
 - 统一部署映射：`environments -> deploy process -> domains`
-- 拓扑一致性：`beta`、`gamma`、`prod` 的进程-领域映射保持一致
-- 端侧生产包唯一：不存在 `app-prod-gray`；生产灰度由云侧发布波次与策略表达，不单独占用环境枚举。
-- 统一 environment topology：当前环境集合共享 `environment_topology_manifest.yaml` schema，alpha 仅通过 mock boundary 差异化。
-- 统一环境包策略：app/service 包的 host allowlist、secret scope、dataSource 与 purity gate 由 manifest 驱动。
+- 统一 environment topology：受支持环境分别由 `<env>/runtime.yaml` 声明运行策略，workload 从各服务环境部署目录推导，alpha 仅通过 mock boundary 差异化。
+- 统一环境包策略：App/Service 包的 host allowlist、secret scope、dataSource 与 purity gate 由环境 runtime 驱动。
 - 统一自动化入口：环境打包、校验、健康检查与巡检统一经 `stackctl` 暴露机器可读报告。
-
-## 目录与版本示例（实施标准）
-
-运行时公共挂载目录（容器内）：
-
-```text
-/etc/qwq-config/
-  configs/
-    content-service/
-      default/config.yaml
-      alpha/config.yaml
-      beta/config.yaml
-      gamma/config.yaml
-      prod/config.yaml
-  releases/
-    config/
-      content-service/
-        v2026.02.27.1.yaml
-        v2026.02.28.0.yaml
-```
-
-实例运行时环境变量：
-- `SERVICE_NAME=content-service`
-- `APP_ENV=prod`
-- `CONFIG_VERSION=v2026.02.28.0`
-- `IMAGE_VERSION=1.8.0`
-- `CONFIG_ROOT=/etc/qwq-config`
-
-加载顺序（固定）：
-1. `${CONFIG_ROOT}/configs/${SERVICE_NAME}/default/config.yaml`
-2. `${CONFIG_ROOT}/configs/${SERVICE_NAME}/${APP_ENV}/config.yaml`
-3. `${CONFIG_ROOT}/quwoquan_service/services/${SERVICE_NAME}/${CONFIG_VERSION}.yaml`
-4. 环境变量覆盖（最高优先级）
-
-## Environment Topology Manifest
-
-统一环境真相源：`quwoquan_ops/environments/environment_topology_manifest.yaml`
-
-每个环境必须显式声明：
-
-- `publicBases.api / realtime / productOps / mediaAvatar / mediaImage / mediaVideo / mediaUpload`
-- `subnets.edge / media / service / data`
-- `mockBoundaryFlags`
-- `artifactPolicy.app / artifactPolicy.service`
-- `hostAllowlist`
-- `forbiddenHostTokens`
-- `rolloutStagePolicy`
-
-强制约束：
-
 - `alpha` 的 topology 字段必须完整，不能通过缺字段表达“简化环境”。
 - `prod` 只允许 `artifactPolicy.app.runtimeEnv=prod`，禁止任何 `prod-gray` 目录或枚举。
 - 本地 profile 与 host 端口必须来自 `quwoquan_ops/environments/local_env_port_manifest.yaml`，不得散落在脚本内作为官方默认值。
-
-## Packaging Contract
-
-环境包必须同时满足：
-
-- App env package 与 service env package 都携带 topology schema 版本、artifact policy 摘要与机器可读报告。
-- `verify_public_vs_upstream_url_contract.py` 阻断 public base / upstream base 混用。
-- `verify_environment_packaging_contract.py` 阻断环境枚举、dataSource、artifact 目录、host allowlist 漂移。
-- `verify_env_artifact_isolation.py` 阻断跨环境 host、mock/seed/debug 信息进入错误环境产物。
-- `verify_prod_package_purity.py` 阻断 prod 产物携带 alpha/mock/seed/debug/local/test 配置。
-
-## Stackctl Contract
-
-统一自动化入口：`quwoquan_ops/cli/stackctl.py`
-
-命令面至少覆盖：
-
-- `package`
-- `up` / `down` / `status`
-- `verify`
-- `health`
-- `inspect`
-- `doctor`
-- `repair`
-- `deploy`
-
-所有命令必须输出稳定的 JSON 报告，并将 Markdown 摘要归档到 `.qwq_output/env/<env>/runs/<run-id>/`。
-
-## 子节点
-
-- `env-file-secret-configcenter-provider`：配置来源抽象（env/file/secret/config center）
-- `env-overlay-config-release`（新增）：环境覆盖与配置发布化落地
-- `environment-process-domain-mapping`（新增）：部署进程与领域归属四态映射与门禁
-- `future-evolution-closed-loop`（新增）：C11~C13 未来演进闭环（spec/design/tasks/acceptance + 门禁草案）
-
-## 适用范围与约束
-
-适用：
-- 所有服务端 Go 服务
-- 本地开发、办公电脑集成联调、容器生产发布
-
-约束：
-- 不允许服务自行实现“私有加载器”
 - `prod` 环境必须显式设置 `APP_ENV=prod`
-- App 只构建 `alpha/beta/gamma/prod`；生产灰度不能通过不同 App 安装包表达。
-- 服务端配置目录只允许 `default/alpha/beta/gamma/prod`，禁止 `prod-gray` 目录。
-- 高风险配置（连接拓扑、鉴权）不支持热更新，仅支持灰度滚动切换
-- 版本快照配置文件不可变（immutable），仅允许新增版本，不允许覆盖已发布版本
-- 密钥字段禁止进入版本快照，必须通过 Secret/env 注入
-- 同一环境内一个 domain 仅允许归属一个部署进程
-- 部署拓扑变化不允许修改领域对外 API 路由契约
 
-## 验收概要
+<a id="req-003"></a>
+### REQ-003 必须metadata 配置定义、四环境覆盖与唯一 workload topology 的单轨闭环，且失败时不得写入成功事实
 
-- A1：三级覆盖模型行为一致且可测试
-- A3：配置发布可灰度、可回滚、可审计
-- A7：配置结构与运行时实现一致
-- A8：本地/集成/生产加载逻辑有自动化测试
-- A8：topology/packaging/stackctl 契约可由 gate 自动执行并产出证据
+- 系统必须metadata 配置定义、四环境覆盖与唯一 workload topology 的单轨闭环，且失败时不得写入成功事实。
 
-## 统一门禁矩阵（FF 配置发布契约）
+<a id="req-005"></a>
+### REQ-005 配置目录统一：default/alpha/beta/gamma/prod
 
-| 阶段命令 | 必过项（最小集） | 不通过处理 |
-|---|---|---|
-| `/prd` | spec.md 含目录/环境变量/拓扑 manifest / artifact policy / stackctl 命令面；acceptance.yaml 含对应验收项 | 阻断 FF，先补文档 |
-| `/design` | 每服务 default/alpha/beta/gamma/prod 目录齐；topology manifest 与 local port manifest 已落地；加载顺序与 APP_ENV 校验有测试；门禁脚本可执行 | 阻断 apply，先补实现与测试 |
-| `/commit` / submit-with-gate | strict gate 通过；CONFIG_VERSION 文件存在且可映射；配置-镜像兼容校验通过；prod purity / artifact isolation 通过 | 禁止提交入库 |
+- 配置目录统一：default/alpha/beta/gamma/prod。
+- 覆盖规则统一：default -> APP_ENV -> env var。
+- 生产挂载统一：`CONFIG_ROOT=/etc/qwq-config`
+- `APP_ENV` 仅允许 `alpha|beta|gamma|prod`
+- 版本配置文件不可变，发布后禁止覆盖写入。
+
+<a id="req-006"></a>
+### REQ-006 四环境配置与拓扑无漂移
+
+- 删除输出目录后仍可从受控真相源重建快照。
+
+<a id="req-007"></a>
+### REQ-007 环境集合严格为 alpha/beta/gamma/prod；dev、integration、prod-gray 不得作为环境目录或运行值
+
+- 环境集合严格为 `alpha/beta/gamma/prod`；`dev`、`integration`、`prod-gray` 不得作为环境目录或运行值。
+- secret 只能引用，不得写明文。
+- UI 动态配置归对象级 `ui_config.yaml`，不得混入 `sys.*`/`ops.*`。
+- workload 的实际部署入口必须与 topology 的 `deploymentRef` 闭环。
+
+<a id="req-008"></a>
+### REQ-008 热更新仅适用于低风险配置字段，禁止覆盖高风险连接/鉴权类字段
+
+- 热更新仅适用于低风险配置字段，禁止覆盖高风险连接/鉴权类字段。
+- 公共库抽象必须保持现有服务启动语义兼容。
+- 任何演进项必须保持 `default -> env -> version -> env vars` 基线不变。
+
+## 4. 契约引用
+
+- canonical：`APP_ENV`
+- canonical：`CONFIG_VERSION`
+- canonical：`quwoquan_service/control-plane/platform-ops/config/schema.yaml`
+- canonical：`quwoquan_service/services/product-ops-service/config/schema.yaml`
+- canonical：`quwoquan_ops/environments`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 配置 Provider 分层
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“配置 Provider 分层”对应的公开行为。
+- THEN 统一目录结构：`default/` + `alpha/` + `beta/` + `gamma/` + `prod/`。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+<a id="gwt-004"></a>
+### GWT-004 四环境配置与拓扑无漂移
+
+- GIVEN 从受控配置真相源生成任一环境的部署快照。
+- WHEN 删除可重建输出后重新生成 alpha、beta、gamma 与 prod 快照。
+- THEN 每个环境的配置、deploymentRef 与 workload topology 一致，且不产生第五环境或 prod-gray。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-config`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 配置 Provider 分层 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“配置 Provider 分层”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+<a id="open-003"></a>
+<a id="open-004"></a>
+### OPEN-004 四环境配置与拓扑无漂移
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：删除输出目录后仍可从受控真相源重建快照。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。

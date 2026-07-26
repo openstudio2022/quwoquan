@@ -10,6 +10,7 @@ import (
 	"quwoquan_service/internal/metadata/ast"
 	"quwoquan_service/internal/metadata/graph"
 	"quwoquan_service/internal/metadata/load"
+	"quwoquan_service/internal/testsupport/contractsview"
 )
 
 func TestCallerVersionPreconditionIsLimitedToSnapshotOverwriteOperations(
@@ -17,7 +18,7 @@ func TestCallerVersionPreconditionIsLimitedToSnapshotOverwriteOperations(
 ) {
 	t.Parallel()
 
-	metadataDir := filepath.Join("..", "..", "..", "contracts", "metadata")
+	metadataDir := contractsview.Build(t)
 	catalog, err := load.Load(metadataDir)
 	if err != nil {
 		t.Fatalf("load metadata: %v", err)
@@ -33,7 +34,6 @@ func TestCallerVersionPreconditionIsLimitedToSnapshotOverwriteOperations(
 	want := []string{
 		"circle.circle_file.UpdateCircleFile",
 		"circle.circle_group.UpdateCircleGroup",
-		"ops.config_layer.UpdateServiceConfig",
 		"ops.experiment.UpdateExperimentRollout",
 	}
 	if !slices.Equal(got, want) {

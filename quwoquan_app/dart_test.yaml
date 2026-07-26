@@ -11,10 +11,35 @@ tags:
   orientation:
   comment:
   like:
+  report:
   ops:
   event:
   replay:
   environment-smoke:
   home-rec:
   video-playback:
+  media-publication:
+  photo:
+  video:
+  search:
+  tag:
+  gamma:
+  circle:
+  user:
+  user-profile:
+  settings:
+  account-closure:
+  gamma-prod:
+  visual:
   flaky:
+  provider:
+  assistant:
+  model:
+  weather:
+  finance:
+  one-tap-login:
+  sms:
+  social-login:
+  location:
+  rtc:
+  b10:

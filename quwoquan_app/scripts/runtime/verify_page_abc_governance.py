@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-页面级 A/B/C 治理扫描（与 verify_page_matrix_scan_complete 磁盘集一致，见 scripts/page_disk_scan_paths.py）。
+页面级 A/B/C 治理扫描（与 page object contract 共用磁盘扫描集，见
+quwoquan_app/scripts/runtime/page_disk_scan_paths.py）。
 
-规范：specs/gates/page_abc_governance.md
-白名单：specs/gates/page_abc_governance_allowlist.yaml
+规格：feature-tree `page-horizontal-quality` Story。
+默认零豁免；只有显式传入 `--allowlist PATH` 时才读取带 owner、原因和失效条件的策略例外。
 
 退出码：
   0 — 成功（报告模式或未启用的 enforce 无未豁免违规）
@@ -12,6 +13,8 @@
 
 CI 可选环境变量（由 gate_repo.sh 读取）：GATE_PAGE_ABC_ENFORCE → 映射为 --enforce-a 等。
 """
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md#gwt-001
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md#gwt-002
 
 from __future__ import annotations
 
@@ -29,8 +32,6 @@ except ImportError:
 from page_disk_scan_paths import matrix_disk_scan_paths
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_ALLOWLIST = ROOT / "specs/gates/page_abc_governance_allowlist.yaml"
-
 APP = ROOT / "quwoquan_app"
 LIB = APP / "lib"
 
@@ -222,7 +223,7 @@ def main() -> int:
         type=Path,
         default=None,
         metavar="PATH",
-        help=f"YAML allowlist (default: {DEFAULT_ALLOWLIST})",
+        help="optional YAML policy exceptions; omitted means zero exemptions",
     )
     ap.add_argument("--enforce-a", action="store_true", help="exit 1 if unexempted A hits")
     ap.add_argument("--enforce-b", action="store_true", help="exit 1 if unexempted B hits")
@@ -239,11 +240,11 @@ def main() -> int:
         return 2
 
     valid_set = frozenset(paths)
-    allow_path = args.allowlist if args.allowlist is not None else DEFAULT_ALLOWLIST
-    if args.allowlist is not None and not allow_path.is_file():
+    allow_path = args.allowlist
+    if allow_path is not None and not allow_path.is_file():
         print(f"verify_page_abc_governance: allowlist not found: {allow_path}", file=sys.stderr)
         return 2
-    exempt, err = load_allowlist(allow_path if allow_path.is_file() else None, valid_set)
+    exempt, err = load_allowlist(allow_path, valid_set)
     if err:
         return 2
 
@@ -269,7 +270,7 @@ def main() -> int:
     if args.json:
         payload = {
             "summary": summary,
-            "allowlist": str(allow_path) if allow_path.is_file() else None,
+            "allowlist": str(allow_path) if allow_path is not None else None,
             "files": [],
         }
         for r in rows:

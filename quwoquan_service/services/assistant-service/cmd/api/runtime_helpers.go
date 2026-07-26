@@ -12,21 +12,9 @@ import (
 
 	rtgov "quwoquan_service/runtime/governance"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/runtimeconfig"
-	"quwoquan_service/services/assistant-service/internal/runtimewiring"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimewiring"
 )
-
-func providerAPIKey(cfg providerCfg) (string, error) {
-	envKey := strings.TrimSpace(cfg.APIKeyEnv)
-	if envKey == "" {
-		return "", fmt.Errorf("provider api_key_env is required")
-	}
-	key := strings.TrimSpace(os.Getenv(envKey))
-	if key == "" {
-		return "", fmt.Errorf("provider api key env %s is empty", envKey)
-	}
-	return key, nil
-}
 
 func providerTimeout(ms int) time.Duration {
 	if ms <= 0 {
@@ -55,10 +43,6 @@ func searchHTTPClient(ms int) *http.Client {
 		&http.Client{Timeout: timeout, Transport: transport},
 		rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default()),
 	)
-}
-
-func requiresRealProvider(appEnv string) bool {
-	return appEnv == "beta" || appEnv == "gamma" || appEnv == "prod"
 }
 
 func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {

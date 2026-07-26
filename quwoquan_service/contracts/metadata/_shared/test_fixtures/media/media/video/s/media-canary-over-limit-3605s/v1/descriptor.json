@@ -1,0 +1,22 @@
+{
+  "assetId": "media-canary-over-limit-3605s",
+  "assetVersion": 1,
+  "coverPublicSliceKey": "media/video/s/media-canary-over-limit-3605s/v1/cover.webp",
+  "coverSha256": "sha256:de873a0665a703570cc441209b2291067738d000e92ef62cfa6d7ca131e1ac71",
+  "coverSizeBytes": 3996,
+  "durationMs": 3605000,
+  "expectedProcessingStatus": "rejected",
+  "height": 960,
+  "probeHash": "sha256:95be94e5c9993d45d147a989a6891181550f966bf111e25908de2f12def59a9b",
+  "processorProfile": "media_canary_progressive_mp4",
+  "schema": "quwoquan.content.media_canary_descriptor",
+  "sha256": "sha256:5ad86f7e6027a667800a93da49d81e24fa6e9fbd6f4a81c123a3b1aff3609fb9",
+  "sizeBytes": 93192106,
+  "videoAudioCodec": "aac",
+  "videoCodec": "h264",
+  "videoContainer": "mp4",
+  "videoFastStart": true,
+  "videoKeyframeIntervalMs": 2000,
+  "videoPublicSliceKey": "media/video/s/media-canary-over-limit-3605s/v1/source.mp4",
+  "width": 540
+}

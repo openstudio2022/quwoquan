@@ -122,7 +122,55 @@ class AppLinkTemplates {
   }
 
 
+  /// Resolves only metadata-registered canonical object types. Empty means fail-closed.
+  static String citationInternalDeepLink(String objectTypeRef, String objectId) {
+    final id = objectId.trim();
+    if (id.isEmpty) return '';
+    switch (objectTypeRef.trim()) {
+      case 'chat.conversation':
+        return chatAppDeepLink(id);
+      case 'circle.circle':
+        return circleAppDeepLink(id);
+      case 'content.post':
+        return postAppDeepLink(id);
+      case 'entity.homepage':
+        return entityHomepageAppDeepLink(id);
+      case 'user.profile':
+        return userAppDeepLink(id);
+      default:
+        return '';
+    }
+  }
+
+  /// Resolves a generated GoRouter location for an internal CitationDestination.
+  static String citationInternalRoutePath(String objectTypeRef, String objectId) {
+    final id = objectId.trim();
+    if (id.isEmpty) return '';
+    switch (objectTypeRef.trim()) {
+      case 'chat.conversation':
+        return _fillRoutePathTemplate('/chat/{id}', <String, String>{'id': id});
+      case 'circle.circle':
+        return _fillRoutePathTemplate('/circle/{id}', <String, String>{'id': id});
+      case 'content.post':
+        return _fillRoutePathTemplate('/works/browser/{workId}', <String, String>{'workId': id});
+      case 'entity.homepage':
+        return _fillRoutePathTemplate('/homepages/{id}', <String, String>{'id': id});
+      case 'user.profile':
+        return _fillRoutePathTemplate('/user/{username}', <String, String>{'username': id});
+      default:
+        return '';
+    }
+  }
+
   static String _fillPathTemplate(String template, Map<String, String> params) {
+    var out = template;
+    params.forEach((key, value) {
+      out = out.replaceAll('{$key}', Uri.encodeComponent(value));
+    });
+    return out;
+  }
+
+  static String _fillRoutePathTemplate(String template, Map<String, String> params) {
     var out = template;
     params.forEach((key, value) {
       out = out.replaceAll('{$key}', Uri.encodeComponent(value));

@@ -1,0 +1,67 @@
+kind: aggregate_root
+description: 面向其他上下文公开的用户身份、资料、可见性和退役生命周期聚合。
+identity:
+  fields:
+  - subAccountId
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: account
+  on_delete: restrict
+  reference_fields:
+  - userId
+  target_object: user.UserAccount
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: callerRingtone
+  on_delete: detach
+  reference_fields:
+  - callerRingtoneId
+  target_object: content.MediaAsset
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: avatarMediaAsset
+  on_delete: detach
+  reference_fields:
+  - avatarMediaAssetId
+  target_object: content.MediaAsset
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: backgroundMediaAsset
+  on_delete: detach
+  reference_fields:
+  - backgroundMediaAssetId
+  target_object: content.MediaAsset
+capabilities:
+- commandable
+- queryable
+- idempotent_commands
+business_rules:
+- accountId 与 personaId 创建后不可变且 userHandle 全局唯一
+- 公开资料只属于 Persona，UserAccount 不保存可写资料副本
+- 一个 Account 至少保留一个 active Persona，primary 切换必须原子校验
+- retired 为终态且跨上下文只保留 tombstone identity
+- profile sync 只应用明确允许继承且未被 override 的字段
+- avatar/background 只保存 MediaAsset identity，delivery URL 不属于权威状态
+- 每个 command 必须以服务端内部 version CAS 原子提交 state、receipt 与 outbox
+lifecycle:
+  states:
+  - active
+  - inactive
+  - retired
+  optimistic_concurrency: version
+  idempotency: command_receipt

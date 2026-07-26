@@ -1,25 +1,67 @@
-# L4 对象任务：go-integration（与 Go 业务服务集成）
+# L3 Story：go-integration（与 Go 业务服务集成） (`go-integration`)
 
-## 功能说明
+> 所属能力：[`recommendation-service`](../spec.md)
 
-- **契约**：ModelPredictRequest 增加 Scenario 字段（或 Context 中携带）；Go 与 Python 双端一致。
-- **Go 客户端**：HTTPModelServiceClient 实现 ModelServiceClient；请求 /score 时传入 scenario（content-service 传 content_feed）；超时与重试可配置。
+> Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
+
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
+
+## 1. 用户价值
+
+作为消费推荐的用户或策略运营者，
+我希望CascadeScorer 在模型服务不可用或超时时回退到 RuleScorer；content-service 通过配置启用/禁用模型调用，
+从而获得可解释且受治理的推荐结果。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- “go-integration（与 Go 业务服务集成）”的输入、可观察主路径、失败语义以及与父能力的交接。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 go-integration（与 Go 业务服务集成）
+
 - **兜底**：CascadeScorer 在模型服务不可用或超时时回退到 RuleScorer；content-service 通过配置启用/禁用模型调用。
 
-## 实现要点
+<a id="req-002"></a>
+### REQ-002 兜底：CascadeScorer 在模型服务不可用或超时时回退到 RuleScorer；content-service 通过配置启用/禁用模型调用
 
-- scorer.go 中 ModelPredictRequest 增加 Scenario；RemoteModelScorer 已通过 client.Predict 调用，无需改接口签名，仅请求体扩展。
-- content-service config 增加 rec_model_service.url、timeout、enabled；main.go 组装 HTTPModelServiceClient 与 CascadeScorer。
-- 可选：content_feed 的 Go 本地 leaves 推理路径，与 Remote 二选一由配置控制。
+- **兜底**：CascadeScorer 在模型服务不可用或超时时回退到 RuleScorer；content-service 通过配置启用/禁用模型调用。
+- 模型服务不可用时 CascadeScorer 回退，请求不失败。
 
-## 约束
+## 4. 契约引用
 
-- 不破坏现有 RuleScorer 与 Engine 行为；模型关闭时行为与当前一致。
-- 契约变更需双端同步（Go 请求体、Python 解析）。
+- 父能力公开契约：[`L2 spec`](../spec.md)。
 
-## 验收标准
+## 5. 验收场景
 
-- A1：content-service 启用 rec_model_service 时，GetFeed 使用模型打分；关闭时使用 RuleScorer。
-- A3：模型服务不可用时 CascadeScorer 回退，请求不失败。
-- A7：契约与 Python 端一致。
-- A8：HTTPModelServiceClient 与 CascadeScorer 有单元或集成测试。
+<a id="gwt-001"></a>
+### GWT-001 go-integration（与 Go 业务服务集成）
+
+- GIVEN 消费推荐的用户或策略运营者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“go-integration（与 Go 业务服务集成）”对应的公开行为。
+- THEN **兜底**：CascadeScorer 在模型服务不可用或超时时回退到 RuleScorer；content-service 通过配置启用/禁用模型调用。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`recommendation-service`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 go-integration（与 Go 业务服务集成） 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“go-integration（与 Go 业务服务集成）”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

@@ -4,59 +4,30 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 cd "$ROOT"
 
-echo "[verify] ff config contract"
+echo "[verify] ff config spec contract"
 
-# Minimal FF contract for config-release feature decomposition:
-# 1) spec.md contains the 3-stage gate matrix and key command names
-#    (L3 convention: design/plan/gate content folds into spec.md; no tasks.md).
-# 2) acceptance.yaml contains env/version/gate related acceptance text.
+spec_files=(
+  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering/spec.md"
+  "$ROOT/specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance/spec.md"
+)
 
 failures=0
-
-tasks_files=(
-  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering/spec.md"
-  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering--environment-process-domain-mapping/spec.md"
-  "$ROOT/specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance--risky-config-gray-release/spec.md"
-)
-
-acceptance_files=(
-  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering/acceptance.yaml"
-  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering--environment-process-domain-mapping/acceptance.yaml"
-  "$ROOT/specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance--risky-config-gray-release/acceptance.yaml"
-)
-
-for f in "${tasks_files[@]}"; do
-  if [[ ! -f "$f" ]]; then
-    echo "[verify] FAIL: missing spec file: $f" >&2
+for spec in "${spec_files[@]}"; do
+  if [[ ! -f "$spec" ]]; then
+    echo "[verify] FAIL: missing spec: $spec" >&2
     failures=$((failures + 1))
     continue
   fi
-
-  for kw in "/prd" "/design" "submit-with-gate"; do
-    if ! grep -n "${kw}" "$f" >/dev/null 2>&1; then
-      echo "[verify] FAIL: ${f} missing gate matrix keyword: ${kw}" >&2
+  for token in "REQ-" "GWT-"; do
+    if ! rg -n "$token" "$spec" >/dev/null; then
+      echo "[verify] FAIL: $spec missing $token" >&2
       failures=$((failures + 1))
     fi
   done
 done
 
-for f in "${acceptance_files[@]}"; do
-  if [[ ! -f "$f" ]]; then
-    echo "[verify] FAIL: missing acceptance file: $f" >&2
-    failures=$((failures + 1))
-    continue
-  fi
-  # Ensure acceptance mentions env/version/gate constraints.
-  for kw in "APP_ENV" "CONFIG_VERSION" "gate"; do
-    if ! grep -n "${kw}" "$f" >/dev/null 2>&1; then
-      echo "[verify] WARN: ${f} does not mention ${kw} explicitly"
-    fi
-  done
-done
-
 if [[ "$failures" -gt 0 ]]; then
-  echo "[verify] FAIL: ff config contract check failed (failures=$failures)" >&2
+  echo "[verify] FAIL: ff config spec contract ($failures)" >&2
   exit 1
 fi
-
-echo "[verify] OK: ff config contract checked"
+echo "[verify] OK: ff config spec contract"

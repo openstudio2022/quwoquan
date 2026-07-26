@@ -32,7 +32,13 @@ public class PlatformViewVideoPlayer extends VideoPlayer {
       @NonNull MediaItem mediaItem,
       @NonNull VideoPlayerOptions options,
       @NonNull ExoPlayerProvider exoPlayerProvider) {
-    super(events, mediaItem, options, /* surfaceProducer */ null, exoPlayerProvider);
+    super(
+        events,
+        mediaItem,
+        options,
+        /* surfaceProducer= */ null,
+        exoPlayerProvider,
+        /* rendererMode= */ "platform_view");
   }
 
   /**

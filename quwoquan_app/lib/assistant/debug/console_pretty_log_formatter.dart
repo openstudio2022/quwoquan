@@ -31,12 +31,12 @@ class ConsolePrettyLogFormatter {
     return rendered.map((line) => '$prefix$line').toList(growable: false);
   }
 
-  static dynamic normalizeJsonLikeValue(
-    dynamic value, {
+  static Object? normalizeJsonLikeValue(
+    Object? value, {
     Set<String> secretKeys = const <String>{'authorization'},
   }) {
     if (value is Map) {
-      final normalized = <String, dynamic>{};
+      final normalized = <String, Object?>{};
       for (final entry in value.entries) {
         final key = entry.key.toString();
         if (secretKeys.contains(key.toLowerCase())) {
@@ -65,7 +65,7 @@ class ConsolePrettyLogFormatter {
     return value;
   }
 
-  static dynamic _normalizeValue(Object? value) {
+  static Object? _normalizeValue(Object? value) {
     if (value == null) {
       return '<empty>';
     }

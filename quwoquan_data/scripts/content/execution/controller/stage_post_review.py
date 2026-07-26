@@ -110,10 +110,9 @@ def _review_gate_is_stale(ctx: ExecutionContext, ref: str, gate_path: Path) -> b
 
 def _content_ref_types(ctx: ExecutionContext, refs: list[str]) -> dict[str, list[str]]:
     from content.post import object_index as content_object
-    from content.execution.workspace import load_execution_manifest
-    execution_content_type = str(
-        load_execution_manifest(ctx.execution_id).get("contentType") or ""
-    )
+    from content.execution.identity import parse_execution_id
+
+    execution_content_type = parse_execution_id(ctx.execution_id).content_type.value
     by_type: dict[str, list[str]] = {}
     for ref in refs:
         coords = content_object.content_coords(ctx.execution_id, ref) or {}
@@ -308,6 +307,7 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
             all_green = False
             stale_review_refs.append(ref)
     initial_issues: list[str] = []
+    initial_issue_records: list[DataIssue] = []
     review_refs = active_refs
     if all_green:
         # review gate 已绿时本分支跳过 handle_post 的 _stage_review，而 media_check
@@ -316,8 +316,15 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         # 图像安全体检（CV：人脸/水印/OCR/去重），保证发布门有真实 media_check 证据。
         from content.source.media.check import check_images
         check_images(ctx.execution_id, list(active_refs), allow_needs_review=True)
-        initial_issues = _materialize_reviewed_refs(ctx, active_refs)
+        from content.execution.controller.post_independent_review import (
+            run_post_independent_reviews,
+        )
+
+        initial_issues.extend(_materialize_reviewed_refs(ctx, active_refs))
         initial_issues.extend(_post_exit_issues(ctx, active_refs))
+        independent_records = run_post_independent_reviews(ctx, active_refs)
+        initial_issue_records.extend(independent_records)
+        initial_issues.extend(str(issue) for issue in independent_records)
         release_short_refs = _release_base_draft_shortfall_refs(
             ctx,
             active_refs=active_refs,
@@ -334,10 +341,12 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
                 StageStatus.DONE,
                 "existing review + materialized packages still pass current gates",
             )
-        initial_issue_records = _post_review_issue_records(
-            ctx,
-            initial_issues,
-            refs=active_refs,
+        initial_issue_records.extend(
+            _post_review_issue_records(
+                ctx,
+                initial_issues,
+                refs=active_refs,
+            )
         )
         matched_refs, _issue_map = _post_review_retry_refs(ctx, initial_issue_records)
         if not matched_refs:
@@ -352,6 +361,8 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         review_refs = [ref for ref in matched_refs if ref in active_refs]
     elif stale_review_refs:
         review_refs = sorted(set(stale_review_refs))
+    # 控制器路径必须拿到全部 per-ref review gate 再走 ReAct 修复链；
+    # allow_partial=False 会在任一 ref 失败时 SystemExit，绕过回退重写机制。
     handle_post(
         PostStageRequest(
             execution_id=ctx.execution_id,
@@ -360,12 +371,18 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
             ),
             stage=PostStage.REVIEW,
             refs=tuple(review_refs),
-            allow_partial=False,
+            allow_partial=True,
             materialize=True,
         )
     )
+    from content.execution.controller.post_independent_review import (
+        run_post_independent_reviews,
+    )
+
     issues = _materialize_reviewed_refs(ctx, active_refs)
     issues.extend(_post_exit_issues(ctx, active_refs))
+    independent_records = run_post_independent_reviews(ctx, active_refs)
+    issues.extend(str(issue) for issue in independent_records)
     release_short_refs = _release_base_draft_shortfall_refs(
         ctx,
         active_refs=active_refs,
@@ -409,8 +426,10 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         issues.extend([str(issue) for issue in (execution_gate.get("issues") or [])])
     if issues:
         fb = _aggregate_review_fallback(ctx, refs=set(active_refs)) or ExecutionStage.POST_COMPOSE
+        issue_records = list(independent_records)
+        issue_records.extend(_post_review_issue_records(ctx, issues, refs=active_refs))
         return StageResult(ExecutionStage.POST_REVIEW, AUTO, StageStatus.FAILED,
                            "发布门未过:\n  - " + "\n  - ".join(issues[:10]),
                            fallback_stage=fb,
-                           issue_records=_post_review_issue_records(ctx, issues, refs=active_refs))
+                           issue_records=issue_records)
     return StageResult(ExecutionStage.POST_REVIEW, AUTO, StageStatus.DONE, "review + materialize approved，发布门通过")

@@ -40,7 +40,8 @@ import core.paths as _paths_mod  # noqa: E402
 from content.execution.runtime_state import write_execution_runtime_state  # noqa: E402
 from content.post.article.evidence_bundle import public_byline_label  # noqa: E402
 from content.post.article.draft_io import write_agent_draft  # noqa: E402
-from content.review.ledger import load_ledger, KIND_IMAGE  # noqa: E402
+from core.control_types import ReviewItemKind  # noqa: E402
+from content.review.ledger import load_ledger  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from content.execution.planning.brief import resolve_compose_brief  # noqa: E402
 from content.post.article.route_analysis import analyze_route_ref  # noqa: E402
@@ -53,7 +54,7 @@ from support.helpers.agent_draft_kit import route_article  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 from governance.creators.candidates.store import CandidateRepository  # noqa: E402
 
-TASK = "20260711--travel-article-hitl-execution--cn-sichuan--canary-001"
+TASK = "20260711--travel-article-hitl-execution--test-region-b--pilot-001"
 REF = "川西大环线慢游_跟团_夏"
 ENTITIES = ["九寨沟", "稻城亚丁", "色达", "新都桥"]
 MINED = "洛绒牛场"
@@ -198,7 +199,7 @@ def test_ledger_written_and_copied():
     # 账本落内容对象 5.review（与成品同处对象根，promote 发布门据此过滤）
     copied = read_json(post_dir / "5.review" / "review_ledger.json")
     assert copied["ref"] == REF
-    assert any(i["kind"] == KIND_IMAGE for i in copied["images"])
+    assert any(i["kind"] == ReviewItemKind.IMAGE.value for i in copied["images"])
 
 
 def test_mined_entity_enters_review_without_placeholder_homepage():

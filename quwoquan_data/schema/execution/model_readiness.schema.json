@@ -13,7 +13,7 @@
   "properties": {
     "executionId": {
       "type": "string",
-      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
     "ready": {
       "const": true
@@ -40,6 +40,7 @@
       "required": [
         "model",
         "modelFamily",
+        "modelParameters",
         "startup"
       ],
       "additionalProperties": false,
@@ -57,6 +58,9 @@
             "grok"
           ]
         },
+        "modelParameters": {
+          "$ref": "#/$defs/modelParameters"
+        },
         "startup": {
           "type": "object",
           "required": [
@@ -67,6 +71,7 @@
             "httpStatus",
             "runtime",
             "model",
+            "modelParameters",
             "cacheHit"
           ],
           "additionalProperties": false,
@@ -100,10 +105,26 @@
               "type": "string",
               "minLength": 1
             },
+            "modelParameters": {
+              "$ref": "#/$defs/modelParameters"
+            },
             "cacheHit": {
               "type": "boolean"
             }
           }
+        }
+      }
+    },
+    "modelParameters": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "value": {"type": "string", "minLength": 1}
         }
       }
     }

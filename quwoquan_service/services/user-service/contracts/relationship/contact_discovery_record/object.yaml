@@ -1,0 +1,48 @@
+kind: aggregate_root
+description: '通讯录发现记录。
+
+  OwnerAccount 上传已哈希的通讯录手机号，平台匹配已注册用户的 SubAccount。
+
+  结果只暴露 subAccountId，不泄露 OwnerAccount 关联（隐私隔离）。
+
+  记录有 72 小时自动过期（隐私合规），到期后自动删除。
+
+  '
+identity:
+  fields:
+  - id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:N
+  consistency: eventual
+  kind: reference
+  name: matchedPersonas
+  on_delete: retain
+  reference_fields:
+  - matchedSubAccountIds
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: ownerAccount
+  on_delete: cascade
+  reference_fields:
+  - ownerAccountId
+  target_object: user.UserAccount
+business_rules:
+- description: 匹配结果只返回 subAccountId，不含 ownerId/userId
+  id: result_isolation
+- description: 每个 OwnerAccount 每 24 小时最多触发 5 次发现
+  id: rate_limit
+- description: 单次上传最多 5000 条哈希手机号
+  id: batch_size_limit
+lifecycle:
+  cleanup_cron: 0 * * * *
+  cleanup_strategy: scheduled_job
+  ttl_hours: 72

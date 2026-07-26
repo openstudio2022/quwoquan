@@ -1,4 +1,0 @@
-service:
-  name: tag-service
-  http:
-    addr: ":18092"

@@ -32,10 +32,10 @@ CREATED_AT_PUBLISHED_FALLBACK = re.compile(
 )
 
 READ_PATH_FILES = [
-    ROOT / "quwoquan_app/lib/ui/content/post_view_projection.dart",
+    ROOT / "quwoquan_app/lib/ui/content/content/post_view_projection.dart",
     ROOT / "quwoquan_app/lib/cloud/runtime/models/content_post_detail_payload.dart",
     ROOT
-    / "quwoquan_service/contracts/metadata/content/post/projections/content_post_detail_wire.yaml",
+    / "quwoquan_service/services/content-service/contracts/content/post/projections/content_post_detail_wire.yaml",
 ]
 
 FORBIDDEN_READ_WIRE = (
@@ -56,21 +56,21 @@ def _non_comment_lines(text: str) -> str:
 
 ARTICLE_DETAIL_VIEW = ROOT / "quwoquan_app/lib/ui/content/models/article_detail_view.dart"
 POST_FIELDS = (
-    ROOT / "quwoquan_service/contracts/metadata/content/post/fields.yaml"
+    ROOT / "quwoquan_service/services/content-service/contracts/content/post/fields.yaml"
 )
 ARTICLE_POST_PROJECTION = (
-    ROOT / "quwoquan_service/contracts/metadata/content/post/projections/article_post.yaml"
+    ROOT / "quwoquan_service/services/content-service/contracts/content/post/projections/article_post.yaml"
 )
 MOCK_DISCOVERY_WIRE_MAP = (
     ROOT / "quwoquan_app/lib/cloud/services/content/feed_item_discovery_wire_map.dart"
 )
 CONTENT_SCENARIO_FIXTURES = [
     ROOT
-    / "quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json",
+    / "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json",
     ROOT
-    / "quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.lite.json",
+    / "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.lite.json",
     ROOT
-    / "quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
+    / "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.gamma-curated.json",
 ]
 
 DEAD_ARTIFACTS = [
@@ -87,7 +87,7 @@ DEAD_ARTIFACTS = [
     ROOT / "quwoquan_app/lib/ui/content/pages/photo_detail_page.dart",
     ROOT / "quwoquan_app/lib/ui/content/pages/video_detail_page.dart",
     ROOT
-    / "quwoquan_service/contracts/metadata/content/post/article_document_schema.yaml",
+    / "quwoquan_service/services/content-service/contracts/content/post/article_document_schema.yaml",
 ]
 
 

@@ -180,7 +180,13 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                   ),
                   onAssistant: (ref) =>
                       GlobalAssistantLauncher.open(context, ref),
-                  onShare: () => AppToast.show(context, UITextConstants.share),
+                  // 分享走真实统一分享面板；未发布/下线主页提示不可分享。
+                  onShare: _canShare
+                      ? widget.onShare
+                      : () => AppToast.show(
+                          context,
+                          UITextConstants.homepageShareUnavailable,
+                        ),
                   onMore: _hasMoreActions
                       ? () => _showMoreActions(context)
                       : null,
@@ -287,7 +293,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           .isNotEmpty)
         (detail?.address ?? widget.initialSummary?.address ?? '').trim(),
     ].join(' · ');
-    final typeLabel = _typeLabel(reference?.homepageType ?? '');
+    final typeLabel = homepageTypeLabel(reference?.homepageType ?? '');
     final identitySubtitle = <String>[
       if (typeLabel.trim().isNotEmpty) typeLabel.trim(),
       if (locationLine.trim().isNotEmpty) locationLine.trim(),
@@ -421,7 +427,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     return (_reference?.subtitle ?? '').trim();
   }
 
-  /// 实体首屏 CTA：主=关注/已关注，次=发记录（高保口径 #3 实体主动作是关注）。
+  /// 实体首屏 CTA：可到访地点主动作=想去，其余主页主动作=关注；次动作=发记录。
   /// 真相源下沉到共享 [ObjectActionBar]，主/次按钮 token 与用户主页 `ProfileActionBar` 同源。
   Widget _buildEntityActionBar(bool isDark) {
     final separator = AppColors.iosSeparator(
@@ -429,13 +435,23 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     ).withValues(alpha: isDark ? 0.22 : 0.14);
     final neutralFill = AppColors.iosProfileSurface(context);
     final neutralForeground = AppColors.iosLabel(context);
-    final isFollowing = widget.detail?.viewerFollowsHomepage ?? false;
+    final usesWishlistIntent = widget.wishlistState != null;
+    final primaryIntentSelected = usesWishlistIntent
+        ? widget.wishlistState!
+        : (widget.detail?.viewerFollowsHomepage ?? false);
+    final primaryIntentLabel = usesWishlistIntent
+        ? (primaryIntentSelected
+              ? UITextConstants.homepageWishlistedAction
+              : UITextConstants.homepageWishlistAction)
+        : (primaryIntentSelected
+              ? UITextConstants.following
+              : UITextConstants.follow);
     final reference = _reference;
     return ObjectActionBar(
       actions: <ObjectAction>[
-        isFollowing
+        primaryIntentSelected
             ? ObjectAction(
-                label: UITextConstants.following,
+                label: primaryIntentLabel,
                 icon: CupertinoIcons.check_mark,
                 onPressed: widget.onToggleFollow,
                 style: ProfileIosActionStyle.outlined,
@@ -444,8 +460,10 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                 borderColor: separator,
               )
             : ObjectAction(
-                label: UITextConstants.follow,
-                icon: CupertinoIcons.add,
+                label: primaryIntentLabel,
+                icon: usesWishlistIntent
+                    ? CupertinoIcons.location
+                    : CupertinoIcons.add,
                 onPressed: widget.onToggleFollow,
                 style: ProfileIosActionStyle.filled,
               ),
@@ -460,6 +478,16 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           foregroundColor: neutralForeground,
           borderColor: separator,
         ),
+        if (_canMessageOwner)
+          ObjectAction(
+            label: UITextConstants.profileDirectMessage,
+            icon: CupertinoIcons.chat_bubble,
+            onPressed: widget.onMessageOwner,
+            style: ProfileIosActionStyle.outlined,
+            backgroundColor: neutralFill,
+            foregroundColor: neutralForeground,
+            borderColor: separator,
+          ),
       ],
     );
   }

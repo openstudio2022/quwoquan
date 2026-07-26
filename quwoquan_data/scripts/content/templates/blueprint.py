@@ -6,7 +6,6 @@ from typing import Any
 
 REQUIRED_BLUEPRINT_FIELDS = [
     "templateId",
-    "version",
     "subject",
     "vertical",
     "intent",
@@ -71,10 +70,10 @@ def blueprint_angle_leaf(blueprint: dict[str, Any]) -> str:
 
 
 def canonical_blueprint_relpath(blueprint: dict[str, Any]) -> str | None:
-    """由蓝图内容确定性推导出与标签系统同构的相对路径（相对 blueprints 根）。
+    """由蓝图内容确定性推导出与标签系统同构的仓库相对路径。
 
-    - entity 蓝图：``Entity/{subject.type}/{角度}.tmpl.yaml``（与 ``control_plane/governance/taxonomy/Entity/{domain}/{type}`` 同构，角度落叶子文件名）。
-    - topic  蓝图：``Format/内容角度/{subject.type 末段}/{角度}.tmpl.yaml``（与 ``control_plane/governance/taxonomy/Format/内容角度`` 同构）。
+    carrier 先形成 ``{carrier}/blueprints`` 物理隔离，后半段与 taxonomy
+    同构；不再要求蓝图复制协议版本字段。
 
     返回 None 表示该蓝图缺 subject/templateId 无法推导（由其它 required 校验兜底报错）。
     """
@@ -84,17 +83,22 @@ def canonical_blueprint_relpath(blueprint: dict[str, Any]) -> str | None:
     angle = blueprint_angle_leaf(blueprint)
     if not angle:
         return None
+    carrier = str(blueprint.get("carrier") or "").strip()
+    if not carrier:
+        return None
+    template_family = "article" if carrier == "review" else carrier
+    prefix = f"{template_family}/blueprints"
     kind = subject.get("kind")
     if kind == "entity":
         subject_type = str(subject.get("type") or "").strip("/")
         if not subject_type:
             return None
-        return f"Entity/{subject_type}/{angle}.tmpl.yaml"
+        return f"{prefix}/Entity/{subject_type}/{angle}.tmpl.yaml"
     if kind == "topic":
         subject_type = str(subject.get("type") or "")
         leaf = subject_type.split("/")[-1] if subject_type else ""
-        prefix = f"Format/内容角度/{leaf}" if leaf else "Format/内容角度"
-        return f"{prefix}/{angle}.tmpl.yaml"
+        taxonomy = f"Format/内容角度/{leaf}" if leaf else "Format/内容角度"
+        return f"{prefix}/{taxonomy}/{angle}.tmpl.yaml"
     return None
 
 

@@ -1,0 +1,32 @@
+kind: external_reference
+description: '服务自治配置只读快照。配置的唯一真相源是服务 config/schema.yaml 与
+
+  environments/{alpha,beta,gamma,prod}/config.yaml；运行态读取服务 package 内唯一有效配置；
+
+  平台不提供任何在线写路径，快照仅用于查看与漂移核对。
+
+  '
+identity:
+  fields:
+  - environment
+  - service
+  version_source: external
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: external_port
+relationships: []
+capabilities:
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- 配置值只随发布包变化；任何环境不提供在线编辑、审批或热写入端点。
+- resolve 的 sys.* 有效值 = 服务 schema 默认值叠加所选环境 config.yaml 覆盖。
+- 快照必须携带来源文件与 sha256，供实例 ACK 漂移核对。
+- 运行实例只读取所属服务 package 的单一 config.yaml；config version 由该文件 sha256 派生。
+lifecycle:
+  states:
+  - published
+  transitions: []
+  notes: 快照无独立生命周期；生命周期由不可变服务 package 管理（发布/回滚）。

@@ -2,6 +2,10 @@
 .cursor/
 .worktrees/
 .qwq_output/
+# Runtime images consume canonical contracts and seed manifests, never the
+# 800MB+ local media fixtures used only by test/data preparation.
+quwoquan_service/contracts/metadata/_shared/test_fixtures/media/
+quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media/
 quwoquan_app/
 quwoquan_data/
 quwoquan_ops/portal/node_modules/

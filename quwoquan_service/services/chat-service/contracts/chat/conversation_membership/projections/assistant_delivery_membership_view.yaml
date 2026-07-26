@@ -1,0 +1,11 @@
+read_model: AssistantDeliveryMembershipView
+description: assistant-service 主动投递与 @小趣消费前使用的精确成员授权切片；不暴露会话成员名册。
+source_entities:
+- ConversationMembership
+consumers:
+- assistant-service
+fields:
+- name: creatorMember
+  type: bool
+- name: assistantSkillMember
+  type: bool

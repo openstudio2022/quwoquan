@@ -12,7 +12,7 @@ var objectMetaTypes = map[string]bool{
 	"GeoPoint": true,
 }
 
-// dartMutationWireFieldType 由 contracts/metadata/content/post/fields.yaml 的字段 `type` 驱动
+// dartMutationWireFieldType 由 services/content-service/contracts/content/post/fields.yaml 的字段 `type` 驱动
 // 渲染 wire 字段 Dart 类型（消除按字段名硬编码 switch 的桥接债，R06/R24）：
 //
 //	[]object        → List<CloudJsonMap>?（结构化数组，禁止 stringify；如 semanticMentions/reviewAspects）
@@ -62,7 +62,7 @@ func writeContentPostMutationWires(outPath string, svc *serviceFile, fieldTypes 
 	}
 	var b strings.Builder
 	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
-	b.WriteString("// Source: contracts/metadata/content/post/service.yaml (writable_fields per operation).\n")
+	b.WriteString("// Source: services/content-service/contracts/content/post/operations.yaml (writable_fields per operation).\n")
 	b.WriteString("// Regenerate: make codegen-app\n\n")
 	b.WriteString("import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';\n\n")
 

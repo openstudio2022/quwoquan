@@ -14,8 +14,6 @@ type BacklogCandidate struct {
 	Owner          string         `json:"owner"`
 	NextAction     string         `json:"nextAction"`
 	DrilldownRoute string         `json:"drilldownRoute,omitempty"`
-	RunbookID      string         `json:"runbookId,omitempty"`
-	RunbookRoute   string         `json:"runbookRoute,omitempty"`
 	RepairEntry    string         `json:"repairEntry,omitempty"`
 	AlertID        string         `json:"alertId,omitempty"`
 	AuditRoute     string         `json:"auditRoute,omitempty"`

@@ -9,7 +9,9 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
+import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/user/pages/my_footprint_page.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_footprint_tab.dart';
 
 void main() {
   testWidgets('我的足迹：渲染条目，点击带 referralSource 进作品浏览器', (tester) async {
@@ -38,6 +40,8 @@ void main() {
           contentBehaviorTrackerProvider.overrideWithValue(tracker),
         ],
         child: CupertinoApp.router(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           routerConfig: GoRouter(
             initialLocation: '/',
             routes: [
@@ -84,7 +88,11 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [footprintRepositoryProvider.overrideWithValue(repo)],
-        child: const CupertinoApp(home: MyFootprintPage()),
+        child: const CupertinoApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MyFootprintPage(),
+        ),
       ),
     );
     await tester.pump();
@@ -98,6 +106,59 @@ void main() {
     expect(repo.requestedTypes, <String?>[null, 'liked']);
     expect(find.text('post_liked'), findsOneWidget);
     expect(find.text('post_all'), findsNothing);
+  });
+
+  testWidgets('主页足迹 Tab：查看全部入口携带当前筛选并进入独立页', (tester) async {
+    final repo = _StubFootprintRepository(
+      pages: <CursorPage<FootprintEntry>>[
+        CursorPage<FootprintEntry>(
+          items: <FootprintEntry>[_entry('post_all', 'view')],
+        ),
+        CursorPage<FootprintEntry>(
+          items: <FootprintEntry>[_entry('post_liked', 'like')],
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [footprintRepositoryProvider.overrideWithValue(repo)],
+        child: CupertinoApp.router(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          routerConfig: GoRouter(
+            initialLocation: '/',
+            routes: [
+              GoRoute(
+                path: '/',
+                builder: (_, _) => const CupertinoPageScaffold(
+                  child: ProfileFootprintTab(isDark: false),
+                ),
+              ),
+              GoRoute(
+                path: '/profile/footprint',
+                builder: (_, state) => CupertinoPageScaffold(
+                  child: Text(
+                    'FOOTPRINT:${state.uri.queryParameters['type'] ?? 'all'}',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.text(UITextConstants.footprintTypeLabel('liked')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('profile-footprint-view-all')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('FOOTPRINT:liked'), findsOneWidget);
   });
 
   testWidgets('我的足迹：cursor 分页加载更多追加条目', (tester) async {
@@ -115,7 +176,11 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [footprintRepositoryProvider.overrideWithValue(repo)],
-        child: const CupertinoApp(home: MyFootprintPage()),
+        child: const CupertinoApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MyFootprintPage(),
+        ),
       ),
     );
     await tester.pump();
@@ -137,7 +202,11 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [footprintRepositoryProvider.overrideWithValue(repo)],
-        child: const CupertinoApp(home: MyFootprintPage()),
+        child: const CupertinoApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MyFootprintPage(),
+        ),
       ),
     );
     await tester.pump();
@@ -145,7 +214,7 @@ void main() {
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
     expect(
-      find.text('${UITextConstants.myFootprintTitle}暂不可用'),
+      find.text(UITextConstants.myFootprintUnavailableTitle),
       findsOneWidget,
     );
   });
@@ -159,7 +228,11 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [footprintRepositoryProvider.overrideWithValue(repo)],
-        child: const CupertinoApp(home: MyFootprintPage()),
+        child: const CupertinoApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MyFootprintPage(),
+        ),
       ),
     );
     await tester.pump();
@@ -193,7 +266,8 @@ class _StubFootprintRepository implements FootprintRepository {
   }) async {
     requestedTypes.add(type);
     requestedCursors.add(cursor);
-    final page = pages[_callIndex < pages.length ? _callIndex : pages.length - 1];
+    final page =
+        pages[_callIndex < pages.length ? _callIndex : pages.length - 1];
     _callIndex++;
     return page;
   }

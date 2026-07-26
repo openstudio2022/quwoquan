@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -14,6 +13,7 @@ import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 Widget _buildCreatePageApp({
   String? initialTabKey,
@@ -22,7 +22,7 @@ Widget _buildCreatePageApp({
   return ProviderScope(
     overrides: [
       ...mockContentFacetOverrides(MockContentRepository()),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
@@ -70,7 +70,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(TestKeys.createMediaAddButton), findsOneWidget);
-    expect(find.text('添加'), findsOneWidget);
+    expect(find.text(UITextConstants.addImage), findsOneWidget);
     expect(find.byKey(TestKeys.createIdentityMoment), findsNothing);
     expect(find.byKey(TestKeys.createWorkFormatVideo), findsNothing);
   });
@@ -223,5 +223,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('视频编辑'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
   });
 }

@@ -34,9 +34,10 @@ DOWNLOAD_CURL_RETRIES = _RUNTIME_POLICY.curl_retries
 SUPPORTED_TEXT_EXTRACTORS: frozenset[str] = frozenset(
     {
         "wikipedia_api",
-        "baidu_baike_openapi",
+        "baidu_baike_html",
         "toutiao_baike_html",
         "qunar_html",
+        "ctrip_sight_html",
         "static_official_html",
         "generic_html",
     }
@@ -98,6 +99,7 @@ def _wikipedia_api_plaintext(url: str) -> str:
 
 def _baike_extractor_source_kind(extractor: str) -> str:
     return {
+        "baidu_baike_html": "home_baidu_baike",
         "toutiao_baike_html": "home_toutiao_baike",
     }.get(extractor, extractor)
 
@@ -151,6 +153,22 @@ def _toutiao_baike_layout_and_text(
         }
         return dom_text[:50000], layout
     return structured_text[:50000], layout
+
+
+def _baidu_baike_layout_and_text(
+    html_bytes: bytes,
+    url: str,
+) -> tuple[str, dict[str, Any]]:
+    """百度百科公开词条 DOM extractor；只作事实引用，不抓取站内图片。"""
+    raw = html_bytes.decode("utf-8", errors="replace")
+    text = _html_to_plain_text(raw, url).strip()[:50000]
+    return text, {
+        "parseStatus": "ok" if text else "rejected",
+        "sourceKind": "home_baidu_baike",
+        "extractor": "baidu_baike_html",
+        "extractionMode": "baidu_dom",
+        **({} if text else {"rejectReason": "empty_dom_text"}),
+    }
 
 
 
@@ -357,11 +375,30 @@ def _static_official_plaintext(url: str) -> str:
 def _extract_text_by_extractor(extractor: str, html_bytes: bytes, url: str = "") -> str:
     if extractor == "wikipedia_api":
         return _wikipedia_api_plaintext(url)[:50000]
+    if extractor == "baidu_baike_html":
+        text, _layout = _baidu_baike_layout_and_text(html_bytes, url)
+        return text
     if extractor == "toutiao_baike_html":
         text, _layout = _toutiao_baike_layout_and_text(html_bytes, url)
         return text
     if extractor == "qunar_html":
         return _qunar_html_plaintext(html_bytes, url)
+    if extractor == "ctrip_sight_html":
+        raw = html_bytes.decode("utf-8", errors="replace")
+        text = _html_to_plain_text(raw)
+        start = text.find("旅游攻略社区>")
+        if start < 0:
+            start = text.rfind("详情介绍")
+        if start >= 0:
+            text = text[start:]
+        end_positions = [
+            position
+            for marker in ("用户问答更多", "用户点评")
+            if (position := text.find(marker)) > 0
+        ]
+        if end_positions:
+            text = text[: min(end_positions)]
+        return text[:50000]
     if extractor == "static_official_html":
         return _static_official_plaintext(url)
     raw = html_bytes.decode("utf-8", errors="replace")

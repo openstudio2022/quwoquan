@@ -1,0 +1,145 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_content_object_alert_coverage.py --write-recording-rules.
+groups:
+  - name: quwoquan_content_contract_report
+    rules:
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/reports/[^/]+/review$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.BeginReportReview"
+          contract_metric: "content_report_review_begin"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/reports/[^/]+/review$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.BeginReportReview"
+          contract_metric: "content_report_review_begin"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/content/reports"})
+        labels:
+          service: "content-service"
+          operation: "content.report.CreateReport"
+          contract_metric: "content_report_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/content/reports"})
+        labels:
+          service: "content-service"
+          operation: "content.report.CreateReport"
+          contract_metric: "content_report_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/reports/[^/]+:dismiss$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.DismissReport"
+          contract_metric: "content_report_dismiss"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/reports/[^/]+:dismiss$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.DismissReport"
+          contract_metric: "content_report_dismiss"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route=~"^/content/reports/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.GetReport"
+          contract_metric: "content_report_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route=~"^/content/reports/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.GetReport"
+          contract_metric: "content_report_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route="/content/users/me/reports"})
+        labels:
+          service: "content-service"
+          operation: "content.report.ListMyReports"
+          contract_metric: "content_my_report_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route="/content/users/me/reports"})
+        labels:
+          service: "content-service"
+          operation: "content.report.ListMyReports"
+          contract_metric: "content_my_report_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route="/content/reports"})
+        labels:
+          service: "content-service"
+          operation: "content.report.ListReports"
+          contract_metric: "content_report_queue_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route="/content/reports"})
+        labels:
+          service: "content-service"
+          operation: "content.report.ListReports"
+          contract_metric: "content_report_queue_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="PATCH",route=~"^/content/reports/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.ResolveReport"
+          contract_metric: "content_report_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="PATCH",route=~"^/content/reports/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.ResolveReport"
+          contract_metric: "content_report_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"

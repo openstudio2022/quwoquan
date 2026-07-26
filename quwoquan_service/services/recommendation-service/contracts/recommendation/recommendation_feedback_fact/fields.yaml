@@ -1,0 +1,63 @@
+description: 推荐点击、停留、隐藏等不可变反馈事实（rec_engagement 信封投影）； 与曝光经 requestId+targetId 最终一致关联，不持有曝光行主键。
+fields:
+- name: id
+  source: eventId
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  role: append_only_fact
+- name: requestId
+  source: context.feedRequestId
+  type: string
+  constraints:
+  - NOT_NULL
+  description: feedRequestId，与曝光同批归因
+  role: append_only_fact
+- name: userId
+  source: userId
+  type: string
+  constraints:
+  - NOT_NULL
+  description: 推荐状态的业务 actor 键；persona 优先、无 persona 时可为匿名/设备 actor
+  role: append_only_fact
+- name: personaId
+  source: personaId
+  type: string
+  constraints:
+  - NULLABLE
+  description: 经过认证的 persona 身份；匿名或设备 actor 时为空
+  role: append_only_fact
+  reference: true
+- name: targetType
+  source: context.contentType
+  type: string
+  constraints:
+  - NOT_NULL
+  role: append_only_fact
+- name: targetId
+  source: targetId
+  type: string
+  constraints:
+  - NOT_NULL
+  role: append_only_fact
+  reference: true
+- name: feedbackType
+  source: labels.action
+  type: string
+  constraints:
+  - NOT_NULL
+  role: append_only_fact
+- name: value
+  source: context.duration
+  type: float64
+  constraints:
+  - NULLABLE
+  description: 停留时长/评分等数值信号
+  role: append_only_fact
+- name: occurredAt
+  source: occurredAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  role: append_only_fact

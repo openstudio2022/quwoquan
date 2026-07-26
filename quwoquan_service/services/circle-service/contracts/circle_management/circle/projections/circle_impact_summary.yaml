@@ -1,0 +1,34 @@
+read_model: CircleImpactSummary
+description: '圈子影响摘要（GetCircleImpact 响应真相源）。
+
+  回答「这个圈子帮助用户建立了什么连接」：items 为按 count 降序的影响事实行，
+
+  端侧「圈子影响」摘要模块取前 3 条 primaryText 渲染。
+
+  强调连接型帮助结果，不下发热度榜、收藏数或运营指标。
+
+  '
+consumers:
+- app
+client_projection:
+  dart_class: CircleImpactSummary
+  base_class: ''
+  output_path: cloud/runtime/generated/circle/circle_impact_summary.g.dart
+  dart_imports:
+  - circle_impact_item.g.dart
+  fields:
+  - name: circleId
+    dart_type: String
+    nullable: false
+    source: circleId
+    default: ''''''
+  - name: total
+    dart_type: int
+    nullable: false
+    source: total
+    default: '0'
+  - name: items
+    dart_type: List<CircleImpactItem>
+    nullable: false
+    source: items
+    list_element_dart_class: CircleImpactItem

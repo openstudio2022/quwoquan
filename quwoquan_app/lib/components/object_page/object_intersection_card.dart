@@ -40,6 +40,7 @@ class ObjectIntersectionCard extends StatefulWidget {
     this.onVisualTap,
     this.onActionHintTap,
     this.onMoreTap,
+    this.onInlineExpand,
     this.highlightKind,
     this.contextObjectTarget,
   });
@@ -67,6 +68,10 @@ class ObjectIntersectionCard extends StatefulWidget {
   final void Function(IntersectionReason reason, IntersectionActionHint hint)?
   onActionHintTap;
   final VoidCallback? onMoreTap;
+
+  /// 就地「展开」被点击（折叠→展开）时回调，携带首条可渲染 reason 供归因；
+  /// 调用方据此上报 intersection_expand（behaviors.yaml 弱正信号）。
+  final void Function(IntersectionReason firstReason)? onInlineExpand;
   final IntersectionTarget? contextObjectTarget;
 
   /// 旅程高亮（§7.3）：从 post 作者徽标跳入时携带的最强证据组 kind；
@@ -89,6 +94,7 @@ class ObjectIntersectionCard extends StatefulWidget {
     void Function(IntersectionReason reason, IntersectionActionHint hint)?
     onActionHintTap,
     VoidCallback? onMoreTap,
+    void Function(IntersectionReason firstReason)? onInlineExpand,
     String? highlightKind,
     IntersectionTarget? contextObjectTarget,
     Key? key,
@@ -116,6 +122,7 @@ class ObjectIntersectionCard extends StatefulWidget {
       onVisualTap: onVisualTap,
       onActionHintTap: onActionHintTap,
       onMoreTap: onMoreTap,
+      onInlineExpand: onInlineExpand,
       highlightKind: highlightKind,
       contextObjectTarget: contextObjectTarget,
     );
@@ -278,7 +285,13 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
         behavior: HitTestBehavior.opaque,
         onTap: opensAll
             ? widget.onMoreTap
-            : () => setState(() => _expanded = !expanded),
+            : () {
+                // 折叠→展开时回调归因（intersection_expand 弱正信号，B6）。
+                if (!expanded && widget.reasons.isNotEmpty) {
+                  widget.onInlineExpand?.call(widget.reasons.first);
+                }
+                setState(() => _expanded = !expanded);
+              },
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[

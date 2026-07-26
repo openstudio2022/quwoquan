@@ -9,6 +9,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/camera/camera_session_models.dart';
+import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_presentation.dart';
 import 'package:quwoquan_app/components/media/picker/one_tap_movie_composer.dart';
@@ -26,6 +27,7 @@ import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 part 'create_media_picker_page_state.dart';
 part 'create_media_picker_page_state_helpers.dart';
+part 'create_media_picker_page_chrome.dart';
 
 typedef CreateMediaPickerImageEditorBuilder =
     Widget Function(
@@ -61,6 +63,7 @@ class CreateMediaPickerPage extends StatefulWidget {
     super.key,
     required this.entryMode,
     required this.maxSelection,
+    required this.filterRepository,
     this.initialSelection = const <CreateMediaItem>[],
     this.flowIntent = CreateMediaPickerFlowIntent.publish,
     MediaPickerService? mediaPickerService,
@@ -73,6 +76,7 @@ class CreateMediaPickerPage extends StatefulWidget {
 
   final MediaPickerEntryMode entryMode;
   final int maxSelection;
+  final ImageEditorFilterRepository filterRepository;
   final List<CreateMediaItem> initialSelection;
   final CreateMediaPickerFlowIntent flowIntent;
   final MediaPickerService mediaPickerService;

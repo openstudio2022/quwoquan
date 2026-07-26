@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
@@ -200,13 +202,20 @@ class _ArticleTypographyThumbnailStripState
               _captureJob = null;
             });
           }
-        } catch (_) {
+        } catch (error, stackTrace) {
           if (mounted) {
             setState(() {
               _loading.remove(job.key);
               _captureJob = null;
             });
           }
+          unawaited(
+            AppExceptionTelemetryService.instance.recordHandledException(
+              source: 'content.article_typography.capture_thumbnail',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          );
         }
       }
     } finally {

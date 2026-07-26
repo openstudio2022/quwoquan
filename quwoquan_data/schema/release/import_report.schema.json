@@ -10,6 +10,7 @@
     "environment",
     "releaseId",
     "counts",
+    "postBindings",
     "auditEvents"
   ],
   "additionalProperties": false,
@@ -77,6 +78,25 @@
         "feedRemoved": {
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "postBindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "postRef",
+          "postId",
+          "contentType",
+          "authorId"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "postRef": {"type": "string", "minLength": 1},
+          "postId": {"type": "string", "minLength": 1},
+          "contentType": {"type": "string", "minLength": 1},
+          "authorId": {"type": "string", "minLength": 1}
         }
       }
     },

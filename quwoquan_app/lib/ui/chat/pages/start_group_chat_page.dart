@@ -4,9 +4,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -16,6 +19,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
@@ -41,13 +45,12 @@ part 'start_group_chat_group_picker_sheet.dart';
 
 /// 与云侧 CreateConversation 默认 maxGroupSize 对齐的前置上限；超限由服务端
 /// 二次校验并通过结构化错误回传，客户端仅做即时拦截。
-const int _kStartGroupChatMaxMembers = 500;
+const int _kStartGroupChatMaxMembers = 1000;
 
 /// 发起群聊 / 添加成员两种模式的可观测命名（埋点事件属性，非路由/surface 契约）。
-const String _kCreateModePageName = 'start_group_chat';
-const String _kAddMemberModePageName = 'group_add_members';
-const String _kStartGroupChatSurface = 'start_group_chat';
-const String _kStartGroupChatRoute = '/chat/start-group';
+const String _kCreateModePageName = PageNames.startGroupChat;
+const String _kAddMemberModePageName = PageNames.chatAddMembers;
+const String _kStartGroupChatRoute = AppRoutePaths.startGroupChat;
 const String _kStartGroupChatJourney = 'start_group_chat';
 
 /// 发起群聊页（图一：创建新群聊 + 相关联系人）
@@ -76,6 +79,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   late final String _wizardId;
   late final PageLifecycleObservability _pageObservability;
   late final JourneyEventTracker _journeyTracker;
+  late final ChatInteractionTelemetryTracker _chatTelemetryTracker;
   late final DateTime _enteredAt;
 
   List<ChatContactRowDto> _contacts = [];
@@ -87,6 +91,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
 
   String get _analyticsPageName =>
       widget.isCreateMode ? _kCreateModePageName : _kAddMemberModePageName;
+  String get _analyticsSurfaceId => widget.isCreateMode
+      ? AppUiSurfaces.startGroupChat.id
+      : AppUiSurfaces.chatAddMembers.id;
 
   void _recordPageState({
     required String phase,
@@ -97,7 +104,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     _pageObservability.recordPageState(
       pageName: _analyticsPageName,
       route: _kStartGroupChatRoute,
-      surface: _kStartGroupChatSurface,
+      surface: _analyticsSurfaceId,
       phase: phase,
       error: error,
       itemCount: itemCount,
@@ -112,6 +119,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         '${widget.conversationId ?? 'create'}_${DateTime.now().microsecondsSinceEpoch}';
     _pageObservability = ref.read(pageLifecycleObservabilityProvider);
     _journeyTracker = ref.read(journeyEventTrackerProvider);
+    _chatTelemetryTracker = ref.read(chatInteractionTelemetryTrackerProvider);
     _enteredAt = DateTime.now();
     _recordPageState(phase: 'enter');
     _recordCompanionContextEnter();
@@ -134,7 +142,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   Future<void> _loadData() async {
     _recordPageState(phase: 'onlineLoading');
     try {
-      final chatRepo = ref.read(chatRepositoryProvider);
+      final chatRepo = ref.read(chatContactRepositoryProvider);
       final contacts = await chatRepo.listGroupCandidates(
         conversationId: widget.conversationId,
         limit: _kStartGroupChatMaxMembers,
@@ -197,7 +205,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _handleCreateConversationSuccess(String conversationId) {
-    AppToast.show(context, UITextConstants.startGroupChatCreatedToast);
+    AppToast.show(context, ChatText.startGroupChatCreatedToast);
     if (conversationId.isEmpty) {
       context.go(AppRoutePaths.chat);
     } else {
@@ -206,10 +214,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _handleAddMembersSuccess(int count) {
-    AppToast.show(
-      context,
-      UITextConstants.startGroupChatMembersAddedCount(count),
-    );
+    AppToast.show(context, ChatText.startGroupChatMembersAddedCount(count));
     context.pop();
   }
 
@@ -241,8 +246,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       category: base.category,
       scope: base.scope,
       title: widget.isCreateMode
-          ? UITextConstants.startGroupChatCreateIncompleteTitle
-          : UITextConstants.startGroupChatAddMembersIncompleteTitle,
+          ? ChatText.startGroupChatCreateIncompleteTitle
+          : ChatText.startGroupChatAddMembersIncompleteTitle,
       message: base.message,
       secondaryMessage: base.secondaryMessage,
       primaryAction:
@@ -268,7 +273,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   Future<void> _refreshChatEntryLists() async {
     await ref.read(chatInboxListProvider.notifier).refresh();
     ref.invalidate(
-      chatContactsRowsForSubTabProvider(UITextConstants.contactsTabGroups),
+      chatContactsRowsForSubTabProvider(ChatText.contactsTabGroups),
     );
   }
 
@@ -276,25 +281,69 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     if (!_selectionBootstrapReady) {
       return;
     }
-    ref
-        .read(startGroupMemberWizardProvider(_wizardId).notifier)
-        .toggleMember(member);
+    final wizardProvider = startGroupMemberWizardProvider(_wizardId);
+    final wasSelected = ref.read(wizardProvider).isSelected(member.userId);
+    ref.read(wizardProvider.notifier).toggleMember(member);
+    if (!wasSelected) {
+      unawaited(
+        _chatTelemetryTracker.track(
+          action: ChatInteractionAction.candidateSourceSelect,
+          outcome: ChatInteractionOutcome.succeeded,
+          source: ChatInteractionSource.contacts,
+          memberCount: ref.read(wizardProvider).selectedMembers.length,
+          pageName: _analyticsPageName,
+          surfaceId: _analyticsSurfaceId,
+        ),
+      );
+    }
   }
 
-  /// 打开「从群聊中选择联系人」二级流程（图四 → 图五）。
+  /// 打开「从群聊 / 圈子中选择联系人」二级流程（图四 → 图五）。
   ///
   /// 用 Navigator.push(CupertinoPageRoute) 承载，不新增 GoRouter 路由/surface；
   /// wizardId 贯穿，图五选中项直接并入当前向导，返回后选中横向条自动滚到尾部。
-  void _pushGroupPicker() {
+  Future<void> _pushSourcePicker(StartGroupSource source) async {
     final isDark = ref.read(isDarkProvider);
-    Navigator.of(context).push(
-      CupertinoPageRoute<void>(
+    final sourceKey = source == StartGroupSource.circle ? 'circle' : 'group';
+    unawaited(
+      _chatTelemetryTracker.track(
+        action: ChatInteractionAction.candidateSourceOpen,
+        outcome: ChatInteractionOutcome.succeeded,
+        source: source == StartGroupSource.circle
+            ? ChatInteractionSource.circle
+            : ChatInteractionSource.group,
+        pageName: _analyticsPageName,
+        surfaceId: _analyticsSurfaceId,
+      ),
+    );
+    final applied = await Navigator.of(context).push<bool>(
+      CupertinoPageRoute<bool>(
         builder: (_) => _GroupPickerSheet(
-          key: const ValueKey<String>('start-group-group-picker-sheet'),
+          key: ValueKey<String>('start-group-$sourceKey-picker-sheet'),
           wizardId: _wizardId,
           isDark: isDark,
-          onBack: () => Navigator.of(context).pop(),
+          source: source,
+          onBack: () => Navigator.of(context).pop(false),
         ),
+      ),
+    );
+    if (!mounted || applied != true) {
+      return;
+    }
+    final selectedCount = ref
+        .read(startGroupMemberWizardProvider(_wizardId))
+        .selectedMembers
+        .length;
+    unawaited(
+      _chatTelemetryTracker.track(
+        action: ChatInteractionAction.candidateSourceSelect,
+        outcome: ChatInteractionOutcome.succeeded,
+        source: source == StartGroupSource.circle
+            ? ChatInteractionSource.circle
+            : ChatInteractionSource.group,
+        pageName: _analyticsPageName,
+        surfaceId: _analyticsSurfaceId,
+        memberCount: selectedCount,
       ),
     );
   }
@@ -307,22 +356,18 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     required int memberCount,
     Object? error,
   }) {
-    final action = widget.isCreateMode
-        ? (success ? 'create_success' : 'create_failed')
-        : (success ? 'add_members_success' : 'add_members_failed');
     unawaited(
-      _journeyTracker.trackAction(
-        journey: _kStartGroupChatJourney,
-        action: action,
+      _chatTelemetryTracker.track(
+        action: widget.isCreateMode
+            ? ChatInteractionAction.groupCreate
+            : ChatInteractionAction.memberAdd,
+        outcome: success
+            ? ChatInteractionOutcome.succeeded
+            : ChatInteractionOutcome.failed,
         pageName: _analyticsPageName,
-        targetType: 'conversation',
-        targetKey: widget.conversationId ?? '',
-        entityType: 'conversation',
-        payload: <String, dynamic>{
-          'isCreateMode': widget.isCreateMode,
-          'memberCount': memberCount,
-          ...?widget.routeExtra?.toAnalyticsPayload(),
-        },
+        surfaceId: _analyticsSurfaceId,
+        memberCount: memberCount,
+        error: error,
       ),
     );
     _recordPageState(
@@ -363,12 +408,12 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     );
     if (widget.isCreateMode &&
         selectedIds.length >= _kStartGroupChatMaxMembers) {
-      AppToast.show(context, UITextConstants.startGroupChatMaxMembersReached);
+      AppToast.show(context, ChatText.startGroupChatMaxMembersReached);
       return;
     }
     setState(() => _submitting = true);
     try {
-      final repo = ref.read(chatRepositoryProvider);
+      final repo = ref.read(chatConversationRepositoryProvider);
       if (widget.isCreateMode) {
         final ChatConversationCreatedDto created = await repo
             .createConversation(
@@ -446,8 +491,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
     final pageTitle = widget.isCreateMode
-        ? UITextConstants.startGroupChat
-        : UITextConstants.addMember;
+        ? ChatText.startGroupChat
+        : ChatText.addMember;
     if (_pageErrorSemantic != null && !_isLoading) {
       return SettingsInsetMemberPickerPageScaffold(
         isDark: isDark,
@@ -512,6 +557,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             userId: c.userId,
             avatarUrl: c.avatarUrl,
             letter: chatContactInitial(displayName),
+            metFrom: c.metFrom,
           );
         })
         .toList();
@@ -547,7 +593,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
-                UITextConstants.startGroupChatSyncingMemberState,
+                ChatText.startGroupChatSyncingMemberState,
                 style: TextStyle(
                   fontSize: AppTypography.sm,
                   color: fgSecondary,
@@ -567,11 +613,20 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       if (_query.trim().isEmpty)
         _ActionEntryRow(
           icon: CupertinoIcons.group,
-          title: UITextConstants.startGroupChatPickFromGroup,
+          title: ChatText.startGroupChatPickFromGroup,
           rowBackground: rowBackground,
           dividerColor: rowDividerColor,
           fgPrimary: fgPrimary,
-          onTap: () => _pushGroupPicker(),
+          onTap: () => _pushSourcePicker(StartGroupSource.group),
+        ),
+      if (_query.trim().isEmpty)
+        _ActionEntryRow(
+          icon: CupertinoIcons.person_3,
+          title: ChatText.startGroupChatPickFromCircle,
+          rowBackground: rowBackground,
+          dividerColor: rowDividerColor,
+          fgPrimary: fgPrimary,
+          onTap: () => _pushSourcePicker(StartGroupSource.circle),
         ),
       for (final letter in grouped.keys) ...[
         _ContactListSectionBand(
@@ -604,6 +659,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                 locked: locked,
                 rowBackground: rowBackground,
                 dividerColor: rowDividerColor,
+                // 事实交集证据：认识来源（metFrom），帮助决策要不要拉入群。
+                subtitle: m.metFrom,
                 onTap: selectionReady && !locked
                     ? () => _toggleSelectedMember(pickable)
                     : null,
@@ -656,7 +713,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                       horizontal: listHorizontalPadding,
                     ),
                     child: Text(
-                      UITextConstants.startGroupChatSelectedCount(
+                      ChatText.startGroupChatSelectedCount(
                         selectedMembers.length,
                       ),
                       style: TextStyle(
@@ -700,7 +757,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                                 .deselectMemberIds(<String>[userId]);
                             AppToast.show(
                               context,
-                              UITextConstants.startGroupChatRemovedMember(
+                              ChatText.startGroupChatRemovedMember(
                                 member.displayName.isNotEmpty
                                     ? member.displayName
                                     : userId,
@@ -788,10 +845,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                     ? const CupertinoActivityIndicator()
                     : Text(
                         widget.isCreateMode
-                            ? UITextConstants.startGroupChatActionCount(
+                            ? ChatText.startGroupChatActionCount(
                                 selectedMembers.length,
                               )
-                            : '${UITextConstants.addMember}（${selectedMembers.length}）',
+                            : '${ChatText.addMember}（${selectedMembers.length}）',
                         style: TextStyle(
                           fontSize: AppTypography.lg,
                           fontWeight: FontWeight.w600,

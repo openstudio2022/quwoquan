@@ -15,14 +15,19 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_evidence.dart';
+import '../../../../support/fixtures/author_impact_fixtures.dart';
 
 AuthorImpactItem _item({List<IntersectionVisual> samples = const []}) {
-  return AuthorImpactItem(
+  return authorImpactItemFixture(
     impactId: 'imp_1',
+    helpType: 'decision',
+    action: 'share',
     intersectionDimension: 'content',
+    tagRef: 'content/city-cycling-guide',
     source: 'source:repost',
     count: 3,
     primaryText: '3人转发了你的内容',
+    subtitleText: '来自城市夜骑指南的转发',
     sampleVisuals: samples,
   );
 }
@@ -32,11 +37,13 @@ AuthorImpactEvidenceItem _row(
   String summary, {
   IntersectionTarget? target,
 }) {
-  return AuthorImpactEvidenceItem(
+  return authorImpactEvidenceItemFixture(
     evidenceId: id,
     impactId: 'imp_1',
+    helpType: 'decision',
+    action: 'share',
+    intersectionDimension: 'content',
     summaryText: summary,
-    occurredAt: '2026-06-19T08:00:00Z',
     contentTarget: target,
   );
 }
@@ -50,7 +57,7 @@ void main() {
     testWidgets('渲染真实来源行 + 触底加载更多翻页', (tester) async {
       Future<AuthorImpactEvidencePage> fetch({String cursor = ''}) async {
         if (cursor.isEmpty) {
-          return AuthorImpactEvidencePage(
+          return authorImpactEvidencePageFixture(
             impactId: 'imp_1',
             totalCount: 3,
             items: <AuthorImpactEvidenceItem>[
@@ -61,7 +68,7 @@ void main() {
             hasMore: true,
           );
         }
-        return AuthorImpactEvidencePage(
+        return authorImpactEvidencePageFixture(
           impactId: 'imp_1',
           totalCount: 3,
           items: <AuthorImpactEvidenceItem>[_row('e2', '有人进了相关圈子')],
@@ -95,7 +102,9 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text(DiscoveryFeedText.impactEvidenceSheetLoadMore));
+      await tester.tap(
+        find.text(DiscoveryFeedText.impactEvidenceSheetLoadMore),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('有人进了相关圈子'), findsOneWidget);
@@ -108,7 +117,7 @@ void main() {
     testWidgets('整行点击 → 进入被影响内容（onContentTap）', (tester) async {
       IntersectionTarget? tapped;
       Future<AuthorImpactEvidencePage> fetch({String cursor = ''}) async {
-        return AuthorImpactEvidencePage(
+        return authorImpactEvidencePageFixture(
           impactId: 'imp_1',
           totalCount: 1,
           items: <AuthorImpactEvidenceItem>[
@@ -148,7 +157,7 @@ void main() {
 
     testWidgets('空页 + 无样本 → 空态文案（不造假）', (tester) async {
       Future<AuthorImpactEvidencePage> fetch({String cursor = ''}) async {
-        return AuthorImpactEvidencePage(impactId: 'imp_1');
+        return authorImpactEvidencePageFixture(impactId: 'imp_1');
       }
 
       await tester.pumpWidget(
@@ -204,7 +213,7 @@ void main() {
 
     testWidgets('空页 + 有样本 → 回退样本簇（真实样本，不编造完整名单）', (tester) async {
       Future<AuthorImpactEvidencePage> fetch({String cursor = ''}) async {
-        return AuthorImpactEvidencePage(impactId: 'imp_1');
+        return authorImpactEvidencePageFixture(impactId: 'imp_1');
       }
 
       await tester.pumpWidget(

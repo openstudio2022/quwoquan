@@ -24,22 +24,48 @@ from quwoquan_ops.cli.lib.local_target_tls import (
 )
 
 
-BUNDLE_PATH = ROOT / "quwoquan_ops" / "environments" / "gamma_curated_media_bundle.json"
-FIXTURE_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
-APP_CHAT_MOCK_DATA_PATH = (
+BUNDLE_PATH = (
     ROOT
-    / "quwoquan_app"
-    / "lib"
-    / "cloud"
+    / "quwoquan_service"
     / "services"
-    / "chat"
-    / "mock"
-    / "chat_mock_data.dart"
+    / "content-service"
+    / "environments"
+    / "gamma"
+    / "resources"
+    / "artifacts"
+    / "media"
+    / "gamma_curated_media_bundle.json"
+)
+MEDIA_DELIVERY_MANIFEST_PATH = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "content-service"
+    / "resources"
+    / "static"
+    / "media"
+    / "media_delivery_manifest.json"
+)
+FIXTURE_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
+SERVICE_FIXTURE_ROOT = ROOT / "quwoquan_service" / "services"
+CHAT_SCENARIO_FIXTURE_PATH = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "chat-service"
+    / "tests"
+    / "support"
+    / "contract_fixtures"
+    / "scenarios"
+    / "chat_scenarios.json"
 )
 APP_PROTOTYPE_MOCK_DATA_PATH = (
     ROOT / "quwoquan_app" / "lib" / "core" / "mock" / "prototype_mock_data.dart"
 )
 MEDIA_AVATAR_LITERAL_RE = re.compile(r"['\"](media/avatar/[^'\"]+)['\"]")
+MEDIA_OBJECT_LITERAL_RE = re.compile(
+    r"""media/(?:avatar|image|video|background)/[^\s"'`<>\[\](){},]+"""
+)
 MEDIA_ROOT = (
     ROOT
     / "quwoquan_service"
@@ -62,7 +88,51 @@ MEDIA_PREFIXES = (
     "media/video/",
     "media/background/",
 )
-GROUP_AVATAR_CALL_RE = re.compile(r"groupAvatarFor\('([^']+)'\)")
+TRACKED_TEXT_SUFFIXES = frozenset(
+    {
+        ".dart",
+        ".go",
+        ".java",
+        ".json",
+        ".kt",
+        ".kts",
+        ".md",
+        ".py",
+        ".sh",
+        ".swift",
+        ".txt",
+        ".xml",
+        ".yaml",
+        ".yml",
+    }
+)
+RETIRED_MEDIA_TREE_PREFIXES = (
+    "cold_start/creators/travel_batch_100_v1/",
+    "media/avatar/circle/",
+    "media/avatar/conversation/",
+    "media/avatar/default/",
+    "media/avatar/group/",
+    "media/avatar/user/",
+    "media/avatar/s/conversation/",
+    "media/background/user/",
+    "media/image/circle/",
+    "media/image/post/",
+)
+REACHABILITY_CHECKED_ARCHIVE_PREFIXES = (
+    "media/avatar/s/archived-avatar/",
+    "media/background/s/archived-avatar/",
+    "media/image/s/archived-image/",
+)
+MEDIA_FILE_SUFFIXES = frozenset(
+    {".gif", ".jpeg", ".jpg", ".json", ".m3u8", ".m4s", ".m4v", ".mov", ".mp4", ".png", ".webp"}
+)
+OPERATIONAL_REQUIRED_MEDIA_REFS = frozenset(
+    {
+        "media/avatar/s/default/group/v1/default.png",
+        "media/avatar/s/archived-avatar/circle/fixture_circle_coffee_04/v1/avatar.png",
+        "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
+    }
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -79,9 +149,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--video-base-url", default="")
     parser.add_argument("--cacert", default="")
     parser.add_argument(
-        "--include-app-mock-group-avatars",
-        choices=("auto", "true", "false"),
-        default="auto",
+        "--files-only",
+        action="store_true",
+        help="只校验媒体引用闭包与本地文件，不启动 HTTPS 探测",
     )
     return parser
 
@@ -170,8 +240,19 @@ def _collect_media_refs_from_json(path: Path) -> set[str]:
 
 def _fixture_json_paths() -> list[Path]:
     paths = sorted(FIXTURE_ROOT.glob("**/test_fixtures/**/*.json"))
+    paths.extend(
+        sorted(
+            SERVICE_FIXTURE_ROOT.glob(
+                "*/tests/support/contract_fixtures/**/*.json"
+            )
+        )
+    )
+    if CHAT_SCENARIO_FIXTURE_PATH.is_file():
+        paths.append(CHAT_SCENARIO_FIXTURE_PATH)
     if BUNDLE_PATH.is_file():
         paths.append(BUNDLE_PATH)
+    if MEDIA_DELIVERY_MANIFEST_PATH.is_file():
+        paths.append(MEDIA_DELIVERY_MANIFEST_PATH)
     return paths
 
 
@@ -190,21 +271,6 @@ def _collect_all_seeded_media_refs() -> tuple[set[str], dict[str, set[str]]]:
     return refs, origins
 
 
-def _collect_app_mock_group_avatar_refs() -> set[str]:
-    text = APP_CHAT_MOCK_DATA_PATH.read_text(encoding="utf-8")
-    conversation_ids = {
-        match.group(1)
-        for match in GROUP_AVATAR_CALL_RE.finditer(text)
-        if "$" not in match.group(1)
-    }
-    if "groupAvatarFor('conv_grid_$n')" in text:
-        conversation_ids.update(f"conv_grid_{index}" for index in range(1, 17))
-    return {
-        f"media/avatar/s/archived-avatar/conversation/{conversation_id}/v1/mock.png"
-        for conversation_id in conversation_ids
-    }
-
-
 def _collect_dart_media_avatar_literals(path: Path) -> set[str]:
     if not path.is_file():
         return set()
@@ -217,17 +283,78 @@ def _collect_dart_media_avatar_literals(path: Path) -> set[str]:
     return refs
 
 
-def _collect_app_chat_and_prototype_avatar_refs() -> set[str]:
-    refs = _collect_dart_media_avatar_literals(APP_CHAT_MOCK_DATA_PATH)
-    refs.update(_collect_dart_media_avatar_literals(APP_PROTOTYPE_MOCK_DATA_PATH))
+def _collect_app_prototype_avatar_refs() -> set[str]:
+    return _collect_dart_media_avatar_literals(APP_PROTOTYPE_MOCK_DATA_PATH)
+
+
+def _collect_tracked_media_literal_refs() -> set[str]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+    refs: set[str] = set()
+    for raw_path in result.stdout.split(b"\0"):
+        if not raw_path:
+            continue
+        relative = Path(raw_path.decode("utf-8", errors="surrogateescape"))
+        path = ROOT / relative
+        if not path.is_file() or path.is_relative_to(MEDIA_ROOT):
+            continue
+        if path.suffix.lower() not in TRACKED_TEXT_SUFFIXES:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for match in MEDIA_OBJECT_LITERAL_RE.finditer(text):
+            object_key = urlsplit(match.group(0).rstrip(".;:。；：")).path.lstrip("/")
+            if Path(object_key).suffix.lower() in MEDIA_FILE_SUFFIXES:
+                refs.add(object_key)
     return refs
 
 
+def _collect_authoritative_media_refs() -> set[str]:
+    fixture_refs, _ = _collect_all_seeded_media_refs()
+    refs = set(fixture_refs)
+    refs.update(_collect_app_prototype_avatar_refs())
+    refs.update(OPERATIONAL_REQUIRED_MEDIA_REFS)
+    return refs
+
+
+def _collect_global_media_refs() -> set[str]:
+    refs = _collect_authoritative_media_refs()
+    refs.update(_collect_tracked_media_literal_refs())
+    return refs
+
+
+def _legacy_unreferenced_media_paths(
+    referenced: set[str] | None = None,
+) -> list[Path]:
+    referenced = referenced if referenced is not None else _collect_global_media_refs()
+    issues: list[Path] = []
+    for path in MEDIA_ROOT.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(MEDIA_ROOT).as_posix()
+        if relative.startswith(RETIRED_MEDIA_TREE_PREFIXES):
+            issues.append(path)
+            continue
+        if relative.startswith(REACHABILITY_CHECKED_ARCHIVE_PREFIXES):
+            object_key = urlsplit(relative).path.lstrip("/")
+            if object_key not in referenced:
+                issues.append(path)
+    return sorted(issues)
+
+
 def _expected_content_type_prefix(object_key: str) -> str | None:
+    path = urlsplit(object_key).path.lower()
+    if path.endswith((".webp", ".png", ".jpg", ".jpeg", ".gif")):
+        return "image/"
+    if path.endswith(".json"):
+        return "application/json"
+    if path.endswith((".mp4", ".m4v", ".mov", ".m3u8", ".m4s")):
+        return "video/"
     if object_key.startswith(("media/avatar/", "media/image/", "media/background/")):
         return "image/"
-    if object_key.startswith("media/video/"):
-        return "video/"
     return None
 
 
@@ -290,7 +417,7 @@ def _probe_seeded_media_objects(
     """并发探测独立媒体对象，保留每个对象的完整 HTTP/MIME 验证。"""
 
     def probe(object_key: str) -> tuple[str, str]:
-        is_video = object_key.startswith("media/video/")
+        is_video = _expected_content_type_prefix(object_key) == "video/"
         return _curl_probe(
             f"{_base_url_for_object_key(object_key, base_urls)}/{object_key}",
             cacert=cacert,
@@ -312,35 +439,65 @@ def _probe_seeded_media_objects(
         }
 
 
-def _include_app_mock_group_avatars(env_name: str, mode: str) -> bool:
-    if mode == "true":
-        return True
-    if mode == "false":
-        return False
-    return env_name == "alpha"
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     env_name = str(args.env)
     target_name = _resolve_target_name(env_name, str(args.target or ""))
-    base_urls = _resolve_public_bases(env_name, target_name, args)
     issues: list[str] = []
+    if not BUNDLE_PATH.is_file():
+        issues.append(f"media bundle missing: {BUNDLE_PATH}")
+    if not FIXTURE_ROOT.is_dir():
+        issues.append(f"fixture root missing: {FIXTURE_ROOT}")
+    if not CHAT_SCENARIO_FIXTURE_PATH.is_file():
+        issues.append(f"chat scenario fixture missing: {CHAT_SCENARIO_FIXTURE_PATH}")
+    if not MEDIA_ROOT.is_dir():
+        issues.append(f"shared media root missing: {MEDIA_ROOT}")
+    legacy_unreferenced_paths: list[Path] = []
+    global_media_refs: set[str] = set()
+    authoritative_media_refs: set[str] = set()
+    if (
+        MEDIA_ROOT.is_dir()
+        and FIXTURE_ROOT.is_dir()
+        and CHAT_SCENARIO_FIXTURE_PATH.is_file()
+    ):
+        authoritative_media_refs = _collect_authoritative_media_refs()
+        global_media_refs = _collect_global_media_refs()
+        legacy_unreferenced_paths = _legacy_unreferenced_media_paths(global_media_refs)
+        for path in legacy_unreferenced_paths[:50]:
+            issues.append(
+                "unreferenced legacy media must be retired: "
+                f"{path.relative_to(ROOT).as_posix()}"
+            )
+        if len(legacy_unreferenced_paths) > 50:
+            issues.append(
+                f"... {len(legacy_unreferenced_paths) - 50} more unreferenced legacy media files"
+            )
+        for object_key in sorted(authoritative_media_refs):
+            source_file = MEDIA_ROOT / urlsplit(object_key).path
+            if not source_file.is_file():
+                issues.append(f"{object_key} authoritative source file missing: {source_file}")
+    if args.files_only:
+        if issues:
+            print("[verify_alpha_media_fixture_surface] FAIL")
+            for issue in issues:
+                print(f"  - {issue}")
+            return 1
+        print(
+            "[verify_alpha_media_fixture_surface] OK "
+            f"filesOnly=true authoritativeRefs={len(authoritative_media_refs)} "
+            f"globalRefs={len(global_media_refs)} "
+            f"legacyUnreferenced={len(legacy_unreferenced_paths)}"
+        )
+        return 0
+
+    base_urls = _resolve_public_bases(env_name, target_name, args)
     local_root_ca: Path | None
     try:
         local_root_ca = _resolve_local_root_ca(target_name, str(args.cacert or ""))
     except LocalTargetTlsError as exc:
         local_root_ca = None
         issues.append(str(exc))
-    if not BUNDLE_PATH.is_file():
-        issues.append(f"media bundle missing: {BUNDLE_PATH}")
-    if not FIXTURE_ROOT.is_dir():
-        issues.append(f"fixture root missing: {FIXTURE_ROOT}")
-    if not APP_CHAT_MOCK_DATA_PATH.is_file():
-        issues.append(f"app chat mock data missing: {APP_CHAT_MOCK_DATA_PATH}")
-    if not MEDIA_ROOT.is_dir():
-        issues.append(f"shared media root missing: {MEDIA_ROOT}")
     if local_root_ca is not None and not local_root_ca.is_file():
         issues.append(f"{target_name} local root CA missing: {local_root_ca}")
     for label, base_url in base_urls.items():
@@ -374,29 +531,16 @@ def main(argv: list[str] | None = None) -> int:
     for object_key, origins in fixture_origins.items():
         object_origins.setdefault(object_key, set()).update(origins)
 
-    app_mock_group_refs: set[str] = set()
-    app_chat_prototype_refs: set[str] = set()
-    if _include_app_mock_group_avatars(env_name, str(args.include_app_mock_group_avatars)):
-        app_mock_group_refs = _collect_app_mock_group_avatar_refs()
-        object_keys.update(app_mock_group_refs)
-        for object_key in app_mock_group_refs:
-            object_origins.setdefault(object_key, set()).add(
-                APP_CHAT_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
-            )
-        app_chat_prototype_refs = _collect_app_chat_and_prototype_avatar_refs()
-        object_keys.update(app_chat_prototype_refs)
-        for object_key in app_chat_prototype_refs:
-            object_origins.setdefault(object_key, set()).add(
-                APP_CHAT_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
-            )
-            if APP_PROTOTYPE_MOCK_DATA_PATH.is_file():
-                object_origins.setdefault(object_key, set()).add(
-                    APP_PROTOTYPE_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
-                )
+    app_prototype_refs = _collect_app_prototype_avatar_refs()
+    object_keys.update(app_prototype_refs)
+    for object_key in app_prototype_refs:
+        object_origins.setdefault(object_key, set()).add(
+            APP_PROTOTYPE_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
+        )
 
     probe_keys: list[str] = []
     for object_key in sorted(object_keys):
-        source_file = MEDIA_ROOT / object_key
+        source_file = MEDIA_ROOT / urlsplit(object_key).path
         if not source_file.is_file():
             origins = ", ".join(sorted(object_origins.get(object_key, set()))[:3])
             suffix = f" referenced by {origins}" if origins else ""
@@ -412,7 +556,7 @@ def main(argv: list[str] | None = None) -> int:
         resolve_local=target_name in DEFAULT_TARGET_BY_ENV.values(),
     )
     for object_key in probe_keys:
-        is_video = object_key.startswith("media/video/")
+        is_video = _expected_content_type_prefix(object_key) == "video/"
         status, content_type = probe_results[object_key]
         base_url = _base_url_for_object_key(object_key, base_urls)
         expected_statuses = {"206"} if is_video else {"200", "206"}
@@ -442,8 +586,9 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "[verify_alpha_media_fixture_surface] OK "
         f"env={env_name} target={target_name} checked={checked} "
-        f"fixtureRefs={len(fixture_refs)} appMockGroupRefs={len(app_mock_group_refs)} "
-        f"appChatPrototypeAvatarRefs={len(app_chat_prototype_refs)} "
+        f"fixtureRefs={len(fixture_refs)} "
+        f"chatScenarioRefs={len(_collect_media_refs_from_json(CHAT_SCENARIO_FIXTURE_PATH))} "
+        f"appPrototypeAvatarRefs={len(app_prototype_refs)} "
         f"videoRange={video_checked} avatarBase={base_urls['avatar']} "
         f"imageBase={base_urls['image']} videoBase={base_urls['video']}"
     )

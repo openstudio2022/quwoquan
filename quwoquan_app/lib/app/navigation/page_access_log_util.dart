@@ -7,6 +7,7 @@ import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
+import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 
@@ -15,6 +16,7 @@ import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 Future<void> writeAppPageAccessOpen({
   required String location,
   required String pageVisitId,
+  DateTime? navigationStartedAt,
   String? pageNameOverride,
   VisitRecorderService? visitRecorder,
   AppTelemetryRecorder? telemetryReporter,
@@ -22,7 +24,14 @@ Future<void> writeAppPageAccessOpen({
   final trace = AppTraceContextStore.instance;
   final pageName = pageNameOverride ?? pageNameFromRouteLocation(location);
   if (pageName.isEmpty) return Future<void>.value();
+  final openedAt = navigationStartedAt ?? DateTime.now();
   AppPageContextStore.instance.setPageName(pageName);
+  AppPageExperienceTracker.instance.beginPageVisit(
+    pageName: pageName,
+    pageVisitId: pageVisitId,
+    openedAt: openedAt,
+    reporter: telemetryReporter,
+  );
   unawaited(
     visitRecorder?.recordVisit(VisitTarget.page(pageName)) ??
         Future<void>.value(),
@@ -43,15 +52,29 @@ Future<void> writeAppPageAccessOpen({
       summaryPayload: <String, Object?>{'event': 'open', 'route': location},
     ),
   );
-  unawaited(
-    telemetryReporter?.record(
-          AppTelemetryPayload.pageOpen(),
+  if (telemetryReporter == null) return Future<void>.value();
+  // readyMs 只表示路由进入到页面首帧渲染完成；业务可用 TTI 由
+  // AppPageExperienceTracker 的 page_first_usable 终态单独结算。
+  // 无渲染管线（纯 Dart 测试）时退化为立即上报且不带 readyMs。
+  final binding = WidgetsBinding.instance;
+  if (binding.firstFrameRasterized || binding.hasScheduledFrame) {
+    binding.addPostFrameCallback((_) {
+      final readyMs = DateTime.now().difference(openedAt).inMilliseconds;
+      unawaited(
+        telemetryReporter.record(
+          AppTelemetryPayload.pageOpen(readyMs: readyMs),
           pageName: pageName,
-        ) ??
-        Future<AppTelemetryRecordResult>.value(
-          AppTelemetryRecordResult.rejected,
         ),
-  );
+      );
+    });
+  } else {
+    unawaited(
+      telemetryReporter.record(
+        AppTelemetryPayload.pageOpen(),
+        pageName: pageName,
+      ),
+    );
+  }
   return Future<void>.value();
 }
 
@@ -66,6 +89,7 @@ Future<void> writeAppPageAccessReturn({
   final durationMs = DateTime.now().difference(enterAt).inMilliseconds;
   final pageName = pageNameOverride ?? pageNameFromRouteLocation(location);
   if (pageName.isEmpty) return Future<void>.value();
+  AppPageExperienceTracker.instance.endPageVisit(pageVisitId);
   unawaited(
     AppLogService.instance.writeEvent(
       logType: AppLogType.pageAccess,

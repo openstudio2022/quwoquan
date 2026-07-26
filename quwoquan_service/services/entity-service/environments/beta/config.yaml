@@ -1,0 +1,9 @@
+overrides:
+  sys.entity-service.redis.rec.addr: 127.0.0.1:6379
+secretRefs:
+  sys.entity-service.mongo.uri: ENTITY_MONGO_URI
+  sys.entity-service.redis.general.password: ENTITY_REDIS_PASSWORD
+  sys.entity-service.redis.rec.password: ENTITY_REDIS_PASSWORD
+externalBindings:
+  runtime.message.transport:
+    state: enabled

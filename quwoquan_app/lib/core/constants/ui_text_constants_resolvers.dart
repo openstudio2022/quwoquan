@@ -80,7 +80,7 @@ String _webPcPrimaryLabel(String routeName) {
     case 'create':
       return UITextConstants.webPcPrimaryCreate;
     case 'chat':
-      return UITextConstants.webPcPrimaryMessages;
+      return ChatText.webPcPrimaryMessages;
     case 'profile':
       return UITextConstants.webPcPrimaryProfile;
     default:

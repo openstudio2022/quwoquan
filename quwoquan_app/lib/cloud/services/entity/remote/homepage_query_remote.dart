@@ -12,7 +12,8 @@ typedef HomepageQueryInvocationContextFactory =
     });
 
 /// 实体主页全部 commercial-ready 查询的唯一远端适配器。
-final class RemoteHomepageQueryAdapter {
+final class RemoteHomepageQueryAdapter
+    implements HomepageQueryFacet, HomepageIntroductionQuery {
   const RemoteHomepageQueryAdapter({
     required this.client,
     required this.invocationContext,
@@ -21,6 +22,7 @@ final class RemoteHomepageQueryAdapter {
   final GeneratedCloudOperationClient client;
   final HomepageQueryInvocationContextFactory invocationContext;
 
+  @override
   Future<HomepageSearchSlice> searchHomepages(
     HomepageSearchQuery query, {
     CloudOperationCancellationSignal? cancellation,
@@ -37,6 +39,7 @@ final class RemoteHomepageQueryAdapter {
     );
   }
 
+  @override
   Future<HomepageDetailProjection> getHomepageDetail(String homepageId) {
     return client.entityHomepageGetHomepageDetail(
       HomepageByIdQuery(homepageId: homepageId),
@@ -47,6 +50,7 @@ final class RemoteHomepageQueryAdapter {
     );
   }
 
+  @override
   Future<HomepageShellProjection> getHomepageShell(String homepageId) {
     return client.entityHomepageGetHomepageShell(
       HomepageByIdQuery(homepageId: homepageId),
@@ -57,18 +61,22 @@ final class RemoteHomepageQueryAdapter {
     );
   }
 
+  @override
   Future<HomepageIntroductionProjection> getHomepageIntroduction(
-    String homepageId,
-  ) {
+    String homepageId, {
+    CloudOperationCancellationSignal? cancellation,
+  }) {
     return client.entityHomepageGetHomepageIntroduction(
       HomepageByIdQuery(homepageId: homepageId),
       context: invocationContext(
         EntityRequestPageIds.getHomepageIntroduction,
         HomepageQuerySurface.introduction,
+        cancellation: cancellation,
       ),
     );
   }
 
+  @override
   Future<HomepageObjectPageBundleProjection> getObjectPageBundle(
     HomepageObjectPageBundleQuery query,
   ) {
@@ -81,6 +89,7 @@ final class RemoteHomepageQueryAdapter {
     );
   }
 
+  @override
   Future<HomepageReviewSummaryProjection> getHomepageReviewSummary(
     String homepageId,
   ) {
@@ -93,6 +102,7 @@ final class RemoteHomepageQueryAdapter {
     );
   }
 
+  @override
   Future<HomepageImpactSummaryProjection> getEntityImpact(String homepageId) {
     return client.entityHomepageGetEntityImpact(
       HomepageByIdQuery(homepageId: homepageId),
@@ -103,6 +113,7 @@ final class RemoteHomepageQueryAdapter {
     );
   }
 
+  @override
   Future<HomepageRelatedGroupsSlice> getHomepageRelatedGroups(
     String homepageId,
   ) {

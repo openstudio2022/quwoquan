@@ -13,11 +13,11 @@ from core.image_asset_strategy import (
 )
 from core.io import write_json
 from core.paths import execution_root
-from content.source.research.source_quality import _license_allows_app_publish  # noqa: PLC2701
 from content.source.source_inputs import curated_images_for_entity
 from content.execution import store
-from content.execution.coverage import coverage_entity_ids, coverage_entity_type
+from content.execution.coverage import coverage_entity_ids, coverage_entity_type_for_entity
 from core.control_types import ContentType
+from governance.coverage.license import audit_image_rights, validate_image_rights
 
 
 OPEN_LICENSE_SCALE_PROOF_SCHEMA = "quwoquan_data.open_license_scale_proof"
@@ -42,19 +42,16 @@ def _publishable_image_issue(
     image: Mapping[str, Any],
     *,
     expected_lane: ContentType,
+    vertical: str,
 ) -> str:
     url = str(image.get("url") or "").strip()
     if not url:
         return "missing url"
     if str(image.get("researchLane") or expected_lane.value) != expected_lane.value:
         return f"not {expected_lane.value} research lane"
-    for field in ("license", "credit", "sourceUrl", "termsUrl", "authorizationProof", "usageScope"):
-        if not str(image.get(field) or "").strip():
-            return f"missing {field}"
-    if str(image.get("usageScope") or "") != "app_publish":
-        return f"usageScope={image.get('usageScope') or ''} is not app_publish"
-    if not _license_allows_app_publish(str(image.get("license") or ""), str(image.get("termsUrl") or "")):
-        return f"license {image.get('license') or ''} is not app publish compatible"
+    blocking_rights_issues = validate_image_rights(image, vertical=vertical)
+    if blocking_rights_issues:
+        return blocking_rights_issues[0]
     try:
         width = int(image.get("width") or 0)
         height = int(image.get("height") or 0)
@@ -73,8 +70,8 @@ def _publishable_image_issue(
 def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
     spec = store.load_spec(execution_id)
     entity_ids = coverage_entity_ids(spec)
-    entity_type = coverage_entity_type(spec)
     spec_model = store.load_spec_model(execution_id)
+    vertical = spec_model.vertical
     content_type = spec_model.content.carriers[0]
     desired_images_per_target = _quota_int(spec, "imageWorksPerTarget", default=0)
     configured_minimum = minimum_publishable_images_per_target(spec)
@@ -91,9 +88,12 @@ def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
     entity_rows: list[dict[str, Any]] = []
     all_urls: set[str] = set()
     all_collection_ids: set[str] = set()
+    rights_audit_issue_count = 0
+    rights_audit_issue_sample: list[dict[str, object]] = []
     minimum_passed_entities = 0
     desired_passed_entities = 0
     for entity_id in entity_ids:
+        entity_type = coverage_entity_type_for_entity(spec, entity_id)
         images = curated_images_for_entity(
             execution_id,
             entity_id,
@@ -106,7 +106,17 @@ def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
         for image in images:
             url = str(image.get("url") or "").strip()
             collection_id = str(image.get("sourceCollectionId") or "").strip()
-            issue = _publishable_image_issue(image, expected_lane=content_type)
+            rights_audit_issues = audit_image_rights(image, vertical=vertical)
+            rights_audit_issue_count += len(rights_audit_issues)
+            if rights_audit_issues and len(rights_audit_issue_sample) < 8:
+                rights_audit_issue_sample.append(
+                    {"entityId": entity_id, "url": url, "issues": rights_audit_issues}
+                )
+            issue = _publishable_image_issue(
+                image,
+                expected_lane=content_type,
+                vertical=vertical,
+            )
             if issue:
                 rejected.append({"url": url, "sourceCollectionId": collection_id, "reason": issue})
                 continue
@@ -229,6 +239,8 @@ def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
             )
         ],
         "entities": entity_rows,
+        "rightsAuditIssueCount": rights_audit_issue_count,
+        "rightsAuditIssueSample": rights_audit_issue_sample,
     }
     return report
 

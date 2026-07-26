@@ -247,108 +247,55 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   bool _entryIsArticle(CircleHubFeedPostEntry entry) {
-    final d = entry.dto;
-    if (d != null) return d.type == 'article';
-    return _rawIsArticle(entry.raw);
+    return entry.isArticle;
   }
 
   bool _entryIsVideo(CircleHubFeedPostEntry entry) {
-    final d = entry.dto;
-    if (d != null) return d.isVideoLike;
-    return _rawIsVideo(entry.raw);
-  }
-
-  String _rawIdentity(Map<String, dynamic> item) {
-    return (item['contentIdentity'] ??
-            (item['type']?.toString() == 'micro' ? 'moment' : 'work'))
-        .toString();
-  }
-
-  String _rawDisplayFormat(Map<String, dynamic> item) {
-    final type = (item['type'] ?? '').toString();
-    switch (type) {
-      case 'image':
-        return 'image';
-      case 'video':
-        return 'video';
-      case 'article':
-        return 'note';
-      case 'micro':
-        return 'micro';
-      default:
-        return type;
-    }
+    return entry.isVideo;
   }
 
   String _entryIdentity(CircleHubFeedPostEntry entry) {
-    final d = entry.dto;
-    if (d != null) {
-      if (d.identity == 'moment') return 'moment';
-      return d.identity.isNotEmpty
-          ? d.identity
-          : (entry.raw['type']?.toString() == 'micro' ? 'moment' : 'work');
-    }
-    return _rawIdentity(entry.raw);
+    return entry.contentIdentity;
   }
 
   String _entryDisplayFormat(CircleHubFeedPostEntry entry) {
-    final d = entry.dto;
-    if (d != null) {
-      switch (d.type) {
-        case 'image':
-          return 'image';
-        case 'video':
-          return 'video';
-        case 'article':
-          return 'note';
-        case 'micro':
-          return 'micro';
-        default:
-          return d.type;
-      }
-    }
-    return _rawDisplayFormat(entry.raw);
+    return entry.displayFormat;
   }
 
   String _entryArticleTemplate(CircleHubFeedPostEntry entry) {
-    final rp = entry.tryReadPresentation();
-    if (rp != null && rp.articleTemplate.isNotEmpty) return rp.articleTemplate;
-    return (entry.raw['articleTemplate'] ?? '').toString();
+    return entry.articleTemplate;
   }
 
-  String _entryCoverUrl(CircleHubFeedPostEntry entry) => entry.wireCoverUrl;
+  String _entryCoverUrl(CircleHubFeedPostEntry entry) => entry.coverUrl;
 
   String _entryHeadlineText(CircleHubFeedPostEntry entry) {
-    final rp = entry.tryReadPresentation();
-    if (rp != null && rp.title.isNotEmpty) return rp.title;
-    return _rawHeadlineText(entry.raw);
+    if (entry.title.isNotEmpty) {
+      return entry.title;
+    }
+    if (entry.bodyText.isNotEmpty) {
+      return entry.bodyText;
+    }
+    return _entryTypeLabel(entry);
   }
 
   String _entrySupportingText(CircleHubFeedPostEntry entry) {
-    final rp = entry.tryReadPresentation();
-    if (rp == null) return _rawSupportingText(entry.raw);
-    final headline = rp.title.isNotEmpty ? rp.title : _entryTypeLabel(entry);
-    final summary = rp.body.trim();
-    if (_entryIsArticle(entry) && summary.isNotEmpty && summary != headline) {
-      return summary;
+    final body = entry.bodyText;
+    if (body.isEmpty || body == _entryHeadlineText(entry)) {
+      return '';
     }
-    return _rawSupportingText(entry.raw);
+    return body;
   }
 
   int _entryLikeCount(CircleHubFeedPostEntry entry) {
-    final rp = entry.tryReadPresentation();
-    if (rp != null) return rp.likeCount;
-    return _rawLikeCount(entry.raw);
+    return entry.likeCount;
   }
 
   String _entryAuthorDisplayName(CircleHubFeedPostEntry entry) {
-    return entry.wireAuthorDisplayName.trim();
+    return entry.authorDisplayName;
   }
 
   String _entryId(CircleHubFeedPostEntry entry) {
-    final rp = entry.tryReadPresentation();
-    if (rp != null && rp.postId.isNotEmpty) return rp.postId;
-    return entry.postIdForKey;
+    return entry.postId;
   }
 
   String _entryTypeLabel(CircleHubFeedPostEntry entry) {
@@ -369,7 +316,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   Widget _entryArticleTemplateBadge(CircleHubFeedPostEntry entry) {
-    return _rawArticleTemplateBadge(entry.raw);
+    return _articleTemplateBadge(entry.articleTemplate);
   }
 
   String _entryArticleTemplateLabel(CircleHubFeedPostEntry entry) {
@@ -378,24 +325,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   String _entryArticleRecommendationLabel(CircleHubFeedPostEntry entry) {
-    return _rawArticleRecommendationLabel(entry.raw);
-  }
-
-  String _rawTypeLabel(Map<String, dynamic> item) {
-    final identity = _rawIdentity(item);
-    if (identity == 'moment') {
-      return UITextConstants.creationFilterMoment;
-    }
-    switch (_rawDisplayFormat(item)) {
-      case 'image':
-        return UITextConstants.workFormatFilterImage;
-      case 'video':
-        return UITextConstants.workFormatFilterVideo;
-      case 'note':
-        return UITextConstants.creationSubText;
-      default:
-        return UITextConstants.homepageContentTypeDefault;
-    }
+    return _articleRecommendationLabel(entry.articleTemplate);
   }
 
   Widget _buildSortControls(
@@ -498,29 +428,23 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     CircleHubFeedPostEntry tapped,
     List<CircleHubFeedPostEntry> sourceItems,
   ) async {
-    final tappedDto = _tryParsePost(tapped);
-    if (tappedDto == null) return;
+    final tappedDto = tapped.post;
     if (!_supportsViewer(tappedDto)) return;
 
     final viewerEntries = sourceItems
-        .where((e) {
-          final d = _tryParsePost(e);
-          return d != null && _supportsViewer(d);
-        })
+        .where((entry) => _supportsViewer(entry.post))
         .toList(growable: false);
     if (viewerEntries.isEmpty) return;
 
     final viewerDtos = viewerEntries
-        .map((e) => _tryParsePost(e)!)
+        .map((entry) => entry.post)
         .toList(growable: false);
     final initialIndex = viewerDtos
         .indexWhere((item) => item.id == tappedDto.id)
         .clamp(0, viewerDtos.length - 1);
     final rawPostsById = <String, MediaViewerPostWireRow>{
-      for (final e in viewerEntries)
-        _tryParsePost(e)!.id: MediaViewerPostWireRow.fromDynamicMap(
-          Map<String, dynamic>.from(e.raw),
-        ),
+      for (final entry in viewerEntries)
+        entry.postId: entry.toMediaViewerWireRow(),
     };
 
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
@@ -544,9 +468,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       ),
       extra: MediaViewerExtra(
         posts: viewerDtos
-            .map(
-              (dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()),
-            )
+            .map(ContentSurfaceViewMapper.fromDto)
             .toList(growable: false),
         dtoPosts: viewerDtos,
         initialIndex: initialIndex,
@@ -563,9 +485,6 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
   }
 
-  PostBaseDto? _tryParsePost(CircleHubFeedPostEntry entry) =>
-      entry.tryResolveDto();
-
   bool _supportsViewer(PostBaseDto post) {
     return post.supportsUnifiedViewer;
   }
@@ -581,66 +500,234 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     });
   }
 
+  List<String> _presentationLabels(CircleHubFeedPostEntry entry) => [
+    if (entry.pinned) UITextConstants.circlePostPinnedBadge,
+    if (entry.featured) UITextConstants.circlePostFeaturedBadge,
+  ];
+
+  String _presentationEyebrow(
+    CircleHubFeedPostEntry entry,
+    String fallback,
+  ) {
+    final labels = _presentationLabels(entry);
+    if (labels.isEmpty) {
+      return fallback;
+    }
+    return [...labels, fallback].where((value) => value.isNotEmpty).join(' · ');
+  }
+
+  Widget _managedEntrySurface(
+    CircleHubFeedPostEntry entry, {
+    required Widget child,
+    required bool showOverlay,
+  }) {
+    final labels = _presentationLabels(entry);
+    final surface = showOverlay && labels.isNotEmpty
+        ? Stack(
+            clipBehavior: Clip.none,
+            children: [
+              child,
+              Positioned.directional(
+                textDirection: Directionality.of(context),
+                top: AppSpacing.sm,
+                end: AppSpacing.sm,
+                child: IgnorePointer(
+                  child: Wrap(
+                    spacing: AppSpacing.intraGroupXs,
+                    children: labels
+                        .map(
+                          (label) => Container(
+                            key: ValueKey<String>(
+                              'circle-post-presentation-${entry.postId}-$label',
+                            ),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.intraGroupXs,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryColor.withValues(
+                                alpha: 0.92,
+                              ),
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.circularBorderRadius,
+                              ),
+                            ),
+                            child: Text(
+                              label,
+                              style: TextStyle(
+                                color: AppColors.white,
+                                fontSize: AppTypography.xs,
+                                fontWeight: AppTypography.bold,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : child;
+    return GestureDetector(
+      behavior: HitTestBehavior.deferToChild,
+      onLongPress:
+          _isAdminOrOwner && entry.placementId.trim().isNotEmpty
+          ? () => _showPostManagement(entry)
+          : null,
+      child: surface,
+    );
+  }
+
+  Future<void> _showPostManagement(CircleHubFeedPostEntry entry) async {
+    final action = await showAppActionSheet<_CirclePostManagementAction>(
+      context,
+      title: UITextConstants.circlePostManagementTitle,
+      sections: [
+        AppActionSheetSection<_CirclePostManagementAction>(
+          items: [
+            AppActionSheetItem<_CirclePostManagementAction>(
+              value: _CirclePostManagementAction.pin,
+              label: entry.pinned
+                  ? UITextConstants.circlePostUnpinAction
+                  : UITextConstants.circlePostPinAction,
+              icon: entry.pinned
+                  ? CupertinoIcons.pin_slash
+                  : CupertinoIcons.pin,
+            ),
+            AppActionSheetItem<_CirclePostManagementAction>(
+              value: _CirclePostManagementAction.feature,
+              label: entry.featured
+                  ? UITextConstants.circlePostUnfeatureAction
+                  : UITextConstants.circlePostFeatureAction,
+              icon: entry.featured
+                  ? CupertinoIcons.star_slash
+                  : CupertinoIcons.star,
+            ),
+          ],
+        ),
+        const AppActionSheetSection<_CirclePostManagementAction>(
+          items: [
+            AppActionSheetItem<_CirclePostManagementAction>(
+              value: _CirclePostManagementAction.remove,
+              label: UITextConstants.circlePostRemoveAction,
+              icon: CupertinoIcons.delete,
+              isDestructive: true,
+            ),
+          ],
+        ),
+      ],
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    if (action == _CirclePostManagementAction.remove) {
+      final confirmed = await showCupertinoDialog<bool>(
+        context: context,
+        builder: (dialogContext) => CupertinoAlertDialog(
+          title: const Text(UITextConstants.circlePostRemoveConfirmTitle),
+          content: const Text(UITextConstants.circlePostRemoveConfirmMessage),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text(UITextConstants.cancel),
+            ),
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text(UITextConstants.circlePostRemoveAction),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) {
+        return;
+      }
+    }
+    try {
+      final writer = ref.read(circleDetailPostPlacementCommandWriterProvider);
+      final message = switch (action) {
+        _CirclePostManagementAction.pin => () async {
+          await writer.setPinned(
+            PinCirclePostCommand(
+              circleId: widget.circleId,
+              placementId: entry.placementId,
+              enabled: !entry.pinned,
+            ),
+          );
+          return UITextConstants.circlePostPinUpdated;
+        }(),
+        _CirclePostManagementAction.feature => () async {
+          await writer.setFeatured(
+            FeatureCirclePostCommand(
+              circleId: widget.circleId,
+              placementId: entry.placementId,
+              enabled: !entry.featured,
+            ),
+          );
+          return UITextConstants.circlePostFeatureUpdated;
+        }(),
+        _CirclePostManagementAction.remove => () async {
+          await writer.removePost(
+            RemoveCirclePostCommand(
+              circleId: widget.circleId,
+              placementId: entry.placementId,
+            ),
+          );
+          return UITextConstants.circlePostRemoved;
+        }(),
+      };
+      final resolvedMessage = await message;
+      await _loadFeed();
+      if (mounted) {
+        AppToast.show(context, resolvedMessage);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final semantic = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.section,
+      );
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: semantic,
+        onAction: (errorAction) async {
+          if (errorAction.type == UiErrorActionType.retry ||
+              errorAction.type == UiErrorActionType.resubmit) {
+            await _showPostManagement(entry);
+          }
+        },
+      );
+    }
+  }
+
   Widget _buildGridItem(
     CircleHubFeedPostEntry entry,
     Color fgSecondary, {
     required VoidCallback onTap,
   }) {
     if (_entryIsArticle(entry)) {
-      return _buildArticleGridItem(entry, fgSecondary, onTap: onTap);
+      return _managedEntrySurface(
+        entry,
+        showOverlay: true,
+        child: _buildArticleGridItem(entry, fgSecondary, onTap: onTap),
+      );
     }
     // 统一记录卡范式：封面 + 唯一交集句 + 标题 + 作者 + 点赞。
-    final dto = entry.tryResolveDto();
-    if (dto != null) {
-      return RecordPostCard(
+    return _managedEntrySurface(
+      entry,
+      showOverlay: true,
+      child: RecordPostCard(
         key: ValueKey<String>('circle-record-grid-${_entryId(entry)}'),
-        post: dto,
+        post: entry.post,
         isDark: widget.isDark,
         onTap: onTap,
         // N5：圈子记录卡 → 交集句对象片段点击精确归因为圈子内容（非推荐流）。
         referralSource: ReferralSource.circlePost,
-      );
-    }
-    final typeLabel = _entryTypeLabel(entry);
-    return PostPreviewCard(
-      isDark: widget.isDark,
-      title: _entryHeadlineText(entry),
-      supportingText: '',
-      coverUrl: _entryCoverUrl(entry),
-      mediaAspectRatio: _creationGridCoverAspectRatio,
-      showVideoBadge: _entryIsVideo(entry),
-      mediaOverlay: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.intraGroupXs,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.black.withValues(alpha: 0.32),
-          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-        ),
-        child: Text(
-          typeLabel,
-          style: TextStyle(
-            color: AppColors.white,
-            fontSize: AppTypography.xs,
-            fontWeight: AppTypography.semiBold,
-          ),
-        ),
-      ),
-      onTap: onTap,
-      footer: Row(
-        children: [
-          PostCardMetric(
-            icon: CupertinoIcons.heart_fill,
-            label: '${_entryLikeCount(entry)}',
-            color: fgSecondary,
-            iconColor: AppColors.error.withValues(alpha: 0.9),
-            textStyle: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: fgSecondary,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -651,35 +738,43 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     required VoidCallback onTap,
   }) {
     if (_entryIsArticle(entry)) {
-      return _buildArticleListItem(entry, fgSecondary, onTap: onTap);
+      return _managedEntrySurface(
+        entry,
+        showOverlay: false,
+        child: _buildArticleListItem(entry, fgSecondary, onTap: onTap),
+      );
     }
     final typeLabel = _entryTypeLabel(entry);
-    return PostPreviewListTile(
-      isDark: widget.isDark,
-      eyebrowText: typeLabel,
-      title: _entryHeadlineText(entry),
-      supportingText: _entrySupportingText(entry),
-      coverUrl: _entryCoverUrl(entry),
-      showVideoBadge: _entryIsVideo(entry),
-      onTap: onTap,
-      footer: Row(
-        children: [
-          PostCardMetric(
-            icon: CupertinoIcons.heart_fill,
-            label: '赞 ${_entryLikeCount(entry)}',
-            color: fgSecondary,
-            iconColor: AppColors.error.withValues(alpha: 0.9),
-            textStyle: TextStyle(
-              fontSize: AppTypography.iosCaption1,
+    return _managedEntrySurface(
+      entry,
+      showOverlay: false,
+      child: PostPreviewListTile(
+        isDark: widget.isDark,
+        eyebrowText: _presentationEyebrow(entry, typeLabel),
+        title: _entryHeadlineText(entry),
+        supportingText: _entrySupportingText(entry),
+        coverUrl: _entryCoverUrl(entry),
+        showVideoBadge: _entryIsVideo(entry),
+        onTap: onTap,
+        footer: Row(
+          children: [
+            PostCardMetric(
+              icon: CupertinoIcons.heart_fill,
+              label: '赞 ${_entryLikeCount(entry)}',
               color: fgSecondary,
+              iconColor: AppColors.error.withValues(alpha: 0.9),
+              textStyle: TextStyle(
+                fontSize: AppTypography.iosCaption1,
+                color: fgSecondary,
+              ),
             ),
-          ),
-        ],
-      ),
-      trailing: Icon(
-        CupertinoIcons.chevron_forward,
-        size: AppSpacing.iconSmall,
-        color: fgSecondary,
+          ],
+        ),
+        trailing: Icon(
+          CupertinoIcons.chevron_forward,
+          size: AppSpacing.iconSmall,
+          color: fgSecondary,
+        ),
       ),
     );
   }
@@ -702,21 +797,19 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       mediaAspectRatio: _creationGridCoverAspectRatio,
       mediaOverlay: _entryArticleTemplateBadge(entry),
       header: IntersectionReasonChip.fromReasons(
-        entry.dto?.intersectionReasons,
+        entry.post.intersectionReasons,
         isDark: widget.isDark,
         // N5：圈子文章卡 → 交集句对象片段点击精确归因为圈子内容（非推荐流）。
         referralSource: ReferralSource.circlePost,
         contextObjectName: _entryHeadlineText(entry).trim().isNotEmpty
             ? _entryHeadlineText(entry).trim()
             : _entrySupportingText(entry).trim(),
-        contextObjectTarget: entry.dto == null
-            ? null
-            : IntersectionTarget(
-                objectType: 'post',
-                objectId: entry.dto!.id,
-                objectKind: 'content',
-                routeId: 'workBrowser',
-              ),
+        contextObjectTarget: IntersectionTarget(
+          objectType: 'post',
+          objectId: entry.postId,
+          objectKind: 'content',
+          routeId: 'workBrowser',
+        ),
       ),
       onTap: onTap,
       footer: Column(
@@ -777,9 +870,12 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     return PostPreviewListTile(
       key: ValueKey<String>('circle-article-list-${_entryId(entry)}'),
       isDark: widget.isDark,
-      eyebrowText: recommendationLabel.isNotEmpty
-          ? recommendationLabel
-          : '笔记 · ${_entryArticleTemplateLabel(entry)}',
+      eyebrowText: _presentationEyebrow(
+        entry,
+        recommendationLabel.isNotEmpty
+            ? recommendationLabel
+            : '笔记 · ${_entryArticleTemplateLabel(entry)}',
+      ),
       eyebrowColor: AppColors.primaryColor,
       title: _entryHeadlineText(entry),
       supportingText: _entrySupportingText(entry),
@@ -822,54 +918,6 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     );
   }
 
-  bool _rawIsArticle(Map<String, dynamic> item) {
-    return (item['contentType'] ?? '').toString() == 'article';
-  }
-
-  String _rawTitle(Map<String, dynamic> item) {
-    final candidates = [
-      item['title'],
-      item['body'],
-      item['caption'],
-      item['summary'],
-    ];
-    for (final candidate in candidates) {
-      final text = candidate?.toString().trim() ?? '';
-      if (text.isNotEmpty) {
-        return text;
-      }
-    }
-    return _rawTypeLabel(item);
-  }
-
-  String _rawHeadlineText(Map<String, dynamic> item) {
-    final title = _rawTitle(item);
-    if (title.isNotEmpty) {
-      return title;
-    }
-    return _rawTypeLabel(item);
-  }
-
-  String _rawSupportingText(Map<String, dynamic> item) {
-    final headline = _rawHeadlineText(item);
-    final summary = (item['summary'] ?? '').toString().trim();
-    if (_rawIsArticle(item) && summary.isNotEmpty && summary != headline) {
-      return summary;
-    }
-    final body =
-        (item['body'] ??
-                item['description'] ??
-                item['content'] ??
-                item['caption'] ??
-                '')
-            .toString()
-            .trim();
-    if (body.isEmpty || body == headline) {
-      return '';
-    }
-    return body;
-  }
-
   List<String> _recommendedArticleTemplatesForCircle() {
     final categoryId = (_circleCategoryId ?? '').trim();
     if (categoryId.isEmpty) {
@@ -884,12 +932,12 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     return const <String>[];
   }
 
-  String _rawArticleRecommendationLabel(Map<String, dynamic> item) {
+  String _articleRecommendationLabel(String articleTemplate) {
     final recommended = _recommendedArticleTemplatesForCircle();
     if (recommended.isEmpty) {
       return '';
     }
-    final templateId = (item['articleTemplate'] ?? '').toString().trim();
+    final templateId = articleTemplate.trim();
     if (templateId.isNotEmpty && recommended.contains(templateId)) {
       return '讨论推荐 · ${articleTemplatePresetFromString(templateId).label}';
     }
@@ -901,17 +949,6 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       return '';
     }
     return '讨论推荐 · $labels';
-  }
-
-  int _rawLikeCount(Map<String, dynamic> item) {
-    return (item['likeCount'] as num?)?.toInt() ??
-        (item['likes'] as num?)?.toInt() ??
-        0;
-  }
-
-  bool _rawIsVideo(Map<String, dynamic> item) {
-    return (item['type'] ?? '').toString() == 'video' ||
-        (item['videoUrl']?.toString().trim() ?? '').isNotEmpty;
   }
 
   Widget _buildErrorCard() {

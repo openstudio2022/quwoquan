@@ -36,7 +36,7 @@ url: https://zh.wikipedia.org/wiki/都江堰
 platform: 维基百科
 ---
 
-都江堰是中国古代的大型水利工程，位于四川省都江堰市城西。导语段提供基础事实，篇幅足够。
+都江堰是中国古代的大型水利工程，位于test-region-b都江堰市城西。导语段提供基础事实，篇幅足够。
 
 == 主体工程 ==
 
@@ -189,6 +189,7 @@ def test_homepage_validation_allows_text_only_and_inline_figures() -> None:
         )
         file_name = f"{asset_id}.jpg"
         manifest = {
+            "vertical": "travel",
             "assets": [
                 {
                     "assetId": asset_id,
@@ -197,6 +198,7 @@ def test_homepage_validation_allows_text_only_and_inline_figures() -> None:
                     "sourceRef": "entities/x/1.download/sources/01.wiki/source.md",
                     "sourceAssetRef": "entities/x/1.download/sources/01.wiki/assets/001.jpg",
                     "authorizationProof": "https://example.com/proof",
+                    "rightsAuditStatus": "verified",
                 }
             ],
             "textSourceRefs": ["entities/x/1.download/sources/01.wiki/source.md"],

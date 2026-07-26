@@ -1,11 +1,19 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
-import 'package:quwoquan_app/core/platform/content_addressed_upload_headers.dart';
-import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
+import 'package:quwoquan_app/application/content/media/content_media_cover_selection.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/ui/content/entry/services/create_page_article_media_projection.dart';
+import 'package:quwoquan_app/ui/content/entry/services/create_page_article_media_uploader.dart';
+import 'package:quwoquan_app/ui/content/entry/services/prepared_post_publication_payload.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/article_render/markdown/qwq_markdown.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+export 'package:quwoquan_app/ui/content/entry/services/prepared_post_publication_payload.dart';
+export 'package:quwoquan_app/ui/content/entry/services/create_page_article_media_projection.dart'
+    show
+        buildArticleAssetManifestForPayload,
+        buildArticleRenderProfileForPayload;
 
 int paragraphCountForPayload(String text) {
   return text
@@ -17,13 +25,13 @@ int paragraphCountForPayload(String text) {
 
 bool shouldPublishAsArticleForPayload(CreateEditorState state) {
   return state.title.trim().isNotEmpty ||
-      state.imagePaths.isNotEmpty ||
       state.body.trim().length >= 140 ||
       paragraphCountForPayload(state.body) >= 2;
 }
 
 String articleSummaryForPayload(CreateEditorState state) {
-  final plainText = state.body.trim();
+  final documentText = state.articleDocument.body.trim();
+  final plainText = documentText.isNotEmpty ? documentText : state.body.trim();
   if (plainText.isEmpty) {
     return state.imagePaths.isNotEmpty ? '图文内容' : '';
   }
@@ -158,7 +166,7 @@ List<Map<String, dynamic>> semanticMentionsForPayload(CreateEditorState state) {
 }
 
 /// 防御性镜像服务端 `semantic.ValidTargetRef`（唯一权威：
-/// `quwoquan_service/services/content-service/internal/domain/post/semantic/mentions.go`）。
+/// `quwoquan_service/services/content-service/internal/content/post/domain/semantic/mentions.go`）。
 /// 仅用于发布前过滤必然非法 / candidate 的 targetRef；服务端仍为最终校验权威。
 bool isSemanticTargetRefValid(String kind, String ref) {
   final value = ref.trim();
@@ -194,75 +202,6 @@ bool isSemanticTargetRefValid(String kind, String ref) {
     default:
       return false;
   }
-}
-
-Map<String, dynamic> buildArticleAssetManifestForPayload(
-  CreateEditorState state,
-) {
-  final assets = <Map<String, Object?>>[];
-  final cover = coverAssetPathForPayload(state);
-  if (cover.trim().isNotEmpty) {
-    assets.add(_assetManifestRow('cover', cover.trim(), role: 'cover'));
-  }
-  for (final asset in state.articleDocument.assets) {
-    final imagePath = asset.imageUrl.trim();
-    if (imagePath.isEmpty) {
-      continue;
-    }
-    final assetId = asset.id.trim().isNotEmpty
-        ? asset.id.trim()
-        : _assetIdForPath(imagePath, 'inline');
-    assets.add(_assetManifestRow(assetId, imagePath, role: 'figure'));
-  }
-  return <String, dynamic>{
-    'schema': 'article-asset-manifest',
-    'markdownVersion': qwqRichMarkdownVersion,
-    'assets': assets,
-  };
-}
-
-Map<String, dynamic> buildArticleRenderProfileForPayload(
-  CreateEditorState state,
-) {
-  return <String, dynamic>{
-    'template': state.articleTemplate.name,
-    'fontPreset': state.articleFontPreset.name,
-    'layoutPolicy': <String, Object?>{
-      'wrapDowngrade': 'compactWidthToFullWidth',
-      'galleryDowngrade': 'singleColumn',
-    },
-  };
-}
-
-String _assetIdForPath(String path, String prefix) {
-  final normalized = path.trim().replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
-  final suffix = normalized.length > 40
-      ? normalized.substring(normalized.length - 40)
-      : normalized;
-  return '${prefix}_${suffix.isEmpty ? 'asset' : suffix}';
-}
-
-Map<String, Object?> _assetManifestRow(
-  String assetId,
-  String path, {
-  required String role,
-}) {
-  return <String, Object?>{
-    'assetId': assetId,
-    'kind': 'image',
-    'role': role,
-    'scope': 'draft',
-    'variantGeneration': <String, Object?>{
-      'required': true,
-      'profiles': <String>['thumbnail', 'display', 'cover', 'full', 'original'],
-      'source': 'server',
-    },
-    'localPath': path,
-    'objectKey': path.startsWith('asset://')
-        ? path.substring('asset://'.length)
-        : path,
-    'sha256': '',
-  };
 }
 
 /// 创作编辑器到原子发布命令的唯一 payload 出口。
@@ -366,54 +305,130 @@ Map<String, Object?> buildPostPublicationPayloadMap(CreateEditorState state) {
   };
 }
 
-typedef CreateMediaObjectUploader =
-    Future<void> Function(
-      Uri uploadUri,
-      List<int> bytes, {
-      required String contentType,
-      required String expectedSha256,
-    });
+typedef PostMediaUploadProgressCallback = void Function(double progress);
 
-class PreparedPostPublicationPayload {
-  const PreparedPostPublicationPayload({
-    required this.payload,
-    required this.mediaAssetIds,
-  });
-
-  final Map<String, Object?> payload;
-  final List<String> mediaAssetIds;
+/// 返回首次点击发布时可持久化的媒体准备意图。
+///
+/// 本地路径仅属于草稿和本次流式读取，不能进入持久发布命令；MediaAsset 尚未产生时，
+/// 队列只记录不可变发布身份和非交付展示元数据，并在上传完成后原子替换为最终命令。
+PreparedPostPublicationPayload buildPostPublicationMediaPreparationPayload(
+  CreateEditorState state,
+) {
+  final payload =
+      Map<String, Object?>.from(buildPostPublicationPayloadMap(state))
+        ..remove('mediaUrls')
+        ..remove('videoUrl')
+        ..remove('coverUrl')
+        ..remove('thumbnailUrl')
+        ..remove('mediaItems');
+  return PreparedPostPublicationPayload(
+    payload: payload,
+    mediaAssetIds: const <String>[],
+  );
 }
 
 Future<PreparedPostPublicationPayload>
 buildPostPublicationPayloadWithRemoteMedia({
   required ContentMediaFacet media,
-  required FileStorageGateway fileStorageGateway,
   required CreateEditorState state,
-  CreateMediaObjectUploader? uploadObject,
+  required ContentMediaSourceReader sourceReader,
+  required ContentMediaStreamObjectUpload uploadStream,
+  AppTelemetryRecorder? telemetry,
+  PostMediaUploadProgressCallback? onUploadProgress,
+  ContentMediaUploadCancellationSignal? cancellationSignal,
+  String? mediaPreparationIdentity,
+  Iterable<ContentMediaPreparationCheckpoint> preparedMediaAssets =
+      const <ContentMediaPreparationCheckpoint>[],
+  Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+  onMediaPrepared,
 }) async {
+  final preparedAssetsBySlot = <String, ContentMediaPreparationCheckpoint>{
+    for (final checkpoint in preparedMediaAssets) checkpoint.slot: checkpoint,
+  };
+  final preparationIdentity =
+      mediaPreparationIdentity?.trim().isNotEmpty == true
+      ? mediaPreparationIdentity!.trim()
+      : state.draftId?.trim() ?? '';
+  final publishesArticle =
+      state.editorKind == CreateEditorKind.text &&
+      shouldPublishAsArticleForPayload(state);
+  final hasMediaSource =
+      state.hasVideo ||
+      state.imagePaths.isNotEmpty ||
+      (publishesArticle &&
+          (state.articleCoverImagePath.trim().isNotEmpty ||
+              state.articleDocument.assets.isNotEmpty));
+  if (preparationIdentity.isEmpty && hasMediaSource) {
+    throw StateError('media publication requires a durable draft identity');
+  }
   final basePayload = Map<String, Object?>.from(
     buildPostPublicationPayloadMap(state),
   );
-  if (state.editorKind != CreateEditorKind.media) {
+  if (publishesArticle) {
+    return uploadArticleMediaForPublication(
+      state: state,
+      basePayload: basePayload,
+      coverSource: coverAssetPathForPayload(state),
+      summary: state.settings.summary.trim().isNotEmpty
+          ? state.settings.summary.trim()
+          : articleSummaryForPayload(state),
+      tagRefs: tagRefsForPayload(state),
+      entityRefs: entityRefsForPayload(state),
+      resolve:
+          ({
+            required source,
+            required slot,
+            required index,
+            required total,
+          }) async {
+            final resolved = await _resolveMediaReference(
+              media: media,
+              localOrRemotePath: source,
+              mediaType: ContentMediaType.image,
+              sourceReader: sourceReader,
+              uploadStream: uploadStream,
+              telemetry: telemetry,
+              onProgress: (uploaded, length) {
+                final progress = length == 0 ? 0 : uploaded / length;
+                onUploadProgress?.call((index + progress) / total);
+              },
+              cancellationSignal: cancellationSignal,
+              preparationIdentity: preparationIdentity,
+              slot: slot,
+              preparedAssetsBySlot: preparedAssetsBySlot,
+              onMediaPrepared: onMediaPrepared,
+            );
+            return resolved.assetId;
+          },
+    );
+  }
+  if (state.editorKind != CreateEditorKind.media && state.imagePaths.isEmpty) {
     return PreparedPostPublicationPayload(
       payload: basePayload,
       mediaAssetIds: const <String>[],
     );
   }
-  // 上传服务的 cdnUrl 只用于本次上传协议，绝不能进入 Post 写入 payload。
+  // 上传完成后的 publicSliceKey 只服务交付解析，Post 写入只携带 assetId。
   // 发布时由 SubmitPostPublication 原子绑定并投影 canonical publicSliceKey。
   basePayload
     ..remove('mediaUrls')
     ..remove('videoUrl')
     ..remove('coverUrl')
-    ..remove('thumbnailUrl');
+    ..remove('thumbnailUrl')
+    ..remove('mediaItems');
   if (state.hasVideo) {
     return _buildPostPublicationPayloadWithRemoteVideoMedia(
       media: media,
-      fileStorageGateway: fileStorageGateway,
       state: state,
       basePayload: basePayload,
-      uploadObject: uploadObject ?? _defaultUploadMediaObject,
+      sourceReader: sourceReader,
+      uploadStream: uploadStream,
+      telemetry: telemetry,
+      onUploadProgress: onUploadProgress,
+      cancellationSignal: cancellationSignal,
+      preparationIdentity: preparationIdentity,
+      preparedAssetsBySlot: preparedAssetsBySlot,
+      onMediaPrepared: onMediaPrepared,
     );
   }
   if (state.imagePaths.isEmpty) {
@@ -423,15 +438,27 @@ buildPostPublicationPayloadWithRemoteMedia({
     );
   }
 
-  final uploader = uploadObject ?? _defaultUploadMediaObject;
   final assetIds = <String>[];
-  for (final path in state.imagePaths) {
+  for (var index = 0; index < state.imagePaths.length; index++) {
+    final path = state.imagePaths[index];
     final resolved = await _resolveMediaReference(
       media: media,
-      fileStorageGateway: fileStorageGateway,
       localOrRemotePath: path,
       mediaType: ContentMediaType.image,
-      uploadObject: uploader,
+      sourceReader: sourceReader,
+      uploadStream: uploadStream,
+      telemetry: telemetry,
+      onProgress: (uploadedBytes, totalBytes) {
+        final itemProgress = totalBytes == 0 ? 0 : uploadedBytes / totalBytes;
+        onUploadProgress?.call(
+          (index + itemProgress) / state.imagePaths.length,
+        );
+      },
+      cancellationSignal: cancellationSignal,
+      preparationIdentity: preparationIdentity,
+      slot: 'image:$index',
+      preparedAssetsBySlot: preparedAssetsBySlot,
+      onMediaPrepared: onMediaPrepared,
     );
     if (resolved.assetId.isNotEmpty) {
       assetIds.add(resolved.assetId);
@@ -440,9 +467,6 @@ buildPostPublicationPayloadWithRemoteMedia({
   if (assetIds.isEmpty) {
     throw StateError('image publish requires uploaded media asset ids');
   }
-  basePayload['mediaItems'] = assetIds
-      .map((assetId) => <String, Object?>{'kind': 'image', 'mediaId': assetId})
-      .toList(growable: false);
   return PreparedPostPublicationPayload(
     payload: basePayload,
     mediaAssetIds: assetIds,
@@ -452,17 +476,35 @@ buildPostPublicationPayloadWithRemoteMedia({
 Future<PreparedPostPublicationPayload>
 _buildPostPublicationPayloadWithRemoteVideoMedia({
   required ContentMediaFacet media,
-  required FileStorageGateway fileStorageGateway,
   required CreateEditorState state,
   required Map<String, Object?> basePayload,
-  required CreateMediaObjectUploader uploadObject,
+  required ContentMediaSourceReader sourceReader,
+  required ContentMediaStreamObjectUpload uploadStream,
+  AppTelemetryRecorder? telemetry,
+  PostMediaUploadProgressCallback? onUploadProgress,
+  ContentMediaUploadCancellationSignal? cancellationSignal,
+  required String preparationIdentity,
+  required Map<String, ContentMediaPreparationCheckpoint> preparedAssetsBySlot,
+  Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+  onMediaPrepared,
 }) async {
+  final itemCount = state.videoThumbnail.trim().isEmpty ? 1 : 2;
   final video = await _resolveMediaReference(
     media: media,
-    fileStorageGateway: fileStorageGateway,
     localOrRemotePath: state.videoPath,
     mediaType: ContentMediaType.video,
-    uploadObject: uploadObject,
+    sourceReader: sourceReader,
+    uploadStream: uploadStream,
+    telemetry: telemetry,
+    onProgress: (uploadedBytes, totalBytes) {
+      final itemProgress = totalBytes == 0 ? 0 : uploadedBytes / totalBytes;
+      onUploadProgress?.call(itemProgress / itemCount);
+    },
+    cancellationSignal: cancellationSignal,
+    preparationIdentity: preparationIdentity,
+    slot: 'video:0',
+    preparedAssetsBySlot: preparedAssetsBySlot,
+    onMediaPrepared: onMediaPrepared,
   );
   if (video.assetId.isEmpty) {
     throw StateError('video publish requires an uploaded MediaAsset id');
@@ -471,18 +513,44 @@ _buildPostPublicationPayloadWithRemoteVideoMedia({
 
   final cover = await _resolveRemoteVideoCover(
     media: media,
-    fileStorageGateway: fileStorageGateway,
-    videoAssetId: video.assetId,
     localOrRemoteCoverPath: state.videoThumbnail,
-    coverStrategy: _videoCoverStrategyForPayload(state),
-    coverFrameTimeMs: state.videoCoverTimeMs,
-    uploadObject: uploadObject,
+    sourceReader: sourceReader,
+    uploadStream: uploadStream,
+    telemetry: telemetry,
+    onProgress: (uploadedBytes, totalBytes) {
+      final itemProgress = totalBytes == 0 ? 0 : uploadedBytes / totalBytes;
+      onUploadProgress?.call((1 + itemProgress) / itemCount);
+    },
+    cancellationSignal: cancellationSignal,
+    preparationIdentity: preparationIdentity,
+    preparedAssetsBySlot: preparedAssetsBySlot,
+    onMediaPrepared: onMediaPrepared,
   );
   if (cover.assetId.isNotEmpty) {
     assetIds.add(cover.assetId);
   }
+  final selectedCover = await selectContentMediaCoverWhenReady(
+    cancellationSignal: cancellationSignal,
+    command: () => cover.assetId.isNotEmpty
+        ? media.selectManualCover(
+            SelectManualContentMediaCoverCommand(
+              mediaId: video.assetId,
+              coverAssetId: cover.assetId,
+            ),
+            ContentMediaAssetCommandContext(
+              idempotencyKey:
+                  'content.media.cover.manual:${video.assetId}:${cover.assetId}',
+            ),
+          )
+        : media.selectAutoCover(
+            SelectAutoContentMediaCoverCommand(mediaId: video.assetId),
+            ContentMediaAssetCommandContext(
+              idempotencyKey: 'content.media.cover.auto:${video.assetId}',
+            ),
+          ),
+  );
 
-  basePayload['coverStrategy'] = cover.coverStrategy;
+  basePayload['coverStrategy'] = selectedCover.coverStrategy;
   basePayload['coverFrameTimeMs'] = state.videoCoverTimeMs;
   if (state.videoDurationMs > 0) {
     basePayload['durationMs'] = state.videoDurationMs;
@@ -493,19 +561,6 @@ _buildPostPublicationPayloadWithRemoteVideoMedia({
   if (state.videoHeight > 0) {
     basePayload['height'] = state.videoHeight;
   }
-  basePayload['mediaItems'] = <Map<String, Object?>>[
-    <String, Object?>{
-      'kind': 'video',
-      'coverStrategy': cover.coverStrategy,
-      'coverFrameTimeMs': state.videoCoverTimeMs,
-      if (state.videoDurationMs > 0) 'durationMs': state.videoDurationMs,
-      if (state.videoWidth > 0) 'width': state.videoWidth,
-      if (state.videoHeight > 0) 'height': state.videoHeight,
-      if (video.assetId.isNotEmpty) 'mediaId': video.assetId,
-      if (cover.assetId.isNotEmpty) 'coverAssetId': cover.assetId,
-    },
-  ];
-
   return PreparedPostPublicationPayload(
     payload: basePayload,
     mediaAssetIds: assetIds,
@@ -519,22 +574,27 @@ class _ResolvedMediaReference {
 }
 
 class _ResolvedVideoCoverReference {
-  const _ResolvedVideoCoverReference({
-    required this.coverStrategy,
-    this.assetId = '',
-  });
+  const _ResolvedVideoCoverReference({this.assetId = ''});
 
-  final String coverStrategy;
   final String assetId;
 }
 
 Future<_ResolvedMediaReference> _resolveMediaReference({
   required ContentMediaFacet media,
-  required FileStorageGateway fileStorageGateway,
   required String localOrRemotePath,
   required ContentMediaType mediaType,
-  required CreateMediaObjectUploader uploadObject,
+  required ContentMediaSourceReader sourceReader,
+  required ContentMediaStreamObjectUpload uploadStream,
+  AppTelemetryRecorder? telemetry,
+  ContentMediaUploadProgressCallback? onProgress,
+  ContentMediaUploadCancellationSignal? cancellationSignal,
+  required String preparationIdentity,
+  required String slot,
+  required Map<String, ContentMediaPreparationCheckpoint> preparedAssetsBySlot,
+  Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+  onMediaPrepared,
 }) async {
+  cancellationSignal?.throwIfCancelled();
   final path = localOrRemotePath.trim();
   if (path.isEmpty) {
     throw StateError('empty media path');
@@ -546,74 +606,107 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
         'media publish requires a MediaAsset reference, not a delivery URL',
       );
     }
+    onProgress?.call(1, 1);
     return _ResolvedMediaReference(assetId: assetId);
   }
-  final uploaded = await ContentMediaUploadCoordinator(
+  final coordinator = ContentMediaUploadCoordinator(
     media: media,
-    fileStorage: fileStorageGateway,
-    uploadObject: uploadObject,
-  ).uploadLocalPath(localPath: path, mediaType: mediaType);
+    telemetry: telemetry,
+  );
+  final source = await sourceReader.prepare(path);
+  cancellationSignal?.throwIfCancelled();
+  final checkpoint = preparedAssetsBySlot[slot];
+  if (checkpoint != null &&
+      checkpoint.matches(
+        expectedSlot: slot,
+        expectedMediaType: mediaType,
+        expectedSha256Digest: source.sha256Digest,
+      ) &&
+      checkpoint.isCompleted) {
+    onProgress?.call(source.fileSize, source.fileSize);
+    return _ResolvedMediaReference(assetId: checkpoint.assetId);
+  }
+  final durableCheckpoint =
+      checkpoint != null &&
+          checkpoint.matches(
+            expectedSlot: slot,
+            expectedMediaType: mediaType,
+            expectedSha256Digest: source.sha256Digest,
+          )
+      ? checkpoint
+      : ContentMediaPreparationCheckpoint.forSource(
+          preparationIdentity: preparationIdentity,
+          slot: slot,
+          mediaType: mediaType,
+          sha256Digest: source.sha256Digest,
+        );
+  if (checkpoint == null || !identical(checkpoint, durableCheckpoint)) {
+    await onMediaPrepared?.call(durableCheckpoint);
+    preparedAssetsBySlot[slot] = durableCheckpoint;
+  }
+  final uploaded = await coordinator.uploadPreparedSource(
+    source: source,
+    mediaType: mediaType,
+    contentType: contentMediaTypeForPath(path, mediaType),
+    uploadStream: uploadStream,
+    onProgress: onProgress,
+    cancellationSignal: cancellationSignal,
+    accessPolicy: ContentMediaAccessPolicy.referencedPost,
+    checkpoint: durableCheckpoint,
+    onCheckpoint: (updated) async {
+      await onMediaPrepared?.call(updated);
+      preparedAssetsBySlot[slot] = updated;
+    },
+  );
   final assetId = uploaded.assetId.trim();
   if (assetId.isEmpty) {
     throw StateError('uploaded media is missing its MediaAsset id');
   }
+  final prepared = durableCheckpoint.copyWith(
+    sessionId: uploaded.sessionId,
+    assetId: assetId,
+    phase: ContentMediaPreparationPhase.completed,
+  );
+  await onMediaPrepared?.call(prepared);
+  preparedAssetsBySlot[slot] = prepared;
   return _ResolvedMediaReference(assetId: assetId);
 }
 
 Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
   required ContentMediaFacet media,
-  required FileStorageGateway fileStorageGateway,
-  required String videoAssetId,
   required String localOrRemoteCoverPath,
-  required String coverStrategy,
-  required int coverFrameTimeMs,
-  required CreateMediaObjectUploader uploadObject,
+  required ContentMediaSourceReader sourceReader,
+  required ContentMediaStreamObjectUpload uploadStream,
+  AppTelemetryRecorder? telemetry,
+  ContentMediaUploadProgressCallback? onProgress,
+  ContentMediaUploadCancellationSignal? cancellationSignal,
+  required String preparationIdentity,
+  required Map<String, ContentMediaPreparationCheckpoint> preparedAssetsBySlot,
+  Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+  onMediaPrepared,
 }) async {
+  cancellationSignal?.throwIfCancelled();
   final coverPath = localOrRemoteCoverPath.trim();
   if (coverPath.isNotEmpty) {
     final cover = await _resolveMediaReference(
       media: media,
-      fileStorageGateway: fileStorageGateway,
       localOrRemotePath: coverPath,
       mediaType: ContentMediaType.image,
-      uploadObject: uploadObject,
+      sourceReader: sourceReader,
+      uploadStream: uploadStream,
+      telemetry: telemetry,
+      onProgress: onProgress,
+      cancellationSignal: cancellationSignal,
+      preparationIdentity: preparationIdentity,
+      slot: 'cover:0',
+      preparedAssetsBySlot: preparedAssetsBySlot,
+      onMediaPrepared: onMediaPrepared,
     );
-    var resolvedStrategy = coverStrategy == 'manual' ? 'manual' : 'first_frame';
-    if (videoAssetId.isNotEmpty && cover.assetId.isNotEmpty) {
-      final selected = await media.selectManualCover(
-        SelectManualContentMediaCoverCommand(
-          mediaId: videoAssetId,
-          coverAssetId: cover.assetId,
-        ),
-      );
-      resolvedStrategy = selected.coverStrategy.trim().isNotEmpty
-          ? selected.coverStrategy.trim()
-          : resolvedStrategy;
-    }
-    return _ResolvedVideoCoverReference(
-      coverStrategy: resolvedStrategy,
-      assetId: cover.assetId,
-    );
+    return _ResolvedVideoCoverReference(assetId: cover.assetId);
   }
 
-  if (videoAssetId.isEmpty) {
-    throw StateError('video cover is missing');
-  }
-  final selected = coverStrategy == 'manual'
-      ? await media.selectManualCover(
-          SelectManualContentMediaCoverCommand(
-            mediaId: videoAssetId,
-            coverFrameTimeMs: coverFrameTimeMs,
-          ),
-        )
-      : await media.selectAutoCover(
-          SelectAutoContentMediaCoverCommand(mediaId: videoAssetId),
-        );
-  return _ResolvedVideoCoverReference(
-    coverStrategy: selected.coverStrategy.trim().isNotEmpty
-        ? selected.coverStrategy.trim()
-        : 'first_frame',
-  );
+  onProgress?.call(1, 1);
+  return const _ResolvedVideoCoverReference();
 }
 
 bool _isRemoteMediaReference(String value) {
@@ -641,31 +734,6 @@ String _videoCoverStrategyForPayload(CreateEditorState state) {
     return 'manual';
   }
   return state.videoCoverTimeMs > 0 ? 'manual' : 'first_frame';
-}
-
-Future<void> _defaultUploadMediaObject(
-  Uri uploadUri,
-  List<int> bytes, {
-  required String contentType,
-  required String expectedSha256,
-}) async {
-  final client = http.Client();
-  try {
-    final uploadHeaders = ContentAddressedUploadHeaders(
-      contentType: contentType,
-      expectedSha256: expectedSha256,
-    );
-    final response = await client.put(
-      uploadUri,
-      headers: uploadHeaders.toHttpHeaders(),
-      body: bytes,
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('media object upload failed: ${response.statusCode}');
-    }
-  } finally {
-    client.close();
-  }
 }
 
 List<CreateDraft> decodeCreateDraftsList(Object? decoded) {

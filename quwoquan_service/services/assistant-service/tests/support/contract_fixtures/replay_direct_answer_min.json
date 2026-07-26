@@ -1,0 +1,63 @@
+{
+  "replayCaseId": "replay_direct_answer_min",
+  "title": "Direct answer without tool",
+  "request": {
+    "conversationId": "acv_replay_direct",
+    "turnId": "atn_replay_direct",
+    "userId": "u_replay",
+    "inputText": "What can XiaoQu do for daily planning?",
+    "clientContext": {
+      "surfaceId": "assistant.personal"
+    }
+  },
+  "fakeModelScript": [
+    {
+      "stage": "understand",
+      "text": "The user asks for a capability explanation.",
+      "structuredDelta": {
+        "intent": "capability_explanation"
+      },
+      "finishReason": "stop"
+    },
+    {
+      "stage": "final",
+      "text": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals.",
+      "finishReason": "stop"
+    }
+  ],
+  "fakeToolScript": [],
+  "expectedStreamEvents": [
+    {
+      "eventType": "run_started"
+    },
+    {
+      "eventType": "process_replace"
+    },
+    {
+      "eventType": "completed"
+    }
+  ],
+  "expectedRunResponse": {
+    "conversationId": "acv_replay_direct",
+    "turnId": "atn_replay_direct",
+    "status": "completed",
+    "finalText": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals.",
+    "summary": "Daily planning capability explanation.",
+    "journey": {
+      "stages": [],
+      "entries": [],
+      "summary": "Answered directly."
+    },
+    "runArtifacts": {
+      "displayMarkdown": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals.",
+      "displayPlainText": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals."
+    },
+    "observability": {
+      "traceId": "trace_replay_direct",
+      "modelProvider": "fake",
+      "skillId": "general_qa",
+      "domainId": "assistant"
+    },
+    "completedAt": "2026-04-29T00:00:02Z"
+  }
+}

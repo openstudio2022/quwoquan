@@ -1,9 +1,12 @@
+# spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-004
+
 from __future__ import annotations
 
 import argparse
 import builtins
 import io
 import json
+import os
 import runpy
 import subprocess
 import tempfile
@@ -14,11 +17,190 @@ from unittest import mock
 from quwoquan_ops.cli import legal_static
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.common import load_json_yaml
+from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
+from quwoquan_ops.cli.lib.output_paths import (
+    deployment_target_for_env,
+    deployment_target_path,
+    legal_static_deployment_package_dir,
+)
 from quwoquan_ops.cli.probes import run_environment_integration_probe as integration_probe
 from quwoquan_app.scripts.gamma import run_local_gamma_t3 as local_gamma_t3
 
 
 class StackctlUpRuntimeTest(unittest.TestCase):
+    def test_beta_content_release_starts_all_declared_readiness_dependencies(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        script = (
+            root
+            / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
+        ).read_text(encoding="utf-8")
+        beta_stack_script = (
+            root / "quwoquan_ops/cli/beta/start_beta_stack.sh"
+        ).read_text(encoding="utf-8")
+        stackctl_script = (root / "quwoquan_ops/cli/stackctl.py").read_text(
+            encoding="utf-8"
+        )
+        release_body = script.split(
+            "beta_manual_start_content_release_stack() {", 1
+        )[1].split("\n}\n\ncleanup()", 1)[0]
+        release_media_body = script.split(
+            "beta_manual_start_release_media_runtime() {", 1
+        )[1].split("\n}\n\nbeta_manual_start_entity_service", 1)[0]
+        release_branch = script.split(
+            'if [[ "$CONTENT_RELEASE_ONLY" == "1" ]]; then', 1
+        )[1].split("\nfi\n\nif [[ \"$START_ASSISTANT\"", 1)[0]
+        content_release_caddy = script.split(
+            "beta_manual_prepare_tls_caddyfile() {", 1
+        )[1].split("    return 0\n  fi", 1)[0]
+
+        self.assertIn("beta_manual_start_release_media_runtime || return 1", release_body)
+        self.assertIn("beta_manual_start_entity_service || return 1", release_body)
+        self.assertIn(
+            'beta_manual_wait_http_ok "http://127.0.0.1:${USER_PORT}/healthz" "user-service"',
+            script,
+        )
+        self.assertIn(
+            '"$ROOT_DIR/quwoquan_service/services/user-service/deploy/compose.yaml"',
+            script,
+        )
+        self.assertIn('user-service) export USER_CONFIG_VERSION="$config_version"', script)
+        self.assertIn("recommendation-service content-service user-service", script)
+        self.assertNotIn("beta_manual_ensure_compose_service_image", script)
+        self.assertIn(
+            "local compose_up_args=(up -d --remove-orphans)",
+            script,
+        )
+        self.assertIn("COMPOSE_PARALLEL_LIMIT=1 docker compose", script)
+        self.assertIn("compose_up_args+=(--no-build)", script)
+        self.assertIn("compose_up_args+=(--build)", script)
+        self.assertIn('APP_BETA_CMD+=(--skip-build)', beta_stack_script)
+        self.assertIn('cmd.append("--skip-build")', stackctl_script)
+        self.assertIn(
+            "beta_manual_ensure_port_available \"$USER_PORT\" \"user-service\"",
+            release_branch,
+        )
+        self.assertIn(
+            "@creator_profile_release path /auth /auth/* /user /user/* /users /users/*",
+            script,
+        )
+        self.assertIn("@content_release path /content /content/* /config/app", script)
+        self.assertIn(
+            "@content_filter_catalog_release path "
+            "/internal/content/filter-catalog-releases "
+            "/internal/content/filter-catalog-releases/*",
+            content_release_caddy,
+        )
+        self.assertIn(
+            "beta_manual_wait_https_ok \\\n"
+            '    "$PUBLIC_IMAGE_HOST" \\\n'
+            '    "$MEDIA_PORT"',
+            release_body,
+        )
+        self.assertIn(
+            "beta_manual_ensure_port_available \"$ENTITY_PORT\" \"entity-service\"",
+            release_branch,
+        )
+        self.assertIn(
+            "beta_manual_ensure_port_available \"$MEDIA_ORIGIN_PORT\" \"media-origin\"",
+            release_branch,
+        )
+        self.assertNotIn("beta_manual_start_fixture_gateway", release_body)
+        self.assertNotIn("beta_manual_start_notification_service", release_body)
+        self.assertNotIn("fixture_", release_body)
+        self.assertIn('ENTITY_SERVICE_ADDR="${listen_host}:${ENTITY_PORT}"', script)
+        self.assertIn(
+            'ENTITY_USER_ACCOUNT_SECURITY_AUTHORITY_BASE_URL="http://127.0.0.1:${USER_PORT}"',
+            script,
+        )
+        self.assertIn(
+            'beta_manual_wait_http_ok "http://127.0.0.1:${ENTITY_PORT}/healthz" "entity-service" 180',
+            script,
+        )
+        self.assertIn("--listen-host 0.0.0.0", release_media_body)
+        lifecycle = (
+            Path(__file__).resolve().parents[4]
+            / "quwoquan_ops/cli/lib/beta_manual_lifecycle.sh"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("kill -KILL $pids", lifecycle)
+        self.assertIn("will not be stopped automatically", lifecycle)
+        self.assertIn(
+            'local diagnostic_log="$BETA_MANUAL_STATE_DIR/stdout/${name}.log"',
+            lifecycle,
+        )
+        self.assertIn('"--diagnostic-log"', lifecycle)
+        self.assertIn(
+            'f"diagnostic_log={shlex.quote(str(diagnostic_log))}"',
+            lifecycle,
+        )
+        self.assertIn("TLS_PROXY_PORT_RELEASE_TIMEOUT_SECONDS", script)
+        self.assertIn("Caddy port :$port did not release", script)
+        self.assertIn('logs --tail 80 "$TLS_PROXY_NAME"', release_body)
+        tls_proxy_body = script.split("beta_manual_start_tls_proxy() {", 1)[1].split(
+            "\n}\n\nbeta_manual_export_tls_root_ca", 1
+        )[0]
+        self.assertIn('if [[ "$CONTENT_RELEASE_ONLY" != "1" ]]; then', tls_proxy_body)
+        self.assertIn('publish_args+=( -p "${PRODUCT_OPS_PORT}:${PRODUCT_OPS_PORT}" )', tls_proxy_body)
+        self.assertIn("Caddy configuration preparation failed", tls_proxy_body)
+        self.assertIn("Caddy previous deployment did not stop cleanly", tls_proxy_body)
+        self.assertIn("beta Caddy deployment failed", tls_proxy_body)
+        self.assertIn("deployment exited before readiness", tls_proxy_body)
+        self.assertIn(
+            "NOTIFICATION_REDIS_GENERAL_DB=1",
+            script,
+        )
+        self.assertIn(
+            "NOTIFICATION_REDIS_REALTIME_DB=4",
+            script,
+        )
+        self.assertIn(
+            "@content_filter_catalog path /content/filter-catalog",
+            script,
+        )
+        self.assertIn(
+            "@content_filter_catalog_release path /internal/content/filter-catalog-releases /internal/content/filter-catalog-releases/*",
+            script,
+        )
+        self.assertIn(
+            "reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}",
+            script,
+        )
+        self.assertNotIn("filter-catalog", release_body)
+        stackctl_source = (
+            Path(__file__).resolve().parents[4] / "quwoquan_ops/cli/stackctl.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('args.workload == "content-release"', stackctl_source)
+        self.assertIn('"beta-content-release-public-health"', stackctl_source)
+        self.assertIn("args.skip_app = True", stackctl_source)
+
+    def test_gamma_content_release_routes_and_activates_filter_catalog(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        caddyfile = (
+            root / "quwoquan_ops/environments/gamma/local/Caddyfile"
+        ).read_text(encoding="utf-8")
+        startup_script = (
+            root / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "@api_content_filter_catalog_release path "
+            "/internal/content/filter-catalog-releases "
+            "/internal/content/filter-catalog-releases/*",
+            caddyfile,
+        )
+        self.assertIn(
+            "ensure_gamma_filter_catalog_release()",
+            startup_script,
+        )
+        self.assertIn(
+            "filter-catalog --target gamma-local --action stage-and-activate",
+            startup_script,
+        )
+        self.assertIn(
+            "wait_local_gamma_host_ready\n"
+            "ensure_gamma_filter_catalog_release",
+            startup_script,
+        )
+
     def test_parser_accepts_report_dir_after_subcommand(self) -> None:
         parser = stackctl.build_parser()
         cases = [
@@ -40,8 +222,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "alpha-local",
                 "--kind",
                 "all",
-                "--tier",
-                "t1",
+                "--profile",
+                "smoke",
                 "--report-dir",
                 ".qwq_output/env/alpha/runs/verify",
             ],
@@ -51,6 +233,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "alpha",
                 "--kind",
                 "legal-static",
+                "--profile",
+                "smoke",
                 "--report-dir",
                 ".qwq_output/env/alpha/runs/legal-verify",
             ],
@@ -86,12 +270,109 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         )
         self.assertEqual(args.report_dir, ".qwq_output/env/alpha/runs/global")
 
+    def test_status_uses_content_consumer_scope_for_current_content_release(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            process_dir = Path(tmp_dir) / "process"
+            process_dir.mkdir()
+            (process_dir / "stack.state").write_text(
+                "stack=beta-local\nworkload=content-release\n", encoding="utf-8"
+            )
+            health_payload = {"exitCode": 0, "summary": "content release ready"}
+            with (
+                mock.patch.object(stackctl, "target_process_dir", return_value=process_dir),
+                mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+                mock.patch.object(stackctl, "get_target", return_value={"env": "beta"}),
+                mock.patch.object(stackctl, "resolve_report_dir", return_value=Path(tmp_dir) / "report"),
+                mock.patch.object(stackctl, "command_health", return_value=health_payload) as health,
+            ):
+                result = stackctl.command_status(
+                    argparse.Namespace(target="beta-local", output_format="text", report_dir="")
+                )
+
+        self.assertEqual(result, health_payload)
+        self.assertEqual(health.call_args.args[0].scope, "content-consumer")
+
+    def test_gamma_status_uses_completed_workload_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            process_dir = Path(tmp_dir) / "process"
+            process_dir.mkdir()
+            (process_dir / "stack_status.json").write_text(
+                json.dumps({"status": "passed", "workload": "content-release"}),
+                encoding="utf-8",
+            )
+            with mock.patch.object(stackctl, "target_process_dir", return_value=process_dir):
+                scope = stackctl._current_runtime_health_scope("gamma-local")
+
+        self.assertEqual(scope, "content-consumer")
+
+    def test_app_startup_treats_missing_log_sink_as_non_blocking_advisory(self) -> None:
+        with mock.patch.object(
+            stackctl,
+            "load_product_telemetry_log_sink",
+            side_effect=RuntimeError(
+                "local provider credentials must not be written into the repository or .qwq_output"
+            ),
+        ):
+            environment, advisory = stackctl._optional_product_telemetry_environment(
+                "beta",
+                "beta-local",
+            )
+
+        self.assertEqual(environment, {"QWQ_PRODUCT_TELEMETRY_AVAILABLE": "0"})
+        self.assertIn("must not be written into the repository", advisory)
+
+    def test_app_startup_injects_log_sink_when_observability_is_available(self) -> None:
+        with mock.patch.object(
+            stackctl,
+            "load_product_telemetry_log_sink",
+            return_value=mock.Mock(
+                environment={
+                    "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": "http://elasticsearch:9200",
+                }
+            ),
+        ):
+            environment, advisory = stackctl._optional_product_telemetry_environment(
+                "gamma",
+                "gamma-local",
+            )
+
+        self.assertEqual(environment["QWQ_PRODUCT_TELEMETRY_AVAILABLE"], "1")
+        self.assertEqual(
+            environment["PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"],
+            "http://elasticsearch:9200",
+        )
+        self.assertEqual(advisory, "")
+
+    def test_beta_cold_start_uses_configurable_backend_readiness_timeout(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[4]
+            / "quwoquan_ops/cli/beta/start_beta_stack.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'BETA_BACKEND_READY_TIMEOUT_SECONDS="${BETA_BACKEND_READY_TIMEOUT_SECONDS:-1200}"',
+            script,
+        )
+        self.assertIn(
+            "BETA_BACKEND_READY_TIMEOUT_SECONDS must be a positive integer.",
+            script,
+        )
+        self.assertIn(
+            'wait_service_ok app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz" "$BETA_BACKEND_READY_TIMEOUT_SECONDS"',
+            script,
+        )
+        self.assertNotIn(
+            'wait_service_ok app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz" 420',
+            script,
+        )
+
     def test_repair_restart_stack_supplies_complete_noninteractive_up_args(self) -> None:
         with (
             tempfile.TemporaryDirectory() as tmp_dir,
             mock.patch.object(stackctl, "load_environment_topology", return_value={}),
             mock.patch.object(stackctl, "get_target", return_value={"env": "gamma"}),
             mock.patch.object(stackctl, "resolve_report_dir", return_value=Path(tmp_dir)),
+            mock.patch.object(stackctl, "load_product_telemetry_log_sink"),
             mock.patch.object(
                 stackctl,
                 "command_down",
@@ -119,49 +400,108 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertTrue(up_args.skip_app)
         self.assertEqual(up_args.rollout_mode, "")
 
+    def test_repair_restart_stack_blocks_before_down_when_materialization_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            report_dir = Path(tmp_dir)
+            with (
+                mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+                mock.patch.object(stackctl, "get_target", return_value={"env": "beta"}),
+                mock.patch.object(stackctl, "resolve_report_dir", return_value=report_dir),
+                mock.patch.object(
+                    stackctl,
+                    "load_product_telemetry_log_sink",
+                    side_effect=RuntimeError(
+                        "local provider credentials must not be written into the repository or .qwq_output"
+                    ),
+                ),
+                mock.patch.object(stackctl, "command_down") as command_down,
+                mock.patch.object(stackctl, "command_up") as command_up,
+            ):
+                result = stackctl.command_repair(
+                    argparse.Namespace(
+                        command="repair",
+                        target="beta-local",
+                        fix="restart-stack",
+                        report_dir="",
+                    )
+                )
+
+            self.assertEqual(result["exitCode"], 2)
+            self.assertIn("blocked before stop", result["summary"])
+            command_down.assert_not_called()
+            command_up.assert_not_called()
+            repair_plan = json.loads(
+                (report_dir / "repair_plan.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(
+                any("QWQ_DEPLOY_WORK_ROOT" in item for item in repair_plan["actions"])
+            )
+
     def test_format_stage_header(self) -> None:
         self.assertEqual(stackctl._format_stage_header(2, 3, "app-launch"), "[step 2/3] app-launch")
 
     def test_legal_static_packages_preserve_utf8_documents_and_current_pointers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            output_root = Path(tmp_dir)
-            for env_name in ("alpha", "beta", "gamma"):
-                with self.subTest(env=env_name):
-                    payload = legal_static.build_package(env_name, output_root=output_root)
-                    self.assertEqual(payload["status"], "ok")
-                    package_dir = (
-                        output_root
-                        / env_name
-                        / "release"
-                        / "legal-static"
-                        / "2026-07"
-                    )
-                    self.assertTrue((package_dir / "checksums.json").is_file())
-                    self.assertTrue(
-                        (
-                            output_root
-                            / env_name
-                            / "release"
-                            / "legal-static"
-                            / "current"
-                        ).exists()
-                    )
-
-                    for document in payload["documents"]:
-                        stable_document = (
-                            package_dir / "public" / "legal" / document["slug"]
+            deploy_root = Path(tmp_dir) / "deploy"
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "QWQ_OUTPUT_ROOT": str(Path(tmp_dir) / ".qwq_output"),
+                    "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
+                },
+                clear=False,
+            ):
+                for env_name in ("alpha", "beta", "gamma"):
+                    with self.subTest(env=env_name):
+                        target_name = deployment_target_for_env(env_name)
+                        output_root = legal_static_deployment_package_dir(env_name)
+                        payload = legal_static.build_package(
+                            env_name,
+                            output_root=output_root,
                         )
-                        self.assertTrue(stable_document.is_file())
-                        self.assertIn(
-                            document["title"],
-                            stable_document.read_text(encoding="utf-8"),
+                        self.assertEqual(payload["status"], "ok")
+                        package_dir = deployment_target_path(
+                            target_name,
+                            "packages",
+                            "legal-static",
+                            "2026-07",
                         )
+                        self.assertTrue((package_dir / "checksums.json").is_file())
+                        self.assertTrue((output_root / "current").exists())
 
-                    verified = legal_static.verify_package(
-                        env_name,
-                        output_root=output_root,
+                        for document in payload["documents"]:
+                            stable_document = (
+                                package_dir / "public" / "legal" / document["slug"]
+                            )
+                            self.assertTrue(stable_document.is_file())
+                            self.assertIn(
+                                document["title"],
+                                stable_document.read_text(encoding="utf-8"),
+                            )
+
+                        verified = legal_static.verify_package(
+                            env_name,
+                            output_root=output_root,
+                        )
+                        self.assertEqual(verified["status"], "ok")
+
+    def test_legal_static_rejects_unscoped_package_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            rejected_output = Path(tmp_dir) / "outside-legal-package"
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "QWQ_OUTPUT_ROOT": str(Path(tmp_dir) / ".qwq_output"),
+                    "QWQ_DEPLOY_WORK_ROOT": str(Path(tmp_dir) / "deploy"),
+                },
+                clear=False,
+            ):
+                with self.assertRaisesRegex(ValueError, "target-scoped"):
+                    legal_static.build_package(
+                        "alpha",
+                        output_root=rejected_output,
                     )
-                    self.assertEqual(verified["status"], "ok")
+            self.assertFalse(rejected_output.exists())
 
     def test_legal_static_html_validation_requires_utf8_document_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -238,7 +578,19 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp_dir,
         ):
             manifest = load_json_yaml(legal_static.DEFAULT_MANIFEST)
-            payload = legal_static.build_package("alpha", output_root=Path(tmp_dir))
+            deploy_root = Path(tmp_dir) / "deploy"
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "QWQ_OUTPUT_ROOT": str(Path(tmp_dir) / ".qwq_output"),
+                    "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
+                },
+                clear=False,
+            ):
+                payload = legal_static.build_package(
+                    "alpha",
+                    output_root=legal_static_deployment_package_dir("alpha"),
+                )
 
         self.assertEqual(manifest["schema"], "legal-static")
         self.assertEqual(manifest["owner"]["appName"], "趣我圈")
@@ -354,6 +706,12 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             self.assertEqual(result["reason"], "timeout")
             self.assertFalse(result["readySeen"])
 
+    def test_alpha_cold_ios_build_timeout_covers_native_plugin_compilation(self) -> None:
+        self.assertGreaterEqual(
+            stackctl.ALPHA_APP_FIRST_BUILD_TIMEOUT_SECONDS,
+            300.0,
+        )
+
     def test_app_launch_failure_detail_requires_ready_signal(self) -> None:
         detail = stackctl._app_launch_failure_detail(
             {
@@ -453,6 +811,68 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertEqual(
             by_name["entity_homepage_search"]["url"],
             "https://gamma.example/homepages/search?query=%E8%A5%BF%E6%B9%96&limit=1",
+        )
+        search = by_name["global_search"]
+        self.assertEqual(search["method"], "POST")
+        self.assertEqual(search["url"], "https://gamma.example/search")
+        self.assertEqual(
+            json.loads(search["body"].decode("utf-8")),
+            {"query": "西湖", "mode": "result", "limit": 1},
+        )
+
+    def test_environment_probe_requires_search_commercial_envelope(self) -> None:
+        issue, hit_count = integration_probe._search_semantic_issue(
+            json.dumps(
+                {
+                    "requestId": "search-probe-1",
+                    "rankingVersion": "search-v1",
+                    "hits": [],
+                }
+            )
+        )
+        self.assertIsNone(issue)
+        self.assertEqual(hit_count, 0)
+
+        issue, hit_count = integration_probe._search_semantic_issue(
+            json.dumps({"requestId": "search-probe-1", "hits": []})
+        )
+        self.assertIn("rankingVersion", issue or "")
+        self.assertIsNone(hit_count)
+
+    def test_environment_probe_can_gate_only_global_search(self) -> None:
+        args = argparse.Namespace(
+            env="beta",
+            test_auth_token="",
+            base_url="https://beta.example",
+            product_ops_base_url="",
+            media_base_url="",
+            resolve_host="",
+            request_timeout_seconds=12,
+            retry_attempts=1,
+            retry_sleep_seconds=0.0,
+            require_non_empty_content_feed=False,
+            only_check=["global_search"],
+            mode="readonly",
+        )
+        response = json.dumps(
+            {
+                "requestId": "search-probe-2",
+                "rankingVersion": "search-v1",
+                "hits": [],
+            }
+        )
+        with mock.patch.object(
+            integration_probe,
+            "request",
+            return_value=(True, 200, response),
+        ):
+            report = integration_probe.run_checks(args)
+
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["onlyChecks"], ["global_search"])
+        self.assertEqual(
+            [check["name"] for check in report["checks"]],
+            ["global_search"],
         )
 
     def test_local_gamma_print_env_exits_before_runtime_preparation(self) -> None:
@@ -607,6 +1027,43 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 {"status": "passed", "principal": "seeded_persona"},
             )
 
+    def test_local_gamma_seed_only_persists_user_profile_for_authenticated_probes(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            report_path = Path(tmp_dir) / "t3-seed-report.json"
+            with (
+                mock.patch.object(
+                    local_gamma_t3,
+                    "seed_content",
+                    return_value={"status": "passed", "insertedCount": 1},
+                ),
+                mock.patch.object(
+                    local_gamma_t3,
+                    "seed_user",
+                    return_value={"status": "passed", "refs": ["user_profile_core"]},
+                ) as seed_user,
+                mock.patch.object(
+                    local_gamma_t3.sys,
+                    "argv",
+                    [
+                        "run_local_gamma_t3.py",
+                        "--seed-only",
+                        "--report",
+                        str(report_path),
+                    ],
+                ),
+            ):
+                self.assertEqual(local_gamma_t3.main(), 0)
+
+            seed_user.assert_called_once_with()
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                report["domainSeeds"]["user"],
+                {"status": "passed", "refs": ["user_profile_core"]},
+            )
+            self.assertNotIn("authorImpact", report["domainSeeds"])
+
     def test_local_gamma_seed_failures_block_startup(self) -> None:
         script = (
             Path(__file__).resolve().parents[4]
@@ -618,8 +1075,31 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("WARN: content seed failed", script)
         self.assertNotIn("WARN: intersection seed failed", script)
         self.assertNotIn("WARN: premium pool seed failed", script)
+        self.assertIn("moderationStatus: 'approved'", script)
         self.assertNotIn("X-Client-User-Id", script)
         self.assertNotIn("X-Test-Auth-Token", script)
+
+    def test_local_gamma_content_release_never_injects_fixture_seeds(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[4]
+            / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'if [[ "$WORKLOAD" == "content-release" ]]; then\n'
+            "  ENABLE_FIXTURE_SEEDS=0",
+            script,
+        )
+        self.assertIn(
+            'if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then\n'
+            "  seed_gamma_content_data",
+            script,
+        )
+        self.assertIn(
+            'if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then\n'
+            "  seed_gamma_premium_pool_data",
+            script,
+        )
 
     def test_local_gamma_retries_created_only_compose_runtime_once(self) -> None:
         script = (
@@ -632,15 +1112,173 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertIn('--filter status=running', script)
         self.assertIn('retry_args+=(--no-build)', script)
         self.assertIn("compose created-only retry recovered startup", script)
+        self.assertIn("run_compose_build_with_timeout", script)
+        self.assertIn(': >"$build_log"', script)
+        self.assertIn("LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS", script)
+        self.assertIn("LOCAL_GAMMA_COMPOSE_BUILD_NO_PROGRESS_TIMEOUT_SECONDS", script)
+        self.assertIn("LOCAL_GAMMA_COMPOSE_BUILD_PARALLEL_LIMIT", script)
+        self.assertIn('COMPOSE_PARALLEL_LIMIT="$compose_parallel_limit"', script)
+        self.assertIn("compose build produced no log progress", script)
+        self.assertIn("LOCAL_GAMMA_DOCKER_PROBE_TIMEOUT_SECONDS", script)
+        self.assertIn("Docker daemon did not answer readiness probe", script)
+        self.assertIn(
+            "docker info --format '{{.ServerVersion}} {{.Driver}}' >/dev/null 2>&1 &",
+            script,
+        )
+        self.assertNotIn("docker system df &", script)
+        self.assertIn("trap cleanup_active_child EXIT INT TERM HUP", script)
+        self.assertIn("LOCAL_GAMMA_ACTIVE_CHILD_PID=\"$compose_pid\"", script)
+        self.assertIn("stopping active child before exit", script)
+        self.assertIn("preserving build log for inspection", script)
+        self.assertIn(
+            'if [[ "$build_status" -eq 0 ]]; then\n    return 0',
+            script,
+        )
+        self.assertNotIn(
+            'if [[ "$build_status" -eq 0 ]]; then\n    rm -f "$build_log"',
+            script,
+        )
+        self.assertIn("run_compose_up_with_timeout", script)
+        self.assertIn("LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS", script)
+        self.assertIn("preserving the partial runtime for inspection", script)
+        self.assertNotIn('LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS:-900', script)
+        self.assertIn("compose_up_timed_out=1", script)
+        self.assertIn("run stackctl inspect before an explicit restart", script)
 
-    def test_local_gamma_product_ops_uses_required_runtime_auth(self) -> None:
-        compose = (
+    def test_local_gamma_selected_build_services_are_nounset_safe(self) -> None:
+        script = (
             Path(__file__).resolve().parents[4]
+            / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("selected_build_service_count=0", script)
+        self.assertIn(
+            'if [[ "$selected_build_service_count" -gt 0 ]]; then',
+            script,
+        )
+        self.assertIn(
+            'if [[ "$selected_build_service_count" == "0" ]]; then',
+            script,
+        )
+
+    def test_local_gamma_build_sentinel_does_not_escape_to_runtime(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[4]
+            / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Scope inert values to this build subprocess only", script)
+        self.assertIn('LOCAL_GAMMA_EMBEDDING_ENDPOINT="$build_embedding_endpoint"', script)
+        self.assertIn('LOCAL_GAMMA_EMBEDDING_API_KEY="$build_embedding_api_key"', script)
+        self.assertNotIn(
+            'export LOCAL_GAMMA_EMBEDDING_API_KEY="${LOCAL_GAMMA_EMBEDDING_API_KEY:-build-only-not-a-runtime-secret}"',
+            script,
+        )
+
+    def test_local_gamma_content_release_excludes_secret_backed_assistant(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        script = (
+            root / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        ).read_text(encoding="utf-8")
+        assistant = (
+            root
+            / "quwoquan_service/services/assistant-service/deploy/compose.yaml"
+        ).read_text(encoding="utf-8")
+        compose = (
+            root
             / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
         ).read_text(encoding="utf-8")
-        product_ops = compose.split("\n  product-ops-service:\n", 1)[1].split(
-            "\n  platform-ops-service:\n", 1
+        proxy = compose.split("\n  gamma-proxy:\n", 1)[1].split(
+            "\n  # ── edge-media", 1
         )[0]
+
+        self.assertIn('profiles: ["assistant-runtime"]', assistant)
+        self.assertIn(
+            "commercial-observability,assistant-runtime,edge-media",
+            script,
+        )
+        self.assertIn('if [[ "$WORKLOAD" == "content-release" ]]; then', script)
+        self.assertIn(
+            '[[ "$service_name" == "assistant-service" ]] ||',
+            script,
+        )
+        self.assertIn('"workload": workload', script)
+        self.assertIn("prepare_down_compose_environment()", script)
+        self.assertIn("prepare_down_compose_environment\n  docker compose", script)
+        self.assertIn("LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE:=", script)
+        self.assertIn("LOCAL_GAMMA_RTC_SERVICE_IMAGE:=", script)
+        self.assertIn(
+            "assistant-service:\n        condition: service_healthy\n"
+            "        required: false",
+            proxy,
+        )
+
+    def test_local_gamma_content_release_accepts_empty_compose_profiles(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        script = root / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        env = dict(os.environ)
+        env.pop("COMPOSE_PROFILES", None)
+        env.pop("LOCAL_GAMMA_RTC_SERVICE_IMAGE", None)
+        env["QWQ_WORKLOAD"] = "content-release"
+        env["LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL"] = (
+            "https://gamma-upload.quwoquan-env.test:19100"
+        )
+        runtime = json.loads(
+            (root / "quwoquan_ops/environments/gamma/runtime.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        build_images = runtime["targets"]["gamma-local"]["buildImages"]
+        env["LOCAL_GAMMA_GO_BASE_IMAGE"] = build_images["goBaseImage"]
+        env["LOCAL_GAMMA_ALPINE_BASE_IMAGE"] = build_images["alpineBaseImage"]
+
+        result = subprocess.run(
+            ["bash", str(script), "--print-env"],
+            cwd=root,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("unbound variable", result.stderr)
+        self.assertNotIn("RTC_SERVICE_IMAGE must come", result.stderr)
+        self.assertIn("--dart-define=APP_RUNTIME_ENV=gamma", result.stdout)
+        self.assertIn(
+            'if [[ "$print_env" != "1" ]] && local_gamma_has_existing_stack; then',
+            script.read_text(encoding="utf-8"),
+        )
+
+    def test_local_gamma_missing_upload_authority_is_a_real_gate_block(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        script = root / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        env = dict(os.environ)
+        env["QWQ_WORKLOAD"] = "content-release"
+        env.pop("LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL", None)
+
+        result = subprocess.run(
+            ["bash", str(script), "--print-env"],
+            cwd=root,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL must provide the canonical media upload base URL",
+            result.stderr,
+        )
+
+    def test_local_gamma_product_ops_uses_required_runtime_auth(self) -> None:
+        product_ops = (
+            Path(__file__).resolve().parents[4]
+            / "quwoquan_service/services/product-ops-service/deploy/compose.yaml"
+        ).read_text(encoding="utf-8")
 
         for name in (
             "AUTH_JWT_SECRET",
@@ -778,14 +1416,15 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         )
         self.assertEqual(
             calls[3].kwargs["body"],
-            {"version": 1, "attachmentMediaIds": []},
+            {"attachmentMediaIds": []},
         )
+        self.assertNotIn("version", calls[3].kwargs["body"])
 
     def test_local_gamma_social_graph_seed_binds_authenticated_persona(self) -> None:
         root = Path(__file__).resolve().parents[4]
         script_path = (
             root
-            / "quwoquan_service/services/seed-box/scripts/apply_content_social_graph_seed.py"
+            / "quwoquan_service/services/content-service/cmd/jobs/seed-social-graph/main.py"
         )
         fixture_path = (
             root
@@ -873,6 +1512,415 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertEqual(kwargs["argv"][-2:], ["--resolve-host", "127.0.0.1"])
         self.assertEqual(kwargs["env"]["BETA_TEST_AUTH_TOKEN"], "beta-bearer")
 
+    def test_report_feedback_probe_profile_commands_use_real_environment_modes(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "beta",
+                "beta-local",
+                VerificationProfile.INTEGRATION,
+                "https://beta-api.quwoquan-env.test:18000",
+                "local",
+                "lifecycle",
+                True,
+            ),
+            (
+                "gamma",
+                "gamma-local",
+                VerificationProfile.RELEASE,
+                "https://gamma-api.quwoquan-env.test:19000",
+                "local",
+                "lifecycle",
+                True,
+            ),
+            (
+                "prod",
+                "prod-hosted",
+                VerificationProfile.RELEASE,
+                "https://api.quwoquan.com",
+                "ssh-hosted",
+                "read-only",
+                False,
+            ),
+        )
+        for (
+            env_name,
+            target_name,
+            profile,
+            api_base_url,
+            backend,
+            expected_mode,
+            expects_local_resolution,
+        ) in cases:
+            with (
+                self.subTest(target=target_name),
+                tempfile.TemporaryDirectory() as tmp_dir,
+                mock.patch.object(
+                    stackctl,
+                    "load_environment_topology",
+                    return_value={},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "get_target",
+                    return_value={
+                        "env": env_name,
+                        "backend": backend,
+                        "publicBases": {"api": api_base_url},
+                    },
+                ),
+            ):
+                command = stackctl._report_feedback_lifecycle_profile_command(
+                    env_name,
+                    target_name,
+                    profile,
+                    Path(tmp_dir),
+                )
+
+            self.assertIsNotNone(command)
+            assert command is not None
+            self.assertEqual(
+                command["name"],
+                f"{target_name}-report-feedback-lifecycle",
+            )
+            self.assertIn("--mode", command["argv"])
+            self.assertEqual(
+                command["argv"][command["argv"].index("--mode") + 1],
+                expected_mode,
+            )
+            self.assertEqual(
+                "--resolve-host" in command["argv"],
+                expects_local_resolution,
+            )
+            self.assertTrue(command["stopOnFailure"])
+            self.assertNotIn("AUTH_TOKEN", " ".join(command["argv"]))
+
+    def test_report_feedback_probe_is_not_added_to_unsupported_profiles(self) -> None:
+        self.assertIsNone(
+            stackctl._report_feedback_lifecycle_profile_command(
+                "beta",
+                "beta-local",
+                VerificationProfile.SMOKE,
+                None,
+            )
+        )
+        self.assertIsNone(
+            stackctl._report_feedback_lifecycle_profile_command(
+                "prod",
+                "prod-sim",
+                VerificationProfile.RELEASE,
+                None,
+            )
+        )
+
+    def test_media_publication_probe_profile_commands_use_real_environment_modes(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "beta",
+                "beta-local",
+                VerificationProfile.INTEGRATION,
+                "https://beta-api.quwoquan-env.test:18000",
+                "local",
+                "lifecycle",
+                True,
+            ),
+            (
+                "gamma",
+                "gamma-local",
+                VerificationProfile.RELEASE,
+                "https://gamma-api.quwoquan-env.test:19000",
+                "local",
+                "lifecycle",
+                True,
+            ),
+            (
+                "prod",
+                "prod-sim",
+                VerificationProfile.INTEGRATION,
+                "https://prod-sim-api.quwoquan-env.test:20000",
+                "local",
+                "lifecycle",
+                True,
+            ),
+            (
+                "prod",
+                "prod-hosted",
+                VerificationProfile.RELEASE,
+                "https://api.quwoquan.example",
+                "ssh-hosted",
+                "read-only",
+                False,
+            ),
+        )
+        for (
+            env_name,
+            target_name,
+            profile,
+            api_base_url,
+            backend,
+            expected_mode,
+            expects_local_resolution,
+        ) in cases:
+            moderation_base_url = {
+                "beta-local": "http://127.0.0.1:18220",
+                "gamma-local": "http://127.0.0.1:19220",
+                "prod-sim": "http://127.0.0.1:20220",
+            }.get(target_name, "")
+            with (
+                self.subTest(target=target_name),
+                tempfile.TemporaryDirectory() as tmp_dir,
+                mock.patch.object(
+                    stackctl,
+                    "load_environment_topology",
+                    return_value={},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "get_target",
+                    return_value={
+                        "env": env_name,
+                        "backend": backend,
+                        "publicBases": {"api": api_base_url},
+                        "origins": {"contentService": moderation_base_url}
+                        if moderation_base_url
+                        else {},
+                    },
+                ),
+            ):
+                command = stackctl._media_publication_lifecycle_profile_command(
+                    env_name,
+                    target_name,
+                    profile,
+                    Path(tmp_dir),
+                )
+
+            self.assertIsNotNone(command)
+            assert command is not None
+            self.assertEqual(
+                command["name"],
+                f"{target_name}-media-publication-lifecycle",
+            )
+            self.assertTrue(
+                any(
+                    str(item).endswith("run_media_publication_lifecycle_probe.py")
+                    for item in command["argv"]
+                )
+            )
+            self.assertEqual(
+                command["argv"][command["argv"].index("--mode") + 1],
+                expected_mode,
+            )
+            self.assertEqual(
+                command["argv"][command["argv"].index("--target-name") + 1],
+                target_name,
+            )
+            self.assertEqual(
+                "--resolve-host" in command["argv"],
+                expects_local_resolution,
+            )
+            self.assertEqual(
+                "--moderation-base-url" in command["argv"],
+                expected_mode == "lifecycle",
+            )
+            if moderation_base_url:
+                self.assertEqual(
+                    command["argv"][
+                        command["argv"].index("--moderation-base-url") + 1
+                    ],
+                    moderation_base_url,
+                )
+            self.assertTrue(command["stopOnFailure"])
+            self.assertNotIn("AUTH_TOKEN", " ".join(command["argv"]))
+
+    def test_media_publication_probe_is_not_added_to_unsupported_profiles(
+        self,
+    ) -> None:
+        self.assertIsNone(
+            stackctl._media_publication_lifecycle_profile_command(
+                "beta",
+                "beta-local",
+                VerificationProfile.SMOKE,
+                None,
+            )
+        )
+        self.assertIsNone(
+            stackctl._media_publication_lifecycle_profile_command(
+                "prod",
+                "prod-hosted",
+                VerificationProfile.INTEGRATION,
+                None,
+            )
+        )
+
+    def test_chat_group_lifecycle_profile_commands_use_safe_environment_modes(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "beta",
+                "beta-local",
+                VerificationProfile.INTEGRATION,
+                "https://beta-api.quwoquan-env.test:18000",
+                "local",
+                True,
+                True,
+            ),
+            (
+                "gamma",
+                "gamma-local",
+                VerificationProfile.RELEASE,
+                "https://gamma-api.quwoquan-env.test:19000",
+                "local",
+                True,
+                True,
+            ),
+            (
+                "prod",
+                "prod-hosted",
+                VerificationProfile.RELEASE,
+                "https://api.quwoquan.com",
+                "ssh-hosted",
+                False,
+                False,
+            ),
+        )
+        for (
+            env_name,
+            target_name,
+            profile,
+            api_base_url,
+            backend,
+            expect_mutating,
+            expects_local_resolution,
+        ) in cases:
+            with (
+                self.subTest(target=target_name),
+                tempfile.TemporaryDirectory() as tmp_dir,
+                mock.patch.object(
+                    stackctl,
+                    "load_environment_topology",
+                    return_value={},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "get_target",
+                    return_value={
+                        "env": env_name,
+                        "backend": backend,
+                        "publicBases": {"api": api_base_url},
+                    },
+                ),
+            ):
+                command = stackctl._chat_group_lifecycle_profile_command(
+                    env_name,
+                    target_name,
+                    profile,
+                    Path(tmp_dir),
+                )
+
+            self.assertIsNotNone(command)
+            assert command is not None
+            self.assertEqual(command["name"], f"{target_name}-chat-group-lifecycle")
+            self.assertTrue(
+                any(
+                    str(item).endswith("run_chat_group_lifecycle_probe.py")
+                    for item in command["argv"]
+                )
+            )
+            self.assertIn("--require-nonempty-sources", command["argv"])
+            self.assertEqual("--mutating" in command["argv"], expect_mutating)
+            self.assertEqual(
+                "--resolve-host" in command["argv"],
+                expects_local_resolution,
+            )
+            self.assertTrue(command["stopOnFailure"])
+            self.assertNotIn("AUTH_TOKEN", " ".join(command["argv"]))
+
+    def test_chat_group_lifecycle_probe_is_not_added_to_unsupported_profiles(
+        self,
+    ) -> None:
+        self.assertIsNone(
+            stackctl._chat_group_lifecycle_profile_command(
+                "beta",
+                "beta-local",
+                VerificationProfile.SMOKE,
+                None,
+            )
+        )
+        self.assertIsNone(
+            stackctl._chat_group_lifecycle_profile_command(
+                "prod",
+                "prod-sim",
+                VerificationProfile.RELEASE,
+                None,
+            )
+        )
+
+    def test_stackctl_selected_profile_includes_chat_group_lifecycle_probe(self) -> None:
+        target = {
+            "env": "beta",
+            "backend": "local",
+            "publicBases": {"api": "https://beta-api.quwoquan-env.test:18000"},
+            "origins": {"contentService": "http://127.0.0.1:18220"},
+        }
+        with (
+            mock.patch.object(
+                stackctl,
+                "load_environment_topology",
+                return_value={},
+            ),
+            mock.patch.object(stackctl, "get_target", return_value=target),
+            mock.patch.object(
+                stackctl,
+                "_local_target_runtime_ready",
+                return_value=True,
+            ),
+        ):
+            commands = stackctl._selected_profile_commands(
+                "beta",
+                "beta-local",
+                VerificationProfile.INTEGRATION,
+                Path("/tmp/chat-group-lifecycle"),
+            )
+
+        command = next(
+            item
+            for item in commands
+            if item["name"] == "beta-local-chat-group-lifecycle"
+        )
+        self.assertIn("--mutating", command["argv"])
+        self.assertIn("--require-nonempty-sources", command["argv"])
+
+    def test_gamma_validation_profiles_register_media_publication_probe(self) -> None:
+        registry_path = (
+            stackctl.ROOT
+            / "quwoquan_ops"
+            / "environments"
+            / "gamma"
+            / "validation_suites.json"
+        )
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        case_id = "media_publication_lifecycle_api_probe"
+        case = registry["smokeCases"][case_id]
+
+        self.assertTrue(
+            (stackctl.ROOT / case["path"]).is_file(),
+            "registered media publication probe must be runnable",
+        )
+        self.assertEqual(case["runner"], "python")
+        for profile_name in (
+            "manual_full",
+            "nightly_full",
+            "release_candidate",
+        ):
+            self.assertIn(
+                case_id,
+                registry["profiles"][profile_name]["smokeCases"],
+            )
+
     def test_run_environment_integration_probe_does_not_override_hosted_dns(self) -> None:
         topology = {"targets": []}
         target = {
@@ -950,7 +1998,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "ephemeral-local-bearer",
         )
 
-    def test_verify_tier_starts_gamma_when_dependency_port_is_missing(self) -> None:
+    def test_verify_integration_starts_gamma_when_dependency_port_is_missing(self) -> None:
         manifest = stackctl.load_port_manifest()
         target = {"env": "gamma", "portProfile": "gamma-local"}
         mongo_port = stackctl.canonical_port(manifest, "gamma-local", "mongodb")
@@ -964,11 +2012,15 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 side_effect=lambda port: port != mongo_port,
             ),
         ):
-            commands = stackctl._selected_tier_commands("gamma", "gamma-local", "t3")
+            commands = stackctl._selected_profile_commands(
+                "gamma",
+                "gamma-local",
+                VerificationProfile.INTEGRATION,
+            )
 
         self.assertEqual(commands[0]["name"], "gamma-local-up")
 
-    def test_verify_tier_skips_gamma_up_only_when_runtime_ports_are_ready(self) -> None:
+    def test_verify_integration_skips_gamma_up_when_runtime_ports_are_ready(self) -> None:
         manifest = stackctl.load_port_manifest()
         target = {"env": "gamma", "portProfile": "gamma-local"}
 
@@ -978,7 +2030,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             mock.patch("quwoquan_ops.cli.stackctl.load_port_manifest", return_value=manifest),
             mock.patch("quwoquan_ops.cli.stackctl.socket_probe", return_value=True),
         ):
-            commands = stackctl._selected_tier_commands("gamma", "gamma-local", "t3")
+            commands = stackctl._selected_profile_commands(
+                "gamma",
+                "gamma-local",
+                VerificationProfile.INTEGRATION,
+            )
 
         self.assertEqual(commands[0]["name"], "gamma-local-health-preflight")
         self.assertIn("local runtime ports already listening", " ".join(commands[0]["argv"]))
@@ -1003,7 +2059,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertEqual(cmd[:4], ["docker", "compose", "-p", "quwoquan_service"])
         self.assertEqual(cmd[4], "-f")
         self.assertTrue(cmd[5].endswith("quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"))
-        self.assertEqual(cmd[6:], ["exec", "-T", "mongodb", "mongosh"])
+        self.assertEqual(cmd[-4:], ["exec", "-T", "mongodb", "mongosh"])
+        self.assertTrue(
+            any(value.endswith("quwoquan_service/services/content-service/deploy/compose.yaml") for value in cmd)
+        )
 
     def test_local_gamma_t3_endpoint_checks_marks_scope_externals_out_of_scope(self) -> None:
         manifest = {
@@ -1109,6 +2168,13 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 mock.patch("quwoquan_ops.cli.stackctl.load_environment_topology", return_value=topology),
                 mock.patch("quwoquan_ops.cli.stackctl.get_target", return_value=topology["targets"]["prod-hosted"]),
                 mock.patch("quwoquan_ops.cli.stackctl.command_health", return_value=health_payload),
+                mock.patch(
+                    "quwoquan_ops.cli.stackctl._legal_static_command",
+                    return_value=(
+                        mock.Mock(returncode=0),
+                        {"status": "ok", "issues": [], "exitCode": 0},
+                    ),
+                ),
                 mock.patch("quwoquan_ops.cli.stackctl._load_release_state", return_value={}),
                 mock.patch(
                     "quwoquan_ops.cli.stackctl._prod_plane_runtime_report",
@@ -1124,6 +2190,63 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             self.assertTrue(
                 any("prod rollout release-state is missing" in item for item in result["details"])
             )
+
+    def test_doctor_prod_target_blocks_invalid_legal_static_source(self) -> None:
+        topology = {
+            "targets": {
+                "prod-sim": {
+                    "env": "prod",
+                    "backend": "local",
+                    "portProfile": None,
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            args = mock.Mock(target="prod-sim", report_dir=tmp_dir)
+            health_payload = {
+                "exitCode": 0,
+                "summary": "stackctl health prod-sim: healthy",
+                "details": [],
+                "reportDir": "tmp",
+            }
+            with (
+                mock.patch(
+                    "quwoquan_ops.cli.stackctl.load_environment_topology",
+                    return_value=topology,
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.stackctl.get_target",
+                    return_value=topology["targets"]["prod-sim"],
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.stackctl.command_health",
+                    return_value=health_payload,
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.stackctl._legal_static_command",
+                    return_value=(
+                        mock.Mock(returncode=1),
+                        {
+                            "status": "failed",
+                            "issues": ["owner.operatorName contains placeholder text"],
+                            "exitCode": 1,
+                        },
+                    ),
+                ),
+            ):
+                result = stackctl.command_doctor(args)
+
+            self.assertEqual(result["exitCode"], 1)
+            self.assertTrue(
+                any("prod legal-static source is invalid" in item for item in result["details"])
+            )
+            self.assertTrue(
+                any("owner.operatorName" in item for item in result["details"])
+            )
+            repair_plan = json.loads(
+                (Path(tmp_dir) / "repair_plan.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(any("approved legal facts" in item for item in repair_plan["actions"]))
 
     def test_doctor_reports_missing_beta_deployment_prerequisite(self) -> None:
         topology = {
@@ -1153,9 +2276,9 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     return_value=topology["targets"]["beta-local"],
                 ),
                 mock.patch(
-                    "quwoquan_ops.cli.stackctl.load_product_telemetry_sls",
+                    "quwoquan_ops.cli.stackctl.load_product_telemetry_log_sink",
                     side_effect=RuntimeError(
-                        "product telemetry SLS deployment secret is missing: /external/beta.env"
+                        "local provider credentials must not be written into the repository or .qwq_output"
                     ),
                 ),
                 mock.patch(
@@ -1173,7 +2296,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 (Path(tmp_dir) / "repair_plan.json").read_text(encoding="utf-8")
             )
             self.assertTrue(
-                any("external product telemetry SLS" in item for item in repair_plan["actions"])
+                any("QWQ_DEPLOY_WORK_ROOT" in item for item in repair_plan["actions"])
             )
             self.assertFalse(
                 any("restart-stack" in item for item in repair_plan["actions"])

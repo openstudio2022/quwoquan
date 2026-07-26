@@ -18,10 +18,14 @@ class StartGroupFriendLetterRow {
     required this.userId,
     required this.avatarUrl,
     required this.letter,
+    this.metFrom = '',
   });
 
   final String displayName;
   final String userId;
   final String avatarUrl;
   final String letter;
+
+  /// 事实交集证据：认识来源（云侧 ChatContactRowDto.metFrom 透传）。
+  final String metFrom;
 }

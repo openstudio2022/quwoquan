@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +9,7 @@ import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projecti
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
@@ -174,7 +175,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      find.text(UITextConstants.assistantProcessCompletedSummary),
+      find.text(AssistantText.assistantProcessCompletedSummary),
       findsOneWidget,
     );
     expect(find.text('耗时 4 秒'), findsOneWidget);
@@ -183,18 +184,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      find.text(UITextConstants.assistantProcessStageUnderstand),
+      find.text(AssistantText.assistantProcessStageUnderstand),
       findsNothing,
     );
-    expect(
-      find.text(UITextConstants.assistantProcessStageSearch),
-      findsNothing,
-    );
+    expect(find.text(AssistantText.assistantProcessStageSearch), findsNothing);
     expect(find.textContaining('正在交叉核实关键结论'), findsAtLeastNWidgets(1));
-    expect(
-      find.text(UITextConstants.assistantProcessStageAnswer),
-      findsNothing,
-    );
+    expect(find.text(AssistantText.assistantProcessStageAnswer), findsNothing);
   });
 
   testWidgets('助理过程抽屉可从 runArtifacts.journey 恢复来源摘要', (tester) async {
@@ -202,7 +197,10 @@ void main() {
     final references = <Map<String, dynamic>>[
       <String, dynamic>{
         'title': '中国气象局',
-        'url': 'https://weather.cma.cn/shenzhen',
+        'destination': <String, dynamic>{
+          'kind': 'external',
+          'url': 'https://weather.cma.cn/shenzhen',
+        },
         'source': 'weather.cma.cn',
       },
     ];
@@ -258,7 +256,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      find.text(UITextConstants.assistantProcessCompletedSummary),
+      find.text(AssistantText.assistantProcessCompletedSummary),
       findsOneWidget,
     );
     expect(find.text('搜索 1 篇'), findsOneWidget);
@@ -277,7 +275,10 @@ void main() {
     await tester.pump();
 
     expect(tappedRef, isNotNull);
-    expect(tappedRef!.url, equals('https://weather.cma.cn/shenzhen'));
+    expect(
+      tappedRef!.destination.url,
+      equals('https://weather.cma.cn/shenzhen'),
+    );
   });
 
   testWidgets('journey 恢复时优先显示用户语言 headline 而不是脏 detail', (tester) async {
@@ -410,7 +411,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      find.text(UITextConstants.assistantProcessStageUnderstand),
+      find.text(AssistantText.assistantProcessStageUnderstand),
       findsNothing,
     );
     expect(find.textContaining('先拆清楚天气和出游两个判断面'), findsAtLeastNWidgets(1));
@@ -521,7 +522,7 @@ void main() {
         ),
         answerGateOpen: true,
         isAssistantRunning: true,
-        runningStatusLabel: UITextConstants.assistantPhaseAnswering,
+        runningStatusLabel: AssistantText.assistantPhaseAnswering,
       ),
     );
     await tester.pump();
@@ -577,7 +578,7 @@ void main() {
         ),
         answerGateOpen: true,
         isAssistantRunning: true,
-        runningStatusLabel: UITextConstants.assistantPhaseAnswering,
+        runningStatusLabel: AssistantText.assistantPhaseAnswering,
       ),
     );
     await tester.pump();
@@ -643,7 +644,7 @@ void main() {
         ),
         answerGateOpen: false,
         isAssistantRunning: true,
-        runningStatusLabel: UITextConstants.assistantPhaseAnswering,
+        runningStatusLabel: AssistantText.assistantPhaseAnswering,
       ),
     );
     await tester.pump();
@@ -675,7 +676,10 @@ void main() {
               'label': '来源1',
               'claim': '深圳今天有雨，外出建议带伞。',
               'evidenceId': 'weather_ev_1',
-              'url': 'https://weather.cma.cn/shenzhen',
+              'destination': <String, dynamic>{
+                'kind': 'external',
+                'url': 'https://weather.cma.cn/shenzhen',
+              },
               'title': '深圳天气预报 - 中国气象局',
               'source': 'weather.cma.cn',
               'snippet': '深圳今天有雨，外出建议带伞。',
@@ -704,7 +708,10 @@ void main() {
     await tester.pump();
 
     expect(tappedRef, isNotNull);
-    expect(tappedRef!.url, equals('https://weather.cma.cn/shenzhen'));
+    expect(
+      tappedRef!.destination.url,
+      equals('https://weather.cma.cn/shenzhen'),
+    );
   });
 
   testWidgets('answerEvidenceBindings 会渲染为可点击递增角标', (tester) async {
@@ -721,7 +728,10 @@ void main() {
               'label': '来源1',
               'claim': '官方仓库',
               'evidenceId': 'evidence_1',
-              'url': 'https://github.com/flutter/flutter',
+              'destination': <String, dynamic>{
+                'kind': 'external',
+                'url': 'https://github.com/flutter/flutter',
+              },
               'title': 'Flutter GitHub 仓库',
               'source': 'github.com',
               'snippet': 'Flutter SDK 与框架源码仓库',
@@ -731,7 +741,10 @@ void main() {
               'label': '来源2',
               'claim': '文档中心',
               'evidenceId': 'evidence_2',
-              'url': 'https://developer.mozilla.org/zh-CN/',
+              'destination': <String, dynamic>{
+                'kind': 'external',
+                'url': 'https://developer.mozilla.org/zh-CN/',
+              },
               'title': 'MDN Web Docs',
               'source': 'developer.mozilla.org',
               'snippet': '文档中心',
@@ -755,7 +768,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.assistantReferenceSectionTitle),
+      find.text(AssistantText.assistantReferenceSectionTitle),
       findsNothing,
     );
 
@@ -765,7 +778,10 @@ void main() {
     await tester.pump();
 
     expect(tappedRef, isNotNull);
-    expect(tappedRef!.url, equals('https://developer.mozilla.org/zh-CN/'));
+    expect(
+      tappedRef!.destination.url,
+      equals('https://developer.mozilla.org/zh-CN/'),
+    );
     expect(tappedRef!.source, equals('developer.mozilla.org'));
   });
 }

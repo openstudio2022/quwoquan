@@ -1,4 +1,4 @@
-"""Execution readiness audit across source, homepage, article, and image lanes."""
+"""Execution readiness audit across every canonical content lane."""
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -11,6 +11,8 @@ from content.execution.selection import (
 )
 from content.execution.source_precheck import source_precheck_report
 from content.execution.contracts import ExecutionStateTransition
+from content.execution.spec_contract import ExecutionSpec
+from core.control_types import ContentType
 from core.entity_artifacts import inactive_entity_artifact_rows
 from core.paths import execution_entity_page_input_path
 from governance.coverage.entity_extract import require_domain_etype
@@ -33,14 +35,9 @@ def audit_execution_readiness(
     from content.execution.recovery.download_gate import _download_research_lane_issues
     from content.source.source_inputs import curated_images_for_entity
 
-    spec = store.load_spec(execution_id)
-    content = spec.get("content") if isinstance(spec.get("content"), Mapping) else {}
-    quotas = content.get("quotas") if isinstance(content.get("quotas"), Mapping) else {}
-    quota_by_lane = {
-        "homepage": int(quotas.get("entityHomepagesPerTarget") or 0),
-        "article": int(quotas.get("entityArticlesPerTarget") or 0),
-        "image": int(quotas.get("imageWorksPerTarget") or 0),
-    }
+    spec_model = store.load_spec_model(execution_id)
+    spec = spec_model.to_dict()
+    quota_by_lane = _quota_by_lane(spec_model)
     state = execution_state_override or load_execution_state(execution_id)
     coverage_ids = coverage_entity_ids(spec)
     planned_ids = execution_planned_entity_ids(execution_id)
@@ -134,17 +131,32 @@ def audit_execution_readiness(
             "infrastructureRetryCounts": dict(state.infrastructure_retry_counts),
             "failedObjects": list(state.failed_objects),
         },
-        "lastAgentRun": {
-            key: (state.last_agent_run or {}).get(key)
-            for key in (
-                "stage",
-                "jobCount",
-                "startedCount",
-                "finishedCount",
-                "infrastructureFailures",
-                "finishedAt",
-            )
-        },
+        "lastAgentRun": _last_agent_run_summary(state),
+    }
+
+
+def _quota_by_lane(spec: ExecutionSpec) -> dict[str, int]:
+    """Project the closed carrier vocabulary to its configured per-target quota."""
+
+    return {
+        content_type.value: spec.content.quotas.for_type(content_type)
+        for content_type in ContentType
+    }
+
+
+def _last_agent_run_summary(state: ExecutionStateTransition) -> dict[str, object]:
+    from content.execution.agent.history import last_managed_agent_run
+
+    record = last_managed_agent_run(state)
+    if record is None:
+        return {}
+    return {
+        "stage": record.stage.value,
+        "jobCount": record.job_count,
+        "startedCount": record.started_count,
+        "finishedCount": record.finished_count,
+        "infrastructureFailures": record.infrastructure_failures,
+        "finishedAt": record.finished_at,
     }
 
 

@@ -1,0 +1,259 @@
+dart_class: RunArtifacts
+library_path: assistant/contracts/run_artifacts.dart
+output_path: assistant/generated/contracts/run_artifacts.g.dart
+contract: run_artifacts
+kind: runtime_persistence_contract
+imports:
+  - package:quwoquan_app/assistant/contracts/assistant_journey.dart
+  - package:quwoquan_app/assistant/contracts/runtime_enums.dart
+  - package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart
+fields:
+  - { name: machineEnvelope, type: string, default: '' }
+  - { name: displayMarkdown, type: string, default: '' }
+  - { name: displayPlainText, type: string, default: '' }
+  - { name: displayState, type: object, ref: display_state, default: {} }
+  - { name: journey, type: object, ref: AssistantJourney, default: {} }
+  - { name: processTimeline, type: list<object>, ref: process_timeline_frame, default: [] }
+  - { name: understandingSnapshot, type: object, ref: understanding_snapshot, default: {} }
+  - { name: answerProcessing, type: object, ref: answer_processing, default: {} }
+  - { name: historicalThinkingSnapshot, type: object, ref: historical_thinking_snapshot, default: {} }
+  - { name: retrievalProcessing, type: object, ref: retrieval_processing, default: {} }
+  - { name: evidenceLedger, type: list<object>, ref: evidence_ledger_entry, default: [] }
+  - { name: answerEvidenceBindings, type: list<object>, ref: answer_evidence_binding, default: [] }
+  - { name: slotState, type: object, ref: slot_state, default: {} }
+  # answerDecision: partitioned_map — JSON 仍为单一 object；稳定键由 RunArtifactsAnswerDecisionCore 承载，其余进 extensions。
+  - { name: answerDecision, type: partitioned_map, ref: answer_decision_core, default: {} }
+  # diagnostics: partitioned_map — 同上。
+  - { name: diagnostics, type: partitioned_map, ref: diagnostics_core, default: {} }
+  - { name: domainPolicyBundle, type: object, ref: policy_bundle }
+subcontracts:
+  answer_decision_core:
+    class_name: RunArtifactsAnswerDecisionCore
+    fields:
+      - { name: nextAction, type: string, default: '' }
+      - { name: answerEligibility, type: string, default: '' }
+      - { name: finalAnswerReady, type: bool, default: false }
+      - { name: evidenceSummary, type: string, default: '' }
+      - { name: confidence, type: double, default: 0.0 }
+      - { name: reasoning, type: string, default: '' }
+      - { name: synthesisReady, type: bool, default: false }
+      - { name: synthesisReason, type: string, default: '' }
+  diagnostics_core:
+    class_name: RunArtifactsDiagnosticsCore
+    fields:
+      - { name: domainId, type: string, default: '' }
+      - { name: renderMode, type: string, default: '' }
+      - { name: renderFallback, type: string, default: '' }
+      - { name: answerEligibility, type: string, default: '' }
+      - { name: qualityGates, type: map, default: {} }
+      - { name: evidenceEvaluation, type: map, default: {} }
+      - { name: answerBoundaryPolicy, type: map, default: {} }
+      - { name: evidenceSummary, type: string, default: '' }
+      - { name: evidencePassed, type: bool, default: false }
+      - { name: finalAnswerMode, type: string, default: '' }
+      - { name: synthesisReady, type: bool, default: false }
+      - { name: synthesisReason, type: string, default: '' }
+      - { name: heuristicFallbackUsed, type: bool, default: false }
+      - { name: emergedTags, type: list<string>, default: [] }
+  display_state:
+    class_name: AssistantDisplayState
+    fields:
+      - { name: process, type: object, ref: process_display_state, default: {} }
+      - { name: answer, type: object, ref: answer_display_state, default: {} }
+  process_display_state:
+    class_name: AssistantProcessDisplayState
+    fields:
+      - { name: activeStepId, type: enum, enum_ref: ProcessStepId, default: '' }
+      - { name: summary, type: string, default: '' }
+      - { name: blocks, type: list<object>, ref: process_display_block, default: [] }
+      - { name: finalAnswerReady, type: bool, default: false }
+  process_display_block:
+    class_name: AssistantProcessDisplayBlock
+    fields:
+      - { name: blockId, type: string, required: true }
+      - { name: stepId, type: enum, enum_ref: ProcessStepId, default: '' }
+      - { name: status, type: enum, enum_ref: JourneyStageStatus, default: pending }
+      - { name: kind, type: enum, enum_ref: ProcessDisplayBlockKind, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: body, type: string, default: '' }
+      - { name: items, type: list<object>, ref: display_item, default: [] }
+      - { name: references, type: list<object>, ref: retrieval_reference, default: [] }
+  answer_display_state:
+    class_name: AssistantAnswerDisplayState
+    fields:
+      - { name: summary, type: string, default: '' }
+      - { name: blocks, type: list<object>, ref: answer_display_block, default: [] }
+  answer_display_block:
+    class_name: AssistantAnswerDisplayBlock
+    fields:
+      - { name: blockId, type: string, required: true }
+      - { name: kind, type: enum, enum_ref: DisplayBlockKind, default: '' }
+      - { name: listStyle, type: enum, enum_ref: DisplayListStyle, default: plain }
+      - { name: title, type: string, default: '' }
+      - { name: body, type: string, default: '' }
+      - { name: items, type: list<object>, ref: display_item, default: [] }
+  display_item:
+    class_name: AssistantDisplayItem
+    fields:
+      - { name: itemId, type: string, required: true }
+      - { name: title, type: string, default: '' }
+      - { name: body, type: string, default: '' }
+      - { name: referenceIds, type: list<string>, default: [] }
+  process_timeline_frame:
+    class_name: ProcessTimelineFrame
+    fields:
+      - { name: frameId, type: string, required: true }
+      - { name: stepId, type: enum, enum_ref: ProcessStepId, default: '' }
+      - { name: status, type: enum, enum_ref: JourneyStageStatus, default: pending }
+      - { name: order, type: int, default: 0 }
+      - { name: headline, type: string, default: '' }
+      - { name: detail, type: string, default: '' }
+      - { name: references, type: list<object>, ref: retrieval_reference, default: [] }
+      - { name: understandingSnapshot, type: object, ref: understanding_snapshot, default: {} }
+      - { name: retrievalProcessing, type: object, ref: retrieval_processing, default: {} }
+      - { name: answerProcessing, type: object, ref: answer_processing, default: {} }
+  evidence_ledger_entry:
+    class_name: EvidenceLedgerEntry
+    fields:
+      - { name: evidenceId, type: string, required: true }
+      - { name: domainId, type: string, default: '' }
+      - { name: dimension, type: string, default: '' }
+      - { name: dimensionLabel, type: string, default: '' }
+      - { name: searchPlanId, type: string, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: destination, type: object, ref: CitationDestination, required: true }
+      - { name: source, type: string, default: '' }
+      - { name: sourceHost, type: string, default: '' }
+      - { name: sourceTier, type: string, default: '' }
+      - { name: freshnessHours, type: int, default: 0 }
+      - { name: authorityScore, type: double, default: 0.0 }
+      - { name: relevanceScore, type: double, default: 0.0 }
+      - { name: slotContributions, type: map, default: {} }
+      - { name: snippet, type: string, default: '' }
+      - { name: retrievedAt, type: string, default: '' }
+  answer_evidence_binding:
+    class_name: AnswerEvidenceBinding
+    fields:
+      - { name: bindingId, type: string, required: true }
+      - { name: label, type: string, default: '' }
+      - { name: claim, type: string, default: '' }
+      - { name: evidenceId, type: string, default: '' }
+      - { name: destination, type: object, ref: CitationDestination, required: true }
+      - { name: title, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: snippet, type: string, default: '' }
+  slot_value:
+    class_name: SlotValueSnapshot
+    fields:
+      - { name: slotId, type: string, required: true }
+      - { name: status, type: enum, enum_ref: SlotValueStatus, default: inferred }
+      - { name: value, type: any }
+      - { name: source, type: string, default: '' }
+      - { name: confidence, type: double, default: 0.0 }
+      - { name: updatedAt, type: string, default: '' }
+      - { name: note, type: string, default: '' }
+      - { name: candidates, type: list<string>, default: [] }
+      - { name: evidenceIds, type: list<string>, default: [] }
+  slot_state:
+    class_name: SlotStateSnapshot
+    fields:
+      - { name: domainId, type: string, default: '' }
+      - { name: slots, type: map, default: {} }
+      - { name: slotValues, type: map<object>, ref: slot_value, default: {} }
+      - { name: missingSlots, type: list<string>, default: [] }
+      - { name: updatedAt, type: string, default: '' }
+  policy_bundle:
+    class_name: DomainPolicyBundle
+    fields:
+      - { name: domainId, type: string, default: '' }
+      - { name: executionPolicy, type: map, default: {} }
+      - { name: slotSchema, type: map, default: {} }
+      - { name: dialoguePolicy, type: map, default: {} }
+      - { name: authorityPolicy, type: map, default: {} }
+      - { name: retrievalPolicy, type: map, default: {} }
+      - { name: answerPolicy, type: map, default: {} }
+      - { name: narrativePolicy, type: map, default: {} }
+  understanding_snapshot:
+    class_name: RunArtifactsUnderstandingSnapshot
+    fields:
+      - { name: intentSummary, type: string, default: '' }
+      - { name: userFacingSummary, type: string, default: '' }
+      - { name: retrievalDesignNarrative, type: string, default: '' }
+      - { name: concernPoints, type: list<string>, default: [] }
+      - { name: emotionSignal, type: string, default: '' }
+      - { name: resolutionItems, type: list<object>, ref: understanding_resolution_item, default: [] }
+      - { name: assumptions, type: list<string>, default: [] }
+      - { name: mismatchSignal, type: string, default: '' }
+      - { name: carryForwardFacts, type: list<string>, default: [] }
+      - { name: discardedAssumptions, type: list<string>, default: [] }
+  understanding_resolution_item:
+    class_name: RunArtifactsUnderstandingResolutionItem
+    fields:
+      - { name: kind, type: string, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: detail, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: originalValue, type: string, default: '' }
+      - { name: resolvedValue, type: string, default: '' }
+      - { name: defaultApplied, type: bool, default: false }
+      - { name: visibleInUnderstanding, type: bool, default: true }
+  answer_processing:
+    class_name: RunArtifactsAnswerProcessing
+    fields:
+      - { name: readinessSummary, type: string, default: '' }
+      - { name: keyFacts, type: list<string>, default: [] }
+      - { name: missingDimensions, type: list<string>, default: [] }
+      - { name: retrieveMoreReason, type: string, default: '' }
+  historical_thinking_snapshot:
+    class_name: RunArtifactsHistoricalThinkingSnapshot
+    fields:
+      - { name: continuityMode, type: string, default: '' }
+      - { name: mismatchSignal, type: string, default: '' }
+      - { name: carryForwardFacts, type: list<string>, default: [] }
+      - { name: needsRecheckFacts, type: list<string>, default: [] }
+      - { name: discardedAssumptions, type: list<string>, default: [] }
+  retrieval_reference:
+    class_name: RetrievalProcessingReference
+    fields:
+      - { name: title, type: string, default: '' }
+      - { name: destination, type: object, ref: CitationDestination, required: true }
+      - { name: source, type: string, default: '' }
+      - { name: snippet, type: string, default: '' }
+      - { name: rank, type: int, default: 0 }
+  retrieval_processing:
+    class_name: RetrievalProcessingSnapshot
+    fields:
+      - { name: searchedDocumentCount, type: int, default: 0 }
+      - { name: processedDocumentCount, type: int, default: 0 }
+      - { name: acceptedDocumentCount, type: int, default: 0 }
+      - { name: processingSummary, type: string, default: '' }
+      - { name: selectedKeyPoints, type: list<string>, default: [] }
+      - { name: expansionReason, type: string, default: '' }
+      - { name: acceptedReferences, type: list<object>, ref: retrieval_reference, default: [] }
+
+# 供 codegen 生成 Dart `Set<String>`，用于 map 字段「稳定键 / 扩展键」分区（不改变 JSON 形状）。
+map_stable_keys:
+  answerDecision:
+    - nextAction
+    - answerEligibility
+    - finalAnswerReady
+    - evidenceSummary
+    - confidence
+    - reasoning
+    - synthesisReady
+    - synthesisReason
+  diagnostics:
+    - domainId
+    - renderMode
+    - renderFallback
+    - answerEligibility
+    - qualityGates
+    - evidenceEvaluation
+    - answerBoundaryPolicy
+    - evidenceSummary
+    - evidencePassed
+    - finalAnswerMode
+    - synthesisReady
+    - synthesisReason
+    - heuristicFallbackUsed
+    - emergedTags

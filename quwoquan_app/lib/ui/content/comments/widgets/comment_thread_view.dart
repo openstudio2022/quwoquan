@@ -2,21 +2,33 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/media/media_aspect_ratio.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        ContentReportReason,
+        ContentReportTargetType,
+        CreateContentReportCommand;
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/content_report_reason_sheet.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 
 part 'comment_thread_rows.dart';
 part 'comment_thread_atoms.dart';
+part 'comment_item_actions.dart';
 
 class CommentThreadView extends ConsumerStatefulWidget {
   const CommentThreadView({
@@ -75,6 +87,9 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
     _scrollController = widget.scrollController ?? ScrollController();
     _ownsController = widget.scrollController == null;
     _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeResumeCommentReport();
+    });
   }
 
   @override
@@ -371,8 +386,44 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
     }
   }
 
+  void _maybeResumeCommentReport() {
+    if (!mounted || !ref.read(authSessionControllerProvider).isAuthenticated) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final controller = ref.read(authContinuationProvider.notifier);
+      final pending = controller.take<SubmitCommentReportContinuation>();
+      if (pending == null) return;
+      if (pending.postId != widget.postId) {
+        controller.set(
+          pending,
+          ownerToken: 'comment-report:${pending.postId}:${pending.commentId}',
+        );
+        return;
+      }
+      unawaited(
+        _submitCommentReport(
+          context,
+          ref,
+          commentId: pending.commentId,
+          reason: pending.reason,
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      previous,
+      next,
+    ) {
+      final wasAuthenticated = previous?.isAuthenticated ?? false;
+      if (!wasAuthenticated && next.isAuthenticated) {
+        _maybeResumeCommentReport();
+      }
+    });
     final state = ref.watch(commentProviderFamily(widget.postId));
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     if (!_initialLoaded) {
@@ -486,12 +537,23 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
           ? const NeverScrollableScrollPhysics()
           : const BouncingScrollPhysics(),
       itemCount:
+          1 +
           state.comments.length +
           (state.status == CommentListStatus.loadingMore ||
                   state.appendFailure != null
               ? 1
               : 0),
-      itemBuilder: (context, index) {
+      itemBuilder: (context, headerAwareIndex) {
+        if (headerAwareIndex == 0) {
+          return _CommentSortSwitcher(
+            sort: state.sort,
+            isDark: isDark,
+            onChanged: (sort) => ref
+                .read(commentProviderFamily(widget.postId).notifier)
+                .changeSort(sort),
+          );
+        }
+        final index = headerAwareIndex - 1;
         if (index >= state.comments.length) {
           if (state.appendFailure != null) {
             final resolved = runtimeErrorSemantic(

@@ -78,11 +78,63 @@ def test_python_runtime_prefers_data_venv_when_current_lacks_cursor_sdk(monkeypa
     assert python_environment.resolve_data_agent_python(include_current=True) == data_python
 
 
-def test_data_python_cache_is_rebuilt_from_repo_truth_after_output_deletion(
+def test_python_tool_cache_rejects_disposable_output_root() -> None:
+    with pytest.raises(ValueError, match="must not be inside .qwq_output"):
+        python_environment.resolve_python_cache_root(
+            str(DATA_ROOT.parent / ".qwq_output" / "env" / "repo"),
+        )
+
+
+def test_agent_reexec_keeps_bytecode_out_of_the_source_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def capture_execvpe(executable: str, argv: list[str], env: dict[str, str]) -> None:
+        captured["executable"] = executable
+        captured["argv"] = argv
+        captured["env"] = env
+        raise RuntimeError("stop after capturing re-exec")
+
+    monkeypatch.delenv(python_environment.BOOTSTRAP_ENV, raising=False)
+    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
+    monkeypatch.setattr(python_environment, "agent_command_needs_bootstrap", lambda _argv: True)
+    monkeypatch.setattr(python_environment, "python_has_modules", lambda *_args: (False, ["missing"]))
+    monkeypatch.setattr(
+        python_environment,
+        "resolve_data_agent_python",
+        lambda **_kwargs: Path("/tmp/quwoquan-data-python"),
+    )
+    monkeypatch.setattr(python_environment.os, "execvpe", capture_execvpe)
+
+    with pytest.raises(RuntimeError, match="stop after capturing re-exec"):
+        python_environment.maybe_reexec_for_agent_command(["cli.py", "task", "execute"])
+
+    env = captured["env"]
+    assert isinstance(env, dict)
+    assert env[python_environment.BOOTSTRAP_ENV] == "1"
+    assert env["PYTHONDONTWRITEBYTECODE"] == "1"
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (["cli.py", "task", "execute"], True),
+        (["cli.py", "task", "preflight"], False),
+    ],
+)
+def test_agent_runtime_commands_are_explicitly_bootstrapped(
+    argv: list[str],
+    expected: bool,
+) -> None:
+    assert python_environment.agent_command_needs_bootstrap(argv) is expected
+
+
+def test_data_python_tool_cache_is_rebuilt_from_repo_truth(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    cache_dir = tmp_path / ".qwq_output/env/repo/local/python-envs/cache/quwoquan-data"
+    cache_dir = tmp_path / "tool-cache" / "quwoquan-data"
     create_calls: list[Path] = []
 
     def create_cache(path: Path, *, with_pip: bool) -> None:
@@ -111,13 +163,14 @@ def test_data_python_cache_is_rebuilt_from_repo_truth_after_output_deletion(
     monkeypatch.setattr(python_environment.shutil, "which", lambda _name: "/usr/bin/tool")
 
     first = python_environment.prepare_data_runtime_cache(cache_dir=cache_dir)
-    shutil.rmtree(tmp_path / ".qwq_output")
+    shutil.rmtree(cache_dir)
     second = python_environment.prepare_data_runtime_cache(cache_dir=cache_dir)
 
     assert create_calls == [cache_dir, cache_dir]
+    assert ".qwq_output" not in cache_dir.parts
     assert first["sourceTruth"] == str(DATA_ROOT / "requirements.txt")
     assert second["sourceTruth"] == str(DATA_ROOT / "requirements.txt")
-    assert first["disposableCache"] == str(cache_dir)
+    assert first["toolCache"] == str(cache_dir)
     assert second["cachePersistenceRequired"] is False
 
 
@@ -244,7 +297,7 @@ def test_network_probe_falls_back_from_head_to_get(monkeypatch):
 
 
 def test_env_ready_writes_compact_failure_evidence(monkeypatch, tmp_path):
-    report_out = tmp_path / "environment_readiness.json"
+    report_out = tmp_path / "runtime_preflight.json"
     monkeypatch.setattr(
         preflight_handler,
         "prepare_data_runtime_cache",

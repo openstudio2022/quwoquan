@@ -1,0 +1,64 @@
+# 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
+services:
+  assistant-service:
+    profiles: ["assistant-runtime"]
+    image: "${QWQ_COMPOSE_ASSISTANT_SERVICE_IMAGE:-localhost/quwoquan_service_assistant-service:latest}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/assistant-service/build/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${QWQ_COMPOSE_GO_BASE_IMAGE:?QWQ_COMPOSE_GO_BASE_IMAGE is required}"
+        ALPINE_BASE_IMAGE: "${QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}"
+        GO_BUILD_FLAGS: "${QWQ_COMPOSE_GO_BUILD_FLAGS:--p=1}"
+    environment:
+      SERVICE_NAME: assistant-service
+      APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${QWQ_COMPOSE_ASSISTANT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_ASSISTANT_SERVICE_CONFIG_VERSION is required}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      ASSISTANT_SERVICE_ADDR: ":18087"
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: quwoquan_assistant
+      POSTGRES_DSN: "${ASSISTANT_POSTGRES_DSN:-postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable}"
+      REDIS_GENERAL_ADDR: redis:6379
+      REDIS_REC_ADDR: redis:6379
+      ASSISTANT_MODEL_FIXTURE_ENDPOINT: "${ASSISTANT_MODEL_FIXTURE_ENDPOINT:-}"
+      ASSISTANT_MODEL_COMPLETION_URL: "${ASSISTANT_MODEL_COMPLETION_URL:-}"
+      ASSISTANT_SCENARIO_SEED_REFS: "${ASSISTANT_SCENARIO_SEED_REFS:-}"
+      ASSISTANT_CHAT_BASE_URL: "http://chat-service:18081"
+      ASSISTANT_NOTIFICATION_BASE_URL: "http://notification-service:18087"
+      ASSISTANT_USER_SERVICE_BASE_URL: "http://user-service:18081"
+      ASSISTANT_MODEL_API_KEY: "${ASSISTANT_MODEL_API_KEY:-}"
+      ASSISTANT_PUBLIC_SEARCH_FIXTURE_URL: "${ASSISTANT_PUBLIC_SEARCH_FIXTURE_URL:-}"
+      ASSISTANT_WEATHER_FIXTURE_GEOCODING_URL: "${ASSISTANT_WEATHER_FIXTURE_GEOCODING_URL:-}"
+      ASSISTANT_WEATHER_FIXTURE_FORECAST_URL: "${ASSISTANT_WEATHER_FIXTURE_FORECAST_URL:-}"
+      ASSISTANT_FINANCE_FIXTURE_CHART_URL: "${ASSISTANT_FINANCE_FIXTURE_CHART_URL:-}"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    volumes:
+      - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+    ports:
+      - "${QWQ_COMPOSE_ASSISTANT_PORT:-19230}:18087"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
+      retries: 10

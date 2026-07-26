@@ -7,8 +7,9 @@ Use the single content facade:
 
 ```bash
 python3 quwoquan_data/scripts/cli.py task execute \
-  --execution-id YYYYMMDD--travel-homepage-coverage--cn-scope--canary-001 \
-  --milestone canary --province <province> --discovery <coverage-path>
+  --execution-id YYYYMMDD--travel-homepage-coverage--cn-region-a--pilot-001 \
+  --family content/travel/homepage/homepage \
+  --region-ref china/<region> --selector source-ready-priority --count <count>
 ```
 
 The same `executionId` resumes only immutable matching input.  A retry uses a

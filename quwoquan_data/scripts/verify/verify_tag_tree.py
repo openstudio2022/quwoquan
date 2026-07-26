@@ -457,13 +457,15 @@ def group_stats():
 # ─────────────────────────────────────────────
 # main
 # ─────────────────────────────────────────────
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="标签体系验证（四分组版）")
     parser.add_argument("--min-total", type=int, default=4800)
     parser.add_argument("--min-non-geo", type=int, default=1000)
     parser.add_argument("--stats-only", action="store_true",
                         help="只输出统计不做验证")
-    args = parser.parse_args()
+    parser.add_argument("--strict", action="store_true",
+                        help="将容量均衡等 warning 也视为阻断")
+    args = parser.parse_args(argv)
 
     print("=" * 60)
     print("标签体系验证（四分组版）")
@@ -496,6 +498,8 @@ def main():
 
     print(f"\n{'验证通过' if not errors else '验证失败'}: {len(errors)} 错误, {len(warnings)} 警告")
 
+    if args.strict and warnings:
+        errors.extend(f"strict: {warning}" for warning in warnings)
     if errors:
         sys.exit(1)
 

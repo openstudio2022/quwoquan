@@ -1,0 +1,119 @@
+events:
+- name: NotificationDeliveryJobCreated
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+- name: NotificationDeliveryJobDispatched
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+- name: NotificationDeliveryJobDeadLettered
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+- name: NotificationDeliveryJobRecovered
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+- name: IncomingCallRealtimeDispatched
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - targetPersonaId
+  - deviceId
+  - deliveryKey
+  - ackDeadlineAt
+- name: IncomingCallRealtimePresented
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - deviceId
+  - deliveryKey
+  - presentedAt
+- name: IncomingCallPushQueued
+  producer: notification-service
+  consumers:
+  - notification-service-worker
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - deviceId
+  - deliveryKey
+  - expiresAt
+- name: IncomingCallSentUnconfirmed
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - deviceId
+  - deliveryKey
+  - externalInteractionId
+- name: IncomingCallDeliveryCancelled
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - deviceId
+  - deliveryKey
+  - status
+- name: IncomingCallCancellationPushSubmitted
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - deviceId
+  - deliveryKey
+  - cancellationExternalInteractionId
+  - cancellationPushSubmittedAt
+- name: IncomingCallCancellationRealtimeDispatched
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - targetPersonaId
+  - cancellationEventId
+  - cancellationRealtimeDispatchedAt

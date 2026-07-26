@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,10 +7,32 @@ import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
+
+const _exampleDocDestination = CitationDestination(
+  kind: CitationDestinationKind.external,
+  url: 'https://example.com/doc',
+);
+const _exampleNoticeDestination = CitationDestination(
+  kind: CitationDestinationKind.external,
+  url: 'https://example.com/notice',
+);
+const _nmcDestination = CitationDestination(
+  kind: CitationDestinationKind.external,
+  url: 'https://www.nmc.cn',
+);
+const _weatherDestination = CitationDestination(
+  kind: CitationDestinationKind.external,
+  url: 'https://www.weather.com.cn',
+);
+const _weatherNmcDestination = CitationDestination(
+  kind: CitationDestinationKind.external,
+  url: 'https://wx.nmc.cn',
+);
 
 AssistantJourneyViewModel _viewModel({
   AssistantJourney journey = const AssistantJourney(),
@@ -136,7 +159,7 @@ const AssistantJourney _referenceJourney = AssistantJourney(
       references: <AssistantJourneyReference>[
         AssistantJourneyReference(
           title: '四川文旅公告',
-          url: 'https://example.com/doc',
+          destination: _exampleDocDestination,
           source: '官方',
         ),
       ],
@@ -148,7 +171,7 @@ const AssistantJourney _referenceJourney = AssistantJourney(
     references: <AssistantJourneyReference>[
       AssistantJourneyReference(
         title: '四川文旅公告',
-        url: 'https://example.com/doc',
+        destination: _exampleDocDestination,
         source: '官方',
       ),
     ],
@@ -264,7 +287,7 @@ void main() {
       expect(viewModel.activeStageId, ProcessStepId.retrievalProcessing);
       expect(
         viewModel.activeStageLabel,
-        UITextConstants.assistantProcessStageRetrievalProcessing,
+        AssistantText.assistantProcessStageRetrievalProcessing,
       );
       expect(
         viewModel.blocks.any(
@@ -342,7 +365,7 @@ void main() {
       );
 
       expect(
-        find.text(UITextConstants.assistantProcessLongWaitReassurance),
+        find.text(AssistantText.assistantProcessLongWaitReassurance),
         findsNothing,
       );
     });
@@ -359,7 +382,7 @@ void main() {
       );
 
       expect(
-        find.text(UITextConstants.assistantProcessLongWaitReassurance),
+        find.text(AssistantText.assistantProcessLongWaitReassurance),
         findsNothing,
       );
       expect(find.text('耗时 2 秒'), findsOneWidget);
@@ -377,12 +400,12 @@ void main() {
       );
 
       expect(
-        find.text(UITextConstants.assistantProcessRunningSummary),
+        find.text(AssistantText.assistantProcessRunningSummary),
         findsOneWidget,
       );
       expect(find.text('耗时 9 秒'), findsOneWidget);
       expect(
-        find.text(UITextConstants.assistantProcessStageUnderstand),
+        find.text(AssistantText.assistantProcessStageUnderstand),
         findsNothing,
       );
     });
@@ -451,15 +474,15 @@ void main() {
       expect(find.text('接纳 1 篇'), findsOneWidget);
       expect(find.textContaining('搜索了 1 篇'), findsOneWidget);
       expect(
-        find.text(UITextConstants.assistantProcessStageUnderstand),
+        find.text(AssistantText.assistantProcessStageUnderstand),
         findsNothing,
       );
       expect(
-        find.text(UITextConstants.assistantProcessStageRetrievalProcessing),
+        find.text(AssistantText.assistantProcessStageRetrievalProcessing),
         findsNothing,
       );
       expect(
-        find.text(UITextConstants.assistantProcessStageAnswer),
+        find.text(AssistantText.assistantProcessStageAnswer),
         findsNothing,
       );
       expect(find.text('查找信息'), findsNothing);
@@ -624,17 +647,17 @@ void main() {
             references: <AssistantJourneyReference>[
               AssistantJourneyReference(
                 title: '深圳天气预报 - nmc.cn',
-                url: 'https://www.nmc.cn',
+                destination: _nmcDestination,
                 source: 'nmc.cn',
               ),
               AssistantJourneyReference(
                 title: '深圳天气预报 - weather.com.cn',
-                url: 'https://www.weather.com.cn',
+                destination: _weatherDestination,
                 source: 'weather.com.cn',
               ),
               AssistantJourneyReference(
                 title: '中央气象台 - wx.nmc.cn',
-                url: 'https://wx.nmc.cn',
+                destination: _weatherNmcDestination,
                 source: 'wx.nmc.cn',
               ),
             ],
@@ -650,17 +673,17 @@ void main() {
         acceptedReferences: <RetrievalProcessingReference>[
           RetrievalProcessingReference(
             title: '深圳天气预报 - nmc.cn',
-            url: 'https://www.nmc.cn',
+            destination: _nmcDestination,
             source: 'nmc.cn',
           ),
           RetrievalProcessingReference(
             title: '深圳天气预报 - weather.com.cn',
-            url: 'https://www.weather.com.cn',
+            destination: _weatherDestination,
             source: 'weather.com.cn',
           ),
           RetrievalProcessingReference(
             title: '中央气象台 - wx.nmc.cn',
-            url: 'https://wx.nmc.cn',
+            destination: _weatherNmcDestination,
             source: 'wx.nmc.cn',
           ),
         ],
@@ -805,7 +828,7 @@ void main() {
           acceptedReferences: <RetrievalProcessingReference>[
             RetrievalProcessingReference(
               title: '深圳天气预报 - nmc.cn',
-              url: 'https://www.nmc.cn',
+              destination: _nmcDestination,
               source: 'nmc.cn',
             ),
           ],
@@ -916,12 +939,12 @@ void main() {
             references: <AssistantJourneyReference>[
               AssistantJourneyReference(
                 title: '四川文旅公告',
-                url: 'https://example.com/doc',
+                destination: _exampleDocDestination,
                 source: '官方',
               ),
               AssistantJourneyReference(
                 title: '景区通知',
-                url: 'https://example.com/notice',
+                destination: _exampleNoticeDestination,
                 source: '景区',
               ),
             ],
@@ -932,12 +955,12 @@ void main() {
           references: <AssistantJourneyReference>[
             AssistantJourneyReference(
               title: '四川文旅公告',
-              url: 'https://example.com/doc',
+              destination: _exampleDocDestination,
               source: '官方',
             ),
             AssistantJourneyReference(
               title: '景区通知',
-              url: 'https://example.com/notice',
+              destination: _exampleNoticeDestination,
               source: '景区',
             ),
           ],
@@ -982,7 +1005,7 @@ void main() {
                   acceptedReferences: <RetrievalProcessingReference>[
                     RetrievalProcessingReference(
                       title: '四川文旅公告',
-                      url: 'https://example.com/doc',
+                      destination: _exampleDocDestination,
                       source: '官方',
                     ),
                   ],
@@ -1006,7 +1029,7 @@ void main() {
       await tester.tap(find.text('1. 四川文旅公告'));
       await tester.pump();
 
-      expect(tappedCitation?.url, 'https://example.com/doc');
+      expect(tappedCitation?.destination.url, 'https://example.com/doc');
     });
   });
 }

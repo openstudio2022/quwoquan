@@ -3,21 +3,29 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/services/user/following_subject_repository.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show ReferralSource;
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
+import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-final followingSubjectsProvider = FutureProvider<List<FollowingSubjectItem>>((
+final followingSubjectsProvider = FutureProvider<List<FollowingSubjectResult>>((
   ref,
 ) async {
-  return ref
-      .watch(followingSubjectRepositoryProvider)
-      .listFollowingSubjects(limit: 20);
+  final slice = await ref
+      .watch(followingSubjectQueryProvider)
+      .listFollowingSubjects(const ListFollowingSubjectsQuery(limit: 20));
+  return slice.items;
 });
 
 class FollowingSubjectStrip extends ConsumerWidget {
@@ -28,7 +36,7 @@ class FollowingSubjectStrip extends ConsumerWidget {
   });
 
   final bool isDark;
-  final void Function(FollowingSubjectItem item)? onSubjectOpen;
+  final void Function(FollowingSubjectResult item)? onSubjectOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -81,7 +89,19 @@ class FollowingSubjectStrip extends ConsumerWidget {
               SizedBox(height: AppSpacing.intraGroupSm),
               asyncItems.when(
                 loading: () => const _FollowingSubjectSkeletonStrip(),
-                error: (_, _) => _FollowingSubjectEmptyState(isDark: isDark),
+                error: (error, _) => AppSectionErrorState(
+                  semantic: runtimeErrorSemantic(
+                    context,
+                    error: error,
+                    category: UiErrorCategory.pageLoad,
+                    scope: UiErrorScope.section,
+                  ),
+                  onAction: (action) async {
+                    if (action.type == UiErrorActionType.retry) {
+                      ref.invalidate(followingSubjectsProvider);
+                    }
+                  },
+                ),
                 data: (items) {
                   if (items.isEmpty) {
                     return _FollowingSubjectEmptyState(isDark: isDark);
@@ -97,7 +117,7 @@ class FollowingSubjectStrip extends ConsumerWidget {
                         final item = items[index];
                         return FollowingSubjectAvatarTile(
                           key: ValueKey<String>(
-                            'following-subject-${item.subjectTypeWire}-${item.subjectId}',
+                            'following-subject-${item.subjectType}-${item.subjectId}',
                           ),
                           item: item,
                           isDark: isDark,
@@ -121,28 +141,55 @@ class FollowingSubjectStrip extends ConsumerWidget {
   void _openSubject(
     BuildContext context,
     WidgetRef ref,
-    FollowingSubjectItem item,
+    FollowingSubjectResult item,
   ) {
     if (onSubjectOpen != null) {
       onSubjectOpen!(item);
     } else {
-      final location = switch (item.subjectType) {
-        FollowingSubjectType.user => AppRoutePaths.userProfile(
-          username: item.targetObjectId,
-        ),
-        FollowingSubjectType.circle => AppRoutePaths.circleDetail(
-          id: item.targetObjectId,
-        ),
-        FollowingSubjectType.homepage => AppRoutePaths.homepageDetail(
-          id: item.targetObjectId,
-        ),
-      };
-      context.push(location);
+      switch (item.subjectType) {
+        case 'user':
+          context.push(
+            AppRoutePaths.userProfile(username: item.targetObjectId),
+          );
+        case 'circle':
+          context.push(
+            AppRoutePaths.circleDetail(id: item.targetObjectId),
+            extra: const CircleDetailPageRouteExtra(
+              referralSource: ReferralSource.organicFeed,
+            ),
+          );
+        case 'homepage':
+          context.push(AppRoutePaths.homepageDetail(id: item.targetObjectId));
+        default:
+          return;
+      }
     }
+    // R20/R21 · 关注频道点击埋点（红点命中时带 unread 信号，驱动频道价值漏斗）。
     unawaited(
       ref
-          .read(followingSubjectRepositoryProvider)
-          .markFollowingSubjectVisited(subject: item)
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'following_channel',
+            action: item.hasUnreadChanges
+                ? 'open_subject_with_unread'
+                : 'open_subject',
+            pageName: 'HomePage',
+            targetType: item.subjectType,
+            targetKey: item.subjectId,
+          ),
+    );
+    final clientRequestId = const Uuid().v4();
+    unawaited(
+      ref
+          .read(followedSubjectVisitCommandWriterProvider)
+          .markFollowedSubjectVisited(
+            MarkFollowedSubjectVisitedCommand(
+              subjectId: item.subjectId,
+              subjectType: item.subjectType,
+              visitedAt: DateTime.now().toUtc(),
+              clientRequestId: clientRequestId,
+            ),
+          )
           .whenComplete(() => ref.invalidate(followingSubjectsProvider)),
     );
   }
@@ -156,7 +203,7 @@ class FollowingSubjectAvatarTile extends StatelessWidget {
     required this.onTap,
   });
 
-  final FollowingSubjectItem item;
+  final FollowingSubjectResult item;
   final bool isDark;
   final VoidCallback onTap;
 
@@ -179,7 +226,7 @@ class FollowingSubjectAvatarTile extends StatelessWidget {
                   bottom: -AppSpacing.two,
                   child: _FollowingSubjectTypeBadge(
                     key: ValueKey<String>(
-                      'following-subject-type-${item.subjectTypeWire}-${item.subjectId}',
+                      'following-subject-type-${item.subjectType}-${item.subjectId}',
                     ),
                     type: item.subjectType,
                     isDark: isDark,
@@ -221,7 +268,7 @@ class _FollowingSubjectTypeBadge extends StatelessWidget {
     required this.isDark,
   });
 
-  final FollowingSubjectType type;
+  final String type;
   final bool isDark;
 
   @override
@@ -254,25 +301,28 @@ class _FollowingSubjectTypeBadge extends StatelessWidget {
 
   Color _accentColor(BuildContext context) {
     return switch (type) {
-      FollowingSubjectType.user => AppColors.iosAccent(context),
-      FollowingSubjectType.circle => AppColors.success,
-      FollowingSubjectType.homepage => AppColors.warning,
+      'user' => AppColors.iosAccent(context),
+      'circle' => AppColors.success,
+      'homepage' => AppColors.warning,
+      _ => AppColors.iosAccent(context),
     };
   }
 
   IconData get _icon {
     return switch (type) {
-      FollowingSubjectType.user => CupertinoIcons.person_fill,
-      FollowingSubjectType.circle => CupertinoIcons.person_2_fill,
-      FollowingSubjectType.homepage => CupertinoIcons.location_solid,
+      'user' => CupertinoIcons.person_fill,
+      'circle' => CupertinoIcons.person_2_fill,
+      'homepage' => CupertinoIcons.location_solid,
+      _ => CupertinoIcons.question_circle,
     };
   }
 
   String get _label {
     return switch (type) {
-      FollowingSubjectType.user => '用户',
-      FollowingSubjectType.circle => '圈子',
-      FollowingSubjectType.homepage => '对象',
+      'user' => UITextConstants.followingSubjectTypeUser,
+      'circle' => UITextConstants.followingSubjectTypeCircle,
+      'homepage' => UITextConstants.followingSubjectTypeObject,
+      _ => UITextConstants.followingSubjectTypeUser,
     };
   }
 }
@@ -296,13 +346,13 @@ class FollowingSubjectUnreadDot extends StatelessWidget {
 class _FollowingSubjectAvatar extends StatelessWidget {
   const _FollowingSubjectAvatar({required this.item, required this.isDark});
 
-  final FollowingSubjectItem item;
+  final FollowingSubjectResult item;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final url = item.visualUrl;
-    final radius = item.subjectType == FollowingSubjectType.user
+    final url = item.avatarUrl.isNotEmpty ? item.avatarUrl : item.coverUrl;
+    final radius = item.subjectType == 'user'
         ? AppSpacing.radiusTwentyEight
         : AppSpacing.radiusTen;
     return ClipRRect(
@@ -341,11 +391,12 @@ class _FollowingSubjectAvatar extends StatelessWidget {
     );
   }
 
-  IconData _fallbackIcon(FollowingSubjectType type) {
+  IconData _fallbackIcon(String type) {
     return switch (type) {
-      FollowingSubjectType.user => CupertinoIcons.person_fill,
-      FollowingSubjectType.circle => CupertinoIcons.person_2_fill,
-      FollowingSubjectType.homepage => CupertinoIcons.location_solid,
+      'user' => CupertinoIcons.person_fill,
+      'circle' => CupertinoIcons.person_2_fill,
+      'homepage' => CupertinoIcons.location_solid,
+      _ => CupertinoIcons.question_circle,
     };
   }
 }

@@ -27,18 +27,7 @@ GoRoute _userProfileRoute(Ref ref) => GoRoute(
       );
     }
     UserProfileRouteExtra? extra;
-    ReferralSource profileReferralSource = ReferralSource.authorProfile;
-    if (state.extra is OtherProfilePageRouteExtra) {
-      final profileExtra = state.extra! as OtherProfilePageRouteExtra;
-      profileReferralSource =
-          profileExtra.referralSource ?? ReferralSource.authorProfile;
-      extra = UserProfileRouteExtra(
-        subAccountId: profileExtra.subAccountId,
-        avatar: profileExtra.avatar,
-        displayName: profileExtra.displayName,
-        backgroundImage: profileExtra.backgroundImage,
-      );
-    } else if (state.extra is UserProfileRouteExtra) {
+    if (state.extra is UserProfileRouteExtra) {
       extra = state.extra! as UserProfileRouteExtra;
     } else if (state.extra is Map) {
       final m = state.extra! as Map;
@@ -57,7 +46,7 @@ GoRoute _userProfileRoute(Ref ref) => GoRoute(
         initialAvatarUrl: extra?.safeAvatar,
         initialDisplayName: extra?.safeDisplayName,
         initialBackgroundImageUrl: extra?.safeBackgroundImage,
-        referralSource: profileReferralSource,
+        referralSource: ReferralSource.authorProfile,
         onBack: onBack,
       ),
     );

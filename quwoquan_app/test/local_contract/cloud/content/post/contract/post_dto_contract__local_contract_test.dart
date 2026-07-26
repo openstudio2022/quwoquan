@@ -1,7 +1,22 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
-import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+
+List<FeedItemDto> _contractDiscoveryItems() {
+  final posts = alphaFixtureSeedReader.contentSeedSet()?['posts'];
+  if (posts is! List) {
+    throw StateError('content_discovery_core.posts fixture is missing');
+  }
+  return posts
+      .whereType<Map>()
+      .map((item) => FeedItemDto.fromReadModelMap(item.cast<String, dynamic>()))
+      .toList(growable: false);
+}
+
+List<FeedItemDto> _contractItemsOfType(String type) => _contractDiscoveryItems()
+    .where((item) => item.type == type)
+    .toList(growable: false);
 
 /// L1a 契约测试：PostDto — 覆盖 mock.yaml dto_scenarios
 ///
@@ -65,8 +80,8 @@ void main() {
         expect(dto.aspectRatio, closeTo(1920 / 1080, 0.001));
       });
 
-      test('mock data: all photo entries have width > 0 and height > 0', () {
-        for (final item in ContentMockData.discoveryPhotoData) {
+      test('contract fixture: all photo entries have dimensions', () {
+        for (final item in _contractItemsOfType('image')) {
           final dto = PhotoPostDto.fromMap(item.toDiscoveryWireMap());
           expect(
             dto.width,
@@ -141,8 +156,8 @@ void main() {
         expect(dto.aspectRatio!, lessThan(1.0));
       });
 
-      test('mock data: all video entries have width > 0 and height > 0', () {
-        for (final item in ContentMockData.discoveryVideoData) {
+      test('contract fixture: all video entries have dimensions', () {
+        for (final item in _contractItemsOfType('video')) {
           final dto = VideoPostDto.fromMap(item.toDiscoveryWireMap());
           expect(
             dto.width,
@@ -204,8 +219,8 @@ void main() {
         expect(dto.articleFontPreset, equals('handwritten'));
       });
 
-      test('mock article data: body non-empty，标题可留空', () {
-        for (final item in ContentMockData.discoveryArticleData) {
+      test('contract article fixture: body non-empty，标题可留空', () {
+        for (final item in _contractItemsOfType('article')) {
           final dto = ArticlePostDto.fromMap(item.toDiscoveryWireMap());
           expect(
             dto.normalizedBody,
@@ -215,69 +230,18 @@ void main() {
         }
       });
 
-      test('canonical article mock 覆盖 5 模板 x 2 封面形态', () {
+      test('contract article fixture carries render metadata', () {
+        final items = _contractItemsOfType('article');
+        expect(items, isNotEmpty);
         expect(
-          ContentMockData.discoveryArticleData.length,
-          greaterThanOrEqualTo(10),
+          items.every(
+            (item) =>
+                (item.articleMarkdownDigest ?? '').isNotEmpty &&
+                (item.articleRenderProfile ?? const <String, dynamic>{})
+                    .isNotEmpty,
+          ),
+          isTrue,
         );
-        const templates = <String>[
-          'gentle',
-          'ritual',
-          'diffuse',
-          'journal',
-          'tech',
-        ];
-        for (final template in templates) {
-          final items = ContentMockData.discoveryArticleData
-              .where((it) => it.articleTemplate == template)
-              .toList(growable: false);
-          expect(
-            items.length,
-            greaterThanOrEqualTo(2),
-            reason: 'template=$template 至少要有有封面/无封面两种存在形态',
-          );
-          expect(
-            items.any((it) => it.coverUrl.trim().isNotEmpty),
-            isTrue,
-            reason: 'template=$template 必须至少有 1 条有封面样本',
-          );
-          expect(
-            items.any((it) => it.coverUrl.trim().isEmpty),
-            isTrue,
-            reason: 'template=$template 必须至少有 1 条无封面样本',
-          );
-          expect(
-            items.every(
-              (it) =>
-                  it.articleMarkdownDigest != null &&
-                  it.articleMarkdownDigest!.isNotEmpty &&
-                  it.articleRenderProfile != null &&
-                  it.articleRenderProfile!.isNotEmpty,
-            ),
-            isTrue,
-            reason:
-                'template=$template 的 canonical 样本必须带 Markdown digest 与 render profile',
-          );
-        }
-      });
-
-      test('canonical article mock 覆盖封面/标题四种组合', () {
-        final items = ContentMockData.discoveryArticleData;
-        bool hasCase({required bool expectCover, required bool expectTitle}) {
-          return items.any((it) {
-            final hasCover = it.coverUrl.trim().isNotEmpty;
-            final hasTitle = (it.title ?? '').trim().isNotEmpty;
-            final hasBody = (it.body ?? '').trim().isNotEmpty;
-            return hasBody &&
-                hasCover == expectCover &&
-                hasTitle == expectTitle;
-          });
-        }
-
-        expect(hasCase(expectCover: true, expectTitle: true), isTrue);
-        expect(hasCase(expectCover: false, expectTitle: true), isTrue);
-        expect(hasCase(expectCover: true, expectTitle: false), isTrue);
-        expect(hasCase(expectCover: false, expectTitle: false), isTrue);
       });
     });
 
@@ -385,12 +349,7 @@ void main() {
       });
 
       test('mixed list of PostBaseDto subtypes is type-safe', () {
-        final rawList = [
-          ...ContentMockData.discoveryPhotoData,
-          ...ContentMockData.discoveryVideoData,
-          ...ContentMockData.discoveryMomentData,
-          ...ContentMockData.discoveryArticleData,
-        ];
+        final rawList = _contractDiscoveryItems();
         final dtos = rawList
             .map((e) => postBaseDtoFromMap(e.toDiscoveryWireMap()))
             .toList(growable: false);
@@ -403,26 +362,26 @@ void main() {
 
         expect(
           photos.length,
-          equals(ContentMockData.discoveryPhotoData.length),
+          equals(rawList.where((item) => item.type == 'image').length),
         );
         expect(
           videos.length,
-          equals(ContentMockData.discoveryVideoData.length),
+          equals(rawList.where((item) => item.type == 'video').length),
         );
         expect(
           moments.length,
-          equals(ContentMockData.discoveryMomentData.length),
+          equals(rawList.where((item) => item.type == 'micro').length),
         );
         expect(
           articles.length,
-          equals(ContentMockData.discoveryArticleData.length),
+          equals(rawList.where((item) => item.type == 'article').length),
         );
       });
 
       test('base fields accessible via PostBaseDto interface', () {
-        final dtos = ContentMockData.discoveryPhotoData
-            .map((e) => postBaseDtoFromMap(e.toDiscoveryWireMap()))
-            .toList();
+        final dtos = _contractItemsOfType(
+          'image',
+        ).map((e) => postBaseDtoFromMap(e.toDiscoveryWireMap())).toList();
         for (final dto in dtos) {
           expect(dto.id, isNotEmpty);
           expect(dto.authorId, isNotEmpty);

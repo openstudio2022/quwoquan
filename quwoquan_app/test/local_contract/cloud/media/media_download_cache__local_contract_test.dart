@@ -166,11 +166,12 @@ void main() {
     );
 
     test('local video source is resolved by platform factory boundary', () {
-      final controller = AppVideoPlayerControllerFactory.localFilePath(
+      final controllerHandle = AppVideoPlayerControllerFactory.localFilePath(
         '/tmp/qwq_cached_video.mp4',
       );
+      addTearDown(controllerHandle.controller.dispose);
 
-      expect(controller.dataSourceType, DataSourceType.file);
+      expect(controllerHandle.controller.dataSourceType, DataSourceType.file);
     });
   });
 }

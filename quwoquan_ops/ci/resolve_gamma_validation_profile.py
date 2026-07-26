@@ -9,7 +9,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REGISTRY_PATH = REPO_ROOT / "quwoquan_ops" / "environments" / "gamma_validation_suites.json"
+REGISTRY_PATH = REPO_ROOT / "quwoquan_ops" / "environments" / "gamma" / "validation_suites.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,7 +51,6 @@ def resolve_payload(profile_name: str) -> dict[str, Any]:
     return {
         "profile": profile_name,
         "description": str(profile.get("description", "")).strip(),
-        "deploys_gamma": bool(profile.get("deploysGamma", False)),
         "readiness_blocking": bool(profile.get("readinessBlocking", False)),
         "smoke_cases": smoke_cases,
         "smoke_cases_blocking": bool(profile.get("smokeCasesBlocking", False)),
@@ -72,7 +71,6 @@ def write_github_output(path: Path, payload: dict[str, Any]) -> None:
     with path.open("a", encoding="utf-8") as handle:
         handle.write(f"profile={payload['profile']}\n")
         handle.write(f"description={payload['description']}\n")
-        handle.write(f"deploys_gamma={emit_bool(bool(payload['deploys_gamma']))}\n")
         handle.write(
             f"readiness_blocking={emit_bool(bool(payload['readiness_blocking']))}\n"
         )
@@ -121,7 +119,6 @@ def print_shell(payload: dict[str, Any]) -> None:
 
     print(f"PROFILE={payload['profile']}")
     print(f"DESCRIPTION={json.dumps(payload['description'], ensure_ascii=False)}")
-    print(f"DEPLOYS_GAMMA={shell_bool(bool(payload['deploys_gamma']))}")
     print(f"READINESS_BLOCKING={shell_bool(bool(payload['readiness_blocking']))}")
     print(
         "SMOKE_CASES_JSON="

@@ -11,7 +11,7 @@
   - quwoquan_app/lib/**/*.dart
   - packages/*/lib/**/*.dart
 
-allowlist：specs/gates/repository_interface_method_budget_allowlist.yaml
+allowlist：quwoquan_ops/policies/gates/repository_interface_method_budget_allowlist.yaml
   method_threshold: 10
   allow:
     - interface: ChatRepository
@@ -34,7 +34,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 ALLOWLIST_PATH = (
-    ROOT / "specs" / "gates" / "repository_interface_method_budget_allowlist.yaml"
+    ROOT / "quwoquan_ops" / "policies" / "gates" / "repository_interface_method_budget_allowlist.yaml"
 )
 DEFAULT_METHOD_THRESHOLD = 10
 

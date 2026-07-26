@@ -4,15 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
-import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
-import 'package:quwoquan_app/ui/chat/providers/voice_offline_queue.dart';
+import 'package:quwoquan_app/ui/chat/providers/chat_send_outbox.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 
+import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 import '../../../../support/fixtures/chat/fixture_realtime_connection_delegate.dart';
 
 void main() {
@@ -46,9 +46,11 @@ void main() {
                   ),
             ),
           ),
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
-            MockRelationshipCapabilityRepository(),
+            mutualRelationshipCapabilityRepository(),
           ),
           voiceQueuedSenderProvider.overrideWithValue(
             (_, _) async => VoiceSendStatus.completed,

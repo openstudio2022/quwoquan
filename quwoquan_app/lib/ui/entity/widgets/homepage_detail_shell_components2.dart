@@ -345,7 +345,7 @@ class _HomepagePrimaryTabSpec {
   final String label;
 }
 
-enum _HomepageMoreAction { claim, maintain, report }
+enum _HomepageMoreAction { share, claim, maintain, report }
 
 String _contentTypeLabel(String contentType) {
   switch (contentType.trim()) {
@@ -361,24 +361,5 @@ String _contentTypeLabel(String contentType) {
       return UITextConstants.homepageContentTypeQuestion;
     default:
       return UITextConstants.homepageContentTypeDefault;
-  }
-}
-
-String _typeLabel(String type) {
-  switch (type.trim()) {
-    case 'hotel':
-      return UITextConstants.homepageTypeHotel;
-    case 'restaurant':
-      return UITextConstants.homepageTypeRestaurant;
-    case 'vehicle':
-      return UITextConstants.homepageTypeVehicle;
-    case 'sight':
-      return UITextConstants.homepageTypeSight;
-    case 'university':
-      return UITextConstants.homepageTypeUniversity;
-    case 'travel_photo':
-      return UITextConstants.homepageTypeTravelPhoto;
-    default:
-      return UITextConstants.homepageTypeDefault;
   }
 }

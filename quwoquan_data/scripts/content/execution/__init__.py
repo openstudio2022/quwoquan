@@ -7,7 +7,7 @@ coverage inventories stay in the repository; execution evidence never does.
 
 from .identity import (
     ContentType,
-    RolloutMilestone,
+    ExecutionPhase,
     SelectionPolicy,
     build_execution_id,
     parse_execution_id,
@@ -34,7 +34,7 @@ __all__ = [
     "finalize_execution_qualification",
     "prepare_execution_qualification",
     "parse_execution_id",
-    "RolloutMilestone",
+    "ExecutionPhase",
     "SelectionPolicy",
     "validate_execution_id",
 ]

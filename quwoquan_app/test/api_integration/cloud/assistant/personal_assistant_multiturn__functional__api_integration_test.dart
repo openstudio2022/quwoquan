@@ -35,23 +35,40 @@ void main() {
     expect(secondState.processSummary.searchCount, greaterThanOrEqualTo(1));
     expect(secondState.processSummary.acceptedCount, greaterThanOrEqualTo(1));
     expect(
-      secondState.processSummary.acceptedReferences.first.url,
+      secondState.processSummary.acceptedReferences.first.destination.url,
       startsWith('https://'),
     );
 
-    final prompts = secondState.events
-        .where((event) => event.eventType == 'assistant.model.interaction')
-        .map((event) => event.payload['requestUserPrompt']?.toString() ?? '')
-        .where((prompt) => prompt.isNotEmpty)
-        .toList(growable: false);
-    expect(prompts.any((prompt) => prompt.contains('同一会话前文')), isTrue);
     expect(
-      prompts.any(
-        (prompt) => prompt.contains('深圳') || prompt.contains('Shen zhen'),
+      secondState.transcript.length,
+      greaterThanOrEqualTo(4),
+      reason: '第二轮必须保留首轮用户问题与回答，供服务端会话上下文续接',
+    );
+    expect(
+      secondState.events.map((event) => event.eventType),
+      everyElement(
+        isIn(<String>[
+          'run_started',
+          'process_replace',
+          'process_append',
+          'process_commit',
+          'answer_delta',
+          'completed',
+          'failed',
+          'cancelled',
+        ]),
+      ),
+    );
+    expect(
+      secondState.events.every(
+        (event) =>
+            !event.payload.containsKey('debugTrace') &&
+            !event.payload.containsKey('reasoning') &&
+            !event.payload.containsKey('toolUse') &&
+            !event.payload.containsKey('toolInput'),
       ),
       isTrue,
     );
-    expect(prompts.any((prompt) => prompt.contains('四口之家')), isTrue);
   });
 }
 

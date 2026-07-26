@@ -8,7 +8,6 @@ export 'circle_section_config_dto.dart';
 export 'circle_stats_wire_dto.dart';
 export 'circle_search_views.dart';
 export 'circle_write_wire_writable_keys.g.dart';
-export 'circle_write_wire_dtos.dart';
 export 'circle_detail_wire_dto.dart';
 export 'circle_category_tab_config_dto.dart';
 export 'circle_category_tab_defaults.dart';

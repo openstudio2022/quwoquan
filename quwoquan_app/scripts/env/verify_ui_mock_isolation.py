@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-阻断 lib/ui、lib/app、lib/core 直接依赖 cloud/services/*/mock 或 UI 模型内嵌 prototype 域名行。
+阻断 production lib 对 Mock、fixture runtime helper 与 UI prototype 域名行的依赖。
 
-真相源：specs/gates/mock_data_cloud_integration_policy.md
-豁免：specs/gates/ui_mock_isolation_allowlist.yaml（过渡期，只缩不扩）
+规格：feature-tree 的 app-cloud-business-object-commercial-closure REQ-004。
+豁免：quwoquan_ops/policies/gates/ui_mock_isolation_allowlist.yaml（过渡期，只缩不扩）。
 
 用法（仓库根）:
-  python3 scripts/verify_ui_mock_isolation.py
+  python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
 """
 
 from __future__ import annotations
@@ -22,7 +22,23 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_LIB = ROOT / "quwoquan_app" / "lib"
-ALLOW = ROOT / "specs" / "gates" / "ui_mock_isolation_allowlist.yaml"
+ALLOW = ROOT / "quwoquan_ops" / "policies" / "gates" / "ui_mock_isolation_allowlist.yaml"
+PRODUCTION_SERVICE_MOCK_ROOT = APP_LIB / "cloud" / "services"
+RETIRED_PRODUCTION_FIXTURE_TOKENS = (
+    "contract_fixture_runtime_loader",
+    "prefab_user_resolver",
+    "mock_session_identity",
+    "kMockCurrentOwnerId",
+    "kMockCurrentSubAccountId",
+    "PrefabUserMetadata",
+    "prefab_user_metadata",
+    "prefab_user_provenance",
+    "QWQ_REPO_ROOT",
+    "contract_fixtures",
+    "test_fixtures",
+    "fixture_user_",
+    "fixture_persona_",
+)
 
 # package:quwoquan_app/.../mock/ 或 .../mock/xxx.dart
 IMPORT_MOCK = re.compile(
@@ -68,10 +84,35 @@ def main() -> int:
     allowed = load_allowed()
     errors: list[str] = []
 
+    # 生产 lib 不得保留业务 Mock 源文件。alpha/test 必须转入独立 mock package，
+    # 不能只靠 import allowlist 或 tree-shaking 隐藏可达实现。
+    if PRODUCTION_SERVICE_MOCK_ROOT.is_dir():
+        for path in sorted(PRODUCTION_SERVICE_MOCK_ROOT.glob("**/mock/*.dart")):
+            rel = path.relative_to(APP_LIB).as_posix()
+            errors.append(
+                f"{rel}: production lib 禁止保留 cloud/services/*/mock 源文件"
+            )
+
+    # P0: production lib（包括 generated）不能通过运行时 loader / resolver、
+    # mock identity、环境变量或仓库相对路径读取 fixture，也不得承载 fixture
+    # user/persona 数据。alpha runner、Mock package 和 test/support 不在 APP_LIB，
+    # 因而只能在这些物理隔离目录持有 fixture 读取逻辑。
+    for path in scan_dart_files(APP_LIB):
+        rel = path.relative_to(APP_LIB).as_posix()
+        text = path.read_text(encoding="utf-8")
+        for token in RETIRED_PRODUCTION_FIXTURE_TOKENS:
+            if token in text:
+                errors.append(
+                    f"{rel}: production lib 禁止 fixture/Mock runtime token {token!r}"
+                )
+
+    # lib/cloud 纳入扫描（B2）：production adapter/provider 同样禁止 import
+    # …/mock/ 本体；mock 承接只允许 test/support 与 runners/alpha。
     roots = [
         APP_LIB / "ui",
         APP_LIB / "app",
         APP_LIB / "core",
+        APP_LIB / "cloud",
     ]
     for base in roots:
         for path in scan_dart_files(base):
@@ -95,7 +136,7 @@ def main() -> int:
         for e in errors:
             print(f"  - {e}", file=sys.stderr)
         print("", file=sys.stderr)
-        print(f"说明见: specs/gates/mock_data_cloud_integration_policy.md", file=sys.stderr)
+        print("说明见 app-cloud-business-object-commercial-closure REQ-004", file=sys.stderr)
         print(f"豁免仅来自: {ALLOW}（禁止为新增页面加行）", file=sys.stderr)
         return 1
 

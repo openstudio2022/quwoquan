@@ -9,7 +9,7 @@ dashboard:
     - rollback_readiness
 object_types:
   - object_type: service_catalog_entry
-    object_kind: snapshot
+    view_kind: snapshot
     label: 服务目录项
     source_entity: EntityRegistry
     view_model: ServiceCatalogEntry
@@ -22,7 +22,7 @@ object_types:
         scopes: [ops.platform.catalog.read]
 
   - object_type: plane_binding
-    object_kind: snapshot
+    view_kind: snapshot
     label: Plane 绑定
     source_entity: DeploymentMapping
     view_model: PlaneBinding
@@ -33,56 +33,39 @@ object_types:
         method: GET
         path: /control-plane/platform/topology/planes
         scopes: [ops.platform.catalog.read]
-      - operation: UpdatePlaneBinding
-        method: POST
-        path: /control-plane/platform/topology/planes/{bindingId}:update
-        scopes: [ops.platform.catalog.write]
-        danger_level: high
-        approval_mode: dual
+
+  - object_type: prod_plane_access_isolation
+    view_kind: snapshot
+    label: 生产平面访问隔离投影
+    source_entity: ProdPlaneAccessIsolation
+    view_model: ProdPlaneAccessIsolationSnapshot
+    risk_level: high
+    deployment_profile: audit_heavy
+    operations:
+      - operation: GetProdPlaneAccessIsolation
+        method: GET
+        path: /control-plane/platform/topology/prod-plane-access-isolation
+        scopes: [ops.platform.dependency.read]
 
   - object_type: service_config
-    object_kind: policy
-    label: 服务配置
-    source_entity: RuntimeConfig
-    view_model: ServiceConfig
+    view_kind: snapshot
+    label: 配置只读快照（IaC）
+    source_entity: ConfigSnapshot
+    view_model: ConfigSnapshotView
     risk_level: high
     deployment_profile: latency_sensitive
     operation_refs:
-      - operation_id: ops.config_layer.ListServiceConfigs
-      - operation_id: ops.config_layer.UpdateServiceConfig
-        danger_level: high
-        approval_mode: single
+      - operation_id: ops.config_snapshot.ListServiceConfigs
+      - operation_id: ops.config_snapshot.ResolveEffectiveConfig
+      - operation_id: ops.config_snapshot.GetConfigSnapshot
+      - operation_id: ops.config_snapshot.ListConfigDomains
     analytics_views:
       - view_id: config-risk-overview
         widget_types: [risk_distribution, rollout_backlog]
-        drilldown_route_id: /platform/config/layers
-
-  - object_type: config_layer_value
-    object_kind: policy
-    label: 配置层值
-    source_entity: ConfigLayer
-    view_model: ConfigLayerValue
-    risk_level: high
-    deployment_profile: latency_sensitive
-    operation_refs:
-      - operation_id: ops.config_layer.ListConfigLayers
-      - operation_id: ops.config_layer.ResolveEffectiveConfig
-
-  - object_type: config_package
-    object_kind: release
-    label: 配置包
-    source_entity: ConfigPackage
-    view_model: ConfigPackage
-    risk_level: critical
-    deployment_profile: batch_heavy
-    operations:
-      - operation: ListConfigPackages
-        method: GET
-        path: /control-plane/platform/configs/packages
-        scopes: [ops.platform.config.read]
+        drilldown_route_id: /platform/config/drift
 
   - object_type: config_instance_report
-    object_kind: snapshot
+    view_kind: snapshot
     label: 实例配置报告
     source_entity: ConfigInstanceReport
     view_model: ConfigInstanceReport
@@ -98,40 +81,8 @@ object_types:
         path: /control-plane/platform/configs/instances/{instanceId}:report
         scopes: [ops.platform.config.write]
 
-  - object_type: governance_policy_template
-    object_kind: policy
-    label: 治理策略模板
-    source_entity: GovernancePolicy
-    view_model: GovernancePolicyTemplate
-    risk_level: medium
-    deployment_profile: latency_sensitive
-    operations:
-      - operation: ListGovernancePolicyTemplates
-        method: GET
-        path: /control-plane/platform/governance/templates
-        scopes: [ops.platform.governance.read]
-
-  - object_type: governance_policy_binding
-    object_kind: policy
-    label: 治理策略绑定
-    source_entity: GovernancePolicyBinding
-    view_model: GovernancePolicyBinding
-    risk_level: high
-    deployment_profile: latency_sensitive
-    operations:
-      - operation: ListGovernancePolicyBindings
-        method: GET
-        path: /control-plane/platform/governance/bindings
-        scopes: [ops.platform.governance.read]
-      - operation: UpdateGovernancePolicyBinding
-        method: POST
-        path: /control-plane/platform/governance/bindings/{bindingId}:update
-        scopes: [ops.platform.governance.write]
-        danger_level: high
-        approval_mode: single
-
   - object_type: config_release
-    object_kind: release
+    view_kind: release
     label: 配置发布单
     source_entity: ConfigRelease
     view_model: ConfigRelease
@@ -142,25 +93,17 @@ object_types:
         method: GET
         path: /control-plane/platform/releases
         scopes: [ops.platform.rollout.read]
-      - operation: ApplyConfigRelease
-        method: POST
-        path: /control-plane/platform/releases/{releaseId}:apply
-        scopes: [ops.platform.rollout.write]
-        danger_level: critical
-        approval_mode: dual
-      - operation: RollbackConfigRelease
-        method: POST
-        path: /control-plane/platform/releases/{releaseId}:rollback
-        scopes: [ops.platform.rollout.write]
-        danger_level: critical
-        approval_mode: dual
+      - operation: GetGrayRoutingPolicy
+        method: GET
+        path: /control-plane/platform/rollout/routing-policy
+        scopes: [ops.platform.rollout.read]
     analytics_views:
       - view_id: release-health
         widget_types: [success_rate, latency_p95, rollback_readiness]
         drilldown_route_id: /platform/rollout
 
   - object_type: environment_topology
-    object_kind: snapshot
+    view_kind: snapshot
     label: 环境拓扑
     source_entity: RuntimeTopology
     view_model: EnvironmentTopology
@@ -173,7 +116,7 @@ object_types:
         scopes: [ops.platform.dependency.read]
 
   - object_type: runtime_cluster
-    object_kind: snapshot
+    view_kind: snapshot
     label: 运行时集群
     source_entity: RuntimeCluster
     view_model: RuntimeCluster
@@ -186,7 +129,7 @@ object_types:
         scopes: [ops.platform.dependency.read]
 
   - object_type: runtime_service
-    object_kind: snapshot
+    view_kind: snapshot
     label: 运行时服务
     source_entity: RuntimeService
     view_model: RuntimeService
@@ -199,7 +142,7 @@ object_types:
         scopes: [ops.platform.dependency.read]
 
   - object_type: runtime_instance
-    object_kind: snapshot
+    view_kind: snapshot
     label: 运行时实例
     source_entity: RuntimeInstance
     view_model: RuntimeInstance
@@ -211,121 +154,54 @@ object_types:
         path: /control-plane/platform/topology/instances
         scopes: [ops.platform.dependency.read]
 
-  - object_type: dependency_profile
-    object_kind: snapshot
-    label: 依赖画像
-    source_entity: DependencyProfile
-    view_model: DependencyProfile
-    risk_level: medium
-    deployment_profile: audit_heavy
-    operations:
-      - operation: ListDependencyProfiles
-        method: GET
-        path: /control-plane/platform/topology/dependencies
-        scopes: [ops.platform.dependency.read]
-
-  - object_type: capacity_profile
-    object_kind: snapshot
-    label: 容量画像
-    source_entity: CapacityProfile
-    view_model: CapacityProfile
-    risk_level: high
-    deployment_profile: batch_heavy
-    operations:
-      - operation: ListCapacityProfiles
-        method: GET
-        path: /control-plane/platform/topology/capacity
-        scopes: [ops.platform.dependency.read]
-
-  - object_type: slo_policy
-    object_kind: policy
-    label: SLO 策略
-    source_entity: SLOPolicy
-    view_model: SLOPolicy
-    risk_level: medium
-    deployment_profile: latency_sensitive
-    operations:
-      - operation: ListSLOPolicies
-        method: GET
-        path: /control-plane/platform/observability/slos
-        scopes: [ops.platform.observability.read]
-
-  - object_type: alert_template
-    object_kind: policy
-    label: 告警模板
+  # Alertmanager 告警回流：ingest 由 Alertmanager receiver 推送（webhook），
+  # active 供值班列表消费，ack 由值班人显式认领并落审计。
+  - object_type: active_alert
+    view_kind: workflow_case
+    label: 活动告警
     source_entity: AlertTemplate
-    view_model: AlertTemplate
-    risk_level: medium
+    view_model: ActiveAlert
+    risk_level: high
     deployment_profile: latency_sensitive
     operations:
-      - operation: ListAlertTemplates
-        method: GET
-        path: /control-plane/platform/observability/alerts
-        scopes: [ops.platform.observability.read]
-
-  - object_type: dashboard_card
-    object_kind: dashboard
-    label: 仪表盘卡片
-    source_entity: DashboardCard
-    view_model: DashboardCard
-    risk_level: low
-    deployment_profile: audit_heavy
-    operations:
-      - operation: ListDashboardCards
-        method: GET
-        path: /control-plane/platform/observability/dashboards/cards
-        scopes: [ops.platform.observability.read]
-
-  - object_type: runbook
-    object_kind: workflow_case
-    label: Runbook
-    source_entity: Runbook
-    view_model: Runbook
-    risk_level: medium
-    deployment_profile: batch_heavy
-    operations:
-      - operation: ListRunbooks
-        method: GET
-        path: /control-plane/platform/runbooks
-        scopes: [ops.platform.runbook.read]
-      - operation: RunDrill
+      - operation: IngestAlertmanagerWebhook
         method: POST
-        path: /control-plane/platform/runbooks/{runbookId}:runDrill
-        scopes: [ops.platform.runbook.write]
+        path: /control-plane/platform/alerts/ingest
+        scopes: [ops.platform.observability.write]
+        auth_mode: machine_token
+        principal: alertmanager
+      - operation: ListActiveAlerts
+        method: GET
+        path: /control-plane/platform/alerts/active
+        scopes: [ops.platform.observability.read]
+      - operation: AcknowledgeAlert
+        method: POST
+        path: /control-plane/platform/alerts/{fingerprint}:ack
+        scopes: [ops.platform.observability.write]
         danger_level: medium
         approval_mode: single
 
-  - object_type: gate_rule
-    object_kind: policy
-    label: 门禁规则
-    source_entity: GateRule
-    view_model: GateRule
-    risk_level: high
-    deployment_profile: latency_sensitive
-    operations:
-      - operation: ListGateRules
-        method: GET
-        path: /control-plane/platform/gates
-        scopes: [ops.platform.gate.read]
-      - operation: OverrideGateRule
-        method: POST
-        path: /control-plane/platform/gates/{gateId}:override
-        scopes: [ops.platform.gate.write]
-        danger_level: high
-        approval_mode: dual
-
-  # 访问隔离映射的控制面投影（只读快照）：仅投影 quwoquan_ops/environments/prod_plane_access_isolation.yaml
-  # 的平面->账号->固定路径->凭据 secret 名->rollout stage 引用，便于审计；不存凭据明文，
-  # 仅用 dependency.read 拓扑读权限，不引入任何 config scope（不污染现有配置面）。
-  - object_type: prod_plane_access_isolation
-    object_kind: snapshot
-    label: Prod 平面访问隔离映射
-    source_entity: ProdPlaneAccessIsolation
-    view_model: ProdPlaneAccessIsolation
-    risk_level: high
+  - object_type: platform_control_plane_journal
+    view_kind: audit
+    label: 平台控制面审计与处置投影
+    source_entity: ControlPlaneJournal
+    view_model: PlatformControlPlaneJournal
+    risk_level: medium
     deployment_profile: audit_heavy
     operations:
-      - operation: ListProdPlaneAccessIsolation
+      - operation: ListPlatformAudits
         method: GET
-        path: /control-plane/platform/topology/prod-plane-access-isolation
-        scopes: [ops.platform.dependency.read]
+        path: /control-plane/platform/audits
+        scopes: [ops.platform.rollout.read]
+      - operation: ListPlatformApprovals
+        method: GET
+        path: /control-plane/platform/approvals
+        scopes: [ops.platform.rollout.read]
+      - operation: GetPlatformProjectionSummary
+        method: GET
+        path: /control-plane/platform/projections/summary
+        scopes: [ops.platform.observability.read]
+      - operation: GetPlatformTriageSummary
+        method: GET
+        path: /control-plane/platform/triage/summary
+        scopes: [ops.platform.observability.read]

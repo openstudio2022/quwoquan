@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 
 void main() {
@@ -58,7 +59,9 @@ void main() {
     late ProviderContainer container;
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [chatRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          chatRepositoryCompositionProvider.overrideWithValue(repository),
+        ],
         child: Consumer(
           builder: (context, ref, _) {
             container = ProviderScope.containerOf(context);
@@ -119,6 +122,39 @@ void main() {
           .any((item) => item.id == 'media_msg'),
       isFalse,
     );
+  });
+
+  testWidgets('成员被移出时只清当事人的会话与离线缓存', (tester) async {
+    late ProviderContainer container;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: Consumer(
+          builder: (context, ref, _) {
+            container = ProviderScope.containerOf(context);
+            return const MaterialApp(home: SizedBox());
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final cache = container.read(conversationCacheProvider);
+    cache.put(
+      const ConversationCacheRecord(id: 'conv_removed', title: '待移出的群聊'),
+    );
+    final handler = RealtimeMessageHandler(
+      container.read,
+      currentUserIdResolver: () => 'persona_removed',
+    );
+
+    handler.handle(<String, dynamic>{
+      'type': 'ConversationMemberRemoved',
+      'conversationId': 'conv_removed',
+      'payload': <String, dynamic>{'userId': 'persona_removed'},
+    });
+    await tester.pump();
+
+    expect(cache.get('conv_removed'), isNull, reason: '终态成员事件必须立即清除当事人的本地会话行');
   });
 }
 

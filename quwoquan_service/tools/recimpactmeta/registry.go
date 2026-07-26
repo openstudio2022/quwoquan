@@ -1,5 +1,5 @@
 // Package recimpactmeta 是影响力 helpType 注册表
-// (contracts/metadata/recommendation/rec_model/impact_help_type_registry.yaml)
+// (services/recommendation-service/contracts/recommendation/recommendation_model_release/impact_help_type_registry.yaml)
 // 的唯一解析/校验层，供服务端 Go codegen (tools/codegen_impact) 与
 // 端侧 Dart codegen (tools/codegen_app_metadata) 共用同一份解析器（§23 去桥接）。
 package recimpactmeta

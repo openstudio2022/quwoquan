@@ -1,0 +1,102 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/application/rtc/call_session/call_participant_presentation.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+void main() {
+  test('conversation member projection enriches display and trust', () async {
+    final resolver = _PresentationResolver();
+    final container = ProviderContainer(
+      overrides: [
+        callParticipantPresentationResolverProvider.overrideWithValue(resolver),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(callParticipantsProvider.notifier)
+        .syncRoster(const <CallParticipantDto>[
+          CallParticipantDto(
+            userId: 'user-known',
+            role: 'invitee',
+            status: 'ringing',
+          ),
+          CallParticipantDto(
+            userId: 'user-unknown',
+            role: 'invitee',
+            status: 'ringing',
+          ),
+        ], conversationId: 'conversation-1');
+
+    final participants = container.read(callParticipantsProvider).participants;
+    final known = participants.singleWhere(
+      (participant) => participant.userId == 'user-known',
+    );
+    final unknown = participants.singleWhere(
+      (participant) => participant.userId == 'user-unknown',
+    );
+    expect(known.displayName, '契约好友');
+    expect(known.avatarUrl, isNotEmpty);
+    expect(known.trustRelation, TrustRelation.known);
+    expect(known.needsTrustWarning, isFalse);
+    expect(unknown.displayName, 'user-unknown');
+    expect(unknown.trustRelation, TrustRelation.possiblyUnknown);
+  });
+
+  test(
+    'ringing presentation is a trusted fallback without conversation data',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          callParticipantPresentationResolverProvider.overrideWithValue(
+            _PresentationResolver(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(callParticipantsProvider.notifier).syncRoster(
+        const <CallParticipantDto>[
+          CallParticipantDto(
+            userId: 'caller',
+            role: 'initiator',
+            status: 'ringing',
+          ),
+        ],
+        callerFallback: const CallParticipantPresentation(
+          userId: 'caller',
+          displayName: '来电用户',
+          avatarUrl: 'https://cdn.example/caller.png',
+          knownInCurrentContext: true,
+        ),
+      );
+
+      final caller = container
+          .read(callParticipantsProvider)
+          .participants
+          .single;
+      expect(caller.displayName, '来电用户');
+      expect(caller.trustRelation, TrustRelation.known);
+    },
+  );
+}
+
+final class _PresentationResolver
+    implements CallParticipantPresentationResolver {
+  @override
+  Future<Map<String, CallParticipantPresentation>> resolve({
+    required String conversationId,
+    required Set<String> userIds,
+  }) async => <String, CallParticipantPresentation>{
+    if (userIds.contains('user-known'))
+      'user-known': const CallParticipantPresentation(
+        userId: 'user-known',
+        displayName: '契约好友',
+        avatarUrl: 'data:image/png;base64,AA==',
+        knownInCurrentContext: true,
+      ),
+  };
+}

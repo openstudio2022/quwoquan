@@ -75,6 +75,34 @@ func TestSpecializedDtoRenderersUseCanonicalNameAsWireKey(t *testing.T) {
 	}
 }
 
+func TestRenderTypedPostDtoNestedProjectionEmitsStringKeyMapHelper(
+	t *testing.T,
+) {
+	projection := clientProjection{
+		DartClass: "ProjectedPostDto",
+		BaseClass: "PostBaseDto",
+		Fields: []projectionFieldDef{
+			{
+				Name:                  "sourceAttribution",
+				Source:                "sourceAttribution",
+				DartType:              "SourceAttributionDto",
+				Nullable:              true,
+				MapFromStringKeyClass: "SourceAttributionDto",
+			},
+		},
+	}
+
+	generated := renderTypedPostDtoDart(projection, "fixture.yaml")
+	for _, expected := range []string{
+		"SourceAttributionDto.fromMap(_parseStringKeyMap(m['sourceAttribution'])!)",
+		"Map<String, dynamic>? _parseStringKeyMap(dynamic v)",
+	} {
+		if !strings.Contains(generated, expected) {
+			t.Fatalf("typed post DTO nested projection missing %q:\n%s", expected, generated)
+		}
+	}
+}
+
 func TestRenderStandaloneDtoStrictProjectionRejectsUnknownAndInvalidWireValues(t *testing.T) {
 	projection := clientProjection{
 		DartClass: "StrictMessageDto",
@@ -83,6 +111,7 @@ func TestRenderStandaloneDtoStrictProjectionRejectsUnknownAndInvalidWireValues(t
 			{Name: "id", Source: "id", DartType: "String"},
 			{Name: "mentions", Source: "mentions", DartType: "List<String>", Nullable: true},
 			{Name: "timestamp", Source: "timestamp", DartType: "DateTime", Nullable: true},
+			{Name: "createdAt", Source: "createdAt", DartType: "DateTime"},
 		},
 	}
 
@@ -93,6 +122,7 @@ func TestRenderStandaloneDtoStrictProjectionRejectsUnknownAndInvalidWireValues(t
 		"!m.containsKey('id') || m['id'] == null || (m['id'] is! String)",
 		"m.containsKey('mentions') && m['mentions'] != null && (m['mentions'] is! List || (m['mentions'] as List).any((value) => value is! String))",
 		"DateTime.tryParse(m['timestamp'] as String) == null",
+		"createdAt: DateTime.parse(m['createdAt'] as String)",
 		"'timestamp': timestamp?.toIso8601String()",
 	} {
 		if !strings.Contains(generated, expected) {
@@ -132,6 +162,7 @@ func TestRenderStandaloneDtoStrictNestedProjection(t *testing.T) {
 
 	for _, expected := range []string{
 		"card: m['card'] == null ? null : CardDto.fromMap(_parseStringKeyMap(m['card'])!)",
+		"Map<String, dynamic>? _parseStringKeyMap(dynamic v)",
 		"'card': card?.toMap()",
 		"'items': items.map((value) => value.toMap()).toList(growable: false)",
 		"m.containsKey('card') && m['card'] != null && (m['card'] is! Map",

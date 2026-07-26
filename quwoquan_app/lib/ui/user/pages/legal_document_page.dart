@@ -1,10 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/remote/user/legal_document_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -21,7 +20,7 @@ class LegalDocumentPage extends ConsumerStatefulWidget {
     super.key,
     required this.title,
     required this.url,
-    this.availabilityProbe = _defaultLegalDocumentAvailabilityProbe,
+    this.availabilityProbe = defaultLegalDocumentAvailabilityProbe,
     this.htmlLoader = defaultLegalDocumentHtmlLoader,
     this.webViewBuilder = _defaultLegalDocumentWebViewBuilder,
   });
@@ -174,7 +173,7 @@ class _LegalDocumentPageState extends ConsumerState<LegalDocumentPage> {
     }
     _lastTrackedFailureGeneration = generation;
     final slug = _legalDocumentSlug(widget.url);
-    final payload = <String, dynamic>{
+    final payload = <String, Object?>{
       'document': slug,
       'runtimeEnv': CloudRuntimeConfig.appRuntimeEnv,
       'failureReason': reason,
@@ -257,52 +256,6 @@ class _LegalDocumentPageState extends ConsumerState<LegalDocumentPage> {
 
 bool _isHttpUrl(Uri uri) {
   return uri.scheme == 'http' || uri.scheme == 'https';
-}
-
-bool _isSuccessfulLegalStatus(int statusCode) {
-  return statusCode >= 200 && statusCode < 400;
-}
-
-Future<bool> _defaultLegalDocumentAvailabilityProbe(Uri uri) async {
-  try {
-    final headResponse = await http
-        .head(uri)
-        .timeout(const Duration(seconds: 5));
-    if (_isSuccessfulLegalStatus(headResponse.statusCode)) {
-      return true;
-    }
-    if (headResponse.statusCode != 403 && headResponse.statusCode != 405) {
-      return false;
-    }
-    final getResponse = await http
-        .get(uri, headers: const {'Range': 'bytes=0-0'})
-        .timeout(const Duration(seconds: 5));
-    return _isSuccessfulLegalStatus(getResponse.statusCode) ||
-        getResponse.statusCode == 206;
-  } catch (_) {
-    return false;
-  }
-}
-
-Future<String> defaultLegalDocumentHtmlLoader(
-  Uri uri, {
-  http.Client? client,
-}) async {
-  final effectiveClient = client ?? http.Client();
-  final shouldCloseClient = client == null;
-  try {
-    final response = await effectiveClient
-        .get(uri)
-        .timeout(const Duration(seconds: 5));
-    if (!_isSuccessfulLegalStatus(response.statusCode)) {
-      throw StateError('legal_document_http_${response.statusCode}');
-    }
-    return utf8.decode(response.bodyBytes);
-  } finally {
-    if (shouldCloseClient) {
-      effectiveClient.close();
-    }
-  }
 }
 
 Widget _defaultLegalDocumentWebViewBuilder(

@@ -102,7 +102,6 @@ from content.homepage.homepage_prompt import (
     _write_entity_page_prompt_and_placeholder,
 )
 MIN_PAGE_CHARS = 350
-HOMEPAGE_FIDELITY_MAX = 0.92
 # 实体主页底稿下发上限：取消旧的 4000 截断（旧值会把维基百科页在中段截断，
 # Agent 看不到「技术变革 / 相关古迹」等后段章节，导致多级目录与章节缺失）。
 # 放宽到覆盖绝大多数百科页全文，仅兜底极端超长源避免 token 失控。
@@ -452,20 +451,6 @@ def validate_entity_page_inputs(execution_id: str, spec: dict[str, Any]) -> list
                     name,
                     f"{label}: homepage baseDraft 可用事实不足",
                 )
-        if source_ref and text:
-            selection = select_homepage_assets(
-                execution_id,
-                domain,
-                etype,
-                name,
-                primary_ref=source_ref,
-            )
-            if not selection.publishable:
-                add_issue(
-                    DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-                    name,
-                    f"{label}: homepage lane 无可发布图片资产",
-                )
         for message in _homepage_base_source_issues(execution_id, domain, etype, name):
             add_issue(DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING, name, message)
     return issues
@@ -560,27 +545,25 @@ def _homepage_gate_body(page_text: str) -> str:
 
 
 def _homepage_tag_refs(domain: str, etype: str, name: str, payload: dict[str, Any]) -> list[str]:
-    """主页确定性标签：主清单契约来源的类型 + 地理标签，加 compose/agent 透传 tagRefs。
-    WP3 统一打标：`typeTagRefs`（Entity/地点/** 全量类型）、`geoTagRef` 主归属与
-    `geoTagRefs` 全量地理归属（Topic/地理/行政区/**）全部并进 tagRefs
-    → ObjectTagIndex 多值反查（「按博物馆浏览」「四川的景区」均命中）。
-    仍不编造：主清单/上游没提供的维度不打。最后补 Topic/Format 最小集，
-    保证 manifest.tagRefs >= 2 个合法 ref（关闭「主页零标签」缺口）。
+    """Project only source-independent homepage tags.
+
+    A coverage leaf's ``typeTagRefs`` is a discovery classification, not
+    evidence that every fine-grained fact is stated by the selected homepage
+    source.  Materializing it verbatim can turn a coverage hint such as ``5A``
+    into an unsupported public claim.  The canonical object therefore keeps
+    the declared entity kind, administrative ownership, and neutral delivery
+    tags.  Evidence-backed fine-grained tags must be produced by the source
+    qualification lane with their own cited evidence; this homepage projection
+    never promotes a static coverage hint into a fact.
     """
     from core.content_tags import resolved_content_tag_refs
-    provided: list[str] = []
+    provided: list[str] = [f"Entity/{domain}/{etype}"]
     if isinstance(payload, dict):
-        provided.extend(
-            str(item).strip() for item in (payload.get("typeTagRefs") or []) if str(item).strip()
-        )
         geo_tag_ref = str(payload.get("geoTagRef") or "").strip()
         if geo_tag_ref:
             provided.append(geo_tag_ref)
         provided.extend(
             str(item).strip() for item in (payload.get("geoTagRefs") or []) if str(item).strip()
         )
-        candidate = payload.get("tagRefs")
-        if isinstance(candidate, list):
-            provided.extend(str(item) for item in candidate if str(item).strip())
     brief: dict[str, Any] = {"tagRefs": list(dict.fromkeys(provided))} if provided else {}
     return resolved_content_tag_refs(brief, "article")

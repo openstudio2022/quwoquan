@@ -1,0 +1,99 @@
+{
+  "schema": "environment-runtime",
+  "environment": "beta",
+  "dataReleaseTarget": "beta-local",
+  "publicBases": {
+    "api": "https://beta-api.quwoquan-env.test:18000",
+    "realtime": "wss://beta-api.quwoquan-env.test:18000",
+    "rtc": "wss://beta-rtc.quwoquan-env.test:18000",
+    "productOps": "https://beta-product-ops.quwoquan-env.test:18010",
+    "mediaAvatar": "https://beta-avatar.quwoquan-env.test:18100",
+    "mediaImage": "https://beta-image.quwoquan-env.test:18100",
+    "mediaVideo": "https://beta-video.quwoquan-env.test:18100",
+    "mediaUpload": "https://beta-upload.quwoquan-env.test:18100"
+  },
+  "subnets": {
+    "edge": "172.31.10.0/24",
+    "media": "172.31.20.0/24",
+    "service": "172.31.30.0/24",
+    "data": "172.31.40.0/24"
+  },
+  "serviceAliases": {
+    "edge": "beta-edge",
+    "media": "beta-media",
+    "service": "beta-service",
+    "data": "beta-data"
+  },
+  "artifactPolicy": {
+    "app": {
+      "runtimeEnv": "beta",
+      "dataSource": "remote",
+      "allowSeeds": false,
+      "allowLocalHosts": true,
+      "allowProdHosts": false,
+      "distribution": "internal-only"
+    },
+    "service": {
+      "allowFixtureRefs": false,
+      "allowReleaseSnapshot": true,
+      "secretScope": "beta",
+      "distribution": "internal-only"
+    }
+  },
+  "hostAllowlist": [
+    "beta-api.quwoquan-env.test",
+    "beta-rtc.quwoquan-env.test",
+    "beta-product-ops.quwoquan-env.test",
+    "beta-avatar.quwoquan-env.test",
+    "beta-image.quwoquan-env.test",
+    "beta-video.quwoquan-env.test",
+    "beta-upload.quwoquan-env.test"
+  ],
+  "forbiddenHostTokens": [
+    "api.quwoquan.com",
+    "gamma-api.quwoquan-env.test",
+    "avatar-cdn.quwoquan.com"
+  ],
+  "rolloutStagePolicy": {
+    "mode": "fixed-env",
+    "allowedStages": []
+  },
+  "targets": {
+    "beta-local": {
+      "env": "beta",
+      "backend": "local",
+      "portProfile": "beta-local",
+      "publicBases": {
+        "api": "https://beta-api.quwoquan-env.test:18000",
+        "realtime": "wss://beta-api.quwoquan-env.test:18000",
+        "rtc": "wss://beta-rtc.quwoquan-env.test:18000",
+        "productOps": "https://beta-product-ops.quwoquan-env.test:18010",
+        "mediaAvatar": "https://beta-avatar.quwoquan-env.test:18100",
+        "mediaImage": "https://beta-image.quwoquan-env.test:18100",
+        "mediaVideo": "https://beta-video.quwoquan-env.test:18100",
+        "mediaUpload": "https://beta-upload.quwoquan-env.test:18100"
+      },
+      "origins": {
+        "mediaOrigin": "http://127.0.0.1:18110",
+        "contentService": "http://127.0.0.1:18220"
+      },
+      "buildImages": {
+        "goBaseImage": "golang:1.24-bookworm",
+        "alpineBaseImage": "alpine:3.21"
+      },
+      "playbackCanary": {
+        "source": "published-release",
+        "workIdEnv": "VIDEO_PLAYBACK_CANARY_WORK_ID",
+        "publicSliceKeyEnv": "VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY"
+      },
+      "dataRelease": {
+        "mode": "local-import",
+        "mongoPortRole": "mongodb",
+        "mediaLocalRef": "cache/media",
+        "mediaPublicBaseKey": "mediaImage",
+        "userPostgresPortRole": "postgres",
+        "publicReadyTimeoutSeconds": 240
+      }
+    }
+  }
+}

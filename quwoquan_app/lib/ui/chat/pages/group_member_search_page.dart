@@ -1,17 +1,13 @@
-// settings-canonical-shell: search_embedded — 见 scripts/settings_canonical_manifest.yaml、specs/ux/page-layout-semantics.md §4.3。
+// settings-canonical-shell: search_embedded — 见 scripts/settings_canonical_manifest.yaml 与 page-layout-semantics L3 spec。
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/search/search_embedded.dart';
-import 'package:quwoquan_app/core/constants/search_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 聊天信息顶栏进入的群成员嵌入式搜索（端侧过滤）。
@@ -51,8 +47,9 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final pageBg =
-        SearchSemanticConstants.embeddedMemberSearchPageBackground(isDark);
+    final pageBg = SearchSemanticConstants.embeddedMemberSearchPageBackground(
+      isDark,
+    );
     final membersState = ref.watch(
       conversationMembersProvider(widget.conversationId),
     );
@@ -68,17 +65,33 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
     Widget listContent;
     if (membersState.isLoading) {
       listContent = const Center(child: CupertinoActivityIndicator());
+    } else if (membersState.error case final error?) {
+      listContent = AppPageErrorState(
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await ref
+                .read(
+                  conversationMembersProvider(widget.conversationId).notifier,
+                )
+                .load();
+          }
+        },
+      );
     } else if (filteredMembers.isEmpty) {
       listContent = Center(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.xl),
           child: Text(
-            UITextConstants.noMatchingMembers,
+            ChatText.noMatchingMembers,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: AppTypography.base,
-              color: fgSecondary,
-            ),
+            style: TextStyle(fontSize: AppTypography.base, color: fgSecondary),
           ),
         ),
       );
@@ -118,7 +131,9 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
             ),
           ],
           SliverToBoxAdapter(
-            child: SizedBox(height: AppSpacing.xl + MediaQuery.paddingOf(context).bottom),
+            child: SizedBox(
+              height: AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
+            ),
           ),
         ],
       );
@@ -129,13 +144,10 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
       child: EmbeddedMemberSearchPageShell(
         isDark: isDark,
         searchController: _searchController,
-        placeholder: UITextConstants.searchGroupMembers,
+        placeholder: ChatText.searchGroupMembers,
         onQueryChanged: (v) => setState(() => _searchQuery = v),
         onCancel: () => context.pop(),
-        listBody: ColoredBox(
-          color: pageBg,
-          child: listContent,
-        ),
+        listBody: ColoredBox(color: pageBg, child: listContent),
       ),
     );
   }

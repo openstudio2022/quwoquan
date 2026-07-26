@@ -6,15 +6,70 @@ import (
 	"time"
 
 	rthealth "quwoquan_service/runtime/health"
-	commentapp "quwoquan_service/services/content-service/internal/application/comment"
-	postapp "quwoquan_service/services/content-service/internal/application/post"
-	reactionapp "quwoquan_service/services/content-service/internal/application/reaction"
-	reportapp "quwoquan_service/services/content-service/internal/application/report"
-	commentports "quwoquan_service/services/content-service/internal/domain/comment/ports"
-	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
-	reactionports "quwoquan_service/services/content-service/internal/domain/reaction/ports"
-	reportports "quwoquan_service/services/content-service/internal/domain/report/ports"
+	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
+	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	reactionports "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction/ports"
+	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
+	shareports "quwoquan_service/services/content-service/internal/content/outbound_share_fact/domain/ports"
+	postapp "quwoquan_service/services/content-service/internal/content/post/application"
+	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
+	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/application"
+	readfactports "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/domain/ports"
+	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
+	moderationports "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/ports"
+	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
+	reportports "quwoquan_service/services/content-service/internal/trust_safety/report/domain/ports"
 )
+
+func startOutboundShareOutboxRelay(
+	ctx context.Context,
+	reader shareports.OutboxReader,
+	checkpoints shareports.ProjectionCheckpointStore,
+	publisher shareports.OutboxPublisher,
+	consumer string,
+	healthName string,
+	healthChecker *rthealth.Checker,
+	logger *slog.Logger,
+) *outboundshareapp.OutboxRelay {
+	relay := outboundshareapp.NewOutboxRelay(reader, checkpoints, publisher, consumer)
+	go func() {
+		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			logger.Error("OutboundShareFact outbox relay stopped", "consumer", consumer, "error", err)
+		}
+	}()
+	healthChecker.Register(healthName, func(_ context.Context) error {
+		return relay.Healthy(5 * time.Second)
+	})
+	return relay
+}
+
+func startProfileInteractionReadFactRelay(
+	ctx context.Context,
+	reader readfactports.OutboxReader,
+	checkpoints readfactports.ProjectionCheckpointStore,
+	publisher readfactports.OutboxPublisher,
+	consumer string,
+	healthName string,
+	healthChecker *rthealth.Checker,
+	logger *slog.Logger,
+) *profileinteractionapp.ReadFactOutboxRelay {
+	relay := profileinteractionapp.NewReadFactOutboxRelay(
+		reader,
+		checkpoints,
+		publisher,
+		consumer,
+	)
+	go func() {
+		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			logger.Error("ProfileInteractionReadFact relay stopped", "consumer", consumer, "error", err)
+		}
+	}()
+	healthChecker.Register(healthName, func(_ context.Context) error {
+		return relay.Healthy(5 * time.Second)
+	})
+	return relay
+}
 
 func startCommentOutboxRelay(
 	ctx context.Context,
@@ -79,6 +134,29 @@ func startReactionOutboxRelay(
 	go func() {
 		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
 			logger.Error("ContentReaction outbox relay stopped", "consumer", consumer, "error", err)
+		}
+	}()
+	healthChecker.Register(healthName, func(_ context.Context) error {
+		return relay.Healthy(5 * time.Second)
+	})
+	return relay
+}
+
+// startModerationOutboxRelay 为 PostModerationCase 事实分配独立 consumer checkpoint。
+func startModerationOutboxRelay(
+	ctx context.Context,
+	reader moderationports.OutboxReader,
+	checkpoints moderationports.ProjectionCheckpointStore,
+	publisher moderationports.OutboxPublisher,
+	consumer string,
+	healthName string,
+	healthChecker *rthealth.Checker,
+	logger *slog.Logger,
+) *moderationapp.OutboxRelay {
+	relay := moderationapp.NewOutboxRelay(reader, checkpoints, publisher, consumer)
+	go func() {
+		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			logger.Error("PostModerationCase outbox relay stopped", "consumer", consumer, "error", err)
 		}
 	}()
 	healthChecker.Register(healthName, func(_ context.Context) error {

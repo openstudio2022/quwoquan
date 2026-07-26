@@ -37,14 +37,16 @@ List<String> resolveAvatarImageUrlCandidates(
 
   final avatarBase =
       avatarCdnBaseUrl ?? CloudRuntimeConfig.mediaAvatarCdnBaseUrl;
-  final resolver = MediaDeliveryResolver(
-    MediaEndpointConfig(
-      avatarBaseUrl: avatarBase,
-      imageBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
-      videoBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
-      attachmentBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
-    ),
+  final endpoints = MediaEndpointConfig.tryCreateAvailable(
+    avatarBaseUrl: avatarBase,
+    imageBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
+    videoBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
+    attachmentBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
   );
+  if (endpoints == null) {
+    return const <String>[];
+  }
+  final resolver = MediaDeliveryResolver(endpoints);
   final resolved = resolver.tryResolve(
     source,
     kind: MediaDeliveryKind.avatar,

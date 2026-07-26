@@ -6,23 +6,20 @@
 ///   - 评论输入（真实 IME 键盘 — flutter_test 无法替代）
 ///   - 评论出现在列表（500ms 内）
 ///   - commentCount +1
-///   - rate limit 触发时：error toast 可见 + 输入框重新 enabled
+///   - rate limit 触发时：结构化恢复反馈可见 + 草稿保留且输入框重新 enabled
 ///
 /// 注：每个用例自启动 App（launchPatrolAppOnce），对齐已绿的
 ///     home_recommendation_journey_test，不依赖 patrol_test_main 预启动。
 library;
 
-import 'dart:convert';
-
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 
 const _apiContractBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const _cloudGatewayBase = String.fromEnvironment('CLOUD_GATEWAY_BASE_URL');
-const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
   defaultValue: 'gamma',
@@ -33,42 +30,10 @@ String get _apiBase =>
 
 const _testCommentText = 'Patrol E2E test comment 测试评论 🎯';
 
-// ─── Staging 数据辅助 ─────────────────────────────────────────────────────
-
-Future<String> _seedPhotoPost(http.Client client) async {
-  final resp = await client.post(
-    Uri.parse('$_apiBase/content/posts'),
-    headers: {
-      'Content-Type': 'application/json',
-      if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
-    },
-    body: jsonEncode({
-      'contentType': 'image',
-      'title': 'patrol comment_on_post_journey seed',
-      'body': 'patrol test fixture',
-      'mediaUrls': ['https://example.com/patrol.jpg'],
-    }),
-  );
-  if (resp.statusCode != 201) {
-    throw Exception('seed failed: ${resp.statusCode} ${resp.body}');
-  }
-  return (jsonDecode(resp.body) as Map<String, dynamic>)['postId'] as String;
-}
-
-Future<void> _deletePost(http.Client client, String postId) async {
-  await client.delete(
-    Uri.parse('$_apiBase/content/posts/$postId'),
-    headers: {if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken'},
-  );
-}
-
 // ─── Tests ────────────────────────────────────────────────────────────────
 
 void main() {
-  late http.Client client;
-  late String seededPostId;
-
-  setUp(() async {
+  setUp(() {
     assert(
       _apiContractEnv == 'gamma',
       'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
@@ -77,13 +42,8 @@ void main() {
       _apiBase.isNotEmpty,
       'Patrol user_acceptance tests require API_CONTRACT_BASE_URL',
     );
-    client = http.Client();
-    seededPostId = await _seedPhotoPost(client);
-  });
-
-  tearDown(() async {
-    await _deletePost(client, seededPostId);
-    client.close();
+    // app_gamma_seed_manifest.json 已预置 content_discovery_core /
+    // fixture_photo_001；测试禁止通过退役 create route 自 seed。
   });
 
   patrolTest(
@@ -154,46 +114,52 @@ void main() {
   );
 
   patrolTest(
-    'comment_on_post_journey — rate limit toast 可见 + 输入框重新 enabled',
-    tags: ['t4', 'content', 'comment', 'flaky'],
+    'comment_on_post_journey — rate limit 反馈可见 + 草稿保留且输入框重新 enabled',
+    tags: ['t4', 'content', 'comment'],
     skip: !kRunPatrolT4,
     ($) async {
       await launchPatrolAppOnce($);
 
-      // 此场景依赖 staging rate limit 触发，标记 flaky，允许 retry
       await $(
         TestKeys.photoPostCard,
       ).waitUntilVisible(timeout: const Duration(seconds: 20));
       await $(TestKeys.photoPostCard).tap();
       await $.pumpAndSettle();
 
-      // 快速连续发 5 条评论触发 rate limit
-      for (var i = 0; i < 5; i++) {
-        await $(TestKeys.commentTextField).enterText('spam $i');
+      // gamma 使用商用默认 burst policy：30 秒最多 5 条。独立用例必须自行提交
+      // max+1 次，不得依赖前一个测试已经消耗配额。
+      var rateLimitFeedbackVisible = false;
+      var rejectedDraft = '';
+      for (var i = 0; i < 6; i++) {
+        await $(
+          TestKeys.commentInputBar,
+        ).waitUntilVisible(timeout: const Duration(seconds: 5));
+        await $(TestKeys.commentInputBar).tap();
+        await $(
+          TestKeys.commentTextField,
+        ).waitUntilVisible(timeout: const Duration(seconds: 5));
+        rejectedDraft = '频控恢复验证 $i';
+        await $(TestKeys.commentTextField).enterText(rejectedDraft);
         await $(TestKeys.submitCommentButton).tap();
-        await $.pump();
+        await $.pumpAndSettle();
+        if (find.byType(CupertinoAlertDialog).evaluate().isNotEmpty) {
+          rateLimitFeedbackVisible = true;
+          break;
+        }
       }
-      await $.pumpAndSettle();
 
-      // ── 断言：error toast 出现 ─────────────────────────────────────────
-      await $(
-        TestKeys.errorToast,
-      ).waitUntilVisible(timeout: const Duration(seconds: 5));
       expect(
-        $(TestKeys.errorToast).visible,
+        rateLimitFeedbackVisible,
         isTrue,
-        reason: 'Error toast must appear on rate limit',
+        reason: 'The sixth request must show structured rate-limit feedback',
       );
 
-      // ── 断言：输入框重新 enabled ──────────────────────────────────────
-      await $(
-        TestKeys.commentTextField,
-      ).waitUntilVisible(timeout: const Duration(seconds: 5));
-      expect(
-        $(TestKeys.commentTextField).visible,
-        isTrue,
-        reason: 'Comment input must be re-enabled after rate limit error',
+      // 失败不能关闭输入态或清掉用户草稿；用户可稍后直接重试。
+      final field = $.tester.widget<CupertinoTextField>(
+        find.byKey(TestKeys.commentTextField),
       );
+      expect(field.enabled, isTrue);
+      expect(field.controller?.text, rejectedDraft);
     },
   );
 }

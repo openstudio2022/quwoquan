@@ -333,7 +333,10 @@ def _prepare_post_review_retry(ctx: ExecutionContext, result: StageResult, targe
             carrier = str(pack.get("carrier") or "article")
             # 复用 author 入队的同一 creator 解析链（pack -> brief），不重造（R24/R25）。
             creator = creator_from_payload(pack) or creator_from_payload(brief)
-            meta: dict[str, Any] = {"baseSourceRef": pack.get("baseSourceRef") or ref}
+            meta: dict[str, Any] = {
+                "baseSourceRef": pack.get("baseSourceRef") or ref,
+                "contentObjectDir": content_object.content_object_rel(ctx.execution_id, ref),
+            }
             # 仅当有完整 registry creator 装配时才声明 contentType（触发 enqueue 严格 creator 门）。
             # managed 模式全程无 creator 装配：省略 contentType/carrier，对齐 enqueue_partition_leaves，
             # 让 author 执行阶段按 pack/brief/plan 默认解析 creator，避免 fanout 专用门在重试路径误崩。

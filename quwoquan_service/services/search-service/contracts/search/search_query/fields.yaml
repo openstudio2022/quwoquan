@@ -1,0 +1,226 @@
+description: 一次搜索请求的查询日志，用于搜索词热力与 relevance 评测
+fields:
+- name: _id
+  source: _id
+  type: ObjectId
+  constraints:
+  - PK
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: searchRequestId
+  source: searchRequestId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 单次搜索请求 ID，串联 impression/click/dwell 等反馈与排序观测
+  role: append_only_fact
+- name: query
+  source: query
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: deny
+  api_exposure: read
+  ops_exposure: read
+  description: 归一化后的私有查询词串；仅用于搜索质量计算，禁止原文日志
+  role: append_only_fact
+- name: mode
+  source: mode
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: suggest 或 result
+  role: append_only_fact
+- name: viewerId
+  source: viewerId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PII
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  description: 登录态用户 ID，仅用于会话级个性化与去偏，匿名态为空
+  role: append_only_fact
+  reference: true
+- name: objectTypes
+  source: objectTypes
+  type: '[]string'
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: resultCount
+  source: resultCount
+  type: int
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: rankingVersion
+  source: rankingVersion
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: experimentBucket
+  source: experimentBucket
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: createdAt
+  source: createdAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+types:
+  HotQueryView:
+    description: 搜索词热力读模型的商用展示切片，供全局搜索默认页「猜你想搜」使用
+    fields:
+    - name: query
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: relevance
+      type: float64
+      constraints:
+      - NOT_NULL
+      - DEFAULT_0
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  UserAccountClosedProjectionInbox:
+    description: Search 已原子应用 UserAccountClosed 的不可逆幂等凭据，不保存账号或 persona 原值。
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: eventDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: appliedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+  UserAccountClosedProjectionFailure:
+    description: Search 账户关闭投影的有限重试状态，仅保存不可逆事件与错误摘要；terminal
+      marker 由受控 recovery 删除，不能被普通 TTL 自动释放。
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: eventDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: errorDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: attempts
+      type: int64
+      constraints:
+      - NOT_NULL
+      - DEFAULT_0
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: createdAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: expireAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: deadLetteredAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read

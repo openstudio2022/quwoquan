@@ -1,104 +1,35 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:livekit_client/livekit_client.dart' as lk;
-import 'package:quwoquan_app/cloud/rtc/models/call_participant_dto.dart';
-import 'package:quwoquan_app/cloud/rtc/livekit_room_service.dart';
-import 'package:quwoquan_app/cloud/rtc/models/call_session_dto.dart';
+import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
+import 'package:quwoquan_app/application/rtc/call_session/call_participant_presentation.dart';
+import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
+import 'package:quwoquan_app/application/rtc/call_session/rtc_media_qoe_tracker.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_session_signal_projection.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_session_state.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-class CallSessionState {
-  final CallSessionDto? session;
-  final CallStatus status;
-  final CallType callType;
-  final bool isMuted;
-  final bool isCameraOn;
-  final bool isRecording;
-  final bool isScreenSharing;
-  final bool isLoading;
+export 'package:quwoquan_app/ui/rtc/models/call_session_state.dart';
 
-  /// LiveKit 媒体重连中（连接质量中断后自动重连）；用于过程态派生。
-  final bool isReconnecting;
-  final String? error;
+part 'call_session_provider_runtime.dart';
 
-  const CallSessionState({
-    this.session,
-    this.status = CallStatus.initiated,
-    this.callType = CallType.audio,
-    this.isMuted = false,
-    this.isCameraOn = false,
-    this.isRecording = false,
-    this.isScreenSharing = false,
-    this.isLoading = false,
-    this.isReconnecting = false,
-    this.error,
-  });
-
-  CallSessionState copyWith({
-    CallSessionDto? session,
-    CallStatus? status,
-    CallType? callType,
-    bool? isMuted,
-    bool? isCameraOn,
-    bool? isRecording,
-    bool? isScreenSharing,
-    bool? isLoading,
-    bool? isReconnecting,
-    String? error,
-  }) {
-    return CallSessionState(
-      session: session ?? this.session,
-      status: status ?? this.status,
-      callType: callType ?? this.callType,
-      isMuted: isMuted ?? this.isMuted,
-      isCameraOn: isCameraOn ?? this.isCameraOn,
-      isRecording: isRecording ?? this.isRecording,
-      isScreenSharing: isScreenSharing ?? this.isScreenSharing,
-      isLoading: isLoading ?? this.isLoading,
-      isReconnecting: isReconnecting ?? this.isReconnecting,
-      error: error,
-    );
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CallSessionState &&
-          runtimeType == other.runtimeType &&
-          session?.callId == other.session?.callId &&
-          status == other.status &&
-          isMuted == other.isMuted &&
-          isCameraOn == other.isCameraOn &&
-          isRecording == other.isRecording &&
-          isScreenSharing == other.isScreenSharing &&
-          isLoading == other.isLoading &&
-          isReconnecting == other.isReconnecting &&
-          error == other.error;
-
-  @override
-  int get hashCode => Object.hash(
-    session?.callId,
-    status,
-    isMuted,
-    isCameraOn,
-    isRecording,
-    isScreenSharing,
-    isLoading,
-    isReconnecting,
-    error,
+final rtcRoomServiceProvider = Provider<RtcRoomService>((ref) {
+  final service = RtcRoomService(
+    connectionUrl: CloudRuntimeConfig.rtcMediaConnectionUrl,
   );
-}
-
-final liveKitRoomServiceProvider = Provider<LiveKitRoomService>((ref) {
-  final service = LiveKitRoomService();
   ref.onDispose(() => service.dispose());
   return service;
 });
@@ -106,43 +37,340 @@ final liveKitRoomServiceProvider = Provider<LiveKitRoomService>((ref) {
 class CallSessionNotifier extends Notifier<CallSessionState> {
   Timer? _timeoutTimer;
   StreamSubscription<void>? _participantsSub;
-  StreamSubscription<lk.DisconnectReason?>? _disconnectSub;
-  LiveKitRoomService? _connectionListenerRoom;
-  String? _recordingId;
+  StreamSubscription<RtcSignalEvent>? _signalSub;
+  RtcRoomService? _connectionListenerRoom;
+  String? _mediaConnectedReportedCallId;
+  final RtcMediaQoeTracker _mediaQoe = RtcMediaQoeTracker();
+  int _signalRefreshGeneration = 0;
+  String? _mediaCredentialsCallId;
+  String _mediaAccessToken = '';
+  bool _mediaAccessEnableVideo = false;
+  bool _mediaConnectInFlight = false;
 
   @override
-  CallSessionState build() => const CallSessionState();
+  CallSessionState build() {
+    // 通话信令是会话状态的权威事实源（LiveKit 房间事件只兜底媒体面）：
+    // 对端接听/挂断/取消、参与者变更、屏幕共享状态全部经 realtime 单通道对齐。
+    _signalSub = ref
+        .read(rtcSignalEventBusProvider)
+        .events
+        .listen(_onSignalEvent);
+    ref.onDispose(() {
+      _signalSub?.cancel();
+      _signalSub = null;
+      _cancelTimeoutTimer();
+      _detachLiveKitObservers();
+    });
+    return const CallSessionState();
+  }
 
-  RtcRepository get _repo => ref.read(rtcRepositoryProvider);
-  LiveKitRoomService get _lkRoom => ref.read(liveKitRoomServiceProvider);
-  bool get _usesLocalRtcSimulation =>
-      ref.read(rtcRepositoryProvider).supportsDevCallSimulation;
+  /// realtime 信令消费：只处理当前会话的事件（callId 对齐）。
+  void _onSignalEvent(RtcSignalEvent event) {
+    final currentCallId = state.session?.callId ?? '';
+    if (currentCallId.isEmpty || event.callId != currentCallId) {
+      return;
+    }
+    switch (event.payload) {
+      case RtcCallAnsweredWsPayload():
+        // 呼出方：对端已接听，进入建连过程态（媒体连通后由
+        // ReportMediaConnected/call.connected 推进 in_call）。
+        if (state.status == CallStatus.ringing ||
+            state.status == CallStatus.initiated) {
+          state = state.copyWith(
+            status: CallStatus.connecting,
+            session: state.session?.copyWith(status: 'connecting'),
+          );
+        }
+      case RtcCallEndedWsPayload(data: final data):
+        // 对端挂断/取消/服务端 no_answer 超时：任意阶段都收尾，
+        // 不再依赖 LiveKit 断连兜底（connecting 阶段无媒体连接可依赖）。
+        if (state.status != CallStatus.ended) {
+          _signalRefreshGeneration += 1;
+          state = state.copyWith(
+            session: projectCallSessionEnded(state.session!, data),
+            isLocalScreenSharing: false,
+          );
+          _endCallState();
+        }
+      case RtcCallConnectedWsPayload(data: final data):
+        _markMediaConnected();
+        final session = state.session!;
+        state = state.copyWith(
+          status: CallStatus.inCall,
+          session: session.copyWith(
+            status: 'in_call',
+            participantCount: data.participantCount,
+          ),
+          isReconnecting: false,
+        );
+        _scheduleSignalRefresh(currentCallId);
+      case RtcParticipantJoinedWsPayload(data: final data):
+        state = state.copyWith(
+          session: state.session?.copyWith(
+            participantCount: data.participantCount,
+          ),
+        );
+        _scheduleSignalRefresh(currentCallId);
+      case RtcParticipantLeftWsPayload(data: final data):
+        // 聚合参与者/建连状态变化：从 CallQuery 拉最新事实刷新 roster。
+        state = state.copyWith(
+          session: state.session?.copyWith(
+            participantCount: data.participantCount,
+          ),
+        );
+        _scheduleSignalRefresh(currentCallId);
+      case RtcScreenShareStartedWsPayload(data: final data):
+        final isLocalScreenShare =
+            _isLocalParticipant(data.userId) ||
+            (state.isLocalScreenSharing &&
+                state.session?.screenShareUserId == data.userId);
+        state = state.copyWith(
+          session: state.session?.copyWith(
+            isScreenSharing: true,
+            screenShareUserId: data.userId,
+          ),
+          isLocalScreenSharing: isLocalScreenShare,
+        );
+      case RtcScreenShareStoppedWsPayload():
+        final session = state.session;
+        if (session != null) {
+          // copyWith 的 null 语义无法清空 sharer；显式重建共享终止事实。
+          state = state.copyWith(
+            session: projectCallSessionWithoutScreenShare(session),
+            isLocalScreenSharing: false,
+          );
+        }
+      default:
+        break;
+    }
+  }
 
-  String get _livekitUrl {
-    final base = CloudRuntimeConfig.gatewayBaseUrl;
-    return '${base.replaceFirst(RegExp(r'/v\d+.*$'), '').replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://')}:7880';
+  bool _isLocalParticipant(String? userId) {
+    final candidate = userId?.trim() ?? '';
+    if (candidate.isEmpty) return false;
+    final localIdentity = _lkRoom.localParticipant?.identity.trim() ?? '';
+    if (localIdentity.isNotEmpty && localIdentity == candidate) {
+      return true;
+    }
+    return ref
+        .read(callParticipantsProvider)
+        .participants
+        .any(
+          (participant) =>
+              participant.isLocal && participant.userId == candidate,
+        );
+  }
+
+  RtcRoomService get _lkRoom => ref.read(rtcRoomServiceProvider);
+  AppUiSurface get _activeCallSurface =>
+      state.callType.isVideo ? AppUiSurfaces.rtcVideo : AppUiSurfaces.rtcVoice;
+
+  RuntimeFailureBase _failureFrom(Object error) =>
+      runtimeFailureFromError(error) ??
+      RuntimeFailure.unknown(code: RuntimeFailureCodes.cloudSystemUnavailable);
+
+  CallSessionState get _runtimeState => state;
+  set _runtimeState(CallSessionState value) => state = value;
+  Ref get _runtimeRef => ref;
+
+  /// 把可信 realtime `call.ringing` 负载投影为来电首帧。
+  ///
+  /// 这不是测试 seed：真实/alpha/gamma 都经同一事件通道调用；随后页面再用
+  /// [refreshIncomingCall] 从 CallQuery 补全聚合详情。
+  void seedIncomingCall({
+    required String callId,
+    required String callType,
+    required String initiatorId,
+    String? callerName,
+    String? callerAvatarUrl,
+    String? conversationId,
+    String? sourceLabel,
+    String? trustRelation,
+    String? expiresAt,
+  }) {
+    final callerId = initiatorId.trim();
+    final displayName = callerName?.trim().isNotEmpty == true
+        ? callerName!.trim()
+        : callerId;
+    final now = DateTime.now().toUtc();
+    final session = CallSessionDto(
+      callId: callId,
+      callType: callType,
+      status: 'ringing',
+      initiatorId: callerId,
+      conversationId: conversationId,
+      roomId: '',
+      maxParticipants: 32,
+      participantCount: 2,
+      participants: <CallParticipantDto>[
+        CallParticipantDto(
+          userId: callerId,
+          role: 'initiator',
+          status: 'ringing',
+          isCameraOn: callType == 'video',
+        ),
+      ],
+      createdAt: now,
+      updatedAt: now,
+    );
+    state = state.copyWith(
+      session: session,
+      incomingPresentation: IncomingCallPresentation(
+        callerId: callerId,
+        displayName: displayName,
+        avatarUrl: callerAvatarUrl,
+        sourceLabel: sourceLabel,
+        trustRelation: trustRelation,
+        expiresAt: DateTime.tryParse(expiresAt ?? '')?.toUtc(),
+      ),
+      status: CallStatus.ringing,
+      callType: CallType.fromString(callType),
+      isCameraOn: callType == 'video',
+      isLoading: false,
+      clearFailure: true,
+    );
+    _syncParticipantRoster(session);
+  }
+
+  Future<void> refreshIncomingCall(String callId) async {
+    if (callId.trim().isEmpty) return;
+    try {
+      final session = await ref
+          .read(rtcCallQueryProvider(AppUiSurfaces.rtcIncoming))
+          .getCall(RtcGetCallQuery(callId: callId));
+      if (state.session?.callId != null &&
+          state.session?.callId != session.callId) {
+        return;
+      }
+      if (session.status == 'ended') {
+        state = state.copyWith(
+          session: session,
+          callType: CallType.fromString(session.callType),
+          isCameraOn: session.callType == 'video',
+          isLoading: false,
+          clearFailure: true,
+        );
+        _syncParticipantRoster(session);
+        _endCallState();
+        return;
+      }
+      state = state.copyWith(
+        session: session,
+        status: CallStatus.fromString(session.status),
+        callType: CallType.fromString(session.callType),
+        isCameraOn: session.callType == 'video',
+        isLoading: false,
+        clearFailure: true,
+      );
+      _syncParticipantRoster(session);
+    } catch (error) {
+      // 保留 ringing 首帧，不用网络失败把来电页退化为空白；错误语义由页面
+      // 消费并提供重试。
+      state = state.copyWith(isLoading: false, failure: _failureFrom(error));
+    }
+  }
+
+  Future<void> retryCurrentCall() async {
+    final callId = state.session?.callId.trim() ?? '';
+    if (callId.isEmpty) return;
+    final generation = ++_signalRefreshGeneration;
+    await _refreshCurrentCallFromSignal(callId, generation);
+    if (state.session?.callId == callId &&
+        state.status != CallStatus.ended &&
+        _mediaCredentialsCallId == callId &&
+        _mediaAccessToken.isNotEmpty) {
+      if (_lkRoom.connectionState.value == RtcConnectionState.disconnected) {
+        await _connectMediaTransport(
+          _mediaAccessToken,
+          enableVideo: _mediaAccessEnableVideo,
+        );
+      } else if (_lkRoom.connectionState.value ==
+          RtcConnectionState.connected) {
+        // 媒体已经连通但 ReportMediaConnected 曾耗尽重试时，不重建房间；
+        // 复用同一 call 的显式重试入口重新提交聚合事实。
+        _reportMediaConnectedOnce();
+      }
+    }
+  }
+
+  void _scheduleSignalRefresh(String expectedCallId) {
+    final generation = ++_signalRefreshGeneration;
+    unawaited(_refreshCurrentCallFromSignal(expectedCallId, generation));
+  }
+
+  Future<void> _refreshCurrentCallFromSignal(
+    String expectedCallId,
+    int generation,
+  ) async {
+    try {
+      final session = await ref
+          .read(rtcCallQueryProvider(_activeCallSurface))
+          .getCall(RtcGetCallQuery(callId: expectedCallId));
+      if (generation != _signalRefreshGeneration ||
+          state.session?.callId != expectedCallId ||
+          state.status == CallStatus.ended) {
+        return;
+      }
+      var nextStatus = CallStatus.fromString(session.status);
+      var nextSession = session;
+      // call.connected 已是服务端事件事实；读模型短暂滞后不得把状态回退到
+      // ringing/connecting。
+      if (state.status == CallStatus.inCall &&
+          nextStatus != CallStatus.inCall &&
+          nextStatus != CallStatus.ended) {
+        nextStatus = CallStatus.inCall;
+        nextSession = session.copyWith(status: 'in_call');
+      }
+      if (nextStatus == CallStatus.ended) {
+        state = state.copyWith(
+          session: nextSession,
+          callType: CallType.fromString(nextSession.callType),
+          isLoading: false,
+          clearFailure: true,
+        );
+        _syncParticipantRoster(nextSession);
+        _endCallState();
+        return;
+      }
+      state = state.copyWith(
+        session: nextSession,
+        status: nextStatus,
+        callType: CallType.fromString(nextSession.callType),
+        isCameraOn: nextSession.callType == 'video',
+        isLoading: false,
+        clearFailure: true,
+      );
+      _syncParticipantRoster(nextSession);
+    } catch (error) {
+      if (generation == _signalRefreshGeneration &&
+          state.session?.callId == expectedCallId &&
+          state.status != CallStatus.ended) {
+        state = state.copyWith(failure: _failureFrom(error));
+      }
+    }
   }
 
   Future<String?> initiateCall({
-    required String callTypeStr,
-    required List<String> targetUserIds,
-    String? conversationId,
+    required RtcCallEntryIntent intent,
+    required List<String> selectedInviteeIds,
+    required AppUiSurface sourceSurface,
   }) async {
     if (state.isLoading) return null;
+    final callTypeStr = intent.mediaType.wireValue;
     try {
       state = state.copyWith(
         isLoading: true,
-        error: null,
+        clearFailure: true,
         callType: CallType.fromString(callTypeStr),
         isCameraOn: callTypeStr == 'video',
         status: CallStatus.initiated,
       );
 
-      final result = await _repo.initiateCall(
-        callType: callTypeStr,
-        inviteeIds: targetUserIds,
-        conversationId: conversationId,
-      );
+      final result = await RtcCallEntryCoordinator(
+        lifecycleWriter: ref.read(
+          rtcCallLifecycleCommandWriterProvider(sourceSurface),
+        ),
+      ).initiate(intent, selectedInviteeIds: selectedInviteeIds);
       final session = result.session;
 
       state = state.copyWith(
@@ -150,6 +378,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         status: CallStatus.ringing,
         isLoading: false,
       );
+      _syncParticipantRoster(session);
 
       ref
           .read(activeCallProvider.notifier)
@@ -159,18 +388,15 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             participants: session.participants,
           );
 
-      final token = result.token;
-      if (token.isNotEmpty) {
-        await _connectToLiveKit(token, enableVideo: callTypeStr == 'video');
-      }
+      await _connectMediaTransport(
+        result.mediaAccess.accessToken,
+        enableVideo: callTypeStr == 'video',
+      );
 
       _startTimeoutTimer();
       return session.callId;
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: runtimeErrorDisplayMessage(e),
-      );
+      state = state.copyWith(isLoading: false, failure: _failureFrom(e));
       return null;
     }
   }
@@ -178,31 +404,29 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   Future<void> answerCall(String callId) async {
     if (state.isLoading) return;
     try {
-      state = state.copyWith(isLoading: true, error: null);
+      state = state.copyWith(isLoading: true, clearFailure: true);
       _cancelTimeoutTimer();
 
-      final answer = await _repo.answerCall(callId);
-      final session = answer.session ?? state.session;
-      if (session == null) {
-        state = state.copyWith(
-          isLoading: false,
-          error: UITextConstants.callAnswerFailed,
-        );
-        return;
-      }
+      final answer = await ref
+          .read(
+            rtcCallLifecycleCommandWriterProvider(AppUiSurfaces.rtcIncoming),
+          )
+          .answerCall(RtcCallIdCommand(callId: callId));
+      final session = answer.session;
       // Preserve the call type established during the ringing phase;
       // the answer response must not silently override it (e.g., mock data
       // may always return a 'video' session regardless of actual type).
       final type = state.callType;
-      final token = answer.token ?? '';
-
+      // 接听后进入 connecting；媒体连通（_connectMediaTransport 成功 +
+      // ReportMediaConnected）才推进 in_call，与服务端状态机同源。
       state = state.copyWith(
         session: session,
-        status: CallStatus.inCall,
+        status: CallStatus.connecting,
         callType: type,
         isCameraOn: type.isVideo,
         isLoading: false,
       );
+      _syncParticipantRoster(session);
 
       ref
           .read(activeCallProvider.notifier)
@@ -212,25 +436,30 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             participants: session.participants,
           );
 
-      if (token.isNotEmpty) {
-        await _connectToLiveKit(token, enableVideo: type.isVideo);
-      }
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: runtimeErrorDisplayMessage(e),
+      await _connectMediaTransport(
+        answer.mediaAccess.accessToken,
+        enableVideo: type.isVideo,
       );
+    } catch (e) {
+      state = state.copyWith(isLoading: false, failure: _failureFrom(e));
     }
   }
 
   Future<void> rejectCall(String callId) async {
     try {
       _cancelTimeoutTimer();
-      await _repo.rejectCall(callId);
+      final endedSession = await ref
+          .read(
+            rtcCallLifecycleCommandWriterProvider(AppUiSurfaces.rtcIncoming),
+          )
+          .rejectCall(RtcCallIdCommand(callId: callId));
+      if (state.session?.callId != callId) return;
+      state = state.copyWith(session: endedSession);
       _endCallState();
     } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
-      _endCallState();
+      if (state.session?.callId == callId) {
+        state = state.copyWith(failure: _failureFrom(e));
+      }
     }
   }
 
@@ -239,44 +468,67 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     if (callId == null) return;
     try {
       _cancelTimeoutTimer();
-      await _repo.hangUp(callId);
+      final endedSession = await ref
+          .read(
+            rtcCallLifecycleCommandWriterProvider(AppUiSurfaces.rtcOutgoing),
+          )
+          .cancelCall(RtcCallIdCommand(callId: callId));
+      if (state.session?.callId != callId) return;
+      state = state.copyWith(session: endedSession);
       _endCallState();
     } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
-      _endCallState();
+      if (state.session?.callId == callId) {
+        state = state.copyWith(failure: _failureFrom(e));
+        _startTimeoutTimer(delay: const Duration(seconds: 5));
+      }
     }
   }
 
-  Future<void> hangupCall() async {
+  Future<CallSessionActionResult> hangupCall({
+    bool clearActiveCall = true,
+  }) async {
     final callId = state.session?.callId;
-    if (callId == null) return;
+    if (callId == null || callId.isEmpty) {
+      return const CallSessionActionResult.notAttempted();
+    }
     try {
-      _cancelTimeoutTimer();
-      await _repo.hangUp(callId);
-      _endCallState();
+      final endedSession = await ref
+          .read(rtcCallLifecycleCommandWriterProvider(_activeCallSurface))
+          .hangupCall(RtcCallIdCommand(callId: callId));
+      if (state.session?.callId != callId) {
+        return const CallSessionActionResult.notAttempted();
+      }
+      state = state.copyWith(session: endedSession);
+      _endCallState(clearActiveCall: clearActiveCall);
+      return const CallSessionActionResult.succeeded();
     } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
-      _endCallState();
+      final failure = _failureFrom(e);
+      if (state.session?.callId == callId) {
+        state = state.copyWith(isLoading: false, failure: failure);
+      }
+      return CallSessionActionResult.failed(failure);
     }
   }
 
   Future<void> joinCall(String callId) async {
     if (state.isLoading) return;
     try {
-      state = state.copyWith(isLoading: true, error: null);
+      state = state.copyWith(isLoading: true, clearFailure: true);
 
-      final creds = await _repo.joinRtcToken(callId);
-      final token = creds.token;
-      final session = await _repo.getCallSession(callId);
+      final creds = await ref
+          .read(rtcCallParticipantCommandWriterProvider(_activeCallSurface))
+          .joinCall(RtcCallIdCommand(callId: callId));
+      final session = creds.session;
       final type = CallType.fromString(session.callType);
 
       state = state.copyWith(
         session: session,
-        status: CallStatus.inCall,
+        status: CallStatus.fromString(session.status),
         callType: type,
         isCameraOn: type.isVideo,
         isLoading: false,
       );
+      _syncParticipantRoster(session);
 
       ref
           .read(activeCallProvider.notifier)
@@ -286,14 +538,12 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             participants: session.participants,
           );
 
-      if (token.isNotEmpty) {
-        await _connectToLiveKit(token, enableVideo: type.isVideo);
-      }
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: runtimeErrorDisplayMessage(e),
+      await _connectMediaTransport(
+        creds.mediaAccess.accessToken,
+        enableVideo: type.isVideo,
       );
+    } catch (e) {
+      state = state.copyWith(isLoading: false, failure: _failureFrom(e));
     }
   }
 
@@ -301,11 +551,16 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     final callId = state.session?.callId;
     if (callId == null) return;
     try {
-      await _repo.hangUp(callId);
+      final endedSession = await ref
+          .read(rtcCallParticipantCommandWriterProvider(_activeCallSurface))
+          .leaveCall(RtcCallIdCommand(callId: callId));
+      if (state.session?.callId != callId) return;
+      state = state.copyWith(session: endedSession);
       _endCallState();
     } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
-      _endCallState();
+      if (state.session?.callId == callId) {
+        state = state.copyWith(failure: _failureFrom(e));
+      }
     }
   }
 
@@ -313,172 +568,353 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     final callId = state.session?.callId;
     if (callId == null) return;
     try {
-      await _repo.inviteToCall(callId: callId, inviteeIds: inviteeIds);
-      final session = await _repo.getCallSession(callId);
+      final session = await ref
+          .read(
+            rtcCallParticipantCommandWriterProvider(
+              AppUiSurfaces.rtcPickParticipants,
+            ),
+          )
+          .inviteToCall(
+            RtcInviteToCallCommand(callId: callId, inviteeIds: inviteeIds),
+          );
       state = state.copyWith(session: session);
+      _syncParticipantRoster(session);
     } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
+      state = state.copyWith(failure: _failureFrom(e));
     }
-  }
-
-  void debugSeedIncomingCall({
-    required String callId,
-    required String callerName,
-    required String callType,
-    String? conversationId,
-  }) {
-    if (!_usesLocalRtcSimulation) return;
-    final session = CallSessionDto(
-      callId: callId,
-      callType: callType,
-      status: 'ringing',
-      initiatorId: callerName,
-      conversationId: conversationId,
-      roomId: 'debug_room_$callId',
-      maxParticipants: 32,
-      participantCount: 2,
-      participants: <CallParticipantDto>[
-        CallParticipantDto(
-          userId: callerName,
-          role: 'initiator',
-          status: 'connected',
-          isMuted: false,
-          isCameraOn: callType == 'video',
-        ),
-      ],
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-    state = state.copyWith(
-      session: session,
-      status: CallStatus.ringing,
-      callType: CallType.fromString(callType),
-      isCameraOn: callType == 'video',
-      isLoading: false,
-      error: null,
-    );
-  }
-
-  void debugSimulateRemoteAnswer() {
-    if (!_usesLocalRtcSimulation) return;
-    final session = state.session;
-    if (session == null) return;
-    final answered = session.copyWith(
-      status: 'in_call',
-      updatedAt: DateTime.now(),
-    );
-    state = state.copyWith(
-      session: answered,
-      status: CallStatus.inCall,
-      isLoading: false,
-      error: null,
-    );
-    ref
-        .read(activeCallProvider.notifier)
-        .startCall(
-          callId: answered.callId,
-          callType: answered.callType,
-          participants: answered.participants,
-        );
-  }
-
-  void debugSimulateRejected({bool timeout = false}) {
-    if (!_usesLocalRtcSimulation) return;
-    final session = state.session;
-    if (session == null) {
-      state = state.copyWith(status: CallStatus.ended, isLoading: false);
-      return;
-    }
-    state = state.copyWith(
-      session: session.copyWith(
-        status: 'ended',
-        endReason: timeout ? 'timeout' : 'rejected',
-        updatedAt: DateTime.now(),
-      ),
-      status: CallStatus.ended,
-      isLoading: false,
-      error: null,
-    );
-    _cancelTimeoutTimer();
-    ref.read(activeCallProvider.notifier).endCall();
   }
 
   Future<void> toggleMute() async {
     final callId = state.session?.callId;
     if (callId == null) return;
-    final newMuted = !state.isMuted;
-    state = state.copyWith(isMuted: newMuted);
+    final targetMuted = !state.isMuted;
+    final writer = ref.read(
+      rtcCallMediaControlWriterProvider(_activeCallSurface),
+    );
+    if (targetMuted) {
+      var localMuted = false;
+      try {
+        // 关闭采集时隐私优先：先停本地麦克风，再提交聚合投影。
+        await _lkRoom.setMicrophoneEnabled(false);
+        localMuted = true;
+        if (state.session?.callId != callId) return;
+        state = state.copyWith(isMuted: true);
+        final session = await writer.toggleMute(
+          RtcToggleMuteCommand(callId: callId, muted: true),
+        );
+        if (state.session?.callId == callId &&
+            state.status != CallStatus.ended) {
+          state = state.copyWith(
+            session: session,
+            isMuted: true,
+            clearFailure: true,
+          );
+        }
+      } catch (error) {
+        if (state.session?.callId == callId) {
+          state = state.copyWith(
+            isMuted: localMuted ? true : state.isMuted,
+            failure: _failureFrom(error),
+          );
+        }
+      }
+      return;
+    }
+
+    CallSessionDto? unmutedSession;
     try {
-      await _lkRoom.setMicrophoneEnabled(!newMuted);
-      await _repo.muteToggle(callId: callId, muted: newMuted);
-    } catch (e) {
-      state = state.copyWith(
-        isMuted: !newMuted,
-        error: runtimeErrorDisplayMessage(e),
+      // 开启采集时先让聚合授权，再开放本地麦克风，避免未授权音频短暂发布。
+      unmutedSession = await writer.toggleMute(
+        RtcToggleMuteCommand(callId: callId, muted: false),
       );
+      if (state.session?.callId != callId || state.status == CallStatus.ended) {
+        return;
+      }
+      await _lkRoom.setMicrophoneEnabled(true);
+      state = state.copyWith(
+        session: unmutedSession,
+        isMuted: false,
+        clearFailure: true,
+      );
+    } catch (error) {
+      try {
+        await _lkRoom.setMicrophoneEnabled(false);
+      } catch (rollbackError, rollbackStackTrace) {
+        developer.log(
+          'RTC microphone privacy rollback failed',
+          name: 'CallSessionNotifier',
+          error: rollbackError.runtimeType,
+          stackTrace: rollbackStackTrace,
+        );
+      }
+      CallSessionDto? compensatedSession;
+      if (unmutedSession != null) {
+        try {
+          compensatedSession = await writer.toggleMute(
+            RtcToggleMuteCommand(callId: callId, muted: true),
+          );
+        } catch (compensationError, compensationStackTrace) {
+          developer.log(
+            'RTC mute aggregate compensation failed',
+            name: 'CallSessionNotifier',
+            error: compensationError.runtimeType,
+            stackTrace: compensationStackTrace,
+          );
+        }
+      }
+      if (state.session?.callId == callId) {
+        state = state.copyWith(
+          session: compensatedSession ?? state.session,
+          isMuted: true,
+          failure: _failureFrom(error),
+        );
+      }
     }
   }
 
   Future<void> toggleCamera() async {
     final callId = state.session?.callId;
     if (callId == null) return;
-    final newCameraOn = !state.isCameraOn;
-    state = state.copyWith(isCameraOn: newCameraOn);
+    final targetCameraOn = !state.isCameraOn;
+    final writer = ref.read(
+      rtcCallMediaControlWriterProvider(_activeCallSurface),
+    );
+    if (!targetCameraOn) {
+      var localCameraStopped = false;
+      try {
+        // 关闭画面时隐私优先：先停本地采集，再提交聚合投影。
+        await _lkRoom.setCameraEnabled(false);
+        localCameraStopped = true;
+        if (state.session?.callId != callId) return;
+        state = state.copyWith(isCameraOn: false);
+        final session = await writer.toggleCamera(
+          RtcToggleCameraCommand(callId: callId, cameraOn: false),
+        );
+        if (state.session?.callId == callId &&
+            state.status != CallStatus.ended) {
+          state = state.copyWith(
+            session: session,
+            isCameraOn: false,
+            clearFailure: true,
+          );
+        }
+      } catch (error) {
+        if (state.session?.callId == callId) {
+          state = state.copyWith(
+            isCameraOn: localCameraStopped ? false : state.isCameraOn,
+            failure: _failureFrom(error),
+          );
+        }
+      }
+      return;
+    }
+
+    CallSessionDto? cameraEnabledSession;
     try {
-      await _lkRoom.setCameraEnabled(newCameraOn);
-      await _repo.cameraToggle(callId: callId, cameraOn: newCameraOn);
-    } catch (e) {
-      state = state.copyWith(
-        isCameraOn: !newCameraOn,
-        error: runtimeErrorDisplayMessage(e),
+      // 开启画面时先让聚合授权，再开放本地摄像头。
+      cameraEnabledSession = await writer.toggleCamera(
+        RtcToggleCameraCommand(callId: callId, cameraOn: true),
       );
+      if (state.session?.callId != callId || state.status == CallStatus.ended) {
+        return;
+      }
+      await _lkRoom.setCameraEnabled(true);
+      state = state.copyWith(
+        session: cameraEnabledSession,
+        isCameraOn: true,
+        clearFailure: true,
+      );
+    } catch (error) {
+      try {
+        await _lkRoom.setCameraEnabled(false);
+      } catch (rollbackError, rollbackStackTrace) {
+        developer.log(
+          'RTC camera privacy rollback failed',
+          name: 'CallSessionNotifier',
+          error: rollbackError.runtimeType,
+          stackTrace: rollbackStackTrace,
+        );
+      }
+      CallSessionDto? compensatedSession;
+      if (cameraEnabledSession != null) {
+        try {
+          compensatedSession = await writer.toggleCamera(
+            RtcToggleCameraCommand(callId: callId, cameraOn: false),
+          );
+        } catch (compensationError, compensationStackTrace) {
+          developer.log(
+            'RTC camera aggregate compensation failed',
+            name: 'CallSessionNotifier',
+            error: compensationError.runtimeType,
+            stackTrace: compensationStackTrace,
+          );
+        }
+      }
+      if (state.session?.callId == callId) {
+        state = state.copyWith(
+          session: compensatedSession ?? state.session,
+          isCameraOn: false,
+          failure: _failureFrom(error),
+        );
+      }
     }
   }
 
-  Future<void> startRecording() async {
-    final callId = state.session?.callId;
-    if (callId == null) return;
+  Future<bool> switchCamera() async {
+    if (!state.isCameraOn || state.status == CallStatus.ended) return false;
     try {
-      _recordingId = await _repo.startRecording(callId);
-      state = state.copyWith(isRecording: true);
-    } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
+      await _lkRoom.switchCamera();
+      if (state.status != CallStatus.ended) {
+        state = state.copyWith(clearFailure: true);
+      }
+      return true;
+    } catch (error) {
+      if (state.status != CallStatus.ended) {
+        state = state.copyWith(failure: _failureFrom(error));
+      }
+      return false;
     }
   }
 
-  Future<void> stopRecording() async {
-    final recordingId = _recordingId;
-    if (recordingId == null || recordingId.isEmpty) return;
+  Future<bool> setSpeakerOn(bool speakerOn) async {
+    if (state.status == CallStatus.ended) return false;
     try {
-      await _repo.stopRecording(recordingId);
-      _recordingId = null;
-      state = state.copyWith(isRecording: false);
-    } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
+      await _lkRoom.setSpeakerOn(speakerOn);
+      if (state.status != CallStatus.ended) {
+        state = state.copyWith(clearFailure: true);
+      }
+      return true;
+    } catch (error) {
+      if (state.status != CallStatus.ended) {
+        state = state.copyWith(failure: _failureFrom(error));
+      }
+      return false;
     }
   }
 
   Future<void> startScreenShare() async {
     final callId = state.session?.callId;
-    if (callId == null) return;
+    if (callId == null || state.isLocalScreenSharing) return;
+    CallSessionDto? startedSession;
+    var mediaStartAttempted = false;
     try {
+      // 先由 CallSession 聚合裁决互斥与权限，再发布 LiveKit track，避免在
+      // screen_share_conflict 等拒绝场景中短暂泄露未授权画面。
+      startedSession = await ref
+          .read(rtcCallScreenShareWriterProvider(AppUiSurfaces.rtcVideo))
+          .startScreenShare(RtcCallIdCommand(callId: callId));
+      if (state.session?.callId != callId || state.status == CallStatus.ended) {
+        await ref
+            .read(rtcCallScreenShareWriterProvider(AppUiSurfaces.rtcVideo))
+            .stopScreenShare(RtcCallIdCommand(callId: callId));
+        return;
+      }
+      mediaStartAttempted = true;
       await _lkRoom.startScreenShare();
-      await _repo.startScreenShare(callId);
-      state = state.copyWith(isScreenSharing: true);
-    } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
+      if (state.session?.callId == callId && state.status != CallStatus.ended) {
+        state = state.copyWith(
+          session: startedSession,
+          isLocalScreenSharing: true,
+          clearFailure: true,
+        );
+      }
+    } catch (error, stackTrace) {
+      // SDK 可能在原生采集已启动后才抛错；只要调用过 start 就幂等尝试
+      // stop，不能仅以 Future 是否正常完成判断敏感画面是否正在发布。
+      if (mediaStartAttempted) {
+        try {
+          await _lkRoom.stopScreenShare();
+        } catch (rollbackError, rollbackStackTrace) {
+          developer.log(
+            'RTC screen-share rollback failed',
+            name: 'CallSessionNotifier',
+            error: rollbackError.runtimeType,
+            stackTrace: rollbackStackTrace,
+          );
+        }
+      }
+      CallSessionDto? compensatedSession;
+      if (startedSession != null) {
+        try {
+          compensatedSession = await ref
+              .read(rtcCallScreenShareWriterProvider(AppUiSurfaces.rtcVideo))
+              .stopScreenShare(RtcCallIdCommand(callId: callId));
+        } catch (compensationError, compensationStackTrace) {
+          developer.log(
+            'RTC screen-share aggregate compensation failed',
+            name: 'CallSessionNotifier',
+            error: compensationError.runtimeType,
+            stackTrace: compensationStackTrace,
+          );
+        }
+      }
+      if (state.session?.callId == callId) {
+        final compensationSucceeded = compensatedSession != null;
+        state = state.copyWith(
+          session: compensationSucceeded
+              ? projectCallSessionWithoutScreenShare(compensatedSession)
+              : (startedSession ?? state.session),
+          // 补偿失败时保留停止入口；此时服务端仍认为当前用户拥有共享，
+          // 页面显示接收中而不是伪报共享已成功。
+          isLocalScreenSharing:
+              startedSession != null && !compensationSucceeded,
+          failure: _failureFrom(error),
+        );
+      }
+      developer.log(
+        'RTC screen-share start failed',
+        name: 'CallSessionNotifier',
+        error: error.runtimeType,
+        stackTrace: stackTrace,
+      );
     }
   }
 
   Future<void> stopScreenShare() async {
     final callId = state.session?.callId;
     if (callId == null) return;
+    Object? mediaStopError;
+    StackTrace? mediaStopStackTrace;
     try {
       await _lkRoom.stopScreenShare();
-      await _repo.stopScreenShare(callId);
-      state = state.copyWith(isScreenSharing: false);
-    } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
+    } catch (error, stackTrace) {
+      mediaStopError = error;
+      mediaStopStackTrace = stackTrace;
+      // 若 SDK 无法确认采集已停止，断开房间是隐私优先的最后保障；用户可从
+      // 结构化失败横幅重连同一 CallSession，不创建第二会话。
+      await _disconnectLiveKit();
+    }
+    if (state.session?.callId == callId) {
+      state = state.copyWith(isLocalScreenSharing: false);
+    }
+    try {
+      final session = await ref
+          .read(rtcCallScreenShareWriterProvider(AppUiSurfaces.rtcVideo))
+          .stopScreenShare(RtcCallIdCommand(callId: callId));
+      if (state.session?.callId == callId && state.status != CallStatus.ended) {
+        state = state.copyWith(
+          session: projectCallSessionWithoutScreenShare(session),
+          isLocalScreenSharing: false,
+          clearFailure: mediaStopError == null,
+          failure: mediaStopError == null ? null : _failureFrom(mediaStopError),
+        );
+      }
+    } catch (error) {
+      if (state.session?.callId == callId) {
+        state = state.copyWith(
+          // 服务端停止失败时保留停止入口，允许幂等重试；本地 track 已先停。
+          isLocalScreenSharing: true,
+          failure: _failureFrom(error),
+        );
+      }
+    }
+    if (mediaStopError != null) {
+      developer.log(
+        'RTC screen-share media stop failed; room disconnected',
+        name: 'CallSessionNotifier',
+        error: mediaStopError.runtimeType,
+        stackTrace: mediaStopStackTrace,
+      );
     }
   }
 
@@ -490,101 +926,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       callType: type,
       isCameraOn: type.isVideo,
       isMuted: false,
-      isRecording: session.isRecording,
-      isScreenSharing: session.isScreenSharing,
+      isLocalScreenSharing: false,
     );
-  }
-
-  Future<void> _connectToLiveKit(
-    String token, {
-    bool enableVideo = false,
-  }) async {
-    // 建连阶段进入「连接中」过程态：振铃/接听后到媒体连通前的可见反馈。
-    if (state.status != CallStatus.inCall) {
-      state = state.copyWith(status: CallStatus.connecting);
-    }
-    try {
-      await _lkRoom.connect(
-        url: _livekitUrl,
-        token: token,
-        enableVideo: enableVideo,
-        enableAudio: true,
-      );
-
-      // 媒体连通：进入通话态并清除重连标记。
-      state = state.copyWith(status: CallStatus.inCall, isReconnecting: false);
-
-      _lkRoom.connectionState.addListener(_onConnectionStateChanged);
-      _connectionListenerRoom = _lkRoom;
-      _lkRoom.connectionQuality.addListener(_onQualityChanged);
-      _lkRoom.activeSpeaker.addListener(_onParticipantsChanged);
-
-      // Initial sync once connected, then on every room participant/track event.
-      _onParticipantsChanged();
-      _participantsSub = _lkRoom.onParticipantsChanged.listen(
-        (_) => _onParticipantsChanged(),
-      );
-
-      _disconnectSub = _lkRoom.onDisconnected.listen((reason) {
-        if (reason != null) {
-          _endCallState();
-        }
-      });
-    } catch (e) {
-      state = state.copyWith(error: UITextConstants.callConnectFailed);
-    }
-  }
-
-  void _onConnectionStateChanged() {
-    final connState = _lkRoom.connectionState.value;
-    final reconnecting = connState == RtcConnectionState.reconnecting;
-    if (reconnecting != state.isReconnecting) {
-      state = state.copyWith(isReconnecting: reconnecting);
-    }
-  }
-
-  void _onQualityChanged() {
-    final q = _lkRoom.connectionQuality.value;
-    ref.read(callQualityProvider.notifier).update(q.toNetworkQuality());
-  }
-
-  void _onParticipantsChanged() {
-    final dtos = state.session?.participants ?? const <CallParticipantDto>[];
-    ref.read(callParticipantsProvider.notifier).syncFromLiveKit(_lkRoom, dtos);
-  }
-
-  void _endCallState() {
-    _cancelTimeoutTimer();
-    _participantsSub?.cancel();
-    _disconnectSub?.cancel();
-    _connectionListenerRoom?.connectionState.removeListener(
-      _onConnectionStateChanged,
-    );
-    _connectionListenerRoom = null;
-    _lkRoom.connectionQuality.removeListener(_onQualityChanged);
-    _lkRoom.activeSpeaker.removeListener(_onParticipantsChanged);
-    _lkRoom.disconnect();
-    ref.read(activeCallProvider.notifier).endCall();
-    state = state.copyWith(
-      status: CallStatus.ended,
-      isLoading: false,
-      isReconnecting: false,
-    );
-  }
-
-  void _startTimeoutTimer() {
-    _cancelTimeoutTimer();
-    _timeoutTimer = Timer(const Duration(seconds: 30), () {
-      if (state.status == CallStatus.ringing ||
-          state.status == CallStatus.initiated) {
-        cancelCall();
-      }
-    });
-  }
-
-  void _cancelTimeoutTimer() {
-    _timeoutTimer?.cancel();
-    _timeoutTimer = null;
+    _syncParticipantRoster(session);
   }
 }
 

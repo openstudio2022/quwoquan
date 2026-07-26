@@ -24,6 +24,20 @@ func loadSourceFields(
 	}
 	var declarations []fieldDocument
 	switch {
+	case fields.Members != nil:
+		if member, ok := fields.Members[entityName]; ok {
+			declarations = member.Fields
+			break
+		}
+		if len(fields.Fields) > 0 {
+			declarations = fields.Fields
+			break
+		}
+		return nil, fmt.Errorf(
+			"source entity %q does not exist in %q",
+			entityName,
+			documentPath,
+		)
 	case fields.Entities != nil:
 		entity, ok := fields.Entities[entityName]
 		if ok {
@@ -39,7 +53,7 @@ func loadSourceFields(
 			entityName,
 			documentPath,
 		)
-	case fields.Entity == entityName:
+	case fields.Entity == entityName || (fields.Entity == "" && len(fields.Fields) > 0):
 		declarations = fields.Fields
 	default:
 		return nil, fmt.Errorf(

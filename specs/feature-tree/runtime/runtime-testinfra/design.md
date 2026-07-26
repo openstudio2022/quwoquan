@@ -1,59 +1,43 @@
-# Design: runtime-testinfra
+# L2 Design：运行时测试基础设施 (`runtime-testinfra`)
 
-> Status: implemented.
+> 对应规格：[L2 spec](./spec.md)
 
-## Summary
+> 设计触发原因：“以物理目录扫描和运行报告提供三层测试证据，不维护路径登记或目录清单”需要 `test-engine-and-fixture-framework` 共享状态 owner、契约或质量边界。
 
-`runtime-testinfra` 不再只指某个语言内的测试 helper，而是全仓三层测试迁移的基础设施层：
+## 1. 背景、目标与非目标
 
-- 生成 canonical bridge
-- 维护目录与页面清单真相源
-- 为 acceptance `tests.recorded` 与 `artifacts/tests/**/report.json` 提供统一证据口径
-- 通过独立门禁阻断伪迁移、假报告和 page matrix 漏洞
+- 设计目标：以物理目录扫描和运行报告提供三层测试证据，不维护路径登记或目录清单。
+- 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
-## Canonical Bridge 设计
+## 2. Story 协作与状态流
 
-### App
+- [`test-engine-and-fixture-framework`](./test-engine-and-fixture-framework/spec.md)：按 canonical 测试目录发现用例，隔离 fixture 与真实依赖，并从执行结果生成证据。
 
-- `quwoquan_app/test/{local_contract,api_integration,user_acceptance}` 是唯一执行根
-- legacy `ui/**`、`patrol/**`、分散根目录测试通过 Dart wrapper bridge 进入 canonical 根
-- 页面级 `user_acceptance/pages/<owner>/<surface_id>/...` 由 page inventory 自动生成
+## 3. 端云与数据流
 
-### Service
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-- `quwoquan_service/services/<svc>/tests/{local_contract,api_integration}` 是唯一执行根
-- Go bridge 使用最小 exec runner 回放 legacy suite，避免复制断言
-- `classification_basis` 显式记录 `internal/cmd -> local_contract`、`tests -> api_integration`
-  的归属依据
+## 4. 关键决策
 
-### Data / Ops
+<a id="dec-001"></a>
+### DEC-001 Runner 扫描 canonical 目录并从执行结果生成报告
+- 决策：Runner 扫描 canonical 目录并从执行结果生成报告。
+- 理由：以物理目录扫描和运行报告提供三层测试证据，不维护路径登记或目录清单。
+- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 关联要求：`REQ-001`
+- 影响 Story：[`test-engine-and-fixture-framework`](./test-engine-and-fixture-framework/spec.md)
+- 关联验收：`SIT-001`
 
-- `quwoquan_data/tests/{local_contract,api_integration,user_acceptance}` 与
-  `quwoquan_ops/tests/local_contract`、`quwoquan_ops/acceptance/{api_integration,user_acceptance}` 成为唯一根
-- Python bridge 使用 importlib wrapper，保证既有套件可被 canonical 根直接发现与执行
+## 5. 失败与恢复
 
-## Truth Sources
+- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
+- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
+- 恢复动作：调用方按 canonical recovery action 重试、刷新或停止；不得自行合成成功结果。
+- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
 
-- `specs/gates/test_directory_inventory.yaml`
-  - 记录 `current_path`、`target_path`、`classification_basis`、`migration_status`
-  - version 2 以后 `pending_count` 表示尚未 bridge 的 suite 数，`bridged_count` 表示已桥接数
-  - `pending_count=0` 只说明治理入口已被 canonical bridge 接管，不说明 legacy 文件已从磁盘移除
-- `specs/gates/user_acceptance_page_inventory.yaml`
-  - 记录 metadata `ui_surfaces`、`app_routes` 对应的 page owner、route 归属、source tests 与
-    反向绑定 API tests
+## 6. 质量与观测
 
-## Guardrails
-
-- `verify-test-directory-layout`
-  - 没有 canonical bridge 的 legacy 测试一律失败
-- `verify-test-no-fake`
-  - 扫描 canonical 根与 `artifacts/tests/**/report.json`，阻断占位测试、假断言、假报告
-- `verify-test-coverage-map`
-  - 校验 acceptance case id、canonical 测试文件、执行环境、report/artifact 一一可追溯
-  - 阻断 page case 缺失、recorded 仍指向 legacy、implemented 但缺 lower-layer binding
-
-## Constraints
-
-- 不维护第二套 inventory、第二套页面矩阵或第二套 report 目录
-- 不允许手写“绿色报告”替代真实 canonical 测试文件
-- 任何 canonical remap 必须通过 bridge generator / inventory 真相源落地，不能只改 acceptance 文本
+- 沿用父 L1 质量约束；新增特有 SLO 时在本节声明。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify commercial Xiaoqu assistant routes do not regress to public auth."""
+"""Verify every non-public Assistant route requires authenticated access."""
 from __future__ import annotations
 
 import sys
@@ -16,35 +16,10 @@ ROOT = Path(__file__).resolve().parents[3]
 SERVICE_DIR = (
     ROOT
     / "quwoquan_service"
+    / "services"
+    / "assistant-service"
     / "contracts"
-    / "metadata"
-    / "assistant"
 )
-
-REQUIRED_AUTH_OPERATIONS = {
-    "SearchXiaoquResults",
-    "CreateAssistantConversation",
-    "GetAssistantConversation",
-    "StartAssistantRun",
-    "GetAssistantRun",
-    "ReportPageContext",
-    "GetEntryPersonalization",
-    "GetSuggestedActions",
-    "ReportInteractionEvent",
-    "ReportScorecard",
-    "ListSkillSubscriptions",
-    "CreateSkillSubscription",
-    "GetSkillSubscription",
-    "UpdateSkillSubscriptionStatus",
-    "TickSkillSubscriptionCron",
-    "ListAssistantTasks",
-    "ListAssistantMemories",
-    "GetLearningOpsSummary",
-    "GrantSkillConsent",
-    "RevokeSkillConsent",
-    "ListConsents",
-}
-
 
 def route_auth_mode(route: dict) -> str:
     security = route.get("security")
@@ -53,10 +28,28 @@ def route_auth_mode(route: dict) -> str:
     return ""
 
 
+def is_explicit_public_catalog_route(route: dict) -> bool:
+    if str(route.get("actor") or "").strip().lower() != "none":
+        return False
+    privacy = route.get("privacy")
+    if not isinstance(privacy, dict):
+        return False
+    request_classification = str(
+        privacy.get("request_classification") or ""
+    ).strip().upper()
+    response_classification = str(
+        privacy.get("response_classification") or ""
+    ).strip().upper()
+    return (
+        request_classification == "PUBLIC"
+        and response_classification == "PUBLIC"
+    )
+
+
 def main() -> int:
     by_operation: dict[str, dict] = {}
     failures: list[str] = []
-    service_paths = sorted(SERVICE_DIR.glob("*/service.yaml"))
+    service_paths = sorted(SERVICE_DIR.glob("*/*/operations.yaml"))
     if not service_paths:
         print(f"FAIL: {SERVICE_DIR} has no service metadata", file=sys.stderr)
         return 1
@@ -74,10 +67,8 @@ def main() -> int:
                 failures.append(f"{operation}: duplicate metadata route")
                 continue
             by_operation[operation] = route
-    for operation in sorted(REQUIRED_AUTH_OPERATIONS):
-        route = by_operation.get(operation)
-        if route is None:
-            failures.append(f"{operation}: missing route")
+    for operation, route in sorted(by_operation.items()):
+        if is_explicit_public_catalog_route(route):
             continue
         mode = route_auth_mode(route)
         if mode != "required":

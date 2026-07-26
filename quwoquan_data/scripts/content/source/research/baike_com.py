@@ -14,6 +14,7 @@ from core.runtime_policy import active_runtime_policy
 from content.source.research import network_io
 from content.source.research.text_match import (
     _dedupe_terms,
+    _geo_context_matches,
     _normalized_title,
     _wiki_resolved_title_matches_entity,
     _wiki_title_matches_entity,
@@ -86,6 +87,11 @@ def _metadata_matches_entity(
         entity_aliases=aliases,
     ):
         return False
+    if not _geo_context_matches(
+        " ".join((title, description, entity_id)),
+        geo_context_terms,
+    ):
+        return False
     if _wiki_title_matches_entity(title, entity_id):
         return True
     if not TOUTIAO_BAIKE_CANONICAL_RESOLUTION.require_geo_context_for_alias:
@@ -98,6 +104,22 @@ def _metadata_matches_entity(
     )
 
 
+def _contextual_search_terms(
+    entity_id: str,
+    geo_context_terms: tuple[str, ...],
+) -> list[str]:
+    """为同名词条补城市/省份限定词；限定词只用于查询，不改变身份匹配。"""
+    contextual: list[str] = []
+    for context in reversed(geo_context_terms):
+        normalized = str(context or "").strip()
+        if not normalized or normalized in entity_id:
+            continue
+        short = re.sub(r"(特别行政区|自治区|自治州|地区|省|市|区|县)$", "", normalized)
+        if short and short not in entity_id:
+            contextual.append(f"{short}{entity_id}")
+    return contextual
+
+
 def resolve_toutiao_baike_page(
     entity_id: str,
     *,
@@ -106,7 +128,11 @@ def resolve_toutiao_baike_page(
 ) -> BaikePageResolution | None:
     policy = TOUTIAO_BAIKE_CANONICAL_RESOLUTION
     candidates = _dedupe_terms(
-        [entity_id, *entity_aliases],
+        [
+            entity_id,
+            *entity_aliases,
+            *_contextual_search_terms(entity_id, geo_context_terms),
+        ],
         limit=policy.candidate_limit,
     )
     timeout = active_runtime_policy().provider_timeouts.encyclopedia_seconds

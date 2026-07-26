@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -109,7 +109,7 @@ class AppForwardRecipient {
       return explicit;
     }
     if (memberCount > 0) {
-      return UITextConstants.forwardRecipientGroupMemberCount(memberCount);
+      return ChatText.forwardRecipientGroupMemberCount(memberCount);
     }
     return '';
   }

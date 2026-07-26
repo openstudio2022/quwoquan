@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
@@ -67,7 +68,7 @@ class CreateActionSheet extends StatelessWidget {
         ),
       if (onStartGroupChat != null)
         _SheetActionSpec(
-          label: UITextConstants.createActionCreateGroupShort,
+          label: ChatText.createActionCreateGroupShort,
           onPressed: onStartGroupChat!,
         ),
       if (onCreateCircle != null)

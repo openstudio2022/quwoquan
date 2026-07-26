@@ -21,18 +21,27 @@ from core.io import read_json  # noqa: E402
 from content.release.environment.activation import write_activation_smoke_report  # noqa: E402
 from content.release.environment.consistency import scan_release_contract  # noqa: E402
 from governance.coverage.benchmark import evaluate_benchmark  # noqa: E402
-from governance.coverage.coverage import evaluate_registry, list_verticals  # noqa: E402
+from governance.coverage.vertical_inventory import (  # noqa: E402
+    evaluate_vertical_inventory,
+    list_verticals,
+)
 from governance.coverage.governance import verify_vertical_script_governance  # noqa: E402
-from governance.coverage.license import load_travel_license_policy, validate_image_rights  # noqa: E402
+from governance.coverage.license import (  # noqa: E402
+    RightsEnforcementMode,
+    audit_image_rights,
+    load_travel_license_policy,
+    rights_enforcement_mode,
+    validate_image_rights,
+)
 from governance.coverage.quality import verify_vertical_quality  # noqa: E402
 
 
-def test_coverage_registry_reports_all_target_verticals():
+def test_content_policy_inventory_reports_all_verticals():
     assert set(list_verticals()) >= {"travel", "photography", "campus"}
     for vertical in ("travel", "photography", "campus"):
-        report = evaluate_registry(vertical)
-        assert report["totals"]["units"] >= 2
-        assert report["status"] in {"passed", "gap"}
+        report = evaluate_vertical_inventory(vertical)
+        assert report["totals"]["carriers"] >= 3
+        assert report["status"] == "passed"
 
 
 def test_vertical_script_governance_passes_with_campus_wrappers():
@@ -82,7 +91,8 @@ def test_photography_image_rights_accepts_authorized_payload():
 def test_travel_image_rights_are_asset_level_and_accept_authorized_payload():
     policy = load_travel_license_policy()
     assert policy["vertical"] == "travel"
-    issues = validate_image_rights(
+    assert rights_enforcement_mode("travel") is RightsEnforcementMode.AUDIT_ONLY
+    issues = audit_image_rights(
         {
             "url": "https://example.com/t.jpg",
             "platform": "小红书",
@@ -91,7 +101,7 @@ def test_travel_image_rights_are_asset_level_and_accept_authorized_payload():
     )
     assert any("missing required field license" in issue for issue in issues), issues
     assert not any("灵感或参考" in issue for issue in issues), issues
-    allowed = validate_image_rights(
+    allowed = audit_image_rights(
         {
             "url": "https://example.com/t2.jpg",
             "platform": "景区官网",
@@ -126,7 +136,7 @@ def test_travel_image_rights_accepts_versioned_commons_cc_licenses():
         "CC BY 4.0",
         "Public domain",
     ):
-        issues = validate_image_rights(
+        issues = audit_image_rights(
             {**base, "license": license_value},
             vertical="travel",
         )
@@ -145,9 +155,9 @@ def test_travel_image_rights_requires_generated_asset_provenance():
         "authorizationProof": "file:///workspace/provenance.json",
         "modelReleaseStatus": "not_required",
     }
-    missing = validate_image_rights(base, vertical="travel")
+    missing = audit_image_rights(base, vertical="travel")
     assert any("generationModel" in issue for issue in missing), missing
-    allowed = validate_image_rights(
+    allowed = audit_image_rights(
         {
             **base,
             "generationModel": "gpt-image",
@@ -158,6 +168,17 @@ def test_travel_image_rights_requires_generated_asset_provenance():
         vertical="travel",
     )
     assert allowed == [], allowed
+
+
+def test_travel_rights_audit_records_gaps_without_blocking_collection():
+    payload = {
+        "url": "https://images.example.com/place.jpg",
+        "platform": "test-gallery",
+        "sourceUrl": "https://images.example.com/place",
+        "credit": "test-creator",
+    }
+    assert audit_image_rights(payload, vertical="travel")
+    assert validate_image_rights(payload, vertical="travel") == []
 
 
 def test_vertical_quality_gate_has_golden_samples():
@@ -206,10 +227,14 @@ def test_post_activation_requires_smoke_report_and_active_release_match():
         assert read_json(run / "activation-smoke.json")["activeReleaseId"] == "rel-1"
 
 
-def test_benchmark_reports_blocked_targets_in_current_maturity():
+def test_benchmark_requires_a_runtime_measurement_receipt():
     report = evaluate_benchmark([1000, 10000, 100000])
     assert [row["targetDailyPosts"] for row in report["targets"]] == [1000, 10000, 100000]
-    assert any(row["status"] == "blocked" for row in report["targets"])
+    assert all(row["status"] == "blocked" for row in report["targets"])
+    assert all(
+        "runtime throughput and cost measurement receipt is required" in row["blockers"]
+        for row in report["targets"]
+    )
 
 
 def _run_all() -> None:

@@ -4,11 +4,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
-import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_media_upload_gateway.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
@@ -391,7 +390,7 @@ class _RegionPickerPageState extends ConsumerState<_RegionPickerPage> {
     });
     try {
       final items = await ref
-          .read(tagRepositoryProvider)
+          .read(tagCatalogQueryProvider)
           .listChildren(parentTagRef);
       if (!mounted || serial != _requestSerial) {
         return;
@@ -555,7 +554,9 @@ class _ProfileQrCardPage extends ConsumerWidget {
         ),
       ),
       body: FutureBuilder<ProfileQrCardData>(
-        future: ref.read(userProfileRepositoryProvider).getProfileQrCard(),
+        future: ref
+            .read(profileEditQueryProvider(AppUiSurfaces.profileEdit))
+            .getProfileQrCard(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CupertinoActivityIndicator());

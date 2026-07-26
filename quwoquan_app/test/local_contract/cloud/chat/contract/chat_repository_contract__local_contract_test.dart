@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 
 void main() {
   group('ChatRepository — 常规契约', () {
@@ -119,24 +119,18 @@ void main() {
       expect(full.status, 'active');
     });
 
-    test('createConversation 保留群家族语义字段', () async {
+    test('createConversation 只创建私建群，不暴露圈群绑定写字段', () async {
       final created = await repo.createConversation(
         type: 'group',
         title: '班级群',
-        circleId: 'school_circle_001',
-        circleGroupId: 'classroom_group_001',
-        originType: 'organization_node_group',
-        bindingType: 'organization_node',
-        lifecyclePolicy: 'bound_to_organization_node',
       );
 
       final full = await repo.getConversation(created.conversationId);
       expect(full.type, 'group');
-      expect(full.circleId, 'school_circle_001');
-      expect(full.circleGroupId, 'classroom_group_001');
-      expect(full.originType, 'organization_node_group');
-      expect(full.bindingType, 'organization_node');
-      expect(full.lifecyclePolicy, 'bound_to_organization_node');
+      expect(full.circleId, isNull);
+      expect(full.circleGroupId, isNull);
+      expect(full.bindingType, 'none');
+      expect(full.lifecyclePolicy, 'persistent');
     });
 
     test('getConversation 返回指定会话', () async {
@@ -157,7 +151,10 @@ void main() {
 
     test('recallMessage 不抛出异常', () async {
       await expectLater(
-        repo.recallMessage(conversationId: 'conv_001', messageId: 'msg_001'),
+        repo.recallMessage(
+          conversationId: 'fixture_conv_direct',
+          messageId: 'fixture_msg_direct_1',
+        ),
         completes,
       );
     });
@@ -177,15 +174,18 @@ void main() {
 
     test('markAsRead 不抛出异常', () async {
       await expectLater(
-        repo.markAsRead(conversationId: 'conv_001', messageId: 'msg_001'),
+        repo.markAsRead(
+          conversationId: 'fixture_conv_direct',
+          messageId: 'fixture_msg_direct_1',
+        ),
         completes,
       );
     });
 
     test('getReceipts 返回列表', () async {
       final receipts = await repo.getReceipts(
-        conversationId: 'conv_001',
-        messageId: 'msg_001',
+        conversationId: 'fixture_conv_direct',
+        messageId: 'fixture_msg_direct_1',
       );
       expect(receipts, isList);
     });
@@ -193,14 +193,16 @@ void main() {
     // ── 成员管理 ────────────────────────────────────────────────────────
 
     test('listMembers 返回成员列表', () async {
-      final members = await repo.listMembers(conversationId: 'conv_002');
+      final members = await repo.listMembers(
+        conversationId: 'fixture_conv_group',
+      );
       expect(members, isList);
       expect(members, isNotEmpty);
     });
 
     test('listMembers display_name_asc 按展示名排序', () async {
       final members = await repo.listMembers(
-        conversationId: 'conv_002',
+        conversationId: 'fixture_conv_group',
         sort: 'display_name_asc',
       );
       final names = members
@@ -224,14 +226,20 @@ void main() {
 
     test('addMembers 不抛出异常', () async {
       await expectLater(
-        repo.addMembers(conversationId: 'conv_002', userIds: ['user_new_001']),
+        repo.addMembers(
+          conversationId: 'fixture_conv_group',
+          userIds: ['fixture_user_new_001'],
+        ),
         completes,
       );
     });
 
     test('removeMember 不抛出异常', () async {
       await expectLater(
-        repo.removeMember(conversationId: 'conv_002', userId: 'user_new_001'),
+        repo.removeMember(
+          conversationId: 'fixture_conv_group',
+          userId: 'fixture_user_new_001',
+        ),
         completes,
       );
     });
@@ -240,14 +248,17 @@ void main() {
 
     test('inviteAssistant 不抛出异常', () async {
       await expectLater(
-        repo.inviteAssistant(conversationId: 'conv_002', skillId: 'general'),
+        repo.inviteAssistant(
+          conversationId: 'fixture_conv_group',
+          skillId: 'general',
+        ),
         completes,
       );
     });
 
     test('removeAssistant 不抛出异常', () async {
       await expectLater(
-        repo.removeAssistant(conversationId: 'conv_002'),
+        repo.removeAssistant(conversationId: 'fixture_conv_group'),
         completes,
       );
     });
@@ -257,7 +268,7 @@ void main() {
     test('updateConversationSettings 不抛出异常', () async {
       await expectLater(
         repo.updateConversationSettings(
-          conversationId: 'conv_001',
+          conversationId: 'fixture_conv_direct',
           muted: true,
           pinned: false,
         ),
@@ -279,28 +290,24 @@ void main() {
       );
     });
 
-    test('searchContacts 返回匹配结果', () async {
-      final contacts = await repo.searchContacts(query: '李');
-      expect(contacts, isList);
-    });
-
-    test('listContactTabCircles Mock 返回圈子占位行', () async {
-      final rows = await repo.listContactTabCircles();
+    test('listContactHome circle 返回真实圈子投影行', () async {
+      final rows = await repo.listContactHome(filter: 'circle');
       expect(rows, isNotEmpty);
-      expect(rows.first, isA<ChatContactTabCircleRowDto>());
+      expect(rows.every((row) => row.kind == 'circle'), isTrue);
       expect(rows.first.circleId, isNotEmpty);
     });
 
-    test('listContactTabFunGroups Mock 返回讨论占位行', () async {
-      final rows = await repo.listContactTabFunGroups();
+    test('listContactHome group 返回真实群会话投影行', () async {
+      final rows = await repo.listContactHome(filter: 'group');
       expect(rows, isNotEmpty);
-      expect(rows.first, isA<ChatContactTabFunGroupRowDto>());
+      expect(rows.every((row) => row.kind == 'group'), isTrue);
+      expect(rows.first.conversationId, isNotEmpty);
     });
 
-    test('listMemberUserIds 解析 conv_001 成员', () async {
-      final ids = await repo.listMemberUserIds('conv_001');
+    test('listMemberUserIds 解析 contract direct 成员', () async {
+      final ids = await repo.listMemberUserIds('fixture_conv_direct');
       expect(ids, isNotEmpty);
-      expect(ids, contains('user_001'));
+      expect(ids, contains('fixture_user_current'));
     });
   });
 
@@ -322,7 +329,9 @@ void main() {
     });
 
     test('listMembers 包含 displayName 和 avatarUrl', () async {
-      final members = await repo.listMembers(conversationId: 'conv_002');
+      final members = await repo.listMembers(
+        conversationId: 'fixture_conv_group',
+      );
       expect(members, isNotEmpty);
       final first = members.first;
       expect(first.displayName, isNotEmpty);
@@ -349,12 +358,7 @@ void main() {
       expect(conversations, isList);
     });
 
-    test('searchContacts 空查询返回空列表', () async {
-      final contacts = await repo.searchContacts(query: '');
-      expect(contacts, isList);
-    });
-
-    test('接口包含全部 19 个 API 方法', () {
+    test('接口包含全部 18 个 API 方法', () {
       final methods = <String>[
         'listInbox',
         'listConversations',
@@ -374,9 +378,8 @@ void main() {
         'removeAssistant',
         'updateConversationSettings',
         'listContacts',
-        'searchContacts',
       ];
-      expect(methods.length, 19);
+      expect(methods.length, 18);
     });
   });
 }

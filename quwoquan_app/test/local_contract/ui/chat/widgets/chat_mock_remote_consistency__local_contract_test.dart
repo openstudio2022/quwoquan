@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 
@@ -11,7 +12,9 @@ import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
 
 Widget _scopedApp({required ChatRepository overrideRepo}) {
   return ProviderScope(
-    overrides: [chatRepositoryProvider.overrideWithValue(overrideRepo)],
+    overrides: [
+      chatRepositoryCompositionProvider.overrideWithValue(overrideRepo),
+    ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
         initialLocation: '/chat',
@@ -64,15 +67,17 @@ void main() {
       expect(find.byType(ChatPage), findsOneWidget);
     });
 
-    test('chatRepositoryProvider 默认返回 ChatRepository 子类型', () {
+    test('chatRepositoryCompositionProvider 默认返回 ChatRepository 子类型', () {
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
         ],
       );
       addTearDown(container.dispose);
 
-      final repo = container.read(chatRepositoryProvider);
+      final repo = container.read(chatRepositoryCompositionProvider);
       expect(repo, isA<ChatRepository>());
       expect(repo, isA<MockChatRepository>());
     });

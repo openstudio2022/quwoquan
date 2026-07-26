@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,9 +17,12 @@ import (
 	rtsearch "quwoquan_service/runtime/search"
 )
 
+var ErrIndexSchemaIncompatible = errors.New("search index schema is incompatible")
+
 // Config is the ES/OpenSearch connection + index configuration. It is supplied by
-// the service from configs/config.yaml (with env overrides) rather than read
-// ad-hoc from os.Getenv in business code, so endpoints/credentials are auditable.
+// the service from its package effective config (schema defaults plus one environment override)
+// rather than read ad-hoc from os.Getenv in business code, so
+// endpoints/credentials are auditable.
 type Config struct {
 	// Endpoints are base URLs (scheme+host[:port]); multiple enable failover.
 	Endpoints []string
@@ -192,7 +196,32 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 		return err
 	}
 	if status == http.StatusOK {
-		return nil
+		mappingStatus, mappingData, mappingErr := c.send(
+			ctx,
+			http.MethodPut,
+			"/"+c.index+"/_mapping",
+			buildIndexMappings(c.cfg.Schema),
+			"application/json",
+		)
+		if mappingErr != nil {
+			return mappingErr
+		}
+		if mappingStatus >= 200 && mappingStatus < 300 {
+			return nil
+		}
+		if mappingStatus == http.StatusBadRequest {
+			return fmt.Errorf(
+				"%w: update mapping status %d: %s",
+				ErrIndexSchemaIncompatible,
+				mappingStatus,
+				truncateBytes(mappingData, 300),
+			)
+		}
+		return fmt.Errorf(
+			"es: update mapping status %d: %s",
+			mappingStatus,
+			truncateBytes(mappingData, 300),
+		)
 	}
 	if status != http.StatusNotFound {
 		return fmt.Errorf("es: head index status %d", status)

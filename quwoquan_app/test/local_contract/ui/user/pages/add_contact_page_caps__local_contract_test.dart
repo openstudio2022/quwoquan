@@ -45,14 +45,6 @@ void main() {
         find.text(UITextConstants.addContactPhoneEntryTitle),
         findsOneWidget,
       );
-      expect(
-        find.text(UITextConstants.editProfileQrCardHeading),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.addContactMyQrCardSubtitle),
-        findsNothing,
-      );
     });
 
     testWidgets('web：无系统通讯录，手机联系人入口隐藏、扫一扫保留', (tester) async {

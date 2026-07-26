@@ -1,0 +1,27 @@
+kind: append_only_fact
+description: 'App 产品事件与异常的严格目录化明细。公共信封固定为九字段，具体 eventType
+
+  只允许 event_catalog.yaml 声明的强类型扩展。原始明细写入阿里云 SLS 三天，
+
+  Portal 只能经 product-ops 查询门面访问；推荐反馈不属于本对象。
+
+  '
+identity:
+  fields:
+  - sessionId
+  - eventType
+  - occurredAt
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: named_reader
+relationships: []
+local_identity_reasons:
+  operationId: generated route, surface, or operation registry key used only for navigation or telemetry
+    attribution
+capabilities:
+- queryable
+- aggregatable
+taggable: false
+vector_enabled: false

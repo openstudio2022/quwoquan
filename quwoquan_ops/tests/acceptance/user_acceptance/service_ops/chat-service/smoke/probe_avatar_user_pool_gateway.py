@@ -24,13 +24,17 @@ def _find_repo_root() -> Path:
 ROOT = _find_repo_root()
 SHARED = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures"
 MEDIA_ROOT = SHARED / "media"
-USER_POOL_PATH = SHARED / "user_pool.json"
+USER_POOL_PATH = (
+    ROOT
+    / "quwoquan_service/services/user-service/tests/support/contract_fixtures/user_pool.json"
+)
 HTTP_TIMEOUT_SECONDS = 10
 READY_TIMEOUT_SECONDS = 20
 READY_PROBE_TIMEOUT_SECONDS = 2
 READY_POLL_SECONDS = 0.2
 PROCESS_SHUTDOWN_TIMEOUT_SECONDS = 5
 CORE_PNG_COVER_KEY = "media/image/s/archived-image/post/fixture_photo_001/cover.png"
+CANONICAL_COVER_PREFIXES = ("media/image/s/", "media/video/s/")
 
 
 def free_port() -> int:
@@ -189,7 +193,12 @@ def main() -> int:
         cover_values = collect_strings(content, "coverUrl") + collect_strings(content, "thumbnailUrl")
         require(cover_values, "expected post cover values from gateway content fixture")
         require(
-            all(value.startswith("media/image/s/archived-image/post/") for value in cover_values),
+        all(
+            value.startswith(CANONICAL_COVER_PREFIXES)
+            and "?" not in value
+            and "#" not in value
+            for value in cover_values
+        ),
             f"all cover values must remain canonical object keys, got {cover_values}",
         )
 

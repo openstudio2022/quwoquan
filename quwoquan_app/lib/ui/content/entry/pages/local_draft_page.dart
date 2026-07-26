@@ -13,7 +13,9 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
+import 'package:quwoquan_app/ui/content/entry/providers/post_publication_intent_queue_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_provider_bridge.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/post_publication_task_section.dart';
 
 class LocalDraftPage extends ConsumerStatefulWidget {
   const LocalDraftPage({super.key});
@@ -54,6 +56,9 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
   @override
   Widget build(BuildContext context) {
     final draftsAsync = ref.watch(createDraftStoreProvider);
+    final publicationIntents = ref.watch(
+      postPublicationIntentQueueProvider.select((state) => state.intents),
+    );
     final pageBackground = AppColors.iosPageBackground(context);
     return AppScaffold(
       key: TestKeys.localDraftPage,
@@ -76,7 +81,8 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
         top: false,
         bottom: false,
         child: draftsAsync.when(
-          data: (snapshot) => _buildLoadedState(context, snapshot),
+          data: (snapshot) =>
+              _buildLoadedState(context, snapshot, publicationIntents),
           loading: () => const Center(child: CupertinoActivityIndicator()),
           error: (error, _) => _LocalDraftEmptyState(
             title: UITextConstants.noDraft,
@@ -90,6 +96,7 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
   Widget _buildLoadedState(
     BuildContext context,
     CreateDraftStoreState snapshot,
+    List<LocalPostPublicationIntent> publicationIntents,
   ) {
     final drafts = snapshot.drafts;
     if (!_didReportOpen) {
@@ -107,6 +114,25 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
     }
     return CustomScrollView(
       slivers: [
+        if (publicationIntents.isNotEmpty)
+          SliverToBoxAdapter(
+            child: PostPublicationTaskSection(
+              intents: publicationIntents,
+              onRetry: (intent) => unawaited(
+                ref
+                    .read(postPublicationIntentQueueProvider.notifier)
+                    .retryPending(intent.command.localDraftId),
+              ),
+              onEdit: (intent) => context.push(
+                AppRoutePaths.create(draftId: intent.command.localDraftId),
+              ),
+              onRemove: (intent) => unawaited(
+                ref
+                    .read(postPublicationIntentQueueProvider.notifier)
+                    .cancelPending(intent.command.localDraftId),
+              ),
+            ),
+          ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class PageLifecycleEventNames {
@@ -16,9 +17,14 @@ class PageLifecycleEventNames {
 }
 
 class PageLifecycleObservability {
-  PageLifecycleObservability({required this.analytics});
+  PageLifecycleObservability({
+    required this.analytics,
+    AppPageExperienceTracker? pageExperienceTracker,
+  }) : _pageExperienceTracker =
+           pageExperienceTracker ?? AppPageExperienceTracker.instance;
 
   final AnalyticsService analytics;
+  final AppPageExperienceTracker _pageExperienceTracker;
 
   void recordPageState({
     required String pageName,
@@ -57,6 +63,14 @@ class PageLifecycleObservability {
     _track(
       eventName: PageLifecycleEventNames.pageLifecycleState,
       properties: properties,
+    );
+    unawaited(
+      _pageExperienceTracker.recordLifecycleTerminal(
+        pageName: pageName,
+        phase: phase,
+        surfaceId: surface,
+        failReasonCode: _sourceCode(error),
+      ),
     );
   }
 
@@ -169,13 +183,31 @@ class PageLifecycleObservability {
     }
     final sourceCode = _sourceCode(error);
     final failureKind = _failureKind(error);
+    final failure = _runtimeFailure(error);
     final properties = <String, dynamic>{};
     if (sourceCode != null) properties['sourceCode'] = sourceCode;
     if (failureKind != null) properties['failureKind'] = failureKind.name;
+    final recoveryAction = error is UiErrorSemantic
+        ? error.recoveryAction?.name
+        : failure?.recovery.action.trim();
+    if (recoveryAction != null && recoveryAction.isNotEmpty) {
+      properties['recoveryAction'] = recoveryAction;
+    }
+    final disruptionLevel = failure?.recovery.disruptionLevel.trim() ?? '';
+    if (disruptionLevel.isNotEmpty) {
+      properties['disruptionLevel'] = disruptionLevel;
+    }
+    final correlation = _failureCorrelation(error, failure);
+    if (correlation.requestId.isNotEmpty) {
+      properties['requestId'] = correlation.requestId;
+    }
+    if (correlation.traceId.isNotEmpty) {
+      properties['traceId'] = correlation.traceId;
+    }
     return properties;
   }
 
-  String? _sourceCode(Object error) {
+  String? _sourceCode(Object? error) {
     if (error is CloudException && (error.code?.trim().isNotEmpty ?? false)) {
       return error.code!.trim();
     }
@@ -193,13 +225,33 @@ class PageLifecycleObservability {
     if (error is UiErrorSemantic) {
       return error.failureKind;
     }
-    if (error is RuntimeFailureBase) {
-      return error.kind;
-    }
+    return _runtimeFailure(error)?.kind;
+  }
+
+  RuntimeFailureBase? _runtimeFailure(Object error) {
     if (error is CloudException) {
-      return error.runtimeFailure.kind;
+      return error.runtimeFailure;
     }
-    return null;
+    return error is RuntimeFailureBase ? error : null;
+  }
+
+  ({String requestId, String traceId}) _failureCorrelation(
+    Object error,
+    RuntimeFailureBase? failure,
+  ) {
+    final attributes = <String, String>{
+      for (final attribute
+          in failure?.context.attributes ?? const <RuntimeContextAttribute>[])
+        attribute.key: attribute.value,
+    };
+    return (
+      requestId: error is CloudException
+          ? (error.requestId ?? '').trim()
+          : (attributes['requestId'] ?? '').trim(),
+      traceId: error is CloudException
+          ? (error.traceId ?? '').trim()
+          : (attributes['traceId'] ?? '').trim(),
+    );
   }
 }
 

@@ -1,0 +1,63 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: quwoquan-default
+  group_by: [alertname, environment, service, domain]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: quwoquan-critical
+      continue: true
+    - matchers:
+        - domain=~"product-telemetry|startup|release"
+      receiver: quwoquan-operations
+
+# 每个 receiver 双路投递：
+# 1) 值班通知 webhook（主机 secret 文件注入，外部 IM/呼叫通道）；
+# 2) platform-ops-service 告警回流 ingest（活动告警列表 + ack 状态机 + 审计），
+#    以 X-Alert-Ingest-Token（主机 secret 文件）认证，服务端 fail-closed。
+receivers:
+  - name: quwoquan-default
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/webhook_url
+        send_resolved: true
+      - url: http://platform-ops-service:18088/control-plane/platform/alerts/ingest
+        send_resolved: true
+        http_config:
+          http_headers:
+            X-Alert-Ingest-Token:
+              files:
+                - /etc/alertmanager/secrets/ingest_token
+  - name: quwoquan-critical
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/webhook_url
+        send_resolved: true
+      - url: http://platform-ops-service:18088/control-plane/platform/alerts/ingest
+        send_resolved: true
+        http_config:
+          http_headers:
+            X-Alert-Ingest-Token:
+              files:
+                - /etc/alertmanager/secrets/ingest_token
+  - name: quwoquan-operations
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/webhook_url
+        send_resolved: true
+      - url: http://platform-ops-service:18088/control-plane/platform/alerts/ingest
+        send_resolved: true
+        http_config:
+          http_headers:
+            X-Alert-Ingest-Token:
+              files:
+                - /etc/alertmanager/secrets/ingest_token
+
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: [alertname, environment, service]

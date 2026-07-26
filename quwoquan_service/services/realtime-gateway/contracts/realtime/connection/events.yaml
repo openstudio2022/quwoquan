@@ -1,0 +1,54 @@
+events:
+- name: PersonaDeviceConnected
+  description: Persona 的可信设备建立连接（WebSocket 或 Long-polling 首次 poll）
+  producer: realtime-gateway
+  consumers:
+  - notification-service
+  channel: direct
+  payload_fields:
+  - accountId
+  - personaId
+  - deviceId
+  - connId
+  - nodeId
+  - transport
+  - connectedAt
+- name: PersonaDeviceDisconnected
+  description: Persona 的设备断开最后一个连接
+  producer: realtime-gateway
+  consumers:
+  - notification-service
+  channel: direct
+  payload_fields:
+  - accountId
+  - personaId
+  - deviceId
+  - lastNodeId
+  - disconnectedAt
+  description_detail: '通知 notification-service 切换到离线推送模式（APNs/FCM）。
+
+    仅当该 persona/device 的所有 connId 均已清除时才发布此事件。
+
+    '
+- name: TransportSwitched
+  description: 用户传输模式切换（活跃→空闲、空闲→活跃）
+  producer: realtime-gateway
+  consumers: []
+  channel: direct
+  payload_fields:
+  - personaId
+  - deviceId
+  - fromTransport
+  - toTransport
+  - switchedAt
+- name: ConnectionReplaced
+  description: Persona 超过 per-persona 连接限制，踢掉最早连接
+  producer: realtime-gateway
+  consumers: []
+  channel: direct
+  payload_fields:
+  - personaId
+  - deviceId
+  - replacedConnId
+  - newConnId
+  - nodeId

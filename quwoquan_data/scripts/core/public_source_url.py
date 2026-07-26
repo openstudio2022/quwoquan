@@ -38,7 +38,7 @@ def _host_is_public(host: str) -> bool:
     )
 
 
-def normalize_public_source_url(url: str, *, source_kind: str) -> str:
+def normalize_public_https_url(url: str) -> str:
     parsed = urlsplit(str(url or "").strip())
     host = (parsed.hostname or "").lower()
     if parsed.scheme.lower() != "https" or not _host_is_public(host):
@@ -56,6 +56,11 @@ def normalize_public_source_url(url: str, *, source_kind: str) -> str:
     canonical = urlunsplit(
         ("https", host, parsed.path or "/", urlencode(sorted(safe_query)), "")
     )
+    return canonical
+
+
+def normalize_public_source_url(url: str, *, source_kind: str) -> str:
+    canonical = normalize_public_https_url(url)
     if not source_url_matches_contract(source_kind, canonical):
         raise ValueError(f"public source URL does not match sourceKind={source_kind}")
     return canonical

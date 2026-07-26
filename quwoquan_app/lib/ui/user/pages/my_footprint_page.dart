@@ -8,6 +8,7 @@ import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/user/providers/my_footprint_provider.dart';
 
 /// 「我的足迹」只读列表页（WP1·T5）。
@@ -42,9 +43,8 @@ class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
     super.initState();
     _selectedType = _typeTabs.contains(widget.type) ? widget.type : '';
     Future<void>.microtask(
-      () => ref
-          .read(myFootprintListProvider.notifier)
-          .load(type: _selectedType),
+      () =>
+          ref.read(myFootprintListProvider.notifier).load(type: _selectedType),
     );
   }
 
@@ -58,7 +58,7 @@ class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
     return UiErrorSemantic(
       category: resolved.category,
       scope: resolved.scope,
-      title: '${UITextConstants.myFootprintTitle}暂不可用',
+      title: UITextConstants.myFootprintUnavailableTitle,
       message: resolved.message,
       secondaryMessage: resolved.secondaryMessage,
       primaryAction:
@@ -90,9 +90,7 @@ class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
     ref
         .read(contentBehaviorTrackerProvider)
         .trackClick(id, referralSource: ReferralSource.authorProfile);
-    context.push(
-      AppRoutePaths.workBrowser(workId: id, source: 'myFootprint'),
-    );
+    context.push(AppRoutePaths.workBrowser(workId: id, source: 'myFootprint'));
   }
 
   @override
@@ -238,12 +236,14 @@ class _FootprintEntryTile extends StatelessWidget {
   String _relativeTime(BuildContext context) {
     final time = DateTime.tryParse(entry.occurredAt);
     if (time == null) return '';
+    final l10n = context.l10n;
     final diff = DateTime.now().toUtc().difference(time.toUtc());
-    if (diff.inMinutes < 1) return AppStrings.justNow;
-    if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
-    if (diff.inDays < 1) return '${diff.inHours}小时前';
-    if (diff.inDays < 30) return '${diff.inDays}天前';
-    return '${time.toLocal().month}月${time.toLocal().day}日';
+    if (diff.inMinutes < 1) return l10n.justNow;
+    if (diff.inHours < 1) return l10n.minutesAgoTemplate(diff.inMinutes);
+    if (diff.inDays < 1) return l10n.hoursAgoTemplate(diff.inHours);
+    if (diff.inDays < 30) return l10n.daysAgoTemplate(diff.inDays);
+    final local = time.toLocal();
+    return l10n.monthDayTemplate(local.month, local.day);
   }
 
   @override

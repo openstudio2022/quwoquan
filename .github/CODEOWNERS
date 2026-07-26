@@ -1,0 +1,8 @@
+# 默认所有权：仓库当前唯一具名维护者。
+* @openstudio2022
+
+# 供应链、生产执行面、契约和商用验收变更必须触发 Code Owner review。
+/.github/workflows/ @openstudio2022
+/quwoquan_ops/ @openstudio2022
+/quwoquan_service/contracts/metadata/ @openstudio2022
+/specs/feature-tree/platform-ops-governance/ @openstudio2022

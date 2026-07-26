@@ -64,7 +64,7 @@ def test_missing_interest_dimension_flagged():
     manifest = {
         "entityRefs": ["/entity/地点/景区/九寨沟"],
         "normalizedEntityRefs": ["entity:景区:九寨沟"],
-        "tagRefs": ["地理/行政区/四川省"],
+        "tagRefs": ["地理/行政区/test-region-b"],
     }
     hints = build_intersection_hints(manifest)
     issues = intersection_hint_issues(hints, manifest)
@@ -91,7 +91,7 @@ def test_ungrounded_and_offcontract_and_enum_flagged():
 
 
 def _seed_and_materialize() -> Path:
-    task = "20260711--travel-article-intersection--cn-sichuan--canary-001"
+    task = "20260711--travel-article-intersection--test-region-b--pilot-001"
     from support.execution_manifest_fixture import build_execution_fixture
 
     build_execution_fixture(task)

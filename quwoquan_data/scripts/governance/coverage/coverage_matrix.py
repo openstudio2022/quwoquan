@@ -1,6 +1,6 @@
 """Coverage discovery 行政区矩阵、checkpoint、resume 与饱和证明。
 
-本模块只管理运行契约和证据；网络 adapter 由 ``coverage_discovery`` 提供。任何
+本模块只管理运行契约和证据；网络 adapter 由 ``discovery`` 提供。任何
 资源 limit 都只写入护栏配置，绝不自动等价为 exhausted/saturated。
 """
 from __future__ import annotations
@@ -16,6 +16,7 @@ from typing import Any
 
 from core import paths as _paths
 from core.runtime_policy import RuntimePolicy
+from core.source_digest import current_source_digest
 from governance.coverage.master_list import (
     admin_children,
     admin_geo_ref,
@@ -187,10 +188,12 @@ def prepare_coverage_matrix(
         raise FileExistsError(f"coverage run already exists; use --resume: {run_dir}")
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    source_digest = current_source_digest()
     revisions = {
         "adminTreeRevision": _digest(tree),
         "typeTaxonomyRevision": _digest(ENTITY_TYPES),
         "adapterRevision": "coverage-discovery-matrix",
+        "sourceDigest": source_digest.digest,
     }
     checkpoint_paths: list[str] = []
     cell_count = 0
@@ -265,6 +268,7 @@ def prepare_coverage_matrix(
                 "province": province,
                 "city": city,
                 "revisions": revisions,
+                "sourceDigest": source_digest.to_document(),
                 "guardrails": effective_guardrails,
                 "updatedAt": _now_iso(),
                 "cells": cells,
@@ -286,6 +290,7 @@ def prepare_coverage_matrix(
         "sources": selected_sources,
         "entityTypes": list(ENTITY_TYPES),
         "revisions": revisions,
+        "sourceDigest": source_digest.to_document(),
         "guardrails": effective_guardrails,
         "checkpointFiles": checkpoint_paths,
         "cellCount": cell_count,
@@ -327,6 +332,38 @@ def resumable_cells(*, run_dir: Path) -> list[dict[str, Any]]:
                 }
             )
     return pending
+
+
+def completed_discovery_shards(
+    *,
+    run_dir: Path,
+    sources: list[str],
+) -> set[tuple[str, str, str, str]]:
+    """返回已成功终结的 province/city/district/source，供进程崩溃后跳过。"""
+    successful = {"exhausted", "saturated", "empty"}
+    grouped: dict[tuple[str, str, str, str], list[str]] = {}
+    for checkpoint_path in sorted(run_dir.glob("checkpoint_*.json")):
+        checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        for cell in checkpoint.get("cells") or []:
+            identity = cell.get("identity") if isinstance(cell, dict) else None
+            if not isinstance(identity, dict):
+                continue
+            source = str(identity.get("source") or "")
+            if source not in sources:
+                continue
+            key = (
+                str(identity.get("province") or ""),
+                str(identity.get("city") or ""),
+                str(identity.get("district") or ""),
+                source,
+            )
+            grouped.setdefault(key, []).append(str(cell.get("status") or "pending"))
+    return {
+        key
+        for key, statuses in grouped.items()
+        if len(statuses) == len(ENTITY_TYPES)
+        and all(status in successful for status in statuses)
+    }
 
 
 def record_cell_page(

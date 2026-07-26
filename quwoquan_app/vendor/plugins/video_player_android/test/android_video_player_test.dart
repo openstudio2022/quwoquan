@@ -185,6 +185,122 @@ void main() {
       expect(creationOptions.httpHeaders, headers);
     });
 
+    test(
+      'native playback token is removed from requests and replays early evidence',
+      () async {
+        final pluginApi = MockAndroidVideoPlayerApi();
+        final instanceApi = MockVideoPlayerInstanceApi();
+        final eventStream = StreamController<PlatformVideoEvent>();
+        final player = AndroidVideoPlayer(
+          pluginApi: pluginApi,
+          playerApiProvider: (_) => instanceApi,
+          videoEventStreamProvider: (_) =>
+              eventStream.stream.asBroadcastStream(),
+        );
+        when(pluginApi.createForTextureView(any)).thenAnswer(
+          (_) async => TexturePlayerIds(playerId: 2, textureId: 100),
+        );
+        const token = 'opaque-native-signal-token';
+        const authorization = 'Bearer token';
+
+        await player.createWithOptions(
+          VideoCreationOptions(
+            dataSource: DataSource(
+              sourceType: DataSourceType.network,
+              uri: 'https://example.com/video.mp4',
+              httpHeaders: <String, String>{
+                AndroidVideoPlayer.nativePlaybackSignalTokenHeader: token,
+                'Authorization': authorization,
+              },
+            ),
+            viewType: VideoViewType.textureView,
+          ),
+        );
+        final verification = verify(pluginApi.createForTextureView(captureAny));
+        final creationOptions = verification.captured.single as CreationOptions;
+        expect(creationOptions.httpHeaders, <String, String>{
+          'Authorization': authorization,
+        });
+
+        eventStream.add(RenderedFirstFrameEvent(ttffMs: 321));
+        await Future<void>.delayed(Duration.zero);
+
+        final signal = await AndroidVideoPlayer.nativePlaybackSignalsFor(
+          token,
+        ).first;
+        expect(
+          signal.kind,
+          AndroidVideoNativePlaybackSignalKind.renderedFirstFrame,
+        );
+        expect(signal.ttffMs, 321);
+
+        await player.dispose(2);
+        await eventStream.close();
+      },
+    );
+
+    test('native playback stream supports session rebinding', () async {
+      final pluginApi = MockAndroidVideoPlayerApi();
+      final instanceApi = MockVideoPlayerInstanceApi();
+      final eventStream = StreamController<PlatformVideoEvent>.broadcast();
+      final player = AndroidVideoPlayer(
+        pluginApi: pluginApi,
+        playerApiProvider: (_) => instanceApi,
+        videoEventStreamProvider: (_) => eventStream.stream,
+      );
+      when(
+        pluginApi.createForTextureView(any),
+      ).thenAnswer((_) async => TexturePlayerIds(playerId: 2, textureId: 100));
+      const token = 'native-rebind-token';
+
+      await player.createWithOptions(
+        VideoCreationOptions(
+          dataSource: DataSource(
+            sourceType: DataSourceType.network,
+            uri: 'https://example.com/video.mp4',
+            httpHeaders: <String, String>{
+              AndroidVideoPlayer.nativePlaybackSignalTokenHeader: token,
+            },
+          ),
+          viewType: VideoViewType.textureView,
+        ),
+      );
+
+      final signals = AndroidVideoPlayer.nativePlaybackSignalsFor(token);
+      final firstBinding = <AndroidVideoNativePlaybackSignal>[];
+      final firstSubscription = signals.listen(firstBinding.add);
+      AndroidVideoPlayer.debugEmitNativePlaybackSignal(
+        const AndroidVideoNativePlaybackSignal(
+          sessionToken: token,
+          kind: AndroidVideoNativePlaybackSignalKind.renderedFirstFrame,
+          ttffMs: 120,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(firstBinding.single.ttffMs, 120);
+      await firstSubscription.cancel();
+
+      final reboundBinding = <AndroidVideoNativePlaybackSignal>[];
+      final reboundSubscription = signals.listen(reboundBinding.add);
+      AndroidVideoPlayer.debugEmitNativePlaybackSignal(
+        const AndroidVideoNativePlaybackSignal(
+          sessionToken: token,
+          kind: AndroidVideoNativePlaybackSignalKind.seekSettled,
+          targetPositionMs: 42000,
+          settledPositionMs: 42000,
+          settleMs: 88,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        reboundBinding.single.kind,
+        AndroidVideoNativePlaybackSignalKind.seekSettled,
+      );
+      await reboundSubscription.cancel();
+      await player.dispose(2);
+      await eventStream.close();
+    });
+
     test('create with network sets a default user agent', () async {
       final (AndroidVideoPlayer player, MockAndroidVideoPlayerApi api, _) =
           setUpMockPlayer(playerId: 1, textureId: 100);

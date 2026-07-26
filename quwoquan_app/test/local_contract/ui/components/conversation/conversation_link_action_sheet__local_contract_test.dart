@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/conversation/conversation_link_action_sheet.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 
 void main() {
@@ -36,22 +36,17 @@ void main() {
     expect(find.byType(AppBottomModalSurface), findsOneWidget);
     expect(find.byType(CupertinoActionSheet), findsNothing);
     expect(
-      find.text(UITextConstants.assistantReferenceActionTitle),
+      find.text(AssistantText.assistantReferenceActionTitle),
       findsOneWidget,
     );
     expect(find.text(url), findsOneWidget);
     expect(
-      find.text(UITextConstants.assistantReferenceOpenInBrowser),
+      find.text(AssistantText.assistantReferenceOpenInBrowser),
       findsOneWidget,
     );
-    expect(
-      find.text(UITextConstants.assistantReferenceCopyLink),
-      findsOneWidget,
-    );
+    expect(find.text(AssistantText.assistantReferenceCopyLink), findsOneWidget);
 
-    await tester.tap(
-      find.text(UITextConstants.assistantReferenceOpenInBrowser),
-    );
+    await tester.tap(find.text(AssistantText.assistantReferenceOpenInBrowser));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -86,15 +81,12 @@ void main() {
 
     expect(find.byType(AppBottomModalSurface), findsOneWidget);
     expect(
-      find.text(UITextConstants.assistantReferenceOpenInBrowser),
+      find.text(AssistantText.assistantReferenceOpenInBrowser),
       findsNothing,
     );
-    expect(
-      find.text(UITextConstants.assistantReferenceCopyLink),
-      findsOneWidget,
-    );
+    expect(find.text(AssistantText.assistantReferenceCopyLink), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.assistantReferenceCopyLink));
+    await tester.tap(find.text(AssistantText.assistantReferenceCopyLink));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 

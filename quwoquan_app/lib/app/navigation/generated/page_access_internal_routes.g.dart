@@ -14,6 +14,7 @@ abstract final class PageAccessInternalRoutes {
   static const String createPagePublishCircleSelect = 'page_internal_create_publish_circle_select';
   static const String createPageHomepageSearch = 'page_internal_create_homepage_search';
   static const String circleShellEditSettings = 'page_internal_circle_edit_settings';
+  static const String circleMembershipApproval = 'page_internal_circle_membership_approval';
   static const String circleMediaPickerCamera = 'page_internal_circle_media_camera';
   static const String circleMediaPickerGallery = 'page_internal_circle_media_gallery';
   static const String profileMediaPickerCamera = 'page_internal_profile_media_camera';

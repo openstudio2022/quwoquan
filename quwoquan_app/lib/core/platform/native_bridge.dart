@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 /// Anti-corruption boundary for app-owned native `MethodChannel` surfaces.
 ///
 /// The app currently owns five native channels:
-///  - `quwoquan/auth/one_tap`        -> already abstracted by `OneTapLoginClient`
-///                                      (core/auth/one_tap_login_channel.dart),
+///  - `quwoquan/auth/one_tap`        -> [OneTapLoginClient]
+///                                      (one_tap_login_native_bridge.dart),
 ///                                      gated by `PlatformCapabilities.oneTapLogin`.
 ///  - `quwoquan/video_editing`       -> used by `IosVideoEditingService`, gated
 ///                                      by `PlatformCapabilities.nativeVideoEditing`.
@@ -194,6 +194,142 @@ abstract interface class AssistantLocalContextBridge {
 /// [CellularNetworkGeneration]，不能直接使用 MethodChannel 或平台判断。
 abstract interface class CellularNetworkProbe {
   Future<CellularNetworkGeneration> readGeneration();
+}
+
+/// 上一次启动发生原生未捕获异常时的最小持久化标记。
+///
+/// 它刻意不携带异常消息或堆栈。
+class NativeCrashMarker {
+  const NativeCrashMarker({required this.kind});
+
+  final String kind;
+}
+
+/// 读取并原子确认 App 自有的原生异常标记。
+///
+/// 原生未捕获异常无法投递给存活的 Dart isolate，因此 Android/iOS 在继续终止
+/// 流程前持久化脱敏标记；下次启动再把它转换为标准运行时异常。
+/// 信号级崩溃仍由获批准的平台崩溃报告器负责。
+abstract interface class NativeCrashMarkerBridge {
+  Future<NativeCrashMarker?> consumePreviousCrash();
+}
+
+class MethodChannelNativeCrashMarkerBridge implements NativeCrashMarkerBridge {
+  const MethodChannelNativeCrashMarkerBridge({
+    this.channel = const MethodChannel('quwoquan/runtime/native_crash_marker'),
+  });
+
+  final MethodChannel channel;
+
+  @override
+  Future<NativeCrashMarker?> consumePreviousCrash() async {
+    try {
+      final raw = await channel.invokeMethod<Object?>('consumePreviousCrash');
+      if (raw is! Map) {
+        return null;
+      }
+      final kind = raw['kind']?.toString().trim() ?? '';
+      if (kind.isEmpty) {
+        return null;
+      }
+      return NativeCrashMarker(kind: kind);
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+}
+
+/// 上一次进程由平台判定的 ANR/hang 最小事实。
+///
+/// 平台只返回来源、发生时间和可选时长；不返回线程栈、异常文本或用户数据。
+class NativeAnrMarker {
+  const NativeAnrMarker({
+    required this.source,
+    required this.occurredAt,
+    this.durationMs,
+  });
+
+  final String source;
+  final DateTime occurredAt;
+  final int? durationMs;
+}
+
+abstract interface class NativeAnrMarkerBridge {
+  /// 读取但不删除上一进程的 ANR；只有产品遥测可靠入队后才允许确认。
+  Future<NativeAnrMarker?> readPreviousAnr();
+
+  /// 确认已可靠转存的原生事实。返回 false 时原生标记必须保留供下次启动重试。
+  Future<bool> acknowledgePreviousAnr(NativeAnrMarker marker);
+}
+
+class MethodChannelNativeAnrMarkerBridge implements NativeAnrMarkerBridge {
+  const MethodChannelNativeAnrMarkerBridge({
+    this.channel = const MethodChannel('quwoquan/runtime/native_crash_marker'),
+  });
+
+  final MethodChannel channel;
+
+  @override
+  Future<NativeAnrMarker?> readPreviousAnr() async {
+    try {
+      final raw = await channel.invokeMethod<Object?>('readPreviousAnr');
+      if (raw is! Map) {
+        return null;
+      }
+      final source = switch (raw['source']?.toString().trim()) {
+        'android_application_exit_info' => 'android_application_exit_info',
+        'ios_metric_kit' => 'ios_metric_kit',
+        _ => '',
+      };
+      final occurredAtEpochMs = switch (raw['occurredAtEpochMs']) {
+        final int value => value,
+        final num value => value.round(),
+        _ => 0,
+      };
+      if (source.isEmpty || occurredAtEpochMs <= 0) {
+        return null;
+      }
+      final rawDuration = raw['durationMs'];
+      final durationMs = switch (rawDuration) {
+        final int value when value >= 0 => value,
+        final num value when value >= 0 => value.round(),
+        _ => null,
+      };
+      return NativeAnrMarker(
+        source: source,
+        occurredAt: DateTime.fromMillisecondsSinceEpoch(
+          occurredAtEpochMs,
+          isUtc: true,
+        ),
+        durationMs: durationMs,
+      );
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  @override
+  Future<bool> acknowledgePreviousAnr(NativeAnrMarker marker) async {
+    try {
+      return await channel.invokeMethod<bool>(
+            'acknowledgePreviousAnr',
+            <String, Object?>{
+              'occurredAtEpochMs': marker.occurredAt
+                  .toUtc()
+                  .millisecondsSinceEpoch,
+            },
+          ) ??
+          false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
 }
 
 class MethodChannelCellularNetworkProbe implements CellularNetworkProbe {

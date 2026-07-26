@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
@@ -112,7 +113,7 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            UITextConstants.forwardSendToLabel,
+            ChatText.forwardSendToLabel,
             style: TextStyle(
               fontSize: AppTypography.iosBody,
               fontWeight: AppTypography.semiBold,
@@ -163,7 +164,7 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
                   child: CupertinoTextField(
                     controller: _messageController,
                     focusNode: _focusNode,
-                    placeholder: UITextConstants.forwardMessagePlaceholder,
+                    placeholder: ChatText.forwardMessagePlaceholder,
                     keyboardType: TextInputType.multiline,
                     minLines: 1,
                     maxLines: ForwardConfirmSheet.maxMessageLines,
@@ -217,7 +218,7 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
                 SizedBox(width: AppSpacing.containerMd),
                 Expanded(
                   child: _SheetActionButton(
-                    label: UITextConstants.send,
+                    label: ChatText.send,
                     foregroundColor: AppColors.white,
                     backgroundColor: AppColors.success,
                     busy: _busy,
@@ -238,7 +239,7 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
     }
     setState(() => _busy = true);
     try {
-      final repo = ref.read(chatRepositoryProvider);
+      final repo = ref.read(chatConversationRepositoryProvider);
       final conversationId = await _resolveConversationId(repo);
       final activeContext = await ref.read(activePersonaContextProvider.future);
       final note = _messageController.text.trim();
@@ -253,16 +254,16 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
               card: widget.payload.toMessageCardCommand(message: note),
               senderDisplayNameSnapshot: activeContext.displayName,
               senderAvatarUrlSnapshot: activeContext.avatarUrl,
-              personaContextVersion: _positiveVersion(
-                activeContext.contextVersion,
-              ),
+              personaContextVersion: activeContext.contextVersion > 0
+                  ? activeContext.contextVersion
+                  : null,
               clientMsgId: _clientMsgId,
             ),
           );
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.forwardSendSuccess);
+      AppToast.show(context, ChatText.forwardSendSuccess);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
@@ -287,12 +288,7 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
     }
   }
 
-  int? _positiveVersion(String raw) {
-    final parsed = int.tryParse(raw.trim());
-    return parsed != null && parsed > 0 ? parsed : null;
-  }
-
-  Future<String> _resolveConversationId(ChatRepository repo) async {
+  Future<String> _resolveConversationId(ChatConversationRepository repo) async {
     final conversationId = widget.recipient.conversationId.trim();
     if (conversationId.isNotEmpty) {
       return conversationId;
@@ -300,7 +296,7 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
     final userId = widget.recipient.userId.trim();
     if (userId.isEmpty ||
         widget.recipient.kind == AppForwardRecipientKind.group) {
-      throw StateError(UITextConstants.forwardCardUnavailable);
+      throw StateError(ChatText.forwardCardUnavailable);
     }
     final created = await repo.createConversation(
       type: 'direct',
@@ -308,7 +304,7 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
     );
     final createdId = created.conversationId.trim();
     if (createdId.isEmpty) {
-      throw StateError(UITextConstants.forwardCardUnavailable);
+      throw StateError(ChatText.forwardCardUnavailable);
     }
     return createdId;
   }
@@ -433,7 +429,7 @@ class _InlineSendButton extends StatelessWidget {
         child: busy
             ? const CupertinoActivityIndicator()
             : Text(
-                UITextConstants.send,
+                ChatText.send,
                 style: TextStyle(
                   color: AppColors.white,
                   fontSize: AppTypography.iosBody,

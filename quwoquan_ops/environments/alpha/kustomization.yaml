@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - ../../../quwoquan_service/services/assistant-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/chat-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/circle-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/content-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/entity-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/integration-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/notification-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/product-ops-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/realtime-gateway/environments/alpha/deploy
+  - ../../../quwoquan_service/services/recommendation-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/rtc-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/search-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/tag-service/environments/alpha/deploy
+  - ../../../quwoquan_service/services/user-service/environments/alpha/deploy
+  - ../../external/coturn/environments/alpha
+  - ../../external/livekit/environments/alpha
+  - ../../../quwoquan_service/control-plane/platform-ops/environments/alpha/deploy

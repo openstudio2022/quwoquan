@@ -15,7 +15,6 @@ from typing import Any, Iterable, Mapping
 OBJECT_JOB_SCHEMA = "quwoquan.object_job"
 AGENT_RESULT_ENVELOPE_SCHEMA = "quwoquan.agent_result_envelope"
 GATE_VERDICT_SCHEMA = "quwoquan.gate_verdict"
-TOKEN_LEDGER_SCHEMA = "quwoquan.token_ledger"
 
 PASSING_GATE_DECISIONS = {"passed", "approved"}
 FINAL_GATE_DECISIONS = {"passed", "approved", "failed", "manual_required", "rejected"}
@@ -217,52 +216,3 @@ def build_agent_result_envelope(
     }
     payload["envelopeId"] = stable_failure_fingerprint([json.dumps(payload, sort_keys=True, ensure_ascii=False)])
     return payload
-
-
-def build_token_ledger_entry(
-    *,
-    execution_id: str,
-    job_id: str,
-    run_id: str,
-    creator_profile_id: str,
-    content_type: str,
-    budget_tokens: int,
-    used_tokens: int,
-    cache_hits: Mapping[str, bool] | None = None,
-    cost_usd: float = 0.0,
-    provider: str = "",
-    model: str = "",
-) -> dict[str, Any]:
-    """账本条目（P4 补强）：runId 必填，token 用量必须能关联到具体 agent run。"""
-    exceeded = int(budget_tokens) > 0 and int(used_tokens) > int(budget_tokens)
-    return {
-        "schema": TOKEN_LEDGER_SCHEMA,
-        "executionId": execution_id,
-        "jobId": job_id,
-        "runId": run_id,
-        "provider": provider,
-        "model": model,
-        "creatorProfileId": creator_profile_id,
-        "contentType": content_type,
-        "budgetTokens": int(budget_tokens),
-        "usedTokens": int(used_tokens),
-        "costUsd": float(cost_usd),
-        "cacheHits": dict(cache_hits or {}),
-        "budgetExceeded": exceeded,
-        "unitPassedCostUsd": None,
-    }
-
-
-def validate_token_ledger_entry(entry: Mapping[str, Any]) -> list[str]:
-    issues: list[str] = []
-    if entry.get("schema") != TOKEN_LEDGER_SCHEMA:
-        issues.append("tokenLedger.schema must be quwoquan.token_ledger")
-    for key in ("executionId", "jobId", "runId", "creatorProfileId", "contentType"):
-        _expect_string(entry, key, issues, prefix="tokenLedger")
-    budget = int(entry.get("budgetTokens") or 0)
-    used = int(entry.get("usedTokens") or 0)
-    if budget < 0 or used < 0:
-        issues.append("tokenLedger budgetTokens/usedTokens must be >= 0")
-    if budget > 0 and used > budget and entry.get("budgetExceeded") is not True:
-        issues.append("tokenLedger.budgetExceeded must be true when usedTokens exceeds budgetTokens")
-    return issues

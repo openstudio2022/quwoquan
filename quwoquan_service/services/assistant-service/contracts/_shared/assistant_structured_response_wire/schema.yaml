@@ -1,0 +1,29 @@
+# `AssistantRunResponse.structuredResponse` 中与端云对齐优先收口的子树（qualityMetrics / dialogueRuntime / uiReferences）。
+# 编排层仍可向 Map 写入扩展键；`qualityMetrics` / `dialogueRuntime` 使用 type: map 以保留未知键往返。
+# 下列标量与 `qualityMetrics` 内常用键同源；客户端经 [assistantStructuredWireFromStructuredRoot] 从 structured root 投影嵌套 map（单键 canonical，禁止多键别名）。
+dart_class: AssistantStructuredResponseWire
+library_path: assistant/contracts/assistant_structured_response_wire.dart
+output_path: assistant/generated/contracts/assistant_structured_response_wire.g.dart
+contract: assistant_structured_response_wire
+kind: runtime_wire_contract
+imports:
+  - package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart
+fields:
+  - { name: qualityMetrics, type: map, default: {} }
+  - { name: decisionParseSuccess, type: bool, default: true }
+  - { name: hardCutSource, type: string, default: '' }
+  - { name: answerGateReady, type: bool, default: false }
+  - { name: answerGateReasonCode, type: string, default: '' }
+  # 与 dialogueRuntime['domainId'] 同源；客户端投影见 assistantStructuredWireFromStructuredRoot。
+  - { name: dialogueDomainId, type: string, default: '' }
+  - { name: dialogueRuntime, type: map, default: {} }
+  - { name: uiReferences, type: list<object>, ref: assistant_ui_reference, default: [] }
+subcontracts:
+  assistant_ui_reference:
+    class_name: AssistantUiReferenceWireDto
+    fields:
+      - { name: destination, type: object, ref: CitationDestination, required: true }
+      - { name: title, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: snippet, type: string, default: '' }
+      - { name: label, type: string, default: '' }

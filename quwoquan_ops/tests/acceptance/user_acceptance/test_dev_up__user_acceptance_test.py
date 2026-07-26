@@ -25,11 +25,14 @@ from quwoquan_ops.cli.lib.dev_up import (
     runtime_env_for_dev_env,
     target_process_root,
 )
-from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
+from quwoquan_ops.cli.lib.output_paths import (
+    certificate_export_dir,
+    legal_static_deployment_package_dir,
+)
 from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
 from quwoquan_ops.cli.lib.local_media_origin import LocalMediaOriginHandler
 from quwoquan_ops.cli.lib.mock_public_plane import MockPublicPlaneHandler
-from quwoquan_ops.cli.stackctl import _health_checks_for_target, _seeded_media_surface_tier_command
+from quwoquan_ops.cli.stackctl import _health_checks_for_target, _seeded_media_surface_profile_command
 
 ROOT = Path(__file__).resolve().parents[4]
 _ASSISTANT_BETA_GATEWAY_PATH = (
@@ -348,11 +351,30 @@ class DevUpTest(unittest.TestCase):
             "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
             video_check["url"],
         )
+        cover_check = next(
+            item
+            for item in checks
+            if item["name"] == "media-public-media-canary-seek-125s-cover"
+        )
+        self.assertNotIn("headers", cover_check)
+        self.assertNotIn("expectedStatus", cover_check)
+        self.assertEqual(cover_check["expectedContentTypePrefix"], "image/webp")
+        preview_manifest_check = next(
+            item
+            for item in checks
+            if item["name"]
+            == "media-public-media-canary-seek-125s-preview-manifest"
+        )
+        self.assertNotIn("headers", preview_manifest_check)
+        self.assertEqual(
+            preview_manifest_check["expectedContentTypePrefix"],
+            "application/json",
+        )
 
     def test_stackctl_t4_blocks_on_full_seeded_media_surface(self) -> None:
         for env_name in ("alpha", "beta", "gamma"):
             with self.subTest(env_name=env_name):
-                command = _seeded_media_surface_tier_command(env_name, f"{env_name}-local")
+                command = _seeded_media_surface_profile_command(env_name, f"{env_name}-local")
                 self.assertIsNotNone(command)
                 assert command is not None
                 argv = command["argv"]
@@ -410,19 +432,20 @@ class DevUpTest(unittest.TestCase):
             ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
         ).read_text(encoding="utf-8")
         self.assertIn("tasks.withType<FlutterTask>()", build_gradle)
-        self.assertIn('"APP_RUNTIME_ENV" to "alpha"', build_gradle)
+        self.assertIn('loadRuntimePackageDartDefines("alpha")', build_gradle)
         self.assertIn(
-            '"CLOUD_GATEWAY_BASE_URL" to "https://localhost:17000"',
+            '"CLOUD_GATEWAY_BASE_URL"',
             build_gradle,
         )
         self.assertIn(
-            '"APP_LEGAL_BASE_URL" to "https://localhost:17000/legal"',
+            '"APP_LEGAL_BASE_URL"',
             build_gradle,
         )
         self.assertIn(
-            '"MEDIA_IMAGE_CDN_BASE_URL" to "https://localhost:17100"',
+            '"MEDIA_IMAGE_CDN_BASE_URL"',
             build_gradle,
         )
+        self.assertIn("rewriteAlphaLocalTransport", build_gradle)
         self.assertIn("prepareAndroidLocalAlphaStack", build_gradle)
         self.assertIn(
             'environment("QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP", "skip")',
@@ -515,6 +538,23 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("start_alpha_mock_stack.sh\" up", prepare_script)
         self.assertIn("QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip", prepare_script)
 
+    def test_local_device_builds_package_gateway_and_object_storage_trust(self) -> None:
+        ios_bundle = (
+            ROOT
+            / "quwoquan_app"
+            / "scripts"
+            / "ios"
+            / "prepare_local_https_trust_bundle.sh"
+        ).read_text(encoding="utf-8")
+        android_build = (
+            ROOT / "quwoquan_app" / "android" / "app" / "build.gradle.kts"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("materialize_local_target_trust_bundle", ios_bundle)
+        self.assertIn("alphaLocalObjectStorageCaCert", android_build)
+        self.assertIn("alphaLocalAppTrustBundle", android_build)
+        self.assertIn("materialize-app-trust-bundle", android_build)
+
     def test_android_local_network_security_forbids_cleartext(self) -> None:
         debug_config = (
             ROOT
@@ -554,7 +594,7 @@ class DevUpTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("LocalDevHttpsTrust.installForCurrentRuntime()", app_bootstrap)
         self.assertIn("_installLocalDevHttpsTrustBeforeMediaClients()", app_bootstrap)
-        self.assertIn("startupPrerequisites: startupPrerequisites", app_bootstrap)
+        self.assertIn("authNetworkPrerequisites: kReleaseMode", app_bootstrap)
         self.assertNotIn("_installLocalDevHttpsTrustAfterFirstFrame", app_bootstrap)
         self.assertIn(
             "SecurityContext.defaultContext.setTrustedCertificatesBytes",
@@ -640,14 +680,19 @@ class DevUpTest(unittest.TestCase):
             ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
         ).read_text(encoding="utf-8")
         gamma_compose = (
-            ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+            ROOT
+            / "quwoquan_service/services/notification-service/deploy/compose.yaml"
+        ).read_text(encoding="utf-8")
+        assistant_compose = (
+            ROOT
+            / "quwoquan_service/services/assistant-service/deploy/compose.yaml"
         ).read_text(encoding="utf-8")
 
         self.assertIn(
             'export LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE=', gamma_script
         )
         self.assertIn(
-            "copy_service_package_config notification-service notification-service",
+            'copy_service_package_config "$service"',
             gamma_script,
         )
         self.assertIn("  notification-service\n)", gamma_script)
@@ -661,12 +706,14 @@ class DevUpTest(unittest.TestCase):
         )
         self.assertIn("  notification-service:\n", gamma_compose)
         self.assertIn(
-            'LOCAL_GAMMA_NOTIFICATION_PORT:-19320}:18087', gamma_compose
+            'QWQ_COMPOSE_NOTIFICATION_PORT:-19320}:18087', gamma_compose
         )
         self.assertIn(
             "ASSISTANT_NOTIFICATION_BASE_URL: \"http://notification-service:18087\"",
-            gamma_compose,
+            assistant_compose,
         )
+        self.assertIn('NOTIFICATION_REDIS_GENERAL_DB: "1"', gamma_compose)
+        self.assertIn('NOTIFICATION_REDIS_REALTIME_DB: "4"', gamma_compose)
 
     def test_gamma_local_search_backfill_blocks_incomplete_read_model(self) -> None:
         gamma_script = (
@@ -773,7 +820,20 @@ class DevUpTest(unittest.TestCase):
             "legal_static_root": MockPublicPlaneHandler.legal_static_root,
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            payload = legal_static.build_package("alpha", output_root=Path(tmp_dir))
+            deploy_root = Path(tmp_dir) / "deploy"
+            with mock.patch.dict(
+                "os.environ",
+                {
+                    "QWQ_OUTPUT_ROOT": str(Path(tmp_dir) / ".qwq_output"),
+                    "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
+                },
+                clear=False,
+            ):
+                package_root = legal_static_deployment_package_dir("alpha")
+                payload = legal_static.build_package(
+                    "alpha",
+                    output_root=package_root,
+                )
             MockPublicPlaneHandler.mode = "api"
             MockPublicPlaneHandler.runtime_env = "alpha"
             MockPublicPlaneHandler.legal_static_root = str(
@@ -810,18 +870,29 @@ class DevUpTest(unittest.TestCase):
                     "legal_static_root"
                 ]
 
-    def test_alpha_mock_public_plane_default_legal_root_uses_output_layout(self) -> None:
+    def test_alpha_mock_public_plane_default_legal_root_uses_deployment_workspace(self) -> None:
         previous_root = MockPublicPlaneHandler.legal_static_root
         with tempfile.TemporaryDirectory() as tmp_dir:
-            output_root = Path(tmp_dir)
-            payload = legal_static.build_package("alpha", output_root=output_root)
-            package_root = Path(payload["packageDir"]).parent
+            deploy_root = Path(tmp_dir) / "deploy"
+            with mock.patch.dict(
+                "os.environ",
+                {
+                    "QWQ_OUTPUT_ROOT": str(Path(tmp_dir) / ".qwq_output"),
+                    "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
+                },
+                clear=False,
+            ):
+                package_root = legal_static_deployment_package_dir("alpha")
+                legal_static.build_package(
+                    "alpha",
+                    output_root=package_root,
+                )
             handler = MockPublicPlaneHandler.__new__(MockPublicPlaneHandler)
             handler.runtime_env = "alpha"
             MockPublicPlaneHandler.legal_static_root = ""
             try:
                 with mock.patch(
-                    "quwoquan_ops.cli.lib.mock_public_plane.legal_static_release_dir",
+                    "quwoquan_ops.cli.lib.mock_public_plane.legal_static_deployment_package_dir",
                     return_value=package_root,
                 ):
                     self.assertEqual(

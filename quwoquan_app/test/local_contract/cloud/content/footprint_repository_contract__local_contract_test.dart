@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
+import '../../../support/cloud_services/content/mock_content_repository.dart';
 
 /// 我的足迹 · Mock 契约（T1/T2）：
 /// - fixture footprint_core 单一真相源（5 条：viewed×2 / liked / commented / shared）。

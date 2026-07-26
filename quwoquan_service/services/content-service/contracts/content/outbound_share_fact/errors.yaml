@@ -1,0 +1,10 @@
+entity: OutboundShareFact
+domain: CONTENT
+description: 'OutboundShareFact 无对象专属错误码：append 复用共享错误码
+
+  （invalid_argument/idempotency_conflict/storage_write_failed），
+
+  唯一定义于 content/content/post/errors.yaml。本文件显式声明空集，防止误判为登记缺失。
+
+  '
+errors: []

@@ -22,9 +22,14 @@ from quwoquan_ops.cli.lib.environment_topology import (
     get_environment,
     load_environment_topology,
 )
+from quwoquan_ops.cli.lib.output_paths import (
+    deployment_target_for_env,
+    deployment_target_path,
+    remove_deployment_tree,
+    resolve_deployment_target_path,
+)
 
-DEFAULT_MANIFEST = ROOT / "quwoquan_service" / "services" / "legal-static" / "source" / "manifest.yaml"
-DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output" / "env"
+DEFAULT_MANIFEST = ROOT / "quwoquan_service" / "static" / "legal" / "manifest.yaml"
 LEGAL_STATIC_SOURCE_SCHEMA = "legal-static"
 REQUIRED_DOCUMENTS = {
     "user-agreement",
@@ -56,9 +61,23 @@ PLACEHOLDER_TOKENS = (
 )
 
 
+def _resolve_package_root(
+    env_name: str,
+    *,
+    output_root: Path | None,
+    target: str = "",
+) -> Path:
+    target_name = deployment_target_for_env(env_name, target=target)
+    return resolve_deployment_target_path(
+        output_root,
+        target=target_name,
+        segments=("packages", "legal-static"),
+    )
+
+
 @contextmanager
-def _package_lock(output_root: Path, env_name: str, *, exclusive: bool) -> Any:
-    lock_root = output_root / env_name / "local" / "legal-static" / "process"
+def _package_lock(package_root: Path, *, exclusive: bool) -> Any:
+    lock_root = package_root / ".locks"
     lock_root.mkdir(parents=True, exist_ok=True)
     lock_path = lock_root / "package.lock"
     with lock_path.open("w", encoding="utf-8") as handle:
@@ -240,20 +259,21 @@ def validate_manifest(
     return manifest, issues
 
 
-def _legal_static_root(output_root: Path, env_name: str) -> Path:
-    return output_root / env_name / "release" / "legal-static"
+def _legal_static_root(package_root: Path, env_name: str) -> Path:
+    return package_root
 
 
-def _package_dir(output_root: Path, env_name: str, version: str) -> Path:
-    return _legal_static_root(output_root, env_name) / version
-
-
-def _refresh_current_pointer(env_root: Path, package_dir: Path) -> str:
+def _refresh_current_pointer(
+    env_root: Path,
+    package_dir: Path,
+    *,
+    target_name: str,
+) -> str:
     current = env_root / "current"
     if current.is_symlink() or current.is_file():
         current.unlink()
     elif current.exists():
-        shutil.rmtree(current)
+        remove_deployment_tree(target_name, "packages", "legal-static", "current")
     try:
         os.symlink(package_dir.name, current, target_is_directory=True)
         return relpath(current)
@@ -266,7 +286,8 @@ def build_package(
     env_name: str,
     *,
     manifest_path: Path = DEFAULT_MANIFEST,
-    output_root: Path = DEFAULT_OUTPUT_ROOT,
+    output_root: Path | None = None,
+    target: str = "",
 ) -> dict[str, Any]:
     manifest, issues = validate_manifest(env_name, manifest_path=manifest_path)
     if issues:
@@ -277,10 +298,26 @@ def build_package(
             "exitCode": 1,
         }
     version = str(manifest["currentVersion"])
-    with _package_lock(output_root, env_name, exclusive=True):
-        package_dir = _package_dir(output_root, env_name, version)
+    target_name = deployment_target_for_env(env_name, target=target)
+    package_root = _resolve_package_root(
+        env_name,
+        output_root=output_root,
+        target=target,
+    )
+    with _package_lock(package_root, exclusive=True):
+        package_dir = deployment_target_path(
+            target_name,
+            "packages",
+            "legal-static",
+            version,
+        )
         if package_dir.exists():
-            shutil.rmtree(package_dir)
+            remove_deployment_tree(
+                target_name,
+                "packages",
+                "legal-static",
+                version,
+            )
         public_root = package_dir / "public"
         public_legal_root = public_root / "legal"
         public_legal_root.mkdir(parents=True, exist_ok=True)
@@ -340,7 +377,7 @@ def build_package(
             "version": version,
             "currentVersion": version,
             "legalBaseUrl": legal_base_url,
-            "artifactRoot": relpath(_legal_static_root(output_root, env_name)),
+            "artifactRoot": relpath(_legal_static_root(package_root, env_name)),
             "packageDir": relpath(package_dir),
             "stableUrls": {doc["slug"]: doc["stableUrl"] for doc in docs_payload},
             "versionedUrls": {doc["slug"]: doc["versionUrl"] for doc in docs_payload},
@@ -359,7 +396,11 @@ def build_package(
             if path.is_file() and path.name != "checksums.json":
                 checksums[str(path.relative_to(package_dir))] = _sha256_file(path)
         write_json(package_dir / "checksums.json", checksums)
-        current_pointer = _refresh_current_pointer(_legal_static_root(output_root, env_name), package_dir)
+        current_pointer = _refresh_current_pointer(
+            _legal_static_root(package_root, env_name),
+            package_dir,
+            target_name=target_name,
+        )
     return {
         "status": "ok",
         "env": env_name,
@@ -376,13 +417,31 @@ def verify_package(
     env_name: str,
     *,
     manifest_path: Path = DEFAULT_MANIFEST,
-    output_root: Path = DEFAULT_OUTPUT_ROOT,
+    output_root: Path | None = None,
     package_root: Path | None = None,
+    target: str = "",
 ) -> dict[str, Any]:
     manifest, issues = validate_manifest(env_name, manifest_path=manifest_path)
     version = str(manifest.get("currentVersion") or "")
-    with _package_lock(output_root, env_name, exclusive=False):
-        package_dir = package_root or _package_dir(output_root, env_name, version)
+    resolved_package_root = _resolve_package_root(
+        env_name,
+        output_root=output_root,
+        target=target,
+    )
+    target_name = deployment_target_for_env(env_name, target=target)
+    with _package_lock(resolved_package_root, exclusive=False):
+        expected_package_dir = deployment_target_path(
+            target_name,
+            "packages",
+            "legal-static",
+            version,
+        )
+        if package_root is not None and package_root.expanduser().resolve() != expected_package_dir:
+            raise ValueError(
+                "legal-static package root must resolve to its target-scoped "
+                f"workspace: expected {expected_package_dir}"
+            )
+        package_dir = package_root or expected_package_dir
         return _verify_package_locked(
             env_name,
             manifest=manifest,
@@ -470,7 +529,12 @@ def parse_args() -> argparse.Namespace:
         sub = subparsers.add_parser(command)
         sub.add_argument("--env", choices=ENVIRONMENTS, required=True)
         sub.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
-        sub.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
+        sub.add_argument(
+            "--output-root",
+            default="",
+            help="external legal-static package root; defaults to QWQ_DEPLOY_WORK_ROOT",
+        )
+        sub.add_argument("--target", default="")
         sub.add_argument("--package-root", default="")
     return parser.parse_args()
 
@@ -478,18 +542,15 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     manifest_path = Path(args.manifest)
-    output_root = Path(args.output_root)
-    if not output_root.is_absolute():
-        output_root = ROOT / output_root
+    output_root = Path(args.output_root) if args.output_root else None
     package_root = Path(args.package_root) if args.package_root else None
-    if package_root is not None and not package_root.is_absolute():
-        package_root = ROOT / package_root
 
     if args.command == "package":
         payload = build_package(
             args.env,
             manifest_path=manifest_path,
             output_root=output_root,
+            target=args.target,
         )
     elif args.command == "verify-package":
         payload = verify_package(
@@ -497,6 +558,7 @@ def main() -> int:
             manifest_path=manifest_path,
             output_root=output_root,
             package_root=package_root,
+            target=args.target,
         )
     else:
         manifest, issues = validate_manifest(args.env, manifest_path=manifest_path)

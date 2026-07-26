@@ -1,20 +1,61 @@
-# L3 子特性：sse-server-and-change-stream
+# L3 Story：SSE 服务端与变更流 (`sse-server-and-change-stream`)
 
-## 功能说明
-- **SSEServer**：管理 SSE 连接（Connect/Push/Disconnect/Broadcast），按 userId 路由推送；支持 Last-Event-ID 续传。
-- **ChangeStreamWatcher**：监听 MongoDB 集合变更（Change Stream），将变更事件转换为 SSE 推送或内部事件。
-- **HTTP 集成**：GET /stream/events 注册 SSE 连接，需认证。
+> 所属能力：[`runtime-streaming`](../spec.md)
 
-## 实现要点
-- **SSEServer**：连接池按 userId 索引；Push 时广播给该用户所有连接。
-- **Change Stream**：监听目标集合（如 messages、assistant_events）；resume token 持久化支持断点续传。
-- **事件映射**：Change Stream 文档 → events.yaml 定义的事件类型 → SSE 推送。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-## 约束
-- SSE 连接需认证，推送内容按 userId 隔离。
-- Change Stream 监听集合需在 event_catalog 登记。
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-## 验收标准
-- A1：SSE 连接建立 + 推送 + Change Stream 触发端到端正确。
-- A3：连接数上限可配置。
-- A8：SSE server + Change Stream watcher 集成测试。
+## 1. 用户价值
+
+作为开发、测试或运维角色，
+我希望以可恢复游标和心跳交付 SSE 事件，断线重连不重复终态且不丢失可重放事件，
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- “SSE 服务端与变更流”的输入、可观察主路径、失败语义以及与父能力的交接。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 SSE 服务端与变更流
+
+- 以可恢复游标和心跳交付 SSE 事件，断线重连不重复终态且不丢失可重放事件。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 SSE 服务端与变更流
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“SSE 服务端与变更流”对应的公开行为。
+- THEN 以可恢复游标和心跳交付 SSE 事件，断线重连不重复终态且不丢失可重放事件。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-streaming`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 SSE 服务端与变更流 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“SSE 服务端与变更流”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

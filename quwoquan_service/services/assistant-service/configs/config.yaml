@@ -1,4 +1,0 @@
-service:
-  name: assistant-service
-  http:
-    addr: ":18087"

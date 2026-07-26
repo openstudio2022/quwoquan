@@ -1,42 +1,26 @@
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class CreateCircleService {
   const CreateCircleService();
 
   Future<List<CreateCircleOption>> listCircles(
-    CircleRepository circleRepository,
+    CircleQueryReader circleQuery,
   ) async {
-    try {
-      final result = await circleRepository.listCircles(limit: 20);
-      if (result.isNotEmpty) {
-        final out = <CreateCircleOption>[];
-        for (final dto in result) {
-          if (dto.id.isEmpty || dto.name.isEmpty) continue;
-          out.add(CreateCircleOption.fromCircleDto(dto));
-        }
-        if (out.isNotEmpty) return out;
-      }
-    } catch (_) {
-      return const <CreateCircleOption>[];
-    }
-    return const <CreateCircleOption>[];
-  }
-}
-
-List<CreateCircleOption> publishFlowRecommendedCircleOptions(
-  CircleRepository circles,
-) {
-  final dtos = circles.publishFlowRecommendedCircles();
-  if (dtos.isEmpty) return const <CreateCircleOption>[];
-  const reasons = <String, String>{'rec-city': '与你兴趣相似', 'rec-run': '同城热门'};
-  return dtos
-      .map(
-        (dto) => CreateCircleOption.fromCircleDto(
-          dto,
-          isJoined: false,
-          recommendationReason: reasons[dto.id],
+    final result = await circleQuery.list(const CircleListQuery(limit: 20));
+    final out = <CreateCircleOption>[];
+    for (final circle in result.items) {
+      if (circle.circleId.isEmpty || circle.name.isEmpty) continue;
+      out.add(
+        CreateCircleOption(
+          id: circle.circleId,
+          name: circle.name,
+          memberCount: circle.memberCount,
+          postCount: circle.postCount,
+          coverUrl: circle.coverUrl,
         ),
-      )
-      .toList(growable: false);
+      );
+    }
+    return out;
+  }
 }

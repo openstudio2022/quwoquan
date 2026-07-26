@@ -1,0 +1,23 @@
+kind: append_only_fact
+description: ExternalInteractionAttemptFact 的领域对象契约。
+identity:
+  fields:
+  - attemptId
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: request
+  on_delete: retain
+  reference_fields:
+  - requestId
+  target_object: integration.ExternalInteraction
+local_identity_reasons:
+  providerRequestId: immutable correlation or idempotency key scoped to this fact or command; it is not
+    a business-object reference

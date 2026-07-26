@@ -1,0 +1,94 @@
+fields:
+- name: eventId
+  type: string
+  constraints:
+  - PK
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: postId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+  reference: true
+- name: actorDimension
+  type: enum
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: append_only_fact
+  reference: true
+- name: actorId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  role: append_only_fact
+  reference: true
+- name: channel
+  type: enum
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: destinationKind
+  type: enum
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: append_only_fact
+- name: destinationDigest
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  role: append_only_fact
+- name: referralId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: idempotencyKey
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  role: append_only_fact
+- name: occurredAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact

@@ -51,6 +51,55 @@ void main() {
     expect(log, ['longpoll:start']);
   });
 
+  test(
+    'transport lifecycle records catalog-compatible connect result',
+    () async {
+      final telemetry = <Map<String, Object?>>[];
+      final delegate = RemoteRealtimeConnectionDelegate(
+        read: _unsupportedRead,
+        currentUserIdResolver: () => 'user-42',
+        authTokenProvider: const _TokenProvider(),
+        config: const RealtimeConfig(
+          wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
+          gatewayBaseUrl: 'http://127.0.0.1:17000',
+          longPollHoldSec: 1,
+        ),
+        telemetryRecorder:
+            ({
+              required transport,
+              required result,
+              required durationMs,
+              failReasonCode,
+            }) async {
+              telemetry.add(<String, Object?>{
+                'transport': transport,
+                'result': result,
+                'durationMs': durationMs,
+                'failReasonCode': failReasonCode,
+              });
+            },
+        longPollFactory:
+            ({
+              required config,
+              required authTokenProvider,
+              required onEvents,
+            }) => _RecordingLongPollTransport(
+              config: config,
+              authTokenProvider: authTokenProvider,
+              onEvents: onEvents,
+              log: <String>[],
+            ),
+      );
+
+      delegate.onAppForeground();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(telemetry, hasLength(1));
+      expect(telemetry.single['transport'], 'long_poll');
+      expect(telemetry.single['result'], 'started');
+    },
+  );
+
   test('remote active switches from long poll to websocket', () async {
     final log = <String>[];
     final delegate = RemoteRealtimeConnectionDelegate(

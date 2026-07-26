@@ -309,11 +309,11 @@ def parse_startup_sequence_log(raw: str) -> dict[str, Any]:
     )
     return {
         "events": events,
-        "motionSpecVersion": next(
+        "motionSpec": next(
             (
-                event.get("motionSpecVersion")
+                event.get("motionSpec")
                 for event in reversed(events)
-                if event.get("motionSpecVersion") is not None
+                if event.get("motionSpec") is not None
             ),
             None,
         ),
@@ -350,6 +350,8 @@ def _flutter_safe_terminal_confirmed(raw_log: str) -> bool:
     return (
         "android_startup_safe_terminal_race_dismissed" in raw_log
         or "ios_startup_safe_terminal_race_dismissed" in raw_log
+        or "android_startup_safe_terminal reportedElapsedMs=" in raw_log
+        or "ios_startup_safe_terminal reportedElapsedMs=" in raw_log
         or "android_startup_safe_terminal elapsedMs=" in raw_log
         or "ios_startup_safe_terminal elapsedMs=" in raw_log
         or '"eventName":"startup_safe_terminal"' in raw_log
@@ -357,22 +359,81 @@ def _flutter_safe_terminal_confirmed(raw_log: str) -> bool:
     )
 
 
+def extract_dart_startup_attempts(raw_log: str) -> list[dict[str, Any]]:
+    """Extract one bounded record for each Dart isolate startup attempt."""
+
+    attempts: list[dict[str, Any]] = []
+    pattern = re.compile(
+        r"(?:android|ios)_dart_startup_attempt "
+        r"attemptId=(?P<attemptId>[A-Za-z0-9_-]+)"
+        r"(?:\s+launchMode=(?P<launchMode>[A-Za-z0-9_-]+))?"
+        r"(?:\s+hotRestart=(?P<hotRestart>true|false))?"
+        r"(?:\s+configurationState=(?P<configurationState>[A-Za-z0-9_-]+))?"
+        r"(?:\s+missingDefineKeys=(?P<missingDefineKeys>[A-Z0-9_,]+))?"
+    )
+    for match in pattern.finditer(raw_log):
+        attempts.append(
+            {
+                key: value
+                for key, value in match.groupdict().items()
+                if value is not None
+            }
+        )
+    return attempts
+
+
 def extract_startup_watchdog_evidence(raw_log: str) -> dict[str, Any]:
     """Emit the same attempt-level fields for Android and iOS probe evidence."""
 
     renderer = re.search(
-        r"(?:android|ios)_flutter_first_frame elapsedMs=(\d+).*source=renderer",
+        r"(?:android|ios)_flutter_first_frame elapsedMs=(\d+).*source=\S+",
         raw_log,
     )
     safe_terminal = re.search(
-        r"(?:android|ios)_startup_safe_terminal elapsedMs=(\d+)",
+        r"(?:android|ios)_startup_safe_terminal (?:elapsedMs|reportedElapsedMs)=(\d+)",
         raw_log,
     )
-    attempt = re.search(r'"attemptId"\s*:\s*"([^"]+)"', raw_log)
+    reported_safe_terminal = re.search(
+        r"(?:android|ios)_startup_safe_terminal reportedElapsedMs=(\d+)",
+        raw_log,
+    )
+    native_received_safe_terminal = re.search(
+        r"(?:android|ios)_startup_safe_terminal .*?receivedMs=(\d+)",
+        raw_log,
+    )
+    dart_attempt = re.search(
+        r"(?:android|ios)_dart_startup_attempt "
+        r"attemptId=([A-Za-z0-9_-]+)"
+        r"(?:\s+launchMode=([A-Za-z0-9_-]+))?"
+        r"(?:\s+hotRestart=(true|false))?"
+        r"(?:\s+configurationState=([A-Za-z0-9_-]+))?"
+        r"(?:\s+missingDefineKeys=([A-Z0-9_,]+))?",
+        raw_log,
+    )
+    attempt = re.search(
+        r'(?:attemptId=|"attemptId"\s*:\s*")([A-Za-z0-9_-]+)',
+        raw_log,
+    )
+    failure_code = re.search(
+        r'(?:failureCode=|"failureCode"\s*:\s*")([A-Za-z0-9_.-]+)',
+        raw_log,
+    )
     race_dismissed = "startup_safe_terminal_race_dismissed" in raw_log
     return {
         "rendererFirstFrameMs": int(renderer.group(1)) if renderer else None,
         "safeTerminalMs": int(safe_terminal.group(1)) if safe_terminal else None,
+        "reportedSafeTerminalMs": (
+            int(reported_safe_terminal.group(1))
+            if reported_safe_terminal
+            else int(safe_terminal.group(1))
+            if safe_terminal
+            else None
+        ),
+        "nativeReceivedSafeTerminalMs": (
+            int(native_received_safe_terminal.group(1))
+            if native_received_safe_terminal
+            else None
+        ),
         "watchdogOutcome": (
             "race_dismissed"
             if race_dismissed
@@ -381,8 +442,31 @@ def extract_startup_watchdog_evidence(raw_log: str) -> dict[str, Any]:
             else "not_triggered"
         ),
         "canonicalTerminal": None,
-        "attemptId": attempt.group(1) if attempt else None,
+        "attemptId": dart_attempt.group(1) if dart_attempt else attempt.group(1) if attempt else None,
+        "launchMode": dart_attempt.group(2) if dart_attempt else None,
+        "hotRestart": (
+            dart_attempt.group(3) == "true"
+            if dart_attempt and dart_attempt.group(3) is not None
+            else None
+        ),
+        "runtimeConfigurationState": dart_attempt.group(4) if dart_attempt else None,
+        "missingDefineKeys": dart_attempt.group(5) if dart_attempt else None,
+        "failureCode": failure_code.group(1) if failure_code else "",
     }
+
+
+def _safe_terminal_within_deadline(
+    evidence: dict[str, Any],
+    deadline_ms: int,
+) -> bool:
+    reported = evidence.get("reportedSafeTerminalMs")
+    received = evidence.get("nativeReceivedSafeTerminalMs")
+    return (
+        isinstance(reported, int)
+        and reported <= deadline_ms
+        and isinstance(received, int)
+        and received <= deadline_ms
+    )
 
 
 def classify_startup_terminal(
@@ -456,8 +540,8 @@ def build_platform_samples(
             ),
             "replayCount": item.get("startupSequence", {}).get("replayCount"),
             "exitReason": item.get("startupSequence", {}).get("exitReason"),
-            "motionSpecVersion": item.get("startupSequence", {}).get(
-                "motionSpecVersion"
+            "motionSpec": item.get("startupSequence", {}).get(
+                "motionSpec"
             ),
             "deviceKind": item.get("deviceKind", "unknown"),
             "reportPath": str(output_dir),
@@ -687,7 +771,7 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
     shell_first_paint_ms = sequence.get("shellFirstPaintMs")
     overlay_removed_ms = sequence.get("overlayRemovedMs")
     sequence_events_present = bool(sequence["events"])
-    sequence_motion_current = sequence.get("motionSpecVersion") == "petal_bloom_v2"
+    sequence_motion_current = sequence.get("motionSpec") == "petal_bloom"
     welcome_exit_within_deadline = (
         welcome_exit_ms is not None
         and welcome_exit_ms <= args.welcome_exit_hard_ms
@@ -699,6 +783,14 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
     overlay_removed_within_deadline = (
         overlay_removed_ms is not None
         and overlay_removed_ms <= args.welcome_exit_hard_ms
+    )
+    watchdog_evidence = extract_startup_watchdog_evidence(log)
+    watchdog_evidence["canonicalTerminal"] = terminal_surface
+    safe_terminal_within_deadline = (
+        _safe_terminal_within_deadline(
+            watchdog_evidence,
+            args.welcome_exit_hard_ms,
+        )
     )
     plain_background_detected = native_static_at_deadline and not terminal_surface_classified
     passed = (
@@ -715,6 +807,7 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
                 sequence_events_present
                 and welcome_exit_within_deadline
                 and overlay_removed_within_deadline
+                and safe_terminal_within_deadline
             )
         )
         and (
@@ -726,8 +819,6 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
             or terminal_surface != "nativeRecovery"
         )
     )
-    watchdog_evidence = extract_startup_watchdog_evidence(log)
-    watchdog_evidence["canonicalTerminal"] = terminal_surface
     return {
         "platform": "android",
         "device": args.android_device,
@@ -755,6 +846,7 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         "welcomeExitHardMs": args.welcome_exit_hard_ms,
         "welcomeExitWithinDeadline": welcome_exit_within_deadline,
         "overlayRemovedWithinDeadline": overlay_removed_within_deadline,
+        "safeTerminalWithinDeadline": safe_terminal_within_deadline,
         "shellFirstPaintTargetMs": args.shell_first_paint_target_ms,
         "shellFirstPaintWithinTarget": shell_first_paint_within_target,
         "startupSequence": sequence,
@@ -856,7 +948,7 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     welcome_exit_ms = sequence.get("welcomeExitMs")
     shell_first_paint_ms = sequence.get("shellFirstPaintMs")
     sequence_events_present = bool(sequence["events"])
-    sequence_motion_current = sequence.get("motionSpecVersion") == "petal_bloom_v2"
+    sequence_motion_current = sequence.get("motionSpec") == "petal_bloom"
     timings = parse_qwqstartup_log(ios_log)
     welcome_exit_within_deadline = (
         welcome_exit_ms is not None
@@ -870,6 +962,14 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     overlay_removed_within_deadline = (
         overlay_removed_ms is not None
         and overlay_removed_ms <= args.welcome_exit_hard_ms
+    )
+    watchdog_evidence = extract_startup_watchdog_evidence(ios_log)
+    watchdog_evidence["canonicalTerminal"] = terminal_surface
+    safe_terminal_within_deadline = (
+        _safe_terminal_within_deadline(
+            watchdog_evidence,
+            args.welcome_exit_hard_ms,
+        )
     )
     first_visible = (
         (
@@ -911,15 +1011,18 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
                 sequence_events_present
                 and welcome_exit_within_deadline
                 and overlay_removed_within_deadline
+                and safe_terminal_within_deadline
             )
         )
         and (
             not args.enforce_shell_target
             or shell_first_paint_within_target
         )
+        and (
+            not args.require_no_native_recovery
+            or terminal_surface != "nativeRecovery"
+        )
     )
-    watchdog_evidence = extract_startup_watchdog_evidence(ios_log)
-    watchdog_evidence["canonicalTerminal"] = terminal_surface
     return {
         "platform": "ios",
         "device": args.ios_device,
@@ -939,6 +1042,7 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         "welcomeExitHardMs": args.welcome_exit_hard_ms,
         "welcomeExitWithinDeadline": welcome_exit_within_deadline,
         "overlayRemovedWithinDeadline": overlay_removed_within_deadline,
+        "safeTerminalWithinDeadline": safe_terminal_within_deadline,
         "shellFirstPaintTargetMs": args.shell_first_paint_target_ms,
         "shellFirstPaintWithinTarget": shell_first_paint_within_target,
         "startupSequence": sequence,
@@ -951,7 +1055,11 @@ def _read_ios_startup_log(device: str, *, launch_pid: int | None) -> str:
     predicate = (
         'eventMessage CONTAINS "startup_welcome_sequence" '
         'OR eventMessage CONTAINS "startup_probe" '
-        'OR eventMessage CONTAINS "ios_flutter_first_frame"'
+        'OR eventMessage CONTAINS "ios_flutter_first_frame" '
+        'OR eventMessage CONTAINS "ios_startup_safe_terminal" '
+        'OR eventMessage CONTAINS "ios_native_first_frame_timeout" '
+        'OR eventMessage CONTAINS "ios_dart_startup_attempt" '
+        'OR eventMessage CONTAINS "ios_startup_bootstrap_failure"'
     )
     if launch_pid is not None:
         predicate = f"processIdentifier == {launch_pid} AND ({predicate})"
@@ -1078,6 +1186,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ios-app", default=str(DEFAULT_IOS_APP))
     parser.add_argument("--ios-install", action="store_true")
     parser.add_argument(
+        "--runtime-env",
+        choices=("alpha", "beta", "gamma", "prod"),
+        default="",
+    )
+    parser.add_argument(
+        "--matrix-evidence-root",
+        default="",
+        help="Write one normalized platform evidence file for the startup matrix.",
+    )
+    parser.add_argument(
         "--ios-offsets-ms",
         type=parse_offsets,
         default=[200, 400, 600, 800, 1000, 1400, 3000, 6000],
@@ -1162,6 +1280,43 @@ def main() -> int:
     }
     report_path = output_dir / "startup_first_frame_report.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if args.matrix_evidence_root:
+        if not args.runtime_env:
+            raise ValueError("--runtime-env is required with --matrix-evidence-root")
+        if args.runs != 1:
+            raise ValueError("matrix evidence export requires --runs 1")
+        matrix_root = Path(args.matrix_evidence_root) / args.runtime_env
+        matrix_root.mkdir(parents=True, exist_ok=True)
+        for result in results:
+            platform = result.get("platform")
+            if platform not in {"android", "ios"}:
+                continue
+            evidence = {
+                "runtimeEnv": args.runtime_env,
+                "platform": platform,
+                "attemptId": result.get("attemptId"),
+                "rendererFirstFrameMs": result.get("rendererFirstFrameMs"),
+                "safeTerminalMs": result.get("safeTerminalMs"),
+                "reportedSafeTerminalMs": result.get("reportedSafeTerminalMs"),
+                "nativeReceivedSafeTerminalMs": result.get(
+                    "nativeReceivedSafeTerminalMs"
+                ),
+                "watchdogOutcome": result.get("watchdogOutcome"),
+                "canonicalTerminal": result.get("canonicalTerminal"),
+                "launchMode": result.get("launchMode"),
+                "hotRestart": result.get("hotRestart"),
+                "runtimeConfigurationState": result.get(
+                    "runtimeConfigurationState"
+                ),
+                "missingDefineKeys": result.get("missingDefineKeys"),
+                "failureCode": result.get("failureCode", ""),
+                "sourceReport": str(report_path),
+            }
+            (matrix_root / f"{platform}.json").write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
 
     if args.write_baseline:
         baseline_path = Path(args.write_baseline)

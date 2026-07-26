@@ -3,6 +3,37 @@ part of 'comment_thread_view.dart';
 // 评论一级行与二级回复展开控件。与 comment_thread_view.dart 同库（part），
 // 复用同一份私有 widget/TestKeys，拆出仅为收敛主文件行数（R03/R24）。
 
+/// 评论头像点击进入作者主页：携带评论快照作乐观首屏，
+/// referralSource 归因链由路由侧 authorProfile 语义承载。
+void _openCommentAuthorProfile(
+  BuildContext context,
+  ContentCommentListItem comment,
+) {
+  final authorId = comment.authorId.trim();
+  if (authorId.isEmpty) return;
+  context.push(
+    AppRoutePaths.userProfile(username: authorId),
+    extra: UserProfileRouteExtra(
+      subAccountId: authorId,
+      avatar: comment.authorAvatarUrlSnapshot,
+      displayName: comment.authorDisplayNameSnapshot,
+    ),
+  );
+}
+
+Future<void> _deleteCommentWithConfirmation(
+  BuildContext context,
+  WidgetRef ref, {
+  required String postId,
+  required String commentId,
+}) async {
+  final confirmed = await _confirmCommentDelete(context);
+  if (!confirmed || !context.mounted) return;
+  await ref
+      .read(commentProviderFamily(postId).notifier)
+      .deleteComment(commentId);
+}
+
 class _CommentThreadItem extends ConsumerWidget {
   const _CommentThreadItem({
     required this.postId,
@@ -38,16 +69,29 @@ class _CommentThreadItem extends ConsumerWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            RoundedSquareAvatar(
-              size: AppSpacing.commentAvatarSize,
-              imageUrl: comment.authorAvatarUrlSnapshot,
-              name: comment.authorDisplayNameSnapshot,
-              borderRadius: AppSpacing.commentAvatarSize / 2,
-              backgroundColor: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.backgroundSecondary,
+            Semantics(
+              button: true,
+              label: UITextConstants.goToUserProfile,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openCommentAuthorProfile(context, comment),
+                child: SizedBox.square(
+                  dimension: AppSpacing.minInteractiveSize,
+                  child: Center(
+                    child: RoundedSquareAvatar(
+                      size: AppSpacing.commentAvatarSize,
+                      imageUrl: comment.authorAvatarUrlSnapshot,
+                      name: comment.authorDisplayNameSnapshot,
+                      borderRadius: AppSpacing.commentAvatarSize / 2,
+                      backgroundColor: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.backgroundSecondary,
+                      ),
+                      fallbackIcon: CupertinoIcons.person_fill,
+                    ),
+                  ),
+                ),
               ),
-              fallbackIcon: CupertinoIcons.person_fill,
             ),
             SizedBox(width: AppSpacing.sm),
             Expanded(child: _buildContent(context, ref)),
@@ -75,9 +119,14 @@ class _CommentThreadItem extends ConsumerWidget {
                               .toggleDislike(comment.id);
                         }),
               onDelete: comment.canDelete
-                  ? () => ref
-                        .read(commentProviderFamily(postId).notifier)
-                        .deleteComment(comment.id)
+                  ? () => unawaited(
+                      _deleteCommentWithConfirmation(
+                        context,
+                        ref,
+                        postId: postId,
+                        commentId: comment.id,
+                      ),
+                    )
                   : null,
             ),
           ],
@@ -109,47 +158,83 @@ class _CommentThreadItem extends ConsumerWidget {
               : AppColors.transparent,
           borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
         ),
-        child: body,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onLongPress: () => showCommentItemActionsSheet(
+            context,
+            ref,
+            postId: postId,
+            comment: comment,
+          ),
+          child: body,
+        ),
       ),
     );
   }
 
   Widget _buildContent(BuildContext context, WidgetRef ref) {
     final canReplyToComment = comment.canReply && !comment.canDelete;
+    // 交集关系标签：只渲染服务端事实投影（关注/互关），无事实不显示。
+    final relationBadge = switch (comment.viewerRelation) {
+      ContentCommentViewerRelation.friend =>
+        UITextConstants.commentRelationFriendBadge,
+      ContentCommentViewerRelation.following =>
+        UITextConstants.commentRelationFollowingBadge,
+      ContentCommentViewerRelation.none => null,
+    };
+    final hasBadges =
+        comment.isPinned ||
+        relationBadge != null ||
+        comment.authorLiked ||
+        comment.isAuthor;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            if (comment.isPinned) ...[
-              _Badge(label: UITextConstants.commentPinnedBadge, isDark: isDark),
-              SizedBox(width: AppSpacing.xs),
-            ],
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: canReplyToComment
-                    ? () => onReplySelected?.call(comment)
-                    : null,
-                child: Text(
-                  comment.authorDisplayNameSnapshot ?? comment.authorId,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: AppColorsFunctional.getColor(
-                      isDark,
-                      ColorType.foregroundSecondary,
-                    ),
-                    fontWeight: AppTypography.regular,
-                  ),
-                ),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: canReplyToComment
+              ? () => onReplySelected?.call(comment)
+              : null,
+          child: Text(
+            comment.authorDisplayNameSnapshot ?? comment.authorId,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.sm,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundSecondary,
               ),
+              fontWeight: AppTypography.regular,
             ),
-            if (comment.isAuthor)
-              _Badge(label: UITextConstants.commentAuthorBadge, isDark: isDark),
-          ],
+          ),
         ),
+        if (hasBadges) ...[
+          SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              if (comment.isPinned)
+                _Badge(
+                  label: UITextConstants.commentPinnedBadge,
+                  isDark: isDark,
+                ),
+              if (relationBadge != null)
+                _Badge(label: relationBadge, isDark: isDark),
+              if (comment.authorLiked)
+                _Badge(
+                  label: UITextConstants.commentAuthorLikedBadge,
+                  isDark: isDark,
+                ),
+              if (comment.isAuthor)
+                _Badge(
+                  label: UITextConstants.commentAuthorBadge,
+                  isDark: isDark,
+                ),
+            ],
+          ),
+        ],
         SizedBox(height: AppSpacing.xs),
         _ExpandableCommentText(
           text: comment.content,
@@ -175,6 +260,12 @@ class _CommentThreadItem extends ConsumerWidget {
                   _togglePin(context, ref, comment);
                 })
               : null,
+          onMore: () => showCommentItemActionsSheet(
+            context,
+            ref,
+            postId: postId,
+            comment: comment,
+          ),
         ),
       ],
     );
@@ -306,12 +397,17 @@ class _ReplyControlLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      key: controlKey,
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
+    return Semantics(
+      button: true,
+      child: CupertinoButton(
+        key: controlKey,
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(
+          AppSpacing.minInteractiveSize,
+          AppSpacing.minInteractiveSize,
+        ),
+        alignment: AlignmentDirectional.centerStart,
+        onPressed: onTap,
         child: Text(
           label,
           style: TextStyle(

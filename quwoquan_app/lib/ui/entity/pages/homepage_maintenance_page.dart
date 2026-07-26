@@ -2,9 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_action_observability.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_write_access.dart';
 
 class HomepageMaintenancePage extends ConsumerStatefulWidget {
   const HomepageMaintenancePage({super.key, required this.homepageId});
@@ -27,8 +32,12 @@ class _HomepageMaintenancePageState
   HomepageDetail? _detail;
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _didStartLoad = false;
+  bool _authResumeScheduled = false;
   UiErrorSemantic? _pageErrorSemantic;
+  UiErrorSemantic? _permissionSemantic;
   UiErrorSemantic? _submitErrorSemantic;
+  String? _titleValidationMessage;
 
   bool get _hasUnsavedChanges {
     final detail = _detail;
@@ -46,13 +55,12 @@ class _HomepageMaintenancePageState
         _tagsController.text.trim() != detail.categoryTags.join(' ');
   }
 
-  String get _confirmLabel =>
-      (_detail?.claimStatus ?? '') == 'claimed' ? '保存主页信息' : '需先完成认领';
-
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_gateEntryAndLoad());
+    });
   }
 
   @override
@@ -67,30 +75,41 @@ class _HomepageMaintenancePageState
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      if (next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated)) {
+        _scheduleAuthContinuationResume();
+      }
+    });
+    if (ref.watch(authSessionControllerProvider).isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scheduleAuthContinuationResume();
+      });
+    }
+
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final canSubmit =
-        !_isLoading &&
-        !_isSubmitting &&
-        (_detail?.claimStatus ?? '') == 'claimed';
-    if (_pageErrorSemantic != null && !_isLoading) {
+    final blockingSemantic = _permissionSemantic ?? _pageErrorSemantic;
+    if (blockingSemantic != null && !_isLoading) {
       return IosSelectionPageScaffold(
-        title: '维护主页',
-        onBack: _handleCloseRequest,
+        title: UITextConstants.homepageMaintainAction,
+        onBack: _safeReturn,
         leadingStyle: IosSelectionHeaderLeadingStyle.close,
         backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
         body: AppPageErrorState(
-          semantic: _pageErrorSemantic!,
-          onAction: (action) async {
-            if (action.type == UiErrorActionType.retry ||
-                action.type == UiErrorActionType.resubmit) {
-              await _load();
-            }
-          },
+          semantic: blockingSemantic,
+          onAction: _permissionSemantic == null
+              ? _handlePageErrorAction
+              : _handlePermissionAction,
         ),
       );
     }
+
+    final canSubmit = !_isLoading && !_isSubmitting && _detail != null;
     return IosSelectionPageScaffold(
-      title: '维护主页',
+      title: UITextConstants.homepageMaintainAction,
       onBack: _handleCloseRequest,
       leadingStyle: IosSelectionHeaderLeadingStyle.close,
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
@@ -105,83 +124,114 @@ class _HomepageMaintenancePageState
           if (_isLoading)
             const Center(child: CupertinoActivityIndicator())
           else ...<Widget>[
-            _MaintenanceCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    _detail?.title ?? '主页',
-                    style: const TextStyle(
-                      fontSize: AppTypography.iosTitle3,
-                      fontWeight: AppTypography.semiBold,
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.intraGroupXs),
-                  Text(
-                    (_detail?.claimStatus ?? '') == 'claimed'
-                        ? '已认领主页可维护标题、简介、位置与标签，记录内容会继续聚合保留。'
-                        : '当前主页尚未完成认领，暂不可维护。',
-                    style: TextStyle(
-                      fontSize: AppTypography.iosFootnote,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(
-                        context,
+            const IosSelectionSectionHeader(
+              title: UITextConstants.homepageFormOverviewSection,
+              padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
+            ),
+            IosSelectionSection(
+              child: Padding(
+                padding: EdgeInsets.all(AppSpacing.containerMd),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      _detail?.title ??
+                          UITextConstants.homepageClaimHomepageFallback,
+                      style: const TextStyle(
+                        fontSize: AppTypography.iosTitle3,
+                        fontWeight: AppTypography.semiBold,
                       ),
                     ),
-                  ),
-                  if (_submitErrorSemantic != null) ...<Widget>[
-                    SizedBox(height: AppSpacing.containerSm),
-                    AppSectionErrorCard(
-                      semantic: _submitErrorSemantic!,
-                      onAction: (action) async {
-                        if (action.type == UiErrorActionType.retry ||
-                            action.type == UiErrorActionType.resubmit) {
-                          await _submit();
-                        }
-                      },
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    Text(
+                      UITextConstants.homepageMaintenanceOwnedDescription,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosFootnote,
+                        color: AppColors.iosSecondaryLabel(context),
+                      ),
                     ),
+                    if (_submitErrorSemantic != null) ...<Widget>[
+                      SizedBox(height: AppSpacing.containerSm),
+                      AppFormErrorCard(
+                        semantic: _submitErrorSemantic!,
+                        onAction: _handleSubmitErrorAction,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             SizedBox(height: AppSpacing.containerSm),
-            _MaintenanceCard(
+            const IosSelectionSectionHeader(
+              title: UITextConstants.homepageFormDetailsSection,
+              padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
+            ),
+            IosSelectionSection(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  _MaintenanceLabel('主页名称'),
-                  CupertinoTextField(
-                    controller: _titleController,
-                    enabled: canSubmit,
-                    placeholder: '主页名称',
+                  IosSelectionFormFieldRow(
+                    label: UITextConstants.homepageMaintenanceNameLabel,
+                    validationMessage: _titleValidationMessage,
+                    child: IosSelectionTextField(
+                      controller: _titleController,
+                      enabled: canSubmit,
+                      placeholder:
+                          UITextConstants.homepageMaintenanceNamePlaceholder,
+                      onChanged: (_) {
+                        if (_titleValidationMessage != null) {
+                          setState(() => _titleValidationMessage = null);
+                        }
+                      },
+                    ),
                   ),
-                  SizedBox(height: AppSpacing.containerSm),
-                  _MaintenanceLabel('一句话简介'),
-                  CupertinoTextField(
-                    controller: _subtitleController,
-                    enabled: canSubmit,
-                    placeholder: '简介',
+                  const IosSelectionInlineDivider(
+                    indent: AppSpacing.containerMd,
                   ),
-                  SizedBox(height: AppSpacing.containerSm),
-                  _MaintenanceLabel('城市'),
-                  CupertinoTextField(
-                    controller: _cityController,
-                    enabled: canSubmit,
-                    placeholder: '城市',
+                  IosSelectionFormFieldRow(
+                    label: UITextConstants.homepageMaintenanceSubtitleLabel,
+                    child: IosSelectionTextField(
+                      controller: _subtitleController,
+                      enabled: canSubmit,
+                      placeholder: UITextConstants
+                          .homepageMaintenanceSubtitlePlaceholder,
+                    ),
                   ),
-                  SizedBox(height: AppSpacing.containerSm),
-                  _MaintenanceLabel('地址'),
-                  CupertinoTextField(
-                    controller: _addressController,
-                    enabled: canSubmit,
-                    placeholder: '地址',
-                    maxLines: 3,
+                  const IosSelectionInlineDivider(
+                    indent: AppSpacing.containerMd,
                   ),
-                  SizedBox(height: AppSpacing.containerSm),
-                  _MaintenanceLabel('分类标签'),
-                  CupertinoTextField(
-                    controller: _tagsController,
-                    enabled: canSubmit,
-                    placeholder: '用空格分隔，例如 景点 城市地标 赏景',
+                  IosSelectionFormFieldRow(
+                    label: UITextConstants.homepageMaintenanceCityLabel,
+                    child: IosSelectionTextField(
+                      controller: _cityController,
+                      enabled: canSubmit,
+                      placeholder:
+                          UITextConstants.homepageMaintenanceCityPlaceholder,
+                    ),
+                  ),
+                  const IosSelectionInlineDivider(
+                    indent: AppSpacing.containerMd,
+                  ),
+                  IosSelectionFormFieldRow(
+                    label: UITextConstants.homepageMaintenanceAddressLabel,
+                    child: IosSelectionTextField(
+                      controller: _addressController,
+                      enabled: canSubmit,
+                      placeholder:
+                          UITextConstants.homepageMaintenanceAddressPlaceholder,
+                      maxLines: 3,
+                    ),
+                  ),
+                  const IosSelectionInlineDivider(
+                    indent: AppSpacing.containerMd,
+                  ),
+                  IosSelectionFormFieldRow(
+                    label: UITextConstants.homepageMaintenanceTagsLabel,
+                    child: IosSelectionTextField(
+                      controller: _tagsController,
+                      enabled: canSubmit,
+                      placeholder:
+                          UITextConstants.homepageMaintenanceTagsPlaceholder,
+                    ),
                   ),
                 ],
               ),
@@ -190,11 +240,76 @@ class _HomepageMaintenancePageState
         ],
       ),
       bottomBar: IosSelectionBottomBar(
-        confirmLabel: _confirmLabel,
+        confirmLabel: UITextConstants.homepageMaintenanceSave,
         confirmEnabled: canSubmit,
         confirmLoading: _isSubmitting,
         onConfirm: _submit,
       ),
+    );
+  }
+
+  Future<void> _gateEntryAndLoad() async {
+    final allowed = await requireHomepageWriteAccess(
+      ref,
+      context,
+      action: HomepageWriteContinuationAction.maintenance,
+      homepageId: widget.homepageId,
+      dismissFallback: AppRoutePaths.homepageDetail(id: widget.homepageId),
+    );
+    if (allowed && mounted) {
+      await _loadOnce();
+    }
+  }
+
+  void _scheduleAuthContinuationResume({int remainingFrames = 30}) {
+    if (!mounted || !AuthGate.isAuthenticated(ref) || _authResumeScheduled) {
+      return;
+    }
+    _authResumeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _authResumeScheduled = false;
+      if (!mounted || !AuthGate.isAuthenticated(ref)) {
+        return;
+      }
+      if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+        if (remainingFrames > 0) {
+          _scheduleAuthContinuationResume(remainingFrames: remainingFrames - 1);
+        }
+        return;
+      }
+      final pending = takeHomepageWriteContinuation(
+        ref,
+        action: HomepageWriteContinuationAction.maintenance,
+        homepageId: widget.homepageId,
+      );
+      if (pending == null) {
+        unawaited(_loadOnce());
+        return;
+      }
+      if (pending.submitAfterLogin) {
+        unawaited(_submit());
+      } else {
+        unawaited(_loadOnce());
+      }
+    });
+  }
+
+  Future<void> _loadOnce() async {
+    if (_didStartLoad) {
+      return;
+    }
+    _didStartLoad = true;
+    await _load();
+  }
+
+  Future<bool> _ensureSubmitAuthentication() {
+    return requireHomepageWriteAccess(
+      ref,
+      context,
+      action: HomepageWriteContinuationAction.maintenance,
+      homepageId: widget.homepageId,
+      dismissFallback: AppRoutePaths.homepageDetail(id: widget.homepageId),
+      submitAfterLogin: true,
     );
   }
 
@@ -203,7 +318,7 @@ class _HomepageMaintenancePageState
       return;
     }
     if (!_hasUnsavedChanges) {
-      _pop();
+      _safeReturn();
       return;
     }
     final discardChanges = await showAppCupertinoDialog<bool>(
@@ -225,27 +340,57 @@ class _HomepageMaintenancePageState
       ),
     );
     if (discardChanges == true && mounted) {
-      _pop();
+      _safeReturn();
     }
   }
 
-  void _pop() {
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.pop();
+  void _safeReturn() {
+    if (context.canPop()) {
+      context.pop();
+      return;
     }
+    context.go(AppRoutePaths.homepageDetail(id: widget.homepageId));
   }
 
   Future<void> _load() async {
     setState(() {
       _isLoading = true;
       _pageErrorSemantic = null;
+      _permissionSemantic = null;
     });
     try {
       final detail = await ref
-          .read(homepageRepositoryProvider)
+          .read(homepageQueryProvider)
           .getHomepageDetail(widget.homepageId);
+      final activeContext = await ref.read(activePersonaContextProvider.future);
       if (!mounted) {
+        return;
+      }
+      final ownerUserId = (detail.ownerUserId ?? '').trim();
+      final ownerSubAccountId = (detail.ownerSubAccountId ?? '').trim();
+      final isOwner =
+          (detail.claimStatus ?? '').trim() == 'claimed' &&
+          ((ownerUserId.isNotEmpty &&
+                  ownerUserId == activeContext.ownerUserId.trim()) ||
+              (ownerSubAccountId.isNotEmpty &&
+                  ownerSubAccountId == activeContext.subAccountId.trim()));
+      if (!isOwner) {
+        setState(() {
+          _detail = detail;
+          _isLoading = false;
+          _permissionSemantic = const UiErrorSemantic(
+            category: UiErrorCategory.permissionRequired,
+            scope: UiErrorScope.page,
+            title: UITextConstants.homepageMaintenanceUnavailableTitle,
+            message: UITextConstants.homepageMaintenanceUnavailableMessage,
+            primaryAction: UiErrorAction(
+              type: UiErrorActionType.dismiss,
+              label: UITextConstants.homepageMaintenanceSafeReturn,
+            ),
+            presentation: UiErrorPresentation.gateCard,
+            tone: UiErrorTone.info,
+          );
+        });
         return;
       }
       _titleController.text = detail.title;
@@ -256,7 +401,6 @@ class _HomepageMaintenancePageState
       setState(() {
         _detail = detail;
         _isLoading = false;
-        _pageErrorSemantic = null;
       });
     } catch (error) {
       if (!mounted) {
@@ -275,13 +419,27 @@ class _HomepageMaintenancePageState
   }
 
   Future<void> _submit() async {
+    if (!await _ensureSubmitAuthentication() || !mounted) {
+      return;
+    }
+    if (_permissionSemantic != null || _detail == null) {
+      return;
+    }
+    if (_titleController.text.trim().isEmpty) {
+      setState(() {
+        _titleValidationMessage =
+            UITextConstants.homepageMaintenanceNameRequired;
+      });
+      return;
+    }
     setState(() {
       _isSubmitting = true;
       _submitErrorSemantic = null;
     });
+    final startedAt = DateTime.now();
     try {
       await ref
-          .read(homepageRepositoryProvider)
+          .read(homepageCommandWriterProvider)
           .updateClaimedHomepageBasics(
             homepageId: widget.homepageId,
             draft: HomepageBasicDraft(
@@ -299,7 +457,18 @@ class _HomepageMaintenancePageState
       if (!mounted) {
         return;
       }
-      AppToast.show(context, '主页信息已更新');
+      await trackHomepageProductAction(
+        ref,
+        action: 'maintenance_submit',
+        pageName: 'homepageMaintenance',
+        result: 'success',
+        startedAt: startedAt,
+        homepageId: widget.homepageId,
+      );
+      if (!mounted) {
+        return;
+      }
+      AppToast.show(context, UITextConstants.homepageMaintenanceUpdated);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
@@ -310,9 +479,18 @@ class _HomepageMaintenancePageState
           context,
           error: error,
           category: UiErrorCategory.submit,
-          scope: UiErrorScope.section,
+          scope: UiErrorScope.form,
         );
       });
+      await trackHomepageProductAction(
+        ref,
+        action: 'maintenance_submit',
+        pageName: 'homepageMaintenance',
+        result: 'failure',
+        startedAt: startedAt,
+        homepageId: widget.homepageId,
+        error: error,
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -321,52 +499,48 @@ class _HomepageMaintenancePageState
       }
     }
   }
-}
 
-class _MaintenanceCard extends StatelessWidget {
-  const _MaintenanceCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(
-          isDark,
-          ColorType.backgroundPrimary,
-        ),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
-        border: Border.all(
-          color: AppColorsFunctional.getColor(
-            isDark,
-            ColorType.separatorSubtle,
-          ),
-        ),
-      ),
-      padding: EdgeInsets.all(AppSpacing.containerMd),
-      child: child,
-    );
+  Future<void> _handleSubmitErrorAction(UiErrorAction action) async {
+    if (_submitErrorSemantic?.sourceCode ==
+        EntityErrorCode.versionConflict.code) {
+      if (mounted) {
+        setState(() => _submitErrorSemantic = null);
+      }
+      await _load();
+      return;
+    }
+    switch (action.type) {
+      case UiErrorActionType.retry:
+      case UiErrorActionType.resubmit:
+        await _submit();
+        return;
+      case UiErrorActionType.dismiss:
+        if (mounted) {
+          setState(() => _submitErrorSemantic = null);
+        }
+        return;
+      case UiErrorActionType.openSettings:
+      case UiErrorActionType.login:
+        return;
+    }
   }
-}
 
-class _MaintenanceLabel extends StatelessWidget {
-  const _MaintenanceLabel(this.label);
+  Future<void> _handlePageErrorAction(UiErrorAction action) async {
+    switch (action.type) {
+      case UiErrorActionType.retry:
+      case UiErrorActionType.resubmit:
+        await _load();
+        return;
+      case UiErrorActionType.dismiss:
+        _safeReturn();
+        return;
+      case UiErrorActionType.openSettings:
+      case UiErrorActionType.login:
+        return;
+    }
+  }
 
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: AppTypography.iosFootnote,
-          color: CupertinoColors.secondaryLabel.resolveFrom(context),
-        ),
-      ),
-    );
+  Future<void> _handlePermissionAction(UiErrorAction action) async {
+    _safeReturn();
   }
 }

@@ -37,7 +37,7 @@ class PostPreviewCard extends StatelessWidget {
   /// 卡内顶部插槽（封面下、标题上）：统一记录卡范式的「唯一交集句」位。
   final Widget? header;
   final Widget footer;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final GestureDragEndCallback? onHorizontalDragEnd;
   final int supportingTextMaxLines;
 

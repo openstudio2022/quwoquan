@@ -71,7 +71,7 @@ class LocalChatSearchMessageRecord {
   }
 
   factory LocalChatSearchMessageRecord.fromProjectionMap(
-    Map<String, dynamic> map, {
+    Map<String, Object?> map, {
     ConversationCacheRecord? conversation,
   }) {
     const allowedKeys = <String>{
@@ -195,8 +195,8 @@ class LocalChatSearchMessageRecord {
     );
   }
 
-  Map<String, dynamic> toProjectionMap() {
-    return <String, dynamic>{
+  Map<String, Object?> toProjectionMap() {
+    return <String, Object?>{
       'schema': schema,
       'messageId': messageId,
       'conversationId': conversationId,
@@ -219,7 +219,7 @@ class LocalChatSearchMessageRecord {
   }
 }
 
-String _requiredProjectionString(Map<String, dynamic> map, String key) {
+String _requiredProjectionString(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! String || value.trim().isEmpty) {
     throw FormatException('$key must be a non-empty String');
@@ -227,7 +227,7 @@ String _requiredProjectionString(Map<String, dynamic> map, String key) {
   return value.trim();
 }
 
-String _projectionString(Map<String, dynamic> map, String key) {
+String _projectionString(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value == null) return '';
   if (value is! String) {
@@ -236,7 +236,7 @@ String _projectionString(Map<String, dynamic> map, String key) {
   return value.trim();
 }
 
-String? _nullableProjectionString(Map<String, dynamic> map, String key) {
+String? _nullableProjectionString(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value == null) return null;
   if (value is! String) {
@@ -246,7 +246,7 @@ String? _nullableProjectionString(Map<String, dynamic> map, String key) {
   return normalized.isEmpty ? null : normalized;
 }
 
-int _requiredProjectionInt(Map<String, dynamic> map, String key) {
+int _requiredProjectionInt(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! int) {
     throw FormatException('$key must be an int');
@@ -254,7 +254,7 @@ int _requiredProjectionInt(Map<String, dynamic> map, String key) {
   return value;
 }
 
-bool _requiredProjectionBool(Map<String, dynamic> map, String key) {
+bool _requiredProjectionBool(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! bool) {
     throw FormatException('$key must be a bool');

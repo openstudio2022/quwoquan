@@ -9,40 +9,58 @@ import (
 
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 	"quwoquan_service/internal/metadata/validate"
+	"quwoquan_service/internal/testsupport/contractsview"
 )
 
-func TestContentServiceRoutePacketIncludesEveryObjectService(t *testing.T) {
-	t.Parallel()
-
+func contentTestContractSource(t *testing.T) *contractcodegen.Source {
+	t.Helper()
 	source, err := contractcodegen.NewSource(
-		"../../contracts/metadata",
+		contractsview.Build(t),
 		validate.ProfileBaseline,
 	)
 	if err != nil {
 		t.Fatalf("NewSource() error = %v", err)
 	}
+	return source
+}
+
+func TestContentServiceRoutePacketIncludesEveryObjectService(t *testing.T) {
+	t.Parallel()
+
+	source := contentTestContractSource(t)
 	routes, err := loadServiceRoutes(source, "content-service")
 	if err != nil {
 		t.Fatalf("loadServiceRoutes() error = %v", err)
 	}
 
-	operations := make(map[string]struct{}, len(routes))
-	for _, route := range routes {
-		operations[route.Operation] = struct{}{}
+	operations := make(map[string]struct{})
+	for _, group := range routes {
+		for _, route := range group.Routes {
+			operations[route.Operation] = struct{}{}
+		}
 	}
 	for _, operation := range []string{
 		"SubmitPostPublication",
 		"CreateComment",
+		"HideComment",
+		"RestoreComment",
 		"LikePost",
 		"InitMediaUpload",
 		"GetMediaAssetReference",
 		"GetMediaAssetDeliveryReference",
 		"CreateOutboundShare",
 		"CreateReport",
+		"ListMyReports",
 		"ListReports",
 		"GetReport",
 		"BeginReportReview",
+		"DismissReport",
 		"ResolveReport",
+		"GetCurrentPostModerationCase",
+		"StageFilterCatalogRelease",
+		"ActivateFilterCatalogRelease",
+		"RollbackFilterCatalogRelease",
+		"GetActiveFilterCatalog",
 	} {
 		if _, found := operations[operation]; !found {
 			t.Errorf("route packet is missing %s", operation)
@@ -53,41 +71,45 @@ func TestContentServiceRoutePacketIncludesEveryObjectService(t *testing.T) {
 func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 	t.Parallel()
 
-	source, err := contractcodegen.NewSource(
-		"../../contracts/metadata",
-		validate.ProfileBaseline,
-	)
-	if err != nil {
-		t.Fatalf("NewSource() error = %v", err)
-	}
-	outputDir := t.TempDir()
-	if err := generateHTTPScaffold(source, "content-service", outputDir); err != nil {
-		t.Fatalf("generateHTTPScaffold() error = %v", err)
-	}
-	generated, err := os.ReadFile(
-		filepath.Join(outputDir, "adapters", "http", "generated_routes.go"),
-	)
+	generated, err := os.ReadFile(filepath.Join(
+		"..", "..", "services", "content-service", "internal", "content", "post",
+		"adapters", "inbound", "http", "routes.go",
+	))
 	if err != nil {
 		t.Fatalf("read generated routes: %v", err)
 	}
 
 	for operation, handler := range map[string]string{
 		"BeginReportReview":              "handleBeginReportReview",
+		"ActivateFilterCatalogRelease":   "handleActivateFilterCatalogRelease",
 		"BindMediaAssetsToComment":       "handleBindMediaAssetsToComment",
 		"CreateComment":                  "handleCreateComment",
 		"CreateOutboundShare":            "handleCreateOutboundShare",
 		"DeleteComment":                  "handleDeleteComment",
+		"DismissReport":                  "handleDismissReport",
+		"GetActiveFilterCatalog":         "handleGetActiveFilterCatalog",
+		"GetMediaImageReprocessRun":      "handleGetMediaImageReprocessRun",
 		"GetReport":                      "handleGetReport",
+		"GetCurrentPostModerationCase":   "handleGetCurrentPostModerationCase",
 		"GetMediaAssetReference":         "handleGetMediaAssetReference",
 		"GetMediaAssetDeliveryReference": "handleGetMediaAssetDeliveryReference",
+		"HideComment":                    "handleHideComment",
 		"ListCommentReplies":             "handleListCommentReplies",
 		"ListComments":                   "handleListComments",
 		"ListCommentsByAuthor":           "handleListCommentsByAuthor",
 		"ListCommentsForPostAuthor":      "handleListCommentsForPostAuthor",
+		"ListMyReports":                  "handleListMyReports",
 		"ListReports":                    "handleListReports",
 		"PinComment":                     "handleSetCommentPinned",
+		"PauseMediaImageReprocessRun":    "handlePauseMediaImageReprocessRun",
 		"ReactToComment":                 "handleReactToComment",
 		"ResolveReport":                  "handleResolveReport",
+		"RestoreComment":                 "handleRestoreComment",
+		"ResumeMediaImageReprocessRun":   "handleResumeMediaImageReprocessRun",
+		"RollbackFilterCatalogRelease":   "handleRollbackFilterCatalogRelease",
+		"RollbackMediaImageReprocessRun": "handleRollbackMediaImageReprocessRun",
+		"StageFilterCatalogRelease":      "handleStageFilterCatalogRelease",
+		"StartMediaImageReprocessRun":    "handleStartMediaImageReprocessRun",
 		"SubmitPostPublication":          "handleSubmitPostPublication",
 		"UpdatePostSettings":             "handleUpdatePostSettings",
 		"PromotePostToWork":              "handlePromotePostToWork",
@@ -116,10 +138,12 @@ func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 		"BindMediaAssetsToComment": {"commentId"},
 		"CreateComment":            {"postId"},
 		"DeleteComment":            {"postId", "commentId"},
+		"HideComment":              {"commentId"},
 		"ListCommentReplies":       {"postId", "commentId"},
 		"ListComments":             {"postId"},
 		"PinComment":               {"postId", "commentId"},
 		"ReactToComment":           {"commentId"},
+		"RestoreComment":           {"commentId"},
 		"UnpinComment":             {"postId", "commentId"},
 	} {
 		block := generatedOperationDispatchBlock(t, string(generated), operation)
@@ -148,30 +172,88 @@ func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 func TestContentErrorGenerationPreservesStableIdentityAndHTTPMetadata(t *testing.T) {
 	t.Parallel()
 
-	source, err := contractcodegen.NewSource(
-		"../../contracts/metadata",
-		validate.ProfileBaseline,
-	)
-	if err != nil {
-		t.Fatalf("NewSource() error = %v", err)
-	}
+	source := contentTestContractSource(t)
 	outputDir := t.TempDir()
-	if err := generateErrorConstants(source, "Post", outputDir); err != nil {
+	if err := generateErrorConstants(source, outputDir); err != nil {
 		t.Fatalf("generateErrorConstants() error = %v", err)
 	}
-	generated, err := os.ReadFile(filepath.Join(outputDir, "generated", "errors.go"))
+	generated, err := os.ReadFile(filepath.Join(outputDir, "content", "comment", "errors.go"))
 	if err != nil {
 		t.Fatalf("read generated errors: %v", err)
 	}
 	sourceText := string(generated)
 	for _, needle := range []string{
 		`rterr.ParseCode("CONTENT.USER.comment_pin_forbidden")`,
-		`WithMetadata("forbidden", 403)`,
-		`WithMetadata("invalid_argument", 400)`,
+		`WithMetadata("comment_pin_forbidden", 403)`,
+		`WithMetadata("comment_pin_invalid_target", 400)`,
 	} {
 		if !strings.Contains(sourceText, needle) {
 			t.Fatalf("generated errors missing %q", needle)
 		}
+	}
+}
+
+func TestContentMediaUploadPolicyGenerationPreservesPerTypeLimits(t *testing.T) {
+	t.Parallel()
+
+	source := contentTestContractSource(t)
+	outputDir := t.TempDir()
+	if err := generateContentMediaUploadPolicy(source, outputDir); err != nil {
+		t.Fatalf("generateContentMediaUploadPolicy() error = %v", err)
+	}
+	generated, err := os.ReadFile(
+		filepath.Join(outputDir, "content_media_upload_policy.go"),
+	)
+	if err != nil {
+		t.Fatalf("read generated media upload policy: %v", err)
+	}
+	sourceText := string(generated)
+	for _, needle := range []string{
+		"ContentMediaUploadPolicies",
+		`"audio": {`,
+		"MaxFileSizeBytes: 10485760",
+		`"file": {`,
+		"MaxFileSizeBytes: 104857600",
+		`"audio/wav"`,
+		`"video/webm"`,
+		`"*/*"`,
+	} {
+		if !strings.Contains(sourceText, needle) {
+			t.Fatalf("generated media upload policy missing %q", needle)
+		}
+	}
+	if strings.Contains(sourceText, "ContentMediaUploadMaxFileSizeBytes int64") {
+		t.Fatal("generated policy regressed to one global media size limit")
+	}
+}
+
+func TestOnboardingInterestCatalogGenerationPreservesReleaseAndDimensionBounds(t *testing.T) {
+	t.Parallel()
+
+	source := contentTestContractSource(t)
+	outputDir := t.TempDir()
+	if err := generateOnboardingInterestCatalog(source, outputDir); err != nil {
+		t.Fatalf("generateOnboardingInterestCatalog() error = %v", err)
+	}
+	generated, err := os.ReadFile(filepath.Join(outputDir, "onboarding_interest_catalog.g.go"))
+	if err != nil {
+		t.Fatalf("read generated onboarding policy: %v", err)
+	}
+	sourceText := string(generated)
+	for _, needle := range []string{
+		"TaxonomyReleaseID",
+		`TaxonomyReleaseID: "tag-taxonomy-20260723-001"`,
+		"DimensionMinSelections",
+		"DimensionMaxSelections",
+		`"topic":    4`,
+		`"audience": 4`,
+	} {
+		if !strings.Contains(sourceText, needle) {
+			t.Fatalf("generated onboarding catalog policy missing %q", needle)
+		}
+	}
+	if strings.Contains(sourceText, "MaxSelectionsPerDimension") {
+		t.Fatal("generated onboarding catalog policy must retain per-dimension bounds")
 	}
 }
 

@@ -1,0 +1,371 @@
+description: Circle 内群组或组织节点的权威聚合；角色与派生计数不属于本聚合。
+fields:
+- name: _id
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  role: authoritative_state
+- name: version
+  type: int64
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: circleId
+  type: ObjectId
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+  reference: true
+- name: parentGroupId
+  type: ObjectId
+  constraints:
+  - NULLABLE
+  role: authoritative_state
+  reference: true
+- name: groupType
+  type: enum
+  enum_ref: CircleGroupType
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: nodeType
+  type: enum
+  enum_ref: OrganizationNodeType
+  constraints:
+  - NULLABLE
+  role: authoritative_state
+- name: name
+  type: string
+  constraints:
+  - NOT_NULL
+  search_field: true
+  role: authoritative_state
+- name: description
+  type: string
+  constraints:
+  - NULLABLE
+  search_field: true
+  role: authoritative_state
+- name: visibility
+  type: enum
+  enum_ref: CircleGroupVisibility
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: joinPolicy
+  type: enum
+  enum_ref: CircleGroupJoinPolicy
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: createdByPersonaId
+  type: string
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+  reference: true
+- name: conversationId
+  type: ObjectId
+  constraints:
+  - NULLABLE
+  role: authoritative_state
+  reference: true
+- name: storageEnabled
+  type: bool
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: noticeEnabled
+  type: bool
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: isDefaultPublicGroup
+  type: bool
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: status
+  type: enum
+  enum_ref: CircleGroupStatus
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: createdAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: updatedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+types:
+  CircleGroupSlice:
+    description: CircleGroupReader 的稳定只读切片；成员数由 CircleGroupMembership Reader 派生。
+    fields:
+    - name: groupId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: version
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: circleId
+      type: ObjectId
+      constraints:
+      - NOT_NULL
+    - name: parentGroupId
+      type: ObjectId
+      constraints:
+      - NULLABLE
+    - name: groupType
+      type: enum
+      enum_ref: CircleGroupType
+      constraints:
+      - NOT_NULL
+    - name: nodeType
+      type: enum
+      enum_ref: OrganizationNodeType
+      constraints:
+      - NULLABLE
+    - name: name
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: description
+      type: string
+      constraints:
+      - NULLABLE
+    - name: visibility
+      type: enum
+      enum_ref: CircleGroupVisibility
+      constraints:
+      - NOT_NULL
+    - name: joinPolicy
+      type: enum
+      enum_ref: CircleGroupJoinPolicy
+      constraints:
+      - NOT_NULL
+    - name: conversationId
+      type: ObjectId
+      constraints:
+      - NULLABLE
+    - name: storageEnabled
+      type: bool
+      constraints:
+      - NOT_NULL
+    - name: noticeEnabled
+      type: bool
+      constraints:
+      - NOT_NULL
+    - name: isDefaultPublicGroup
+      type: bool
+      constraints:
+      - NOT_NULL
+    - name: status
+      type: enum
+      enum_ref: CircleGroupStatus
+      constraints:
+      - NOT_NULL
+    - name: memberCount
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: createdAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+    - name: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+  CreateCircleGroupRequest:
+    description: 创建 CircleGroup 的强类型命令体；actor 与 circleId 由 runtime/path 注入。
+    fields:
+    - name: parentGroupId
+      type: ObjectId
+      constraints:
+      - NULLABLE
+    - name: groupType
+      type: enum
+      enum_ref: CircleGroupType
+      constraints:
+      - NOT_NULL
+    - name: nodeType
+      type: enum
+      enum_ref: OrganizationNodeType
+      constraints:
+      - NULLABLE
+    - name: name
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: description
+      type: string
+      constraints:
+      - NULLABLE
+    - name: visibility
+      type: enum
+      enum_ref: CircleGroupVisibility
+      constraints:
+      - NOT_NULL
+    - name: joinPolicy
+      type: enum
+      enum_ref: CircleGroupJoinPolicy
+      constraints:
+      - NOT_NULL
+    - name: storageEnabled
+      type: bool
+      constraints:
+      - NOT_NULL
+    - name: noticeEnabled
+      type: bool
+      constraints:
+      - NOT_NULL
+  UpdateCircleGroupRequest:
+    description: CircleGroup 可变策略的强类型 PATCH；版本只从 If-Match 获取。
+    fields:
+    - name: parentGroupId
+      type: ObjectId
+      constraints:
+      - NULLABLE
+    - name: nodeType
+      type: enum
+      enum_ref: OrganizationNodeType
+      constraints:
+      - NULLABLE
+    - name: name
+      type: string
+      constraints:
+      - NULLABLE
+    - name: description
+      type: string
+      constraints:
+      - NULLABLE
+    - name: visibility
+      type: enum
+      enum_ref: CircleGroupVisibility
+      constraints:
+      - NULLABLE
+    - name: joinPolicy
+      type: enum
+      enum_ref: CircleGroupJoinPolicy
+      constraints:
+      - NULLABLE
+    - name: storageEnabled
+      type: bool
+      constraints:
+      - NULLABLE
+    - name: noticeEnabled
+      type: bool
+      constraints:
+      - NULLABLE
+  CircleGroupCommandResult:
+    description: CircleGroup 命令的提交回执。
+    fields:
+    - name: groupId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: version
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: status
+      type: enum
+      enum_ref: CircleGroupStatus
+      constraints:
+      - NOT_NULL
+    - name: idempotentReplay
+      type: bool
+      constraints:
+      - NOT_NULL
+  CircleGroupCommandReceipt:
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: commandDigest
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: groupId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: version
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: status
+      type: enum
+      enum_ref: CircleGroupStatus
+      constraints:
+      - NOT_NULL
+    - name: expiresAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+  CircleGroupOutbox:
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: outboxSequence
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: eventType
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: aggregateId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: aggregateVersion
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: payloadJson
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: occurredAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+  CircleGroupOutboxSequence:
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: sequence
+      type: int64
+      constraints:
+      - NOT_NULL
+  CircleGroupProjectionCheckpoint:
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: sequence
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL

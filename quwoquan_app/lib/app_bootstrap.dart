@@ -18,6 +18,8 @@ import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
+import 'package:quwoquan_app/core/platform/firebase_incoming_call_runtime.dart';
+import 'package:quwoquan_app/core/platform/app_recovery_native_bridge.dart';
 import 'package:quwoquan_app/core/platform/local_dev_https_trust.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_session_store.dart';
@@ -33,87 +35,49 @@ bool _bootstrapRecoveryMounted = false;
 bool _bootstrapRecoveryScheduled = false;
 List<Override> _bootstrapProviderScopeOverrides = const <Override>[];
 
-/// 共享启动：默认入口 [main] 与 [main_prod] 均经此函数，后者可注入 [providerScopeOverrides]。
+/// 首次 [runZonedGuarded] 建立的 bootstrap Zone。
 ///
-/// [WidgetsFlutterBinding.ensureInitialized] 与 [runApp] 必须在同一 Zone 内调用，
-/// 否则 debug 下会触发 `Zone mismatch`（见 [BindingBase.debugCheckZone]）。
+/// [WidgetsFlutterBinding.ensureInitialized] 与全部 [runApp]（含 recovery / retry）
+/// 必须始终落在该 Zone；重试禁止再次 `runZonedGuarded`，否则 debug 下会触发
+/// `Zone mismatch`（见 [BindingBase.debugCheckZone]）。
+Zone? _bootstrapZone;
+
+/// 共享启动：默认入口 [main] 与 [main_prod] 均经此函数，后者可注入 [providerScopeOverrides]。
 Future<void> runQuwoquanApp({
   List<Override> providerScopeOverrides = const [],
-}) async {
-  await runZonedGuarded<Future<void>>(
-    () async {
-      WidgetsFlutterBinding.ensureInitialized();
-      _bootstrapProviderScopeOverrides = List<Override>.unmodifiable(
-        providerScopeOverrides,
-      );
-      _installBootstrapErrorBoundary();
-      _installRootIsolateErrorListener();
-      _configureStartupTelemetry();
-      AppStartupRuntime.instance.markBootstrapStarted();
-      try {
-        CloudRuntimeConfig.validateRequiredEndpoints();
-        AppStartupRuntime.instance.markConfigurationValidated();
-        // SecureStorage / package_info / 连通性探测不得阻塞 runApp。
-        // 日志中 native_first_frame_timeout 后才出现 FlutterSecureStorage migration
-        // 即旧路径在首帧预算内卡住的实证。
-        AppTelemetrySessionStore.instance.bootstrapForColdStart();
-        AppTelemetryContextProvider.instance.bootstrapForColdStart(
-          appVersion: const String.fromEnvironment(
-            'APP_VERSION',
-            defaultValue: 'dev',
-          ),
-        );
-        CloudClientContextRegistry.configure(
-          const AppCloudClientContextProvider(),
-        );
-        assert(() {
-          debugPaintSizeEnabled = false;
-          debugPaintBaselinesEnabled = false;
-          debugPaintPointersEnabled = false;
-          debugRepaintRainbowEnabled = false;
-          return true;
-        }());
+  bool autoCompleteStartupWelcomeForTest = false,
+}) {
+  final existingZone = _bootstrapZone;
+  if (existingZone != null) {
+    return existingZone.run(
+      () => _runQuwoquanAppInBootstrapZone(
+        providerScopeOverrides: providerScopeOverrides,
+        autoCompleteStartupWelcomeForTest: autoCompleteStartupWelcomeForTest,
+      ),
+    );
+  }
 
-        SystemChrome.setSystemUIOverlayStyle(
-          AppTheme.systemUiOverlayStyleFor(Brightness.light),
-        );
-        unawaited(
-          SystemChrome.setPreferredOrientations([
-            DeviceOrientation.portraitUp,
-            DeviceOrientation.portraitDown,
-            DeviceOrientation.landscapeLeft,
-            DeviceOrientation.landscapeRight,
-          ]),
-        );
-
-        if (!_bootstrapLifecycleObserverInstalled) {
-          WidgetsBinding.instance.addObserver(_AppExceptionLifecycleObserver());
-          _bootstrapLifecycleObserverInstalled = true;
-        }
-        AppStartupRuntime.instance.markRunAppCalled();
-        runApp(
-          ProviderScope(
-            overrides: providerScopeOverrides,
-            child: QuWoQuanAppRoot(
-              postFirstFrameTasks: _hydratePostFirstFrameStartupState,
-              authNetworkPrerequisites: kReleaseMode
-                  ? null
-                  : _installLocalDevHttpsTrustBeforeMediaClients,
-            ),
-          ),
-        );
-        _bootstrapRecoveryMounted = false;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _bootstrapFirstFrameConfirmed = true;
-          AppStartupRuntime.instance.markFirstFramePainted();
-        });
-      } catch (error, stack) {
-        _showBootstrapRecovery(
-          error: error,
-          stack: stack,
+  final done = Completer<void>();
+  runZonedGuarded(
+    () {
+      _bootstrapZone = Zone.current;
+      unawaited(
+        _runQuwoquanAppInBootstrapZone(
           providerScopeOverrides: providerScopeOverrides,
-        );
-      }
+          autoCompleteStartupWelcomeForTest: autoCompleteStartupWelcomeForTest,
+        ).then<void>(
+          (_) {
+            if (!done.isCompleted) {
+              done.complete();
+            }
+          },
+          onError: (Object error, StackTrace stack) {
+            if (!done.isCompleted) {
+              done.completeError(error, stack);
+            }
+          },
+        ),
+      );
     },
     (Object error, StackTrace stack) {
       _handleBootstrapZoneError(
@@ -121,8 +85,90 @@ Future<void> runQuwoquanApp({
         stack: stack,
         providerScopeOverrides: providerScopeOverrides,
       );
+      if (!done.isCompleted) {
+        done.complete();
+      }
     },
   );
+  return done.future;
+}
+
+Future<void> _runQuwoquanAppInBootstrapZone({
+  required List<Override> providerScopeOverrides,
+  required bool autoCompleteStartupWelcomeForTest,
+}) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  registerFirebaseIncomingCallBackgroundHandler();
+  _bootstrapProviderScopeOverrides = List<Override>.unmodifiable(
+    providerScopeOverrides,
+  );
+  _installBootstrapErrorBoundary();
+  _installRootIsolateErrorListener();
+  _configureStartupTelemetry();
+  AppStartupRuntime.instance.markBootstrapStarted();
+  try {
+    CloudRuntimeConfig.validateRequiredEndpoints();
+    AppStartupRuntime.instance.markConfigurationValidated();
+    // SecureStorage / package_info / 连通性探测不得阻塞 runApp。
+    // 日志中 native_first_frame_timeout 后才出现 FlutterSecureStorage migration
+    // 即旧路径在首帧预算内卡住的实证。
+    AppTelemetrySessionStore.instance.bootstrapForColdStart();
+    AppTelemetryContextProvider.instance.bootstrapForColdStart(
+      appVersion: const String.fromEnvironment(
+        'APP_VERSION',
+        defaultValue: 'dev',
+      ),
+    );
+    CloudClientContextRegistry.configure(const AppCloudClientContextProvider());
+    assert(() {
+      debugPaintSizeEnabled = false;
+      debugPaintBaselinesEnabled = false;
+      debugPaintPointersEnabled = false;
+      debugRepaintRainbowEnabled = false;
+      return true;
+    }());
+
+    SystemChrome.setSystemUIOverlayStyle(
+      AppTheme.systemUiOverlayStyleFor(Brightness.light),
+    );
+    unawaited(
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]),
+    );
+
+    if (!_bootstrapLifecycleObserverInstalled) {
+      WidgetsBinding.instance.addObserver(_AppExceptionLifecycleObserver());
+      _bootstrapLifecycleObserverInstalled = true;
+    }
+    AppStartupRuntime.instance.markRunAppCalled();
+    runApp(
+      ProviderScope(
+        overrides: providerScopeOverrides,
+        child: QuWoQuanAppRoot(
+          autoCompleteStartupWelcomeForTest: autoCompleteStartupWelcomeForTest,
+          postFirstFrameTasks: _hydratePostFirstFrameStartupState,
+          authNetworkPrerequisites: kReleaseMode
+              ? null
+              : _installLocalDevHttpsTrustBeforeMediaClients,
+        ),
+      ),
+    );
+    _bootstrapRecoveryMounted = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bootstrapFirstFrameConfirmed = true;
+      AppStartupRuntime.instance.markFirstFramePainted();
+    });
+  } catch (error, stack) {
+    _showBootstrapRecovery(
+      error: error,
+      stack: stack,
+      providerScopeOverrides: providerScopeOverrides,
+    );
+  }
 }
 
 Future<void> _installLocalDevHttpsTrustBeforeMediaClients() {
@@ -228,7 +274,8 @@ void _scheduleBootstrapRecoveryBeforeFirstFrame(
     return;
   }
   _bootstrapRecoveryScheduled = true;
-  scheduleMicrotask(() {
+  final zone = _bootstrapZone ?? Zone.current;
+  zone.scheduleMicrotask(() {
     _bootstrapRecoveryScheduled = false;
     _showBootstrapRecovery(
       error: error,
@@ -243,6 +290,17 @@ void _showBootstrapRecovery({
   required StackTrace stack,
   required List<Override> providerScopeOverrides,
 }) {
+  final zone = _bootstrapZone;
+  if (zone != null && !identical(Zone.current, zone)) {
+    zone.run(
+      () => _showBootstrapRecovery(
+        error: error,
+        stack: stack,
+        providerScopeOverrides: providerScopeOverrides,
+      ),
+    );
+    return;
+  }
   if (_bootstrapFirstFrameConfirmed || _bootstrapRecoveryMounted) {
     _logBootstrapException(
       source: 'bootstrap_failure_after_root',
@@ -252,6 +310,7 @@ void _showBootstrapRecovery({
     return;
   }
   _bootstrapRecoveryMounted = true;
+  unawaited(AppRecoveryNativeBridge().recordFatalStartup());
   final failure = BootstrapFailure.fromError(error);
   AppStartupRuntime.instance.recordBootstrapFailure(failure.runtimeFailure);
   _logBootstrapException(
@@ -259,17 +318,7 @@ void _showBootstrapRecovery({
     exceptionText: error.toString(),
     stackText: stack.toString(),
   );
-  runApp(
-    BootstrapRecoveryApp(
-      failure: failure,
-      onRetry: () async {
-        _bootstrapRecoveryMounted = false;
-        _bootstrapFirstFrameConfirmed = false;
-        _bootstrapRecoveryScheduled = false;
-        await runQuwoquanApp(providerScopeOverrides: providerScopeOverrides);
-      },
-    ),
-  );
+  runApp(BootstrapRecoveryApp(failure: failure));
   WidgetsBinding.instance.addPostFrameCallback((_) {
     _bootstrapFirstFrameConfirmed = true;
     AppStartupRuntime.instance.markFirstFramePainted();
@@ -320,6 +369,17 @@ void _logBootstrapException({
   required String exceptionText,
   required String stackText,
 }) {
+  // 裸 `flutter run` 常见于缺 dart-define；必须在控制台可见，不能只进遥测。
+  final hint =
+      exceptionText.contains('runtime_define_validation') ||
+          exceptionText.contains('App runtime package is missing')
+      ? ' Repair: launch via quwoquan_app/run.sh (env-package dart-defines), '
+            'not bare `flutter run`.'
+      : '';
+  debugPrint('[bootstrap] source=$source exception=$exceptionText$hint');
+  if (stackText.isNotEmpty) {
+    debugPrint('[bootstrap] stack=$stackText');
+  }
   try {
     logQuwoquanAppException(
       source: source,

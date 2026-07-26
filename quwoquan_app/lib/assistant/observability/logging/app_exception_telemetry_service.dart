@@ -4,10 +4,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/core/observability/generated/runtime_log_catalog.g.dart';
+import 'package:quwoquan_app/core/observability/runtime_log_record.dart';
+import 'package:quwoquan_app/core/observability/runtime_logger.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
-import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
-import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class AppExceptionTelemetryFailureState {
   const AppExceptionTelemetryFailureState({
@@ -23,28 +25,27 @@ class AppExceptionTelemetryFailureState {
   final DateTime occurredAt;
 }
 
-/// 全局异常只负责稳定错误语义、去重和方法栈裁剪；排队、加密、重试、死信全部由
-/// AppTelemetryOutbox 统一承担，不维护第二套 Hive 队列。
+/// 全局异常只负责稳定错误语义与去重；写入由统一 RuntimeLogger 的加密环形缓冲
+/// 承担，不再向产品行为遥测或助手本地文件双写。
 class AppExceptionTelemetryService {
-  AppExceptionTelemetryService({AppTelemetryRecorder? reporter})
-    : _reporter = reporter;
+  AppExceptionTelemetryService({RuntimeLogger? logger}) : _logger = logger;
 
   static final AppExceptionTelemetryService instance =
       AppExceptionTelemetryService();
 
-  AppTelemetryRecorder? _reporter;
+  RuntimeLogger? _logger;
   final Set<String> _recentFingerprints = <String>{};
   AppExceptionTelemetryFailureState? _lastFlushFailure;
 
   AppExceptionTelemetryFailureState? get lastFlushFailure => _lastFlushFailure;
 
-  void bind({required AppTelemetryRecorder reporter}) {
-    _reporter = reporter;
+  void bind({required RuntimeLogger logger}) {
+    _logger = logger;
   }
 
-  void unbind(AppTelemetryRecorder reporter) {
-    if (identical(_reporter, reporter)) {
-      _reporter = null;
+  void unbind(RuntimeLogger logger) {
+    if (identical(_logger, logger)) {
+      _logger = null;
     }
   }
 
@@ -57,48 +58,88 @@ class AppExceptionTelemetryService {
     String surfaceId = 'global.app.runtime',
     String routeId = 'global.app.runtime',
     String operationId = 'app.runtime.capture_exception',
+    RuntimeFailureBase? runtimeFailure,
+    String exceptionType = '',
   }) async {
-    final reporter = _reporter;
-    if (reporter == null) return;
+    final logger = _logger;
+    if (logger == null) return;
     final fingerprint = _fingerprint(source, exceptionText, stackText);
     if (!_rememberFingerprint(fingerprint)) return;
     final resolvedPage = pageName.trim().isEmpty || pageName == 'app'
         ? AppPageContextStore.instance.pageName
         : pageName.trim();
-    final result = await reporter.record(
-      AppTelemetryPayload.runtimeException(
-        errorCode: 'APP.RUNTIME.uncaught_exception',
-        operationId: operationId.trim().isEmpty ? null : operationId.trim(),
-        callStack: _methodStack(stackText),
+    await logger.exception(
+      signal: 'app.exception.flutter',
+      errorCode: RuntimeLogCatalog.failureCodes['app_uncaught_flutter']!,
+      fingerprint: fingerprint,
+      message: 'unhandled app exception',
+      correlation: RuntimeLogCorrelation(
+        operationId: operationId.trim().isEmpty
+            ? 'app.runtime.capture_exception'
+            : operationId.trim(),
+        pageName: resolvedPage,
+        surfaceId: surfaceId,
       ),
-      pageName: resolvedPage,
+      attributes: <String, String>{
+        'source': source.trim(),
+        'stackFrameCount': '${_methodStack(stackText).length}',
+        if (exceptionType.trim().isNotEmpty)
+          'exceptionType': exceptionType.trim(),
+        if (runtimeFailure != null) ...<String, String>{
+          'kind': runtimeFailure.kind.name,
+          'reason': runtimeFailure.semanticReason.trim().isEmpty
+              ? runtimeFailure.code
+              : runtimeFailure.semanticReason.trim(),
+          'failurePoint': runtimeFailure.code,
+        },
+      },
     );
-    if (result != AppTelemetryRecordResult.accepted) {
-      _lastFlushFailure = AppExceptionTelemetryFailureState(
-        errorType: result.name,
-        message: 'runtime_exception_not_queued',
-        queueDepth: 0,
-        occurredAt: DateTime.now().toUtc(),
-      );
-    } else {
-      _lastFlushFailure = null;
-    }
+    _lastFlushFailure = null;
+  }
+
+  /// 已捕获、已降级处理的异常入口。
+  ///
+  /// 与全局未捕获入口共用稳定指纹和缓冲，但额外把
+  /// [CloudErrorMapper.runtimeFailureFromException] 的 code/kind/reason 写入
+  /// runtime log allowlist 字段，避免只有 `error.toString()` 而无法聚合恢复语义。
+  Future<void> recordHandledException({
+    required String source,
+    required Object error,
+    required StackTrace stackTrace,
+    String pageId = 'global.app.runtime',
+    String pageName = '',
+    String surfaceId = 'global.app.runtime',
+    String routeId = 'global.app.runtime',
+    String operationId = 'app.runtime.capture_exception',
+  }) {
+    final failure = CloudErrorMapper.runtimeFailureFromException(error);
+    return recordGlobalException(
+      source: source,
+      exceptionText: error.toString(),
+      stackText: stackTrace.toString(),
+      pageId: pageId,
+      pageName: pageName,
+      surfaceId: surfaceId,
+      routeId: routeId,
+      operationId: operationId,
+      runtimeFailure: failure,
+      exceptionType: error.runtimeType.toString(),
+    );
   }
 
   Future<void> flushPending() async {
-    final reporter = _reporter;
-    if (reporter == null) return;
-    final result = await reporter.flush();
-    if (result == AppTelemetryFlushResult.deferred ||
-        result == AppTelemetryFlushResult.identityBlocked) {
+    final logger = _logger;
+    if (logger == null) return;
+    try {
+      await logger.flush();
+      _lastFlushFailure = null;
+    } catch (_) {
       _lastFlushFailure = AppExceptionTelemetryFailureState(
-        errorType: result.name,
+        errorType: 'runtime_log_flush_failed',
         message: 'runtime_exception_flush_deferred',
         queueDepth: 0,
         occurredAt: DateTime.now().toUtc(),
       );
-    } else {
-      _lastFlushFailure = null;
     }
   }
 

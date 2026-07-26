@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/controlplane"
-	"quwoquan_service/services/product-ops-service/internal/application"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 )
 
 type productProjectionSummaryResponse struct {
@@ -199,11 +199,10 @@ func buildProductBacklogCandidates(
 			Owner:          "product-ops",
 			NextAction:     "打开 /product/dashboard 处理治理 case，并补齐审批说明。",
 			DrilldownRoute: "/product/dashboard",
-			RunbookID:      "cfg-rollback-drill",
-			RunbookRoute:   "/platform/runbook",
-			RepairEntry:    "/product/governance",
-			AlertID:        "governance_dual_review_pending",
-			AuditRoute:     "/audit",
+
+			RepairEntry: "/product/governance",
+			AlertID:     "governance_dual_review_pending",
+			AuditRoute:  "/audit",
 			Evidence: map[string]any{
 				"pendingDualReview": projectionSummary.PendingDualReview,
 				"workflowCount":     projectionSummary.WorkflowCount,
@@ -222,11 +221,10 @@ func buildProductBacklogCandidates(
 			Owner:          "app-observability",
 			NextAction:     "检查 page_access / event 上报链路，补齐九字段公共信封与事件目录要求的强类型扩展。",
 			DrilldownRoute: "/product/dashboard",
-			RunbookID:      "cfg-rollback-drill",
-			RunbookRoute:   "/platform/runbook",
-			RepairEntry:    "/product/dashboard",
-			AlertID:        "OpsEventUploadDrop",
-			AuditRoute:     "/audit",
+
+			RepairEntry: "/product/dashboard",
+			AlertID:     "OpsEventUploadDrop",
+			AuditRoute:  "/audit",
 			Evidence: map[string]any{
 				"missingDimensions": missingDimensions,
 				"totalEvents":       eventSummary.TotalCount,
@@ -243,11 +241,10 @@ func buildProductBacklogCandidates(
 			Owner:          "product-ops",
 			NextAction:     "打开 /product/l1-l4/environment 补齐缺失层级指标或接入对应 domain metric snapshot。",
 			DrilldownRoute: "/product/l1-l4/environment",
-			RunbookID:      "cfg-rollback-drill",
-			RunbookRoute:   "/platform/runbook",
-			RepairEntry:    "/product/l1-l4/environment",
-			AlertID:        "HighP95Latency",
-			AuditRoute:     "/audit",
+
+			RepairEntry: "/product/l1-l4/environment",
+			AlertID:     "HighP95Latency",
+			AuditRoute:  "/audit",
 			Evidence: map[string]any{
 				"cardCount": len(projectionSummary.L1L4Cards),
 				"cards":     projectionSummary.L1L4Cards,
@@ -264,11 +261,10 @@ func buildProductBacklogCandidates(
 			Owner:          "app-observability",
 			NextAction:     "检查页面访问采集、事件批量上报与 visit 汇总之间的链路。",
 			DrilldownRoute: "/product/dashboard",
-			RunbookID:      "cfg-rollback-drill",
-			RunbookRoute:   "/platform/runbook",
-			RepairEntry:    "/product/dashboard",
-			AlertID:        "OpsEventUploadDrop",
-			AuditRoute:     "/audit",
+
+			RepairEntry: "/product/dashboard",
+			AlertID:     "OpsEventUploadDrop",
+			AuditRoute:  "/audit",
 			Evidence: map[string]any{
 				"visitCount": visitSummary.TotalVisits,
 				"events":     eventSummary.TotalCount,
@@ -287,11 +283,10 @@ func buildProductBacklogCandidates(
 				Owner:          "app-observability",
 				NextAction:     "对照最近事件样本修复 AppLog / event uploader 的字段映射。",
 				DrilldownRoute: "/product/dashboard",
-				RunbookID:      "cfg-rollback-drill",
-				RunbookRoute:   "/platform/runbook",
-				RepairEntry:    "/product/dashboard",
-				AlertID:        "OpsEventUploadDrop",
-				AuditRoute:     "/audit",
+
+				RepairEntry: "/product/dashboard",
+				AlertID:     "OpsEventUploadDrop",
+				AuditRoute:  "/audit",
 				Evidence: map[string]any{
 					"missingFields": missingFields,
 					"sampleRowKey":  recentEvents[0].RowKey,

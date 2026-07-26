@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
 
 from core.tree_integrity import tree_integrity_stats
 from content.release.canonical import object_transaction_audit as transaction
+from content.release.canonical.object_transaction import (
+    _source_asset_for_manifest_asset,
+    _source_assets_by_ref,
+)
 from content.release.canonical.application import (
     apply_object_transaction,
     rollback_object_transaction,
@@ -87,6 +92,33 @@ def test_apply_is_atomic_create_once_idempotent_and_has_no_layout_parent(
     assert rerun["idempotent"] is True
 
 
+def test_first_transaction_initializes_missing_canonical_publish_root(
+    tmp_path: Path,
+) -> None:
+    canonical = build_canonical(tmp_path)
+    package = build_package(tmp_path, canonical)
+    shutil.rmtree(canonical)
+    output = tmp_path / ".qwq_output"
+
+    audit = transaction.audit_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        package_root=package,
+        transaction_id=TRANSACTION_ID,
+        expected_canonical_merkle=tree_integrity_stats(canonical)["merkleRoot"],
+    )
+    applied = apply_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        package_root=package,
+        transaction_id=TRANSACTION_ID,
+        dry_run_attestation_sha256=str(audit["dryRunAttestationSha256"]),
+    )
+
+    assert applied["status"] == "applied"
+    assert (canonical / "entities" / OBJECT_REF / "_entity.json").is_file()
+
+
 def test_rollback_restores_before_merkle_and_preserves_transaction_evidence(
     tmp_path: Path,
 ) -> None:
@@ -108,3 +140,42 @@ def test_rollback_restores_before_merkle_and_preserves_transaction_evidence(
     assert rolled_back["restoredMerkle"] == applied["beforeMerkle"]
     assert not (canonical / "entities" / OBJECT_REF).exists()
     assert Path(rolled_back["rollbackRefPreserved"]).is_dir()
+
+
+def test_entity_transaction_resolves_duplicate_source_asset_ids_by_full_reference(
+    tmp_path: Path,
+) -> None:
+    execution = tmp_path / "execution"
+    first = execution / "sources" / "first" / "assets"
+    second = execution / "sources" / "second" / "assets"
+    for directory, url in (
+        (first, "https://upload.wikimedia.org/first.jpg"),
+        (second, "https://upload.wikimedia.org/second.jpg"),
+    ):
+        directory.mkdir(parents=True)
+        (directory / "image.jpg").write_bytes(b"image")
+        (directory / "index.json").write_text(
+            json.dumps(
+                {
+                    "assets": [
+                        {
+                            "sourceAssetId": "001_001",
+                            "fileName": "image.jpg",
+                            "url": url,
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    source_ref, source_asset = _source_asset_for_manifest_asset(
+        {
+            "sourceAssetId": "001_001",
+            "sourceAssetRef": "sources/second/assets/image.jpg",
+        },
+        _source_assets_by_ref(execution),
+    )
+
+    assert source_ref == "sources/second/assets/image.jpg"
+    assert source_asset["url"] == "https://upload.wikimedia.org/second.jpg"

@@ -8,13 +8,13 @@ P4 诚实约束：图虫等"专业图库 / 摄影社区"大多受版权保护，
    逐图创作者授权后可发布 / 商业授权后可发布 / 仅参考」。
 2. 对受限来源产出**如实**的受限记录（受限原因 + ``bypassAttempted=false`` + 需要的授权凭证），
    并给出**替代路径**（回到 Wikimedia Commons / Openverse 等开放许可图池）。
-3. 授权完整性硬门（``source_quality._collection_gate`` / ``governance.coverage.validate_image_rights``）
-   仍是最终发布闸：缺逐图 ``license/credit/termsUrl/authorizationProof/usageScope`` 一律不进
-   发布面；页/集合级授权必须传播到每一张图。
+3. 授权完整性由 vertical license policy 决定。冷启动 ``audit_only`` 模式保留逐图
+   ``license/credit/termsUrl/authorizationProof/usageScope`` 及缺口，但不以缺口过滤内容；
+   ``enforce`` 模式才把缺口作为发布硬门。页/集合级事实仍传播到每一张图。
 
 本模块只做确定性分级与如实标注，**不抓取、不绕过、不伪造授权**。优先官方 API / 合规路径的
 落地形态：开放许可来源走 API 真实抓取（Commons/Openverse），受限来源如实标注受限并指向替代
-路径，等待人工授权凭证后才可发布。
+路径；是否阻断发布只由 vertical license policy 决定。
 """
 from __future__ import annotations
 
@@ -282,7 +282,7 @@ def professional_library_compliance_summary(
         "alternativePath": _alternative_path(registry),
         "note": (
             "图库可发布性以 content_source_registry.yaml rightsPolicy 为唯一真相源；受限来源"
-            "如实标注，不抓取/不绕过 ToS/登录墙，发布前必须逐图补齐授权凭证或回退开放许可图池。"
+            "如实标注，不抓取/不绕过 ToS/登录墙；逐图保留权利审计，是否阻断由垂类 license policy 决定。"
         ),
     }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/realtime_connection_credential.dart';
@@ -12,18 +13,23 @@ typedef RealtimeEventCallback = void Function(Map<String, dynamic> event);
 
 /// WebSocket transport for active (foreground chat) state.
 /// Handles connection, heartbeat, auth, and raw event dispatch.
+/// 鉴权：先经 IssueConnectionTicket 换取一次性 ticket，升级 query 只带 ticket。
 class WebSocketTransport {
   WebSocketTransport({
     required this.config,
     required this.authTokenProvider,
     required this.onEvent,
     required this.onDisconnect,
-  });
+    http.Client? ticketClient,
+  }) : _ticketClient = ticketClient ?? http.Client(),
+       _ownsTicketClient = ticketClient == null;
 
   final RealtimeConfig config;
   final CloudAuthTokenProvider authTokenProvider;
   final RealtimeEventCallback onEvent;
   final VoidCallback onDisconnect;
+  final http.Client _ticketClient;
+  final bool _ownsTicketClient;
 
   WebSocketChannel? _channel;
   Timer? _heartbeatTimer;
@@ -39,6 +45,8 @@ class WebSocketTransport {
     try {
       final credential = await RealtimeConnectionCredential.resolveWebSocket(
         authTokenProvider,
+        gatewayBaseUrl: config.gatewayBaseUrl,
+        client: _ticketClient,
       );
       if (credential == null) {
         _handleDisconnect();
@@ -171,5 +179,8 @@ class WebSocketTransport {
     _disposed = true;
     disconnect();
     _connected.dispose();
+    if (_ownsTicketClient) {
+      _ticketClient.close();
+    }
   }
 }

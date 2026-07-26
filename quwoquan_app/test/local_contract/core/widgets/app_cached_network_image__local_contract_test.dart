@@ -19,6 +19,8 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 import '../../../support/sqflite_ffi_test_support.dart';
 
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-002
+
 Widget _wrap(Widget child, {List<Override> overrides = const []}) {
   return ProviderScope(
     overrides: overrides,
@@ -426,5 +428,37 @@ void main() {
         expect(find.byType(CachedNetworkImage), findsNothing);
       },
     );
+
+    testWidgets('circular avatar uses the unified avatar loader and fallback', (
+      tester,
+    ) async {
+      const fallbackKey = ValueKey<String>('avatar-fallback');
+      await tester.pumpWidget(
+        _wrap(
+          const AppCircularAvatar(
+            imageUrl: '',
+            size: AppSpacing.avatarSize,
+            backgroundColor: CupertinoColors.systemGrey5,
+            fallback: Icon(CupertinoIcons.person, key: fallbackKey),
+          ),
+        ),
+      );
+
+      expect(find.byKey(fallbackKey), findsOneWidget);
+      expect(find.byType(AppAvatarImage), findsNothing);
+
+      await tester.pumpWidget(
+        _wrap(
+          const AppCircularAvatar(
+            imageUrl: 'media/avatar/s/mock/user/current/v1/avatar.png',
+            size: AppSpacing.avatarSize,
+            backgroundColor: CupertinoColors.systemGrey5,
+            fallback: Icon(CupertinoIcons.person, key: fallbackKey),
+          ),
+        ),
+      );
+
+      expect(find.byType(AppAvatarImage), findsOneWidget);
+    });
   });
 }

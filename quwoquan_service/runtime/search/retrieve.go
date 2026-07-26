@@ -141,6 +141,7 @@ type RecallCandidate struct {
 // RetrieveHit is the standard, caller-agnostic result item.
 type RetrieveHit struct {
 	Target       Target         `json:"target"`
+	ObjectType   string         `json:"objectType"`
 	ObjectID     string         `json:"objectId"`
 	Title        string         `json:"title"`
 	Snippet      string         `json:"snippet"`
@@ -485,6 +486,7 @@ func rankAndMerge(plan RetrievePlan, candidates []RecallCandidate) ([]RetrieveHi
 
 		hits = append(hits, RetrieveHit{
 			Target:       target,
+			ObjectType:   doc.ObjectType,
 			ObjectID:     doc.ObjectID,
 			Title:        firstNonEmpty(doc.Title, doc.ObjectID),
 			Snippet:      truncate(snippet, 180),
@@ -742,9 +744,15 @@ func permitted(viewer Viewer, doc Document) bool {
 func retrieveCitations(hits []RetrieveHit) []Citation {
 	citations := make([]Citation, 0, len(hits))
 	for _, hit := range hits {
+		objectType := strings.TrimSpace(hit.ObjectType)
+		if objectType == "" {
+			// 文档投影漏掉 canonical type 时不产生 citation，避免向端侧泄露
+			// target alias 并让未知目标错误地打开默认内容页。
+			continue
+		}
 		citations = append(citations, Citation{
-			CitationID: citationID(string(hit.Target), hit.ObjectID),
-			ObjectType: string(hit.Target),
+			CitationID: citationID(objectType, hit.ObjectID),
+			ObjectType: objectType,
 			ObjectID:   hit.ObjectID,
 			Title:      hit.Title,
 			Snippet:    hit.Snippet,

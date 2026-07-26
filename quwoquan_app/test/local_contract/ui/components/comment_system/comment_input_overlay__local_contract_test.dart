@@ -6,25 +6,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_input_overlay.dart';
 import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/recording_content_media_facet.dart';
 import '../../../../support/cloud_services/test_content_comment_facet.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/runtime_failure_fixtures.dart';
 
 class _AuthenticatedSession extends AuthSessionController {
   @override
@@ -65,8 +72,11 @@ void main() {
             child: Builder(
               builder: (context) {
                 return CupertinoButton(
-                  onPressed: () =>
-                      CommentInputOverlay.show(context, postId: 'post_001'),
+                  onPressed: () => CommentInputOverlay.show(
+                    context,
+                    postId: 'post_001',
+                    sourceSurface: AppUiSurfaces.homeFeed,
+                  ),
                   child: const Text('open-comment-input'),
                 );
               },
@@ -82,7 +92,7 @@ void main() {
     expect(find.byKey(TestKeys.commentInputOverlay), findsOneWidget);
     expect(find.byKey(TestKeys.chatInputVoiceToggleButton), findsNothing);
     expect(find.byIcon(CupertinoIcons.mic), findsNothing);
-    expect(find.text(UITextConstants.voiceInput), findsNothing);
+    expect(find.text(ChatText.voiceInput), findsNothing);
   });
 
   testWidgets(
@@ -159,6 +169,42 @@ void main() {
     );
     expect(field.controller?.text, isEmpty, reason: '提交成功后草稿应已清除');
   });
+
+  testWidgets('评论频控失败展示结构化恢复反馈并保留可编辑草稿', (tester) async {
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
+    await tester.pumpWidget(
+      _overlayHarness(
+        postId: 'rate-limited-post',
+        onSubmit: (_) => throw CloudException(
+          type: CloudErrorType.rateLimited,
+          message: 'comment rate limited',
+          statusCode: 429,
+          code: 'CONTENT.USER.comment_rate_limited',
+          userMessage: '操作太频繁，请稍后再试',
+          runtimeFailure: testRuntimeFailure(
+            code: 'CONTENT.USER.comment_rate_limited',
+            kind: RuntimeFailureKind.rateLimited,
+            nature: RuntimeFailureNature.transient,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open-comment-input'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(TestKeys.commentTextField), '频控后仍需保留');
+    await tester.pump();
+    await tester.tap(find.byKey(TestKeys.submitCommentButton));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+    expect(find.text('操作太频繁，请稍后再试'), findsOneWidget);
+    final field = tester.widget<CupertinoTextField>(
+      find.byKey(TestKeys.commentTextField),
+    );
+    expect(field.enabled, isTrue);
+    expect(field.controller?.text, '频控后仍需保留');
+  });
 }
 
 Widget _overlayHarness({
@@ -177,7 +223,7 @@ Widget _overlayHarness({
           subjectType: 'subAccount',
           displayName: '测试用户',
           avatarUrl: '',
-          personaContextVersion: '1',
+          contextVersion: 1,
         ),
       ),
     ],
@@ -191,6 +237,7 @@ Widget _overlayHarness({
               onPressed: () => CommentInputOverlay.show(
                 context,
                 postId: postId,
+                sourceSurface: AppUiSurfaces.homeFeed,
                 onSubmit: onSubmit,
               ),
               child: const Text('open-comment-input'),
@@ -221,7 +268,7 @@ Future<void> testCommentSubmitThroughProvider() async {
           subjectType: 'subAccount',
           displayName: '测试用户',
           avatarUrl: '',
-          personaContextVersion: '1',
+          contextVersion: 1,
         ),
       ),
     ],
@@ -264,9 +311,21 @@ Future<void> testCommentComposerMentionsAndAttachment(
             selectedPath: <int>[1, 2, 3, 4],
           }),
         ),
+        contentMediaSourceReaderProvider.overrideWithValue(
+          const _MemoryContentMediaSourceReader(<String, List<int>>{
+            selectedPath: <int>[1, 2, 3, 4],
+          }),
+        ),
         homeFeedContentMediaFacetProvider.overrideWithValue(media),
-        contentMediaObjectUploadProvider.overrideWithValue(
-          (_, _, {required contentType, required expectedSha256}) async {},
+        contentMediaStreamObjectUploadProvider.overrideWithValue(
+          (
+            _,
+            _, {
+            required contentLength,
+            required contentType,
+            required expectedSha256,
+            abortTrigger,
+          }) async {},
         ),
         commentRemoteConfigProvider.overrideWithValue(
           const CommentRemoteConfig(maxImageAttachments: 1),
@@ -282,12 +341,13 @@ Future<void> testCommentComposerMentionsAndAttachment(
                 onPressed: () => CommentInputOverlay.show(
                   context,
                   postId: 'comment-compose-post',
+                  sourceSurface: AppUiSurfaces.homeFeed,
                   config: const CommentConfig(maxImageAttachments: 1),
                   mentionCandidates: <ContentCommentMention>[
                     ContentCommentMention(
                       subjectType: 'assistant',
                       subjectId: 'assistant_xiaoqu',
-                      displayName: UITextConstants.assistantEntryXiaoqu,
+                      displayName: AssistantText.assistantEntryXiaoqu,
                     ),
                     ContentCommentMention(
                       subjectType: 'user',
@@ -320,7 +380,14 @@ Future<void> testCommentComposerMentionsAndAttachment(
   await tester.enterText(find.byKey(TestKeys.commentTextField), '很喜欢这张图');
   await tester.pump();
 
-  await tester.tap(find.byKey(TestKeys.commentAtXiaoquButton));
+  await tester.tap(find.byKey(TestKeys.commentMentionButton));
+  await tester.pumpAndSettle();
+  expect(
+    find.text(AssistantText.assistantEntryXiaoqu),
+    findsOneWidget,
+    reason: '点击 @ 后应展示可选择的小趣候选',
+  );
+  await tester.tap(find.text(AssistantText.assistantEntryXiaoqu));
   await tester.pump();
 
   final textField = tester.widget<CupertinoTextField>(
@@ -329,7 +396,7 @@ Future<void> testCommentComposerMentionsAndAttachment(
   expect(
     textField.controller?.text,
     contains('@小趣'),
-    reason: '点击 @ 应先插入默认小趣候选',
+    reason: '选择小趣候选后应插入可见的 @小趣 文本',
   );
 
   await tester.tap(find.byIcon(CupertinoIcons.photo).first);
@@ -356,7 +423,7 @@ Future<void> testCommentComposerMentionsAndAttachment(
   expect(payload.mentions, hasLength(1));
   expect(
     payload.mentions.single.displayName,
-    equals(UITextConstants.assistantEntryXiaoqu),
+    equals(AssistantText.assistantEntryXiaoqu),
   );
 }
 
@@ -412,4 +479,23 @@ final class _MemoryFileStorageGateway implements FileStorageGateway {
   @override
   Future<List<FileSystemEntry>> listDirectory(String path) async =>
       const <FileSystemEntry>[];
+}
+
+final class _MemoryContentMediaSourceReader
+    implements ContentMediaSourceReader {
+  const _MemoryContentMediaSourceReader(this.bytesByPath);
+
+  final Map<String, List<int>> bytesByPath;
+
+  @override
+  Future<PreparedContentMediaSource> prepare(String localPath) {
+    final bytes = bytesByPath[localPath];
+    if (bytes == null) {
+      throw StateError('missing in-memory media source: $localPath');
+    }
+    return prepareContentMediaSource(
+      fileSize: bytes.length,
+      openRead: () => Stream<List<int>>.value(bytes),
+    );
+  }
 }

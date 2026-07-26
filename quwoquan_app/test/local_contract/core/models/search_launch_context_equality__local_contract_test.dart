@@ -60,4 +60,33 @@ void main() {
       expect(a, isNot(equals(b)));
     });
   });
+
+  group('SearchSessionState', () {
+    test('拆分后展示状态仍通过 search_models 强类型 API 暴露', () {
+      const launchContext = SearchLaunchContext(entrySurfaceId: 'surface');
+      const initial = SearchSessionState(launchContext: launchContext);
+
+      expect(initial.viewMode, SearchViewMode.historyBrowse);
+
+      final live = initial.copyWith(
+        query: '川西',
+        suggestionSections: const <SearchSuggestionSection>[
+          SearchSuggestionSection(
+            kind: SearchSuggestionSectionKind.network,
+            items: <SearchSuggestionEntry>[
+              SearchSuggestionEntry.network(
+                NetworkSearchSuggestion(query: '川西露营'),
+              ),
+            ],
+          ),
+        ],
+      );
+
+      expect(live.viewMode, SearchViewMode.liveSuggestions);
+      expect(
+        live.suggestionSections.single.items.single.kind,
+        SearchSuggestionEntryKind.network,
+      );
+    });
+  });
 }

@@ -20,6 +20,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     required String postId,
     String? cursor,
     int limit = 20,
+    ContentCommentSort sort = ContentCommentSort.hot,
   }) async {
     final roots = _items
         .where(
@@ -28,8 +29,31 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
               item.status == ContentCommentStatus.active &&
               item.parentCommentId == null,
         )
-        .toList(growable: false);
-    return _page(roots, cursor, limit);
+        .toList();
+    // 与服务端排序契约同源：置顶段在前；hot 档按确定性热度分
+    // (like - dislike + 2*reply) 降序，latest 档按时间降序。
+    int hotScore(ContentCommentListItem item) =>
+        (item.likeCount - item.dislikeCount) + 2 * item.replyCount;
+    roots.sort((a, b) {
+      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+      if (a.isPinned && b.isPinned) {
+        final pinCompare = (b.pinnedAt ?? DateTime(0)).compareTo(
+          a.pinnedAt ?? DateTime(0),
+        );
+        if (pinCompare != 0) return pinCompare;
+      } else if (sort == ContentCommentSort.hot) {
+        final scoreCompare = hotScore(b).compareTo(hotScore(a));
+        if (scoreCompare != 0) return scoreCompare;
+      }
+      final createdCompare = b.createdAt.compareTo(a.createdAt);
+      if (createdCompare != 0) return createdCompare;
+      return b.id.compareTo(a.id);
+    });
+    return _page(
+      List<ContentCommentListItem>.unmodifiable(roots),
+      cursor,
+      limit,
+    );
   }
 
   @override
@@ -39,14 +63,20 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     String? cursor,
     int limit = 10,
   }) async {
-    final replies = _items
-        .where(
-          (item) =>
-              item.postId == postId &&
-              item.parentCommentId == commentId &&
-              item.status == ContentCommentStatus.active,
-        )
-        .toList(growable: false);
+    final replies =
+        _items
+            .where(
+              (item) =>
+                  item.postId == postId &&
+                  item.parentCommentId == commentId &&
+                  item.status == ContentCommentStatus.active,
+            )
+            .toList(growable: false)
+          ..sort((left, right) {
+            final createdOrder = left.createdAt.compareTo(right.createdAt);
+            if (createdOrder != 0) return createdOrder;
+            return left.id.compareTo(right.id);
+          });
     final page = _page(replies, cursor, limit);
     return ContentCommentReplyPageSlice(
       items: page.items,
@@ -60,17 +90,17 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     String? cursor,
     int limit = 20,
   }) async {
-    final page = _page(
-      _items
-          .where(
-            (item) =>
-                item.authorId == actorId &&
-                item.status == ContentCommentStatus.active,
-          )
-          .toList(growable: false),
-      cursor,
-      limit,
-    );
+    final comments =
+        _items
+            .where(
+              (item) =>
+                  item.authorId == actorId &&
+                  (item.status == ContentCommentStatus.active ||
+                      item.status == ContentCommentStatus.hidden),
+            )
+            .toList(growable: false)
+          ..sort(_compareLatest);
+    final page = _page(comments, cursor, limit);
     return ContentAuthorCommentPageSlice(
       items: page.items,
       nextCursor: page.nextCursor,
@@ -83,17 +113,16 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     String? cursor,
     int limit = 20,
   }) async {
-    final page = _page(
-      _items
-          .where(
-            (item) =>
-                item.authorId != actorId &&
-                item.status == ContentCommentStatus.active,
-          )
-          .toList(growable: false),
-      cursor,
-      limit,
-    );
+    final comments =
+        _items
+            .where(
+              (item) =>
+                  item.authorId != actorId &&
+                  item.status == ContentCommentStatus.active,
+            )
+            .toList(growable: false)
+          ..sort(_compareLatest);
+    final page = _page(comments, cursor, limit);
     return ContentReceivedCommentPageSlice(
       items: page.items,
       nextCursor: page.nextCursor,
@@ -316,6 +345,15 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
       nextCursor: end < values.length ? '$end' : null,
       total: values.length,
     );
+  }
+
+  static int _compareLatest(
+    ContentCommentListItem left,
+    ContentCommentListItem right,
+  ) {
+    final createdOrder = right.createdAt.compareTo(left.createdAt);
+    if (createdOrder != 0) return createdOrder;
+    return right.id.compareTo(left.id);
   }
 
   ContentCommentListItem? _find(String id) {

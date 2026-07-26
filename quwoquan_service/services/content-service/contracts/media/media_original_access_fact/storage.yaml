@@ -1,0 +1,53 @@
+backend: mongodb
+collections:
+  media_original_access_facts:
+    entity: MediaOriginalAccessFact
+    role: append_only
+    indexes:
+    - name: idx_media_original_access_audit
+      keys:
+        auditId: 1
+      unique: true
+    - name: idx_media_original_access_asset_time
+      keys:
+        assetId: 1
+        grantedAt: -1
+    - name: idx_media_original_access_viewer_asset_purpose_time
+      keys:
+        viewerId: 1
+        assetId: 1
+        purpose: 1
+        grantedAt: -1
+    - name: idx_media_original_access_dedupe
+      keys:
+        viewerId: 1
+        idempotencyKey: 1
+      unique: true
+  media_original_access_receipts:
+    entity: MediaOriginalAccessFact
+    role: idempotency_receipt
+    indexes:
+    - name: idx_media_original_access_receipt_key
+      keys:
+        idempotencyKey: 1
+      unique: true
+  media_original_access_rate_limits:
+    entity: MediaOriginalAccessFact
+    role: rate_limit_lock
+    description: viewer/media/purpose 窗口的 hash 化额度保留；与原图审计事实同一 Mongo transaction 写入，TTL 后自动清理。
+    indexes:
+    - name: idx_media_original_access_rate_limit_expire
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
+transaction:
+  scope:
+  - media_original_access_facts
+  - media_original_access_receipts
+  - media_original_access_rate_limits
+  isolation: mongo_transaction
+  guarantees:
+  - idempotency_digest
+  - viewer_media_purpose_rate_window_serialization
+  - audit_and_rate_reservation_atomic_commit
+role: append_only

@@ -1,6 +1,5 @@
 // Command codegen_circle_domain regenerates every circle bounded-context object
-// into its own model/event package. Object packets must never be folded back
-// into the Circle aggregate merely to keep old imports compiling.
+// into its service-root generated/<context>/<object>/contract package.
 package main
 
 import (
@@ -18,22 +17,13 @@ func main() {
 	var metadataDir string
 	var outputDir string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
-	flag.StringVar(&outputDir, "output-dir", "services/circle-service/internal", "circle-service internal output directory")
+	flag.StringVar(&outputDir, "output-dir", "services/circle-service/generated/circle_management", "circle-service generated context directory")
 	flag.Parse()
 
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
 		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
 	}
-	generator := contractcodegen.NewDomainGenerator(
-		source,
-		filepath.Clean(outputDir),
-		contractcodegen.WithTypedEnums(),
-		contractcodegen.WithSliceEntityRefs(),
-		contractcodegen.WithSkipViewEntities(),
-		contractcodegen.WithGoFieldIDSuffix(),
-		contractcodegen.WithBusinessObjectEntitiesOnly(),
-	)
 	objects := []string{
 		"Circle",
 		"CircleBehaviorFact",
@@ -44,6 +34,16 @@ func main() {
 		"CirclePostPlacement",
 	}
 	for _, object := range objects {
+		generator := contractcodegen.NewDomainGenerator(
+			source,
+			filepath.Join(filepath.Clean(outputDir), contractcodegen.CamelToSnake(object)),
+			contractcodegen.WithTypedEnums(),
+			contractcodegen.WithSliceEntityRefs(),
+			contractcodegen.WithSkipViewEntities(),
+			contractcodegen.WithGoFieldIDSuffix(),
+			contractcodegen.WithBusinessObjectEntitiesOnly(),
+			contractcodegen.WithObjectFirstRoot(),
+		)
 		if err := generator.GenerateDomainModel(object); err != nil {
 			exitErr(fmt.Errorf("generate %s model: %w", object, err))
 		}
@@ -58,7 +58,7 @@ func main() {
 }
 
 func generateErrors(source *contractcodegen.Source, outputDir string) error {
-	const sourcePath = "social/circle/errors.yaml"
+	const sourcePath = "circle/circle_management/circle/errors.yaml"
 	var errorsFile contractcodegen.ErrorsFile
 	if err := source.Decode(sourcePath, &errorsFile); err != nil {
 		return err
@@ -72,7 +72,7 @@ func generateErrors(source *contractcodegen.Source, outputDir string) error {
 	if err != nil {
 		return fmt.Errorf("gofmt generated errors: %w", err)
 	}
-	outPath := filepath.Join(outputDir, "generated", "errors.go")
+	outPath := filepath.Join(outputDir, "circle", "errors.go")
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		return err
 	}

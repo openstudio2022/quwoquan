@@ -9,10 +9,10 @@ SCAFFOLD = ROOT / "quwoquan_ops" / "gate" / "scaffold"
 if str(SCAFFOLD) not in sys.path:
     sys.path.insert(0, str(SCAFFOLD))
 
-from test_directory_inventory_lib import (
+from test_directory_layout_lib import (
     go_has_test_entrypoint,
     iter_canonical_files,
-    recorded_file_is_canonical,
+    evidence_path_is_canonical,
 )
 
 
@@ -23,8 +23,8 @@ CANONICAL_ALPHA_LOCATION_TEST = (
 
 
 def test_nested_dart_package_local_contract_is_canonical() -> None:
-    assert recorded_file_is_canonical(CANONICAL_ALPHA_LOCATION_TEST)
-    assert not recorded_file_is_canonical(
+    assert evidence_path_is_canonical(CANONICAL_ALPHA_LOCATION_TEST)
+    assert not evidence_path_is_canonical(
         "quwoquan_app/packages/quwoquan_cloud_mock/test/integration/alpha_location_query_test.dart"
     )
 
@@ -36,10 +36,10 @@ def test_nested_dart_package_local_contract_is_inventory_visible() -> None:
 
 def test_embedded_real_service_integration_test_is_canonical() -> None:
     embedded = (
-        "quwoquan_service/services/content-service/cmd/import/"
-        "mongo_import__api_integration_test.go"
+        "quwoquan_service/services/content-service/tests/api_integration/"
+        "content/post/import/mongo_import__api_integration_test.go"
     )
-    assert recorded_file_is_canonical(embedded)
+    assert evidence_path_is_canonical(embedded)
     layers = {
         path.relative_to(ROOT).as_posix(): layer
         for _, path, layer in iter_canonical_files()

@@ -25,8 +25,8 @@ class LocalSearchNamespace {
 
   String get key => '${ownerUserId.trim()}::$actorId';
 
-  Map<String, dynamic> toMap() {
-    return <String, dynamic>{
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
       'key': key,
       'ownerUserId': ownerUserId,
       'subAccountId': subAccountId,
@@ -46,7 +46,7 @@ class LocalSearchNamespace {
       ownerUserId: context.ownerUserId.trim(),
       subAccountId: subAccountId,
       subjectType: context.subjectType.trim(),
-      personaContextVersion: context.personaContextVersion.trim(),
+      personaContextVersion: context.contextVersion.toString(),
     );
   }
 }

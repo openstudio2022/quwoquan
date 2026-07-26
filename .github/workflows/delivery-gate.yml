@@ -1,8 +1,11 @@
 # Delivery Gate — PR 合入主门禁（L1+L2）
 # 触发：pull_request(main) + workflow_dispatch
 # 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract) + portal
-# 端到端闭环见 quwoquan_ops/environments/ci_cd_end_to_end_design.md
+# 执行语义见 .cursor/commands/deliver.md；本 workflow 是 CI 行为真相源。
 name: 03. Delivery Gate
+
+permissions:
+  contents: read
 
 env:
   QWQ_OUTPUT_ROOT: .qwq_output
@@ -49,7 +52,7 @@ jobs:
       topology: ${{ steps.detect.outputs.topology }}
       data: ${{ steps.detect.outputs.data }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
           ref: ${{ inputs.checkout_ref || github.sha }}
@@ -69,9 +72,7 @@ jobs:
       - name: Environment Topology Regression
         if: ${{ steps.detect.outputs.topology == 'true' }}
         run: |
-          bash quwoquan_service/scripts/deploy/verify_deployment_domain_mapping.sh
-          bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
-          bash quwoquan_service/scripts/deploy/report_deployment_mapping_impact.sh
+          make verify-service-architecture
       - id: finish
         if: always()
         name: Finish timer
@@ -86,26 +87,63 @@ jobs:
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 设置 Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: quwoquan_service/go.mod
       - name: 设置 Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
-      - name: 安装 Python 依赖 (rec-model-service)
+      - name: 安装 Python 依赖 (recommendation-service)
         run: |
-          pip install -r quwoquan_service/services/rec-model-service/requirements.txt
+          pip install -r quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt
       - name: Gate (quwoquan_service)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope service
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  search_contract_smoke:
+    name: Delivery Gate — Search /search Contract Smoke
+    runs-on: ubuntu-latest
+    needs: topology_regression
+    if: >-
+      ${{
+        needs.topology_regression.outputs.service == 'true' ||
+        needs.topology_regression.outputs.app == 'true' ||
+        needs.topology_regression.outputs.topology == 'true'
+      }}
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: 设置 Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - name: Verify canonical /search response contract
+        working-directory: quwoquan_service
+        run: go test ./services/search-service/tests/api_integration/search/search/search_query -count=1
+      - name: Verify four-environment search probe contract
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+            quwoquan_ops.tests.acceptance.user_acceptance.test_stackctl_up_runtime__user_acceptance_test.StackctlUpRuntimeTest.test_environment_probe_uses_ready_entity_operation_not_blocked_chat \
+            quwoquan_ops.tests.acceptance.user_acceptance.test_stackctl_up_runtime__user_acceptance_test.StackctlUpRuntimeTest.test_environment_probe_requires_search_commercial_envelope
       - id: finish
         if: always()
         name: Finish timer
@@ -120,13 +158,13 @@ jobs:
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           channel: stable
           cache: true
@@ -147,14 +185,14 @@ jobs:
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 设置 Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
       - name: 安装 Data 依赖
@@ -175,14 +213,14 @@ jobs:
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 设置 Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "20.19.0"
           cache: npm
@@ -200,6 +238,7 @@ jobs:
     needs:
       - topology_regression
       - quwoquan_service
+      - search_contract_smoke
       - quwoquan_app
       - quwoquan_data
       - ops_portal
@@ -209,7 +248,7 @@ jobs:
       critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
       summary_result: ${{ steps.summary.outputs.result }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
       - name: 输出 Delivery Gate 耗时摘要
@@ -217,16 +256,19 @@ jobs:
         env:
           TOPOLOGY_SECONDS: ${{ needs.topology_regression.outputs.duration_seconds }}
           SERVICE_SECONDS: ${{ needs.quwoquan_service.outputs.duration_seconds }}
+          SEARCH_SECONDS: ${{ needs.search_contract_smoke.outputs.duration_seconds }}
           APP_SECONDS: ${{ needs.quwoquan_app.outputs.duration_seconds }}
           DATA_SECONDS: ${{ needs.quwoquan_data.outputs.duration_seconds }}
           PORTAL_SECONDS: ${{ needs.ops_portal.outputs.duration_seconds }}
         run: |
           TOPOLOGY_SECONDS="${TOPOLOGY_SECONDS:-0}"
           SERVICE_SECONDS="${SERVICE_SECONDS:-0}"
+          SEARCH_SECONDS="${SEARCH_SECONDS:-0}"
           APP_SECONDS="${APP_SECONDS:-0}"
           DATA_SECONDS="${DATA_SECONDS:-0}"
           PORTAL_SECONDS="${PORTAL_SECONDS:-0}"
           FANOUT_SECONDS="${SERVICE_SECONDS}"
+          if [ "${SEARCH_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${SEARCH_SECONDS}"; fi
           if [ "${APP_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${APP_SECONDS}"; fi
           if [ "${DATA_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${DATA_SECONDS}"; fi
           if [ "${PORTAL_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${PORTAL_SECONDS}"; fi
@@ -237,6 +279,7 @@ jobs:
             --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
             --phase "topology_regression=${TOPOLOGY_SECONDS}" \
             --phase "quwoquan_service=${SERVICE_SECONDS}" \
+            --phase "search_contract_smoke=${SEARCH_SECONDS}" \
             --phase "quwoquan_app=${APP_SECONDS}" \
             --phase "quwoquan_data=${DATA_SECONDS}" \
             --phase "ops_portal=${PORTAL_SECONDS}" \
@@ -248,6 +291,7 @@ jobs:
         env:
           TOPOLOGY: ${{ needs.topology_regression.result }}
           SERVICE: ${{ needs.quwoquan_service.result }}
+          SEARCH: ${{ needs.search_contract_smoke.result }}
           APP: ${{ needs.quwoquan_app.result }}
           DATA: ${{ needs.quwoquan_data.result }}
           PORTAL: ${{ needs.ops_portal.result }}
@@ -270,6 +314,7 @@ jobs:
           }
           expect_success "topology_regression" "${TOPOLOGY}" "检查部署拓扑 / metadata 回归脚本"
           expect_success_or_skipped "quwoquan_service" "${SERVICE}" "检查 service scope gate 输出"
+          expect_success_or_skipped "search_contract_smoke" "${SEARCH}" "检查 /search 商业信封与四环境探针契约"
           expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope gate 输出"
           expect_success_or_skipped "quwoquan_data" "${DATA}" "检查 data scope gate 输出"
           expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
@@ -282,7 +327,7 @@ jobs:
       - name: Upload delivery gate timing summary
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: delivery-gate-timing-summary
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/delivery-gate-summary.json

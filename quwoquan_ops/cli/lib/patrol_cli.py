@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
 
 INSTALL_HINT = (
-    "install with `dart pub global activate patrol_cli` or set "
+    "install with `dart pub global activate patrol_cli 4.4.0` or set "
     "`PATROL_CLI=/absolute/path/to/patrol`"
 )
+REQUIRED_PATROL_CLI_VERSION = "4.4.0"
 
 
 @dataclass(frozen=True)
@@ -19,6 +21,7 @@ class PatrolCliResolution:
     source: str
     searched: tuple[str, ...]
     error: str
+    version: str = ""
 
     def as_report(self, *, required: bool) -> dict[str, object]:
         return {
@@ -27,6 +30,7 @@ class PatrolCliResolution:
             "source": self.source,
             "searched": list(self.searched),
             "error": self.error,
+            "version": self.version,
             "installHint": INSTALL_HINT,
         }
 
@@ -44,6 +48,34 @@ def _home_pub_cache_candidate(env: Mapping[str, str]) -> Path:
     return (Path(home).expanduser() if home else Path.home()) / ".pub-cache" / "bin" / "patrol"
 
 
+def _version_for_executable(path: Path) -> str | None:
+    try:
+        result = subprocess.run(
+            [str(path), "--version"],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=5,
+        )
+    except OSError:
+        return None
+    output = "\n".join((result.stdout, result.stderr))
+    expected = f"patrol_cli v{REQUIRED_PATROL_CLI_VERSION}"
+    return REQUIRED_PATROL_CLI_VERSION if result.returncode == 0 and expected in output else None
+
+
+def _resolved_cli(path: Path, source: str, searched: list[str]) -> PatrolCliResolution:
+    version = _version_for_executable(path)
+    if version is not None:
+        return PatrolCliResolution(str(path), source, tuple(searched), "", version)
+    return PatrolCliResolution(
+        None,
+        source,
+        tuple(searched),
+        f"Patrol CLI must be v{REQUIRED_PATROL_CLI_VERSION}; {INSTALL_HINT}",
+    )
+
+
 def resolve_patrol_cli(env: Mapping[str, str] | None = None) -> PatrolCliResolution:
     """Resolve the Patrol CLI without requiring pub-cache/bin to be in PATH."""
     values = os.environ if env is None else env
@@ -58,7 +90,7 @@ def resolve_patrol_cli(env: Mapping[str, str] | None = None) -> PatrolCliResolut
             if found:
                 resolved = Path(found)
                 if _is_executable(resolved):
-                    return PatrolCliResolution(str(resolved), "PATROL_CLI", tuple(searched), "")
+                    return _resolved_cli(resolved, "PATROL_CLI", searched)
             return PatrolCliResolution(
                 None,
                 "PATROL_CLI",
@@ -69,7 +101,7 @@ def resolve_patrol_cli(env: Mapping[str, str] | None = None) -> PatrolCliResolut
         configured_path = Path(configured).expanduser()
         searched.append(f"PATROL_CLI path: {configured_path}")
         if _is_executable(configured_path):
-            return PatrolCliResolution(str(configured_path), "PATROL_CLI", tuple(searched), "")
+            return _resolved_cli(configured_path, "PATROL_CLI", searched)
         return PatrolCliResolution(
             None,
             "PATROL_CLI",
@@ -82,18 +114,18 @@ def resolve_patrol_cli(env: Mapping[str, str] | None = None) -> PatrolCliResolut
     if found:
         resolved = Path(found)
         if _is_executable(resolved):
-            return PatrolCliResolution(str(resolved), "PATH", tuple(searched), "")
+            return _resolved_cli(resolved, "PATH", searched)
 
     pub_cache = values.get("PUB_CACHE", "").strip()
     if pub_cache:
         candidate = Path(pub_cache).expanduser() / "bin" / "patrol"
         searched.append(f"PUB_CACHE bin: {candidate}")
         if _is_executable(candidate):
-            return PatrolCliResolution(str(candidate), "PUB_CACHE", tuple(searched), "")
+            return _resolved_cli(candidate, "PUB_CACHE", searched)
 
     home_candidate = _home_pub_cache_candidate(values)
     searched.append(f"home pub-cache bin: {home_candidate}")
     if _is_executable(home_candidate):
-        return PatrolCliResolution(str(home_candidate), "HOME_PUB_CACHE", tuple(searched), "")
+        return _resolved_cli(home_candidate, "HOME_PUB_CACHE", searched)
 
     return PatrolCliResolution(None, "missing", tuple(searched), f"Patrol CLI not found; {INSTALL_HINT}")

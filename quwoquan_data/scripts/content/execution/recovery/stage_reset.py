@@ -4,6 +4,34 @@ from core.control_types import ExecutionStage, ExecutionStateStatus, ModalityCon
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueLane, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, Sequence, _planned_pixel_issue, data_issue, execution_root, execution_state_status, image_count_is_hard_quota, image_strategy_allows_ai_generated, image_strategy_requires_publishable_images, issue_messages, load_execution_state, minimum_publishable_images_per_target, read_json, save_execution_state, store
 
+
+def _requeue_dead_homepage_author_jobs(
+    execution_id: str,
+    *,
+    stage_name: str,
+    reason: str,
+) -> list[str]:
+    """Reopen only failed homepage author objects during an audited recovery."""
+    if stage_name not in {
+        ExecutionStage.BUILD_HOMEPAGE.value,
+        ExecutionStage.BUILD_VALIDATE.value,
+    }:
+        return []
+    from content.execution.queue.management import dead_jobs, requeue_refs
+
+    refs = [
+        str(row.get("ref") or "")
+        for row in dead_jobs(execution_id)
+        if str(row.get("stage") or "") == "author"
+        and str(row.get("ref") or "").startswith("/entity/")
+    ]
+    return requeue_refs(
+        execution_id,
+        refs,
+        "author",
+        reason=f"retry-stage->{stage_name}: {reason}",
+    ) if refs else []
+
 def reset_stage_retries(
     execution_id: str,
     *,
@@ -61,6 +89,11 @@ def reset_stage_retries(
     state.react_rewinds = react_rewinds
     rewound_completed = _rewind_to(completed_before, stage_name)
     state.completed = [name for name in STAGE_NAMES if name in rewound_completed]
+    requeued_homepage_refs = _requeue_dead_homepage_author_jobs(
+        execution_id,
+        stage_name=stage_name,
+        reason=str(reason or "operator requested retry"),
+    )
     invalidated_content_refs: list[str] = []
     if stage_name in {"download_plan", "download_fetch", "build_prepare", "build_homepage", "build_validate", "content_plan", "post_plan", "post_compose"}:
         try:
@@ -108,6 +141,7 @@ def reset_stage_retries(
             "reason": str(reason or "operator requested retry"),
             "previous": previous,
             "invalidatedContentRefs": sorted(invalidated_content_refs),
+            "requeuedHomepageRefs": sorted(requeued_homepage_refs),
             "resetReactRewinds": sorted(reset_react_keys),
             "recoveredAt": recovered_at,
         }
@@ -118,6 +152,7 @@ def reset_stage_retries(
         "stage": stage_name,
         "previous": previous,
         "invalidatedContentRefs": sorted(invalidated_content_refs),
+        "requeuedHomepageRefs": sorted(requeued_homepage_refs),
         "resetReactRewinds": sorted(reset_react_keys),
         "retryCounts": state.retry_counts or {},
         "infrastructureRetryCounts": state.infrastructure_retry_counts or {},
@@ -373,7 +408,7 @@ def _source_plan_issue_records(
                     )
                 if str(image.get("generationModel") or "").strip() and not allow_generated_images:
                     lane_issues.append(f"image {image.get('url') or '?'} is AI-generated")
-            desired_image_works = int(quotas.get("imageWorksPerTarget") or 0) if "image" in active_lanes else 0
+            desired_image_works = quotas.image_works_per_target if "image" in active_lanes else 0
             required_image_works = (
                 max(1, desired_image_works)
                 if image_count_is_hard_quota(ctx.spec.to_dict())
@@ -393,6 +428,20 @@ def _source_plan_issue_records(
                     "image research needs enough rights-cleared source collections "
                     f"for {required_image_works} image work(s)"
                 )
+            # video 作品的帧来自 video lane 的 rights-cleared 图证；plan 阶段无帧候选
+            # 必须判未就绪并触发 auto research，否则 fetch 必然 0 帧失败。
+            if "video" in active_lanes and quotas.video_works_per_target > 0:
+                video_frame_candidates = [
+                    image for image in images
+                    if str(image.get("researchLane") or "") == "video"
+                ]
+                required_frames = requirements.min_video_frames
+                if required_frames and len(video_frame_candidates) < required_frames:
+                    lane_issues.append(
+                        "video research needs "
+                        f">={required_frames} rights-cleared frame candidate(s), "
+                        f"got {len(video_frame_candidates)}"
+                    )
             source_rights_lanes = [
                 lane for lane in ("homepage", "article")
                 if lane in active_lanes and (lane != "article" or article_quota > 0)

@@ -77,88 +77,72 @@ class _WorksVideoControlRow extends StatelessWidget {
   const _WorksVideoControlRow({
     super.key,
     required this.session,
-    required this.episodeCurrent,
-    required this.episodeTotal,
+    required this.sharedTimelineEnabled,
+    required this.previewTrackDescriptor,
+    required this.previewTrackQuery,
+    required this.durationVisible,
+    required this.scrubTimeVisible,
+    required this.durationKey,
+    required this.scrubTimeKey,
   });
 
   final VideoPlaybackSession? session;
-  final int episodeCurrent;
-  final int episodeTotal;
-
-  static String _formatDuration(Duration duration) {
-    final totalSeconds = duration.inSeconds.clamp(0, 359999);
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
+  final bool sharedTimelineEnabled;
+  final VideoPreviewTrackDescriptor? previewTrackDescriptor;
+  final VideoPreviewTrackQuery previewTrackQuery;
+  final bool durationVisible;
+  final bool scrubTimeVisible;
+  final Key durationKey;
+  final Key scrubTimeKey;
 
   @override
   Widget build(BuildContext context) {
     final activeSession = session;
     if (activeSession == null) {
-      return episodeTotal > 1
-          ? Align(alignment: Alignment.centerLeft, child: _episodeBadge())
-          : const SizedBox.shrink();
+      return const SizedBox.shrink();
     }
     return AnimatedBuilder(
       animation: activeSession,
       builder: (context, _) {
         final snapshot = activeSession.snapshot;
-        if (!snapshot.isInitialized) {
-          return episodeTotal > 1
-              ? Align(alignment: Alignment.centerLeft, child: _episodeBadge())
-              : const SizedBox.shrink();
+        if (snapshot.duration <= Duration.zero) {
+          return const SizedBox.shrink();
         }
-        return Column(
+        return VideoPlaybackTimeline(
           key: const ValueKey<String>('works-video-control-row'),
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                GestureDetector(
-                  key: const ValueKey<String>('works-video-play-toggle'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => unawaited(activeSession.toggle()),
-                  child: Icon(
-                    snapshot.isPlaying
-                        ? CupertinoIcons.pause_fill
-                        : CupertinoIcons.play_fill,
-                    size: AppSpacing.iconMedium,
-                    color: AppColors.white.withValues(alpha: 0.92),
-                  ),
-                ),
-                SizedBox(width: AppSpacing.intraGroupSm),
-                Expanded(child: _WorksVideoTimeline(session: activeSession)),
-                if (snapshot.controlsVisibility ==
-                    VideoPlaybackControlsVisibility.transient) ...[
-                  SizedBox(width: AppSpacing.intraGroupSm),
-                  Text(
-                    _formatDuration(snapshot.duration),
-                    key: const ValueKey<String>(
-                      'works-video-transient-duration',
-                    ),
-                    style: TextStyle(
-                      color: AppColors.white.withValues(alpha: 0.78),
-                      fontSize: AppTypography.xxs,
-                      fontWeight: AppTypography.medium,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            if (episodeTotal > 1) ...[
-              SizedBox(height: AppSpacing.intraGroupXs),
-              _episodeBadge(),
-            ],
-          ],
+          session: activeSession,
+          profile: VideoPlaybackTimelineProfile.workBrowser,
+          showDuration: durationVisible,
+          showScrubTime: scrubTimeVisible,
+          showVisuals: sharedTimelineEnabled && snapshot.isInitialized,
+          durationKey: durationKey,
+          scrubTimeKey: scrubTimeKey,
+          previewBuilder: previewTrackDescriptor == null
+              ? null
+              : (context, snapshot, target) {
+                  return VideoTimelinePreview(
+                    descriptor: previewTrackDescriptor!,
+                    query: previewTrackQuery,
+                    target: target,
+                  );
+                },
         );
       },
     );
   }
+}
 
-  Widget _episodeBadge() {
+class _WorksVideoSeriesBadge extends StatelessWidget {
+  const _WorksVideoSeriesBadge({
+    required this.episodeCurrent,
+    required this.episodeTotal,
+  });
+
+  final int episodeCurrent;
+  final int episodeTotal;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       key: const ValueKey<String>('works-video-series-badge'),
       padding: EdgeInsets.symmetric(
@@ -189,153 +173,6 @@ class _WorksVideoControlRow extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _WorksVideoTimeline extends StatefulWidget {
-  const _WorksVideoTimeline({required this.session});
-
-  final VideoPlaybackSession session;
-
-  @override
-  State<_WorksVideoTimeline> createState() => _WorksVideoTimelineState();
-}
-
-class _WorksVideoTimelineState extends State<_WorksVideoTimeline> {
-  bool _scrubbing = false;
-
-  void _startScrub(double dx, double width) {
-    if (width <= 0 || _scrubbing) {
-      return;
-    }
-    _scrubbing = true;
-    unawaited(widget.session.beginScrub());
-    _updateTarget(dx, width);
-  }
-
-  void _updateTarget(double dx, double width) {
-    final duration = widget.session.snapshot.duration;
-    if (width <= 0 || duration <= Duration.zero) {
-      return;
-    }
-    final fraction = (dx / width).clamp(0.0, 1.0);
-    widget.session.updateScrubTarget(
-      Duration(milliseconds: (duration.inMilliseconds * fraction).round()),
-    );
-  }
-
-  void _finishScrub({required bool commit}) {
-    if (!_scrubbing) {
-      return;
-    }
-    _scrubbing = false;
-    unawaited(widget.session.endScrub(commit: commit));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final snapshot = widget.session.snapshot;
-        final displayPosition = snapshot.effectivePosition;
-        final progress = snapshot.duration <= Duration.zero
-            ? 0.0
-            : (displayPosition.inMilliseconds /
-                      snapshot.duration.inMilliseconds)
-                  .clamp(0.0, 1.0);
-        final expanded = snapshot.isScrubbing || !snapshot.isPlaying;
-        final trackHeight = expanded
-            ? AppSpacing.xs
-            : AppSpacing.xs / AppSpacing.two;
-        final handleSize = expanded
-            ? AppSpacing.sm
-            : AppSpacing.xs + AppSpacing.hairline;
-        return GestureDetector(
-          key: const ValueKey<String>('works-video-timeline'),
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (details) => _startScrub(details.localPosition.dx, width),
-          onTapUp: (_) => _finishScrub(commit: true),
-          onTapCancel: () => _finishScrub(commit: false),
-          onHorizontalDragStart: (details) =>
-              _startScrub(details.localPosition.dx, width),
-          onHorizontalDragUpdate: (details) =>
-              _updateTarget(details.localPosition.dx, width),
-          onHorizontalDragEnd: (_) => _finishScrub(commit: true),
-          onHorizontalDragCancel: () => _finishScrub(commit: false),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (snapshot.isScrubbing)
-                Padding(
-                  padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
-                  child: Text(
-                    '${_WorksVideoControlRow._formatDuration(displayPosition)} / '
-                    '${_WorksVideoControlRow._formatDuration(snapshot.duration)}',
-                    key: const ValueKey<String>('works-video-scrub-time-label'),
-                    style: TextStyle(
-                      color: AppColors.white.withValues(alpha: 0.96),
-                      fontSize: AppTypography.xxs,
-                      fontWeight: AppTypography.semiBold,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ),
-              SizedBox(
-                height: AppSpacing.minInteractiveSize / AppSpacing.two,
-                child: Center(
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        height: trackHeight,
-                        decoration: BoxDecoration(
-                          color: AppColors.white.withValues(
-                            alpha: expanded ? 0.44 : 0.24,
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.circularBorderRadius,
-                          ),
-                        ),
-                      ),
-                      FractionallySizedBox(
-                        widthFactor: progress,
-                        child: Container(
-                          height: trackHeight,
-                          decoration: BoxDecoration(
-                            color: AppColors.white.withValues(
-                              alpha: expanded ? 1 : 0.92,
-                            ),
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.circularBorderRadius,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left:
-                            (width * progress) - (handleSize / AppSpacing.two),
-                        top: (trackHeight - handleSize) / AppSpacing.two,
-                        child: Container(
-                          width: handleSize,
-                          height: handleSize,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.white.withValues(
-                              alpha: expanded ? 1 : 0.88,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

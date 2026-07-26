@@ -6,15 +6,27 @@ import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
-import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const String kFeedSortRecommend = 'recommend';
 
-abstract interface class ContentReadRepository {
+String contentPostDeleteIdempotencyKey(String postId) {
+  final normalized = postId.trim();
+  if (normalized.isEmpty) {
+    throw ArgumentError.value(postId, 'postId', 'must not be empty');
+  }
+  return 'content.post.delete:$normalized';
+}
+
+/// DiscoveryFeed named query：只暴露发现/首页分页 Slice。
+abstract interface class ContentDiscoveryFeedQuery {
+  /// [channelId] 首页频道路由标识（home_channels.feed_query.channel 真相源）。
+  /// 非空时走频道推荐主链路（服务端进推荐引擎并按 channelId 归因），
+  /// identity/type 不参与请求——它们是发现页浏览流（时间线具名查询）的专属参数。
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
+    String? channelId,
     String? identity,
     String? type,
     String? subCategory,
@@ -26,7 +38,10 @@ abstract interface class ContentReadRepository {
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   });
+}
 
+abstract interface class ContentReadRepository
+    implements ContentDiscoveryFeedQuery {
   Future<List<PostBaseDto>> listDiscoveryFeed({
     required String category,
     String? identity,
@@ -46,15 +61,19 @@ abstract interface class ContentReadRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
-
-  DiscoveryPresentationWire? discoveryPresentationWireForPost(String postId);
-
-  List<PostBaseDto> embeddedDiscoveryArticlePostsForFollowingMix();
 }
 
 /// 单帖详情读取独立于发现流，避免详情页依赖通用读侧 Facet。
 abstract interface class ContentPostDetailReader {
   Future<ContentPostDetailPayload> getPost({required String postId});
+}
+
+/// 当前用户对实体对象的「想去」状态读取，供实体主页独立注入。
+abstract interface class ContentEntityWishlistStateReader {
+  Future<EntityWishlistState> getEntityWishlistState({
+    required String objectId,
+    required String objectKind,
+  });
 }
 
 /// 作者作品分页读取独立于发现流，供用户主页创作 Tab 使用。
@@ -69,20 +88,11 @@ abstract interface class ContentAuthorPostsReader {
   });
 }
 
-/// Content Post 搜索独立于通用内容读取，避免搜索调用方依赖完整读侧 Facet。
-abstract interface class ContentPostSearchRepository {
-  Future<List<PostSearchItemView>> searchPosts({
-    required String query,
-    String? identity,
-    String? type,
-    String? categoryId,
-    String? subCategory,
-    int limit = CloudApiDefaults.pageLimit,
-  });
-}
-
 abstract interface class ContentWriteRepository {
-  Future<void> deletePost({required String postId});
+  Future<void> deletePost({
+    required String postId,
+    required String idempotencyKey,
+  });
 
   Future<PostBaseDto> updatePostSettings({
     required String postId,
@@ -107,8 +117,4 @@ abstract interface class ContentConfigRepository {
   Future<ContentAppConfigWire> getAppConfig();
 
   bool get requiresResolvedPersonaForMutations;
-
-  bool get usesEmbeddedContentCatalog;
-
-  bool get usesCloudAssistantEdgeSync;
 }

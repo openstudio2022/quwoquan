@@ -11,6 +11,28 @@ import 'package:sqflite/sqflite.dart';
 part 'local_chat_search_store_impl.dart';
 part 'local_chat_search_store_queries.dart';
 
+abstract interface class LocalChatSearchReader {
+  Future<List<LocalChatSearchContactRecord>> searchContacts({
+    required LocalSearchNamespace namespace,
+    required String query,
+    int limit = 20,
+  });
+
+  Future<List<ConversationSearchItemView>> searchConversations({
+    required LocalSearchNamespace namespace,
+    required String query,
+    String? conversationType,
+    int limit = 20,
+  });
+
+  Future<List<MessageSearchItemView>> searchMessages({
+    required LocalSearchNamespace namespace,
+    required String query,
+    String? conversationType,
+    int limit = 20,
+  });
+}
+
 /// Named façade over a single sqflite row (`Map<String, Object?>`), used where
 /// id-ordered reads return raw driver maps.
 final class LocalChatSearchSqliteRow {

@@ -1,33 +1,72 @@
-# L3 Story：content-lifecycle-resurfacing
+# L3 Story：内容生命周期再曝光 (`content-lifecycle-resurfacing`)
 
-## 功能说明
+> 所属能力：[`exposure-governance`](../spec.md)
 
-内容生命周期复活让优质老内容在合适的时间、事件、社交触发或常青场景下重新进入推荐，而不是被一次热度衰减后永久沉没。
+> Journey / Scenario：[`JNY-003 / SCN-007`](../../../spec.md#scn-007)
 
-## 生命周期状态
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- `new`：新入池内容，待小流量试投。
-- `rising`：早期反馈达标，获得更多试投。
-- `mature`：稳定内容，按常规预算参与推荐。
-- `evergreen`：长期完成率或收藏表现稳定，具备周期性再投资格。
-- `dormant`：自然衰减后沉默，但未退役。
-- `revived`：被季节、事件、社交、常青或二次分发触发复活。
-- `retired`：低质、违规或持续负反馈，原则上不再推荐。
+## 1. 用户价值
 
-## 范围
+作为内容创作者或浏览者，
+我希望`retired` 内容不得因复活源绕过合规准入，
+从而完成可恢复的内容创作、发现或互动。
 
-- 生命周期状态机与状态迁移条件。
-- 复活触发器：季节、事件、地点/标签热度、社交互动、常青识别、二次分发。
-- 复活召回仍受合规、去重、疲劳和动态预算约束。
+## 2. 范围与非目标
 
-## 非目标
+### In Scope
 
-- 本轮不实现 `ResurfaceSource` 或读模型。
-- 不绕过内容审核与下架状态。
+- “内容生命周期再曝光”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 生命周期状态机。
+- 季节、事件、社交、常青、二次分发复活触发器。
+- 合规准入、疲劳、去重和动态预算约束。
+- 本 Story 不包含 `ResurfaceSource` 或 `rm_exposure_state` 实现。
 
-## 验收标准
+### Out of Scope
 
-- A1：复活触发器必须可解释，并能进入推荐理由或运营看板。
-- A2：`retired` 内容不得因复活源绕过合规准入。
-- A3：复活曝光进入 `resurfaced_exposure_rate`。
-- A4：可通过 `disable_resurface_source` 回滚。
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 内容生命周期再曝光
+
+- `retired` 内容不得因复活源绕过合规准入。
+
+<a id="req-002"></a>
+### REQ-002 复活触发器必须可解释，并能进入推荐理由或运营看板
+
+- 复活触发器必须可解释，并能进入推荐理由或运营看板。
+- `retired` 内容不得因复活源绕过合规准入。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/storage.yaml`
+- canonical：`quwoquan_service/services/content-service/observability/slo/recommendation_slo.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 内容生命周期再曝光
+
+- GIVEN 内容创作者或浏览者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“内容生命周期再曝光”对应的公开行为。
+- THEN `retired` 内容不得因复活源绕过合规准入。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`exposure-governance`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 内容生命周期再曝光 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“内容生命周期再曝光”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

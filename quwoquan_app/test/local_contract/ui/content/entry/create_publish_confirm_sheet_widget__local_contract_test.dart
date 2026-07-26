@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-008
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -23,6 +25,7 @@ CreateLocationCoordinator _locationCoordinator() {
 Widget _buildApp({
   PublishSettings initialSettings = const PublishSettings(),
   ValueChanged<PublishSettings>? onConfirm,
+  bool circleLoadUnavailable = false,
 }) {
   return ProviderScope(
     child: ScreenUtilInit(
@@ -31,17 +34,26 @@ Widget _buildApp({
         locale: const Locale('zh'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: _Host(initialSettings: initialSettings, onConfirm: onConfirm),
+        home: _Host(
+          initialSettings: initialSettings,
+          onConfirm: onConfirm,
+          circleLoadUnavailable: circleLoadUnavailable,
+        ),
       ),
     ),
   );
 }
 
 class _Host extends StatelessWidget {
-  const _Host({required this.initialSettings, this.onConfirm});
+  const _Host({
+    required this.initialSettings,
+    this.onConfirm,
+    required this.circleLoadUnavailable,
+  });
 
   final PublishSettings initialSettings;
   final ValueChanged<PublishSettings>? onConfirm;
+  final bool circleLoadUnavailable;
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +69,7 @@ class _Host extends StatelessWidget {
                   locationCoordinator: _locationCoordinator(),
                   joinedCircles: const <CreateCircleOption>[],
                   recommendedCircles: const <CreateCircleOption>[],
+                  circleLoadUnavailable: circleLoadUnavailable,
                 ),
               ),
             );
@@ -129,6 +142,30 @@ void main() {
 
     expect(confirmed, isNotNull);
     expect(confirmed!.summary, isEmpty);
+  });
+
+  testWidgets('圈子查询不可用时展示明确降级且仍可公开发布', (tester) async {
+    PublishSettings? confirmed;
+    await tester.pumpWidget(
+      _buildApp(
+        circleLoadUnavailable: true,
+        onConfirm: (settings) => confirmed = settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开发布确认'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(UITextConstants.createPublishCirclesUnavailable),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
+    await tester.pumpAndSettle();
+
+    expect(confirmed, isNotNull);
+    expect(confirmed!.circleIds, isEmpty);
+    expect(confirmed!.isPublic, isTrue);
   });
 
   testWidgets('切换可见性为私密后确认返回 isPublic=false', (tester) async {

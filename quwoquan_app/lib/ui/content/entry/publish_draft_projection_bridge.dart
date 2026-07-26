@@ -5,7 +5,7 @@ import 'package:quwoquan_app/ui/content/models/post_read_ui_bundle.dart';
 
 /// 创作草稿 → 与 [projectArticleDetailView] 兼容的 wire Map（预览 / ReadPresentation 管道入口）。
 ///
-/// SubmitPostPublication 可写字段以 `contracts/metadata/content/post/service.yaml` 为 SSOT；
+/// SubmitPostPublication 可写字段以 `quwoquan_service/services/content-service/contracts/content/post/operations.yaml` 为 SSOT；
 /// 实际上传仍走 [buildPostPublicationPayloadMap] + [attachActivePersonaToCreatePayload]。
 Map<String, dynamic> createEditorStateToArticlePreviewWire(
   CreateEditorState state, {

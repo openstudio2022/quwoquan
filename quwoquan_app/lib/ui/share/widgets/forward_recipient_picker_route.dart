@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
@@ -50,9 +51,10 @@ class _ForwardRecipientPickerRouteState
   }
 
   Future<_ForwardPickerData> _load() async {
-    final repo = ref.read(chatRepositoryProvider);
-    final conversations = await repo.listConversations(limit: 50);
-    final contacts = await repo.listContactHome(
+    final contactRepo = ref.read(chatContactRepositoryProvider);
+    final conversationRepo = ref.read(chatConversationRepositoryProvider);
+    final conversations = await conversationRepo.listConversations(limit: 50);
+    final contacts = await contactRepo.listContactHome(
       filter: switch (widget.mode) {
         ForwardRecipientPickerMode.all => 'all',
         ForwardRecipientPickerMode.groups => 'group',
@@ -95,12 +97,9 @@ class _ForwardRecipientPickerRouteState
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
       title: switch (widget.mode) {
-        ForwardRecipientPickerMode.all =>
-          UITextConstants.forwardSelectChatTitle,
-        ForwardRecipientPickerMode.groups =>
-          UITextConstants.shareSelectGroupTitle,
-        ForwardRecipientPickerMode.messages =>
-          UITextConstants.shareSelectMessageTitle,
+        ForwardRecipientPickerMode.all => ChatText.forwardSelectChatTitle,
+        ForwardRecipientPickerMode.groups => ChatText.shareSelectGroupTitle,
+        ForwardRecipientPickerMode.messages => ChatText.shareSelectMessageTitle,
       },
       onBack: () => Navigator.of(context).pop(false),
       body: Column(
@@ -132,7 +131,7 @@ class _ForwardRecipientPickerRouteState
                       context,
                       error:
                           snapshot.error ??
-                          StateError(UITextConstants.forwardCardUnavailable),
+                          StateError(ChatText.forwardCardUnavailable),
                       category: UiErrorCategory.sectionLoad,
                       scope: UiErrorScope.section,
                     ),
@@ -210,7 +209,7 @@ class _ForwardPickerList extends StatelessWidget {
         if (recent.isNotEmpty) ...<Widget>[
           ForwardSectionHeader(
             isDark: isDark,
-            title: UITextConstants.forwardRecentChats,
+            title: ChatText.forwardRecentChats,
           ),
           SizedBox(height: AppSpacing.intraGroupSm),
           ForwardRecipientListCard(
@@ -221,10 +220,7 @@ class _ForwardPickerList extends StatelessWidget {
           SizedBox(height: AppSpacing.containerLg),
         ],
         if (contacts.isNotEmpty) ...<Widget>[
-          ForwardSectionHeader(
-            isDark: isDark,
-            title: UITextConstants.forwardContacts,
-          ),
+          ForwardSectionHeader(isDark: isDark, title: ChatText.forwardContacts),
           SizedBox(height: AppSpacing.intraGroupSm),
           ForwardRecipientListCard(
             isDark: isDark,
@@ -263,7 +259,7 @@ class _ForwardPickerEmptyState extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.all(AppSpacing.containerXl),
         child: Text(
-          UITextConstants.forwardNoRecipients,
+          ChatText.forwardNoRecipients,
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: AppTypography.iosBody,

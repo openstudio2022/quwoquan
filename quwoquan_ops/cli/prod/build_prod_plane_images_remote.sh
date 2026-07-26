@@ -32,10 +32,32 @@ KEY_FILE="${KEY_DIR%/}/${ACCOUNT}"
 
 REMOTE_CMD="set -euo pipefail
 cd '${WORKSPACE_ROOT}'
-export LOCAL_GAMMA_ALPINE_BASE_IMAGE='docker.io/library/debian:bookworm-slim'
+export QWQ_COMPOSE_ALPINE_BASE_IMAGE='docker.io/library/debian:bookworm-slim'
+export QWQ_COMPOSE_ENV=prod
+export QWQ_COMPOSE_CONFIG_ROOT=/tmp/qwq-config
+export QWQ_COMPOSE_REC_POLICY_SOURCE=/dev/null
+export QWQ_COMPOSE_OBJECT_STORAGE_ENDPOINT=http://127.0.0.1
+export QWQ_COMPOSE_OBJECT_STORAGE_BUCKET=build-only
+export QWQ_COMPOSE_OBJECT_STORAGE_REGION=build-only
+export QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID=build-only
+export QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET=build-only
+export QWQ_COMPOSE_OBJECT_STORAGE_CDN_DOMAIN=build-only.invalid
+export QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY=build-only
+export QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE=/dev/null
 for svc in ${SERVICES//,/ }; do
   echo \"[remote-build] \$svc\"
-  podman compose -f quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml build \"\$svc\"
+  fragment=\"quwoquan_service/services/\${svc}/deploy/compose.yaml\"
+  if [[ ! -f \"\$fragment\" ]]; then
+    echo \"FAIL: autonomous compose fragment missing: \$fragment\" >&2
+    exit 1
+  fi
+  version_var=\"QWQ_COMPOSE_\$(printf '%s' \"\$svc\" | tr '[:lower:]-' '[:upper:]_')_CONFIG_VERSION\"
+  printf -v \"\$version_var\" '%s' 'sha256:0000000000000000000000000000000000000000000000000000000000000000'
+  export \"\$version_var\"
+  podman compose \
+    -f quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml \
+    -f \"\$fragment\" \
+    build \"\$svc\"
   # podman compose 是薄壳，build 失败的退出码不一定冒泡；用镜像存在性硬校验。
   image_ref=\"localhost/quwoquan_service_\${svc}:latest\"
   if ! podman image exists \"\$image_ref\"; then

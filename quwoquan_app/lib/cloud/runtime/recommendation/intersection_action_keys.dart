@@ -3,7 +3,7 @@ import '../generated/recommendation/intersection_kind_metadata.g.dart';
 /// 交集动作 `actionKey` 端侧闭集常量与路由分类。
 ///
 /// 唯一真相源是云侧 metadata：
-/// `contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml`
+/// `quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml`
 /// 与 `intersection_kind_metadata.g.dart`（codegen 下发的 `intersectionActionKeyMeta`）。
 /// metadata 明确规定「端只读 actionKey / label / target / dispatch 渲染并分发动作，
 /// 禁止端侧按 kind 猜测行动，也禁止端手写『哪些 actionKey 属助手/约伴』第二份枚举」。

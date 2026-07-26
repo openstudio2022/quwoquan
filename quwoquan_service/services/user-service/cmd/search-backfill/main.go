@@ -27,8 +27,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
-	"quwoquan_service/services/user-service/internal/infrastructure/searchindex"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/searchindex"
 )
 
 func main() {

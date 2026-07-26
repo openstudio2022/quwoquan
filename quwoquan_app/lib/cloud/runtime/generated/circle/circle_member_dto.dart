@@ -1,6 +1,6 @@
 /// 圈子成员 DTO。
 ///
-/// 字段对齐：contracts/metadata/social/circle/fields.yaml CircleMember
+/// 字段对齐：contracts/metadata/circle/circle/circle/fields.yaml CircleMember
 class CircleMemberDto {
   final String id;
   final String circleId;

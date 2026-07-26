@@ -1,5 +1,5 @@
 /// 圈子成员列表行投影（ListCircleMemberships / Mock 富集字段）。
-/// 合约：`quwoquan_service/contracts/metadata/social/circle/projections/circle_member_roster_row.yaml`
+/// 合约：`quwoquan_service/contracts/metadata/circle/circle/circle/projections/circle_member_roster_row.yaml`
 ///
 /// 对齐 [circleStatsMemberRowFromWireMap] 所读键，并保留 CircleMember 实体常见键。
 class CircleMemberRosterItemDto {

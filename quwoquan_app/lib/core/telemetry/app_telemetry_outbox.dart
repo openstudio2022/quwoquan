@@ -19,6 +19,10 @@ enum AppTelemetryFlushResult {
   deadLettered,
 }
 
+/// 仅在事件已写入加密 outbox 后返回 [persisted]。平台 ANR marker 只能以此
+/// 作为确认前提，不能把一次写入尝试误称为可靠入队。
+enum AppTelemetryEnqueueResult { persisted, unavailable, evicted }
+
 enum AppTelemetryDeliveryDegradation { dropped, deadLettered, retrying }
 
 typedef AppTelemetryDeliveryObserver =
@@ -32,6 +36,7 @@ final class AppTelemetryQueuedRecord {
     required this.enqueuedAt,
     required this.expiresAt,
     required this.droppable,
+    this.critical = false,
   });
 
   final Map<String, Object?> wire;
@@ -40,6 +45,7 @@ final class AppTelemetryQueuedRecord {
   final DateTime enqueuedAt;
   final DateTime expiresAt;
   final bool droppable;
+  final bool critical;
 
   Map<String, Object?> toEnvelope(String actorPartitionKey) =>
       <String, Object?>{
@@ -49,6 +55,7 @@ final class AppTelemetryQueuedRecord {
         'enqueuedAt': enqueuedAt.toUtc().toIso8601String(),
         'expiresAt': expiresAt.toUtc().toIso8601String(),
         'droppable': droppable,
+        'critical': critical,
         'wire': wire,
       };
 }
@@ -87,18 +94,34 @@ final class AppTelemetryOutbox {
   final int maxBatchBytes;
   bool _flushing = false;
 
-  Future<void> enqueue(AppTelemetryQueuedRecord record) async {
-    final box = await _storage.open(_partition, _queueName);
-    if (box == null) {
-      _deliveryObserver(
-        AppTelemetryDeliveryDegradation.dropped,
-        'encrypted_outbox_unavailable',
+  Future<AppTelemetryEnqueueResult> enqueue(
+    AppTelemetryQueuedRecord record,
+  ) async {
+    try {
+      final box = await _storage.open(_partition, _queueName);
+      if (box == null) {
+        _deliveryObserver(
+          AppTelemetryDeliveryDegradation.dropped,
+          'encrypted_outbox_unavailable',
+        );
+        return AppTelemetryEnqueueResult.unavailable;
+      }
+      final key = _nextEventKey(box, record.enqueuedAt);
+      await box.put(
+        key,
+        canonicalJsonEncode(record.toEnvelope(_partition.key)),
       );
-      return;
+      await _enforceCapacity(box);
+      return box.containsKey(key)
+          ? AppTelemetryEnqueueResult.persisted
+          : AppTelemetryEnqueueResult.evicted;
+    } on Object {
+      _deliveryObserver(
+        AppTelemetryDeliveryDegradation.retrying,
+        'encrypted_outbox_write_failed',
+      );
+      return AppTelemetryEnqueueResult.unavailable;
     }
-    final key = _nextEventKey(box, record.enqueuedAt);
-    await box.put(key, canonicalJsonEncode(record.toEnvelope(_partition.key)));
-    await _enforceCapacity(box);
   }
 
   Future<void> deadLetter(
@@ -161,8 +184,11 @@ final class AppTelemetryOutbox {
       } on CloudException catch (error) {
         final status = error.statusCode ?? 0;
         if (status == 400 || status == 422) {
-          await _deadLetterSealed(box, sealed, 'http_$status');
-          return AppTelemetryFlushResult.deadLettered;
+          return _isolateRejectedSealedBatch(
+            box,
+            sealed,
+            reason: 'http_$status',
+          );
         }
         if (status == 401 || status == 403) {
           return AppTelemetryFlushResult.identityBlocked;
@@ -245,24 +271,94 @@ final class AppTelemetryOutbox {
     return sealed;
   }
 
-  Future<void> _deadLetterSealed(
+  /// 事件目录校验属于单条事实的语义错误，不能让一个坏事件拖入同批已封存的
+  /// 合法事件。原批次收到 400/422 后按原顺序拆为单事件幂等请求：已确认的记录
+  /// 删除，仍被目录拒绝的记录单独进入 DLQ，依赖/鉴权故障则保持未确认记录重试。
+  ///
+  /// 单事件发送期间原始 queue key 一直保留；进程中断时下一轮会重新密封尚未确认
+  /// 的 key，因此不会以“先删除再发送”的方式丢失关键商业事件。
+  Future<AppTelemetryFlushResult> _isolateRejectedSealedBatch(
     Box<String> box,
-    _SealedTelemetryBatch sealed,
-    String reason,
-  ) async {
+    _SealedTelemetryBatch sealed, {
+    required String reason,
+  }) async {
+    await box.delete(_sealedKey);
+    var deadLettered = false;
     for (final key in sealed.eventKeys) {
       final raw = box.get(key);
-      if (raw == null) continue;
-      await _storage.moveToDlq(
-        partition: _partition,
-        queueName: _queueName,
-        sourceKey: key,
-        rawEnvelope: raw,
-        reason: reason,
-      );
+      final envelope = _readEnvelope(raw);
+      if (raw == null || envelope == null) {
+        if (raw != null) {
+          await _storage.moveToDlq(
+            partition: _partition,
+            queueName: _queueName,
+            sourceKey: key,
+            rawEnvelope: raw,
+            reason: 'poison_envelope',
+          );
+          deadLettered = true;
+          continue;
+        }
+        continue;
+      }
+      final canonicalBody = canonicalJsonEncode(<String, Object?>{
+        'events': <Map<String, Object?>>[envelope.wire],
+      });
+      final digest = sha256.convert(utf8.encode(canonicalBody)).toString();
+      try {
+        final ack = await _transport.sendSealedBatch(
+          canonicalBody: canonicalBody,
+          idempotencyKey: digest,
+        );
+        if (ack.acceptedCount != 1) {
+          _deliveryObserver(
+            AppTelemetryDeliveryDegradation.retrying,
+            'incomplete_ack',
+          );
+          return AppTelemetryFlushResult.deferred;
+        }
+        await box.delete(key);
+      } on CloudException catch (error) {
+        final status = error.statusCode ?? 0;
+        if (status == 400 || status == 422) {
+          await _storage.moveToDlq(
+            partition: _partition,
+            queueName: _queueName,
+            sourceKey: key,
+            rawEnvelope: raw,
+            reason: 'isolated_http_$status',
+          );
+          if (box.containsKey(key)) {
+            _deliveryObserver(
+              AppTelemetryDeliveryDegradation.retrying,
+              'dlq_move_failed',
+            );
+            return AppTelemetryFlushResult.deferred;
+          }
+          deadLettered = true;
+          continue;
+        }
+        if (status == 401 || status == 403) {
+          return AppTelemetryFlushResult.identityBlocked;
+        }
+        _deliveryObserver(
+          AppTelemetryDeliveryDegradation.retrying,
+          status == 0 ? 'network' : 'http_$status',
+        );
+        return AppTelemetryFlushResult.deferred;
+      } catch (_) {
+        _deliveryObserver(
+          AppTelemetryDeliveryDegradation.retrying,
+          'transport_exception',
+        );
+        return AppTelemetryFlushResult.deferred;
+      }
     }
-    await box.delete(_sealedKey);
-    _deliveryObserver(AppTelemetryDeliveryDegradation.deadLettered, reason);
+    if (deadLettered) {
+      _deliveryObserver(AppTelemetryDeliveryDegradation.deadLettered, reason);
+      return AppTelemetryFlushResult.deadLettered;
+    }
+    return AppTelemetryFlushResult.delivered;
   }
 
   Future<void> _removeExpired(Box<String> box) async {
@@ -305,6 +401,7 @@ final class AppTelemetryOutbox {
       for (final key in removableKeys) {
         final envelope = _readEnvelope(box.get(key));
         if (envelope != null &&
+            !envelope.critical &&
             envelope.logType == 'event' &&
             envelope.droppable) {
           victim = key;
@@ -312,37 +409,44 @@ final class AppTelemetryOutbox {
         }
       }
       for (final key in removableKeys) {
-        if (_readEnvelope(box.get(key))?.logType == 'event') {
+        final envelope = _readEnvelope(box.get(key));
+        if (envelope?.logType == 'event' && !envelope!.critical) {
           victim = key;
           break;
         }
       }
       if (victim != null) {
-        await box.delete(victim);
+        final raw = box.get(victim);
+        if (raw == null) {
+          await box.delete(victim);
+          continue;
+        }
+        await _storage.moveToDlq(
+          partition: _partition,
+          queueName: _queueName,
+          sourceKey: victim,
+          rawEnvelope: raw,
+          reason: 'outbox_overflow_event',
+          kind: ActorQueueSignalKind.overflowMoved,
+        );
+        if (box.containsKey(victim)) {
+          _deliveryObserver(
+            AppTelemetryDeliveryDegradation.retrying,
+            'overflow_dlq_move_failed',
+          );
+          return;
+        }
         _deliveryObserver(
-          AppTelemetryDeliveryDegradation.dropped,
+          AppTelemetryDeliveryDegradation.deadLettered,
           'outbox_overflow_event',
         );
         continue;
       }
-      final errorKey = removableKeys.first;
-      final raw = box.get(errorKey);
-      if (raw == null) {
-        await box.delete(errorKey);
-        continue;
-      }
-      await _storage.moveToDlq(
-        partition: _partition,
-        queueName: _queueName,
-        sourceKey: errorKey,
-        rawEnvelope: raw,
-        reason: 'outbox_overflow_error',
-        kind: ActorQueueSignalKind.overflowMoved,
-      );
       _deliveryObserver(
-        AppTelemetryDeliveryDegradation.deadLettered,
-        'outbox_overflow_error',
+        AppTelemetryDeliveryDegradation.retrying,
+        'outbox_capacity_preserves_critical',
       );
+      return;
     }
   }
 
@@ -383,6 +487,7 @@ final class AppTelemetryOutbox {
         logType: (decoded['logType'] ?? '').toString(),
         expiresAt: expiresAt.toUtc(),
         droppable: decoded['droppable'] == true,
+        critical: decoded['critical'] == true,
       );
     } catch (_) {
       return null;
@@ -430,12 +535,14 @@ final class _QueuedEnvelope {
     required this.logType,
     required this.expiresAt,
     required this.droppable,
+    required this.critical,
   });
 
   final Map<String, Object?> wire;
   final String logType;
   final DateTime expiresAt;
   final bool droppable;
+  final bool critical;
 }
 
 final class _SealedTelemetryBatch {

@@ -1,0 +1,118 @@
+# Reusable backing plane for one local content-release environment.  Service
+# configuration stays in each service's environment package; generated data,
+# credentials, and certificates stay in the external target work root.
+services:
+  postgres:
+    image: "${QWQ_LOCAL_POSTGRES_IMAGE:-docker.io/library/postgres:16-alpine}"
+    environment:
+      POSTGRES_USER: quwoquan
+      POSTGRES_PASSWORD: quwoquan
+      POSTGRES_DB: quwoquan
+    ports:
+      - "${QWQ_LOCAL_POSTGRES_PORT:?QWQ_LOCAL_POSTGRES_PORT is required}:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quwoquan"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mongodb:
+    image: "${QWQ_LOCAL_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
+    command: ["--replSet", "rs0", "--bind_ip_all", "--wiredTigerCacheSizeGB", "${QWQ_LOCAL_MONGO_CACHE_SIZE_GB:-0.25}"]
+    ports:
+      - "${QWQ_LOCAL_MONGO_PORT:?QWQ_LOCAL_MONGO_PORT is required}:27017"
+    volumes:
+      - mongodb:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mongo-init:
+    image: "${QWQ_LOCAL_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    entrypoint:
+      - bash
+      - -lc
+      - |
+        mongosh --host mongodb:27017 --quiet --eval '
+          try { rs.status().ok } catch (e) {
+            rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongodb:27017"}]})
+          }
+        '
+    restart: "no"
+
+  redis:
+    image: "${QWQ_LOCAL_REDIS_IMAGE:-docker.io/library/redis:7.2-alpine}"
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${QWQ_LOCAL_REDIS_PORT:?QWQ_LOCAL_REDIS_PORT is required}:6379"
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  object-storage:
+    image: "${QWQ_LOCAL_MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}"
+    networks:
+      default:
+        aliases:
+          - "${QWQ_LOCAL_PUBLIC_UPLOAD_HOST:?QWQ_LOCAL_PUBLIC_UPLOAD_HOST is required}"
+          - "${QWQ_LOCAL_UPLOAD_LOCAL_HOST:?QWQ_LOCAL_UPLOAD_LOCAL_HOST is required}"
+    environment:
+      MINIO_ROOT_USER: "${QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID:?QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
+      MINIO_ROOT_PASSWORD: "${QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET:?QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
+      MINIO_BROWSER: "off"
+      MINIO_CERTS_DIR: /root/.minio/certs
+    command: ["server", "/data", "--address", ":${QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT:?QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT is required}", "--console-address", ":9001"]
+    ports:
+      - "${QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT:?QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT is required}:${QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT:?QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT is required}"
+    volumes:
+      - object-storage:/data
+      - ${QWQ_LOCAL_OBJECT_STORAGE_TLS_DIR:?QWQ_LOCAL_OBJECT_STORAGE_TLS_DIR is required}:/root/.minio/certs:ro
+
+  object-storage-init:
+    image: "${QWQ_LOCAL_MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-03-12T17-29-24Z}"
+    depends_on:
+      object-storage:
+        condition: service_started
+    environment:
+      QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT: "${QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT:?QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT is required}"
+      QWQ_LOCAL_OBJECT_STORAGE_BUCKET: "${QWQ_LOCAL_OBJECT_STORAGE_BUCKET:?QWQ_LOCAL_OBJECT_STORAGE_BUCKET is required}"
+      QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID: "${QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID:?QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
+      QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET: "${QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET:?QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
+      QWQ_LOCAL_PUBLIC_UPLOAD_HOST: "${QWQ_LOCAL_PUBLIC_UPLOAD_HOST:?QWQ_LOCAL_PUBLIC_UPLOAD_HOST is required}"
+    volumes:
+      - ${QWQ_LOCAL_OBJECT_STORAGE_CA_FILE:?QWQ_LOCAL_OBJECT_STORAGE_CA_FILE is required}:/etc/qwq-object-storage/ca.crt:ro
+      - ./object-storage-lifecycle.json:/etc/qwq-object-storage/lifecycle.json:ro
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        install -d -m 0700 /root/.mc/certs/CAs
+        cp /etc/qwq-object-storage/ca.crt /root/.mc/certs/CAs/qwq-local-object-storage.crt
+        for attempt in $(seq 1 60); do
+          if mc alias set qwq "https://${QWQ_LOCAL_PUBLIC_UPLOAD_HOST}:${QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT}" "$QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID" "$QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET"; then
+            mc mb --ignore-existing "qwq/${QWQ_LOCAL_OBJECT_STORAGE_BUCKET}"
+            mc ilm rule import "qwq/${QWQ_LOCAL_OBJECT_STORAGE_BUCKET}" < /etc/qwq-object-storage/lifecycle.json
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "object-storage did not become ready" >&2
+        exit 1
+    restart: "no"
+
+volumes:
+  postgres:
+  mongodb:
+  redis:
+  object-storage:

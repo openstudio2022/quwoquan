@@ -4,59 +4,97 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 cd "$ROOT"
 
-echo "[verify] service config layout"
+PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from pathlib import Path
+import re
+import yaml
 
-# Env-split guardrail mode:
-# - default strict=1: require full env split layout for all services with configs/
-STRICT="${QWQ_CONFIG_GATE_STRICT:-1}"
+root = Path.cwd()
+service_roots = sorted((root / "quwoquan_service/services").glob("*-service"))
+gateway = root / "quwoquan_service/services/realtime-gateway"
+if gateway.is_dir():
+    service_roots.append(gateway)
+service_roots = sorted(set(service_roots))
+control_plane = root / "quwoquan_service/control-plane/platform-ops"
+all_roots = service_roots + ([control_plane] if control_plane.is_dir() else [])
 
-failures=0
-warnings=0
-checked=0
+expected_services = {
+    "assistant-service", "chat-service", "circle-service", "content-service",
+    "entity-service", "integration-service", "notification-service",
+    "product-ops-service", "realtime-gateway", "recommendation-service",
+    "rtc-service", "search-service", "tag-service", "user-service",
+}
+actual_services = {path.name for path in service_roots}
+if actual_services != expected_services:
+    raise SystemExit(f"domain service set mismatch: {sorted(actual_services)}")
 
-services_dir="$ROOT/quwoquan_service/services"
-if [[ ! -d "$services_dir" ]]; then
-  echo "[verify] FAIL: services directory not found: $services_dir" >&2
-  exit 1
-fi
+global_config_sources = [
+    root / "quwoquan_service/contracts/metadata/platform/config.yaml",
+    root / "quwoquan_service/contracts/metadata/_control_plane/product/config.yaml",
+    root / "quwoquan_ops/environments/config",
+]
+remaining = [str(path) for path in global_config_sources if path.exists()]
+if remaining:
+    raise SystemExit("global service config truth sources are forbidden: " + ", ".join(remaining))
 
-shopt -s nullglob
-for svc_path in "$services_dir"/*; do
-  [[ -d "$svc_path" ]] || continue
-  svc="$(basename "$svc_path")"
-  cfg_root="$svc_path/configs"
+all_keys: dict[str, Path] = {}
+for owner in all_roots:
+    schema_path = owner / "config/schema.yaml"
+    if not schema_path.is_file():
+        raise SystemExit(f"missing config schema: {schema_path}")
+    schema = yaml.safe_load(schema_path.read_text()) or {}
+    entries = schema.get("configs", []) or []
+    if not isinstance(entries, list):
+        raise SystemExit(f"{schema_path}: configs must be a list")
+    definitions = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("key"), str):
+            raise SystemExit(f"{schema_path}: invalid config definition")
+        key = entry["key"]
+        if key in definitions:
+            raise SystemExit(f"{schema_path}: duplicate key {key}")
+        if key in all_keys:
+            raise SystemExit(f"config key has two owners: {key}: {all_keys[key]} and {schema_path}")
+        definitions[key] = entry
+        all_keys[key] = schema_path
 
-  # Service without configs/ is considered out-of-scope for now (skeleton stage).
-  if [[ ! -d "$cfg_root" ]]; then
-    echo "[verify] WARN: $svc has no configs/ directory (skipped)"
-    warnings=$((warnings + 1))
-    if [[ "$STRICT" == "1" ]]; then
-      echo "[verify] FAIL: strict mode requires configs/ for all services" >&2
-      failures=$((failures + 1))
-    fi
-    continue
-  fi
+    environments_root = owner / "environments"
+    envs = sorted(path.name for path in environments_root.iterdir() if path.is_dir())
+    if envs != ["alpha", "beta", "gamma", "prod"]:
+        raise SystemExit(f"{owner}: environment set must be alpha/beta/gamma/prod, got {envs}")
+    for env in envs:
+        path = environments_root / env / "config.yaml"
+        if not path.is_file():
+            raise SystemExit(f"missing environment config: {path}")
+        payload = yaml.safe_load(path.read_text()) or {}
+        allowed_sections = {"overrides", "secretRefs", "externalBindings"}
+        unknown_sections = set(payload) - allowed_sections
+        if unknown_sections:
+            raise SystemExit(f"{path}: unknown sections {sorted(unknown_sections)}")
+        overrides = payload.get("overrides", {}) or {}
+        refs = payload.get("secretRefs", {}) or {}
+        bindings = payload.get("externalBindings", {}) or {}
+        if not all(isinstance(item, dict) for item in (overrides, refs, bindings)):
+            raise SystemExit(f"{path}: overrides, secretRefs and externalBindings must be mappings")
+        if set(overrides) & set(refs):
+            raise SystemExit(f"{path}: key cannot be both override and secretRef")
+        for key in set(overrides) | set(refs):
+            if key not in definitions:
+                raise SystemExit(f"{path}: undefined or foreign config key {key}")
+        for key, ref in refs.items():
+            if not definitions[key].get("sensitive"):
+                raise SystemExit(f"{path}: non-sensitive key uses secretRef: {key}")
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]*", str(ref)):
+                raise SystemExit(f"{path}: invalid secret reference for {key}: {ref}")
+        for key in overrides:
+            if definitions[key].get("sensitive"):
+                raise SystemExit(f"{path}: sensitive key must use secretRef: {key}")
+            if "default" in definitions[key] and overrides[key] == definitions[key]["default"]:
+                raise SystemExit(f"{path}: override duplicates schema default for {key}")
+        text = path.read_text()
+        for other_env in {"alpha", "beta", "gamma", "prod"} - {env}:
+            if re.search(rf"environments[/\\]{other_env}(?:[/\\]|$)", text):
+                raise SystemExit(f"{path}: environment inheritance/reference to {other_env} is forbidden")
 
-  checked=$((checked + 1))
-
-  default_file="$cfg_root/default/config.yaml"
-  alpha_file="$cfg_root/alpha/config.yaml"
-  beta_file="$cfg_root/beta/config.yaml"
-  gamma_file="$cfg_root/gamma/config.yaml"
-  prod_file="$cfg_root/prod/config.yaml"
-
-  if [[ -f "$default_file" && -f "$alpha_file" && -f "$beta_file" && -f "$gamma_file" && -f "$prod_file" ]]; then
-    echo "[verify] OK: $svc config layout complete (default/alpha/beta/gamma/prod)"
-    continue
-  fi
-
-  echo "[verify] FAIL: $svc missing env-split config layout (default/alpha/beta/gamma/prod)" >&2
-  failures=$((failures + 1))
-done
-
-if [[ "$failures" -gt 0 ]]; then
-  echo "[verify] FAIL: service config layout checks failed (failures=$failures, warnings=$warnings, checked=$checked)" >&2
-  exit 1
-fi
-
-echo "[verify] OK: service config layout checked (checked=$checked, warnings=$warnings, strict=$STRICT)"
+print(f"[verify] OK: {len(all_keys)} unique definitions, 14 services + platform-ops, four autonomous environments")
+PY

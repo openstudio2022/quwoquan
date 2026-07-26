@@ -1,9 +1,9 @@
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation/spec.md#gwt-001
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_search_index.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
@@ -34,7 +34,7 @@ void main() {
           subjectType: 'owner',
           displayName: '主账号',
           avatarUrl: '',
-          personaContextVersion: 'v1',
+          contextVersion: 1,
         ),
       );
       subNamespace = LocalSearchNamespace.fromActivePersonaContext(
@@ -44,13 +44,14 @@ void main() {
           subjectType: 'sub_account',
           displayName: '子账号',
           avatarUrl: '',
-          personaContextVersion: 'v2',
+          contextVersion: 2,
         ),
       );
       await store.ensureReady();
     });
 
     tearDown(() async {
+      await store.close();
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
@@ -113,13 +114,13 @@ void main() {
     test(
       'ensureSeeded is deduped per namespace and reseeds new namespace',
       () async {
-        final repo = _CountingCircleRepository();
+        final reader = _CountingCircleQueryReader();
         const groups = _CountingCircleGroupQuery();
 
         expect(
           await store.ensureSeeded(
             namespace: ownerNamespace,
-            circleRepository: repo,
+            circleQuery: reader,
             circleGroupQuery: groups,
           ),
           isTrue,
@@ -127,59 +128,213 @@ void main() {
         expect(
           await store.ensureSeeded(
             namespace: ownerNamespace,
-            circleRepository: repo,
+            circleQuery: reader,
             circleGroupQuery: groups,
           ),
           isTrue,
         );
-        final ownerListCalls = repo.listCirclesCalls;
+        final ownerListCalls = reader.listCalls;
 
         expect(
           await store.ensureSeeded(
             namespace: subNamespace,
-            circleRepository: repo,
+            circleQuery: reader,
             circleGroupQuery: groups,
           ),
           isTrue,
         );
 
         expect(ownerListCalls, equals(1));
-        expect(repo.listCirclesCalls, equals(2));
+        expect(reader.listCalls, equals(2));
         expect(await store.hasAnySnapshot(ownerNamespace), isTrue);
         expect(await store.hasAnySnapshot(subNamespace), isTrue);
       },
     );
+
+    test('搜索索引在同一账号同步窗口内只刷新一次', () async {
+      final reader = _CountingCircleQueryReader();
+      final index = SqfliteLocalCircleGroupSearchIndex(
+        store,
+        () async => ActivePersonaContextViewData.fallback(
+          subAccountId: 'user_owner',
+          ownerUserId: 'user_owner',
+          subjectType: 'owner',
+          displayName: '主账号',
+          avatarUrl: '',
+          contextVersion: 1,
+        ),
+        reader,
+        const _CountingCircleGroupQuery(),
+      );
+
+      expect(await index.sync(), isTrue);
+      expect(await index.sync(), isTrue);
+      expect(reader.listCalls, 1);
+      expect(await index.searchGroups(query: '默认'), hasLength(1));
+    });
+
+    test('forceRefresh 原子替换快照并清除已退出讨论', () async {
+      await store.upsertGroups(
+        namespace: ownerNamespace,
+        groups: const <LocalCircleGroupSnapshotRecord>[
+          LocalCircleGroupSnapshotRecord(
+            circleId: 'fixture_circle_photo',
+            groupId: 'stale_group',
+            name: '已退出摄影讨论',
+            description: '过期数据',
+            circleName: '契约摄影社',
+            groupType: 'public_group',
+            visibility: 'public',
+            updatedAt: '2026-07-13T00:00:00.000Z',
+          ),
+        ],
+      );
+
+      await store.ensureSeeded(
+        namespace: ownerNamespace,
+        circleQuery: _CountingCircleQueryReader(),
+        circleGroupQuery: const _CountingCircleGroupQuery(groupName: '最新摄影讨论'),
+        forceRefresh: true,
+      );
+
+      expect(
+        await store.searchGroups(namespace: ownerNamespace, query: '已退出'),
+        isEmpty,
+      );
+      expect(
+        await store.searchGroups(namespace: ownerNamespace, query: '最新'),
+        hasLength(1),
+      );
+    });
+
+    test('账号 closed 终态物理清除全部 namespace', () async {
+      const snapshot = LocalCircleGroupSnapshotRecord(
+        circleId: 'circle_terminal',
+        groupId: 'group_terminal',
+        name: '终态清理群',
+        description: 'local residual',
+        circleName: '终态圈',
+        groupType: 'public_group',
+        visibility: 'public',
+        updatedAt: '2026-07-24T00:00:00.000Z',
+      );
+      await store.upsertGroups(
+        namespace: ownerNamespace,
+        groups: const <LocalCircleGroupSnapshotRecord>[snapshot],
+      );
+      await store.upsertGroups(
+        namespace: subNamespace,
+        groups: const <LocalCircleGroupSnapshotRecord>[snapshot],
+      );
+
+      await store.clearAllNamespaces();
+
+      expect(await store.hasAnySnapshot(ownerNamespace), isFalse);
+      expect(await store.hasAnySnapshot(subNamespace), isFalse);
+    });
+
+    test('seed 读取失败时显式失败且不提交不完整快照', () async {
+      final reader = _CountingCircleQueryReader();
+      final failure = StateError('circle group query unavailable');
+
+      await expectLater(
+        store.ensureSeeded(
+          namespace: ownerNamespace,
+          circleQuery: reader,
+          circleGroupQuery: _CountingCircleGroupQuery(failure: failure),
+        ),
+        throwsA(same(failure)),
+      );
+
+      expect(await store.hasAnySnapshot(ownerNamespace), isFalse);
+    });
+
+    test('forceRefresh 读取失败时保留上一份完整快照', () async {
+      await store.upsertGroups(
+        namespace: ownerNamespace,
+        groups: const <LocalCircleGroupSnapshotRecord>[
+          LocalCircleGroupSnapshotRecord(
+            circleId: 'fixture_circle_photo',
+            groupId: 'stable_group',
+            name: '保留摄影讨论',
+            description: '上一份完整快照',
+            circleName: '契约摄影社',
+            groupType: 'public_group',
+            visibility: 'public',
+            updatedAt: '2026-07-13T00:00:00.000Z',
+          ),
+        ],
+      );
+      final failure = StateError('circle group query unavailable');
+
+      await expectLater(
+        store.ensureSeeded(
+          namespace: ownerNamespace,
+          circleQuery: _CountingCircleQueryReader(),
+          circleGroupQuery: _CountingCircleGroupQuery(failure: failure),
+          forceRefresh: true,
+        ),
+        throwsA(same(failure)),
+      );
+
+      expect(
+        await store.searchGroups(namespace: ownerNamespace, query: '保留'),
+        hasLength(1),
+      );
+    });
   });
 }
 
-class _CountingCircleRepository extends MockCircleRepository {
-  int listCirclesCalls = 0;
+final class _CountingCircleQueryReader implements CircleQueryReader {
+  int listCalls = 0;
 
   @override
-  Future<List<CircleDto>> listCircles({
-    String? category,
-    String? subCategory,
-    String? domainId,
-    String? recommendFor,
-    String? cursor,
-    int limit = 20,
-    String? sort,
-  }) async {
-    listCirclesCalls += 1;
-    return super.listCircles(
-      category: category,
-      subCategory: subCategory,
-      domainId: domainId,
-      recommendFor: recommendFor,
-      cursor: cursor,
-      limit: limit,
-      sort: sort,
+  Future<CirclePageSlice> list(CircleListQuery query) async {
+    listCalls += 1;
+    return CirclePageSlice(
+      items: <CircleProjection>[
+        CircleProjection(
+          circleId: 'fixture_circle_photo',
+          name: '契约摄影社',
+          ownerId: 'fixture_owner',
+        ),
+      ],
     );
   }
+
+  @override
+  Future<CircleSearchResultSlice> search(CircleSearchQuery query) async =>
+      CircleSearchResultSlice(
+        items: const <CircleSearchItemProjection>[],
+        facetBuckets: const <CircleFacetBucketProjection>[],
+      );
+
+  @override
+  Future<CircleProjection> get(CircleDetailQuery query) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<CircleFeedPageSlice> feed(CircleFeedQuery query) async =>
+      CircleFeedPageSlice(items: const <CircleFeedPostProjection>[]);
+
+  @override
+  Future<CircleStatsSlice> stats(CircleStatsQuery query) async =>
+      const CircleStatsSlice();
+
+  @override
+  Future<CircleImpactSlice> impact(CircleImpactQuery query) async =>
+      CircleImpactSlice(
+        circleId: query.circleId,
+        total: 0,
+        items: const <CircleImpactItemProjection>[],
+      );
 }
 
 final class _CountingCircleGroupQuery implements CircleGroupQueryReader {
-  const _CountingCircleGroupQuery();
+  const _CountingCircleGroupQuery({this.failure, this.groupName = '默认公共群'});
+
+  final Object? failure;
+  final String groupName;
 
   CircleGroupSlice _group(String circleId) => CircleGroupSlice(
     groupId: '${circleId}_group_default',
@@ -188,7 +343,7 @@ final class _CountingCircleGroupQuery implements CircleGroupQueryReader {
     parentGroupId: null,
     groupType: CircleGroupType.publicGroup,
     nodeType: null,
-    name: '默认公共群',
+    name: groupName,
     description: '',
     visibility: CircleGroupVisibility.public,
     joinPolicy: CircleGroupJoinPolicy.applyOnly,
@@ -207,8 +362,14 @@ final class _CountingCircleGroupQuery implements CircleGroupQueryReader {
       _group(query.circleId);
 
   @override
-  Future<CircleGroupPageSlice> list(CircleGroupListQuery query) async =>
-      CircleGroupPageSlice(items: <CircleGroupSlice>[_group(query.circleId)]);
+  Future<CircleGroupPageSlice> list(CircleGroupListQuery query) async {
+    if (failure != null) {
+      throw failure!;
+    }
+    return CircleGroupPageSlice(
+      items: <CircleGroupSlice>[_group(query.circleId)],
+    );
+  }
 
   @override
   Future<CircleGroupPageSlice> search(CircleGroupSearchQuery query) async =>

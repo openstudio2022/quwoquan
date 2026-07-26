@@ -6,14 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -28,8 +25,11 @@ import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/harness/profile_shell_scroll_utils.dart';
+import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/test_content_comment_facet.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 /// 互动 Tab：切换后渲染 ProfileInteractionTab，二级子页（赞/评论/分享）可见。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
@@ -44,7 +44,10 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   }
 }
 
-class _InteractionContractRepository extends MockUserProfileRepository {
+class _InteractionContractRepository
+    implements
+        ContentProfileInteractionQueryFacet,
+        ContentProfileInteractionReadFactAppendFacet {
   const _InteractionContractRepository({
     required this.received,
     required this.sent,
@@ -54,23 +57,37 @@ class _InteractionContractRepository extends MockUserProfileRepository {
   final List<ProfileInteractionActivityViewData> sent;
 
   @override
-  Future<List<ProfileInteractionActivityViewData>>
-  listProfileInteractionReceivedView(
-    String userId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
+  Future<ContentProfileInteractionPage> listActivities(
+    ContentProfileInteractionPageQuery query, {
+    required ContentProfileInteractionDirection direction,
   }) async {
-    return received.take(limit).toList(growable: false);
+    final filterKey = switch (query.type) {
+      ContentProfileInteractionType.like => 'likes',
+      ContentProfileInteractionType.comment => 'comments',
+      ContentProfileInteractionType.share => 'shares',
+    };
+    final source = direction == ContentProfileInteractionDirection.received
+        ? received
+        : sent;
+    final items = source
+        .where((item) => item.filterKeys.contains(filterKey))
+        .take(query.limit)
+        .map(_contentActivityFromView)
+        .toList(growable: false);
+    return ContentProfileInteractionPage(items: items);
   }
 
   @override
-  Future<List<ProfileInteractionActivityViewData>>
-  listProfileInteractionSentView(
-    String userId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    return sent.take(limit).toList(growable: false);
+  Future<ContentProfileInteractionReadFactAck> appendReadFact(
+    AppendContentProfileInteractionReadFactCommand command,
+  ) async {
+    return ContentProfileInteractionReadFactAck(
+      factId: 'fact-${command.activityId}-${command.state.wireValue}',
+      activityId: command.activityId,
+      state: command.state.wireValue,
+      occurredAt: DateTime.utc(2026, 7, 15),
+      replayed: false,
+    );
   }
 }
 
@@ -89,11 +106,6 @@ class _RecordingChatRepository extends MockChatRepository {
   Future<ChatConversationCreatedDto> createConversation({
     required String type,
     String? title,
-    String? circleId,
-    String? circleGroupId,
-    String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   }) {
@@ -103,11 +115,6 @@ class _RecordingChatRepository extends MockChatRepository {
     return super.createConversation(
       type: type,
       title: title,
-      circleId: circleId,
-      circleGroupId: circleGroupId,
-      originType: originType,
-      bindingType: bindingType,
-      lifecyclePolicy: lifecyclePolicy,
       maxGroupSize: maxGroupSize,
       initialMemberIds: initialMemberIds,
     );
@@ -139,7 +146,13 @@ Widget _interactionTabActionsApp(
 }) {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(repository),
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      profileInteractionQueryFacetProvider.overrideWithValue(repository),
+      profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+        repository,
+      ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
       ),
@@ -149,7 +162,7 @@ Widget _interactionTabActionsApp(
           commentFacet: commentFacet,
         ),
       if (chatRepository != null)
-        chatRepositoryProvider.overrideWithValue(chatRepository),
+        chatRepositoryCompositionProvider.overrideWithValue(chatRepository),
       if (chatRepository != null)
         chatMessageCommandWriterProvider.overrideWithValue(
           chatRepository.writer,
@@ -161,7 +174,7 @@ Widget _interactionTabActionsApp(
             ownerUserId: 'profile_owner',
             displayName: '主页测试分身',
             avatarUrl: '',
-            personaContextVersion: '3',
+            contextVersion: 3,
           ),
         ),
     ],
@@ -180,13 +193,28 @@ Widget _interactionTabActionsApp(
 }
 
 Widget _scopedApp() {
+  const interactions = _InteractionContractRepository(
+    received: <ProfileInteractionActivityViewData>[],
+    sent: <ProfileInteractionActivityViewData>[],
+  );
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(
-        const MockUserProfileRepository(),
+      ...mockContentFacetOverrides(MockContentRepository()),
+      intersectionRepositoryProvider.overrideWithValue(
+        AlphaIntersectionRepository(),
+      ),
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      authorImpactQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
+      ),
+      profileInteractionQueryFacetProvider.overrideWithValue(interactions),
+      profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+        interactions,
       ),
     ],
     child: MaterialApp(
@@ -205,7 +233,13 @@ Widget _interactionTabApp(
 }) {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(repository),
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      profileInteractionQueryFacetProvider.overrideWithValue(repository),
+      profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+        repository,
+      ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
       ),
@@ -269,7 +303,13 @@ Widget _interactionTabRouterApp(
   );
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(repository),
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      profileInteractionQueryFacetProvider.overrideWithValue(repository),
+      profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+        repository,
+      ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
       ),
@@ -380,6 +420,62 @@ ProfileInteractionActivityViewData _interaction({
   );
 }
 
+ContentProfileInteractionActivity _contentActivityFromView(
+  ProfileInteractionActivityViewData view,
+) {
+  final occurredAt =
+      view.occurredAt ?? view.createdAt ?? DateTime.utc(2026, 6, 18);
+  return ContentProfileInteractionActivity(
+    activityId: view.activityId,
+    activityType: view.filterKeys.contains('comments')
+        ? 'comment'
+        : view.filterKeys.contains('shares')
+        ? 'share'
+        : 'like',
+    direction: view.direction,
+    commentKind: view.commentKind,
+    commentId: view.commentId,
+    parentCommentId: view.parentCommentId,
+    viewerReaction: view.viewerReaction,
+    actorSubAccountId: view.actorSubAccountId,
+    actorDisplayName: view.actorDisplayName,
+    actorAvatarUrl: view.actorAvatarUrl,
+    actorAvatarVersion: view.actorAvatarVersion,
+    counterpartSubAccountId: view.counterpartSubAccountId,
+    counterpartDisplayName: view.counterpartDisplayName,
+    counterpartAvatarUrl: view.counterpartAvatarUrl,
+    targetSubAccountId: view.targetSubAccountId,
+    targetContentId: view.targetContentId,
+    targetContentType: view.targetContentType,
+    targetContentSummary: view.targetContentSummary,
+    targetKind: view.targetKind,
+    targetAvailability: view.targetAvailability,
+    targetReplyCount: view.targetReplyCount,
+    displaySubAccountId: view.displaySubAccountId,
+    displayName: view.displayName,
+    displayAvatarUrl: view.displayAvatarUrl,
+    displayAvatarVersion: view.displayAvatarVersion,
+    displayUserRouteId: view.displayUserRouteId,
+    primaryText: view.primaryText,
+    contextText: view.contextText,
+    previewMediaKind: view.previewMediaKind,
+    previewImageUrl: view.previewImageUrl,
+    previewText: view.previewText,
+    previewUnavailable: view.previewUnavailable,
+    previewObjectId: view.previewObjectId,
+    previewRouteId: view.previewRouteId,
+    outboundShareEventId: view.outboundShareEventId,
+    shareText: view.shareText,
+    impactPrimaryText: view.impactPrimaryText,
+    impactDeepLink: view.impactDeepLink,
+    filterKeys: view.filterKeys,
+    createdAt: view.createdAt ?? occurredAt,
+    occurredAt: occurredAt,
+    seenAt: view.seenAt,
+    readAt: view.readAt,
+  );
+}
+
 void _setPhoneSize(WidgetTester tester) {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 3.0;
@@ -409,21 +505,6 @@ Future<void> _tapPreviewSurface(WidgetTester tester, String activityId) async {
   );
   final topLeft = tester.getTopLeft(finder);
   await tester.tapAt(topLeft + const Offset(6, 6));
-}
-
-Future<void> _tapInteractionSubTab(WidgetTester tester, String label) async {
-  final tabBar = find.byKey(
-    const ValueKey<String>('profile-interaction-secondary-tabs'),
-  );
-  if (label == UITextConstants.interactionSubViews) {
-    await tester.drag(tabBar, const Offset(-160, 0));
-    await _pumpFrames(tester, count: 4);
-  }
-  await tester.tap(
-    find
-        .ancestor(of: find.text(label), matching: find.byType(CupertinoButton))
-        .first,
-  );
 }
 
 void main() {
@@ -467,7 +548,7 @@ void main() {
         ),
         matching: find.text(UITextConstants.interactionSubVisitors),
       ),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -495,11 +576,6 @@ void main() {
               primaryText: '契约主句：转发',
               filterKeys: const <String>['shares'],
             ),
-            _interaction(
-              id: 'view',
-              primaryText: '契约主句：浏览',
-              filterKeys: const <String>['views'],
-            ),
           ],
           sent: const <ProfileInteractionActivityViewData>[],
         ),
@@ -510,7 +586,6 @@ void main() {
     expect(find.text('契约主句：点赞'), findsOneWidget);
     expect(find.text('契约主句：评论'), findsNothing);
     expect(find.text('契约主句：转发'), findsNothing);
-    expect(find.text('契约主句：浏览'), findsNothing);
     expect(find.text('旧字段不应作为主句'), findsNothing);
     expect(find.byIcon(CupertinoIcons.chevron_forward), findsNothing);
 
@@ -535,15 +610,6 @@ void main() {
       tester.widget<Text>(find.text('契约主句：评论')).style?.fontWeight,
       AppTypography.regular,
     );
-
-    await _tapInteractionSubTab(tester, UITextConstants.interactionSubVisitors);
-    await _pumpFrames(tester);
-
-    expect(
-      find.text(UITextConstants.profileInteractionViewReceivedText),
-      findsOneWidget,
-    );
-    expect(find.text('契约主句：转发'), findsNothing);
   });
 
   testWidgets('赞二级 Tab 不渲染方向开关，避免挤压分类', (tester) async {

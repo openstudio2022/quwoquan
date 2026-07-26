@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 class CircleCard extends StatelessWidget {
   const CircleCard({
@@ -39,10 +40,11 @@ class CircleCard extends StatelessWidget {
           children: [
             AspectRatio(
               aspectRatio: 16 / 9,
-              child: Image.network(
-                coverUrl,
+              child: AppCachedNetworkImage(
+                imageUrl: coverUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
+                cdnPreset: CdnImagePreset.cover,
+                errorWidget: Container(
                   color: border.withValues(alpha: 0.1),
                   child: Icon(
                     Icons.group,

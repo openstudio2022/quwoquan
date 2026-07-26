@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/remote/entity/homepage/homepage_command_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
@@ -8,18 +9,42 @@ import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/remote/homepage_query_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-RemoteHomepageRepository buildRemoteHomepageRepositoryForTest({
+HomepageFacetProjectionAdapter buildRemoteHomepageRepositoryForTest({
   required CloudHttpClient httpClient,
   required String baseUrl,
 }) {
   final gatewayBaseUri = Uri.parse(baseUrl);
-  return RemoteHomepageRepository(
-    queryAdapter: buildHomepageQueryAdapterForTest(
+  final client = buildGeneratedCloudOperationClient(
+    httpClient: httpClient,
+    clientContextProvider: const _HomepageTestClientContext(),
+    telemetrySink: const _NoopHomepageTelemetrySink(),
+    environment: CloudRuntimeEnvironment(
+      environment: CloudEnvironment.gamma,
+      gatewayBaseUri: gatewayBaseUri,
+    ),
+  );
+  final commands = RemoteHomepageCommandWriter(
+    client: client,
+    invocationContext: (clientPageId, surface) =>
+        CloudOperationInvocationContext(
+          surfaceId: surface.id,
+          routeId: surface.routeId,
+          clientPageId: clientPageId,
+          idempotencyKey: 'test-idempotency-key',
+          actor: const CloudOperationActorContext(
+            accountId: 'test-account',
+            personaId: 'test-persona',
+          ),
+        ),
+  );
+  return HomepageFacetProjectionAdapter(
+    query: buildHomepageQueryAdapterForTest(
       httpClient: httpClient,
       gatewayBaseUri: gatewayBaseUri,
     ),
-    httpClient: httpClient,
-    baseUrl: baseUrl,
+    candidateWriter: commands,
+    claimRequestWriter: commands,
+    statusReportWriter: commands,
   );
 }
 

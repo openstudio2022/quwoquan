@@ -1,8 +1,0 @@
-read_model: ReplyPageSlice
-description: 二级回复商用投影分页；组合 ContentReaction、MediaAsset 与 capability，parentCommentId 是一级线程根。
-source_entities: [Comment, ContentReaction, MediaAsset, Post]
-consumers: [app]
-client_projection:
-  dart_class: ContentCommentReplyPageSlice
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/comment_contracts.dart
-fields: [attachments, replyCount, replyPreview, replyNextCursor, likeCount, dislikeCount, viewerReaction, isAuthor, canDelete, canReply, canReport, canPin]

@@ -5,19 +5,10 @@ import {
 } from "../runtime/errors/runtimeError.js";
 import { productControlPlane } from "../../generated/control-plane/productControlPlane.generated.js";
 import { eventCatalog } from "../../generated/telemetry/eventCatalog.generated.js";
+import { getPortalAccessToken, notifyPortalAuthExpired } from "../auth/portalAuth.js";
 
 export type ProductTelemetryNetworkClass =
   (typeof eventCatalog.network_classes)[number];
-
-export interface ExperimentItem {
-  id: string;
-  name: string;
-  enabled: boolean;
-  policyVersion: string;
-  buckets: Array<{ name: string; weightPct: number }>;
-  bucketStats: Record<string, number>;
-  assignedSubjects: number;
-}
 
 export interface ReleaseItem {
   releaseId: string;
@@ -45,6 +36,84 @@ export interface ReportItem {
   updatedAt: string;
 }
 
+export interface HomepageCandidateItem {
+  homepageId: string;
+  canonicalEntityId: string;
+  title: string;
+  subtitle?: string;
+  homepageType: string;
+  coverUrl?: string;
+  city?: string;
+  address?: string;
+  status: 'candidate' | 'published' | 'offline';
+}
+
+export interface HomepageClaimRequestItem {
+  claimRequestId: string;
+  version: number;
+  homepageId: string;
+  requesterPersonaId: string;
+  claimTier: string;
+  businessLicenseUrl?: string;
+  contactPhone?: string;
+  identityCardFrontUrl?: string;
+  identityCardBackUrl?: string;
+  note?: string;
+  status: 'pending_review' | 'approved' | 'rejected';
+  reviewerAccountId?: string;
+  reviewNote?: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt?: string;
+}
+
+export interface HomepageStatusReportItem {
+  reportId: string;
+  version: number;
+  homepageId: string;
+  reporterPersonaId: string;
+  reason: string;
+  description?: string;
+  evidenceUrls?: string[];
+  status: 'pending_review' | 'confirmed_offline' | 'dismissed';
+  reviewerAccountId?: string;
+  reviewNote?: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt?: string;
+}
+
+export interface CursorSlice<T> {
+  items: T[];
+  nextCursor?: string;
+}
+
+export interface IntakeHomepageCandidatePayload {
+  title: string;
+  subtitle?: string;
+  homepageType: string;
+  canonicalEntityId: string;
+  categoryTags?: string[];
+  coverUrl?: string;
+  address?: string;
+  city?: string;
+  introductionMarkdown?: string;
+}
+
+export interface PostModerationCaseItem {
+  id: string;
+  version: number;
+  postId: string;
+  postVersion: number;
+  contentDigest: string;
+  status: 'pending' | 'reviewed' | 'approved' | 'rejected' | 'superseded';
+  reviewerId?: string;
+  decisionReason?: string;
+  createdAt: string;
+  updatedAt: string;
+  decidedAt?: string;
+}
+
 export interface ServiceCatalogItem {
   id: string;
   service: string;
@@ -54,46 +123,12 @@ export interface ServiceCatalogItem {
   summary: string;
 }
 
-export interface OnboardingDomainItem {
-  domain: string;
-  display_name: string;
-  template_role: string;
-  rollout_group: string;
-  acceptance_status: string;
-  metadata_paths: string[];
-  service_names: string[];
-  control_planes: Record<string, { enabled: boolean; object_types: string[]; config_prefixes: string[] }>;
-  minimum_package: {
-    metadata_files: string[];
-    codegen_targets: string[];
-    test_evidence: Record<string, string[]>;
-  };
-  deployment: {
-    plane_binding_domain: string;
-    plane_binding_source: string;
-    current_binding_source: string;
-  };
-  replication: {
-    source_template: string;
-    next_copy_targets: string[];
-    copy_notes: string[];
-  };
-  blocking_gaps: string[];
-}
-
 export interface PlaneBindingItem {
   id: string;
   env: string;
-  process: string;
-  domain: string;
-  planes: string[];
-}
-
-export interface EnvironmentTopologyItem {
-  id: string;
-  env: string;
-  process: string;
-  domains: string[];
+  workload: string;
+  plane: string;
+  deploymentRef: string;
 }
 
 export interface RuntimeClusterItem {
@@ -124,52 +159,6 @@ export interface RuntimeInstanceItem {
   status: string;
 }
 
-export interface DependencyItem {
-  id: string;
-  dependency: string;
-  profile: string;
-  latency: string;
-  status: string;
-}
-
-export interface CapacityProfileItem {
-  id: string;
-  plane: string;
-  resourceClass: string;
-  scaling: string;
-  splitTrigger: string;
-}
-
-export interface GovernanceBindingItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  status: string;
-}
-
-export interface GovernanceTemplateItem {
-  id: string;
-  title: string;
-  summary: string;
-  status: string;
-}
-
-export interface GateRuleItem {
-  id: string;
-  rule: string;
-  stage: string;
-  status: string;
-  summary: string;
-}
-
-export interface RunbookItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  status: string;
-  lastRunAt?: string;
-}
-
 export interface PlatformAuditItem {
   auditId: string;
   objectType: string;
@@ -197,70 +186,62 @@ export interface PlatformApprovalItem {
 export interface PlatformProjectionSummary {
   approvalCount: number;
   auditCount: number;
-  runbookCount: number;
+  activeAlerts: number;
   releaseServices: string[];
 }
 
-export interface SLOPolicyItem {
+// ActiveAlertItem 对齐 platform-ops-service 的 Alertmanager 回流对象：
+// firing 由 webhook 建立，acknowledged 由值班人认领，resolved 归档。
+export interface ActiveAlertItem {
   id: string;
-  service: string;
-  objective: string;
-  window: string;
-  status: string;
-}
-
-export interface AlertTemplateItem {
-  id: string;
-  title: string;
+  fingerprint: string;
+  alertName: string;
   severity: string;
+  service?: string;
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  startsAt?: string;
+  endsAt?: string;
   status: string;
-  owner?: string;
-  runbookId?: string;
-  runbookRoute?: string;
-  repairEntry?: string;
-  alertId?: string;
-  auditRoute?: string;
-}
-
-export interface DashboardCardItem {
-  id: string;
-  title: string;
-  summary: string;
+  ackedBy?: string;
+  ackedAt?: string;
+  updatedAt: string;
 }
 
 export interface ConfigKeyItem {
-  id: string;
   key: string;
+  kind: string;
   owner?: string;
   default: unknown;
   scope: string;
   reload: string;
   rollout?: string;
-  risk_level?: string;
-  ui_editable?: boolean;
+  riskLevel?: string;
+  uiEditable: boolean;
 }
 
-export interface ConfigLayerItem {
-  id: string;
-  title?: string;
-  scopeLevel: string;
-  scopeID: string;
-  environment?: string;
-  cluster?: string;
-  service?: string;
-  values: Record<string, unknown>;
+export interface ConfigSnapshotFile {
+  path: string;
+  role: string;
+  sha256: string;
+  content: string;
 }
 
-export interface ConfigPackageItem {
-  id: string;
-  packageId: string;
-  environment: string;
-  cluster: string;
+export interface ConfigSnapshotView {
+  domain: string;
   service: string;
-  configVersion: string;
-  imageVersion: string;
-  releaseState: string;
-  distribution: string;
+  environment: string;
+  files: ConfigSnapshotFile[];
+  releaseVersions: string[];
+  mergedSha256?: string;
+  snapshotSource: string;
+}
+
+export interface ConfigDomainItem {
+  domain: string;
+  label: string;
+  services?: string[];
+  description: string;
 }
 
 export interface ConfigInstanceReportItem {
@@ -299,14 +280,12 @@ export interface EffectiveConfigResponse {
     environment?: string;
     cluster?: string;
     service?: string;
-    instanceId?: string;
   };
   resolvedAt: string;
   effectiveHash: string;
   desiredHash: string;
   values: EffectiveConfigValue[];
   source: string;
-  driftSummary: ConfigInstanceReportSummary;
 }
 
 export interface PlatformTriageServiceDriftItem {
@@ -340,80 +319,49 @@ export interface PlatformTriageSummaryResponse {
   source: string;
 }
 
-export interface PlatformReleaseMutationRequest {
-  service: string;
-  fromImage?: string;
-  toImage?: string;
-  fromConfig?: string;
-  toConfig?: string;
-  step?: number;
-  errorRate?: number;
-  p95Ms?: number;
-  redisErrorRate?: number;
+export interface ControlPlaneMutationReceipt {
+  objectType: string;
+  objectId: string;
+  intent: string;
+  payloadDigest: string;
+  idempotencyKey: string;
+  committedAt: string;
+  replayed: boolean;
 }
 
-export interface PlatformRollbackMutationRequest {
-  service: string;
-  targetConfigVersion: string;
-  workflowRef?: string;
-  rollbackToken?: string;
-}
-
-export interface PlatformReleaseMutationResponse {
-  releaseId: string;
-  service: string;
-  scriptOutput?: string;
-  error?: string;
-  releaseState: string;
-  approvalState?: string;
-  stageState: string;
-  workflowRef?: string;
-  rollbackToken?: string;
-  observedSlo?: Record<string, unknown>;
-  ackSummary: ConfigInstanceReportSummary;
-  pauseReason?: string;
-  rollbackReason?: string;
-}
-
-export interface ModerationCaseItem {
+// PremiumPoolEntryItem 对齐 product-ops-service 全局精选池条目：
+// upsert/rollback/takedown 全部真实落库并经 outbox 事件广播给 content-service。
+export interface PremiumPoolEntryItem {
   id: string;
-  targetType: string;
-  targetId: string;
-  reason: string;
+  contentId: string;
+  scope: string;
   status: string;
-  assignedQueue: string;
-  evidenceRefs: string[];
-  updatedAt: string;
-  resolution?: string;
-}
-
-export interface RecoveryCaseItem {
-  id: string;
-  userId: string;
-  status: string;
-  evidenceRefs: string[];
-  updatedAt: string;
-  decision?: string;
-}
-
-export interface AppealCaseItem {
-  id: string;
-  targetType: string;
-  targetId: string;
-  status: string;
-  evidenceRefs: string[];
-  updatedAt: string;
-  decision?: string;
-}
-
-export interface RecommendationPolicyItem {
-  id: string;
-  name: string;
-  status: string;
-  policyVersion: string;
-  guardrailSnapshot: Record<string, unknown>;
+  qualityScore: number;
+  qualityAdmission: string;
+  supplySource?: string;
+  sourceTaskId?: string;
+  auditId: string;
+  rollbackToken: string;
+  featuredAt: string;
+  expiresAt: string;
+  takedownEjected: boolean;
   updatedAt: string;
 }
+
+export type PremiumPoolMutationResponse =
+  | {
+      entry: PremiumPoolEntryItem;
+      approvalCount: number;
+      approvalState: string;
+      pending: boolean;
+      payloadDigest: string;
+      approverActors: string[];
+    }
+  | {
+      entry: PremiumPoolEntryItem;
+      pending: false;
+      receipt: ControlPlaneMutationReceipt;
+    };
 
 export interface WorkflowItem {
   objectType: string;
@@ -449,8 +397,10 @@ export interface ProductEventSummary {
   totalCount: number;
   sessionCount: number;
   dimensions: Record<string, Record<string, number>>;
-  source: 'sls_aggregate';
+  sourceKind: 'raw_records' | 'hourly_rollup';
   freshness: string;
+  generatedThrough?: string;
+  lagSeconds?: number;
   actualFrom: string;
   actualTo: string;
 }
@@ -486,8 +436,49 @@ export interface ProductEventDrilldownItem {
 export interface ProductEventDrilldown {
   totalCount: number;
   items: ProductEventDrilldownItem[];
-  source: 'sls_raw';
+  sourceKind: 'raw_records' | 'hourly_rollup';
   freshness: string;
+  generatedThrough?: string;
+  lagSeconds?: number;
+  actualFrom: string;
+  actualTo: string;
+}
+
+export interface RuntimeLogSummary {
+  totalCount: number;
+  dimensions: Record<string, Record<string, number>>;
+  sourceKind: 'raw_records' | 'hourly_rollup';
+  freshness: string;
+  generatedThrough?: string;
+  lagSeconds?: number;
+  actualFrom: string;
+  actualTo: string;
+}
+
+export interface RuntimeLogDrilldownItem {
+  rowKey: string;
+  recordId?: string;
+  occurredAt: string;
+  observedAt: string;
+  logKind: 'access' | 'runtime' | 'exception' | 'event' | 'audit';
+  severity: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
+  signal: string;
+  message: string;
+  errorCode?: string;
+  fingerprint?: string;
+  resource: Record<string, string>;
+  correlation?: Record<string, string>;
+  attributes?: Record<string, string>;
+  ingestedAt: string;
+}
+
+export interface RuntimeLogDrilldown {
+  totalCount: number;
+  items: RuntimeLogDrilldownItem[];
+  sourceKind: 'raw_records' | 'hourly_rollup';
+  freshness: string;
+  generatedThrough?: string;
+  lagSeconds?: number;
   actualFrom: string;
   actualTo: string;
 }
@@ -501,8 +492,6 @@ export interface ControlPlaneBacklogCandidate {
   owner?: string;
   nextAction: string;
   drilldownRoute?: string;
-  runbookId?: string;
-  runbookRoute?: string;
   repairEntry?: string;
   alertId?: string;
   auditRoute?: string;
@@ -515,12 +504,31 @@ export interface ProductEventQuery {
   pageName?: string;
   appVersion?: string;
   networkClass?: ProductTelemetryNetworkClass;
+  result?: string;
   errorCode?: string;
   sessionId?: string;
   from?: string;
   to?: string;
   limit?: number;
   revealSession?: boolean;
+}
+
+export interface RuntimeLogQuery {
+  signal?: string;
+  severity?: RuntimeLogDrilldownItem['severity'];
+  errorCode?: string;
+  fingerprint?: string;
+  sourceType?: 'app' | 'service' | 'data' | 'portal';
+  service?: string;
+  appVersion?: string;
+  /** 按用户维度检索（服务端要求 sensitive 权限；与 revealCorrelation 同门）。 */
+  actorHash?: string;
+  /** 日志文本检索（SLS 全文索引短语匹配 / memory contains）。 */
+  messageContains?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  revealCorrelation?: boolean;
 }
 
 export interface RecommendationBehaviorMetricSeries {
@@ -570,8 +578,6 @@ export interface ProductL1L4AlertState {
   threshold: number;
   source: string;
   owner?: string;
-  runbookId?: string;
-  runbookRoute?: string;
   repairEntry?: string;
   alertId?: string;
   auditRoute?: string;
@@ -580,7 +586,7 @@ export interface ProductL1L4AlertState {
 export interface ProductL1L4MetricsCoverage {
   totalMetrics: number;
   liveMetrics: number;
-  fallbackMetrics: number;
+  unavailableMetrics: number;
   eventSignals: number;
 }
 
@@ -608,7 +614,13 @@ export interface ProductTriageSummaryResponse {
   source: string;
 }
 
-function envBaseUrl(key: 'VITE_PRODUCT_OPS_BASE_URL' | 'VITE_PLATFORM_OPS_BASE_URL' | 'VITE_CONTENT_SERVICE_BASE_URL') {
+function envBaseUrl(
+  key:
+    | 'VITE_PRODUCT_OPS_BASE_URL'
+    | 'VITE_PLATFORM_OPS_BASE_URL'
+    | 'VITE_CONTENT_SERVICE_BASE_URL'
+    | 'VITE_ENTITY_SERVICE_BASE_URL',
+) {
   const importMetaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
   const processEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
   return (importMetaEnv?.[key] ?? processEnv?.[key] ?? '').trim();
@@ -625,7 +637,10 @@ async function fetchJSON<T>(baseUrl: string, path: string): Promise<T> {
   }
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}${path}`);
+    const token = getPortalAccessToken();
+    response = await fetch(`${baseUrl}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
   } catch (error) {
     throw new RuntimeError(
       fallbackRuntimeErrorResponse({
@@ -636,6 +651,9 @@ async function fetchJSON<T>(baseUrl: string, path: string): Promise<T> {
     );
   }
   if (!response.ok) {
+    if (response.status === 401) {
+      notifyPortalAuthExpired();
+    }
     const text = await response.text();
     let decoded: unknown;
     try {
@@ -675,6 +693,16 @@ async function fetchJSON<T>(baseUrl: string, path: string): Promise<T> {
 }
 
 async function postJSON<T>(baseUrl: string, path: string, payload: unknown): Promise<T> {
+  return mutateJSON<T>(baseUrl, 'POST', path, payload);
+}
+
+async function mutateJSON<T>(
+  baseUrl: string,
+  method: 'POST' | 'PATCH',
+  path: string,
+  payload: unknown,
+  extraHeaders: Record<string, string> = {},
+): Promise<T> {
   if (!baseUrl) {
     throw new RuntimeError(
       fallbackRuntimeErrorResponse({
@@ -685,10 +713,13 @@ async function postJSON<T>(baseUrl: string, path: string, payload: unknown): Pro
   }
   let response: Response;
   try {
+    const token = getPortalAccessToken();
     response = await fetch(`${baseUrl}${path}`, {
-      method: 'POST',
+      method,
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...extraHeaders,
       },
       body: JSON.stringify(payload),
     });
@@ -702,6 +733,9 @@ async function postJSON<T>(baseUrl: string, path: string, payload: unknown): Pro
     );
   }
   if (!response.ok) {
+    if (response.status === 401) {
+      notifyPortalAuthExpired();
+    }
     const text = await response.text();
     let decoded: unknown;
     try {
@@ -742,7 +776,7 @@ async function postJSON<T>(baseUrl: string, path: string, payload: unknown): Pro
 
 function withQuery(
   path: string,
-  query: Record<string, string | number | boolean | undefined | null> | ProductEventQuery | ControlPlaneScopeQuery = {},
+  query: Record<string, string | number | boolean | undefined | null> | ProductEventQuery | RuntimeLogQuery | ControlPlaneScopeQuery = {},
 ): string {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
@@ -770,14 +804,6 @@ function productControlPlaneOperationPath(operation: string): string {
       cause: `generated product control-plane operation is missing: ${operation}`,
     }),
   );
-}
-
-export async function fetchExperiments(): Promise<ExperimentItem[]> {
-  const payload = await fetchJSON<{ items: ExperimentItem[] }>(
-    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/control-plane/product/experiments',
-  );
-  return payload.items;
 }
 
 export async function fetchRuntimeClusters(): Promise<RuntimeClusterItem[]> {
@@ -812,12 +838,216 @@ export async function fetchReleases(): Promise<ReleaseItem[]> {
   return payload.items;
 }
 
-export async function fetchReports(): Promise<ReportItem[]> {
+export async function fetchReports(limit = 50): Promise<ReportItem[]> {
   const payload = await fetchJSON<{ items: ReportItem[] }>(
     envBaseUrl('VITE_CONTENT_SERVICE_BASE_URL'),
-    withQuery(productControlPlaneOperationPath('ListReports'), { limit: 10 }),
+    withQuery(productControlPlaneOperationPath('ListReports'), { limit }),
   );
   return payload.items;
+}
+
+// 举报处置动作直连 content-service 真实举报聚合（report_queue 对象），
+// path 来自 generated control-plane operation；命令幂等由 Idempotency-Key 承载。
+export async function beginReportReview(reportId: string): Promise<ReportItem> {
+  const path = productControlPlaneOperationPath('BeginReportReview')
+    .replace('{reportId}', encodeURIComponent(reportId));
+  return mutateJSON<ReportItem>(envBaseUrl('VITE_CONTENT_SERVICE_BASE_URL'), 'POST', path, {}, {
+    'Idempotency-Key': `portal-begin-review-${reportId}`,
+  });
+}
+
+export type ReportResolution = 'warn' | 'delete_content' | 'suspend_user' | 'ban';
+
+export async function resolveReport(reportId: string, resolution: ReportResolution): Promise<ReportItem> {
+  const path = productControlPlaneOperationPath('ResolveReport')
+    .replace('{reportId}', encodeURIComponent(reportId));
+  return mutateJSON<ReportItem>(envBaseUrl('VITE_CONTENT_SERVICE_BASE_URL'), 'PATCH', path, { resolution }, {
+    'Idempotency-Key': `portal-resolve-${reportId}-${resolution}`,
+  });
+}
+
+export async function dismissReport(reportId: string): Promise<ReportItem> {
+  const path = productControlPlaneOperationPath('DismissReport')
+    .replace('{reportId}', encodeURIComponent(reportId));
+  return mutateJSON<ReportItem>(
+    envBaseUrl('VITE_CONTENT_SERVICE_BASE_URL'),
+    'POST',
+    path,
+    {},
+    { 'Idempotency-Key': `portal-dismiss-report-${reportId}` },
+  );
+}
+
+export async function fetchHomepageCandidates(
+  query: {
+    text?: string;
+    homepageType?: string;
+    city?: string;
+    cursor?: string;
+    limit?: number;
+  } = {},
+): Promise<CursorSlice<HomepageCandidateItem>> {
+  return fetchJSON<CursorSlice<HomepageCandidateItem>>(
+    envBaseUrl('VITE_ENTITY_SERVICE_BASE_URL'),
+    withQuery(productControlPlaneOperationPath('ListHomepageCandidates'), {
+      query: query.text,
+      homepageType: query.homepageType,
+      city: query.city,
+      cursor: query.cursor,
+      limit: query.limit ?? 50,
+    }),
+  );
+}
+
+export async function intakeHomepageCandidate(
+  payload: IntakeHomepageCandidatePayload,
+): Promise<HomepageCandidateItem> {
+  return mutateJSON<HomepageCandidateItem>(
+    envBaseUrl('VITE_ENTITY_SERVICE_BASE_URL'),
+    'POST',
+    productControlPlaneOperationPath('IntakeHomepageCandidate'),
+    payload,
+    {
+      'Idempotency-Key':
+        `portal-homepage-intake-${payload.canonicalEntityId}`,
+    },
+  );
+}
+
+export async function publishHomepageCandidate(
+  homepageId: string,
+): Promise<HomepageCandidateItem> {
+  const path = productControlPlaneOperationPath('PublishHomepageCandidate')
+    .replace('{homepageId}', encodeURIComponent(homepageId));
+  return mutateJSON<HomepageCandidateItem>(
+    envBaseUrl('VITE_ENTITY_SERVICE_BASE_URL'),
+    'POST',
+    path,
+    {},
+    { 'Idempotency-Key': `portal-homepage-publish-${homepageId}` },
+  );
+}
+
+export async function fetchHomepageClaimRequests(
+  query: {
+    homepageId?: string;
+    status?: HomepageClaimRequestItem['status'];
+    cursor?: string;
+    limit?: number;
+  } = {},
+): Promise<CursorSlice<HomepageClaimRequestItem>> {
+  return fetchJSON<CursorSlice<HomepageClaimRequestItem>>(
+    envBaseUrl('VITE_ENTITY_SERVICE_BASE_URL'),
+    withQuery(productControlPlaneOperationPath('ListHomepageClaimRequests'), {
+      homepageId: query.homepageId,
+      status: query.status ?? 'pending_review',
+      cursor: query.cursor,
+      limit: query.limit ?? 50,
+    }),
+  );
+}
+
+export async function reviewHomepageClaimRequest(
+  item: HomepageClaimRequestItem,
+  status: 'approved' | 'rejected',
+  reviewNote: string,
+): Promise<HomepageClaimRequestItem> {
+  const path = productControlPlaneOperationPath('ReviewHomepageClaimRequest')
+    .replace('{homepageId}', encodeURIComponent(item.homepageId))
+    .replace('{claimRequestId}', encodeURIComponent(item.claimRequestId));
+  return mutateJSON<HomepageClaimRequestItem>(
+    envBaseUrl('VITE_ENTITY_SERVICE_BASE_URL'),
+    'POST',
+    path,
+    { status, reviewNote },
+    {
+      'Idempotency-Key':
+        `portal-homepage-claim-${item.claimRequestId}-${item.version}-${status}`,
+    },
+  );
+}
+
+export async function fetchHomepageStatusReports(
+  query: {
+    homepageId?: string;
+    status?: HomepageStatusReportItem['status'];
+    cursor?: string;
+    limit?: number;
+  } = {},
+): Promise<CursorSlice<HomepageStatusReportItem>> {
+  return fetchJSON<CursorSlice<HomepageStatusReportItem>>(
+    envBaseUrl('VITE_ENTITY_SERVICE_BASE_URL'),
+    withQuery(productControlPlaneOperationPath('ListHomepageStatusReports'), {
+      homepageId: query.homepageId,
+      status: query.status ?? 'pending_review',
+      cursor: query.cursor,
+      limit: query.limit ?? 50,
+    }),
+  );
+}
+
+export async function reviewHomepageStatusReport(
+  item: HomepageStatusReportItem,
+  status: 'confirmed_offline' | 'dismissed',
+  reviewNote: string,
+): Promise<HomepageStatusReportItem> {
+  const path = productControlPlaneOperationPath('ReviewHomepageStatusReport')
+    .replace('{homepageId}', encodeURIComponent(item.homepageId))
+    .replace('{reportId}', encodeURIComponent(item.reportId));
+  return mutateJSON<HomepageStatusReportItem>(
+    envBaseUrl('VITE_ENTITY_SERVICE_BASE_URL'),
+    'POST',
+    path,
+    { status, reviewNote },
+    {
+      'Idempotency-Key':
+        `portal-homepage-report-${item.reportId}-${item.version}-${status}`,
+    },
+  );
+}
+
+export async function fetchCurrentPostModerationCase(
+  postId: string,
+): Promise<PostModerationCaseItem> {
+  const path = productControlPlaneOperationPath('GetCurrentPostModerationCase')
+    .replace('{postId}', encodeURIComponent(postId));
+  return fetchJSON<PostModerationCaseItem>(
+    envBaseUrl('VITE_CONTENT_SERVICE_BASE_URL'),
+    path,
+  );
+}
+
+export async function reviewPostModerationCase(
+  item: PostModerationCaseItem,
+): Promise<PostModerationCaseItem> {
+  const path = productControlPlaneOperationPath('ReviewPostModerationCase')
+    .replace('{postId}', encodeURIComponent(item.postId));
+  return mutateJSON<PostModerationCaseItem>(
+    envBaseUrl('VITE_CONTENT_SERVICE_BASE_URL'),
+    'POST',
+    path,
+    { caseId: item.id },
+    { 'Idempotency-Key': `portal-review-moderation-${item.id}-${item.version}` },
+  );
+}
+
+export async function decidePostModerationCase(
+  item: PostModerationCaseItem,
+  decision: 'approved' | 'rejected',
+  decisionReason: string,
+): Promise<PostModerationCaseItem> {
+  const path = productControlPlaneOperationPath('DecidePostModeration')
+    .replace('{postId}', encodeURIComponent(item.postId));
+  return mutateJSON<PostModerationCaseItem>(
+    envBaseUrl('VITE_CONTENT_SERVICE_BASE_URL'),
+    'POST',
+    path,
+    { caseId: item.id, decision, decisionReason },
+    {
+      'Idempotency-Key':
+        `portal-decide-moderation-${item.id}-${item.version}-${decision}`,
+    },
+  );
 }
 
 export async function fetchServiceCatalog(): Promise<ServiceCatalogItem[]> {
@@ -828,74 +1058,10 @@ export async function fetchServiceCatalog(): Promise<ServiceCatalogItem[]> {
   return payload.items;
 }
 
-export async function fetchOnboardingDomains(): Promise<OnboardingDomainItem[]> {
-  const payload = await fetchJSON<{ items: OnboardingDomainItem[] }>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/onboarding/domains',
-  );
-  return payload.items;
-}
-
 export async function fetchPlaneBindings(): Promise<PlaneBindingItem[]> {
   const payload = await fetchJSON<{ items: PlaneBindingItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
     '/control-plane/platform/topology/planes',
-  );
-  return payload.items;
-}
-
-export async function fetchEnvironmentTopologies(): Promise<EnvironmentTopologyItem[]> {
-  const payload = await fetchJSON<{ items: EnvironmentTopologyItem[] }>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/topology/environments',
-  );
-  return payload.items;
-}
-
-export async function fetchDependencies(): Promise<DependencyItem[]> {
-  const payload = await fetchJSON<{ items: DependencyItem[] }>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/topology/dependencies',
-  );
-  return payload.items;
-}
-
-export async function fetchCapacityProfiles(): Promise<CapacityProfileItem[]> {
-  const payload = await fetchJSON<{ items: CapacityProfileItem[] }>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/topology/capacity',
-  );
-  return payload.items;
-}
-
-export async function fetchGovernanceBindings(): Promise<GovernanceBindingItem[]> {
-  const payload = await fetchJSON<{ items: GovernanceBindingItem[] }>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/governance/bindings',
-  );
-  return payload.items;
-}
-
-export async function fetchGovernanceTemplates(): Promise<GovernanceTemplateItem[]> {
-  const payload = await fetchJSON<{ items: GovernanceTemplateItem[] }>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/governance/templates',
-  );
-  return payload.items;
-}
-
-export async function fetchGateRules(): Promise<GateRuleItem[]> {
-  const payload = await fetchJSON<{ items: GateRuleItem[] }>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/gates',
-  );
-  return payload.items;
-}
-
-export async function fetchRunbooks(): Promise<RunbookItem[]> {
-  const payload = await fetchJSON<{ items: RunbookItem[] }>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/runbooks',
   );
   return payload.items;
 }
@@ -923,28 +1089,20 @@ export async function fetchPlatformProjectionSummary(): Promise<PlatformProjecti
   );
 }
 
-export async function fetchSLOPolicies(): Promise<SLOPolicyItem[]> {
-  const payload = await fetchJSON<{ items: SLOPolicyItem[] }>(
+export async function fetchActiveAlerts(status?: string): Promise<ActiveAlertItem[]> {
+  const payload = await fetchJSON<{ items: ActiveAlertItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/observability/slos',
+    withQuery('/control-plane/platform/alerts/active', { status }),
   );
   return payload.items;
 }
 
-export async function fetchAlertTemplates(): Promise<AlertTemplateItem[]> {
-  const payload = await fetchJSON<{ items: AlertTemplateItem[] }>(
+export async function ackAlert(fingerprint: string): Promise<ActiveAlertItem> {
+  return postJSON<ActiveAlertItem>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/observability/alerts',
+    `/control-plane/platform/alerts/${encodeURIComponent(fingerprint)}:ack`,
+    {},
   );
-  return payload.items;
-}
-
-export async function fetchDashboardCards(): Promise<DashboardCardItem[]> {
-  const payload = await fetchJSON<{ items: DashboardCardItem[] }>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/observability/dashboards/cards',
-  );
-  return payload.items;
 }
 
 export async function fetchPlatformConfigKeys(): Promise<ConfigKeyItem[]> {
@@ -955,20 +1113,46 @@ export async function fetchPlatformConfigKeys(): Promise<ConfigKeyItem[]> {
   return payload.items;
 }
 
-export async function fetchPlatformConfigLayers(): Promise<ConfigLayerItem[]> {
-  const payload = await fetchJSON<{ items: ConfigLayerItem[] }>(
+export type GrayRoutingStage = 'gray-initial' | 'carry-on' | 'full';
+
+export interface GrayRoutingStageDimensions {
+  appVersions: string[];
+  userIds: string[];
+  provinces: string[];
+  carriers: string[];
+}
+
+export interface GrayRoutingPolicyResponse {
+  policy: {
+    enabled: boolean;
+    grayUpstream: string;
+    grayUpstreamTlsInsecureSkipVerify: boolean;
+    stageDimensions: Record<GrayRoutingStage, GrayRoutingStageDimensions>;
+  };
+  sourcePath: string;
+  rawYaml: string;
+}
+
+export async function fetchGrayRoutingPolicy(): Promise<GrayRoutingPolicyResponse> {
+  return fetchJSON<GrayRoutingPolicyResponse>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/configs/layers',
+    '/control-plane/platform/rollout/routing-policy',
+  );
+}
+
+export async function fetchConfigDomains(): Promise<ConfigDomainItem[]> {
+  const payload = await fetchJSON<{ items: ConfigDomainItem[] }>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    '/control-plane/platform/configs/domains',
   );
   return payload.items;
 }
 
-export async function fetchPlatformConfigPackages(): Promise<ConfigPackageItem[]> {
-  const payload = await fetchJSON<{ items: ConfigPackageItem[] }>(
+export async function fetchConfigSnapshot(env: string, service: string): Promise<ConfigSnapshotView> {
+  return fetchJSON<ConfigSnapshotView>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/configs/packages',
+    withQuery('/control-plane/platform/configs/snapshot', { env, service }),
   );
-  return payload.items;
 }
 
 export async function fetchPlatformConfigInstanceReports(): Promise<{
@@ -995,64 +1179,66 @@ export async function fetchPlatformTriageSummary(query: ControlPlaneScopeQuery =
   );
 }
 
-export async function applyPlatformRelease(
-  releaseId: string,
-  payload: PlatformReleaseMutationRequest,
-): Promise<PlatformReleaseMutationResponse> {
-  return postJSON<PlatformReleaseMutationResponse>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    `/control-plane/platform/releases/${releaseId}:apply`,
+export async function fetchPremiumPoolEntries(activeOnly = false): Promise<PremiumPoolEntryItem[]> {
+  const payload = await fetchJSON<{ items: PremiumPoolEntryItem[] }>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    withQuery(productControlPlaneOperationPath('ListPremiumPoolEntries'), {
+      activeOnly: activeOnly ? 'true' : undefined,
+    }),
+  );
+  return payload.items;
+}
+
+export async function upsertPremiumPoolEntry(payload: {
+  contentId: string;
+  scope?: string;
+  qualityScore: number;
+  qualityAdmission: string;
+  supplySource?: string;
+  sourceTaskId?: string;
+  auditId: string;
+  rollbackToken?: string;
+  expiresAt: string;
+}): Promise<PremiumPoolEntryItem> {
+  return postJSON<PremiumPoolEntryItem>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    productControlPlaneOperationPath('UpsertPremiumPoolEntry'),
     payload,
   );
 }
 
-export async function rollbackPlatformRelease(
-  releaseId: string,
-  payload: PlatformRollbackMutationRequest,
-): Promise<PlatformReleaseMutationResponse> {
-  return postJSON<PlatformReleaseMutationResponse>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    `/control-plane/platform/releases/${releaseId}:rollback`,
-    payload,
-  );
+export async function rollbackPremiumPoolEntry(contentId: string): Promise<PremiumPoolEntryItem> {
+  const path = productControlPlaneOperationPath('RollbackPremiumPoolEntry')
+    .replace('{contentId}', encodeURIComponent(contentId));
+  return postJSON<PremiumPoolEntryItem>(envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'), path, {});
 }
 
-export async function fetchModerationCases(): Promise<ModerationCaseItem[]> {
-  const payload = await fetchJSON<{ items: ModerationCaseItem[] }>(
+// takedown 为双签高危动作：单 principal 调用会返回 pending approval 状态，
+// 第二个不同 principal 复核后才真正弹出条目。
+export async function takedownPremiumPoolEntry(contentId: string): Promise<PremiumPoolMutationResponse> {
+  const path = productControlPlaneOperationPath('TakedownPremiumPoolEntry')
+    .replace('{contentId}', encodeURIComponent(contentId));
+  return mutateJSON<PremiumPoolMutationResponse>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/control-plane/product/moderation/cases',
+    'POST',
+    path,
+    {},
+    { 'Idempotency-Key': `portal-premium-pool-takedown-${contentId}` },
   );
-  return payload.items;
-}
-
-export async function fetchRecoveryCases(): Promise<RecoveryCaseItem[]> {
-  const payload = await fetchJSON<{ items: RecoveryCaseItem[] }>(
-    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/control-plane/product/recovery/cases',
-  );
-  return payload.items;
-}
-
-export async function fetchAppealCases(): Promise<AppealCaseItem[]> {
-  const payload = await fetchJSON<{ items: AppealCaseItem[] }>(
-    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/control-plane/product/appeal/cases',
-  );
-  return payload.items;
-}
-
-export async function fetchRecommendationPolicies(): Promise<RecommendationPolicyItem[]> {
-  const payload = await fetchJSON<{ items: RecommendationPolicyItem[] }>(
-    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/control-plane/product/recommendation/policies',
-  );
-  return payload.items;
 }
 
 export async function fetchProductWorkflows(): Promise<WorkflowItem[]> {
   const payload = await fetchJSON<{ items: WorkflowItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
     '/control-plane/product/workflows',
+  );
+  return payload.items;
+}
+
+export async function fetchProductAudits(): Promise<PlatformAuditItem[]> {
+  const payload = await fetchJSON<{ items: PlatformAuditItem[] }>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    '/control-plane/product/audits',
   );
   return payload.items;
 }
@@ -1086,6 +1272,20 @@ export async function fetchProductEventDrilldown(query: ProductEventQuery = {}):
   );
 }
 
+export async function fetchRuntimeLogSummary(query: RuntimeLogQuery = {}): Promise<RuntimeLogSummary> {
+  return fetchJSON<RuntimeLogSummary>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    withQuery('/ops/runtime-logs/summary', query),
+  );
+}
+
+export async function fetchRuntimeLogDrilldown(query: RuntimeLogQuery = {}): Promise<RuntimeLogDrilldown> {
+  return fetchJSON<RuntimeLogDrilldown>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    withQuery('/ops/runtime-logs/drilldown', query),
+  );
+}
+
 export async function fetchRecommendationBehaviorMetrics(): Promise<RecommendationBehaviorMetrics> {
   return fetchJSON<RecommendationBehaviorMetrics>(
     envBaseUrl('VITE_CONTENT_SERVICE_BASE_URL'),
@@ -1097,6 +1297,117 @@ export async function fetchProductL1L4Metrics(query: ControlPlaneScopeQuery = {}
   return fetchJSON<ProductL1L4MetricsResponse>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
     withQuery('/control-plane/product/metrics/l1l4', query),
+  );
+}
+
+export interface ServiceRouteREDItem {
+  service: string;
+  route: string;
+  method?: string;
+  qps: number;
+  avgMs: number;
+  p99Ms: number;
+  successRatePercent: number;
+}
+
+export interface ServiceRouteREDResponse {
+  items: ServiceRouteREDItem[];
+  window: string;
+  source: string;
+}
+
+export async function fetchServiceRouteRED(service: string): Promise<ServiceRouteREDResponse> {
+  return fetchJSON<ServiceRouteREDResponse>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    withQuery('/control-plane/product/metrics/red-routes', { service }),
+  );
+}
+
+export interface GrowthDailyItem {
+  date: string;
+  dau: number;
+  pv: number;
+  sessionCount: number;
+  newActors: number;
+  updatedAt?: string;
+}
+
+export interface GrowthOverviewResponse {
+  days: GrowthDailyItem[];
+  todayPv: number;
+  todayDau: number;
+  wau: number;
+  mau: number;
+  d1RetentionPercent: number;
+  d7RetentionPercent: number;
+  source: string;
+  generatedAt: string;
+}
+
+export async function fetchGrowthOverview(days = 30): Promise<GrowthOverviewResponse> {
+  return fetchJSON<GrowthOverviewResponse>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    withQuery('/control-plane/product/growth/overview', { days }),
+  );
+}
+
+export interface PageExperienceStat {
+  pageName: string;
+  opens: number;
+  avgReadyMs: number;
+  readySamples: number;
+  avgStayMs: number;
+  staySamples: number;
+  runtimeErrors: number;
+}
+
+export interface RtcMediaQoeHourlyPoint {
+  bucketStart: string;
+  partial: boolean;
+  hasSamples: boolean;
+  effectiveSampleCount: number;
+  mediaConnectedCount: number;
+  mediaConnectedRate: number | null;
+  connectP95Ms: number | null;
+  connectionLostCount: number;
+  connectionLostRate: number | null;
+  reconnectCount: number;
+  generatedThrough: string | null;
+}
+
+export interface RtcMediaQoeSummary {
+  hasSamples: boolean;
+  windowHours: number;
+  actualFrom: string;
+  actualTo: string;
+  effectiveSampleCount: number;
+  mediaConnectedCount: number;
+  mediaConnectedRate: number | null;
+  connectP95Ms: number | null;
+  connectionLostCount: number;
+  connectionLostRate: number | null;
+  reconnectCount: number;
+  series: RtcMediaQoeHourlyPoint[];
+  sourceKind: string;
+  freshness: string;
+  generatedThrough: string | null;
+  lagSeconds: number | null;
+}
+
+export async function fetchPageExperience(query: { from?: string; to?: string } = {}): Promise<{
+  items: PageExperienceStat[];
+  source: string;
+}> {
+  return fetchJSON<{ items: PageExperienceStat[]; source: string }>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    withQuery('/control-plane/product/experience/pages', query),
+  );
+}
+
+export async function fetchRtcMediaQoeSummary(): Promise<RtcMediaQoeSummary> {
+  return fetchJSON<RtcMediaQoeSummary>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    productControlPlaneOperationPath('GetRtcMediaQoeSummary'),
   );
 }
 

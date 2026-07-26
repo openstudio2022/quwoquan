@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from pathlib import Path
 
 from content.release.canonical import object_transaction as transaction
@@ -183,6 +184,8 @@ def build_package(root: Path, canonical: Path) -> Path:
                         "title=File:Example.jpg&oldid=1"
                     ),
                     "modelReleaseStatus": "not_required",
+                    "rightsAuditStatus": "verified",
+                    "rightsAuditIssues": [],
                 }
             ],
         },
@@ -207,8 +210,18 @@ def build_package(root: Path, canonical: Path) -> Path:
         object_root / "evidence_index.json",
         {"schema": "quwoquan_data.release_evidence_index", "refs": []},
     )
+    creator_package_ref = Path("creators") / CREATOR_ID
+    creator_package_root = package_root / creator_package_ref
+    shutil.copytree(canonical / "creators" / CREATOR_ID, creator_package_root)
     closure = {
         "creatorRefs": [CREATOR_ID],
+        "creatorObjects": [
+            {
+                "creatorRef": CREATOR_ID,
+                "packageRef": creator_package_ref.as_posix(),
+                "treeDigest": transaction._tree_digest(creator_package_root),
+            }
+        ],
         "tagRefs": [TAG_REF],
         "sourceCatalogRef": "evidence/source_catalog.json",
         "rightsRef": "evidence/rights.json",
@@ -241,7 +254,7 @@ def build_package(root: Path, canonical: Path) -> Path:
         {
             "schema": transaction.PACKAGE_SCHEMA,
             "transactionId": TRANSACTION_ID,
-            "executionId": "20260711--travel-homepage-coverage--cn-test--canary-001",
+            "executionId": "20260711--travel-homepage-coverage--cn-test--pilot-001",
             "sourcePolicyRevision": SOURCE_POLICY,
             "target": {
                 "layoutSchema": transaction.LAYOUT_SCHEMA,

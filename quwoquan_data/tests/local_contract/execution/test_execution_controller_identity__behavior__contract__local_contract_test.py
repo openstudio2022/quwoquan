@@ -22,16 +22,16 @@ from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: 
 
 def test_controller_request_exposes_only_one_execution_identity():
     request = ControllerRequest(
-        execution_id="20260712--travel-homepage-coverage--cn-zhejiang--m1-004"
+        execution_id="20260712--travel-homepage-coverage--test-region-a--scale-004"
     )
 
-    assert request.execution_id == "20260712--travel-homepage-coverage--cn-zhejiang--m1-004"
+    assert request.execution_id == "20260712--travel-homepage-coverage--test-region-a--scale-004"
     assert not hasattr(request, "batch")
 
 
 def test_controller_request_is_immutable():
     request = ControllerRequest(
-        execution_id="20260712--travel-homepage-coverage--cn-zhejiang--m1-004"
+        execution_id="20260712--travel-homepage-coverage--test-region-a--scale-004"
     )
     try:
         request.execution_id = "changed"
@@ -41,7 +41,7 @@ def test_controller_request_is_immutable():
 
 
 def test_managed_process_identity_uses_execution_id_only():
-    execution_id = "20260712--travel-homepage-coverage--cn-zhejiang--m1-004"
+    execution_id = "20260712--travel-homepage-coverage--test-region-a--scale-004"
 
     assert _managed_command_execution_id(
         f"python3 scripts/cli.py task execute --execution-id {execution_id}"
@@ -54,16 +54,18 @@ def test_managed_process_identity_uses_execution_id_only():
 def test_controller_entrypoint_loads_coverage_and_baseline_through_execution_boundaries(monkeypatch):
     from content.execution.controller import control, orchestrator
 
-    execution_id = "20260715--travel-homepage-coverage--cn-zhejiang--canary-001"
+    execution_id = "20260715--travel-homepage-coverage--test-region-a--pilot-001"
     observed: dict[str, object] = {}
+    fixture = ExecutionFixtureBuilder(
+        execution_id,
+        targets=({"name": "测试实体甲", "entityType": "地点/景区"},),
+    )
+    fixture.build()
 
     monkeypatch.setattr(
         controller_entrypoint.store,
         "load_spec",
-        lambda _execution_id: ExecutionFixtureBuilder(
-            execution_id,
-            targets=({"name": "普陀山", "entityType": "地点/景区"},),
-        ).spec_payload(),
+        lambda _execution_id: fixture.spec_payload(),
     )
     monkeypatch.setattr(
         controller_entrypoint,
@@ -97,7 +99,7 @@ def test_controller_entrypoint_loads_coverage_and_baseline_through_execution_bou
         )
     )
 
-    assert observed["entityIds"] == ["普陀山"]
+    assert observed["entityIds"] == ["测试实体甲"]
 
 
 def test_execution_guards_are_real_context_managers():
@@ -107,10 +109,10 @@ def test_execution_guards_are_real_context_managers():
     from content.execution.context import ExecutionContext
 
     ctx = ExecutionContext(
-        execution_id="20260715--travel-homepage-coverage--cn-zhejiang--canary-001",
+        execution_id="20260715--travel-homepage-coverage--test-region-a--pilot-001",
         entity_ids=[],
         spec=ExecutionFixtureBuilder(
-            "20260715--travel-homepage-coverage--cn-zhejiang--canary-001"
+            "20260715--travel-homepage-coverage--test-region-a--pilot-001"
         ).spec(),
         managed=False,
     )
@@ -121,7 +123,7 @@ def test_execution_guards_are_real_context_managers():
 def test_default_execution_state_uses_the_schema_contract_version():
     from content.execution.context import EXECUTION_STATE_CONTRACT, load_execution_state
 
-    state = load_execution_state("20260715--travel-homepage-coverage--cn-zhejiang--canary-001")
+    state = load_execution_state("20260715--travel-homepage-coverage--test-region-a--pilot-001")
 
     assert EXECUTION_STATE_CONTRACT == "quwoquan.content.execution_state"
     assert state.schema == EXECUTION_STATE_CONTRACT
@@ -134,7 +136,7 @@ def test_execution_state_snapshot_is_deeply_immutable_and_transition_is_explicit
     snapshot = ExecutionState.from_mapping(
         {
             "schema": "quwoquan.content.execution_state",
-            "executionId": "20260715--travel-homepage-coverage--cn-zhejiang--canary-001",
+            "executionId": "20260715--travel-homepage-coverage--test-region-a--pilot-001",
             "completed": [],
             "status": "queued",
             "updatedAt": "2026-07-15T00:00:00Z",
@@ -166,7 +168,7 @@ def test_execution_state_rejects_invalid_control_values(field, value, error_type
 
     payload = {
         "schema": "quwoquan.content.execution_state",
-        "executionId": "20260715--travel-homepage-coverage--cn-zhejiang--canary-001",
+        "executionId": "20260715--travel-homepage-coverage--test-region-a--pilot-001",
         "completed": [],
         "status": "queued",
         "updatedAt": "2026-07-15T00:00:00Z",

@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: integration-service
+  labels:
+    app.kubernetes.io/name: integration-service
+  annotations:
+    quwoquan.io/config-version: package-required
+    quwoquan.io/image-version: package-required
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: integration-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: integration-service
+      annotations:
+        quwoquan.io/config-version: package-required
+        quwoquan.io/image-version: package-required
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: integration-service
+          image: quwoquan/integration-service:package-required
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 18086
+          envFrom:
+            - secretRef:
+                name: integration-service-runtime-secrets
+          env:
+            - name: SERVICE_NAME
+              value: integration-service
+            - name: APP_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['quwoquan.io/environment']
+            - name: CONFIG_ROOT
+              value: /etc/qwq/config
+            - name: CONFIG_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['quwoquan.io/config-version']
+            - name: IMAGE_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['quwoquan.io/image-version']
+          volumeMounts:
+            - name: runtime-config
+              mountPath: /etc/qwq/config/integration-service.yaml
+              subPath: integration-service.yaml
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: runtime-config
+          configMap:
+            name: integration-service-runtime-config

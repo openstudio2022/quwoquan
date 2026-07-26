@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """按平面硬校验 prod-hosted 的 SSH 发布凭据（self-hosted / 本机持钥模型）。
 
-访问隔离映射唯一真相源：quwoquan_ops/environments/prod_plane_access_isolation.yaml。
+访问隔离映射唯一真相源：quwoquan_ops/environments/prod/access-isolation.yaml。
 对给定 rollout stage（gray-initial/carry-on/full）下适用的平面账号，校验以下任一路径：
 
 1. 显式 key 文件：`<SSH_KEY_SECRET>_FILE` / `<SSH_KEY_SECRET>_PATH`
@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover
     sys.exit(2)
 
 ROOT = Path(__file__).resolve().parents[3]
-ACCESS = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
+ACCESS = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh" / "quwoquan-prod"
 
 PRIVATE_KEY_MARKERS = (
@@ -156,8 +156,7 @@ def _required_credentials(access: dict, args: argparse.Namespace) -> list[Requir
             continue
         if service_filter and str(plane.get("plane")) == "service" and governed:
             target = {
-                "recommendation-service": "rec-model-service",
-                "seed-box": "__all__",
+                "recommendation-service": "recommendation-service",
                 "service-plane": "__all__",
             }.get(service_filter, service_filter)
             if target != "__all__" and target not in governed:

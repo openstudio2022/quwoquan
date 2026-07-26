@@ -1,6 +1,9 @@
-# 仅对 manifest 执行群头像商用 E1–E4 证据机器校验（不跑 Patrol/ECS）。
+# 仅对 manifest 执行群头像商用证据机器校验（不跑 Patrol 或环境栈）。
 # 典型：从 Actions 下载 artifact 后填入 manifest，再 workflow_dispatch 本文件。
-name: 08b. Verify Chat Avatar Commercial Matrix Evidence
+name: Verify Chat Avatar Commercial Matrix Evidence
+
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
@@ -8,7 +11,6 @@ on:
       manifest_path:
         description: 仓库内 manifest 相对路径（YAML/JSON）
         required: true
-        default: .qwq_output/env/gamma/runs/commercial-matrix-chat-avatar/manifest.yaml
 
 jobs:
   verify:
@@ -16,10 +18,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Install PyYAML
         run: pip install pyyaml
       - name: Verify manifest
+        env:
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
         run: |
-          python3 quwoquan_service/services/chat-service/tests/ops/gate/verify_chat_avatar_commercial_matrix_evidence.py \
-            --manifest "${{ inputs.manifest_path }}"
+          test -f "$MANIFEST_PATH" || {
+            echo "manifest 不在当前 checkout；请先下载 artifact，并把文件放入仓库工作区后再传入相对路径。" >&2
+            exit 1
+          }
+          python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_chat_avatar_commercial_matrix_evidence.py \
+            --manifest "$MANIFEST_PATH"

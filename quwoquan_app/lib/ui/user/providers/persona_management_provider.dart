@@ -1,10 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:quwoquan_app/application/user/persona/persona_query.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
-import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    as contracts;
 
 class PersonaManagementState {
   const PersonaManagementState({
@@ -52,7 +56,14 @@ class PersonaManagementState {
 }
 
 class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
-  UserRepository get _repo => ref.read(userRepositoryProvider);
+  /// 读投影（列表/配额/激活上下文/生命周期守卫）。
+  PersonaQuery get _query =>
+      ref.read(personaQueryProvider(AppUiSurfaces.profilePersonas));
+
+  /// 命令面：Persona 聚合 typed facet（generated client，
+  /// timeout/retry/idempotency 由 metadata descriptor 驱动）。
+  contracts.PersonaManagementCommandWriter get _commands =>
+      ref.read(personaCommandWriterProvider);
 
   AnalyticsService get _analytics => ref.read(analyticsProvider);
 
@@ -60,7 +71,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
 
   @override
   PersonaManagementState build() {
-    ref.watch(userRepositoryProvider);
+    ref.watch(personaQueryProvider(AppUiSurfaces.profilePersonas));
     return const PersonaManagementState();
   }
 
@@ -70,7 +81,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     }
     state = state.copyWith(isLoading: true, rawError: () => null);
     try {
-      final summary = await _repo.getPersonaManagementSummary();
+      final summary = await _query.getPersonaManagementSummary();
       state = state.copyWith(
         items: summary.items,
         quota: summary.quota,
@@ -78,10 +89,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        rawError: () => e,
-      );
+      state = state.copyWith(isLoading: false, rawError: () => e);
     }
   }
 
@@ -92,24 +100,23 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
   }) async {
     state = state.copyWith(isMutating: true, rawError: () => null);
     try {
-      final created = await _repo.createPersona(
-        displayName: displayName,
-        isolationLevel: isolationLevel,
-        purposeHint: purposeHint,
+      final created = await _commands.createPersona(
+        contracts.CreatePersonaCommand(
+          displayName: displayName,
+          isolationLevel: isolationLevel,
+          purposeHint: purposeHint,
+        ),
       );
       await _reloadAfterMutation();
       await _track('create_succeeded', <String, dynamic>{
         'subAccountId': created.subAccountId,
       });
-      return created;
+      return _itemById(created.subAccountId);
     } catch (e) {
       await _track('create_failed', <String, dynamic>{
         'message': runtimeErrorDisplayMessage(e),
       });
-      state = state.copyWith(
-        isMutating: false,
-        rawError: () => e,
-      );
+      state = state.copyWith(isMutating: false, rawError: () => e);
       rethrow;
     }
   }
@@ -117,7 +124,9 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
   Future<void> activatePersona(String subAccountId) async {
     state = state.copyWith(isMutating: true, rawError: () => null);
     try {
-      await _repo.activatePersona(subAccountId);
+      await _commands.activatePersona(
+        contracts.ActivatePersonaCommand(subAccountId: subAccountId),
+      );
       await ref
           .read(authSessionControllerProvider.notifier)
           .updateActiveSubAccount(subAccountId);
@@ -129,10 +138,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       await _track('activate_failed', <String, dynamic>{
         'message': runtimeErrorDisplayMessage(e),
       });
-      state = state.copyWith(
-        isMutating: false,
-        rawError: () => e,
-      );
+      state = state.copyWith(isMutating: false, rawError: () => e);
       rethrow;
     }
   }
@@ -152,63 +158,45 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       if (email != null) 'email',
     ];
     try {
-      final updated = await _repo.updatePersona(
-        subAccountId,
-        displayName: displayName,
-        phone: phone,
-        email: email,
-        isolationLevel: isolationLevel,
-        purposeHint: purposeHint,
+      final receipt = await _commands.updatePersona(
+        contracts.UpdatePersonaCommand(
+          subAccountId: subAccountId,
+          displayName: displayName,
+          phone: phone,
+          email: email,
+          isolationLevel: isolationLevel,
+          purposeHint: purposeHint,
+        ),
       );
       await _reloadAfterMutation();
-      if (_syncEnabled && changedFields.isNotEmpty) {
+      final updated = _itemById(receipt.subAccountId);
+      if (updated != null && _syncEnabled && changedFields.isNotEmpty) {
         _setPendingSyncSuggestion(updated, changedFields);
       }
       return updated;
     } catch (e) {
-      state = state.copyWith(
-        isMutating: false,
-        rawError: () => e,
-      );
+      state = state.copyWith(isMutating: false, rawError: () => e);
       rethrow;
     }
   }
 
   Future<PersonaLifecycleGuardViewData> getLifecycleGuard(String subAccountId) {
-    return _repo.getPersonaLifecycleGuard(subAccountId);
-  }
-
-  Future<void> deletePersona(String subAccountId) async {
-    state = state.copyWith(isMutating: true, rawError: () => null);
-    try {
-      await _repo.deleteEmptyPersona(subAccountId);
-      await _reloadAfterMutation();
-    } catch (e) {
-      await _track('delete_blocked', <String, dynamic>{
-        'message': runtimeErrorDisplayMessage(e),
-      });
-      state = state.copyWith(
-        isMutating: false,
-        rawError: () => e,
-      );
-      rethrow;
-    }
+    return _query.getPersonaLifecycleGuard(subAccountId);
   }
 
   Future<void> retirePersona(String subAccountId) async {
     state = state.copyWith(isMutating: true, rawError: () => null);
     try {
-      await _repo.retirePersona(subAccountId);
+      await _commands.retirePersona(
+        contracts.RetirePersonaCommand(subAccountId: subAccountId),
+      );
       await _track('retired_count', <String, dynamic>{'retiredCount': 1});
       await _reloadAfterMutation();
       await _track('retire_succeeded', <String, dynamic>{
         'subAccountId': subAccountId,
       });
     } catch (e) {
-      state = state.copyWith(
-        isMutating: false,
-        rawError: () => e,
-      );
+      state = state.copyWith(isMutating: false, rawError: () => e);
       rethrow;
     }
   }
@@ -219,16 +207,19 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
   }) async {
     state = state.copyWith(isMutating: true, rawError: () => null);
     try {
-      final appliedCount = await _repo.applyPersonaProfileSync(
-        suggestion.sourcePersonaId,
-        fieldsMask: suggestion.fieldKeys,
-        applyScope:
-            targetPersonaIds == null ||
-                targetPersonaIds.length == suggestion.targetPersonaIds.length
-            ? 'all_sub_accounts'
-            : 'selected_subjects',
-        syncTargetIds: targetPersonaIds ?? suggestion.targetPersonaIds,
+      final result = await _commands.applyPersonaProfileSync(
+        contracts.ApplyPersonaProfileSyncCommand(
+          subAccountId: suggestion.sourcePersonaId,
+          fieldsMask: suggestion.fieldKeys,
+          applyScope:
+              targetPersonaIds == null ||
+                  targetPersonaIds.length == suggestion.targetPersonaIds.length
+              ? 'all_sub_accounts'
+              : 'selected_subjects',
+          syncTargetIds: targetPersonaIds ?? suggestion.targetPersonaIds,
+        ),
       );
+      final appliedCount = result.appliedCount;
       await _track('profile_sync_applied', <String, dynamic>{
         'appliedCount': appliedCount,
       });
@@ -236,10 +227,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       state = state.copyWith(pendingSyncSuggestion: () => null);
       return appliedCount;
     } catch (e) {
-      state = state.copyWith(
-        isMutating: false,
-        rawError: () => e,
-      );
+      state = state.copyWith(isMutating: false, rawError: () => e);
       rethrow;
     }
   }
@@ -259,7 +247,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
   }
 
   Future<void> _reloadAfterMutation() async {
-    final summary = await _repo.getPersonaManagementSummary();
+    final summary = await _query.getPersonaManagementSummary();
     state = state.copyWith(
       items: summary.items,
       quota: summary.quota,
@@ -268,6 +256,15 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       isMutating: false,
       rawError: () => null,
     );
+  }
+
+  PersonaManagementItemViewData? _itemById(String subAccountId) {
+    for (final item in state.items) {
+      if (item.subAccountId == subAccountId) {
+        return item;
+      }
+    }
+    return null;
   }
 
   void _setPendingSyncSuggestion(
@@ -337,7 +334,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
         properties: <String, dynamic>{
           'pageName': 'persona_management',
           'surfaceId': 'persona_management_page',
-          'routeId': '/profile/personas',
+          'routeId': AppRoutePaths.profilePersonas,
           ...properties,
         },
       ),

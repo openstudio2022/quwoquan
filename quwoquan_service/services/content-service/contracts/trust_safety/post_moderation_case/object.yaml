@@ -1,0 +1,53 @@
+kind: aggregate_root
+description: '针对 postId + postVersion + contentDigest 的审核 Case。审批只对绑定版本与摘要有效；
+
+  Post 编辑产生新版本后旧 approval 自动失效，发布必须存在当前摘要的 approved Case。
+
+  '
+identity:
+  fields:
+  - id
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: post
+  on_delete: retain
+  reference_fields:
+  - postId
+  target_object: content.Post
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: reviewer
+  on_delete: retain
+  reference_fields:
+  - reviewerId
+  target_object: user.UserAccount
+capabilities:
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- case identity 固定绑定 postId + postVersion + contentDigest
+- 同一 Post revision 最多存在一个非 superseded Case
+- reviewer 必须具备 TrustSafety 权限且不能伪造 actor
+- 只允许 pending -> reviewed -> approved|rejected 或任意有效态 -> superseded
+- Post 版本或摘要变化后旧 approval 不得用于发布
+lifecycle:
+  states:
+  - pending
+  - reviewed
+  - approved
+  - rejected
+  - superseded
+  optimistic_concurrency: version
+  idempotency: command_key

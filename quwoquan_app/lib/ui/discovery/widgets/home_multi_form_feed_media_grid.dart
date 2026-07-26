@@ -407,6 +407,9 @@ class _HomeFeedVideoCard extends ConsumerWidget {
       isDark,
       ColorType.surfaceMuted,
     );
+    final sharedTimelineEnabled = ref.watch(
+      contentFeatureFlagProvider('enable_shared_video_timeline'),
+    );
     final resolver = MediaDeliveryResolver.fromRuntimeConfig();
     final videoReference = resolver.tryResolve(
       dto.mediaVideoUrl,
@@ -439,7 +442,9 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                 initialize: initialize,
                 autoPlay: autoPlay,
                 showControls: false,
-                overlayMode: VideoPlaybackOverlayMode.inlineFeed,
+                overlayMode: sharedTimelineEnabled
+                    ? VideoPlaybackOverlayMode.inlineFeed
+                    : VideoPlaybackOverlayMode.none,
                 verifiedDuration: dto.durationMs == null
                     ? null
                     : Duration(milliseconds: dto.durationMs!),
@@ -453,6 +458,19 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                         startupMs: startupLatency.inMilliseconds,
                         candidateIndex: candidateIndex,
                         autoPlay: autoPlay,
+                      );
+                },
+                onEffectivePlayback: (evidence) {
+                  ref
+                      .read(contentBehaviorTrackerProvider)
+                      .trackEffectivePlayback(
+                        dto.id,
+                        playbackSessionId: evidence.playbackSessionId,
+                        effectivePlayMs: evidence.effectivePlayMs,
+                        consumedRatio: evidence.consumedRatio,
+                        totalUnits: evidence.totalUnits,
+                        contentType: 'video',
+                        referralSource: ReferralSource.organicFeed,
                       );
                 },
                 onPlaybackFailed: (failure) {
@@ -481,24 +499,12 @@ class _HomeFeedVideoCard extends ConsumerWidget {
               ),
             // 中央播放标识只属于完全未初始化的静态封面态；预热/初始化后由
             // VideoPlayerWidget 自己呈现加载或画面，避免长按时叠出两个播放按钮。
+            // 与沉浸暂停态共用无背景圆角三角，避免 tip 角与圆形底造成两套视觉语言。
             if (!initialize && !autoPlay)
               Center(
-                child: Container(
+                child: KeyedSubtree(
                   key: ValueKey<String>('home-video-focus-paused-${dto.id}'),
-                  width: AppSpacing.videoPlayOverlaySize,
-                  height: AppSpacing.videoPlayOverlaySize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.overlayMedium,
-                  ),
-                  child: Icon(
-                    CupertinoIcons.play_fill,
-                    color: AppColorsFunctional.getColor(
-                      isDark,
-                      ColorType.mediaThumbnailOverlayForeground,
-                    ),
-                    size: AppSpacing.videoPlayOverlayIconSize,
-                  ),
+                  child: const VideoPlaybackCenterPlayGlyph(),
                 ),
               ),
           ],

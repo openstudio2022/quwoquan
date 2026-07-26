@@ -1,5 +1,5 @@
 // GENERATED FILE — DO NOT EDIT BY HAND.
-// Source: contracts/metadata/content/post/projections/read_presentation_surfaces.yaml
+// Source: services/content-service/contracts/content/post/projections/read_presentation_surfaces.yaml
 // Regenerate: make codegen-app
 
 /// 帖子只读投影所挂靠的 UI 表面（与 post-projection-pipeline-inventory / gap 清单一致）。

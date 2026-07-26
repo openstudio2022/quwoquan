@@ -7,8 +7,9 @@
   禁止脱离底稿从零另写，也禁止零加工整篇逐字照搬。
 - review 对两类来源都启用 `baseDraftFidelity`（下限防换稿/重写，上限防零加工照搬）。
 - 仅 `blocked` 来源不可作底稿（且不会进入底稿路径）。
-- 注意：普通网页/UGC（攻略/游记/评论）以底稿为骨架轻改用于商用发布存在版权风险，
-  该风险由产品侧承担（详见 SKILL「来源权利分层」与 docs/outstanding_risks_backlog）。
+- 普通网页/UGC（攻略/游记/评论）只有在对象级 source/rights 证据满足
+  `runtime-data-engineering/article-commercial-scale-closure` 的准入合同后才可进入发布；
+  不得用“产品承担风险”绕过权利门禁。
 
 - 每篇文章/主页只认领一篇底稿（某来源单元的 source.md），一源仅一稿。
 - 批次级账本（`batches/<batch>/_shared/base_draft_ledger.json`）记录 sourceRef -> postRef
@@ -482,7 +483,6 @@ def extract_base_draft_body(text: str) -> str:
 # 注入 prompt 的底稿正文上限：fidelity 门按整篇底稿判，prompt 必须给整篇（否则 agent 看不到
 # 的内容无法保留 → 必然低保真）。仅对极端超长底稿（书籍级）设安全上限，避免 prompt 失控。
 BASE_DRAFT_PROMPT_MAX_CHARS = 24000
-
 
 
 

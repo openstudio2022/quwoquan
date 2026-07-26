@@ -1,0 +1,9 @@
+schema: quwoquan.test_media_fixture_source
+fixture: public_domain_face.jpg
+sha256: 2391017375f6ac2b320228a4ccd54dda7dc4287f5aa92aa9477e31f2c8c73199
+sourcePage: https://commons.wikimedia.org/wiki/File:President_Barack_Obama.jpg
+assetUrl: https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/President_Barack_Obama.jpg/500px-President_Barack_Obama.jpg
+author: Official White House Photo by Pete Souza
+rightsBasis: public_domain
+purpose: deterministic_local_contract_face_detection
+collectedAt: "2026-07-20T05:45:00+08:00"

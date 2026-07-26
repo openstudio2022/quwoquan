@@ -1,0 +1,63 @@
+kind: aggregate_root
+description: '共享主页主档聚合。只承载 candidate -> published -> offline 生命周期与主档维护；
+
+  认领、状态上报和评价各自拥有独立生命周期，页面壳层与摘要均由查询 Slice 组装。
+
+  '
+identity:
+  fields:
+  - homepageId
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: owner
+  on_delete: detach
+  reference_fields:
+  - ownerUserId
+  - ownerSubAccountId
+  target_objects:
+  - user.UserAccount
+  - user.Persona
+local_identity_reasons:
+  canonicalEntityId: external data-catalog entity key resolved only through the EntityHomepage external
+    projection port
+  sourceReleaseId: stable catalog or release key; resolved through its typed catalog reader and never
+    used as an aggregate Store identity
+capabilities:
+- queryable
+- searchable
+- aggregatable
+taggable: true
+vector_enabled: false
+business_rules:
+- canonical identity 与 homepageType 创建后不可变
+- candidate 只能在必填主档、标签和来源证据齐全后发布
+- published 主档修改使用服务端内部 version CAS 并生成可审计事件
+- offline 主页不可重新公开，重新上线必须创建新候选版本
+- 认领、状态上报和评价均通过各自上下文公开契约；关注关系唯一归属 user.SubjectFollow，Homepage 不提供 follow 写入口
+- averageRating/ratingCount/reviewSummary 是 HomepageReview 事件投影字段，claimStatus/owner 由 HomepageClaimReviewed
+  事件幂等推进；均不接受公开写入
+lifecycle:
+  states:
+  - candidate
+  - published
+  - offline
+  transitions:
+  - from: candidate
+    command: PublishHomepage
+    to: published
+  - from: published
+    command: TakeHomepageOffline
+    to: offline
+  transition_notes: TakeHomepageOffline 是内部行为，无公开 API；仅由 HomepageStatusReportReviewed(confirmed_offline)
+    事件消费或数据工程 reload 驱动
+  optimistic_concurrency: version
+  idempotency: command_receipt

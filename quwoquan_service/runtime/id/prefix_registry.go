@@ -12,6 +12,7 @@ type Prefix string
 const (
 	PrefixAssistantConversation   Prefix = "acv_"
 	PrefixAssistantTurn           Prefix = "atn_"
+	PrefixAssistantPreferenceFact Prefix = "apf_"
 	PrefixSkillSubscription       Prefix = "sub_"
 	PrefixDeviceContext           Prefix = "dcx_"
 	PrefixToolUse                 Prefix = "tu_"
@@ -82,6 +83,7 @@ var DefaultRegistry = NewRegistry()
 func init() {
 	DefaultRegistry.MustRegister(PrefixAssistantConversation, "AssistantConversation")
 	DefaultRegistry.MustRegister(PrefixAssistantTurn, "AssistantTurn")
+	DefaultRegistry.MustRegister(PrefixAssistantPreferenceFact, "AssistantPreferenceFact")
 	DefaultRegistry.MustRegister(PrefixSkillSubscription, "SkillSubscription")
 	DefaultRegistry.MustRegister(PrefixDeviceContext, "DeviceContext")
 	DefaultRegistry.MustRegister(PrefixToolUse, "ToolUse")

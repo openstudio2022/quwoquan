@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import hashlib
 import io
+import warnings
 from typing import Any
 
+from core.image_decode import ImageProbe, pil_available as decode_pil_available, probe_image_bytes
 from core.media_asset_url import IMAGE_VARIANT_PROFILES
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 
@@ -34,18 +36,13 @@ WEBP_METHOD = MEDIA_PROCESSING_POLICY.webp_method
 
 
 def pil_available() -> bool:
-    return _PIL_OK
+    return _PIL_OK and decode_pil_available()
 
 
 def image_dimensions(data: bytes) -> tuple[int, int] | None:
     """读图片像素宽高；非图片/解析失败返回 None。"""
-    if not _PIL_OK or not data:
-        return None
-    try:
-        with Image.open(io.BytesIO(data)) as im:
-            return int(im.width), int(im.height)
-    except Exception:
-        return None
+    probe = probe_image_bytes(data)
+    return (probe.width, probe.height) if probe.succeeded else None
 
 
 def build_local_variants(data: bytes, *, base_name: str) -> list[dict[str, Any]]:
@@ -55,43 +52,46 @@ def build_local_variants(data: bytes, *, base_name: str) -> list[dict[str, Any]]
     fileName 形如 "{base_name}.variants/{profile}.webp"（相对来源单元 assets/）。
     原图小于某 profile 宽度时跳过该 profile（不放大、不虚增带宽）。
     """
-    if not _PIL_OK or not data:
+    probe: ImageProbe = probe_image_bytes(data)
+    if not _PIL_OK or not probe.succeeded:
         return []
     try:
-        with Image.open(io.BytesIO(data)) as im:
-            im = im.convert("RGB")
-            src_w, src_h = im.width, im.height
-            out: list[dict[str, Any]] = []
-            for profile in LOCAL_VARIANT_PROFILES:
-                cfg = IMAGE_VARIANT_PROFILES.get(profile)
-                if not cfg:
-                    continue
-                target_w = int(cfg["width"])
-                # 仅缩小：原图比目标宽则等比缩放，否则用原尺寸（webp 重编码省带宽）。
-                if src_w > target_w:
-                    target_h = max(1, round(src_h * target_w / src_w))
-                    resized = im.resize((target_w, target_h), Image.LANCZOS)
-                else:
-                    target_w, target_h = src_w, src_h
-                    resized = im
-                buf = io.BytesIO()
-                resized.save(buf, format="WEBP", quality=int(cfg["quality"]), method=WEBP_METHOD)
-                body = buf.getvalue()
-                out.append(
-                    {
-                        "profile": profile,
-                        "fileName": f"{base_name}.variants/{profile}.webp",
-                        "width": target_w,
-                        "height": target_h,
-                        "format": "webp",
-                        "quality": int(cfg["quality"]),
-                        "bytes": body,
-                        "byteSize": len(body),
-                        "sha256": "sha256:" + hashlib.sha256(body).hexdigest(),
-                    }
-                )
-            return out
-    except Exception:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(data)) as im:
+                im = im.convert("RGB")
+                src_w, src_h = im.width, im.height
+                out: list[dict[str, Any]] = []
+                for profile in LOCAL_VARIANT_PROFILES:
+                    cfg = IMAGE_VARIANT_PROFILES.get(profile)
+                    if not cfg:
+                        continue
+                    target_w = int(cfg["width"])
+                    # 仅缩小：原图比目标宽则等比缩放，否则用原尺寸（webp 重编码省带宽）。
+                    if src_w > target_w:
+                        target_h = max(1, round(src_h * target_w / src_w))
+                        resized = im.resize((target_w, target_h), Image.LANCZOS)
+                    else:
+                        target_w, target_h = src_w, src_h
+                        resized = im
+                    buf = io.BytesIO()
+                    resized.save(buf, format="WEBP", quality=int(cfg["quality"]), method=WEBP_METHOD)
+                    body = buf.getvalue()
+                    out.append(
+                        {
+                            "profile": profile,
+                            "fileName": f"{base_name}.variants/{profile}.webp",
+                            "width": target_w,
+                            "height": target_h,
+                            "format": "webp",
+                            "quality": int(cfg["quality"]),
+                            "bytes": body,
+                            "byteSize": len(body),
+                            "sha256": "sha256:" + hashlib.sha256(body).hexdigest(),
+                        }
+                    )
+                return out
+    except (Image.DecompressionBombWarning, Image.DecompressionBombError, OSError, ValueError):
         return []
 
 

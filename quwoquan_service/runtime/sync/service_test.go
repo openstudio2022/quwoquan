@@ -2,6 +2,7 @@ package runtimesync
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -143,6 +144,52 @@ func TestService_AppendPatchBatchAndMetrics(t *testing.T) {
 	if metrics[metricSyncPullTotal] <= 0 {
 		t.Fatalf("expected pull metric recorded, got %v", metrics[metricSyncPullTotal])
 	}
+	if metrics[metricSyncFanoutTotal] != 2 ||
+		metrics[metricSyncFanoutFailures] != 0 {
+		t.Fatalf("unexpected fanout metrics: %+v", metrics)
+	}
+}
+
+func TestService_RecordsRecoverableRealtimeHintFanoutFailure(t *testing.T) {
+	router := rtredis.MustNewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"general":  {Mode: "memory"},
+			"realtime": {Mode: "memory"},
+		},
+		DefaultScene: "general",
+	})
+	t.Cleanup(func() {
+		_ = router.Close()
+	})
+	realtime := failingPublishClient{Client: router.Scene("realtime")}
+	service := NewService(router.Scene("general"), realtime)
+
+	patch, err := service.AppendPatch(
+		context.Background(),
+		"user_fanout_failure",
+		"conversation.avatar.updated",
+		map[string]any{"conversationId": "conv_001"},
+	)
+	if err != nil {
+		t.Fatalf("durable patch append must survive hint fanout failure: %v", err)
+	}
+	if patch.SyncSeq != 1 {
+		t.Fatalf("unexpected patch seq: %d", patch.SyncSeq)
+	}
+	metrics := service.MetricsSnapshot()
+	if metrics[metricSyncFanoutTotal] != 1 ||
+		metrics[metricSyncFanoutFailures] != 1 ||
+		metrics[metricSyncFanoutFailRatio] != 1 {
+		t.Fatalf("fanout failure must be observable: %+v", metrics)
+	}
+}
+
+type failingPublishClient struct {
+	rtredis.Client
+}
+
+func (failingPublishClient) Publish(context.Context, string, string) error {
+	return errors.New("realtime unavailable")
 }
 
 func TestService_PullSupportsLongOfflineCatchupInBatches(t *testing.T) {

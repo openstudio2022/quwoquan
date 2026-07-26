@@ -9,11 +9,13 @@ import 'package:http/http.dart' as http;
 class LocalGammaAnonymousSession {
   const LocalGammaAnonymousSession({
     required this.accessToken,
+    required this.refreshToken,
     required this.ownerId,
     required this.personaId,
   });
 
   final String accessToken;
+  final String refreshToken;
   final String ownerId;
   final String personaId;
 
@@ -56,6 +58,7 @@ class LocalGammaAnonymousSession {
     }
     return LocalGammaAnonymousSession(
       accessToken: _requiredString(decoded, 'accessToken'),
+      refreshToken: _requiredString(decoded, 'refreshToken'),
       ownerId: _requiredString(decoded, 'ownerId'),
       personaId: _requiredString(activeSub, 'subAccountId'),
     );

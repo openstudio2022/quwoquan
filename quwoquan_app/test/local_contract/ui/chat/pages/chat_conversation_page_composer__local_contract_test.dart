@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
-import 'package:quwoquan_app/ui/chat/providers/voice_offline_queue.dart';
+import 'package:quwoquan_app/ui/chat/providers/chat_send_outbox.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
+import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -29,16 +29,21 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
-            MockRelationshipCapabilityRepository(),
+            mutualRelationshipCapabilityRepository(),
           ),
           voiceQueuedSenderProvider.overrideWithValue(
             (_, _) async => VoiceSendStatus.completed,
           ),
         ],
         child: MaterialApp(
-          home: ChatConversationPage(conversationId: 'conv_001', onBack: _noop),
+          home: ChatConversationPage(
+            conversationId: 'fixture_conv_group',
+            onBack: _noop,
+          ),
         ),
       ),
     );

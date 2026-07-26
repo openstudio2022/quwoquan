@@ -204,7 +204,7 @@ def test_entity_page_failure_schema() -> None:
         "targetEntity": "东沙古镇",
         "failureKind": "source_entity_mismatch",
         "reasons": ["底稿是岱山县整县概况"],
-        "evidence": [{"field": "baseDraft", "quote": "岱山县，隶属浙江省舟山市"}],
+        "evidence": [{"field": "baseDraft", "quote": "岱山县，隶属test-region-a舟山市"}],
     }
     assert entity_page_failure_issues(failure, entity_name="东沙古镇") == []
     bad_kind = {**failure, "failureKind": "whatever"}

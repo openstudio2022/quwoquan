@@ -1,0 +1,98 @@
+aggregate: Post
+description: 'Post 实体隐私与安全策略。
+
+  声明内容不与 fields.yaml classification 重复；仅描述 fields.yaml 无法表达的：
+
+  - 端侧 app log 的具体 mask 策略（补充 fields.yaml log_policy 的实现细节）
+
+  - GDPR 数据生命周期（删除级联顺序与策略）
+
+  - API 层字段 alias（内部字段名 → 对外暴露名）
+
+  - 字段暴露范围（补充 api_exposure 的精细化 consumer 控制）
+
+  codegen 从本文件生成 Dart ContentPrivacyPolicy.sanitizeForLog()。
+
+  '
+app_log_policy:
+- field: location
+  classification: PII
+  app_log: mask
+  mask_strategy: city_level_only
+  description: 仅记录城市名，不记录精确坐标
+- field: locationName
+  classification: PII
+  app_log: mask
+  mask_strategy: strip_detail
+  description: 仅记录省份级别，不记录具体地名
+- field: body
+  classification: PUBLIC
+  app_log: truncate
+  truncate_chars: 200
+  description: 长文本截断200字符，避免日志泄露完整内容
+- field: title
+  classification: PUBLIC
+  app_log: truncate
+  truncate_chars: 100
+- field: embedding
+  classification: SENSITIVE
+  app_log: drop
+  description: 向量嵌入不记录日志，体积大且无排查价值
+- field: tagRefs
+  classification: PUBLIC
+  app_log: allow
+- field: mediaUrls
+  classification: PUBLIC
+  app_log: count_only
+  description: 仅记录数量，不记录完整 URL 列表
+- field: publishLocation
+  classification: PII
+  app_log: mask
+  mask_strategy: city_level_only
+  description: 发布位置仅记录城市级别，不记录精确信息
+- field: deviceInfo
+  classification: PII
+  app_log: mask
+  mask_strategy: strip_detail
+  description: 设备信息脱敏，不记录完整型号/版本
+data_lifecycle:
+  retention_days: 1825
+  user_deletion_hook: true
+  deletion_cascade:
+  - entity: Comment
+    strategy: hard_delete
+    description: 评论随帖子硬删除
+  - entity: MediaAsset
+    strategy: soft_delete_then_cdn_purge
+    soft_delete_first: true
+    cdn_purge_delay_hours: 24
+    description: 先软删，24小时后 CDN 清理，避免 CDN 回源错误
+  - entity: Post
+    strategy: soft_delete
+    description: 帖子本身标记删除，数据保留至 retention_days
+  anonymization_on_delete:
+  - field: authorId
+    strategy: replace_with_placeholder
+    placeholder: '[deleted_user]'
+  - field: locationName
+    strategy: drop
+field_visibility:
+- field: postId
+  description: API/wire 唯一键为 postId；存储层 Mongo _id 不进入客户端 wire；拒绝 _id 与 id 旧键别名
+- field: embedding
+  visibility: never_expose
+  description: 向量嵌入对任何 API consumer 不可见（仅内部推荐服务直接查询 DB）
+- field: moderationStatus
+  visibility:
+  - platform-ops
+  - content-service-internal
+  description: 审核状态仅运营后台和服务内部可见，app 端不返回此字段
+- field: authorId
+  visibility:
+  - all
+  note: PUBLIC，所有 consumer 可见
+- field: location
+  visibility:
+  - app
+  - content-service-internal
+  description: 精确位置仅 app 和服务内部，不对推荐引擎暴露原始坐标（特征化后传递）

@@ -27,14 +27,21 @@ class AppUiSurfaces {
     owner: 'chat',
     routeId: 'chat',
     pathTemplate: '/chat',
-    description: '趣信列表与会话入口',
+    description: '趣信列表与会话入口（含通知维度 AppMessage inbox 与当前 persona 通话记录）',
     operationIds: <String>[
       'ListInbox',
+      'ListMessageHome',
       'ListConversations',
       'ListConversationTimestamps',
       'BatchGetConversations',
       'ListContacts',
-      'SearchContacts',
+      'ListContactHome',
+      'ListAppMessages',
+      'GetAppMessage',
+      'AckAppMessage',
+      'ReadAppMessage',
+      'GetAppMessageUnreadCount',
+      'ListCalls',
     ],
   );
 
@@ -49,6 +56,24 @@ class AppUiSurfaces {
       'ListConversations',
       'SearchSocialRelations',
       'ListPersonaCircles',
+      'ListGroupCandidates',
+      'ListSelectableGroupConversations',
+      'ListSelectableGroupContactMembers',
+    ],
+  );
+
+  static const AppUiSurface greetingInbox = AppUiSurface(
+    id: 'greetingInbox',
+    owner: 'chat',
+    routeId: 'greetingInbox',
+    pathTemplate: '/chat/greetings',
+    description: '打招呼收件箱与发件箱',
+    operationIds: <String>[
+      'ListGreetingInbox',
+      'ListGreetingOutbox',
+      'ReplyGreetingRequest',
+      'IgnoreGreetingRequest',
+      'CancelGreetingRequest',
     ],
   );
 
@@ -60,15 +85,19 @@ class AppUiSurfaces {
     description: 'IM 会话详情',
     operationIds: <String>[
       'GetConversation',
+      'InitiateCall',
       'InitMediaUpload',
       'CompleteMediaUpload',
       'AbortMediaUpload',
+      'ListMembers',
       'ListMessages',
       'SendMessage',
       'RecallMessage',
       'SyncMessages',
       'MarkAsRead',
       'GetReceipts',
+      'InviteAssistant',
+      'RemoveAssistant',
     ],
   );
 
@@ -80,8 +109,12 @@ class AppUiSurfaces {
     description: '会话设置页',
     operationIds: <String>[
       'GetConversation',
+      'UpdateConversationTitle',
       'UpdateConversationSettings',
+      'UpdateAnnouncement',
       'ListMembers',
+      'RemoveMember',
+      'LeaveConversation',
     ],
   );
 
@@ -94,7 +127,7 @@ class AppUiSurfaces {
     operationIds: <String>[
       'GetConversation',
       'ListMembers',
-      'UpdateConversationSettings',
+      'UpdateGroupGovernanceSettings',
       'DissolveConversation',
     ],
   );
@@ -109,7 +142,6 @@ class AppUiSurfaces {
       'ListMembers',
       'AddMembers',
       'ListContacts',
-      'SearchContacts',
     ],
   );
 
@@ -151,6 +183,18 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface chatAnnouncement = AppUiSurface(
+    id: 'chatAnnouncement',
+    owner: 'chat',
+    routeId: 'chatAnnouncement',
+    pathTemplate: '/chat/{id}/announcement',
+    description: '群公告查看与编辑页',
+    operationIds: <String>[
+      'GetGroupHome',
+      'UpdateAnnouncement',
+    ],
+  );
+
   static const AppUiSurface assistantHalfSheet = AppUiSurface(
     id: 'assistantHalfSheet',
     owner: 'assistant',
@@ -172,9 +216,12 @@ class AppUiSurfaces {
     description: '找私助云端优先对话入口',
     operationIds: <String>[
       'CreateAssistantConversation',
+      'ListAssistantConversations',
       'GetAssistantConversation',
+      'ListConversationTurns',
       'StartAssistantRun',
       'GetAssistantRun',
+      'CancelAssistantRun',
       'StreamAssistantRunEvents',
       'ListAppMessages',
       'GetAppMessage',
@@ -190,7 +237,10 @@ class AppUiSurfaces {
       'GetPolicy',
       'ListSkills',
       'ListAssistantTasks',
-      'ListAssistantMemories',
+      'SetAssistantPreference',
+      'ListAssistantPreferences',
+      'RevokeAssistantPreference',
+      'RestoreAssistantPreference',
       'ListConsents',
       'GrantSkillConsent',
       'RevokeSkillConsent',
@@ -211,7 +261,10 @@ class AppUiSurfaces {
       'GetPolicy',
       'ListSkills',
       'ListAssistantTasks',
-      'ListAssistantMemories',
+      'SetAssistantPreference',
+      'ListAssistantPreferences',
+      'RevokeAssistantPreference',
+      'RestoreAssistantPreference',
       'ListConsents',
       'GrantSkillConsent',
       'RevokeSkillConsent',
@@ -225,6 +278,8 @@ class AppUiSurfaces {
     pathTemplate: '/chat/{id}',
     description: '私助记录抽屉与分页',
     operationIds: <String>[
+      'ListAssistantConversations',
+      'ListConversationTurns',
     ],
   );
 
@@ -247,6 +302,7 @@ class AppUiSurfaces {
     pathTemplate: '/search',
     description: '全局搜索记录页与记录管理态',
     operationIds: <String>[
+      'ListHotQueries',
       'ListRecentSearches',
       'UpsertRecentSearch',
       'DeleteRecentSearch',
@@ -261,10 +317,7 @@ class AppUiSurfaces {
     pathTemplate: '/search',
     description: '输入后的实时联想页（最常使用、联系人、聊天记录、搜索网络结果）',
     operationIds: <String>[
-      'SearchContacts',
       'SearchSocialRelations',
-      'SearchConversations',
-      'SearchMessages',
       'SearchCircles',
       'ListCircleGroups',
       'SearchCircleGroups',
@@ -279,14 +332,10 @@ class AppUiSurfaces {
     pathTemplate: '/search/network',
     description: '网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）',
     operationIds: <String>[
-      'GetNearbyLocations',
-      'SubmitPostPublication',
-      'SearchLocations',
-      'SearchPosts',
-      'GetPost',
-      'SearchCircles',
+      'SearchQuery',
       'SearchXiaoquResults',
       'UpsertRecentSearch',
+      'ReportSearchFeedback',
     ],
   );
 
@@ -338,16 +387,22 @@ class AppUiSurfaces {
     owner: 'entity',
     routeId: 'homepageDetail',
     pathTemplate: '/homepages/{id}',
-    description: '实体（共享主页）统一对象页：身份 / 我的交集 / 打动 / Tab 内容（含详情与阅读壳层、口碑、相关群组）',
+    description: '实体（共享主页）统一对象页：身份 / 我的交集 / 打动 / Tab 内容（含详情与阅读壳层、口碑评价读写、相关群组）；关注动作归 user.SubjectFollow',
     operationIds: <String>[
       'GetObjectPageBundle',
       'GetEntityImpact',
       'GetHomepageDetail',
-      'FollowHomepage',
-      'UnfollowHomepage',
       'GetHomepageShell',
       'GetHomepageReviewSummary',
       'GetHomepageRelatedGroups',
+      'ListHomepageReviews',
+      'GetMyHomepageReview',
+      'GetEntityWishlistState',
+      'CreateHomepageReview',
+      'UpdateHomepageReview',
+      'DeleteHomepageReview',
+      'FollowSubject',
+      'UnfollowSubject',
     ],
   );
 
@@ -406,8 +461,14 @@ class AppUiSurfaces {
     description: '圈子/组织统一对象页：身份 / 我的交集 / 打动 / Tab 内容（你认识的人有 N 个在这交集卡）',
     operationIds: <String>[
       'GetCircle',
+      'UpdateCircle',
+      'ArchiveCircle',
+      'UpdateCircleSections',
       'GetCircleImpact',
       'GetCircleFeed',
+      'RemovePostFromCircle',
+      'PinCirclePost',
+      'FeatureCirclePost',
       'ListCircleMemberships',
       'ListCircleGroups',
       'SearchCircleGroups',
@@ -458,17 +519,19 @@ class AppUiSurfaces {
     pathTemplate: '/user/{username}',
     description: '用户主页壳层（我的 / TA的，统一对象页 + 你们的交集卡）',
     operationIds: <String>[
-      'GetUserProfile',
+      'GetUserHomepageBundle',
       'GetSubAccountProfile',
-      'ListUserWorks',
       'ListUserPosts',
-      'ListUserLifeItems',
-      'ListUserLikes',
       'GetRelationshipCapability',
       'FollowUser',
       'UnfollowUser',
+      'SendGreetingRequest',
       'CreateReport',
       'ListPersonaCircles',
+      'ListProfileInteractionActivitiesReceived',
+      'ListProfileInteractionActivitiesSent',
+      'GetAuthorImpact',
+      'ListAuthorImpactEvidence',
     ],
   );
 
@@ -477,13 +540,27 @@ class AppUiSurfaces {
     owner: 'user',
     routeId: 'profileCareerInterests',
     pathTemplate: '/profile/career-interests',
-    description: '我的资料页职业身份与兴趣标签编辑页（职业/兴趣均来自 tag-service 标签体系）',
+    description: '我的资料页职业身份与兴趣标签编辑页（职业/兴趣均来自 tag-service 标签体系；添加/移除动作产出标签反馈事实）',
     operationIds: <String>[
       'GetProfileEditSnapshot',
       'UpdateUserProfile',
       'ResolveTag',
       'ListTagChildren',
       'ValidateTagRefs',
+      'ReportTagFeedback',
+    ],
+  );
+
+  static const AppUiSurface interestOnboarding = AppUiSurface(
+    id: 'interestOnboarding',
+    owner: 'content',
+    routeId: 'interestOnboarding',
+    pathTemplate: '/onboarding/interests',
+    description: '游客首启兴趣先验采集；选择在登录后经确认型行为提交，跳过回安全首页',
+    operationIds: <String>[
+      'ListTagChildren',
+      'ValidateTagRefs',
+      'ReportBehaviors',
     ],
   );
 
@@ -568,8 +645,13 @@ class AppUiSurfaces {
     owner: 'app',
     routeId: 'home',
     pathTemplate: '/',
-    description: 'App 主导航壳与跨端导航 chrome',
+    description: 'App 主导航壳与跨端导航 chrome；含启动期匿名引导与 token 滑动刷新',
     operationIds: <String>[
+      'LoginAnonymous',
+      'RefreshToken',
+      'GetActivePersonaContext',
+      'UpsertDevicePushEndpoint',
+      'RemoveDevicePushEndpoint',
     ],
   );
 
@@ -591,13 +673,18 @@ class AppUiSurfaces {
       'ReactToComment',
       'BindMediaAssetsToComment',
       'GetMediaAsset',
-      'RequestOriginalImageAccess',
       'InitMediaUpload',
       'CompleteMediaUpload',
       'AbortMediaUpload',
+      'DiscardMediaAsset',
       'CreateOutboundShare',
       'PlacePostInCircle',
       'ListPersonaCircles',
+      'ListFollowingSubjects',
+      'MarkFollowedSubjectVisited',
+      'ListFollowing',
+      'FollowUser',
+      'UnfollowUser',
     ],
   );
 
@@ -616,8 +703,14 @@ class AppUiSurfaces {
     owner: 'circle',
     routeId: 'circles',
     pathTemplate: '/circles',
-    description: '圈子发现与分类列表入口',
+    description: '圈子发现与分类列表入口（含建圈动作）',
     operationIds: <String>[
+      'ListCircles',
+      'ListCircleDiscoveryFeed',
+      'SearchCircles',
+      'CreateCircle',
+      'GetCircleFeed',
+      'ListPersonaCircles',
     ],
   );
 
@@ -626,8 +719,20 @@ class AppUiSurfaces {
     owner: 'user',
     routeId: 'profile',
     pathTemplate: '/profile',
-    description: '我的主页根入口',
+    description: '我的主页根入口（互动 tab 内联承载评论收发、删除与回应）',
     operationIds: <String>[
+      'GetMeProfile',
+      'GetUserHomepageBundle',
+      'ListFollowing',
+      'ListProfileInteractionActivitiesReceived',
+      'ListProfileInteractionActivitiesSent',
+      'UpdateProfileInteractionState',
+      'ListCommentsByAuthor',
+      'ListCommentsForPostAuthor',
+      'DeleteComment',
+      'ReactToComment',
+      'GetAuthorImpact',
+      'ListAuthorImpactEvidence',
     ],
   );
 
@@ -646,14 +751,22 @@ class AppUiSurfaces {
     owner: 'user',
     routeId: 'login',
     pathTemplate: '/login',
-    description: '商用登录入口',
+    description: '商用登录入口（手机 OTP + 一键登录 + 社交登录）',
     operationIds: <String>[
+      'SendOtp',
+      'LoginWithPhone',
+      'LoginWithWechat',
+      'LoginWithAlipay',
+      'LoginWithQq',
+      'LoginOneTap',
+      'CreateAlipayAuthorizationRequest',
+      'ResolveOneTapLoginHint',
     ],
   );
 
   static const AppUiSurface legalUserAgreement = AppUiSurface(
     id: 'legalUserAgreement',
-    owner: 'legal',
+    owner: 'user',
     routeId: 'legalUserAgreement',
     pathTemplate: '/legal/user-agreement',
     description: '用户协议静态正文',
@@ -663,7 +776,7 @@ class AppUiSurfaces {
 
   static const AppUiSurface legalPrivacyPolicy = AppUiSurface(
     id: 'legalPrivacyPolicy',
-    owner: 'legal',
+    owner: 'user',
     routeId: 'legalPrivacyPolicy',
     pathTemplate: '/legal/privacy-policy',
     description: '隐私政策静态正文',
@@ -673,7 +786,7 @@ class AppUiSurfaces {
 
   static const AppUiSurface legalPermissions = AppUiSurface(
     id: 'legalPermissions',
-    owner: 'legal',
+    owner: 'user',
     routeId: 'legalPermissions',
     pathTemplate: '/legal/permissions',
     description: '权限说明静态正文',
@@ -683,7 +796,7 @@ class AppUiSurfaces {
 
   static const AppUiSurface legalThirdPartySdkList = AppUiSurface(
     id: 'legalThirdPartySdkList',
-    owner: 'legal',
+    owner: 'user',
     routeId: 'legalThirdPartySdkList',
     pathTemplate: '/legal/third-party-sdk-list',
     description: '第三方 SDK 清单静态正文',
@@ -707,8 +820,6 @@ class AppUiSurfaces {
       'CreateOutboundShare',
       'PlacePostInCircle',
       'ListPersonaCircles',
-      'CreateOutboundShare',
-      'PlacePostInCircle',
       'GetMediaUploadSession',
       'SelectAutoVideoCover',
       'SelectManualVideoCover',
@@ -720,11 +831,9 @@ class AppUiSurfaces {
     owner: 'content',
     routeId: 'createEditImage',
     pathTemplate: '/create/edit-image',
-    description: '图片编辑全屏页',
+    description: '图片编辑全屏页；像素编辑保持本地，滤镜目录只读当前 active FilterCatalogRelease',
     operationIds: <String>[
-      'GetMediaAsset',
-      'SelectAutoVideoCover',
-      'SelectManualVideoCover',
+      'GetActiveFilterCatalog',
     ],
   );
 
@@ -753,6 +862,10 @@ class AppUiSurfaces {
       'InitMediaUpload',
       'CompleteMediaUpload',
       'AbortMediaUpload',
+      'CreateOutboundShare',
+      'ListFollowing',
+      'FollowUser',
+      'UnfollowUser',
     ],
   );
 
@@ -764,6 +877,9 @@ class AppUiSurfaces {
     description: '圈子成员、群聊、粉丝与获赞统计列表',
     operationIds: <String>[
       'ListCircleMemberships',
+      'ListPendingCircleMemberships',
+      'ApproveCircleMember',
+      'RejectCircleMember',
       'UpdateCircleMembershipRole',
       'ListCircleGroupMemberships',
       'UpdateCircleGroupMemberRole',
@@ -777,6 +893,13 @@ class AppUiSurfaces {
     pathTemplate: '/assistant/management',
     description: '私助偏好、隐私与记忆管理',
     operationIds: <String>[
+      'SetAssistantPreference',
+      'ListAssistantPreferences',
+      'RevokeAssistantPreference',
+      'RestoreAssistantPreference',
+      'GrantSkillConsent',
+      'RevokeSkillConsent',
+      'ListConsents',
     ],
   );
 
@@ -787,6 +910,7 @@ class AppUiSurfaces {
     pathTemplate: '/assistant/skills',
     description: '私助技能中心',
     operationIds: <String>[
+      'ListAssistantConversations',
     ],
   );
 
@@ -805,8 +929,71 @@ class AppUiSurfaces {
     owner: 'settings',
     routeId: 'settings',
     pathTemplate: '/settings',
-    description: '设置中枢',
+    description: '设置中枢（通知/隐私/通话设置、账号凭证与登出）',
     operationIds: <String>[
+      'GetNotificationSettings',
+      'GetPrivacySettings',
+      'GetCallSettings',
+      'UpdateNotificationSettings',
+      'UpdatePrivacySettings',
+      'UpdateCallSettings',
+      'ListCredentials',
+      'BindPhoneCredential',
+      'BindCarrierPhoneCredential',
+      'UnbindCredential',
+      'Logout',
+    ],
+  );
+
+  static const AppUiSurface settingsNotifications = AppUiSurface(
+    id: 'settingsNotifications',
+    owner: 'settings',
+    routeId: 'settingsNotifications',
+    pathTemplate: '/settings/notifications',
+    description: '通知偏好设置页',
+    operationIds: <String>[
+      'GetNotificationSettings',
+      'UpdateNotificationSettings',
+    ],
+  );
+
+  static const AppUiSurface settingsPrivacy = AppUiSurface(
+    id: 'settingsPrivacy',
+    owner: 'settings',
+    routeId: 'settingsPrivacy',
+    pathTemplate: '/settings/privacy',
+    description: '隐私与陌生人消息设置页',
+    operationIds: <String>[
+      'GetPrivacySettings',
+      'UpdatePrivacySettings',
+    ],
+  );
+
+  static const AppUiSurface settingsCalls = AppUiSurface(
+    id: 'settingsCalls',
+    owner: 'settings',
+    routeId: 'settingsCalls',
+    pathTemplate: '/settings/calls',
+    description: '通话铃声与振动设置页',
+    operationIds: <String>[
+      'GetCallSettings',
+      'UpdateCallSettings',
+    ],
+  );
+
+  static const AppUiSurface settingsAccountSecurity = AppUiSurface(
+    id: 'settingsAccountSecurity',
+    owner: 'settings',
+    routeId: 'settingsAccountSecurity',
+    pathTemplate: '/settings/account-security',
+    description: '账号凭证、安全、登出与注销设置页',
+    operationIds: <String>[
+      'ListCredentials',
+      'BindPhoneCredential',
+      'BindCarrierPhoneCredential',
+      'UnbindCredential',
+      'Logout',
+      'CloseAccount',
     ],
   );
 
@@ -820,6 +1007,42 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface blockedUsers = AppUiSurface(
+    id: 'blockedUsers',
+    owner: 'user',
+    routeId: 'blockedUsers',
+    pathTemplate: '/settings/blocked-users',
+    description: '拉黑用户管理页',
+    operationIds: <String>[
+      'BlockUser',
+      'UnblockUser',
+      'ListBlockedUsers',
+    ],
+  );
+
+  static const AppUiSurface blockedKeywords = AppUiSurface(
+    id: 'blockedKeywords',
+    owner: 'user',
+    routeId: 'blockedKeywords',
+    pathTemplate: '/settings/blocked-keywords',
+    description: '当前 persona 的屏蔽关键词管理页',
+    operationIds: <String>[
+      'GetPrivacySettings',
+      'UpdatePrivacySettings',
+    ],
+  );
+
+  static const AppUiSurface myReports = AppUiSurface(
+    id: 'myReports',
+    owner: 'content',
+    routeId: 'myReports',
+    pathTemplate: '/settings/my-reports',
+    description: '当前 persona 私有可见的举报进度页',
+    operationIds: <String>[
+      'ListMyReports',
+    ],
+  );
+
   static const AppUiSurface settingsDarkMode = AppUiSurface(
     id: 'settingsDarkMode',
     owner: 'settings',
@@ -827,6 +1050,8 @@ class AppUiSurfaces {
     pathTemplate: '/settings/dark-mode',
     description: '外观与深色模式设置页',
     operationIds: <String>[
+      'GetAppearanceSettings',
+      'UpdateAppearanceSettings',
     ],
   );
 
@@ -847,6 +1072,10 @@ class AppUiSurfaces {
     pathTemplate: '/profile/edit',
     description: '我的资料编辑页',
     operationIds: <String>[
+      'GetMeProfile',
+      'GetProfileEditSnapshot',
+      'GetProfileQrCard',
+      'UpdateUserProfile',
       'InitMediaUpload',
       'CompleteMediaUpload',
       'AbortMediaUpload',
@@ -865,20 +1094,14 @@ class AppUiSurfaces {
     pathTemplate: '/profile/personas',
     description: '分身管理页',
     operationIds: <String>[
-    ],
-  );
-
-  static const AppUiSurface profileComments = AppUiSurface(
-    id: 'profileComments',
-    owner: 'user',
-    routeId: 'profileComments',
-    pathTemplate: '/profile/comments',
-    description: '资料页评论列表',
-    operationIds: <String>[
-      'ListCommentsByAuthor',
-      'ListCommentsForPostAuthor',
-      'DeleteComment',
-      'ReactToComment',
+      'ListPersonas',
+      'GetPersonaManagementSummary',
+      'GetPersonaLifecycleGuard',
+      'CreatePersona',
+      'UpdatePersona',
+      'ApplyPersonaProfileSync',
+      'RetirePersona',
+      'ActivatePersona',
     ],
   );
 
@@ -889,6 +1112,11 @@ class AppUiSurfaces {
     pathTemplate: '/profile/stats',
     description: '粉丝、关注与圈子统计列表',
     operationIds: <String>[
+      'GetUserHomepageBundle',
+      'ListFollowers',
+      'ListFollowing',
+      'FollowUser',
+      'UnfollowUser',
     ],
   );
 
@@ -899,6 +1127,8 @@ class AppUiSurfaces {
     pathTemplate: '/profile/intersections',
     description: '我的交集与影响力收件箱',
     operationIds: <String>[
+      'GetAuthorImpact',
+      'ListAuthorImpactEvidence',
     ],
   );
 
@@ -919,6 +1149,8 @@ class AppUiSurfaces {
     pathTemplate: '/rtc/outgoing/{callId}',
     description: '呼出等待页',
     operationIds: <String>[
+      'GetCall',
+      'CancelCall',
     ],
   );
 
@@ -929,6 +1161,10 @@ class AppUiSurfaces {
     pathTemplate: '/rtc/incoming/{callId}',
     description: '来电接听页',
     operationIds: <String>[
+      'GetCall',
+      'AnswerCall',
+      'RejectCall',
+      'AckIncomingCallPresentation',
     ],
   );
 
@@ -939,6 +1175,15 @@ class AppUiSurfaces {
     pathTemplate: '/rtc/voice/{callId}',
     description: '语音通话页',
     operationIds: <String>[
+      'GetCall',
+      'HangupCall',
+      'JoinCall',
+      'LeaveCall',
+      'ReportMediaConnected',
+      'ToggleMute',
+      'ToggleCamera',
+      'StartScreenShare',
+      'StopScreenShare',
     ],
   );
 
@@ -949,6 +1194,15 @@ class AppUiSurfaces {
     pathTemplate: '/rtc/video/{callId}',
     description: '视频通话页',
     operationIds: <String>[
+      'GetCall',
+      'HangupCall',
+      'JoinCall',
+      'LeaveCall',
+      'ReportMediaConnected',
+      'ToggleMute',
+      'ToggleCamera',
+      'StartScreenShare',
+      'StopScreenShare',
     ],
   );
 
@@ -959,12 +1213,15 @@ class AppUiSurfaces {
     pathTemplate: '/rtc/pick-participants',
     description: '通话参与者选择页',
     operationIds: <String>[
+      'InitiateCall',
+      'InviteToCall',
     ],
   );
 
   static const List<AppUiSurface> all = <AppUiSurface>[
     chatList,
     startGroupChat,
+    greetingInbox,
     chatDetail,
     chatSettings,
     chatManage,
@@ -972,6 +1229,7 @@ class AppUiSurfaces {
     chatTransferOwnership,
     chatAdmins,
     chatMemberSearch,
+    chatAnnouncement,
     assistantHalfSheet,
     personalAssistantDialog,
     assistantSettings,
@@ -993,6 +1251,7 @@ class AppUiSurfaces {
     myFootprint,
     userProfile,
     profileCareerInterests,
+    interestOnboarding,
     addContact,
     addContactSearch,
     addContactScan,
@@ -1018,12 +1277,18 @@ class AppUiSurfaces {
     assistantSkills,
     personalAssistantChatAlias,
     settingsHome,
+    settingsNotifications,
+    settingsPrivacy,
+    settingsCalls,
+    settingsAccountSecurity,
     settingsPermissions,
+    blockedUsers,
+    blockedKeywords,
+    myReports,
     settingsDarkMode,
     settingsAbout,
     profileEdit,
     profilePersonas,
-    profileComments,
     profileStats,
     myIntersections,
     objectIntersections,
@@ -1037,6 +1302,7 @@ class AppUiSurfaces {
   static const Map<String, AppUiSurface> byId = <String, AppUiSurface>{
     'chatList': chatList,
     'startGroupChat': startGroupChat,
+    'greetingInbox': greetingInbox,
     'chatDetail': chatDetail,
     'chatSettings': chatSettings,
     'chatManage': chatManage,
@@ -1044,6 +1310,7 @@ class AppUiSurfaces {
     'chatTransferOwnership': chatTransferOwnership,
     'chatAdmins': chatAdmins,
     'chatMemberSearch': chatMemberSearch,
+    'chatAnnouncement': chatAnnouncement,
     'assistantHalfSheet': assistantHalfSheet,
     'personalAssistantDialog': personalAssistantDialog,
     'assistantSettings': assistantSettings,
@@ -1065,6 +1332,7 @@ class AppUiSurfaces {
     'myFootprint': myFootprint,
     'userProfile': userProfile,
     'profileCareerInterests': profileCareerInterests,
+    'interestOnboarding': interestOnboarding,
     'addContact': addContact,
     'addContactSearch': addContactSearch,
     'addContactScan': addContactScan,
@@ -1090,12 +1358,18 @@ class AppUiSurfaces {
     'assistantSkills': assistantSkills,
     'personalAssistantChatAlias': personalAssistantChatAlias,
     'settingsHome': settingsHome,
+    'settingsNotifications': settingsNotifications,
+    'settingsPrivacy': settingsPrivacy,
+    'settingsCalls': settingsCalls,
+    'settingsAccountSecurity': settingsAccountSecurity,
     'settingsPermissions': settingsPermissions,
+    'blockedUsers': blockedUsers,
+    'blockedKeywords': blockedKeywords,
+    'myReports': myReports,
     'settingsDarkMode': settingsDarkMode,
     'settingsAbout': settingsAbout,
     'profileEdit': profileEdit,
     'profilePersonas': profilePersonas,
-    'profileComments': profileComments,
     'profileStats': profileStats,
     'myIntersections': myIntersections,
     'objectIntersections': objectIntersections,

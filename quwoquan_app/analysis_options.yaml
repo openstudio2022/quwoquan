@@ -11,7 +11,7 @@ include: package:flutter_lints/flutter.yaml
 
 analyzer:
   exclude:
-    - lib/cloud/runtime/generated/integration/location_poi_dto.g.dart
+    - lib/cloud/runtime/generated/integration/external_integration/location_poi_dto.g.dart
     - lib/cloud/runtime/generated/content/article_post_dto.g.dart
     - lib/cloud/runtime/generated/content/moment_post_dto.g.dart
     - lib/cloud/runtime/generated/content/photo_post_dto.g.dart

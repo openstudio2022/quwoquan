@@ -1,53 +1,130 @@
-# L3 规格：career-interest-profile-editor — 职业与兴趣资料页闭环
+# L3 Story：career-interest-profile-editor — 职业与兴趣资料页闭环 (`career-interest-profile-editor`)
 
-## Spec Entry
+> 所属能力：[`profile-homepage-redesign`](../spec.md)
+>
+> Journey / Scenario：[`JNY-003 / SCN-009`](../../../spec.md#scn-009)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- AppRoot Journey/Scenario: `profile-career-interest-personalization`
-- L1_domain_service: `user-identity-profile-relationship`
-- L2_business_capability: `profile-homepage-redesign`
-- L3_story: `career-interest-profile-editor`
-- 验收意图: `GWT / contract / SIT / UAT`
-- 测试证据: `local_contract / api_integration / user_acceptance`
+## 1. 用户价值
 
-## 目标
+作为管理账号、Persona 或关系的用户，我希望职业与兴趣资料页端云标签闭环，覆盖标签真相源、端侧 UX、user-service 保存校验与 object_tag_index 投影，从而安全地维持身份、画像与关系状态。
 
-在“我的资料页”提供独立 `职业与兴趣` 页面，让用户维护事实型职业身份与兴趣标签。职业与兴趣标签必须同源于 tag-service 导入的标签体系，保存后进入 `object_tag_index` 的 `user` 对象索引，用于主页展示、共同职业/共同兴趣解释、推荐权重和小趣助手偏好理解。
+## 2. 范围与非目标
 
-## 范围
+### In Scope
 
-- 新增端侧路由 `/profile/career-interests` 与页面 `CareerInterestPage`。
-- 职业标签根为 `Audience/用户/职业`，V1 保存一个职业叶子 tagRef。
-- 兴趣标签根为 `Audience/用户/兴趣偏好`，分类为 `全部 / 旅行摄影 / 校园 / 生活 / 艺术 / 科技`，保存有序叶子 tagRefs，最多 30 个、允许 0 个。
-- 查询复用 tag-service `ListTagChildren(parentTagRef)`、`ResolveTag(tagRef)`、`ValidateTagRefs(tagRefs)`。
-- 保存复用 user-service `GET /user/profile/edit-snapshot` 与 `PATCH /user/profile`，字段为 `occupationTagRef`、`interestTagRefs` 和派生 `identityTags`。
+- /profile/career-interests 独立页面
+- Audience/用户/职业 与 Audience/用户/兴趣偏好 标签树
+- ListTagChildren / ResolveTag / ValidateTagRefs 查询校验链路
+- ReportTagFeedback 标签添加/移除事实链路
+- PATCH /user/profile 保存 occupationTagRef 与有序 interestTagRefs
+- object_tag_index user 对象投影
+
+### Out of Scope
+
+- 推荐标签模块
+- 自由文本标签
+- Topic/兴趣 旧路径
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 页面加载与标签同源查询
+
+- 职业与兴趣入口不依赖端侧完整枚举。
+
+<a id="req-002"></a>
+### REQ-002 编辑、排序、保存与校验
+
+- PATCH 仅更新触达的职业/兴趣字段，未触达字段不被误清空。
+
+<a id="req-003"></a>
+### REQ-003 保存后进入交集索引
+
+- 写时投影与离线 backfill 都使用 object_tag_index 同一结构。
+
+<a id="req-004"></a>
+### REQ-004 我的资料页职业与兴趣管理旅程
+
+- 用户能完成职业选择、兴趣添加、排序、保存、回读的完整旅程。
+
+<a id="req-005"></a>
+### REQ-005 user-service 保存校验必须拒绝旧 `Topic/兴趣/*`、非职业/兴趣根、职业多选、分类父节点、兴趣超过 30
+
 - user-service 保存校验必须拒绝旧 `Topic/兴趣/*`、非职业/兴趣根、职业多选、分类父节点、兴趣超过 30。
-- 保存成功后投影到 Mongo `object_tag_index`：`objectType=user`、`objectId=userId`、`tagRefs=[occupationTagRef, ...interestTagRefs]`。
-
-## Out of Scope
-
-- 不做推荐标签模块。
-- 不开放自由文本标签。
-- 不新增第二套端侧兴趣枚举。
-- 不绕过 tag-service 校验。
-- 不改分身管理页或整个编辑资料页结构；仅替换职业与兴趣入口。
-
-## UX / UI
-
-- 顶部：返回箭头、标题 `职业与兴趣`、右侧 `保存`。
-- 模块顺序：`职业身份`、`我的标签`、`全部兴趣`。
-- 职业身份：白色圆角单行入口，展示 `职业大类 · 叶子职业`，未选中展示 `选择你的职业身份`；点击后进入与个人资料页一致的列表式两级选择，先选职业大类，再进入二级职业列表选择叶子标签。
-- 我的标签：默认编辑态，4 列轻量文字卡片，右上角 `×` 删除，长按拖拽排序，轻微摇曳；不展示“点击删除/拖拽排序”说明文案，空态使用纯文字提示而不是输入框式卡片；极窄屏可降为 3 列。
-- 全部兴趣：横向分类胶囊 Tab，文字标签卡片右上角 `+`，点击卡片或 `+` 添加；标签字体使用常规字重，`+` 与文字之间必须预留空间，不得重叠；添加后从全部兴趣隐藏。
+- 全部兴趣：横向分类胶囊 Tab，文字标签卡片右上角 `+`，点击卡片或 `+` 添加
+- 标签字体使用常规字重，`+` 与文字之间必须预留空间，不得重叠
+- 添加后从全部兴趣隐藏。
 - 返回拦截：有未保存修改时使用 iOS 原生风格 `CupertinoAlertDialog`，提供 `保存 / 继续编辑 / 放弃修改`；不得回退为底部动作面板。
-
-## 环境集成
-
-- alpha: App mock fixture 与 Service local_contract 使用同一标签根和校验规则。
-- beta/gamma: tag-service import 加载 `quwoquan_data/control_plane/governance/taxonomy` 的发布包；user-service 保存前走 `ValidateTagRefs`；`object_tag_index` 支持 import/backfill 与写时投影。
-- prod: 发布包包含同一标签树、幂等 import/backfill 入口、可回滚的派生索引重建路径。
-
-## 观测与运营
-
 - 页面保存失败统一映射 `USER.PROFILE.invalid_tag_ref` 或通用保存失败文案。
-- 指标：保存成功率、保存失败率、invalid_tag_ref 计数、用户兴趣平均数量、`object_tag_index` user 对象覆盖率、shared-tags 共同兴趣非空率。
-- SLO: 页面标签层级加载 P95 <= 500ms；保存 P95 <= 800ms；投影失败告警但可通过 backfill 重建。
+
+## 4. 契约引用
+
+- canonical：`tag-service.ListTagChildren`
+- canonical：`tag-service.ResolveTag`
+- canonical：`user-service.UpdateUserProfile`
+- canonical：`tag-service.ValidateTagRefs`
+- canonical：`tag-service.ReportTagFeedback`
+- canonical：`tag-service.object_tag_index`
+- canonical：`tag-service.SharedTags`
+- canonical：`profile-career-interest-personalization`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 页面加载与标签同源查询
+
+- GIVEN tag-service 已导入职业与兴趣标签树
+- GIVEN 用户已有或没有 occupationTagRef / interestTagRefs
+- WHEN 用户从编辑资料进入职业与兴趣页
+- THEN 职业分类通过 Audience/用户/职业 子节点查询
+- THEN 兴趣分类通过 Audience/用户/兴趣偏好 子节点查询
+- THEN 已选 tagRef 通过 ResolveTag 补文案
+- THEN 端侧无 Topic/兴趣 旧路径依赖
+
+<a id="gwt-002"></a>
+### GWT-002 编辑、排序、保存与校验
+
+- GIVEN 我的标签少于 30 个
+- WHEN 用户删除兴趣、从全部兴趣添加兴趣并拖拽排序后点击保存
+- THEN interestTagRefs 去重保序保存
+- THEN 超过 30 个兴趣被拒绝
+- THEN Topic/兴趣 与非法职业/兴趣根被 USER.PROFILE.invalid_tag_ref 拒绝
+- THEN 标签添加/移除分别以 click/ignore 经 TagFeedbackCommandWriter 追加事实；失败不阻断编辑并进入结构化观测。
+
+<a id="gwt-003"></a>
+### GWT-003 保存后进入交集索引
+
+- GIVEN 用户保存职业与兴趣
+- WHEN user-service 发布 UserProfileUpdated
+- THEN object_tag_index 中 objectType=user 的 tagRefs 包含职业与兴趣
+- THEN shared-tags 可用同一 tagRef 计算共同职业/共同兴趣
+
+<a id="gwt-004"></a>
+### GWT-004 我的资料页职业与兴趣管理旅程
+
+- GIVEN 用户在我的资料页点击编辑资料
+- WHEN 进入职业与兴趣页，选择职业，添加兴趣，排序并保存
+- THEN 返回编辑资料页后 snapshot 回读一致
+- THEN 我的主页资料展示与交集解释优先使用靠前兴趣
+
+## 6. 依赖
+
+- 前置要求：[`profile-homepage-redesign`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 Gamma Remote 标签目录页面实证
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：标签目录、发布导入、资料页和 object_tag_index 已有分层测试；
+  Gamma-local 已由统一材料器装配日志 Port 替身，不需要真实 SLS 租户或凭据；当前仍
+  缺可用物理设备上的 production Remote Patrol CaseResult，静态编译不能冒充真机 UAT。
+- 完成判定：`career_interest_reads_remote_tag_catalog` 在 Gamma-local 真机会话中通过并
+  产出 CaseResult，页面叶子标签可回溯到 tag-service taxonomy release。

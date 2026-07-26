@@ -1,122 +1,78 @@
-# L2 规格：runtime-redis
+# L2 Business Capability：运行时 Redis (`runtime-redis`)
 
-## 1. 定位
+> 所属领域：[`runtime`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
+
+## 1. 能力目标
 
 `runtime-redis` 提供跨服务一致的 Redis client、scene 连接池、健康检查和可观测机制。
-它不是业务数据访问层，不解释业务对象，也不根据 metadata 创建 Store、Reader 或缓存。
 
-业务缓存属于对应服务的对象 Reader adapter：
+## 2. 范围与非目标
 
-```text
-Object Query Facade
-  -> named Reader port
-  -> service internal/infrastructure/cache/<object>_reader
-  -> runtime Redis client scene
-```
+### In Scope
 
-具体 adapter 由服务 composition root 显式创建和注入。
+- 跨服务 Redis client、scene 连接池、健康检查和指标。
+- Redis Cluster hash tag、pipeline 和同 slot 原子操作约束。
+- alpha/beta/gamma/prod 的配置差异与 fail-fast 行为。
 
-## 2. 能力范围
+### Out of Scope
 
-### 2.1 Client
+- 其他 L2 的事实所有权、metadata schema 与实现施工步骤。
 
-统一 client 覆盖：
+## 3. Journey / Scenario 贡献
 
-- String：Get、Set、SetNX、Del、Incr、Expire。
-- Hash：HSet、HGet、HGetAll、HIncrByFloat。
-- Set：SAdd、SMembers、SIsMember、SRem。
-- Pub/Sub：Publish、Subscribe。
-- Pipeline：显式批处理。
-- Bytes：仅供明确需要二进制值的 infrastructure adapter。
+- [`JNY-006 / SCN-014`](../../spec.md#scn-014)
+  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
+  - 本能力处理：`runtime-redis` 提供跨服务一致的 Redis client、scene 连接池、健康检查和可观测机制。
+  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
+  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
 
-client 返回结构化 runtime failure，并传播 OperationContext、trace/request id 与 scene。
+## 4. Story
 
-### 2.2 Scene
 
-首发 scene：
 
-- `rec`：推荐 HotPath、会话特征与高 QPS pipeline。
-- `general`：对象缓存、计数、限流与低频状态。
-- `realtime`：seq、dedup、presence 与 Pub/Sub fanout。
+- [`redis-scene-client`](./redis-scene-client/spec.md)：同一 scene 在同一环境必须解析到唯一连接与 prefix；prod 必需 scene 缺地址、凭据或健康状态时必须拒绝启动。
 
-消费者必须通过 `Scene(name)` 显式选 scene。业务 Store/Reader 不接受“任意 key 自动选
-scene”的隐式依赖；key prefix 与 TTL 仍由 metadata/keyspace 合同校验。
+## 5. 能力要求
 
-### 2.3 配置与拓扑
+<a id="req-001"></a>
+### REQ-001 runtime redis 能力 SIT
 
-typed config 声明每个 scene 的 mode、address、TLS、pool 和 secret reference。
-连接创建属于 `quwoquan_service/internal/platform/**`；公共 runtime 暴露稳定接口与
-健康/指标合同。
+- 本能力必须组合直属 Story 与公开契约，交付“`runtime-redis` 提供跨服务一致的 Redis client、scene 连接池、健康检查和可观测机制”所定义的业务结果；失败终态必须可区分且不得伪造成功。
 
-standalone/cluster 是同一 scene adapter 的部署配置差异，不改变业务 Facade 或数据端口。
+<a id="req-002"></a>
+### REQ-002 缓存失败不得静默吞错；必须按恢复策略降级并产生指标
 
-## 3. 对象缓存接入
+- 缓存失败不得静默吞错；必须按恢复策略降级并产生指标。
+- Redis Cluster 的事务和批量 key 操作必须处于同一 slot；调用方用稳定 hash tag 保证共址。
+- `PipelineRead` 的同批 key 必须共享 hash tag，禁止以跨 slot fallback 掩盖调用错误。
+- local contract 可注入显式 fake client，但不得把 fake 结果记作集成证据。
+- beta/gamma/prod 的必需 scene 缺地址、secret 或健康状态时必须 fail-fast；禁止 Memory/Noop fallback。
 
-每个缓存必须满足：
+## 6. 契约与依赖
 
-1. 对应 metadata `storage.yaml` 声明 cache role、key、TTL 与失效事件。
-2. 服务定义业务命名 Reader，例如 `PostDetailReader`、`PersonaSnapshotReader`。
-3. `internal/infrastructure/cache/**` 实现 read-through、negative cache 或精确失效。
-4. composition root 显式把 cache Reader 注入 query Facade。
-5. command 只提交 authoritative Store + outbox；缓存写入不参与聚合事务。
-6. local contract 验证 key/TTL/失效，api integration 使用真实 Redis 验证一致性。
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-禁止：
+## 7. 集成验收
 
-- 跨对象缓存装饰器或动态 CRUD。
-- 由 metadata 在运行期选择业务 Store/Reader 实现。
-- application/domain 直接调用 Redis。
-- 缓存冒充 authoritative store。
-- 缓存失败静默吞错；必须按恢复策略降级并产生指标。
+<a id="sit-001"></a>
+### SIT-001 runtime redis 能力 SIT
 
-## 4. Composition root
+- GIVEN 执行“runtime redis 能力”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“runtime redis 能力”对应动作。
+- THEN 直属 Story 共同交付“`runtime-redis` 提供跨服务一致的 Redis client、scene 连接池、健康检查和可观测机制”，失败终态可区分且不产生伪成功事实。
+- AND Cluster 模式的批量读写遵循同 slot 约束，必需 scene 配置缺失时进程拒绝就绪。
 
-```go
-// 示意：具体类型由服务显式选择。
-redisScenes := platform.MustOpenRedisScenes(cfg.Redis)
+## 8. 开放事项
 
-postDetailReader := cache.NewPostDetailReader(
-    persistence.NewMongoPostDetailReader(mongo),
-    redisScenes.Scene("general"),
-    cfg.PostDetailCache,
-)
-postQuery := application.NewPostQueryFacade(postDetailReader)
-```
+<a id="open-001"></a>
+### OPEN-001 runtime redis 能力 SIT
 
-禁止把对象名、存储类型或 cache role 交给公共工厂动态返回业务接口。
-
-## 5. 四环境
-
-- **alpha**：local contract 可注入显式 fake client；不得把 fake 结果记作集成证据。
-- **beta**：使用真实 Redis 与 beta seed，验证恢复、TTL 和权限。
-- **gamma**：拓扑与 prod 同构，执行真实并发、故障与恢复验证。
-- **prod**：所有必需 scene 缺地址/secret/健康状态即 fail-fast；禁止 Memory、Noop、
-  Mock 或自动 fallback。
-
-## 6. 可观测与安全
-
-每个 scene 至少输出：
-
-- command latency histogram、error count、timeout count。
-- pool active/idle/wait、connection failure、reconnect。
-- cache hit/miss/negative-hit/eviction（由对象 adapter 带 object/operation 维度）。
-- Pub/Sub lag、subscriber count、drop/reconnect。
-
-日志不得记录 secret、PII 或完整 value；key 仅输出经策略允许的类型/哈希。
-
-## 7. 测试证据
-
-- `local_contract`：client 接口、scene 隔离、keyspace/TTL、对象 cache Reader
-  conformance、结构化错误。
-- `api_integration`：真实 standalone/cluster Redis、并发 SetNX/Incr、Pub/Sub、断连
-  恢复、对象 cache hit/miss/失效。
-- `user_acceptance`：仅当缓存策略影响用户旅程时验证无陈旧展示、错误恢复和 SLO。
-
-## 8. 验收
-
-1. runtime client 不依赖任何业务对象或服务 infrastructure。
-2. 所有业务缓存都通过对象 named Reader adapter 接入。
-3. service composition root 对每个 adapter 的选择清晰可审计。
-4. beta/gamma/prod 无测试替身和自动 fallback。
-5. scene 指标、健康、错误与 trace 可按 operation/object 聚合。
-6. `make gate` 与对应 local_contract/api_integration 全绿。
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：`runtime-redis` 提供跨服务一致的 Redis client、scene 连接池、健康检查和可观测机制。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

@@ -1,8 +1,6 @@
-import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
-import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 
 /// 我的足迹条目（云侧只读契约 GET /content/footprint 的端侧映射）。
 ///
@@ -48,72 +46,6 @@ abstract class FootprintRepository {
   });
 }
 
-/// Mock 实现：contract fixture（footprint_core）单一真相源；
-/// postRef join content_discovery_core.posts，不复制第二套内容数据。
-class MockFootprintRepository implements FootprintRepository {
-  @override
-  Future<CursorPage<FootprintEntry>> getMyFootprint({
-    String? type,
-    String? cursor,
-    int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
-  }) async {
-    final seed = ContractFixtureRuntimeLoader.contentSeedSet('footprint_core');
-    final rawItems = seed?['items'];
-    if (rawItems is! List) {
-      return const CursorPage<FootprintEntry>(items: <FootprintEntry>[]);
-    }
-    final postsById = _discoveryPostsById();
-    final normalizedType = (type ?? '').trim().toLowerCase();
-    final entries = <FootprintEntry>[];
-    for (final raw in rawItems.whereType<Map>()) {
-      final item = raw.cast<String, dynamic>();
-      final itemType = (item['type'] ?? '').toString().toLowerCase();
-      if (normalizedType.isNotEmpty && itemType != normalizedType) {
-        continue;
-      }
-      final postRef = (item['postRef'] ?? '').toString();
-      final postMap = postsById[postRef];
-      entries.add(
-        FootprintEntry(
-          postId: postRef,
-          action: (item['action'] ?? '').toString(),
-          occurredAt: _isoMinusHours(item['occurredAgoHours']),
-          post: postMap != null
-              ? contentPostDtoFromReadModelMap(postMap)
-              : null,
-        ),
-      );
-    }
-    final start = int.tryParse(cursor ?? '') ?? 0;
-    final window = entries.skip(start).take(limit).toList(growable: false);
-    final nextOffset = start + window.length;
-    return CursorPage<FootprintEntry>(
-      items: window,
-      nextCursor: nextOffset < entries.length ? '$nextOffset' : null,
-    );
-  }
-
-  static Map<String, Map<String, dynamic>> _discoveryPostsById() {
-    final seed = ContractFixtureRuntimeLoader.contentSeedSet();
-    final rawPosts = seed?['posts'];
-    final byId = <String, Map<String, dynamic>>{};
-    if (rawPosts is List) {
-      for (final raw in rawPosts.whereType<Map>()) {
-        final map = raw.cast<String, dynamic>();
-        final id = (map['postId'] ?? '').toString();
-        if (id.isNotEmpty) {
-          byId[id] = map;
-        }
-      }
-    }
-    return byId;
-  }
-
-  static String _isoMinusHours(Object? agoHours) {
-    final hours = agoHours is num ? agoHours.toInt() : 0;
-    return DateTime.now()
-        .toUtc()
-        .subtract(Duration(hours: hours))
-        .toIso8601String();
-  }
-}
+// Mock 实现已物理迁至 test/support/cloud_services/content/
+// mock_content_repository.dart（测试）与 runners/alpha 的 fixture 回放实现；
+// 生产 lib 只保留接口与 Remote adapter。

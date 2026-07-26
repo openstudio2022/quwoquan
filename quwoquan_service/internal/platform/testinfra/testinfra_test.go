@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-testinfra/spec.md#sit-001
 package testinfra
 
 import (
@@ -89,5 +90,36 @@ func TestSuiteCleanRedis(t *testing.T) {
 	}
 	if suite.Redis.Exists("k2") {
 		t.Error("k2 should be flushed")
+	}
+}
+
+func TestPostgresFixtureReusesOneProcessAndCleansBetweenSuites(t *testing.T) {
+	fixture, err := StartPostgresFixture(t.TempDir(), 0)
+	if err != nil {
+		t.Fatalf("start shared postgres fixture: %v", err)
+	}
+	defer func() {
+		if err := fixture.Close(); err != nil {
+			t.Fatalf("close shared postgres fixture: %v", err)
+		}
+	}()
+
+	first := NewSuite(t, WithPostgresFixture(fixture))
+	if _, err := first.PG.Exec(`CREATE TABLE shared_fixture_probe (id TEXT PRIMARY KEY)`); err != nil {
+		t.Fatalf("create shared fixture probe: %v", err)
+	}
+	if _, err := first.PG.Exec(`INSERT INTO shared_fixture_probe (id) VALUES ('first')`); err != nil {
+		t.Fatalf("seed shared fixture probe: %v", err)
+	}
+	first.TearDown(t)
+
+	second := NewSuite(t, WithPostgresFixture(fixture))
+	defer second.TearDown(t)
+	var count int
+	if err := second.PG.QueryRow(`SELECT COUNT(*) FROM shared_fixture_probe`).Scan(&count); err != nil {
+		t.Fatalf("read shared fixture probe after cleanup: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("shared fixture leaked %d rows between suites", count)
 	}
 }

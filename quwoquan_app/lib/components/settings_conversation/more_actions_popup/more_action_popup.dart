@@ -1,39 +1,25 @@
 // 对话态设置 UI：贴底半屏、保留上层上下文（与全屏 `settings_form/` 区分）。
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 
-/// 更多操作弹窗组件（对话态）
-class MoreActionPopup extends StatelessWidget {
-  final dynamic config;
-
-  const MoreActionPopup({super.key, required this.config});
-
-  /// 显示更多操作弹窗
+/// Post 更多操作弹窗入口（对话态）。
+abstract final class MoreActionPopup {
   static Future<void> show({
     required BuildContext context,
-    required dynamic config,
+    required MediaPostMoreActionConfig config,
     double? panelMaxWidth,
-    bool showDragHandle = true,
-    bool isScrollControlled = true,
-  }) async {
-    if (config is MediaPostMoreActionConfig) {
-      await showAppBottomModal<dynamic>(
-        context: context,
-        builder: (context) => _MediaPostMoreActionSheet(
-          config: config,
-          panelMaxWidth: panelMaxWidth,
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(); // Stub
+  }) {
+    return showAppBottomModal<void>(
+      context: context,
+      builder: (context) => _MediaPostMoreActionSheet(
+        config: config,
+        panelMaxWidth: panelMaxWidth,
+      ),
+    );
   }
 }
 
@@ -42,13 +28,13 @@ class _ScrollAction {
   final String id;
   final IconData icon;
   final String label;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   const _ScrollAction({
     required this.id,
     required this.icon,
     required this.label,
-    this.onTap,
+    required this.onTap,
   });
 }
 
@@ -107,65 +93,35 @@ class _MediaPostMoreActionSheetState
 
   List<_ScrollAction> _buildScrollActions(bool isDark) {
     final actions = <_ScrollAction>[
-      _ScrollAction(
-        id: 'reward',
-        icon: CupertinoIcons.gift,
-        label: AppStrings.reward,
-        onTap: widget.config.onReward,
-      ),
-      _ScrollAction(
-        id: 'message',
-        icon: CupertinoIcons.chat_bubble,
-        label: AppStrings.message,
-        onTap: widget.config.onMessage,
-      ),
-      _ScrollAction(
-        id: 'copyLink',
-        icon: CupertinoIcons.link,
-        label: AppStrings.copyLink,
-        onTap: widget.config.onCopyLink,
-      ),
-      _ScrollAction(
-        id: 'fontSettings',
-        icon: CupertinoIcons.textformat,
-        label: AppStrings.fontSettings,
-        onTap: widget.config.onFontSettings,
-      ),
-      _ScrollAction(
-        id: 'darkMode',
-        icon: isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon,
-        label: isDark ? AppStrings.lightMode : AppStrings.darkMode,
-        onTap: widget.config.onThemeToggle,
-      ),
-      _ScrollAction(
-        id: 'feedback',
-        icon: CupertinoIcons.pencil,
-        label: AppStrings.feedback,
-        onTap: widget.config.onFeedback,
-      ),
-    ];
-    if (widget.config.showShareAction) {
-      actions.insert(
-        5,
+      if (widget.config.onCopyLink != null)
+        _ScrollAction(
+          id: 'copyLink',
+          icon: CupertinoIcons.link,
+          label: UITextConstants.copyLink,
+          onTap: widget.config.onCopyLink!,
+        ),
+      if (widget.config.showShareAction && widget.config.onShare != null)
         _ScrollAction(
           id: 'share',
           icon: CupertinoIcons.share,
           label: UITextConstants.share,
-          onTap: widget.config.onShare,
+          onTap: widget.config.onShare!,
         ),
-      );
-    }
-    if (widget.config.showViewOriginalAction) {
-      actions.insert(
-        widget.config.showShareAction ? 6 : 5,
+      if (widget.config.showViewOriginalAction &&
+          widget.config.onViewOriginal != null)
         _ScrollAction(
           id: 'viewOriginal',
           icon: CupertinoIcons.photo,
-          label: AppStrings.viewOriginal,
-          onTap: widget.config.onViewOriginal,
+          label: UITextConstants.viewOriginal,
+          onTap: widget.config.onViewOriginal!,
         ),
-      );
-    }
+      _ScrollAction(
+        id: 'themeMode',
+        icon: isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon,
+        label: isDark ? UITextConstants.lightMode : UITextConstants.darkMode,
+        onTap: widget.config.onThemeToggle ?? _toggleTheme,
+      ),
+    ];
     return actions;
   }
 
@@ -175,7 +131,7 @@ class _MediaPostMoreActionSheetState
         _BottomAction(
           id: _contentFilterActionId,
           icon: CupertinoIcons.line_horizontal_3_decrease,
-          label: '内容过滤',
+          label: UITextConstants.contentFilterTitle,
           description: _contentFilterSummaryFor(
             options: widget.config.filterOptions,
             selectedIds: _selectedFilterIds,
@@ -185,47 +141,51 @@ class _MediaPostMoreActionSheetState
         _BottomAction(
           id: _readingSettingsActionId,
           icon: CupertinoIcons.book,
-          label: '阅读设置',
+          label: UITextConstants.readingSettingsTitle,
           description: _readingSettingSummaryFor(
             options: widget.config.readingOptions,
             selectedId: _selectedReadingOptionId,
           ),
         ),
-      _BottomAction(
-        id: 'notInterested',
-        icon: CupertinoIcons.eye_slash,
-        label: AppStrings.notInterested,
-        description: AppStrings.notInterestedDescription,
-        onTap: widget.config.onNotInterested,
-      ),
-      _BottomAction(
-        id: 'blockUser',
-        icon: CupertinoIcons.person_badge_minus,
-        label: AppStrings.blockUser,
-        description: AppStrings.blockUserDescription,
-        onTap: widget.config.onBlockUser,
-      ),
-      _BottomAction(
-        id: 'blockWords',
-        icon: CupertinoIcons.slider_horizontal_3,
-        label: AppStrings.blockWords,
-        description: AppStrings.blockWordsDescription,
-        onTap: widget.config.onBlockWords,
-      ),
-      _BottomAction(
-        id: 'report',
-        icon: CupertinoIcons.flag,
-        label: AppStrings.report,
-        description: AppStrings.reportDescription,
-        onTap: widget.config.onReport,
-      ),
+      if (widget.config.onNotInterested != null)
+        _BottomAction(
+          id: 'notInterested',
+          icon: CupertinoIcons.eye_slash,
+          label: UITextConstants.notInterested,
+          description: UITextConstants.notInterestedDescription,
+          onTap: widget.config.onNotInterested,
+        ),
+      if (widget.config.onBlockUser != null)
+        _BottomAction(
+          id: 'blockUser',
+          icon: CupertinoIcons.person_badge_minus,
+          label: UITextConstants.blockAuthor,
+          description: UITextConstants.blockAuthorDescription,
+          onTap: widget.config.onBlockUser,
+        ),
+      if (widget.config.onBlockWords != null)
+        _BottomAction(
+          id: 'blockWords',
+          icon: CupertinoIcons.slider_horizontal_3,
+          label: UITextConstants.blockKeywords,
+          description: UITextConstants.blockKeywordsDescription,
+          onTap: widget.config.onBlockWords,
+        ),
+      if (widget.config.onReport != null)
+        _BottomAction(
+          id: 'report',
+          icon: CupertinoIcons.flag,
+          label: UITextConstants.report,
+          description: UITextConstants.reportDescription,
+          onTap: widget.config.onReport,
+        ),
     ];
     if (widget.config.showDeleteAction && widget.config.onDelete != null) {
       actions.add(
         _BottomAction(
           id: 'delete',
           icon: CupertinoIcons.delete,
-          label: UITextConstants.messageActionDelete,
+          label: ChatText.messageActionDelete,
           onTap: widget.config.onDelete,
           isDestructive: true,
         ),
@@ -249,7 +209,7 @@ class _MediaPostMoreActionSheetState
     required Set<String> selectedIds,
   }) {
     if (options.isEmpty || selectedIds.isEmpty) {
-      return '全部作品';
+      return UITextConstants.allWorks;
     }
     final selected = options
         .where((option) => selectedIds.contains(option.id))
@@ -257,7 +217,7 @@ class _MediaPostMoreActionSheetState
     if (selected.isEmpty ||
         selected.any((option) => option.id == 'all') ||
         selected.length == options.length - 1) {
-      return '全部作品';
+      return UITextConstants.allWorks;
     }
     return selected.map((option) => option.label).join(' / ');
   }
@@ -298,45 +258,20 @@ class _MediaPostMoreActionSheetState
     Navigator.pop(context);
   }
 
-  VoidCallback? _fallbackScrollAction(String actionId) {
-    switch (actionId) {
-      case 'reward':
-        return () => _showToast(AppStrings.rewardFeatureDeveloping);
-      case 'message':
-        return () => _showToast(AppStrings.messageFeatureDeveloping);
-      case 'viewOriginal':
-        return () => _showToast(AppStrings.viewOriginalFeatureDeveloping);
-      case 'fontSettings':
-        return () => _showToast(AppStrings.fontSettingsFeatureDeveloping);
-      case 'darkMode':
-        return () {
-          Future<void>.delayed(const Duration(milliseconds: 80), () {
-            ref.read(themeProvider.notifier).toggleTheme();
-          });
-        };
-      case 'feedback':
-        return () => _showToast(AppStrings.feedbackFeatureDeveloping);
-    }
-    return null;
-  }
-
-  void _showToast(String message) {
-    final navigator = Navigator.of(context, rootNavigator: true);
-    final toastContext = navigator.overlay?.context ?? navigator.context;
-    AppToast.show(
-      toastContext,
-      message,
-      duration: const Duration(milliseconds: 1600),
-    );
+  void _toggleTheme() {
+    Future<void>.delayed(const Duration(milliseconds: 80), () {
+      ref.read(themeProvider.notifier).toggleTheme();
+    });
   }
 
   void _handleScrollActionTap(_ScrollAction action) {
-    final callback = action.onTap ?? _fallbackScrollAction(action.id);
+    widget.config.onActionInvoked?.call(action.id);
     Navigator.pop(context);
-    callback?.call();
+    action.onTap();
   }
 
   void _handleBottomActionTap(_BottomAction action) {
+    widget.config.onActionInvoked?.call(action.id);
     if (action.id == _contentFilterActionId) {
       setState(() {
         _showContentFilterPanel = true;
@@ -384,7 +319,9 @@ class _MediaPostMoreActionSheetState
     );
 
     return CupertinoTheme(
-      data: CupertinoTheme.of(context).copyWith(brightness: Brightness.dark),
+      data: CupertinoTheme.of(context).copyWith(
+        brightness: resolvedIsDark ? Brightness.dark : Brightness.light,
+      ),
       child: AppBottomModalSurface(
         onDismiss: () => Navigator.pop(context),
         backgroundColor: panelBackground,
@@ -404,7 +341,7 @@ class _MediaPostMoreActionSheetState
             children: [
               ConversationSheetHeader(
                 isDark: resolvedIsDark,
-                title: AppStrings.moreActionsTitle,
+                title: UITextConstants.moreActionsTitle,
               ),
               if (_showContentFilterPanel) ...[
                 _InlineContentFilterSection(
@@ -457,7 +394,7 @@ class _MediaPostMoreActionSheetState
               ConversationSheetCancelBar(
                 isDark: resolvedIsDark,
                 label: (_showContentFilterPanel || _showReadingSettingsPanel)
-                    ? '返回'
+                    ? UITextConstants.back
                     : UITextConstants.cancel,
                 onTap: () {
                   if (_showContentFilterPanel || _showReadingSettingsPanel) {
@@ -535,8 +472,9 @@ class _MoreActionQuickSection extends StatelessWidget {
                                 ),
                               ),
                               child: Center(
-                                child: _QuickActionIcon(
-                                  action: actions[index],
+                                child: Icon(
+                                  actions[index].icon,
+                                  size: AppSpacing.iconMedium,
                                   color: secondaryText,
                                 ),
                               ),
@@ -568,21 +506,6 @@ class _MoreActionQuickSection extends StatelessWidget {
   }
 }
 
-class _QuickActionIcon extends StatelessWidget {
-  const _QuickActionIcon({required this.action, required this.color});
-
-  final _ScrollAction action;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    if (action.id == 'message') {
-      return AppMessageBubbleIcon(size: AppSpacing.iconMedium, color: color);
-    }
-    return Icon(action.icon, size: AppSpacing.iconMedium, color: color);
-  }
-}
-
 class _InlineContentFilterSection extends StatelessWidget {
   const _InlineContentFilterSection({
     required this.options,
@@ -606,7 +529,10 @@ class _InlineContentFilterSection extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const ConversationSheetHeader(isDark: isDark, title: '内容过滤'),
+        const ConversationSheetHeader(
+          isDark: isDark,
+          title: UITextConstants.contentFilterTitle,
+        ),
         ConversationSheetListCard(
           isDark: isDark,
           child: Column(
@@ -644,7 +570,11 @@ class _InlineContentFilterSection extends StatelessWidget {
           ),
         ),
         SizedBox(height: SettingsSemanticConstants.conversationSheetSectionGap),
-        ConversationSheetCancelBar(isDark: isDark, label: '完成', onTap: onDone),
+        ConversationSheetCancelBar(
+          isDark: isDark,
+          label: UITextConstants.done,
+          onTap: onDone,
+        ),
       ],
     );
   }
@@ -669,7 +599,10 @@ class _InlineReadingSettingsSection extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const ConversationSheetHeader(isDark: isDark, title: '阅读设置'),
+        const ConversationSheetHeader(
+          isDark: isDark,
+          title: UITextConstants.readingSettingsTitle,
+        ),
         ConversationSheetListCard(
           isDark: isDark,
           child: Column(

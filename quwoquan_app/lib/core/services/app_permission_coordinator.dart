@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/core/platform/startup_deferred_plugins.dart';
@@ -160,32 +161,32 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
   AppPermissionCopy copyFor(AppPermissionKind kind) {
     return switch (kind) {
       AppPermissionKind.microphone => const AppPermissionCopy(
-        label: UITextConstants.permissionMicrophoneLabel,
-        primerTitle: UITextConstants.chatVoicePermissionPrimerTitle,
-        primerMessage: UITextConstants.chatVoicePermissionPrimerMessage,
-        settingsPathMessage: UITextConstants.chatVoicePermissionOpenSettings,
-        deniedMessage: UITextConstants.chatVoicePermissionDenied,
+        label: ChatText.permissionMicrophoneLabel,
+        primerTitle: ChatText.chatVoicePermissionPrimerTitle,
+        primerMessage: ChatText.chatVoicePermissionPrimerMessage,
+        settingsPathMessage: ChatText.chatVoicePermissionOpenSettings,
+        deniedMessage: ChatText.chatVoicePermissionDenied,
       ),
       AppPermissionKind.camera => const AppPermissionCopy(
-        label: UITextConstants.permissionCameraLabel,
+        label: ChatText.permissionCameraLabel,
         primerTitle: UITextConstants.cameraPermissionRequiredTitle,
         primerMessage: UITextConstants.cameraPermissionPrimerMessage,
         settingsPathMessage: UITextConstants.cameraPermissionRequiredRecovery,
         deniedMessage: UITextConstants.cameraPermissionRequired,
       ),
       AppPermissionKind.photos => const AppPermissionCopy(
-        label: UITextConstants.permissionPhotosLabel,
-        primerTitle: UITextConstants.permissionPhotosPrimerTitle,
-        primerMessage: UITextConstants.permissionPhotosPrimerMessage,
-        settingsPathMessage: UITextConstants.permissionPhotosOpenSettings,
+        label: ChatText.permissionPhotosLabel,
+        primerTitle: ChatText.permissionPhotosPrimerTitle,
+        primerMessage: ChatText.permissionPhotosPrimerMessage,
+        settingsPathMessage: ChatText.permissionPhotosOpenSettings,
         deniedMessage: UITextConstants.mediaPickerPermissionDenied,
       ),
       AppPermissionKind.location => const AppPermissionCopy(
-        label: UITextConstants.permissionLocationLabel,
-        primerTitle: UITextConstants.permissionLocationPrimerTitle,
-        primerMessage: UITextConstants.permissionLocationPrimerMessage,
-        settingsPathMessage: UITextConstants.permissionLocationOpenSettings,
-        deniedMessage: UITextConstants.permissionLocationDenied,
+        label: ChatText.permissionLocationLabel,
+        primerTitle: ChatText.permissionLocationPrimerTitle,
+        primerMessage: ChatText.permissionLocationPrimerMessage,
+        settingsPathMessage: ChatText.permissionLocationOpenSettings,
+        deniedMessage: ChatText.permissionLocationDenied,
       ),
       AppPermissionKind.contacts => const AppPermissionCopy(
         label: UITextConstants.permissionContactsLabel,
@@ -195,12 +196,11 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
         deniedMessage: UITextConstants.permissionContactsDenied,
       ),
       AppPermissionKind.notifications => const AppPermissionCopy(
-        label: UITextConstants.permissionNotificationsLabel,
-        primerTitle: UITextConstants.permissionNotificationsPrimerTitle,
-        primerMessage: UITextConstants.permissionNotificationsPrimerMessage,
-        settingsPathMessage:
-            UITextConstants.permissionNotificationsOpenSettings,
-        deniedMessage: UITextConstants.permissionNotificationsDenied,
+        label: ChatText.permissionNotificationsLabel,
+        primerTitle: ChatText.permissionNotificationsPrimerTitle,
+        primerMessage: ChatText.permissionNotificationsPrimerMessage,
+        settingsPathMessage: ChatText.permissionNotificationsOpenSettings,
+        deniedMessage: ChatText.permissionNotificationsDenied,
       ),
     };
   }
@@ -293,7 +293,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       if (showUiOnFailure) {
         await _showSoftToast(
           context,
-          UITextConstants.permissionRestrictedMessage(copyFor(kind).label),
+          ChatText.permissionRestrictedMessage(copyFor(kind).label),
         );
       }
       return AppPermissionEnsureOutcome.restricted;
@@ -362,7 +362,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       category: UiErrorCategory.permissionRequired,
       scope: UiErrorScope.dialog,
       title: openSettings
-          ? UITextConstants.permissionSettingsGateTitle(copy.label)
+          ? ChatText.permissionSettingsGateTitle(copy.label)
           : copy.primerTitle,
       message: openSettings ? copy.settingsPathMessage : copy.deniedMessage,
       primaryAction: UiErrorAction(
@@ -374,7 +374,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
         label: openSettings
             ? UITextConstants.openSettings
             : (includeRetry
-                  ? UITextConstants.permissionRetryAuthorization
+                  ? ChatText.permissionRetryAuthorization
                   : UITextConstants.confirm),
       ),
       secondaryAction: openSettings
@@ -383,7 +383,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
                   ? UiErrorActionType.retry
                   : UiErrorActionType.dismiss,
               label: includeRetry
-                  ? UITextConstants.permissionRetryAuthorization
+                  ? ChatText.permissionRetryAuthorization
                   : UITextConstants.cancel,
             )
           : null,
@@ -404,7 +404,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       if (showUiOnFailure && context.mounted) {
         await _showSoftToast(
           context,
-          UITextConstants.permissionStillDeniedMessage(copyFor(kind).label),
+          ChatText.permissionStillDeniedMessage(copyFor(kind).label),
         );
       }
       return AppPermissionEnsureOutcome.softDenied;
@@ -450,7 +450,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
         outcome == AppPermissionEnsureOutcome.softDenied) {
       await _showSoftToast(
         context,
-        UITextConstants.permissionStillDeniedMessage(copyFor(kind).label),
+        ChatText.permissionStillDeniedMessage(copyFor(kind).label),
       );
       return AppPermissionEnsureOutcome.softDenied;
     }
@@ -497,10 +497,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       if (granted) {
         session.suppressSettingsPrompt = false;
         if (toastContext != null && toastContext.mounted) {
-          AppToast.show(
-            toastContext,
-            UITextConstants.permissionGrantedMessage(label),
-          );
+          AppToast.show(toastContext, ChatText.permissionGrantedMessage(label));
         }
         callback?.call(true);
       } else {
@@ -508,7 +505,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
         if (toastContext != null && toastContext.mounted) {
           AppToast.show(
             toastContext,
-            UITextConstants.permissionStillDeniedMessage(label),
+            ChatText.permissionStillDeniedMessage(label),
           );
         }
         callback?.call(false);
@@ -545,7 +542,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(UITextConstants.permissionPrimerContinue),
+            child: const Text(ChatText.permissionPrimerContinue),
           ),
         ],
       ),

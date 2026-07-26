@@ -1,88 +1,187 @@
-# L3 Story：four-environment-commercial-login-maturity
+# L3 Story：四环境环境商用登录成熟度 (`four-environment-commercial-login-maturity`)
 
-## 功能说明
+> 所属能力：[`onboarding-and-identity-entry`](../spec.md)
 
-本 Story 把全部登录方式（手机号验证码、运营商一键登录、微信、支付宝、QQ、匿名/游客）收敛到**同一套“环境 × 外部依赖”配置契约**下。短信 OTP、运营商号码置换和社交 OAuth 都经防腐接口进入 provider；环境差异只来自受控装配、部署凭据和拓扑。alpha/beta/gamma 允许确定性的固定测试 OTP provider，但不得引入任意验证码放通、验证码回传或可进入 prod 的 Mock 旁路。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-本 Story 不替代 `two-state-one-tap-login--commercial-login-entry`（登录页骨架与手机号/一键的体验验收），而是在其之上补齐：社交三方真实置换、四环境矩阵、首登资料同步、凭证唯一性与 fail-closed 准入。
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 用户价值
+## 1. 用户价值
 
-- 用户可用微信/支付宝/QQ 一键登录，首次登录自动同步第三方昵称与头像到本应用，无需手动填写资料。
-- 同一 OwnerAccount 可并行绑定一个微信、一个支付宝、一个 QQ（每类型至多一个），跨类型可同时绑定。
-- 所有环境的验证码都经 challenge 校验；端云 response、日志和 UI 均不接收或显示验证码。
-- alpha/beta/gamma 默认固定测试码 `123456`，但仍执行有效期、限流、失败与一次性消费；prod 无认证放通后门、无 mock 数据源，登录链路失败时保持 fail-closed。
+作为管理身份、Persona 或关系的用户，
+我希望application contract 覆盖 provider 失败、正常排队和错误验证码拒绝，
+从而安全地维持身份、画像与关系状态。
 
-## 范围
+## 2. 范围与非目标
 
-- 三类外部依赖防腐接口与分环境部署配置：
-  - 短信 OTP：`ExternalInteractionClient` 负责受控投递；验证码只保存 challenge hash，投递明文通过短时密封 `codeRef` 进入 provider 内存。
-  - 运营商一键：`OneTapPhoneResolver` 使用部署注入的运营商能力；未接入时返回结构化不可用。
-  - 社交 OAuth：`ExternalAuthProviderClient` 只装配真实 HTTP provider；凭据缺失时 fail-closed。
-- user-service 社交票据置换：`LoginWithSocialProvider`（wechat/alipay/qq），稳定 credentialKey（unionId 优先），首登创建 owner + primary persona + credential，首登资料同步昵称/头像与昵称去重。
-- 端云契约：`service.yaml` 新增 `LoginWithAlipay`/`LoginWithQq`，`fields.yaml` 扩展 `CredentialType`（alipay/qq），`errors.yaml` 新增社交错误码，codegen 产出 Go/Dart。
-- 端侧：`AuthRepository.loginAlipay/loginQq`、`NativeAuthBridge`、`LoginPage` 三方登录状态流与无死循环；`OtpSendResultData` 不含验证码。
-- 四环境 `config.yaml` 矩阵与门禁：`verify_login_dependency_config.py` 阻断已退休认证旁路。
+### In Scope
 
-## Out of Scope
+- “四环境环境商用登录成熟度”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 三类外部依赖防腐接口与分环境 fail-closed 配置。
+- alpha/beta/gamma 固定测试码 provider 与 prod 真实 provider 的构建隔离。
+- 删除任意验证码、debugCode、sandbox phone allowlist 与 pass-through 旁路。
+- LoginWithSocialProvider 微信/支付宝/QQ 票据置换与首登资料同步。
+- LoginWithAlipay / LoginWithQq metadata 契约与 codegen。
 
-- 不实现 Apple、Passkey 的正式 SDK 登录；仅保留未来扩展所需的防腐层枚举，不提供 App 登录入口、Remote Repository 方法或公开 HTTP 登录路由。
-- 不做第三方头像转存自有 CDN（首登先存厂商头像 URL，留待 media 资产管线）。
-- 不引入第二套登录页或登录路由。
+### Out of Scope
 
-## 四环境 × 三类外部依赖矩阵（真相源）
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-| 依赖 \ 环境 | alpha | beta | gamma | prod |
-|---|---|---|---|---|
-| 短信 OTP 下发 | public plane / alpha runner 固定测试码 `123456` | 默认固定测试 provider，可显式切沙箱/真实 provider | 默认固定测试 provider，可显式切沙箱/真实 provider | 仅真实 provider，缺配置启动失败 |
-| 运营商一键 | App alpha runner contract fixture，不请求 user-service | 部署注入的 resolver，缺失启动失败 | 部署注入的 resolver，缺失启动失败 | 部署注入的 resolver，缺失启动失败 |
-| 社交 OAuth | App alpha runner contract fixture，不请求 user-service | 真实 HTTP provider，缺配置启动失败 | 真实 HTTP provider，缺配置启动失败 | 微信/支付宝/QQ 正式 SDK 与服务端官方签名/令牌置换；缺配置启动失败 |
+## 3. 行为要求
 
-- 端侧 capability 必须区分 `available / notConfigured / clientNotInstalled / probeTimeout / sdkUnavailable / unsupportedPlatform`。未安装客户端或瞬时探测失败时入口保持可发现并就近解释；明确不支持的平台隐藏；beta/gamma/prod 配置或 SDK 缺失由发布门禁阻断，不能靠静默隐藏伪装可用。
+<a id="req-001"></a>
+### REQ-001 四环境环境商用登录成熟度
+
+- application contract 覆盖 provider 失败、正常排队和错误验证码拒绝。
+
+<a id="req-002"></a>
+### REQ-002 短信 OTP challenge、密封传输与固定码校验不泄漏
+
+- application contract 覆盖 provider 失败、正常排队和错误验证码拒绝。
+- API integration 证明 response/outbox 不泄露验证码，provider 只在请求前于内存中解封。
+
+<a id="req-003"></a>
+### REQ-003 社交三方票据置换分环境实现且 prod 使用官方协议
+
+- 三类官方 provider resolver 均有确定性协议测试。
+- prod 微信、支付宝、QQ 均有真实 UAT；未配置凭证只用于验证 fail-closed，不能作为完成证据。
+
+<a id="req-004"></a>
+### REQ-004 社交首登创建账号并同步昵称头像
+
+- 社交首登必须创建身份事实，二次登录必须复用既有账号并恢复原 Persona。
+- owner、primary persona、credential 与昵称头像初始化结果可在真实存储验证。
+
+<a id="req-005"></a>
+### REQ-005 端侧社交登录命中 metadata 且失败不回环
+
+- App 端社交登录 Repository、NativeAuthBridge 和 LoginPage 状态均有 local_contract 覆盖。
+- 授权取消、provider 不可用和服务错误不会触发登录回环。
+- 同一次失败不会同时显示 Toast/Snackbar 与内联反馈。
+
+<a id="req-006"></a>
+### REQ-006 社交 metadata/codegen/错误码契约一致
+
+- LoginWithAlipay / LoginWithQq 为 public operation 且 request/response 由 metadata 生成。
+- CredentialType 枚举包含 alipay/qq。
+- USER.AUTH 社交错误码生成 Dart/Go 常量。
+- 端侧 RemoteAuthRepository 消费生成的 path/pageId，不硬编码。
+- Apple 与 Passkey 不在 public operation、RemoteAuthRepository 或用户服务公开登录路由中； `POST /auth/login/apple` 和 `POST /auth/login/passkey` 必须返回 404。
+- SendOtp、手机号、微信、QQ、支付宝、一键登录和 hint 的 commercial/security/privacy/reliability/telemetry/SLO 均由 ContractGraph 生成；缺生产证据的 provider 必须保持 blocked。
+
+<a id="req-007"></a>
+### REQ-007 凭证唯一性约束契约
+
+- 全局 credential_type+credential_key 唯一。
+- owner 内 owner_id+credential_type 唯一。
+
+<a id="req-008"></a>
+### REQ-008 登录商业可观测、采样与保留契约
+
+- 登录漏斗、各 provider 请求结果、非 2xx 比率、P95 与 USER 错误码在同一 L2 大盘可查。
+- provider 非 2xx 比率超过 2%，或挑战/登录 P95 超过 1.2s/1.5s，连续两个 5 分钟窗口后触发告警。
+- `sys.user.auth.*` 声明成功明细采样、30 天原始明细和 180 天聚合指标保留，并支持 progressive rollout。
+- 登录观测不得依赖已退役的 product-ops `event_records` Mongo 集合；运行时采样和保留必须由正式单轨实现证明。
+
+<a id="req-009"></a>
+### REQ-009 四环境端到端与商用纯净证据
+
+- alpha public plane 与 alpha runner 使用固定码 123456；production App/Service package graph 不可达该 adapter。
+- beta/gamma 固定使用 Port 对等本地认证 Provider，不允许在同一环境切换官方沙箱或真实 Provider。
+- prod 微信、支付宝、QQ 与三网本机号认证均有真实成功证据，且无放通、无验证码回传、无 mock 数据源。
+- 社交首登资料同步真机可见。
+- 配置纯度门禁阻断已退休认证旁路。
+
+<a id="req-010"></a>
+### REQ-010 运营商一键：OneTapPhoneResolver 使用部署注入的运营商能力；未接入时返回结构化不可用
+
+- 运营商一键：`OneTapPhoneResolver` 使用部署注入的运营商能力；未接入时返回结构化不可用。
+- 端侧 capability 必须区分 `available / notConfigured / clientNotInstalled / probeTimeout / sdkUnavailable / unsupportedPlatform`。未安装客户端或瞬时探测失败时入口保持可发现并就近解释。
+- 明确不支持的平台隐藏。
+- beta/gamma 本地 Provider 配置缺失、或 prod 真实 Provider 配置/SDK 缺失，均由发布门禁阻断，不能靠静默隐藏伪装可用。
 - 固定测试 OTP 只允许产生确定性的非生产账号会话；非生产 provider 与固定码不得进入 prod 构建图、SBOM 或运行配置。
 - provider 模式的内部短信提交仅允许 service principal + operation scope + HTTPS/mTLS；`INTEGRATION_SERVICE_MTLS_CA_FILE`、`INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE`、`INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE` 由 Secret Manager/CI 注入，缺失时拒绝装配远端 OTP client。
-
-## 凭证与唯一性
-
-- 全局唯一：`credential_type + credential_key`（一个第三方身份只能绑定一个 owner）。
-- owner 内唯一：`owner_id + credential_type`（一个 owner 每类型至多一个绑定）。
-- credentialKey 由服务端基于 `ExternalIdentity` 生成：优先 `provider:unionid:<unionId>`，否则 `provider:appopenid:<appId>:<openId>`；App 不上传持久厂商账号 ID。
-
-## 首登资料同步
-
-- 首次社交登录创建 owner + primary persona 后，用厂商公开资料初始化：`ownerDisplayName`、`nickname`、`nicknameCustomized=true`、`avatarUrl`（暂存厂商 URL）。取得头像字段不等于端侧展示成功；登录页仅在现有可信 CDN/gateway 候选成功解码后显示头像，原始第三方 URL 不新增白名单。
-- 同步失败不阻断登录：结构化告警 + 默认资料兜底。
-
-## 错误与异常语义
-
-- 社交错误码：`USER.AUTH.wechat_auth_failed` / `alipay_auth_failed` / `qq_auth_failed`（502 retry）、`social_provider_cancelled`（400 surface）、`social_provider_unavailable`（503 surface）。
-- 端侧三方登录失败只在社交方法区域提示并保持登录页可重试；取消由恢复策略吸收且不显示错误，绝不在受限态二次弹登录。
-- 运营商入口采用 `OneTapAvailability` 强类型探测；只有 vendor、短时 token 与有效期组成完整可提交路径时才可见。仅 SDK 初始化、未配置、超时、网络不支持和无 token 探测均静默回退短信，不以用户点击后的失败探测能力。
 - 端侧文案统一走云端 userMessage 优先 → `UserErrorCode` baseline → 通用兜底；不直接读取原始异常字符串。
 - user-service 客户端响应和日志必须脱敏 OAuth URL、authCode、token、secret 与 provider 原始 body；客户端默认不接收 debugMessage。
-
-## 观测、SLO 与灰度
-
-- KPI：各社交 provider 登录成功率、首登资料同步成功率、provider 失败率与凭据配置失败次数。
-- SLO：社交票据置换 P95 <= 1500ms；首登资料同步 P95 <= 1000ms（异步不阻断登录）。
-- 灰度：社交入口和 provider vendor 可按环境/版本/渠道控制；回滚到"仅手机号 + 一键"，不引入身份旁路。
 - `SendOtp`、手机号、微信、QQ、支付宝、一键登录与 hint 操作必须在 metadata 同源声明 commercial/security/privacy/reliability/telemetry/SLO；正式 provider 未取得生产凭据、受控 SDK 与真机 UAT 时保持 `blocked`，不得用本地协议测试改写为 ready。
-- 登录商业大盘与 Alertmanager 规则复用 `http_server_*` / `http_server_error_codes_total` 实际指标；provider 错误率 >2% 或 P95 超标连续两个 5 分钟窗口后告警。原始登录明细 30 天、聚合指标 180 天，成功明细 prod 默认采样 10%，均由 `sys.user.auth.*` 配置治理。
 - 当前只完成上述 `sys.user.auth.*` 配置契约、环境种子和事件 TTL；在 product-ops 运行时消费采样比例并形成 180 天聚合保留的证据补齐前，不得把静态配置声明视为采样策略已生效。
-
-## 当前商业准入状态
-
-- 当前为 `GATE_BLOCK`。`R-AUTH-001` 在微信、QQ、支付宝、阿里云一键登录的生产凭据、受控 SDK、真实网络真机 UAT、provider 后台结果与回滚演练齐全前不得关闭。
+- 微信、QQ、支付宝、阿里云一键登录在生产凭据、受控 SDK、真实网络真机 UAT、provider 后台结果与回滚演练齐全前保持 `GATE_BLOCK`。
 - prod 用户协议/隐私政策必须由法务/运营提供真实获批主体信息并通过 legal-static CLI 生成与线上 URL 探测；不得猜测主体、地址、电话、ICP备案号，也不得把占位包当作登录商用证据。
-- 静态仪表盘/告警/配置契约只证明工程接线存在；没有真实运行窗口、告警触发与回滚演练时，SLO 证据仍为 partial。
 
-## 验收标准
+## 4. 契约引用
 
-- A1：四环境矩阵在 config 与门禁中冻结；已退休认证旁路在任一环境出现即被阻断。
-- A2：社交三方（wechat/alipay/qq）端云链路只使用真实 provider；缺凭证只允许 fail-closed，不以 unavailable 作为商用完成证据。
-- A3：首登创建 owner/persona/credential 并同步昵称头像，昵称去重生效。
-- A4：凭证全局唯一与 owner 内每类型唯一约束生效。
-- A5：端侧 `loginAlipay/loginQq` 命中 metadata path/pageId，社交登录失败/取消不回环。
-- A6：`SendOtp` API、端侧数据模型和 UI 均不包含验证码。
-- A7：mock 隔离、平台分支隔离、登录无死循环门禁全绿。
-- A8：同一社交失败只有一个就近反馈，取消静默恢复；客户端与日志无 secret、authCode、token 和 OAuth URL 泄露。
+- canonical：`quwoquan_service/services/user-service/environments/gamma/config.yaml`
+- canonical：`quwoquan_service/services/user-service/environments/prod/config.yaml`
+- canonical：`quwoquan_service/scripts/verify/verify_login_dependency_config.py`
+- canonical：`quwoquan_service/services/user-service/tests/local_contract/account/authentication_challenge/command_facade__local_contract_test.go`
+- canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/helpers.go`
+- canonical：`quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/external_interaction_mongo_provider__reliability__api_integration_test.go`
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/errors.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml`
+- canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/auth_contract__api_integration_test.go`
+- canonical：`quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 四环境环境商用登录成熟度
+
+- GIVEN 管理身份、Persona 或关系的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“四环境环境商用登录成熟度”对应的公开行为。
+- THEN application contract 覆盖 provider 失败、正常排队和错误验证码拒绝。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+<a id="gwt-003"></a>
+### GWT-003 社交三方票据置换分环境实现且 prod 使用官方协议
+
+- GIVEN 微信、支付宝或 QQ 的有效或失败票据在支持环境中提交。
+- WHEN 对应 provider resolver 执行置换。
+- THEN 非生产使用受控环境配置，prod 只使用官方协议，且未配置凭据时 fail-closed。
+
+<a id="gwt-009"></a>
+### GWT-009 四环境端到端与商用纯净证据
+
+- GIVEN alpha、beta、gamma 与 prod 分别构建并执行登录路径。
+- WHEN 验证固定码、官方 provider、首登资料同步和失败恢复。
+- THEN 非生产 adapter 不可达生产包，prod 只保留真实认证与可复验的真机证据。
+
+## 6. 依赖
+
+- 前置要求：[`onboarding-and-identity-entry`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 社交三方票据置换分环境实现且 prod 使用官方协议
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：三类官方 provider resolver 均有确定性协议测试。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 登录商业可观测、采样与保留契约
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：登录漏斗、各 provider 请求结果、非 2xx 比率、P95 与 USER 错误码在同一 L2 大盘可查。
+- 完成判定：登录漏斗、各 provider 请求结果、非 2xx 比率、P95 与 USER 错误码在同一 L2 大盘可查。
+- provider 非 2xx 比率超过 2%，或挑战/登录 P95 超过 1.2s/1.5s，连续两个 5 分钟窗口后触发告警。
+- `sys.user.auth.*` 声明成功明细采样、30 天原始明细和 180 天聚合指标保留，并支持 progressive rollout。
+
+<a id="open-003"></a>
+### OPEN-003 四环境端到端与商用纯净证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：alpha public plane 与 alpha runner 使用固定码 123456；production App/Service package graph 不可达该 adapter。
+- 完成判定：`GWT-009` 对应行为满足且真实测试 `spec_ref` 有效。

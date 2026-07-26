@@ -1,59 +1,71 @@
-# L2 规格：端侧平台化重构
+# L2 Business Capability：圈子端侧运行边界 (`circle-client-platform`)
 
-## 背景与动机
+> 所属领域：[`circle-community`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-圈子端侧代码当前存在三个结构性问题：
+## 1. 能力目标
 
-1. **目录位置错误**：代码仍在 `lib/features/circles/`，按架构约束应在 `lib/ui/circle/`。
-2. **数据层缺失**：无独立 CircleRepository，圈子数据混在 AppContentRepository 的 mock 中，无法接入云端 API。
-3. **代码质量**：circle_detail_page.dart 存在 40+ 处硬编码视觉字面量（字号/间距/尺寸/圆角），违反编码规范。
+统一圈子端侧领域模型、Repository 边界与页面状态
 
-本 L2 目标：完成圈子端侧的平台化重构，为后续功能迭代（存储空间、群聊、领域对齐）奠定干净的代码基础。
+## 2. 范围与非目标
 
-## 目标用户
+### In Scope
 
-- 开发团队：需要干净的代码架构来高效迭代圈子功能。
+- 由本目录 Story 组合交付“端侧平台化重构”的独立业务结果。
 
-## 功能范围
+### Out of Scope
 
-### L3: directory-migration（目录迁移）
+- 其他 L2 的事实所有权、metadata schema 与实现施工步骤。
 
-- `lib/features/circles/pages/` → `lib/ui/circle/pages/`。
-- 创建 `lib/ui/circle/providers/`、`lib/ui/circle/widgets/`、`lib/ui/circle/models/` 子目录。
-- 更新 `app_router.dart`、`main_app_shell.dart`、`bottom_navigation.dart` 中的 import 路径。
-- 从大 Widget 文件中提取独立组件：CircleCard、ChannelPanel、DiscoveryPostCard、StatChip、ActionButton、MoreMenuItem。
-- 更新 acceptance.yaml 中引用 `features/circles/` 的路径（如 circles-channel-management-panel）。
+## 3. Journey / Scenario 贡献
 
-### L3: circle-repository-creation（Repository 创建）
+- [`JNY-008 / SCN-014`](../../spec.md#scn-014)
+  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
+  - 本能力处理：统一圈子端侧领域模型、Repository 边界与页面状态。
+  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
+  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
 
-- 创建 `lib/cloud/services/circle/circle_repository.dart`：Abstract 接口 + Mock 实现 + Remote 实现。
-- Abstract 接口方法与 service.yaml API 一一对应（listCircles, getCircle, createCircle, joinCircle, leaveCircle, getCircleFeed, getCircleStats, listMembers）。
-- Mock 实现：从 PrototypeMockData 提取圈子数据到 `lib/cloud/services/circle/mock/circle_mock_data.dart`。
-- Remote 实现：使用 CloudRuntimeConfig.gatewayBaseUrl + CloudRequestHeaders。
-- 在 `app_providers.dart` 注册 `circleRepositoryProvider`。
-- 从 AppContentRepository 中移除 circles* 相关接口和实现。
+## 4. Story
 
-### L3: circle-code-quality（代码质量清理）
 
-- circle_detail_page.dart 所有硬编码字面量替换为语义标签。
-- 所有圈子页面 import 改为绝对路径 `package:quwoquan_app/ui/circle/...`。
-- 操作文案硬编码（'分享圈子'、'保存封面'、'举报圈子'）替换为 UITextConstants。
-- 运行 `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py` 对 ui/circle/ 零新增违规。
 
-## 不做什么（Out of Scope）
+- [`circle-client-boundary`](./circle-client-boundary/spec.md)：同一登录主体的圈子详情、成员列表和动态必须来自同一 Repository 模式；切换主体或环境时旧状态必须失效。
 
-- 不做功能变更——纯结构迁移 + 代码质量，用户感知不变。
-- 不做 Remote 实现的实际联调——先保证 Mock 切换正常。
-- 不做状态管理重构（保持现有 ConsumerStatefulWidget 模式，后续按需迁移到 Notifier）。
+## 5. 能力要求
 
-## 约束
+<a id="req-001"></a>
+### REQ-001 circle client platform 能力 SIT
+
+- 本能力必须组合直属 Story 与公开契约，交付“统一圈子端侧领域模型、Repository 边界与页面状态”所定义的业务结果；失败终态必须可区分且不得伪造成功。
+
+<a id="req-002"></a>
+### REQ-002 迁移过程中不得出现功能退化
 
 - 迁移过程中不得出现功能退化。
-- 所有路由路径（/circles、/circle/:id、/circle/:id/stats）保持不变。
-- PrototypeMockData 中的圈子 mock 数据迁移到 circle_mock_data.dart 后，原处删除。
 
-## 验收重点
+## 6. 契约与依赖
 
-- A1（L1）：目录迁移完成，无存量 features/circles/ 引用。
-- A2（L1）：CircleRepository 三层模式创建完成并注册。
-- A7（L1）：硬编码清零，语义化审计通过。
+- 上游能力：[`circle-community`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 circle client platform 能力 SIT
+
+- GIVEN 执行“circle client platform 能力”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“circle client platform 能力”对应动作。
+- THEN 直属 Story 共同交付“统一圈子端侧领域模型、Repository 边界与页面状态”，失败终态可区分且不产生伪成功事实。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 circle client platform 能力 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：统一圈子端侧领域模型、Repository 边界与页面状态。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

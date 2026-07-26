@@ -1,26 +1,61 @@
-# L4 对象任务：inference-api（多场景推理 API）
+# L3 Story：多场景推理 API (`inference-api`)
 
-## 功能说明
+> 所属能力：[`recommendation-service`](../spec.md)
 
-- **入口**：POST /score，请求体含 scenario、userId、sessionId、userFeatures、sessionSignals、candidates、context；响应体含 scores 数组（id、score、detail）。
-- **路由**：按 scenario（content_feed、circle_discovery、friend_suggestion）选择模型与特征解析器；id 对应 contentId、circleId 或 userId。
-- **模型加载**：从 ModelRegistry 或本地/OSS 加载各 scenario 的 production 模型；支持热加载或定期同步。
-- **推理**：LightGBM 批量预测；特征转换与 feature_registry 对齐。
+> Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
 
-## 实现要点
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-- FastAPI 应用；/health 健康检查。
-- 各 scenario 独立模型文件与特征解析模块；未支持 scenario 可返回 501 或规则分兜底。
-- 延迟目标满足 Go 侧预算。
+## 1. 用户价值
 
-## 约束
+作为消费推荐的用户或策略运营者，
+我希望通过 POST /score 接收场景、主体、特征和候选，返回逐候选分数与可解释明细，
+从而获得可解释且受治理的推荐结果。
 
-- 请求/响应与 Go ModelPredictRequest/ModelPredictResponse 契约一致。
-- 仅读特征与模型，不写业务数据。
+## 2. 范围与非目标
 
-## 验收标准
+### In Scope
 
-- A1：POST /score scenario=content_feed 返回正确 scores。
-- A2：推理延迟满足约定。
-- A7：契约与 Go scorer 一致。
-- A8：推理 API 有接口测试。
+- “多场景推理 API”的输入、可观察主路径、失败语义以及与父能力的交接。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 多场景推理 API
+
+- 通过 POST /score 接收场景、主体、特征和候选，返回逐候选分数与可解释明细。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 多场景推理 API
+
+- GIVEN 消费推荐的用户或策略运营者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“多场景推理 API”对应的公开行为。
+- THEN 通过 POST /score 接收场景、主体、特征和候选，返回逐候选分数与可解释明细。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`recommendation-service`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 多场景推理 API 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“多场景推理 API”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

@@ -1,155 +1,183 @@
-# Object Homepage Gamma Real Data Closure
+# L3 Story：对象主页 Gamma 真实数据闭环 (`object-homepage-gamma-real-data-closure`)
 
-## Spec Entry
+> 所属能力：[`intersection-unified-experience`](../spec.md)
+>
+> Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- AppRoot Journey/Scenario: 从首页推荐、搜索、我的主页交集入口进入圈子主页或实体主页，判断“为什么推荐”、查看真实记录/讨论/相关圈子，并完成关注、加入或私信。
-- L1_domain_service: `object-homepage-network`
-- L2_business_capability: `intersection-unified-experience`
-- L3_story: `object-homepage-gamma-real-data-closure`
-- 验收意图: `SIT / GWT / UAT / contract`
-- 测试证据: `local_contract / api_integration / user_acceptance`
-- 当前阶段: `/continue-dev` 下一轮目标规划；本 Story 是圈子主页与实体主页商用重构从本地 UI 到 gamma-local 真实链路的实施门。
+## 1. 用户价值
 
-## 用户价值
+作为浏览或维护对象主页的用户，我希望把圈子主页与实体主页从本地 UI 合格推进到 gamma-local 真实数据、真实服务、真实 App Remote、真实行为观测闭环，从而理解对象关系并完成受权限保护的操作。
 
-用户进入圈子主页或实体主页时，必须能基于真实服务数据判断：
-
-- 这里是什么，是否可信。
-- 实体/圈子「我的交集」与「这里打动的人 / 圈子打动的人」双模块。
-- 谁和我有关，以及证据是否可点开。
-- 我能做什么：关注、加入、私信、查看记录、参与讨论、进入相关圈子。
-
-本 Story 的价值不是再做一个本地 demo，而是让真实/种子数据经由 `Data -> Service -> App -> Behavior -> Recommendation -> Observability -> Environment` 闭环，支撑商用验收。
-
-## 范围
+## 2. 范围与非目标
 
 ### In Scope
 
-- 当前 `/continue-dev` 收口轮次只验证 **homepage-only** 的 `H100 -> H1000` 真实端到端闭环，不把 article/image 的放量链路混入同一批执行。
-- gamma-local 拓扑闭环：`entity-service`、`circle-service` 进入 compose、gateway route、port profile、package、healthcheck、stackctl 验证证据。
-- 端云契约闭环：实体主页、圈子主页、对象交集、相关圈子、打动摘要（内部契约仍为 impact）、关注/加入状态全部走 metadata/service 契约，不在 App 维护第二套模型。
-- 种子与身份闭环：`app_gamma_seed_manifest.json` 覆盖 viewer、用户关系、实体主页、圈子、记录、讨论、相关圈子与对象交集所需数据；api_integration/user_acceptance 使用同一 viewer 和 token 语义。
-- 真实 API 探针：覆盖 `/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/related-groups`、`/circles`、`/circles/{circleId}`、`/impact`、`/content/intersections/object`；前台模块标题必须稳定映射为「这里打动的人 / 圈子打动的人」。
-- App Remote 验收：实体/圈子页面在 remote/gamma 数据模式下消费同一契约，禁止回落到 Dart mock 或 UI 自造主句。
-- 交集事实契约：商用可见理由只消费 `IntersectionReason.primaryText / primarySpans / sampleVisuals / representativeActor / objectVisual / lifecycleState / actionHints / iconKey`；`join(primarySpans.text) == primaryText` 必须可测。
-- 可观测闭环：首页曝光、理由曝光、span 点击、证据展开、关注/加入/私信、Tab 切换、记录点击、错误态和空态都有 `surface/objectType/objectId/reasonId/targetType/targetId/env` 归因。
-- 实体主页 author 阶段默认通过 `cursor_sdk` 使用**最新 `composer`** 模型执行，并记录 startup、throughput、firstPassRate、authoritative ledger 等真实执行证据。
-- 实体主页正文主源闭集冻结为 `Wikipedia + 百度百科 + 搜狗百科 + 今日头条百科`；权威 rank 为 `0/1/2/2`。Wikidata、OSM、百科搜索只做候选发现；Wikivoyage、360、官网、政府、门户、媒体、OTA 不得进入 source plan/source unit/writing pack/`primaryEvidenceRef`。
+- entity-service 与 circle-service 的 gamma-local compose/gateway/package/health/stackctl 闭环。
+- 实体主页、圈子主页、相关圈子、影响摘要、对象交集、关注/加入状态的 metadata-first 端云契约闭环。
+- api_integration 探针覆盖 homepage/circle/intersection/related groups/impact，并验证 primaryText 与 primarySpans。
+- user_acceptance 覆盖推荐入口、搜索入口、我的主页入口、CTA、Tab、错误态和空态。
+- 行为埋点与服务观测覆盖曝光、点击、证据、CTA、错误、空态和环境归因。
 
 ### Out of Scope
 
-- 不在本 Story 建深排平台、premium pool、商业运营后台、支付或预约链路。
-- 不新增 homepage/circle 专属交集 API；优先复用 `/content/intersections/object`，只有 metadata 契约缺字段时才补契约。
-- 不解决 `R-IX01` 到 `R-IX04` 的全量算法与商业策略能力；这些风险只影响推荐精度，不阻塞真实事实展示闭环。
-- 不宣称 prod-ready；通过 gamma-local api_integration、user_acceptance 和 UAT 证据后，才能进入 prod rollout 规格。
-- 不在本轮执行 article/image 的 `H100/H1000` 放量验证；Pinterest image-only 商业线仅保留共享 runtime/composer 的非干扰回归，不纳入本 Story 的完成定义。
+- 深排平台、premium pool、全量商业运营后台、支付或预约链路。
+- 新增 homepage/circle 专属交集 API。
+- prod rollout；本 Story 只到 gamma-local 与商用准入证据。
 
-## 商用成熟度判定
+## 3. 行为要求
 
-本 Story 是“圈子主页与实体主页商用成熟”的阻断门。只有本地 widget/provider 通过，不能判定商用成熟；必须同时满足：
+<a id="req-001"></a>
+### REQ-001 gamma-local 拓扑、网关与健康检查闭环
 
+- metadata 与 compose 静态契约通过。
+- stackctl health 证明 gamma-local gateway 与 entity/circle 服务可访问。
+- stackctl verify 覆盖 api_integration；Patrol runner 缺失时输出明确 user_acceptance 阻断证据。
+
+<a id="req-002"></a>
+### REQ-002 实体主页真实 bundle、简介、相关圈子与关注状态闭环
+
+- homepage bundle、introduction、related-groups 均有 populated api_integration 结果。
+- App Remote 页面不回退 Dart mock，且内部字段不外露。
+- 关注状态刷新后在页面、服务响应和行为埋点中一致。
+
+<a id="req-003"></a>
+### REQ-003 圈子主页真实 detail、impact、成员、讨论与加入状态闭环
+
+- circle list/detail/impact/feed/members 均有 populated api_integration 结果。
+- App Remote 页面不回退 Dart mock，且加入状态刷新一致。
+- 打动摘要只展示 primaryText 风格句，不自造“打动了谁”用户文案。
+
+<a id="req-004"></a>
+### REQ-004 对象交集理由的真实事实行契约
+
+- homepage/circle object intersections 的 api_integration 覆盖鉴权、分页、spans、visuals、action hints 和空结果。
+- objectType=homepage|circle 不退化为 interest/同好 等错误用户语义。
+- feed/search/video-book host surface 的 reason target 必须等于当前业务对象，且不得通过 reason 池随机附着。
+- App 本地合同断言 shared fact row、span 深链与旧链路禁用。
+
+<a id="req-005"></a>
+### REQ-005 行为归因、错误态、空态与推荐回流闭环
+
+- 本地合同覆盖事件属性与禁止普通 click 降级。
+- api_integration 覆盖服务日志、指标和错误码映射。
+- user_acceptance 覆盖未登录、弱网、无理由、无记录、重试和探索 CTA。
+
+<a id="req-006"></a>
+### REQ-006 真实 API 探针：覆盖 `/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/related-groups`、`/circles`、`/circles/{circleId}`、`/impact`、`/content/intersections/object`
+
+- 真实 API 探针：覆盖 `/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/related-groups`、`/circles`、`/circles/{circleId}`、`/impact`、`/content/intersections/object`；前台模块标题必须稳定映射为「这里打动的人 / 圈子打动的人」。
+- App Remote 验收：实体/圈子页面在 remote/gamma 数据模式下消费同一契约，禁止回落到 Dart mock 或 UI 自造主句。
+- 交集事实契约：商用可见理由只消费 `IntersectionReason.primaryText / primarySpans / sampleVisuals / representativeActor / objectVisual / lifecycleState / actionHints / iconKey`；`join(primarySpans.text) == primaryText` 必须可测。
+- 实体主页正文主源闭集冻结为 `Wikipedia + 百度百科 + 搜狗百科 + 今日头条百科`
+- 权威 rank 为 `0/1/2/2`。Wikidata、OSM、百科搜索只做候选发现
+- Wikivoyage、360、官网、政府、门户、媒体、OTA 不得进入 source plan/source unit/writing pack/`primaryEvidenceRef`。
 - 静态拓扑不是 404，也不是只在 compose 中存在；stackctl health 和 api_integration 探针必须证明可访问。
 - App 页面不能用 mock、旧 `EvidenceGroup`、`intersectionPoints` 或本地拼句兜底真实推荐理由。
 - 实体主页不能暴露“统一对象键、对象页模板、来源、灰度 cohort、主页管理”等运维字段。
 - 圈子主页和实体主页的相关二级模块必须可点击、可刷新、可恢复，而不是静态展示。
 - 错误态、空态、未登录、弱网、无理由、无记录都必须有恢复动作和埋点。
-
-## Contract Direction
-
-### Reuse First
-
-- 实体主页继续使用 `quwoquan_service/contracts/metadata/entity/homepage/service.yaml`。
-- 圈子主页继续使用 `quwoquan_service/contracts/metadata/social/circle/service.yaml`。
-- 对象交集继续使用 `quwoquan_service/contracts/metadata/content/post/service.yaml` 中的 `/content/intersections/object`。
-- App 侧继续通过 generated route/path 与 repository 消费契约，不手写第二套 URL、错误码或 DTO。
-
-### Minimum Extensions
-
-仅在现有契约无法表达商用字段时扩展 metadata：
-
-- `HomepageDetailBundle` 缺少公开字段时，只补用户语义字段，不暴露运维字段。
-- `CircleDetailView` 缺少封面、独立头像、成员头像簇、加入状态或 action state 时，先补 read model。
-- `IntersectionReason` 已能表达主句、span、visual、actionHints 时，不新增平行结构。
-- 若 `objectType=homepage` 无法决定地点/学校/公司等细分类，优先由服务端根据 homepage metadata 解析 subtype；不要让 App 临时把用户文案逻辑写死。
-
-### Anti-overdesign
-
-- 不新增 `homepage-intersections` 或 `circle-intersections` 并行接口。
-- 不为旧 demo 建 shim、fallback、allowlist 或兼容层。
-- 不把“相关圈子”做成独立复杂推荐平台；本轮只要求 read model、排序理由、点击/加入闭环。
-- 不把所有商业运营能力前置到本 Story；保留可观测字段和配置来源即可。
-
-## End-to-End Flow
-
-```mermaid
-flowchart LR
-  Data["seed/source data"] --> Service["entity/circle/content services"]
-  Service --> Gateway["gamma-local gateway"]
-  Gateway --> App["App remote repositories"]
-  App --> UI["circle/entity pages"]
-  UI --> Behavior["follow/join/message/click"]
-  Behavior --> Rec["recommendation signals"]
-  UI --> Obs["telemetry and logs"]
-  Service --> Obs
-```
-
-## Implementation Order
-
-1. 规格与契约收口：确认 L2/L3 acceptance、metadata 字段、禁词、端云模型一致。
-2. gamma-local 健康闭环：修复 gateway health、TLS/port/profile、stackctl verify 中断点。
-3. seed 与 API 探针：补齐实体、圈子、相关圈子、打动摘要（impact）、对象交集的 api_integration manifest 和严格断言。
-4. App Remote 串联：确保页面在 remote/gamma 模式下消费真实 bundle、detail、impact、intersection、related groups。
-5. 观测与 UAT：补行为归因、错误/空态、弱网/未登录恢复，输出 user_acceptance 或替代 dry-run 证据。
-6. Exit Review：按规格达成、测试证据、E2E、产品/UX、运营观测、自动化门禁、剩余风险逐项关闭。
-
-## Continue-Dev Task Review
-
-2026-06-25 复审结论：本 Story 的方向满足商用重构入口，但当前任务清单在未补下列切片前不能直接宣称商用成熟。下一轮可以进入开发，但必须按 P0-P6 顺序推进；P0/P1 未绿时，不允许先做 App UI 或新增并行 API。
-
-### P0 gamma-local health first
-
-- 目标：先让 gamma gateway、product-ops gateway、entity-service、circle-service、content-service 在 stackctl health 中可访问。
-- 输入：`docker-compose.gamma-local.yaml`、`quwoquan_ops/environments/local-gamma/Caddyfile`、port profile、stackctl package/health report。
-- 输出：`stackctl health --target gamma-local --scope full` 通过；若仍有 TLS EOF，先修 topology/证书/服务启动，不进入对象页开发。
 - 禁止：绕过 stackctl 手写第二套 curl base URL，或把 health 失败标成 endpoint 空结果。
 
-### P1 manifest and seed contract closure
+## 4. 契约引用
 
-- 目标：补齐 `app_gamma_seed_manifest.json` 与 `run_local_gamma_t3.py`，让 seed refs 与 verified endpoints 覆盖商用对象主页所需最小数据。
-- 必补 endpoints：`/homepages/{homepageId}/related-groups`、`/homepages/{homepageId}/review-summary`、`/circles/{circleId}/impact`、`/circles/{circleId}/members`、`/circles/{circleId}/feed`、`/content/intersections/object?objectType=homepage|circle&objectId=...`。
-- 必补 seed：viewer、relationship、circle membership、related circle、homepage subtype、content anchor、object intersection reason 所需样本必须来自 metadata fixture 或服务 seed 命令。
-- 禁止：为通过探针在脚本里手写第二套业务文档结构；若服务没有 seed 能力，先补 service seed 或 metadata fixture。
+- canonical：`surface/objectType/objectId/reasonId/targetType/targetId/env`
 
-### P2 typed API probes
+## 5. 验收场景
 
-- 目标：`run_local_gamma_t3.py` 不只验证 2xx 和 bytes，还要验证商用字段与语义。
-- 实体断言：Header 字段、简介、相关圈子卡、关注状态、公开字段白名单；不得出现统一对象键、模板、来源、灰度 cohort、主页管理。
-- 圈子断言：独立头像、封面、成员头像簇、成员数、加入状态、impact primaryText、feed/members 可分页。
-- 交集断言：`primaryText` 非空、`join(primarySpans.text) == primaryText`、span target 完整、sample visuals/action hints 可导航、objectType=homepage|circle 不退化为 `interest`/`同好`。
-- 错误断言：未登录、无理由、无记录、服务不可用返回结构化错误和恢复语义，不返回 raw exception。
+<a id="gwt-001"></a>
+### GWT-001 gamma-local 拓扑、网关与健康检查闭环
 
-### P3 metadata-first model decision
+- GIVEN entity-service 和 circle-service 已在 docker-compose.gamma-local.yaml、Caddyfile、port profile 与 package 流程中声明。
+- WHEN 运行 metadata verify、compose config、stackctl health 与 stackctl verify。
+- THEN gateway 可通过 gamma-local public base 访问 entity/circle/content/user 相关端点。
+- THEN health 不再因为 404、路由缺失、TLS EOF 或服务未启动而失败。
 
-- 目标：只在现有 read model 无法表达商用字段时扩 metadata，并先 verify/codegen。
-- 决策：`HomepageDetailBundle`、`CircleDetailView`、`CircleImpactSummary`、`IntersectionReason` 仍是主模型；不新增 `homepage-intersections` 或 `circle-intersections`。
-- 关键风险：`objectType=homepage` 需要服务端从 homepage metadata 解析 subtype，不能让 App 用本地文案或硬编码 route 推断用户语义。
+<a id="gwt-002"></a>
+### GWT-002 实体主页真实 bundle、简介、相关圈子与关注状态闭环
 
-### P4 App Remote and local contract parity
+- GIVEN gamma-local seed 创建可发布的 homepage，并具备 viewer 关系、简介、缩略图、关注状态、相关圈子。
+- WHEN App Remote repository 请求 homepage object-page-bundle、introduction、related-groups，并刷新关注状态。
+- THEN 实体主页 Header、CTA、我的交集、这里打动的人、记录、讨论、相关圈子均来自真实服务。
+- THEN 公开页面不展示统一对象键、模板、内部 sourceRefs/primaryEvidenceRef、灰度 cohort、主页管理等内部字段；仅展示可安全打开的四百科 canonical HTTPS 来源卡。
 
-- 目标：App 的 remote/gamma 页面消费同一契约，local_contract 与 api_integration 字段一一对应。
-- 实体页面：复用现有 `homepage_detail_page_widget` 与 `homepage_repository_contract` 测试资产，补 remote journey 和无内部字段断言。
-- 圈子页面：复用现有 `circle_shell_widget`、`circle_detail_journey` 和 circle repository 测试资产，补 impact、members、join state 刷新断言。
-- 交集组件：继续以 `ObjectIntersectionSection`/`ObjectIntersectionCard` 为共享渲染入口，禁止恢复 `EvidenceGroup` 或 `intersectionPoints` 本地拼句。
+<a id="gwt-003"></a>
+### GWT-003 圈子主页真实 detail、impact、成员、讨论与加入状态闭环
 
-### P5 observability and behavior feedback
+- GIVEN gamma-local seed 创建可访问圈子，并具备成员头像簇、加入状态、影响摘要、记录与讨论。
+- WHEN App Remote repository 请求 circle list/detail/impact/feed/members，并执行 join/leave 状态刷新。
+- THEN 圈子主页 Header、CTA、我的交集、圈子打动的人、记录、讨论、成员均来自真实服务。
+- THEN 圈子头像独立于封面，封面只作为兜底；记录卡最多展示一条推荐理由。
 
-- 目标：页面、API、行为事件、推荐回流和告警同源。
-- 事件归因：曝光、理由曝光、span 点击、证据展开、关注/加入/私信、Tab 切换、记录点击、错误态和空态都带 `surface/objectType/objectId/reasonId/targetType/targetId/env`。
-- 服务观测：health、HTTP error、latency、空结果、鉴权失败、seed/probe failure 都进入 stackctl report 或服务指标。
-- 推荐回流：关注、加入、打开对象、打开讨论、点击相关圈子必须能进入 behavior/recommendation attribution，不降级成普通 click。
+<a id="gwt-004"></a>
+### GWT-004 对象交集理由的真实事实行契约
 
-### P6 exit gate
+- GIVEN homepage 和 circle 都有可校验 viewer relation、sample visuals、span target 与 action hints。
+- WHEN 请求 /content/intersections/object?objectType=homepage|circle&objectId={id}。
+- THEN 每条商用可见理由有 primaryText、primarySpans、target、reasonId、iconKey 或可解析 icon。
+- THEN join(primarySpans.text) == primaryText；无 primaryText 的理由不渲染。
+- THEN displayBinding 与 surface 一致：独立列表为 explicit_link 且有 typed object；对象页/内容卡为 host_implicit 或 host_plain 时不得出现可点击 self-target。
+- THEN 主句禁止 raw stats、泛对象和旧术语：不出现 `2赞1评`、`这条记录`、`TA的内容`、`相关圈子`、`我的连接`。
+- THEN App 不再通过 EvidenceGroup、intersectionPoints 或本地模板拼主句。
 
-- 目标：只有当 local_contract、api_integration、user_acceptance 三层证据齐备时，才可声明对象主页商用准入完成。
-- 最小门禁：feature-tree/acceptance、metadata verify/codegen、compose config、stackctl health、strict gamma probes、App mock isolation、page horizontal quality、相关 Flutter/Go tests。
-- 若 Patrol runner 缺失，只能记录 user_acceptance runner-blocked 或 dry-run 证据，不能宣称自动化 user_acceptance 完成。
+<a id="gwt-005"></a>
+### GWT-005 行为归因、错误态、空态与推荐回流闭环
+
+- GIVEN 用户从推荐、搜索、我的主页交集入口进入对象主页。
+- WHEN 用户浏览理由、点击 span、展开证据、关注/加入/私信、切换 Tab、点击记录，或遇到错误/空态。
+- THEN 所有事件具备 surface、objectType、objectId、reasonId、targetType、targetId、env 归因。
+- THEN 服务端 health、错误码、延迟、空结果、鉴权失败与 App RuntimeFailure/CloudException 映射同源。
+
+## 6. 依赖
+
+- 前置要求：[`intersection-unified-experience`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 gamma-local 拓扑、网关与健康检查闭环
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：metadata 与 compose 静态契约通过。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 实体主页真实 bundle、简介、相关圈子与关注状态闭环
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：homepage bundle、introduction、related-groups 均有 populated api_integration 结果。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 圈子主页真实 detail、impact、成员、讨论与加入状态闭环
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：circle list/detail/impact/feed/members 均有 populated api_integration 结果。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 对象交集理由的真实事实行契约
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：homepage/circle object intersections 的 api_integration 覆盖鉴权、分页、spans、visuals、action hints 和空结果。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-005"></a>
+### OPEN-005 行为归因、错误态、空态与推荐回流闭环
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：本地合同覆盖事件属性与禁止普通 click 降级。
+- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效

@@ -1,7 +1,8 @@
 package es
 
 // IndexSchemaConfig controls how the unified object index is created (settings +
-// mappings). It is supplied by the service from configs/config.yaml so the
+// mappings). It is supplied by the service from its package effective config,
+// rendered from config/schema.yaml plus environments/<env>/config.yaml, so the
 // analyzer chain, sharding and synonyms are auditable and environment-specific.
 type IndexSchemaConfig struct {
 	// NumberOfShards / NumberOfReplicas default to 1 when unset.
@@ -104,6 +105,10 @@ func buildIndexMappings(c IndexSchemaConfig) map[string]any {
 		"visibility":        keywordField(),
 		"quality":           map[string]any{"type": "float"},
 		"updatedAt":         map[string]any{"type": "date"},
+		// Object-specific public presentation fields are retained in _source but
+		// never dynamically indexed. Search/filter truth remains in the explicit
+		// fields above.
+		"payload": map[string]any{"type": "object", "enabled": false},
 		// Cross-object location dimension (R-S05e): geo enables geo_distance
 		// ("附近") recall + distance sort; placeId/placeName carry the place
 		// reference. All optional — only objects with a real location populate them.

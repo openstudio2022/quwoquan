@@ -25,7 +25,7 @@ def test_current_instruction_surface_has_no_retired_runtime_architecture() -> No
 @pytest.mark.parametrize("term", RETIRED_TERMS)
 def test_active_instruction_rejects_retired_term(term: str) -> None:
     issues = scan_instruction_text(
-        "specs/runtime_extension_catalog.md",
+        ".cursor/commands/extend.md",
         f"服务必须使用 {term} 作为当前实现。\n",
     )
     assert issues

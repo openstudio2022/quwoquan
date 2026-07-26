@@ -1,11 +1,12 @@
 // ignore_for_file: avoid_print
 
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
+import 'package:quwoquan_cloud_mock/chat_fixture.dart';
 
 void main() {
   final violations = <String>[];
+  final engine = AlphaChatStateEngine();
 
-  for (final conv in ChatMockData.conversations) {
+  for (final conv in engine.conversationSeeds) {
     if (conv['type']?.toString() != 'group') {
       continue;
     }
@@ -17,10 +18,11 @@ void main() {
     final memberCount = declared is int
         ? declared
         : int.tryParse('$declared') ?? -1;
-    final roster = ChatMockData.membersFor(id);
+    final roster = engine.membersFor(id);
     if (memberCount != roster.length) {
       violations.add(
-        'ChatMockData $id: memberCount=$memberCount roster=${roster.length}',
+        'AlphaChatStateEngine $id: '
+        'memberCount=$memberCount roster=${roster.length}',
       );
     }
   }

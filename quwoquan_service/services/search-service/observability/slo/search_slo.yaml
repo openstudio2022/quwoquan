@@ -1,0 +1,129 @@
+version: 1
+# 搜索 SLI/SLO 声明（单一真相源：本文件 + searchmetrics 指标）。
+# 延迟分位数来自 histogram（search_retrieve_duration_seconds_bucket），禁止用算术
+# 平均代替分位数。告警规则落在单一源 quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+# 的 quwoquan_search 组，expr 直接消费下列指标，阈值与本文件 objective 对齐。
+service: search-service
+domain: search
+
+# 指标真相源（Prometheus，promauto 默认注册表，/metrics 暴露）
+metrics:
+  latency_histogram: search_retrieve_duration_seconds   # labels: mode, bucket, status
+  requests_total: search_retrieve_requests_total        # labels: mode, bucket, status(ok|error)
+  zero_results_total: search_retrieve_zero_results_total # labels: mode, bucket
+  degraded_total: search_retrieve_degraded_total         # labels: mode, bucket
+  term_heat_applied_total: search_retrieve_term_heat_applied_total # labels: bucket
+  feedback_events_total: search_feedback_events_total    # labels: event_type
+  load_shed_total: search_retrieve_load_shed_total       # labels: reason (背压熔断/限流退化)
+  inflight_gauge: search_retrieve_inflight               # 当前在途并发（饱和度）
+  related_terms_cache_total: search_retrieve_related_terms_cache_total # labels: result(hit|miss)
+  product_funnel_source: app-product-telemetry-search-funnel-hourly # SLS scheduled SQL；按 requestId 去重
+
+slis:
+  - id: retrieve_latency
+    description: /search 检索延迟（用户感知），分位数取自 histogram
+    sli: histogram_quantile(q, sum(rate(search_retrieve_duration_seconds_bucket[5m])) by (le))
+    objectives:
+      p50_ms: 80
+      p99_ms: 400
+  - id: availability
+    description: 检索可用性 = 1 - 错误率（status=error / 全部）
+    sli: 1 - sum(rate(search_retrieve_requests_total{status="error"}[5m])) / sum(rate(search_retrieve_requests_total[5m]))
+    objective: 0.995
+  - id: zero_result_rate
+    description: 成功检索中零结果占比（搜索质量负向 SLI）
+    sli: sum(rate(search_retrieve_zero_results_total[5m])) / sum(rate(search_retrieve_requests_total{status="ok"}[5m]))
+    objective_max: 0.15
+  - id: degrade_rate
+    description: 携带降级信号（如 ES 失败回退 native）的检索占比
+    sli: sum(rate(search_retrieve_degraded_total[5m])) / sum(rate(search_retrieve_requests_total{status="ok"}[5m]))
+    objective_max: 0.05
+  - id: load_shed_rate
+    description: 背压边界主动 shed（in-flight 满）占比；受控 503 退化，超阈值说明实例饱和需扩容
+    sli: sum(rate(search_retrieve_load_shed_total[5m])) / (sum(rate(search_retrieve_requests_total[5m])) + sum(rate(search_retrieve_load_shed_total[5m])))
+    objective_max: 0.01
+  - id: inflight_saturation
+    description: 在途并发饱和度（current inflight / max_concurrency_per_instance）；持续高位即扩容触发
+    sli: max(search_retrieve_inflight)
+    objective_max: 256
+  - id: related_terms_cache_hit_rate
+    description: 相关词热点缓存命中率（Mongo 卸载效果，越高越省后端）
+    sli: sum(rate(search_retrieve_related_terms_cache_total{result="hit"}[5m])) / sum(rate(search_retrieve_related_terms_cache_total[5m]))
+    objective_min: 0.5
+  - id: effective_search_success_rate
+    description: 有效搜索成功率 = 产生点击或结果页停留满 3 秒的去重 requestId / query_submit 去重 requestId
+    source: aliyun_sls.app-product-telemetry-search-funnel-hourly
+    sli: effectiveActionRequestCount / querySubmitCount
+    objective_min: 0.35
+  - id: submit_to_first_actionable_result
+    description: 提交到首个非空、可操作结果渲染完成的端到端耗时；零结果不混入成功延迟
+    source: aliyun_sls.app-product-telemetry-search-funnel-hourly.firstActionableHistogram
+    objective:
+      p95_ms: 1500
+  - id: result_to_effective_action_rate
+    description: 结果到有效行动率 = 点击或结果页停留满 3 秒的去重 requestId / 非空结果曝光去重 requestId
+    source: aliyun_sls.app-product-telemetry-search-funnel-hourly
+    sli: effectiveActionRequestCount / nonEmptyResultCount
+    objective_min: 0.20
+
+# AB：experimentBucket 作为所有 SLI 的可切分维度（mode/bucket label）；control vs
+# term_heat 的 zero_result_rate / latency / feedback CTR 可分桶对比做归因与显著性判定。
+ab:
+  experiment_id: search_ranking
+  buckets: [control, term_heat]
+  segmentation_label: bucket
+
+# 高并发负载模型与 SLO（冻结目标；单一真相源）。RPS/分位数在可重复压测校准前为
+# target，压测后由 .qwq_output/env/repo/runs/search-load/** 回填 measured，并据此定容量与 NO-GO 阈值。
+# baseline=日常稳态，peak=业务高峰，spike=突发（营销/热点）。RPS/并发为单 search-service
+# 实例可承载目标；弹性靠水平扩实例 + ES 数据节点/副本，不靠单实例堆叠。
+load_model:
+  version: 1
+  traffic_classes:
+    suggest:
+      description: 输入即时联想；App 本地优先，云侧轻量联想可选
+      path: POST /search (mode=suggest)
+      target_rps: { baseline: 60, peak: 200, spike: 500 }
+      max_concurrency_per_instance: 120
+      server_latency_ms: { p50: 40, p95: 120, p99: 250 }   # search_retrieve_duration_seconds
+      timeout_ms: 800
+      error_rate_max: 0.005
+      degrade_rate_max: 0.05
+      cost_guard: [no_unbounded_wildcard, no_deep_paging, no_script_sort, "limit<=12"]
+    result:
+      description: 正式结果页云侧检索（单源云侧）
+      path: POST /search (mode=result)
+      target_rps: { baseline: 30, peak: 120, spike: 300 }
+      max_concurrency_per_instance: 100
+      server_latency_ms: { p50: 80, p95: 400, p99: 800 }    # 服务端 retrieve（histogram）
+      e2e_p95_ms: 1500                                       # 用户感知端到端（含网关 + 网络）
+      timeout_ms: 1500
+      error_rate_max: 0.005
+      degrade_rate_max: 0.05
+    feedback:
+      description: 点击/曝光/停留反馈写入（非用户感知延迟、best-effort）
+      path: POST /search/feedback
+      target_rps: { baseline: 80, peak: 300, spike: 800 }
+      max_concurrency_per_instance: 150
+      server_latency_ms: { p50: 20, p95: 80, p99: 200 }
+      timeout_ms: 1000
+      error_rate_max: 0.01
+      delivery: best_effort
+    indexing:
+      description: 写时投影增量 + 批量 backfill（异步侧路，不进用户感知延迟）
+      target_docs_per_sec: { incremental: 50, backfill_bulk: 2000 }
+      bulk_batch_docs: { default: 500, backfill: 1000 }
+      index_freshness_seconds_max: 30   # index.refresh_interval 目标（高写入期可调高）
+      redis_consumer_lag_max: 1000      # search→content 信号 stream consumer lag
+      delivery: best_effort
+  shared_objectives:
+    redis_publish_latency_ms_p99_max: 50
+    redis_signal_lag_max: 1000
+    es_search_threadpool_queue_max: 1000   # 超过即背压/429，不得雪崩
+    circuit_open_rate_max: 0.02
+  release_gate:
+    rule: 任一 traffic class 在 peak 档实测分位数/错误率/降级率超目标即 NO-GO；spike 档允许有界降级（429/503）但不得演变为整体不可用（雪崩）。
+    benchmark_source: .qwq_output/env/repo/runs/search-load/**
+    capacity_calibration: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-001
+
+alerts_source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_search

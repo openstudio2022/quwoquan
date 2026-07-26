@@ -95,8 +95,24 @@ class AppTypography {
     expanded: iosSubheadline,
   );
 
-  /// 欢迎页主标题（hero）
-  static const double welcomeHeroTitle = 48.0;
+  // ==================== 欢迎页品牌排版 ====================
+
+  /// 正式品牌展示字体：仓内固定的 Noto Sans SC 可变字体。
+  ///
+  /// 授权、上游 commit 与 SHA-256 由 bundled_fonts_manifest.yaml 审计；
+  /// 原生启动资源也由 Flutter 使用本字体生成，保证接管时字形一致。
+  static const String welcomeBrandFontFamily = 'Noto Sans SC';
+
+  /// 图一 slogan 主视觉字号：标准机 32sp，紧凑屏降至 28sp。
+  static double welcomeSloganResponsive(BuildContext context) =>
+      responsive(context, compact: 28.0, regular: 32.0, expanded: 32.0);
+
+  /// slogan 固定视觉字重约 600。
+  static const FontWeight welcomeSloganWeight = semiBold;
+
+  /// 底部品牌名「趣我圈」：18sp / medium，明显弱于 slogan 的品牌落款。
+  static const double welcomeBrandName = 18.0;
+  static const FontWeight welcomeBrandNameWeight = medium;
 
   // ==================== iOS 语义字号 ====================
   static const double iosLargeTitle = 34.0;

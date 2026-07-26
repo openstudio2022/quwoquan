@@ -7,10 +7,9 @@
     "cachePersistenceRequired": false,
     "allowedOutputConsumption": [
       "same_execution_stage",
-      "derived_release_deployment",
       "verification_evidence"
     ],
-    "derivedDeploymentSnapshots": "env/<env>/release and env/<env>/local/<target>/process",
+    "derivedDeploymentSnapshots": "QWQ_DEPLOY_WORK_ROOT/<target>; .qwq_output retains only run evidence and local process/cache",
     "rebuildSources": [
       "quwoquan_app/configs",
       "quwoquan_app/deploy",
@@ -29,7 +28,7 @@
   "topLevel": {
     "env": {
       "segments": ["alpha", "beta", "gamma", "prod", "repo"],
-      "deploymentChildren": ["runs", "observability", "release", "local"],
+      "deploymentChildren": ["runs", "observability", "local"],
       "repoChildren": ["runs", "observability", "local"],
       "localChildren": ["process", "cache"]
     },

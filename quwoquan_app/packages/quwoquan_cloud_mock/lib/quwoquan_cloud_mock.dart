@@ -1,9 +1,14 @@
 /// 仅供 alpha runner 与 local_contract 使用的 Cloud Mock 装配。
 library;
 
+export 'src/alpha_fixture_seed_reader.dart';
 export 'src/content/alpha_report_command.dart';
+export 'src/content/alpha_report_query.dart';
+export 'src/content/alpha_filter_catalog_query.dart';
 export 'src/content/alpha_media_facets.dart';
 export 'src/content/alpha_outbound_share_writer.dart';
+export 'src/circle/alpha_circle_query_reader.dart';
+export 'src/circle/alpha_circle_lifecycle_facets.dart';
 export 'src/circle/alpha_post_placement_writer.dart';
 export 'src/circle/alpha_membership_facets.dart';
 export 'src/circle/alpha_behavior_fact_writer.dart';
@@ -13,7 +18,23 @@ export 'src/circle/alpha_file_facets.dart';
 export 'src/content/alpha_comment_facets.dart';
 export 'src/content/alpha_post_reaction_facets.dart';
 export 'src/content/alpha_post_publication_writer.dart';
+export 'src/entity/alpha_homepage_facets.dart';
+export 'src/entity/alpha_homepage_review_facets.dart';
+export 'src/user/alpha_contact_discovery_facets.dart';
+export 'src/user/alpha_following_subject_facets.dart';
+export 'src/user/alpha_greeting_request_facets.dart';
+export 'src/user/alpha_persona_relationship_facets.dart';
+export 'src/user/alpha_profile_update_proposal_facets.dart';
+export 'src/user/alpha_fixture_user_resolver.dart';
+export 'src/user/alpha_account_facets.dart';
+export 'src/user/alpha_b1_identity_facets.dart';
+export 'src/user/alpha_subject_follow_facets.dart';
 export 'src/generated/alpha_fixture_bundle.g.dart';
 export 'src/integration/alpha_location_query.dart';
 export 'src/notification/alpha_app_message_facets.dart';
+export 'src/chat/alpha_chat_state_engine.dart';
 export 'src/chat/alpha_message_writer.dart';
+export 'src/rtc/alpha_call_session_facets.dart';
+export 'src/search/alpha_search_facets.dart';
+export 'src/content/alpha_profile_interaction_facets.dart';
+export 'src/tag/alpha_tag_facets.dart';

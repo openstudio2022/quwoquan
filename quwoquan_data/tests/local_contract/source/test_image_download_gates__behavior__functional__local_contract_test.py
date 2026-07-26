@@ -30,7 +30,6 @@ from PIL import Image  # noqa: E402
 from core.image_rules import (  # noqa: E402
     MIN_ENTITY_IMAGES,
     image_caption_quality_issue,
-    image_known_reject_issue,
     is_generic_relevance,
     min_count_issue,
     pixel_size_issue,
@@ -38,8 +37,10 @@ from core.image_rules import (  # noqa: E402
 )
 from core.image_safety import dedupe_image_payloads  # noqa: E402
 from core.image_variants import build_local_variants, image_dimensions  # noqa: E402
+from content.source.contracts import MediaProvenance, ModelReleaseStatus, RightsAuditStatus  # noqa: E402
 from content.source.source_unit import write_source_unit  # noqa: E402
 from core.paths import execution_source_unit_dir  # noqa: E402
+from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
 def _jpeg(seed: int, size=(800, 600)) -> bytes:
@@ -84,17 +85,23 @@ def test_low_quality_image_caption_blocks_garbled_platform_template():
     ) is None
 
 
-def test_known_wrong_place_image_caption_blocks_same_name_collision():
-    assert image_known_reject_issue(
-        "20120430杭州临安浙西大峡谷剑门关水库",
-        entity_id="剑门关",
-        asset_id="剑门关#wrong",
-    ) is not None
-    assert image_known_reject_issue(
-        "剑门关关楼与蜀道峡谷景观",
-        entity_id="剑门关",
-        asset_id="剑门关#ok",
-    ) is None
+def test_media_provenance_derives_model_release_before_rights_audit():
+    provenance = MediaProvenance.from_mapping(
+        {
+            "sourceUrl": "https://upload.wikimedia.org/example.jpg",
+            "license": "CC BY 4.0",
+            "credit": "Example photographer",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+            "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+            "usageScope": "app_publish",
+            "caption": "测试实体丙山景",
+        },
+        vertical="travel",
+    )
+
+    assert provenance.model_release_status is ModelReleaseStatus.NOT_REQUIRED
+    assert provenance.rights_audit_status is RightsAuditStatus.VERIFIED
+    assert not any("modelReleaseStatus" in issue for issue in provenance.rights_audit_issues)
 
 
 # ── Gate 2: 每实体最少图片数 ────────────────────────────────────────
@@ -146,20 +153,21 @@ def test_dedupe_image_payloads_removes_near_duplicates():
 
 # ── Gate 4 + 5 落盘：write_source_unit 持久化 contentType/版权/尺寸/变体 ──
 def test_source_unit_persists_meta_and_variants():
-    obj = Path(tempfile.mkdtemp(prefix="img_gate_obj_")) / "海螺沟"
+    obj = Path(tempfile.mkdtemp(prefix="img_gate_obj_")) / "测试实体丙"
     body = _jpeg(5, size=(1280, 960))
-    execution_id = "20260711--travel-image-download--cn-sichuan--canary-001"
+    execution_id = "20260711--travel-image-download--test-region-b--pilot-001"
+    build_execution_fixture(execution_id)
     manifest = write_source_unit(
         obj,
         execution_id=execution_id,
         ordinal=1,
         source_id="overview_baike",
-        source_md="# 海螺沟\n\n概述",
+        source_md="# 测试实体丙\n\n概述",
         platform="baike",
         source_category="overview_baike",
-        url="https://zh.wikipedia.org/wiki/海螺沟",
-        title="海螺沟（百科）",
-        target_ref="/entity/地点/景区/海螺沟",
+        url="https://zh.wikipedia.org/wiki/测试实体丙",
+        title="测试实体丙（百科）",
+        target_ref="/entity/地点/景区/测试实体丙",
         images=[
             {
                 "bytes": body,
@@ -170,9 +178,9 @@ def test_source_unit_persists_meta_and_variants():
                 "license": "CC BY-SA 3.0",
                 "credit": "Carol",
                 "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
-                "caption": "海螺沟一号冰川",
+                "caption": "测试实体丙一号冰川",
                 "relevance": "支撑低海拔现代冰川核心体验段落",
-                "slug": "海螺沟_1",
+                "slug": "测试实体丙_1",
             }
         ],
     )
@@ -185,6 +193,8 @@ def test_source_unit_persists_meta_and_variants():
     assert asset["contentType"] == "image/jpeg"
     assert asset["license"] == "CC BY-SA 3.0"
     assert asset["termsUrl"].startswith("https://creativecommons.org")
+    assert asset["modelReleaseStatus"] == "not_required"
+    assert not any("modelReleaseStatus" in issue for issue in asset["rightsAuditIssues"])
     assert asset["width"] == 1280 and asset["height"] == 960
     assert asset["relevance"] == "支撑低海拔现代冰川核心体验段落"
     assert asset["variants"], "assets/index.json 应记录多变体"

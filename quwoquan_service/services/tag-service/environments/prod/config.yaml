@@ -1,0 +1,7 @@
+overrides:
+  sys.tag-service.redis.rec.mode: cluster
+  sys.tag-service.redis.rec.tls: true
+secretRefs: {}
+externalBindings:
+  runtime.message.transport:
+    state: enabled

@@ -10,17 +10,20 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.lib.observability import (
     append_log_line,
+    canonical_log_record,
     parse_log_records,
+    run_dir,
     validate_log_payload,
     write_run_manifest,
 )
+from quwoquan_ops.cli.lib.common import artifact_run_dir
 from quwoquan_ops.cli.lib.local_run import resolve_local_run
 from quwoquan_ops.cli.lib.runtime_log_process import run_logged_process
 from quwoquan_ops.gate.verify_observability_envelope import envelope_issues
 from quwoquan_ops.gate.verify_observability_layout import layout_issues
 
 
-def test_compact_deploy_log_accepts_short_fields(tmp_path: Path) -> None:
+def test_canonical_deploy_log_accepts_canonical_writer_fields(tmp_path: Path) -> None:
     root = tmp_path / ".qwq_output"
     run = root / "env" / "gamma" / "observability" / "run-1"
     write_run_manifest(
@@ -34,10 +37,10 @@ def test_compact_deploy_log_accepts_short_fields(tmp_path: Path) -> None:
     append_log_line(
         run / "logs" / "ci" / "stackctl" / "deploy.log",
         {
-            "level": "INFO",
+            "severity": "INFO",
             "step": "package",
             "result": "ok",
-            "msg": "package ready, with comma",
+            "message": "package ready, with comma",
         },
     )
 
@@ -45,36 +48,72 @@ def test_compact_deploy_log_accepts_short_fields(tmp_path: Path) -> None:
     assert envelope_issues(root) == []
 
 
-def test_repeated_context_fields_are_rejected() -> None:
-    issues = validate_log_payload(
+def test_version_and_release_identifiers_are_rejected() -> None:
+    record = canonical_log_record(
         "event",
         {
-            "ts": "2026-07-08T10:00:00Z",
-            "level": "INFO",
-            "msg": "too chatty",
+            "occurredAt": "2026-07-08T10:00:00Z",
+            "severity": "INFO",
+            "message": "too chatty",
             "event": "open",
             "result": "ok",
-            "schema" + "Version": "1",
-            "runId": "run-1",
         },
+        resource={"sourceType": "ops", "service": "stackctl"},
     )
+    record["schema" + "Version"] = "1"
+    record["protocolVersion"] = "1"
+    record["releaseVersion"] = "1"
+    record["releaseId"] = "release-1"
+    issues = validate_log_payload("event", record)
 
-    assert any("forbidden repeated field" in issue for issue in issues)
+    assert any("forbidden field" in issue for issue in issues)
 
 
-def test_attrs_are_size_limited_and_secret_keys_blocked() -> None:
-    issues = validate_log_payload(
+def test_attrs_are_string_only_sanitized_and_secret_keys_dropped() -> None:
+    record = canonical_log_record(
         "exception",
         {
-            "ts": "2026-07-08T10:00:00Z",
-            "level": "ERROR",
-            "msg": "failed",
-            "err": "RuntimeError",
-            "attrs": {"apiToken": "should-not-appear"},
+            "occurredAt": "2026-07-08T10:00:00Z",
+            "severity": "ERROR",
+            "message": "failed",
+            "errorCode": "RuntimeError",
+            "attributes": {
+                "apiToken": "should-not-appear",
+                "protocolVersion": "must-not-appear",
+                "releaseVersion": "must-not-appear",
+                "releaseId": "must-not-appear",
+                "inputKv": {"nested": "retained as text"},
+            },
         },
+        resource={"sourceType": "ops", "service": "stackctl"},
+    )
+    issues = validate_log_payload("exception", record)
+
+    assert issues == []
+    assert record["attributes"] == {
+        "inputKv": '{"nested":"retained as text"}'
+    }
+
+
+def test_canonical_log_rejects_signal_kind_mismatch_and_normalizes_status() -> None:
+    record = canonical_log_record(
+        "access",
+        {
+            "schema": "observability.slim",
+            "logKind": "access",
+            "signal": "service.access.http",
+            "method": "GET",
+            "route": "/content/content/posts/{postId}",
+            "status": 200,
+            "durationMs": 12,
+        },
+        resource={"sourceType": "service", "service": "content-service"},
     )
 
-    assert any("secret-like" in issue for issue in issues)
+    assert record["status"] == "200"
+    assert validate_log_payload("access", record) == []
+    record["signal"] = "service.runtime.process"
+    assert any("does not match" in issue for issue in validate_log_payload("access", record))
 
 
 def test_layout_rejects_unknown_log_kind(tmp_path: Path) -> None:
@@ -102,18 +141,24 @@ def test_layout_rejects_root_side_channel(tmp_path: Path) -> None:
     assert any("old observability root" in issue for issue in layout_issues(root))
 
 
-def test_delimited_log_parser_keeps_message_commas_and_stack_lines() -> None:
+def test_json_log_parser_preserves_message_commas_and_stack_lines() -> None:
+    record = canonical_log_record(
+        "exception",
+        {
+            "occurredAt": "2026-07-08T10:00:00Z",
+            "severity": "ERROR",
+            "errorCode": "APP.SYSTEM.failed",
+            "message": "message, with comma\nat frame one\nat frame two",
+        },
+        resource={"sourceType": "ops", "service": "stackctl"},
+    )
     records, issues = parse_log_records(
         "exception",
-        [
-            "2026-07-08T10:00:00Z,ERROR,APP.SYSTEM.failed,req-1,trace-1,message, with comma",
-            "\tat frame one",
-            "\tat frame two",
-        ],
+        [json.dumps(record)],
     )
 
     assert issues == []
-    assert records[0]["msg"] == "message, with comma\nat frame one\nat frame two"
+    assert records[0]["message"] == "message, with comma\nat frame one\nat frame two"
 
 
 def test_local_run_uses_immutable_id_and_persists_manifest(tmp_path: Path) -> None:
@@ -137,8 +182,66 @@ def test_local_run_uses_immutable_id_and_persists_manifest(tmp_path: Path) -> No
     manifest = json.loads(
         (started.observability_root / "manifest.json").read_text(encoding="utf-8")
     )
+    assert manifest["schema"] == "observability.slim"
+    # 禁止契约信封字段：manifest 不得含已退休标识。
+    forbidden_envelope_fields = {
+        "schema" + "Version",
+        "event" + "Version",
+        "releaseId",
+        "dataReleaseId",
+    }
+    assert set(manifest).isdisjoint(forbidden_envelope_fields)
     assert manifest["runId"] == started.run_id
     assert manifest["target"] == "alpha-local"
+
+
+def test_observability_manifest_never_accepts_release_identifiers(
+    tmp_path: Path,
+) -> None:
+    """禁止契约信封：manifest 不得接受退休 release/version 字段。"""
+    run = tmp_path / ".qwq_output" / "env" / "repo" / "observability" / "run-1"
+
+    write_run_manifest(
+        run,
+        env_name="repo",
+        run_id="run-1",
+        command="verify",
+        target="repo",
+        report_dir=tmp_path / ".qwq_output" / "env" / "repo" / "runs" / "run-1",
+    )
+
+    manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
+    forbidden_envelope_fields = {
+        "schema" + "Version",
+        "event" + "Version",
+        "releaseId",
+        "dataReleaseId",
+    }
+    assert set(manifest).isdisjoint(forbidden_envelope_fields)
+
+
+def test_data_runtime_logs_share_the_repo_observability_root() -> None:
+    assert run_dir("repo", "run-1").parts[-4:] == (
+        "env",
+        "repo",
+        "observability",
+        "run-1",
+    )
+    try:
+        run_dir("data", "run-1")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("data must not create a separate observability root")
+
+
+def test_baseline_report_uses_the_repo_run_root(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / ".qwq_output"))
+
+    report_dir = artifact_run_dir("repo", "verify", target="repo")
+
+    assert report_dir.parent.parts[-3:] == ("env", "repo", "runs")
+    assert report_dir.name.endswith("-verify-repo")
 
 
 def test_runtime_stdout_adapter_emits_valid_runtime_records(tmp_path: Path) -> None:
@@ -163,3 +266,138 @@ def test_runtime_stdout_adapter_emits_valid_runtime_records(tmp_path: Path) -> N
     assert result == 0
     assert layout_issues(root) == []
     assert envelope_issues(root) == []
+    records = [
+        json.loads(line)
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert all(
+        record["resource"] == {
+            "sourceType": "service",
+            "service": "api-edge",
+            "environment": "alpha",
+        }
+        for record in records
+    )
+
+
+def test_runtime_stdout_adapter_never_copies_raw_process_output_into_runtime_logs(
+    tmp_path: Path,
+) -> None:
+    log_path = (
+        tmp_path
+        / ".qwq_output"
+        / "env"
+        / "gamma"
+        / "observability"
+        / "run-1"
+        / "logs"
+        / "service"
+        / "api-edge"
+        / "local"
+        / "runtime.log"
+    )
+
+    result = run_logged_process(
+        [sys.executable, "-c", "print('WARN authorization=secret-token')"],
+        log_path=log_path,
+        event="api-edge",
+    )
+
+    assert result == 0
+    rendered = log_path.read_text(encoding="utf-8")
+    assert "secret-token" not in rendered
+    assert "managed process emitted a non-info line" in rendered
+
+
+def test_runtime_stdout_adapter_writes_explicit_diagnostic_output_outside_observability(
+    tmp_path: Path,
+) -> None:
+    log_path = (
+        tmp_path
+        / ".qwq_output"
+        / "env"
+        / "beta"
+        / "observability"
+        / "run-1"
+        / "logs"
+        / "service"
+        / "app-beta"
+        / "local"
+        / "runtime.log"
+    )
+    diagnostic_path = (
+        tmp_path
+        / ".qwq_output"
+        / "env"
+        / "beta"
+        / "local"
+        / "beta-local"
+        / "process"
+        / "stdout"
+        / "app-beta.log"
+    )
+
+    result = run_logged_process(
+        [sys.executable, "-c", "print('GATE_BLOCK authorization=secret-token')"],
+        log_path=log_path,
+        event="app-beta",
+        diagnostic_log_path=diagnostic_path,
+    )
+
+    assert result == 0
+    assert "secret-token" not in log_path.read_text(encoding="utf-8")
+    assert diagnostic_path.read_text(encoding="utf-8") == "GATE_BLOCK authorization=secret-token\n"
+    assert diagnostic_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_runtime_stdout_adapter_preserves_canonical_service_records(
+    tmp_path: Path,
+) -> None:
+    log_path = (
+        tmp_path
+        / ".qwq_output"
+        / "env"
+        / "gamma"
+        / "observability"
+        / "run-1"
+        / "logs"
+        / "service"
+        / "api-edge"
+        / "local"
+        / "runtime.log"
+    )
+    service_record = {
+        "schema": "observability.slim",
+        "recordId": "srv-1",
+        "occurredAt": "2026-07-19T00:00:00Z",
+        "observedAt": "2026-07-19T00:00:01Z",
+        "logKind": "exception",
+        "severity": "ERROR",
+        "signal": "service.exception.runtime",
+        "message": "request processing failed authorization=secret-token",
+        "resource": {
+            "sourceType": "service",
+            "service": "api-edge",
+            "environment": "gamma",
+            "service.version": "2026.07.19",
+        },
+        "errorCode": "SERVICE.RUNTIME.log_encoding_failed",
+    }
+
+    result = run_logged_process(
+        [sys.executable, "-c", f"print({json.dumps(service_record)!r})"],
+        log_path=log_path,
+        event="api-edge",
+    )
+
+    assert result == 0
+    records = [
+        json.loads(line)
+        for line in log_path.with_name("exception.log").read_text(encoding="utf-8").splitlines()
+    ]
+    assert records[0] | {"message": service_record["message"]} == service_record
+    assert records[0]["message"] == "request processing failed authorization=***"
+    assert "secret-token" not in json.dumps(records)
+    assert "managed process emitted a non-info line" not in log_path.read_text(
+        encoding="utf-8"
+    )

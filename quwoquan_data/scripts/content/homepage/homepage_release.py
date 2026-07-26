@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 import yaml
 from core.io import read_json, write_assistant_task, write_json
+from content.execution.identity import parse_execution_id
 from content.execution.runtime_contract import canonical_sha256, stage_execution_context
 from core.article_package import compute_document_sha256, sha256_file, sha256_text
 from content.post.article.draft_io import PLACEHOLDER_MARKER, is_placeholder
@@ -73,8 +74,8 @@ from content.homepage.homepage_assets import (
     select_homepage_assets,
     write_homepage_media_dispositions,
 )
+from content.homepage.quality_policy import homepage_source_fidelity_limit
 MIN_PAGE_CHARS = 350
-HOMEPAGE_FIDELITY_MAX = 0.92
 # 实体主页底稿下发上限：取消旧的 4000 截断（旧值会把维基百科页在中段截断，
 # Agent 看不到「技术变革 / 相关古迹」等后段章节，导致多级目录与章节缺失）。
 # 放宽到覆盖绝大多数百科页全文，仅兜底极端超长源避免 token 失控。
@@ -213,7 +214,7 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
             gate_body,
             base_text_for_gate,
             carrier="article",
-            max_ratio=HOMEPAGE_FIDELITY_MAX,
+            max_ratio=homepage_source_fidelity_limit(execution_id),
             source_use_mode=str(base.get("sourceUseMode") or "factual_reference_only"),
         )
     )
@@ -229,8 +230,6 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         ).strip(),
     )
     images = [dict(image) for image in selection.publishable]
-    if not images:
-        return [f"{label}: homepage lane 无可发布图片资产"]
     obj = execution_entity_object_dir(execution_id, domain, etype, name)
     obj.mkdir(parents=True, exist_ok=True)
     from core.paths import STAGE_REVIEW, ensure_object_stages
@@ -252,7 +251,7 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         if asset:
             asset["role"] = manifest_role
             assets.append(asset)
-    if not assets:
+    if images and not assets:
         return [f"{label}: homepage asset copy failed"]
     draft_text = _replace_homepage_source_asset_refs(draft_text, assets)
     # 配图确定性注入（主页三段契约）：封面只进 frontmatter；有原图注的图按章节锚点
@@ -324,7 +323,7 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
     )
     cover_asset_id = next(
         (str(a.get("assetId") or "") for a in assets if a.get("role") == "cover"),
-        str((assets[0] or {}).get("assetId") or ""),
+        "",
     )
     final_text = _ensure_homepage_cover_frontmatter(final_text, cover_asset_id)
     final_text = fold_to_simplified(final_text)
@@ -377,6 +376,7 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
                 obj,
                 base,
                 fallback_title=name,
+                source_refs=source_refs,
             )
         )
     except (OSError, ValueError, TypeError) as exc:
@@ -406,6 +406,7 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         {
             "entityRef": entity_ref(domain, etype, name),
             "executionId": execution_id,
+            "vertical": parse_execution_id(execution_id).vertical,
             "sourceCatalogRef": "evidence/source_catalog.json",
             "sourceCatalogSha256": source_catalog_sha,
             "primaryEvidenceRef": primary_evidence_ref,

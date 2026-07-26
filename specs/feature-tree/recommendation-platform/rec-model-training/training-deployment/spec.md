@@ -1,21 +1,61 @@
-# L4 对象任务：training-deployment（训练部署）
+# L3 Story：推荐训练部署 (`training-deployment`)
 
-## 功能说明
+> 所属能力：[`rec-model-training`](../spec.md)
 
-- **训练镜像**：services/rec-model-service/scripts Dockerfile（LightGBM、pymongo、redis 等），供本地或云上训练任务使用。
-- **调度**：PAI-DLC、火山 ML 工作流、cron 或事件驱动；按 scenario/datasetId 提交训练任务。
-- **产出**：模型文件上传 OSS/TOS，元信息写入 rec_model_registry；推理服务（rec-model-service）从 Registry 拉取或挂载。
+> Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
 
-## 实现要点
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-- 训练镜像 Dockerfile 与启动入口（如 train.py --scenario --datasetId）。
-- 文档或脚本：如何提交 PAI-DLC/火山训练任务；环境变量连接 MongoDB/Redis/OSS。
+## 1. 用户价值
 
-## 约束
+作为消费推荐的用户或策略运营者，
+我希望构建可复现训练制品，加载版本化数据与参数，并产出可登记、可回滚的模型候选，
+从而获得可解释且受治理的推荐结果。
 
-- 不硬编码云账号与密钥；与 quwoquan_service 部署方式兼容。
+## 2. 范围与非目标
 
-## 验收标准
+### In Scope
 
-- A1：训练镜像可本地或云上跑通训练并写入 Registry。
-- A8：部署与提交步骤可文档化或脚本化复现。
+- “推荐训练部署”的输入、可观察主路径、失败语义以及与父能力的交接。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 推荐训练部署
+
+- 构建可复现训练制品，加载版本化数据与参数，并产出可登记、可回滚的模型候选。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 推荐训练部署
+
+- GIVEN 消费推荐的用户或策略运营者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“推荐训练部署”对应的公开行为。
+- THEN 构建可复现训练制品，加载版本化数据与参数，并产出可登记、可回滚的模型候选。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`rec-model-training`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 推荐训练部署 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“推荐训练部署”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

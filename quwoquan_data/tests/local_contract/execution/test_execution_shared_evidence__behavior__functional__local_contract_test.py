@@ -18,7 +18,6 @@ PLAN_FROZEN_EVIDENCE = {
     "content_object_index.json",
     "env_ready_report.json",
     "execution_state.json",
-    "token_ledger.json",
     "managed_execution_audit.json",
     "scale_readiness.json",
     "ship_report.json",
@@ -27,7 +26,7 @@ PLAN_FROZEN_EVIDENCE = {
 
 
 def test_plan_frozen_evidence_all_authoritative():
-    """计划冻结的十项 execution 权威证据必须全部登记为 authoritative。"""
+    """计划冻结的 execution 权威证据必须全部登记为 authoritative。"""
     missing = PLAN_FROZEN_EVIDENCE - paths_mod.EXECUTION_SHARED_AUTHORITATIVE_ENTRIES
     assert missing == set(), missing
 
@@ -64,11 +63,11 @@ def test_gate_blocks_unknown_shared_entry(tmp_path):
     assert "未登记" in issues[0]
 
 
-def test_execution_shared_allowlist_is_minimal_ledger_face():
-    """execution `_shared` 只允许跨对象账本和不可重算决策包。"""
+def test_execution_shared_allowlist_is_minimal_evidence_face():
+    """execution `_shared` 只允许不可重算决策包。"""
     assert paths_mod.EXECUTION_SHARED_ALLOWED_ENTRIES == frozenset(
         {
-            *paths_mod.EXECUTION_SHARED_LEDGER_FILENAMES,
+            *paths_mod.EXECUTION_SHARED_DISCOVERY_FILENAMES,
             "baseline_freeze_packet.json",
             "baseline_report.json",
             "explore_packet.json",

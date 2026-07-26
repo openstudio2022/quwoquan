@@ -147,9 +147,9 @@
 
 - `GET /v1/content/feed`（`content.feed.list`，发现页唯一 canonical 路径）
   - SLO：成功率 ≥ 99.5%，p95 ≤ 400ms
-- `GET /v1/content/posts/{postId}/comments`
+- `GET /v1/content/content/posts/{postId}/comments`
   - SLO：成功率 ≥ 99.5%，p95 ≤ 300ms
-- `GET /v1/content/posts/{postId}/counters`
+- `GET /v1/content/content/posts/{postId}/counters`
   - SLO：成功率 ≥ 99.9%，p95 ≤ 120ms
 
 #### 5.2.4 Chat（核心业务对象：Conversation/Message）
@@ -170,7 +170,7 @@
 
 - `POST /v1/ops/events`（体验/行为事件接收）
   - SLO：成功率 ≥ 99.9%，p95 ≤ 200ms（写入可异步落库，但必须幂等）
-- `GET /v1/ops/experiments/{experimentId}/assignments/{subjectKey}`
+- `GET /v1/ops/product_ops/experiments/{experimentId}/assignments/{subjectKey}`
   - SLO：成功率 ≥ 99.9%，p95 ≤ 80ms（建议强缓存）
 
 #### 5.2.7 Assistant（自学习与推理）

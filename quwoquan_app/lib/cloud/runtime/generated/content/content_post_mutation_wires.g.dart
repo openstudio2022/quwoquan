@@ -1,5 +1,5 @@
 // GENERATED FILE — DO NOT EDIT BY HAND.
-// Source: contracts/metadata/content/post/service.yaml (writable_fields per operation).
+// Source: services/content-service/contracts/content/post/operations.yaml (writable_fields per operation).
 // Regenerate: make codegen-app
 
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';

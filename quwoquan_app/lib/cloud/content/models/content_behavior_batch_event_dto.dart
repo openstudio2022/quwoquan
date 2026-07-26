@@ -1,6 +1,6 @@
 /// POST `/content/behaviors` 请求体中 `events[]` 的单条载荷。
 ///
-/// OpenAPI 规范见 `quwoquan_service/contracts/metadata/content/openapi.yaml`
+/// OpenAPI 规范见 `quwoquan_service/services/content-service/contracts/openapi.yaml`
 /// → `BehaviorEvent`（`contentId` / `eventType` / `timestamp` 等）。
 /// 端上另有记录字段（如 `action`、`postId`、`surface`）经 [fromMap] 原样保留。
 class ContentBehaviorBatchEventDto {

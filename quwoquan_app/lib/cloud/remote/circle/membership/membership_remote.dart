@@ -8,7 +8,11 @@ typedef CircleMembershipInvocationContextFactory =
     });
 
 final class RemoteCircleMembershipFacet
-    implements CircleMembershipCommandWriter, CircleMembershipQuery {
+    implements
+        CircleMembershipCommandWriter,
+        CircleMembershipModerationWriter,
+        CircleMembershipQuery,
+        PendingCircleMembershipQuery {
   const RemoteCircleMembershipFacet({
     required this.client,
     required this.invocationContext,
@@ -45,12 +49,45 @@ final class RemoteCircleMembershipFacet
   );
 
   @override
+  Future<CircleMembershipCommandResult> approve(
+    DecideCircleMembershipCommand command,
+  ) => client.circleCircleMembershipApproveCircleMember(
+    command,
+    context: invocationContext(
+      CircleRequestPageIds.approveCircleMember,
+      command: true,
+    ),
+  );
+
+  @override
+  Future<CircleMembershipCommandResult> reject(
+    DecideCircleMembershipCommand command,
+  ) => client.circleCircleMembershipRejectCircleMember(
+    command,
+    context: invocationContext(
+      CircleRequestPageIds.rejectCircleMember,
+      command: true,
+    ),
+  );
+
+  @override
   Future<CircleMembershipPageSlice> listMemberships(
     CircleMembershipListQuery query,
   ) => client.circleCircleMembershipListCircleMemberships(
     query,
     context: invocationContext(
       CircleRequestPageIds.listCircleMemberships,
+      command: false,
+    ),
+  );
+
+  @override
+  Future<CircleMembershipPageSlice> listPendingMemberships(
+    PendingCircleMembershipListQuery query,
+  ) => client.circleCircleMembershipListPendingCircleMemberships(
+    query,
+    context: invocationContext(
+      CircleRequestPageIds.listPendingCircleMemberships,
       command: false,
     ),
   );

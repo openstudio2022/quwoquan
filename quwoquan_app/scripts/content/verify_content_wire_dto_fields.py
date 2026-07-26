@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Compare typed content decoders with metadata fields.yaml / report fields.
 
-Run from repo root: python3 scripts/verify_content_wire_dto_fields.py
+Run from repo root:
+  python3 quwoquan_app/scripts/content/verify_content_wire_dto_fields.py
 
-新端点或新 JSON 响应：先在 contracts/metadata/content/post/projections/ 补 client_projection
-YAML，再执行 quwoquan_service 下 make codegen-app，最后改 ContentRepository；门禁盘点见
-specs/gates/content_domain_dynamic_map_inventory.yaml。
+新端点或新 JSON 响应：先在 quwoquan_service/services/content-service/contracts/content/post/projections/ 补 client_projection
+YAML，再执行 quwoquan_service 下 make codegen-app，最后改 ContentRepository；开放缺口记录在
+metadata-driven-client-data-contract Story，本脚本直接校验代码与 metadata。
 """
 from __future__ import annotations
 
@@ -16,15 +17,6 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-FIELDS_POST = (
-    ROOT
-    / "quwoquan_service"
-    / "contracts"
-    / "metadata"
-    / "content"
-    / "post"
-    / "fields.yaml"
-)
 FIELDS_REPORT = (
     ROOT
     / "quwoquan_service"
@@ -83,16 +75,6 @@ POST_READER_DART = (
     / "content"
     / "post_reader_queries.dart"
 )
-SEARCH_DART = (
-    ROOT
-    / "quwoquan_app"
-    / "lib"
-    / "cloud"
-    / "runtime"
-    / "generated"
-    / "content"
-    / "post_search_item_view_dto.g.dart"
-)
 REPORT_DART = (
     ROOT
     / "quwoquan_app"
@@ -103,37 +85,6 @@ REPORT_DART = (
     / "content"
     / "report_create_request_wire.g.dart"
 )
-
-
-def _entity_field_names(data: dict, entity: str) -> list[str]:
-    ent = data.get("entities", {}).get(entity)
-    if not ent:
-        raise SystemExit(f"entity {entity!r} not found in fields yaml")
-    fields = ent.get("fields") or []
-    out = []
-    for row in fields:
-        if isinstance(row, dict) and row.get("name"):
-            out.append(str(row["name"]))
-    return out
-
-
-def _extract_factory_block(dart: str, factory_name: str) -> str:
-    idx = dart.find(f"factory {factory_name}")
-    if idx < 0:
-        raise SystemExit(f"factory {factory_name} not found")
-    brace = dart.find("{", idx)
-    depth = 0
-    i = brace
-    while i < len(dart):
-        c = dart[i]
-        if c == "{":
-            depth += 1
-        elif c == "}":
-            depth -= 1
-            if depth == 0:
-                return dart[brace : i + 1]
-        i += 1
-    raise SystemExit(f"unclosed factory {factory_name}")
 
 
 def _extract_function_block(dart: str, function_name: str) -> str:
@@ -188,7 +139,6 @@ def _report_create_body_keys(report_yaml: dict) -> set[str]:
 
 
 def main() -> int:
-    post = yaml.safe_load(FIELDS_POST.read_text(encoding="utf-8"))
     comment = yaml.safe_load(FIELDS_COMMENT.read_text(encoding="utf-8"))
     comment_projection = yaml.safe_load(
         COMMENT_PAGE_PROJECTION.read_text(encoding="utf-8")
@@ -206,8 +156,6 @@ def main() -> int:
         for field in (comment_projection.get("fields") or [])
         if str(field).strip()
     )
-    search_fields = set(_entity_field_names(post, "PostSearchItemView"))
-
     comment_block = _extract_function_block(
         COMMENT_DART.read_text(encoding="utf-8"),
         "_decodeCommentListItem(",
@@ -257,32 +205,6 @@ def main() -> int:
             "verify_content_wire_dto_fields: ContentPostDetailSlice decoder uses fields "
             "absent from metadata:\n  "
             + "\n  ".join(sorted(unknown_post_detail)),
-            file=sys.stderr,
-        )
-        return 1
-
-    search_block = _extract_factory_block(
-        SEARCH_DART.read_text(encoding="utf-8"),
-        "PostSearchItemView.fromMap",
-    )
-    search_keys = _map_keys_in_block(search_block)
-    extra_search_ok = {
-        "id",
-        "_id",
-        "type",
-        "body",
-        "thumbnailUrl",
-        "subAccountId",
-        "authorDisplayNameSnapshot",
-        "authorAvatarUrlSnapshot",
-        "displayName",
-        "avatarUrl",
-    }
-    unknown_s = search_keys - search_fields - extra_search_ok
-    if unknown_s:
-        print(
-            "verify_content_wire_dto_fields: PostSearchItemView.fromMap unknown keys:\n  "
-            + "\n  ".join(sorted(unknown_s)),
             file=sys.stderr,
         )
         return 1

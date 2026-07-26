@@ -1,0 +1,76 @@
+kind: aggregate_root
+description: '举报记录。合规审计不可丢失，状态机需 ACID。
+
+  PostgreSQL 存储。支持举报帖子、评论、用户、圈子、消息。
+
+  '
+identity:
+  fields:
+  - id
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: target
+  on_delete: retain
+  reference_fields:
+  - targetType
+  - targetId
+  target_objects:
+  - content.Post
+  - content.Comment
+  - user.Persona
+  - circle.Circle
+  - chat.Message
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: reporter
+  on_delete: retain
+  reference_fields:
+  - reporterId
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: reporterAccount
+  on_delete: retain
+  reference_fields:
+  - reporterAccountId
+  target_object: user.UserAccount
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: reviewer
+  on_delete: retain
+  reference_fields:
+  - reviewerId
+  target_object: user.UserAccount
+capabilities:
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- reporter persona、targetType 与 targetId 创建后不可变
+- 同一 reporter 对同一 target 与 reason 的活动举报按 idempotency key 去重
+- 只有 pending 可以进入 reviewing，只有 reviewing 可以 resolved 或 dismissed
+- reviewer 必须具备 TrustSafety 权限且写入不可篡改审计
+- aggregate、command receipt 与 outbox 必须在同一 PostgreSQL transaction 提交
+lifecycle:
+  states:
+  - pending
+  - reviewing
+  - resolved
+  - dismissed
+  optimistic_concurrency: version
+  idempotency: command_key

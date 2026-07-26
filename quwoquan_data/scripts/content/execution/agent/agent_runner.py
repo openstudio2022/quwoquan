@@ -1,180 +1,94 @@
-"""Execution service extracted from the retired monolithic runner."""
+"""Cursor SDK boundary for one managed execution checkpoint.
+
+The SDK event stream must be drained for completion, but data execution does not
+persist provider billing telemetry.  Evidence is limited to the typed run
+outcome: provider, run ID, result, timing and stable failure semantics.
+"""
 from __future__ import annotations
-from core.runtime_policy import active_runtime_policy
+
 import sys
-from content.execution.support import Any, ExecutionContext, MANAGED_AGENT_TIMEOUT_SECONDS, Path, _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, _CURSOR_BRIDGE_READY_DELAY_SECONDS, _normalize_managed_agent_provider, aggregate_turn_usage, contextmanager, extract_cursor_usage, hashlib, is_cursor_auth_error, json, load_execution_state, os, re, resolve_cursor_api_key, save_execution_state, store, subprocess, tempfile, time
+import time
+from pathlib import Path
+from typing import Any
+
+from core.control_types import AgentFailureKind, AgentProvider, AgentRunStatus
+from core.cursor_credentials import is_cursor_auth_error, resolve_cursor_api_key
+from core.runtime_policy import active_runtime_policy
+from content.execution.agent.managed_workspace import (
+    managed_local_workspace_guard as _managed_local_workspace_guard,
+    redact_managed_secret as _redact_managed_secret,
+    terminate_workspace_cursor_bridges as _terminate_workspace_cursor_bridges,
+)
+from content.execution.context import ExecutionContext, _managed_uses_serial_local_cursor
+
 
 _CURSOR_BRIDGE_MAX_RETRIES = active_runtime_policy().cursor_bridge_max_retries
 _PROCESS_TERMINATION_TIMEOUT_SECONDS = active_runtime_policy().process_termination_timeout_seconds
+_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS = active_runtime_policy().bridge_launch_cooldown_seconds
+_CURSOR_BRIDGE_READY_DELAY_SECONDS = active_runtime_policy().bridge_ready_delay_seconds
 
-def _managed_local_workspace_lock_path(workspace: str) -> Path:
-    digest = hashlib.sha256(workspace.encode("utf-8")).hexdigest()[:16]
-    root = Path(os.environ.get("QWQ_MANAGED_LOCAL_LOCK_DIR", tempfile.gettempdir()))
-    return root / f"qwq-managed-local-{digest}.lock"
 
-@contextmanager
-def _managed_local_workspace_guard(ctx: ExecutionContext):
-    from content.execution.agent.agent_conflicts import _cleanup_managed_local_workspace_conflicts, _cross_task_managed_data_cli_conflicts, _managed_local_workspace_conflicts, _managed_workspace_conflicts_for_provider
-    if not ctx.managed or str(ctx.runtime) != "local":
-        yield
-        return
-    try:
-        import fcntl  # type: ignore
-    except Exception:  # noqa: BLE001
-        yield
-        return
-    workspace = str(Path.cwd())
-    lock_path = _managed_local_workspace_lock_path(workspace)
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as lock_file:
-        try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            lock_file.seek(0)
-            owner = lock_file.read().strip()
-            raise RuntimeError(
-                "another managed-local execution is already running in this workspace"
-                + (f" ({owner})" if owner else "")
-            ) from exc
-        lock_file.seek(0)
-        lock_file.truncate()
-        lock_file.write(
-            json.dumps(
-                {
-                    "pid": os.getpid(),
-                    "executionId": ctx.execution_id,
-                    "startedAt": store.now_iso(),
-                },
-                ensure_ascii=False,
-            )
-        )
-        lock_file.flush()
-        try:
-            conflicts = _managed_workspace_conflicts_for_provider(
-                _managed_local_workspace_conflicts(Path.cwd()),
-                ctx.agent_provider,
-            )
-            if conflicts and ctx.force_clean_workspace_agent_state:
-                cross_task_conflicts = _cross_task_managed_data_cli_conflicts(
-                    conflicts,
-                    execution_id=ctx.execution_id,
-                )
-                cleanup_reports: list[dict[str, Any]] = []
-                if cross_task_conflicts:
-                    observed_report = {
-                        "schema": "quwoquan_data.managed_workspace_cleanup",
-                        "mode": "force_clean_workspace_agent_state_observed_cross_task_after_lock",
-                        "requestedConflictCount": len(conflicts),
-                        "crossTaskConflictCount": len(cross_task_conflicts),
-                        "conflicts": cross_task_conflicts[:20],
-                    }
-                    cleanup_reports.append(observed_report)
-                    cross_task_pids = {
-                        int(item.get("pid") or 0) for item in cross_task_conflicts
-                    }
-                    conflicts = [
-                        item for item in conflicts
-                        if int(item.get("pid") or 0) not in cross_task_pids
-                    ]
-                if conflicts:
-                    cleanup_report = _cleanup_managed_local_workspace_conflicts(conflicts)
-                    cleanup_reports.append(cleanup_report)
-                    conflicts = _managed_workspace_conflicts_for_provider(
-                        _managed_local_workspace_conflicts(Path.cwd()),
-                        ctx.agent_provider,
-                    )
-                    if cross_task_conflicts:
-                        cross_task_pids = {
-                            int(item.get("pid") or 0) for item in cross_task_conflicts
-                        }
-                        conflicts = [
-                            item for item in conflicts
-                            if int(item.get("pid") or 0) not in cross_task_pids
-                        ]
-                state = load_execution_state(ctx.execution_id)
-                reports = state.workspace_cleanup_reports
-                if isinstance(reports, list):
-                    reports.extend(cleanup_reports)
-                    state.workspace_cleanup_reports = reports[-20:]
-                    state.heartbeat_at = store.now_iso()
-                    save_execution_state(state)
-            if conflicts:
-                rendered = "; ".join(
-                    f"{item.get('kind')} pid={item.get('pid')} pgid={item.get('pgid')} "
-                    f"cmd={_redact_managed_secret(str(item.get('command') or ''))[:220]}"
-                    for item in conflicts[:8]
-                )
-                raise RuntimeError(
-                    "managed local workspace conflicts appeared after acquiring lock: "
-                    + rendered
-                )
-            yield
-        finally:
-            lock_file.seek(0)
-            lock_file.truncate()
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-
-def _terminate_workspace_cursor_bridges(workspace: Path) -> None:
-    """Best-effort cleanup for half-started Cursor SDK bridges in this workspace."""
-    from content.execution.agent.agent_worker import _terminate_pid_tree_if_alive
-    try:
-        proc = subprocess.run(
-            ["ps", "-ax", "-o", "pid=,command="],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-    except Exception:  # noqa: BLE001
-        return
-    workspace_text = str(workspace)
-    current_pid = os.getpid()
-    for line in proc.stdout.splitlines():
-        if "cursor-sdk-bridge" not in line or workspace_text not in line:
-            continue
-        parts = line.strip().split(maxsplit=1)
-        if not parts:
-            continue
-        try:
-            pid = int(parts[0])
-        except ValueError:
-            continue
-        if pid <= 0 or pid == current_pid:
-            continue
-        _terminate_pid_tree_if_alive(pid)
-
-def _prompt_cursor_agent_capturing_usage(
+def _prompt_cursor_agent(
     agent_cls: Any,
     prompt: str,
     agent_options: Any,
     *,
     client: Any,
-) -> tuple[Any, list[dict[str, Any]]]:
-    """`Agent.prompt` 等价实现，同时消费事件流捕获 `turn-ended` usage。
-    本地 bridge 不会把 usage 回填到终态 ``RunResult``；authoritative token
-    用量只出现在流式 ``turn-ended`` interaction update 上。这里在等待终态的
-    同时收集全部 turn usage，供 TokenLedger 使用 authoritative 计量。
-    """
+) -> tuple[Any, str]:
+    """Run one prompt and preserve the SDK terminal status explanation."""
     agent = agent_cls.create(agent_options, client=client)
     try:
         run = agent.send(prompt)
-        turn_usages: list[dict[str, Any]] = []
+        terminal_message = ""
         for event in run.events():
-            update = getattr(event, "interaction_update", None)
-            if update is not None and getattr(update, "type", "") == "turn-ended":
-                usage = getattr(update, "usage", None)
-                if usage:
-                    turn_usages.append(dict(usage))
-        result = run.wait()
-        return result, turn_usages
+            message = getattr(event, "sdk_message", None)
+            if (
+                getattr(message, "type", "") == "status"
+                and str(getattr(message, "status", "")).casefold() == "error"
+            ):
+                terminal_message = str(getattr(message, "message", "") or "").strip()
+        return run.wait(), terminal_message
     finally:
         agent.close()
 
-def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str) -> dict[str, Any]:
-    """在当前 workspace 启动 Cursor Agent；只返回终态，推进由父进程校验。"""
+
+def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
+    """Run Cursor SDK and return the sole typed managed-agent result."""
     from content.execution.agent.agent_worker import _terminate_pid_tree_if_alive
-    from content.execution.controller.preflight import _cursor_bridge_error_is_retryable, _cursor_bridge_launch_guard, _patch_cursor_sdk_tool_callback_token
-    from content.execution.context import _managed_uses_serial_local_cursor
+    from content.execution.agent.outcome import AgentRunOutcome
+    from content.execution.controller.preflight import (
+        _cursor_bridge_error_is_retryable,
+        _cursor_bridge_launch_guard,
+        _patch_cursor_sdk_tool_callback_token,
+    )
+
+    provider = AgentProvider.CURSOR_SDK
+
+    def failure(
+        kind: AgentFailureKind,
+        message: str,
+        *,
+        started: bool = False,
+        retryable: bool = False,
+        error_code: str = "",
+        request_id: str = "",
+        attempts: int = 0,
+        warm_attempts: int = 0,
+        duration_ms: int = 0,
+    ) -> AgentRunOutcome:
+        return AgentRunOutcome.failed(
+            kind,
+            provider=provider,
+            message=_redact_managed_secret(message),
+            started=started,
+            retryable=retryable,
+            error_code=error_code,
+            request_id=request_id,
+            attempts=attempts,
+            warm_attempts=warm_attempts,
+            duration_ms=duration_ms,
+        )
+
     try:
         from cursor_sdk import (  # type: ignore
             Agent,
@@ -184,242 +98,184 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str) -> dict[st
             CursorAgentError,
             LocalAgentOptions,
         )
-    except Exception as exc:  # noqa: BLE001
-        return {"started": False, "status": "error", "error": f"cursor_sdk unavailable: {exc}"}
-    # 每次 agent 调用前只从受限 key file reload；SDK 所需环境变量仅作
-    # 当前进程内传递，不是配置来源，也不得写入运行证据。
+    except (ImportError, ModuleNotFoundError) as exc:
+        return failure(
+            AgentFailureKind.SDK_UNAVAILABLE,
+            f"cursor_sdk unavailable: {type(exc).__name__}",
+        )
+
     key = resolve_cursor_api_key()
     if not key:
-        return {
-            "started": False,
-            "status": "error",
-            "error": "cursor API key file missing or invalid",
-        }
+        return failure(
+            AgentFailureKind.CREDENTIAL_INVALID,
+            "cursor API key file missing or invalid",
+        )
     _patch_cursor_sdk_tool_callback_token()
-    result = None
-    turn_usages: list[dict[str, Any]] = []
-    last_error: dict[str, Any] | None = None
+
     workspace = Path.cwd()
+    last_error: AgentRunOutcome | None = None
+    result: Any | None = None
+    terminal_status_message = ""
+    completed_attempt = 0
+    completed_warm_attempt = 0
     auth_reload_used = False
-    for attempt in range(3):
-        client = None
+
+    for attempt in range(_CURSOR_BRIDGE_MAX_RETRIES):
+        client: Any | None = None
         bridge_pids: list[int] = []
-        bridge_retry_requested = False
+        request_bridge_retry = False
         try:
-            if attempt > 0 and _managed_uses_serial_local_cursor(ctx):
+            if attempt and _managed_uses_serial_local_cursor(ctx):
                 _terminate_workspace_cursor_bridges(workspace)
             with _cursor_bridge_launch_guard():
                 client = Client.launch_bridge(
                     workspace=str(workspace),
                     max_retries=_CURSOR_BRIDGE_MAX_RETRIES,
-                    # resolve_cursor_api_key 已从唯一 key file 写入当前进程；
-                    # bridge 只能继承该瞬时值，不能读取第二配置源。
                     allow_api_key_env_fallback=True,
                 )
             owned_bridge = getattr(client, "_owned_bridge", None)
             endpoint = getattr(owned_bridge, "endpoint", None)
             process = getattr(owned_bridge, "process", None)
-            for pid in (
-                getattr(process, "pid", None),
-                getattr(endpoint, "pid", None),
-            ):
+            for pid in (getattr(process, "pid", None), getattr(endpoint, "pid", None)):
                 if isinstance(pid, int) and pid > 0 and pid not in bridge_pids:
                     bridge_pids.append(pid)
             if _CURSOR_BRIDGE_READY_DELAY_SECONDS:
                 time.sleep(_CURSOR_BRIDGE_READY_DELAY_SECONDS)
             if str(ctx.runtime) == "cloud":
-                agent_options = AgentOptions(
+                options = AgentOptions(
                     api_key=key,
-                    model=ctx.model,
+                    model=ctx.model_selection.to_sdk_document(),
                     cloud=CloudAgentOptions(repos=[]),
                 )
             else:
-                agent_options = AgentOptions(
+                options = AgentOptions(
                     api_key=key,
-                    model=ctx.model,
-                    local=LocalAgentOptions(cwd=str(Path.cwd())),
+                    model=ctx.model_selection.to_sdk_document(),
+                    local=LocalAgentOptions(cwd=str(workspace)),
                 )
-            warm_attempts = active_runtime_policy().cursor_warm_attempts
-            for warm_attempt in range(warm_attempts):
+
+            for warm_attempt in range(active_runtime_policy().cursor_warm_attempts):
                 try:
-                    result, turn_usages = _prompt_cursor_agent_capturing_usage(
-                        Agent, prompt, agent_options, client=client
+                    result, terminal_status_message = _prompt_cursor_agent(
+                        Agent,
+                        prompt,
+                        options,
+                        client=client,
                     )
+                    completed_attempt = attempt + 1
+                    completed_warm_attempt = warm_attempt + 1
                     break
                 except CursorAgentError as exc:
                     message = getattr(exc, "message", str(exc))
+                    error_code = str(getattr(exc, "code", "") or "")
+                    request_id = str(getattr(exc, "request_id", "") or "")
                     if is_cursor_auth_error(
                         message,
-                        code=str(getattr(exc, "code", "") or ""),
+                        code=error_code,
                         status=getattr(exc, "status", None),
                     ):
                         reloaded = resolve_cursor_api_key()
                         if not auth_reload_used and reloaded and reloaded != key:
                             auth_reload_used = True
                             key = reloaded
-                            bridge_retry_requested = True
+                            request_bridge_retry = True
                             break
-                        return {
-                            "started": False,
-                            "status": "error",
-                            "error": f"cursor credential invalid (auth): {message}",
-                            "retryable": False,
-                            "authFailure": True,
-                            "errorCode": getattr(exc, "code", None),
-                            "requestId": getattr(exc, "request_id", None),
-                            "attempts": attempt + 1,
-                        }
-                    retryable_bridge = _cursor_bridge_error_is_retryable(
+                        return failure(
+                            AgentFailureKind.CREDENTIAL_INVALID,
+                            f"cursor credential invalid (auth): {message}",
+                            error_code=error_code,
+                            request_id=request_id,
+                            attempts=attempt + 1,
+                            warm_attempts=warm_attempt + 1,
+                        )
+                    retryable = _cursor_bridge_error_is_retryable(
                         message,
-                        code=str(getattr(exc, "code", "") or ""),
+                        code=error_code,
                         explicit_retryable=bool(getattr(exc, "is_retryable", False)),
                     )
-                    last_error = {
-                        "started": False,
-                        "status": "error",
-                        "error": message,
-                        "retryable": retryable_bridge,
-                        "errorCode": getattr(exc, "code", None),
-                        "requestId": getattr(exc, "request_id", None),
-                        "attempts": attempt + 1,
-                        "warmAttempts": warm_attempt + 1,
-                    }
-                    if retryable_bridge and warm_attempt + 1 < warm_attempts:
+                    last_error = failure(
+                        AgentFailureKind.BRIDGE_UNAVAILABLE,
+                        message,
+                        retryable=retryable,
+                        error_code=error_code,
+                        request_id=request_id,
+                        attempts=attempt + 1,
+                        warm_attempts=warm_attempt + 1,
+                    )
+                    if retryable and warm_attempt + 1 < active_runtime_policy().cursor_warm_attempts:
                         time.sleep(2)
                         continue
-                    if attempt < 2 and retryable_bridge:
-                        bridge_retry_requested = True
-                        break
-                    return last_error
+                    request_bridge_retry = retryable
+                    break
                 except RuntimeError as exc:
                     message = f"{type(exc).__name__}: {exc}"
-                    lowered = message.casefold()
-                    retryable_bridge = (
-                        "client has been closed" in lowered
-                        or _cursor_bridge_error_is_retryable(message)
+                    retryable = _cursor_bridge_error_is_retryable(message)
+                    last_error = failure(
+                        AgentFailureKind.BRIDGE_UNAVAILABLE,
+                        message,
+                        retryable=retryable,
+                        attempts=attempt + 1,
+                        warm_attempts=warm_attempt + 1,
                     )
-                    last_error = {
-                        "started": False,
-                        "status": "error",
-                        "error": message,
-                        "retryable": retryable_bridge,
-                        "attempts": attempt + 1,
-                        "warmAttempts": warm_attempt + 1,
-                    }
-                    if retryable_bridge and warm_attempt + 1 < warm_attempts:
+                    if retryable and warm_attempt + 1 < active_runtime_policy().cursor_warm_attempts:
                         time.sleep(2)
                         continue
-                    if attempt < 2 and retryable_bridge:
-                        bridge_retry_requested = True
-                        break
-                    return last_error
+                    request_bridge_retry = retryable
+                    break
                 except Exception as exc:  # noqa: BLE001
-                    message = f"{type(exc).__name__}: {exc}"
-                    retryable_bridge = _cursor_bridge_error_is_retryable(message)
-                    last_error = {
-                        "started": False,
-                        "status": "error",
-                        "error": message,
-                        "retryable": retryable_bridge,
-                        "attempts": attempt + 1,
-                        "warmAttempts": warm_attempt + 1,
-                    }
-                    if retryable_bridge and warm_attempt + 1 < warm_attempts:
-                        time.sleep(2)
-                        continue
-                    if attempt < 2 and retryable_bridge:
-                        bridge_retry_requested = True
-                        break
-                    return last_error
-            if result is not None:
-                break
-            if bridge_retry_requested:
-                if _managed_uses_serial_local_cursor(ctx):
-                    _terminate_workspace_cursor_bridges(workspace)
-                time.sleep(max(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, 2.0) + 0.5 * (attempt + 1))
-                continue
-            return last_error or {
-                "started": False,
-                "status": "error",
-                "error": "Cursor SDK returned no result",
-                "retryable": False,
-                "attempts": attempt + 1,
-            }
+                    return failure(
+                        AgentFailureKind.SDK_EXECUTION_FAILED,
+                        f"{type(exc).__name__}: {exc}",
+                        attempts=attempt + 1,
+                        warm_attempts=warm_attempt + 1,
+                    )
         except CursorAgentError as exc:
             message = getattr(exc, "message", str(exc))
-            # 凭据失效（轮换/过期/plan_required/401/403）单独分流：不计 retryable bridge 预算，
-            # 而是 reload key + 重建 bridge 重试一次；reload 后仍失败才上报"凭据失效"。
+            error_code = str(getattr(exc, "code", "") or "")
+            request_id = str(getattr(exc, "request_id", "") or "")
             if is_cursor_auth_error(
                 message,
-                code=str(getattr(exc, "code", "") or ""),
+                code=error_code,
                 status=getattr(exc, "status", None),
             ):
                 reloaded = resolve_cursor_api_key()
                 if not auth_reload_used and reloaded and reloaded != key:
                     auth_reload_used = True
                     key = reloaded
-                    _terminate_workspace_cursor_bridges(workspace)
-                    time.sleep(max(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, 2.0))
-                    continue
-                return {
-                    "started": False,
-                    "status": "error",
-                    "error": f"cursor credential invalid (auth): {message}",
-                    "retryable": False,
-                    "authFailure": True,
-                    "errorCode": getattr(exc, "code", None),
-                    "requestId": getattr(exc, "request_id", None),
-                    "attempts": attempt + 1,
-                }
-            retryable_bridge = _cursor_bridge_error_is_retryable(
-                message,
-                code=str(getattr(exc, "code", "") or ""),
-                explicit_retryable=bool(getattr(exc, "is_retryable", False)),
-            )
-            last_error = {
-                "started": False,
-                "status": "error",
-                "error": message,
-                "retryable": retryable_bridge,
-                "errorCode": getattr(exc, "code", None),
-                "requestId": getattr(exc, "request_id", None),
-                    "attempts": attempt + 1,
-                }
-            if attempt < 2 and retryable_bridge:
-                if _managed_uses_serial_local_cursor(ctx):
-                    _terminate_workspace_cursor_bridges(workspace)
-                time.sleep(max(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, 2.0) + 0.5 * (attempt + 1))
-                continue
-            return last_error
+                    request_bridge_retry = True
+                else:
+                    return failure(
+                        AgentFailureKind.CREDENTIAL_INVALID,
+                        f"cursor credential invalid (auth): {message}",
+                        error_code=error_code,
+                        request_id=request_id,
+                        attempts=attempt + 1,
+                    )
+            else:
+                retryable = _cursor_bridge_error_is_retryable(
+                    message,
+                    code=error_code,
+                    explicit_retryable=bool(getattr(exc, "is_retryable", False)),
+                )
+                last_error = failure(
+                    AgentFailureKind.BRIDGE_UNAVAILABLE,
+                    message,
+                    retryable=retryable,
+                    error_code=error_code,
+                    request_id=request_id,
+                    attempts=attempt + 1,
+                )
+                request_bridge_retry = retryable
         except RuntimeError as exc:
             message = f"{type(exc).__name__}: {exc}"
-            lowered = message.casefold()
-            retryable_bridge = (
-                "client has been closed" in lowered
-                or _cursor_bridge_error_is_retryable(message)
+            retryable = _cursor_bridge_error_is_retryable(message)
+            last_error = failure(
+                AgentFailureKind.BRIDGE_UNAVAILABLE,
+                message,
+                retryable=retryable,
+                attempts=attempt + 1,
             )
-            last_error = {
-                "started": False,
-                "status": "error",
-                "error": message,
-                "retryable": retryable_bridge,
-                "attempts": attempt + 1,
-            }
-            if attempt < 2 and retryable_bridge:
-                if _managed_uses_serial_local_cursor(ctx):
-                    _terminate_workspace_cursor_bridges(workspace)
-                time.sleep(max(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, 2.0) + 0.5 * (attempt + 1))
-                continue
-            return last_error
-        except Exception as exc:  # noqa: BLE001
-            last_error = {
-                "started": False,
-                "status": "error",
-                "error": f"{type(exc).__name__}: {exc}",
-                "retryable": False,
-                "attempts": attempt + 1,
-            }
-            return last_error
+            request_bridge_retry = retryable
         finally:
             if client is not None:
                 try:
@@ -431,44 +287,62 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str) -> dict[st
                     )
             for pid in bridge_pids:
                 _terminate_pid_tree_if_alive(pid)
+
+        if result is not None:
+            break
+        if not request_bridge_retry or attempt + 1 >= _CURSOR_BRIDGE_MAX_RETRIES:
+            return last_error or failure(
+                AgentFailureKind.NO_RESULT,
+                "Cursor bridge returned no run result",
+                retryable=True,
+                attempts=attempt + 1,
+            )
+        if _managed_uses_serial_local_cursor(ctx):
+            _terminate_workspace_cursor_bridges(workspace)
+        time.sleep(max(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, 2.0) + 0.5 * (attempt + 1))
+
     if result is None:
-        return last_error or {
-            "started": False,
-            "status": "error",
-            "error": "Cursor isolated bridge retry exhausted without a run result",
-            "retryable": True,
-        }
-    status = str(getattr(result, "status", "error"))
+        return last_error or failure(
+            AgentFailureKind.NO_RESULT,
+            "Cursor isolated bridge retry exhausted without a run result",
+            retryable=True,
+        )
+    raw_status = str(getattr(result, "status", AgentRunStatus.ERROR.value))
     result_text = str(getattr(result, "result", "") or "").strip()
-    usage = extract_cursor_usage(result)
-    if not usage.get("available"):
-        usage = aggregate_turn_usage(turn_usages)
-    return {
-        "started": True,
-        "status": status,
-        "error": None if status == "finished" else (
-            f"agent status={status}: {result_text[:1600]}" if result_text else f"agent status={status}"
-        ),
-        "result": result_text[:4000],
-        "agentId": getattr(result, "agent_id", None),
-        "runId": getattr(result, "id", None),
-        "durationMs": int(getattr(result, "duration_ms", 0) or 0),
-        "usedTokens": int(usage.get("usedTokens") or 0),
-        "costUsd": float(usage.get("costUsd") or 0.0),
-        "usageMeasurementMode": str(usage.get("source") or "") if usage.get("available") else "",
-    }
-
-def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str) -> dict[str, Any]:
-    _normalize_managed_agent_provider(ctx.agent_provider)
-    outcome = _default_managed_agent_runner(ctx, prompt)
-    outcome.setdefault("agentProvider", "cursor_sdk")
-    return outcome
-
-def _redact_managed_secret(text: str) -> str:
-    text = re.sub(r"crsr_[A-Za-z0-9_-]+", "<redacted-cursor-key>", str(text or ""))
-    text = re.sub(
-        r"(--tool-callback-auth-token\s+)[^\s]+",
-        r"\1<redacted-token>",
-        text,
+    duration_ms = int(getattr(result, "duration_ms", 0) or 0)
+    if raw_status != AgentRunStatus.FINISHED.value:
+        return failure(
+            (
+                AgentFailureKind.PROVIDER_REJECTED
+                if terminal_status_message
+                else AgentFailureKind.SDK_EXECUTION_FAILED
+            ),
+            terminal_status_message
+            or (
+                f"agent status={raw_status}: {result_text[:1600]}"
+                if result_text
+                else f"agent status={raw_status}"
+            ),
+            started=True,
+            error_code=(
+                AgentFailureKind.PROVIDER_REJECTED.value
+                if terminal_status_message
+                else AgentFailureKind.SDK_EXECUTION_FAILED.value
+            ),
+            duration_ms=duration_ms,
+            attempts=completed_attempt,
+            warm_attempts=completed_warm_attempt,
+        )
+    return AgentRunOutcome.finished(
+        provider=provider,
+        result_text=result_text[:4000],
+        agent_id=str(getattr(result, "agent_id", "") or ""),
+        run_id=str(getattr(result, "id", "") or ""),
+        duration_ms=duration_ms,
+        attempts=completed_attempt,
+        warm_attempts=completed_warm_attempt,
     )
-    return text
+
+
+def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str):
+    return _default_managed_agent_runner(ctx, prompt)

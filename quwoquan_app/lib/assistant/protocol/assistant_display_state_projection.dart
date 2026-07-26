@@ -2,7 +2,8 @@ import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 
 const String assistantDisplayStateField = 'displayState';
 
@@ -252,10 +253,11 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
               ? frame!.references
               : snapshot.acceptedReferences)
           .where(
-            (item) =>
-                item.title.trim().isNotEmpty ||
-                item.url.trim().isNotEmpty ||
-                item.source.trim().isNotEmpty,
+            (item) => hasUsableCitationDestination(
+              item.destination,
+              title: item.title,
+              source: item.source,
+            ),
           )
           .toList(growable: false);
   final summary = _resolveRetrievalSummary(frame: frame, snapshot: snapshot);
@@ -279,7 +281,7 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
       ? snapshot.processedDocumentCount
       : acceptedCount;
   final statsLabel = (processedCount > 0 || acceptedCount > 0)
-      ? UITextConstants.assistantProcessReferenceDigestTemplate
+      ? AssistantText.assistantProcessReferenceDigestTemplate
             .replaceFirst('%s', processedCount.toString())
             .replaceFirst('%s', acceptedCount.toString())
       : '';
@@ -400,7 +402,9 @@ String _resolveRetrievalSummary({
 bool _isLowSignalRetrievalSummary(String text) {
   final normalized = text.trim();
   if (normalized.isEmpty) return false;
-  return normalized == '已完成处理' || normalized == '处理完成';
+  return normalized == '已完成处理' ||
+      normalized == '处理完成' ||
+      normalized == '已完成资料筛选并进入成答';
 }
 
 ProcessTimelineFrame? _frameForStep(
@@ -620,9 +624,11 @@ List<RetrievalProcessingReference> _mergeRetrievalReferences(
     ...existing,
     ...incoming,
   ]) {
-    final key = reference.url.trim().isNotEmpty
-        ? reference.url.trim()
-        : '${reference.source.trim()}:${reference.title.trim()}';
+    final key = citationReferenceKey(
+      reference.destination,
+      source: reference.source,
+      title: reference.title,
+    );
     if (key.trim().isEmpty || merged.containsKey(key)) {
       continue;
     }
@@ -651,10 +657,11 @@ bool _hasVisibleProcessBlock(AssistantProcessDisplayBlock block) {
         (item) => item.title.trim().isNotEmpty || item.body.trim().isNotEmpty,
       ) ||
       block.references.any(
-        (reference) =>
-            reference.title.trim().isNotEmpty ||
-            reference.url.trim().isNotEmpty ||
-            reference.source.trim().isNotEmpty,
+        (reference) => hasUsableCitationDestination(
+          reference.destination,
+          title: reference.title,
+          source: reference.source,
+        ),
       );
 }
 

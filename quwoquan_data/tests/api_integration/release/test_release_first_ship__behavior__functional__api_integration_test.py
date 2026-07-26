@@ -34,7 +34,7 @@ def _release(
         "schema": "quwoquan_data.release",
         "releaseId": release_id,
         "releaseKind": release_kind,
-        "executionIds": ["20260715--travel-homepage-coverage--cn-zhejiang--m1-001"],
+        "executionIds": ["20260715--travel-homepage-coverage--test-region-a--scale-001"],
     })
     write_json(release / "payload" / "desired_state.json", desired)
     write_json(release / "payload" / "sample_bundle.json", {
@@ -66,11 +66,10 @@ def _target(
         target_name=f"{env.value}-test",
         mode=EnvironmentReleaseMode.LOCAL_IMPORT,
         mongo_uri="mongodb://topology.test",
+        user_postgres_dsn="postgres://topology.test/quwoquan",
         media_sync_root=root / "environment-media",
         media_base_url=f"https://{env.value}-image.quwoquan-env.test",
         api_base_url=f"https://{env.value}-api.quwoquan-env.test",
-        entity_reload_url="",
-        auth_token="",
         missing_requirements=(),
     )
 
@@ -83,6 +82,7 @@ def _patch_roots(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
         "resolve_environment_release_target",
         lambda env: _target(root, DeploymentEnvironment(env)),
     )
+    monkeypatch.setattr(handler, "require_environment_readiness", lambda **_kwargs: None)
 
 
 def test_apply_writes_append_only_environment_run(
@@ -96,7 +96,7 @@ def test_apply_writes_append_only_environment_run(
         env="gamma",
         run_id="apply-1",
         import_to_db=False,
-        full_sync=False,
+        full_sync=True,
         dry_run=True,
         confirm_prod_apply=False,
     )
@@ -115,6 +115,11 @@ def test_apply_import_enforces_release_desired_state(
     _release(tmp_path)
     _patch_roots(monkeypatch, tmp_path)
     calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        handler,
+        "_run_creator_importer",
+        lambda **kwargs: calls.append({"kind": "creator", **kwargs}) or kwargs["run"] / "creator-import.json",
+    )
     monkeypatch.setattr(handler, "_run_content_importer", lambda **kwargs: calls.append({"kind": "content", **kwargs}))
     monkeypatch.setattr(
         handler,
@@ -134,19 +139,21 @@ def test_apply_import_enforces_release_desired_state(
         env="gamma",
         run_id="apply-sync",
         import_to_db=True,
-        full_sync=False,
+        full_sync=True,
         dry_run=False,
         confirm_prod_apply=False,
     ))
 
-    assert len(calls) == 2
-    assert calls[0]["kind"] == "content"
-    assert calls[0]["mode"] == "upsert"
-    assert calls[0]["delete_policy"] == "none"
-    assert calls[1]["kind"] == "homepage"
-    assert calls[1]["mode"] == "upsert"
+    assert len(calls) == 3
+    assert calls[0]["kind"] == "creator"
+    assert calls[1]["kind"] == "content"
+    assert calls[1]["mode"] == "sync"
+    assert calls[1]["delete_policy"] == "tombstone"
+    assert calls[1]["creator_receipt"] == calls[0]["run"] / "creator-import.json"
+    assert calls[2]["kind"] == "homepage"
+    assert calls[2]["mode"] == "sync"
     assert calls[0]["mongo_uri"] == "mongodb://topology.test"
-    assert calls[1]["media_base_url"] == "https://gamma-image.quwoquan-env.test"
+    assert calls[2]["media_base_url"] == "https://gamma-image.quwoquan-env.test"
     applied = read_json(
         tmp_path / "env/gamma/runs/data-release/release-a/apply-sync/applied_ref.json"
     )
@@ -154,29 +161,29 @@ def test_apply_import_enforces_release_desired_state(
     assert applied["releaseRef"] == "data/releases/release-a"
 
 
-def test_apply_full_sync_requires_explicit_flag(
+def test_apply_rejects_missing_full_sync_flag(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _release(tmp_path)
     _patch_roots(monkeypatch, tmp_path)
     calls: list[dict[str, object]] = []
+    monkeypatch.setattr(handler, "_run_creator_importer", lambda **kwargs: calls.append({"kind": "creator", **kwargs}) or kwargs["run"] / "creator-import.json")
     monkeypatch.setattr(handler, "_run_content_importer", lambda **kwargs: calls.append(kwargs))
     monkeypatch.setattr(handler, "_run_homepage_importer", lambda **kwargs: calls.append({"kind": "homepage", **kwargs}))
 
-    handler._apply_release(argparse.Namespace(
-        release_id="release-a",
-        env="gamma",
-        run_id="apply-full-sync",
-        import_to_db=True,
-        full_sync=True,
-        dry_run=False,
-        confirm_prod_apply=False,
-    ))
+    with pytest.raises(SystemExit, match="immutable release requires --full-sync"):
+        handler._apply_release(argparse.Namespace(
+            release_id="release-a",
+            env="gamma",
+            run_id="apply-without-full-sync",
+            import_to_db=True,
+            full_sync=False,
+            dry_run=False,
+            confirm_prod_apply=False,
+        ))
 
-    assert calls[0]["mode"] == "sync"
-    assert calls[0]["delete_policy"] == "tombstone"
-    assert calls[1]["mode"] == "sync"
+    assert calls == []
 
 
 def test_rollback_writes_resolvable_release_ref(
@@ -208,13 +215,18 @@ def test_rollback_writes_resolvable_release_ref(
     assert result["status"] == "dry_run"
 
 
-def test_rollback_import_reloads_entity_service(
+def test_rollback_import_applies_all_release_owners(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _release(tmp_path)
     _patch_roots(monkeypatch, tmp_path)
     calls: list[str] = []
+    monkeypatch.setattr(
+        handler,
+        "_run_creator_importer",
+        lambda **_kwargs: calls.append("creator") or tmp_path / "creator-import.json",
+    )
     monkeypatch.setattr(
         handler,
         "_run_content_importer",
@@ -224,43 +236,6 @@ def test_rollback_import_reloads_entity_service(
         handler,
         "_run_homepage_importer",
         lambda **_kwargs: calls.append("homepage"),
-    )
-
-    def _reload(
-        url: str,
-        *,
-        authorization_header: str,
-        release_id: str,
-        run: Path,
-    ) -> Path:
-        assert authorization_header == "Bearer test-release-operator"
-        calls.append(f"reload:{url}:{release_id}")
-        report = run / "entity-reload.json"
-        write_json(report, {"ok": True})
-        return report
-
-    monkeypatch.setattr(handler, "_trigger_entity_reload", _reload)
-    reload_target = _target(tmp_path)
-    monkeypatch.setattr(
-        handler,
-        "resolve_environment_release_target",
-        lambda _env: EnvironmentReleaseTarget(
-            environment=reload_target.environment,
-            target_name=reload_target.target_name,
-            mode=reload_target.mode,
-            mongo_uri=reload_target.mongo_uri,
-            media_sync_root=reload_target.media_sync_root,
-            media_base_url=reload_target.media_base_url,
-            api_base_url=reload_target.api_base_url,
-            entity_reload_url="https://gamma-entity.quwoquan-env.test",
-            auth_token="",
-            missing_requirements=reload_target.missing_requirements,
-        ),
-    )
-    monkeypatch.setattr(
-        handler,
-        "_authorization_header_for_target",
-        lambda _target: "Bearer test-release-operator",
     )
 
     handler._rollback_release(argparse.Namespace(
@@ -274,14 +249,10 @@ def test_rollback_import_reloads_entity_service(
     ))
 
     assert calls == [
+        "creator",
         "content",
         "homepage",
-        "reload:https://gamma-entity.quwoquan-env.test:release-a",
     ]
-    assert read_json(
-        tmp_path
-        / "env/gamma/runs/data-release/release-a/rollback-reload/entity-reload.json"
-    )["ok"] is True
 
 
 def test_release_contract_is_environment_neutral_and_create_once(tmp_path: Path) -> None:
@@ -359,7 +330,14 @@ def test_media_sync_reads_only_release_media_closure(
     assert read_json(run / "media-sync.json")["failed"] == 0
 
 
-@pytest.mark.parametrize("environment", [DeploymentEnvironment.BETA, DeploymentEnvironment.GAMMA])
+@pytest.mark.parametrize(
+    "environment",
+    [
+        DeploymentEnvironment.ALPHA,
+        DeploymentEnvironment.BETA,
+        DeploymentEnvironment.GAMMA,
+    ],
+)
 def test_ship_verify_uses_environment_topology_without_manual_network_arguments(
     environment: DeploymentEnvironment,
     tmp_path: Path,
@@ -397,7 +375,7 @@ def test_ship_verify_uses_environment_topology_without_manual_network_arguments(
         return output
 
     monkeypatch.setattr(handler, "write_homepage_api_verification", _verify)
-    handler._verify_homepages(
+    handler._verify_release_consumers(
         argparse.Namespace(
             release_id=release.name,
             env=environment.value,
@@ -455,7 +433,7 @@ def test_ship_verify_empty_baseline_proves_isolated_removal(
         return output
 
     monkeypatch.setattr(handler, "write_baseline_api_verification", _verify_baseline)
-    handler._verify_homepages(
+    handler._verify_release_consumers(
         argparse.Namespace(
             release_id=release.name,
             env="gamma",

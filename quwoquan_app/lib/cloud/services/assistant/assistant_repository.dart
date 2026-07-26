@@ -1,732 +1,97 @@
-import 'dart:convert';
+/// Assistant 域 production Remote 适配器（B8 批次阶段 3a 拆分产物）。
+///
+/// 一个 Remote 类实现 8 个对象级窄 Facet（与 content 域 RemoteContentRepository
+/// 同构）；接口与共享类型见 `assistant_facets.dart`。alpha/test 替身位于
+/// `test/support/cloud_services/assistant_facets_mock.dart`，production 不可达。
+///
+/// B8 阶段 3b 错误单轨：读接口失败一律抛经 [CloudErrorMapper] 收口的
+/// `CloudException`，不再本地合成 fallback 结果；批量学习上报保留部分成功
+/// 语义但不静默单条失败；遥测类上报（页面上下文）保留结构化降级 ack。
+library;
 
-import 'package:crypto/crypto.dart';
+import 'dart:convert';
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_request_page_ids.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import 'package:quwoquan_app/cloud/runtime/transport/cloud_retry_policy.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_run_stream_event.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
-import 'package:quwoquan_app/cloud/services/assistant/mock/assistant_prototype_fixture.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
-    show
-        AssistantInteractionReportBatchAck,
-        AssistantPolicyView,
-        AssistantEntryPersonalizationChipView,
-        AssistantEntryPersonalizationView,
-        AssistantCreationSuggestRequest,
-        AssistantCreationSuggestResponse,
-        AssistantReportPageContextRequestWire,
-        AssistantScorecardReportBatchAck,
-        AssistantSearchCitationView,
-        AssistantSearchResultView,
-        AssistantSearchXiaoquRequestWire,
-        AssistantSuggestedHomepageView,
-        AssistantSkillCatalogItemView,
-        AssistantUserMemoryView,
-        AssistantUserTaskView,
-        InteractionEvent,
-        PageContextAck,
-        SuggestedAction,
-        SuggestedActionListView,
-        Scorecard;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart'
-    show AssistantConversationWire;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart'
-    show AssistantStreamEventWire;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart'
-    show AssistantTurnEnvelopeWire;
-export 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart'
-    show
-        SkillSubscriptionDestinationWire,
-        SkillSubscriptionSearchQueryPlanWire,
-        SkillSubscriptionTriggerWire,
-        SkillSubscriptionWire;
-export 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart'
-    show ToolUseWire;
+export 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart'
+    show AssistantConsentStore;
+export 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 
-part 'assistant_creation_suggest.dart';
+part 'assistant_repository_consent.dart';
+part 'assistant_repository_conversation_run.dart';
+part 'assistant_repository_experience.dart';
+part 'assistant_repository_learning.dart';
+part 'assistant_repository_preferences.dart';
+part 'assistant_repository_search.dart';
+part 'assistant_repository_subscriptions.dart';
 
-const String kPersonalContentAccessSkillId = 'personal_content_access';
-
-/// Assistant 任务/记忆等列表接口单次拉取条数（与网关约定一致，非 [CloudApiDefaults.pageLimit]）。
-const int _kAssistantListPageDefaultLimit = 32;
-
-/// Assistant 技能目录单次拉取条数。
-const int _kAssistantSkillCatalogDefaultLimit = 64;
-
-/// Assistant 技能订阅列表单次拉取条数。
-const int _kAssistantSkillSubscriptionsDefaultLimit = 20;
-
-class AssistantSkillConsent {
-  const AssistantSkillConsent({
-    required this.skillId,
-    required this.grantedScope,
-    required this.granted,
-    required this.updatedAt,
-  });
-
-  final String skillId;
-  final String grantedScope;
-  final bool granted;
-  final DateTime updatedAt;
-
-  factory AssistantSkillConsent.fromJson(Map<String, dynamic> json) {
-    final revokedAt = (json['revokedAt'] ?? '').toString().trim();
-    return AssistantSkillConsent(
-      skillId: (json['skillId'] ?? '').toString().trim(),
-      grantedScope:
-          (json['grantedScope'] ?? kPersonalContentAccessSkillId)
-              .toString()
-              .trim(),
-      // 服务端必须显式确认 granted=true；字段缺失、false 或已有撤回时间均失败关闭。
-      granted: json['granted'] == true && revokedAt.isEmpty,
-      updatedAt:
-          DateTime.tryParse((json['grantedAt'] ?? '').toString()) ??
-          DateTime.now(),
+String _requireAssistantCommandRequestId(
+  String value, {
+  required String operation,
+}) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    throw ArgumentError.value(
+      value,
+      'clientRequestId',
+      '$operation requires a stable client request identity',
     );
   }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'skillId': skillId,
-    'grantedScope': grantedScope,
-    'granted': granted,
-    'grantedAt': updatedAt.toIso8601String(),
-  };
+  return normalized;
 }
 
-AssistantSearchResultView _buildFallbackSearchResult({
-  required String query,
-  required String searchIntensity,
-}) {
-  final trimmedQuery = query.trim();
-  final summary = trimmedQuery.isEmpty
-      ? '小趣搜会结合圈子讨论结果和已有公开内容，为你梳理当前最相关的线索。'
-      : '小趣搜正在整理“$trimmedQuery”的公开线索，会优先总结当前最相关的话题、圈子讨论与内容方向。';
-  return AssistantSearchResultView(
-    queryEcho: trimmedQuery,
-    summary: summary,
-    searchIntensity: searchIntensity,
-    citations: const <AssistantSearchCitationView>[],
-  );
-}
-
-AssistantEntryPersonalizationView _buildFallbackEntryPersonalization(
-  AssistantOpenContext context,
-) {
-  final pageType = assistantPageTypeForSource(context.source);
-  final welcome = switch (pageType) {
-    'chat' => '我可以结合当前会话帮你整理话题、找资料或写回复。',
-    'search' => '我可以把站内结果、网页线索和你的上下文串起来。',
-    'create' => '我可以帮你找灵感、配文案或整理发布计划。',
-    'home' => '我可以结合当前主页、关系和交集帮你解释信息。',
-    _ => '有什么想让我帮忙的？',
-  };
-  return AssistantEntryPersonalizationView(
-    welcomeMessage: welcome,
-    suggestionLines: const <String>['说一句你想做的事，或选上面的推荐试试'],
-    chips: const <AssistantEntryPersonalizationChipView>[
-      AssistantEntryPersonalizationChipView(
-        chipId: 'find',
-        label: '帮我找',
-        actionType: 'command',
-        value: 'find',
-      ),
-      AssistantEntryPersonalizationChipView(
-        chipId: 'remember',
-        label: '帮我记',
-        actionType: 'command',
-        value: 'remember',
-      ),
-      AssistantEntryPersonalizationChipView(
-        chipId: 'share',
-        label: '帮我分享',
-        actionType: 'command',
-        value: 'share',
-      ),
-    ],
-    personalized: false,
-  );
-}
-
-Map<String, dynamic> assistantContextSnapshotFromOpenContext(
-  AssistantOpenContext context, {
-  String? operationId,
-}) {
-  final now = DateTime.now().toUtc().toIso8601String();
-  final pageType = assistantPageTypeForSource(context.source);
-  final objectType = context.objectType?.trim() ?? '';
-  final objectId = context.entityId?.trim() ?? '';
-  return <String, dynamic>{
-    'snapshotVersion': 'assistant_context_v1',
-    'capturedAt': now,
-    'routeId': AppUiSurfaces.personalAssistantDialog.routeId,
-    'surfaceId': AppUiSurfaces.personalAssistantDialog.id,
-    if (operationId != null && operationId.trim().isNotEmpty)
-      'operationId': operationId.trim(),
-    'pageType': pageType,
-    'sourceSurfaceId': context.source.name,
-    'experienceLevel': context.experienceLevel.name,
-    'visitTarget': context.visitTarget.targetKey,
-    if (objectType.isNotEmpty && objectId.isNotEmpty)
-      'pageObjects': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'objectTypeRef': objectType,
-          'objectId': objectId,
-          if ((context.hints['title'] ?? '').toString().trim().isNotEmpty)
-            'title': context.hints['title'].toString().trim(),
-          if ((context.hints['snippet'] ?? '').toString().trim().isNotEmpty)
-            'snippet': context.hints['snippet'].toString().trim(),
-        },
-      ],
-    if (context.intersectionRefs.isNotEmpty)
-      'intersectionRefs': context.intersectionRefs,
-    if ((context.tab ?? '').trim().isNotEmpty)
-      'matchedSegments': <String>[context.tab!.trim()],
-    if ((context.dimension ?? '').trim().isNotEmpty)
-      'matchedInterestTags': <String>[context.dimension!.trim()],
-    'consentMatrix': const <String, dynamic>{
-      'canReadCurrentPage': true,
-      'canReadConversation': false,
-      'canUseProfile': true,
-      'canUseRelationshipGraph': true,
-      'canUseTags': true,
-      'canDeliverProactively': false,
-      'consentSource': 'app_open_context',
-      'consentVersion': 'assistant_context_v1',
-    },
-  };
-}
-
-abstract class AssistantRepository
+/// 公开 Remote 类型维持为所有 assistant typed Facet 的唯一 production 装配点。
+///
+/// 每个 Facet 的直接实现位于同 library 的职责 part 中；此类只组合这些实现与共享
+/// transport 基座，不引入方法转发层或第二个公开 repository。
+class RemoteAssistantRepository extends _RemoteAssistantRepositoryBase
+    with
+        _RemoteAssistantConversationRun,
+        _RemoteAssistantSkillSubscription,
+        _RemoteAssistantSkillConsent,
+        _RemoteAssistantLearningAppend,
+        _RemoteAssistantExperience,
+        _RemoteAssistantPreferenceFact,
+        _RemoteAssistantXiaoquSearch
     implements
-        AssistantConversationRepository,
-        AssistantSkillSubscriptionRepository {
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  });
-
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
-  });
-
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  });
-
-  Future<List<AssistantSkillConsent>> listConsents();
-
-  Future<AssistantSkillConsent> grantSkillConsent({
-    required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
-  });
-
-  Future<void> revokeSkillConsent({required String skillId});
-
-  Future<AssistantSearchResultView> searchXiaoquResults({
-    required String query,
-    String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
-  });
-
-  Future<PageContextAck> reportPageContext({
-    required AssistantOpenContext context,
-    String? userAction,
-    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
-  });
-
-  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
-    required AssistantOpenContext context,
-  });
-
-  Future<SuggestedActionListView> getSuggestedActions({
-    required AssistantOpenContext context,
-  });
-
-  /// GET /assistant/tasks
-  Future<List<AssistantUserTaskView>> listAssistantTasks({
-    int limit = _kAssistantListPageDefaultLimit,
-    String? status,
-  });
-
-  /// GET /assistant/memories
-  Future<List<AssistantUserMemoryView>> listAssistantMemories({
-    int limit = _kAssistantListPageDefaultLimit,
-  });
-
-  /// GET /assistant/skills
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
-    int limit = _kAssistantSkillCatalogDefaultLimit,
-  });
-
-  Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
-    required AssistantCreationSuggestRequest request,
-  });
-}
-
-class MockAssistantRepository implements AssistantRepository {
-  MockAssistantRepository({AssistantConsentStore? store})
-    : _store =
-          store ?? AssistantConsentStore(actorScope: 'alpha_mock_assistant');
-
-  final AssistantConsentStore _store;
-  final List<SkillSubscriptionWire> _subscriptions = <SkillSubscriptionWire>[];
-
-  @override
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  }) async {
-    return AssistantPolicyView(
-      version: policyVersionHint.trim().isEmpty
-          ? 'assistant_policy_local_mock_v1'
-          : policyVersionHint.trim(),
-      values: <String, dynamic>{
-        'learningSyncEnabled': false,
-        'suggestedActionsEnabled': true,
-        'pageContextTtlSeconds': 300,
-        'searchFallbackMode': 'local_mock',
-        'defaultSearchIntensity': 'balanced',
-      },
-    );
-  }
-
-  @override
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
-  }) async {
-    return AssistantInteractionReportBatchAck(
-      accepted: true,
-      count: events.length,
-      resource: 'interaction_event_batch',
-      mode: 'local_mock',
-    );
-  }
-
-  @override
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  }) async {
-    return AssistantScorecardReportBatchAck(
-      accepted: true,
-      count: scorecards.length,
-      resource: 'scorecard_batch',
-      mode: 'local_mock',
-    );
-  }
-
-  @override
-  Future<List<AssistantSkillConsent>> listConsents() {
-    return _store.load();
-  }
-
-  @override
-  Future<AssistantSkillConsent> grantSkillConsent({
-    required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
-  }) async {
-    final consent = AssistantSkillConsent(
-      skillId: skillId,
-      grantedScope: grantedScope,
-      granted: true,
-      updatedAt: DateTime.now(),
-    );
-    await _store.upsert(consent);
-    return consent;
-  }
-
-  @override
-  Future<void> revokeSkillConsent({required String skillId}) {
-    return _store.revoke(skillId);
-  }
-
-  @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
-    required String query,
-    String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
-  }) async {
-    return _buildFallbackSearchResult(
-      query: query,
-      searchIntensity: searchIntensity,
-    );
-  }
-
-  @override
-  Future<PageContextAck> reportPageContext({
-    required AssistantOpenContext context,
-    String? userAction,
-    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
-  }) async {
-    return PageContextAck(
-      accepted: true,
-      contextKey: 'mock:${assistantPageTypeForSource(context.source)}',
-      expiresAt: DateTime.now()
-          .toUtc()
-          .add(const Duration(minutes: 5))
-          .toIso8601String(),
-    );
-  }
-
-  @override
-  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
-    required AssistantOpenContext context,
-  }) async {
-    return _buildFallbackEntryPersonalization(context);
-  }
-
-  @override
-  Future<SuggestedActionListView> getSuggestedActions({
-    required AssistantOpenContext context,
-  }) async {
-    final personalization = _buildFallbackEntryPersonalization(context);
-    return SuggestedActionListView(
-      items: personalization.chips
-          .map(
-            (chip) => SuggestedAction(
-              actionId: chip.chipId,
-              type: chip.actionType,
-              label: chip.label,
-              payload: <String, dynamic>{'value': chip.value ?? ''},
-            ),
-          )
-          .toList(growable: false),
-    );
-  }
-
-  @override
-  Future<List<AssistantUserTaskView>> listAssistantTasks({
-    int limit = _kAssistantListPageDefaultLimit,
-    String? status,
-  }) async {
-    final raw = AssistantPrototypeFixture.instance.tasks;
-    Iterable<AssistantPrototypeTaskRow> rows = raw;
-    if (status != null && status.trim().isNotEmpty) {
-      rows = raw.where((row) => row.status == status.trim());
-    }
-    return rows
-        .map((row) {
-          final time = row.time ?? '';
-          final category = row.category ?? '';
-          final desc = <String>[
-            if (time.isNotEmpty) time,
-            if (category.isNotEmpty) category,
-          ].join(' · ');
-          return AssistantUserTaskView(
-            taskId: row.taskKey,
-            title: row.title,
-            description: desc.isEmpty ? null : desc,
-            status: row.status,
-          );
-        })
-        .take(limit)
-        .toList(growable: false);
-  }
-
-  @override
-  Future<List<AssistantUserMemoryView>> listAssistantMemories({
-    int limit = _kAssistantListPageDefaultLimit,
-  }) async {
-    return AssistantPrototypeFixture.instance.memories
-        .map(
-          (row) => AssistantUserMemoryView(
-            memoryId: row.memoryKey,
-            title: row.title,
-            snippet: row.kind,
-            sourceType: row.kind,
-          ),
-        )
-        .take(limit)
-        .toList(growable: false);
-  }
-
-  @override
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
-    int limit = _kAssistantSkillCatalogDefaultLimit,
-  }) async {
-    final p0Skills = <AssistantSkillCatalogItemView>[
-      const AssistantSkillCatalogItemView(
-        skillId: 'daily_assistant',
-        displayName: '每日助手',
-        description: '管理待办、日历、会议、作息和学习计划。',
-        category: 'life',
-        requiresConsent: false,
-        iconHint: 'checkmark',
-      ),
-      const AssistantSkillCatalogItemView(
-        skillId: 'news_briefing',
-        displayName: '新闻简报',
-        description: '按关注话题定时生成新闻摘要。',
-        category: 'content',
-        requiresConsent: false,
-        iconHint: 'news',
-      ),
-      const AssistantSkillCatalogItemView(
-        skillId: 'stock_sentinel',
-        displayName: '股票哨兵',
-        description: '跟踪关注股票的重大消息面和行情变化。',
-        category: 'finance',
-        requiresConsent: false,
-        iconHint: 'chart',
-      ),
-      const AssistantSkillCatalogItemView(
-        skillId: 'travel_journey_manager',
-        displayName: '出行旅程管家',
-        description: '结合天气、路况和景点拥堵提醒行程风险。',
-        category: 'travel',
-        requiresConsent: false,
-        iconHint: 'airplane',
-      ),
-      const AssistantSkillCatalogItemView(
-        skillId: 'creation_assistant',
-        displayName: '创作助手',
-        description: '帮助整理草稿摘要、推荐标签和关联主页。',
-        category: 'content_creation',
-        requiresConsent: false,
-        iconHint: 'sparkles',
-      ),
-    ];
-    final prototypeSkills = AssistantPrototypeFixture.instance.skills.map(
-      (row) => AssistantSkillCatalogItemView(
-        skillId: row.skillId,
-        displayName: row.name,
-        description: row.description,
-        requiresConsent: false,
-      ),
-    );
-    return <AssistantSkillCatalogItemView>[
-      ...p0Skills,
-      ...prototypeSkills,
-    ].take(limit).toList(growable: false);
-  }
-
-  @override
-  Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
-    required AssistantCreationSuggestRequest request,
-  }) => mockSuggestCreationAssistance(_subscriptions, request: request);
-
-  @override
-  Future<List<SkillSubscriptionWire>> listSkillSubscriptions({
-    int limit = _kAssistantSkillSubscriptionsDefaultLimit,
-    String status = '',
-  }) async {
-    final filtered = _subscriptions
-        .where((item) {
-          if (status.trim().isEmpty) {
-            return item.status != 'archived';
-          }
-          return item.status == status.trim();
-        })
-        .toList(growable: false);
-    return filtered.take(limit).toList(growable: false);
-  }
-
-  @override
-  Future<SkillSubscriptionWire> createSkillSubscription({
-    required String skillId,
-    String domainId = 'assistant',
-    List<String> tagRefs = const <String>[],
-    required String rawText,
-    List<String> queries = const <String>[],
-    String cron = '0 8 * * *',
-  }) async {
-    final now = DateTime.now().toUtc().toIso8601String();
-    final subscription = SkillSubscriptionWire(
-      subscriptionId: 'sub_mock_${_subscriptions.length + 1}',
-      createdByUserId: 'mock-user',
-      skillId: skillId,
-      domainId: domainId,
-      tagRefs: tagRefs,
-      searchQueryPlan: SkillSubscriptionSearchQueryPlanWire(
-        rawText: rawText,
-        queries: queries.isEmpty ? <String>[rawText] : queries,
-      ),
-      trigger: SkillSubscriptionTriggerWire(cron: cron),
-      destination: const SkillSubscriptionDestinationWire(
-        destinationType: 'user',
-        destinationId: 'mock-user',
-      ),
-      createdAt: now,
-      updatedAt: now,
-    );
-    _subscriptions.insert(0, subscription);
-    return subscription;
-  }
-
-  @override
-  Future<SkillSubscriptionWire> updateSkillSubscriptionStatus({
-    required String subscriptionId,
-    required String status,
-  }) async {
-    final idx = _subscriptions.indexWhere(
-      (item) => item.subscriptionId == subscriptionId,
-    );
-    if (idx < 0) {
-      throw StateError('skill subscription not found');
-    }
-    final current = _subscriptions[idx];
-    final updated = SkillSubscriptionWire(
-      subscriptionId: current.subscriptionId,
-      owner: current.owner,
-      createdByUserId: current.createdByUserId,
-      skillId: current.skillId,
-      domainId: current.domainId,
-      tagRefs: current.tagRefs,
-      status: status,
-      searchQueryPlan: current.searchQueryPlan,
-      trigger: current.trigger,
-      destination: current.destination,
-      createdAt: current.createdAt,
-      updatedAt: DateTime.now().toUtc().toIso8601String(),
-    );
-    _subscriptions[idx] = updated;
-    return updated;
-  }
-
-  @override
-  Future<AssistantConversationWire> createAssistantConversation({
-    String summary = '',
-  }) async {
-    final now = DateTime.now().toUtc().toIso8601String();
-    return AssistantConversationWire(
-      conversationId: 'acv_mock_personal_assistant',
-      userId: 'mock-user',
-      summary: summary,
-      createdAt: now,
-      updatedAt: now,
-    );
-  }
-
-  @override
-  Future<AssistantConversationWire> getAssistantConversation({
-    required String conversationId,
-  }) async {
-    final now = DateTime.now().toUtc().toIso8601String();
-    return AssistantConversationWire(
-      conversationId: conversationId,
-      userId: 'mock-user',
-      createdAt: now,
-      updatedAt: now,
-    );
-  }
-
-  @override
-  Future<AssistantTurnEnvelopeWire> startAssistantRun({
-    required String conversationId,
-    required String text,
-    String turnType = 'user',
-    String skillId = '',
-    String domainId = '',
-  }) async {
-    return AssistantTurnEnvelopeWire(
-      turnId: 'atn_mock_personal_assistant',
-      conversationId: conversationId,
-      turnType: turnType,
-      skillId: skillId,
-      domainId: domainId,
-      input: <String, dynamic>{'text': text},
-      trigger: const <String, dynamic>{'type': 'user_message'},
-      traceId: 'trace_mock_personal_assistant',
-      createdAt: DateTime.now().toUtc().toIso8601String(),
-    );
-  }
-
-  @override
-  Future<AssistantTurnEnvelopeWire> getAssistantRun({
-    required String runId,
-  }) async {
-    return AssistantTurnEnvelopeWire(
-      turnId: runId,
-      conversationId: 'acv_mock_personal_assistant',
-      traceId: 'trace_mock_personal_assistant',
-      createdAt: DateTime.now().toUtc().toIso8601String(),
-    );
-  }
-
-  @override
-  Stream<AssistantStreamEventWire> watchAssistantRunEvents({
-    required String runId,
-  }) async* {
-    final createdAt = DateTime.now().toUtc().toIso8601String();
-    final toolUse = ToolUseWire(
-      toolUseId: 'tu_mock_personal_assistant',
-      turnId: runId,
-      toolName: 'web_search',
-      input: const <String, dynamic>{'query': '找私助 mock stream'},
-      status: 'requested',
-      createdAt: createdAt,
-    );
-    final completedToolUse = ToolUseWire(
-      toolUseId: toolUse.toolUseId,
-      turnId: runId,
-      toolName: toolUse.toolName,
-      input: toolUse.input,
-      status: 'completed',
-      result: const <String, dynamic>{
-        'provider': 'mock',
-        'summary': '找私助 mock stream 已完成工具观察。',
-        'references': <Map<String, dynamic>>[],
-      },
-      createdAt: createdAt,
-      completedAt: createdAt,
-    );
-    yield AssistantStreamEventWire(
-      schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.turn.started',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
-      seq: 1,
-      eventType: 'turn_started',
-      payload: const <String, dynamic>{'status': 'running'},
-      createdAt: createdAt,
-    );
-    yield AssistantStreamEventWire(
-      schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.tool.requested',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
-      seq: 2,
-      eventType: 'tool_use_requested',
-      payload: <String, dynamic>{'toolUse': toolUse.toJson()},
-      createdAt: createdAt,
-    );
-    yield AssistantStreamEventWire(
-      schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.tool.completed',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
-      seq: 3,
-      eventType: 'tool_result_received',
-      payload: <String, dynamic>{'toolUse': completedToolUse.toJson()},
-      createdAt: createdAt,
-    );
-    yield AssistantStreamEventWire(
-      schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.answer.final',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
-      seq: 4,
-      eventType: 'final_answer',
-      payload: const <String, dynamic>{'text': '找私助 mock stream 已接通。'},
-      createdAt: createdAt,
-    );
-  }
-}
-
-class RemoteAssistantRepository implements AssistantRepository {
+        AssistantConversationRunFacet,
+        AssistantSkillSubscriptionFacet,
+        AssistantSkillConsentFacet,
+        AssistantLearningAppendFacet,
+        AssistantPersonalizationFacet,
+        AssistantPersonalDataFacet,
+        AssistantPreferenceFactFacet,
+        AssistantXiaoquSearchFacet,
+        AssistantCreationSuggestFacet {
   RemoteAssistantRepository({
+    super.httpClient,
+    super.store,
+    required super.consentActorScope,
+  });
+}
+
+/// 各 Facet 共享的 transport、metadata surface 和解码原语。
+///
+/// 此基座不声明任何业务 Facet 方法，避免重新聚合对象级职责。
+abstract class _RemoteAssistantRepositoryBase {
+  _RemoteAssistantRepositoryBase({
     CloudHttpClient? httpClient,
     AssistantConsentStore? store,
     required String consentActorScope,
@@ -736,131 +101,11 @@ class RemoteAssistantRepository implements AssistantRepository {
   final CloudHttpClient _httpClient;
   final AssistantConsentStore _store;
 
-  @override
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  }) async {
-    try {
-      final uri = _assistantGetUri(AssistantApiMetadata.getPolicyPath, {
-        if (policyVersionHint.trim().isNotEmpty)
-          'policyVersionHint': policyVersionHint.trim(),
-      });
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.getPolicyOperation,
-          clientPageId: AssistantRequestPageIds.getPolicy,
-        ),
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = response.body.trim().isEmpty
-            ? <String, dynamic>{}
-            : CloudResponseDecoder.asObject(
-                jsonDecode(response.body),
-                context: _personalAssistantDialogContext(
-                  operationId: AssistantApiMetadata.getPolicyOperation,
-                ),
-              );
-        if (decoded.isNotEmpty) {
-          return AssistantPolicyView.fromJson(decoded);
-        }
-      }
-    } catch (_) {
-      // Fall back to a safe default snapshot when assistant-service is unavailable.
-    }
-    return AssistantPolicyView(
-      version: policyVersionHint.trim().isEmpty
-          ? 'assistant_policy_remote_fallback_v1'
-          : policyVersionHint.trim(),
-      values: <String, dynamic>{
-        'learningSyncEnabled': true,
-        'suggestedActionsEnabled': true,
-        'pageContextTtlSeconds': 300,
-        'searchFallbackMode': 'summary_with_citations',
-        'defaultSearchIntensity': 'balanced',
-      },
-    );
-  }
-
-  @override
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
-  }) async {
-    final accepted = <InteractionEvent>[];
-    for (final event in events) {
-      final eventId = event.eventId.trim();
-      final runId = event.runId.trim();
-      if (eventId.isEmpty || runId.isEmpty) {
-        continue;
-      }
-      try {
-        final uri = _assistantUri(
-          AssistantApiMetadata.reportInteractionEventPath,
-        );
-        final response = await _httpClient.post(
-          uri,
-          headers: <String, String>{
-            ..._headersForPersonalAssistantDialog(
-              operationId: AssistantApiMetadata.reportInteractionEventOperation,
-              clientPageId: AssistantRequestPageIds.reportInteractionEvent,
-            ),
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode(event.toJson()),
-        );
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          accepted.add(event);
-        }
-      } catch (_) {
-        // Best effort: keep batch partial-success semantics.
-      }
-    }
-    return AssistantInteractionReportBatchAck.fromJson(<String, dynamic>{
-      'accepted': accepted.length == events.length,
-      'acceptedCount': accepted.length,
-      'count': events.length,
-      'resource': 'interaction_event_batch',
-    });
-  }
-
-  @override
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  }) async {
-    final accepted = <Scorecard>[];
-    for (final scorecard in scorecards) {
-      final scoreId = scorecard.scoreId.trim();
-      final eventId = scorecard.eventId.trim();
-      if (scoreId.isEmpty || eventId.isEmpty) {
-        continue;
-      }
-      try {
-        final uri = _assistantUri(AssistantApiMetadata.reportScorecardPath);
-        final response = await _httpClient.post(
-          uri,
-          headers: <String, String>{
-            ..._headersForPersonalAssistantDialog(
-              operationId: AssistantApiMetadata.reportScorecardOperation,
-              clientPageId: AssistantRequestPageIds.reportScorecard,
-            ),
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode(scorecard.toJson()),
-        );
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          accepted.add(scorecard);
-        }
-      } catch (_) {
-        // Best effort: keep batch partial-success semantics.
-      }
-    }
-    return AssistantScorecardReportBatchAck.fromJson(<String, dynamic>{
-      'accepted': accepted.length == scorecards.length,
-      'acceptedCount': accepted.length,
-      'count': scorecards.length,
-      'resource': 'scorecard_batch',
-    });
-  }
+  static final CloudOperationContract _assistantStreamOperation =
+      appCloudOperationContracts[AppCloudOperationIds
+          .assistantAssistantRunStreamAssistantRunEvents]!;
+  static const CloudRetryPolicy _assistantStreamRetryPolicy =
+      CloudRetryPolicy();
 
   Map<String, String> _headersForSettings({
     required String operationId,
@@ -949,716 +194,6 @@ class RemoteAssistantRepository implements AssistantRepository {
     return raw;
   }
 
-  @override
-  Future<List<AssistantSkillConsent>> listConsents() async {
-    final uri = _assistantUri(AssistantApiMetadata.listConsentsPath);
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: _headersForSettings(
-        operationId: AssistantApiMetadata.listConsentsOperation,
-        clientPageId: AssistantRequestPageIds.listConsents,
-      ),
-    );
-    final object = decoded is List
-        ? <String, dynamic>{'items': decoded}
-        : CloudResponseDecoder.asObject(
-            decoded,
-            context: _settingsContext(
-              operationId: AssistantApiMetadata.listConsentsOperation,
-            ),
-          );
-    final rawItems =
-        (object['items'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    final consents = rawItems
-        .map(AssistantSkillConsent.fromJson)
-        .where((item) => item.skillId.isNotEmpty)
-        .toList(growable: false);
-    await _store.save(consents);
-    return consents;
-  }
-
-  @override
-  Future<AssistantSkillConsent> grantSkillConsent({
-    required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
-  }) async {
-    final path = AssistantApiMetadata.grantSkillConsentPath(skillId: skillId);
-    final uri = _assistantUri(path);
-    final decoded = await _httpClient.postJson(
-      uri,
-      headers: _headersForSettings(
-        operationId: AssistantApiMetadata.grantSkillConsentOperation,
-        clientPageId: AssistantRequestPageIds.grantSkillConsent,
-      ),
-      body: <String, dynamic>{'grantedScope': grantedScope},
-    );
-    try {
-      final object = CloudResponseDecoder.asObject(
-        decoded,
-        context: _settingsContext(
-          operationId: AssistantApiMetadata.grantSkillConsentOperation,
-        ),
-      );
-      final payload =
-          (object['consent'] as Map?)?.cast<String, dynamic>() ?? object;
-      final consent = AssistantSkillConsent.fromJson(payload);
-      if (consent.skillId != skillId || !consent.granted) {
-        throw const FormatException(
-          'assistant consent grant response is not authoritative',
-        );
-      }
-      await _store.upsert(consent);
-      return consent;
-    } catch (error) {
-      throw CloudErrorMapper.fromException(error, requestPath: path);
-    }
-  }
-
-  @override
-  Future<void> revokeSkillConsent({required String skillId}) async {
-    final uri = _assistantUri(
-      AssistantApiMetadata.revokeSkillConsentPath(skillId: skillId),
-    );
-    await _httpClient.deleteJson(
-      uri,
-      headers: _headersForSettings(
-        operationId: AssistantApiMetadata.revokeSkillConsentOperation,
-        clientPageId: AssistantRequestPageIds.revokeSkillConsent,
-      ),
-    );
-    await _store.revoke(skillId);
-  }
-
-  @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
-    required String query,
-    String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
-  }) async {
-    final trimmedQuery = query.trim();
-    if (trimmedQuery.isEmpty) {
-      return _buildFallbackSearchResult(
-        query: query,
-        searchIntensity: searchIntensity,
-      );
-    }
-    try {
-      final uri = _assistantUri(AssistantApiMetadata.searchXiaoquResultsPath);
-      final response = await _httpClient.post(
-        uri,
-        headers: <String, String>{
-          ..._headersForNetworkResults(
-            operationId: AssistantApiMetadata.searchXiaoquResultsOperation,
-          ),
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(
-          AssistantSearchXiaoquRequestWire(
-            userQuery: trimmedQuery,
-            searchIntensity: searchIntensity,
-            sourceSurfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
-            fromGlobalSearch: true,
-          ).toJson()..addAll(
-            contextSnapshot == null
-                ? const <String, dynamic>{}
-                : <String, dynamic>{'contextSnapshot': contextSnapshot},
-          ),
-        ),
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = response.body.trim().isEmpty
-            ? <String, dynamic>{}
-            : CloudResponseDecoder.asObject(
-                jsonDecode(response.body),
-                context: _networkResultsContext(
-                  operationId:
-                      AssistantApiMetadata.searchXiaoquResultsOperation,
-                ),
-              );
-        final result = AssistantSearchResultView.fromJson(decoded);
-        if (result.queryEcho.isNotEmpty ||
-            result.summary?.trim().isNotEmpty == true) {
-          return result;
-        }
-      }
-    } catch (_) {
-      // Fall back to local synthesis when assistant-service is unavailable.
-    }
-    return _buildFallbackSearchResult(
-      query: trimmedQuery,
-      searchIntensity: searchIntensity,
-    );
-  }
-
-  @override
-  Future<PageContextAck> reportPageContext({
-    required AssistantOpenContext context,
-    String? userAction,
-    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
-  }) async {
-    final snapshot = assistantContextSnapshotFromOpenContext(
-      context,
-      operationId: AssistantApiMetadata.reportPageContextOperation,
-    );
-    final pageType = assistantPageTypeForSource(context.source);
-    final objectType = context.objectType?.trim() ?? '';
-    final objectId = context.entityId?.trim() ?? '';
-    final businessObjects = <Map<String, dynamic>>[
-      if (objectType.isNotEmpty && objectId.isNotEmpty)
-        <String, dynamic>{'objectType': objectType, 'objectId': objectId},
-    ];
-    try {
-      final response = await _httpClient.post(
-        _assistantUri(AssistantApiMetadata.reportPageContextPath),
-        headers: <String, String>{
-          ..._headersForPersonalAssistantDialog(
-            operationId: AssistantApiMetadata.reportPageContextOperation,
-            clientPageId: AssistantRequestPageIds.reportPageContext,
-          ),
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(
-          AssistantReportPageContextRequestWire(
-            pageType: pageType,
-            businessObjects: businessObjects,
-            userAction: userAction,
-            userActions: userActions.isEmpty ? null : userActions,
-          ).toJson()..addAll(<String, dynamic>{'contextSnapshot': snapshot}),
-        ),
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = response.body.trim().isEmpty
-            ? <String, dynamic>{}
-            : CloudResponseDecoder.asObject(
-                jsonDecode(response.body),
-                context: _personalAssistantDialogContext(
-                  operationId: AssistantApiMetadata.reportPageContextOperation,
-                ),
-              );
-        return PageContextAck.fromJson(decoded);
-      }
-    } catch (_) {
-      // 页面上下文上报是体验增强，失败时不阻断半屏入口。
-    }
-    return PageContextAck(
-      accepted: false,
-      contextKey: 'fallback:$pageType',
-      expiresAt: DateTime.now()
-          .toUtc()
-          .add(const Duration(minutes: 5))
-          .toIso8601String(),
-    );
-  }
-
-  @override
-  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
-    required AssistantOpenContext context,
-  }) async {
-    try {
-      final uri = _assistantGetUri(
-        AssistantApiMetadata.getEntryPersonalizationPath,
-        <String, String>{
-          'source': context.source.name,
-          'pageType': assistantPageTypeForSource(context.source),
-          if ((context.tab ?? '').trim().isNotEmpty) 'tab': context.tab!.trim(),
-          if ((context.dimension ?? '').trim().isNotEmpty)
-            'dimension': context.dimension!.trim(),
-          if ((context.entityId ?? '').trim().isNotEmpty)
-            'objectId': context.entityId!.trim(),
-          if ((context.objectType ?? '').trim().isNotEmpty)
-            'objectType': context.objectType!.trim(),
-          'experienceLevel': context.experienceLevel.name,
-        },
-      );
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.getEntryPersonalizationOperation,
-          clientPageId: AssistantRequestPageIds.getEntryPersonalization,
-        ),
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = response.body.trim().isEmpty
-            ? <String, dynamic>{}
-            : CloudResponseDecoder.asObject(
-                jsonDecode(response.body),
-                context: _personalAssistantDialogContext(
-                  operationId:
-                      AssistantApiMetadata.getEntryPersonalizationOperation,
-                ),
-              );
-        final view = AssistantEntryPersonalizationView.fromJson(decoded);
-        if (view.welcomeMessage.trim().isNotEmpty) {
-          return view;
-        }
-      }
-    } catch (_) {
-      // 个性化入口失败时保留本地 prompt 兜底。
-    }
-    return _buildFallbackEntryPersonalization(context);
-  }
-
-  @override
-  Future<SuggestedActionListView> getSuggestedActions({
-    required AssistantOpenContext context,
-  }) async {
-    try {
-      final uri = _assistantGetUri(
-        AssistantApiMetadata.getSuggestedActionsPath,
-        <String, String>{
-          'pageType': assistantPageTypeForSource(context.source),
-          if ((context.entityId ?? '').trim().isNotEmpty)
-            'objectId': context.entityId!.trim(),
-        },
-      );
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.getSuggestedActionsOperation,
-          clientPageId: AssistantRequestPageIds.getSuggestedActions,
-        ),
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = response.body.trim().isEmpty
-            ? <String, dynamic>{}
-            : CloudResponseDecoder.asObject(
-                jsonDecode(response.body),
-                context: _personalAssistantDialogContext(
-                  operationId:
-                      AssistantApiMetadata.getSuggestedActionsOperation,
-                ),
-              );
-        return SuggestedActionListView.fromJson(decoded);
-      }
-    } catch (_) {
-      // 建议动作失败时半屏仍使用 entry personalization chips。
-    }
-    final personalization = _buildFallbackEntryPersonalization(context);
-    return SuggestedActionListView(
-      items: personalization.chips
-          .map(
-            (chip) => SuggestedAction(
-              actionId: chip.chipId,
-              type: chip.actionType,
-              label: chip.label,
-              payload: <String, dynamic>{'value': chip.value ?? ''},
-            ),
-          )
-          .toList(growable: false),
-    );
-  }
-
-  @override
-  Future<List<AssistantUserTaskView>> listAssistantTasks({
-    int limit = _kAssistantListPageDefaultLimit,
-    String? status,
-  }) async {
-    try {
-      final uri =
-          _assistantGetUri(AssistantApiMetadata.listAssistantTasksPath, {
-            'limit': '$limit',
-            if (status != null && status.trim().isNotEmpty)
-              'status': status.trim(),
-          });
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.listAssistantTasksOperation,
-          clientPageId: AssistantRequestPageIds.listAssistantTasks,
-        ),
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const <AssistantUserTaskView>[];
-      }
-      final decoded = response.body.trim().isEmpty
-          ? <String, dynamic>{}
-          : jsonDecode(response.body);
-      final rows = _decodeItemsMap(
-        decoded,
-        context: _personalAssistantDialogContext(
-          operationId: AssistantApiMetadata.listAssistantTasksOperation,
-        ),
-      );
-      return rows
-          .map(AssistantUserTaskView.fromJson)
-          .where((row) => row.taskId.isNotEmpty)
-          .take(limit)
-          .toList(growable: false);
-    } catch (_) {
-      return const <AssistantUserTaskView>[];
-    }
-  }
-
-  @override
-  Future<List<AssistantUserMemoryView>> listAssistantMemories({
-    int limit = _kAssistantListPageDefaultLimit,
-  }) async {
-    try {
-      final uri = _assistantGetUri(
-        AssistantApiMetadata.listAssistantMemoriesPath,
-        {'limit': '$limit'},
-      );
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.listAssistantMemoriesOperation,
-          clientPageId: AssistantRequestPageIds.listAssistantMemories,
-        ),
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const <AssistantUserMemoryView>[];
-      }
-      final decoded = response.body.trim().isEmpty
-          ? <String, dynamic>{}
-          : jsonDecode(response.body);
-      final rows = _decodeItemsMap(
-        decoded,
-        context: _personalAssistantDialogContext(
-          operationId: AssistantApiMetadata.listAssistantMemoriesOperation,
-        ),
-      );
-      return rows
-          .map(AssistantUserMemoryView.fromJson)
-          .where((row) => row.memoryId.isNotEmpty)
-          .take(limit)
-          .toList(growable: false);
-    } catch (_) {
-      return const <AssistantUserMemoryView>[];
-    }
-  }
-
-  @override
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
-    int limit = _kAssistantSkillCatalogDefaultLimit,
-  }) async {
-    try {
-      final uri = _assistantGetUri(AssistantApiMetadata.listSkillsPath, {
-        'limit': '$limit',
-      });
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.listSkillsOperation,
-          clientPageId: AssistantRequestPageIds.listSkills,
-        ),
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const <AssistantSkillCatalogItemView>[];
-      }
-      final decoded = response.body.trim().isEmpty
-          ? <String, dynamic>{}
-          : jsonDecode(response.body);
-      final rows = _decodeItemsMap(
-        decoded,
-        context: _personalAssistantDialogContext(
-          operationId: AssistantApiMetadata.listSkillsOperation,
-        ),
-      );
-      return rows
-          .map(AssistantSkillCatalogItemView.fromJson)
-          .where((row) => row.skillId.isNotEmpty)
-          .take(limit)
-          .toList(growable: false);
-    } catch (_) {
-      return const <AssistantSkillCatalogItemView>[];
-    }
-  }
-
-  @override
-  Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
-    required AssistantCreationSuggestRequest request,
-  }) => remoteSuggestCreationAssistance(this, request: request);
-
-  @override
-  Future<List<SkillSubscriptionWire>> listSkillSubscriptions({
-    int limit = _kAssistantSkillSubscriptionsDefaultLimit,
-    String status = '',
-  }) async {
-    try {
-      final uri = _assistantGetUri(
-        AssistantApiMetadata.listSkillSubscriptionsPath,
-        {
-          'limit': '$limit',
-          if (status.trim().isNotEmpty) 'status': status.trim(),
-        },
-      );
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.listSkillSubscriptionsOperation,
-          clientPageId: AssistantRequestPageIds.listSkillSubscriptions,
-        ),
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const <SkillSubscriptionWire>[];
-      }
-      final decoded = response.body.trim().isEmpty
-          ? <String, dynamic>{}
-          : jsonDecode(response.body);
-      final rows = _decodeItemsMap(
-        decoded,
-        context: _personalAssistantDialogContext(
-          operationId: AssistantApiMetadata.listSkillSubscriptionsOperation,
-        ),
-      );
-      return rows
-          .map(SkillSubscriptionWire.fromJson)
-          .where((row) => row.subscriptionId.isNotEmpty)
-          .take(limit)
-          .toList(growable: false);
-    } catch (_) {
-      return const <SkillSubscriptionWire>[];
-    }
-  }
-
-  @override
-  Future<SkillSubscriptionWire> createSkillSubscription({
-    required String skillId,
-    String domainId = 'assistant',
-    List<String> tagRefs = const <String>[],
-    required String rawText,
-    List<String> queries = const <String>[],
-    String cron = '0 8 * * *',
-  }) async {
-    final response = await _httpClient.post(
-      _assistantUri(AssistantApiMetadata.createSkillSubscriptionPath),
-      headers: <String, String>{
-        ..._headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.createSkillSubscriptionOperation,
-          clientPageId: AssistantRequestPageIds.createSkillSubscription,
-        ),
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(<String, dynamic>{
-        'skillId': skillId,
-        'domainId': domainId,
-        'tagRefs': tagRefs,
-        'searchQueryPlan': <String, dynamic>{
-          'rawText': rawText,
-          'queries': queries.isEmpty ? <String>[rawText] : queries,
-        },
-        'trigger': <String, dynamic>{'type': 'cron', 'cron': cron},
-        'destination': const <String, dynamic>{'destinationType': 'user'},
-      }),
-    );
-    return SkillSubscriptionWire.fromJson(
-      _decodeAssistantObject(
-        response,
-        operationId: AssistantApiMetadata.createSkillSubscriptionOperation,
-      ),
-    );
-  }
-
-  @override
-  Future<SkillSubscriptionWire> updateSkillSubscriptionStatus({
-    required String subscriptionId,
-    required String status,
-  }) async {
-    final response = await _httpClient.patch(
-      _assistantUri(
-        AssistantApiMetadata.updateSkillSubscriptionStatusPath(
-          subscriptionId: subscriptionId,
-        ),
-      ),
-      headers: <String, String>{
-        ..._headersForPersonalAssistantDialog(
-          operationId:
-              AssistantApiMetadata.updateSkillSubscriptionStatusOperation,
-          clientPageId: AssistantRequestPageIds.updateSkillSubscriptionStatus,
-        ),
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(<String, dynamic>{'status': status}),
-    );
-    return SkillSubscriptionWire.fromJson(
-      _decodeAssistantObject(
-        response,
-        operationId:
-            AssistantApiMetadata.updateSkillSubscriptionStatusOperation,
-      ),
-    );
-  }
-
-  @override
-  Future<AssistantConversationWire> createAssistantConversation({
-    String summary = '',
-  }) async {
-    final uri = _assistantUri(
-      AssistantApiMetadata.createAssistantConversationPath,
-    );
-    _debugAssistantRepository(
-      'POST $uri operation=${AssistantApiMetadata.createAssistantConversationOperation}',
-    );
-    final response = await _httpClient.post(
-      uri,
-      headers: <String, String>{
-        ..._headersForPersonalAssistantDialog(
-          operationId:
-              AssistantApiMetadata.createAssistantConversationOperation,
-          clientPageId: AssistantRequestPageIds.createAssistantConversation,
-        ),
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(<String, dynamic>{'summary': summary}),
-    );
-    _debugAssistantRepository(
-      'response status=${response.statusCode} operation=${AssistantApiMetadata.createAssistantConversationOperation}',
-    );
-    final conversation = AssistantConversationWire.fromJson(
-      _decodeAssistantObject(
-        response,
-        operationId: AssistantApiMetadata.createAssistantConversationOperation,
-      ),
-    );
-    _debugAssistantRepository(
-      'conversation decoded id=${conversation.conversationId}',
-    );
-    return conversation;
-  }
-
-  @override
-  Future<AssistantConversationWire> getAssistantConversation({
-    required String conversationId,
-  }) async {
-    final response = await _httpClient.get(
-      _assistantUri(
-        AssistantApiMetadata.getAssistantConversationPath(
-          conversationId: conversationId,
-        ),
-      ),
-      headers: _headersForPersonalAssistantDialog(
-        operationId: AssistantApiMetadata.getAssistantConversationOperation,
-        clientPageId: AssistantRequestPageIds.getAssistantConversation,
-      ),
-    );
-    return AssistantConversationWire.fromJson(
-      _decodeAssistantObject(
-        response,
-        operationId: AssistantApiMetadata.getAssistantConversationOperation,
-      ),
-    );
-  }
-
-  @override
-  Future<AssistantTurnEnvelopeWire> startAssistantRun({
-    required String conversationId,
-    required String text,
-    String turnType = 'user',
-    String skillId = '',
-    String domainId = '',
-  }) async {
-    final uri = _assistantUri(
-      AssistantApiMetadata.startAssistantRunPath(
-        conversationId: conversationId,
-      ),
-    );
-    _debugAssistantRepository(
-      'POST $uri operation=${AssistantApiMetadata.startAssistantRunOperation} '
-      'conversationId=$conversationId text="${_assistantDebugSnippet(text)}"',
-    );
-    final response = await _httpClient.post(
-      uri,
-      headers: <String, String>{
-        ..._headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.startAssistantRunOperation,
-          clientPageId: AssistantRequestPageIds.startAssistantRun,
-        ),
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(<String, dynamic>{
-        'turnType': turnType,
-        'skillId': skillId,
-        'domainId': domainId,
-        'input': <String, dynamic>{'text': text},
-        'trigger': const <String, dynamic>{'type': 'user_message'},
-      }),
-    );
-    _debugAssistantRepository(
-      'response status=${response.statusCode} operation=${AssistantApiMetadata.startAssistantRunOperation}',
-    );
-    final turn = AssistantTurnEnvelopeWire.fromJson(
-      _decodeAssistantObject(
-        response,
-        operationId: AssistantApiMetadata.startAssistantRunOperation,
-      ),
-    );
-    _debugAssistantRepository(
-      'turn decoded conversationId=${turn.conversationId} turnId=${turn.turnId} traceId=${turn.traceId}',
-    );
-    return turn;
-  }
-
-  @override
-  Future<AssistantTurnEnvelopeWire> getAssistantRun({
-    required String runId,
-  }) async {
-    final response = await _httpClient.get(
-      _assistantUri(AssistantApiMetadata.getAssistantRunPath(runId: runId)),
-      headers: _headersForPersonalAssistantDialog(
-        operationId: AssistantApiMetadata.getAssistantRunOperation,
-        clientPageId: AssistantRequestPageIds.getAssistantRun,
-      ),
-    );
-    return AssistantTurnEnvelopeWire.fromJson(
-      _decodeAssistantObject(
-        response,
-        operationId: AssistantApiMetadata.getAssistantRunOperation,
-      ),
-    );
-  }
-
-  @override
-  Stream<AssistantStreamEventWire> watchAssistantRunEvents({
-    required String runId,
-  }) async* {
-    final uri = _assistantUri(
-      AssistantApiMetadata.streamAssistantRunEventsPath(runId: runId),
-    );
-    _debugAssistantRepository(
-      'GET $uri operation=${AssistantApiMetadata.streamAssistantRunEventsOperation} runId=$runId',
-    );
-    final request = http.Request('GET', uri)
-      ..headers.addAll(<String, String>{
-        ..._headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.streamAssistantRunEventsOperation,
-          clientPageId: AssistantRequestPageIds.streamAssistantRunEvents,
-        ),
-      });
-    final response = await _httpClient.send(request);
-    _debugAssistantRepository(
-      'stream response status=${response.statusCode} runId=$runId',
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('Assistant stream failed: ${response.statusCode}');
-    }
-    final buffer = StringBuffer();
-    await for (final piece in response.stream.transform(utf8.decoder)) {
-      buffer.write(piece);
-      var current = buffer.toString();
-      var splitIndex = current.indexOf('\n\n');
-      while (splitIndex >= 0) {
-        final frame = current.substring(0, splitIndex);
-        final event = _decodeAssistantStreamFrame(frame);
-        if (event != null) {
-          _debugAssistantRepository(
-            'sse event type=${event.eventType} seq=${event.seq} runId=$runId '
-            'skill=${event.payload['skillId'] ?? ''} tool=${_assistantToolNameFromPayload(event.payload)}',
-          );
-          yield event;
-        }
-        current = current.substring(splitIndex + 2);
-        splitIndex = current.indexOf('\n\n');
-      }
-      buffer
-        ..clear()
-        ..write(current);
-    }
-  }
-
   Uri _assistantUri(String path) {
     return Uri.parse('${CloudRuntimeConfig.gatewayBaseUrl}$path');
   }
@@ -1668,7 +203,11 @@ class RemoteAssistantRepository implements AssistantRepository {
     required String operationId,
   }) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('Assistant request failed: ${response.statusCode}');
+      throw CloudErrorMapper.fromStatusCode(
+        response.statusCode,
+        body: response.body,
+        requestPath: response.request?.url.path,
+      );
     }
     final decoded = response.body.trim().isEmpty
         ? <String, dynamic>{}
@@ -1680,12 +219,22 @@ class RemoteAssistantRepository implements AssistantRepository {
   }
 }
 
-AssistantStreamEventWire? _decodeAssistantStreamFrame(String frame) {
+final class _AssistantSseFrame {
+  const _AssistantSseFrame({required this.event, required this.lastEventId});
+
+  final AssistantStreamEventWire event;
+  final String lastEventId;
+}
+
+_AssistantSseFrame? _decodeAssistantStreamFrame(String frame) {
   final lines = const LineSplitter().convert(frame);
   final dataLines = <String>[];
+  var lastEventId = '';
   for (final rawLine in lines) {
     final line = rawLine.trimRight();
-    if (line.startsWith('data:')) {
+    if (line.startsWith('id:')) {
+      lastEventId = line.substring(3).trim();
+    } else if (line.startsWith('data:')) {
       dataLines.add(line.substring(5).trimLeft());
     }
   }
@@ -1748,7 +297,30 @@ AssistantStreamEventWire? _decodeAssistantStreamFrame(String frame) {
       'AssistantStreamEvent.payload must be an object',
     );
   }
-  return AssistantStreamEventWire.fromJson(envelope);
+  if (parseAssistantRunStreamEventType(envelope['eventType'] as String) ==
+      AssistantRunStreamEventType.unknown) {
+    throw FormatException(
+      'AssistantStreamEvent.eventType is unsupported: ${envelope['eventType']}',
+    );
+  }
+  return _AssistantSseFrame(
+    event: AssistantStreamEventWire.fromJson(envelope),
+    lastEventId: lastEventId,
+  );
+}
+
+bool _isAssistantTerminalStreamEvent(AssistantStreamEventWire event) {
+  return parseAssistantRunStreamEventType(event.eventType.wireName).isTerminal;
+}
+
+bool _isAssistantStreamRetryable(CloudException error) {
+  return switch (error.type) {
+    CloudErrorType.timeout ||
+    CloudErrorType.network ||
+    CloudErrorType.rateLimited ||
+    CloudErrorType.server => true,
+    _ => false,
+  };
 }
 
 void _debugAssistantRepository(String message) {
@@ -1764,84 +336,4 @@ String _assistantDebugSnippet(String value, {int maxLength = 120}) {
     return normalized;
   }
   return '${normalized.substring(0, maxLength)}...';
-}
-
-String _assistantToolNameFromPayload(Map<String, dynamic> payload) {
-  final raw = payload['toolUse'];
-  if (raw is Map) {
-    return (raw['toolName'] ?? '').toString().trim();
-  }
-  return '';
-}
-
-class AssistantConsentStore {
-  AssistantConsentStore({required String actorScope})
-    : _actorScope = actorScope.trim().isEmpty
-          ? 'unauthenticated'
-          : actorScope.trim();
-
-  final String _actorScope;
-  static const int schema = 1;
-
-  String get _key {
-    final digest = sha256.convert(utf8.encode(_actorScope)).toString();
-    return 'assistant_skill_consents:${digest.substring(0, 24)}';
-  }
-
-  Future<List<AssistantSkillConsent>> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
-    if (raw == null || raw.trim().isEmpty) {
-      return const <AssistantSkillConsent>[];
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic> ||
-          decoded['schema'] != schema ||
-          decoded['items'] is! List) {
-        await prefs.remove(_key);
-        return const <AssistantSkillConsent>[];
-      }
-      return (decoded['items'] as List)
-          .whereType<Map>()
-          .map(
-            (item) =>
-                AssistantSkillConsent.fromJson(item.cast<String, dynamic>()),
-          )
-          .where((item) => item.skillId.isNotEmpty)
-          .toList(growable: false);
-    } catch (_) {
-      await prefs.remove(_key);
-      return const <AssistantSkillConsent>[];
-    }
-  }
-
-  Future<void> save(List<AssistantSkillConsent> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _key,
-      jsonEncode(<String, dynamic>{
-        'schema': schema,
-        'items': items.map((item) => item.toJson()).toList(growable: false),
-      }),
-    );
-  }
-
-  Future<void> upsert(AssistantSkillConsent next) async {
-    final current = await load();
-    final merged = <AssistantSkillConsent>[
-      for (final item in current)
-        if (item.skillId != next.skillId) item,
-      next,
-    ];
-    await save(merged);
-  }
-
-  Future<void> revoke(String skillId) async {
-    final current = await load();
-    final next = current
-        .where((item) => item.skillId != skillId)
-        .toList(growable: false);
-    await save(next);
-  }
 }

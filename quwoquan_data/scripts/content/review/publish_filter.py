@@ -16,7 +16,6 @@ from core.article_package import compute_asset_manifest_sha256, compute_document
 from core.io import read_json, write_json
 from content.review.ledger import (
     ReviewLedger,
-    STATE_DISCARD,
     post_publishability,
 )
 
@@ -242,7 +241,7 @@ def apply_publish_filter(
     publishable = True
 
     if ledger_file.is_file():
-        ledger = ReviewLedger.from_dict(read_json(ledger_file))
+        ledger = ReviewLedger.from_document(read_json(ledger_file))
         publishable, reasons, discard_targets = post_publishability(ledger)
 
     # 实体主页存在性必须以发布面 page.md 为准；review sidecar 只作审计输入，

@@ -1,9 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
+    show contentPostDeleteIdempotencyKey;
+import '../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
-  group('MockContentRepository 删除旅程契约 (T1/T2)', () {
+  group('MockContentRepository 删除旅程 local_contract', () {
     // 取一个「删除前 getPost 可读」的种子帖 id：直达兜底走 getPost，因此契约
     // 必须建立在 getPost 可读的帖上。
     Future<String> firstReadablePostId(MockContentRepository repo) async {
@@ -24,7 +27,7 @@ void main() {
       fail('seed feed 中应至少有一个 getPost 可读的帖');
     }
 
-    test('deletePost 后 getPost 抛错（软删墓碑语义，与云侧一致）', () async {
+    test('deletePost 后 getPost 返回 410 墓碑语义', () async {
       final repo = MockContentRepository();
       final postId = await firstReadablePostId(repo);
 
@@ -32,15 +35,21 @@ void main() {
       final before = await repo.getPost(postId: postId);
       expect(before.post.id, postId);
 
-      await repo.deletePost(postId: postId);
+      final idempotencyKey = contentPostDeleteIdempotencyKey(postId);
+      await repo.deletePost(postId: postId, idempotencyKey: idempotencyKey);
+      await repo.deletePost(postId: postId, idempotencyKey: idempotencyKey);
 
       // 删除后读取必须失败（呈现删除态/错误态，而非回退到旧内容）。
       await expectLater(
         repo.getPost(postId: postId),
         throwsA(
           isA<CloudException>()
-              .having((e) => e.type, 'type', CloudErrorType.notFound)
-              .having((e) => e.code, 'code', 'CONTENT.USER.post_not_found'),
+              .having((e) => e.statusCode, 'statusCode', 410)
+              .having(
+                (e) => e.code,
+                'code',
+                ContentErrorCode.contentDeleted.code,
+              ),
         ),
       );
     });
@@ -52,18 +61,26 @@ void main() {
         throwsA(
           isA<CloudException>()
               .having((e) => e.type, 'type', CloudErrorType.notFound)
-              .having((e) => e.code, 'code', 'CONTENT.USER.post_not_found'),
+              .having(
+                (e) => e.code,
+                'code',
+                ContentErrorCode.postNotFound.code,
+              ),
         ),
       );
     });
 
-    test('空 id 删除是安全幂等空操作', () async {
+    test('删除命令拒绝空 postId 或空 caller-owned idempotency key', () async {
       final repo = MockContentRepository();
-      await repo.deletePost(postId: '');
-      // 不影响既有可读帖。
       final postId = await firstReadablePostId(repo);
-      final detail = await repo.getPost(postId: postId);
-      expect(detail.post.id, postId);
+      await expectLater(
+        repo.deletePost(postId: '', idempotencyKey: 'delete-empty-post'),
+        throwsArgumentError,
+      );
+      await expectLater(
+        repo.deletePost(postId: postId, idempotencyKey: ''),
+        throwsArgumentError,
+      );
     });
   });
 }

@@ -1,190 +1,77 @@
-# L2 规格：development-workflow-governance（三层治理重构）
+# L2 Business Capability：开发流程治理 (`development-workflow-governance`)
 
-## 背景与动机
+> 所属领域：[`runtime`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-当前仓库的 SDD 主线、特性树、命令、门禁和测试规则已经很多，但真正的问题不是“缺少规范”，而是**规范之间的层级模型不一致**：
+## 1. 能力目标
 
-1. **特性树仍混用多套层级**：`tree_index.yaml`、`runtime/tree.yaml`、`acceptance.yaml`、脚本和命令文案同时存在 `L3_component`、`L4_detail`、`L5_leaf`、`L4_story` 等旧新混合语义。
-2. **命令默认仍以四层/五层思维驱动**：`/explore`、`/prd`、`/design`、`/dev` 明面上在收敛，但仍把 `L4` 当实施叶子，把 `L5` 当兼容层，导致新增特性和存量治理口径持续漂移。
-3. **任务层和树层没有彻底解耦**：很多节点把“任务项”“守护项”“兼容项”“观测项”继续下钻成目录层级，`树内任务文档` 没能成为唯一工程执行清单。
-4. **测试层和特性树层相互污染**：当前仓库已经有较成熟的 `三层测试` 测试治理视图，但主流程与 deploy 文案仍把 `L3/L4` 用作测试层表达，导致“层级”和“验证方式”混用。
-5. **现有治理目标已改变**：本轮决策已经明确，不再采用四层树，也不再保留兼容迁移层，而是一次性切换到严格三层治理模型。
+让开发者、审核者和编程 Agent 使用同一套目录原生规格、动态上下文和可执行门禁完成需求理解、实现与验收。
 
-本特性的目标，是把整个仓库的**特性树、命令、规则、主流程、索引生成、门禁脚本和验收标准**统一重构为三层治理模型：
+## 2. 范围与非目标
 
-- `L1`：能力
-- `L2`：Feature / 稳定业务特性容器
-- `L3`：Story / 最小独立交付单元
-- `Task`：工程任务项
+### In Scope
 
-并且要求：
+- AppRoot/L1/L2/L3 的目录、规格、设计与验收规则。
+- `explore/prd/design/dev/verify` 等命令的统一上下文链。
+- 动态特性上下文、总览、变更影响报告和机器门禁。
 
-- **不再保留 `L4/L5`**
-- **不再保留记录兼容映射**
-- **不再允许树层和测试层共用 `L*` 语义**
+### Out of Scope
 
-## 目标用户
+- 业务领域自身的产品决定和 wire schema。
+- 将当前会话计划、执行日志或派生报告提交为长期真相源。
 
-- **产品与需求提出者**：需要一个足够简单、可稳定复用的治理模型，把想法直接落到可交付 Story，而不是在 feature/subfeature/story/detail 之间反复摇摆。
-- **架构师与技术负责人**：需要一个可审计、可门禁、不会持续长回复杂层级的仓库治理结构。
-- **AI Agent / 编程助手**：需要确定的阶段职责与单一术语，避免在 `/explore`、`/prd`、`/design`、`/dev` 中反复误判层级。
-- **端侧与云侧开发者**：需要把开发工作聚焦到“一个 Story + 一组任务项”的执行模型，而不是处理多层目录与兼容命名。
-- **测试与交付负责人**：需要让 `acceptance.yaml`、`三层测试`、`gate`、`deploy` 使用同一套语言，明确什么是交付单元，什么是验证方式。
+## 3. Journey / Scenario 贡献
 
-## 功能范围
+- 本能力是横切工程能力，不直接承接用户 Journey；它为所有 Journey 提供一致的实施和审核约束。
 
-### R1：将特性树统一重构为三层治理模型
+## 4. Story
 
-- R1.1：仓库特性树只保留三层语义：
-  - `L1_domain_service`：能力
-  - `L2_business_capability`：Feature / 稳定业务特性容器
-  - `L3_story`：Story / 最小独立交付单元
-- R1.2：目录树保留到 `L3_story`；`Task` 不再作为目录节点存在，而是通过 `树内任务文档` 或后续 `tasks.yaml` 表达。
-- R1.3：所有记录 `L3_component / L3_subfeature / L4_detail / L4_story / L4_object_task / L5_*` 必须退出正式治理模型。
-- R1.4：任何新增 `L2_business_capability` 若还能继续拆出稳定子容器，说明建模过大；任何 `L3_story` 若还能拆出多个独立 Story，必须继续拆分。
 
-### R2：重构命令语义，使其围绕三层模型运行
 
-- R2.1：`/explore` 负责定位 `L1_domain_service`、`L2_business_capability` 与目标 `L3_story`，并给出初步 Task 拆解方向，不再输出旧层级归属。
-- R2.2：`/prd` 只创建或更新 `L3_story` 的 `spec.md` 与 `acceptance.yaml`。
-- R2.3：`/design` 只面向 AppRoot、`L1_domain_service` 与 `L2_business_capability` 冻结设计；`L3_story` 只引用上层设计，并在 `spec.md` / `acceptance.yaml` 中表达实现约束与验收。
-- R2.4：`/dev` 以 `L3_story` 为唯一实施单位，逐个完成其 Task。
-- R2.5：`/verify`、`/commit`、`/deliver` 只检查 `L3_story` 的完成度、验收闭环和 Task 完成状态。
-- R2.6：`/deploy` 与测试规则中不再使用 `L3/L4` 表示测试层，统一改用 `api_integration/user_acceptance`。
+- [`directory-native-sdd`](./directory-native-sdd/spec.md)：工具必须直接扫描目录与 Markdown；删除 `.qwq_output` 后仍可从受版本控制真相源重建上下文。
 
-### R3：重构验收标准，使 `acceptance.yaml` 与三层模型一致
+## 5. 能力要求
 
-- R3.1：`L1` 的验收重点为能力治理、关键旅程、NFR、发布与回滚约束。
-- R3.2：`L3_story` 的 `acceptance.yaml` 成为业务验收唯一真相源，承担：
-  - 常规路径
-  - 异常路径
-  - 边界/幂等
-  - `三层测试` 测试映射
-  - 必要的非功能要求
-- R3.3：`Task` 不再拥有独立 `acceptance.yaml`，仅通过任务项回链到所属 `L3_story` 的验收项。
-- R3.4：仓库内所有现存 `acceptance.yaml` 必须统一改成三层口径，不保留旧 `level` 值和兼容字段。
+<a id="req-001"></a>
+### REQ-001 目录原生单轨治理
 
-### R4：重构规则、主流程和测试口径
+- 目录结构必须直接表达 `AppRoot / L1 / L2 / L3`，不得维护人工索引或状态镜像。
+- 规格、设计、metadata、代码与测试必须各自承担唯一职责，不得生成第二真相源。
+- 长期未完成事项必须进入最低 owner 节点 `OPEN`；已解决事项转为当前要求或直接删除。
 
-- R4.1：`specs/00_MASTER_DEVELOPMENT_FLOW.md` 必须从四层治理改为三层治理，并把“L3/L4 测试”改写为 `api_integration/user_acceptance` 测试。
-- R4.2：`specs/feature-tree/00_FEATURE_TREE_STANDARD.md` 必须改写为三层标准，不再出现 Current L5 或兼容迁移描述。
-- R4.3：`specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md` 必须改写为三层唯一权威定义。
-- R4.4：`.cursor/rules/03-testing.mdc` 必须与三层树解耦，只保留 `三层测试` 作为测试治理语言。
-- R4.5：`.cursor/commands/*.md` 必须统一引用三层术语，不再出现“L4 默认叶子”“L5 兼容”等表述。
+<a id="req-002"></a>
+### REQ-002 命令与自然语言一致执行
 
-### R5：重构脚本、索引和门禁
+- 命令和自然语言执行必须使用同一 Spec Entry、Pre-work Reflection 与 Exit Review。
+- 动态上下文、总览和变更报告只写入 `.qwq_output`。
+- 目录、链接、章节、验收证据和禁止文件必须由可执行门禁校验。
 
-- R5.1：`tree_index.yaml`、`runtime/tree.yaml`、tree index 生成器与相关校验脚本必须统一到三层模型。
-- R5.2：`quwoquan_ops/gate/scaffold/new_feature_fullstack.sh` 必须退出旧 `changes/` 五层脚手架模式，改为直接生成新的三层特性节点。
-- R5.3：`scripts/verify_feature_traceability.sh`、`quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh` 等脚本必须改为零容忍旧层级。
-- R5.4：一旦发现旧 level、旧目录深度、旧兼容字段，门禁必须直接失败，而不是容忍读取。
+## 6. 契约与依赖
 
-### R6：重构存量特性树
+- 上游能力：[`runtime`](../spec.md) 的仓库执行约束。
+- 下游能力：仓库内所有业务节点、metadata、代码和测试。
+- 读取事实：目录、Markdown、metadata、测试 `spec_ref` 与 Git diff。
+- 写入事实：只修改正式规格、设计、metadata、代码和测试；派生结果写入 `.qwq_output`。
+- 一致性要求：README 模板、命令和 gate 必须同步更新。
 
-- R6.1：所有现有 L1 节点保留为新 `L1_domain_service`。
-- R6.2：旧扁平 Story 与记录深层节点需要按“Feature 容器”与“独立 Story”重新归并到 `L2_business_capability / L3_story`。
-- R6.3：旧 `L5` 一律消失，不再保留为目录层或兼容字段。
-- R6.4：旧中间分组信息若仍有价值，应迁移为 tag、journey、module_group、business_object 等元数据，而不是继续保留目录层。
+## 7. 集成验收
 
-## 不做什么（Out of Scope）
+<a id="sit-001"></a>
+### SIT-001 目标节点可生成最小完整上下文
 
-- OS1：本次 `/prd` 不直接实现所有文档、脚本、索引和门禁改造，只冻结三层治理的规格基线与验收基线。
-- OS2：本次 `/prd` 不处理具体业务功能的代码实现，不修改端侧或云侧业务逻辑。
-- OS3：本次 `/prd` 不保留任何兼容迁移策略，不设计“双轨并行”方案，也不为旧层级继续提供映射表。
-- OS4：本次 `/prd` 不继续讨论是否采用微软四层、Jira 四层或 SAFe 分层，三层模型已作为输入前提冻结。
-- OS5：本次 `/prd` 不决定 Task 最终是否落为 `树内任务文档` 还是 `tasks.yaml`，只冻结其“不作为目录层”的原则。
+- GIVEN 仓库中存在符合层级规范的目标 spec 或被 L1 工程归属覆盖的代码路径。
+- WHEN 开发者生成 feature context 并执行特性树门禁。
+- THEN 输出包含唯一 owner、父链、要求、验收、设计决定、metadata、测试证据、OPEN 与 Git 影响。
+- AND 任何人工索引、节点级 acceptance、changelog 或中央 backlog 回潮都会阻断。
 
-## 对标输入与吸收结论
+## 8. 开放事项
 
-### 对标对象
+<a id="open-001"></a>
+### OPEN-001 全树证据引用收口
 
-- **Microsoft Azure DevOps**：`Epic -> Feature -> User Story -> Task`
-- **Atlassian / Jira 常见实践**：`Epic/Feature -> Story -> Task`
-- **Aha! / 产品管理工具**：Theme / Epic / Story / Task
-
-### 借鉴点
-
-- 借鉴“能力 / Story / Task 必须语义分离”的原则。
-- 借鉴“最小独立验收单元应是 Story，而不是技术任务”的做法。
-- 借鉴“Task 服务于 Story，而不是再形成一层业务树”的分工。
-
-### 不借鉴点
-
-- 不采纳微软式四层树，因为本仓库当前主要矛盾是**层级过深与语义漂移**，而不是缺少中间管理层。
-- 不保留 Epic/Feature/Story 的完整层级链，不再引入新的中间容器层。
-- 不采用兼容迁移思路，不接受“旧层级继续读、新层级逐步推广”的长期混合态。
-
-### 适用边界
-
-- 本结论适用于本仓库的**代码仓治理树**、命令、规则、流程、门禁和验收。
-- 本结论不要求外部项目管理工具也必须使用同样三层；外部看板可有自己的 portfolio 层。
-
-### 成本与代价
-
-- 需要一次性重写主流程、规则、命令、索引生成器和门禁脚本。
-- 需要全量迁移存量特性树与 `acceptance.yaml`。
-- 短期成本高，但能换来长期治理模型稳定。
-
-## 角色分工
-
-- **产品**：确认三层模型的交付边界，确保 `L2_business_capability` 与 `L3_story` 的职责清晰，且 `L3_story` 真正对应独立用户/平台价值。
-- **架构**：负责三层治理定义、目录模型、脚本改造边界、索引与门禁统一口径。
-- **开发**：按 `L3_story -> Task` 实施重构，保证文档、脚本与实现一致推进。
-- **测试**：负责把 `acceptance.yaml` 与 `三层测试` 验证闭环对齐，不再使用旧 `L3/L4` 测试称呼。
-- **发布/治理负责人**：负责切换窗口、回滚方案、门禁收口和迁移完成标准。
-
-## 非功能目标
-
-- **一致性**：命令、规则、特性树、验收、脚本、索引不得再出现互相矛盾的层级语义。
-- **可审计性**：任何 `L3_story` 都可直接追踪到其 `acceptance.yaml` 与 Task。
-- **门禁确定性**：旧层级一律 fail，不再兼容。
-- **迁移安全性**：重构需在单分支/单窗口内完成，并可通过 gate 与索引重建验证完整性。
-
-## 元数据唯一源边界
-
-本次需求不涉及业务 API `service.yaml` 或 UI `surface/route` 元数据分层，而涉及**治理元数据唯一源**：
-
-- `specs/feature-tree/tree_index.yaml`：特性树索引唯一真相源
-- `specs/feature-tree/<L1>/<L2>/spec.md`：规格真相源
-- `specs/feature-tree/<L1>/<L2>/acceptance.yaml`：验收真相源
-- `树内任务文档` 或后续 `tasks.yaml`：任务真相源
-
-禁止行为：
-
-- 在 `runtime/tree.yaml`、脚手架、校验脚本、命令文案中继续维护另一套与三层树不一致的层级定义
-- 在测试规则中继续用 `L3/L4` 代指测试层
-
-## 四层验收视图
-
-尽管特性树改为三层，测试仍保留 `三层测试`：
-
-- `local_contract`：契约与静态校验
-- `local_contract`：模块与交互验证
-- `api_integration`：端云集成与 staging 合约
-- `user_acceptance`：端到端旅程与真机/Patrol
-
-原则：
-
-- 树层级只表达交付对象
-- `三层测试` 只表达验证方式
-- 两者不再共用 `L*` 术语
-
-## 灰度与回滚约束
-
-- 本次重构应在单独治理分支完成，不允许半兼容状态进入主干。
-- 合入前必须完成：
-  - 新旧层级残留扫描
-  - `tree_index.yaml` 重建与校验
-  - 命令/规则/流程文案一致性校验
-  - 代表性样例节点的三层迁移验证
-- 若门禁或索引重建失败，必须整体回滚该治理分支，不允许局部带病合入。
-
-## 验收重点
-
-详见 `acceptance.yaml`。本次 `/prd` 基线重点关注：
-
-- A1~A2：三层模型是否被明确定义，并明确禁止 `L4/L5`
-- A3~A4：命令、主流程、规则是否全部改为围绕 `L1/L2/L3`
-- A5：测试层是否与特性树层彻底解耦
-- A6：脚本、索引与门禁是否切换到三层且零兼容
-- A7：存量特性树与 `acceptance.yaml` 是否纳入一次性迁移范围
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：部分节点仍以同节点 OPEN 声明尚缺直接测试 `spec_ref`，影响自动验收覆盖率。
+- 完成判定：`SIT-001` 及全部节点验收锚点均有真实测试 `spec_ref`，且不再依赖 OPEN 代替证据。

@@ -20,7 +20,6 @@ ALLOWED_METRICS_FILES = frozenset({"snapshot.json", "prometheus.prom"})
 ALLOWED_TRACE_FILES = frozenset({"links.json"})
 ALLOWED_ATTACHMENT_FILES = frozenset({"stdout.log", "stderr.log"})
 ALLOWED_ATTACHMENT_DIRS = frozenset({"screenshots"})
-ALLOWED_OBSERVABILITY_PARENTS = frozenset({"env", "data"})
 
 
 def layout_issues(root: Path = OBSERVABILITY_ROOT) -> list[str]:
@@ -29,10 +28,9 @@ def layout_issues(root: Path = OBSERVABILITY_ROOT) -> list[str]:
         return issues
     old_root = root / "observability"
     if old_root.exists():
-        issues.append(f"{_rel(old_root)}: old observability root is forbidden; use env/<env>/observability or data/observability")
+        issues.append(f"{_rel(old_root)}: old observability root is forbidden; use env/<env>/observability")
 
     env_root = root / "env"
-    data_root = root / "data"
     if env_root.exists():
         for entry in sorted(env_root.iterdir()):
             if not entry.is_dir():
@@ -42,8 +40,11 @@ def layout_issues(root: Path = OBSERVABILITY_ROOT) -> list[str]:
                 issues.append(f"{_rel(entry)}: unknown env segment")
                 continue
             issues.extend(_observability_runs_issues(entry / "observability"))
-    if data_root.exists():
-        issues.extend(_observability_runs_issues(data_root / "observability"))
+    data_observability = root / "data" / "observability"
+    if data_observability.exists():
+        issues.append(
+            f"{_rel(data_observability)}: data observability is forbidden; use env/repo/observability"
+        )
     return issues
 
 

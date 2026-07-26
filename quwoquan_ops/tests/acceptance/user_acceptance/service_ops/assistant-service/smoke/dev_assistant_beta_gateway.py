@@ -26,7 +26,7 @@ METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata"
 
 
 def load_fixture(relative_path: str) -> dict:
-    return json.loads((METADATA / relative_path).read_text(encoding="utf-8"))
+    return json.loads((ROOT / relative_path).read_text(encoding="utf-8"))
 
 
 def seed_set(relative_path: str, ref: str) -> dict:
@@ -271,6 +271,8 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
     assistant_upstream_port: int = 18087
     chat_upstream_host: str = "127.0.0.1"
     chat_upstream_port: int = 18081
+    content_upstream_host: str = "127.0.0.1"
+    content_upstream_port: int = 0
     entity_upstream_host: str = "127.0.0.1"
     entity_upstream_port: int = 18084
     avatar_cdn_base_url: str = ""
@@ -416,7 +418,9 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
             return ("assistant-service", self.assistant_upstream_host, self.assistant_upstream_port)
         if path.startswith("/chat"):
             return ("chat-service", self.chat_upstream_host, self.chat_upstream_port)
-        if path.startswith("/homepages"):
+        if path.startswith("/content/") and self.content_upstream_port > 0:
+            return ("content-service", self.content_upstream_host, self.content_upstream_port)
+        if path.startswith("/homepages") and self.entity_upstream_port > 0:
             return ("entity-service", self.entity_upstream_host, self.entity_upstream_port)
         return None
 
@@ -424,17 +428,17 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         if path == "/healthz":
             return {"status": "ok", "gateway": "business-beta"}
 
-        content = seed_set("content/test_fixtures/scenarios/content_scenarios.json", "content_discovery_core")
-        circle = seed_set("social/circle/test_fixtures/scenarios/circle_scenarios.json", "circle_core")
-        circle_home = seed_set("social/circle/test_fixtures/scenarios/circle_scenarios.json", "circle_home_feed_core")
-        chat = seed_set("messages/chat/test_fixtures/scenarios/chat_scenarios.json", "chat_core")
-        chat_contacts = seed_set("messages/chat/test_fixtures/scenarios/chat_scenarios.json", "chat_contacts_core")
-        user = seed_set("user/test_fixtures/scenarios/user_scenarios.json", "user_profile_core")
-        user_feed = seed_set("user/test_fixtures/scenarios/user_scenarios.json", "profile_feed_core")
-        entity = seed_set("entity/test_fixtures/scenarios/entity_scenarios.json", "entity_homepage_core")
-        integration = seed_set("integration/test_fixtures/scenarios/integration_scenarios.json", "location_poi_core")
-        notification = seed_set("notification/test_fixtures/scenarios/notification_scenarios.json", "notification_core")
-        rtc = seed_set("rtc/test_fixtures/scenarios/rtc_scenarios.json", "rtc_core")
+        content = seed_set("quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json", "content_discovery_core")
+        circle = seed_set("quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.json", "circle_core")
+        circle_home = seed_set("quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.json", "circle_home_feed_core")
+        chat = seed_set("quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json", "chat_core")
+        chat_contacts = seed_set("quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json", "chat_contacts_core")
+        user = seed_set("quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.json", "user_profile_core")
+        user_feed = seed_set("quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.json", "profile_feed_core")
+        entity = seed_set("quwoquan_service/services/entity-service/tests/support/contract_fixtures/scenarios/entity_scenarios.json", "entity_homepage_core")
+        integration = seed_set("quwoquan_service/services/integration-service/tests/support/contract_fixtures/scenarios/integration_scenarios.json", "location_poi_core")
+        notification = seed_set("quwoquan_service/services/notification-service/tests/support/contract_fixtures/scenarios/notification_scenarios.json", "notification_core")
+        rtc = seed_set("quwoquan_service/services/rtc-service/tests/support/contract_fixtures/scenarios/rtc_scenarios.json", "rtc_core")
         intersections = intersection_feed_payloads()
         params = parse_qs(query)
 
@@ -497,7 +501,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 else user_feed.get("authorPostIds", [])
             )
             return {"items": [p for p in content.get("posts", []) if (p.get("id") or p.get("postId")) in selected_ids]}
-        if path.startswith("/content/posts/"):
+        if path.startswith("/content/content/posts/"):
             post_id = path.split("/")[-1]
             posts = [p for p in content.get("posts", []) if p.get("id") == post_id or p.get("postId") == post_id]
             return posts[0] if posts else {}
@@ -531,7 +535,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
             return {"items": (chat.get("members") or {}).get(conversation_id, [])}
         if path == "/me":
             return user_profile_wire(user.get("profiles", [])[0])
-        if path == "/user/personas/active":
+        if path == "/user/persona/personas/active":
             profile = user_profile_wire(user.get("profiles", [])[0])
             return {
                 "subAccountId": profile["subAccountId"],
@@ -596,7 +600,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
             return {"items": circle.get("circles", [])}
         if path == "/homepages/search":
             return {"items": entity.get("homepages", [])}
-        if path == "/integration/locations/pois":
+        if path == "/integration/external_integration/locations/pois":
             return {"items": integration.get("pois", [])}
         if path == "/app-messages":
             return {
@@ -611,7 +615,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         if path.startswith("/app-messages/") and path.endswith("/read"):
             message_id = path.split("/")[-2]
             return self._app_message_action_wire(notification, message_id, read=True)
-        if path.startswith("/app-messages/") and path.count("/") == 3:
+        if path.startswith("/app-messages/") and path.count("/") == 2:
             message_id = path.split("/")[-1]
             return self._app_message_action_wire(notification, message_id, read=None)
         if path == "/rtc/calls":
@@ -668,6 +672,8 @@ def main() -> None:
     parser.add_argument("--assistant-upstream-port", type=int, default=0)
     parser.add_argument("--chat-upstream-host", default="127.0.0.1")
     parser.add_argument("--chat-upstream-port", type=int, default=18081)
+    parser.add_argument("--content-upstream-host", default="127.0.0.1")
+    parser.add_argument("--content-upstream-port", type=int, default=0)
     parser.add_argument("--entity-upstream-host", default="127.0.0.1")
     parser.add_argument("--entity-upstream-port", type=int, default=18084)
     parser.add_argument("--avatar-cdn-base-url", default="")
@@ -679,6 +685,8 @@ def main() -> None:
     AssistantBetaGateway.assistant_upstream_port = args.assistant_upstream_port or args.upstream_port
     AssistantBetaGateway.chat_upstream_host = args.chat_upstream_host
     AssistantBetaGateway.chat_upstream_port = args.chat_upstream_port
+    AssistantBetaGateway.content_upstream_host = args.content_upstream_host
+    AssistantBetaGateway.content_upstream_port = args.content_upstream_port
     AssistantBetaGateway.entity_upstream_host = args.entity_upstream_host
     AssistantBetaGateway.entity_upstream_port = args.entity_upstream_port
     AssistantBetaGateway.avatar_cdn_base_url = args.avatar_cdn_base_url
@@ -697,7 +705,8 @@ def main() -> None:
         "[business-beta-gateway] listening "
         f"http://{args.listen_host}:{args.listen_port} -> "
         f"assistant=http://{AssistantBetaGateway.assistant_upstream_host}:{AssistantBetaGateway.assistant_upstream_port} "
-        f"chat=http://{AssistantBetaGateway.chat_upstream_host}:{AssistantBetaGateway.chat_upstream_port}"
+        f"chat=http://{AssistantBetaGateway.chat_upstream_host}:{AssistantBetaGateway.chat_upstream_port} "
+        f"content=http://{AssistantBetaGateway.content_upstream_host}:{AssistantBetaGateway.content_upstream_port}"
     )
     try:
         server.serve_forever()

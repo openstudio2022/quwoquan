@@ -3,16 +3,11 @@
 与对象证据链规格一致：每张图必须能说清「与检索对象的真实相关性」，禁止通用模板串
 （如 "{实体} 实景主图"）。像素门保证内容页不会出现糊图；数量门由当前
 ContentSupplyTask 的载体配额决定，图片作品允许单张高质量图。
-真相源：specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md + 用户图片下载要求。
+真相源：specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md。
 """
 from __future__ import annotations
 
 import re
-import urllib.parse
-from functools import lru_cache
-from pathlib import Path
-
-import yaml
 
 # 旧任务的默认实体图数量；新 separated research 按任务配额动态计算。
 MIN_ENTITY_IMAGES = 2
@@ -46,13 +41,6 @@ _LOW_QUALITY_CAPTION_MARKERS = (
     "500px provided description",
 )
 
-_TRAVEL_SOURCE_REGISTRY = (
-    Path(__file__).resolve().parents[2]
-    / "verticals"
-    / "travel"
-    / "sources"
-    / "source_registry.yaml"
-)
 
 
 def is_generic_relevance(relevance: str, *, entity_id: str = "") -> bool:
@@ -124,73 +112,6 @@ def image_caption_quality_issue(caption: str, *, entity_id: str = "", asset_id: 
     return None
 
 
-def _normalized_known_term_text(value: str) -> str:
-    text = urllib.parse.unquote(str(value or "")).casefold()
-    text = re.sub(r"[_/\\\-·|:：,，.。()（）\\[\\]【】]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
-
-
-@lru_cache(maxsize=1)
-def _known_image_reject_registry() -> dict[str, tuple[str, ...]]:
-    if not _TRAVEL_SOURCE_REGISTRY.is_file():
-        return {}
-    try:
-        data = yaml.safe_load(_TRAVEL_SOURCE_REGISTRY.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError):
-        return {}
-    out: dict[str, tuple[str, ...]] = {}
-    for row in data.get("knownImageRejectTerms") or []:
-        if not isinstance(row, dict):
-            continue
-        entity = str(row.get("entity") or "").strip()
-        values = row.get("rejectTerms") if isinstance(row.get("rejectTerms"), list) else []
-        seen: set[str] = set()
-        terms: list[str] = []
-        for value in values:
-            term = str(value or "").strip()
-            if not term or term in seen:
-                continue
-            seen.add(term)
-            terms.append(term)
-        if entity and terms:
-            out[entity] = tuple(terms)
-    return out
-
-
-def known_image_reject_terms(entity_id: str) -> tuple[str, ...]:
-    """Curated cross-entity visual reject terms from the travel source registry."""
-    entity = str(entity_id or "").strip()
-    if not entity:
-        return ()
-    return _known_image_reject_registry().get(entity, ())
-
-
-def image_known_reject_issue(
-    text: str,
-    *,
-    entity_id: str,
-    asset_id: str = "",
-) -> str | None:
-    """Block curated same-name/wrong-place image matches before release."""
-    entity = str(entity_id or "").strip()
-    if not entity:
-        return None
-    haystack_raw = urllib.parse.unquote(str(text or "")).casefold()
-    haystack_normalized = _normalized_known_term_text(haystack_raw)
-    for term in known_image_reject_terms(entity):
-        raw = urllib.parse.unquote(str(term or "")).casefold()
-        normalized = _normalized_known_term_text(raw)
-        if (raw and raw in haystack_raw) or (
-            normalized and normalized in haystack_normalized
-        ):
-            label = asset_id or "?"
-            return (
-                f"imageCaption: {label} 命中『{entity}』已知错位图片词"
-                f"（term={term!r}）"
-            )
-    return None
-
-
 def pixel_size_issue(width: int | None, height: int | None, *, asset_id: str) -> str | None:
     """单图像素门：尺寸缺失或低于阈值返回问题串，否则 None。"""
     if not width or not height:
@@ -245,8 +166,6 @@ __all__ = [
     "is_generic_relevance",
     "relevance_issue",
     "image_caption_quality_issue",
-    "known_image_reject_terms",
-    "image_known_reject_issue",
     "pixel_size_issue",
     "min_count_issue",
     "asset_index_relevance_issues",

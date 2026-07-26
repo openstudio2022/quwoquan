@@ -18,6 +18,9 @@ type Client interface {
 	// ── String ──────────────────────────────────────────────
 	Get(ctx context.Context, key string) (string, error)
 	GetBytes(ctx context.Context, key string) ([]byte, error)
+	// GetDel atomically reads and deletes a key (one-time credential
+	// consumption). Returns ErrKeyNotFound when the key does not exist.
+	GetDel(ctx context.Context, key string) (string, error)
 	Set(ctx context.Context, key string, value string, ttl time.Duration) error
 	SetBytes(ctx context.Context, key string, value []byte, ttl time.Duration) error
 	SetNX(ctx context.Context, key string, value string, ttl time.Duration) (bool, error)
@@ -54,6 +57,7 @@ type Client interface {
 	XReadGroup(ctx context.Context, group string, consumer string, streams map[string]string, count int64, block time.Duration) ([]StreamMessage, error)
 	XAck(ctx context.Context, stream string, group string, ids ...string) error
 	XAutoClaim(ctx context.Context, stream string, group string, consumer string, minIdle time.Duration, start string, count int64) ([]StreamMessage, string, error)
+	XPendingCount(ctx context.Context, stream string, group string) (int64, error)
 
 	// ── Pipeline ────────────────────────────────────────────
 	Pipeline(ctx context.Context) Pipeliner
@@ -87,6 +91,7 @@ type Pipeliner interface {
 	Set(ctx context.Context, key string, value string, ttl time.Duration)
 	HGetAll(ctx context.Context, key string) *MapResult
 	SMembers(ctx context.Context, key string) *SliceResult
+	SIsMember(ctx context.Context, key string, member string) *BoolResult
 	Exec(ctx context.Context) error
 }
 
@@ -122,7 +127,18 @@ type SliceResult struct {
 
 func NewSliceResult(val []string, err error) *SliceResult { return &SliceResult{val: val, err: err} }
 func (r *SliceResult) Result() ([]string, error)          { return r.val, r.err }
-func (r *SliceResult) SetResult(val []string, err error)  { r.val, r.err = val, err }
+
+// BoolResult holds a deferred SISMEMBER result from a pipeline
+// (N3-2 FilterCandidates 单 RTT 批量点查).
+type BoolResult struct {
+	val bool
+	err error
+}
+
+func NewBoolResult(val bool, err error) *BoolResult      { return &BoolResult{val: val, err: err} }
+func (r *BoolResult) Result() (bool, error)              { return r.val, r.err }
+func (r *BoolResult) SetResult(val bool, err error)      { r.val, r.err = val, err }
+func (r *SliceResult) SetResult(val []string, err error) { r.val, r.err = val, err }
 
 // ErrKeyNotFound is returned when a key does not exist.
 // Callers should check errors.Is(err, ErrKeyNotFound).

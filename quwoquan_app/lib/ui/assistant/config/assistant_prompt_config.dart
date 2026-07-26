@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 
@@ -41,25 +41,25 @@ class AssistantPromptConfig {
   }
 
   static const Map<String, String> _welcomeMap = {
-    'default': '有什么想让我帮忙的？',
-    'discovery_firstTime': '你在发现页，第一次来这儿～找内容、管讨论或调设置都可以跟我说。',
-    'discovery_returning': '又来看发现了，需要帮你找、帮你记还是做别的？',
-    'discovery_frequent': '老地方了，直接说你想干啥～',
-    'circles_firstTime': '你在圈子页，第一次来～想找圈子、管订阅或发内容都可以找我。',
-    'circles_returning': '又来看圈子了，需要帮你找、帮你记还是做别的？',
-    'circles_frequent': '圈子常客了，直接说你想干啥～',
-    'chat_firstTime': '你在聊天，第一次从这里找我～发消息、找人或管设置都可以。',
-    'chat_returning': '又来找我了，需要帮你找、帮你记还是发点什么？',
-    'chat_frequent': '直接说你想干啥～',
-    'profile_firstTime': '你在个人页，第一次从这里找我～改资料、管分身或设置都可以。',
-    'profile_returning': '又来看个人页了，需要帮你记、帮你办还是做别的？',
-    'profile_frequent': '直接说你想干啥～',
-    'create_firstTime': '你在创作，第一次从这里找我～配文案、定时发或找灵感都可以。',
-    'create_returning': '又在创作了，需要帮你配文案、帮你发还是做别的？',
-    'create_frequent': '创作老手了，直接说你想干啥～',
-    'article_firstTime': '你在看内容，第一次从这里找我～总结、推荐或记一笔都可以。',
-    'article_returning': '又来看这篇了，需要帮你读、帮你记还是做别的？',
-    'article_frequent': '直接说你想干啥～',
+    'default': AssistantText.assistantPromptWelcomeDefault,
+    'discovery_firstTime': AssistantText.assistantPromptDiscoveryFirstTime,
+    'discovery_returning': AssistantText.assistantPromptDiscoveryReturning,
+    'discovery_frequent': AssistantText.assistantPromptDiscoveryFrequent,
+    'circles_firstTime': AssistantText.assistantPromptCirclesFirstTime,
+    'circles_returning': AssistantText.assistantPromptCirclesReturning,
+    'circles_frequent': AssistantText.assistantPromptCirclesFrequent,
+    'chat_firstTime': AssistantText.assistantPromptChatFirstTime,
+    'chat_returning': AssistantText.assistantPromptChatReturning,
+    'chat_frequent': AssistantText.assistantPromptChatFrequent,
+    'profile_firstTime': AssistantText.assistantPromptProfileFirstTime,
+    'profile_returning': AssistantText.assistantPromptProfileReturning,
+    'profile_frequent': AssistantText.assistantPromptProfileFrequent,
+    'create_firstTime': AssistantText.assistantPromptCreateFirstTime,
+    'create_returning': AssistantText.assistantPromptCreateReturning,
+    'create_frequent': AssistantText.assistantPromptCreateFrequent,
+    'article_firstTime': AssistantText.assistantPromptArticleFirstTime,
+    'article_returning': AssistantText.assistantPromptArticleReturning,
+    'article_frequent': AssistantText.assistantPromptArticleFrequent,
   };
 
   /// 根据 [context] 返回 3～5 个推荐 chips（首次偏教学向，常用偏效率向）。
@@ -68,17 +68,17 @@ class AssistantPromptConfig {
       case ExperienceLevel.firstTime:
         return [
           AssistantChipEntry(
-            label: UITextConstants.assistantCommandFind,
+            label: AssistantText.assistantCommandFind,
             actionType: 'command',
             value: 'find',
           ),
           const AssistantChipEntry(
-            label: '讨论管理',
+            label: AssistantText.assistantPromptDiscussionManagement,
             actionType: 'route',
             value: 'circles',
           ),
           const AssistantChipEntry(
-            label: '深色模式',
+            label: AssistantText.assistantPromptDarkMode,
             actionType: 'setting',
             value: 'theme',
           ),
@@ -86,17 +86,17 @@ class AssistantPromptConfig {
       case ExperienceLevel.returning:
         return [
           AssistantChipEntry(
-            label: UITextConstants.assistantCommandFind,
+            label: AssistantText.assistantCommandFind,
             actionType: 'command',
             value: 'find',
           ),
           AssistantChipEntry(
-            label: UITextConstants.assistantCommandRemember,
+            label: AssistantText.assistantCommandRemember,
             actionType: 'command',
             value: 'remember',
           ),
           const AssistantChipEntry(
-            label: '订阅置顶',
+            label: AssistantText.assistantPromptPinnedSubscription,
             actionType: 'route',
             value: 'circles',
           ),
@@ -104,17 +104,17 @@ class AssistantPromptConfig {
       case ExperienceLevel.frequent:
         return [
           AssistantChipEntry(
-            label: UITextConstants.assistantCommandFind,
+            label: AssistantText.assistantCommandFind,
             actionType: 'command',
             value: 'find',
           ),
           AssistantChipEntry(
-            label: UITextConstants.assistantCommandShare,
+            label: AssistantText.assistantCommandShare,
             actionType: 'command',
             value: 'share',
           ),
           const AssistantChipEntry(
-            label: '直接发',
+            label: AssistantText.assistantPromptDirectPublish,
             actionType: 'route',
             value: 'create',
           ),
@@ -130,16 +130,16 @@ class AssistantPromptConfig {
     if (context.source == AssistantSource.discovery && tab.isNotEmpty) {
       if (level == ExperienceLevel.returning ||
           level == ExperienceLevel.frequent) {
-        lines.add('可以让我帮你找类似风格的内容');
+        lines.add(AssistantText.assistantPromptFindSimilar);
       }
     }
     if (context.source == AssistantSource.create) {
       if (context.hints['hasAddedMedia'] == true) {
-        lines.add('可以让我帮你配文案或定时发');
+        lines.add(AssistantText.assistantPromptCreateCopyOrSchedule);
       }
     }
     if (lines.isEmpty) {
-      lines.add('说一句你想做的事，或选上面的推荐试试');
+      lines.add(AssistantText.assistantPromptChooseOrDescribe);
     }
     return lines;
   }

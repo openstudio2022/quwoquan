@@ -50,12 +50,13 @@ void main() {
 
   testWidgets('视频相机不可用时复用深色错误语义且隐藏无意义控件', (tester) async {
     await tester.pumpWidget(
-      const CupertinoApp(
-        theme: CupertinoThemeData(brightness: Brightness.light),
+      CupertinoApp(
+        theme: const CupertinoThemeData(brightness: Brightness.light),
         home: CameraCapturePage(
           initialMode: MediaPickerEntryMode.video,
           allowVideoMode: true,
           cameraDiscovery: _noAvailableCameras,
+          filterRepository: _FakeFilterRepository(),
         ),
       ),
     );
@@ -113,12 +114,16 @@ void main() {
     await tester.tap(find.text('open camera'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     // 推进录制时长越过最短限制（默认 1s）。
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 400));
     }
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     await tester.pump();
     await tester.pump();
     await tester.pumpAndSettle();
@@ -126,12 +131,17 @@ void main() {
     expect(find.text(UITextConstants.cameraVideoRetake), findsOneWidget);
     expect(find.text(UITextConstants.cameraVideoNext), findsOneWidget);
     final retakeContainer = tester.widget<Container>(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('camera-retake-video-action')),
-        matching: find.byWidgetPredicate(
-          (widget) => widget is Container && widget.decoration is BoxDecoration,
-        ),
-      ).first,
+      find
+          .descendant(
+            of: find.byKey(
+              const ValueKey<String>('camera-retake-video-action'),
+            ),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Container && widget.decoration is BoxDecoration,
+            ),
+          )
+          .first,
     );
     final retakeDecoration = retakeContainer.decoration! as BoxDecoration;
     expect(retakeDecoration.border, isNotNull);
@@ -140,7 +150,9 @@ void main() {
       greaterThan(0),
     );
 
-    await tester.tap(find.byKey(const ValueKey<String>('camera-use-video-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-use-video-action')),
+    );
     await tester.pumpAndSettle();
 
     expect(result?.path, '/tmp/recorded.mp4');
@@ -166,7 +178,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
@@ -186,7 +200,9 @@ void main() {
     expect(rotateButton.onPressed, isNull);
 
     // 停止录制以取消计时器，避免残存 Timer。
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     await tester.pump();
     await tester.pumpAndSettle();
     expect(find.text(UITextConstants.cameraVideoNext), findsOneWidget);
@@ -210,14 +226,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraVideoRecordTooShort), findsOneWidget);
+    expect(
+      find.text(UITextConstants.cameraVideoRecordTooShort),
+      findsOneWidget,
+    );
     expect(find.text(UITextConstants.cameraVideoNext), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('camera-record-action')),
@@ -246,15 +269,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 400));
     }
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraVideoPreviewUnavailable), findsOneWidget);
+    expect(
+      find.text(UITextConstants.cameraVideoPreviewUnavailable),
+      findsOneWidget,
+    );
     expect(
       find.text(UITextConstants.cameraVideoPreviewUnavailableHint),
       findsOneWidget,
@@ -267,7 +297,10 @@ void main() {
       tester,
       const ValueKey<String>('camera-use-video-action'),
     );
-    expect((retakeDecoration.color?.a ?? 0), greaterThan(nextDecoration.color?.a ?? 0));
+    expect(
+      (retakeDecoration.color?.a ?? 0),
+      greaterThan(nextDecoration.color?.a ?? 0),
+    );
     expect(nextDecoration.color, isNot(AppColors.primaryColor));
   });
 
@@ -289,11 +322,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 400));
     }
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     await tester.pump();
     await tester.pumpAndSettle();
 
@@ -313,12 +350,15 @@ void main() {
 
 BoxDecoration _buttonDecoration(WidgetTester tester, Key key) {
   final container = tester.widget<Container>(
-    find.descendant(
-      of: find.byKey(key),
-      matching: find.byWidgetPredicate(
-        (widget) => widget is Container && widget.decoration is BoxDecoration,
-      ),
-    ).first,
+    find
+        .descendant(
+          of: find.byKey(key),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Container && widget.decoration is BoxDecoration,
+          ),
+        )
+        .first,
   );
   return container.decoration! as BoxDecoration;
 }
@@ -370,7 +410,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
         sort: 1,
         enabled: true,
         defaultStrength: 0,
-        params: <String, double>{},
+        adjustments: ImageEditorFilterAdjustments(),
       ),
       ImageEditorFilterPreset(
         id: 'cool',
@@ -379,7 +419,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
         sort: 2,
         enabled: true,
         defaultStrength: 80,
-        params: <String, double>{'temperature': -12},
+        adjustments: ImageEditorFilterAdjustments(temperature: -12),
       ),
     ];
   }

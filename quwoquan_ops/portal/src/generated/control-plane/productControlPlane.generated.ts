@@ -7,6 +7,7 @@ export const productControlPlane = {
       "moderation_summary",
       "experiment_health",
       "recommendation_guardrail",
+      "rtc_media_qoe",
       "sla_watch"
     ]
   },
@@ -15,7 +16,6 @@ export const productControlPlane = {
     {
       "deployment_profile": "latency_sensitive",
       "label": "四层指标快照",
-      "object_kind": "dashboard",
       "object_type": "l1l4_metric_snapshot",
       "operations": [
         {
@@ -25,53 +25,122 @@ export const productControlPlane = {
           "scopes": [
             "ops.product.dashboard.read"
           ]
+        },
+        {
+          "method": "GET",
+          "operation": "GetServiceRouteRED",
+          "path": "/control-plane/product/metrics/red-routes",
+          "scopes": [
+            "ops.product.dashboard.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "GetGrowthOverview",
+          "path": "/control-plane/product/growth/overview",
+          "scopes": [
+            "ops.product.dashboard.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "GetPageExperience",
+          "path": "/control-plane/product/experience/pages",
+          "scopes": [
+            "ops.product.dashboard.read"
+          ]
         }
       ],
       "risk_level": "medium",
       "source_entity": "ProductMetricSnapshot",
+      "view_kind": "dashboard",
       "view_model": "ProductMetricSnapshot"
     },
     {
-      "deployment_profile": "audit_heavy",
-      "label": "治理案例",
-      "object_kind": "workflow_case",
-      "object_type": "moderation_case",
+      "analytics_views": [
+        {
+          "drilldown_route_id": "product.dashboard",
+          "view_id": "rtc_media_qoe_24h",
+          "widget_types": [
+            "metric_strip",
+            "hourly_timeseries",
+            "freshness_badge"
+          ]
+        }
+      ],
+      "deployment_profile": "latency_sensitive",
+      "label": "RTC 媒体 QoE 24 小时权威回读",
+      "object_type": "rtc_media_qoe_summary",
       "operations": [
         {
+          "contract_operation_id": "ops.event_record.GetRtcMediaQoeSummary",
           "method": "GET",
-          "operation": "GetModerationCase",
-          "path": "/control-plane/product/moderation/cases/{caseId}",
+          "operation": "GetRtcMediaQoeSummary",
+          "path": "/ops/events/rtc-media-qoe/summary",
           "scopes": [
-            "ops.case.read"
-          ]
-        },
-        {
-          "method": "POST",
-          "operation": "StartModerationReview",
-          "path": "/control-plane/product/moderation/cases/{caseId}:startReview",
-          "scopes": [
-            "ops.case.write"
-          ]
-        },
-        {
-          "approval_mode": "dual",
-          "danger_level": "high",
-          "method": "POST",
-          "operation": "ApplyEnforcementAction",
-          "path": "/control-plane/product/moderation/cases/{caseId}:applyAction",
-          "scopes": [
-            "ops.case.write"
+            "ops.telemetry.read"
           ]
         }
       ],
       "risk_level": "high",
-      "source_entity": "Report",
-      "view_model": "ModerationCase"
+      "source_entity": "EventRecord",
+      "view_kind": "dashboard",
+      "view_model": "RtcMediaQoeSummarySlice"
+    },
+    {
+      "deployment_profile": "audit_heavy",
+      "label": "产品控制面工作流与审计投影",
+      "object_type": "product_control_plane_journal",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListProductWorkflows",
+          "path": "/control-plane/product/workflows",
+          "scopes": [
+            "ops.product.dashboard.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "ListProductAudits",
+          "path": "/control-plane/product/audits",
+          "scopes": [
+            "ops.product.dashboard.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "ListProductApprovals",
+          "path": "/control-plane/product/approvals",
+          "scopes": [
+            "ops.product.dashboard.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "GetProductProjectionSummary",
+          "path": "/control-plane/product/projections/summary",
+          "scopes": [
+            "ops.product.dashboard.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "GetProductTriageSummary",
+          "path": "/control-plane/product/triage/summary",
+          "scopes": [
+            "ops.product.dashboard.read"
+          ]
+        }
+      ],
+      "risk_level": "medium",
+      "source_entity": "ControlPlaneJournal",
+      "view_kind": "audit",
+      "view_model": "ProductControlPlaneJournal"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "举报运营队列",
-      "object_kind": "operational_queue",
       "object_type": "report_queue",
       "operations": [
         {
@@ -107,59 +176,93 @@ export const productControlPlane = {
           "scopes": [
             "ops.case.write"
           ]
+        },
+        {
+          "method": "POST",
+          "operation": "DismissReport",
+          "path": "/content/reports/{reportId}:dismiss",
+          "scopes": [
+            "ops.case.write"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "GetCurrentPostModerationCase",
+          "path": "/internal/content/posts/{postId}/moderation-case",
+          "scopes": [
+            "ops.case.read"
+          ]
+        },
+        {
+          "method": "POST",
+          "operation": "ReviewPostModerationCase",
+          "path": "/internal/content/posts/{postId}:review-moderation",
+          "scopes": [
+            "ops.case.write"
+          ]
+        },
+        {
+          "approval_mode": "single",
+          "danger_level": "high",
+          "method": "POST",
+          "operation": "DecidePostModeration",
+          "path": "/internal/content/posts/{postId}:moderate",
+          "scopes": [
+            "ops.case.write"
+          ]
         }
       ],
       "risk_level": "high",
       "source_entity": "Report",
+      "view_kind": "operational_queue",
       "view_model": "ReportQueue"
     },
     {
       "deployment_profile": "audit_heavy",
-      "label": "账号恢复案例",
-      "object_kind": "workflow_case",
-      "object_type": "recovery_case",
+      "label": "实体主页候选治理队列",
+      "object_type": "homepage_candidate_queue",
       "operations": [
         {
           "method": "GET",
-          "operation": "GetRecoveryCase",
-          "path": "/control-plane/product/recovery/cases/{caseId}",
+          "operation": "ListHomepageCandidates",
+          "path": "/homepages/candidates",
           "scopes": [
             "ops.case.read"
           ]
         },
         {
-          "approval_mode": "dual",
-          "danger_level": "critical",
           "method": "POST",
-          "operation": "SubmitRecoveryDecision",
-          "path": "/control-plane/product/recovery/cases/{caseId}:submitDecision",
+          "operation": "IntakeHomepageCandidate",
+          "path": "/homepages/candidates",
           "scopes": [
-            "ops.case.approve"
+            "ops.case.write"
+          ]
+        },
+        {
+          "approval_mode": "single",
+          "danger_level": "high",
+          "method": "POST",
+          "operation": "PublishHomepageCandidate",
+          "path": "/homepages/candidates/{homepageId}:publish",
+          "scopes": [
+            "ops.case.write"
           ]
         }
       ],
-      "risk_level": "critical",
-      "source_entity": "UserProfile",
-      "view_model": "RecoveryCase"
+      "risk_level": "high",
+      "source_entity": "Homepage",
+      "view_kind": "operational_queue",
+      "view_model": "HomepageCandidateQueue"
     },
     {
       "deployment_profile": "audit_heavy",
-      "label": "申诉案例",
-      "object_kind": "workflow_case",
-      "object_type": "appeal_case",
+      "label": "实体主页认领审核队列",
+      "object_type": "homepage_claim_request_queue",
       "operations": [
         {
           "method": "GET",
-          "operation": "ListAppealCases",
-          "path": "/control-plane/product/appeal/cases",
-          "scopes": [
-            "ops.case.read"
-          ]
-        },
-        {
-          "method": "GET",
-          "operation": "GetAppealCase",
-          "path": "/control-plane/product/appeal/cases/{caseId}",
+          "operation": "ListHomepageClaimRequests",
+          "path": "/homepage-claim-requests",
           "scopes": [
             "ops.case.read"
           ]
@@ -168,21 +271,50 @@ export const productControlPlane = {
           "approval_mode": "single",
           "danger_level": "high",
           "method": "POST",
-          "operation": "SubmitAppealDecision",
-          "path": "/control-plane/product/appeal/cases/{caseId}:submitDecision",
+          "operation": "ReviewHomepageClaimRequest",
+          "path": "/homepages/{homepageId}/claim-requests/{claimRequestId}:review",
           "scopes": [
-            "ops.case.approve"
+            "ops.case.write"
           ]
         }
       ],
       "risk_level": "high",
-      "source_entity": "AppealCase",
-      "view_model": "AppealCase"
+      "source_entity": "HomepageClaimRequest",
+      "view_kind": "operational_queue",
+      "view_model": "HomepageClaimRequestQueue"
+    },
+    {
+      "deployment_profile": "audit_heavy",
+      "label": "实体主页状态上报审核队列",
+      "object_type": "homepage_status_report_queue",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListHomepageStatusReports",
+          "path": "/homepage-status-reports",
+          "scopes": [
+            "ops.case.read"
+          ]
+        },
+        {
+          "approval_mode": "single",
+          "danger_level": "high",
+          "method": "POST",
+          "operation": "ReviewHomepageStatusReport",
+          "path": "/homepages/{homepageId}/status-reports/{reportId}:review",
+          "scopes": [
+            "ops.case.write"
+          ]
+        }
+      ],
+      "risk_level": "high",
+      "source_entity": "HomepageStatusReport",
+      "view_kind": "operational_queue",
+      "view_model": "HomepageStatusReportQueue"
     },
     {
       "deployment_profile": "latency_sensitive",
       "label": "实验",
-      "object_kind": "release",
       "object_type": "experiment",
       "operations": [
         {
@@ -208,26 +340,28 @@ export const productControlPlane = {
       ],
       "risk_level": "medium",
       "source_entity": "Experiment",
+      "view_kind": "release",
       "view_model": "Experiment"
     },
     {
       "deployment_profile": "latency_sensitive",
-      "label": "推荐策略",
-      "object_kind": "policy",
-      "object_type": "recommendation_policy",
+      "label": "全局精选池条目",
+      "object_type": "premium_pool_entry",
       "operations": [
         {
           "method": "GET",
-          "operation": "ListRecommendationPolicies",
-          "path": "/control-plane/product/recommendation/policies",
+          "operation": "ListPremiumPoolEntries",
+          "path": "/control-plane/product/recommendation/premium-pool",
           "scopes": [
             "ops.reco.read"
           ]
         },
         {
+          "approval_mode": "single",
+          "danger_level": "high",
           "method": "POST",
-          "operation": "SimulateRecommendationPolicy",
-          "path": "/control-plane/product/recommendation/policies/{policyId}:simulate",
+          "operation": "UpsertPremiumPoolEntry",
+          "path": "/control-plane/product/recommendation/premium-pool",
           "scopes": [
             "ops.reco.write"
           ]
@@ -236,8 +370,19 @@ export const productControlPlane = {
           "approval_mode": "single",
           "danger_level": "high",
           "method": "POST",
-          "operation": "ActivateRecommendationPolicy",
-          "path": "/control-plane/product/recommendation/policies/{policyId}:activate",
+          "operation": "RollbackPremiumPoolEntry",
+          "path": "/control-plane/product/recommendation/premium-pool/{contentId}:rollback",
+          "scopes": [
+            "ops.reco.write"
+          ]
+        },
+        {
+          "approval_mode": "dual",
+          "danger_level": "critical",
+          "idempotency": "required",
+          "method": "POST",
+          "operation": "TakedownPremiumPoolEntry",
+          "path": "/control-plane/product/recommendation/premium-pool/{contentId}:takedown",
           "scopes": [
             "ops.reco.write"
           ]
@@ -245,7 +390,8 @@ export const productControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "VisitRecord",
-      "view_model": "RecommendationPolicy"
+      "view_kind": "policy",
+      "view_model": "PremiumPoolEntry"
     }
   ],
   "plane": "product-control-plane"

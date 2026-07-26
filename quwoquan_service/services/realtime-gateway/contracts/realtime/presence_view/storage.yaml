@@ -1,0 +1,2 @@
+backend: redis
+role: projection

@@ -20,6 +20,7 @@
           "platform": { "type": "string" },
           "sourceKind": { "type": "string" },
           "sourceTitle": { "type": "string", "minLength": 1 },
+          "qualifiedAuthorityTitle": { "type": "string", "minLength": 1 },
           "url": { "type": "string", "pattern": "^https://" },
           "canonicalUrl": { "type": "string", "pattern": "^https://" },
           "extractor": { "type": "string" },
@@ -61,7 +62,7 @@
                 {
                   "properties": {
                     "sourceKind": { "const": "baidu_baike" },
-                    "extractor": { "const": "baidu_baike_openapi" }
+                    "extractor": { "const": "baidu_baike_html" }
                   }
                 },
                 {

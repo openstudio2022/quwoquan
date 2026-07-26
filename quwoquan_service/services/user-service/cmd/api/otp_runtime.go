@@ -7,8 +7,8 @@ import (
 	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
-	"quwoquan_service/services/user-service/internal/application"
-	userintegration "quwoquan_service/services/user-service/internal/infrastructure/integration"
+	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
+	userintegration "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
 )
 
 const (

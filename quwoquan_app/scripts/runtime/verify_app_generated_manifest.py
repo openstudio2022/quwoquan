@@ -21,6 +21,7 @@ MANIFEST = APP / "tool/cloud_codegen/generated_manifest.json"
 GENERATOR = "app-only-emitter"
 ALLOWED_PREFIXES = (
     "lib/app/navigation/generated/",
+    "lib/application/content/media/generated/",
     "lib/assistant/generated/",
     "lib/cloud/runtime/generated/",
     "lib/cloud/assistant/generated/",
@@ -171,6 +172,22 @@ def verify_emitter_boundary() -> None:
         if source.name.endswith("_test.go") or source.name == "contract_graph_source.go":
             continue
         text = source.read_text(encoding="utf-8")
+        if source.name == "assistant_codegen.go":
+            # 该文件尾部的 service-owned Go enum check 分支不属于 App emitter；
+            # App 生成路径只检查此前的 Dart 输出逻辑。
+            text = text.split("func generateAssistantRuntimeEnumsGo(", 1)[0]
+        if source.name == "link_templates_codegen.go":
+            # citation destination Go 校验只读取 service-owned 既有生成物；
+            # 保留同文件后续 App link template emitter 的边界扫描。
+            before, remainder = text.split(
+                "func generateCitationDestinationsGo(",
+                1,
+            )
+            _, after = remainder.split(
+                "func renderCitationDestinationsGo(",
+                1,
+            )
+            text = before + "func renderCitationDestinationsGo(" + after
         if "os.ReadFile(" in text:
             raise AssertionError(
                 f"App emitter 禁止读取 Graph/lock 之外的文件: {source.name}"

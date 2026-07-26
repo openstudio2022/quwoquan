@@ -15,7 +15,15 @@ def _read(path: Path) -> str:
 
 def _required_markers() -> dict[Path, tuple[str, ...]]:
     data = ROOT / "quwoquan_data" / "scripts"
-    importer = ROOT / "quwoquan_service" / "services" / "content-service" / "cmd" / "import"
+    content_service = ROOT / "quwoquan_service" / "services" / "content-service"
+    importer = (
+        content_service
+        / "internal"
+        / "content"
+        / "post"
+        / "infrastructure"
+        / "releaseimport"
+    )
     return {
         data / "content" / "release" / "environment" / "handler.py": (
             "_release_media_object_keys",
@@ -49,13 +57,16 @@ def _required_markers() -> dict[Path, tuple[str, ...]]:
             "validateVideoAssets",
             "BindPostAssetURLs",
         ),
-        importer / "main.go": (
+        importer / "runtime.go": (
             "media-base-url",
             "BindPostAssetURLs",
         ),
+        content_service / "cmd" / "import" / "main.go": (
+            "releaseimport.Run()",
+        ),
         ROOT / "quwoquan_app" / "lib" / "core" / "media" / "asset_url_resolver.dart": (
             "resolveManifestUrls",
-            "objectKey",
+            "publicSliceKey",
         ),
     }
 

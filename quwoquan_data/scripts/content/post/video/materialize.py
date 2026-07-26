@@ -21,6 +21,7 @@ from content.post.video.package import (
     render_video_work_package,
 )
 from content.post.video.authoring import video_script_path
+from content.post.video.source_video import SourcedVideoAsset
 from core.intersection_signal import build_intersection_hints
 from core.io import read_json, write_json
 from core.paths import execution_root
@@ -46,18 +47,43 @@ def _source_frames(
     )
 
 
+def _source_video(
+    execution_id: str,
+    pack: VideoWritingPack,
+) -> SourcedVideoAsset | None:
+    if pack.source_video is None:
+        return None
+    return SourcedVideoAsset(
+        path=execution_root(execution_id) / pack.source_video.asset_ref,
+        evidence=pack.source_video,
+    )
+
+
 def _write_source_refs(post_dir: Path, pack: VideoWritingPack) -> None:
-    source_rows = [
-        {
-            "role": "frame",
-            "sourceRef": frame.source_ref,
-            "sourceAssetRef": frame.asset_ref,
-            "rightsRef": frame.rights_ref,
-            "sourceUrl": frame.source_url,
-            "sha256": frame.sha256,
-        }
-        for frame in pack.source_frames
-    ]
+    source_rows = (
+        [
+            {
+                "role": "sourced_video",
+                "sourceRef": pack.source_video.source_ref,
+                "sourceAssetRef": pack.source_video.asset_ref,
+                "rightsRef": pack.source_video.rights_ref,
+                "sourceUrl": pack.source_video.source_post_url,
+                "sha256": pack.source_video.sha256,
+            }
+        ]
+        if pack.source_video is not None
+        else [
+            {
+                "role": "frame",
+                "sourceRef": frame.source_ref,
+                "sourceAssetRef": frame.asset_ref,
+                "rightsRef": frame.rights_ref,
+                "sourceUrl": frame.source_url,
+                "sha256": frame.sha256,
+            }
+            for frame in pack.source_frames
+        ]
+    )
     write_json(
         post_dir / "1.download" / "source_refs.json",
         {
@@ -105,6 +131,7 @@ def materialize_video_post(
             caption=draft.caption,
             script_lines=draft.script_lines,
             source_frames=_source_frames(execution_id, pack),
+            source_video=_source_video(execution_id, pack),
             author_id=author_id,
             creator_profile_id=profile_id,
             agent_run_id=meta.agent_run_id,
@@ -158,7 +185,11 @@ def materialize_video_post(
             "videoRef": "assets/video.mp4",
             "posterRef": "assets/poster.webp",
             "subtitlesRef": "subtitles.vtt",
-            "renderStrategy": "rights_cleared_image_sequence",
+            "renderStrategy": (
+                "sourced_video_transcode"
+                if pack.source_video is not None
+                else "rights_cleared_image_sequence"
+            ),
         },
     )
     write_review_evidence(

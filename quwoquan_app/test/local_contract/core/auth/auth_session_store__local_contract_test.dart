@@ -1,7 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String _defaultNicknameSample = '新同学_260622_6698692';
@@ -13,9 +13,9 @@ void main() {
     FlutterSecureStorage.setMockInitialValues(<String, String>{});
   });
 
-  test('saveLoginResult persists tokens and active persona', () async {
+  test('saveLoginGrant persists tokens and active persona', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
-    final result = AuthLoginResultDto.fromMap(<String, dynamic>{
+    final result = decodeAuthSessionGrant(<String, dynamic>{
       'accessToken': 'access-1',
       'refreshToken': 'refresh-1',
       'ownerId': 'owner-1',
@@ -25,7 +25,7 @@ void main() {
       'identityOrigin': 'phone',
     });
 
-    await store.saveLoginResult(result);
+    await store.saveLoginGrant(result);
     final stored = await store.read();
 
     expect(stored.accessToken, 'access-1');
@@ -36,12 +36,12 @@ void main() {
   });
 
   test(
-    'saveLoginResult persists remembered login method and masked account',
+    'saveLoginGrant persists remembered login method and masked account',
     () async {
       final store = AuthSessionStore(
         secureStorage: const FlutterSecureStorage(),
       );
-      final result = AuthLoginResultDto.fromMap(<String, dynamic>{
+      final result = decodeAuthSessionGrant(<String, dynamic>{
         'accessToken': 'access-2',
         'refreshToken': 'refresh-2',
         'ownerId': 'owner-2',
@@ -57,7 +57,7 @@ void main() {
         },
       });
 
-      await store.saveLoginResult(
+      await store.saveLoginGrant(
         result,
         rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
       );
@@ -100,8 +100,8 @@ void main() {
       final store = AuthSessionStore(
         secureStorage: const FlutterSecureStorage(),
       );
-      await store.saveLoginResult(
-        AuthLoginResultDto.fromMap(<String, dynamic>{
+      await store.saveLoginGrant(
+        decodeAuthSessionGrant(<String, dynamic>{
           'accessToken': 'access-soft',
           'refreshToken': 'refresh-soft',
           'ownerId': 'owner-soft',
@@ -134,8 +134,8 @@ void main() {
 
   test('softLogout uses cloud-issued remember TTL for expiry', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
-    await store.saveLoginResult(
-      AuthLoginResultDto.fromMap(<String, dynamic>{
+    await store.saveLoginGrant(
+      decodeAuthSessionGrant(<String, dynamic>{
         'accessToken': 'access-ttl',
         'refreshToken': 'refresh-ttl',
         'ownerId': 'owner-ttl',
@@ -162,8 +162,8 @@ void main() {
       final store = AuthSessionStore(
         secureStorage: const FlutterSecureStorage(),
       );
-      await store.saveLoginResult(
-        AuthLoginResultDto.fromMap(<String, dynamic>{
+      await store.saveLoginGrant(
+        decodeAuthSessionGrant(<String, dynamic>{
           'accessToken': 'access-hard',
           'refreshToken': 'refresh-hard',
           'ownerId': 'owner-hard',
@@ -198,8 +198,8 @@ void main() {
       final store = AuthSessionStore(
         secureStorage: const FlutterSecureStorage(),
       );
-      await store.saveLoginResult(
-        AuthLoginResultDto.fromMap(<String, dynamic>{
+      await store.saveLoginGrant(
+        decodeAuthSessionGrant(<String, dynamic>{
           'accessToken': 'access-expired',
           'refreshToken': 'refresh-expired',
           'ownerId': 'owner-expired',
@@ -232,8 +232,8 @@ void main() {
       final store = AuthSessionStore(
         secureStorage: const FlutterSecureStorage(),
       );
-      await store.saveLoginResult(
-        AuthLoginResultDto.fromMap(<String, dynamic>{
+      await store.saveLoginGrant(
+        decodeAuthSessionGrant(<String, dynamic>{
           'accessToken': 'access-old',
           'refreshToken': 'refresh-old',
           'ownerId': 'owner-refresh',
@@ -248,12 +248,16 @@ void main() {
         rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
       );
 
-      await store.saveRefreshedAccountHint(<String, dynamic>{
-        'displayName': '系统默认昵称',
-        'nicknameCustomized': false,
-        'avatarUrl': '',
-        'maskedPhone': '138****0005',
-      });
+      await store.saveRefreshedAccountHint(
+        const AccountHintSnapshot(
+          displayName: '系统默认昵称',
+          nicknameCustomized: false,
+          avatarUrl: '',
+          avatarAssetId: '',
+          maskedPhone: '138****0005',
+          identityOrigin: 'phone',
+        ),
+      );
       final refreshed = await store.read();
 
       expect(refreshed.rememberedDisplayName, '系统默认昵称');
@@ -268,10 +272,10 @@ void main() {
     },
   );
 
-  test('saveLoginResult(phoneOtp) 记住完整手机号，软退出保留供自动预填', () async {
+  test('saveLoginGrant(phoneOtp) 记住完整手机号，软退出保留供自动预填', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
-    await store.saveLoginResult(
-      AuthLoginResultDto.fromMap(<String, dynamic>{
+    await store.saveLoginGrant(
+      decodeAuthSessionGrant(<String, dynamic>{
         'accessToken': 'access-phone',
         'refreshToken': 'refresh-phone',
         'ownerId': 'owner-phone',
@@ -294,8 +298,8 @@ void main() {
 
   test('彻底退出清除本机完整手机号', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
-    await store.saveLoginResult(
-      AuthLoginResultDto.fromMap(<String, dynamic>{
+    await store.saveLoginGrant(
+      decodeAuthSessionGrant(<String, dynamic>{
         'accessToken': 'access-phone',
         'refreshToken': 'refresh-phone',
         'ownerId': 'owner-phone',
@@ -313,8 +317,8 @@ void main() {
 
   test('非手机号登录方式不持有完整手机号', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
-    await store.saveLoginResult(
-      AuthLoginResultDto.fromMap(<String, dynamic>{
+    await store.saveLoginGrant(
+      decodeAuthSessionGrant(<String, dynamic>{
         'accessToken': 'access-wechat',
         'refreshToken': 'refresh-wechat',
         'ownerId': 'owner-wechat',

@@ -1,4 +1,4 @@
-// Codegen for rec-model-service Python: reads ModelRelease metadata and projections,
+// Codegen for recommendation-service Python: reads ModelRelease metadata and projections,
 // then generates pure operation descriptors and Pydantic contracts.
 package main
 
@@ -19,8 +19,8 @@ const (
 
 func main() {
 	metadataDir := flag.String("metadata-dir", "contracts/metadata", "metadata root directory")
-	outputDir := flag.String("output-dir", "services/rec-model-service/generated", "Python generated output directory")
-	serviceDir := flag.String("service-dir", "recommendation/model_release", "service metadata directory")
+	outputDir := flag.String("output-dir", "services/recommendation-service/internal/recommendation/recommendation_model_release/generated", "Python generated output directory")
+	serviceDir := flag.String("service-dir", "recommendation/recommendation/recommendation_model_release", "service metadata directory")
 	flag.Parse()
 
 	if err := run(*metadataDir, *outputDir, *serviceDir); err != nil {
@@ -42,9 +42,9 @@ func run(metadataDir, outputDir, serviceDir string) error {
 	if err != nil {
 		return fmt.Errorf("load fields: %w", err)
 	}
-	service, err := loadService(source, filepath.Join(servicePath, "service.yaml"))
+	operations, err := loadOperations(source, filepath.Join(servicePath, "operations.yaml"))
 	if err != nil {
-		return fmt.Errorf("load service: %w", err)
+		return fmt.Errorf("load operations: %w", err)
 	}
 
 	projections, err := loadProjections(source, projectionsPath)
@@ -58,7 +58,7 @@ func run(metadataDir, outputDir, serviceDir string) error {
 	if err := os.MkdirAll(filepath.Join(outputDir, "api"), 0755); err != nil {
 		return err
 	}
-	operationsPy := generateOperationsPy(service)
+	operationsPy := generateOperationsPy(operations)
 	if err := os.WriteFile(filepath.Join(outputDir, "api", "operations.py"), []byte(operationsPy), 0644); err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func run(metadataDir, outputDir, serviceDir string) error {
 		return err
 	}
 
-	// Generate content features + training sample from content/post/behaviors.yaml
+	// Generate content features + training sample from content/content/post/behaviors.yaml
 	behaviorsPath := resolveContentBehaviors(source)
 	if behaviorsPath != "" {
 		beh, err := loadBehaviors(source, behaviorsPath)
@@ -125,11 +125,7 @@ func run(metadataDir, outputDir, serviceDir string) error {
 }
 
 func resolveContentBehaviors(source *contractcodegen.Source) string {
-	p := filepath.Join("content", "post", "behaviors.yaml")
-	if source.Has(p) {
-		return p
-	}
-	p = filepath.Join("post", "behaviors.yaml")
+	p := filepath.Join("content", "content", "post", "behaviors.yaml")
 	if source.Has(p) {
 		return p
 	}
@@ -140,6 +136,7 @@ func resolveContentBehaviors(source *contractcodegen.Source) string {
 
 type fieldsFile struct {
 	Entities map[string]entityDef `yaml:"entities"`
+	Types    map[string]entityDef `yaml:"types"`
 }
 
 type entityDef struct {
@@ -154,7 +151,7 @@ type fieldDef struct {
 	Description string   `yaml:"description"`
 }
 
-type serviceFile struct {
+type operationsFile struct {
 	APIRoutes []routeDef `yaml:"api_routes"`
 }
 
@@ -190,11 +187,14 @@ func loadFields(source *contractcodegen.Source, path string) (*fieldsFile, error
 	if err := source.Decode(path, &f); err != nil {
 		return nil, err
 	}
+	if len(f.Entities) == 0 {
+		f.Entities = f.Types
+	}
 	return &f, nil
 }
 
-func loadService(source *contractcodegen.Source, path string) (*serviceFile, error) {
-	var s serviceFile
+func loadOperations(source *contractcodegen.Source, path string) (*operationsFile, error) {
+	var s operationsFile
 	if err := source.Decode(path, &s); err != nil {
 		return nil, err
 	}
@@ -386,7 +386,7 @@ func pythonOperationConstant(operation string) string {
 	return b.String()
 }
 
-func generateOperationsPy(s *serviceFile) string {
+func generateOperationsPy(s *operationsFile) string {
 	var b strings.Builder
 	b.WriteString(genHeader)
 	b.WriteString("\n\"\"\"Operation descriptors generated from ContractGraph metadata.\"\"\"\n\n")
@@ -432,7 +432,7 @@ func generateAPIInit() string {
 func generateRootInit() string {
 	var b strings.Builder
 	b.WriteString(genHeader)
-	b.WriteString("\n\"\"\"Generated models and API for rec-model-service. DO NOT EDIT.\"\"\"\n\n")
+	b.WriteString("\n\"\"\"Generated models and API for recommendation-service. DO NOT EDIT.\"\"\"\n\n")
 	b.WriteString("# Lazy subpackages so models can be imported without requiring fastapi.\n")
 	b.WriteString("__all__ = [\"api\", \"models\"]\n")
 	return b.String()

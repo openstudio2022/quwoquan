@@ -11,8 +11,11 @@ Policy:
   - Files NOT in the baseline (and outside the boundary) that import `dart:io`
     fail the gate. The baseline may only shrink (only-decrease), never grow
     without an explicit, reviewed `--write-baseline`.
+  - `lib/cloud/runtime/**` and `lib/cloud/remote/**` are production transport
+    paths and may never import `dart:io`, including if a future baseline entry
+    would otherwise permit it.
 
-Allowlist: specs/gates/lib_dart_io_import_allowlist.yaml
+Allowlist: quwoquan_ops/policies/gates/lib_dart_io_import_allowlist.yaml
   { "allowed": [ "<rel/path.dart>", ... ] }
 
 Regenerate baseline (after migrating files behind the gateway, intentionally):
@@ -28,10 +31,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_LIB = ROOT / "quwoquan_app" / "lib"
-ALLOWLIST = ROOT / "specs" / "gates" / "lib_dart_io_import_allowlist.yaml"
+ALLOWLIST = ROOT / "quwoquan_ops" / "policies" / "gates" / "lib_dart_io_import_allowlist.yaml"
 
 # Anti-corruption boundary: allowed to use dart:io without allowlisting.
 BOUNDARY_PREFIXES = ("core/platform/",)
+PRODUCTION_TRANSPORT_PREFIXES = ("cloud/runtime/", "cloud/remote/")
 
 IMPORT_RE = re.compile(r"""^\s*import\s+['"]dart:io['"]""", re.M)
 
@@ -47,6 +51,10 @@ def _scan_importers() -> set[str]:
 
 def _is_boundary(rel: str) -> bool:
     return any(rel.startswith(p) for p in BOUNDARY_PREFIXES)
+
+
+def _is_production_transport(rel: str) -> bool:
+    return any(rel.startswith(p) for p in PRODUCTION_TRANSPORT_PREFIXES)
 
 
 def _load_allowed() -> set[str]:
@@ -107,14 +115,25 @@ def main() -> int:
     new_violations = sorted(
         r for r in importers if not _is_boundary(r) and r not in allowed
     )
+    transport_violations = sorted(
+        r for r in importers if _is_production_transport(r)
+    )
+    stale_entries = sorted(
+        r for r in allowed if r not in importers or _is_boundary(r)
+    )
 
-    if new_violations:
-        print("verify_lib_dart_io_budget: BLOCK: new dart:io imports", file=sys.stderr)
+    if new_violations or transport_violations or stale_entries:
+        print("verify_lib_dart_io_budget: BLOCK: baseline drift", file=sys.stderr)
         for v in new_violations:
-            print(f"  {v}", file=sys.stderr)
+            print(f"  new importer: {v}", file=sys.stderr)
+        for v in transport_violations:
+            print(f"  production transport importer: {v}", file=sys.stderr)
+        for v in stale_entries:
+            print(f"  stale allowlist entry: {v}", file=sys.stderr)
         print(
-            "  Route file/path access through FileStorageGateway "
-            "(lib/core/platform/) instead of importing dart:io.",
+            "  Production runtime/remote must not access local files; route "
+            "platform file access through FileStorageGateway "
+            "(lib/core/platform/).",
             file=sys.stderr,
         )
         return 1

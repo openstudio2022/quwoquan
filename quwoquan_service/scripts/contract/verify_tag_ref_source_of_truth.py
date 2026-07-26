@@ -24,6 +24,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 META = ROOT / "quwoquan_service" / "contracts" / "metadata"
+SERVICE_ROOT = ROOT / "quwoquan_service" / "services"
 GROUPS = ("Topic", "Audience", "Format", "Entity")
 TAXONOMY_ROOT = ROOT / "quwoquan_data" / "control_plane" / "governance" / "taxonomy"
 
@@ -33,7 +34,7 @@ checks: list[str] = []
 
 def c1_zero_reference() -> None:
     """扁平 tag_taxonomy 在 Go/Dart 代码零引用，且废弃文件已物理删除。"""
-    pat = re.compile(r"tag_taxonomy")
+    pat = re.compile(r"\btag_taxonomy(?!_release)\b")
     hits: list[str] = []
     for base in (ROOT / "quwoquan_service", ROOT / "quwoquan_app"):
         if not base.exists():
@@ -66,13 +67,13 @@ def c1_zero_reference() -> None:
 def c2_fields_use_tag_ref() -> None:
     """对象标签字段已切路径制 tagRef。"""
     required = {
-        "content/post/fields.yaml": "post.tagRefs",
-        "social/circle/fields.yaml": "circle.tags",
-        "entity/homepage/fields.yaml": "entity.categoryTags/highlightTags",
-        "user/user_profile/fields.yaml": "user.interestTags",
+        "content-service/contracts/content/post/fields.yaml": "post.tagRefs",
+        "circle-service/contracts/circle_management/circle/fields.yaml": "circle.tags",
+        "entity-service/contracts/entity_homepage/homepage/fields.yaml": "entity.categoryTags/highlightTags",
+        "user-service/contracts/account/user_account/fields.yaml": "user.interestTags",
     }
     for rel, desc in required.items():
-        p = META / rel
+        p = SERVICE_ROOT / rel
         if not p.exists():
             errors.append(f"C2: 缺少 {rel}")
             continue
@@ -115,17 +116,22 @@ def c4_metadata_contract_clean() -> None:
         r"(?:唯一|单一)?真相源[^\n]*publish/tags|publish/tags[^\n]*(?:唯一|单一)?真相源"
     )
     hits: list[str] = []
-    for pattern in ("*.md", "*.yaml", "*.yml", "*.json"):
-        files = META.rglob(pattern)
-        for f in files:
-            try:
-                text = f.read_text(encoding="utf-8", errors="ignore")
-            except OSError as exc:
-                errors.append(f"C4: metadata 文件不可读 {f.relative_to(ROOT)}: {exc}")
-                continue
-            for i, line in enumerate(text.splitlines(), 1):
-                if flat_pat.search(line) or publish_truth_pat.search(line):
-                    hits.append(f"{f.relative_to(ROOT)}:{i}")
+    metadata_roots = [META]
+    metadata_roots.extend(
+        sorted(path for path in SERVICE_ROOT.glob("*/contracts") if path.is_dir())
+    )
+    for metadata_root in metadata_roots:
+        for pattern in ("*.md", "*.yaml", "*.yml", "*.json"):
+            files = metadata_root.rglob(pattern)
+            for f in files:
+                try:
+                    text = f.read_text(encoding="utf-8", errors="ignore")
+                except OSError as exc:
+                    errors.append(f"C4: metadata 文件不可读 {f.relative_to(ROOT)}: {exc}")
+                    continue
+                for i, line in enumerate(text.splitlines(), 1):
+                    if flat_pat.search(line) or publish_truth_pat.search(line):
+                        hits.append(f"{f.relative_to(ROOT)}:{i}")
     if hits:
         errors.append(
             "C4: metadata 仍引用废弃扁平 taxonomy，或把 publish/tags 误写为"

@@ -4,14 +4,14 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
-/// F5: same JSON as [quwoquan_service/contracts/metadata/assistant/assistant_run/fixtures/assistant_learning_ops_summary.sample.json].
+/// F5: same JSON as [quwoquan_service/services/assistant-service/tests/support/contract_fixtures/assistant_learning_ops_summary.sample.json].
 File _learningOpsFixtureFile() {
   final candidates = <File>[
     File(
-      '../quwoquan_service/contracts/metadata/assistant/assistant_run/fixtures/assistant_learning_ops_summary.sample.json',
+      '../quwoquan_service/services/assistant-service/tests/support/contract_fixtures/assistant_learning_ops_summary.sample.json',
     ),
     File(
-      'quwoquan_service/contracts/metadata/assistant/assistant_run/fixtures/assistant_learning_ops_summary.sample.json',
+      'quwoquan_service/services/assistant-service/tests/support/contract_fixtures/assistant_learning_ops_summary.sample.json',
     ),
   ];
   for (final f in candidates) {

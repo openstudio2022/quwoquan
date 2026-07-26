@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 
 const String kEditorIconFadeBands = 'fadeBands';
 const String kEditorIconHighlightRing = 'highlightRing';
@@ -59,11 +59,7 @@ class ImageEditorSemanticIcon extends StatelessWidget {
         return SizedBox(
           width: size,
           height: size,
-          child: Icon(
-            Icons.circle_outlined,
-            size: size,
-            color: color,
-          ),
+          child: Icon(Icons.circle_outlined, size: size, color: color),
         );
     }
   }
@@ -109,10 +105,7 @@ class _FadeBandsPainter extends CustomPainter {
         radius * 2,
         bandHeight,
       );
-      canvas.drawRect(
-        rect,
-        Paint()..color = bands[i],
-      );
+      canvas.drawRect(rect, Paint()..color = bands[i]);
     }
     canvas.restore();
   }

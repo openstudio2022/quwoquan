@@ -1,17 +1,12 @@
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:test/test.dart';
-import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 
-/// T1 契约测试：GreetingRepository
-///
-/// 守护：GreetingRequestDto 解析正确性 + MockGreetingRepository 行为正确性
 void main() {
-  // ── GreetingRequestDto 常规契约 ──────────────────────────────────────────────
-
-  group('GreetingRequestDto — 常规契约', () {
-    final now = DateTime.now();
-
-    test('fromMap 全字段正确解析', () {
-      final dto = GreetingRequestDto.fromMap(<String, dynamic>{
+  group('GreetingRequest typed contract', () {
+    test('decoder 严格解析 canonical record', () {
+      final record = decodeGreetingRequestRecord(<String, Object?>{
         'id': 'gr_001',
         'requesterSubAccountId': 'user_a',
         'targetSubAccountId': 'user_b',
@@ -19,188 +14,132 @@ void main() {
         'status': 'pending',
         'source': 'profile',
         'promotedConversationId': null,
-        'expireAt': null,
+        'expireAt': '2026-07-23T08:00:00Z',
         'decisionAt': null,
-        'createdAt': now.toIso8601String(),
-        'updatedAt': now.toIso8601String(),
+        'createdAt': '2026-07-20T08:00:00Z',
+        'updatedAt': '2026-07-20T08:00:00Z',
       });
-      expect(dto.id, 'gr_001');
-      expect(dto.requesterSubAccountId, 'user_a');
-      expect(dto.targetSubAccountId, 'user_b');
-      expect(dto.requestMessage, '你好，很高兴认识你！');
-      expect(dto.status, 'pending');
-      expect(dto.isPending, true);
-      expect(dto.isReplied, false);
+
+      expect(record.id, 'gr_001');
+      expect(record.requesterSubAccountId, 'user_a');
+      expect(record.targetSubAccountId, 'user_b');
+      expect(record.requestMessage, '你好，很高兴认识你！');
+      expect(record.status, 'pending');
+      expect(record.expireAt, DateTime.utc(2026, 7, 23, 8));
     });
 
-    test('isPending 与 isReplied 互斥', () {
-      final pending = GreetingRequestDto.fromMap(<String, dynamic>{
-        'id': 'g1', 'status': 'pending', 'source': 'profile',
-        'requesterSubAccountId': 'a', 'targetSubAccountId': 'b',
-        'createdAt': now.toIso8601String(),
-        'updatedAt': now.toIso8601String(),
-      });
-      final replied = GreetingRequestDto.fromMap(<String, dynamic>{
-        'id': 'g2', 'status': 'replied', 'source': 'profile',
-        'requesterSubAccountId': 'a', 'targetSubAccountId': 'b',
-        'createdAt': now.toIso8601String(),
-        'updatedAt': now.toIso8601String(),
-      });
-      expect(pending.isPending, true);
-      expect(pending.isReplied, false);
-      expect(replied.isReplied, true);
-      expect(replied.isPending, false);
+    test('decoder 缺失 required field 时 fail closed', () {
+      expect(
+        () => decodeGreetingRequestRecord(const <String, Object?>{}),
+        throwsFormatException,
+      );
     });
 
-    test('fromMap 正确解析 expireAt / decisionAt 时间字段', () {
-      final expireAt = now.add(const Duration(days: 3));
-      final dto = GreetingRequestDto.fromMap(<String, dynamic>{
-        'id': 'g_time',
-        'requesterSubAccountId': 'a',
-        'targetSubAccountId': 'b',
-        'status': 'pending',
+    test('send command 只输出 canonical typed body', () {
+      final payload = encodeSendGreetingCommand(
+        SendGreetingCommand(
+          targetSubAccountId: 'user_b',
+          requestMessage: ' 认识一下 ',
+          source: ' profile ',
+        ),
+      );
+
+      expect(payload.body, <String, Object?>{
+        'targetSubAccountId': 'user_b',
+        'requestMessage': '认识一下',
         'source': 'profile',
-        'expireAt': expireAt.toIso8601String(),
-        'createdAt': now.toIso8601String(),
-        'updatedAt': now.toIso8601String(),
       });
-      expect(dto.expireAt, isNotNull);
-      expect(dto.expireAt!.isAfter(now), true);
     });
   });
 
-  // ── GreetingRequestDto 单轨契约 ────────────────────────────────────────────
-
-  group('GreetingRequestDto — 单轨契约', () {
-    test('fromMap 缺失字段使用安全默认值', () {
-      final dto = GreetingRequestDto.fromMap(const <String, dynamic>{});
-      expect(dto.id, isEmpty);
-      expect(dto.status, 'pending');
-      expect(dto.source, 'profile');
-      expect(dto.requestMessage, isNull);
-      expect(dto.promotedConversationId, isNull);
-    });
-
-    test('fromMap 所有 status 值均可解析', () {
-      const statuses = [
-        'pending', 'replied', 'ignored', 'blocked', 'cancelled', 'expired',
-      ];
-      final now = DateTime.now();
-      for (final s in statuses) {
-        expect(
-          () => GreetingRequestDto.fromMap(<String, dynamic>{
-            'id': 'g', 'status': s, 'source': 'profile',
-            'requesterSubAccountId': 'a', 'targetSubAccountId': 'b',
-            'createdAt': now.toIso8601String(),
-            'updatedAt': now.toIso8601String(),
-          }),
-          returnsNormally,
-          reason: 'status=$s should not throw',
-        );
-      }
-    });
-  });
-
-  // ── GreetingRequestDto 异常/边界契约 ─────────────────────────────────────────
-
-  group('GreetingRequestDto — 异常/边界契约', () {
-    test('fromMap 全字段缺失不崩溃', () {
-      expect(
-        () => GreetingRequestDto.fromMap(const <String, dynamic>{}),
-        returnsNormally,
-      );
-    });
-
-    test('fromMap 非法 createdAt 不崩溃（降级为 now）', () {
-      expect(
-        () => GreetingRequestDto.fromMap(<String, dynamic>{
-          'createdAt': 'not-a-date',
-          'updatedAt': 'not-a-date',
-        }),
-        returnsNormally,
-      );
-    });
-  });
-
-  // ── MockGreetingRepository 常规契约 ──────────────────────────────────────────
-
-  group('MockGreetingRepository — 常规契约', () {
-    late MockGreetingRepository repo;
+  group('AlphaGreetingRequestFacet', () {
+    late AlphaGreetingRequestFacet facet;
 
     setUp(() {
-      repo = MockGreetingRepository();
-    });
-
-    test('sendGreeting 返回 pending DTO 且 targetSubAccountId 正确', () async {
-      final dto = await repo.sendGreeting(
-        targetSubAccountId: 'user_x',
-        requestMessage: '认识一下',
+      facet = AlphaGreetingRequestFacet(
+        seedInbox: <GreetingRequestRecord>[
+          _greetingRecord(id: 'inbox-1', requester: 'user_a'),
+        ],
+        seedOutbox: <GreetingRequestRecord>[
+          _greetingRecord(id: 'outbox-1', target: 'user_b'),
+        ],
       );
-      expect(dto.status, 'pending');
-      expect(dto.targetSubAccountId, 'user_x');
-      expect(dto.requestMessage, '认识一下');
-      expect(dto.isPending, true);
     });
 
-    test('sendGreeting 后 listOutbox 包含刚发送的请求', () async {
-      await repo.sendGreeting(targetSubAccountId: 'user_y');
-      final outbox = await repo.listOutbox();
-      expect(outbox, isNotEmpty);
-      expect(outbox.any((g) => g.targetSubAccountId == 'user_y'), true);
-    });
+    test('send 后可从 typed outbox query 回读且 id 唯一', () async {
+      final first = await facet.sendGreeting(
+        SendGreetingCommand(
+          targetSubAccountId: 'user_x',
+          requestMessage: '认识一下',
+        ),
+      );
+      final second = await facet.sendGreeting(
+        SendGreetingCommand(targetSubAccountId: 'user_y'),
+      );
+      final outbox = await facet.listGreetingOutbox(
+        const ListGreetingRequestsQuery(status: 'pending', limit: 20),
+      );
 
-    test('listInbox 初始为空', () async {
-      final inbox = await repo.listInbox();
-      expect(inbox, isEmpty);
-    });
-
-    test('replyGreeting 返回含 conversationId 的 DTO', () async {
-      final result = await repo.replyGreeting('gr_001');
-      expect(result.conversationId, isNotEmpty);
-    });
-
-    test('cancelGreeting 返回 cancelled 状态 DTO', () async {
-      await repo.sendGreeting(targetSubAccountId: 'user_z');
-      final outbox = await repo.listOutbox();
-      final requestId = outbox.first.id;
-      final cancelled = await repo.cancelGreeting(requestId);
-      expect(cancelled.status, 'cancelled');
-    });
-
-    test('cancelGreeting 后 listOutbox 不再包含该请求', () async {
-      await repo.sendGreeting(targetSubAccountId: 'user_w');
-      final outbox1 = await repo.listOutbox();
-      await repo.cancelGreeting(outbox1.first.id);
-      final outbox2 = await repo.listOutbox();
-      expect(outbox2, isEmpty);
-    });
-
-    test('接口包含全部 6 个 service.yaml 方法', () {
+      expect(first.status, 'pending');
+      expect(first.requestMessage, '认识一下');
+      expect(first.id, isNot(second.id));
       expect(
-        repo.runtimeType.toString(),
-        contains('MockGreetingRepository'),
+        outbox.items.map((item) => item.targetSubAccountId),
+        containsAll(<String>['user_x', 'user_y']),
       );
     });
-  });
 
-  // ── MockGreetingRepository 兼容性/边界契约 ───────────────────────────────────
+    test('reply 与 ignore 推进 inbox 终态', () async {
+      final replied = await facet.replyGreeting(
+        ReplyGreetingCommand(requestId: 'inbox-1'),
+      );
+      expect(replied.status, 'replied');
+      expect(replied.promotedConversationId, isNotEmpty);
 
-  group('MockGreetingRepository — 边界契约', () {
-    test('多次 sendGreeting 各自有独立 id', () async {
-      final repo = MockGreetingRepository();
-      final dto1 = await repo.sendGreeting(targetSubAccountId: 'u1');
-      await Future<void>.delayed(const Duration(milliseconds: 2));
-      final dto2 = await repo.sendGreeting(targetSubAccountId: 'u2');
-      expect(dto1.id, isNot(dto2.id));
+      final ignoreFacet = AlphaGreetingRequestFacet(
+        seedInbox: <GreetingRequestRecord>[
+          _greetingRecord(id: 'inbox-ignore', requester: 'user_c'),
+        ],
+      );
+      final ignored = await ignoreFacet.ignoreGreeting(
+        IgnoreGreetingCommand(requestId: 'inbox-ignore'),
+      );
+      expect(ignored.status, 'ignored');
+      expect(ignored.decisionAt, isNotNull);
     });
 
-    test('listOutbox status=cancelled 过滤已取消', () async {
-      final repo = MockGreetingRepository();
-      await repo.sendGreeting(targetSubAccountId: 'u1');
-      final pending = await repo.listOutbox(status: 'pending');
-      final cancelled = await repo.listOutbox(status: 'cancelled');
-      expect(pending, isNotEmpty);
-      expect(cancelled, isEmpty);
+    test('cancel 后 pending 过滤消失、cancelled 过滤可见', () async {
+      final cancelled = await facet.cancelGreeting(
+        CancelGreetingCommand(requestId: 'outbox-1'),
+      );
+      final pending = await facet.listGreetingOutbox(
+        const ListGreetingRequestsQuery(status: 'pending'),
+      );
+      final cancelledSlice = await facet.listGreetingOutbox(
+        const ListGreetingRequestsQuery(status: 'cancelled'),
+      );
+
+      expect(cancelled.status, 'cancelled');
+      expect(pending.items, isEmpty);
+      expect(cancelledSlice.items.single.id, 'outbox-1');
     });
   });
+}
+
+GreetingRequestRecord _greetingRecord({
+  required String id,
+  String requester = 'fixture_user_current',
+  String target = 'fixture_user_current',
+}) {
+  final createdAt = DateTime.utc(2026, 7, 20, 8);
+  return GreetingRequestRecord(
+    id: id,
+    requesterSubAccountId: requester,
+    targetSubAccountId: target,
+    requestMessage: 'fixture greeting',
+    status: 'pending',
+    source: 'profile',
+    createdAt: createdAt,
+    updatedAt: createdAt,
+  );
 }

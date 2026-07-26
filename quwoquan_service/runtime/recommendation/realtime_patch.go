@@ -13,7 +13,7 @@ import (
 
 // 低风险首页推荐实时 patch（商用化阶段 7 · §G）服务端发射真相源。
 //
-// 单一真相源：contracts/metadata/content/post/projections/recommendation_realtime_patch.yaml。
+// 单一真相源：services/content-service/contracts/content/post/projections/recommendation_realtime_patch.yaml。
 // 本文件的常量 / 字段必须与该 metadata 逐项一致（由 realtime_patch_test.go 契约测试锁定），
 // App 端强类型 DTO 由 codegen_app_metadata 从同一 metadata 生成，禁止第二套定义。
 //

@@ -28,7 +28,7 @@ func TestGenerateCoversEveryTransportOperation(t *testing.T) {
 				"GetPost",
 				"content",
 				"content.post",
-				"/content/posts/{postId}",
+				"/content/content/posts/{postId}",
 				"PostView",
 				"object",
 			),
@@ -38,7 +38,7 @@ func TestGenerateCoversEveryTransportOperation(t *testing.T) {
 				"content",
 				"content.post",
 				"POST",
-				"/internal/content/posts/{postId}:rebuild-index",
+				"/internal/content/content/posts/{postId}:rebuild-index",
 				"RebuildPostIndexRequest",
 				"RebuildPostIndexResult",
 			),
@@ -72,7 +72,7 @@ func TestGenerateCoversEveryTransportOperation(t *testing.T) {
 	assertOperationBinding(
 		t,
 		content,
-		"/content/posts/{postId}",
+		"/content/content/posts/{postId}",
 		"get",
 		"GetPost",
 		"content.post",
@@ -82,14 +82,14 @@ func TestGenerateCoversEveryTransportOperation(t *testing.T) {
 	assertPathParameter(
 		t,
 		content,
-		"/content/posts/{postId}",
+		"/content/content/posts/{postId}",
 		"get",
 		"postId",
 	)
 	assertOperationBinding(
 		t,
 		content,
-		"/internal/content/posts/{postId}:rebuild-index",
+		"/internal/content/content/posts/{postId}:rebuild-index",
 		"post",
 		"RebuildPostIndex",
 		"content.post",
@@ -167,7 +167,7 @@ func TestGenerateHonorsExplicitBodylessPostCommand(t *testing.T) {
 		"ops",
 		"ops.experiment_assignment_fact",
 		"POST",
-		"/ops/experiments/{experimentId}/assignment",
+		"/ops/product_ops/experiments/{experimentId}/assignment",
 		"",
 		"ExperimentAssignmentFact",
 	)
@@ -231,7 +231,7 @@ func TestGenerateRequiredAuthNeverAdvertisesAnonymousAccess(t *testing.T) {
 		"ops",
 		"ops.experiment_assignment_fact",
 		"POST",
-		"/ops/experiments/{experimentId}/assignment",
+		"/ops/product_ops/experiments/{experimentId}/assignment",
 		"",
 		"ExperimentAssignmentFact",
 	)
@@ -261,7 +261,7 @@ func TestGenerateCarriesTypedAppendSinkWithoutAggregateOwner(t *testing.T) {
 		"ops",
 		"ops.experiment_assignment_fact",
 		"POST",
-		"/ops/experiments/{experimentId}/assignments",
+		"/ops/product_ops/experiments/{experimentId}/assignments",
 		"AssignExperimentVariantRequest",
 		"ExperimentAssignmentFact",
 	)
@@ -276,7 +276,7 @@ func TestGenerateCarriesTypedAppendSinkWithoutAggregateOwner(t *testing.T) {
 	rendered := operationAt(
 		t,
 		document,
-		"/ops/experiments/{experimentId}/assignments",
+		"/ops/product_ops/experiments/{experimentId}/assignments",
 		"post",
 	)
 	application := rendered["x-application"].(map[string]any)
@@ -297,7 +297,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 				"content",
 				"content.post",
 				"POST",
-				"/content/posts/{postId}:publish",
+				"/content/content/posts/{postId}:publish",
 				"PublishPostRequest",
 				"PublishPostResult",
 			),
@@ -306,7 +306,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 				"ListPosts",
 				"content",
 				"content.post",
-				"/content/posts",
+				"/content/content/posts",
 				"PostCard",
 				"page",
 			),
@@ -316,7 +316,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 				"content",
 				"content.post",
 				"POST",
-				"/content/posts:mark-visited",
+				"/content/content/posts:mark-visited",
 				"MarkPostsVisitedRequest",
 				"",
 			),
@@ -333,7 +333,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 	publish := operationAt(
 		t,
 		document,
-		"/content/posts/{postId}:publish",
+		"/content/content/posts/{postId}:publish",
 		"post",
 	)
 	publishApplication := publish["x-application"].(map[string]any)
@@ -354,7 +354,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 		"#/components/schemas/PublishPostResult",
 	)
 
-	list := operationAt(t, document, "/content/posts", "get")
+	list := operationAt(t, document, "/content/content/posts", "get")
 	listApplication := list["x-application"].(map[string]any)
 	if got, want := listApplication["reader"], "ListPostsReader"; got != want {
 		t.Fatalf("query reader = %v, want %s", got, want)
@@ -384,7 +384,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 		t.Fatal("placeholder schema must not use additionalProperties as a universal map")
 	}
 
-	ack := operationAt(t, document, "/content/posts:mark-visited", "post")
+	ack := operationAt(t, document, "/content/content/posts:mark-visited", "post")
 	if _, exists := ack["responses"].(map[string]any)["204"]; !exists {
 		t.Fatal("ack command must generate a 204 response")
 	}
@@ -440,7 +440,7 @@ func TestCompareDirectoryRejectsStaleAndOrphanSnapshots(t *testing.T) {
 				"GetPost",
 				"content",
 				"content.post",
-				"/content/posts/{postId}",
+				"/content/content/posts/{postId}",
 				"PostView",
 				"object",
 			),

@@ -1,0 +1,444 @@
+description: Persona 对象专属 command packet。
+api_routes:
+- method: POST
+  path: /user/personas
+  operation: CreatePersona
+  actor: account
+  application:
+    kind: command
+    facet: PersonaManagementCommandFacade
+    method: createPersona
+    aggregate_owner: Persona
+    mutation_target: Persona
+    invariant_target: Persona
+  description: 创建新分身；userHandle/趣我圈号由服务端按 subAccountId 系统分配，客户端不提交
+  request_entity: Persona
+  request_fields:
+  - displayName
+  - avatarUrl
+  - isolationLevel
+  - purposeHint
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  response_entity: PersonaManagementItemView
+  response_fields:
+  - subAccountId
+  - displayName
+  - userHandle
+  - phone
+  - email
+  - avatarUrl
+  - backgroundUrl
+  - bio
+  - isolationLevel
+  - isActive
+  - isPrimary
+  - status
+  - retiredAt
+  - inheritsProfileFromOwner
+  - overriddenProfileFields
+  - lastProfileSyncAt
+  - lastProfileSyncSource
+  - profileVisibility
+  - purposeHint
+  - updatedAt
+  - lastActivatedAt
+  authorization:
+    principal: account
+    ownership_policy: current_account_owner
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.USER.invalid_argument
+  - USER.USER.unauthorized
+  - USER.SUB_ACCOUNT.quota_reached
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_create
+    trace: true
+    attributes:
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../user/persona_contracts.dart
+    request_type: CreatePersonaCommand
+    response_type: PersonaManagementItem
+    request_encoder: encodeCreatePersonaCommand
+    response_decoder: decodePersonaManagementItem
+- method: PATCH
+  path: /user/personas/{subAccountId}
+  operation: UpdatePersona
+  actor: account
+  application:
+    kind: command
+    facet: PersonaManagementCommandFacade
+    method: updatePersona
+    aggregate_owner: Persona
+    mutation_target: Persona
+    invariant_target: Persona
+  description: 更新分身资料或隔离等级；userHandle/趣我圈号只读，不允许客户端修改
+  request_entity: SubAccountProfileMutation
+  request_fields:
+  - displayName
+  - phone
+  - email
+  - avatarUrl
+  - backgroundUrl
+  - isolationLevel
+  - purposeHint
+  - applyScope
+  - syncTargetIds
+  - fieldsMask
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  response_entity: PersonaManagementItemView
+  response_fields:
+  - subAccountId
+  - displayName
+  - userHandle
+  - phone
+  - email
+  - avatarUrl
+  - backgroundUrl
+  - bio
+  - isolationLevel
+  - isActive
+  - isPrimary
+  - status
+  - retiredAt
+  - inheritsProfileFromOwner
+  - overriddenProfileFields
+  - lastProfileSyncAt
+  - lastProfileSyncSource
+  - profileVisibility
+  - purposeHint
+  - updatedAt
+  - lastActivatedAt
+  authorization:
+    principal: account
+    ownership_policy: current_account_owner
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.USER.invalid_argument
+  - USER.USER.unauthorized
+  - USER.SUB_ACCOUNT.not_found
+  - USER.SUB_ACCOUNT.handle_readonly
+  - USER.SUB_ACCOUNT.retired_guard
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_update
+    trace: true
+    attributes:
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../user/persona_contracts.dart
+    request_type: UpdatePersonaCommand
+    response_type: PersonaManagementItem
+    request_encoder: encodeUpdatePersonaCommand
+    response_decoder: decodePersonaManagementItem
+- method: POST
+  path: /user/personas/{subAccountId}/profile-sync
+  operation: ApplyPersonaProfileSync
+  actor: account
+  application:
+    kind: command
+    facet: PersonaManagementCommandFacade
+    method: applyPersonaProfileSync
+    aggregate_owner: Persona
+    mutation_target: Persona
+    invariant_target: Persona
+  description: 将某个分身的资料字段同步到全部或指定其它分身
+  request_entity: SubAccountProfileMutation
+  request_fields:
+  - applyScope
+  - syncTargetIds
+  - fieldsMask
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  authorization:
+    principal: account
+    ownership_policy: current_account_owner
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.USER.invalid_argument
+  - USER.USER.unauthorized
+  - USER.SUB_ACCOUNT.not_found
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_profile_sync
+    trace: true
+    attributes:
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../user/persona_contracts.dart
+    request_type: ApplyPersonaProfileSyncCommand
+    response_type: PersonaProfileSyncResult
+    request_encoder: encodeApplyPersonaProfileSyncCommand
+    response_decoder: decodePersonaProfileSyncResult
+- method: POST
+  path: /user/personas/{subAccountId}/retire
+  operation: RetirePersona
+  actor: account
+  application:
+    kind: command
+    facet: PersonaManagementCommandFacade
+    method: retirePersona
+    aggregate_owner: Persona
+    mutation_target: Persona
+    invariant_target: Persona
+  description: 退役非主、非激活且非最后一个分身；Persona 标识永久保留以承载跨域归因
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  response_entity: PersonaLifecycleGuardView
+  response_fields:
+  - subAccountId
+  - requestedAction
+  - allowed
+  - reason
+  - requiresSuccessor
+  authorization:
+    principal: account
+    ownership_policy: current_account_owner
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.USER.invalid_argument
+  - USER.USER.unauthorized
+  - USER.SUB_ACCOUNT.not_found
+  - USER.SUB_ACCOUNT.last_sub_account
+  - USER.SUB_ACCOUNT.primary_guard
+  - USER.SUB_ACCOUNT.active_guard
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_retire
+    trace: true
+    attributes:
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../user/persona_contracts.dart
+    request_type: RetirePersonaCommand
+    response_type: PersonaLifecycleGuard
+    request_encoder: encodeRetirePersonaCommand
+    response_decoder: decodePersonaLifecycleGuard
+- method: POST
+  path: /user/personas/{subAccountId}/activate
+  operation: ActivatePersona
+  actor: account
+  application:
+    kind: command
+    facet: PersonaManagementCommandFacade
+    method: activatePersona
+    aggregate_owner: Persona
+    mutation_target: Persona
+    invariant_target: Persona
+  description: 切换激活分身（强一致，排他写）
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  response_entity: ActivePersonaContextView
+  response_fields:
+  - ownerUserId
+  - subAccountId
+  - subjectType
+  - displayName
+  - avatarUrl
+  - avatarVersion
+  - isPrimary
+  - isolationLevel
+  - profileVisibility
+  - contextVersion
+  - personaSnapshotVersion
+  - sourceSurfaceId
+  - explicitOverride
+  - switchedAt
+  authorization:
+    principal: account
+    ownership_policy: current_account_owner
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.USER.invalid_argument
+  - USER.USER.unauthorized
+  - USER.SUB_ACCOUNT.not_found
+  - USER.SUB_ACCOUNT.retired_guard
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_activate
+    trace: true
+    attributes:
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../user/persona_contracts.dart
+    request_type: ActivatePersonaCommand
+    response_type: ActivePersonaContext
+    request_encoder: encodeActivatePersonaCommand
+    response_decoder: decodeActivePersonaContext
+- method: PATCH
+  path: /user/profile
+  operation: UpdateUserProfile
+  actor: persona
+  application:
+    kind: command
+    facet: ProfileCommandFacade
+    method: updateUserProfile
+    aggregate_owner: Persona
+    mutation_target: Persona
+    invariant_target: Persona
+  description: '[已有] 更新主控账号资料'
+  request_entity: SubAccountProfileMutation
+  request_fields:
+  - nickname
+  - displayName
+  - avatarAssetId
+  - avatarUrl
+  - backgroundAssetId
+  - backgroundUrl
+  - bio
+  - gender
+  - birthDate
+  - regionTagRef
+  - occupationTagRef
+  - interestTagRefs
+  - expectedTaxonomyReleaseId
+  - identityTags
+  - profileVisibility
+  - applyScope
+  - syncTargetIds
+  - fieldsMask
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  authorization:
+    principal: account
+    ownership_policy: current_account_owner
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.USER.invalid_argument
+  - USER.USER.unauthorized
+  - USER.USER.nickname_taken
+  - USER.PROFILE.invalid_media_asset
+  - USER.PROFILE.invalid_region
+  - USER.PROFILE.invalid_tag_ref
+  - USER.PROFILE.taxonomy_release_conflict
+  - USER.PROFILE.version_conflict
+  - USER.PROFILE.idempotency_conflict
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_profile_update
+    trace: true
+    attributes:
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../user/persona_contracts.dart
+    request_type: UpdateUserProfileCommand
+    response_type: ProfileUpdateSnapshot
+    request_encoder: encodeUpdateUserProfileCommand
+    response_decoder: decodeProfileUpdateSnapshot

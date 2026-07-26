@@ -1,9 +1,0 @@
-entity: RecommendationIntersectionVisitState
-backend: mongodb
-collections:
-  recommendation_intersection_visit_states:
-    entity: RecommendationIntersectionVisitState
-    role: authoritative
-    indexes:
-      - { name: uq_intersection_visit_subject, keys: { personaId: 1, targetType: 1, targetId: 1 }, unique: true }
-      - { name: idx_intersection_visit_updated, keys: { updatedAt: -1 } }

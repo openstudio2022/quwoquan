@@ -1,12 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
+import 'package:quwoquan_app/ui/chat/providers/chat_send_outbox.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const _uuid = Uuid();
@@ -42,15 +49,14 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
 
   final String conversationId;
 
-  ChatRepository get _repo => ref.read(chatRepositoryProvider);
+  ChatMessageRepository get _repo => ref.read(chatMessageRepositoryProvider);
+  ChatMemberRepository get _memberRepo =>
+      ref.read(chatMemberRepositoryProvider);
   ChatMessageCommandWriter get _writer =>
       ref.read(chatMessageCommandWriterProvider);
-  final Map<String, ChatSendMessageCommand> _pendingCommands =
-      <String, ChatSendMessageCommand>{};
 
   @override
   ChatMessageState build() {
-    ref.onDispose(_pendingCommands.clear);
     return const ChatMessageState();
   }
 
@@ -160,10 +166,12 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
       mentions: mentions ?? const <String>[],
       senderDisplayNameSnapshot: senderName ?? activeContext.displayName,
       senderAvatarUrlSnapshot: senderAvatar ?? activeContext.avatarUrl,
-      personaContextVersion: _positiveVersion(activeContext.contextVersion),
+      personaContextVersion: activeContext.contextVersion > 0
+          ? activeContext.contextVersion
+          : null,
     );
-    _pendingCommands[clientMsgId] = command;
     state = state.copyWith(messages: _sorted([...state.messages, optimistic]));
+    final sendStartedAt = DateTime.now();
     try {
       final resp = await _writer.sendMessage(command);
       final confirmed = optimistic.copyWith(
@@ -176,56 +184,90 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         return m.clientMsgId == clientMsgId ? confirmed : m;
       }).toList();
       state = state.copyWith(messages: _sorted(updated));
-      _pendingCommands.remove(clientMsgId);
+      _recordSendOperationResult(result: 'success', startedAt: sendStartedAt);
       return true;
     } catch (e) {
+      // 发送失败：命令进持久化 outbox（断网/杀进程后按原 clientMsgId 自动重发），
+      // 气泡标记 failed 供手动立即重试。
       final failed = state.messages.map((m) {
         return m.clientMsgId == clientMsgId ? m.copyWith(status: 'failed') : m;
       }).toList();
       state = state.copyWith(messages: _sorted(failed));
+      _recordSendOperationResult(
+        result: 'failure',
+        startedAt: sendStartedAt,
+        failReasonCode: e is CloudException ? e.code : e.runtimeType.toString(),
+      );
+      await ref.read(chatSendOutboxProvider.notifier).enqueueCommand(command);
       return false;
     }
   }
 
-  /// 重试发送失败的消息。
+  /// 消息发送 operation_result 遥测：观测失败不得影响发送语义。
+  void _recordSendOperationResult({
+    required String result,
+    required DateTime startedAt,
+    String? failReasonCode,
+  }) {
+    unawaited(() async {
+      try {
+        await ref
+            .read(appTelemetryReporterProvider)
+            .record(
+              AppTelemetryPayload.operationResult(
+                operationId: ChatApiMetadata.sendMessageOperation,
+                result: result,
+                durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+                failReasonCode: failReasonCode,
+              ),
+            );
+      } catch (error, stackTrace) {
+        // 产品遥测通道不可用不影响发送语义，但必须进入独立 runtime 错误面。
+        unawaited(
+          AppExceptionTelemetryService.instance.recordHandledException(
+            source: 'chat.send_message.operation_result',
+            error: error,
+            stackTrace: stackTrace,
+            operationId: ChatApiMetadata.sendMessageOperation,
+          ),
+        );
+      }
+    }());
+  }
+
+  /// 重试发送失败的消息：触发持久化 outbox 按原 clientMsgId 顺序重放，
+  /// 服务端唯一约束保证不产生第二条消息。
   Future<void> retrySendMessage(String clientMsgId) async {
-    final msg = state.messages.firstWhere(
+    final hasFailed = state.messages.any(
       (m) => m.clientMsgId == clientMsgId && m.status == 'failed',
-      orElse: () => throw StateError('Message not found or not failed'),
     );
-    await _resolveActivePersonaContext();
-    final command = _pendingCommands[clientMsgId];
-    if (command == null) {
-      throw StateError('Pending Message command not found');
+    if (!hasFailed) {
+      throw StateError('Message not found or not failed');
     }
+    await _resolveActivePersonaContext();
     final retrying = state.messages.map((m) {
       return m.clientMsgId == clientMsgId ? m.copyWith(status: 'sending') : m;
     }).toList();
     state = state.copyWith(messages: _sorted(retrying));
     try {
-      final resp = await _writer.sendMessage(command);
-      final confirmed = msg.copyWith(
-        id: resp.messageId,
-        seq: resp.seq,
-        status: 'sent',
-        timestamp: resp.timestamp,
-      );
-      final updated = state.messages.map((m) {
-        return m.clientMsgId == clientMsgId ? confirmed : m;
-      }).toList();
-      state = state.copyWith(messages: _sorted(updated));
-      _pendingCommands.remove(clientMsgId);
-    } catch (_) {
+      await ref.read(chatSendOutboxProvider.notifier).drain();
+      // drain 成功后从服务端确认视角刷新该会话消息（重放结果含 seq）。
+      await loadMessages();
+    } catch (error, stackTrace) {
+      // 重试失败回落 failed 气泡供再次手动重试，并结构化上报。
       final failed = state.messages.map((m) {
         return m.clientMsgId == clientMsgId ? m.copyWith(status: 'failed') : m;
       }).toList();
       state = state.copyWith(messages: _sorted(failed));
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'chat.message.retry_send',
+          error: error,
+          stackTrace: stackTrace,
+          operationId: ChatApiMetadata.sendMessageOperation,
+        ),
+      );
     }
-  }
-
-  int? _positiveVersion(String raw) {
-    final parsed = int.tryParse(raw.trim());
-    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   /// 撤回消息。
@@ -301,7 +343,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
       return messages;
     }
     try {
-      final members = await _repo.listMembers(
+      final members = await _memberRepo.listMembers(
         conversationId: conversationId,
         limit: 200,
         sort: 'joined_asc',
@@ -329,7 +371,15 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
             );
           })
           .toList(growable: false);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // best-effort：快照水合失败降级为原始消息，上报保留观测面。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'chat.message.hydrate_sender_snapshots',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return messages;
     }
   }

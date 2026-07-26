@@ -1,30 +1,68 @@
-# 沉浸式媒体边缘滑动返回 Story
+# L3 Story：沉浸式媒体边缘滑动返回 Story (`immersive-media-edge-swipe-back`)
 
-## 最小价值点
+> 所属能力：[`native-edge-gesture-navigation`](../spec.md)
+>
+> Journey / Scenario：[`JNY-006 / SCN-006`](../../../spec.md#scn-006)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-用户在沉浸式媒体浏览器中从 iOS / Android 屏幕左右边缘滑动时，应返回上一页或退出沉浸浏览器，不应误触媒体左右切换。
+## 1. 用户价值
 
-## 归属
+作为开发、测试或运维角色，我希望沉浸式媒体浏览器边缘滑动返回，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-- 领域服务：`runtime`
-- 业务能力：`native-edge-gesture-navigation`
-- 关联 Scenario：`immersive-media-edge-swipe-back`
+## 2. 范围与非目标
 
-## 行为规则
+### In Scope
 
-- Given：用户从 feed 或详情页打开沉浸式媒体浏览器。
-- When：用户从屏幕左或右边缘发起系统返回手势。
-- Then：路由 pop 到上一页，媒体浏览器清理沉浸态，媒体横滑翻页不被触发。
+- iOS left/right edge swipe
+- Android left/right edge swipe or predictive back equivalent
 
-## 接口契约
+### Out of Scope
+
+- media paging business rules
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 沉浸式媒体边缘滑动返回上一页
+
+- iOS 与 Android 均验证边缘返回成功。
+- 返回动画无可见卡顿。
+
+<a id="req-002"></a>
+### REQ-002 Route contract：沉浸式媒体浏览器必须暴露可 pop 的路由状态
 
 - Route contract：沉浸式媒体浏览器必须暴露可 pop 的路由状态。
 - Gesture policy contract：边缘热区与媒体横滑区域必须可区分。
-- Telemetry contract：记录 edgeSwipeBack、edgeSwipeCancel、gestureConflictResolved。
 
-## 验收关注点
+## 4. 契约引用
 
-- iOS interactive pop 与 Android predictive back / back dispatcher 均覆盖。
-- 左右边缘均覆盖。
-- 横滑媒体翻页与边缘返回冲突可测。
-- 返回动画无明显卡顿。
+- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#AppBackDisposition`
+- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#supportedBackEdges`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 沉浸式媒体边缘滑动返回上一页
+
+- GIVEN 用户已从 feed 或详情页进入沉浸式媒体浏览器。
+- WHEN 用户从屏幕左边缘或右边缘发起返回手势。
+- THEN App 返回上一页，沉浸式媒体浏览器关闭。
+- THEN 媒体左右翻页不被误触发。
+
+## 6. 依赖
+
+- 前置要求：[`native-edge-gesture-navigation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 沉浸式媒体边缘滑动返回上一页
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：iOS 与 Android 均验证边缘返回成功。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效

@@ -26,6 +26,12 @@ func startConfigSyncLoop(
 		baseURL = strings.TrimSpace(os.Getenv("VITE_PLATFORM_OPS_BASE_URL"))
 	}
 	if baseURL == "" {
+		// beta/gamma/prod 的配置热更与 drift 检测依赖该地址；生产缺失必须
+		// fail-fast，禁止静默跳过后伪装"配置中心可用"。
+		if strings.EqualFold(strings.TrimSpace(appEnv), "prod") {
+			log.Fatal("product-ops-service PLATFORM_OPS_BASE_URL is required in prod (config sync/ACK loop)")
+		}
+		log.Printf("WARN: product-ops-service config sync disabled: PLATFORM_OPS_BASE_URL is empty (env=%s)", appEnv)
 		return
 	}
 

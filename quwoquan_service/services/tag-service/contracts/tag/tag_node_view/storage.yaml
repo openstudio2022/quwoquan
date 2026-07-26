@@ -1,0 +1,37 @@
+backend: mongodb
+collections:
+  tag_nodes:
+    entity: TagNodeView
+    indexes:
+    - name: uq_tag_nodes_release_tag_ref
+      keys:
+        releaseId: 1
+        tagRef: 1
+      unique: true
+    - name: idx_tag_nodes_release_lifecycle_group_depth_tagref
+      keys:
+        releaseId: 1
+        lifecycleStatus: 1
+        group: 1
+        depth: 1
+        tagRef: 1
+      key_order:
+      - releaseId
+      - lifecycleStatus
+      - group
+      - depth
+      - tagRef
+    - name: idx_tag_nodes_release_parent_lifecycle_tagref
+      keys:
+        releaseId: 1
+        parentTagRef: 1
+        lifecycleStatus: 1
+        tagRef: 1
+      key_order:
+      - releaseId
+      - parentTagRef
+      - lifecycleStatus
+      - tagRef
+role: projection
+codegen:
+  enabled: true

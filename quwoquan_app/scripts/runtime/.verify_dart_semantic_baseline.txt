@@ -1,2 +1,0 @@
-# verify_dart_semantic baseline: 已知违规，逐步修复
-# S8/P8 收口（2026-03-30）：清单已清空；新增违规须直接 token 化，禁止登记本文件。

@@ -1,21 +1,20 @@
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_lifecycle_guard_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_quota_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_summary_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_lifecycle_guard_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_item_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_quota_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_summary_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_user_like_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_normalized_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_profile_stats_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_view_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/account/user_account_stats_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_bundle_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_tab_counts_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_viewer_context_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 part 'profile_homepage_bundle_models.dart';
 part "profile_homepage_persona_models.dart";
 
@@ -136,6 +135,61 @@ class SubAccountProfileViewData {
     );
   }
 
+  factory SubAccountProfileViewData.fromSubAccountProfileProjection(
+    SubAccountProfileProjection projection,
+  ) {
+    final subAccountId = projection.subAccountId;
+    final displayName = projection.displayName.isNotEmpty
+        ? projection.displayName
+        : (projection.nickname.isNotEmpty ? projection.nickname : subAccountId);
+    final userHandle = projection.userHandle.isNotEmpty
+        ? projection.userHandle
+        : (projection.username.isNotEmpty ? projection.username : subAccountId);
+    final subjectType = projection.subjectType.isNotEmpty
+        ? projection.subjectType
+        : 'user';
+    final username = projection.username.isNotEmpty
+        ? projection.username
+        : userHandle;
+    final avatarUrl = isLocalFileImageSource(projection.avatarUrl)
+        ? projection.avatarUrl
+        : resolveAvatarImageUrl(
+            projection.avatarUrl,
+            avatarVersion: projection.avatarVersion,
+          );
+    final backgroundUrl = isLocalFileImageSource(projection.backgroundUrl)
+        ? projection.backgroundUrl
+        : resolveContentMediaUrl(projection.backgroundUrl);
+    return SubAccountProfileViewData(
+      subAccountId: subAccountId,
+      ownerUserId: projection.ownerUserId,
+      subjectType: subjectType,
+      userHandle: userHandle,
+      username: username,
+      displayName: displayName,
+      nicknameCustomized: projection.nicknameCustomized,
+      avatarUrl: avatarUrl,
+      avatarVersion: projection.avatarVersion,
+      backgroundUrl: backgroundUrl,
+      bio: projection.bio,
+      identityTags: projection.identityTags,
+      verified: projection.verified,
+      followerCount: projection.followerCount,
+      followingCount: projection.followingCount,
+      postCount: projection.postCount,
+      circleCount: projection.circleCount,
+      likeCount: projection.likeCount,
+      profileCompleteness: projection.profileCompleteness,
+      profileCompletenessMissingItems:
+          projection.profileCompletenessMissingItems,
+      isolationLevel: projection.isolationLevel,
+      profileVisibility: projection.profileVisibility,
+      inheritsFromOwner: projection.inheritsFromOwner,
+      overriddenFields: projection.overriddenFields ?? const <String>[],
+      updatedAt: projection.updatedAt,
+    );
+  }
+
   SubAccountProfileViewData mergeStats(UserProfileStatsViewData stats) {
     return SubAccountProfileViewData(
       subAccountId: subAccountId,
@@ -166,7 +220,8 @@ class SubAccountProfileViewData {
     );
   }
 }
-/// 用户主页统计计数（[UserProfileRepository.getUserStats] / 与档案合并）。
+
+/// 用户主页统计计数（`ProfileQuery.getUserStats` / 与档案合并）。
 @immutable
 class UserProfileStatsViewData {
   const UserProfileStatsViewData({
@@ -192,6 +247,19 @@ class UserProfileStatsViewData {
       postCount: w.postCount,
     );
   }
+
+  factory UserProfileStatsViewData.fromUserProfileStatsProjection(
+    UserProfileStatsProjection projection,
+  ) {
+    return UserProfileStatsViewData(
+      followingCount: projection.followingCount,
+      circleCount: projection.circleCount,
+      followerCount: projection.followerCount,
+      likeCount: projection.likeCount,
+      postCount: projection.postCount,
+    );
+  }
+
   factory UserProfileStatsViewData.fromProfile(SubAccountProfileViewData p) {
     return UserProfileStatsViewData(
       followingCount: p.followingCount,
@@ -203,64 +271,33 @@ class UserProfileStatsViewData {
   }
 }
 
-/// 关注关系查询视图（[UserProfileRepository.getRelationship] wire 归一化后）。
+/// 关注关系查询视图（由 PersonaRelationship 对象级 Query 提供）。
+///
+/// 直接消费 RelationshipView wire（relationState + block 双向位）；
+/// isFollowing / isFollowedBy / isMutual 是端侧从 relationState 派生的
+/// view model 便捷位，不再期待 wire 下发。
 @immutable
 class RelationshipViewData {
   const RelationshipViewData({
     required this.relationState,
-    required this.isFollowing,
-    required this.isFollowedBy,
-    required this.isMutual,
+    this.isBlocked = false,
+    this.isBlockedBy = false,
   });
   final String relationState;
-  final bool isFollowing;
-  final bool isFollowedBy;
-  final bool isMutual;
-  factory RelationshipViewData.fromRelationshipNormalizedWire(
-    RelationshipNormalizedWireDto w,
+  final bool isBlocked;
+  final bool isBlockedBy;
+
+  bool get isMutual => relationState == 'mutual';
+  bool get isFollowing => relationState == 'following' || isMutual;
+  bool get isFollowedBy => relationState == 'followed_by' || isMutual;
+
+  factory RelationshipViewData.fromRelationshipViewWire(
+    RelationshipViewWireDto w,
   ) {
     return RelationshipViewData(
       relationState: w.relationState,
-      isFollowing: w.isFollowing,
-      isFollowedBy: w.isFollowedBy,
-      isMutual: w.isMutual,
-    );
-  }
-}
-
-/// 主页「获赞」列表行（[UserProfileRepository.listUserLikes]）。
-@immutable
-class ProfileUserLikeRowViewData {
-  const ProfileUserLikeRowViewData({
-    required this.postId,
-    required this.title,
-    required this.coverUrl,
-    required this.likerNickname,
-    required this.likerAvatarUrl,
-    this.likerAvatarVersion = 0,
-    this.likedAt,
-  });
-  final String postId;
-  final String title;
-  final String coverUrl;
-  final String likerNickname;
-  final String likerAvatarUrl;
-  final int likerAvatarVersion;
-  final DateTime? likedAt;
-  factory ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
-    ProfileUserLikeRowWireDto w,
-  ) {
-    return ProfileUserLikeRowViewData(
-      postId: w.postId,
-      title: w.title,
-      coverUrl: resolveContentMediaUrl(w.coverUrl),
-      likerNickname: w.likerNickname,
-      likerAvatarUrl: resolveAvatarImageUrl(
-        w.likerAvatarUrl,
-        avatarVersion: w.likerAvatarVersion,
-      ),
-      likerAvatarVersion: w.likerAvatarVersion,
-      likedAt: w.likedAt,
+      isBlocked: w.isBlocked,
+      isBlockedBy: w.isBlockedBy,
     );
   }
 }
@@ -332,6 +369,32 @@ class ProfileSocialRelationRowViewData {
       relationshipCapability: w.relationshipCapability == null
           ? null
           : RelationshipCapabilityDto.fromMap(w.relationshipCapability!),
+    );
+  }
+
+  factory ProfileSocialRelationRowViewData.fromPersonaRelationshipListItem(
+    PersonaRelationshipListItem item,
+  ) {
+    final id = item.subAccountId;
+    final name = item.displayName.isNotEmpty ? item.displayName : id;
+    final handle = item.userHandle.isNotEmpty
+        ? item.userHandle
+        : (item.username.isNotEmpty ? item.username : id);
+    final username = item.username.isNotEmpty ? item.username : handle;
+    return ProfileSocialRelationRowViewData(
+      subAccountId: id,
+      username: username,
+      userHandle: handle,
+      displayName: name,
+      avatarUrl: resolveAvatarImageUrl(item.avatarUrl),
+      profileVisibility: item.profileVisibility,
+      relationState: item.relationState,
+      followedAt: item.followedAt,
+      relationshipCapability: item.relationshipCapability == null
+          ? null
+          : RelationshipCapabilityDto.fromContract(
+              item.relationshipCapability!,
+            ),
     );
   }
 

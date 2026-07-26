@@ -4,8 +4,6 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
   void _closePanel() {
     _setEditorState(() {
       _selectedToolIndex = null;
-      _selectedProToolIndex = null;
-      _proPlaceholderTitle = null;
       _hslPickerActive = false;
       _hslPickerPoint = null;
       _localAddMode = false;
@@ -28,6 +26,9 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     _bwSnapshotBlackLevel = _bwBlackLevel;
     _proHslSnapshotValues = cloneHslValues(_proHslValues);
     _localSnapshotAnchors = cloneLocalAnchors(_localAnchors);
+    _curvesSnapshot = _curvesState;
+    _wbSnapshotTemperature = _wbTemperature;
+    _wbSnapshotTint = _wbTint;
     _resetHslSessionHistory();
     _resetBwSessionHistory();
     _resetLocalSessionHistory();
@@ -37,13 +38,15 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     _setEditorState(() {
       _selectedProCategory = _proCategorySnapshot;
       _selectedProBaseToolIndex = _proBaseToolSnapshot;
-      _proPlaceholderTitle = null;
       _proBaseValues
         ..clear()
         ..addAll(_proBaseSnapshotValues);
       _bwWhiteLevel = _bwSnapshotWhiteLevel;
       _bwBlackLevel = _bwSnapshotBlackLevel;
       _proHslValues = cloneHslValues(_proHslSnapshotValues);
+      _curvesState = _curvesSnapshot;
+      _wbTemperature = _wbSnapshotTemperature;
+      _wbTint = _wbSnapshotTint;
       _localAnchors
         ..clear()
         ..addAll(cloneLocalAnchors(_localSnapshotAnchors));
@@ -69,9 +72,9 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       _resetBwSessionHistory();
       _resetLocalSessionHistory();
       _selectedToolIndex = null;
-      _selectedProToolIndex = null;
       _showProToolbox = false;
     });
+    _disposeCurveSessionResources();
   }
 
   void _onProBaseValueChanged(String toolType, double value) {
@@ -482,70 +485,155 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     return false;
   }
 
-  void _confirmProPanel() {
+  /// 专业面板确认：确认即烘焙（与裁剪/滤镜/马赛克统一的一步一快照模型）。
+  Future<void> _confirmProPanel() async {
     if (_selectedToolIndex != kImageEditorToolPro) return;
     final isOverall = _selectedProCategory == kImageEditorProCategoryOverall;
     final isLocal = _selectedProCategory == kImageEditorProCategoryLocal;
     final isHsl = _selectedProCategory == kImageEditorProCategoryHsl;
     final isBw = _selectedProCategory == kImageEditorProCategoryBwLevels;
-    if (isOverall && _isProBaseSessionEdited()) {
-      _pushStep(
-        ImageEditorStep(
-          type: 'proTools',
-          params: {
-            'subType': 'baseAdjustments',
-            'values': Map<String, double>.from(_proBaseValues),
-            'selectedIndex': _selectedProBaseToolIndex,
-          },
-        ),
+    final isCurve = _selectedProCategory == kImageEditorProCategoryCurve;
+    final isWb = _selectedProCategory == kImageEditorProCategoryWhiteBalance;
+
+    ImageEditorStepPayload? payload;
+    if (isOverall && _isProBaseSessionEdited() && _hasProBaseAdjustments) {
+      payload = ImageEditorProBaseStepPayload(
+        values: Map<String, double>.from(_proBaseValues),
+      );
+    } else if (isLocal && _isLocalSessionEdited() && _hasLocalAdjustments) {
+      payload = ImageEditorProLocalStepPayload(
+        anchors: cloneLocalAnchors(_localAnchors),
+      );
+    } else if (isHsl && _isProHslSessionEdited() && _hasProHslAdjustments) {
+      payload = ImageEditorProHslStepPayload(
+        values: cloneHslValues(_proHslValues),
+      );
+    } else if (isBw && _isProBwLevelsSessionEdited()) {
+      payload = ImageEditorProBwLevelsStepPayload(
+        whiteLevel: _bwWhiteLevel,
+        blackLevel: _bwBlackLevel,
+      );
+    } else if (isCurve && _hasCurveAdjustments) {
+      payload = ImageEditorProCurvesStepPayload(curves: _curvesState);
+    } else if (isWb && _hasWhiteBalanceAdjustments) {
+      payload = ImageEditorProWhiteBalanceStepPayload(
+        temperature: _wbTemperature,
+        tint: _wbTint,
       );
     }
-    if (isLocal && _isLocalSessionEdited()) {
-      _pushStep(
-        ImageEditorStep(
-          type: 'proTools',
-          params: {
-            'subType': 'localAdjustments',
-            'anchors': _localAnchors
-                .map(imageEditorLocalAnchorWireMap)
-                .toList(growable: false),
-            'selectedAnchorId': _selectedLocalAnchorId,
-          },
-        ),
+
+    if (payload != null) {
+      final subType = payload.subType!;
+      final beforePath = _currentPath;
+      final afterPath = await _bakeProCategoryToCurrentImage(subType);
+      if (afterPath == null) {
+        await _showEditorActionFailure(
+          title: UITextConstants.imageEditorProTools,
+        );
+        return;
+      }
+      _commitBakedStep(
+        payload: payload,
+        beforePath: beforePath,
+        afterPath: afterPath,
       );
+      _resetProSessionValuesAfterBake(subType);
     }
-    if (isHsl && _isProHslSessionEdited()) {
-      _pushStep(
-        ImageEditorStep(
-          type: 'proTools',
-          params: {
-            'subType': 'hslAdjustments',
-            'values': cloneHslValues(_proHslValues),
-            'selectedChannel': _selectedHslChannel,
-          },
-        ),
-      );
-    }
-    if (isBw && _isProBwLevelsSessionEdited()) {
-      _pushStep(
-        ImageEditorStep(
-          type: 'proTools',
-          params: {
-            'subType': 'bwLevelsAdjustments',
-            'whiteLevel': _bwWhiteLevel,
-            'blackLevel': _bwBlackLevel,
-          },
-        ),
-      );
-    }
+    if (!mounted) return;
     _setEditorState(() {
       _hslPickerActive = false;
       _hslPickerPoint = null;
       _isComparingSessionBaseline = false;
       _selectedToolIndex = null;
-      _selectedProToolIndex = null;
-      _proPlaceholderTitle = null;
       _showProToolbox = false;
     });
+    _disposeCurveSessionResources();
+  }
+
+  /// 按类别烘焙当前会话到文件；曲线走 LUT 引擎，其余走矩阵引擎。
+  Future<String?> _bakeProCategoryToCurrentImage(String subType) async {
+    if (_currentPath.isEmpty) return null;
+    try {
+      final bytes = await _loadImageBytes(_currentPath);
+      if (bytes.isEmpty) return null;
+      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
+      ui.Image adjusted;
+      if (subType == 'localAdjustments') {
+        adjusted = await ImageEditorExportEngine.applyLocalAdjustments(
+          image,
+          <ImageEditorLocalRenderSpec>[
+            for (final anchor in _localAnchors)
+              if (anchor.values.values.any((value) => value.abs() > 0.001))
+                ImageEditorLocalRenderSpec(
+                  center: anchor.center,
+                  radiusOnShortSide: anchor.radius,
+                  colorMatrix: _buildLocalAnchorColorMatrix(anchor),
+                ),
+          ],
+        );
+      } else if (subType == 'curves') {
+        adjusted = await ImageEditorExportEngine.applyCurves(
+          image,
+          _curvesState,
+        );
+      } else {
+        final matrix = switch (subType) {
+          'baseAdjustments' => _buildProBaseColorMatrix(),
+          'hslAdjustments' => _buildProHslColorMatrix(_proHslValues),
+          'bwLevelsAdjustments' => _bwLevelsMatrix(
+            whiteLevel: _bwWhiteLevel,
+            blackLevel: _bwBlackLevel,
+          ),
+          'whiteBalance' => _buildWhiteBalanceColorMatrix(),
+          _ => _identityColorMatrix(),
+        };
+        adjusted = await ImageEditorExportEngine.applyColorMatrix(
+          image,
+          matrix,
+        );
+      }
+      image.dispose();
+      return _writeImageToTemp(adjusted, 'pro_$subType');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 烘焙成功后清零对应会话值，避免预览与文件双重叠加。
+  void _resetProSessionValuesAfterBake(String subType) {
+    switch (subType) {
+      case 'baseAdjustments':
+        _proBaseValues.updateAll((key, value) => 0);
+        _proBaseSnapshotValues.updateAll((key, value) => 0);
+      case 'localAdjustments':
+        _localAnchors.clear();
+        _localSnapshotAnchors = <LocalAnchor>[];
+        _selectedLocalAnchorId = null;
+        _localSessionStack.clear();
+        _localSessionCursor = -1;
+      case 'hslAdjustments':
+        _proHslValues = createDefaultHslValues();
+        _proHslSnapshotValues = createDefaultHslValues();
+        _hslSessionBaselineValues = createDefaultHslValues();
+        _hslSessionStack.clear();
+        _hslSessionCursor = -1;
+      case 'bwLevelsAdjustments':
+        _bwWhiteLevel = 0;
+        _bwBlackLevel = 0;
+        _bwSnapshotWhiteLevel = 0;
+        _bwSnapshotBlackLevel = 0;
+        _bwSessionBaselineWhiteLevel = 0;
+        _bwSessionBaselineBlackLevel = 0;
+        _bwSessionStack.clear();
+        _bwSessionCursor = -1;
+      case 'curves':
+        _curvesState = ImageEditorCurvesState();
+        _curvesSnapshot = ImageEditorCurvesState();
+      case 'whiteBalance':
+        _wbTemperature = 0;
+        _wbTint = 0;
+        _wbSnapshotTemperature = 0;
+        _wbSnapshotTint = 0;
+    }
   }
 }

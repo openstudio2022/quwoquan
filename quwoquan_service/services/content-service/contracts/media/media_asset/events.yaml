@@ -1,0 +1,50 @@
+events:
+- name: MediaAssetCreated
+  description: 已验证的上传会话物化为独立 MediaAsset；media-processing 处理权威快照中处于 processing 的图片或视频，终态重放仅推进 checkpoint。
+  producer: content-service
+  consumers:
+  - media-processing
+  channel: transactional_outbox
+  payload_fields:
+  - id
+  - version
+  - ownerId
+  - sourceSessionId
+  - objectKey
+  - sha256
+  - processingStatus
+- name: MediaAssetProcessingUpdated
+  description: 图片解码/方向归一/压缩或视频转码/扫描/预览轨处理更新资产处理状态。
+  producer: content-service
+  consumers:
+  - content-service
+  - search-service
+  channel: transactional_outbox
+  payload_fields:
+  - id
+  - version
+  - processingStatus
+  - processedAt
+- name: MediaAssetAccessPolicyUpdated
+  description: owner 修改资产访问策略。
+  producer: content-service
+  consumers:
+  - content-service
+  channel: transactional_outbox
+  payload_fields:
+  - id
+  - version
+  - ownerId
+  - accessPolicy
+- name: MediaAssetDiscarded
+  description: owner 放弃未被有效内容引用的资产；同事务写入逻辑删除与 outbox，media-processing 按同序 cursor 完成可重放物理清理。
+  producer: content-service
+  consumers:
+  - media-processing
+  channel: transactional_outbox
+  payload_fields:
+  - id
+  - version
+  - ownerId
+  - objectKey
+  - processingStatus

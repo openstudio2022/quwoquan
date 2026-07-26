@@ -21,7 +21,25 @@ void main() {
   testWidgets('ArticlePreviewBookPager exposes PageView with test key', (
     WidgetTester tester,
   ) async {
-    final doc = ArticleDocumentData(title: 'T', body: '正文一段\n第二段');
+    final doc = ArticleDocumentData(
+      nodes: const <ArticleDocumentNode>[
+        ArticleDocumentNode(
+          id: 'document_title',
+          type: ArticleDocumentNodeType.documentTitle,
+          text: 'T',
+        ),
+        ArticleDocumentNode(
+          id: 'paragraph_1',
+          type: ArticleDocumentNodeType.paragraph,
+          text: '正文一段',
+        ),
+        ArticleDocumentNode(
+          id: 'paragraph_2',
+          type: ArticleDocumentNodeType.paragraph,
+          text: '第二段',
+        ),
+      ],
+    );
     final pages = ArticlePaginationEngine.paginateSnapshot(
       document: doc,
       stageWidth: 400,
@@ -48,13 +66,20 @@ void main() {
   testWidgets('ArticleEditor vertical layout uses ListView not PageView', (
     WidgetTester tester,
   ) async {
-    final document = ArticleDocumentData(title: '', body: '仅一页正文');
+    final document = ArticleDocumentData(
+      nodes: const <ArticleDocumentNode>[
+        ArticleDocumentNode(
+          id: 'paragraph_1',
+          type: ArticleDocumentNodeType.paragraph,
+          text: '仅一页正文',
+        ),
+      ],
+    );
     final pages = ArticlePaginationEngine.paginateSnapshot(
       document: document,
       stageWidth: 400,
       contentHeightOverride: 520,
     );
-    final blocks = buildArticleBlocksFromDocument(document);
     final state = CreateEditorState(
       editorKind: CreateEditorKind.text,
       draftFlowKind: CreateDraftFlowKind.article,
@@ -76,9 +101,8 @@ void main() {
       body: document.body,
       articleDocument: document,
       articlePages: pages,
-      articleBlocks: blocks,
       activeArticlePageId: pages.first.id,
-      activeArticleBlockId: blocks.first.id,
+      activeArticleBlockId: document.nodes.first.id,
       articleTemplate: ArticleTemplatePreset.journal,
       articlePaperTexture: ArticlePaperTexture.darkPaper,
       articleFontPreset: ArticleFontPreset.clean,
@@ -102,28 +126,21 @@ void main() {
               onTitleChanged: (_) {},
               onTitleStyleChanged: (_) {},
               onUpdateNodeText: (String nodeId, String value) {},
-              onUpdateWrapParagraphTexts: (
-                String figureNodeId,
-                String narrowText,
-                String belowText,
-              ) {},
+              onUpdateWrapParagraphTexts:
+                  (String figureNodeId, String narrowText, String belowText) {},
               onUpdateNodeImageLayout: (String nodeId, String layout) {},
               onUpdateNodeCaption: (String nodeId, String caption) {},
               onEditNodeImage: (String nodeId) async {},
               onRemoveNodeImage: (String nodeId) {},
               onInsertImageAfter: (String? afterNodeId) async {},
-              onInsertImageAtSelection: (
-                String nodeId,
-                int selectionOffset,
-              ) async {},
+              onInsertImageAtSelection:
+                  (String nodeId, int selectionOffset) async {},
               onActiveBlockChanged: (String? id) {},
-              onInsertTextNodeAfter: (String afterNodeId, {String initialText = ''}) {
-                return '';
-              },
-              onEnsureWrapNodeGroup: (
-                String figureNodeId, {
-                int? splitOffset,
-              }) {
+              onInsertTextNodeAfter:
+                  (String afterNodeId, {String initialText = ''}) {
+                    return '';
+                  },
+              onEnsureWrapNodeGroup: (String figureNodeId, {int? splitOffset}) {
                 return null;
               },
             ),

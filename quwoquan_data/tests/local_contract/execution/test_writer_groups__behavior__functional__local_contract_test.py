@@ -48,7 +48,7 @@ from content.post.article.draft_io import (  # noqa: E402
 from core.paths import ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
-EXECUTION_ID = "20260711--travel-article-agent-pack--cn-sichuan--canary-001"
+EXECUTION_ID = "20260711--travel-article-agent-pack--test-region-b--pilot-001"
 
 
 def setup_function() -> None:

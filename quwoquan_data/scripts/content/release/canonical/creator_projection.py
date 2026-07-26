@@ -62,13 +62,17 @@ def project_creator_object(creator_ref: str, target: Path) -> Path:
         target / "profile.json",
         {
             "schema": "quwoquan_data.creator_profile",
-            "userId": creator_ref,
+            "creatorId": creator_ref,
+            "userId": str(payload.get("authorId") or ""),
             "authorId": str(payload.get("authorId") or ""),
+            "subAccountId": str(payload.get("subAccountId") or payload.get("authorId") or ""),
             "displayName": str(payload.get("displayName") or ""),
             "userHandle": str(payload.get("userHandle") or ""),
+            "avatarObjectKey": str(payload.get("avatarObjectKey") or ""),
             "headline": str(payload.get("headline") or ""),
             "bio": str(payload.get("bio") or ""),
             "creatorArchetype": str(payload.get("creatorArchetype") or ""),
+            "publicProfileTagRefs": tag_refs,
             "disclosure": dict(payload.get("disclosure") or {}),
         },
     )

@@ -1,0 +1,73 @@
+{
+  "algorithm": "sha256:qwq-filter-catalog-canonical-json",
+  "canonicalPayload": {
+    "categories": [
+      {
+        "categoryId": "camera_photo",
+        "displayNameZhHans": "拍照",
+        "displayNameEn": null,
+        "sort": 1,
+        "enabled": true
+      }
+    ],
+    "presets": [
+      {
+        "presetId": "original",
+        "categoryId": "camera_photo",
+        "displayNameZhHans": "原图",
+        "displayNameEn": null,
+        "sort": 1,
+        "enabled": true,
+        "defaultStrength": 0,
+        "adjustments": {
+          "lightSense": 0,
+          "brightness": 0,
+          "exposure": 0,
+          "contrast": 0,
+          "saturation": 0,
+          "vibrance": 0,
+          "texture": 0,
+          "sharpen": 0,
+          "structure": 0,
+          "highlight": 0,
+          "shadow": 0,
+          "temperature": 0,
+          "tint": 0,
+          "grain": 0,
+          "fade": 0
+        }
+      },
+      {
+        "presetId": "cinema",
+        "categoryId": "camera_photo",
+        "displayNameZhHans": "电影",
+        "displayNameEn": "Cinema",
+        "sort": 2,
+        "enabled": true,
+        "defaultStrength": 80.5,
+        "adjustments": {
+          "lightSense": 0,
+          "brightness": 0,
+          "exposure": 0,
+          "contrast": 8.25,
+          "saturation": 0,
+          "vibrance": 0,
+          "texture": 0,
+          "sharpen": 0,
+          "structure": 0,
+          "highlight": 0,
+          "shadow": 0,
+          "temperature": -12.5,
+          "tint": 0,
+          "grain": 0.0000001,
+          "fade": 0
+        }
+      }
+    ],
+    "recommendedFallbackPresetIds": [
+      "cinema"
+    ]
+  },
+  "canonicalJsonUtf8": "{\"categories\":[{\"categoryId\":\"camera_photo\",\"displayNameEn\":null,\"displayNameZhHans\":\"拍照\",\"enabled\":true,\"sort\":1}],\"presets\":[{\"adjustments\":{\"brightness\":0,\"contrast\":0,\"exposure\":0,\"fade\":0,\"grain\":0,\"highlight\":0,\"lightSense\":0,\"saturation\":0,\"shadow\":0,\"sharpen\":0,\"structure\":0,\"temperature\":0,\"texture\":0,\"tint\":0,\"vibrance\":0},\"categoryId\":\"camera_photo\",\"defaultStrength\":0,\"displayNameEn\":null,\"displayNameZhHans\":\"原图\",\"enabled\":true,\"presetId\":\"original\",\"sort\":1},{\"adjustments\":{\"brightness\":0,\"contrast\":8.25,\"exposure\":0,\"fade\":0,\"grain\":0.0000001,\"highlight\":0,\"lightSense\":0,\"saturation\":0,\"shadow\":0,\"sharpen\":0,\"structure\":0,\"temperature\":-12.5,\"texture\":0,\"tint\":0,\"vibrance\":0},\"categoryId\":\"camera_photo\",\"defaultStrength\":80.5,\"displayNameEn\":\"Cinema\",\"displayNameZhHans\":\"电影\",\"enabled\":true,\"presetId\":\"cinema\",\"sort\":2}],\"recommendedFallbackPresetIds\":[\"cinema\"]}",
+  "sha256": "fba38ede15295f3bbee31375d9955edc0baf722b8c204dbf0575f4ab25401242"
+}

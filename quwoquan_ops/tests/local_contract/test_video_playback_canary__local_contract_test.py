@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -107,6 +109,38 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
 
         self.assertEqual(status, 0)
         self.assertIn('"status": "passed"', output.getvalue())
+
+    def test_successful_probe_writes_replayable_range_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            report_path = Path(temporary_dir) / "range.json"
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {
+                        "PROD_TEST_AUTH_TOKEN": "secret-token",
+                        "PROD_ROLLOUT_STAGE": "gray-initial",
+                        "VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY": (
+                            "media/video/s/release-video-20260716/post/canary.mp4"
+                        ),
+                    },
+                    clear=True,
+                ),
+                mock.patch.object(canary, "load_environment_topology", return_value={}),
+                mock.patch.object(canary, "get_target", return_value=self._topology_target()),
+                mock.patch.object(
+                    canary,
+                    "_probe_https_video",
+                    return_value=(206, "video/mp4"),
+                ),
+                redirect_stdout(io.StringIO()),
+            ):
+                status = canary.main(["--report", str(report_path)])
+
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(status, 0)
+        self.assertEqual(report["rangeStatus"], 206)
+        self.assertEqual(report["contentType"], "video/mp4")
 
     def test_fixture_key_cannot_be_a_production_release_canary(self) -> None:
         output = io.StringIO()

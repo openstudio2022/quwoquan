@@ -1,7 +1,12 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_stage_banner.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 void main() {
   // ──────────────────────────────────────────────────────────────────
@@ -11,17 +16,11 @@ void main() {
   group('resolveCallStage — 过程态派生', () {
     test('initiated/connecting → 连接中', () {
       expect(
-        resolveCallStage(
-          status: CallStatus.initiated,
-          connectedPeerCount: 0,
-        ),
+        resolveCallStage(status: CallStatus.initiated, connectedPeerCount: 0),
         CallStage.connecting,
       );
       expect(
-        resolveCallStage(
-          status: CallStatus.connecting,
-          connectedPeerCount: 0,
-        ),
+        resolveCallStage(status: CallStatus.connecting, connectedPeerCount: 0),
         CallStage.connecting,
       );
     });
@@ -198,5 +197,38 @@ void main() {
         UITextConstants.callStageEnded,
       );
     });
+
+    testWidgets('结构化 failure 显示提示与恢复动作', (tester) async {
+      var retryCount = 0;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            callSessionProvider.overrideWith(_FailureCallSessionNotifier.new),
+          ],
+          child: MaterialApp(
+            home: Scaffold(body: CallStageBanner(onRetry: () => retryCount++)),
+          ),
+        ),
+      );
+
+      expect(
+        find.text(
+          runtimeFailureDisplayMessage(_FailureCallSessionNotifier.failure),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(UITextConstants.retry), findsOneWidget);
+      await tester.tap(find.text(UITextConstants.retry));
+      expect(retryCount, 1);
+    });
   });
+}
+
+final class _FailureCallSessionNotifier extends CallSessionNotifier {
+  static final RuntimeFailureBase failure = RuntimeFailure.unknown(
+    code: RuntimeFailureCodes.cloudSystemUnavailable,
+  );
+
+  @override
+  CallSessionState build() => CallSessionState(failure: failure);
 }

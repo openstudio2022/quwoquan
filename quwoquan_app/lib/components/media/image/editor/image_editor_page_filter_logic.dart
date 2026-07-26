@@ -2,13 +2,39 @@ part of 'image_editor_page.dart';
 
 extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
   Future<void> _initFilterConfig() async {
-    final config = await _filterRepository.loadConfig();
-    if (!mounted) return;
-    _setEditorState(() {
-      _filterConfig = config;
-    });
-    _rebuildFilterData();
-    await _filterRepository.scheduleUpdateCheckPlaceholder();
+    if (mounted) {
+      _setEditorState(() {
+        _filterCatalogLoading = true;
+        _filterCatalogLoadFailed = false;
+      });
+    }
+    try {
+      final config = await _filterRepository.loadConfig();
+      if (!mounted) return;
+      _setEditorState(() {
+        _filterConfig = config;
+        _filterCatalogLoading = false;
+      });
+      _observability.recordPageState(
+        pageName: _ImageEditorPageState._kPageName,
+        phase: 'filter_catalog_ready',
+        surface: _ImageEditorPageState._kSurfaceId,
+        itemCount: config.presets.length,
+      );
+      await _rebuildFilterData();
+    } catch (error) {
+      if (!mounted) return;
+      _setEditorState(() {
+        _filterCatalogLoading = false;
+        _filterCatalogLoadFailed = true;
+      });
+      _observability.recordPageState(
+        pageName: _ImageEditorPageState._kPageName,
+        phase: 'filter_catalog_failure',
+        surface: _ImageEditorPageState._kSurfaceId,
+        error: error,
+      );
+    }
   }
 
   Future<void> _rebuildFilterData() async {

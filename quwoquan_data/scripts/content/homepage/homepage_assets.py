@@ -106,6 +106,11 @@ def select_homepage_assets(
         return {}
     all_images = object_image_candidates(obj, execution_id)
     from core.page_media import HomepageAssetDisposition
+    from content.execution.identity import parse_execution_id
+    from governance.coverage.license import rights_proof_required
+
+    vertical = parse_execution_id(execution_id).vertical
+    require_rights_proof = rights_proof_required(vertical)
 
     excluded: list[HomepageMediaDisposition] = []
 
@@ -134,7 +139,10 @@ def select_homepage_assets(
             continue
         if not str(image.get("sourceAssetRef") or ""):
             continue
-        if not (str(image.get("authorizationProof") or "").strip() or str(image.get("termsUrl") or "").strip()):
+        if require_rights_proof and not (
+            str(image.get("authorizationProof") or "").strip()
+            or str(image.get("termsUrl") or "").strip()
+        ):
             continue
         placement = _placement_for(image)
         # 地图/位置图（locatorMap / coverCandidateRank<0）不可做封面，也不进正文内嵌：
@@ -172,24 +180,28 @@ def select_homepage_assets(
             if str(image.get("researchLane") or "") == "homepage_image"
             and str(image.get("sourceRef") or "").endswith("/source.md")
             and str(image.get("sourceAssetRef") or "")
-            and (
+            and (not require_rights_proof or (
                 str(image.get("authorizationProof") or "").strip()
                 or str(image.get("termsUrl") or "").strip()
-            )
+            ))
         ]
-    from core.image_safety import watermark_prone_source_reason
-
     publishable_candidates: list[dict[str, Any]] = []
+    from governance.content_supply_policy import load_content_supply_policy
+
+    media_subject_policy = load_content_supply_policy(vertical).media_subject
     for image in candidates:
-        watermark_reason = watermark_prone_source_reason(
-            (
-                str(image.get("authorizationProof") or ""),
-                str(image.get("collectionPageUrl") or ""),
-                str(image.get("sourceUrl") or ""),
-            )
+        prohibited_indicator = media_subject_policy.prohibited_indicator(
+            image.get("caption"),
+            image.get("relevance"),
+            image.get("visualSubject"),
+            image.get("sourceUrl"),
         )
-        if watermark_reason:
-            _exclude(image, HomepageAssetDisposition.POLICY_EXCLUDED, watermark_reason)
+        if prohibited_indicator or image.get("isRepresentativeVisual") is False:
+            _exclude(
+                image,
+                HomepageAssetDisposition.POLICY_EXCLUDED,
+                f"media_subject_not_representative:{prohibited_indicator or 'source_verdict'}",
+            )
             continue
         publishable_candidates.append(image)
     candidates = publishable_candidates
@@ -217,11 +229,19 @@ def select_homepage_assets(
     if not picked:
         return HomepageAssetSelection((), tuple(excluded))
 
-    from core.page_media import normalized_subject_core, subject_keys_conflict
+    from core.page_media import (
+        normalized_subject_core,
+        normalized_subject_key,
+        subject_keys_conflict,
+    )
 
     def _subject_core(item: Mapping[str, Any]) -> str:
+        subject_key = str(item.get("subjectKey") or "").strip() or normalized_subject_key(
+            str(item.get("caption") or item.get("relevance") or ""),
+            str(item.get("sourceUrl") or item.get("sourceAssetRef") or ""),
+        )
         return normalized_subject_core(
-            str(item.get("subjectKey") or ""),
+            subject_key,
             entity_name=name,
         )
 
@@ -297,8 +317,26 @@ def select_homepage_assets(
         )
 
     cover = min(non_conflicting or cover_pool or picked, key=_cover_key)
+    cover_subject = _subject_core(cover)
+    publishable = [cover]
+    for item in picked:
+        if item is cover:
+            continue
+        subject = _subject_core(item)
+        if cover_subject and subject and subject_keys_conflict(
+            cover_subject,
+            subject,
+            entity_name=name,
+        ):
+            _exclude(
+                item,
+                HomepageAssetDisposition.DUPLICATE_ALIAS,
+                "cover_visual_subject_conflict",
+            )
+            continue
+        publishable.append(item)
     return HomepageAssetSelection(
-        publishable=tuple([cover, *(item for item in picked if item is not cover)]),
+        publishable=tuple(publishable),
         excluded=tuple(excluded),
     )
 
@@ -354,6 +392,12 @@ def copy_homepage_asset(
         "sourceAssetRef": str(image.get("sourceAssetRef") or "").strip(),
         "termsUrl": str(image.get("termsUrl") or "").strip(),
         "authorizationProof": str(image.get("authorizationProof") or "").strip(),
+        "rightsAuditStatus": str(image.get("rightsAuditStatus") or "").strip(),
+        "rightsAuditIssues": [
+            str(issue)
+            for issue in (image.get("rightsAuditIssues") or [])
+            if str(issue).strip()
+        ],
     }
 
 

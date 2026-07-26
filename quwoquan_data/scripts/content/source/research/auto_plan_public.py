@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import copy
 import time
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from typing import Any, Callable, Mapping
 
 from core.data_issue import (
+    DataIssue,
     DataIssueCode, DataIssueStage,
+    DataIssueError,
     DataIssueLane,
     DataRecoveryAction,
     data_issue,
@@ -16,6 +18,7 @@ from core.io import read_json
 from core.carrier_contract import research_plan_files
 from core.paths import execution_root
 from core.source_catalog import vertical_from_task_id
+from content.execution import store
 from content.source.source_unit import resolve_entity_object_dir
 from content.source.prepare import prepare_source_plan, resolve_research_entity_types
 
@@ -55,6 +58,120 @@ def _invalidate_forced_lane_plans(
                 (object_dir / "1.download" / filename).unlink(missing_ok=True)
 
 
+def _homepage_source_plan_missing_entity_ids(
+    execution_id: str,
+    entity_ids: list[str],
+    *,
+    entity_type: str,
+) -> list[str]:
+    """Return homepage targets whose current plan has no encyclopedia source.
+
+    The initial parallel pass favors throughput. A source plan with no homepage
+    source can result from a transient provider response, so it receives the
+    bounded recovery pass declared by the runtime policy before Agent repair is
+    considered. This reads the current plan, never a report diagnostic.
+    """
+    resolved_types = resolve_research_entity_types(
+        execution_id,
+        entity_ids,
+        fallback_type=entity_type,
+    )
+    filename = research_plan_files()["homepage"]
+    missing: list[str] = []
+    for entity_id in entity_ids:
+        object_dir = resolve_entity_object_dir(
+            execution_id,
+            entity_id,
+            etype_hint=resolved_types[entity_id],
+        )
+        plan = read_json(object_dir / "1.download" / filename)
+        payload = plan.get("payload") if isinstance(plan.get("payload"), dict) else {}
+        sources = payload.get("sources") if isinstance(payload.get("sources"), list) else []
+        if not sources:
+            missing.append(entity_id)
+    return missing
+
+
+def _discard_recovered_homepage_source_issues(
+    report: dict[str, Any],
+    *,
+    recovered_entity_ids: set[str],
+) -> None:
+    """Discard only superseded homepage primary-source absence diagnostics."""
+    retained: list[dict[str, Any]] = []
+    for raw in report.get("sourceUnavailable") or []:
+        if not isinstance(raw, dict):
+            raise TypeError("sourceUnavailable rows must use DataIssue objects")
+        issue = DataIssue.from_dict(raw)
+        if (
+            issue.ref in recovered_entity_ids
+            and issue.lane is DataIssueLane.HOMEPAGE
+            and issue.code is DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING
+        ):
+            continue
+        retained.append(raw)
+    report["sourceUnavailable"] = retained
+
+
+def _recover_homepage_source_plans(
+    execution_id: str,
+    entity_ids: list[str],
+    *,
+    entity_type: str,
+    recovery_passes: int,
+    recovery_workers: int,
+    report: dict[str, Any],
+) -> list[str]:
+    """Replay only empty homepage plans with the bounded recovery pool."""
+    recovered: list[str] = []
+    for _ in range(recovery_passes):
+        unresolved = _homepage_source_plan_missing_entity_ids(
+            execution_id,
+            entity_ids,
+            entity_type=entity_type,
+        )
+        if not unresolved:
+            break
+        _invalidate_forced_lane_plans(
+            execution_id,
+            unresolved,
+            entity_type=entity_type,
+            lanes={"homepage"},
+        )
+        network_breaker.BREAKER.reset()
+        network_breaker.start_wave_budget()
+        with ThreadPoolExecutor(max_workers=min(recovery_workers, len(unresolved))) as executor:
+            futures = [
+                executor.submit(
+                    _write_auto_research_plans_impl,
+                    execution_id,
+                    [entity_id],
+                    entity_type=entity_type,
+                    force=True,
+                    lanes={"homepage"},
+                    write_shared_report=False,
+                )
+                for entity_id in unresolved
+            ]
+            for future in as_completed(futures):
+                _merge_auto_reports(report, future.result())
+        still_unresolved = set(
+            _homepage_source_plan_missing_entity_ids(
+                execution_id,
+                unresolved,
+                entity_type=entity_type,
+            )
+        )
+        newly_recovered = [entity_id for entity_id in unresolved if entity_id not in still_unresolved]
+        recovered.extend(newly_recovered)
+        if newly_recovered:
+            _discard_recovered_homepage_source_issues(
+                report,
+                recovered_entity_ids=set(newly_recovered),
+            )
+    return recovered
+
+
 def _existing_report_entity_ids(report: Mapping[str, Any] | None) -> list[str]:
     if not isinstance(report, Mapping):
         return []
@@ -78,7 +195,12 @@ def _existing_report_entity_ids(report: Mapping[str, Any] | None) -> list[str]:
         for item in availability.get("ineligibleTargets") or []:
             if isinstance(item, Mapping):
                 _add(item.get("entityId"))
-    for key in ("candidates", "imageCollections", "sourceUnavailable"):
+    for key in (
+        "candidates",
+        "imageCollections",
+        "homepageMediaAdvisories",
+        "sourceUnavailable",
+    ):
         for item in report.get(key) or []:
             if isinstance(item, Mapping):
                 _add(item.get("entityId"))
@@ -118,6 +240,7 @@ def _write_incremental_auto_research_checkpoint(
         "issues": [],
         "candidates": [],
         "imageCollections": [],
+        "homepageMediaAdvisories": [],
         "sourceUnavailable": [],
         "rescueEvents": [],
     }
@@ -174,12 +297,26 @@ def write_auto_research_plans(
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Discover separated source plans, optionally parallelized per entity."""
-    selected_lanes = lanes or {"homepage", "article", "image"}
+    if lanes is None:
+        execution_spec = store.resolve_spec(store.load_spec(execution_id))
+        selected_lanes = {
+            str(lane).strip()
+            for lane in (
+                ((execution_spec.get("content") or {}).get("research") or {}).get("lanes")
+                or []
+            )
+            if str(lane).strip()
+        }
+    else:
+        selected_lanes = set(lanes)
+    if not selected_lanes:
+        raise ValueError("execution must declare at least one research lane")
     vertical = vertical_from_task_id(execution_id)
     started = time.monotonic()
     from core.runtime_policy import active_runtime_policy
 
-    workers = max_workers or active_runtime_policy().research_workers
+    runtime_policy = active_runtime_policy()
+    workers = max_workers or runtime_policy.research_workers
 
     def emit_progress(
         status: str,
@@ -243,6 +380,7 @@ def write_auto_research_plans(
             "issues": [],
             "candidates": [],
             "imageCollections": [],
+            "homepageMediaAdvisories": [],
             "sourceUnavailable": [],
         }
         results: dict[str, dict[str, Any]] = {}
@@ -287,6 +425,8 @@ def write_auto_research_plans(
                     entity_id = futures[future]
                     try:
                         results[entity_id] = future.result()
+                    except DataIssueError:
+                        raise
                     except Exception as exc:  # noqa: BLE001
                         results[entity_id] = {
                             "updated": [],
@@ -294,12 +434,12 @@ def write_auto_research_plans(
                             "candidates": [],
                             "imageCollections": [],
                             "sourceUnavailable": [data_issue(
-                                DataIssueCode.NETWORK_UNREACHABLE,
+                                DataIssueCode.INTERNAL_UNEXPECTED,
                                 stage=DataIssueStage.DOWNLOAD_PLAN,
                                 ref=entity_id,
                                 lane=DataIssueLane.ALL,
                                 recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
-                                message=f"source discovery infrastructure failure: {type(exc).__name__}: {exc}",
+                                message="source research worker raised unexpectedly",
                             ).as_dict()],
                         }
                     _merge_auto_reports(report, results[entity_id])
@@ -356,6 +496,21 @@ def write_auto_research_plans(
             raise
         finally:
             executor.shutdown(wait=shutdown_wait, cancel_futures=not shutdown_wait)
+    recovered_homepage_entities: list[str] = []
+    if "homepage" in selected_lanes and not no_progress_timed_out:
+        recovered_homepage_entities = _recover_homepage_source_plans(
+            execution_id,
+            entity_ids,
+            entity_type=entity_type,
+            recovery_passes=runtime_policy.source_plan_recovery_passes,
+            recovery_workers=runtime_policy.source_plan_recovery_workers,
+            report=report,
+        )
+    if recovered_homepage_entities:
+        report["homepageRecovery"] = {
+            "recoveredEntityIds": recovered_homepage_entities,
+            "recoveredEntityCount": len(recovered_homepage_entities),
+        }
     elapsed = max(time.monotonic() - started, 0.001)
     scope_ids = (
         [entity_id for entity_id in entity_ids if entity_id not in set(remaining_after_timeout)]

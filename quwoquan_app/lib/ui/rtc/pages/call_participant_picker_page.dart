@@ -1,34 +1,27 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_picker_participant_row.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
 enum _ParticipantSource { currentConversation, sameInterest, otherGroups }
 
 class CallParticipantPickerPage extends ConsumerStatefulWidget {
-  const CallParticipantPickerPage({
-    super.key,
-    this.callId,
-    this.maxParticipants = 32,
-    this.conversationId,
-    this.defaultSelectAll = false,
-  });
+  const CallParticipantPickerPage({super.key, required this.routeExtra});
 
-  final String? callId;
-  final int maxParticipants;
+  final CallParticipantPickerRouteExtra routeExtra;
 
-  /// 群聊上下文：优先从群成员加载，忽略通用联系人
-  final String? conversationId;
-
-  /// 是否默认全选（群成员 <=8 时传 true）
-  final bool defaultSelectAll;
+  String? get callId => routeExtra.callId;
+  String? get conversationId => routeExtra.conversationId;
+  bool get defaultSelectAll => routeExtra.defaultSelectAll;
+  int get selectionLimit => routeExtra.selectionLimit;
+  bool get allowsCrossContextSources => routeExtra.allowsCrossContextSources;
 
   @override
   ConsumerState<CallParticipantPickerPage> createState() =>
@@ -60,9 +53,10 @@ class _CallParticipantPickerPageState
       });
     }
     try {
-      final chatRepo = ref.read(chatRepositoryProvider);
-      final contacts = await _loadContactsForSource(chatRepo, _source);
-      final groups = await _loadAvailableGroups(chatRepo);
+      final contacts = await _loadContactsForSource(_source);
+      final groups = widget.allowsCrossContextSources
+          ? await _loadAvailableGroups()
+          : const <ChatInboxDto>[];
       if (mounted) {
         setState(() {
           _contacts = contacts;
@@ -90,10 +84,13 @@ class _CallParticipantPickerPageState
     }
   }
 
-  Future<List<ChatInboxDto>> _loadAvailableGroups(
-    ChatRepository chatRepo,
-  ) async {
-    final inbox = await chatRepo.listInbox(limit: 100);
+  Future<List<ChatInboxDto>> _loadAvailableGroups() async {
+    if (!widget.allowsCrossContextSources) {
+      return const <ChatInboxDto>[];
+    }
+    final inbox = await ref
+        .read(chatConversationRepositoryProvider)
+        .listInbox(limit: 100);
     final currentConversationId = widget.conversationId;
     return inbox
         .where((item) {
@@ -105,20 +102,24 @@ class _CallParticipantPickerPageState
   }
 
   Future<List<CallPickerParticipantRow>> _loadContactsForSource(
-    ChatRepository chatRepo,
     _ParticipantSource source,
   ) async {
+    final contactRepo = ref.read(chatContactRepositoryProvider);
+    final memberRepo = ref.read(chatMemberRepositoryProvider);
     final currentUserId = ref.read(userDataProvider)?.id ?? '';
     switch (source) {
       case _ParticipantSource.currentConversation:
         final convId = widget.conversationId;
         if (convId == null || convId.isEmpty) {
-          final rows = await chatRepo.listContacts(limit: 200);
+          if (!widget.allowsCrossContextSources) {
+            return const <CallPickerParticipantRow>[];
+          }
+          final rows = await contactRepo.listContacts(limit: 200);
           return rows
               .map(CallPickerParticipantRow.fromContact)
               .toList(growable: false);
         }
-        final rawMembers = await chatRepo.listMembers(
+        final rawMembers = await memberRepo.listMembers(
           conversationId: convId,
           limit: 200,
         );
@@ -127,7 +128,7 @@ class _CallParticipantPickerPageState
             .map(CallPickerParticipantRow.fromMember)
             .toList(growable: false);
       case _ParticipantSource.sameInterest:
-        final contacts = await chatRepo.listContacts(limit: 200);
+        final contacts = await contactRepo.listContacts(limit: 200);
         return contacts
             .where((c) => c.userId != currentUserId)
             .map(CallPickerParticipantRow.fromContact)
@@ -137,7 +138,7 @@ class _CallParticipantPickerPageState
         if (groupId == null || groupId.isEmpty) {
           return const <CallPickerParticipantRow>[];
         }
-        final rawMembers = await chatRepo.listMembers(
+        final rawMembers = await memberRepo.listMembers(
           conversationId: groupId,
           limit: 200,
         );
@@ -155,12 +156,18 @@ class _CallParticipantPickerPageState
         _selectedIds.isEmpty;
     if (!shouldSelectDefault) return;
     _selectedIds.addAll(
-      contacts.map((c) => c.userId).where((id) => id.isNotEmpty),
+      contacts
+          .map((c) => c.userId)
+          .where((id) => id.isNotEmpty)
+          .take(widget.selectionLimit),
     );
   }
 
   Future<void> _switchSource(_ParticipantSource next) async {
-    final chatRepo = ref.read(chatRepositoryProvider);
+    if (!widget.allowsCrossContextSources &&
+        next != _ParticipantSource.currentConversation) {
+      return;
+    }
     final previousSource = _source;
     setState(() {
       _source = next;
@@ -168,7 +175,7 @@ class _CallParticipantPickerPageState
       _pageErrorSemantic = null;
     });
     try {
-      final contacts = await _loadContactsForSource(chatRepo, next);
+      final contacts = await _loadContactsForSource(next);
       if (!mounted) return;
       setState(() {
         _contacts = contacts;
@@ -192,7 +199,6 @@ class _CallParticipantPickerPageState
   }
 
   Future<void> _switchOtherGroup(String groupId) async {
-    final chatRepo = ref.read(chatRepositoryProvider);
     final previousGroupId = _selectedGroupId;
     setState(() {
       _selectedGroupId = groupId;
@@ -201,7 +207,6 @@ class _CallParticipantPickerPageState
     });
     try {
       final contacts = await _loadContactsForSource(
-        chatRepo,
         _ParticipantSource.otherGroups,
       );
       if (!mounted) return;
@@ -266,7 +271,7 @@ class _CallParticipantPickerPageState
   void _onConfirm() {
     if (_selectedIds.isEmpty) return;
 
-    if (widget.callId != null) {
+    if (widget.routeExtra.isExistingCallInvite) {
       ref
           .read(callSessionProvider.notifier)
           .inviteToCall(_selectedIds.toList());
@@ -291,14 +296,14 @@ class _CallParticipantPickerPageState
           },
         ),
         middle: Text(
-          '邀请参与者',
+          UITextConstants.callInviteParticipants,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _selectedIds.isNotEmpty ? _onConfirm : null,
           child: Text(
-            '确定 (${_selectedIds.length})',
+            UITextConstants.callConfirmSelected(_selectedIds.length),
             style: TextStyle(
               color: _selectedIds.isNotEmpty
                   ? AppColors.primaryColor
@@ -321,13 +326,13 @@ class _CallParticipantPickerPageState
               )
             : Column(
                 children: [
-                  _buildSourceTabs(),
+                  if (widget.allowsCrossContextSources) _buildSourceTabs(),
                   if (_source == _ParticipantSource.otherGroups)
                     _buildGroupSelector(),
                   Padding(
                     padding: EdgeInsets.all(AppSpacing.md),
                     child: AppSearchField(
-                      placeholder: '搜索联系人',
+                      placeholder: UITextConstants.callSearchContacts,
                       onChanged: (value) {
                         setState(() => _searchQuery = value);
                       },
@@ -338,7 +343,9 @@ class _CallParticipantPickerPageState
                     child: Row(
                       children: [
                         Text(
-                          '最多 ${widget.maxParticipants} 人',
+                          UITextConstants.callParticipantLimit(
+                            widget.selectionLimit,
+                          ),
                           style: TextStyle(
                             color: AppColors.overlayMedium,
                             fontSize: AppTypography.sm,
@@ -379,7 +386,9 @@ class _CallParticipantPickerPageState
                         SizedBox(width: AppSpacing.sm),
                         if (_selectedIds.isNotEmpty)
                           Text(
-                            '已选 ${_selectedIds.length}',
+                            UITextConstants.callSelectedCount(
+                              _selectedIds.length,
+                            ),
                             style: TextStyle(
                               color: AppColors.primaryColor,
                               fontSize: AppTypography.sm,
@@ -396,7 +405,9 @@ class _CallParticipantPickerPageState
                         : filtered.isEmpty
                         ? Center(
                             child: Text(
-                              _searchQuery.isEmpty ? '暂无联系人' : '未找到匹配的联系人',
+                              _searchQuery.isEmpty
+                                  ? UITextConstants.callNoContacts
+                                  : UITextConstants.callNoMatchingContacts,
                               style: TextStyle(
                                 color: AppColors.overlayMedium,
                                 fontSize: AppTypography.md,
@@ -414,14 +425,14 @@ class _CallParticipantPickerPageState
                                 ),
                                 isDisabled:
                                     _selectedIds.length >=
-                                        widget.maxParticipants &&
+                                        widget.selectionLimit &&
                                     !_selectedIds.contains(contact.userId),
                                 onToggle: (userId) {
                                   setState(() {
                                     if (_selectedIds.contains(userId)) {
                                       _selectedIds.remove(userId);
                                     } else if (_selectedIds.length <
-                                        widget.maxParticipants) {
+                                        widget.selectionLimit) {
                                       _selectedIds.add(userId);
                                     }
                                   });
@@ -442,21 +453,30 @@ class _CallParticipantPickerPageState
         AppSpacing.md,
         AppSpacing.sm,
         AppSpacing.md,
-        0,
+        AppSpacing.zero,
       ),
       child: CupertinoSlidingSegmentedControl<_ParticipantSource>(
         groupValue: _source,
         children: const <_ParticipantSource, Widget>{
           _ParticipantSource.currentConversation: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.six,
+            ),
             child: Text(UITextConstants.callSourceCurrentConversation),
           ),
           _ParticipantSource.sameInterest: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.six,
+            ),
             child: Text(UITextConstants.callSourceMutualFollow),
           ),
           _ParticipantSource.otherGroups: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.six,
+            ),
             child: Text(UITextConstants.callSourceOtherGroups),
           ),
         },
@@ -474,7 +494,7 @@ class _CallParticipantPickerPageState
       return Padding(
         padding: EdgeInsets.all(AppSpacing.md),
         child: Text(
-          '暂无可切换讨论',
+          UITextConstants.callNoSwitchableConversation,
           style: TextStyle(
             color: AppColors.overlayMedium,
             fontSize: AppTypography.sm,
@@ -593,23 +613,17 @@ class _ContactRow extends StatelessWidget {
                   : null,
             ),
             SizedBox(width: AppSpacing.sm),
-            CircleAvatar(
-              radius: AppSpacing.twenty,
+            AppCircularAvatar(
+              imageUrl: avatarUrl,
+              size: AppSpacing.twenty * 2,
               backgroundColor: AppColors.primaryColor.withValues(alpha: 0.2),
-              backgroundImage: avatarUrl != null
-                  ? NetworkImage(avatarUrl)
-                  : null,
-              child: avatarUrl == null
-                  ? Text(
-                      displayName.isNotEmpty
-                          ? displayName[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        fontSize: AppTypography.md,
-                        fontWeight: AppTypography.semiBold,
-                      ),
-                    )
-                  : null,
+              fallback: Text(
+                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                style: TextStyle(
+                  fontSize: AppTypography.md,
+                  fontWeight: AppTypography.semiBold,
+                ),
+              ),
             ),
             SizedBox(width: AppSpacing.sm),
             Expanded(

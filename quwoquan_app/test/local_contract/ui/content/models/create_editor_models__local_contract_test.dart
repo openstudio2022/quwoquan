@@ -1,11 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 
 void main() {
   group('CreateDraft', () {
-    test('从存储 map 恢复文字草稿与预览文案', () {
+    test('文字草稿缺少 canonical articleMarkdown 时不回退旧 body/imagePaths', () {
       final draft = CreateDraft.fromStorageMap({
         'id': 'draft_1',
         'updatedAt': 123,
@@ -20,9 +21,10 @@ void main() {
       });
 
       expect(draft.identity, CreateContentIdentity.moment);
-      expect(draft.previewText, '东京三日清单');
+      expect(draft.previewText, isEmpty);
       expect(draft.toStorageMap()['type'], 'text');
-      expect(draft.state.imagePaths, hasLength(1));
+      expect(draft.state.imagePaths, isEmpty);
+      expect(draft.state.articleDocument.body, isEmpty);
     });
 
     test('从 articleMarkdown 恢复正文与图片索引', () {
@@ -64,16 +66,21 @@ void main() {
       expect(restored.state.body, contains('第一段'));
     });
 
-    test('图片块布局样式可序列化恢复', () {
-      final block = CreateTextBlock.image(
-        id: 'img_1',
-        imagePath: 'inline.png',
-        imageLayout: CreateTextImageLayout.wrapRight,
+    test('图片 node 布局由 canonical document 直接承载', () {
+      final document = ArticleDocumentData(
+        nodes: const <ArticleDocumentNode>[
+          ArticleDocumentNode(
+            id: 'img_1',
+            type: ArticleDocumentNodeType.figure,
+            imageUrl: 'inline.png',
+            imageLayout: 'wrapRight',
+          ),
+        ],
       );
 
-      final restored = CreateTextBlock.fromMap(block.toMap());
-      expect(restored.imageLayout, CreateTextImageLayout.wrapRight);
-      expect(restored.usesWrappedLayout, isTrue);
+      final imageNode = document.nodes.single;
+      expect(imageNode.imageLayout, 'wrapRight');
+      expect(imageNode.type, ArticleDocumentNodeType.figure);
     });
 
     test('扁平存储下图片类草稿解析为作品身份', () {

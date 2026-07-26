@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import json
 import hashlib
+import shutil
 import sys
-from types import SimpleNamespace
 from argparse import Namespace
 from pathlib import Path
+
 
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -17,12 +18,11 @@ if str(SCRIPTS) not in sys.path:
 from core.release_layout import payload_digest, payload_file  # noqa: E402
 from core.source_digest import current_source_digest  # noqa: E402
 from content.release.canonical import handler  # noqa: E402
-from content.release.canonical import aggregate_release as aggregate_module  # noqa: E402
 from content.release.canonical.aggregate_release import build_aggregate_release  # noqa: E402
 
 
-EXECUTION_ID = "20260713--travel-homepage-coverage--cn-zhejiang--canary-901"
-RELEASE_ID = "20260713--travel-homepage-coverage--cn-zhejiang--canary-901"
+EXECUTION_ID = "20260713--travel-homepage-coverage--test-region-a--scale-901"
+RELEASE_ID = "20260713--travel-homepage-coverage--test-release-a--scale-901"
 TAG_REF = "Topic/旅行"
 
 
@@ -44,11 +44,12 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     publish_root = tmp_path / "publish"
     execution_root = tmp_path / EXECUTION_ID
     release_root = tmp_path / "releases"
+    source_digest = current_source_digest().to_document()
     _write_json(
         execution_root / "execution_manifest.json",
         {
             "executionId": EXECUTION_ID,
-            "sourceDigest": current_source_digest().to_document(),
+            "sourceDigest": source_digest,
         },
     )
     _write_json(
@@ -57,23 +58,26 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
             "schema": "quwoquan_data.execution_publish_ref",
             "executionId": EXECUTION_ID,
             "canonicalPublishRoot": "quwoquan_data/publish",
-            "publishedRefs": {"entities": ["地点/景区/普陀山"], "posts": []},
+            "publishedRefs": {"entities": ["地点/景区/测试实体甲"], "posts": []},
         },
     )
     _write_json(
-        execution_root / "entities/地点/景区/普陀山/5.review/attestation.json",
+        execution_root / "entities/地点/景区/测试实体甲/5.review/attestation.json",
         {
             "decision": "approved",
-            "objectRef": "/entity/地点/景区/普陀山",
+            "objectRef": "/entity/地点/景区/测试实体甲",
             "independentReviewer": {"status": "passed"},
         },
     )
     selected_key, selected_asset = _write_cas(publish_root, b"putuo-release-asset")
     unrelated_key, unrelated_asset = _write_cas(publish_root, b"unrelated-canonical-asset")
-    entity_root = publish_root / "entities/地点/景区/普陀山"
+    entity_root = publish_root / "entities/地点/景区/测试实体甲"
     _write_json(
         entity_root / "manifest.json",
         {
+            "schema": "quwoquan_data.entity_object",
+            "executionId": EXECUTION_ID,
+            "sourceDigest": source_digest,
             "finalContentRef": "page.md",
             "sourceCatalogRef": "source_catalog.json",
             "rightsRef": "rights.json",
@@ -82,7 +86,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
             "assetRefsRef": "asset.refs.json",
         },
     )
-    (entity_root / "page.md").write_text("# 普陀山\n", encoding="utf-8")
+    (entity_root / "page.md").write_text("# 测试实体甲\n", encoding="utf-8")
     _write_json(entity_root / "source_catalog.json", {"sources": []})
     _write_json(entity_root / "rights.json", {"assets": []})
     _write_json(
@@ -124,20 +128,20 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
 
 def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: Path) -> None:
     publish_root, execution_root, release_root, selected_key, unrelated_key = _fixture(tmp_path)
+    shutil.rmtree(execution_root)
 
     result = build_aggregate_release(
         publish_root=publish_root,
         release_root=release_root,
         release_id=RELEASE_ID,
-        execution_roots=[execution_root],
-        rollout_milestone="canary",
+        execution_ids=[EXECUTION_ID],
     )
 
     release = release_root / RELEASE_ID
     assert result["idempotent"] is False
     assert payload_file(release, "release.json").is_file()
     assert payload_file(release, "desired_state.json").is_file()
-    assert payload_file(release, "objects/entities/地点/景区/普陀山/manifest.json").is_file()
+    assert payload_file(release, "objects/entities/地点/景区/测试实体甲/manifest.json").is_file()
     assert payload_file(release, "objects/tags/Topic/旅行/_definition.json").is_file()
     desired = json.loads(payload_file(release, "desired_state.json").read_text(encoding="utf-8"))
     assert desired["desiredRefs"]["tags"] == [TAG_REF]
@@ -145,15 +149,13 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
     assert [item["objectKey"] for item in media["assets"]] == [selected_key]
     assert payload_file(release, selected_key).is_file()
     assert unrelated_key not in {item["objectKey"] for item in media["assets"]}
-    aggregate = json.loads((release / "attestations/aggregate.json").read_text(encoding="utf-8"))
+    aggregate = json.loads((release / "attestations/release.json").read_text(encoding="utf-8"))
     assert aggregate["payloadSha256"] == payload_digest(release)
-    assert aggregate["sourceDigest"] == current_source_digest().to_document()
-    assert aggregate["rolloutMilestone"] == "canary"
+    assert aggregate["sourceDigests"] == [current_source_digest().to_document()]
     assert aggregate["postCount"] == 0
     assert aggregate["creatorCount"] == 0
     header = json.loads(payload_file(release, "release.json").read_text(encoding="utf-8"))
-    assert header["rolloutMilestone"] == "canary"
-    assert header["sourceDigest"] == current_source_digest().to_document()
+    assert header["sourceDigests"] == [current_source_digest().to_document()]
     assert not (release / "release.json").exists()
     assert not (release / "desired_state.json").exists()
 
@@ -167,8 +169,7 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
         publish_root=publish_root,
         release_root=release_root,
         release_id=RELEASE_ID,
-        execution_roots=[execution_root],
-        rollout_milestone="canary",
+        execution_ids=[EXECUTION_ID],
     )
     assert rerun["idempotent"] is True
 
@@ -177,12 +178,10 @@ def test_release_aggregate_handler__execution_ids__contract__local_contract(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
     execution_ids = [
-        "20260715--travel-homepage-coverage--cn-zhejiang--canary-001",
-        "20260715--travel-homepage-coverage--cn-sichuan--canary-001",
+        "20260715--travel-homepage-coverage--test-region-a--pilot-001",
+        "20260715--travel-homepage-coverage--test-region-b--pilot-001",
     ]
     captured: dict[str, object] = {}
-
-    monkeypatch.setattr(handler, "execution_root", lambda execution_id: tmp_path / "tasks" / execution_id)
 
     def _build(**kwargs: object) -> dict[str, object]:
         captured.update(kwargs)
@@ -195,22 +194,20 @@ def test_release_aggregate_handler__execution_ids__contract__local_contract(
             publish_root=str(tmp_path / "publish"),
             release_root=str(tmp_path / "releases"),
             release_id=RELEASE_ID,
-            rollout_milestone="canary",
         )
     )
 
-    assert captured["execution_roots"] == [tmp_path / "tasks" / item for item in execution_ids]
-    assert captured["rollout_milestone"] == "canary"
+    assert captured["execution_ids"] == execution_ids
     assert json.loads(capsys.readouterr().out)["releaseId"] == RELEASE_ID
 
 
-def test_launch_release__complete_object_closure__contract__local_contract(
-    tmp_path: Path, monkeypatch
+def test_release__multi_carrier_object_closure__contract__local_contract(
+    tmp_path: Path,
 ) -> None:
     publish_root = tmp_path / "publish"
     release_root = tmp_path / "releases"
-    entity_ref = "地点/景区/普陀山"
-    creator_ref = "qwq_creator_travel_blogger_001"
+    entity_ref = "地点/景区/测试实体甲"
+    creator_ref = "test_creator_a"
     for relative in ("creators", "entities", "posts", "tags", "media/objects"):
         (publish_root / relative).mkdir(parents=True, exist_ok=True)
     entity_root = publish_root / "entities" / entity_ref
@@ -226,7 +223,7 @@ def test_launch_release__complete_object_closure__contract__local_contract(
             "assetRefsRef": "asset.refs.json",
         },
     )
-    (entity_root / "page.md").write_text("# 普陀山\n", encoding="utf-8")
+    (entity_root / "page.md").write_text("# test entity\n", encoding="utf-8")
     _write_json(entity_root / "source_catalog.json", {"sources": []})
     _write_json(entity_root / "rights.json", {"assets": []})
     _write_json(entity_root / "creator.refs.json", {"creatorRefs": []})
@@ -249,35 +246,34 @@ def test_launch_release__complete_object_closure__contract__local_contract(
     _write_json(creator_root / "assets.refs.json", {"assets": []})
     (creator_root / "works.refs.ndjson").write_text("", encoding="utf-8")
 
-    executions: list[Path] = []
+    executions: list[str] = []
 
-    def add_execution(execution_id: str, *, entities: list[str], posts: list[str]) -> None:
-        root = tmp_path / "tasks" / execution_id
-        _write_json(
-            root / "execution_manifest.json",
-            {
-                "executionId": execution_id,
-                "sourceDigest": current_source_digest().to_document(),
-            },
-        )
-        _write_json(
-            root / "publish_ref.json",
-            {
-                "schema": "quwoquan_data.execution_publish_ref",
-                "executionId": execution_id,
-                "canonicalPublishRoot": "quwoquan_data/publish",
-                "publishedRefs": {"entities": entities, "posts": posts},
-            },
-        )
-        executions.append(root)
+    def add_execution(
+        execution_id: str,
+        *,
+        entities: list[str],
+        posts: list[str],
+        source_digest: dict[str, object] | None = None,
+    ) -> None:
+        source_digest = source_digest or current_source_digest().to_document()
+        for kind, refs in (("entities", entities), ("posts", posts)):
+            for ref in refs:
+                manifest_path = publish_root / kind / ref / "manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["executionId"] = execution_id
+                manifest["sourceDigest"] = source_digest
+                _write_json(manifest_path, manifest)
+        executions.append(execution_id)
 
     add_execution(
-        "20260718--travel-homepage-coverage--cn-zhejiang--m3-901",
+        "20260718--travel-homepage-coverage--test-region-a--scale-901",
         entities=[entity_ref],
         posts=[],
     )
+    alternate_source_digest = current_source_digest().to_document()
+    alternate_source_digest["digest"] = "sha256:" + "c" * 64
     for content_type, suffix in (("article", "guide"), ("image", "gallery"), ("video", "short")):
-        post_ref = f"{content_type}/普陀山/{suffix}"
+        post_ref = f"{content_type}/测试实体甲/{suffix}"
         post_root = publish_root / "posts" / post_ref
         object_key, asset = _write_cas(
             publish_root,
@@ -287,6 +283,7 @@ def test_launch_release__complete_object_closure__contract__local_contract(
             post_root / "manifest.json",
             {
                 "schema": "quwoquan_data.post_manifest",
+                "vertical": "travel",
                 "contentType": content_type,
                 "creatorProfileId": creator_ref,
                 "finalContentRef": "content.md",
@@ -304,30 +301,20 @@ def test_launch_release__complete_object_closure__contract__local_contract(
         _write_json(post_root / "tag.refs.json", {"tagRefs": []})
         _write_json(post_root / "asset.refs.json", {"assets": [asset]})
         add_execution(
-            f"20260718--travel-{content_type}-cold-start--cn-zhejiang--m3-90{len(executions) + 1}",
+            f"20260718--travel-{content_type}-supply--test-region-a--scale-90{len(executions) + 1}",
             entities=[],
             posts=[post_ref],
+            source_digest=(
+                alternate_source_digest if content_type == "article" else None
+            ),
         )
         assert (publish_root / object_key).is_file()
-
-    policy = SimpleNamespace(
-        expected_post_count=3,
-        targets=(SimpleNamespace(name="普陀山"),),
-        content_mix=SimpleNamespace(article=1, image=1, video=1),
-    )
-    monkeypatch.setattr(
-        aggregate_module,
-        "expected_entity_refs",
-        lambda: {"浙江省": {entity_ref}, "四川省": set()},
-    )
-    monkeypatch.setattr(aggregate_module, "load_cold_start_supply_policy", lambda: policy)
 
     result = build_aggregate_release(
         publish_root=publish_root,
         release_root=release_root,
-        release_id="20260718--travel-cold-start-launch--cn-zhejiang-sichuan--launch-001",
-        execution_roots=executions,
-        rollout_milestone="launch",
+        release_id="20260718--travel-multi-carrier--test-release-b--001",
+        execution_ids=executions,
     )
 
     release = release_root / result["releaseId"]
@@ -336,12 +323,17 @@ def test_launch_release__complete_object_closure__contract__local_contract(
         "creators": [creator_ref],
         "entities": [entity_ref],
         "posts": [
-            "article/普陀山/guide",
-            "image/普陀山/gallery",
-            "video/普陀山/short",
+            "article/测试实体甲/guide",
+            "image/测试实体甲/gallery",
+            "video/测试实体甲/short",
         ],
         "tags": [],
     }
     assert payload_file(release, f"objects/creators/{creator_ref}/_creator.json").is_file()
     assert result["postCount"] == 3
     assert result["creatorCount"] == 1
+    release_header = json.loads(payload_file(release, "release.json").read_text(encoding="utf-8"))
+    assert release_header["sourceDigests"] == sorted(
+        [current_source_digest().to_document(), alternate_source_digest],
+        key=lambda item: item["digest"],
+    )

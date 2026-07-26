@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -46,7 +47,7 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
   }
 
   Future<List<AppForwardRecipient>> _loadRecentRecipients() async {
-    final repo = ref.read(chatRepositoryProvider);
+    final repo = ref.read(chatConversationRepositoryProvider);
     final conversations = await repo.listConversations(limit: 30);
     return uniqueForwardRecipients(
       sortForwardRecipientsByRecent(
@@ -84,7 +85,7 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
         children: <Widget>[
           _ForwardShareHeader(primary: primary),
           Text(
-            UITextConstants.forwardMostContacted,
+            ChatText.forwardMostContacted,
             style: TextStyle(
               fontSize: AppTypography.iosTitle3,
               fontWeight: AppTypography.semiBold,
@@ -139,7 +140,7 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
                 child: _ForwardTargetAction(
                   isDark: isDark,
                   icon: CupertinoIcons.person_2_fill,
-                  label: UITextConstants.forwardActionAppContacts,
+                  label: ChatText.forwardActionAppContacts,
                   onPressed: _openRecipientPicker,
                 ),
               ),
@@ -148,7 +149,7 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
                 child: _ForwardTargetAction(
                   isDark: isDark,
                   icon: CupertinoIcons.chat_bubble_2_fill,
-                  label: UITextConstants.forwardActionWechatFriend,
+                  label: ChatText.forwardActionWechatFriend,
                   onPressed: () => _openExternalShare(
                     ForwardExternalShareTarget.wechatFriend,
                   ),
@@ -159,7 +160,7 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
                 child: _ForwardTargetAction(
                   isDark: isDark,
                   icon: CupertinoIcons.circle_grid_3x3_fill,
-                  label: UITextConstants.forwardActionWechatMoments,
+                  label: ChatText.forwardActionWechatMoments,
                   onPressed: () => _openExternalShare(
                     ForwardExternalShareTarget.wechatMoments,
                   ),
@@ -232,14 +233,13 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
     }
     final message = switch (result.delivery) {
       ForwardExternalShareDelivery.wechatAccepted =>
-        UITextConstants.forwardOpeningWechat,
-      ForwardExternalShareDelivery.wechatCompleted =>
-        UITextConstants.shareCompleted,
+        ChatText.forwardOpeningWechat,
+      ForwardExternalShareDelivery.wechatCompleted => ChatText.shareCompleted,
       ForwardExternalShareDelivery.systemShareFallback =>
-        UITextConstants.forwardShareSystemFallback,
+        ChatText.forwardShareSystemFallback,
       ForwardExternalShareDelivery.cancelled => '',
       ForwardExternalShareDelivery.unavailable =>
-        UITextConstants.forwardExternalShareUnavailable,
+        ChatText.forwardExternalShareUnavailable,
     };
     AppToast.show(context, message);
   }
@@ -256,7 +256,7 @@ class _RecentEmptyState extends StatelessWidget {
       height: AppSpacing.avatarUserXl + AppSpacing.containerLg,
       child: Center(
         child: Text(
-          UITextConstants.forwardNoRecentChats,
+          ChatText.forwardNoRecentChats,
           style: TextStyle(
             fontSize: AppTypography.iosFootnote,
             color:
@@ -339,7 +339,7 @@ class _ForwardShareHeader extends StatelessWidget {
         alignment: Alignment.center,
         children: <Widget>[
           Text(
-            UITextConstants.shareTo,
+            ChatText.shareTo,
             style: TextStyle(
               fontSize: AppTypography.iosTitle3,
               fontWeight: AppTypography.semiBold,

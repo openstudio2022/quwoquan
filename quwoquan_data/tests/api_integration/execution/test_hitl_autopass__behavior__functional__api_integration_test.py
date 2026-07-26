@@ -27,45 +27,41 @@ _TMP = Path(tempfile.mkdtemp(prefix="hitl_"))
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
+from core.control_types import ReviewPublishState  # noqa: E402
 from content.review.ledger import (  # noqa: E402
-    DEFAULT_POLICY,
-    STATE_DISCARD,
-    STATE_FIX,
-    STATE_PUBLISHABLE,
-    agent_image_item,
+    agent_image_verdict,
     needs_human,
     resolve_publish_state,
 )
+from content.review.policy import review_policy  # noqa: E402
 
 
 def test_unsafe_auto_discard_no_human():
     """水印/平台标记 unsafe → 1 分 → 自动 discard，不进人工队列。"""
-    item = agent_image_item("a1", {"status": "unsafe", "reasons": ["watermark"]})
-    assert resolve_publish_state(item, DEFAULT_POLICY) == STATE_DISCARD
-    assert needs_human(item, DEFAULT_POLICY) is False
+    item = agent_image_verdict("a1", {"status": "unsafe", "reasons": ["watermark"]})
+    assert resolve_publish_state(item) is ReviewPublishState.DISCARD
+    assert needs_human(item) is False
 
 
 def test_needs_review_still_human():
     """人脸边界 needs_review → 2 分 → 仍需人工裁决（不自动丢弃）。"""
-    item = agent_image_item("a2", {"status": "needs_review", "reasons": ["face_boundary"]})
-    assert resolve_publish_state(item, DEFAULT_POLICY) == STATE_FIX
-    assert needs_human(item, DEFAULT_POLICY) is True
+    item = agent_image_verdict("a2", {"status": "needs_review", "reasons": ["face_boundary"]})
+    assert resolve_publish_state(item) is ReviewPublishState.FIX
+    assert needs_human(item) is True
 
 
 def test_safe_auto_publishable():
     """safe → 4 分 → 自动可发布，无需人工。"""
-    item = agent_image_item("a3", {"status": "safe", "reasons": []})
-    assert resolve_publish_state(item, DEFAULT_POLICY) == STATE_PUBLISHABLE
-    assert needs_human(item, DEFAULT_POLICY) is False
+    item = agent_image_verdict("a3", {"status": "safe", "reasons": []})
+    assert resolve_publish_state(item) is ReviewPublishState.PUBLISHABLE
+    assert needs_human(item) is False
 
 
-def test_disable_auto_discard_reverts_to_human():
-    """关闭 autoDiscardScoreAtMost → 退回旧行为（unsafe 也转人工）。"""
-    pol = {"autoApprove": {"agentMinScore": 3, "requireHumanWhenDoubtful": True},
-           "reprocess": {"maxAttempts": 3}}
-    item = agent_image_item("a4", {"status": "unsafe", "reasons": ["platform_mark"]})
-    assert resolve_publish_state(item, pol) == STATE_FIX
-    assert needs_human(item, pol) is True
+def test_policy_owns_auto_discard_threshold():
+    """Unsafe disposition follows the repository-owned review policy."""
+    policy = review_policy()
+    item = agent_image_verdict("a4", {"status": "unsafe", "reasons": ["platform_mark"]})
+    assert item.agent_score == policy.auto_discard_at_most
 
 
 def _run_all() -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from core.io import read_json
 from content.source.research.auto_plan_video import write_video_lane
-from governance.coverage.cold_start_supply import load_cold_start_supply_policy
+from governance.content_supply_policy import load_content_supply_policy
 
 
 def _frame(entity: str, ordinal: int) -> dict[str, object]:
@@ -28,9 +28,9 @@ def _frame(entity: str, ordinal: int) -> dict[str, object]:
 
 
 def test_video_lane_writes_minimum_rights_cleared_frame_plan(tmp_path):
-    entity = "普陀山"
+    entity = "测试实体甲"
     required = (
-        load_cold_start_supply_policy().video_delivery.minimum_segment_count
+        load_content_supply_policy("travel").video_delivery.minimum_source_frames
     )
     report: dict[str, object] = {"sourceUnavailable": [], "videoFrames": []}
     updated: list[dict[str, object]] = []

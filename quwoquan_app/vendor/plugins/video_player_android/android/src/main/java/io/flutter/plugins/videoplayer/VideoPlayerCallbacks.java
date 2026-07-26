@@ -26,4 +26,31 @@ public interface VideoPlayerCallbacks {
   void onIsPlayingStateUpdate(boolean isPlaying);
 
   void onAudioTrackChanged(@Nullable String selectedTrackId);
+
+  /** Reports the renderer configuration without exposing device identifiers. */
+  void onPlaybackDiagnostics(
+      @NonNull String rendererMode,
+      @NonNull String decoderQueueMode,
+      boolean decoderFallbackEnabled);
+
+  /** Emitted once when ExoPlayer renders the first video frame. */
+  void onRenderedFirstFrame(long ttffMs);
+
+  /**
+   * Emitted when a seek has both discontinuity and a subsequent rendered frame.
+   *
+   * @param targetPositionMs requested seek target
+   * @param settledPositionMs position observed when the settle frame rendered
+   * @param settleMs elapsed time from the seek request to that frame
+   */
+  void onSeekSettled(long targetPositionMs, long settledPositionMs, long settleMs);
+
+  /** Reports an actual renderer dropped-frame batch. */
+  void onDroppedVideoFrames(int droppedFrames, long elapsedMs);
+
+  /** Reports an actual audio output underrun. */
+  void onAudioUnderrun(int bufferSize, long bufferSizeMs, long elapsedSinceLastFeedMs);
+
+  /** Reports processed-frame samples for dropped-frame-ratio aggregation. */
+  void onVideoFrameProcessing(int processedFrames);
 }

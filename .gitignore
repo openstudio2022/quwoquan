@@ -19,16 +19,16 @@ tmp/
 # Build artifacts
 .dart_tool/
 build/
+!quwoquan_service/services/*/build/
+!quwoquan_service/services/*/build/Dockerfile
+!quwoquan_service/control-plane/*/build/
+!quwoquan_service/control-plane/*/build/Dockerfile
 dist/
 .test-dist/
 .gradle/
 *.tsbuildinfo
 *.o
 *.a
-
-# quwoquan_data command package named "build" is source code, not a build artifact.
-!quwoquan_data/scripts/build/
-!quwoquan_data/scripts/build/*.py
 
 # Environment files
 .env
@@ -61,14 +61,10 @@ logs/
 # Assistant reference implementations (synced from upstream, do not commit)
 ref/
 
-# Unified in-project output root (runtime batches / release / artifacts index / app evidence).
-# Canonical SSOT: quwoquan_data/scripts/_common/paths.py::default_output_root().
+# Unified in-project output root (runtime tasks / releases / evidence / cache).
+# Canonical SSOT: quwoquan_data/scripts/core/paths.py::default_output_root().
 # All runtime-phase output lives here (gitignored); only publish/** stays version-controlled.
 .qwq_output/
-
-# Persistent local runtime state (PKI, volumes, control snapshots, instance state).
-# This root is not safe for broad output cleanup; reset/rotation must be category-scoped.
-.qwq_state/
 
 # Retired generated roots and local-only assistant state.
 .mainline-release-artifact/
@@ -81,50 +77,6 @@ quwoquan_app/openspec-README.md
 
 # Retired sandbox root; do not use it as a runtime fallback.
 .qwq_sandbox/
-
-# Control plane task registry: committed task.yaml specs are version-controlled
-# input contracts; run progress / runs / notes stay local (never commit).
-# Family packages (control_plane/families/**) and shared runtime profiles
-# (control_plane/_shared/**) are fully version-controlled (no ignore rule needed).
-quwoquan_data/control_plane/tasks/**
-!quwoquan_data/control_plane/tasks/
-!quwoquan_data/control_plane/tasks/**/
-!quwoquan_data/control_plane/tasks/**/task.yaml
-
-# quwoquan_data runtime roots
-quwoquan_data/runtime/**
-!quwoquan_data/runtime/
-!quwoquan_data/runtime/.gitignore
-
-# Deprecated quwoquan_data root-level runtime data directories.
-# New sample data must live under quwoquan_data/tests/fixtures/.
-quwoquan_data/crawl_specs/
-quwoquan_data/trees/
-quwoquan_data/runs/
-quwoquan_data/publish/**
-!quwoquan_data/publish/tags/
-!quwoquan_data/publish/tags/**
-!quwoquan_data/publish/creators/
-!quwoquan_data/publish/creators/**
-!quwoquan_data/publish/user_media/
-!quwoquan_data/publish/user_media/**
-quwoquan_data/out/
-quwoquan_data/raw/
-quwoquan_data/batch_plans/
-quwoquan_data/data/
-
-# Retired top-level runtime/output roots. They are ignored if recreated locally,
-# and quwoquan_ops/gate/verify_root_layout.py fails when they exist in repo root.
-.qwq_output/runs/
-state/
-/runtime/
-# App runtime verification scripts are source assets and must stay trackable.
-app_log/
-tmp/
-build/
-
-# quwoquan_data release artifacts are generated outputs, not source truth.
-quwoquan_data/release/
 
 quwoquan_service/.local_models/
 quwoquan_service/.control-plane-state/

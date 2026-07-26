@@ -1,0 +1,4 @@
+overrides: {}
+secretRefs:
+  sys.platform-ops-service.postgres.dsn: POSTGRES_DSN
+externalBindings: {}

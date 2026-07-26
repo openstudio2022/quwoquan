@@ -12,17 +12,19 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from core import ops_governance as og
+from core.control_types import QueueBackend, QueueJobState
 from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
 from content.execution import production_contracts as pc
 from content.execution import store
+from content.execution.queue.model import QueueJob
 
-STATE_QUEUED = "queued"
-STATE_LEASED = "leased"
-STATE_SUCCEEDED = "succeeded"
-STATE_FAILED = "failed"
-STATE_BLOCKED = "blocked"
-STATE_DEAD = "dead"
+STATE_QUEUED = QueueJobState.QUEUED
+STATE_LEASED = QueueJobState.LEASED
+STATE_SUCCEEDED = QueueJobState.SUCCEEDED
+STATE_FAILED = QueueJobState.FAILED
+STATE_BLOCKED = QueueJobState.BLOCKED
+STATE_DEAD = QueueJobState.DEAD
 
 _RUNTIME_POLICY = active_runtime_policy()
 DEFAULT_LEASE_TTL_SECONDS = _RUNTIME_POLICY.queue_lease_ttl_seconds
@@ -42,23 +44,23 @@ DEFAULT_TOOL_PERMISSIONS: tuple[str, ...] = (
     "write_draft",          # 写 4.draft 草稿与 self-check
     "run_review_gate",      # 跑单 ref review 门
 )
-# token/cost 预算（0 = 不限，>0 = SDK runner 侧硬上限，超出强制 dead）。
-DEFAULT_TOKEN_BUDGET = 0
-DEFAULT_COST_BUDGET_USD = 0.0
 
 OBJECT_JOB_SCHEMA = pc.OBJECT_JOB_SCHEMA
-QUEUE_BACKEND_LOCAL = "local_file"
-QUEUE_BACKEND_RELIABLETASK = "reliabletask"
-SUPPORTED_QUEUE_BACKENDS = (QUEUE_BACKEND_LOCAL, QUEUE_BACKEND_RELIABLETASK)
+QUEUE_BACKEND_LOCAL = QueueBackend.LOCAL_FILE
+QUEUE_BACKEND_RELIABLETASK = QueueBackend.RELIABLE_TASK
+SUPPORTED_QUEUE_BACKENDS = tuple(QueueBackend)
 RELIABLETASK_QUEUE = "reliabletask.data.content_supply"
 RELIABLETASK_TASK_TYPE = "data.content_object.execute"
 
 
-def _backend_name(backend: str | None = None) -> str:
-    value = str(backend or "").strip() or str(os.environ.get("QWQ_OBJECT_QUEUE_BACKEND") or QUEUE_BACKEND_LOCAL)
-    if value not in SUPPORTED_QUEUE_BACKENDS:
-        raise ValueError(f"unsupported object queue backend: {value}")
-    return value
+def _backend_name(backend: str | QueueBackend | None = None) -> QueueBackend:
+    value = str(backend or "").strip() or str(
+        os.environ.get("QWQ_OBJECT_QUEUE_BACKEND") or QUEUE_BACKEND_LOCAL
+    )
+    try:
+        return QueueBackend(value)
+    except ValueError as exc:
+        raise ValueError(f"unsupported object queue backend: {value}") from exc
 
 
 def _reliabletask_ref(
@@ -79,14 +81,21 @@ def _reliabletask_ref(
     adapter can dispatch it through MongoStore + RedisReadyIndex without
     changing job IDs or queue semantics.
     """
+    execution_id = str(execution_id or "").strip()
     entity_ref = str(entity_ref or "").strip()
     carrier = str(carrier or "").strip()
     source_revision = str(source_revision or "").strip()
-    if not entity_ref or not carrier or not source_revision:
+    stage = str(stage or "").strip()
+    if not execution_id or not entity_ref or not carrier or not source_revision or not stage:
         raise ValueError(
-            "reliabletask idempotency requires entityRef + carrier + sourceRevision"
+            "reliabletask idempotency requires "
+            "executionId + entityRef + carrier + sourceRevision + stage"
         )
-    idempotency_key = f"{entity_ref}|{carrier}|{source_revision}"
+    # 必须与 runtime/reliabletask.DataContentJob.IdempotencyKey 完全同构。
+    # 新 execution 即便复用同一来源，也不能与旧执行共享死信或作者证据。
+    idempotency_key = (
+        f"{execution_id}|{entity_ref}|{carrier}|{source_revision}|{stage}"
+    )
     return {
         "taskType": RELIABLETASK_TASK_TYPE,
         "queue": RELIABLETASK_QUEUE,
@@ -174,32 +183,19 @@ def _job_path(execution_id: str, job_id: str) -> Path:
 def _now() -> float:
     return time.time()
 
-def _job_governance_issues(job: Mapping[str, Any]) -> list[str]:
-    if not bool(job.get("requireGovernance")):
-        return []
-    issues: list[str] = []
-    if not str(job.get("controllerRunId") or "").strip():
-        issues.append("controllerRunId required")
-    if not str(job.get("assignmentId") or "").strip():
-        issues.append("assignmentId required")
-    if not isinstance(job.get("assignmentPath"), list) or not job.get("assignmentPath"):
-        issues.append("assignmentPath required")
-    if not str(job.get("owner") or "").strip():
-        issues.append("owner required")
-    if bool(job.get("sourceUnitIdRequired")) and not str(job.get("sourceUnitId") or "").strip():
-        issues.append("sourceUnitId required")
-    return issues
+def _job_governance_issues(job: QueueJob) -> tuple[str, ...]:
+    return job.governance_issues()
 
 
-def _envelope_governance_issues(job: Mapping[str, Any], envelope: Mapping[str, Any]) -> list[str]:
-    issues = _job_governance_issues(job)
-    if not bool(job.get("requireGovernance")):
+def _envelope_governance_issues(job: QueueJob, envelope: Mapping[str, Any]) -> list[str]:
+    issues = list(_job_governance_issues(job))
+    if not job.require_governance:
         return issues
     agent = envelope.get("agent") if isinstance(envelope.get("agent"), Mapping) else {}
     envelope_controller = str(envelope.get("controllerRunId") or agent.get("controllerRunId") or "")
-    if envelope_controller and envelope_controller != str(job.get("controllerRunId") or ""):
+    if envelope_controller and envelope_controller != job.controller_run_id:
         issues.append("envelope.controllerRunId does not match job.controllerRunId")
-    allowed_write_roots = [str(item).strip().rstrip("/") for item in (job.get("allowedWriteRoots") or []) if str(item).strip()]
+    allowed_write_roots = [item.rstrip("/") for item in job.allowed_write_roots if item]
     if allowed_write_roots:
         for item in envelope.get("files") or []:
             if not isinstance(item, Mapping):
@@ -210,24 +206,32 @@ def _envelope_governance_issues(job: Mapping[str, Any], envelope: Mapping[str, A
     return issues
 
 
-def _load_jobs(execution_id: str) -> list[dict[str, Any]]:
+def _load_jobs(execution_id: str) -> list[QueueJob]:
     base = queue_dir(execution_id)
     if not base.is_dir():
         return []
-    out: list[dict[str, Any]] = []
+    out: list[QueueJob] = []
     for path in sorted(base.glob("*.json")):
         try:
-            out.append(read_json(path))
-        except (OSError, ValueError):
-            continue
+            out.append(QueueJob.from_document(read_json(path)))
+        except (OSError, ValueError, TypeError) as exc:
+            raise RuntimeError(f"object queue document is invalid: {path}: {exc}") from exc
     return out
 
 
-def _active_mutex_keys(jobs: list[dict[str, Any]], now: float) -> set[str]:
+def _write_job(job: QueueJob) -> None:
+    write_json(_job_path(job.execution_id, job.job_id), job.to_document())
+
+
+def _read_job(execution_id: str, job_id: str) -> QueueJob:
+    return QueueJob.from_document(read_json(_job_path(execution_id, job_id)))
+
+
+def _active_mutex_keys(jobs: list[QueueJob], now: float) -> set[str]:
     active: set[str] = set()
     for job in jobs:
-        if job.get("state") == STATE_LEASED and float(job.get("leaseExpiresEpoch") or 0) > now:
-            active.add(str(job.get("mutexKey") or job.get("ref")))
+        if job.state is STATE_LEASED and not job.lease.is_expired(now):
+            active.add(job.mutex_key)
     return active
 
 __all__ = [name for name in globals() if not name.startswith("__")]

@@ -1,16 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/greeting_reply_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
-    show SubAccountProfileViewData, UserHomepageBundleViewData, UserWorkItem;
+    show SubAccountProfileViewData, UserHomepageBundleViewData;
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class ProfileState {
   const ProfileState({
@@ -23,12 +30,11 @@ class ProfileState {
     this.interactionDirection = InteractionDirection.received,
     this.creations = const [],
     this.circles = const [],
-    this.works = const [],
     this.isLoading = false,
     this.isFollowing = false,
     this.capability,
     this.optimisticFollowOverride,
-    this.rawError,
+    this.failure,
   });
 
   final String userId;
@@ -41,7 +47,6 @@ class ProfileState {
 
   final List<PostBaseDto> creations;
   final List<CircleDto> circles;
-  final List<UserWorkItem> works;
   final bool isLoading;
   final bool isFollowing;
 
@@ -49,18 +54,17 @@ class ProfileState {
   final RelationshipCapabilityDto? capability;
   final bool? optimisticFollowOverride;
 
-  /// 首屏聚合失败的原始错误（null = 无错误）。UI 经 [errorMessage] 消费结构化文案，
-  /// 不直接读异常字符串（对齐 runtime error cutover）。
-  final Object? rawError;
+  /// 首屏聚合失败的结构化错误（null = 无错误）。
+  final RuntimeFailureBase? failure;
 
   /// 结构化首屏错误文案（null = 无错误）。
   String? get errorMessage =>
-      rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
+      failure == null ? null : runtimeFailureDisplayMessage(failure!).trim();
 
   /// 首屏聚合是否失败（用于错误态分支：重试 / 降级提示）。
-  bool get hasLoadError => rawError != null;
+  bool get hasLoadError => failure != null;
 
-  bool get hasCacheFallback => rawError != null && profile != null;
+  bool get hasCacheFallback => failure != null && profile != null;
 
   RelationshipCapabilityDto? get displayCapability {
     final base = capability;
@@ -80,12 +84,11 @@ class ProfileState {
     InteractionDirection? interactionDirection,
     List<PostBaseDto>? creations,
     List<CircleDto>? circles,
-    List<UserWorkItem>? works,
     bool? isLoading,
     bool? isFollowing,
     RelationshipCapabilityDto? capability,
     bool? optimisticFollowOverride,
-    Object? rawError,
+    RuntimeFailureBase? failure,
     bool clearCapability = false,
     bool clearOptimisticFollowOverride = false,
     bool clearError = false,
@@ -100,14 +103,13 @@ class ProfileState {
       interactionDirection: interactionDirection ?? this.interactionDirection,
       creations: creations ?? this.creations,
       circles: circles ?? this.circles,
-      works: works ?? this.works,
       isLoading: isLoading ?? this.isLoading,
       isFollowing: isFollowing ?? this.isFollowing,
       capability: clearCapability ? null : (capability ?? this.capability),
       optimisticFollowOverride: clearOptimisticFollowOverride
           ? null
           : (optimisticFollowOverride ?? this.optimisticFollowOverride),
-      rawError: clearError ? null : (rawError ?? this.rawError),
+      failure: clearError ? null : (failure ?? this.failure),
     );
   }
 }
@@ -173,19 +175,20 @@ class ProfileNotifier extends Notifier<ProfileState> {
       itemCount: state.creations.length,
     );
     try {
-      final repo = ref.read(userProfileRepositoryProvider);
+      final profileQuery = ref.read(
+        profileQueryProvider(AppUiSurfaces.userProfile),
+      );
       final contentRepo = ref.read(userProfileContentAuthorPostsReaderProvider);
       // 锁定决策 #1：homepage-bundle 一次聚合身份域真相（profile/stats/关系能力/
       // viewerContext），与作品/帖子内容并发补充，消除首屏串行阻塞。
+      // 作品 Tab 由 content 域 ListUserPosts 单轨承载（user_work 投影已删除）。
       final results = await Future.wait(<Future<Object>>[
-        repo.getUserHomepageBundle(_userId),
+        profileQuery.getUserHomepageBundle(_userId),
         contentRepo.listUserPosts(userId: _userId),
-        repo.listUserWorks(_userId),
       ]);
       final bundle = results[0] as UserHomepageBundleViewData;
       final postsPage = results[1] as CursorPage<PostBaseDto>;
       final posts = postsPage.items;
-      final works = results[2] as List<UserWorkItem>;
       final profile = bundle.profileWithStats;
       if (!ref.mounted) {
         return;
@@ -220,15 +223,17 @@ class ProfileNotifier extends Notifier<ProfileState> {
           seededCapability?.viewerFollowsTarget ??
           sharedFollowing;
       final fallbackError = postsPage.cacheFallbackError;
+      final fallbackFailure = fallbackError == null
+          ? null
+          : CloudErrorMapper.runtimeFailureFromException(fallbackError);
       state = state.copyWith(
         profile: profile,
         creations: posts,
-        works: works,
         isLoading: false,
         isFollowing: seededFollowing,
         capability: seededCapability,
         optimisticFollowOverride: optimisticFollowOverride,
-        rawError: fallbackError,
+        failure: fallbackFailure,
         clearError: fallbackError == null,
       );
       _recordProfileState(
@@ -244,12 +249,12 @@ class ProfileNotifier extends Notifier<ProfileState> {
           .read(userRelationshipStateProvider.notifier)
           .setFollowing(subAccountId, seededFollowing);
     } catch (e) {
-      // 结构化错误态：保留原始错误供 UI 经 errorMessage 展示，不静默吞异常。
-      state = state.copyWith(isLoading: false, rawError: e);
+      final failure = CloudErrorMapper.runtimeFailureFromException(e);
+      state = state.copyWith(isLoading: false, failure: failure);
       _recordProfileState(
         phase: state.profile == null ? 'blockingFailure' : 'cacheFallback',
         source: state.profile == null ? 'online' : 'retained',
-        error: e,
+        error: failure,
         copyKey: state.profile == null
             ? 'homepageLoadFailedTitle'
             : 'profileCacheFallback',
@@ -276,7 +281,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
         .read(pageLifecycleObservabilityProvider)
         .recordPageState(
           pageName: 'profile',
-          route: '/users/$_userId',
+          route: AppRoutePaths.userProfile(username: _userId),
           surface: 'user_profile',
           phase: phase,
           source: source,
@@ -287,6 +292,9 @@ class ProfileNotifier extends Notifier<ProfileState> {
           itemCount: itemCount,
         );
   }
+
+  /// 登录态切换后重新读取当前 viewer→target 的 named capability。
+  Future<void> refreshRelationshipCapability() => _loadRelationshipCapability();
 
   Future<void> _loadRelationshipCapability() async {
     try {
@@ -329,7 +337,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
         clearOptimisticFollowOverride:
             effectiveFollowing == cap.viewerFollowsTarget,
       );
-    } catch (_) {
+    } catch (error) {
       if (!ref.mounted) {
         return;
       }
@@ -344,6 +352,14 @@ class ProfileNotifier extends Notifier<ProfileState> {
         optimisticFollowOverride: state.capability == null
             ? null
             : seededFollowing,
+      );
+      _recordProfileState(
+        phase: 'capabilityFallback',
+        source: 'relationshipState',
+        error: error,
+        copyKey: 'profileCapabilityFallback',
+        hasCache: true,
+        itemCount: state.creations.length,
       );
     }
   }
@@ -380,19 +396,27 @@ class ProfileNotifier extends Notifier<ProfileState> {
         ? relationshipState.isFollowing(subAccountId)
         : state.isFollowing;
     final nextFollowing = !wasFollowing;
-    ref
+    await ref
         .read(userRelationshipStateProvider.notifier)
-        .setFollowing(subAccountId, nextFollowing);
-    ref
-        .read(discoveryStateProvider.notifier)
-        .setFollowState(subAccountId, nextFollowing);
-    ref
-        .read(clientStateSyncOutboxProvider.notifier)
-        .enqueueFollow(
-          subAccountId: subAccountId,
+        .setFollowingWithSync(
+          subAccountId,
           currentFollowing: wasFollowing,
           shouldFollow: nextFollowing,
+          sourceSurface: AppUiSurfaces.userProfile,
+          flushImmediately: false,
         );
+    // R20/R21 · 关注/取关动作埋点（关系旅程漏斗；来源为他人主页）。
+    unawaited(
+      ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'relationship',
+            action: nextFollowing ? 'follow_user' : 'unfollow_user',
+            pageName: 'ProfilePage',
+            targetType: 'user',
+            targetKey: subAccountId,
+          ),
+    );
     state = state.copyWith(
       isFollowing: nextFollowing,
       optimisticFollowOverride: state.capability == null ? null : nextFollowing,
@@ -416,6 +440,18 @@ class ProfileNotifier extends Notifier<ProfileState> {
     if (!ref.mounted) {
       return greeting;
     }
+    // R20 · 打招呼发起埋点（破冰漏斗起点；回复侧在 replyGreeting 上报）。
+    unawaited(
+      ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'greeting',
+            action: 'send_greeting',
+            pageName: 'ProfilePage',
+            targetType: 'user',
+            targetKey: targetUserId,
+          ),
+    );
     final capability = state.capability;
     if (capability != null) {
       state = state.copyWith(
@@ -433,7 +469,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
         ? state.profile!.subAccountId
         : _userId;
     final result = await ref
-        .read(chatRepositoryProvider)
+        .read(chatConversationRepositoryProvider)
         .createConversation(
           type: 'direct',
           initialMemberIds: <String>[targetUserId],

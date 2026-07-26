@@ -1,75 +1,118 @@
-# L3：App 远程运营配置（app-remote-config）
+# L3 Story：App 远程运营配置（app-remote-config） (`app-remote-config`)
 
-## 背景与目标
+> 所属能力：[`runtime-client-foundation`](../spec.md)
+>
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-当前 App 启动基础配置走 `app_runtime.yaml -> --dart-define -> CloudRuntimeConfig`，远程运营配置走内容域 `/config/app -> contentRuntimeConfigProvider`。两条链路职责不同，但现状容易混称为“启动配置”，并且远程配置仍存在懒加载、重复拉取、无磁盘 LKG、无统一发布闭环等问题。
+## 1. 用户价值
 
-本 L3 的目标是建立 `AppRemoteConfig` 主线：以本地默认与最近稳定快照保障启动可用，以 `/config/app` 下发可运营参数，以控制面配置包保障审计、灰度、回滚与生效率可见。
+作为开发、测试或运维角色，我希望统一 App 远程运营配置的 schema、缓存、激活、投影、灰度与验收，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-## In Scope
+## 2. 范围与非目标
 
-1. 明确四类配置边界：
-   - `BuildRuntimeConfig`：构建期/环境期常量，继续由 `app_runtime.yaml` 与 `--dart-define` 管理。
-   - `AppRemoteConfig`：App 可公开消费的运营参数、轻系统参数、feature flag、kill switch。
-   - `ServiceRuntimeConfig`：服务实例内部配置，只经服务端 runtime-config 消费。
-   - `PageDataBundle`：页面业务数据，不混入全局配置。
-2. 建立 `AppRemoteConfigSnapshot` 契约：`schema`、`packageVersion`、`configHash`、`fetchedAt`、`maxAgeSec`、`activationPolicy` 与业务 payload（单轨当前形状，禁止 `schemaVersion` 信封或协议版本分支）。
-3. 端侧支持 default / disk LKG / network fresh 三层来源，启动不阻塞首帧。
-4. 收口现有 `comment`、`home_channels`、`intersection`、`client_state_sync`、`feature_flags`、`gray_release` 到统一 provider。
-5. 为配置字段建立 owner、risk、reload、activation、expiry、fallback 与验收口径。
+### In Scope
 
-## Out of Scope
+- AppRemoteConfig 字段目录与 schema 风险分级
+- /config/app 元信息增强与规范投影
+- 端侧 LKG 缓存、后台刷新与消费者收口
+- 配置发布、漂移、灰度、回滚观测契约
 
-- 不允许通过 AppRemoteConfig 热更新 gateway、CDN、鉴权、密钥、支付、安全权限、数据权限裁决。
-- 不支持远程新增 App 不认识的新页面模板或路由表。
-- 不在本 L3 一次性完成运营控制台 UI；本 L3 先冻结 schema、投影、缓存和验收契约。
-- 不引入第三方 Remote Config SaaS 作为主真相源。
+### Out of Scope
 
-## 核心契约
+- gateway/CDN/auth/secret/payment/security policy 热更新
+- 控制面完整 UI 实现
+- 第三方 Remote Config SaaS 接入
 
-`/config/app` 目标响应必须至少包含：
+## 3. 行为要求
 
-```json
-{
-  "schema": "app_remote_config",
-  "packageVersion": "cfg_2026_06_06_001",
-  "configHash": "sha256:...",
-  "fetchedAt": "2026-06-06T01:00:00Z",
-  "maxAgeSec": 21600,
-  "activationPolicy": {
-    "default": "next_session",
-    "kill_switches": "immediate"
-  },
-  "content": {}
-}
-```
+<a id="req-001"></a>
+### REQ-001 启动不阻塞且有默认可用配置
 
-## 产品与运营范围
+- 冷启动首帧可在无远程配置的情况下正常进入欢迎页和首页
+- 首页频道、评论与 feature flag 由本地默认值提供
+- 远程配置失败不会阻塞首帧或产生白屏
 
-首批纳入：
-- 首页频道：显示/隐藏、排序、模板、feed_query、mood copy。
-- 评论体验：字数、回复预览数、展开页大小、附件上限、默认排序、折叠行数。
-- 交集展示：默认展开行数、候选窗上限。
-- 客户端同步：flush 延迟、retry 延迟、批量上限、前后台触发策略。
-- Feature flags：文章书本阅读、卷角、身份 IA、分享模板、persona 管理等。
+<a id="req-002"></a>
+### REQ-002 LKG 优先和后台刷新
 
-首批不纳入：
-- gateway/CDN/鉴权/密钥/支付/安全策略。
-- 路由表新增/删除。
-- 需要新代码支持的新页面模板。
-- 数据权限、审核、安全合规裁决。
+- 启动后优先使用磁盘 LKG 作为 active 配置
+- 远程 fresh 配置仅在后台刷新并进入 pending
+- 当前会话内不会出现频道结构跳变
 
-## 非功能要求
+<a id="req-003"></a>
+### REQ-003 配置接口统一消费
+
+- comment/home/intersection 等消费者统一走 AppRemoteConfig facade
+- 页面构建过程中不再重复拉取 /config/app
+- 新配置字段通过统一 provider 下发到消费者
+
+<a id="req-004"></a>
+### REQ-004 服务端快照可缓存可回滚
+
+- /config/app 响应包含可审计的快照元信息
+- ETag 命中时可返回轻响应
+- 回滚后新会话拿到回滚后的 packageVersion / configHash
+
+<a id="req-005"></a>
+### REQ-005 App 首帧不得等待远程配置网络请求
 
 - App 首帧不得等待远程配置网络请求。
 - 无网络、配置接口失败、schema 不兼容时，App 必须使用 LKG 或 codegen defaults。
-- 会话级字段默认 next-session 生效，避免频道、骨架、实验 bucket 中途跳变。
 - kill switch 可 immediate 生效，但必须有最小 payload、短 TTL、审计与回滚。
-- `/config/app` 应支持 `ETag` / `If-None-Match`、多级缓存与预计算快照。
-
-## 验收摘要
-
 - local_contract：配置目录、schema、禁止字段、feature flag expiry 与页面可运营矩阵静态校验。
-- local_contract：端侧 default/LKG/network/pending/immediate 状态机与消费者收口测试。
-- api_integration：服务端投影、ETag、快照缓存、回滚 hash 与高并发冷启动集成测试。
-- user_acceptance：运营灰度发布、生效率看板、SLO 失败回滚与审计记录演练。
+
+## 4. 契约引用
+
+- canonical：`/config/app`
+- canonical：`AppRemoteConfigSnapshot`
+- canonical：`AppRemoteConfigStore`
+- canonical：`AppRemoteConfigSnapshot.activationPolicy`
+- canonical：`contentRuntimeConfigProvider`
+- canonical：`AppRemoteConfig`
+- canonical：`ConfigProjectionService`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 启动不阻塞且有默认可用配置
+
+- GIVEN 首次安装且本地没有远程配置缓存
+- GIVEN /config/app 网络不可达
+- WHEN App 冷启动进入欢迎页和首页
+- THEN 首帧不等待远程配置
+- THEN 首页频道、评论、feature flag 使用 codegen defaults
+- THEN 不出现白屏或阻塞性配置错误
+
+<a id="gwt-002"></a>
+### GWT-002 LKG 优先和后台刷新
+
+- GIVEN 本地存在上一份稳定配置
+- WHEN App 启动后远程返回新 configHash
+- THEN 启动立即激活 LKG
+- THEN 普通字段写入 pending next-session
+- THEN 当前会话不发生首页频道结构跳变
+
+<a id="gwt-003"></a>
+### GWT-003 配置接口统一消费
+
+- GIVEN 评论输入、评论列表、首页频道和交集卡都需要配置
+- WHEN 页面首次构建
+- THEN 组件不得直接重复拉取 /config/app
+- THEN 配置均从 AppRemoteConfig/contentRuntime facade 读取
+
+<a id="gwt-004"></a>
+### GWT-004 服务端快照可缓存可回滚
+
+- GIVEN 控制面发布新配置包
+- WHEN 客户端请求 /config/app
+- THEN 响应包含 schema/packageVersion/configHash/maxAgeSec
+- THEN ETag 可用于未变更轻响应
+- THEN 回滚后新会话获得回滚版本 hash
+
+## 6. 依赖
+
+- 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

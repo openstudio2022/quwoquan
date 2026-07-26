@@ -8,6 +8,7 @@
 //   MicroPostDto  ← micro_post_dto.g.dart
 
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/source_attribution_dto.g.dart';
 
 /// 所有类型化帖子 DTO 的抽象基类。
 ///
@@ -53,6 +54,9 @@ abstract class PostBaseDto {
   String? get recallPath => null;
   String? get supplySource => null;
 
+  /// 外部来源视频的原创者和权利事实；与平台发布作者身份分离。
+  SourceAttributionDto? get sourceAttribution => null;
+
   /// 是否在创作之后发生过实质更新（决定 UI 是否展示「更新于」）。
   /// 容忍秒级抖动：仅当更新时间比创作时间晚超过 1 秒才算更新。
   bool get hasMeaningfulUpdate {
@@ -69,11 +73,18 @@ abstract class PostBaseDto {
   /// Optional canonical body / caption across all post kinds.
   String? get body => null;
 
+  /// Optional canonical summary for article-like posts.
+  String get summary => '';
+
   /// Canonical image list when the post carries image media.
   List<String> get imageUrls => const <String>[];
 
   /// Canonical cover image for article/photo-like posts.
   String? get coverUrl => null;
+
+  /// Article presentation facts; empty for non-article content.
+  String get articleTemplate => '';
+  String get articleFontPreset => '';
 
   /// Canonical video URL for video-like posts.
   String? get videoUrl => null;

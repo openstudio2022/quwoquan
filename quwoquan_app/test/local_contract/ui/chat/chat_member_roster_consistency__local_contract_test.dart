@@ -1,15 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 
-const _conversationId = 'conv_002';
-const _conv003Id = 'conv_003';
-const _convGrid12Id = 'conv_grid_12';
+const _conversationId = 'fixture_conv_group';
+const _photoGroupId = 'fixture_conv_photo_group';
+const _travelGroupId = 'fixture_conv_travel_group';
 const _newMemberId = 'user_roster_contract_new';
 
 void main() {
@@ -17,14 +17,16 @@ void main() {
     test('listMembers 与 chatMessageProvider sender 快照一致', () async {
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
-          currentUserIdProvider.overrideWithValue('user_001'),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
+          currentUserIdProvider.overrideWithValue('fixture_user_current'),
         ],
       );
       addTearDown(container.dispose);
 
       final members = await container
-          .read(chatRepositoryProvider)
+          .read(chatRepositoryCompositionProvider)
           .listMembers(conversationId: _conversationId, limit: 200);
       final memberByUserId = {
         for (final member in members)
@@ -64,8 +66,8 @@ void main() {
       final repo = MockChatRepository();
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(repo),
-          currentUserIdProvider.overrideWithValue('user_001'),
+          chatRepositoryCompositionProvider.overrideWithValue(repo),
+          currentUserIdProvider.overrideWithValue('fixture_user_current'),
         ],
       );
       addTearDown(container.dispose);
@@ -106,8 +108,8 @@ void main() {
       final repo = MockChatRepository();
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(repo),
-          currentUserIdProvider.overrideWithValue('user_001'),
+          chatRepositoryCompositionProvider.overrideWithValue(repo),
+          currentUserIdProvider.overrideWithValue('fixture_user_current'),
         ],
       );
       addTearDown(container.dispose);
@@ -140,10 +142,10 @@ void main() {
     });
 
     test(
-      'conv_003 与 conv_grid_12 memberCount / listMembers / getGroupHome 一致',
+      'contract groups memberCount / listMembers / getGroupHome 一致',
       () async {
         final repo = MockChatRepository();
-        for (final conversationId in [_conv003Id, _convGrid12Id]) {
+        for (final conversationId in [_photoGroupId, _travelGroupId]) {
           final members = await repo.listMembers(
             conversationId: conversationId,
             limit: 200,
@@ -161,11 +163,14 @@ void main() {
       },
     );
 
-    test('addMembers 后 conv_003 groupAvatarVersion 递增', () async {
+    test('addMembers 后 contract groupAvatarVersion 递增', () async {
       final repo = MockChatRepository();
-      final before = await repo.getConversation(_conv003Id);
-      await repo.addMembers(conversationId: _conv003Id, userIds: ['user_004']);
-      final after = await repo.getConversation(_conv003Id);
+      final before = await repo.getConversation(_photoGroupId);
+      await repo.addMembers(
+        conversationId: _photoGroupId,
+        userIds: ['fixture_user_weekend_1'],
+      );
+      final after = await repo.getConversation(_photoGroupId);
       expect(after.memberCount, before.memberCount + 1);
       expect(after.groupAvatarVersion, greaterThan(before.groupAvatarVersion));
     });

@@ -14,6 +14,7 @@ from core.article_package import (
 )
 from core.intersection_signal import build_intersection_hints
 from core.io import write_json
+from core.control_types import ContentGenerator
 from core.post_evidence_chain import build_finalization_report
 from core.provenance import build_provenance
 from content.execution.asset_registry import allocate_post_asset_id, load_execution_asset_registry
@@ -102,12 +103,20 @@ def materialize_posts(
         # 出处门：文章正文必须由 generator=agent 创作；图片作品不生成正文，
         # 只接受结构化 sourceCollection/assets/caption 证据包。
         generator = str(compose_payload.get("generator") or "")
-        if (is_image and generator != "image_evidence_pack") or (
-            not is_image and generator != "agent"
+        if (
+            is_image
+            and generator != ContentGenerator.IMAGE_EVIDENCE_PACK.value
+        ) or (
+            not is_image and generator != ContentGenerator.AGENT.value
         ):
             continue
 
         writing_pack = read_writing_pack(execution_id, ref) or {}
+        allowed_contact_numbers = [
+            str(value).strip()
+            for value in writing_pack.get("allowedContactNumbers") or []
+            if str(value).strip()
+        ]
         raw_title = compose_payload.get("title")
         title = str(raw_title if raw_title is not None else ("" if is_image else ref))
         caption = str(compose_payload.get("caption") or compose_payload.get("summary") or "")
@@ -194,7 +203,12 @@ def materialize_posts(
         if is_image and not 1 <= len(raw_assets) <= 20:
             raise RuntimeError(f"{ref}: image work requires 1..20 assets, got {len(raw_assets)}")
         image_source = (
-            _image_source_contract(compose_payload, raw_assets, ref=ref)
+            _image_source_contract(
+                compose_payload,
+                raw_assets,
+                ref=ref,
+                vertical=str(compose_payload.get("vertical") or ""),
+            )
             if is_image
             else {}
         )
@@ -239,6 +253,7 @@ def materialize_posts(
             "schema": "quwoquan_data.post_manifest",
             "topicId": ref,
             "contentType": content_type,
+            "vertical": compose_payload.get("vertical"),
             "entityRefs": entity_refs,
             "normalizedEntityRefs": normalized_entity_refs,
             "tagRefs": tag_refs,
@@ -274,6 +289,8 @@ def materialize_posts(
                     "termsUrl": a.get("termsUrl", ""),
                     "licenseSnapshot": a.get("licenseSnapshot", ""),
                     "authorizationProof": a.get("authorizationProof", ""),
+                    "rightsAuditStatus": a.get("rightsAuditStatus", ""),
+                    "rightsAuditIssues": a.get("rightsAuditIssues", []),
         "authorizationBasis": a.get("authorizationBasis", ""),
                     "usageScope": a.get("usageScope", ""),
         "pinUrl": a.get("pinUrl", ""),
@@ -288,7 +305,9 @@ def materialize_posts(
             ],
             "template": template,
             "carrier": "image" if is_image else compose_payload.get("carrier", "article"),
-            "generator": compose_payload.get("generator", "agent"),
+            "generator": compose_payload.get(
+                "generator", ContentGenerator.AGENT.value
+            ),
             "generatorModel": compose_payload.get("generatorModel"),
             "citedSourceRefs": [
                 _relativize_ref(r, execution_id)
@@ -318,6 +337,7 @@ def materialize_posts(
                 {
                     "markdownDialect": MARKDOWN_DIALECT,
                     "articleRenderProfile": render_profile,
+                    "allowedContactNumbers": allowed_contact_numbers,
                 }
             )
         created_at, updated_at = materialized_manifest_times(

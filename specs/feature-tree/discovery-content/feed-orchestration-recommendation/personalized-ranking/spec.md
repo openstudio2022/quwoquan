@@ -1,46 +1,75 @@
-# L3 特性：personalized-ranking
+# L3 Story：个性化排序 (`personalized-ranking`)
 
-## 功能说明
-- 建立发现流的个性化排序基线：`sort=recommend` 与 cursor 分页并存。
-- 固化端云协同边界：
-  - 端侧维护已看窗口（记录内容回滚不变化）。
-  - 云侧仅计算未来窗口（cursor 之后）并应用实时反馈。
-- cursor 使用 opaque token（端侧透传，不解析内部结构）。
+> 所属能力：[`feed-orchestration-recommendation`](../spec.md)
 
-## 范围
-- 云侧：
-  - `GET /content/feed` 支持 `sort` 查询参数。
-  - 推荐引擎支持基于 token 的 future offset 分页。
-  - 强反馈即时过滤未来窗口；弱反馈影响未来重排权重。
-- 端侧：
-  - Feed 请求透传 `sort` 与 `cursor`。
-  - 维持已看窗口队列，滚动回看优先使用本地记录队列。
+> Journey / Scenario：[`JNY-003 / SCN-007`](../../../spec.md#scn-007)
 
-## 非目标
-- 不在云侧维护长记录窗口队列（记录队列由端侧维护）。
-- 不引入新的业务对象，仅在现有 Post/Feed 契约上扩展。
-- 本 Story 不直接拥有曝光记忆、动态预算或生命周期复活；这些归属 `discovery-content/exposure-governance`。
-- 深度排序模型平台轨不进入当前商用成熟度门槛。
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 商用成熟度候选规格
+## 1. 用户价值
 
-当前 `sort=recommend` 基线已完成强反馈未来窗口抑制。为达到非深度商用成熟度，后续排序成熟度必须补齐三个 L3：
+作为内容创作者或浏览者，
+我希望端侧不得解析 token，仅做透传和存储，
+从而完成可恢复的内容创作、发现或互动。
 
-- `collaborative-recall`：itemCF/swing i2i 与 u2i 非深度协同召回，读路径只消费离线物化候选。
-- `ranking-calibration`：规则分、模型分、内容质量分与交集信号的校准口径，支撑混排、阈值和动态曝光预算。
-- `time-decay-contextual-ranking`：统计量时间加权衰减与 requestHour/weekday/season/eventWindow 上下文排序。
+## 2. 范围与非目标
 
-## 约束
-- metadata-first：先更新 `service.yaml` 与测试契约，再 codegen。
-- cursor token 需要版本字段，保证后续协议演进兼容。
+### In Scope
+
+- “个性化排序”的输入、可观察主路径、失败语义以及与父能力的交接。
+- sort=recommend 首屏与翻页路径。
+- cursor 透传、不解析、连续推进。
+- 强反馈过滤未来窗口，弱反馈影响未来重排。
+- 端侧已看窗口回滚稳定。
+- 协同召回、排序校准、时间衰减与上下文化排序的商用成熟度规格。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 个性化排序
+
+- “个性化排序”必须通过父能力公开契约交付可观察结果；失败时返回 canonical failure，不写入成功事实。
+
+<a id="req-002"></a>
+### REQ-002 端侧不得解析 token，仅做透传和存储
+
 - 端侧不得解析 token，仅做透传和存储。
 
-## 验收标准
-- A1：`sort=recommend` 首屏与翻页路径可执行，返回稳定。
-- A2：同一会话下，cursor 跨页无重复，`nextCursor` 可连续推进。
-- A3：用户回滚已看内容时，端侧记录窗口不抖动。
-- A4：强反馈（dislike/report/block）仅影响未来窗口，不回写记录窗口。
-- A5：弱反馈（click/like/favorite/dwell）可影响未来排序，不破坏分页连续性。
-- A6：协同召回、排序校准、时间衰减与上下文化排序的规格已登记，且不与 `exposure-governance` 或深度模型平台轨混淆。
-- A7：metadata/codegen/gate 一致性校验通过。
-- A8：端云自动化测试映射完整（contract + provider/journey）。
+<a id="req-003"></a>
+### REQ-003 排序策略、特征与解释一致
+
+- policy.yaml、feature_registry、ContentCandidate、RuleScorer 和 App 解释显示均对齐。
+
+<a id="req-004"></a>
+### REQ-004 契约与字段策略必须与 metadata 保持一致
+
+- 契约与字段策略必须与 metadata 保持一致。
+- 本 Story 禁止新增 intersection-only ranker，也不把 `/score` 同步塞进 feed 读路径。
+- `affinityIntersectionScore` 没有 `intersectionConfidenceLabel` 时不得参与候选级融合。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/operations.yaml`
+- canonical：`quwoquan_service/contracts/metadata/_shared/search_contract.yaml`
+- canonical：`quwoquan_service/services/recommendation-service/config/schema.yaml`
+- canonical：`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/feature_registry.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 个性化排序
+
+- GIVEN 内容创作者或浏览者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“个性化排序”对应的公开行为。
+- THEN 通过父能力公开契约交付“个性化排序”的可观察结果。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`feed-orchestration-recommendation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

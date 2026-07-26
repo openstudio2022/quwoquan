@@ -65,7 +65,7 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
     def test_control_plane_declares_sampling_and_retention_keys(self) -> None:
         path = (
             ROOT
-            / "quwoquan_service/contracts/metadata/_control_plane/platform/config_schema.yaml"
+            / "quwoquan_service/services/user-service/config/schema.yaml"
         )
         configs = yaml.safe_load(path.read_text(encoding="utf-8"))["configs"]
         values = {item["key"]: item for item in configs}

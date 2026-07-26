@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,17 +9,14 @@ import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.da
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
+import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/media/app_image_cache_controller.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart'
+    show accountSessionLifecycleCommandWriterProvider;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -53,6 +51,8 @@ enum AuthPromptReason {
   firstRun,
   manualLoggedOut,
   sessionExpired,
+  accountSuspended,
+  accountClosed,
   actionRequired,
 }
 
@@ -67,14 +67,6 @@ enum AuthRememberedLoginMethod {
   passkey,
   anonymous,
 }
-
-typedef AuthSessionRefreshExecutor =
-    Future<AuthLoginResultDto> Function(
-      String refreshToken, {
-      Future<void>? abortTrigger,
-    });
-
-final Future<void> _neverAuthRefreshAbort = Completer<void>().future;
 
 class AuthSessionState {
   const AuthSessionState({
@@ -307,8 +299,8 @@ class AuthSessionStore {
     );
   }
 
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -327,15 +319,10 @@ class AuthSessionStore {
           maskedIdentifier: rememberedLoginMaskedIdentifier,
           accountHint: result.accountHint,
         );
-    final normalizedDisplayName = _hintString(
-      result.accountHint,
-      'displayName',
-    );
-    final normalizedAvatarUrl = _hintString(result.accountHint, 'avatarUrl');
-    final normalizedNicknameCustomized = _hintBool(
-      result.accountHint,
-      'nicknameCustomized',
-    );
+    final normalizedDisplayName = result.accountHint?.displayName.trim() ?? '';
+    final normalizedAvatarUrl = result.accountHint?.avatarUrl.trim() ?? '';
+    final normalizedNicknameCustomized =
+        result.accountHint?.nicknameCustomized ?? false;
     await _secureStorage.write(key: _accessTokenKey, value: result.accessToken);
     await _secureStorage.write(
       key: _refreshTokenKey,
@@ -386,25 +373,29 @@ class AuthSessionStore {
     await _ensureInstallId(prefs);
   }
 
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {
     final prefs = await _prefsFactory();
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
-    await _secureStorage.write(key: _accessTokenKey, value: accessToken);
-    await _secureStorage.write(key: _refreshTokenKey, value: refreshToken);
+    await _secureStorage.write(key: _accessTokenKey, value: result.accessToken);
+    await _secureStorage.write(
+      key: _refreshTokenKey,
+      value: result.refreshToken,
+    );
     await prefs.setInt(_lastRefreshAtKey, nowEpochMs);
     await prefs.setInt(_lastForegroundAuthCheckAtKey, nowEpochMs);
     await prefs.setBool(_manualLoggedOutKey, false);
     await prefs.setBool(_launchPromptDismissedKey, false);
+    await prefs.setInt(
+      _sessionRememberTtlKey,
+      _normalizedRememberTtl(result.sessionRememberTtlSeconds),
+    );
     // 刷新成功代表会话仍活跃，清除残留的软退出过期戳；沿用登录时缓存的快速登录 TTL。
     await prefs.remove(_quickLoginExpiresAtKey);
     await _ensureInstallId(prefs);
   }
 
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {
     if (accountHint == null) {
       return;
@@ -412,19 +403,19 @@ class AuthSessionStore {
     final prefs = await _prefsFactory();
     await prefs.setString(
       _rememberedLoginMaskedIdentifierKey,
-      _hintString(accountHint, 'maskedPhone'),
+      accountHint.maskedPhone.trim(),
     );
     await prefs.setString(
       _rememberedDisplayNameKey,
-      _hintString(accountHint, 'displayName'),
+      accountHint.displayName.trim(),
     );
     await prefs.setString(
       _rememberedAvatarUrlKey,
-      _hintString(accountHint, 'avatarUrl'),
+      accountHint.avatarUrl.trim(),
     );
     await prefs.setBool(
       _rememberedNicknameCustomizedKey,
-      _hintBool(accountHint, 'nicknameCustomized'),
+      accountHint.nicknameCustomized,
     );
   }
 
@@ -517,10 +508,8 @@ class AuthSessionStore {
     return generated;
   }
 
-  static String _activeSubAccountIdFromResult(AuthLoginResultDto result) {
-    final activeSub = result.activeSub ?? const <String, dynamic>{};
-    return activeSub['subAccountId']?.toString().trim() ?? '';
-  }
+  static String _activeSubAccountIdFromResult(AuthSessionGrant result) =>
+      result.activeSub?.subAccountId.trim() ?? '';
 
   static AuthRememberedLoginMethod _rememberedLoginMethodFromRaw(String? raw) {
     final normalized = raw?.trim() ?? '';
@@ -550,28 +539,19 @@ class AuthSessionStore {
   static String _normalizedRememberedMaskedIdentifier({
     required AuthRememberedLoginMethod method,
     String? maskedIdentifier,
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   }) {
     final explicitMasked = maskedIdentifier?.trim() ?? '';
     if (explicitMasked.isNotEmpty) {
       return explicitMasked;
     }
-    final hintMaskedPhone = _hintString(accountHint, 'maskedPhone');
+    final hintMaskedPhone = accountHint?.maskedPhone.trim() ?? '';
     if (hintMaskedPhone.isNotEmpty) {
       return hintMaskedPhone;
     }
     return '';
   }
-
-  static String _hintString(Map<String, dynamic>? accountHint, String key) {
-    return accountHint?[key]?.toString().trim() ?? '';
-  }
-
-  static bool _hintBool(Map<String, dynamic>? accountHint, String key) {
-    return accountHint?[key] == true;
-  }
 }
-
 
 class ProviderBackedCloudAuthTokenProvider implements CloudAuthTokenProvider {
   const ProviderBackedCloudAuthTokenProvider(this._readAccessToken);
@@ -593,55 +573,3 @@ final authSessionControllerProvider =
     NotifierProvider<AuthSessionController, AuthSessionState>(
       AuthSessionController.new,
     );
-
-final authSessionRefreshExecutorProvider = Provider<AuthSessionRefreshExecutor>((
-  ref,
-) {
-  if (_shouldUseRemoteAuthRefreshEndpoint()) {
-    return (String refreshToken, {Future<void>? abortTrigger}) async {
-      final client = CloudHttpClient();
-      final gatewayOrigin = Uri.parse(CloudRuntimeConfig.gatewayBaseUrl);
-      final response = await client.sendOperationJson(
-        method: 'POST',
-        uri: Uri.parse(
-          '${CloudRuntimeConfig.gatewayBaseUrl}${UserApiMetadata.refreshTokenPath}',
-        ),
-        gatewayOrigin: gatewayOrigin,
-        headers: CloudRequestHeaders.forPage(UserRequestPageIds.refreshToken),
-        requireAuth: false,
-        abortTrigger: abortTrigger ?? _neverAuthRefreshAbort,
-        body: <String, dynamic>{'refreshToken': refreshToken},
-      );
-      return AuthLoginResultDto.fromMap(
-        Map<String, dynamic>.from(response as Map),
-      );
-    };
-  }
-  return (String refreshToken, {Future<void>? abortTrigger}) async {
-    return AuthLoginResultDto.fromMap(<String, dynamic>{
-      'accessToken': 'mock_refreshed_token_${refreshToken.hashCode}',
-      'refreshToken': 'mock_refreshed_refresh',
-      'ownerId': kMockCurrentOwnerId,
-      'activeSub': <String, dynamic>{'subAccountId': kMockCurrentSubAccountId},
-      'subAccountCount': 1,
-      'accountState': 'active',
-      'identityOrigin': 'phone',
-    });
-  };
-});
-
-bool _shouldUseRemoteAuthRefreshEndpoint() {
-  const value = String.fromEnvironment('APP_DATA_SOURCE', defaultValue: '');
-  if (value == 'remote') {
-    return true;
-  }
-  if (value == 'mock') {
-    return false;
-  }
-  if (CloudRuntimeConfig.appRuntimeEnv == 'beta' ||
-      CloudRuntimeConfig.appRuntimeEnv == 'gamma' ||
-      CloudRuntimeConfig.appRuntimeEnv == 'prod') {
-    return true;
-  }
-  return false;
-}

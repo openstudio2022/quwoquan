@@ -29,6 +29,16 @@ class CloudRequestHeaders {
 
   static String platform() => _clientContext.platform;
 
+  /// 灰度路由维度头：仅在端侧持有真实值时注入（缺失 = 该维度不参与匹配）。
+  static Map<String, String> _grayRoutingDimensionHeaders() {
+    final regionCode = _clientContext.regionCode?.trim() ?? '';
+    final carrier = _clientContext.carrier?.trim() ?? '';
+    return <String, String>{
+      if (regionCode.isNotEmpty) 'X-Client-Region-Code': regionCode,
+      if (carrier.isNotEmpty) 'X-Client-Carrier': carrier,
+    };
+  }
+
   static Map<String, String> forPage(String pageId) {
     final ts = _toBase36(DateTime.now().microsecondsSinceEpoch);
     final rand = _toBase36(_rng.nextInt(36 * 36 * 36 * 36)); // 4 chars base36
@@ -44,6 +54,7 @@ class CloudRequestHeaders {
       'X-Client-Device-Platform': platform(),
       'X-Client-App-Version': appVersion,
       'X-Client-Locale': _clientContext.locale,
+      ..._grayRoutingDimensionHeaders(),
       // 追踪：分段可读，可从 ID 直接看出源头/页面/会话/时间
       'X-Trace-Id': traceId,
       'X-Request-Id': requestId,
@@ -54,20 +65,15 @@ class CloudRequestHeaders {
     Map<String, String> headers, {
     String? ownerUserId,
     String? subAccountId,
-    String? subAccountContextVersion,
   }) {
     final next = Map<String, String>.from(headers);
     final resolvedOwnerUserId = (ownerUserId ?? '').trim();
     final resolvedSubAccountId = (subAccountId ?? '').trim();
-    final resolvedContextVersion = (subAccountContextVersion ?? '').trim();
     if (resolvedOwnerUserId.isNotEmpty) {
       next['X-Client-User-Id'] = resolvedOwnerUserId;
     }
     if (resolvedSubAccountId.isNotEmpty) {
       next['X-Client-Sub-Account-Id'] = resolvedSubAccountId;
-    }
-    if (resolvedContextVersion.isNotEmpty) {
-      next['X-Client-Sub-Account-Context-Version'] = resolvedContextVersion;
     }
     return next;
   }
@@ -112,6 +118,7 @@ class CloudRequestHeaders {
       'X-Client-Device-Platform': platform(),
       'X-Client-App-Version': appVersion,
       'X-Client-Locale': _clientContext.locale,
+      ..._grayRoutingDimensionHeaders(),
       'X-Trace-Id': traceId,
       'X-Request-Id': requestId,
     };

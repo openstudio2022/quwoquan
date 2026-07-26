@@ -1,219 +1,175 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/remote/circle/circle_feed_post_projection_mapper.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// 首页圈子流中单条帖子：保留 wire map 供 MediaViewer 写回，同时缓存解析后的 [PostBaseDto]。
-class CircleHubFeedPostEntry {
-  CircleHubFeedPostEntry._(this.raw, this.dto);
+/// 圈子 Hub 帖子的强类型页面模型。
+///
+/// 云侧公开内容事实由 [CircleFeedPostProjection] 提供；本类型只维护沉浸查看器
+/// 返回的会话内互动快照，不保存或向 UI 暴露动态 wire map。
+final class CircleHubFeedPostEntry {
+  CircleHubFeedPostEntry._({
+    required this.circleId,
+    required this.placementId,
+    required this.post,
+    required this.presentation,
+    this.pinned = false,
+    this.featured = false,
+    this.pinnedAt,
+    this.featuredAt,
+  }) : _likeCount = post.likeCount,
+       _commentCount = post.commentCount,
+       _shareCount = post.shareCount;
 
-  /// 圈子流 wire 行（含扩展键）；与 [dto] 同步更新，供 [applyMediaViewerResult] 写回。
-  /// 展示逻辑优先 [dto] / [tryReadPresentation]；长期可评估缩为写回所需窄键或二次 [ContentReadRepository.getPost]。
-  Map<String, dynamic> raw;
-  PostBaseDto? dto;
-
-  factory CircleHubFeedPostEntry.fromMap(Map<String, dynamic> source) {
-    final next = Map<String, dynamic>.from(source);
-    PostBaseDto? parsed;
-    try {
-      parsed = postBaseDtoFromMap(next);
-    } catch (_) {
-      parsed = null;
-    }
-    return CircleHubFeedPostEntry._(next, parsed);
+  /// 已取得 App DTO 的圈内帖子入口。
+  ///
+  /// [PostReadPresentation] 是 metadata 生成的只读展示契约；DTO 的动态序列化结果只在
+  /// 该生成工厂的适配边界内使用，不向页面消费者暴露。
+  factory CircleHubFeedPostEntry.fromPost({
+    required String circleId,
+    String placementId = '',
+    required PostBaseDto post,
+    bool pinned = false,
+    bool featured = false,
+    DateTime? pinnedAt,
+    DateTime? featuredAt,
+  }) {
+    return CircleHubFeedPostEntry._(
+      circleId: circleId,
+      placementId: placementId,
+      post: post,
+      presentation: PostReadPresentation(
+        postId: post.id,
+        contentType: post.type,
+        contentIdentity: post.identity,
+        displayName: post.displayName,
+        avatarUrl: post.avatarUrl,
+        title: post.normalizedTitle,
+        body: post.normalizedBody,
+        coverUrl: post.mediaCoverUrl,
+        likeCount: post.likeCount,
+        commentCount: post.commentCount,
+        shareCount: post.shareCount,
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+        publishedAt: post.publishedAt,
+        articleTemplate: post.articleTemplate,
+        articleFontPreset: post.articleFontPreset,
+      ),
+      pinned: pinned,
+      featured: featured,
+      pinnedAt: pinnedAt,
+      featuredAt: featuredAt,
+    );
   }
 
-  /// 由 [PostBaseDto] 构建；补齐圈子创作区常用的 wire 键（contentType / postId 等）。
-  factory CircleHubFeedPostEntry.fromPostDto(PostBaseDto p) {
-    final raw = Map<String, dynamic>.from(p.toMap());
-    raw['postId'] = p.id;
-    raw['contentType'] = p.type;
-    raw['contentIdentity'] = p.identity;
-    raw['authorDisplayName'] = p.displayName;
-    raw['authorAvatarUrl'] = p.avatarUrl;
-    return CircleHubFeedPostEntry._(raw, p);
+  factory CircleHubFeedPostEntry.fromProjection({
+    required CircleFeedPostProjection projection,
+    CircleFeedPostProjectionMapper mapper =
+        const CircleFeedPostProjectionMapper(),
+  }) {
+    return CircleHubFeedPostEntry.fromPost(
+      circleId: projection.circleId,
+      placementId: projection.placementId,
+      post: mapper.toDto(projection.post),
+      pinned: projection.pinned,
+      featured: projection.featured,
+      pinnedAt: projection.pinnedAt,
+      featuredAt: projection.featuredAt,
+    );
   }
 
-  String get postIdForKey => (raw['postId'] ?? '').toString();
+  final String circleId;
+  final String placementId;
+  final PostBaseDto post;
+  final PostReadPresentation presentation;
+  final bool pinned;
+  final bool featured;
+  final DateTime? pinnedAt;
+  final DateTime? featuredAt;
 
-  /// 圈子故事卡片 / 筛选用；避免在 UI 上散写 `raw['circleId']`。
-  String get wireCircleId => (raw['circleId'] ?? '').toString();
+  int _likeCount;
+  int _commentCount;
+  int _shareCount;
+  bool _isLiked = false;
+  bool _isFollowingAuthor = false;
 
-  /// 圈子页二级筛选用；兼容 `subCategory` wire 字段。
-  String get wireSubCategory => (raw['subCategory'] ?? '').toString();
+  String get postId => post.id;
+  String get title => presentation.title.trim();
+  String get bodyText => presentation.body.trim();
+  String get contentIdentity => presentation.contentIdentity;
+  String get displayFormat => post.displayFormat;
+  String get articleTemplate => presentation.articleTemplate;
+  String get authorRelationshipId => post.authorId;
+  String get authorDisplayName => presentation.displayName.trim();
+  String get authorAvatarUrl => presentation.avatarUrl.trim();
+  int get likeCount => _likeCount;
+  int get commentCount => _commentCount;
+  int get shareCount => _shareCount;
+  bool get isLiked => _isLiked;
+  bool get isFollowingAuthor => _isFollowingAuthor;
+  bool get isArticle => post.isArticleLike;
+  bool get isVideo => post.isVideoLike;
+  bool get showsVideoBadge => post.hasVideo;
 
-  /// MediaViewer 回写关注态、互动快照使用 canonical 作者主键。
-  String get wireAuthorRelationshipId => (raw['authorId'] ?? '').toString();
-
-  /// Wire 计数优先（含用户操作后的回写），其次 [dto]。
-  int get wireLikeCount =>
-      (raw['likeCount'] as num?)?.toInt() ?? dto?.likeCount ?? 0;
-
-  int get wireShareCount =>
-      (raw['shareCount'] as num?)?.toInt() ?? dto?.shareCount ?? 0;
-
-  /// [dto] 已解析则直接返回，否则尝试 [postBaseDtoFromMap]（失败返回 null）。
-  PostBaseDto? tryResolveDto() {
-    if (dto != null) return dto;
-    try {
-      return postBaseDtoFromMap(raw);
-    } catch (_) {
-      return null;
+  String get coverUrl {
+    if (presentation.coverUrl.isNotEmpty) {
+      return presentation.coverUrl;
     }
+    return post.primaryVisualUrl.trim();
   }
 
-  /// 封面 / 缩略：与圈子 hub 卡片一致（先 presentation / DTO 视觉主 URL，再 wire）。
-  String get wireCoverUrl {
-    final rp = tryReadPresentation();
-    if (rp != null && rp.coverUrl.isNotEmpty) return rp.coverUrl;
-    final d = dto;
-    if (d != null) {
-      final u = d.primaryVisualUrl.trim();
-      if (u.isNotEmpty) return u;
+  List<String> get imageUrls {
+    final images = post.mediaImageUrls;
+    if (images.isNotEmpty) {
+      return images;
     }
-    final cover = (raw['coverUrl'] ?? '').toString();
-    if (cover.isNotEmpty) return cover;
-    final imageUrls = raw['imageUrls'];
-    if (imageUrls is List && imageUrls.isNotEmpty) {
-      return imageUrls.first.toString();
-    }
-    return '';
-  }
-
-  List<String> get wireImageUrls {
-    final d = dto;
-    final dtoImages = d?.mediaImageUrls ?? const <String>[];
-    if (dtoImages.isNotEmpty) {
-      return dtoImages;
-    }
-    final imageUrls = raw['imageUrls'];
-    if (imageUrls is List) {
-      final urls = imageUrls
-          .map((url) => url.toString().trim())
-          .where((url) => url.isNotEmpty)
-          .toList(growable: false);
-      if (urls.isNotEmpty) {
-        return urls;
-      }
-    }
-    final cover = wireCoverUrl.trim();
+    final cover = coverUrl;
     return cover.isEmpty ? const <String>[] : <String>[cover];
   }
 
-  String get wireTitle {
-    final d = dto;
-    if (d != null && d.normalizedTitle.isNotEmpty) return d.normalizedTitle;
-    final rp = tryReadPresentation();
-    if (rp != null && rp.title.isNotEmpty) return rp.title;
-    return (raw['title'] ?? '').toString();
-  }
-
-  String get wireBodyText {
-    final d = dto;
-    if (d != null && d.normalizedBody.isNotEmpty) return d.normalizedBody;
-    final rp = tryReadPresentation();
-    if (rp != null && rp.body.isNotEmpty) return rp.body;
-    return (raw['body'] ?? '').toString();
-  }
-
-  /// 使用 canonical 作者昵称，供 hub 信息流卡片使用。
-  String get wireAuthorDisplayName {
-    final d = dto;
-    if (d != null && d.displayName.trim().isNotEmpty) {
-      return d.displayName.trim();
-    }
-    final rp = tryReadPresentation();
-    if (rp != null && rp.displayName.trim().isNotEmpty) {
-      return rp.displayName.trim();
-    }
-    return (raw['authorDisplayName'] ?? '').toString();
-  }
-
-  String get wireAuthorAvatarUrl {
-    final d = dto;
-    if (d != null && d.avatarUrl.trim().isNotEmpty) {
-      return d.avatarUrl.trim();
-    }
-    final rp = tryReadPresentation();
-    if (rp != null && rp.avatarUrl.trim().isNotEmpty) {
-      return rp.avatarUrl.trim();
-    }
-    return (raw['authorAvatarUrl'] ?? '').toString();
-  }
-
-  bool get wireIsLiked => raw['isLiked'] as bool? ?? false;
-
-  bool get wireShowsVideoBadge =>
-      (raw['videoUrl']?.toString().trim() ?? '').isNotEmpty ||
-      (dto?.mediaVideoUrl.isNotEmpty ?? false);
-
-  double wireCoverAspectRatio() {
-    final d = dto;
-    final aspect = d?.aspectRatio;
+  double get coverAspectRatio {
+    final aspect = post.aspectRatio;
     if (aspect != null && aspect > 0) {
       return aspect;
     }
-    final width = (raw['width'] as num?)?.toDouble();
-    final height = (raw['height'] as num?)?.toDouble();
-    if (width != null && height != null && width > 0 && height > 0) {
-      return width / height;
+    if (post.hasVideo) {
+      return 9 / 16;
     }
-    final hasVideo =
-        (raw['videoUrl']?.toString().trim() ?? '').isNotEmpty ||
-        (d?.mediaVideoUrl.isNotEmpty ?? false);
-    if (hasVideo) return 9 / 16;
-    final hasImage =
-        raw['imageUrls'] is List && (raw['imageUrls'] as List).isNotEmpty;
-    if (hasImage) return 3 / 4;
-    return 1.0;
+    if (imageUrls.isNotEmpty) {
+      return 3 / 4;
+    }
+    return 1;
   }
 
-  /// Metadata 只读投影；解析失败时返回 null（回退到 [raw] 辅助逻辑）。
-  PostReadPresentation? tryReadPresentation() {
-    try {
-      final base = dto ?? postBaseDtoFromMap(raw);
-      return PostReadPresentation.fromPostBase(base, wire: raw);
-    } catch (_) {
-      return null;
-    }
+  MediaViewerPostWireRow toMediaViewerWireRow() {
+    return MediaViewerPostWireRow.fromPostBase(
+      post,
+      circleId: circleId,
+      likeCount: likeCount,
+      commentCount: commentCount,
+      shareCount: shareCount,
+      isLiked: isLiked,
+      isFollowingAuthor: isFollowingAuthor,
+    );
   }
 
   void applyMediaViewerResult(MediaViewerResult result) {
-    final id = postIdForKey;
-    if (id.isEmpty) return;
-    final scopePostIds = result.effectiveScopePostIds;
-    if (scopePostIds.isNotEmpty && !scopePostIds.contains(id)) {
+    if (result.effectiveScopePostIds.isNotEmpty &&
+        !result.effectiveScopePostIds.contains(postId)) {
       return;
     }
 
-    final authorId = wireAuthorRelationshipId;
+    _likeCount = result.postLikesCount[postId] ?? _likeCount;
+    _commentCount = result.postCommentCount[postId] ?? _commentCount;
+    _shareCount = result.postSharesCount[postId] ?? _shareCount;
+    _isLiked = result.likedPosts.contains(postId);
 
-    final likeCount = result.postLikesCount[id];
-    if (likeCount != null) {
-      raw['likeCount'] = likeCount;
-      raw['likes'] = likeCount;
-    }
-
-    final shareCount = result.postSharesCount[id];
-    if (shareCount != null) {
-      raw['shareCount'] = shareCount;
-    }
-
-    final commentCount = result.postCommentCount[id];
-    if (commentCount != null) {
-      raw['commentCount'] = commentCount;
-      raw['commentsCount'] = commentCount;
-    }
-
-    raw['isLiked'] = result.likedPosts.contains(id);
+    final authorId = authorRelationshipId.trim();
     if (authorId.isNotEmpty &&
         (result.effectiveScopeProfileIds.isEmpty ||
             result.effectiveScopeProfileIds.contains(authorId))) {
-      raw['isFollowingAuthor'] = result.followingUsers.contains(authorId);
-    }
-
-    try {
-      dto = postBaseDtoFromMap(raw);
-    } catch (_) {
-      dto = null;
+      _isFollowingAuthor = result.followingUsers.contains(authorId);
     }
   }
 
@@ -221,8 +177,8 @@ class CircleHubFeedPostEntry {
     List<CircleHubFeedPostEntry> items,
     MediaViewerResult result,
   ) {
-    for (final e in items) {
-      e.applyMediaViewerResult(result);
+    for (final item in items) {
+      item.applyMediaViewerResult(result);
     }
   }
 }

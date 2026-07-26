@@ -5,16 +5,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 
-const _testConvId = 'conv_002';
+const _testConvId = 'fixture_conv_group';
 
 Widget _scopedApp({ChatRepository? mock}) {
   final repo = mock ?? MockChatRepository();
   return ProviderScope(
-    overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      chatRepositoryCompositionProvider.overrideWithValue(repo),
+      currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
+    ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
         initialLocation: '/chat/$_testConvId/admins',
@@ -60,7 +65,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.selectGroupMembers), findsOneWidget);
+      expect(find.text(ChatText.selectGroupMembers), findsOneWidget);
     });
 
     testWidgets('加载完成后显示成员列表', (tester) async {
@@ -78,8 +83,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      // conv_002 群主 displayName='我'，不应出现
-      expect(find.text('我'), findsNothing);
+      expect(
+        find.text(chatDisplayNameFor(chatCurrentUserProfileId())),
+        findsNothing,
+      );
     });
 
     testWidgets('初始管理员显示管理员标签', (tester) async {
@@ -88,7 +95,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.admin), findsWidgets);
+      expect(find.text(ChatText.admin), findsWidgets);
     });
 
     testWidgets('完成按钮显示已选人数', (tester) async {
@@ -112,9 +119,9 @@ void main() {
       final textField = find.byType(CupertinoTextField);
       expect(textField, findsOneWidget);
 
-      await tester.enterText(textField, '李明');
+      await tester.enterText(textField, '契约同伴一');
       await tester.pump();
-      expect(find.text('李明'), findsWidgets);
+      expect(find.text('契约同伴一'), findsWidgets);
     });
 
     testWidgets('tap 未选中成员后选中态变化', (tester) async {
@@ -123,7 +130,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      final member = find.text('张华');
+      final member = find.text('契约同伴二');
       expect(member, findsOneWidget);
       await tester.ensureVisible(member);
       await tester.pump();

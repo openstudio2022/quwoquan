@@ -11,12 +11,19 @@ class AppSpacing {
   static const double fourteen = 14.0, eighteen = 18.0;
   static const double twenty = 20.0, thirtySix = 36.0;
   static const double twentyEight = 28.0, forty = 40.0;
-  static const double oneHundred = 100.0, twoHundredTwenty = 220.0;
+  static const double oneHundred = 100.0, oneHundredSixty = 160.0;
+  static const double twoHundredTwenty = 220.0;
   static const double threeHundredTwenty = 320.0, radiusTwo = 2.0;
   static const double radiusTen = 10.0, radiusEighteen = 18.0;
   static const double radiusTwenty = 20.0, radiusTwentyFour = 24.0;
   static const double radiusTwentyEight = 28.0, radiusThirtyTwo = 32.0;
   static const double radiusNinetyNine = 99.0;
+
+  /// RTC 画中画语义尺寸。
+  static const double rtcPipWidth = 120.0;
+  static const double rtcPipHeight = 160.0;
+  static const double rtcPipEdgePadding = 12.0;
+  static const double rtcPipInitialTop = 100.0;
   // ==================== 响应式断点 ====================
   static const double compactBreakpoint = 360.0;
   static const double markdownCompactBreakpoint = 420.0;
@@ -185,6 +192,23 @@ class AppSpacing {
   /// 统一可点击区域最低标准（WCAG 触控建议）
   static const double minInteractiveSize = 44.0;
 
+  /// 不可恢复异常页：固定内容槽避免版本检查和容器重建状态切换时纵向跳动。
+  static const double recoveryContentMaxWidth = 280.0;
+  static const double recoveryHorizontalInset = 24.0;
+  static const double recoveryTitleSlotHeight = 44.0;
+  static const double recoverySubtitleSlotHeight = 52.0;
+  static const double recoveryActionSlotHeight = 108.0;
+  static const double recoveryTitleSubtitleGap = 16.0;
+  static const double recoverySubtitleActionGap = 28.0;
+  static const double recoveryButtonGap = 12.0;
+  static const double recoveryVisualCenterAlignment = 0.1;
+  static const Duration recoveryOldContentFadeDuration = Duration(
+    milliseconds: 80,
+  );
+  static const Duration recoveryNewContentFadeDuration = Duration(
+    milliseconds: 120,
+  );
+
   /// 我的主页转发互动行最小高度。
   static const double profileShareInteractionRowMinHeight = 104.0;
 
@@ -196,9 +220,18 @@ class AppSpacing {
 
   /// 首页统一对象推荐卡最大宽度（横滑流内单卡上限，避免过宽）。
   static const double homeObjectCardMaxWidth = 260.0;
+  static const double chatBubbleMaxWidth = 280.0;
+  static const double chatBubbleImageSize = 200.0;
+  static const double chatBubbleHorizontalPadding = 24.0;
+  static const double chatBubbleRadius = 12.0;
+  static const double chatBubbleTailExtent = 8.0;
+  static const double chatContactRowHeight = 56.0;
 
   /// 首页统一对象推荐卡横滑流固定高度（含两行文案 + 行动按钮触控余量）。
   static const double homeObjectCardRailHeight = 88.0;
+  static const double homepageIntroductionTimelineDateWidth = 86.0;
+  static const double homepageIntroductionHorizontalCardWidth = 180.0;
+  static const double homepageIntroductionInlineFigureAspectRatio = 16 / 9;
   static const double objectIntersectionCardWideWidth = 132.0;
   static const double objectIntersectionCardWideCoverHeight = 92.0;
   // ==================== 文本行高语义 ====================
@@ -289,6 +322,22 @@ class AppSpacing {
   static const double welcomePetalHeight = 94.0;
   static const double welcomePetalRadialOffset = 54.0;
 
+  /// 图一高保花朵可见直径：约占屏宽 40%，小屏下限 132、上限 168。
+  static const double welcomeFlowerWidthFraction = 0.40;
+  static const double welcomeFlowerMinDiameter = 132.0;
+  static const double welcomeFlowerMaxDiameter = 168.0;
+
+  /// 花朵可见边缘到 slogan 首行的视觉间距（36~44dp 规格取中值）。
+  static const double welcomeFlowerSloganVisualGap = 40.0;
+
+  /// 底部品牌名视觉中心距屏底比例（约 90% 屏高）与安全区最小让位。
+  static const double welcomeBrandFooterCenterFromBottomFraction = 0.10;
+  static const double welcomeBrandFooterSafeAreaGap = 12.0;
+
+  /// 启动提示单行槽位高度与其到品牌名的间距。
+  static const double welcomeStartupHintSlotHeight = 24.0;
+  static const double welcomeStartupHintToBrandGap = 10.0;
+
   /// 花瓣下层径向柔光直径（羽化至透明，提亮花心叠色区；刻意避开早前「独立光圈」像素断言）。
   static const double welcomeBloomDiameter = 92.0;
 
@@ -317,14 +366,7 @@ class AppSpacing {
   static double primaryTopBarSafeTopInset(
     double safeTop,
     BuildContext context,
-  ) {
-    if (safeTop <= zero) {
-      return zero;
-    }
-    final labelTopPadding =
-        (primaryTopBarHeight(context) - _primaryTabFontSize) / 2;
-    return (safeTop - labelTopPadding + xs).clamp(zero, safeTop);
-  }
+  ) => _appSpacingPrimaryTopBarSafeTopInset(safeTop, context);
 
   static const double _primaryTabFontSize = 14.0;
 
@@ -503,19 +545,7 @@ class AppSpacing {
   static double bottomNavContentSideInset(
     BuildContext context,
     double bottomSafeInset,
-  ) {
-    final baseInset = bottomNavSideInset(context);
-    if (bottomSafeInset <= zero) {
-      return baseInset;
-    }
-    return baseInset +
-        responsiveValue(
-          context,
-          compact: containerXs,
-          regular: containerSm,
-          expanded: containerMd,
-        );
-  }
+  ) => _appSpacingBottomNavContentSideInset(context, bottomSafeInset);
 
   /// 子标签导航高度: 44.0
   static const double subTabNavigationHeight = 44.0;
@@ -761,13 +791,7 @@ class AppSpacing {
   /// 手机 28、平板 32、宽屏 Web 40（极窄机降到 24 防溢出）。
   /// 图标为矢量绘制，任意尺寸均像素级清晰。
   static double bottomNavBarItemIconSize(BuildContext context) =>
-      responsiveWideValue(
-        context,
-        compact: iconMedium,
-        regular: 28.0,
-        expanded: 32.0,
-        wide: 40.0,
-      );
+      _appSpacingBottomNavBarItemIconSize(context);
 
   /// 底部导航主操作内图标尺寸，随胶囊缩小避免 “+” 过重。
   static const double bottomNavPrimaryActionIconSize = 22.0;
@@ -843,11 +867,18 @@ class AppSpacing {
   /// 功能项选中边框线宽（如裁剪比例框）
   static const double toolPanelItemBorderWidthSelected = 2.0;
 
-  /// 视频封面中央播放按钮尺寸（圆形）
+  /// 视频中央播放提示的语义占位尺寸
   static const double videoPlayOverlaySize = 52.0;
 
-  /// 视频封面中央播放图标尺寸
+  /// 旧视频封面中央播放图标尺寸
   static const double videoPlayOverlayIconSize = 22.0;
+
+  /// 沉浸视频无背景圆角播放三角尺寸
+  static const double videoPlayRoundedGlyphSize = 44.0;
+
+  /// 视频拖动预览最大尺寸
+  static const double videoTimelinePreviewMaxWidth = 160.0;
+  static const double videoTimelinePreviewMaxHeight = 120.0;
 
   /// 功能项未选中边框线宽
   static const double toolPanelItemBorderWidthUnselected = 1.0;
@@ -945,24 +976,10 @@ class AppSpacing {
       MediaQuery.sizeOf(context).width >= wideBreakpoint;
 
   static double webInstallBannerHeight(BuildContext context) =>
-      responsiveWideValue(
-        context,
-        compact: webInstallBannerCompactHeight,
-        regular: webInstallBannerCompactHeight,
-        expanded: webInstallBannerCompactHeight,
-        wide: webInstallBannerWideHeight,
-      );
+      _appSpacingWebInstallBannerHeight(context);
 
   static EdgeInsets webShellContentPadding(BuildContext context) =>
-      EdgeInsets.symmetric(
-        horizontal: responsiveWideValue(
-          context,
-          compact: containerXs,
-          regular: containerSm,
-          expanded: containerMd,
-          wide: containerLg,
-        ),
-      );
+      _AppSpacingWebLayout.shellContentPadding(context);
 
   static int webPcMasonryColumns(BuildContext context) =>
       _appSpacingWebPcMasonryColumns(context);
@@ -976,14 +993,10 @@ class AppSpacing {
   static double adaptiveFeedMaxContentWidth(double availableWidth) =>
       _appSpacingAdaptiveFeedMaxContentWidth(availableWidth);
 
-  /// Post 预览网格的最佳列宽（理想单列内容宽度），用于计算列数。
-  static const double _gridIdealColumnWidth = 220.0;
-
-  /// Post 预览网格的最小列数。
-  static const int gridMinColumns = 2;
-
-  /// Post 预览网格的最大列数，避免 iPad/桌面出现 5-6 列的过密卡片。
-  static const int gridMaxColumns = 4;
+  static const double _gridIdealColumnWidth =
+      _AppSpacingGridValues.idealColumnWidth;
+  static const int gridMinColumns = _AppSpacingGridValues.minColumns;
+  static const int gridMaxColumns = _AppSpacingGridValues.maxColumns;
 
   /// 根据可用宽度计算 Post 预览瀑布流/宫格列数。
   /// 保证至少 [gridMinColumns] 列，并限制不超过 [gridMaxColumns]。

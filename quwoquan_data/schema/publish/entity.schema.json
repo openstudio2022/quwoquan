@@ -21,7 +21,7 @@
     },
     "geoTagRef": {
       "type": "string",
-      "description": "区县级主归属行政区标签（单值），Topic/地理/行政区/** 叶子，如 Topic/地理/行政区/中国/四川省/凉山彝族自治州/盐源县"
+      "description": "区县级主归属行政区标签（单值），必须是 Topic/地理/行政区 下的叶子"
     },
     "geoTagRefs": {
       "type": "array",
@@ -57,7 +57,7 @@
         },
         "entityName": { "type": "string", "minLength": 1 },
         "extractor": {
-          "enum": ["wikipedia_api", "baidu_baike_openapi", "toutiao_baike_html"]
+          "enum": ["wikipedia_api", "baidu_baike_html", "toutiao_baike_html"]
         },
         "canonicalUrl": { "type": "string", "pattern": "^https://" },
         "sourceUrl": { "type": "string", "pattern": "^https://" },

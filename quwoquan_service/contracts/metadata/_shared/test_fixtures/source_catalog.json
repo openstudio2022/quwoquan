@@ -148,7 +148,7 @@
         "originalHeight": 1800
       },
       "sourceRefs": [
-        "quwoquan_app/lib/cloud/services/user/user_profile_repository.dart"
+        "quwoquan_app/lib/cloud/services/user/account/user_account_repository.dart"
       ]
     },
     {
@@ -178,7 +178,7 @@
         "originalHeight": 800
       },
       "sourceRefs": [
-        "quwoquan_app/lib/cloud/services/user/user_profile_repository.dart"
+        "quwoquan_app/lib/cloud/services/user/account/user_account_repository.dart"
       ]
     },
     {

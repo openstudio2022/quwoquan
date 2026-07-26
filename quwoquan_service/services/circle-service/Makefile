@@ -1,28 +1,20 @@
-.PHONY: build test test-contract test-unit gate dev clean
+SERVICE_ROOT := $(abspath ../..)
+REPO_ROOT := $(abspath ../../..)
+QWQ_OUTPUT_ROOT := $(REPO_ROOT)/.qwq_output
+BUILD_OUTPUT_DIR := $(QWQ_OUTPUT_ROOT)/env/repo/local/service-build/cache/$(notdir $(CURDIR))
+SERVICE_PACKAGE := ./services/circle-service/...
+COMMAND_PACKAGE := ./services/circle-service/cmd/...
+TEST_PACKAGE := ./services/circle-service/tests/...
 
-# --- Build ---
+.PHONY: build test gate
+
 build:
-	go build -o bin/circle-service ./cmd/api
+	@mkdir -p "$(BUILD_OUTPUT_DIR)"
+	cd $(SERVICE_ROOT) && go build -o "$(BUILD_OUTPUT_DIR)/" $(COMMAND_PACKAGE)
 
-# --- Test ---
-test: test-contract
+test:
+	cd $(SERVICE_ROOT) && \
+		pkgs=$$(go list $(TEST_PACKAGE) | grep -v '/tests/api_integration' || true); \
+		if [ -n "$$pkgs" ]; then go test $$pkgs -count=1; fi
 
-test-contract:
-	cd tests && go test -v -count=1 -timeout 120s ./...
-
-test-contract-local:
-	cd tests && go test -v -count=1 -timeout 120s -run "TestCreate|TestGet|TestList" ./...
-
-test-unit:
-	go test -v -count=1 ./internal/...
-
-# --- Gate ---
 gate: build test
-
-# --- Dev ---
-dev:
-	APP_ENV=local go run ./cmd/api
-
-# --- Clean ---
-clean:
-	rm -rf bin/

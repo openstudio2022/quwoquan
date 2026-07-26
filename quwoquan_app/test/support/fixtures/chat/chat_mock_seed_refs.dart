@@ -1,19 +1,15 @@
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart'
-    as chat_mock_data;
+import 'package:quwoquan_cloud_mock/chat_fixture.dart';
 
-const _chatCurrentUserProfileId =
-    chat_mock_data.ChatMockData.currentUserProfileId;
-final _chatDisplayNameFor = chat_mock_data.ChatMockData.nameFor;
-final _chatAvatarUrlFor = chat_mock_data.ChatMockData.avatarFor;
-final _chatConversations = chat_mock_data.ChatMockData.conversations;
+final _chatFixtureEngine = AlphaChatStateEngine();
 
-String chatCurrentUserProfileId() => _chatCurrentUserProfileId;
+String chatCurrentUserProfileId() => _chatFixtureEngine.currentUserId;
 
-String chatDisplayNameFor(String userId) => _chatDisplayNameFor(userId);
+String chatDisplayNameFor(String userId) =>
+    _chatFixtureEngine.displayNameFor(userId);
 
-String chatAvatarUrlFor(String userId) => _chatAvatarUrlFor(userId);
+String chatAvatarUrlFor(String userId) => _chatFixtureEngine.avatarFor(userId);
 
 Map<String, dynamic> chatConversationSeedById(String conversationId) =>
     Map<String, dynamic>.from(
-      _chatConversations.firstWhere((item) => item['id'] == conversationId),
+      _chatFixtureEngine.conversationSeedById(conversationId),
     );

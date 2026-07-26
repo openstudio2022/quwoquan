@@ -206,7 +206,6 @@ def _write_download_availability(
     *,
     source: str = "artifact_gate",
 ) -> dict[str, Any]:
-    from content.execution.agent.auto_research import _sync_auto_research_availability
     active = list(frozen_target_names(ctx))
     merged_unresolved: dict[str, dict[str, list[str]]] = {
         str(entity_id): {
@@ -304,7 +303,6 @@ def _write_download_availability(
         execution_root(ctx.execution_id) / "_shared" / "source_unavailable_targets.json",
         report,
     )
-    _sync_auto_research_availability(ctx, report)
     return report
 
 def _pending_download_repair_unresolved(ctx: ExecutionContext) -> dict[str, dict[str, list[str]]]:

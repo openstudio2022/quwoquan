@@ -19,8 +19,6 @@
 /// ```dart
 /// import 'package:quwoquan_app/components/components.dart';
 ///
-/// ImagePostCard(...)
-/// VideoPostCard(...)
 /// TabNavigationWidget(...)
 /// ```
 ///
@@ -28,11 +26,6 @@
 /// - 依赖 core 模块（设计系统、常量、服务等）
 /// - 不依赖 features 模块（避免循环依赖）
 /// - 不依赖 app 模块（保持组件独立性）
-
-// ==================== 内容卡片组件 ====================
-export 'content/image_post_card.dart';
-export 'content/video_post_card.dart';
-export 'content/media_post_card.dart';
 
 // ==================== Post 组件 ====================
 export 'post/post_preview_card.dart';
@@ -56,7 +49,6 @@ export 'input/unified_emoji_picker.dart';
 export 'input/customizable_chat_input_bar.dart';
 
 // ==================== 媒体查看器组件 ====================
-export 'media/image/viewer/image_viewer.dart';
 export 'media/video/viewer/video_media_viewer.dart';
 export 'media/video/player/video_player_widget.dart';
 export 'media/shared/toolbar/media_viewer_toolbar.dart';

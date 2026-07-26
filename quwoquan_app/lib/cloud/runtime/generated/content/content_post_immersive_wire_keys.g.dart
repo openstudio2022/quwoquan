@@ -1,5 +1,5 @@
 // GENERATED FILE — DO NOT EDIT BY HAND.
-// Source: contracts/metadata/content/post/projections/content_post_immersive_wire_keys.yaml
+// Source: services/content-service/contracts/content/post/projections/content_post_immersive_wire_keys.yaml
 // Regenerate: make codegen-app
 
 /// 沉浸器与详情并行 raw Map 扩展键名 SSOT

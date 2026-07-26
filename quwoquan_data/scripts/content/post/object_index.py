@@ -94,11 +94,9 @@ def _validate_execution_and_object_content_types(
     execution_id: str, content_type: str, *, ref: str = ""
 ) -> None:
     """Require one canonical content type for the complete execution package."""
-    from content.execution.identity import ContentType
-    from content.execution.workspace import load_execution_manifest  # 延迟导入避免循环依赖
+    from content.execution.identity import ContentType, parse_execution_id
 
-    manifest = load_execution_manifest(execution_id)
-    execution_content_type = ContentType(str(manifest.get("contentType") or ""))
+    execution_content_type = parse_execution_id(execution_id).content_type
     try:
         object_content_type = ContentType(str(content_type or "").strip())
     except ValueError as exc:
@@ -132,6 +130,11 @@ def register_content_object(
     title = str(title or "").strip()
     if not title:
         raise ValueError(f"content object title missing or empty for ref={ref!r}")
+    # A content object is runtime output, so it may only be created inside an
+    # execution package whose immutable plan has already been frozen.
+    from content.execution.workspace import load_execution_manifest
+
+    load_execution_manifest(execution_id)
     _validate_execution_and_object_content_types(execution_id, content_type, ref=ref)
     index = load_index(execution_id)
     existing = index.get(ref) or {}

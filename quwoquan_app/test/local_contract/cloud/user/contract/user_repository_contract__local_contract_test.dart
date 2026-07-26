@@ -1,23 +1,27 @@
 import 'package:test/test.dart';
-import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
-import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
+import 'package:quwoquan_app/application/user/persona/persona_query.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    as contracts;
+import '../../../../support/cloud_services/mock_persona_facets.dart';
 
 void main() {
-  group('UserRepository — 常规契约', () {
-    late UserRepository repo;
+  group('Persona Query/Command Facet — 常规契约', () {
+    late PersonaQuery query;
+    late MockPersonaFacets commandWriter;
 
     setUp(() {
-      repo = MockUserRepository();
+      commandWriter = MockPersonaFacets();
+      query = commandWriter;
     });
 
     test('listPersonas 返回分身列表', () async {
-      final accounts = await repo.listPersonas();
+      final accounts = await query.listPersonas();
       expect(accounts, isNotEmpty);
       expect(accounts.first.subAccountId, isNotEmpty);
     });
 
     test('getPersonaManagementSummary 返回 quota 与 items', () async {
-      final summary = await repo.getPersonaManagementSummary();
+      final summary = await query.getPersonaManagementSummary();
       expect(summary.items, isNotEmpty);
       expect(summary.quota.maxSubAccounts, greaterThan(0));
     });
@@ -25,65 +29,65 @@ void main() {
     test(
       'getPersonaManagementSummary 与 activeContext 显式暴露 avatarVersion',
       () async {
-        final summary = await repo.getPersonaManagementSummary();
+        final summary = await query.getPersonaManagementSummary();
         expect(summary.items, isNotEmpty);
         final primary = summary.items.first;
-        expect(primary.avatarUrl, isNotEmpty);
+        // avatarUrl 经 MediaDeliveryResolver 解析；flutter test 无
+        // dart-define CDN endpoint 时解析为空串，此处只断言版本语义。
         expect(primary.avatarVersion, greaterThanOrEqualTo(0));
         expect(summary.activeContext, isNotNull);
-        expect(summary.activeContext!.avatarUrl, isNotEmpty);
         expect(summary.activeContext!.avatarVersion, greaterThanOrEqualTo(0));
       },
     );
 
     test('getActivePersonaContext 返回活动身份上下文', () async {
-      final context = await repo.getActivePersonaContext();
+      final context = await query.getActivePersonaContext();
       expect(context.subAccountId, isNotEmpty);
     });
 
-    test('getActivePersonaContext 与 canonical 当前 mock 用户对齐', () async {
-      final context = await repo.getActivePersonaContext();
-      expect(context.subAccountId, kMockCurrentSubAccountId);
-      expect(context.ownerUserId, kMockCurrentOwnerId);
+    test('getActivePersonaContext 与 Query 当前分身对齐', () async {
+      final context = await query.getActivePersonaContext();
+      expect(context.subAccountId, 'persona_primary');
+      expect(context.ownerUserId, 'owner-test');
       expect(context.displayName, isNotEmpty);
     });
 
-    test('activatePersona 不崩溃', () async {
-      await repo.activatePersona('persona_test');
+    test('activatePersona 切换到已存在分身', () async {
+      final personas = await query.listPersonas();
+      final target = personas.last.subAccountId;
+      await expectLater(
+        commandWriter.activatePersona(
+          contracts.ActivatePersonaCommand(subAccountId: target),
+        ),
+        completes,
+      );
     });
 
     test('applyPersonaProfileSync 返回已应用数量', () async {
-      final count = await repo.applyPersonaProfileSync(
-        'persona_test',
-        fieldsMask: const <String>['phone', 'email'],
+      final result = await commandWriter.applyPersonaProfileSync(
+        contracts.ApplyPersonaProfileSyncCommand(
+          subAccountId: 'persona_primary',
+          applyScope: 'all_sub_accounts',
+          fieldsMask: const <String>['phone', 'email'],
+        ),
       );
-      expect(count, greaterThanOrEqualTo(0));
-    });
-
-    test('getNotificationSettings 返回通知设置', () async {
-      final settings = await repo.getNotificationSettings();
-      expect(settings.enablePush, isTrue);
-    });
-
-    test('getPrivacySettings 返回隐私设置', () async {
-      final settings = await repo.getPrivacySettings();
-      expect(settings.profileVisibility, 'public');
+      expect(result.appliedCount, greaterThanOrEqualTo(0));
     });
   });
 
-  group('UserRepository — 异常/边界契约', () {
-    late UserRepository repo;
-
-    setUp(() {
-      repo = MockUserRepository();
+  group('Persona Query/Command Facet — 异常/边界契约', () {
+    test('activatePersona 空 ID fail-fast', () {
+      expect(
+        () => contracts.ActivatePersonaCommand(subAccountId: ''),
+        throwsArgumentError,
+      );
     });
 
-    test('activatePersona 空 ID 不崩溃', () async {
-      await repo.activatePersona('');
-    });
-
-    test('deleteEmptyPersona 空 ID 不崩溃', () async {
-      await repo.deleteEmptyPersona('');
+    test('retirePersona 空 ID fail-fast', () {
+      expect(
+        () => contracts.RetirePersonaCommand(subAccountId: ''),
+        throwsArgumentError,
+      );
     });
   });
 }

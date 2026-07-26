@@ -52,7 +52,6 @@ from core.python_environment import (
     resolve_cursor_startup_timeout_seconds,
 )
 from core.source_plan_contract import source_plan_rule_signature
-from core.cursor_usage import aggregate_turn_usage, extract_cursor_usage
 from core.paths import release_root
 from content.execution.workspace import (
     execution_command_root,

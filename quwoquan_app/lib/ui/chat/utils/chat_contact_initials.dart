@@ -84,6 +84,5 @@ String chatContactInitial(String name) {
     '老': 'L',
     '阿': 'A',
   };
-  return map[name[0]] ??
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[name.codeUnitAt(0) % 26];
+  return map[name[0]] ?? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[name.codeUnitAt(0) % 26];
 }

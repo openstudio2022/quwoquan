@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../support/app/web_shell_test_harness.dart';
@@ -20,7 +20,7 @@ void main() {
       await WebShellTestHarness.tapPrimary(tester, 'chat');
 
       // 右侧说明栏已移除，不再展示占位 rail 文案。
-      expect(find.text(UITextConstants.webPcMessagesRailTitle), findsNothing);
+      expect(find.text(ChatText.webPcMessagesRailTitle), findsNothing);
       expect(find.text('消息助手'), findsNothing);
 
       // 上下文 tab 与移动端主 tab 对齐，去掉「小趣」助手入口。

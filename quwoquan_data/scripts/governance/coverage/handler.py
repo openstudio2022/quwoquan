@@ -6,7 +6,11 @@ import json
 
 from content.source.fetch_text import SUPPORTED_TEXT_EXTRACTORS
 from governance.coverage.benchmark import evaluate_benchmark, render_benchmark, write_benchmark_report
-from governance.coverage.coverage import evaluate_registry, list_verticals, render_report
+from governance.coverage.vertical_inventory import (
+    evaluate_vertical_inventory,
+    list_verticals,
+    render_inventory_report,
+)
 from governance.coverage.governance import verify_vertical_script_governance
 from governance.coverage.maturity import evaluate_maturity, render_maturity
 from governance.coverage.quality import verify_vertical_quality
@@ -16,9 +20,9 @@ from core.runtime_policy import active_runtime_policy
 
 def handle_coverage_inventory(args: argparse.Namespace) -> None:
     verticals = [args.vertical] if args.vertical else list_verticals()
-    reports = [evaluate_registry(v) for v in verticals]
+    reports = [evaluate_vertical_inventory(v) for v in verticals]
     for report in reports:
-        print(render_report(report))
+        print(render_inventory_report(report))
     if args.json:
         print(json.dumps({"reports": reports}, ensure_ascii=False, indent=2))
     if args.strict and any(r["status"] != "passed" for r in reports):
@@ -37,10 +41,16 @@ def handle_master_list_stats(args: argparse.Namespace) -> None:
 
 
 def handle_coverage_discover(args: argparse.Namespace) -> None:
+    from pathlib import Path
+
+    from governance.coverage.discovery import discover_candidates
     from governance.coverage.coverage_matrix import (
         CoverageMatrixGuardrails,
+        completed_discovery_shards,
+        coverage_matrix_status,
         prepare_coverage_matrix,
     )
+    from governance.coverage.coverage_finalize import finalize_discovery_source_cells
 
     provinces = _provinces_arg(args)
     if not provinces:
@@ -72,10 +82,152 @@ def handle_coverage_discover(args: argparse.Namespace) -> None:
     if args.prepare_only:
         print(json.dumps(matrix_report, ensure_ascii=False, indent=2))
         return
-    raise SystemExit(
-        "[vertical coverage-discover] GATE_BLOCK: 市州矩阵/checkpoint 已准备；"
-        "两省 coverage 长跑仍按计划暂停，未发网络请求"
+    run_dir = Path(str(matrix_report["runDir"]))
+    seed_candidates: list[dict[str, object]] = []
+    for candidate_file in sorted(run_dir.glob("candidates_*.ndjson")):
+        with candidate_file.open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                candidate = row.get("candidate") if isinstance(row, dict) else None
+                if isinstance(candidate, dict):
+                    seed_candidates.append(candidate)
+    skip_shards = (
+        completed_discovery_shards(run_dir=run_dir, sources=sources)
+        if args.resume
+        else set()
     )
+    incrementally_finalized_sources: set[str] = (
+        {"osm_poi"} & set(sources)
+        if args.until_saturated
+        else set()
+    )
+
+    def record_shard_progress(
+        source: str,
+        province: str,
+        city: str,
+        district: str,
+        candidates: list[dict[str, object]],
+        failure_reason: str | None,
+    ) -> None:
+        finalize_discovery_source_cells(
+            run_dir=run_dir,
+            source=source,
+            candidates=candidates,
+            failed_districts=(
+                [f"{city}/{district}:{failure_reason}"]
+                if failure_reason
+                else None
+            ),
+            province_filter=province,
+            city_filter=city,
+            district_filter=district,
+            retry_only=bool(args.resume),
+        )
+    discovery_report = discover_candidates(
+        provinces,
+        sources=sources,
+        cities=cities or None,
+        # --limit 是每省安全池下限，不是“来源已耗尽”的上限。只有非饱和
+        # 探针可在达到下限后提前停；--until-saturated 必须让 adapter 自然耗尽。
+        limit=None if args.until_saturated else int(args.limit),
+        out_dir=run_dir / "source-pages",
+        seed_candidates=seed_candidates if args.resume else None,
+        skip_shards=skip_shards if args.resume else None,
+        shard_progress=record_shard_progress if args.until_saturated else None,
+    )
+    unique_counts = discovery_report.get("uniqueCounts") or {}
+    below_minimum = {
+        province: {
+            "required": int(args.limit),
+            "actual": int(unique_counts.get(province) or 0),
+        }
+        for province in provinces
+        if int(unique_counts.get(province) or 0) < int(args.limit)
+    }
+    source_finalization: list[dict[str, object]] = []
+    if args.until_saturated:
+        candidates: list[dict[str, object]] = []
+        for candidate_file in discovery_report.get("files") or []:
+            with Path(str(candidate_file)).open(encoding="utf-8") as fh:
+                candidates.extend(
+                    json.loads(line)
+                    for line in fh
+                    if line.strip()
+                )
+        gaps_by_source: dict[str, list[dict[str, object]]] = {}
+        for gap in discovery_report.get("sourceGaps") or []:
+            gaps_by_source.setdefault(str(gap.get("source") or ""), []).append(gap)
+        for source in sources:
+            if source in incrementally_finalized_sources:
+                continue
+            source_gaps = gaps_by_source.get(source) or []
+            failed_districts = [
+                str(item)
+                for gap in source_gaps
+                for item in (gap.get("failedDistricts") or [])
+            ]
+            non_shard_gap = next(
+                (
+                    str(gap.get("reason") or "source_driver_blocked")
+                    for gap in source_gaps
+                    if not gap.get("failedDistricts")
+                ),
+                None,
+            )
+            source_finalization.append(
+                finalize_discovery_source_cells(
+                    run_dir=run_dir,
+                    source=source,
+                    candidates=candidates,
+                    failed_districts=failed_districts,
+                    blocked_reason=non_shard_gap,
+                )
+            )
+        matrix_report["status"] = coverage_matrix_status(
+            run_dir=run_dir
+        )
+    report = {
+        "schema": "quwoquan_data.coverage_discovery_run",
+        "minimumTarget": int(args.limit),
+        "minimumTargetReached": not below_minimum,
+        "belowMinimum": below_minimum,
+        "untilSaturated": bool(args.until_saturated),
+        "matrix": matrix_report,
+        "discovery": discovery_report,
+        "sourceFinalization": source_finalization,
+    }
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if below_minimum:
+        raise SystemExit(
+            "[governance coverage discover] GATE_BLOCK: 每省唯一候选安全池未达到 --limit；"
+            f"{below_minimum}"
+        )
+    unresolved_source_gaps = [
+        gap
+        for gap in (discovery_report.get("sourceGaps") or [])
+        if str(gap.get("status") or "") != "typed_blocked"
+    ]
+    if unresolved_source_gaps:
+        raise SystemExit(
+            "[governance coverage discover] GATE_BLOCK: 存在未收口或部分失败的来源驱动；"
+            "候选已保留，但不得宣称来源矩阵完成；"
+            f"{unresolved_source_gaps}"
+        )
+    if args.until_saturated:
+        status = matrix_report.get("status") or {}
+        incomplete = {
+            province: province_status
+            for province, province_status in (status.get("provinces") or {}).items()
+            if not bool(province_status.get("allCellsTerminal"))
+        }
+        if incomplete:
+            raise SystemExit(
+                "[governance coverage discover] GATE_BLOCK: --until-saturated 的矩阵仍有"
+                "非终态 cell；资源运行完成不得冒充来源饱和"
+            )
 
 
 def handle_coverage_merge(args: argparse.Namespace) -> None:
@@ -101,6 +253,50 @@ def handle_coverage_merge(args: argparse.Namespace) -> None:
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if args.apply and report.get("writtenFiles"):
         print("[vertical coverage-merge] 已写回，请跑: qwq-data verify coverage-static-identity")
+
+
+def handle_coverage_source_ready(args: argparse.Namespace) -> None:
+    from pathlib import Path
+
+    from governance.coverage.source_readiness import (
+        qualify_source_ready_candidates,
+    )
+
+    provinces = _provinces_arg(args)
+    if not provinces:
+        raise SystemExit(
+            "[governance coverage source-ready] GATE_BLOCK: 需要 --provinces"
+        )
+    candidate_files = [
+        Path(item.strip())
+        for item in str(args.candidates or "").split(",")
+        if item.strip()
+    ]
+    if not candidate_files and not args.include_master_list:
+        raise SystemExit(
+            "[governance coverage source-ready] GATE_BLOCK: "
+            "需要 --candidates 或 --include-master-list"
+        )
+    report = qualify_source_ready_candidates(
+        run_id=str(args.run_id),
+        provinces=provinces,
+        candidate_files=candidate_files,
+        sources=[
+            item.strip()
+            for item in str(args.sources or "").split(",")
+            if item.strip()
+        ],
+        minimum_per_province=int(args.minimum_per_province),
+        include_master_list=bool(args.include_master_list),
+        exhaust_input=bool(args.exhaust_input),
+        resume=bool(args.resume),
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if report.get("decision") != "GO":
+        raise SystemExit(
+            "[governance coverage source-ready] GATE_BLOCK: "
+            f"每省来源就绪下限未满足；{report.get('belowMinimum')}"
+        )
 
 
 def handle_coverage_governance(args: argparse.Namespace) -> None:
@@ -134,7 +330,7 @@ def handle_source_registry(args: argparse.Namespace) -> None:
 
 
 def handle_maturity(args: argparse.Namespace) -> None:
-    reports = [evaluate_registry(v) for v in list_verticals()]
+    reports = [evaluate_vertical_inventory(v) for v in list_verticals()]
     coverage_status = "passed" if reports and all(r["status"] == "passed" for r in reports) else "gap"
     report = evaluate_maturity(
         coverage_status=coverage_status,
@@ -151,7 +347,9 @@ def handle_maturity(args: argparse.Namespace) -> None:
 
 def handle_benchmark(args: argparse.Namespace) -> None:
     targets = [int(x.strip()) for x in (args.targets or "").split(",") if x.strip()]
-    report = evaluate_benchmark(targets or None)
+    if not targets:
+        raise SystemExit("[governance benchmark] GATE_BLOCK --targets is required")
+    report = evaluate_benchmark(targets)
     print(render_benchmark(report))
     if args.report:
         out = write_benchmark_report(report, name=args.report)
@@ -175,6 +373,9 @@ def handle_coverage_command(args: argparse.Namespace) -> None:
         return
     if command == "merge":
         handle_coverage_merge(args)
+        return
+    if command == "source-ready":
+        handle_coverage_source_ready(args)
         return
     if command == "governance":
         handle_coverage_governance(args)
@@ -243,6 +444,37 @@ def register_coverage_parser(subparsers: argparse._SubParsersAction) -> None:
     pcm.add_argument("--apply", action="store_true", help="写回市州 YAML（缺省只出报告）")
     pcm.set_defaults(handler=handle_coverage_merge)
 
+    pcs = sub.add_parser(
+        "source-ready",
+        help="以三百科闭集逐对象预筛来源资格，并按省冻结可恢复证据",
+    )
+    pcs.add_argument("--provinces", required=True, help="省份列表（逗号分隔）")
+    pcs.add_argument("--candidates", help="发现候选 NDJSON 文件列表（逗号分隔）")
+    pcs.add_argument(
+        "--sources",
+        default="wikipedia,toutiao_baike,baidu_baike",
+        help="三百科解析顺序（逗号分隔）",
+    )
+    pcs.add_argument(
+        "--minimum-per-province",
+        type=int,
+        required=True,
+        help="每省必须达到的唯一 source-ready 对象数",
+    )
+    pcs.add_argument("--run-id", required=True, help="可恢复来源预筛运行 ID")
+    pcs.add_argument(
+        "--include-master-list",
+        action="store_true",
+        help="同时纳入仓内省级主清单",
+    )
+    pcs.add_argument(
+        "--exhaust-input",
+        action="store_true",
+        help="处理完全部唯一候选后再按区县×类型轮询冻结",
+    )
+    pcs.add_argument("--resume", action="store_true")
+    pcs.set_defaults(handler=handle_coverage_source_ready)
+
     pg = sub.add_parser("governance", help="校验垂类/任务脚本未在公共 scripts 平铺")
 
     pq = sub.add_parser("quality", help="校验垂类 golden samples 与专项质量门")
@@ -260,8 +492,8 @@ def register_coverage_parser(subparsers: argparse._SubParsersAction) -> None:
     pm.add_argument("--json", action="store_true")
     pm.set_defaults(handler=handle_maturity)
 
-    pb = sub.add_parser("benchmark", help="输出 1k/10k/100k 日产成熟度评估报告")
-    pb.add_argument("--targets", help="逗号分隔日产目标，默认 1000,10000,100000")
+    pb = sub.add_parser("benchmark", help="输出显式请求的日产成熟度评估报告")
+    pb.add_argument("--targets", required=True, help="逗号分隔的运行期日产目标")
     pb.add_argument("--report", help="写入 runtime/benchmarks/<name>.json")
     pb.add_argument("--strict", action="store_true")
     pb.add_argument("--json", action="store_true")

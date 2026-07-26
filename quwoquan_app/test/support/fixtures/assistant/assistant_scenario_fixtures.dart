@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 
+import '../../cloud_services/assistant_facets_mock.dart';
+
 const String assistantScenarioFixtureName =
-    'assistant/test_fixtures/scenarios/assistant_scenarios.json';
+    'quwoquan_service/services/assistant-service/tests/support/contract_fixtures/scenarios/assistant_scenarios.json';
 const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
   'ASSISTANT_SCENARIO_FIXTURE_JSON_B64',
 );
@@ -219,7 +221,7 @@ AppDataSourceMode expectedRepositoryModeForCurrentRuntimeEnv(
   );
 }
 
-class ScenarioMockAssistantRepository extends MockAssistantRepository {
+class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
   ScenarioMockAssistantRepository({required AssistantScenarioPack pack})
     : _scenarios = {
         for (final scenario in pack.assistantTurnScenariosFor('alpha'))
@@ -233,6 +235,7 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
   @override
   Future<AssistantConversationWire> createAssistantConversation({
     String summary = '',
+    required String clientRequestId,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
     return AssistantConversationWire(
@@ -248,9 +251,12 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
   Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
+    required String clientRequestId,
     String turnType = 'user',
     String skillId = '',
     String domainId = '',
+    List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs =
+        const <AssistantIntersectionEvidenceRef>[],
   }) async {
     final scenario = _scenarios[text.trim()] ?? _scenarios.values.first;
     final turnId = 'atn_fixture_${scenario.id}';
@@ -261,8 +267,8 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
       turnType: turnType,
       skillId: skillId.isEmpty ? scenario.skillId : skillId,
       domainId: domainId.isEmpty ? scenario.domainId : domainId,
-      input: <String, dynamic>{'text': text},
-      trigger: const <String, dynamic>{'type': 'user_message'},
+      input: AssistantTurnInputWire(text: text),
+      trigger: const AssistantTurnTriggerWire(type: 'user_message'),
       traceId: 'trace_fixture_${scenario.id}',
       createdAt: DateTime.now().toUtc().toIso8601String(),
     );
@@ -278,102 +284,149 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
     final toolName = scenario.alphaMockStream.toolName.isEmpty
         ? 'mock_search'
         : scenario.alphaMockStream.toolName;
-    final toolUse = ToolUseWire(
-      toolUseId: 'tu_fixture_${scenario.id}',
-      turnId: turnId,
-      toolName: toolName,
-      input: <String, dynamic>{'query': scenario.question},
-      status: 'requested',
-      createdAt: createdAt,
-    );
-    final completedToolUse = ToolUseWire(
-      toolUseId: toolUse.toolUseId,
-      turnId: turnId,
-      toolName: toolName,
-      input: toolUse.input,
-      status: 'completed',
-      result: <String, dynamic>{
-        'provider': 'fixture',
-        'summary': scenario.alphaMockStream.toolSummary,
-        'seedRefs': scenario.seedRefs,
-      },
-      createdAt: createdAt,
-      completedAt: createdAt,
-    );
-
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:assistant.turn.started',
+      eventId: '$turnId:run_started',
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 1,
-      eventType: 'turn_started',
-      payload: const <String, dynamic>{'status': 'running'},
+      eventType: AssistantStreamEventType.runStarted,
+      payload: const <String, dynamic>{'status': 'running', 'restarted': false},
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:assistant.plan.updated',
+      eventId: '$turnId:process_replace',
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 2,
-      eventType: 'plan_updated',
-      payload: <String, dynamic>{
-        'iteration': 1,
-        'skillId': scenario.skillId,
-        'understandingSnapshot': <String, dynamic>{
-          'userFacingSummary': 'fixture：理解「${scenario.question}」的核心关注点。',
-          'retrievalDesignNarrative': 'fixture：说明检索方向与需要核验的外部信息。',
-        },
-      },
+      eventType: AssistantStreamEventType.processReplace,
+      payload: const <String, dynamic>{'processes': <Object?>[]},
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:assistant.tool.requested',
+      eventId: '$turnId:planning',
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 3,
-      eventType: 'tool_use_requested',
-      payload: <String, dynamic>{'toolUse': toolUse.toJson()},
-      createdAt: createdAt,
-    );
-    yield AssistantStreamEventWire(
-      schema: 'assistant_stream_event',
-      eventId: '$turnId:assistant.tool.completed',
-      conversationId: 'acv_fixture_personal_assistant',
-      turnId: turnId,
-      seq: 4,
-      eventType: 'tool_result_received',
-      payload: <String, dynamic>{'toolUse': completedToolUse.toJson()},
-      createdAt: createdAt,
-    );
-    yield AssistantStreamEventWire(
-      schema: 'assistant_stream_event',
-      eventId: '$turnId:assistant.observation.assessed',
-      conversationId: 'acv_fixture_personal_assistant',
-      turnId: turnId,
-      seq: 5,
-      eventType: 'observation_assessed',
+      eventType: AssistantStreamEventType.processAppend,
       payload: <String, dynamic>{
-        'iteration': 1,
-        'skillId': scenario.skillId,
-        'retrievalProcessing': <String, dynamic>{
-          'processingSummary': 'fixture：已从工具结果整理证据叙事。',
-          'selectedKeyPoints': <String>['fixture 要点'],
-          'acceptedReferences': <dynamic>[],
+        'process': <String, dynamic>{
+          'processId': 'planning',
+          'scope': 'root',
+          'stage': 'planning',
+          'status': 'completed',
+          'order': 1,
+          'summary': '已确定需要核对的公开信息。',
+          'skillId': scenario.skillId,
+          'domainId': scenario.domainId,
         },
       },
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:assistant.answer.final',
+      eventId: '$turnId:tool_execution',
+      conversationId: 'acv_fixture_personal_assistant',
+      turnId: turnId,
+      seq: 4,
+      eventType: AssistantStreamEventType.processAppend,
+      payload: <String, dynamic>{
+        'process': <String, dynamic>{
+          'processId': 'tool_execution',
+          'scope': 'skill',
+          'stage': 'tool_execution',
+          'status': 'completed',
+          'order': 2,
+          'summary': scenario.alphaMockStream.toolSummary,
+          'skillId': scenario.skillId,
+          'domainId': scenario.domainId,
+          'toolName': toolName,
+        },
+      },
+      createdAt: createdAt,
+    );
+    yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
+      eventId: '$turnId:evidence_review',
+      conversationId: 'acv_fixture_personal_assistant',
+      turnId: turnId,
+      seq: 5,
+      eventType: AssistantStreamEventType.processCommit,
+      payload: <String, dynamic>{
+        'process': <String, dynamic>{
+          'processId': 'evidence_review',
+          'scope': 'aggregation',
+          'stage': 'evidence_review',
+          'status': 'completed',
+          'order': 3,
+          'summary': '已从已验证的结果整理证据。',
+          'searchedDocumentCount': 1,
+          'processedDocumentCount': 1,
+          'acceptedDocumentCount': 1,
+          'acceptedReferences': <Object?>[],
+        },
+      },
+      createdAt: createdAt,
+    );
+    yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
+      eventId: '$turnId:answer_generation',
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 6,
-      eventType: 'final_answer',
+      eventType: AssistantStreamEventType.processAppend,
+      payload: const <String, dynamic>{
+        'process': <String, dynamic>{
+          'processId': 'answer_generation',
+          'scope': 'root',
+          'stage': 'answer_generation',
+          'status': 'active',
+          'order': 4,
+        },
+      },
+      createdAt: createdAt,
+    );
+    yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
+      eventId: '$turnId:answer_delta',
+      conversationId: 'acv_fixture_personal_assistant',
+      turnId: turnId,
+      seq: 7,
+      eventType: AssistantStreamEventType.answerDelta,
       payload: <String, dynamic>{'text': scenario.alphaMockStream.finalAnswer},
+      createdAt: createdAt,
+    );
+    yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
+      eventId: '$turnId:answer_generation_complete',
+      conversationId: 'acv_fixture_personal_assistant',
+      turnId: turnId,
+      seq: 8,
+      eventType: AssistantStreamEventType.processCommit,
+      payload: const <String, dynamic>{
+        'process': <String, dynamic>{
+          'processId': 'answer_generation',
+          'scope': 'root',
+          'stage': 'answer_generation',
+          'status': 'completed',
+          'order': 4,
+        },
+      },
+      createdAt: createdAt,
+    );
+    yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
+      eventId: '$turnId:completed',
+      conversationId: 'acv_fixture_personal_assistant',
+      turnId: turnId,
+      seq: 9,
+      eventType: AssistantStreamEventType.completed,
+      payload: <String, dynamic>{
+        'status': 'completed',
+        'finalAnswer': scenario.alphaMockStream.finalAnswer,
+      },
       createdAt: createdAt,
     );
   }
@@ -401,11 +454,14 @@ Map<String, dynamic> _loadContractFixtureObject(String metadataRelativePath) {
   return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
 }
 
-File? _tryContractFixtureFile(String metadataRelativePath) {
+File? _tryContractFixtureFile(String repositoryOrMetadataPath) {
+  final suffix = repositoryOrMetadataPath.startsWith('quwoquan_service/')
+      ? repositoryOrMetadataPath
+      : 'quwoquan_service/contracts/metadata/$repositoryOrMetadataPath';
   final candidates = <File>[
-    File('../quwoquan_service/contracts/metadata/$metadataRelativePath'),
-    File('quwoquan_service/contracts/metadata/$metadataRelativePath'),
-    File('../../quwoquan_service/contracts/metadata/$metadataRelativePath'),
+    File('../$suffix'),
+    File(suffix),
+    File('../../$suffix'),
   ];
   for (final candidate in candidates) {
     if (candidate.existsSync()) {

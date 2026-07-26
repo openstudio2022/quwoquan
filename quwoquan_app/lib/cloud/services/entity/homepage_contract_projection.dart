@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_impact_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -263,14 +263,6 @@ Map<String, dynamic>? _reviewSummaryToWire(
     'averageRating': source.averageRating,
     'ratingCount': source.ratingCount,
     'highlightTags': source.highlightTags,
-    'dimensionScores': source.dimensionScores
-        .map(
-          (score) => <String, dynamic>{
-            'label': score.label,
-            'score': score.score,
-          },
-        )
-        .toList(),
   };
 }
 

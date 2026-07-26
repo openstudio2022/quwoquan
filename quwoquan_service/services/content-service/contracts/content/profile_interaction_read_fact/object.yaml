@@ -1,0 +1,37 @@
+kind: append_only_fact
+description: '当前 owner persona 对 received profile activity 的 seen/read 追加事实。
+
+  语义键 ownerPersonaId+activityId+state 唯一，事实不可修改；read 只会推进
+
+  ActivityView 状态，seen 永不清除 read。
+
+  '
+identity:
+  fields:
+  - factId
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: none
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: ownerPersona
+  on_delete: retain
+  reference_fields:
+  - ownerPersonaId
+  target_object: user.Persona
+local_identity_reasons:
+  activityId: immutable projection target identity scoped by ownerPersonaId; it never grants aggregate
+    access
+business_rules:
+- state 只允许 seen/read
+- ownerPersonaId+activityId+state 唯一，重复追加返回首次事实
+- 仅 received activity 的 owner persona 可追加
+- read 投影同时保证 seenAt 非空，seen 不得回退已存在 readAt
+lifecycle:
+  initial: appended
+  terminal: appended

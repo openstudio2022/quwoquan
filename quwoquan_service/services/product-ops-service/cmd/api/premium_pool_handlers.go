@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -128,9 +129,119 @@ func (s *productService) handleRollbackPremiumPool(w http.ResponseWriter, r *htt
 	s.transitionPremiumPoolEntry(w, r, contentID, "rolled_back", "rollback_global_premium", false)
 }
 
+// handleTakedownPremiumPool 是高危处置（把内容从全局精选池弹出并广播事件），
+// 必须由两个不同 principal 对同一 payload digest 双签后才执行。
 func (s *productService) handleTakedownPremiumPool(w http.ResponseWriter, r *http.Request) {
 	contentID := segmentBetween(r.URL.Path, "/control-plane/product/recommendation/premium-pool/", ":takedown")
-	s.transitionPremiumPoolEntry(w, r, contentID, "takedown_ejected", "takedown_eject_global_premium", true)
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idempotencyKey == "" {
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "Idempotency-Key is required")
+		return
+	}
+	id := premiumPoolEntryID(contentID)
+	entry, ok, err := s.getPremiumPoolEntry(id)
+	if err != nil {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		return
+	}
+	if !ok {
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "premium pool entry not found")
+		return
+	}
+	actor := actorFromRequest(r)
+	payloadDigest := dualApprovalPayloadDigest(documentFromStruct(entry), "takedown")
+	approvals, err := s.store.ListApprovals("premium_pool_entry", entry.ID)
+	if err != nil {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		return
+	}
+	if !approvalExistsForIntent(approvals, actor, payloadDigest, "takedown") {
+		if err := s.store.AppendApproval(controlplane.ApprovalDecision{
+			ObjectType:    "premium_pool_entry",
+			ObjectID:      entry.ID,
+			Mode:          "dual",
+			Actor:         actor,
+			Decision:      "takedown",
+			PayloadDigest: payloadDigest,
+		}); err != nil {
+			writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+			return
+		}
+		approvals, err = s.store.ListApprovals("premium_pool_entry", entry.ID)
+		if err != nil {
+			writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+			return
+		}
+	}
+	if !dualApprovalSatisfied(approvals, payloadDigest, "takedown") {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"entry":          entry,
+			"approvalCount":  countMatchingApprovals(approvals, payloadDigest, "takedown"),
+			"pending":        true,
+			"approvalState":  "pending_second_principal",
+			"payloadDigest":  payloadDigest,
+			"approverActors": distinctMatchingApprovalActors(approvals, payloadDigest, "takedown"),
+		})
+		return
+	}
+	before := documentFromStruct(entry)
+	entry.Status = "takedown_ejected"
+	entry.TakedownEjected = true
+	entry.UpdatedAt = nowRFC3339()
+	workflow := premiumPoolWorkflow(entry, entry.Status)
+	atomicStore, ok := s.store.(controlplane.AtomicMutationStore)
+	if !ok {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", "atomic mutation store is required")
+		return
+	}
+	receipt, err := atomicStore.CommitApprovedMutation(controlplane.ApprovedMutation{
+		Namespace:        premiumPoolNamespace,
+		ObjectType:       "premium_pool_entry",
+		ObjectID:         entry.ID,
+		Intent:           "takedown",
+		ApprovalDecision: "takedown",
+		PayloadDigest:    payloadDigest,
+		IdempotencyKey:   idempotencyKey,
+		Document:         documentFromStruct(entry),
+		Workflow:         workflow,
+		Audit: controlplane.AuditEvent{
+			AuditID:       "takedown_eject_global_premium_" + entry.ID + "_" + payloadDigest[:12],
+			ObjectType:    "premium_pool_entry",
+			ObjectID:      entry.ID,
+			Action:        "takedown_eject_global_premium",
+			DangerLevel:   "critical",
+			Actor:         actor,
+			Environment:   environmentFromRequest(r),
+			RequestID:     requestIDFromRequest(r),
+			TraceID:       traceIDFromRequest(r),
+			WorkflowRef:   workflow.WorkflowID,
+			RollbackToken: entry.RollbackToken,
+			Before:        before,
+			After:         documentFromStruct(entry),
+		},
+		OutboxEvents: []controlplane.MutationOutboxEvent{{
+			EventID:       "premium_pool_takedown_" + payloadDigest[:32],
+			EventType:     premiumPoolEntryTakedownEjectedEvent,
+			AggregateType: "PremiumPoolEntry",
+			AggregateID:   entry.ID,
+			Payload:       documentFromStruct(entry),
+			OccurredAt:    entry.UpdatedAt,
+		}},
+	})
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, controlplane.ErrMutationIdempotencyConflict) ||
+			errors.Is(err, controlplane.ErrDualApprovalRequired) {
+			status = http.StatusConflict
+		}
+		writeRuntimeError(w, r, status, "请求处理失败", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"entry":   entry,
+		"pending": false,
+		"receipt": receipt,
+	})
 }
 
 func (s *productService) transitionPremiumPoolEntry(w http.ResponseWriter, r *http.Request, contentID, status, action string, takedown bool) {

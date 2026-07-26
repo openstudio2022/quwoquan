@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/create_page_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/article_reader/hosts/article_editor_reader_adapter.dart';
 import 'package:quwoquan_app/ui/content/article_reader/hosts/article_reader_host_adapter.dart';
@@ -270,7 +271,7 @@ class _ArticleTypographyPageState extends ConsumerState<ArticleTypographyPage> {
                   borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
                   onPressed: () => Navigator.of(context).pop(true),
                   child: const Text(
-                    '下一步',
+                    CreatePageText.nextStep,
                     style: TextStyle(
                       color: AppColors.white,
                       fontSize: AppTypography.base,
@@ -342,7 +343,7 @@ class _ArticleTypographyPageState extends ConsumerState<ArticleTypographyPage> {
                   ),
                   SizedBox(width: AppSpacing.containerLg),
                   _buildTabItem(
-                    label: '纸张',
+                    label: CreatePageText.paper,
                     selected: _tab == _TypographyTab.paper,
                     labelColor: fg,
                     secondaryColor: fgSecondary,
@@ -350,7 +351,7 @@ class _ArticleTypographyPageState extends ConsumerState<ArticleTypographyPage> {
                   ),
                   SizedBox(width: AppSpacing.containerLg),
                   _buildTabItem(
-                    label: '字体',
+                    label: CreatePageText.font,
                     selected: _tab == _TypographyTab.font,
                     labelColor: fg,
                     secondaryColor: fgSecondary,

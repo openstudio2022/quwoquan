@@ -53,4 +53,55 @@ void main() {
 
     expect(AppMessageNavigationTarget.fromMessage(message), isNull);
   });
+
+  test('Report result notification returns to private report progress', () {
+    final message = AppMessage(
+      messageId: 'msg_report',
+      userId: 'user_1',
+      messageType: 'content',
+      source: 'report_result',
+      sourceId: 'report_1',
+      destination: const AppMessageDestination(type: 'user', id: 'user_1'),
+      title: '举报处理完成',
+      summary: '你提交的举报已处理',
+      target: const AppMessageTarget(
+        targetType: 'report',
+        targetId: 'report_1',
+      ),
+      read: false,
+      createdAt: DateTime.utc(2026, 7, 20),
+    );
+
+    expect(
+      AppMessageNavigationTarget.fromMessage(message)?.location,
+      AppRoutePaths.myReports,
+    );
+  });
+
+  test('Homepage governance result returns to canonical homepage detail', () {
+    final message = AppMessage(
+      messageId: 'msg_homepage',
+      userId: 'persona_1',
+      messageType: 'entity',
+      source: 'homepage_claim_result',
+      sourceId: 'claim_1',
+      destination: const AppMessageDestination(
+        type: 'user',
+        id: 'persona_1',
+      ),
+      title: '主页认领审核完成',
+      summary: '你的主页认领申请已通过',
+      target: const AppMessageTarget(
+        targetType: 'homepage',
+        targetId: 'homepage_1',
+      ),
+      read: false,
+      createdAt: DateTime.utc(2026, 7, 20),
+    );
+
+    expect(
+      AppMessageNavigationTarget.fromMessage(message)?.location,
+      AppRoutePaths.homepageDetail(id: 'homepage_1'),
+    );
+  });
 }

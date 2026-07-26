@@ -4,12 +4,13 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/media/local_video_file_readiness.dart';
+import 'package:quwoquan_app/core/platform/ios_video_editing_bridge.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/components/media/shared/media_creation_bottom_button.dart';
-import 'package:quwoquan_app/ui/content/entry/services/ios_video_editing_service.dart';
 import 'package:video_player/video_player.dart';
 part 'video_editor_page_state.dart';
 part 'video_editor_page_state_cover.dart';

@@ -1,6 +1,0 @@
-entity: MediaOriginalAccessFact
-tests:
-  - name: original_media_access_append_outbox_and_replay
-    operation: RequestOriginalImageAccess
-    go_func: TestRequestOriginalImageAccessContract
-    command: RequestOriginalImageAccess

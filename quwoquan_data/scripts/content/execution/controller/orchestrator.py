@@ -1,8 +1,14 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
+import os
 import traceback
 
 from core.control_types import ExecutionStage, ExecutionStateStatus, StageStatus
+from core.runtime_observability import (
+    DataRuntimeLogResource,
+    DataRuntimeLogger,
+    default_data_exception_code,
+)
 from content.execution.support import CHECKPOINT, DataIssueCode, DataIssueError, DataIssueStage, DataRecoveryAction, ExecutionContext, MAX_REACT_REWINDS, StageResult, _active_spec, _write_execution_packet, data_issue, ensure_execution_command_layout, load_execution_state, save_execution_state, store, sys
 
 
@@ -26,6 +32,61 @@ def _unexpected_stage_issue(stage_name: str, exc: Exception):
         },
     )
 
+def _execution_runtime_logger(ctx: ExecutionContext) -> DataRuntimeLogger:
+    from core.paths import OUTPUT_ROOT
+    from quwoquan_ops.cli.lib.observability import write_run_manifest
+
+    environment = os.environ.get("APP_ENV", "alpha").strip() or "alpha"
+    observability_root = (
+        OUTPUT_ROOT / "env" / "repo" / "observability" / ctx.execution_id
+    )
+    write_run_manifest(
+        observability_root,
+        env_name="repo",
+        run_id=ctx.execution_id,
+        command="task execute",
+        target=ctx.execution_id,
+        report_dir=OUTPUT_ROOT / "data" / "tasks" / ctx.execution_id,
+    )
+    return DataRuntimeLogger(
+        observability_root / "logs" / "data" / "runtime.log",
+        resource=DataRuntimeLogResource(
+            environment=environment,
+            component="execution-controller",
+        ),
+        execution_id=ctx.execution_id,
+    )
+
+
+def _record_stage_runtime(
+    logger: DataRuntimeLogger,
+    *,
+    stage_name: str,
+    kind: str,
+    result: StageResult,
+) -> None:
+    attributes = {
+        "stage": stage_name,
+        "outcome": str(result.status),
+        "gate": kind,
+    }
+    try:
+        logger.runtime(
+            event=stage_name,
+            result=str(result.status),
+            message="data execution stage completed",
+            attributes=attributes,
+        )
+        if result.status is StageStatus.FAILED:
+            logger.exception(
+                error_code=default_data_exception_code(),
+                message="data execution stage failed",
+                failure_point=stage_name,
+                attributes=attributes,
+            )
+    except OSError as exc:
+        print(f"[task execute] runtime diagnostic write failed: {exc}", file=sys.stderr)
+
 
 def run_controller(ctx: ExecutionContext) -> int:
     """按 DAG 顺序执行；遇 waiting checkpoint 停（10），failed 走 ReAct 回退或停（1）。"""
@@ -35,6 +96,16 @@ def run_controller(ctx: ExecutionContext) -> int:
     from content.execution.controller.control import _completed_until_revalidation, _managed_checkpoint_interruption_is_resumable, _mark_execution_interrupted, _react_rewind, _recover_stale_agent_scheduler, _recover_stale_auto_research, _rewind_to, _stage_exception_fallback, _stop_at_until
     if ctx.baseline_packet is None or ctx.baseline_packet_path is None:
         raise RuntimeError("execution run requires baseline freeze packet")
+    runtime_logger = _execution_runtime_logger(ctx)
+    try:
+        runtime_logger.runtime(
+            event="execution_started",
+            result="started",
+            message="data execution controller started",
+            attributes={"stage": "execution", "outcome": "started", "gate": "controller"},
+        )
+    except OSError as exc:
+        print(f"[task execute] runtime diagnostic write failed: {exc}", file=sys.stderr)
     state = load_execution_state(ctx.execution_id)
     if _recover_stale_agent_scheduler(ctx, state):
         state = load_execution_state(ctx.execution_id)
@@ -143,6 +214,12 @@ def run_controller(ctx: ExecutionContext) -> int:
             # loop records stage status; otherwise an older in-memory copy can
             # silently erase object-level fast-fail decisions.
             state = load_execution_state(ctx.execution_id)
+            _record_stage_runtime(
+                runtime_logger,
+                stage_name=stage_name,
+                kind=kind,
+                result=result,
+            )
             if result.status is StageStatus.WAITING:
                 controller_yield = result.controller_yield
                 state.completed = sorted(completed)

@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_input_overlay.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
@@ -61,6 +62,41 @@ void main() {
       expect(container.read(authContinuationProvider), isNull);
       expect(controller.take<SubmitCommentContinuation>(), isNull);
     });
+
+    test('B2 页面动作续接保持强类型目标', () {
+      const report = SubmitContentReportContinuation(
+        postId: 'post-report',
+        surface: ContentReportContinuationSurface.workBrowser,
+        reason: ContentReportReason.spam,
+      );
+      const original = RequestOriginalImageAccessContinuation(
+        postId: 'post-image',
+        mediaId: 'media-original',
+        imageIndex: 2,
+      );
+      const share = ShareContentContinuation(
+        postId: 'post-share',
+        target: ContentShareContinuationTarget.groupChat,
+      );
+      const create = ResumeCreateActionContinuation(
+        action: CreateActionContinuationKind.pickImages,
+        closeWhenEmptyOnCancel: true,
+      );
+      const moderation = ContentModerationContinuation(
+        postId: 'post-block',
+        surface: ContentModerationContinuationSurface.homeFeed,
+        action: ContentModerationContinuationAction.blockKeyword,
+        keyword: '重复营销',
+      );
+
+      expect(report.surface, ContentReportContinuationSurface.workBrowser);
+      expect(report.reason, ContentReportReason.spam);
+      expect(original.mediaId, 'media-original');
+      expect(share.target, ContentShareContinuationTarget.groupChat);
+      expect(create.action, CreateActionContinuationKind.pickImages);
+      expect(create.closeWhenEmptyOnCancel, isTrue);
+      expect(moderation.keyword, '重复营销');
+    });
   });
 
   group('评论统一输入浮层登录续接', () {
@@ -86,6 +122,7 @@ void main() {
                     onPressed: () => CommentInputOverlay.show(
                       context,
                       postId: 'post-1',
+                      sourceSurface: AppUiSurfaces.homeFeed,
                       onSubmit: submitted.add,
                     ),
                     child: const Text('open-input'),
@@ -96,8 +133,10 @@ void main() {
           ),
           GoRoute(
             path: '/login',
-            builder: (context, state) =>
-                const Scaffold(body: Center(child: Text('LOGIN_PLACEHOLDER'))),
+            builder: (context, state) => const Scaffold(
+              key: ValueKey<String>('login-route-sentinel'),
+              body: Center(child: Text('LOGIN_PLACEHOLDER')),
+            ),
           ),
         ],
       );
@@ -134,11 +173,20 @@ void main() {
         container.read(authContinuationProvider),
         isA<SubmitCommentContinuation>(),
       );
+      expect(
+        GoRouterState.of(
+          tester.element(
+            find.byKey(const ValueKey<String>('login-route-sentinel')),
+          ),
+        ).uri.queryParameters[loginGuestDismissPopQueryParam],
+        LoginDismissPolicy.safeFallback.name,
+      );
 
-      // 模拟登录成功：浮层仍在栈上并监听登录态翻转，自动续提原文本。
+      // 模拟真实登录成功：会话先翻转，登录页再 pop，原浮层回到前台后续提。
       (container.read(authSessionControllerProvider.notifier)
               as _FlippableSession)
           .loginNow();
+      router.pop();
       await tester.pumpAndSettle();
 
       expect(submitted.length, 1);

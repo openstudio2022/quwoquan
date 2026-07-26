@@ -1,0 +1,136 @@
+read_model: AuthorImpactItem
+description: "创作者影响力单条事实（「TA的影响 / 我的影响力」模块行真相源）。\n云侧按 helpType + action + intersectionDimension 反向聚合真实动作计数，\n\
+  并产出 primaryText 结论句（如「读者林清越等23人加入了「AI 产品圈」」\n「联系人周屿等7人读完了《川西雪山和校园摄影路线》」；作者本人视角仍使用同一可点击 typed object），\n\
+  端只读直出，禁止本地拼装文案（全局验收 G2）；subtitleText 为影响来源摘要\n（如「来自 AI 产品圈、摄影爱好者圈」），端只读直出；禁止下发转化率/漏斗/增长率等运营指标。\n与 IntersectionReason\
+  \ 单通道对齐，禁止保留 displayText 第二文案字段。\n\n闭集枚举（端按字符串解析）：\n  helpType: relationship | community | decision\
+  \ | knowledge | spread\n"
+consumers:
+- app
+client_projection:
+  dart_class: AuthorImpactItem
+  strict: true
+  base_class: ''
+  output_path: cloud/runtime/generated/content/author_impact_item.g.dart
+  dart_imports:
+  - ../recommendation/intersection_text_span.g.dart
+  - ../recommendation/intersection_visual.g.dart
+  - ../recommendation/intersection_target.g.dart
+  - ../recommendation/intersection_propagation_path.g.dart
+  - ../recommendation/intersection_representative_actor.g.dart
+  - ../recommendation/intersection_action_hint.g.dart
+  fields:
+  - name: helpType
+    dart_type: String
+    nullable: false
+    source: helpType
+    default: ''''''
+  - name: action
+    dart_type: String
+    nullable: false
+    source: action
+    default: ''''''
+  - name: intersectionDimension
+    dart_type: String
+    nullable: false
+    source: intersectionDimension
+    default: ''''''
+  - name: tagRef
+    dart_type: String
+    nullable: false
+    source: tagRef
+    default: ''''''
+  - name: source
+    dart_type: String
+    nullable: false
+    source: source
+    default: ''''''
+  - name: count
+    dart_type: int
+    nullable: false
+    source: count
+    default: '0'
+  - name: primaryText
+    dart_type: String
+    nullable: false
+    source: primaryText
+    default: ''''''
+  - name: subtitleText
+    dart_type: String
+    nullable: false
+    source: subtitleText
+    default: ''''''
+  - name: impactId
+    dart_type: String
+    nullable: false
+    source: impactId
+    default: ''''''
+  - name: primarySpans
+    dart_type: List<IntersectionTextSpan>
+    nullable: false
+    source: primarySpans
+    list_element_dart_class: IntersectionTextSpan
+  - name: sampleVisuals
+    dart_type: List<IntersectionVisual>
+    nullable: false
+    source: sampleVisuals
+    list_element_dart_class: IntersectionVisual
+  - name: representativeActor
+    dart_type: IntersectionRepresentativeActor
+    nullable: true
+    source: representativeActor
+    map_from_string_key_class: IntersectionRepresentativeActor
+  - name: actionHints
+    dart_type: List<IntersectionActionHint>
+    nullable: false
+    source: actionHints
+    list_element_dart_class: IntersectionActionHint
+  - name: countTarget
+    dart_type: IntersectionTarget
+    nullable: true
+    source: countTarget
+    map_from_string_key_class: IntersectionTarget
+  - name: evidenceSnapshotId
+    dart_type: String
+    nullable: false
+    source: evidenceSnapshotId
+    default: ''''''
+  - name: countObjectKind
+    dart_type: String
+    nullable: false
+    source: countObjectKind
+    default: ''''''
+  - name: propagationPath
+    dart_type: IntersectionPropagationPath
+    nullable: true
+    source: propagationPath
+    map_from_string_key_class: IntersectionPropagationPath
+  - name: iconKey
+    dart_type: String
+    nullable: false
+    source: iconKey
+    default: ''''''
+  - name: freshAt
+    dart_type: String
+    nullable: false
+    source: freshAt
+    default: ''''''
+  - name: timeBucket
+    dart_type: String
+    nullable: false
+    source: timeBucket
+    default: ''''''
+  - name: lifecycleState
+    dart_type: String
+    nullable: false
+    source: lifecycleState
+    default: ''''''
+  - name: previousStrength
+    dart_type: double
+    nullable: false
+    source: previousStrength
+    default: '0.0'
+  - name: strengthDelta
+    dart_type: double
+    nullable: false
+    source: strengthDelta
+    default: '0.0'

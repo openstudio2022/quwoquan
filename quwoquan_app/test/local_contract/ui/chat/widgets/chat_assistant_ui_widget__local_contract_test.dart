@@ -42,42 +42,27 @@ void main() {
       expect(find.bySemanticsLabel('转发'), findsOneWidget);
     });
 
-    testWidgets('feedbackStatus=helpful 时有帮助图标为填充态', (tester) async {
-      await tester.pumpWidget(_wrapToolbar(feedbackStatus: 'helpful'));
+    testWidgets('feedbackStatus=useful 时有帮助图标为填充态', (tester) async {
+      await tester.pumpWidget(_wrapToolbar(feedbackStatus: 'useful'));
       await tester.pump();
 
-      expect(
-        find.byIcon(CupertinoIcons.hand_thumbsup_fill),
-        findsOneWidget,
-      );
-      expect(
-        find.byIcon(CupertinoIcons.hand_thumbsdown),
-        findsOneWidget,
-      );
+      expect(find.byIcon(CupertinoIcons.hand_thumbsup_fill), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.hand_thumbsdown), findsOneWidget);
     });
 
-    testWidgets('feedbackStatus=unhelpful 时没帮助图标为填充态', (tester) async {
-      await tester.pumpWidget(_wrapToolbar(feedbackStatus: 'unhelpful'));
+    testWidgets('feedbackStatus=irrelevant 时没帮助图标为填充态', (tester) async {
+      await tester.pumpWidget(_wrapToolbar(feedbackStatus: 'irrelevant'));
       await tester.pump();
 
-      expect(
-        find.byIcon(CupertinoIcons.hand_thumbsdown_fill),
-        findsOneWidget,
-      );
-      expect(
-        find.byIcon(CupertinoIcons.hand_thumbsup),
-        findsOneWidget,
-      );
+      expect(find.byIcon(CupertinoIcons.hand_thumbsdown_fill), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.hand_thumbsup), findsOneWidget);
     });
 
     testWidgets('重新生成按钮渲染', (tester) async {
       await tester.pumpWidget(_wrapToolbar());
       await tester.pump();
 
-      expect(
-        find.byIcon(CupertinoIcons.arrow_2_circlepath),
-        findsOneWidget,
-      );
+      expect(find.byIcon(CupertinoIcons.arrow_2_circlepath), findsOneWidget);
     });
   });
 
@@ -87,9 +72,9 @@ void main() {
   group('AssistantAnswerToolbar — 交互契约', () {
     testWidgets('tap 有帮助按钮触发回调', (tester) async {
       var called = false;
-      await tester.pumpWidget(_wrapToolbar(
-        onFeedbackHelpful: () => called = true,
-      ));
+      await tester.pumpWidget(
+        _wrapToolbar(onFeedbackHelpful: () => called = true),
+      );
       await tester.pump();
 
       await tester.tap(find.bySemanticsLabel('有帮助'));
@@ -100,9 +85,9 @@ void main() {
 
     testWidgets('tap 没帮助按钮触发回调', (tester) async {
       var called = false;
-      await tester.pumpWidget(_wrapToolbar(
-        onFeedbackUnhelpful: () => called = true,
-      ));
+      await tester.pumpWidget(
+        _wrapToolbar(onFeedbackUnhelpful: () => called = true),
+      );
       await tester.pump();
 
       await tester.tap(find.bySemanticsLabel('没帮助'));
@@ -113,9 +98,7 @@ void main() {
 
     testWidgets('tap 复制按钮触发回调', (tester) async {
       var called = false;
-      await tester.pumpWidget(_wrapToolbar(
-        onCopyAnswer: () => called = true,
-      ));
+      await tester.pumpWidget(_wrapToolbar(onCopyAnswer: () => called = true));
       await tester.pump();
 
       await tester.tap(find.bySemanticsLabel('复制'));
@@ -126,9 +109,7 @@ void main() {
 
     testWidgets('tap 转发按钮触发回调', (tester) async {
       var called = false;
-      await tester.pumpWidget(_wrapToolbar(
-        onShareAnswer: () => called = true,
-      ));
+      await tester.pumpWidget(_wrapToolbar(onShareAnswer: () => called = true));
       await tester.pump();
 
       await tester.tap(find.bySemanticsLabel('转发'));
@@ -143,13 +124,15 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('AssistantAnswerToolbar — 错误态渲染', () {
     testWidgets('null 回调安全渲染', (tester) async {
-      await tester.pumpWidget(_wrapToolbar(
-        onFeedbackHelpful: null,
-        onFeedbackUnhelpful: null,
-        onCopyAnswer: null,
-        onShareAnswer: null,
-        onRegenerateSelected: null,
-      ));
+      await tester.pumpWidget(
+        _wrapToolbar(
+          onFeedbackHelpful: null,
+          onFeedbackUnhelpful: null,
+          onCopyAnswer: null,
+          onShareAnswer: null,
+          onRegenerateSelected: null,
+        ),
+      );
       await tester.pump();
 
       expect(find.byType(AssistantAnswerToolbar), findsOneWidget);
@@ -170,14 +153,8 @@ void main() {
       await tester.pump();
 
       expect(find.byType(AssistantAnswerToolbar), findsOneWidget);
-      expect(
-        find.byIcon(CupertinoIcons.hand_thumbsup),
-        findsOneWidget,
-      );
-      expect(
-        find.byIcon(CupertinoIcons.hand_thumbsdown),
-        findsOneWidget,
-      );
+      expect(find.byIcon(CupertinoIcons.hand_thumbsup), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.hand_thumbsdown), findsOneWidget);
     });
 
     testWidgets('未知 feedbackStatus 安全渲染', (tester) async {

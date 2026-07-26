@@ -105,7 +105,7 @@ categories:
     verticals: [travel]
     description: 央媒、地方权威媒体、国际组织或行业机构公开页面，仅作事实参考和背景校验，不作为可改编底稿。
     evidenceFocus: [fact, background]
-    examplePlatforms: [权威媒体, 人民网, 新华网, 央视网, 中国新闻网, 四川在线, 光明网, UNESCO]
+    examplePlatforms: [权威媒体, 人民网, 新华网, 央视网, 中国新闻网, 地方新闻网, 光明网, UNESCO]
   - id: school_official
     label: 学校官方
     verticals: [campus]

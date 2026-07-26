@@ -1,18 +1,17 @@
 package graph_test
 
 import (
-	"path/filepath"
-	"slices"
 	"testing"
 
 	"quwoquan_service/internal/metadata/graph"
 	"quwoquan_service/internal/metadata/load"
+	"quwoquan_service/internal/testsupport/contractsview"
 )
 
-func TestProfileUpdateProposalReadinessIsDerivedAndFailsClosed(t *testing.T) {
+func TestProfileUpdateProposalReadinessHasNoManualEvidenceDeclaration(t *testing.T) {
 	t.Parallel()
 
-	metadataDir := filepath.Join("..", "..", "..", "contracts", "metadata")
+	metadataDir := contractsview.Build(t)
 	catalog, err := load.Load(metadataDir)
 	if err != nil {
 		t.Fatalf("load metadata: %v", err)
@@ -29,30 +28,16 @@ func TestProfileUpdateProposalReadinessIsDerivedAndFailsClosed(t *testing.T) {
 	if got == nil {
 		t.Fatal("ProfileUpdateProposal derived readiness is missing")
 	}
-	if !got.Modeled || !got.ContractReady || !got.Implemented {
-		t.Fatalf("readiness=%+v, want implemented object packet", *got)
+	if !got.Modeled || !got.ContractReady {
+		t.Fatalf("readiness=%+v, want modeled contract-ready object", *got)
 	}
-	if got.CommercialReady || got.Stage != "implemented" {
-		t.Fatalf("readiness=%+v, must remain fail-closed before UAT and four environments", *got)
+	if got.Implemented || got.CommercialReady || got.Stage != "contract-ready" {
+		t.Fatalf("readiness=%+v, runtime evidence must stay external to metadata", *got)
 	}
-	for _, missing := range []string{
-		"commercial.user_acceptance",
-		"commercial.environment.alpha",
-		"commercial.environment.beta",
-		"commercial.environment.gamma",
-		"commercial.environment.prod",
-	} {
-		if !slices.Contains(got.Missing, missing) {
-			t.Fatalf("readiness missing=%v, want %s", got.Missing, missing)
-		}
+	if len(got.Missing) != 1 || got.Missing[0] != "readiness.evidence" {
+		t.Fatalf("readiness missing=%v, want derived runner evidence only", got.Missing)
 	}
-
-	if len(contractGraph.ReadinessEvidence) != 1 {
-		t.Fatalf("readiness evidence packets=%d, want 1", len(contractGraph.ReadinessEvidence))
-	}
-	for _, artifact := range contractGraph.ReadinessEvidence[0].LocalContract {
-		if len(artifact.SHA256) != 64 {
-			t.Fatalf("artifact %s digest=%q, want derived SHA256", artifact.Path, artifact.SHA256)
-		}
+	if len(contractGraph.ReadinessEvidence) != 0 {
+		t.Fatalf("metadata must not carry manual readiness evidence: %+v", contractGraph.ReadinessEvidence)
 	}
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 
 const String kHslAxisHue = 'hue';
 const String kHslAxisSaturation = 'saturation';
@@ -89,22 +90,16 @@ const List<ImageEditorHslChannel> kImageEditorHslChannels = [
 ];
 
 Map<String, Map<String, double>> createDefaultHslValues() => {
-      for (final channel in kImageEditorHslChannels)
-        channel.key: {
-          kHslAxisHue: 0,
-          kHslAxisSaturation: 0,
-          kHslAxisLuminance: 0,
-        },
-    };
+  for (final channel in kImageEditorHslChannels)
+    channel.key: {kHslAxisHue: 0, kHslAxisSaturation: 0, kHslAxisLuminance: 0},
+};
 
 Map<String, Map<String, double>> cloneHslValues(
   Map<String, Map<String, double>> source,
 ) {
   return {
     for (final entry in source.entries)
-      entry.key: {
-        for (final axis in entry.value.entries) axis.key: axis.value,
-      },
+      entry.key: {for (final axis in entry.value.entries) axis.key: axis.value},
   };
 }
 

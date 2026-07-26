@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
+import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_viewer_modal.dart';
 
@@ -100,6 +101,73 @@ void main() {
     expect(find.byType(AppSectionErrorState), findsOneWidget);
   });
 
+  testWidgets('Comment provider 不跨会话容器复用静态快照', (tester) async {
+    const postId = 'post-session-isolation';
+    final firstComments = TestContentCommentFacet(
+      items: <ContentCommentListItem>[
+        testCommentItem(
+          id: 'first-session-comment',
+          postId: postId,
+          content: '前一会话的评论',
+        ),
+      ],
+    );
+    final firstContainer = ProviderContainer(
+      overrides: [
+        workBrowserContentCommentFacetProvider.overrideWithValue(firstComments),
+        commentRemoteConfigProvider.overrideWithValue(
+          const CommentRemoteConfig(),
+        ),
+      ],
+    );
+    final firstListener = firstContainer.listen(
+      commentProviderFamily(postId),
+      (_, _) {},
+    );
+    await firstContainer
+        .read(commentProviderFamily(postId).notifier)
+        .loadComments();
+    expect(
+      firstContainer
+          .read(commentProviderFamily(postId))
+          .comments
+          .single
+          .content,
+      '前一会话的评论',
+    );
+    firstListener.close();
+    firstContainer.dispose();
+    await tester.pump();
+
+    final secondComments = TestContentCommentFacet(
+      items: <ContentCommentListItem>[
+        testCommentItem(
+          id: 'second-session-comment',
+          postId: postId,
+          content: '当前会话的评论',
+        ),
+      ],
+    );
+    final secondContainer = ProviderContainer(
+      overrides: [
+        workBrowserContentCommentFacetProvider.overrideWithValue(
+          secondComments,
+        ),
+        commentRemoteConfigProvider.overrideWithValue(
+          const CommentRemoteConfig(),
+        ),
+      ],
+    );
+
+    expect(
+      secondContainer.read(commentProviderFamily(postId)).comments,
+      isEmpty,
+      reason: '新的会话必须从 Remote 权威投影加载，不能复用上一会话的 Comment 快照',
+    );
+    secondContainer.dispose();
+    await tester.pump();
+  });
+
   testWidgets('点赞经 typed reaction command 并用结果更新页态', (tester) async {
     final comments = TestContentCommentFacet(
       items: <ContentCommentListItem>[
@@ -140,7 +208,7 @@ void main() {
     testCommentReactionThreeStateWidget,
   );
 
-  testWidgets('置顶操作携带当前 aggregate version', (tester) async {
+  testWidgets('置顶操作经 typed 命名命令执行', (tester) async {
     final comments = TestContentCommentFacet(
       items: <ContentCommentListItem>[
         testCommentItem(
@@ -168,6 +236,62 @@ void main() {
     expect(comments.lastPinCommand?.postId, 'post-pin');
     expect(comments.lastPinCommand?.commentId, 'comment-pin');
     await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('热门最新与评论动作具备 44pt 语义，窄屏大字体 badge 不溢出', (tester) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final comments = TestContentCommentFacet(
+      items: <ContentCommentListItem>[
+        testCommentItem(
+          id: 'comment-accessibility',
+          postId: 'post-accessibility',
+          authorDisplayNameSnapshot: '一位拥有很长昵称的评论作者',
+          content: '窄屏和动态字体下仍然完整显示的评论正文',
+          isPinned: true,
+          isAuthor: true,
+          authorLiked: true,
+          authorIpLocation: '新疆维吾尔自治区',
+          viewerRelation: ContentCommentViewerRelation.friend,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _app(
+        comments,
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: const CommentThreadView(postId: 'post-accessibility'),
+        ),
+        authenticated: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final hot = find.bySemanticsLabel(UITextConstants.commentSortHot).first;
+    final latest = find
+        .bySemanticsLabel(UITextConstants.commentSortLatest)
+        .first;
+    expect(tester.getSize(hot).height, greaterThanOrEqualTo(44));
+    expect(tester.getSize(latest).height, greaterThanOrEqualTo(44));
+    expect(
+      tester.getSemantics(hot).flagsCollection.isSelected.toBoolOrNull(),
+      isTrue,
+    );
+    expect(
+      find.bySemanticsLabel(UITextConstants.commentMoreActions),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.commentPinnedBadge), findsOneWidget);
+    expect(find.text(UITextConstants.commentAuthorLikedBadge), findsOneWidget);
+    expect(
+      find.text(UITextConstants.commentRelationFriendBadge),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 }
 

@@ -24,7 +24,7 @@ from verify.verify_directory_evidence_chain import scan_execution, scan_executio
 
 
 def _execution_id(sequence: int) -> str:
-    return f"20260711--travel-homepage-layout--cn-zhejiang--canary-{sequence:03d}"
+    return f"20260711--travel-homepage-layout--test-region-a--pilot-{sequence:03d}"
 
 
 def _seed_execution(sequence: int) -> tuple[str, Path]:

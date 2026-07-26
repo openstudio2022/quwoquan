@@ -27,6 +27,7 @@ from content.homepage.homepage_text import _homepage_source_priority  # noqa: E4
 from content.source.research.homepage_source_policy import _homepage_can_seed_base_draft  # noqa: E402
 from content.source.source_inputs import content_type_for_lane  # noqa: E402
 from core.carrier_contract import CARRIER_LANES  # noqa: E402
+from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
 def test_article_video_detection_positive_and_negative():
@@ -49,7 +50,7 @@ def test_homepage_primary_source_three_encyclopedia_closed_set():
     encyclopedia_priorities = []
     for meta in (
         {"researchLane": "homepage", "sourceKind": "wikipedia", "extractor": "wikipedia_api", "canonicalUrl": "https://zh.wikipedia.org/wiki/西湖", "policyRevision": "encyclopedia-primary"},
-        {"researchLane": "homepage", "sourceKind": "baidu_baike", "extractor": "baidu_baike_openapi", "canonicalUrl": "https://baike.baidu.com/item/西湖", "policyRevision": "encyclopedia-primary"},
+        {"researchLane": "homepage", "sourceKind": "baidu_baike", "extractor": "baidu_baike_html", "canonicalUrl": "https://baike.baidu.com/item/西湖", "policyRevision": "encyclopedia-primary"},
         {"researchLane": "homepage", "sourceKind": "toutiao_baike", "extractor": "toutiao_baike_html", "canonicalUrl": "https://www.baike.com/wiki/西湖", "policyRevision": "encyclopedia-primary"},
     ):
         priority = _homepage_source_priority(meta)
@@ -71,7 +72,7 @@ def test_homepage_primary_source_three_encyclopedia_closed_set():
 def test_homepage_base_draft_seed_three_encyclopedia_closed_set():
     identities = [
         ("wikipedia", "wikipedia_api", "https://zh.wikipedia.org/wiki/西湖"),
-        ("baidu_baike", "baidu_baike_openapi", "https://baike.baidu.com/item/西湖"),
+        ("baidu_baike", "baidu_baike_html", "https://baike.baidu.com/item/西湖"),
         ("toutiao_baike", "toutiao_baike_html", "https://www.baike.com/wiki/西湖"),
     ]
     for source_kind, extractor, url in identities:
@@ -106,7 +107,8 @@ def test_write_source_unit_persists_has_video_flag():
     from content.source.source_unit import write_source_unit
 
     obj = Path(tempfile.mkdtemp(prefix="three_class_obj_"))
-    execution_id = "20260711--travel-article-video-flag--cn-sichuan--canary-001"
+    execution_id = "20260711--travel-article-video-flag--test-region-b--pilot-001"
+    build_execution_fixture(execution_id)
     # 含视频来源：hasVideo=True 必须落入 manifest（meta.json），供内容计划弃稿。
     manifest_video = write_source_unit(
         obj,

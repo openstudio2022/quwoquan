@@ -1,0 +1,23 @@
+read_model: NotificationSettingsView
+description: Account owner 的通知设置 typed slice。
+source_entities:
+- UserSetting
+consumers:
+- app
+fields:
+- name: userId
+  type: string
+- name: enablePush
+  type: bool
+- name: enableMarketing
+  type: bool
+- name: quietHoursStart
+  type: time
+  nullable: true
+- name: quietHoursEnd
+  type: time
+  nullable: true
+- name: version
+  type: int
+- name: updatedAt
+  type: timestamp

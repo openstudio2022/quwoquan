@@ -18,8 +18,9 @@ import tempfile
 from pathlib import Path
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
-for _path in (DATA_ROOT, SCRIPTS_ROOT):
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
@@ -33,6 +34,8 @@ from core.source_layout import (  # noqa: E402
 )
 from core.wiki_wikitext import parse_wikitext_layout, parse_wikitext_placements  # noqa: E402
 from content.source.baike_layout import parse_baike_layout, render_layout_markdown  # noqa: E402
+from support.image_fixture import jpeg_bytes, png_bytes  # noqa: E402
+from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
 # 黄龙式样本：infobox（含地图）+ 正文 + 景点表（行图）+ 图库宫格 + 无图注图。
@@ -41,11 +44,11 @@ _HUANGLONG_WIKITEXT = """{{Infobox 景区
 | image = Huanglong_Wucai_Pond.jpg
 | caption = 黄龙五彩池
 | map = Sichuan_location_map.png
-| 地址 = 四川省阿坝州松潘县
+| 地址 = test-region-b阿坝州松潘县
 | 海拔 = 3100-3600 米
 }}
 
-'''黄龙风景名胜区'''位于[[四川省]][[松潘县]]，以彩池、雪山、峡谷、森林闻名。<ref>来源</ref>
+'''黄龙风景名胜区'''位于[[test-region-b]][[松潘县]]，以彩池、雪山、峡谷、森林闻名。<ref>来源</ref>
 
 == 主要景点 ==
 
@@ -137,16 +140,16 @@ def test_wikitext_gallery_degrades_to_consecutive_figures_with_original_captions
 
 
 def test_rendered_mediawiki_prose_replaces_template_loss_without_losing_figures() -> None:
-    wikitext = """'''海螺沟'''位于四川省。\n\n== 冰川 ==\n面积占比{{unicode|10.4%}}，纵坡为{{unicode|540‰}}。\n[[File:Hailuogou.jpg|thumb|海螺沟冰川]]\n\n== 温泉 ==\n水温在{{unicode|50℃}}至{{unicode|90℃}}之间。\n"""
-    rendered = """海螺沟位于四川省。\n\n== 冰川 ==\n面积占比10.4%，纵坡为540‰。\n\n== 温泉 ==\n水温在50℃至90℃之间。\n"""
+    wikitext = """'''测试实体丙'''位于test-region-b。\n\n== 冰川 ==\n面积占比{{unicode|10.4%}}，纵坡为{{unicode|540‰}}。\n[[File:Hailuogou.jpg|thumb|测试实体丙冰川]]\n\n== 温泉 ==\n水温在{{unicode|50℃}}至{{unicode|90℃}}之间。\n"""
+    rendered = """测试实体丙位于test-region-b。\n\n== 冰川 ==\n面积占比10.4%，纵坡为540‰。\n\n== 温泉 ==\n水温在50℃至90℃之间。\n"""
 
-    parsed = parse_wikitext_layout(wikitext, title="海螺沟")
+    parsed = parse_wikitext_layout(wikitext, title="测试实体丙")
     merged = merge_rendered_text_layout(parsed, rendered)
     text = render_source_markdown(merged)
 
     for value in ("10.4%", "540‰", "50℃", "90℃"):
         assert value in text
-    assert "![海螺沟冰川](asset://source-inline-001)" in text
+    assert "![测试实体丙冰川](asset://source-inline-001)" in text
     assert "占比，" not in text
 
 
@@ -190,6 +193,15 @@ def test_mediawiki_fidelity_ignores_only_intentionally_dropped_tail_sections() -
     assert "金沙湖专题" not in publishable_rendered
 
 
+def test_mediawiki_fidelity_matches_same_prose_across_heading_levels() -> None:
+    from core.source_fidelity import assess_source_content_fidelity
+
+    rendered = "## 建筑\n\n城墙始建于东晋，后经多次修整。"
+    candidate = "### 建筑\n\n城墙始建于东晋，后经多次修整。"
+
+    assert assess_source_content_fidelity(rendered, candidate).complete
+
+
 def test_wikitext_infobox_yields_cover_candidate_and_blocks_locator_map() -> None:
     layout = parse_wikitext_layout(_HUANGLONG_WIKITEXT)
     figures = layout_figures(layout)
@@ -205,7 +217,7 @@ def test_wikitext_infobox_yields_cover_candidate_and_blocks_locator_map() -> Non
     assert all(not c["isMapLike"] for c in candidates)
     # 信息框键值行进 factRow。
     facts = {b["key"]: b["value"] for b in layout["blocks"] if b["type"] == "factRow"}
-    assert facts.get("地址") == "四川省阿坝州松潘县"
+    assert facts.get("地址") == "test-region-b阿坝州松潘县"
 
 
 def test_wikitext_placements_view_includes_gallery_and_table_figures() -> None:
@@ -225,10 +237,10 @@ _BAIKE_HTML = """<!DOCTYPE html>
 <h1>西岭雪山</h1>
 <div class="basic-info cmn-clearfix"><dl>
 <dt>中文名</dt><dd>西岭雪山</dd>
-<dt>地理位置</dt><dd>四川省成都市大邑县</dd>
+<dt>地理位置</dt><dd>test-region-b成都市大邑县</dd>
 <dt>景区级别</dt><dd>AAAA级</dd>
 </dl></div>
-<div class="para">西岭雪山位于四川省成都市大邑县境内，属世界自然遗产大熊猫栖息地。<sup>[1]</sup></div>
+<div class="para">西岭雪山位于test-region-b成都市大邑县境内，属世界自然遗产大熊猫栖息地。<sup>[1]</sup></div>
 <h2>地理环境<span>编辑</span></h2>
 <div class="para">景区最高峰苗基岭海拔5364米，为成都第一峰，山顶终年积雪。</div>
 <div class="para"><img src="https://baike.example/xiling.jpg">冬季滑雪场面积广阔。</div>
@@ -245,7 +257,7 @@ def test_baike_html_parses_sections_facts_and_records_image_evidence() -> None:
     assert layout["parseStatus"] == "ok"
     assert layout["title"] == "西岭雪山"
     facts = {b["key"]: b["value"] for b in layout["blocks"] if b["type"] == "factRow"}
-    assert facts.get("地理位置") == "四川省成都市大邑县"
+    assert facts.get("地理位置") == "test-region-b成都市大邑县"
     headings = [b["text"] for b in layout["blocks"] if b["type"] == "heading"]
     assert "地理环境" in headings
     assert all("编辑" not in h for h in headings)
@@ -260,7 +272,7 @@ def test_baike_html_parses_sections_facts_and_records_image_evidence() -> None:
     # 从 IR 渲染的 source 正文保留结构语义。
     text = render_layout_markdown(layout)
     assert "## 地理环境" in text
-    assert "- 地理位置：四川省成都市大邑县" in text
+    assert "- 地理位置：test-region-b成都市大邑县" in text
 
 
 def test_baike_html_parse_failure_is_structured_reject_not_plaintext_fallback() -> None:
@@ -277,7 +289,8 @@ def test_write_source_unit_persists_layout_and_manifest_summary(monkeypatch) -> 
     from content.source.source_unit import write_source_unit
 
     layout = parse_wikitext_layout(_HUANGLONG_WIKITEXT, title="黄龙风景名胜区")
-    execution_id = "20260712--travel-homepage-layout-contract--cn-sichuan--canary-001"
+    execution_id = "20260712--travel-homepage-layout-contract--test-region-b--pilot-001"
+    build_execution_fixture(execution_id)
     ensure_execution_layout(execution_id)
     ensure_execution_command_layout(execution_id, "source")
     object_dir = execution_entity_object_dir(
@@ -347,14 +360,13 @@ def test_download_source_unit_images_keeps_complete_source_page(monkeypatch) -> 
     """页面自有图片无数量 cap：散图与 gallery 成员全部进入下载处置。"""
     import content.source.image_download as hi
 
-    jpeg = b"\xff\xd8\xff\xe0" + b"0" * 128 + b"\xff\xd9"
     monkeypatch.setattr(hi, "validate_image_rights", lambda spec, vertical: [])
     monkeypatch.setattr(hi, "_cached_source_image_payload", lambda *a, **k: None)
     from content.source.fetch_images import PageImageFetchResult, PageImagePayload
 
     def page_payload(url: str, max_bytes: int = 0) -> PageImageFetchResult:
         _ = max_bytes
-        content = jpeg + url.encode("utf-8")
+        content = jpeg_bytes(seed=int(url.rsplit("/", 1)[-1].split(".", 1)[0]))
         return PageImageFetchResult(
             requested_url=url,
             resolved_url=url,
@@ -372,7 +384,6 @@ def test_download_source_unit_images_keeps_complete_source_page(monkeypatch) -> 
         )
 
     monkeypatch.setattr(hi, "fetch_page_image_payload", page_payload)
-    monkeypatch.setattr(hi, "image_dimensions", lambda b: (1200, 800))
     monkeypatch.setattr(hi, "pixel_size_issue", lambda w, h, asset_id: None)
     monkeypatch.setattr(
         hi,
@@ -430,9 +441,9 @@ def test_write_source_unit_asset_entries_carry_cover_candidate_fields(monkeypatc
     """assets/index.json 携带封面候选语义：placementType/rank/isMapLike/代表性/视觉主体。"""
     from content.source.source_unit import write_source_unit
 
-    jpeg = b"\xff\xd8\xff\xe0" + b"0" * 200 + b"\xff\xd9"
     from core.paths import execution_entity_object_dir, execution_source_unit_dir, ensure_execution_command_layout, ensure_execution_layout
-    execution_id = "20260712--travel-homepage-layout-assets--cn-sichuan--canary-001"
+    execution_id = "20260712--travel-homepage-layout-assets--test-region-b--pilot-001"
+    build_execution_fixture(execution_id)
     ensure_execution_layout(execution_id)
     ensure_execution_command_layout(execution_id, "source")
     object_dir = execution_entity_object_dir(
@@ -451,7 +462,7 @@ def test_write_source_unit_asset_entries_carry_cover_candidate_fields(monkeypatc
         title="黄龙风景名胜区",
         images=[
             {
-                "bytes": jpeg,
+                "bytes": jpeg_bytes(seed=1),
                 "ext": ".jpg",
                 "url": "https://upload.wikimedia.org/a.jpg",
                 "caption": "黄龙五彩池",
@@ -464,7 +475,7 @@ def test_write_source_unit_asset_entries_carry_cover_candidate_fields(monkeypatc
                 "sourceOrder": 0,
             },
             {
-                "bytes": jpeg + b"2",
+                "bytes": png_bytes(seed=2),
                 "ext": ".png",
                 "url": "https://upload.wikimedia.org/map.png",
                 "caption": "",

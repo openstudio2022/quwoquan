@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
+	configrelease "quwoquan_service/runtime/configrelease"
 	"strings"
 	"time"
 
@@ -20,9 +20,15 @@ import (
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 
-	httpadapter "quwoquan_service/services/tag-service/internal/adapters/http"
-	"quwoquan_service/services/tag-service/internal/application"
-	"quwoquan_service/services/tag-service/internal/infrastructure/persistence"
+	feedbackhttp "quwoquan_service/services/tag-service/internal/tag/tag_feedback/adapters/inbound/http"
+	"quwoquan_service/services/tag-service/internal/tag/tag_feedback/application/tagfeedback"
+	"quwoquan_service/services/tag-service/internal/tag/tag_feedback/infrastructure/tagfeedbackstore"
+	nodehttp "quwoquan_service/services/tag-service/internal/tag/tag_node_view/adapters/inbound/http"
+	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/application"
+	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
+	releasehttp "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/adapters/inbound/http"
+	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease"
+	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/infrastructure/taxonomyreleasestore"
 )
 
 type config struct {
@@ -42,6 +48,10 @@ type config struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
 	} `yaml:"mongo"`
+
+	Redis struct {
+		General redisSceneCfg `yaml:"general"`
+	} `yaml:"redis"`
 }
 
 func main() {
@@ -85,14 +95,35 @@ func main() {
 	tagNodeStore := persistence.NewMongoTagNodeStore(db.Collection("tag_nodes"))
 	objectTagStore := persistence.NewMongoObjectTagIndexStore(db.Collection("object_tag_index"))
 	if err := tagNodeStore.EnsureIndexes(ctx); err != nil {
-		log.Printf("WARN: tag-service ensure tag_nodes indexes: %v", err)
+		log.Fatalf("tag-service ensure tag_nodes indexes: %v", err)
 	}
 	if err := objectTagStore.EnsureIndexes(ctx); err != nil {
-		log.Printf("WARN: tag-service ensure object_tag_index indexes: %v", err)
+		log.Fatalf("tag-service ensure object_tag_index indexes: %v", err)
 	}
 
-	tagService := application.NewTagService(tagNodeStore, objectTagStore)
-	handler := httpadapter.NewTagHandler(tagService).Routes()
+	releaseStore := taxonomyreleasestore.NewStore(db)
+	if err := releaseStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("tag-service ensure tag_taxonomy_releases indexes: %v", err)
+	}
+	tagService := application.NewTagService(tagNodeStore, objectTagStore, releaseStore)
+	releaseFacade, err := taxonomyrelease.NewFacade(releaseStore, tagNodeStore)
+	if err != nil {
+		log.Fatalf("tag-service taxonomy release facade init failed: %v", err)
+	}
+	feedbackSink := tagfeedbackstore.NewSink(db)
+	if err := feedbackSink.EnsureIndexes(ctx); err != nil {
+		log.Printf("WARN: tag-service ensure tag_feedback indexes: %v", err)
+	}
+	feedbackFacade, err := tagfeedback.NewFacade(feedbackSink, tagService)
+	if err != nil {
+		log.Fatalf("tag-service tag feedback facade init failed: %v", err)
+	}
+
+	routesMux := http.NewServeMux()
+	nodehttp.NewTagHandler(tagService).Register(routesMux)
+	releasehttp.NewTaxonomyReleaseHandler(releaseFacade).Register(routesMux)
+	feedbackhttp.NewTagFeedbackHandler(feedbackFacade).Register(routesMux)
+	var handler http.Handler = routesMux
 
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("mongodb", func(hctx context.Context) error {
@@ -105,12 +136,27 @@ func main() {
 	outerMux.Handle("/", handler)
 
 	instanceID, _ := os.Hostname()
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		log.Fatalf("tag-service runtime log exporter init failed: %v", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
 	if err != nil {
 		log.Fatalf("tag-service process logger init failed: %v", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
 		log.Fatalf("tag-service exception logger init failed: %v", err)
 	}
@@ -179,37 +225,12 @@ func getenvOrDefault(key, fallback string) string {
 
 func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
 	cfg := config{}
-	if strings.TrimSpace(configRoot) != "" {
-		if err := mergeConfigFile(&cfg, filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")); err != nil {
-			return config{}, fmt.Errorf("read default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")); err != nil {
-			return config{}, fmt.Errorf("read env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			if err := mergeConfigFile(&cfg, filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")); err != nil {
-				return config{}, fmt.Errorf("read version config: %w", err)
-			}
-		}
-		return cfg, nil
+	path, err := configrelease.File(configRoot, serviceName, appEnv)
+	if err != nil {
+		return config{}, err
 	}
-	localDefault := filepath.Join("configs", "default", "config.yaml")
-	if _, err := os.Stat(localDefault); err == nil {
-		if err := mergeConfigFile(&cfg, localDefault); err != nil {
-			return config{}, fmt.Errorf("read local default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml")); err != nil {
-			return config{}, fmt.Errorf("read local env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			if err := mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml")); err != nil {
-				return config{}, fmt.Errorf("read local version config: %w", err)
-			}
-		}
-		return cfg, nil
-	}
-	if err := mergeConfigFile(&cfg, filepath.Join("configs", "config.yaml")); err != nil {
-		return config{}, fmt.Errorf("read current config: %w", err)
+	if err := mergeConfigFile(&cfg, path); err != nil {
+		return config{}, fmt.Errorf("read generated runtime config: %w", err)
 	}
 	return cfg, nil
 }
@@ -232,6 +253,7 @@ func applyEnvOverrides(cfg *config) {
 	if v := os.Getenv("TAG_MONGO_DATABASE"); v != "" {
 		cfg.Mongo.Database = v
 	}
+	applyTagRedisEnvOverrides(&cfg.Redis.General)
 }
 
 func validateRuntimeCompatibility(cfg config, configVersion, _ string) error {

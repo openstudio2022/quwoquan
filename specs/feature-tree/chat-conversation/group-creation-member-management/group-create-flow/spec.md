@@ -1,168 +1,147 @@
-# L3 规格：group-create-flow — 全局添加入口发起群聊
+# L3 Story：group-create-flow — 全局添加入口发起群聊 (`group-create-flow`)
 
-> **层级**：L3_story（隶属 L2 `group-creation-member-management`）
-> **状态**：specified
+> 所属能力：[`group-creation-member-management`](../spec.md)
 
-## 0. 一句话定义
+> Journey / Scenario：[`JNY-007 / SCN-013`](../../../spec.md#scn-013)
 
-用户可从全局添加入口进入独立的发起群聊页，在真实群聊、真实圈子和互相关注联系人三类来源中选人，借助微信级三页结构与更优的已选反馈区，原子创建 500 人上限的私建群并立即回流消息列表。
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 1. 背景与动机
+## 1. 用户价值
 
-当前发起群聊页存在以下问题：
+作为发起群聊的用户，
+我希望从全局添加入口选择互相关注且未屏蔽的联系人创建群聊，并对重复、超限或无权限获得明确提示，
+从而一次完成可恢复且成员边界正确的群聊创建。
 
-1. 入口路由复用 `chatAddMembers`，建群与后续加人语义混淆。
-2. 圈子来源仍是独立 mock，无法保证和消息页、我的圈子一致。
-3. 单独选互关联系人没有冻结 A-Z 索引、搜索过滤、右侧索引定位等微信级基础能力。
-4. 已选反馈不足，用户不知道自己跨来源到底已经选了谁。
-5. 建群成功后消息列表和聊天详情页尚无端云一致 guarantee。
+## 2. 范围与非目标
 
-因此本 Scenario 先冻结发起群聊这条主路径。
+### In Scope
 
-## 2. 目标用户
+- “group-create-flow — 全局添加入口发起群聊”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 三来源服务端权威读取、搜索、互关过滤、跨来源 userId 去重与已选反馈。
+- CreateConversation 初始成员的互关/拉黑/去重/1000 人上限校验。
+- 建群成功后聊天详情可进入且 Inbox 可权威回读。
+- 圈子或圈子群创建。
+- 企业联系人、群二维码和邀请链接。
 
-- 从全局加号入口快速拉群的高频聊天用户
-- 想从已有群聊/圈子里继续扩展多人沟通的用户
-- 对 iOS 原生体验、深浅色一致性和视觉整洁度敏感的用户
+### Out of Scope
 
-## 3. 功能范围
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-### 3.1 In Scope
+## 3. 行为要求
 
-| 编号 | 功能 | 说明 |
-|---|---|---|
-| GC1 | 独立发起群聊页 | 图一为正式页面，不再复用旧加成员页 |
-| GC2 | 单独选互关联系人 | 互相关注联系人列表、搜索、A-Z 索引、右侧定位 |
-| GC3 | 从已有群聊中选互关成员 | 图二 sheet 选择真实群聊来源 |
-| GC4 | 从圈子中选互关成员 | 图二类 sheet 选择真实已加入圈子来源 |
-| GC5 | 群/圈成员选择 sheet | 图三 sheet，支持搜索、勾选、全选、底部数量按钮 |
-| GC6 | 已选成员反馈区 | 搜索框下方展示已选头像，最多三行，超过折叠，可展开、可删除 |
-| GC7 | 互关过滤与去重 | 所有来源只允许加入与当前用户互关的成员，跨来源按 `userId` 去重 |
-| GC8 | 原子建群 | 点击“完成”后一次性创建私建群并带上初始成员 |
-| GC9 | 创建成功回流消息列表 | 新群立即出现在消息页并可进入详情 |
-| GC10 | 双模式 iOS 原画质 | 浅色/深色双模、蓝色主题、观感优于微信 |
+<a id="req-001"></a>
+### REQ-001 group-create-flow — 全局添加入口发起群聊
 
-### 3.2 Out-of-Scope
+- 全局添加入口必须只返回互关且未屏蔽的候选；重复请求不得重复建群，容量越界必须拒绝且不写 outbox。
 
-- 企业联系人来源
-- 群二维码分享、邀请链接
-- 旧入口兼容与记录双轨
-- 圈子群创建本身（本场景只消费已有圈子群）
+<a id="req-002"></a>
+### REQ-002 服务端原子建群与成员策略
 
-## 4. 页面与交互基线
+- 服务端必须原子创建 Conversation、初始 Membership 与 outbox；任一步失败均不得留下部分群聊。
 
-### 4.1 图一：发起群聊页
+<a id="req-003"></a>
+### REQ-003 建群成功进入详情并回流消息列表
 
-页面结构冻结为：
+- 从圈子或全局入口选成员并建群后必须进入详情，随后 Inbox 可回读同一会话。
 
-1. 顶部导航：返回、标题“发起群聊”、右上“完成”
-2. 搜索框
-3. 已选成员头像区
-4. 来源入口区：
-   - 选择群聊中的互关成员
-   - 选择圈子中的互关成员
-   - 单独选互关联系人
-5. 单独选互关联系人列表：与联系人列表同语义，支持字母分组和右侧 A-Z 索引
+<a id="req-004"></a>
+### REQ-004 统一接收初始成员列表
 
-规则：
+- 统一接收初始成员列表。
+- 服务端必须在分页前执行 `source=group|circle` 过滤，禁止端侧拿一页后再过滤。
+- 深色模式不能退化为纯黑白替换，必须保留层级与轻表面。
+- `memberCountBucket` 只允许登记闭集人数分桶；禁止以来源组合、`userId` 等高基数值作为标签。
+- 服务黄金信号来自统一 `http_server_*` 和受控 Prometheus 指标，覆盖建群与候选源的请求量、成功率、错误率和延迟。
+- Message/Conversation/Membership/UserState outbox relay 与 InboxProjector 必须注册。
+- beta integration、gamma release 与 prod 只读验收统一由环境 validation suite 执行。
 
-- “完成”在没有已选成员时 disabled
-- 搜索既能过滤互关联系人列表，也能过滤来源页内结果
-- 已选成员区默认最多展示三行；超过三行显示“展开/收起”
-- 每个已选头像右上角有删除操作
+<a id="req-005"></a>
+### REQ-005 必须从全局添加入口经互关联系人、私建群或圈子绑定群三类来源选人，原子创建私建群并进入新会话、回流 Inbox，且失败时不得写入成功事实
 
-### 4.2 图二：来源选择 sheet
+- 系统必须从全局添加入口经互关联系人、私建群或圈子绑定群三类来源选人，原子创建私建群并进入新会话、回流 Inbox，且失败时不得写入成功事实。
 
-适用于“选择群聊中的互关成员”与“选择圈子中的互关成员”。
+<a id="req-006"></a>
+### REQ-006 服务本地契约引用边界
 
-规则：
+- 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
 
-- 贴底非全屏 sheet
-- 顶部有返回/收起、标题、搜索框
-- 列表展示真实来源对象
-- 每一行显示名称与“可选人数”
-- 点击某个群/圈后进入图三
+## 4. 契约引用
 
-### 4.3 图三：成员选择 sheet
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#ListSelectableGroupConversations`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#ListSelectableGroupContactMembers`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/projections/selectable_group_conversation_row.yaml`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#CreateConversation`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/errors.yaml`
+- canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml#startGroupChat`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#ListInbox`
+- canonical：`quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_l2_chat_objects`
+- canonical：`quwoquan_ops/observability/monitoring/dashboards/l2_business_journey.json`
+- canonical：`quwoquan_ops/environments/gamma/validation_suites.json#chat_group_lifecycle_api_probe`
 
-规则：
+## 5. 验收场景
 
-- 贴底非全屏 sheet
-- 标题显示来源名与可选人数
-- 候选成员仅为该群/圈里“与当前用户互关”的成员
-- 支持单选/多选、全选
-- 底部主按钮默认 disabled；选择后变为 enabled，并显示已选数量
+<a id="gwt-001"></a>
+### GWT-001 group-create-flow — 全局添加入口发起群聊
 
-## 5. 权限与业务约束
+- GIVEN 发起或接收消息的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“group-create-flow — 全局添加入口发起群聊”对应的公开行为。
+- THEN 合法成员只创建一个群聊并进入详情；非互关、屏蔽、重复或超容量请求得到稳定终态且无部分写入。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
 
-- 所有人都可以发起群聊
-- 只能选择互关联系人
-- 从群聊中选择成员时，也只能选群内与当前用户互关的成员
-- 从圈子中选择成员时，也只能选圈内与当前用户互关的成员
-- 私建群最大人数上限 `500`
-- 本场景创建的是私建群，不是圈子群
-- 不做记录兼容，不做运行时回滚
+<a id="gwt-002"></a>
+### GWT-002 服务端原子建群与成员策略
 
-## 6. 端云一致性
+- GIVEN 用户从受支持来源选定初始成员。
+- WHEN 服务端处理成功、非互关、屏蔽、重复或容量边界的建群请求。
+- THEN Conversation、Membership 与 outbox 同时提交，或请求被稳定拒绝且不留下部分群聊。
 
-### 6.1 数据真相源
+<a id="gwt-003"></a>
+### GWT-003 建群成功进入详情并回流消息列表
 
-| 数据 | 真相源 |
-|---|---|
-| 私建群创建 | `messages/conversation` |
-| 真实群聊来源 | `messages/conversation` 会话列表 |
-| 真实圈子来源 | `social/circle` 用户已加入圈子列表 |
-| 圈子群绑定 | `Circle.conversationId` |
-| 互关判定 | `user` 关系能力真相源 |
+- GIVEN 用户从圈子或全局入口完成成员选择。
+- WHEN 建群请求成功并完成会话投影。
+- THEN 用户进入新会话详情，且 Inbox 可回读同一会话。
 
-### 6.2 建群 contract 要求
+## 6. 依赖
 
-建群接口必须满足：
+- 前置要求：[`group-creation-member-management`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
 
-- 原子创建私建群
-- 统一接收初始成员列表
-- 服务端做互关校验、去重、500 人上限校验
-- 成功后消息列表能立即读取到该群
+## 7. 开放事项
 
-### 6.3 候选源 contract 要求
+<a id="open-001"></a>
+### OPEN-001 三类来源选择与同一向导状态
 
-候选源读取必须能稳定回答：
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Remote、Alpha Mock、Provider 与页面 local_contract 对 source、circleId、计数和成员交集行为一致。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
-- 来源列表项
-- 每个来源的可选人数
-- 来源内成员列表
-- 成员是否可被选择
+<a id="open-002"></a>
+### OPEN-002 服务端原子建群与成员策略
 
-## 7. 对标与吸收结论
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：api_integration 覆盖成功、非互关、屏蔽、重复请求、边界容量与 outbox。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
 
-| 维度 | 微信 | 趣聊目标 |
-|---|---|---|
-| 图一骨架 | 搜索 + 来源入口 + 联系人列表 + A-Z 索引 | 吸收并增加已选反馈区 |
-| 图二来源 sheet | 搜索 + 群列表 | 吸收，蓝色主题更轻 |
-| 图三成员选择 | 多选 + 全选 + 底部数量按钮 | 吸收，浅深色与线条更稳 |
-| 视觉主题 | 微信绿 | 趣聊蓝 |
+<a id="open-003"></a>
+### OPEN-003 建群成功进入详情并回流消息列表
 
-## 8. 非功能要求
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：user_acceptance 覆盖“圈子来源 -> 选成员 -> 建群 -> 进入详情 -> Inbox 回读”，beta/gamma/prod smoke 均留证。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
 
-- 发起页首屏壳层即时可见
-- A-Z 索引定位响应要稳定，不出现错位跳转
-- 深色模式不能退化为纯黑白替换，必须保留层级与轻表面
-- 图二/图三 sheet 必须保留上半屏上下文，不做第二个全屏页
+<a id="open-004"></a>
+### OPEN-004 group-create-flow — 全局添加入口发起群聊 验收证据
 
-## 9. 验收重点
-
-### local_contract
-
-- route / surface / create contract / candidate contract 结构冻结
-
-### local_contract
-
-- 图一页面、图二/图三 sheet、搜索、A-Z 索引、已选区折叠/展开/删除全部可交互
-
-### api_integration
-
-- 原子建群后消息列表、聊天详情页与成员数据一致
-
-### user_acceptance
-
-- 真机完成“发起群聊 -> 选择来源 -> 选择成员 -> 完成建群 -> 返回消息页”的完整旅程
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“group-create-flow — 全局添加入口发起群聊”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

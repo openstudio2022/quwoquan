@@ -3,7 +3,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/content_post_projection_mapper.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef ContentPostReaderInvocationContextFactory =
@@ -14,22 +16,51 @@ typedef ContentPostReaderInvocationContextFactory =
 /// 仅接收生成客户端与调用上下文；App DTO 的转换被限制在本适配器，业务消费者
 /// 不接触 HTTP、header、decoder 或 URL path。
 final class RemoteContentPostReaderAdapter
-    implements ContentPostDetailReader, ContentAuthorPostsReader {
+    implements
+        ContentPostDetailReader,
+        ContentEntityWishlistStateReader,
+        ContentAuthorPostsReader,
+        ContentPostPublicationStatusReader {
   const RemoteContentPostReaderAdapter({
     required this.client,
     required this.invocationContext,
+    this.projectionMapper = const ContentPostProjectionMapper(),
   });
 
   final GeneratedCloudOperationClient client;
   final ContentPostReaderInvocationContextFactory invocationContext;
+  final ContentPostProjectionMapper projectionMapper;
 
   @override
   Future<ContentPostDetailPayload> getPost({required String postId}) async {
-    final response = await client.contentPostGetPost(
-      ContentPostDetailQuery(postId: postId),
-      context: invocationContext(ContentRequestPageIds.getPost),
+    return _detailPayloadFromSlice(await _getPostSlice(postId));
+  }
+
+  @override
+  Future<ContentPostPublicationStatus> getPostPublicationStatus(
+    String postId,
+  ) async {
+    final response = await _getPostSlice(postId);
+    return ContentPostPublicationStatus(
+      postId: response.post.postId,
+      state: ContentPostPublicationState.fromWire(response.status),
+      moderationStatus: response.moderationStatus,
+      updatedAt:
+          response.post.updatedAt ??
+          response.post.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
-    return _detailPayloadFromSlice(response);
+  }
+
+  @override
+  Future<EntityWishlistState> getEntityWishlistState({
+    required String objectId,
+    required String objectKind,
+  }) {
+    return client.contentPostGetEntityWishlistState(
+      EntityWishlistStateQuery(objectId: objectId, objectKind: objectKind),
+      context: invocationContext(ContentRequestPageIds.getEntityWishlistState),
+    );
   }
 
   @override
@@ -53,16 +84,23 @@ final class RemoteContentPostReaderAdapter
       context: invocationContext(ContentRequestPageIds.listUserPosts),
     );
     return CursorPage<PostBaseDto>(
-      items: response.items.map(_postDtoFromProjection).toList(growable: false),
+      items: response.items.map(projectionMapper.toDto).toList(growable: false),
       nextCursor: response.nextCursor,
       totalCount: response.totalCount,
+    );
+  }
+
+  Future<ContentPostDetailSlice> _getPostSlice(String postId) {
+    return client.contentPostGetPost(
+      ContentPostDetailQuery(postId: postId),
+      context: invocationContext(ContentRequestPageIds.getPost),
     );
   }
 
   ContentPostDetailPayload _detailPayloadFromSlice(
     ContentPostDetailSlice slice,
   ) {
-    final wire = _postWireFromProjection(slice.post)
+    final wire = projectionMapper.toWire(slice.post)
       ..addAll(<String, dynamic>{
         if (slice.isOfficial != null) 'isOfficial': slice.isOfficial,
         if (slice.badge != null) 'badge': slice.badge,
@@ -117,73 +155,12 @@ final class RemoteContentPostReaderAdapter
               .toList(growable: false),
         if (slice.coverUrl != null) 'coverUrl': slice.coverUrl,
         if (slice.tagRefs != null) 'tagRefs': slice.tagRefs,
+        'status': slice.status,
+        if (slice.moderationStatus != null)
+          'moderationStatus': slice.moderationStatus,
         if (slice.visibility != null) 'visibility': slice.visibility,
       });
     return ContentPostDetailPayload.fromWire(wire);
-  }
-
-  PostBaseDto _postDtoFromProjection(ContentPostProjection projection) {
-    return postBaseDtoFromMap(_postWireFromProjection(projection));
-  }
-
-  /// 唯一 DTO projection boundary：纯合同投影在这里映射到 App DTO。
-  Map<String, dynamic> _postWireFromProjection(
-    ContentPostProjection projection,
-  ) {
-    return <String, dynamic>{
-      'id': projection.postId,
-      'type': projection.contentType,
-      if (projection.contentIdentity != null)
-        'identity': projection.contentIdentity,
-      'assistantUsePolicy': projection.assistantUsePolicy,
-      if (projection.authorId != null) 'authorId': projection.authorId,
-      if (projection.authorDisplayName != null)
-        'displayName': projection.authorDisplayName,
-      if (projection.authorAvatarUrl != null)
-        'avatarUrl': projection.authorAvatarUrl,
-      if (projection.authorBackgroundUrl != null)
-        'authorBackgroundUrl': projection.authorBackgroundUrl,
-      if (projection.authorRoleLabel != null)
-        'authorRoleLabel': projection.authorRoleLabel,
-      'authorIdentityTags': projection.authorIdentityTags,
-      'authorVerified': projection.authorVerified,
-      if (projection.title != null) 'title': projection.title,
-      if (projection.body != null) 'body': projection.body,
-      if (projection.summary != null) 'summary': projection.summary,
-      if (projection.coverUrl != null) 'coverUrl': projection.coverUrl,
-      'imageUrls': projection.imageUrls,
-      if (projection.videoUrl != null) 'videoUrl': projection.videoUrl,
-      if (projection.thumbnailUrl != null)
-        'thumbnailUrl': projection.thumbnailUrl,
-      if (projection.width != null) 'width': projection.width,
-      if (projection.height != null) 'height': projection.height,
-      if (projection.durationMs != null) 'durationMs': projection.durationMs,
-      'likeCount': projection.likeCount,
-      'commentCount': projection.commentCount,
-      'shareCount': projection.shareCount,
-      if (projection.createdAt != null)
-        'createdAt': projection.createdAt!.toUtc().toIso8601String(),
-      if (projection.updatedAt != null)
-        'updatedAt': projection.updatedAt!.toUtc().toIso8601String(),
-      if (projection.publishedAt != null)
-        'publishedAt': projection.publishedAt!.toUtc().toIso8601String(),
-      if (projection.contentVertical != null)
-        'contentVertical': projection.contentVertical,
-      if (projection.recallPath != null) 'recallPath': projection.recallPath,
-      if (projection.supplySource != null)
-        'supplySource': projection.supplySource,
-      if (projection.intersectionReasons != null)
-        'intersectionReasons': projection.intersectionReasons!
-            .map(
-              (reason) => <String, dynamic>{
-                'kind': reason.kind,
-                'primaryText': reason.primaryText,
-                'secondaryText': reason.secondaryText,
-                'strength': reason.strength,
-              },
-            )
-            .toList(growable: false),
-    };
   }
 
   Object? _structuredValueToWire(ContentPostStructuredValue value) {

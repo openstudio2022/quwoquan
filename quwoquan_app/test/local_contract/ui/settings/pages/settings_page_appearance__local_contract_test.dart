@@ -4,25 +4,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:quwoquan_app/app/models/appearance_settings_models.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/application/user/device_registration/device_push_endpoint_writer.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    as contracts;
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
+import 'package:quwoquan_app/core/observability/runtime_log_ports.dart';
+import 'package:quwoquan_app/core/observability/runtime_log_record.dart';
+import 'package:quwoquan_app/core/observability/runtime_logger.dart';
+import 'package:quwoquan_app/core/platform/push_endpoint_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_about_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_calls_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_dark_mode_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_notifications_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
-import '../../../../support/fakes/test_auth_repository.dart';
 import '../../../../support/recording_app_telemetry_recorder.dart';
 
 void main() {
@@ -50,6 +57,7 @@ void main() {
         find.text(UITextConstants.settingsPermissionManagement),
         findsOneWidget,
       );
+      expect(find.text(UITextConstants.settingsBlockedUsers), findsOneWidget);
       expect(find.text(UITextConstants.settingsDarkMode), findsOneWidget);
       expect(find.text(UITextConstants.settingsAboutQuwoquan), findsOneWidget);
       expect(find.text(UITextConstants.switchAccount), findsOneWidget);
@@ -92,7 +100,7 @@ void main() {
       expect(find.text(_RouteProbe.profilePersonas), findsOneWidget);
     });
 
-    testWidgets('权限管理页展示三层预留权限', (tester) async {
+    testWidgets('权限管理页只承载真实联系人系统权限，不展示对象权限占位', (tester) async {
       await tester.pumpWidget(_buildSettingsApp());
       await tester.pumpAndSettle();
 
@@ -104,21 +112,24 @@ void main() {
         find.text(UITextConstants.settingsContactsPermission),
         findsOneWidget,
       );
+      final actionCount =
+          find.text(UITextConstants.openSettings).evaluate().length +
+          find
+              .text(UITextConstants.settingsPermissionUnavailable)
+              .evaluate()
+              .length;
+      expect(actionCount, 1);
       expect(
-        find.text(UITextConstants.settingsCirclesPermission),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.settingsEntitiesPermission),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.settingsPermissionReserved),
-        findsNWidgets(3),
+        find
+            .textContaining(UITextConstants.settingsPermissionUnavailable)
+            .evaluate()
+            .length,
+        lessThanOrEqualTo(1),
       );
     });
 
     testWidgets('深色模式进入详情页并通过系统开关和手动单选更新运行时', (tester) async {
+      _useTallViewport(tester);
       await tester.pumpWidget(_buildSettingsApp());
       await tester.pumpAndSettle();
 
@@ -165,6 +176,27 @@ void main() {
       );
     });
 
+    testWidgets('外观设置加载失败时显示可恢复状态，重试后恢复真实摘要', (tester) async {
+      _useTallViewport(tester);
+      final appearanceRepository = _RecoveringSettingsQueryReader();
+      await tester.pumpWidget(
+        _buildSettingsApp(settingsQueryReader: appearanceRepository),
+      );
+      await tester.pumpAndSettle();
+
+      expect(appearanceRepository.loadCount, 1);
+      expect(find.text(UITextConstants.loadFailed), findsOneWidget);
+      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.tryAgain));
+      await tester.pumpAndSettle();
+
+      expect(appearanceRepository.loadCount, 2);
+      expect(find.text(UITextConstants.loadFailed), findsNothing);
+      expect(find.text(UITextConstants.tryAgain), findsNothing);
+      expect(find.text(UITextConstants.settingsDarkModeSystem), findsOneWidget);
+    });
+
     testWidgets('深色模式主行值贴右，账号操作为无图标居中按钮', (tester) async {
       _useTallViewport(tester);
       await tester.pumpWidget(_buildSettingsApp());
@@ -188,8 +220,11 @@ void main() {
         tester.getTopLeft(chevron).dx - tester.getTopRight(modeText).dx,
         lessThanOrEqualTo(AppSpacing.sm),
       );
-      expect(find.byType(SettingsInsetNavigationRow), findsNWidgets(5));
-      expect(find.byType(SettingsInsetFormSectionDivider), findsNWidgets(2));
+      expect(find.byType(SettingsInsetNavigationRow), findsAtLeastNWidgets(6));
+      expect(
+        find.byType(SettingsInsetFormSectionDivider),
+        findsAtLeastNWidgets(3),
+      );
 
       final switchAccountButton = find.ancestor(
         of: find.text(UITextConstants.switchAccount),
@@ -221,6 +256,7 @@ void main() {
     });
 
     testWidgets('关于趣我圈页显示版本号', (tester) async {
+      _useTallViewport(tester);
       await tester.pumpWidget(_buildSettingsApp());
       await tester.pumpAndSettle();
 
@@ -274,7 +310,7 @@ void main() {
 
     testWidgets('退出登录默认走软退出：不远端吊销、不清本机凭证', (tester) async {
       final store = _SpyAuthSessionStore();
-      final repo = _SpyAuthRepository();
+      final repo = _SpyAccountSessionLifecycleWriter();
       final behavior = _SpyBehaviorRepository();
       final ops = _SpyAppTelemetryRecorder();
       await tester.pumpWidget(
@@ -325,7 +361,7 @@ void main() {
 
     testWidgets('退出并清除本机登录信息：远端吊销 + 清本机凭证', (tester) async {
       final store = _SpyAuthSessionStore();
-      final repo = _SpyAuthRepository();
+      final repo = _SpyAccountSessionLifecycleWriter();
       final behavior = _SpyBehaviorRepository();
       final ops = _SpyAppTelemetryRecorder();
       await tester.pumpWidget(
@@ -355,6 +391,145 @@ void main() {
       expect(ops.clearPendingCount, 1);
       await tester.pump(const Duration(seconds: 4));
     });
+
+    testWidgets('登录态展示通知与通话设置区并通过 typed 命令提交', (tester) async {
+      _useTallViewport(tester);
+      final commands = _RecordingUserSettingsCommandWriter();
+      await tester.pumpWidget(
+        _buildSettingsApp(settingsCommandWriter: commands),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(UITextConstants.settingsNotificationSection),
+        findsOneWidget,
+      );
+      expect(find.text(UITextConstants.settingsCallSection), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.settingsNotificationSection));
+      await tester.pumpAndSettle();
+      expect(find.text(UITextConstants.settingsEnablePush), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.settingsEnablePush));
+      await tester.pumpAndSettle();
+      expect(commands.notificationCommands, hasLength(1));
+      expect(commands.notificationCommands.single.enablePush, isFalse);
+
+      await tester.tap(find.byIcon(CupertinoIcons.back));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(UITextConstants.settingsCallSection));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(UITextConstants.settingsCallRingtoneDefault),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(UITextConstants.settingsEnableCallVibration));
+      await tester.pumpAndSettle();
+      expect(commands.callCommands, hasLength(1));
+      expect(commands.callCommands.single.enableCallVibration, isFalse);
+    });
+
+    testWidgets('设置命令失败时回滚开关状态', (tester) async {
+      _useTallViewport(tester);
+      final commands = _RecordingUserSettingsCommandWriter()
+        ..failNotification = true;
+      await tester.pumpWidget(
+        _buildSettingsApp(settingsCommandWriter: commands),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(UITextConstants.settingsNotificationSection));
+      await tester.pumpAndSettle();
+      final pushSwitchBefore = tester.widget<CupertinoSwitch>(
+        find
+            .descendant(
+              of: find.ancestor(
+                of: find.text(UITextConstants.settingsEnablePush),
+                matching: find.byType(SettingsInsetSwitchRow),
+              ),
+              matching: find.byType(CupertinoSwitch),
+            )
+            .first,
+      );
+      expect(pushSwitchBefore.value, isTrue);
+
+      await tester.tap(find.text(UITextConstants.settingsEnablePush));
+      await tester.pumpAndSettle();
+
+      final pushSwitchAfter = tester.widget<CupertinoSwitch>(
+        find
+            .descendant(
+              of: find.ancestor(
+                of: find.text(UITextConstants.settingsEnablePush),
+                matching: find.byType(SettingsInsetSwitchRow),
+              ),
+              matching: find.byType(CupertinoSwitch),
+            )
+            .first,
+      );
+      expect(pushSwitchAfter.value, isTrue);
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.text(UITextConstants.operationFailed), findsOneWidget);
+      expect(find.text(UITextConstants.operationFailedRetry), findsOneWidget);
+      await tester.tap(find.text(UITextConstants.cancel));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
+    });
+
+    testWidgets('远端吊销失败仍清除本机凭证，并写入结构化异常记录', (tester) async {
+      final store = _SpyAuthSessionStore();
+      final repo = _FailingLogoutAccountSessionLifecycleWriter();
+      final behavior = _SpyBehaviorRepository();
+      final ops = _SpyAppTelemetryRecorder();
+      final buffer = InMemoryRuntimeLogBuffer();
+      final logger = RuntimeLogger(
+        resource: const RuntimeLogResource(
+          sourceType: 'app',
+          environment: 'alpha',
+          service: 'quwoquan_app',
+          appVersion: 'test',
+        ),
+        buffer: buffer,
+      );
+      AppExceptionTelemetryService.instance.bind(logger: logger);
+      addTearDown(() => AppExceptionTelemetryService.instance.unbind(logger));
+
+      await tester.pumpWidget(
+        _buildSettingsApp(
+          store: store,
+          authRepository: repo,
+          behaviorRepository: behavior,
+          telemetryRecorder: ops,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openLogoutDialog(tester);
+      await tester.tap(
+        find.widgetWithText(
+          CupertinoDialogAction,
+          UITextConstants.logoutDialogHardAction,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repo.logoutCount, 1);
+      expect(store.clearSessionCount, 1);
+      expect(store.softLogoutCount, 0);
+      expect(behavior.clearPendingCount, 1);
+      expect(ops.clearPendingCount, 1);
+      expect(tester.takeException(), isNull);
+
+      final record = (await buffer.pending()).singleWhere(
+        (entry) =>
+            entry.attributes.toWire()['source'] ==
+            'settings.logout.remote_revoke',
+      );
+      expect(record.kind, RuntimeLogKind.exception);
+      expect(record.correlation.operationId, 'user.account_session.Logout');
+      expect(record.correlation.surfaceId, 'settingsHome');
+      expect(record.attributes.toWire()['exceptionType'], 'StateError');
+      await tester.pump(const Duration(seconds: 4));
+    });
   });
 }
 
@@ -375,14 +550,16 @@ void _useTallViewport(WidgetTester tester) {
 
 Widget _buildSettingsApp({
   AuthSessionStore? store,
-  AuthRepository? authRepository,
+  contracts.AccountSessionLifecycleCommandWriter? authRepository,
   BehaviorRepository? behaviorRepository,
   AppTelemetryRecorder? telemetryRecorder,
+  contracts.UserSettingsQueryReader? settingsQueryReader,
+  contracts.UserSettingsCommandWriter? settingsCommandWriter,
 }) {
   return ProviderScope(
     overrides: [
-      appearanceSettingsRepositoryProvider.overrideWithValue(
-        MockAppearanceSettingsRepository(),
+      userSettingsQueryReaderProvider.overrideWithValue(
+        settingsQueryReader ?? _SettingsQueryReader(),
       ),
       authSessionStoreProvider.overrideWithValue(
         store ?? _SpyAuthSessionStore(),
@@ -390,12 +567,24 @@ Widget _buildSettingsApp({
       authSessionControllerProvider.overrideWith(
         _SettingsTestAuthSessionController.new,
       ),
+      devicePushEndpointCoordinatorProvider.overrideWithValue(
+        DevicePushEndpointCoordinator(
+          gateway: const _EmptyPushEndpointGateway(),
+          writer: const _NoopDevicePushEndpointWriter(),
+        ),
+      ),
       if (authRepository != null)
-        authRepositoryProvider.overrideWithValue(authRepository),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          authRepository,
+        ),
       if (behaviorRepository != null)
         behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
       if (telemetryRecorder != null)
         appTelemetryReporterProvider.overrideWithValue(telemetryRecorder),
+      if (settingsCommandWriter != null)
+        userSettingsCommandWriterProvider.overrideWithValue(
+          settingsCommandWriter,
+        ),
     ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
@@ -412,6 +601,14 @@ Widget _buildSettingsApp({
               GoRoute(
                 path: AppRoutePaths.settingsDarkModeSegment,
                 builder: (context, state) => const SettingsDarkModePage(),
+              ),
+              GoRoute(
+                path: AppRoutePaths.settingsNotificationsSegment,
+                builder: (context, state) => const SettingsNotificationsPage(),
+              ),
+              GoRoute(
+                path: AppRoutePaths.settingsCallsSegment,
+                builder: (context, state) => const SettingsCallsPage(),
               ),
               GoRoute(
                 path: AppRoutePaths.settingsAboutSegment,
@@ -480,6 +677,69 @@ abstract final class SettingsRemovedText {
   static const String userAndPersona = '用户与分身';
 }
 
+class _SettingsQueryReader implements contracts.UserSettingsQueryReader {
+  @override
+  Future<contracts.NotificationSettingsView> getNotificationSettings() async =>
+      contracts.NotificationSettingsView(
+        userId: 'owner-id',
+        enablePush: true,
+        enableMarketing: false,
+        version: 1,
+        updatedAt: DateTime.utc(2026, 7, 19),
+      );
+
+  @override
+  Future<contracts.PrivacySettingsView> getPrivacySettings() async =>
+      contracts.PrivacySettingsView(
+        userId: 'owner-id',
+        allowStrangerMsg: true,
+        profileVisibility: contracts.ProfileVisibility.public,
+        assistantEnabled: true,
+        version: 1,
+        updatedAt: DateTime.utc(2026, 7, 19),
+      );
+
+  @override
+  Future<contracts.CallSettingsView> getCallSettings() async =>
+      contracts.CallSettingsView(
+        userId: 'owner-id',
+        defaultIncomingCallRingtoneId: contracts.OfficialRingtoneId(
+          'official.default',
+        ),
+        allowCallerRingtoneOverride: true,
+        enableCallVibration: true,
+        enableGroupCallRing: true,
+        version: 1,
+        updatedAt: DateTime.utc(2026, 7, 19),
+      );
+
+  @override
+  Future<contracts.AppearanceSettingsView> getAppearanceSettings() async =>
+      contracts.AppearanceSettingsView(
+        themeMode: contracts.ThemeModeSetting.system,
+        fontSizePreset: contracts.FontSizePreset.md,
+        source: contracts.AppearanceSource.ownerDefault,
+        ownerDefaultThemeMode: contracts.ThemeModeSetting.system,
+        ownerDefaultFontSizePreset: contracts.FontSizePreset.md,
+        hasSubAccountOverride: false,
+        version: 1,
+        updatedAt: DateTime.utc(2026, 7, 19),
+      );
+}
+
+final class _RecoveringSettingsQueryReader extends _SettingsQueryReader {
+  int loadCount = 0;
+
+  @override
+  Future<contracts.AppearanceSettingsView> getAppearanceSettings() {
+    loadCount += 1;
+    if (loadCount == 1) {
+      throw StateError('appearance settings unavailable');
+    }
+    return super.getAppearanceSettings();
+  }
+}
+
 class _SpyAuthSessionStore implements AuthSessionStore {
   int softLogoutCount = 0;
   int clearSessionCount = 0;
@@ -500,8 +760,8 @@ class _SpyAuthSessionStore implements AuthSessionStore {
   );
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    contracts.AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -509,14 +769,11 @@ class _SpyAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(contracts.TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    contracts.AccountHintSnapshot? accountHint,
   ) async {}
 
   @override
@@ -539,12 +796,34 @@ class _SpyAuthSessionStore implements AuthSessionStore {
   Future<void> markForegroundAuthCheckNow() async {}
 }
 
-class _SpyAuthRepository extends TestAuthRepository {
+class _SpyAccountSessionLifecycleWriter
+    implements contracts.AccountSessionLifecycleCommandWriter {
   int logoutCount = 0;
 
   @override
-  Future<void> logout({String? refreshToken, String? deviceId}) async {
+  Future<contracts.LogoutAck> logout(contracts.LogoutCommand command) async {
     logoutCount += 1;
+    return const contracts.LogoutAck(revoked: true);
+  }
+
+  @override
+  Future<contracts.TokenRefreshGrant> refreshToken(
+    contracts.RefreshTokenCommand command,
+  ) async {
+    return const contracts.TokenRefreshGrant(
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      sessionRememberTtlSeconds: 2592000,
+    );
+  }
+}
+
+final class _FailingLogoutAccountSessionLifecycleWriter
+    extends _SpyAccountSessionLifecycleWriter {
+  @override
+  Future<contracts.LogoutAck> logout(contracts.LogoutCommand command) async {
+    logoutCount += 1;
+    throw StateError('settings remote revoke unavailable');
   }
 }
 
@@ -577,4 +856,99 @@ final class _SettingsTestAuthSessionController extends AuthSessionController {
     identityOrigin: 'settings-test',
     installId: 'install-id',
   );
+}
+
+final class _EmptyPushEndpointGateway implements PushEndpointGateway {
+  const _EmptyPushEndpointGateway();
+
+  @override
+  Future<void> acknowledgeMutation(String mutationId) async {}
+
+  @override
+  Future<void> queueActiveEndpointRemovals() async {}
+
+  @override
+  Future<void> purgeForTerminalAccountClosure() async {}
+
+  @override
+  Future<List<PushEndpointMutation>> readPendingMutations() async =>
+      const <PushEndpointMutation>[];
+
+  @override
+  Future<void> recordUpsert(DevicePushEndpoint endpoint) async {}
+}
+
+final class _NoopDevicePushEndpointWriter implements DevicePushEndpointWriter {
+  const _NoopDevicePushEndpointWriter();
+
+  @override
+  Future<void> remove(DevicePushEndpoint endpoint) async {}
+
+  @override
+  Future<void> upsert(DevicePushEndpoint endpoint) async {}
+}
+
+/// 记录 UserSettings typed 命令的 stub；receipt 与 Remote 同形。
+final class _RecordingUserSettingsCommandWriter
+    implements contracts.UserSettingsCommandWriter {
+  final List<contracts.UpdateNotificationSettingsCommand> notificationCommands =
+      <contracts.UpdateNotificationSettingsCommand>[];
+  final List<contracts.UpdateCallSettingsCommand> callCommands =
+      <contracts.UpdateCallSettingsCommand>[];
+  bool failNotification = false;
+  int version = 1;
+
+  @override
+  Future<contracts.UserSettingsCommandResult> updateNotificationSettings(
+    contracts.UpdateNotificationSettingsCommand command,
+  ) async {
+    if (failNotification) {
+      throw StateError('settings backend unavailable');
+    }
+    notificationCommands.add(command);
+    return contracts.UserSettingsCommandResult(
+      userId: 'owner-id',
+      version: ++version,
+      idempotentReplay: false,
+    );
+  }
+
+  @override
+  Future<contracts.UserSettingsCommandResult> updatePrivacySettings(
+    contracts.UpdatePrivacySettingsCommand command,
+  ) async {
+    return contracts.UserSettingsCommandResult(
+      userId: 'owner-id',
+      version: ++version,
+      idempotentReplay: false,
+    );
+  }
+
+  @override
+  Future<contracts.UserSettingsCommandResult> updateCallSettings(
+    contracts.UpdateCallSettingsCommand command,
+  ) async {
+    callCommands.add(command);
+    return contracts.UserSettingsCommandResult(
+      userId: 'owner-id',
+      version: ++version,
+      idempotentReplay: false,
+    );
+  }
+
+  @override
+  Future<contracts.AppearanceSettingsView> updateAppearanceSettings(
+    contracts.UpdateAppearanceSettingsCommand command,
+  ) async {
+    return contracts.AppearanceSettingsView(
+      themeMode: command.themeMode,
+      fontSizePreset: command.fontSizePreset,
+      source: contracts.AppearanceSource.ownerDefault,
+      ownerDefaultThemeMode: command.themeMode,
+      ownerDefaultFontSizePreset: command.fontSizePreset,
+      hasSubAccountOverride: false,
+      version: ++version,
+      updatedAt: DateTime.utc(2026, 7, 19),
+    );
+  }
 }

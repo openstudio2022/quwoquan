@@ -1,13 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
@@ -16,7 +17,9 @@ void main() {
     test('loadMessages fills missing sender snapshots from members', () async {
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -37,16 +40,16 @@ void main() {
       expect(friendMessage.senderName, '契约联系人');
       expect(
         friendMessage.senderAvatar,
-        contains(
-          '/media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png',
-        ),
+        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/'
+        'archived-avatar/user/fixture_user_friend/avatar.png',
+        reason: '统一 alpha 测试入口注入的 avatar CDN 必须解析相对头像引用',
       );
       expect(selfMessage.senderName, matches(_defaultNicknamePattern));
       expect(
         selfMessage.senderAvatar,
-        contains(
-          '/media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png',
-        ),
+        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/'
+        'archived-avatar/user/fixture_user_current/avatar.png',
+        reason: '不得改用本地 gateway 或额外 URL 拼接回退',
       );
     });
 
@@ -54,7 +57,9 @@ void main() {
       final writer = _TrackingMessageWriter();
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           ...mockContentFacetOverrides(MockContentRepository()),
           activePersonaContextProvider.overrideWith(
@@ -107,7 +112,9 @@ void main() {
       final writer = _TrackingMessageWriter();
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           ...mockContentFacetOverrides(MockContentRepository()),
           activePersonaContextProvider.overrideWith(

@@ -55,15 +55,34 @@ func (r *RedisReadyIndex) EnqueueReadyOrMerge(ctx context.Context, task Reliable
 	if err := r.Ensure(ctx); err != nil {
 		return err
 	}
-	_, err := r.client.XAdd(ctx, r.stream, map[string]string{
-		"taskId":         strings.TrimSpace(task.TaskID),
+	taskID := strings.TrimSpace(task.TaskID)
+	if taskID == "" {
+		return fmt.Errorf("reliabletask: ready task id is required")
+	}
+	markerKey := r.readyMarkerKey(taskID)
+	claimed, err := r.client.SetNX(ctx, markerKey, taskID, 0)
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		return nil
+	}
+	_, err = r.client.XAdd(ctx, r.stream, map[string]string{
+		"taskId":         taskID,
 		"taskType":       strings.TrimSpace(task.TaskType),
 		"outboxId":       strings.TrimSpace(task.OutboxID),
 		"dedupeKey":      strings.TrimSpace(task.DedupeKey),
 		"idempotencyKey": strings.TrimSpace(task.IdempotencyKey),
 		"queue":          r.queue,
 	})
+	if err != nil {
+		_ = r.client.Del(ctx, markerKey)
+	}
 	return err
+}
+
+func (r *RedisReadyIndex) readyMarkerKey(taskID string) string {
+	return r.stream + ":queued:" + strings.TrimSpace(taskID)
 }
 
 func (r *RedisReadyIndex) Claim(ctx context.Context, consumer string, count int64, block time.Duration) ([]ReadyIndexMessage, error) {
@@ -97,7 +116,31 @@ func (r *RedisReadyIndex) Ack(ctx context.Context, message ReadyIndexMessage) er
 	if stream == "" {
 		stream = r.stream
 	}
-	return r.client.XAck(ctx, stream, r.group, message.RawID)
+	if err := r.client.XAck(ctx, stream, r.group, message.RawID); err != nil {
+		return err
+	}
+	return r.client.Del(ctx, r.readyMarkerKey(message.TaskID))
+}
+
+// Purge removes one discarded execution's disposable stream and the exact
+// marker keys derived from its Mongo task IDs. Streams are execution-scoped.
+func (r *RedisReadyIndex) Purge(ctx context.Context, taskIDs []string) error {
+	keys := make([]string, 0, len(taskIDs)+1)
+	keys = append(keys, r.stream)
+	seen := make(map[string]struct{}, len(taskIDs))
+	for _, taskID := range taskIDs {
+		taskID = strings.TrimSpace(taskID)
+		if taskID == "" {
+			continue
+		}
+		markerKey := r.readyMarkerKey(taskID)
+		if _, exists := seen[markerKey]; exists {
+			continue
+		}
+		seen[markerKey] = struct{}{}
+		keys = append(keys, markerKey)
+	}
+	return r.client.Del(ctx, keys...)
 }
 
 func (r *RedisReadyIndex) ReclaimPending(ctx context.Context, consumer string, minIdle time.Duration, count int64) ([]ReadyIndexMessage, error) {

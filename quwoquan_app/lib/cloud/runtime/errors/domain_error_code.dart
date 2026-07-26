@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/rtc/generated/rtc_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/notification/notification_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 
 class DomainErrorCode {
@@ -64,6 +65,12 @@ class DomainErrorCodeRegistry {
     if (code.startsWith('ENTITY.')) {
       final value = EntityErrorCode.fromCode(code);
       return value == EntityErrorCode.unknown ? null : _fromEntity(value);
+    }
+    if (code.startsWith('NOTIFICATION.')) {
+      final value = NotificationErrorCode.fromCode(code);
+      return value == NotificationErrorCode.unknown
+          ? null
+          : _fromNotification(value);
     }
     return null;
   }
@@ -147,6 +154,16 @@ class DomainErrorCodeRegistry {
   static DomainErrorCode _fromEntity(EntityErrorCode value) {
     return DomainErrorCode(
       domain: 'entity',
+      code: value.code,
+      defaultMessage: value.defaultMessage,
+      httpStatus: value.httpStatus,
+      value: value,
+    );
+  }
+
+  static DomainErrorCode _fromNotification(NotificationErrorCode value) {
+    return DomainErrorCode(
+      domain: 'notification',
       code: value.code,
       defaultMessage: value.defaultMessage,
       httpStatus: value.httpStatus,

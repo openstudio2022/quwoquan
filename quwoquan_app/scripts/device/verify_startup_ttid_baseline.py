@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Ratchet gate for cold-start TTID baseline JSON artifacts.
 
-Validates committed baseline structure and blocks regressions where the latest
-baseline P50 firstVisibleMs exceeds the ratchet by more than 10%.
+Without ``--baseline`` this validates the committed ratchet contract only.
+With an explicit measurement artifact it blocks P50 regressions over 10%.
 """
 
 from __future__ import annotations
@@ -14,11 +14,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_DIR = ROOT / "quwoquan_app"
-DEFAULT_RATCHET = ROOT / "specs/gates/startup_ttid_ratchet_baseline.json"
-DEFAULT_BASELINE = DEFAULT_RATCHET
-REQUIRED_ACCEPTANCE = (
+DEFAULT_RATCHET = ROOT / "quwoquan_ops/policies/gates/startup_ttid_ratchet_baseline.json"
+REQUIRED_SPEC = (
     ROOT
-    / "specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/acceptance.yaml"
+    / "specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md"
 )
 REQUIRED_TESTS = (
     APP_DIR / "test/local_contract/app/startup_ttid__local_contract_test.dart",
@@ -87,7 +86,11 @@ def validate_commercial_uat(raw: dict) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--baseline", default=str(DEFAULT_BASELINE))
+    parser.add_argument(
+        "--baseline",
+        default="",
+        help="Explicit startup measurement JSON; omitted mode validates ratchet structure only.",
+    )
     parser.add_argument("--ratchet", default=str(DEFAULT_RATCHET))
     parser.add_argument(
         "--regression-ratio",
@@ -103,7 +106,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    baseline_path = Path(args.baseline)
+    baseline_path = Path(args.baseline) if args.baseline else None
     ratchet_path = Path(args.ratchet)
 
     missing_tests = [str(path) for path in REQUIRED_TESTS if not path.is_file()]
@@ -113,28 +116,63 @@ def main() -> int:
             print(f"  - {item}", file=sys.stderr)
         return 1
 
-    if not REQUIRED_ACCEPTANCE.is_file():
-        print(f"FAIL: missing acceptance: {REQUIRED_ACCEPTANCE}", file=sys.stderr)
+    if not REQUIRED_SPEC.is_file() or "GWT-" not in REQUIRED_SPEC.read_text(encoding="utf-8"):
+        print(f"FAIL: missing startup spec/GWT: {REQUIRED_SPEC}", file=sys.stderr)
         return 1
 
-    if not baseline_path.is_file():
+    if args.write_ratchet and baseline_path is None:
+        print("FAIL: --write-ratchet requires --baseline", file=sys.stderr)
+        return 1
+    if args.commercial_uat and baseline_path is None:
+        print("FAIL: --commercial-uat requires --baseline", file=sys.stderr)
+        return 1
+    if baseline_path is not None and baseline_path.resolve() == ratchet_path.resolve():
+        print("FAIL: --baseline and --ratchet must be different files", file=sys.stderr)
+        return 1
+    if baseline_path is not None and not baseline_path.is_file():
         print(f"FAIL: missing baseline: {baseline_path}", file=sys.stderr)
         return 1
 
-    baseline = load_json(baseline_path)
-    shape_errors = validate_baseline_shape(baseline)
-    if shape_errors:
-        print(f"FAIL: invalid baseline shape: {baseline_path}", file=sys.stderr)
-        for item in shape_errors:
-            print(f"  - {item}", file=sys.stderr)
-        return 1
-    if args.commercial_uat:
-        commercial_errors = validate_commercial_uat(baseline)
-        if commercial_errors:
-            print("FAIL: commercial startup UAT evidence incomplete:", file=sys.stderr)
-            for item in commercial_errors:
+    baseline: dict = {}
+    if baseline_path is not None:
+        baseline = load_json(baseline_path)
+        shape_errors = validate_baseline_shape(baseline)
+        if shape_errors:
+            print(f"FAIL: invalid baseline shape: {baseline_path}", file=sys.stderr)
+            for item in shape_errors:
                 print(f"  - {item}", file=sys.stderr)
             return 1
+        if args.commercial_uat:
+            commercial_errors = validate_commercial_uat(baseline)
+            if commercial_errors:
+                print("FAIL: commercial startup UAT evidence incomplete:", file=sys.stderr)
+                for item in commercial_errors:
+                    print(f"  - {item}", file=sys.stderr)
+                return 1
+
+    if baseline_path is None:
+        if not ratchet_path.is_file():
+            print(f"FAIL: missing ratchet baseline: {ratchet_path}", file=sys.stderr)
+            return 1
+        ratchet = load_json(ratchet_path)
+        shape_errors = validate_baseline_shape(ratchet)
+        if shape_errors:
+            print(f"FAIL: invalid ratchet shape: {ratchet_path}", file=sys.stderr)
+            for item in shape_errors:
+                print(f"  - {item}", file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "passed": True,
+                    "mode": "ratchet_structure",
+                    "ratchet": str(ratchet_path),
+                    "ratchetP50FirstVisibleMs": ratchet["p50"]["firstVisibleMs"],
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
 
     current_p50 = baseline.get("p50", {}).get("firstVisibleMs")
     if current_p50 is None:

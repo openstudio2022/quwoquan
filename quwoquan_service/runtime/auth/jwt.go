@@ -69,6 +69,7 @@ type TokenSubject struct {
 	AccountID     string
 	PersonaID     string
 	DeviceActorID string
+	AuthEpoch     int64
 	Scopes        []string
 	Permissions   []string
 	Roles         []string
@@ -82,6 +83,7 @@ type Claims struct {
 	Subject       string    `json:"sub,omitempty"`
 	Persona       string    `json:"psn,omitempty"`
 	DeviceActorID string    `json:"did,omitempty"`
+	AuthEpoch     int64     `json:"ae,omitempty"`
 	TokenVersion  int       `json:"ver"`
 	Scope         string    `json:"scope,omitempty"`
 	Permissions   []string  `json:"permissions,omitempty"`
@@ -115,13 +117,20 @@ func (s *Signer) Sign(subject TokenSubject) (string, error) {
 	accountID := strings.TrimSpace(subject.AccountID)
 	personaID := strings.TrimSpace(subject.PersonaID)
 	deviceActorID := strings.TrimSpace(subject.DeviceActorID)
+	authEpoch := subject.AuthEpoch
 	switch s.config.Type {
 	case TokenTypeAccess:
 		if accountID == "" || deviceActorID != "" {
 			return "", errors.New("auth: access token requires only an account subject")
 		}
+		if authEpoch < 0 {
+			return "", errors.New("auth: access token auth epoch cannot be negative")
+		}
+		if authEpoch == 0 && !strings.HasPrefix(accountID, "service:") {
+			authEpoch = 1
+		}
 	case TokenTypeDevice:
-		if deviceActorID == "" || accountID != "" || personaID != "" {
+		if deviceActorID == "" || accountID != "" || personaID != "" || authEpoch != 0 {
 			return "", errors.New("auth: device ticket requires only a device actor")
 		}
 	}
@@ -137,6 +146,7 @@ func (s *Signer) Sign(subject TokenSubject) (string, error) {
 		Subject:       accountID,
 		Persona:       personaID,
 		DeviceActorID: deviceActorID,
+		AuthEpoch:     authEpoch,
 		TokenVersion:  s.config.TokenVersion,
 		Scope:         strings.Join(normalizedGrants(subject.Scopes), " "),
 		Permissions:   normalizedGrants(subject.Permissions),
@@ -230,13 +240,15 @@ func (v *Verifier) Verify(token string) (*Claims, error) {
 	switch v.config.Type {
 	case TokenTypeAccess:
 		if strings.TrimSpace(claims.Subject) == "" ||
-			strings.TrimSpace(claims.DeviceActorID) != "" {
+			strings.TrimSpace(claims.DeviceActorID) != "" ||
+			claims.AuthEpoch < 0 {
 			return nil, ErrInvalidToken
 		}
 	case TokenTypeDevice:
 		if strings.TrimSpace(claims.DeviceActorID) == "" ||
 			strings.TrimSpace(claims.Subject) != "" ||
-			strings.TrimSpace(claims.Persona) != "" {
+			strings.TrimSpace(claims.Persona) != "" ||
+			claims.AuthEpoch != 0 {
 			return nil, ErrInvalidToken
 		}
 	}

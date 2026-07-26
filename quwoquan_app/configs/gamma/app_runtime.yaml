@@ -9,7 +9,8 @@ runtime:
   mediaImageCdnBaseUrl: https://gamma-image.quwoquan-env.test:19100
   mediaVideoCdnBaseUrl: https://gamma-video.quwoquan-env.test:19100
   mediaUploadBaseUrl: https://gamma-upload.quwoquan-env.test:19130
-  currentUserId: fixture_user_current
+  rtcMediaConnectionUrl: wss://gamma-rtc.quwoquan-env.test:19000
+  currentUserId: ''
 seed:
   enabled: false
-  manifest: quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json
+  manifest: ''

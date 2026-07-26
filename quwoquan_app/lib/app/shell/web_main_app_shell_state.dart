@@ -180,15 +180,15 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         return const <_WebContextTabSpec>[
           _WebContextTabSpec(
             id: 'messages',
-            label: UITextConstants.webPcMessagesTabMessages,
+            label: ChatText.webPcMessagesTabMessages,
           ),
           _WebContextTabSpec(
             id: 'contacts',
-            label: UITextConstants.webPcMessagesTabContacts,
+            label: ChatText.webPcMessagesTabContacts,
           ),
           _WebContextTabSpec(
             id: 'groups',
-            label: UITextConstants.webPcMessagesTabGroups,
+            label: ChatText.webPcMessagesTabGroups,
           ),
         ];
       case MainTabDestination.interestMatch:
@@ -234,7 +234,7 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
       case MainTabDestination.create:
         return UITextConstants.webPcSearchHintCreate;
       case MainTabDestination.chat:
-        return UITextConstants.webPcSearchHintMessages;
+        return ChatText.webPcSearchHintMessages;
       case MainTabDestination.interestMatch:
         return UITextConstants.webPcSearchHintHome;
       case MainTabDestination.profile:

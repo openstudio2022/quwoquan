@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show MaxLengthEnforcement;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
@@ -10,6 +12,8 @@ import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_draft_store.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
@@ -18,6 +22,8 @@ import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+part 'comment_input_overlay_components.dart';
 
 /// 评论统一输入浮层。
 ///
@@ -35,6 +41,7 @@ class CommentInputOverlay {
   static Future<bool> show(
     BuildContext context, {
     required String postId,
+    required AppUiSurface sourceSurface,
     CommentConfig config = const CommentConfig(),
     ContentCommentListItem? replyTo,
     String surfaceMode = 'overlay',
@@ -48,7 +55,9 @@ class CommentInputOverlay {
         config: config,
         replyTo: replyTo,
         surfaceMode: surfaceMode,
+        sourceSurface: sourceSurface,
         mentionCandidates: mentionCandidates ?? _defaultMentions,
+        loadFollowingCandidates: mentionCandidates == null,
         onSubmit: onSubmit,
       ),
     );
@@ -60,7 +69,7 @@ class CommentInputOverlay {
         ContentCommentMention(
           subjectType: 'assistant',
           subjectId: 'assistant_xiaoqu',
-          displayName: UITextConstants.assistantEntryXiaoqu,
+          displayName: AssistantText.assistantEntryXiaoqu,
         ),
       ];
 }
@@ -70,7 +79,9 @@ class _CommentInputSheet extends ConsumerStatefulWidget {
     required this.postId,
     required this.config,
     required this.surfaceMode,
+    required this.sourceSurface,
     required this.mentionCandidates,
+    required this.loadFollowingCandidates,
     this.replyTo,
     this.onSubmit,
   });
@@ -79,7 +90,9 @@ class _CommentInputSheet extends ConsumerStatefulWidget {
   final CommentConfig config;
   final ContentCommentListItem? replyTo;
   final String surfaceMode;
+  final AppUiSurface sourceSurface;
   final List<ContentCommentMention> mentionCandidates;
+  final bool loadFollowingCandidates;
   final FutureOr<void> Function(CommentComposerPayload payload)? onSubmit;
 
   @override
@@ -94,18 +107,29 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   final List<String> _attachmentMediaIds = <String>[];
 
   late CommentConfig _effectiveConfig;
+  late List<ContentCommentMention> _mentionCandidates;
   bool _showEmojiPanel = false;
+  bool _showMentionPanel = false;
+  bool _mentionCandidatesLoading = false;
+  bool _followingCandidatesLoaded = false;
+  Object? _mentionCandidatesError;
   bool _isUploadingAttachment = false;
   bool _isSubmitting = false;
+  bool _continuationResumeScheduled = false;
   bool _draftCleared = false;
   Timer? _draftSaveTimer;
+  late final String _draftActorScope;
 
   @override
   void initState() {
     super.initState();
+    _draftActorScope = ref.read(currentUserIdProvider).trim();
     _effectiveConfig = _resolveComposerConfig(
       ref.read(commentRemoteConfigProvider),
       widget.config,
+    );
+    _mentionCandidates = List<ContentCommentMention>.of(
+      widget.mentionCandidates,
     );
     _controller.addListener(_onTextChanged);
     // 输入态曝光：运营漏斗起点（区分回复 vs 顶层评论、来源宿主）。
@@ -127,6 +151,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   Future<void> _restoreDraft() async {
     final draft = await CommentDraftStore.load(
       widget.postId,
+      actorScope: _draftActorScope,
       replyToCommentId: widget.replyTo?.id,
     );
     if (draft == null || !mounted) return;
@@ -140,7 +165,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
         ..clear()
         ..addAll(draft.attachmentMediaIds);
       for (final subjectId in draft.mentionSubjectIds) {
-        final candidate = widget.mentionCandidates
+        final candidate = _mentionCandidates
             .where((c) => c.subjectId == subjectId)
             .toList(growable: false);
         if (candidate.isNotEmpty &&
@@ -162,6 +187,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     unawaited(
       CommentDraftStore.save(
         widget.postId,
+        actorScope: _draftActorScope,
         replyToCommentId: widget.replyTo?.id,
         draft: CommentDraft(
           content: _controller.text,
@@ -180,6 +206,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     unawaited(
       CommentDraftStore.clear(
         widget.postId,
+        actorScope: _draftActorScope,
         replyToCommentId: widget.replyTo?.id,
       ),
     );
@@ -241,12 +268,76 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   void _toggleEmojiPanel() {
     setState(() {
       _showEmojiPanel = !_showEmojiPanel;
+      _showMentionPanel = false;
       if (_showEmojiPanel) {
         _focusNode.unfocus();
       } else {
         _focusNode.requestFocus();
       }
     });
+  }
+
+  void _toggleMentionPanel() {
+    final shouldShow = !_showMentionPanel;
+    setState(() {
+      _showMentionPanel = shouldShow;
+      _showEmojiPanel = false;
+    });
+    if (!shouldShow) {
+      _focusNode.requestFocus();
+      return;
+    }
+    _focusNode.unfocus();
+    if (widget.loadFollowingCandidates && !_followingCandidatesLoaded) {
+      unawaited(_loadFollowingMentionCandidates());
+    }
+  }
+
+  Future<void> _loadFollowingMentionCandidates() async {
+    if (_mentionCandidatesLoading || _followingCandidatesLoaded) return;
+    final session = ref.read(authSessionControllerProvider);
+    final subAccountId = session.activeSubAccountId.trim();
+    if (!session.isAuthenticated || subAccountId.isEmpty) {
+      return;
+    }
+    setState(() {
+      _mentionCandidatesLoading = true;
+      _mentionCandidatesError = null;
+    });
+    try {
+      final page = await ref
+          .read(personaRelationshipQueryProvider(widget.sourceSurface))
+          .listFollowing(subAccountId: subAccountId, limit: 20);
+      if (!mounted) return;
+      final merged = <String, ContentCommentMention>{
+        for (final candidate in _mentionCandidates)
+          candidate.subjectId: candidate,
+      };
+      for (final relation in page.items) {
+        final subjectId = relation.subAccountId.trim();
+        final displayName = relation.displayName.trim();
+        if (subjectId.isEmpty || displayName.isEmpty) continue;
+        merged.putIfAbsent(
+          subjectId,
+          () => ContentCommentMention(
+            subjectType: 'user',
+            subjectId: subjectId,
+            displayName: displayName,
+          ),
+        );
+      }
+      setState(() {
+        _mentionCandidates = merged.values.toList(growable: false);
+        _mentionCandidatesLoading = false;
+        _followingCandidatesLoaded = true;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _mentionCandidatesLoading = false;
+        _mentionCandidatesError = error;
+      });
+    }
   }
 
   void _addMention(ContentCommentMention candidate) {
@@ -266,8 +357,11 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
           );
     }
     _insertText('${UITextConstants.commentMention}$displayName ');
-    if (_showEmojiPanel) {
-      setState(() => _showEmojiPanel = false);
+    if (_showEmojiPanel || _showMentionPanel) {
+      setState(() {
+        _showEmojiPanel = false;
+        _showMentionPanel = false;
+      });
     }
     _focusNode.requestFocus();
   }
@@ -299,11 +393,19 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
             ? workBrowserContentMediaFacetProvider
             : homeFeedContentMediaFacetProvider,
       );
-      final uploaded = await ContentMediaUploadCoordinator(
-        media: media,
-        fileStorage: ref.read(fileStorageGatewayProvider),
-        uploadObject: ref.read(contentMediaObjectUploadProvider),
-      ).uploadLocalPath(localPath: path, mediaType: ContentMediaType.image);
+      final source = await ref
+          .read(contentMediaSourceReaderProvider)
+          .prepare(path);
+      final uploaded =
+          await ContentMediaUploadCoordinator(
+            media: media,
+            telemetry: ref.read(appTelemetryReporterProvider),
+          ).uploadPreparedSource(
+            source: source,
+            mediaType: ContentMediaType.image,
+            contentType: contentMediaTypeForPath(path, ContentMediaType.image),
+            uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
+          );
       if (!mounted) return;
       setState(() => _attachmentMediaIds.add(uploaded.assetId));
       _scheduleDraftSave();
@@ -383,7 +485,15 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
               ),
             ),
           );
-      unawaited(requireLogin(ref, context, AuthGateReason.comment));
+      unawaited(
+        requireLogin(
+          ref,
+          context,
+          AuthGateReason.comment,
+          dismissFallback: AppRoutePaths.home,
+          dismissPolicy: LoginDismissPolicy.safeFallback,
+        ),
+      );
       return;
     }
 
@@ -391,32 +501,50 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   }
 
   /// 登录态翻转为已认证时，消费本帖待续接评论并在原浮层自动续提。
-  void _maybeResumeContinuation() {
-    if (_isSubmitting) return;
-    if (!ref.read(authSessionControllerProvider).isAuthenticated) return;
-    final pending = ref
-        .read(authContinuationProvider.notifier)
-        .take<SubmitCommentContinuation>();
-    if (pending == null) return;
-    // 续接帖与本浮层不一致：放回槽位，交由对应宿主续接。
-    if ((pending.postId != null && pending.postId != widget.postId) ||
-        pending.replyToCommentId != widget.replyTo?.id) {
-      ref.read(authContinuationProvider.notifier).set(pending);
+  void _maybeResumeContinuation({int remainingFrames = 30}) {
+    if (_isSubmitting ||
+        _continuationResumeScheduled ||
+        !ref.read(authSessionControllerProvider).isAuthenticated) {
       return;
     }
-    setState(() {
-      _controller.text = pending.content;
-      _controller.selection = TextSelection.collapsed(
-        offset: _controller.text.length,
-      );
-      _attachmentMediaIds
-        ..clear()
-        ..addAll(pending.attachmentMediaIds);
-      _selectedMentions
-        ..clear()
-        ..addAll(pending.mentions);
+    _continuationResumeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _continuationResumeScheduled = false;
+      if (!mounted ||
+          _isSubmitting ||
+          !ref.read(authSessionControllerProvider).isAuthenticated) {
+        return;
+      }
+      if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+        if (remainingFrames > 0) {
+          _maybeResumeContinuation(remainingFrames: remainingFrames - 1);
+        }
+        return;
+      }
+      final pending = ref
+          .read(authContinuationProvider.notifier)
+          .take<SubmitCommentContinuation>();
+      if (pending == null) return;
+      // 续接帖与本浮层不一致：放回槽位，交由对应宿主续接。
+      if ((pending.postId != null && pending.postId != widget.postId) ||
+          pending.replyToCommentId != widget.replyTo?.id) {
+        ref.read(authContinuationProvider.notifier).set(pending);
+        return;
+      }
+      setState(() {
+        _controller.text = pending.content;
+        _controller.selection = TextSelection.collapsed(
+          offset: _controller.text.length,
+        );
+        _attachmentMediaIds
+          ..clear()
+          ..addAll(pending.attachmentMediaIds);
+        _selectedMentions
+          ..clear()
+          ..addAll(pending.mentions);
+      });
+      unawaited(_performSubmit());
     });
-    unawaited(_performSubmit());
   }
 
   Future<void> _performSubmit() async {
@@ -655,15 +783,12 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
           ),
           SizedBox(width: AppSpacing.md),
           _ToolIcon(
-            key: TestKeys.commentAtXiaoquButton,
+            key: TestKeys.commentMentionButton,
             icon: CupertinoIcons.at,
             isDark: isDark,
+            active: _showMentionPanel,
             semanticLabel: UITextConstants.commentMention,
-            onTap: () {
-              if (widget.mentionCandidates.isNotEmpty) {
-                _addMention(widget.mentionCandidates.first);
-              }
-            },
+            onTap: _toggleMentionPanel,
           ),
           SizedBox(width: AppSpacing.md),
           _ToolIcon(
@@ -672,7 +797,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
                 : CupertinoIcons.smiley,
             isDark: isDark,
             active: _showEmojiPanel,
-            semanticLabel: UITextConstants.emojiRecent,
+            semanticLabel: ChatText.emojiRecent,
             onTap: _toggleEmojiPanel,
           ),
           const Spacer(),
@@ -708,281 +833,66 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   }
 
   Widget _buildAccessory(bool isDark) {
+    if (_showMentionPanel) {
+      return _buildMentionPicker(isDark);
+    }
     if (_showEmojiPanel) {
       return UnifiedEmojiPicker(onEmojiSelected: _insertText);
     }
     return _RecentEmojiStrip(isDark: isDark, onSelected: _insertText);
   }
-}
 
-CommentConfig _resolveComposerConfig(
-  CommentRemoteConfig remote,
-  CommentConfig fallback,
-) {
-  return CommentConfig(
-    maxLength: remote.maxLength > 0 ? remote.maxLength : fallback.maxLength,
-    maxImageAttachments: remote.maxImageAttachments > 0
-        ? remote.maxImageAttachments
-        : fallback.maxImageAttachments,
-    enabled: remote.enabled && fallback.enabled,
-  );
-}
-
-class _ReplyIndicator extends StatelessWidget {
-  const _ReplyIndicator({
-    required this.isDark,
-    required this.username,
-    required this.onCancel,
-  });
-
-  final bool isDark;
-  final String username;
-  final VoidCallback onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.md,
-        0,
-      ),
-      child: Row(
-        children: [
-          Icon(
-            CupertinoIcons.arrowshape_turn_up_left,
-            size: AppSpacing.iconSmall,
-            color: AppColors.primaryColor,
-          ),
-          SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Text(
-              '${UITextConstants.replyAction} @$username',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: AppColors.primaryColor,
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: onCancel,
-            child: Icon(
-              CupertinoIcons.xmark,
-              size: AppSpacing.iconSmall,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundTertiary,
-              ),
-            ),
-          ),
-        ],
-      ),
+  Widget _buildMentionPicker(bool isDark) {
+    final secondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
     );
-  }
-}
-
-class _ToolIcon extends StatelessWidget {
-  const _ToolIcon({
-    super.key,
-    required this.icon,
-    required this.isDark,
-    required this.semanticLabel,
-    this.onTap,
-    this.active = false,
-    this.busy = false,
-  });
-
-  final IconData icon;
-  final bool isDark;
-  final String semanticLabel;
-  final VoidCallback? onTap;
-  final bool active;
-  final bool busy;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: const Size.square(AppSpacing.minInteractiveSize),
-      onPressed: onTap,
-      child: SizedBox(
-        width: AppSpacing.minInteractiveSize,
-        height: AppSpacing.minInteractiveSize,
-        child: Center(
-          child: busy
-              ? const CupertinoActivityIndicator()
-              : Icon(
-                  icon,
-                  size: AppSpacing.appChromeActionIconSize,
-                  semanticLabel: semanticLabel,
-                  color: active
-                      ? AppColors.primaryColor
-                      : AppColorsFunctional.getColor(
-                          isDark,
-                          ColorType.foregroundSecondary,
-                        ),
-                ),
-        ),
+    return ConstrainedBox(
+      key: TestKeys.commentMentionPicker,
+      constraints: const BoxConstraints(
+        maxHeight: AppSpacing.commentComposerMaxHeight,
       ),
-    );
-  }
-}
-
-class _SendButton extends StatelessWidget {
-  const _SendButton({required this.canSend, this.onTap});
-
-  final bool canSend;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      key: TestKeys.submitCommentButton,
-      padding: EdgeInsets.zero,
-      minimumSize: const Size.square(AppSpacing.minInteractiveSize),
-      onPressed: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: canSend
-              ? AppColors.primaryColor
-              : AppColors.primaryColor.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-        ),
-        child: Text(
-          UITextConstants.commentSend,
-          style: TextStyle(
-            fontSize: AppTypography.body,
-            fontWeight: AppTypography.semiBold,
-            color: AppColors.white,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 输入框底部的单张图片缩略图（右上角可删除），形态参考主流评论输入。
-class _AttachmentThumbnail extends StatelessWidget {
-  const _AttachmentThumbnail({
-    required this.mediaId,
-    required this.isDark,
-    required this.onRemove,
-  });
-
-  final String mediaId;
-  final bool isDark;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final thumbnailUrl = 'media/comment/$mediaId/v1/comment.png';
-    return SizedBox(
-      width: AppSpacing.commentAttachmentThumbnailSize,
-      height: AppSpacing.commentAttachmentThumbnailSize,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
-            child: Container(
-              width: AppSpacing.commentAttachmentThumbnailSize,
-              height: AppSpacing.commentAttachmentThumbnailSize,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.backgroundPrimary,
+      child: _mentionCandidatesLoading
+          ? const Center(child: CupertinoActivityIndicator())
+          : _mentionCandidatesError != null
+          ? Center(
+              child: CupertinoButton(
+                onPressed: _loadFollowingMentionCandidates,
+                child: Text(UITextConstants.commentMentionPickerRetry),
               ),
-              alignment: Alignment.center,
-              child: AppCachedNetworkImage(
-                imageUrl: thumbnailUrl,
-                fit: BoxFit.cover,
-                width: AppSpacing.commentAttachmentThumbnailSize,
-                height: AppSpacing.commentAttachmentThumbnailSize,
-                cdnPreset: CdnImagePreset.thumbnail,
-                errorWidget: Icon(
-                  CupertinoIcons.photo,
-                  size: AppSpacing.iconMedium,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundTertiary,
+            )
+          : _mentionCandidates.isEmpty
+          ? Center(
+              child: Text(
+                UITextConstants.commentMentionPickerEmpty,
+                style: TextStyle(fontSize: AppTypography.sm, color: secondary),
+              ),
+            )
+          : ListView(
+              shrinkWrap: true,
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
+              children: <Widget>[
+                Text(
+                  UITextConstants.commentMentionPickerTitle,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    fontWeight: AppTypography.medium,
+                    color: secondary,
                   ),
                 ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: -AppSpacing.xs,
-            right: -AppSpacing.xs,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onRemove,
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: AppColors.overlayStrong,
-                  shape: BoxShape.circle,
+                ..._mentionCandidates.map(
+                  (candidate) => CupertinoButton(
+                    alignment: Alignment.centerLeft,
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                    onPressed: () => _addMention(candidate),
+                    child: Text(candidate.displayName?.trim() ?? ''),
+                  ),
                 ),
-                padding: EdgeInsets.all(AppSpacing.xs),
-                child: Icon(
-                  CupertinoIcons.xmark,
-                  size: AppSpacing.iconXSmall,
-                  color: AppColors.white,
-                ),
-              ),
+              ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 最近常用 emoji 横条（无最近记录时不展示）。
-class _RecentEmojiStrip extends ConsumerWidget {
-  const _RecentEmojiStrip({required this.isDark, required this.onSelected});
-
-  final bool isDark;
-  final ValueChanged<String> onSelected;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final recent = ref
-        .watch(emojiRepositoryProvider)
-        .when(
-          data: (repo) => repo.getRecentEntries(),
-          loading: () => const <EmojiEntry>[],
-          error: (_, _) => const <EmojiEntry>[],
-        );
-    if (recent.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return SizedBox(
-      key: TestKeys.commentRecentEmojiStrip,
-      height: AppSpacing.commentComposerRecentEmojiHeight,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        itemCount: recent.length,
-        separatorBuilder: (_, _) => SizedBox(width: AppSpacing.sm),
-        itemBuilder: (context, index) {
-          final entry = recent[index];
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => onSelected(entry.char),
-            child: Center(
-              child: Text(
-                entry.char,
-                style: const TextStyle(fontSize: AppTypography.xxl),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 }

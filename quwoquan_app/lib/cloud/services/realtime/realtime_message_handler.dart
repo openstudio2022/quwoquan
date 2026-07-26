@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
@@ -11,6 +12,7 @@ import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 
 /// 与 [Ref.read] / [WidgetRef.read] 兼容，避免 `Ref` 与 `WidgetRef` 类型分裂。
 typedef ChatProviderRead = T Function<T>(ProviderListenable<T> listenable);
@@ -23,11 +25,16 @@ typedef ChatProviderInvalidate =
 /// Called by realtime connection delegates when a WebSocket, long-poll,
 /// or mock catalog event arrives.
 class RealtimeMessageHandler {
-  RealtimeMessageHandler(ChatProviderRead read, {this._invalidate})
-    : _read = read;
+  RealtimeMessageHandler(
+    ChatProviderRead read, {
+    this.invalidate,
+    String Function()? currentUserIdResolver,
+  }) : _read = read,
+       _currentUserIdResolver = currentUserIdResolver ?? _emptyCurrentUserId;
 
   final ChatProviderRead _read;
-  final ChatProviderInvalidate? _invalidate;
+  final ChatProviderInvalidate? invalidate;
+  final String Function() _currentUserIdResolver;
   final Set<String> _pendingConversationRefreshes = <String>{};
   Timer? _conversationRefreshTimer;
   Timer? _avatarPatchTimer;
@@ -41,6 +48,13 @@ class RealtimeMessageHandler {
 
     // 推荐实时 patch 以 canonical envelope 字段识别，解析失败直接拒绝。
     if (_routeFeedRealtimePatch(event, payload)) {
+      return;
+    }
+
+    // rtc 通话信令（rt:rtc:user 通道，wire type call.* / participant.* /
+    // screen_share.*）分发给通话事件总线，由来电协调器与通话页订阅。
+    if (isRtcSignalWireType(eventType)) {
+      _read(rtcSignalEventBusProvider).emit(event);
       return;
     }
 
@@ -117,7 +131,7 @@ class RealtimeMessageHandler {
           unawaited(
             _read(conversationMembersProvider(conversationId).notifier).load(),
           );
-          _invalidate?.call(groupHomeProvider(conversationId));
+          invalidate?.call(groupHomeProvider(conversationId));
           _refreshConversationCache(conversationId);
         }
         return;
@@ -128,14 +142,15 @@ class RealtimeMessageHandler {
             (payload['latestSyncSeq'] as num?)?.toInt();
         _scheduleAvatarPatchSync(conversationLatestSeq);
         if (conversationId.isNotEmpty) {
-          _invalidate?.call(groupHomeProvider(conversationId));
+          invalidate?.call(groupHomeProvider(conversationId));
           _refreshConversationCache(conversationId);
         }
         return;
 
       case 'ConversationMemberRemoved':
+      case 'ConversationMemberLeft':
         if (conversationId.isEmpty) return;
-        _reloadGroupRosterProviders(conversationId);
+        _handleTerminalMembershipEvent(conversationId, payload);
         return;
 
       case 'ConversationUserSettingsChanged':
@@ -157,6 +172,34 @@ class RealtimeMessageHandler {
       default:
         return;
     }
+  }
+
+  static String _emptyCurrentUserId() => '';
+
+  // Removal/leave events are delivered to the affected user in addition to the
+  // post-mutation roster. That user must purge all local copies immediately:
+  // the server has deleted ConversationUserState, so retaining cached messages
+  // or an inbox card would expose an inaccessible conversation until a later
+  // full sync.
+  void _handleTerminalMembershipEvent(
+    String conversationId,
+    Map<String, dynamic> payload,
+  ) {
+    final affectedUserId = (payload['userId'] as String? ?? '').trim();
+    final currentUserId = _currentUserIdResolver().trim();
+    if (affectedUserId.isEmpty ||
+        currentUserId.isEmpty ||
+        affectedUserId != currentUserId) {
+      _reloadGroupRosterProviders(conversationId);
+      return;
+    }
+    _read(conversationCacheProvider).remove(conversationId);
+    invalidate?.call(chatMessageProvider(conversationId));
+    invalidate?.call(conversationMembersProvider(conversationId));
+    invalidate?.call(groupHomeProvider(conversationId));
+    unawaited(
+      _read(localChatSearchSyncProvider).removeConversation(conversationId),
+    );
   }
 
   /// 识别并路由推荐实时 patch。返回 true 表示该事件已被识别为 feed patch
@@ -200,6 +243,8 @@ class RealtimeMessageHandler {
       final existing = cache.get(conversationId);
       final currentUnread = existing?.unreadCount ?? 0;
 
+      // 展示性提示：+1 只用于即时角标；未读真相源是服务端 inbox 投影，
+      // 下一次 sync/ListInbox 会以服务端值覆盖本地提示值。
       cache.applyListPatch(
         conversationId,
         ConversationListPatch(
@@ -208,8 +253,15 @@ class RealtimeMessageHandler {
           unreadCount: currentUnread + 1,
         ),
       );
-    } catch (_) {
-      /* best-effort: 应用会话列表补丁失败仅影响列表预览即时性，下次同步会拉到最新态 */
+    } catch (error, stackTrace) {
+      // best-effort：补丁失败仅影响列表预览即时性，下次同步拉最新态；仍上报观测。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordGlobalException(
+          source: 'chat.realtime.conversation_list_patch',
+          exceptionText: error.toString(),
+          stackText: stackTrace.toString(),
+        ),
+      );
     }
   }
 
@@ -218,7 +270,7 @@ class RealtimeMessageHandler {
     unawaited(
       _read(conversationMembersProvider(conversationId).notifier).load(),
     );
-    _invalidate?.call(groupHomeProvider(conversationId));
+    invalidate?.call(groupHomeProvider(conversationId));
     _refreshConversationCache(conversationId);
   }
 
@@ -239,8 +291,15 @@ class RealtimeMessageHandler {
             ).syncConversation(conversationId: id, forceFull: true),
           );
         }
-      } catch (_) {
-        /* best-effort: 强制刷新会话缓存失败时维持现有缓存，下次读取会从云端补齐 */
+      } catch (error, stackTrace) {
+        // best-effort：维持现有缓存，下次读取从云端补齐；上报以免静默退化。
+        unawaited(
+          AppExceptionTelemetryService.instance.recordGlobalException(
+            source: 'chat.realtime.conversation_cache_refresh',
+            exceptionText: error.toString(),
+            stackText: stackTrace.toString(),
+          ),
+        );
       }
     });
   }
@@ -254,8 +313,15 @@ class RealtimeMessageHandler {
         unawaited(syncService.sync(force: true));
         _scheduleAvatarPatchSync(_latestHintedSyncSeq);
         unawaited(_read(localChatSearchSyncProvider).sync(force: true));
-      } catch (_) {
-        /* best-effort: 重连后触发的补全同步失败由下一次心跳/重连或主动刷新再次兜底 */
+      } catch (error, stackTrace) {
+        // 重连补全失败若静默即丢消息不可观测：必须上报，由下一次心跳/重连兜底。
+        unawaited(
+          AppExceptionTelemetryService.instance.recordGlobalException(
+            source: 'chat.realtime.reconnect_gap_recovery',
+            exceptionText: error.toString(),
+            stackText: stackTrace.toString(),
+          ),
+        );
       }
     });
   }
@@ -277,8 +343,15 @@ class RealtimeMessageHandler {
             force: true,
           ),
         );
-      } catch (_) {
-        /* best-effort: 头像补丁同步失败仅影响头像即时刷新，后续同步会补齐 */
+      } catch (error, stackTrace) {
+        // best-effort：仅影响头像即时刷新，后续同步补齐；上报保留观测面。
+        unawaited(
+          AppExceptionTelemetryService.instance.recordGlobalException(
+            source: 'chat.realtime.avatar_patch_sync',
+            exceptionText: error.toString(),
+            stackText: stackTrace.toString(),
+          ),
+        );
       }
     });
   }

@@ -89,6 +89,7 @@ void main() {
           deviceManufacturer: 'Apple',
           deviceModel: 'iPhone',
           appVersion: '1.0.0+1',
+          devicePlatform: 'ios',
         );
       },
       connectivityLoader: () async => const <ConnectivityResult>[
@@ -103,6 +104,7 @@ void main() {
     await provider.initialize();
     expect(loads, 1);
     expect(provider.networkClass, 'wifi');
+    expect(provider.devicePlatform, 'ios');
     changes.add(const <ConnectivityResult>[
       ConnectivityResult.wifi,
       ConnectivityResult.vpn,

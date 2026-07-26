@@ -64,6 +64,42 @@ class NoFakeGateContractTest(unittest.TestCase):
             gate.FAKE_INTEGRATION_FILENAME_RE.search("media_oss_spy.go")
         )
 
+    def test_app_user_acceptance_local_injection_is_rejected(self) -> None:
+        gate = _load_gate()
+        samples = (
+            "ProviderScope(overrides: [])",
+            "profileQueryProvider.overrideWithValue(query)",
+            "await tester.pumpWidget(app)",
+            "final query = FakeLocationQueryAdapter()",
+            "import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';",
+        )
+        for sample in samples:
+            with self.subTest(sample=sample):
+                self.assertTrue(
+                    any(
+                        pattern.search(sample)
+                        for pattern in gate.APP_USER_ACCEPTANCE_FAKE_PATTERNS
+                    ),
+                    sample,
+                )
+
+    def test_app_user_acceptance_evidence_checklist_is_rejected(self) -> None:
+        gate = _load_gate()
+        samples = (
+            "test('page coverage evidence is declared', () {})",
+            "const sourceEvidence = <String>[];",
+            "const requiredCaseIds = <String>[];",
+        )
+        for sample in samples:
+            with self.subTest(sample=sample):
+                self.assertTrue(
+                    any(
+                        pattern.search(sample)
+                        for pattern in gate.APP_USER_ACCEPTANCE_FAKE_PATTERNS
+                    ),
+                    sample,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

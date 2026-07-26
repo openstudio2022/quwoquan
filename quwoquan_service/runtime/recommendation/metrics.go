@@ -85,18 +85,18 @@ type EngagementMetrics struct {
 	CommentTotal atomic.Int64
 
 	// Per-type click/like/share breakdown
-	ClickPhoto   atomic.Int64
-	ClickVideo   atomic.Int64
-	ClickArticle atomic.Int64
-	ClickMoment  atomic.Int64
-	LikePhoto    atomic.Int64
-	LikeVideo    atomic.Int64
-	LikeArticle  atomic.Int64
-	LikeMoment   atomic.Int64
-	SharePhoto   atomic.Int64
-	ShareVideo   atomic.Int64
-	ShareArticle atomic.Int64
-	ShareMoment  atomic.Int64
+	ClickPhoto     atomic.Int64
+	ClickVideo     atomic.Int64
+	ClickArticle   atomic.Int64
+	ClickMoment    atomic.Int64
+	LikePhoto      atomic.Int64
+	LikeVideo      atomic.Int64
+	LikeArticle    atomic.Int64
+	LikeMoment     atomic.Int64
+	SharePhoto     atomic.Int64
+	ShareVideo     atomic.Int64
+	ShareArticle   atomic.Int64
+	ShareMoment    atomic.Int64
 	CommentPhoto   atomic.Int64
 	CommentVideo   atomic.Int64
 	CommentArticle atomic.Int64
@@ -107,8 +107,8 @@ type EngagementMetrics struct {
 	SkipTotal    atomic.Int64
 
 	// Social source conversions
-	SocialImpressions      atomic.Int64
-	SocialPositiveActions   atomic.Int64
+	SocialImpressions     atomic.Int64
+	SocialPositiveActions atomic.Int64
 
 	// Referral source distribution
 	SourceOrganicFeed      atomic.Int64
@@ -123,6 +123,7 @@ type EngagementMetrics struct {
 	// Model vs Rule bucket counters (pipeline level)
 	ModelHits        atomic.Int64
 	RuleHits         atomic.Int64
+	ModelFallbacks   atomic.Int64
 	ModelTimeouts    atomic.Int64
 	TotalRequests    atomic.Int64
 	EmptyFeedResults atomic.Int64
@@ -311,6 +312,9 @@ func RecordPipelineResult(modelUsed string, isEmpty bool) {
 	switch modelUsed {
 	case "rule", "":
 		GlobalEngagementMetrics.RuleHits.Add(1)
+	case "rule_fallback":
+		GlobalEngagementMetrics.RuleHits.Add(1)
+		GlobalEngagementMetrics.ModelFallbacks.Add(1)
 	default:
 		GlobalEngagementMetrics.ModelHits.Add(1)
 	}
@@ -341,50 +345,51 @@ func SnapshotEngagementMetrics() map[string]int64 {
 		GlobalEngagementMetrics.CommentTotal.Load()
 
 	return map[string]int64{
-		"impression_total":          impressionTotal,
-		"impression_photo":          GlobalEngagementMetrics.ImpressionPhoto.Load(),
-		"impression_video":          GlobalEngagementMetrics.ImpressionVideo.Load(),
-		"impression_article":        GlobalEngagementMetrics.ImpressionArticle.Load(),
-		"impression_moment":         GlobalEngagementMetrics.ImpressionMoment.Load(),
-		"click_total":               GlobalEngagementMetrics.ClickTotal.Load(),
-		"click_photo":               GlobalEngagementMetrics.ClickPhoto.Load(),
-		"click_video":               GlobalEngagementMetrics.ClickVideo.Load(),
-		"click_article":             GlobalEngagementMetrics.ClickArticle.Load(),
-		"click_moment":              GlobalEngagementMetrics.ClickMoment.Load(),
-		"deep_engage_total":         deepTotal,
-		"deep_engage_photo":         GlobalEngagementMetrics.DeepEngagePhoto.Load(),
-		"deep_engage_video":         GlobalEngagementMetrics.DeepEngageVideo.Load(),
-		"deep_engage_article":       GlobalEngagementMetrics.DeepEngageArticle.Load(),
-		"deep_engage_moment":        GlobalEngagementMetrics.DeepEngageMoment.Load(),
-		"interaction_total":         interactionTotal,
-		"like_photo":                GlobalEngagementMetrics.LikePhoto.Load(),
-		"like_video":                GlobalEngagementMetrics.LikeVideo.Load(),
-		"like_article":              GlobalEngagementMetrics.LikeArticle.Load(),
-		"like_moment":               GlobalEngagementMetrics.LikeMoment.Load(),
-		"share_photo":               GlobalEngagementMetrics.SharePhoto.Load(),
-		"share_video":               GlobalEngagementMetrics.ShareVideo.Load(),
-		"share_article":             GlobalEngagementMetrics.ShareArticle.Load(),
-		"share_moment":              GlobalEngagementMetrics.ShareMoment.Load(),
-		"comment_photo":             GlobalEngagementMetrics.CommentPhoto.Load(),
-		"comment_video":             GlobalEngagementMetrics.CommentVideo.Load(),
-		"comment_article":           GlobalEngagementMetrics.CommentArticle.Load(),
-		"comment_moment":            GlobalEngagementMetrics.CommentMoment.Load(),
-		"dislike_total":             GlobalEngagementMetrics.DislikeTotal.Load(),
-		"skip_total":                GlobalEngagementMetrics.SkipTotal.Load(),
-		"social_impressions":        GlobalEngagementMetrics.SocialImpressions.Load(),
-		"social_positive_actions":   GlobalEngagementMetrics.SocialPositiveActions.Load(),
-		"source_organic_feed":       GlobalEngagementMetrics.SourceOrganicFeed.Load(),
-		"source_friend_share":       GlobalEngagementMetrics.SourceFriendShare.Load(),
-		"source_chat_link":          GlobalEngagementMetrics.SourceChatLink.Load(),
-		"source_circle_post":        GlobalEngagementMetrics.SourceCirclePost.Load(),
-		"source_author_profile":     GlobalEngagementMetrics.SourceAuthorProfile.Load(),
-		"source_entity_page":        GlobalEngagementMetrics.SourceEntityPage.Load(),
-		"source_search":             GlobalEngagementMetrics.SourceSearch.Load(),
-		"source_push_notification":  GlobalEngagementMetrics.SourcePushNotification.Load(),
-		"model_hits":                GlobalEngagementMetrics.ModelHits.Load(),
-		"rule_hits":                 GlobalEngagementMetrics.RuleHits.Load(),
-		"model_timeouts":            GlobalEngagementMetrics.ModelTimeouts.Load(),
-		"total_requests":            GlobalEngagementMetrics.TotalRequests.Load(),
-		"empty_feed_results":        GlobalEngagementMetrics.EmptyFeedResults.Load(),
+		"impression_total":         impressionTotal,
+		"impression_photo":         GlobalEngagementMetrics.ImpressionPhoto.Load(),
+		"impression_video":         GlobalEngagementMetrics.ImpressionVideo.Load(),
+		"impression_article":       GlobalEngagementMetrics.ImpressionArticle.Load(),
+		"impression_moment":        GlobalEngagementMetrics.ImpressionMoment.Load(),
+		"click_total":              GlobalEngagementMetrics.ClickTotal.Load(),
+		"click_photo":              GlobalEngagementMetrics.ClickPhoto.Load(),
+		"click_video":              GlobalEngagementMetrics.ClickVideo.Load(),
+		"click_article":            GlobalEngagementMetrics.ClickArticle.Load(),
+		"click_moment":             GlobalEngagementMetrics.ClickMoment.Load(),
+		"deep_engage_total":        deepTotal,
+		"deep_engage_photo":        GlobalEngagementMetrics.DeepEngagePhoto.Load(),
+		"deep_engage_video":        GlobalEngagementMetrics.DeepEngageVideo.Load(),
+		"deep_engage_article":      GlobalEngagementMetrics.DeepEngageArticle.Load(),
+		"deep_engage_moment":       GlobalEngagementMetrics.DeepEngageMoment.Load(),
+		"interaction_total":        interactionTotal,
+		"like_photo":               GlobalEngagementMetrics.LikePhoto.Load(),
+		"like_video":               GlobalEngagementMetrics.LikeVideo.Load(),
+		"like_article":             GlobalEngagementMetrics.LikeArticle.Load(),
+		"like_moment":              GlobalEngagementMetrics.LikeMoment.Load(),
+		"share_photo":              GlobalEngagementMetrics.SharePhoto.Load(),
+		"share_video":              GlobalEngagementMetrics.ShareVideo.Load(),
+		"share_article":            GlobalEngagementMetrics.ShareArticle.Load(),
+		"share_moment":             GlobalEngagementMetrics.ShareMoment.Load(),
+		"comment_photo":            GlobalEngagementMetrics.CommentPhoto.Load(),
+		"comment_video":            GlobalEngagementMetrics.CommentVideo.Load(),
+		"comment_article":          GlobalEngagementMetrics.CommentArticle.Load(),
+		"comment_moment":           GlobalEngagementMetrics.CommentMoment.Load(),
+		"dislike_total":            GlobalEngagementMetrics.DislikeTotal.Load(),
+		"skip_total":               GlobalEngagementMetrics.SkipTotal.Load(),
+		"social_impressions":       GlobalEngagementMetrics.SocialImpressions.Load(),
+		"social_positive_actions":  GlobalEngagementMetrics.SocialPositiveActions.Load(),
+		"source_organic_feed":      GlobalEngagementMetrics.SourceOrganicFeed.Load(),
+		"source_friend_share":      GlobalEngagementMetrics.SourceFriendShare.Load(),
+		"source_chat_link":         GlobalEngagementMetrics.SourceChatLink.Load(),
+		"source_circle_post":       GlobalEngagementMetrics.SourceCirclePost.Load(),
+		"source_author_profile":    GlobalEngagementMetrics.SourceAuthorProfile.Load(),
+		"source_entity_page":       GlobalEngagementMetrics.SourceEntityPage.Load(),
+		"source_search":            GlobalEngagementMetrics.SourceSearch.Load(),
+		"source_push_notification": GlobalEngagementMetrics.SourcePushNotification.Load(),
+		"model_hits":               GlobalEngagementMetrics.ModelHits.Load(),
+		"rule_hits":                GlobalEngagementMetrics.RuleHits.Load(),
+		"model_fallbacks":          GlobalEngagementMetrics.ModelFallbacks.Load(),
+		"model_timeouts":           GlobalEngagementMetrics.ModelTimeouts.Load(),
+		"total_requests":           GlobalEngagementMetrics.TotalRequests.Load(),
+		"empty_feed_results":       GlobalEngagementMetrics.EmptyFeedResults.Load(),
 	}
 }

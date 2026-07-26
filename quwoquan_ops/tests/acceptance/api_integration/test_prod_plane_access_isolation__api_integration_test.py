@@ -13,7 +13,7 @@ except ImportError:  # pragma: no cover
 
 
 ROOT = Path(__file__).resolve().parents[4]
-ACCESS = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
+ACCESS = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 
 
 def _run(argv: list[str], **env_overrides: str) -> subprocess.CompletedProcess[str]:
@@ -154,9 +154,11 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
             PROD_SSH_HOST="203.0.113.10",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("prod-edge-svc@203.0.113.10", result.stdout)
+        self.assertIn("realtime-gateway rtc-service", result.stdout)
+        self.assertIn("edge-gray", result.stdout)
         self.assertIn("prod-service-svc@203.0.113.10", result.stdout)
         self.assertIn("service-gray", result.stdout)
-        self.assertNotIn("prod-edge-svc", result.stdout)
         self.assertNotIn("prod-data-svc", result.stdout)
 
 

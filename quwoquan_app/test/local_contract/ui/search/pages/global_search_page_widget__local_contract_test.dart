@@ -1,5 +1,9 @@
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md#gwt-001
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md#gwt-002
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md#gwt-003
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md#gwt-004
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -8,20 +12,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
-import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
+import 'package:quwoquan_app/ui/search/providers/search_coordinator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
 GoRouter _buildRouter({
   SearchLaunchContext launchContext = const SearchLaunchContext(
@@ -77,6 +86,15 @@ GoRouter _buildRouter({
           return Text('homepage:${state.pathParameters['id']}');
         },
       ),
+      GoRoute(
+        path: AppRoutePaths.userProfilePathTemplate.replaceAll(
+          '{username}',
+          ':username',
+        ),
+        builder: (context, state) {
+          return Text('user:${state.pathParameters['username']}');
+        },
+      ),
     ],
   );
 }
@@ -85,20 +103,43 @@ Widget _buildApp({
   SearchLaunchContext launchContext = const SearchLaunchContext(
     entrySurfaceId: '/search',
   ),
-  HomepageRepository? homepageRepository,
+  HomepageFacetSet? homepageRepository,
+  RecentSearchQuery? recentSearchQuery,
+  RecentSearchCommandWriter? recentSearchCommandWriter,
 }) {
+  final recentSearches = AlphaRecentSearchFacet();
   return ProviderScope(
     overrides: [
+      appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
       searchRepositoryProvider.overrideWithValue(_FakeSearchRepository()),
-      assistantRepositoryProvider.overrideWithValue(_FakeAssistantRepository()),
-      chatRepositoryProvider.overrideWithValue(MockChatRepository()),
-      if (homepageRepository != null)
-        homepageRepositoryProvider.overrideWithValue(homepageRepository),
+      searchHotQueryReaderProvider.overrideWithValue(AlphaHotQueryReader()),
+      recentSearchQueryProvider.overrideWithValue(
+        recentSearchQuery ?? recentSearches,
+      ),
+      recentSearchCommandWriterProvider.overrideWithValue(
+        recentSearchCommandWriter ?? recentSearches,
+      ),
+      searchFeedbackCommandWriterProvider.overrideWithValue(
+        AlphaSearchFeedbackWriter(),
+      ),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
+      assistantXiaoquSearchFacetProvider.overrideWithValue(
+        _FakeAssistantRepository(),
+      ),
+      chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
+      homepageFacetSetProvider.overrideWithValue(
+        homepageRepository ?? MockHomepageRepository(),
+      ),
     ],
     child: MaterialApp.router(
       routerConfig: _buildRouter(launchContext: launchContext),
     ),
   );
+}
+
+final class _MockModeNotifier extends AppDataSourceModeNotifier {
+  @override
+  AppDataSourceMode build() => AppDataSourceMode.mock;
 }
 
 void _suppressImageErrors() {
@@ -115,8 +156,9 @@ void _suppressImageErrors() {
 
 void main() {
   setUp(() async {
+    // 最近搜索本地缓存清零；远端 RecentSearchState 由 typed port 承载，
+    // widget 测试经 provider override 注入替身，无进程内共享状态需要复位。
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    await const MockUserProfileRepository().clearRecentSearches();
   });
 
   testWidgets('默认页无结果 Tab 且展示搜索入口模块', (tester) async {
@@ -135,8 +177,8 @@ void main() {
     expect(find.text('视频'), findsNothing);
     expect(find.text('长文'), findsNothing);
     expect(find.text('猜你想搜'), findsOneWidget);
-    expect(find.text('热门圈子'), findsOneWidget);
-    expect(find.text('热门地点'), findsOneWidget);
+    expect(find.text('发现圈子'), findsOneWidget);
+    expect(find.text('发现地点'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('search_home_guess_refresh_button')),
       findsOneWidget,
@@ -150,7 +192,7 @@ void main() {
 
     expect(find.text('毕业旅行'), findsOneWidget);
 
-    await tester.tap(find.text('热门圈子'));
+    await tester.tap(find.text('发现圈子'));
     await tester.pumpAndSettle();
 
     expect(
@@ -158,7 +200,7 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.text('热门地点'));
+    await tester.tap(find.text('发现地点'));
     await tester.pumpAndSettle();
 
     expect(
@@ -177,25 +219,20 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'global_search_recent_entries_v1': jsonEncode(<Map<String, dynamic>>[
-        _historyEntry('摄影圈'),
-        _historyEntry('旅行手账'),
-        _historyEntry('李明'),
-        _historyEntry('周末登山'),
-        _historyEntry('咖啡俱乐部'),
-        _historyEntry('夜景延时'),
-        _historyEntry('圈子搭子'),
-        _historyEntry('厦门大学'),
-        _historyEntry('鼓浪屿'),
-        _historyEntry('九寨沟'),
-        _historyEntry('环岛路'),
-        _historyEntry('旅行'),
-        _historyEntry('武夷山'),
-        _historyEntry('黄山'),
-        _historyEntry('西湖'),
-      ]),
-    });
+    await _seedHistory(<String>[
+      '摄影圈',
+      '旅行手账',
+      '李明',
+      '周末登山',
+      '咖啡俱乐部',
+      '夜景延时',
+      '圈子搭子',
+      '厦门大学',
+      '鼓浪屿',
+      '九寨沟',
+      '环岛路',
+      '旅行',
+    ]);
 
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
@@ -203,27 +240,22 @@ void main() {
     expect(find.text('搜索历史'), findsOneWidget);
     expect(find.text('展开'), findsOneWidget);
     expect(find.byKey(TestKeys.searchHistoryExpandButton), findsOneWidget);
-    expect(find.text('黄山'), findsNothing);
+    expect(find.text('环岛路'), findsNothing);
 
     await tester.tap(find.byKey(TestKeys.searchHistoryExpandButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('黄山'), findsOneWidget);
+    expect(find.text('环岛路'), findsOneWidget);
     expect(find.text('收起'), findsOneWidget);
 
     await tester.tap(find.byKey(TestKeys.searchHistoryExpandButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('黄山'), findsNothing);
+    expect(find.text('环岛路'), findsNothing);
   });
 
   testWidgets('搜索历史删除态支持单条删除与全部删除', (tester) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'global_search_recent_entries_v1': jsonEncode(<Map<String, dynamic>>[
-        _historyEntry('摄影圈'),
-        _historyEntry('旅行手账'),
-      ]),
-    });
+    await _seedHistory(<String>['摄影圈', '旅行手账']);
 
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
@@ -259,6 +291,99 @@ void main() {
     expect(find.text('搜索历史'), findsNothing);
   });
 
+  testWidgets('未完成远端 upsert 返回后不得复活已删除的本地搜索', (tester) async {
+    const launchContext = SearchLaunchContext(entrySurfaceId: '/search');
+    final recentSearches = _DelayedRecentSearchFacet();
+    await tester.pumpWidget(
+      _buildApp(
+        launchContext: launchContext,
+        recentSearchQuery: recentSearches,
+        recentSearchCommandWriter: recentSearches,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final pageContext = tester.element(find.byType(GlobalSearchPage));
+    final container = ProviderScope.containerOf(pageContext);
+    final provider = searchCoordinatorProvider(launchContext);
+    final coordinator = container.read(provider.notifier);
+    final upsert = coordinator.rememberCurrentQuery(query: '并发删除');
+    await recentSearches.upsertStarted.future;
+    await tester.pump();
+
+    final localEntry = container.read(provider).recentSearches.single;
+    await coordinator.removeRecentSearch(localEntry.entryId);
+    recentSearches.completeUpsert(
+      RecentSearchEntry(
+        entryId: 'recent-canonical-delete-race',
+        query: '并发删除',
+        scope: SearchScope.all.wireValue,
+        facet: null,
+        updatedAt: DateTime.utc(2026, 7, 24, 12),
+      ),
+    );
+    await upsert;
+    await tester.pumpAndSettle();
+
+    expect(container.read(provider).recentSearches, isEmpty);
+    expect(
+      recentSearches.deletedEntryIds,
+      contains('recent-canonical-delete-race'),
+    );
+    final cached = await SearchRecentHistoryStore(
+      actorNamespace: 'guest',
+    ).load();
+    expect(cached.entries, isEmpty);
+    expect(cached.pendingUpsertKeys, isEmpty);
+    expect(cached.pendingDeleteKeys, isEmpty);
+  });
+
+  testWidgets('重启后按语义删除回执清理 Remote canonical entryId', (tester) async {
+    final recentSearches = AlphaRecentSearchFacet();
+    final remoteEntry = await recentSearches.upsertRecentSearch(
+      UpsertRecentSearchCommand(
+        query: '待删除',
+        scope: SearchScope.all.wireValue,
+        facet: null,
+      ),
+    );
+    await SearchRecentHistoryStore(actorNamespace: 'guest').save(
+      const SearchRecentHistoryCacheSnapshot(
+        pendingDeleteKeys: <String>{'all||待删除'},
+      ),
+    );
+
+    await tester.pumpWidget(
+      _buildApp(
+        recentSearchQuery: recentSearches,
+        recentSearchCommandWriter: recentSearches,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      (await recentSearches.listRecentSearches(
+        ListRecentSearchesQuery(),
+      )).items,
+      isEmpty,
+      reason: '删除回执必须通过语义键解析服务端 canonical entryId',
+    );
+    expect(
+      remoteEntry.entryId,
+      isNot(
+        RecentSearchEntryView.buildEntryId(
+          query: '待删除',
+          scope: SearchScope.all,
+        ),
+      ),
+    );
+    final cached = await SearchRecentHistoryStore(
+      actorNamespace: 'guest',
+    ).load();
+    expect(cached.pendingDeleteKeys, isEmpty);
+    expect(cached.entries, isEmpty);
+  });
+
   testWidgets('输入关键词后展示本地匹配与搜索网络结果', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
@@ -285,7 +410,11 @@ void main() {
   });
 
   testWidgets('输入钱时输入框无 spinner 且东钱湖主页可直接打开', (tester) async {
-    await tester.pumpWidget(_buildApp());
+    // homepageFacetSetProvider production 装配已收口 Remote-only；widget 测试
+    // 必须显式注入 contract-seeded Mock（lite fixture 含东钱湖）。
+    await tester.pumpWidget(
+      _buildApp(homepageRepository: MockHomepageRepository()),
+    );
     await tester.pumpAndSettle();
 
     final field = find.byKey(const ValueKey<String>('global_search_field'));
@@ -434,7 +563,7 @@ void main() {
     expect(avatar.imageUrl, isNull);
   });
 
-  testWidgets('联系人没有单聊时回退到已存在讨论会话', (tester) async {
+  testWidgets('联系人没有单聊时进入联系人资料，不误开无关会话', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
@@ -451,10 +580,11 @@ void main() {
     await tester.tap(find.text('王芳').last);
     await _pumpUntil(
       tester,
-      condition: () => find.text('chat:conv_002').evaluate().isNotEmpty,
+      condition: () => find.text('user:user_wang_fang').evaluate().isNotEmpty,
     );
 
-    expect(find.text('chat:conv_002'), findsOneWidget);
+    expect(find.text('user:user_wang_fang'), findsOneWidget);
+    expect(find.text('chat:conv_002'), findsNothing);
   });
 
   testWidgets('搜索网络结果入口打开独立网络结果页', (tester) async {
@@ -547,14 +677,15 @@ class _FakeSearchRepository implements SearchRepository {
           title: '西湖景区',
           subtitle: '杭州',
           resolvedFrom: SearchResolvedFrom.remote,
-          payload: const SearchHitPayloadWireMap(<String, dynamic>{
-            'homepageId': 'homepage_west_lake',
-            'homepageType': 'place',
-            'title': '西湖景区',
-            'subtitle': '杭州西湖风景名胜区',
-            'city': '杭州',
-            'address': '浙江省杭州市西湖区',
-          }),
+          payload: const SearchHitPayloadEntityHomepage(
+            SearchEntityHomepageHitView(
+              homepageId: 'homepage_west_lake',
+              name: '西湖景区',
+              subtitle: '杭州西湖风景名胜区',
+              placeName: '杭州',
+              address: '浙江省杭州市西湖区',
+            ),
+          ),
         ),
       ];
       return SearchResponse(request: normalized, sections: _sectionsFor(hits));
@@ -575,55 +706,65 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_ming',
             title: '李明',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_li_ming',
-              'displayName': '李明',
-              'conversationId': 'conv_001',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_li_ming',
+                displayName: '李明',
+                conversationId: 'conv_001',
+              ),
+            ),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_xiang',
             title: '李想',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_li_xiang',
-              'displayName': '李想',
-              'conversationId': 'conv_007',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_li_xiang',
+                displayName: '李想',
+                conversationId: 'conv_007',
+              ),
+            ),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_qing',
             title: '李青',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_li_qing',
-              'displayName': '李青',
-              'conversationId': 'conv_008',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_li_qing',
+                displayName: '李青',
+                conversationId: 'conv_008',
+              ),
+            ),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_yue',
             title: '李悦',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_li_yue',
-              'displayName': '李悦',
-              'conversationId': 'conv_009',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_li_yue',
+                displayName: '李悦',
+                conversationId: 'conv_009',
+              ),
+            ),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_ze',
             title: '李泽',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_li_ze',
-              'displayName': '李泽',
-              'conversationId': 'conv_010',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_li_ze',
+                displayName: '李泽',
+                conversationId: 'conv_010',
+              ),
+            ),
           ),
         ];
       case '王':
@@ -633,11 +774,12 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_wang_fang',
             title: '王芳',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_wang_fang',
-              'displayName': '王芳',
-              'conversationId': 'conv_002',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_wang_fang',
+                displayName: '王芳',
+              ),
+            ),
           ),
         ];
       default:
@@ -655,52 +797,60 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_002',
         title: '周末登山群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: SearchHitPayloadWireMap(<String, dynamic>{
-          'conversationId': 'conv_002',
-          'type': 'group',
-          'title': '周末登山群',
-          'memberCount': 15,
-          'lastMessagePreview': '周六早上8点出发',
-        }),
+        payload: SearchHitPayloadChatConversation(
+          ConversationSearchItemView(
+            conversationId: 'conv_002',
+            type: 'group',
+            title: '周末登山群',
+            memberCount: 15,
+            lastMessagePreview: '周六早上8点出发',
+          ),
+        ),
       ),
       SearchHit(
         objectType: SearchObjectType.chatConversation,
         objectId: 'conv_grid_3',
         title: '3人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: SearchHitPayloadWireMap(<String, dynamic>{
-          'conversationId': 'conv_grid_3',
-          'type': 'group',
-          'title': '3人测试群',
-          'memberCount': 3,
-          'lastMessagePreview': '测试群聊',
-        }),
+        payload: SearchHitPayloadChatConversation(
+          ConversationSearchItemView(
+            conversationId: 'conv_grid_3',
+            type: 'group',
+            title: '3人测试群',
+            memberCount: 3,
+            lastMessagePreview: '测试群聊',
+          ),
+        ),
       ),
       SearchHit(
         objectType: SearchObjectType.chatConversation,
         objectId: 'conv_grid_4',
         title: '4人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: SearchHitPayloadWireMap(<String, dynamic>{
-          'conversationId': 'conv_grid_4',
-          'type': 'group',
-          'title': '4人测试群',
-          'memberCount': 4,
-          'lastMessagePreview': '测试群聊',
-        }),
+        payload: SearchHitPayloadChatConversation(
+          ConversationSearchItemView(
+            conversationId: 'conv_grid_4',
+            type: 'group',
+            title: '4人测试群',
+            memberCount: 4,
+            lastMessagePreview: '测试群聊',
+          ),
+        ),
       ),
       SearchHit(
         objectType: SearchObjectType.chatConversation,
         objectId: 'conv_grid_5',
         title: '5人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: SearchHitPayloadWireMap(<String, dynamic>{
-          'conversationId': 'conv_grid_5',
-          'type': 'group',
-          'title': '5人测试群',
-          'memberCount': 5,
-          'lastMessagePreview': '测试群聊',
-        }),
+        payload: SearchHitPayloadChatConversation(
+          ConversationSearchItemView(
+            conversationId: 'conv_grid_5',
+            type: 'group',
+            title: '5人测试群',
+            memberCount: 5,
+            lastMessagePreview: '测试群聊',
+          ),
+        ),
       ),
     ];
   }
@@ -839,65 +989,18 @@ class _DelayedHomepageRepository extends MockHomepageRepository {
   }
 }
 
-class _FakeAssistantRepository implements AssistantRepository {
-  @override
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  }) async => AssistantPolicyView(
-    version: policyVersionHint.isEmpty ? 'test' : policyVersionHint,
-    values: <String, dynamic>{'grantedScopes': const <String>[]},
-  );
-
-  @override
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
-  }) async => AssistantInteractionReportBatchAck(
-    accepted: true,
-    count: events.length,
-    resource: 'interaction_event_batch',
-  );
-
-  @override
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  }) async => AssistantScorecardReportBatchAck(
-    accepted: true,
-    count: scorecards.length,
-    resource: 'scorecard_batch',
-  );
-
-  @override
-  Future<AssistantSkillConsent> grantSkillConsent({
-    required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
-  }) async {
-    return AssistantSkillConsent(
-      skillId: skillId,
-      grantedScope: grantedScope,
-      granted: true,
-      updatedAt: DateTime(2026, 3, 27),
-    );
-  }
-
-  @override
-  Future<List<AssistantSkillConsent>> listConsents() async {
-    return const <AssistantSkillConsent>[];
-  }
-
-  @override
-  Future<void> revokeSkillConsent({required String skillId}) async {}
-
+class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
+    AssistantContextSnapshot? contextSnapshot,
   }) async {
     return AssistantSearchResultView(
       queryEcho: query,
       summary: '$query 的推荐结果',
       searchIntensity: searchIntensity,
-      citations: const <AssistantSearchCitationView>[
+      citations: <AssistantSearchCitationView>[
         AssistantSearchCitationView(
           citationId: 'citation_1',
           objectType: 'content.post',
@@ -905,36 +1008,86 @@ class _FakeAssistantRepository implements AssistantRepository {
           title: '冰雪旅行推荐',
           snippet: '适合冬季出行的内容推荐',
           sourceDomain: '小趣搜',
+          destination: CitationDestination(
+            kind: CitationDestinationKind.internal,
+            objectTypeRef: 'content.post',
+            objectId: 'post_1',
+          ),
         ),
       ],
     );
   }
-
-  @override
-  Future<List<AssistantUserTaskView>> listAssistantTasks({
-    int limit = 32,
-    String? status,
-  }) async => const <AssistantUserTaskView>[];
-
-  @override
-  Future<List<AssistantUserMemoryView>> listAssistantMemories({
-    int limit = 32,
-  }) async => const <AssistantUserMemoryView>[];
-
-  @override
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
-    int limit = 64,
-  }) async => const <AssistantSkillCatalogItemView>[];
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Map<String, dynamic> _historyEntry(String query) {
-  return <String, dynamic>{
-    'entryId': query,
-    'query': query,
-    'scope': SearchScope.all.wireValue,
-    'updatedAt': DateTime(2026, 3, 22, 10).toIso8601String(),
-  };
+final class _DelayedRecentSearchFacet
+    implements RecentSearchQuery, RecentSearchCommandWriter {
+  final Completer<void> upsertStarted = Completer<void>();
+  final Completer<RecentSearchEntry> _upsertResult =
+      Completer<RecentSearchEntry>();
+  final List<String> deletedEntryIds = <String>[];
+  RecentSearchEntry? _entry;
+
+  void completeUpsert(RecentSearchEntry entry) {
+    _upsertResult.complete(entry);
+  }
+
+  @override
+  Future<RecentSearchEntrySlice> listRecentSearches(
+    ListRecentSearchesQuery query,
+  ) async {
+    final entry = _entry;
+    return RecentSearchEntrySlice(
+      items: entry == null
+          ? const <RecentSearchEntry>[]
+          : <RecentSearchEntry>[entry],
+    );
+  }
+
+  @override
+  Future<RecentSearchEntry> upsertRecentSearch(
+    UpsertRecentSearchCommand command,
+  ) async {
+    if (!upsertStarted.isCompleted) {
+      upsertStarted.complete();
+    }
+    final entry = await _upsertResult.future;
+    _entry = entry;
+    return entry;
+  }
+
+  @override
+  Future<void> deleteRecentSearch(DeleteRecentSearchCommand command) async {
+    deletedEntryIds.add(command.entryId);
+    if (_entry?.entryId == command.entryId) {
+      _entry = null;
+    }
+  }
+
+  @override
+  Future<void> clearRecentSearches(ClearRecentSearchesCommand command) async {
+    _entry = null;
+  }
+}
+
+Future<void> _seedHistory(List<String> queries) {
+  final updatedAt = DateTime(2026, 3, 22, 10);
+  final entries = queries
+      .map(
+        (query) => RecentSearchEntryView(
+          entryId: 'local-pending-$query',
+          query: query,
+          scope: SearchScope.all,
+          facet: null,
+          updatedAt: updatedAt,
+        ),
+      )
+      .toList(growable: false);
+  return SearchRecentHistoryStore(actorNamespace: 'guest').save(
+    SearchRecentHistoryCacheSnapshot(
+      entries: entries,
+      pendingUpsertKeys: queries
+          .map((query) => 'all||${query.toLowerCase()}')
+          .toSet(),
+    ),
+  );
 }

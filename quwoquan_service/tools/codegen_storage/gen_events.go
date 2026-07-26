@@ -26,7 +26,9 @@ func generateMergedEventConstants(
 	manifest *Manifest,
 	contractGraph *graph.ContractGraph,
 ) error {
-	// Group events by domain_pkg
+	// Group events by physical object and Go package. Generated code must remain
+	// underneath generated/<context>/<object>; sharing a package name never grants
+	// permission to merge two business objects into one output directory.
 	pkgEvents := make(map[string][]eventDef)
 	pkgOutputDir := make(map[string]string)
 	pkgNames := make(map[string]string)
@@ -40,14 +42,20 @@ func generateMergedEventConstants(
 		if err := contractGraph.DecodeDocumentYAML(eventsPath, &ev); err != nil {
 			return fmt.Errorf("parse %s: %w", eventsPath, err)
 		}
-		pkg := src.domainPath()
+		pkg := filepath.ToSlash(filepath.Join(src.ObjectPath, src.domainPath()))
 		pkgEvents[pkg] = appendUniqueEvents(pkgEvents[pkg], ev.Events)
 		if _, exists := pkgNames[pkg]; !exists {
 			pkgNames[pkg] = src.DomainPkg
 		}
 		// Record output dir (same for all sources with same domain_pkg + manifest)
 		if _, exists := pkgOutputDir[pkg]; !exists {
-			pkgOutputDir[pkg] = filepath.Join(manifest.OutputDir, "domain", pkg, "event")
+			pkgOutputDir[pkg] = filepath.Join(
+				manifest.OutputDir,
+				src.ObjectPath,
+				"contract",
+				src.domainPath(),
+				"event",
+			)
 		}
 	}
 

@@ -1,5 +1,31 @@
 part of 'app_custom_icons.dart';
 
+/// 圆润播放按钮，用于「精品」入口，避免与中间创建按钮形成交叉重叠感。
+class AppPremiumMarkIcon extends StatelessWidget {
+  const AppPremiumMarkIcon({
+    super.key,
+    required this.size,
+    required this.color,
+    this.filled = false,
+  });
+
+  final double size;
+  final Color color;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        size: Size(size, size),
+        painter: _PremiumMarkPainter(color: color, filled: filled),
+      ),
+    );
+  }
+}
+
 class _PremiumMarkPainter extends CustomPainter {
   _PremiumMarkPainter({required this.color, required this.filled});
 

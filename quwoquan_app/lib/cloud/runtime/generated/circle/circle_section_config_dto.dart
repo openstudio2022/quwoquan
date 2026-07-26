@@ -1,6 +1,6 @@
 /// 圈子主页板块配置项（嵌入文档）。
 ///
-/// 字段对齐：contracts/metadata/social/circle/fields.yaml CircleSectionConfig
+/// 字段对齐：contracts/metadata/circle/circle/circle/fields.yaml CircleSectionConfig
 class CircleSectionConfigDto {
   final String sectionType;
   final bool visible;

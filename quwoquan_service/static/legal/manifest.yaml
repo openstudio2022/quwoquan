@@ -1,0 +1,57 @@
+schema: legal-static
+packageKind: legal-static
+currentVersion: "2026-07"
+status: legal-review-required
+owner:
+  appName: 趣我圈
+  appId: quwoquan
+  operatorName: 趣我圈运营主体（待法务确认）
+  registeredAddress: 运营主体注册地址（待法务确认）
+  personalInfoProtectionContact: privacy@quwoquan.com
+  customerSupportEmail: support@quwoquan.com
+  customerSupportPhone: 客服电话（待法务确认）
+  icpFilingNumber: ICP 备案号（待备案）
+releasePolicy:
+  packageKind: legal-static
+  artifactRoot: QWQ_DEPLOY_WORK_ROOT/<target>/packages/legal-static
+  stableUrlResolution: manifest.currentVersion
+  immutableVersionUrl: true
+  prodCanonicalBaseUrl: https://quwoquan.com/legal
+  prodRequiresGammaProbe: true
+  prodPlaceholderPolicy: deny
+externalResourceAllowlist:
+  - https://www.gov.cn
+  - https://www.cac.gov.cn
+documents:
+  - slug: user-agreement
+    title: 用户协议
+    version: "2026-07"
+    source: versions/2026-07/user-agreement.html
+    stablePath: /legal/user-agreement
+    versionPath: /legal/2026-07/user-agreement
+    consentVersionKey: APP_USER_AGREEMENT_VERSION
+    checksumSha256: sha256:77386f5b3668c13bdc2bc1c6dcbd0f3c79ae0f7719cc84a4a0fa4ac803042e27
+  - slug: privacy-policy
+    title: 隐私政策
+    version: "2026-07"
+    source: versions/2026-07/privacy-policy.html
+    stablePath: /legal/privacy-policy
+    versionPath: /legal/2026-07/privacy-policy
+    consentVersionKey: APP_PRIVACY_POLICY_VERSION
+    checksumSha256: sha256:bc359f5f2b5916b04f85af7d0bd061dec2344d7727bd1203b8611e1b9c2c2a2b
+  - slug: permissions
+    title: 权限说明
+    version: "2026-07"
+    source: versions/2026-07/permissions.html
+    stablePath: /legal/permissions
+    versionPath: /legal/2026-07/permissions
+    consentVersionKey: ""
+    checksumSha256: sha256:63837f1cac38545d888f1adb603f05542528ff3b70eddcc7adf1d89d5b998e2a
+  - slug: third-party-sdk-list
+    title: 第三方 SDK 清单
+    version: "2026-07"
+    source: versions/2026-07/third-party-sdk-list.html
+    stablePath: /legal/third-party-sdk-list
+    versionPath: /legal/2026-07/third-party-sdk-list
+    consentVersionKey: ""
+    checksumSha256: sha256:06da228ad30215f1520fbb47b749cbaa93712a38fd2ebaf74d39c12dfecc42f7

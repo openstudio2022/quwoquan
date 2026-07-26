@@ -51,6 +51,7 @@ class CacheManagementService {
     required ConversationCacheService conversationCache,
     Future<void> Function()? clearTemporaryImages,
     Future<void> Function()? clearAllRebuildableImages,
+    required Future<void> Function() clearAccountScopedPersistence,
   }) : _postCache = postCache,
        _querySnapshotStore = querySnapshotStore,
        _userProfileCache = userProfileCache,
@@ -59,7 +60,8 @@ class CacheManagementService {
            clearTemporaryImages ?? AppImageCacheController.clearTemporaryImages,
        _clearAllRebuildableImages =
            clearAllRebuildableImages ??
-           AppImageCacheController.clearAllRebuildableImages;
+           AppImageCacheController.clearAllRebuildableImages,
+       _clearAccountScopedPersistence = clearAccountScopedPersistence;
 
   final PostObjectCacheService _postCache;
   final ContentQuerySnapshotStore _querySnapshotStore;
@@ -67,6 +69,7 @@ class CacheManagementService {
   final ConversationCacheService _conversationCache;
   final Future<void> Function() _clearTemporaryImages;
   final Future<void> Function() _clearAllRebuildableImages;
+  final Future<void> Function() _clearAccountScopedPersistence;
 
   CacheUsageEstimate estimateUsage() {
     return CacheUsageEstimate(
@@ -122,6 +125,31 @@ class CacheManagementService {
           objectsRemoved: removed,
           protectedObjects: _protectedObjectCount(protectedUserIds),
         );
+    }
+  }
+
+  /// 云侧账号已进入 closed 终态后的本地隐私清理。
+  ///
+  /// 与用户主动“清缓存”不同，这里不保留会话或当前用户资料；所有数据均可由
+  /// 未注销账号重新从 Remote 权威构建。
+  Future<void> clearForTerminalAccountClosure() async {
+    await _querySnapshotStore.ensureHydrated();
+    _postCache.clearAllRebuildable();
+    _querySnapshotStore.clearAll();
+    _conversationCache.clearAllNamespaces();
+    await Future.wait<void>(<Future<void>>[
+      _clearAllRebuildableImages(),
+      _clearAccountScopedPersistence(),
+      _userProfileCache.clearAllForTerminalAccountClosure(),
+      _querySnapshotStore.flushPersistence(),
+    ]);
+    if (_postCache.detailCount != 0 ||
+        _postCache.projectionCount != 0 ||
+        _querySnapshotStore.count != 0 ||
+        _userProfileCache.diskCount != 0 ||
+        _userProfileCache.memoryCount != 0 ||
+        _conversationCache.totalEntryCount != 0) {
+      throw StateError('terminal account closure cache verification failed');
     }
   }
 

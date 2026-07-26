@@ -1,0 +1,52 @@
+version: 1
+service: realtime-gateway
+domain: realtime
+capability: account-security-session-fence
+
+# 同步 authority、durable consumer 和 readiness 指标均不带账户、persona、ticket、
+# eventId 或 payload 标签。失败源内容只保留在原 Redis Stream PEL；DLQ 只含摘要。
+metrics:
+  authority_checks_total: runtime_auth_account_security_authority_checks_total # labels: outcome
+  authority_check_duration_seconds: runtime_auth_account_security_authority_check_duration_seconds # labels: outcome
+  consumer_total: realtime_account_security_consumer_total # labels: event_class, outcome
+  consumer_duration_seconds: realtime_account_security_consumer_duration_seconds
+  readiness_status: runtime_health_check_status # labels: check
+  readiness_duration_seconds: runtime_health_check_duration_seconds # labels: check
+
+privacy:
+  permitted_labels: [outcome, event_class, check]
+  prohibited_labels:
+    [account_id, accountId, user_id, persona_id, ticket, event_id, payload, error]
+
+slis:
+  - id: authority_latency
+    description: 同步 UserAccount security authority 调用的 P95 延迟；unavailable 一律拒绝，不使用缓存。
+    sli: histogram_quantile(0.95, sum(rate(runtime_auth_account_security_authority_check_duration_seconds_bucket[5m])) by (le))
+    objective:
+      p95_ms: 150
+      timeout_ms: 500
+  - id: consumer_apply_latency
+    description: terminal UserAccount event 从 durable read 到 Redis fence、清理与 relay 发布完成的 P95。
+    sli: histogram_quantile(0.95, sum(rate(realtime_account_security_consumer_duration_seconds_bucket[5m])) by (le))
+    objective:
+      p95_ms: 1000
+  - id: consumer_dlq
+    description: account-security event 进入 DLQ 必须为零；DLQ 后原 PEL 保持待恢复状态。
+    sli: sum(increase(realtime_account_security_consumer_total{outcome="dlq"}[5m]))
+    objective_max: 0
+  - id: readiness
+    description: authority、Redis、跨节点 eviction relay 或 consumer 未健康时 /readyz 返回 503，实例不应接收新连接。
+    sli: min(runtime_health_check_status{check=~"realtime_redis|account_security_authority|account_security_relay|user_account_security_consumer"})
+    objective: 1
+
+failure_semantics:
+  authority_unavailable: deny_ticket_upgrade_and_session_attach
+  terminal_event_retry: retain_source_pel_until_applied_or_operator_recovery
+  dlq: digest_only_record_and_hold_source_pending
+  readiness_failure: remove_instance_from_ready_pool
+
+release_gate:
+  rule: authority unavailable、relay reconnecting、consumer DLQ 或任一 readiness check 非 healthy 时停止放量；修复后从原 PEL 恢复并验证无残留 presence/lease。
+  rollback: restore_previous_realtime_gateway_image_or_config_then_replay_held_source_pel
+
+alerts_source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_l2_realtime_gateway

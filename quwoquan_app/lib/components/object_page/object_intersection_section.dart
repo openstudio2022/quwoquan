@@ -108,6 +108,19 @@ class ObjectIntersectionSection extends ConsumerWidget {
           title: title,
         ),
       ),
+      onInlineExpand: (firstReason) {
+        // 列表入口「展开」归因（intersection_expand 弱正信号 0.2，B6 端云执行链）。
+        ref
+            .read(contentBehaviorTrackerProvider)
+            .trackIntersectionExpand(
+              contentId: query.objectBId,
+              intersectionId: firstReason.intersectionId,
+              intersectionDimension: firstReason.dimension,
+              intersectionClass: firstReason.intersectionClass,
+              intersectionSourceRef: firstReason.source,
+              referralSource: referralSourceForObjectType(query.objectBType),
+            );
+      },
       onReasonTap: (reason) {
         // 统一交集证据组点击归因（R20 漏斗 · 三主页一致）：
         // 触发维度 + 路径制 tagRefs 回流推荐管线（B3）。仓库内部失败入队。
@@ -326,6 +339,8 @@ class ObjectIntersectionSection extends ConsumerWidget {
           hint,
           sourceRef: reason.source,
           attribution: _attributionFor(reason),
+          evidenceReason: reason,
+          contextObjectTarget: _contextObjectTarget,
         )
         .didOpen;
   }

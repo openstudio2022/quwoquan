@@ -3,7 +3,7 @@ import 'package:quwoquan_app/l10n/app_localizations_zh.dart';
 
 /// L1a 契约测试（过渡保留）：content 领域 location 集成所需的 l10n key 存在且非空
 ///
-/// 规范：specs/ux/error-and-permission-semantics.md §5.3
+/// 规范：specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
 /// 注：纯 l10n key 存在性测试价值低，将由 L1b 交互测试覆盖。本文件过渡保留，待 L1b
 /// location_selector_page_widget_test 实现后可删除。
 /// 领域：content，集成：location（content 使用的 location）
@@ -35,7 +35,7 @@ void main() {
 
   group('ErrorPermissionL10n — 单轨契约', () {
     test('location keys match integration errors.yaml semantics', () {
-      // integration/location/errors.yaml 文案约定
+      // integration/external_integration/location/errors.yaml 文案约定
       expect(l10n.locationPermissionRequired, contains('权限'),
           reason: 'location_permission_required 语义');
       expect(

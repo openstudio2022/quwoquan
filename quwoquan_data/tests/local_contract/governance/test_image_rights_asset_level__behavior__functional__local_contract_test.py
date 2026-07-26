@@ -10,7 +10,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from governance.coverage.license import validate_image_rights  # noqa: E402
+from governance.coverage.license import audit_image_rights as validate_image_rights  # noqa: E402
 
 
 def test_discovery_platform_is_not_blocked_by_source_name_when_asset_rights_are_complete():

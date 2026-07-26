@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_motion_timeline.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_brand_cluster.dart';
@@ -9,7 +10,7 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 
 void main() {
   setUpAll(() async {
-    final loader = FontLoader('Noto Sans SC')
+    final loader = FontLoader(AppTypography.welcomeBrandFontFamily)
       ..addFont(
         rootBundle.load('assets/fonts/noto_sans_sc/NotoSansSC[wght].ttf'),
       );
@@ -125,7 +126,7 @@ class _GoldenHost extends StatelessWidget {
       theme: const CupertinoThemeData(
         textTheme: CupertinoTextThemeData(
           textStyle: TextStyle(
-            fontFamily: 'Noto Sans SC',
+            fontFamily: AppTypography.welcomeBrandFontFamily,
             decoration: TextDecoration.none,
           ),
         ),
@@ -135,31 +136,14 @@ class _GoldenHost extends StatelessWidget {
   }
 }
 
+/// 与运行时/原生导出共用 [WelcomeStaticFrame]，golden 即首帧终态真相源。
 class _StaticFinalFrame extends StatelessWidget {
   const _StaticFinalFrame();
 
   @override
   Widget build(BuildContext context) {
-    final appearance = WelcomeAppearance.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            appearance.gradientStart,
-            appearance.background,
-            appearance.gradientEnd,
-          ],
-        ),
-      ),
-      child: WelcomeBrandCluster(
-        flower: WelcomeFlowerMark(appearance: appearance),
-        typography: WelcomeBrandCluster.buildTypography(
-          appearance,
-          fontFamily: 'Noto Sans SC',
-        ),
-      ),
+    return WelcomeStaticFrame(
+      flower: WelcomeFlowerMark(appearance: WelcomeAppearance.of(context)),
     );
   }
 }

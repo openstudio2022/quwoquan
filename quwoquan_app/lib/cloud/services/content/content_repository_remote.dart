@@ -14,12 +14,19 @@ class RemoteContentRepository
         ContentWriteRepository,
         ContentEngagementRepository,
         ContentConfigRepository {
-  RemoteContentRepository({CloudHttpClient? httpClient, String? baseUrl})
-    : _httpClient = httpClient ?? CloudHttpClient(),
-      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteContentRepository({
+    CloudHttpClient? httpClient,
+    String? baseUrl,
+    Future<List<String>> Function()? blockedKeywordsLoader,
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
+       _blockedKeywordsLoader = blockedKeywordsLoader ?? _emptyBlockedKeywords;
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
+  final Future<List<String>> Function() _blockedKeywordsLoader;
+
+  static Future<List<String>> _emptyBlockedKeywords() async => const <String>[];
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
     return Uri.parse(
@@ -30,6 +37,7 @@ class RemoteContentRepository
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
+    String? channelId,
     String? identity,
     String? type,
     String? subCategory,
@@ -41,12 +49,20 @@ class RemoteContentRepository
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
-    final resolvedIdentity = identity ?? _mapCategoryToIdentity(category);
-    final resolvedType = _normalizeFeedType(
-      type ?? _mapCategoryToFeedType(category),
-    );
+    // 频道推荐主链路与浏览流互斥：channelId 非空时不发送 identity/type。
+    final resolvedChannelId = channelId?.trim() ?? '';
+    final channelRouted = resolvedChannelId.isNotEmpty;
+    final resolvedIdentity = channelRouted
+        ? null
+        : (identity ?? _mapCategoryToIdentity(category));
+    final resolvedType = channelRouted
+        ? null
+        : _normalizeFeedType(type ?? _mapCategoryToFeedType(category));
     final query = <String, String>{};
     final keys = GeneratedPostRuntimeMetadata.feedQueryParams;
+    if (keys.contains('channelId') && channelRouted) {
+      query['channelId'] = resolvedChannelId;
+    }
     if (keys.contains('identity') &&
         resolvedIdentity != null &&
         resolvedIdentity.isNotEmpty) {
@@ -77,15 +93,24 @@ class RemoteContentRepository
       query['feedRequestId'] = feedRequestId!;
     }
     final uri = _uri(ContentApiMetadata.getFeedPath, queryParameters: query);
+    final blockedKeywords = (await _blockedKeywordsLoader())
+        .map((keyword) => keyword.trim())
+        .where((keyword) => keyword.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final headers = <String, String>{
+      ...CloudRequestHeaders.forPage(ContentRequestPageIds.getFeed),
+      if (blockedKeywords.isNotEmpty)
+        'X-Blocked-Keywords': blockedKeywords
+            .map(Uri.encodeQueryComponent)
+            .join(','),
+    };
     final decoded = cancellation == null
-        ? await _httpClient.getJson(
-            uri,
-            headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getFeed),
-          )
+        ? await _httpClient.getJson(uri, headers: headers)
         : await _httpClient.getJsonAbortable(
             uri,
             gatewayOrigin: Uri.parse(_baseUrl),
-            headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getFeed),
+            headers: headers,
             cancellation: cancellation,
           );
     final obj = CloudResponseDecoder.asObject(
@@ -99,8 +124,19 @@ class RemoteContentRepository
     final dtoItems = rawPage.items
         .map(postBaseDtoFromMap)
         .toList(growable: false);
+    final rawObjectCards = obj['objectCards'];
+    final objectCards = rawObjectCards is List
+        ? rawObjectCards
+              .whereType<Map>()
+              .map(
+                (card) =>
+                    FeedObjectCardDto.fromMap(card.cast<String, dynamic>()),
+              )
+              .toList(growable: false)
+        : const <FeedObjectCardDto>[];
     return DiscoveryFeedPage(
       items: dtoItems,
+      objectCards: objectCards,
       nextCursor: rawPage.nextCursor,
       feedRequestId: obj['feedRequestId']?.toString(),
       rankingVersion: obj['rankingVersion']?.toString(),
@@ -196,11 +232,26 @@ class RemoteContentRepository
   }
 
   @override
-  Future<void> deletePost({required String postId}) async {
-    final uri = _uri(ContentApiMetadata.deletePostPath(postId: postId));
+  Future<void> deletePost({
+    required String postId,
+    required String idempotencyKey,
+  }) async {
+    final normalizedPostId = postId.trim();
+    final normalizedIdempotencyKey = idempotencyKey.trim();
+    if (normalizedPostId.isEmpty || normalizedIdempotencyKey.isEmpty) {
+      throw ArgumentError(
+        'DeletePost requires postId and caller-owned idempotencyKey',
+      );
+    }
+    final uri = _uri(
+      ContentApiMetadata.deletePostPath(postId: normalizedPostId),
+    );
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.deletePost),
+      headers: <String, String>{
+        ...CloudRequestHeaders.forPage(ContentRequestPageIds.deletePost),
+        'Idempotency-Key': normalizedIdempotencyKey,
+      },
     );
   }
 
@@ -282,18 +333,4 @@ class RemoteContentRepository
 
   @override
   bool get requiresResolvedPersonaForMutations => true;
-
-  @override
-  bool get usesEmbeddedContentCatalog => false;
-
-  @override
-  bool get usesCloudAssistantEdgeSync => true;
-
-  @override
-  DiscoveryPresentationWire? discoveryPresentationWireForPost(String postId) =>
-      null;
-
-  @override
-  List<PostBaseDto> embeddedDiscoveryArticlePostsForFollowingMix() =>
-      const <PostBaseDto>[];
 }

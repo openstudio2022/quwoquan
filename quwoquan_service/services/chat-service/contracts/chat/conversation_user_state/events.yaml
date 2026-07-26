@@ -1,0 +1,26 @@
+events:
+- name: ConversationReadWatermarkAdvanced
+  producer: chat-service
+  consumers:
+  - projection-workers
+  channel: transactional_outbox
+  payload_fields:
+  - conversationId
+  - userId
+  - messageId
+  - readSeq
+  - unreadCount
+  - mentionUnreadCount
+  - readAt
+  - updatedAt
+- name: ConversationUserSettingsChanged
+  producer: chat-service
+  consumers:
+  - projection-workers
+  channel: transactional_outbox
+  payload_fields:
+  - conversationId
+  - userId
+  - muted
+  - pinned
+  - updatedAt

@@ -1,0 +1,31 @@
+kind: aggregate_root
+description: '一次不可变标签分类发布。数据工程 publish/import 是唯一写入口；
+
+  TagNodeView 通过 releaseId 归属该版本投影，在线 tag-service 仅查询激活投影。
+
+  '
+identity:
+  fields:
+  - releaseId
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships: []
+capabilities:
+- versioned
+- auditable
+business_rules:
+- releaseId、contentDigest 和 parent graph 创建后不可变
+- taxonomy 必须无环且所有 node path、alias 和 canonical id 唯一
+- 同一 taxonomy 只能有一个 active release
+- 在线服务不得直接修改 TagNodeView，只能切换已验证 release
+lifecycle:
+  states:
+  - staged
+  - active
+  - retired
+  - rejected
+  optimistic_concurrency: version
+  idempotency: import_receipt

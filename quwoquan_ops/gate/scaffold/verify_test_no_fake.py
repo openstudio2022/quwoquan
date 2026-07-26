@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path
 
-from test_directory_inventory_lib import (
+from test_directory_layout_lib import (
     ROOT,
     contains_generated_bridge_marker,
     go_has_test_entrypoint,
@@ -42,6 +42,20 @@ FAKE_INTEGRATION_DEPENDENCY_PATTERNS = (
 FAKE_INTEGRATION_FILENAME_RE = re.compile(
     r"(?:^|[_-])(?:fake|mock|stub|memory|test[_-]?double)(?:[_\-.]|$)",
     re.IGNORECASE,
+)
+APP_USER_ACCEPTANCE_FAKE_PATTERNS = (
+    re.compile(r"\.overrideWith(?:Value)?\s*\("),
+    re.compile(r"\bProviderScope\s*\("),
+    re.compile(r"\bHttpOverrides\.global\s*="),
+    re.compile(
+        r"\b(?:Mock|Fake|Stub|Noop|InMemory|Memory)[A-Za-z0-9_]*"
+        r"(?:Repository|Query|Writer|Reader|Facet|Store|Service|Client|Adapter)\b"
+    ),
+    re.compile(r"import\s+['\"][^'\"]*test/support/(?:fixtures|cloud_services)/"),
+    re.compile(r"\bquwoquan_cloud_mock\b"),
+    re.compile(r"\bpumpWidget\s*\("),
+    re.compile(r"\bcoverage evidence is declared\b"),
+    re.compile(r"\b(?:sourceEvidence|requiredCaseIds)\b"),
 )
 DART_TEST_RE = re.compile(r"\b(?:test(?:Widgets)?|patrolTest)\s*\(")
 PYTHON_TEST_RE = re.compile(r"^\s*def\s+test_[A-Za-z0-9_]+\s*\(", re.MULTILINE)
@@ -82,7 +96,11 @@ def verify_canonical_files(failures: Failures) -> None:
                         f"{path.relative_to(ROOT)} uses fake integration dependency "
                         f"{pattern.pattern!r}"
                     )
-        if path.suffix == ".go" and not go_has_test_entrypoint(path):
+        if (
+            path.suffix == ".go"
+            and "_support__" not in path.name
+            and not go_has_test_entrypoint(path)
+        ):
             failures.add(f"{path.relative_to(ROOT)} go canonical test lacks Test*/Benchmark*/TestMain entrypoint")
         if path.suffix == ".py" and "importlib.util.spec_from_file_location" not in text and "def test_" not in text:
             failures.add(f"{path.relative_to(ROOT)} python canonical test lacks real test body")
@@ -95,6 +113,10 @@ def verify_test_artifacts(failures: Failures) -> None:
     if not test_artifacts.exists():
         return
     for path in test_artifacts.rglob("report.json"):
+        # Disposable pytest isolation roots are deleted after the suite; ignore
+        # any leftover incomplete reports instead of treating them as evidence.
+        if any(part.startswith("data-local-contract.") for part in path.parts):
+            continue
         text = path.read_text(encoding="utf-8", errors="ignore")
         if '"exit_code"' not in text or '"case_results"' not in text:
             failures.add(f"{path.relative_to(ROOT)} report.json missing exit_code or case_results")
@@ -146,6 +168,19 @@ def verify_all_test_sources(failures: Failures) -> None:
                         failures.add(
                             f"{path.relative_to(ROOT)} contains skip pattern "
                             f"{pattern.pattern!r}"
+                        )
+            is_app_user_acceptance_source = (
+                path.suffix == ".dart"
+                and "quwoquan_app" in path.parts
+                and "user_acceptance" in path.parts
+            )
+            if is_app_user_acceptance_source:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+                for pattern in APP_USER_ACCEPTANCE_FAKE_PATTERNS:
+                    if pattern.search(text):
+                        failures.add(
+                            f"{path.relative_to(ROOT)} injects local/mock state "
+                            f"into App user-acceptance evidence {pattern.pattern!r}"
                         )
             if not is_canonical_test_source:
                 continue

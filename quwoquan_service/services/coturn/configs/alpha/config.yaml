@@ -1,5 +1,0 @@
-service:
-  name: coturn
-config:
-  env: alpha
-  version: "v2026.07.08.0"

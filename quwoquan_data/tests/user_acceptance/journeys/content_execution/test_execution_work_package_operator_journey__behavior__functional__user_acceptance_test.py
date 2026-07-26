@@ -10,8 +10,8 @@ from pathlib import Path
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "quwoquan_data").is_dir())
 CLI = REPO_ROOT / "quwoquan_data/scripts/cli.py"
-EXECUTION_ID = "20260711--travel-homepage-coverage--cn-zhejiang--canary-981"
-RETRY_ID = "20260711--travel-homepage-coverage--cn-zhejiang--canary-982"
+EXECUTION_ID = "20260711--travel-homepage-coverage--test-region-a--pilot-981"
+RETRY_ID = "20260711--travel-homepage-coverage--test-region-a--pilot-982"
 
 
 def _run(
@@ -28,8 +28,14 @@ def _run(
         "execute",
         "--execution-id",
         execution_id,
-        "--rollout",
-        "travel-homepage-coverage",
+        "--family",
+        "content/travel/homepage/homepage",
+        "--region-ref",
+        "china",
+        "--selector",
+        "all",
+        "--count",
+        "1",
         "--stage",
         "plan-only",
     ]
@@ -63,8 +69,10 @@ def test_operator_creates_resumes_and_retries_one_work_package(tmp_path: Path):
     }
     manifest = json.loads((root / "execution_manifest.json").read_text(encoding="utf-8"))
     assert manifest["executionId"] == EXECUTION_ID
-    assert manifest["scope"] == "cn-zhejiang"
     assert manifest["retryOf"] is None
+    request = json.loads((root / manifest["requestRef"]).read_text(encoding="utf-8"))
+    assert request["regionRef"] == "china"
+    assert request["count"] == 1
     assert (root / "0.plan/execution_spec.yaml").is_file()
     assert (root / "_shared/target_selection.json").is_file()
     assert not list(root.rglob("*.recipe.yaml"))

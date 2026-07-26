@@ -138,12 +138,14 @@ void main() {
       },
     );
 
-    test('following channel uses single_column_relations template', () {
+    test('following channel uses channel-routed relations template', () {
       final following = ContentUIConfig.homeChannels.firstWhere(
         (c) => c.id == 'following',
       );
       expect(following.template, equals('single_column_relations'));
-      expect(following.feedQuery['category'], equals('following'));
+      expect(following.feedQuery['channel'], equals('following'));
+      expect(following.feedQuery.containsKey('identity'), isFalse);
+      expect(following.feedQuery.containsKey('type'), isFalse);
     });
 
     test(

@@ -1,10 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
-import 'package:quwoquan_app/cloud/services/integration/location_query_contracts.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_circle_services.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../../../support/fake_location_gateway.dart';
@@ -46,23 +43,41 @@ final class _SequencedLocationQuery
   }
 }
 
-final class _FakeCircleRepository extends MockCircleRepository {
-  _FakeCircleRepository({required this.circles});
+final class _FakeCircleQueryReader implements CircleQueryReader {
+  _FakeCircleQueryReader({required this.circles});
 
-  final List<CircleDto> circles;
+  final List<CircleProjection> circles;
 
   @override
-  Future<List<CircleDto>> listCircles({
-    String? category,
-    String? domainId,
-    String? recommendFor,
-    String? cursor,
-    int limit = 20,
-    String? sort,
-    String? subCategory,
-  }) async {
-    return circles.take(limit).toList(growable: false);
-  }
+  Future<CirclePageSlice> list(CircleListQuery query) async =>
+      CirclePageSlice(items: circles.take(query.limit));
+
+  @override
+  Future<CircleSearchResultSlice> search(CircleSearchQuery query) async =>
+      CircleSearchResultSlice(
+        items: const <CircleSearchItemProjection>[],
+        facetBuckets: const <CircleFacetBucketProjection>[],
+      );
+
+  @override
+  Future<CircleProjection> get(CircleDetailQuery query) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<CircleFeedPageSlice> feed(CircleFeedQuery query) async =>
+      CircleFeedPageSlice(items: const <CircleFeedPostProjection>[]);
+
+  @override
+  Future<CircleStatsSlice> stats(CircleStatsQuery query) async =>
+      const CircleStatsSlice();
+
+  @override
+  Future<CircleImpactSlice> impact(CircleImpactQuery query) async =>
+      CircleImpactSlice(
+        circleId: query.circleId,
+        total: 0,
+        items: const <CircleImpactItemProjection>[],
+      );
 }
 
 void main() {
@@ -144,25 +159,17 @@ void main() {
   group('CreateCircleService', () {
     test('uses remote circles when endpoint has data', () async {
       const service = CreateCircleService();
-      final fake = _FakeCircleRepository(
-        circles: <CircleDto>[
-          CircleDto.fromMap(<String, dynamic>{
-            'id': 'c1',
-            'name': '测试圈子A',
-            'ownerId': 'u1',
-            'coverUrl': 'https://example.com/c1.jpg',
-            'memberCount': 88,
-            'postCount': 12,
-            'createdAt': '2025-01-01T00:00:00.000Z',
-            'updatedAt': '2025-01-01T00:00:00.000Z',
-          }),
-          CircleDto.fromMap(<String, dynamic>{
-            'id': 'c2',
-            'name': '测试圈子B',
-            'ownerId': 'u1',
-            'createdAt': '2025-01-01T00:00:00.000Z',
-            'updatedAt': '2025-01-01T00:00:00.000Z',
-          }),
+      final fake = _FakeCircleQueryReader(
+        circles: <CircleProjection>[
+          CircleProjection(
+            circleId: 'c1',
+            name: '测试圈子A',
+            ownerId: 'u1',
+            coverUrl: 'https://example.com/c1.jpg',
+            memberCount: 88,
+            postCount: 12,
+          ),
+          CircleProjection(circleId: 'c2', name: '测试圈子B', ownerId: 'u1'),
         ],
       );
 

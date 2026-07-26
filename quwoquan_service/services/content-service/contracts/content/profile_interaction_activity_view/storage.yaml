@@ -1,0 +1,37 @@
+backend: mongodb
+collections:
+  profile_interaction_activity_views:
+    entity: ProfileInteractionActivityView
+    role: projection
+    description: 三类 durable source outbox 物化的个人主页互动行；请求路径只读本集合。
+    indexes:
+    - name: idx_profile_interaction_identity
+      keys:
+        ownerPersonaId: 1
+        direction: 1
+        activityId: 1
+      unique: true
+    - name: idx_profile_interaction_page
+      keys:
+        ownerPersonaId: 1
+        direction: 1
+        activityType: 1
+        active: 1
+        occurredAt: -1
+        activityId: -1
+    - name: idx_profile_interaction_source
+      keys:
+        sourceType: 1
+        sourceEventId: 1
+        direction: 1
+      unique: true
+    - name: idx_profile_interaction_target
+      keys:
+        targetContentId: 1
+        active: 1
+    - name: idx_profile_interaction_comment
+      keys:
+        commentId: 1
+        ownerPersonaId: 1
+      sparse: true
+role: projection

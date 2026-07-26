@@ -160,12 +160,19 @@
       ]
     },
     "agentRunHistory": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/managedAgentRunRecord"
+      }
     },
     "lastAgentRun": {
-      "type": [
-        "object",
-        "null"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/managedAgentRunRecord"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "reactRewinds": {
@@ -206,6 +213,141 @@
     },
     "schema": {
       "const": "quwoquan.content.execution_state"
+    }
+  },
+  "$defs": {
+    "managedAgentOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "started",
+        "status",
+        "agentProvider",
+        "failureKind",
+        "error",
+        "retryable",
+        "authFailure",
+        "errorCode",
+        "requestId",
+        "attempts",
+        "warmAttempts",
+        "result",
+        "agentId",
+        "runId",
+        "durationMs",
+        "completionMode",
+        "stdoutTail",
+        "stderrTail",
+        "jobIndex",
+        "lane",
+        "ref",
+        "timing",
+        "gateIssues",
+        "issueRecords"
+      ],
+      "properties": {
+        "started": { "type": "boolean" },
+        "status": { "enum": ["finished", "error"] },
+        "agentProvider": { "const": "cursor_sdk" },
+        "failureKind": { "type": ["string", "null"] },
+        "error": { "type": ["string", "null"] },
+        "retryable": { "type": "boolean" },
+        "authFailure": { "type": "boolean" },
+        "errorCode": { "type": ["string", "null"] },
+        "requestId": { "type": ["string", "null"] },
+        "attempts": { "type": "integer", "minimum": 0 },
+        "warmAttempts": { "type": "integer", "minimum": 0 },
+        "result": { "type": "string" },
+        "agentId": { "type": ["string", "null"] },
+        "runId": { "type": ["string", "null"] },
+        "durationMs": { "type": "integer", "minimum": 0 },
+        "completionMode": { "type": ["string", "null"] },
+        "stdoutTail": { "type": ["string", "null"] },
+        "stderrTail": { "type": ["string", "null"] },
+        "jobIndex": { "type": "integer", "minimum": 0 },
+        "lane": { "type": "string", "minLength": 1 },
+        "ref": { "type": ["string", "null"] },
+        "timing": { "type": "object" },
+        "gateIssues": { "type": "array", "items": { "type": "string" } },
+        "issueRecords": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "managedAgentScheduler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestedMaxWorkers",
+        "effectiveWorkerCount",
+        "localCursorMaxWorkers",
+        "runtime",
+        "promptCount",
+        "estimatedMinWaves",
+        "laneLimits",
+        "agentProvider",
+        "startedAt",
+        "finishedAt",
+        "elapsedSeconds"
+      ],
+      "properties": {
+        "requestedMaxWorkers": { "type": "integer", "minimum": 0 },
+        "effectiveWorkerCount": { "type": "integer", "minimum": 0 },
+        "localCursorMaxWorkers": { "type": "integer", "minimum": 0 },
+        "runtime": { "type": "string", "minLength": 1 },
+        "promptCount": { "type": "integer", "minimum": 0 },
+        "estimatedMinWaves": { "type": "integer", "minimum": 0 },
+        "laneLimits": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        },
+        "agentProvider": { "const": "cursor_sdk" },
+        "startedAt": { "type": "string", "minLength": 1 },
+        "finishedAt": { "type": "string", "minLength": 1 },
+        "elapsedSeconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "managedAgentRunRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "jobCount",
+        "plannedJobCount",
+        "scheduler",
+        "refs",
+        "startedCount",
+        "finishedCount",
+        "infrastructureFailures",
+        "outcomes",
+        "finishedAt",
+        "recovered",
+        "recoveredAt",
+        "recoveryReason",
+        "status",
+        "interruptReason",
+        "cancelledQueuedJobCount",
+        "cancelledActiveJobCount",
+        "terminatedSubprocessPids"
+      ],
+      "properties": {
+        "stage": { "enum": ["download_plan", "build_homepage", "content_plan", "post_author"] },
+        "jobCount": { "type": "integer", "minimum": 0 },
+        "plannedJobCount": { "type": "integer", "minimum": 0 },
+        "scheduler": { "$ref": "#/$defs/managedAgentScheduler" },
+        "refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "startedCount": { "type": "integer", "minimum": 0 },
+        "finishedCount": { "type": "integer", "minimum": 0 },
+        "infrastructureFailures": { "type": "integer", "minimum": 0 },
+        "outcomes": { "type": "array", "items": { "$ref": "#/$defs/managedAgentOutcome" } },
+        "finishedAt": { "type": "string", "minLength": 1 },
+        "recovered": { "type": "boolean" },
+        "recoveredAt": { "type": ["string", "null"] },
+        "recoveryReason": { "type": ["string", "null"] },
+        "status": { "enum": ["completed", "interrupted"] },
+        "interruptReason": { "type": ["string", "null"] },
+        "cancelledQueuedJobCount": { "type": "integer", "minimum": 0 },
+        "cancelledActiveJobCount": { "type": "integer", "minimum": 0 },
+        "terminatedSubprocessPids": { "type": "array", "items": { "type": "integer", "minimum": 1 } }
+      }
     }
   }
 }

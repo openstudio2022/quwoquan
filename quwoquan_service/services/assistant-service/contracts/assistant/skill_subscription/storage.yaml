@@ -1,0 +1,50 @@
+backend: mongodb
+collections:
+  skill_subscriptions:
+    entity: SkillSubscription
+    role: authoritative
+    description: 订阅聚合真相源；一次创建幂等由 ownerId+clientRequestId 唯一约束承载。
+    indexes:
+    - name: idx_skill_subscriptions_owner_status
+      keys:
+        owner.ownerId: 1
+        status: 1
+        updatedAt: -1
+    - name: idx_skill_subscriptions_status_updated
+      keys:
+        status: 1
+        updatedAt: -1
+    - name: idx_skill_subscriptions_trigger
+      keys:
+        status: 1
+        trigger.type: 1
+    - name: idx_skill_subscriptions_delivery
+      keys:
+        status: 1
+        deliveryState.nextAttemptAt: 1
+        updatedAt: 1
+        _id: 1
+    - name: uq_skill_subscriptions_client_request
+      keys:
+        owner.ownerId: 1
+        clientRequestId: 1
+      unique: true
+      sparse: true
+status_transition_note: 'UpdateSkillSubscriptionStatus 是收敛的 set 语义：目标状态已满足时服务端 no-op 返回存量（不推进 updatedAt、不产生伪事件）。set
+  操作重放与用户再次设置同构且 无害，故不建独立 receipt 集合；一次创建的幂等由 uq_skill_subscriptions_client_request 唯一约束承载（聚合自身即 receipt）。
+
+  '
+redis_cache:
+- key: assistant:subscription:lease:{subscriptionId}:{deliveryId}
+  ttl_seconds: 300
+  type: string
+  description: 订阅投递租约（SetNX + TTL）；首次调度及失败补偿共用 deliveryId，同一投递只有一个实例进入外部副作用。
+- key: assistant:subscription:delivery_slot:{subscriptionId}:{utcDate}:{slot}
+  ttl_seconds: 172800
+  type: string
+  description: 订阅 UTC 自然日投递配额槽；成功后保留到 TTL，失败时按持有值校验后释放，原子限制 maxPerDay。
+- key: assistant:intersection:lease:{userId}:{window}
+  ttl_seconds: 300
+  type: string
+  description: 交集提醒调度租约，同上语义。
+role: authoritative

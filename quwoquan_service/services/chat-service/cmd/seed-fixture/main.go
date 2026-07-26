@@ -13,11 +13,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/runtime/contractfixture"
-	messagemodel "quwoquan_service/services/chat-service/internal/domain/chat/message/model"
-	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
+	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
+	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
 )
 
-const chatScenarioFixturePath = "messages/chat/test_fixtures/scenarios/chat_scenarios.json"
+const chatScenarioFixturePath = "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json"
 
 type multiFlag []string
 
@@ -116,7 +116,7 @@ func main() {
 		seedRefs = append(seedRefs, "chat_core")
 	}
 
-	pack, err := contractfixture.LoadMetadataJSON[chatFixturePack](chatScenarioFixturePath)
+	pack, err := contractfixture.LoadRepositoryJSON[chatFixturePack](chatScenarioFixturePath)
 	if err != nil {
 		log.Fatalf("load chat fixture pack: %v", err)
 	}

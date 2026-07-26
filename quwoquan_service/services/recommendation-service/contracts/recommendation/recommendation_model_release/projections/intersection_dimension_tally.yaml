@@ -1,0 +1,93 @@
+read_model: IntersectionDimensionTally
+description: '「我的交集」单个维度的计数与未读统计（B1 契约）。
+
+  dimension 与 IntersectionReason.dimension 闭集对齐；count 为该维度可见事实交集总数；
+
+  newCount 为自上次查看（已读水位）以来的新增数，端侧据此显示红点。
+
+  label 为后端提供的用户语言维度短名（如"身份""地点""内容""兴趣""关系"），端不本地拼装。
+
+  briefText 为云侧实例化的一句话动态简报（如"4 位校友正在讨论 AI 产品"），
+
+  我的主页聚合卡按 briefText 渲染动态简报行；缺省时端回落 label + newCount，不本地编造事实。
+
+  subtitleText 为该动态简报的证据摘要（如"张晓明、王晨、阿远、陈璟"），端只读直出。
+
+  dimension 为开放字符串，端对未知维度优雅降级（briefText 缺省走 label）。
+
+  '
+consumers:
+- app
+client_projection:
+  dart_class: IntersectionDimensionTally
+  base_class: ''
+  output_path: cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart
+  dart_imports:
+  - intersection_text_span.g.dart
+  - intersection_visual.g.dart
+  fields:
+  - name: dimension
+    dart_type: String
+    nullable: false
+    source: dimension
+    default: ''''''
+  - name: label
+    dart_type: String
+    nullable: false
+    source: label
+    default: ''''''
+  - name: count
+    dart_type: int
+    nullable: false
+    source: count
+    default: '0'
+  - name: newCount
+    dart_type: int
+    nullable: false
+    source: newCount
+    default: '0'
+  - name: briefText
+    dart_type: String
+    nullable: false
+    source: briefText
+    default: ''''''
+  - name: subtitleText
+    dart_type: String
+    nullable: false
+    source: subtitleText
+    default: ''''''
+  - name: briefSpans
+    dart_type: List<IntersectionTextSpan>
+    nullable: false
+    source: briefSpans
+    list_element_dart_class: IntersectionTextSpan
+  - name: sampleVisuals
+    dart_type: List<IntersectionVisual>
+    nullable: false
+    source: sampleVisuals
+    list_element_dart_class: IntersectionVisual
+  - name: sourceRef
+    dart_type: String
+    nullable: false
+    source: sourceRef
+    default: ''''''
+  - name: countObjectKind
+    dart_type: String
+    nullable: false
+    source: countObjectKind
+    default: ''''''
+  - name: strengthenedCount
+    dart_type: int
+    nullable: false
+    source: strengthenedCount
+    default: '0'
+  - name: reactivatedCount
+    dart_type: int
+    nullable: false
+    source: reactivatedCount
+    default: '0'
+  - name: iconKey
+    dart_type: String
+    nullable: false
+    source: iconKey
+    default: ''''''

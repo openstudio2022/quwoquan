@@ -7,21 +7,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
+import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
+import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_reference_webview_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/assistant_conversation_empty_state.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/assistant_conversation_inline_error.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/assistant_history_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/streaming_scroll_fab.dart';
 
@@ -59,10 +67,28 @@ class _PersonalAssistantConversationPageState
       if (!mounted) {
         return;
       }
+      // 页面曝光（R20）：GoRoute 无 name 不经 pageAccess observer，页面自身
+      // 直调现行 pageAccess 通道（与 MainAppShell tab 埋点同源）。
+      if (!widget.embedded) {
+        unawaited(
+          writeAppPageAccessOpen(
+            location: AppRoutePaths.assistantPersonal,
+            pageVisitId: AppTraceContextStore.instance.newPageVisitId(),
+            visitRecorder: ref.read(visitRecorderServiceProvider),
+            telemetryReporter: ref.read(appTelemetryReporterProvider),
+          ),
+        );
+      }
+      final requestedConversationId =
+          widget.assistantOpenContext?.conversationId.trim() ?? '';
+      final notifier = ref.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+      notifier.setOpenContext(widget.assistantOpenContext);
       unawaited(
-        ref
-            .read(personalAssistantStreamControllerProvider.notifier)
-            .ensureHistoryInitialized()
+        (requestedConversationId.isEmpty
+                ? notifier.ensureHistoryInitialized()
+                : notifier.switchConversation(requestedConversationId))
             .then((_) => _sendInitialQueryIfNeeded()),
       );
     });
@@ -135,22 +161,29 @@ class _PersonalAssistantConversationPageState
   }
 
   Future<void> _openReference(AssistantCitation citation) async {
-    final url = citation.url.trim();
-    if (url.isEmpty) return;
-    final uri = Uri.tryParse(url);
-    if (uri == null || !(uri.isScheme('https') || uri.isScheme('http'))) {
-      await Clipboard.setData(ClipboardData(text: url));
-      return;
+    final destination = citation.resolvedDestination;
+    switch (destination) {
+      case InternalCitationDestination():
+        context.push(destination.routePath);
+      case ExternalCitationDestination():
+        await Navigator.of(context).push(
+          CupertinoPageRoute<void>(
+            // 携带 metadata 登记的 internal location，pageAccess observer 据此
+            // 记录 webview 页的进入/停留（assistant_reference_webview_modal）。
+            settings: const RouteSettings(
+              name: PageAccessInternalRoutes.assistantConversationReferenceWeb,
+            ),
+            builder: (_) => AssistantReferenceWebViewPage(
+              initialUrl: destination.uri.toString(),
+              title: citation.title,
+              source: citation.source,
+            ),
+          ),
+        );
+      case null:
+        // 未知对象、无 destination 和非 HTTPS URL 均不可打开，避免错误回退。
+        return;
     }
-    await Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        builder: (_) => AssistantReferenceWebViewPage(
-          initialUrl: url,
-          title: citation.title,
-          source: citation.source,
-        ),
-      ),
-    );
   }
 
   @override
@@ -173,6 +206,7 @@ class _PersonalAssistantConversationPageState
         setState(() => _userScrolledAway = false);
       },
       onReferenceTap: _openReference,
+      openContext: widget.assistantOpenContext,
     );
     if (widget.embedded) {
       return content;
@@ -180,20 +214,45 @@ class _PersonalAssistantConversationPageState
     return AppScaffold(
       backgroundColor: CupertinoColors.systemBackground.resolveFrom(context),
       navigationBar: AppNavigationBar(
-        middle: const Text(UITextConstants.assistantEntryFindPersonal),
+        middle: const Text(AssistantText.assistantEntryFindPersonal),
         leading: widget.onBack == null
             ? null
             : AppNavigationBarIconButton(
                 icon: CupertinoIcons.back,
                 onPressed: widget.onBack,
               ),
-        trailing: AppNavigationBarIconButton(
-          icon: AppNavigationSemanticConstants.settingsActionIcon,
-          onPressed: () => context.push(AppRoutePaths.assistantManagement),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppNavigationBarIconButton(
+              key: TestKeys.assistantHistoryButton,
+              icon: CupertinoIcons.clock,
+              onPressed: _openHistorySheet,
+            ),
+            AppNavigationBarIconButton(
+              icon: AppNavigationSemanticConstants.settingsActionIcon,
+              onPressed: () => context.push(AppRoutePaths.assistantManagement),
+            ),
+          ],
         ),
       ),
       child: content,
     );
+  }
+
+  Future<void> _openHistorySheet() async {
+    final selected = await showAssistantHistorySheet(context);
+    if (!mounted || selected == null) {
+      return;
+    }
+    final notifier = ref.read(
+      personalAssistantStreamControllerProvider.notifier,
+    );
+    if (selected.isEmpty) {
+      notifier.startNewConversation();
+      return;
+    }
+    await notifier.switchConversation(selected);
   }
 }
 
@@ -206,6 +265,7 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
     required this.showScrollFab,
     required this.onScrollToBottom,
     required this.onReferenceTap,
+    required this.openContext,
   });
 
   final TextEditingController controller;
@@ -215,6 +275,7 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
   final bool showScrollFab;
   final VoidCallback onScrollToBottom;
   final Future<void> Function(AssistantCitation citation) onReferenceTap;
+  final AssistantOpenContext? openContext;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -231,6 +292,8 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
     final chatListBg = isDark ? background : AppColors.chatBackground;
     final bubbleSelf = AppColors.chatBubbleOutgoing;
     final bubbleOther = AppColors.chatBubbleIncoming;
+    final hasRetryError =
+        state.retryAvailable && state.errorMessage.trim().isNotEmpty;
     final timelinePadding = EdgeInsets.symmetric(
       horizontal:
           AppSpacing.semantic[DesignSemanticConstants
@@ -246,11 +309,25 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
           Expanded(
             child: state.historyLoading && state.transcript.isEmpty
                 ? Center(child: CupertinoActivityIndicator(color: foreground))
+                : state.transcript.isEmpty && !hasRetryError
+                ? AssistantConversationEmptyState(
+                    openContext: openContext,
+                    foreground: foreground,
+                    onSuggestionSelected: (value) {
+                      controller
+                        ..text = value
+                        ..selection = TextSelection.collapsed(
+                          offset: value.length,
+                        );
+                      focusNode.requestFocus();
+                    },
+                  )
                 : ConversationTimeline(
                     controller: scrollController,
                     backgroundColor: chatListBg,
                     padding: timelinePadding,
-                    itemCount: state.transcript.length,
+                    itemCount:
+                        state.transcript.length + (hasRetryError ? 1 : 0),
                     overlays: <Widget>[
                       if (showScrollFab)
                         Positioned(
@@ -260,6 +337,25 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
                         ),
                     ],
                     itemBuilder: (context, index) {
+                      if (index == state.transcript.length) {
+                        return AssistantConversationInlineError(
+                          state: state,
+                          onRetry: ref
+                              .read(
+                                personalAssistantStreamControllerProvider
+                                    .notifier,
+                              )
+                              .retryLastFailedAction,
+                          onOpenSettings: () =>
+                              context.push(AppRoutePaths.assistantManagement),
+                          onDismiss: ref
+                              .read(
+                                personalAssistantStreamControllerProvider
+                                    .notifier,
+                              )
+                              .dismissError,
+                        );
+                      }
                       final row = state.transcript[index];
                       final isUserRow = row is UserTranscriptTimelineRow;
                       final isAssistantMessage =
@@ -292,13 +388,35 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
                             state.running &&
                                 index == state.transcript.length - 1 &&
                                 isAssistantMessage
-                            ? UITextConstants.assistantPhaseUnderstanding
+                            ? _assistantRunningStatusLabel(state.processSummary)
                             : null,
                         showFeedbackActions:
                             isAssistantMessage &&
                             !state.running &&
                             index == state.transcript.length - 1,
-                        feedbackStatus: state.feedbackMessage,
+                        feedbackStatus: state.feedbackType,
+                        onRegenerateAnswer:
+                            isAssistantMessage &&
+                                !state.running &&
+                                index == state.transcript.length - 1
+                            ? () => ref
+                                  .read(
+                                    personalAssistantStreamControllerProvider
+                                        .notifier,
+                                  )
+                                  .regenerateLastAnswer()
+                            : null,
+                        onRegenerateOptionSelected:
+                            isAssistantMessage &&
+                                !state.running &&
+                                index == state.transcript.length - 1
+                            ? (option) => ref
+                                  .read(
+                                    personalAssistantStreamControllerProvider
+                                        .notifier,
+                                  )
+                                  .regenerateLastAnswer(option: option)
+                            : null,
                         onFeedbackHelpful: isAssistantMessage
                             ? () => ref
                                   .read(
@@ -346,6 +464,61 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
                     },
                   ),
           ),
+          if (state.running)
+            Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
+              child: Center(
+                child: CupertinoButton(
+                  key: TestKeys.assistantStopGeneratingButton,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.xs,
+                  ),
+                  minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+                  onPressed: ref
+                      .read(personalAssistantStreamControllerProvider.notifier)
+                      .stopGeneration,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppColors.dark.backgroundSecondary
+                          : AppColors.white,
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.largeBorderRadius,
+                      ),
+                      border: Border.all(
+                        color: AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.borderPrimary,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          CupertinoIcons.stop_fill,
+                          size: AppSpacing.iconSmall,
+                          color: foreground,
+                        ),
+                        SizedBox(width: AppSpacing.xs),
+                        Text(
+                          AssistantText.assistantStopGenerating,
+                          style: TextStyle(
+                            fontSize: AppTypography.sm,
+                            color: foreground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ColoredBox(
             color: isDark ? background : AppColors.chatToolbarBackground,
             child: SafeArea(
@@ -367,7 +540,7 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
                     controller: controller,
                     focusNode: focusNode,
                     textFieldKey: TestKeys.assistantChatInputField,
-                    hintText: UITextConstants.assistantAskPlaceholder,
+                    hintText: AssistantText.assistantAskPlaceholder,
                     maxTextLength: 5000,
                     maxVisibleLines: 5,
                     onSend: state.running ? (_) async {} : onSend,
@@ -383,6 +556,24 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _assistantRunningStatusLabel(
+  PersonalAssistantProcessSummary processSummary,
+) {
+  if (processSummary.finalAnswerReady ||
+      processSummary.finalAnswerSummary.trim().isNotEmpty) {
+    return AssistantText.assistantPhaseAnswering;
+  }
+  if (processSummary.processingSummary.trim().isNotEmpty ||
+      processSummary.acceptedCount > 0) {
+    return AssistantText.assistantPhaseAnalyzing;
+  }
+  if (processSummary.retrievalDesignNarrative.trim().isNotEmpty ||
+      processSummary.searchCount > 0) {
+    return AssistantText.assistantPhaseSearching;
+  }
+  return AssistantText.assistantPhaseUnderstanding;
 }
 
 String _assistantRowText(AssistantTranscriptTimelineRow row) {

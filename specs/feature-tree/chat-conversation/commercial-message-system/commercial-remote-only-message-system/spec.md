@@ -1,43 +1,77 @@
-# L3 Story：commercial-remote-only-message-system
+# L3 Story：商用远端单轨消息系统 (`commercial-remote-only-message-system`)
 
-## 最小价值点
+> 所属能力：[`commercial-message-system`](../spec.md)
 
-确保商用消息体系路径只依赖真实 Remote/服务端持久化事实，不再回退 Mock、prototype bundle 或本地业务拼接。
+> Journey / Scenario：[`JNY-003 / SCN-008`](../../../spec.md#scn-008)
 
-## 归属
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-- 领域服务：`chat-conversation`
-- 业务能力：`commercial-message-system`
-- 关联 Journey / Scenario：商用路径 Remote-only 收口
+## 1. 用户价值
 
-## 行为范围
+作为发起或接收消息的用户，
+我希望只基于真实账号、会话和通知事实完成消息主路径，远端失败时显示可恢复错误而不注入 Mock，
+从而信任消息列表、未读状态和发送结果。
+
+## 2. 范围与非目标
 
 ### In Scope
 
-- App 商用主路径不从 chat/intersection/app message mock 拼业务列表。
-- 服务端生产配置不允许 mock-user、memory store、noop resolver。
-- 退役字段不再作为商用主渲染来源。
+- “商用远端单轨消息系统”的输入、可观察主路径、失败语义以及与父能力的交接。
+- alpha/test fixture 的开发态组织方式。
 
 ### Out of Scope
 
-- alpha/test fixture 的开发态存在方式。
-- 具体 hosted 部署流程。
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-## 行为规则
+## 3. 行为要求
 
-- Given：应用运行在商用消息体系主路径。
-- When：页面、Provider 与服务配置加载消息体系相关数据。
-- Then：系统只消费真实 Remote/持久化契约，不再以 Mock 或退役字段维持主渲染。
+<a id="req-001"></a>
+### REQ-001 商用远端单轨消息系统
 
-## 接口契约
+- 商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。
 
-- API path / operation：消息、通知、交集相关 metadata operation。
-- DTO / projection：`MessageHome`、`ContactHome`、`GroupHome`、`AppMessage`。
-- error code：消息域、通知域、内容域和 runtime error metadata。
-- surface / route：消息体系相关页面的 metadata route / surface。
+<a id="req-002"></a>
+### REQ-002 商用消息体系 Remote-only 契约保持单一真相源
 
-## 验收关注点
+- 商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。
 
-- done_when：商用主路径不再依赖 Mock、prototype bundle 和退役字段。
-- edge cases：release 包默认 Remote、配置缺失防回退、缓存存在但远端失败时的结构化降级。
-- test evidence：`T1_static_contract`、`T3_service_contract`。
+## 4. 契约引用
+
+- canonical：`specs/feature-tree/chat-conversation/commercial-message-system/spec.md`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 商用远端单轨消息系统
+
+- GIVEN 发起或接收消息的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“商用远端单轨消息系统”对应的公开行为。
+- THEN 商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`commercial-message-system`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 商用消息体系主路径只消费 Remote 与真实持久化事实
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：商用消息体系主路径的正式渲染不再依赖 Mock、prototype 和退役字段。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 商用消息体系 Remote-only 契约保持单一真相源
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。
+- 完成判定：商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。

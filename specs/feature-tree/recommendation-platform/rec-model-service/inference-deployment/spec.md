@@ -1,22 +1,61 @@
-# L4 对象任务：inference-deployment（推理部署）
+# L3 Story：推荐推理部署 (`inference-deployment`)
 
-## 功能说明
+> 所属能力：[`recommendation-service`](../spec.md)
 
-- **推理镜像**：rec-model-service（Python FastAPI + LightGBM），健康检查 GET /health，从 ModelRegistry/OSS 加载 production 模型。
-- **自建**：docker-compose 或 K8s 部署；与 content-service 同网或同集群，URL 配置连接。
-- **云平台**：PAI-EAS 自定义 Processor 或内置 LightGBM Processor；火山 ML 在线服务；模型与数据存 OSS/TOS。
+> Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
 
-## 实现要点
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-- Dockerfile 与 docker-compose 新增 rec-model-service；环境变量连接 MongoDB/Redis/OSS。
-- 文档或脚本：如何部署 PAI-EAS/火山推理服务。
-- 部署后与 Go 集成验证：content-service 指向推理 URL 可正常打分。
+## 1. 用户价值
 
-## 约束
+作为消费推荐的用户或策略运营者，
+我希望从 ModelRegistry 或 OSS 加载 production 模型，通过健康检查后提供推理服务并支持回滚，
+从而获得可解释且受治理的推荐结果。
 
-- 不硬编码云账号与密钥；与 quwoquan_service 部署方式兼容。
+## 2. 范围与非目标
 
-## 验收标准
+### In Scope
 
-- A1：docker-compose 可启动 rec-model-service，content-service 可调用。
-- A8：部署步骤可文档化或脚本化复现。
+- “推荐推理部署”的输入、可观察主路径、失败语义以及与父能力的交接。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 推荐推理部署
+
+- 从 ModelRegistry 或 OSS 加载 production 模型，通过健康检查后提供推理服务并支持回滚。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 推荐推理部署
+
+- GIVEN 消费推荐的用户或策略运营者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“推荐推理部署”对应的公开行为。
+- THEN 从 ModelRegistry 或 OSS 加载 production 模型，通过健康检查后提供推理服务并支持回滚。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`recommendation-service`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 推荐推理部署 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“推荐推理部署”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

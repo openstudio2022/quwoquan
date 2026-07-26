@@ -6,9 +6,9 @@ import (
 )
 
 // writeRtcCallSessionDtos generates CallParticipantDto + CallSessionDto from
-// contracts/metadata/rtc/call_session/fields.yaml (entities CallParticipant, CallSession).
+// services/rtc-service/contracts/rtc/call_session/fields.yaml (entities CallParticipant, CallSession).
 func writeRtcCallSessionDtos(appDir, metadataDir string) error {
-	fieldsPath := filepath.Join(metadataDir, "rtc", "call_session", "fields.yaml")
+	fieldsPath := filepath.Join(metadataDir, "rtc", "rtc", "call_session", "fields.yaml")
 	ff, err := readFields(fieldsPath)
 	if err != nil {
 		return fmt.Errorf("rtc read fields: %w", err)
@@ -18,7 +18,7 @@ func writeRtcCallSessionDtos(appDir, metadataDir string) error {
 	if !okS || !okP {
 		return fmt.Errorf("rtc fields: missing CallSession or CallParticipant entity")
 	}
-	out := renderRtcCallSessionDtosDartFromFields(fieldsPath, ff)
+	out := renderRtcCallSessionDtosDartFromFields(metadataSourceLabel(fieldsPath), ff)
 	outPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "rtc", "call_session_dtos.g.dart")
 	writeFile(outPath, out)
 	return nil

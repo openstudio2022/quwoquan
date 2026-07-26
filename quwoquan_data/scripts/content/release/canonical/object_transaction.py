@@ -14,6 +14,12 @@ from core.tree_integrity import tree_integrity_stats
 from core.schema import assert_valid
 from core.release_layout import attestation_root, payload_digest, payload_file, payload_root
 from core.media_asset_url import build_release_media_manifest
+from core.source_digest import SourceDigest, SourceDigestError
+from governance.coverage.license import (
+    RightsAuditStatus,
+    parse_rights_audit_status,
+    rights_proof_required,
+)
 from content.release.canonical.object_transaction_contract import (
     PACKAGE_SCHEMA,
     DRY_RUN_SCHEMA,
@@ -107,17 +113,14 @@ def _release_entity_tag_refs(*, publish_root: Path, entity_refs: set[str]) -> li
 
 
 def _image_dimensions(path: Path) -> tuple[int, int, str]:
-    try:
-        from PIL import Image
+    from core.image_decode import probe_image_path
 
-        with Image.open(path) as image:
-            width, height = image.size
-            mime = str(Image.MIME.get(image.format or "") or "")
-    except Exception as exc:  # noqa: BLE001
-        raise ObjectTransactionError(f"发布图片不可解析：{path}: {exc}") from exc
-    if width <= 0 or height <= 0 or not mime.startswith("image/"):
+    probe = probe_image_path(path)
+    if not probe.succeeded:
+        raise ObjectTransactionError(f"发布图片不可解析：{path}: {probe.failure.value}")
+    if probe.width <= 0 or probe.height <= 0 or not probe.mime_type.startswith("image/"):
         raise ObjectTransactionError(f"发布图片缺有效尺寸或 MIME：{path}")
-    return width, height, mime
+    return probe.width, probe.height, probe.mime_type
 
 
 def _safe_asset_id(value: str) -> str:
@@ -125,6 +128,55 @@ def _safe_asset_id(value: str) -> str:
     if not text:
         raise ObjectTransactionError("manifest asset 缺 assetId")
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:20]
+
+
+def _source_assets_by_ref(execution_root: Path) -> dict[str, dict[str, Any]]:
+    """Index source metadata by its execution-unique asset reference.
+
+    ``sourceAssetId`` is only unique inside one source unit (for example every
+    source starts at ``001_001``).  Promotion must therefore resolve metadata
+    through the already persisted ``sourceAssetRef`` path.
+    """
+
+    rows: dict[str, dict[str, Any]] = {}
+    for index_path in sorted((execution_root / "sources").glob("*/assets/index.json")):
+        for row in (_read_json(index_path).get("assets") or []):
+            if not isinstance(row, dict):
+                continue
+            file_name = str(row.get("fileName") or "").strip()
+            if not file_name:
+                raise ObjectTransactionError(f"{index_path}: source asset 缺 fileName")
+            asset_path = index_path.parent / _safe_rel(
+                file_name,
+                label=f"{index_path}.assets.fileName",
+            )
+            asset_ref = asset_path.relative_to(execution_root).as_posix()
+            if asset_ref in rows:
+                raise ObjectTransactionError(f"sourceAssetRef 重复：{asset_ref}")
+            rows[asset_ref] = row
+    return rows
+
+
+def _source_asset_for_manifest_asset(
+    raw: Mapping[str, Any],
+    source_assets: Mapping[str, dict[str, Any]],
+) -> tuple[str, dict[str, Any]]:
+    source_asset_ref = str(raw.get("sourceAssetRef") or "").strip()
+    if not source_asset_ref:
+        raise ObjectTransactionError("manifest asset 缺 sourceAssetRef")
+    source_asset = source_assets.get(source_asset_ref)
+    if source_asset is None:
+        raise ObjectTransactionError(
+            f"manifest asset 的 sourceAssetRef 未指向来源资产：{source_asset_ref}"
+        )
+    declared_id = str(raw.get("sourceAssetId") or "").strip()
+    actual_id = str(source_asset.get("sourceAssetId") or "").strip()
+    if declared_id and declared_id != actual_id:
+        raise ObjectTransactionError(
+            "manifest asset sourceAssetId 与 sourceAssetRef 目标不一致："
+            f"{declared_id}!={actual_id}"
+        )
+    return source_asset_ref, source_asset
 
 
 def build_entity_object_transaction_package(
@@ -145,6 +197,12 @@ def build_entity_object_transaction_package(
     execution_id = _execution_id(str(execution_manifest.get("executionId") or ""))
     if execution_root.name != execution_id:
         raise ObjectTransactionError("execution root 与 executionId 不一致")
+    try:
+        source_digest = SourceDigest.from_document(execution_manifest.get("sourceDigest"))
+    except SourceDigestError as exc:
+        raise ObjectTransactionError(
+            f"{execution_id}: execution manifest lacks a valid frozen sourceDigest"
+        ) from exc
     rel = _safe_rel(object_ref.removeprefix("/entity/"), label="objectRef")
     if len(rel.parts) < 3:
         raise ObjectTransactionError("entity objectRef 必须包含 domain/type/name")
@@ -200,16 +258,16 @@ def build_entity_object_transaction_package(
         shutil.copy2(attestation_source, object_root / "attestation.json")
         shutil.copy2(evidence_index_source, object_root / "evidence_index.json")
 
-        source_assets: dict[str, dict[str, Any]] = {}
-        for index_path in sorted((execution_root / "sources").glob("*/assets/index.json")):
-            for row in (_read_json(index_path).get("assets") or []):
-                if isinstance(row, dict) and str(row.get("sourceAssetId") or ""):
-                    source_assets[str(row["sourceAssetId"])] = row
+        source_assets = _source_assets_by_ref(execution_root)
 
         cas_rows: list[dict[str, Any]] = []
         asset_refs: list[dict[str, Any]] = []
         rights_rows: list[dict[str, Any]] = []
         canonical_assets: list[dict[str, Any]] = []
+        vertical = str(source_manifest.get("vertical") or "").strip()
+        if not vertical:
+            raise ObjectTransactionError("entity manifest 缺 vertical policy owner")
+        require_rights_proof = rights_proof_required(vertical)
         for raw in source_manifest.get("assets") or []:
             if not isinstance(raw, dict):
                 raise ObjectTransactionError("manifest.assets item 必须为 object")
@@ -227,19 +285,35 @@ def build_entity_object_transaction_package(
             shutil.copy2(asset_source, cas_target)
             width, height, mime = _image_dimensions(asset_source)
             asset_id = str(raw.get("assetId") or "").strip()
-            source_asset = source_assets.get(str(raw.get("sourceAssetId") or "")) or {}
+            source_asset_ref, source_asset = _source_asset_for_manifest_asset(
+                raw,
+                source_assets,
+            )
             canonical_file_page = str(
-                raw.get("authorizationProof") or source_asset.get("authorizationProof") or ""
+                raw.get("authorizationProof")
+                or source_asset.get("authorizationProof")
+                or source_asset.get("collectionPageUrl")
+                or source_asset.get("sourceUrl")
+                or source_asset.get("url")
+                or ""
+            ).strip()
+            authorization_proof = str(
+                raw.get("authorizationProof")
+                or source_asset.get("authorizationProof")
+                or ""
             ).strip()
             license_url = str(raw.get("termsUrl") or source_asset.get("termsUrl") or "").strip()
             if license_url.startswith("http://"):
                 license_url = "https://" + license_url.removeprefix("http://")
-            if not canonical_file_page.startswith("https://") or not license_url.startswith("https://"):
+            if not canonical_file_page.startswith("https://"):
+                raise ObjectTransactionError(f"asset {asset_id} 缺 HTTPS 来源证明")
+            if require_rights_proof and not license_url.startswith("https://"):
                 raise ObjectTransactionError(f"asset {asset_id} 缺 HTTPS 权利证明")
             snapshot_payload = {
                 "schema": "quwoquan_data.asset_rights_snapshot",
                 "executionId": execution_id,
                 "assetId": asset_id,
+                "sourceAssetRef": source_asset_ref,
                 "sourceAsset": source_asset,
                 "manifestAsset": raw,
             }
@@ -254,22 +328,58 @@ def build_entity_object_transaction_package(
             )
             author = str(raw.get("credit") or source_asset.get("credit") or source_asset.get("creator") or "").strip()
             license_name = str(raw.get("license") or source_asset.get("license") or "").strip()
-            if not author or not license_name or not fetched_at:
+            try:
+                rights_audit_status = parse_rights_audit_status(raw, source_asset)
+            except ValueError as exc:
+                raise ObjectTransactionError(
+                    f"asset {asset_id} 缺有效 rightsAuditStatus"
+                ) from exc
+            if require_rights_proof and (
+                not author
+                or not license_name
+                or not fetched_at
+                or not authorization_proof.startswith("https://")
+            ):
                 raise ObjectTransactionError(f"asset {asset_id} 权利字段不完整")
-            attribution = f"{str(raw.get('caption') or asset_id)}，作者：{author}，{license_name}"
+            if require_rights_proof and rights_audit_status is not RightsAuditStatus.VERIFIED:
+                raise ObjectTransactionError(f"asset {asset_id} 权利状态未经核实")
+            if not require_rights_proof and not fetched_at:
+                raise ObjectTransactionError(f"asset {asset_id} 权利审计字段不完整")
+            effective_license_name = license_name or "unknown"
+            rights_audit_issues = [
+                str(issue)
+                for issue in (raw.get("rightsAuditIssues") or [])
+                if str(issue).strip()
+            ]
+            if (
+                rights_audit_status is RightsAuditStatus.UNVERIFIED
+                and not rights_audit_issues
+            ):
+                raise ObjectTransactionError(
+                    f"asset {asset_id} 未核实权利状态缺审计问题"
+                )
+            attribution = f"{str(raw.get('caption') or asset_id)}，" + (
+                f"作者：{author}，许可：{effective_license_name}"
+                if rights_audit_status is RightsAuditStatus.VERIFIED
+                else "来源已记录，作者与许可尚未核实"
+            )
             rights_rows.append(
                 {
                     "assetId": asset_id,
                     "sourceKind": str((entity.get("primarySource") or {}).get("sourceKind") or "wikipedia"),
-                    "sourceUseMode": "licensed_adaptation",
+                    "sourceUseMode": (
+                        "licensed_adaptation"
+                        if rights_audit_status is RightsAuditStatus.VERIFIED
+                        else "rights_audit_only"
+                    ),
                     "canonicalFilePage": canonical_file_page,
                     "snapshotUrl": canonical_file_page,
                     "pageRevision": _digest_file(snapshot_path),
                     "originalAssetUrl": str(source_asset.get("url") or canonical_file_page),
                     "author": author,
                     "source": str(source_asset.get("collectionPageUrl") or canonical_file_page),
-                    "licenseName": license_name,
-                    "licenseShortName": license_name,
+                    "licenseName": effective_license_name,
+                    "licenseShortName": effective_license_name,
                     "licenseUrl": license_url,
                     "usageScope": "app_publish",
                     "attribution": attribution,
@@ -290,7 +400,9 @@ def build_entity_object_transaction_package(
                         "width": width,
                         "height": height,
                     },
-                    "authorizationProof": canonical_file_page,
+                    "authorizationProof": authorization_proof,
+                    "rightsAuditStatus": rights_audit_status.value,
+                    "rightsAuditIssues": rights_audit_issues,
                     "modelReleaseStatus": "not_required",
                 }
             )
@@ -329,6 +441,7 @@ def build_entity_object_transaction_package(
                 "schema": "quwoquan_data.entity_object",
                 "entityRef": str(entity.get("entityRef") or ""),
                 "executionId": execution_id,
+                "sourceDigest": source_digest.to_document(),
                 "finalContentRef": "page.md",
                 "sourceCatalogRef": source_catalog_ref.as_posix(),
                 "rightsRef": rights_ref.as_posix(),

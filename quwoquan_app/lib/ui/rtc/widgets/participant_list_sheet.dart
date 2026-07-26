@@ -1,11 +1,12 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
 
@@ -24,20 +25,15 @@ class ParticipantListSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final participantsState = ref.watch(callParticipantsProvider);
     final participants = participantsState.participants;
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    final outer = SettingsSemanticConstants.conversationSheetOuterHorizontalPadding;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final outer =
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding;
     return AppBottomModalSurface(
       onDismiss: () => Navigator.of(context).pop(),
       backgroundColor:
           SettingsSemanticConstants.conversationSheetPanelBackground(isDark),
       maxHeightRatio: 0.6,
-      contentPadding: EdgeInsets.fromLTRB(
-        outer,
-        0,
-        outer,
-        outer,
-      ),
+      contentPadding: EdgeInsets.fromLTRB(outer, 0, outer, outer),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -67,7 +63,7 @@ class ParticipantListSheet extends ConsumerWidget {
       child: Row(
         children: [
           Text(
-            '参与者',
+            UITextConstants.callParticipants,
             style: TextStyle(
               fontSize: AppTypography.lg,
               fontWeight: AppTypography.semiBold,
@@ -100,7 +96,7 @@ class ParticipantListSheet extends ConsumerWidget {
           borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
           onPressed: onInviteMore,
           child: Text(
-            '邀请更多',
+            UITextConstants.callInviteMore,
             style: TextStyle(
               fontSize: AppTypography.md,
               fontWeight: AppTypography.medium,
@@ -124,23 +120,19 @@ class _ParticipantRow extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: AppSpacing.twenty,
+          AppCircularAvatar(
+            imageUrl: participant.avatarUrl,
+            size: AppSpacing.twenty * 2,
             backgroundColor: AppColors.primaryColor.withValues(alpha: 0.2),
-            backgroundImage: participant.avatarUrl != null
-                ? NetworkImage(participant.avatarUrl!)
-                : null,
-            child: participant.avatarUrl == null
-                ? Text(
-                    participant.displayName.isNotEmpty
-                        ? participant.displayName[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      fontSize: AppTypography.md,
-                      fontWeight: AppTypography.semiBold,
-                    ),
-                  )
-                : null,
+            fallback: Text(
+              participant.displayName.isNotEmpty
+                  ? participant.displayName[0].toUpperCase()
+                  : '?',
+              style: TextStyle(
+                fontSize: AppTypography.md,
+                fontWeight: AppTypography.semiBold,
+              ),
+            ),
           ),
           SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -172,7 +164,7 @@ class _ParticipantRow extends StatelessWidget {
                           borderRadius: BorderRadius.circular(AppSpacing.xs),
                         ),
                         child: Text(
-                          '发起人',
+                          UITextConstants.callInitiator,
                           style: TextStyle(
                             fontSize: AppTypography.xs,
                             color: AppColors.primaryColor,

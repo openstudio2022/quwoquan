@@ -5,10 +5,16 @@
     "personaId": "fixture_user_current"
   },
   "description": "gamma 云侧精简清单：只装载声明的 curated 业务对象及其完整媒体闭包，alpha/beta 继续保持全量共享池。",
+  "releaseInputs": [
+    {
+      "objectId": "content.filter_catalog_release",
+      "manifestPath": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/environments/gamma.seed.json"
+    }
+  ],
   "seedRefs": [
     {
       "domain": "assistant",
-      "fixturePath": "assistant/test_fixtures/scenarios/assistant_scenarios.json",
+      "fixturePath": "quwoquan_service/services/assistant-service/tests/support/contract_fixtures/scenarios/assistant_scenarios.json",
       "refs": [
         "assistant_p0_core",
         "skill_management_core"
@@ -22,9 +28,10 @@
     },
     {
       "domain": "content",
-      "fixturePath": "content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
+      "fixturePath": "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.gamma-curated.json",
       "refs": [
         "content_discovery_core",
+        "comment_thread_core",
         "intersection_core",
         "home_showcase_core",
         "profile_share_interaction_core"
@@ -36,17 +43,19 @@
       "targetStore": "content-service:gamma_test_namespace",
       "verifiedEndpoints": [
         "/content/feed",
-        "/content/posts/fixture_photo_001",
-        "/content/posts/fixture_photo_001/comments",
-        "/content/posts/fixture_photo_001/comments?sort=recommended",
-        "/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
+        "/content/content/posts/fixture_photo_001",
+        "/content/content/posts/fixture_photo_001/comments",
+        "/content/content/posts/fixture_photo_001/comments?sort=hot",
+        "/content/content/posts/fixture_photo_001/comments?sort=latest",
+        "/content/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
         "/content/sub-accounts/{activePersonaId}/interactions/received?type=share",
-        "/content/sub-accounts/{activePersonaId}/interactions/sent?type=share"
+        "/content/sub-accounts/{activePersonaId}/interactions/sent?type=share",
+        "/content/sub-accounts/{activePersonaId}/author-impact"
       ]
     },
     {
       "domain": "circle",
-      "fixturePath": "social/circle/test_fixtures/scenarios/circle_scenarios.gamma-curated.json",
+      "fixturePath": "quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.gamma-curated.json",
       "refs": [
         "circle_core",
         "circle_group_chat_link_core"
@@ -63,7 +72,7 @@
     },
     {
       "domain": "chat",
-      "fixturePath": "messages/chat/test_fixtures/scenarios/chat_scenarios.gamma-curated.json",
+      "fixturePath": "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.gamma-curated.json",
       "refs": [
         "chat_core",
         "chat_contacts_core",
@@ -78,12 +87,16 @@
     },
     {
       "domain": "user",
-      "fixturePath": "user/test_fixtures/scenarios/user_scenarios.gamma-curated.json",
+      "fixturePath": "quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.gamma-curated.json",
       "refs": [
         "user_profile_core",
         "persona_core",
         "profile_feed_core",
-        "relationship_core"
+        "relationship_core",
+        "greeting_core",
+        "subject_follow_core",
+        "contact_discovery_core",
+        "following_subject_core"
       ],
       "verificationScopes": [
         "object-homepage-gamma-real-data-closure"
@@ -92,12 +105,15 @@
       "targetStore": "user-service:gamma_test_namespace",
       "verifiedEndpoints": [
         "/user/profile/fixture_user_current",
-        "/me"
+        "/me",
+        "/user/following-subjects",
+        "/user/greeting-request/inbox",
+        "/owner/contact-discovery/latest"
       ]
     },
     {
       "domain": "entity",
-      "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.gamma-curated.json",
+      "fixturePath": "quwoquan_service/services/entity-service/tests/support/contract_fixtures/scenarios/entity_scenarios.gamma-curated.json",
       "refs": [
         "entity_homepage_core",
         "entity_claim_core",
@@ -106,8 +122,9 @@
       "verificationScopes": [
         "object-homepage-gamma-real-data-closure"
       ],
-      "resetScope": "fixture_entity_*",
-      "targetStore": "entity-service:gamma_test_namespace",
+      "resetScope": "homepages authoritative collection in quwoquan_entity (ship/import sync+offline-stale 幂等重放)",
+      "targetStore": "mongodb:quwoquan_entity.homepages",
+      "seedChannel": "promote→qwq-data ship --import→entity-service homepage-import（与 beta 同通道、env 参数区分）",
       "verifiedEndpoints": [
         "/homepages/search",
         "/homepages/{homepageId}/object-page-bundle",
@@ -116,19 +133,56 @@
     },
     {
       "domain": "integration",
-      "fixturePath": "integration/test_fixtures/scenarios/integration_scenarios.json",
+      "fixturePath": "quwoquan_service/services/integration-service/tests/support/contract_fixtures/scenarios/integration_scenarios.json",
       "refs": [
         "location_poi_core"
       ],
       "resetScope": "fixture_integration_*",
       "targetStore": "integration-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/integration/locations/pois"
+        "/integration/external_integration/locations/pois"
+      ]
+    },
+    {
+      "domain": "tag",
+      "fixturePath": "quwoquan_service/services/tag-service/tests/support/contract_fixtures/scenarios/tag_scenarios.json",
+      "refs": [
+        "tag_launch_subset",
+        "tag_catalog_core"
+      ],
+      "resetScope": "declared object_tag_index seed refs in quwoquan_tag",
+      "targetStore": "mongodb:quwoquan_tag.tag_nodes+object_tag_index",
+      "verifiedEndpoints": [
+        "/tag/resolve?tagRef=Topic%2F摄影",
+        "/tag/children?parentTagRef=Audience%2F用户%2F职业&limit=20",
+        "/tag/shared-tags?objectAId=fixture_user_current&objectAType=user&objectBId=fixture_user_photo&objectBType=user&limit=20"
+      ],
+      "deliveryChannels": [
+        "control_plane/governance/taxonomy import",
+        "declared object_tag_index projection seed"
+      ]
+    },
+    {
+      "domain": "search",
+      "fixturePath": "quwoquan_service/services/search-service/tests/support/contract_fixtures/scenarios/search_scenarios.json",
+      "refs": [
+        "search_remote_acceptance"
+      ],
+      "resetScope": "derived quwoquan_objects index + quwoquan_search acceptance facts",
+      "targetStore": "elasticsearch:quwoquan_objects+mongodb:quwoquan_search",
+      "verifiedEndpoints": [
+        "/search",
+        "/search/hot-queries",
+        "/search/feedback"
+      ],
+      "deliveryChannels": [
+        "content/entity/circle/user search-backfill",
+        "search-service queryheat rebuild"
       ]
     },
     {
       "domain": "notification",
-      "fixturePath": "notification/test_fixtures/scenarios/notification_scenarios.json",
+      "fixturePath": "quwoquan_service/services/notification-service/tests/support/contract_fixtures/scenarios/notification_scenarios.json",
       "refs": [
         "notification_core"
       ],
@@ -140,7 +194,7 @@
     },
     {
       "domain": "rtc",
-      "fixturePath": "rtc/test_fixtures/scenarios/rtc_scenarios.json",
+      "fixturePath": "quwoquan_service/services/rtc-service/tests/support/contract_fixtures/scenarios/rtc_scenarios.json",
       "refs": [
         "rtc_core"
       ],
@@ -148,6 +202,23 @@
       "targetStore": "rtc-service:gamma_test_namespace",
       "verifiedEndpoints": [
         "/rtc/calls"
+      ]
+    },
+    {
+      "domain": "recommendation",
+      "fixturePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/content_recommendation_object_cards.gamma_seed.json",
+      "refs": [
+        "object_cards_gamma_acceptance"
+      ],
+      "applyScript": "quwoquan_service/services/content-service/cmd/jobs/seed-object-cards/main.py",
+      "resetScope": "gamma_object_cards_seed",
+      "targetStore": "content-service:quwoquan_content",
+      "verifiedEndpoints": [
+        "/content/feed"
+      ],
+      "supplementaryFixtures": [
+        "_shared/test_fixtures/content_recommendation_social_graph.gamma_seed.json",
+        "_shared/test_fixtures/content_recommendation_moment_channel.gamma_seed.json"
       ]
     }
   ],
@@ -220,6 +291,11 @@
           "domain": "content",
           "path": "/content/intersections/object?objectType=circle&objectId={circleId}",
           "assertion": "object_intersections_circle"
+        },
+        {
+          "domain": "content",
+          "path": "/content/feed?sort=recommend&channelId=recommend&limit=24",
+          "assertion": "home_feed_object_cards"
         }
       ]
     }
@@ -270,6 +346,11 @@
         "port": 443
       },
       {
+        "prefix": "/search",
+        "service": "search-service",
+        "port": 443
+      },
+      {
         "prefix": "/app-messages",
         "service": "notification-service",
         "port": 443
@@ -279,6 +360,17 @@
         "service": "rtc-service",
         "port": 443
       }
+    ]
+  },
+  "mediaSeedRef": "quwoquan_service/services/content-service/resources/static/media/media_delivery_manifest.json",
+  "mediaCanary": {
+    "profileRef": "quwoquan_data/reference/media_canary/video_playback.yaml",
+    "readyAssetIds": [
+      "media-canary-seek-125s",
+      "media-canary-hour-boundary-3595s"
+    ],
+    "rejectionAssetIds": [
+      "media-canary-over-limit-3605s"
     ]
   },
   "schema": "app-seed-manifest"

@@ -1,10 +1,14 @@
+// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync/spec.md#gwt-001
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/user_sync_repository.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -397,7 +401,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(_ResyncChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            _ResyncChatRepository(),
+          ),
           userSyncRepositoryProvider.overrideWithValue(
             _GapUserSyncRepository(),
           ),

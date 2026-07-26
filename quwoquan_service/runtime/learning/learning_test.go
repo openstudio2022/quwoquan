@@ -2,6 +2,7 @@ package runtimelearning
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"sync"
@@ -92,12 +93,19 @@ func TestBufferedRecorder_FlushOnStop(t *testing.T) {
 	r.RecordEvent(context.Background(), Event{EventID: "e1"})
 	r.RecordScorecard(context.Background(), Scorecard{ScorecardID: "s1"})
 	r.Stop()
+	r.Stop()
 
 	if sink.eventCount() != 1 {
 		t.Errorf("expected 1 event flushed on stop, got %d", sink.eventCount())
 	}
 	if sink.scorecardCount() != 1 {
 		t.Errorf("expected 1 scorecard flushed on stop, got %d", sink.scorecardCount())
+	}
+	if err := r.RecordEvent(
+		context.Background(),
+		Event{EventID: "after-stop"},
+	); !errors.Is(err, ErrRecorderStopped) {
+		t.Fatalf("record after Stop must fail explicitly, got %v", err)
 	}
 }
 
@@ -116,6 +124,69 @@ func TestBufferedRecorder_Scorecards(t *testing.T) {
 	if sink.scorecardCount() != 2 {
 		t.Errorf("expected 2 scorecards, got %d", sink.scorecardCount())
 	}
+}
+
+func TestBufferedRecorder_RequeuesFailedEventBatch(t *testing.T) {
+	sink := &failOnceEventSink{}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	recorder := NewBufferedRecorder(
+		sink,
+		logger,
+		WithFlushSize(1),
+		WithFlushInterval(20*time.Millisecond),
+	)
+	defer recorder.Stop()
+
+	_ = recorder.RecordEvent(context.Background(), Event{EventID: "e1"})
+	_ = recorder.RecordEvent(context.Background(), Event{EventID: "e2"})
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		sink.mu.Lock()
+		completed := sink.calls >= 2 && len(sink.events) == 2
+		sink.mu.Unlock()
+		if completed || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	if sink.calls != 2 {
+		t.Fatalf("failed batch must be retried by the next flush, calls=%d", sink.calls)
+	}
+	if len(sink.events) != 2 ||
+		sink.events[0].EventID != "e1" ||
+		sink.events[1].EventID != "e2" {
+		t.Fatalf("requeued batch must preserve order without loss: %+v", sink.events)
+	}
+}
+
+type failOnceEventSink struct {
+	mu     sync.Mutex
+	calls  int
+	events []Event
+}
+
+func (s *failOnceEventSink) FlushEvents(
+	_ context.Context,
+	events []Event,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls++
+	if s.calls == 1 {
+		return errors.New("transient sink failure")
+	}
+	s.events = append(s.events, events...)
+	return nil
+}
+
+func (*failOnceEventSink) FlushScorecards(
+	context.Context,
+	[]Scorecard,
+) error {
+	return nil
 }
 
 func TestLogSink_NoError(t *testing.T) {

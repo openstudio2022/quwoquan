@@ -2,19 +2,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"gopkg.in/yaml.v3"
 
-	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	platformredis "quwoquan_service/internal/platform/redis"
 	rtauth "quwoquan_service/runtime/auth"
@@ -22,95 +20,62 @@ import (
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
-	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	"quwoquan_service/runtime/otpseal"
 
 	rtredis "quwoquan_service/runtime/redis"
 	runtimesync "quwoquan_service/runtime/sync"
-	httpadapter "quwoquan_service/services/user-service/internal/adapters/http"
-	"quwoquan_service/services/user-service/internal/adapters/mq"
-	"quwoquan_service/services/user-service/internal/application"
-	personaapp "quwoquan_service/services/user-service/internal/application/persona/persona"
-	proposalapp "quwoquan_service/services/user-service/internal/application/persona/profile_update_proposal"
-	relationshipapp "quwoquan_service/services/user-service/internal/application/relationship/persona_relationship"
-	"quwoquan_service/services/user-service/internal/infrastructure/cache"
-	userintegration "quwoquan_service/services/user-service/internal/infrastructure/integration"
-	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
-	personapersistence "quwoquan_service/services/user-service/internal/infrastructure/persona/persona/persistence"
-	proposalpersistence "quwoquan_service/services/user-service/internal/infrastructure/persona/profile_update_proposal/persistence"
-	"quwoquan_service/services/user-service/internal/infrastructure/projection"
-	relationshippersistence "quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/persistence"
-	"quwoquan_service/services/user-service/internal/infrastructure/searchindex"
-	"quwoquan_service/services/user-service/internal/infrastructure/tagindex"
+	accountsessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
+	accountsessionpersistence "quwoquan_service/services/user-service/internal/account/account_session/infrastructure/persistence"
+	challengeapp "quwoquan_service/services/user-service/internal/account/authentication_challenge/application"
+	challengepersistence "quwoquan_service/services/user-service/internal/account/authentication_challenge/infrastructure/persistence"
+	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
+	credentialpersistence "quwoquan_service/services/user-service/internal/account/credential_binding/infrastructure/persistence"
+	registrationapp "quwoquan_service/services/user-service/internal/account/device_registration/application"
+	registrationpersistence "quwoquan_service/services/user-service/internal/account/device_registration/infrastructure/persistence"
+	invitationhttp "quwoquan_service/services/user-service/internal/account/invitation/adapters/inbound/http"
+	invitationapp "quwoquan_service/services/user-service/internal/account/invitation/application"
+	invitationpersistence "quwoquan_service/services/user-service/internal/account/invitation/infrastructure/persistence"
+	httpadapter "quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/http"
+	"quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/mq"
+	useraccountapp "quwoquan_service/services/user-service/internal/account/user_account/application"
+	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
+	usertelemetry "quwoquan_service/services/user-service/internal/account/user_account/domain/user/telemetry"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache"
+	useraccountcache "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache"
+	userintegration "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
+	useraccountobservability "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/observability"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
+	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
+	useraccountprojection "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/searchindex"
+	usercache "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/cache"
+	userobservability "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/observability"
+	userpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/persistence"
+	usersettingsapp "quwoquan_service/services/user-service/internal/account/user_settings/application"
+	usersettingspersistence "quwoquan_service/services/user-service/internal/account/user_settings/infrastructure/persistence"
+	personaapp "quwoquan_service/services/user-service/internal/persona_management/persona/application/persona"
+	personapersistence "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/persistence"
+	proposalapp "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/application"
+	proposalpersistence "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/infrastructure/persistence"
+	followingapp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/application"
+	contacthttp "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/adapters/inbound/http"
+	contactapp "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/application"
+	contactpersistence "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/infrastructure/persistence"
+	visitapp "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/application"
+	greetinghttp "quwoquan_service/services/user-service/internal/relationship/greeting_request/adapters/inbound/http"
+	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
+	greetingpersistence "quwoquan_service/services/user-service/internal/relationship/greeting_request/infrastructure/persistence"
+	relationshipapp "quwoquan_service/services/user-service/internal/relationship/persona_relationship/application"
+	reltelemetry "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/telemetry"
+	relobservability "quwoquan_service/services/user-service/internal/relationship/persona_relationship/infrastructure/observability"
+	relationshippersistence "quwoquan_service/services/user-service/internal/relationship/persona_relationship/infrastructure/persistence"
+	relationshipprojection "quwoquan_service/services/user-service/internal/relationship/persona_relationship/infrastructure/projection"
+	subjectfollowapp "quwoquan_service/services/user-service/internal/relationship/subject_follow/application"
+	subjectfollowpersistence "quwoquan_service/services/user-service/internal/relationship/subject_follow/infrastructure/persistence"
 )
-
-type redisSceneCfg struct {
-	Mode     string   `yaml:"mode"`
-	Addr     string   `yaml:"addr"`
-	Addrs    []string `yaml:"addrs"`
-	Password string   `yaml:"password"`
-	DB       int      `yaml:"db"`
-	TLS      bool     `yaml:"tls"`
-	Pool     struct {
-		Size           int `yaml:"size"`
-		MinIdle        int `yaml:"min_idle"`
-		ReadTimeoutMs  int `yaml:"read_timeout_ms"`
-		WriteTimeoutMs int `yaml:"write_timeout_ms"`
-		DialTimeoutMs  int `yaml:"dial_timeout_ms"`
-	} `yaml:"pool"`
-}
-
-type config struct {
-	Config struct {
-		Version         string `yaml:"version"`
-		MinImageVersion string `yaml:"min_image_version"`
-		MaxImageVersion string `yaml:"max_image_version"`
-	} `yaml:"config"`
-	Service struct {
-		HTTP struct {
-			Addr string `yaml:"addr"`
-		} `yaml:"http"`
-	} `yaml:"service"`
-	Postgres struct {
-		DSN                    string `yaml:"dsn"`
-		MaxOpenConns           int    `yaml:"max_open_conns"`
-		MaxIdleConns           int    `yaml:"max_idle_conns"`
-		ConnMaxLifetimeMinutes int    `yaml:"conn_max_lifetime_minutes"`
-	} `yaml:"postgres"`
-	MongoDB struct {
-		URI      string `yaml:"uri"`
-		Database string `yaml:"database"`
-	} `yaml:"mongodb"`
-	ES    searchindex.ESConfig `yaml:"es"`
-	Redis struct {
-		General  redisSceneCfg `yaml:"general"`
-		Realtime redisSceneCfg `yaml:"realtime"`
-	} `yaml:"redis"`
-	Integration struct {
-		ExternalInteractionBaseURL string `yaml:"external_interaction_base_url"`
-		Social                     struct {
-			Providers map[string]providerOAuthCfg `yaml:"providers"`
-		} `yaml:"social"`
-		OneTap struct {
-			Resolver string `yaml:"resolver"`
-		} `yaml:"one_tap"`
-		OTP struct {
-			Mode string `yaml:"mode"`
-		} `yaml:"otp"`
-	} `yaml:"integration"`
-}
-
-type providerOAuthCfg struct {
-	AppID                string `yaml:"app_id"`
-	AppSecret            string `yaml:"app_secret"`
-	AppPrivateKeyPEM     string `yaml:"app_private_key_pem"`
-	PlatformPublicKeyPEM string `yaml:"platform_public_key_pem"`
-	MerchantPID          string `yaml:"merchant_pid"`
-	TokenURL             string `yaml:"token_url"`
-	UserInfoURL          string `yaml:"user_info_url"`
-}
 
 func main() {
 	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
@@ -188,6 +153,15 @@ func main() {
 	if err := redisRouter.PingAll(ctx); err != nil {
 		log.Printf("WARN: user-service redis ping: %v", err)
 	}
+	messageTransport, err := newUserMessageTransport(
+		ctx,
+		appEnv,
+		redisRouter,
+		cfg,
+	)
+	if err != nil {
+		log.Fatalf("user-service message transport preflight failed: %v", err)
+	}
 	redisClient := redisRouter.Scene("general")
 
 	shardDirectory, err := application.LoadDefaultShardDirectory()
@@ -197,20 +171,67 @@ func main() {
 
 	// 5. Stores
 	profileStore := persistence.NewPgProfileStore(pgPool)
-	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
-	settingStore := persistence.NewPgSettingStore(pgPool)
+	personaStore := userpersistence.NewPgPersonaStore(pgPool)
+	invitationStore, err := invitationpersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		log.Fatalf("Invitation store init failed: %v", err)
+	}
+	invitationFacade, err := invitationapp.NewFacade(invitationStore, personaStore)
+	if err != nil {
+		log.Fatalf("Invitation facade init failed: %v", err)
+	}
+	invitationHandler, err := invitationhttp.NewHandler(invitationFacade)
+	if err != nil {
+		log.Fatalf("Invitation HTTP composition failed: %v", err)
+	}
+	userSettingsStore, err := usersettingspersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		log.Fatalf("user-service UserSettings store init failed: %v", err)
+	}
 	relationshipStore := relationshippersistence.NewPgPersonaRelationshipStore(pgPool)
-	greetingStore := persistence.NewPgGreetingStore(pgPool)
-	workStore := persistence.NewPgWorkStore(pgPool)
-	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
-	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
-	userAuthStore := persistence.NewPgUserAuthStore(pgPool)
-	userDeviceStore := persistence.NewPgUserDeviceStore(pgPool)
+	greetingStore := greetingpersistence.NewPgGreetingStore(pgPool)
+	credentialStore, err := credentialpersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		log.Fatalf("CredentialBinding store init failed: %v", err)
+	}
+	credentialCommands := credentialapp.NewCredentialCommandFacade(
+		credentialStore,
+	)
+	credentialQueries := credentialapp.NewCredentialQueryFacade(
+		credentialStore,
+	)
+	accountSessionStore, err := accountsessionpersistence.NewAccountSessionPostgresStore(pgPool)
+	if err != nil {
+		log.Fatalf("AccountSession store init failed: %v", err)
+	}
+	accountSessionCommands :=
+		accountsessionapp.NewAccountSessionCommandFacade(accountSessionStore)
+	deviceRegistrationStore, err := registrationpersistence.NewPostgresStore(
+		pgPool,
+	)
+	if err != nil {
+		log.Fatalf("DeviceRegistration store init failed: %v", err)
+	}
+	pushTokenCipher, err := registrationpersistence.LoadAESGCMTokenCipher(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("DeviceRegistration token cipher init failed: %v", err)
+	}
+	deviceRegistrationCommands := registrationapp.NewCommandFacade(
+		deviceRegistrationStore,
+		pushTokenCipher,
+	)
+	deviceRegistrationQueries := registrationapp.NewQueryFacade(
+		deviceRegistrationStore,
+		deviceRegistrationStore,
+		personaStore,
+		pushTokenCipher,
+	)
 	consentRecordStore := persistence.NewPgConsentRecordStore(pgPool)
-	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
-	profileQrTokenStore := persistence.NewPgProfileQrTokenStore(pgPool)
-	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
-	inviteStore := persistence.NewPgInviteStore(pgPool)
+	anonymousDeviceBindingStore := userpersistence.NewPgAnonymousDeviceBindingStore(pgPool)
+	profileQrTokenStore := userpersistence.NewPgProfileQrTokenStore(pgPool)
+	contactDiscoveryStore := contactpersistence.NewPgContactDiscoveryStore(pgPool)
 	personaProfileProposalStore, err := personapersistence.NewProfileProposalPostgresStore(pgPool)
 	if err != nil {
 		log.Fatalf("Persona profile proposal Store init failed: %v", err)
@@ -230,25 +251,38 @@ func main() {
 	}
 	if searchBuilt.Client != nil {
 		if err := searchBuilt.EnsureIndex(ctx); err != nil {
-			log.Fatalf("user-service search index ensure failed: %v", err)
+			// UserProfile remains authoritative in Postgres. SearchIndexView is a
+			// best-effort derived projection, so transient ES failure degrades
+			// health without taking profile commands offline.
+			log.Printf("WARN: user-service search index ensure failed: %v", err)
 		}
 		log.Printf("user-service search index enabled: %s", searchBuilt.Client.IndexName())
 	}
 
 	// 6. Caches
-	profileCache := cache.NewProfileCache(redisClient)
-	settingCache := cache.NewSettingCache(redisClient)
+	profileCache := usercache.NewProfileCache(redisClient)
 	// The domain MQ publisher stays the primary; when ES is enabled the search
 	// projector is composed onto the fan-out tail (best-effort, never blocks).
-	relationshipEventPublisher := mq.NewEventPublisher(redisClient)
+	relationshipEventPublisher := mq.NewEventPublisher(messageTransport)
 	var userEventPublisher application.UserEventPublisher = relationshipEventPublisher
+	accountCloseProjections := searchindex.ComposePublisher()
 	if searchBuilt.Projector != nil {
 		userEventPublisher = searchindex.ComposePublisher(userEventPublisher, searchBuilt.Projector)
+		accountCloseProjections = searchindex.ComposePublisher(
+			accountCloseProjections,
+			searchBuilt.Projector,
+		)
 	}
 	if mongoDB != nil {
+		mongoCleanupProjector :=
+			useraccountprojection.NewMongoCleanupProjector(mongoDB)
 		userEventPublisher = searchindex.ComposePublisher(
 			userEventPublisher,
-			tagindex.NewProjector(mongoDB.Collection("object_tag_index"), profileStore),
+			mongoCleanupProjector,
+		)
+		accountCloseProjections = searchindex.ComposePublisher(
+			accountCloseProjections,
+			mongoCleanupProjector,
 		)
 	}
 	userSyncService := runtimesync.NewService(redisClient, redisRouter.Scene("realtime"))
@@ -263,7 +297,6 @@ func main() {
 	profileService := application.NewProfileService(
 		profileStore,
 		personaStore,
-		settingStore,
 		profileCache,
 		userEventPublisher,
 		userSyncService,
@@ -271,57 +304,153 @@ func main() {
 		application.WithRegionTagResolver(regionTagResolver),
 		application.WithProfileTagValidator(profileTagValidator),
 	)
-	searchService := application.NewSearchService(profileStore, personaStore, redisClient)
+	searchService := application.NewSearchService(profileStore, personaStore)
+	// R-OBJ-001：对象级关系指标经 Prometheus sink 导出到 /metrics。
+	reltelemetry.Collector().SetSink(relobservability.PrometheusSink{})
+	userMetricsSink := userobservability.PrometheusSink{}
+	usertelemetry.Collector().SetSink(userMetricsSink)
+	usertelemetry.RolloutCollector().SetSink(userMetricsSink)
+	relationshipCounterProjector := relationshipprojection.NewCounterProjector(
+		pgPool,
+		profileCache,
+	)
+	relationshipCounterReconciler := relationshipprojection.NewCounterReconciler(
+		pgPool,
+		profileCache,
+	)
+	go func() {
+		if err := relationshipCounterReconciler.Run(
+			ctx,
+			time.Minute,
+			500,
+		); err != nil && ctx.Err() == nil {
+			log.Printf(
+				"ERROR: persona relationship counter reconciler stopped: %v",
+				err,
+			)
+		}
+	}()
 	relationshipService := relationshipapp.NewPersonaRelationshipService(
 		relationshipStore,
-		profileStore,
 		personaStore,
 		profileCache,
 		greetingStore,
 	)
-	relationshipOutboxRelay := relationshipapp.NewOutboxRelay(relationshipStore, relationshipEventPublisher)
-	go func() {
-		if err := relationshipOutboxRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
-			log.Printf("ERROR: persona relationship outbox relay stopped: %v", err)
-		}
-	}()
 	chatServiceBaseURL := strings.TrimSpace(getenvOrDefault("CHAT_SERVICE_BASE_URL", ""))
 	if chatServiceBaseURL == "" {
 		log.Fatal("user-service startup failed: CHAT_SERVICE_BASE_URL is required")
 	}
 	conversationGateway := userintegration.NewChatServiceClient(chatServiceBaseURL, nil)
-	greetingService := application.NewGreetingService(
+	greetingService := greetingapp.NewGreetingService(
+		greetingStore,
 		greetingStore,
 		relationshipService,
 		conversationGateway,
 		userEventPublisher,
+		relationshipEventPublisher,
+		greetingapp.NewSettingsGreetingNotifyPolicy(
+			userSettingsStore,
+			personaStore,
+		),
 	)
-	personaService := application.NewPersonaService(personaStore, personaStore, profileCache)
+	greetingOutboxRelay := greetingapp.NewGreetingOutboxRelay(
+		greetingStore,
+		userEventPublisher,
+		relationshipEventPublisher,
+	)
+	go func() {
+		if err := greetingOutboxRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+			log.Printf("ERROR: greeting outbox relay stopped: %v", err)
+		}
+	}()
 	var creatorRuntimeStore *persistence.CreatorRuntimeProfileReader
 	if mongoDB != nil {
 		creatorRuntimeStore = persistence.NewCreatorRuntimeProfileReader(mongoDB)
 	}
-	workOptions := make([]application.WorkServiceOption, 0, 1)
 	subAccountOptions := make([]application.SubAccountServiceOption, 0, 1)
 	if creatorRuntimeStore != nil {
-		workOptions = append(workOptions, application.WithCreatorRuntimeWorks(creatorRuntimeStore))
 		subAccountOptions = append(
 			subAccountOptions,
 			application.WithCreatorRuntimeProfiles(creatorRuntimeStore),
 		)
 	}
-	workService := application.NewWorkService(workStore, workOptions...)
-	lifeItemService := application.NewLifeItemService(lifeItemStore)
-	settingService := application.NewSettingService(settingStore, settingCache)
-	otpCodeCache := cache.NewOtpCodeCache(redisClient)
-	otpChallengeStore := persistence.NewPgOtpChallengeStore(pgPool)
-	socialProviderClient, err := socialAuthProviderClient(cfg)
-	if err != nil {
-		log.Fatalf("social auth provider client init failed: %v", err)
+	// UserSettings 对象 packet：PG 聚合 store（state+outbox 同事务、内部 CAS）
+	// + 对象专属 command/query facade；旧 SettingService 已退役。
+	userSettingsCommands := usersettingsapp.NewUserSettingsCommandFacade(userSettingsStore)
+	userSettingsQueries := usersettingsapp.NewUserSettingsQueryFacade(userSettingsStore)
+
+	// SubjectFollow packet：PG 聚合 + receipt + outbox；relay 组合 Redis Stream
+	// 发布与 following_subjects 投影 upsert（两者都成功才推进 checkpoint）。
+	subjectFollowStore := subjectfollowpersistence.NewPgSubjectFollowStore(pgPool)
+	subjectFollowService := subjectfollowapp.NewSubjectFollowService(subjectFollowStore)
+	var followingSubjectStore *persistence.MongoFollowingSubjectStore
+	var followedSubjectVisitStore *persistence.MongoFollowedSubjectVisitStore
+	var followingProjector *followingapp.Projector
+	if mongoDB != nil {
+		followingSubjectStore = persistence.NewMongoFollowingSubjectStore(mongoDB)
+		if err := followingSubjectStore.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("following subject index ensure failed: %v", err)
+		}
+		followedSubjectVisitStore = persistence.NewMongoFollowedSubjectVisitStore(mongoDB)
+		if err := followedSubjectVisitStore.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("followed subject visit index ensure failed: %v", err)
+		}
+		followingProjector = followingapp.NewProjector(followingSubjectStore)
 	}
-	oneTapResolverImpl, err := oneTapResolver(cfg)
+	subjectFollowPublisher := &subjectFollowFanout{
+		events:    relationshipEventPublisher,
+		projector: followingProjector,
+	}
+	subjectFollowRelay := subjectfollowapp.NewOutboxRelay(subjectFollowStore, subjectFollowPublisher)
+	go func() {
+		if err := subjectFollowRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+			log.Printf("ERROR: subject follow outbox relay stopped: %v", err)
+		}
+	}()
+	// PersonaFollowStateChanged 同样驱动 following_subjects 投影：relay 的
+	// publisher 组合 Redis 发布与投影 upsert，两者都成功才推进 checkpoint。
+	relationshipOutboxRelay := relationshipapp.NewOutboxRelay(
+		relationshipStore,
+		&personaRelationshipFanout{
+			events:    relationshipEventPublisher,
+			projector: followingProjector,
+			counters:  relationshipCounterProjector,
+		},
+	)
+	go func() {
+		if err := relationshipOutboxRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+			log.Printf("ERROR: persona relationship outbox relay stopped: %v", err)
+		}
+	}()
+	followedSubjectVisitService := visitapp.NewVisitService(
+		followedSubjectVisitStore,
+		followingSubjectStore,
+	)
+	var homepageDisplayResolver followingapp.SubjectDisplayResolver
+	if entityServiceBaseURL := strings.TrimSpace(
+		getenvOrDefault("ENTITY_SERVICE_BASE_URL", ""),
+	); entityServiceBaseURL != "" {
+		homepageDisplayResolver = userintegration.NewEntityHomepageDisplayClient(entityServiceBaseURL, nil)
+	}
+	followingSubjectQueryService := followingapp.NewQueryService(
+		followingSubjectStore,
+		personaStore,
+		homepageDisplayResolver,
+	)
+	otpCodeCache := cache.NewOtpCodeCache(redisClient)
+	authenticationChallengeStore, err :=
+		challengepersistence.NewPostgresStore(pgPool)
 	if err != nil {
-		log.Fatalf("one tap resolver init failed: %v", err)
+		log.Fatalf("AuthenticationChallenge store init failed: %v", err)
+	}
+	authenticationChallenges :=
+		challengeapp.NewAuthenticationChallengeCommandFacade(
+			authenticationChallengeStore,
+			challengeapp.OTPCredentialVerifier{},
+		)
+	carrierPhoneResolver, err := newCarrierPhoneResolver()
+	if err != nil && !errors.Is(err, ErrAuthRuntimeCapabilityBlocked) {
+		log.Fatalf("carrier identity adapter init failed: %v", err)
 	}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
@@ -356,35 +485,47 @@ func main() {
 	if err != nil {
 		log.Fatalf("external interaction client init failed: %v", err)
 	}
+	accountEnforcementStore, err := useraccountpersistence.NewEnforcementStore(pgPool)
+	if err != nil {
+		log.Fatalf("UserAccount enforcement store init failed: %v", err)
+	}
 	authService := application.NewAuthService(
 		profileStore,
 		personaStore,
 		credentialStore,
 		anonymousDeviceBindingStore,
 		shardDirectory,
-		application.WithAccountSessionStore(userAuthStore),
-		application.WithDeviceRegistrationStore(userDeviceStore),
+		application.WithAccountSessionCommands(accountSessionCommands),
+		application.WithCredentialCommands(credentialCommands),
+		application.WithDeviceRegistration(deviceRegistrationCommands),
 		application.WithConsentRecordStore(consentRecordStore),
 		application.WithOtpCodeStore(otpCodeCache),
-		application.WithOtpChallengeStore(otpChallengeStore),
+		application.WithAuthenticationChallenges(authenticationChallenges),
 		application.WithOTPCodeSealer(otpCodeSealer),
 		application.WithOTPCodeGenerator(otpCodeGenerator),
 		application.WithExternalInteractionClient(externalInteractionClient),
-		application.WithExternalAuthProviderClient(socialProviderClient),
-		application.WithOneTapPhoneResolver(oneTapResolverImpl),
+		application.WithCarrierPhoneResolver(carrierPhoneResolver),
 		application.WithAccessTokenSigner(accessSigner),
+		application.WithAccountSecurityReader(accountEnforcementStore),
 		application.WithDefaultNicknamePrefix(getenvOrDefault("USER_DEFAULT_NICKNAME_PREFIX", "新同学")),
 	)
+	federatedLogins, err := newFederatedLoginBindings(authService)
+	if err != nil && !errors.Is(err, ErrAuthRuntimeCapabilityBlocked) {
+		log.Fatalf("federated identity adapter init failed: %v", err)
+	}
+	personaCommandStore, err := personapersistence.NewPersonaCommandPostgresStore(pgPool)
+	if err != nil {
+		log.Fatalf("Persona command store init failed: %v", err)
+	}
 	subAccountService := application.NewSubAccountService(
 		personaStore,
-		personaStore,
-		personaStore,
+		personaCommandStore,
 		profileStore,
 		profileCache,
 		subAccountOptions...,
 	)
-	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
-	inviteService := application.NewInviteService(inviteStore, inviteStore)
+	contactDiscoveryService := contactapp.NewContactDiscoveryService(contactDiscoveryStore, userEventPublisher)
+	go contactDiscoveryService.RunExpiredCleanup(ctx, time.Hour)
 	personaProfileProposalFacade, err := personaapp.NewProfileProposalFacade(personaProfileProposalStore)
 	if err != nil {
 		log.Fatalf("Persona profile proposal Facade init failed: %v", err)
@@ -400,6 +541,9 @@ func main() {
 	}
 
 	healthChecker := rthealth.NewChecker()
+	if ping := searchBuilt.HealthPing(); ping != nil {
+		healthChecker.Register("elasticsearch", ping)
+	}
 	healthChecker.Register("postgres", func(hctx context.Context) error {
 		return pgPool.Ping(hctx)
 	})
@@ -411,9 +555,6 @@ func main() {
 			return mongoClient.Ping(hctx, nil)
 		})
 	}
-	if ping := searchBuilt.HealthPing(); ping != nil {
-		healthChecker.Register("search_es", ping)
-	}
 
 	// 8. Handler
 	var interestReader application.InterestProfileReader
@@ -421,52 +562,110 @@ func main() {
 		interestReader = projection.NewMongoInterestProfileReader(mongoDB)
 	}
 	interestProfileService := application.NewInterestProfileService(interestReader)
+	accountCloseStore, err := useraccountpersistence.NewCloseStore(pgPool)
+	if err != nil {
+		log.Fatalf("UserAccount close store init failed: %v", err)
+	}
+	accountOutboxStore, err :=
+		useraccountpersistence.NewUserAccountOutboxStore(pgPool)
+	if err != nil {
+		log.Fatalf("UserAccount outbox store init failed: %v", err)
+	}
+	accountEventFanout, err := mq.NewUserAccountEventFanout(
+		relationshipEventPublisher,
+		accountCloseProjections,
+	)
+	if err != nil {
+		log.Fatalf("UserAccount event fanout init failed: %v", err)
+	}
+	accountOutboxRelay, err := useraccountapp.NewUserAccountOutboxRelay(
+		accountOutboxStore,
+		accountEventFanout,
+		fmt.Sprintf("user-service-%d", os.Getpid()),
+		useraccountapp.WithUserAccountOutboxObserver(
+			useraccountobservability.CloseOutboxObserver{},
+		),
+	)
+	if err != nil {
+		log.Fatalf("UserAccount outbox relay init failed: %v", err)
+	}
+	healthChecker.Register("user_account_outbox_relay", func(hctx context.Context) error {
+		return accountOutboxRelay.Healthy(hctx, 15*time.Second)
+	})
+	go accountOutboxRelay.Run(ctx)
+	closeAccountFacade := useraccountapp.NewCloseAccountFacade(
+		accountCloseStore,
+		useraccountcache.NewClosedAccountCache(redisClient),
+	)
+	accountEnforcementFacade :=
+		useraccountapp.NewAccountEnforcementCommandFacade(accountEnforcementStore)
 	userHandler, err := httpadapter.NewUserHandler(
 		profileService, searchService, relationshipService, greetingService,
-		personaService, workService, lifeItemService, settingService,
-		authService, subAccountService, contactDiscoveryService, inviteService,
+		userSettingsCommands, userSettingsQueries,
+		authService, credentialQueries,
+		deviceRegistrationCommands, deviceRegistrationQueries,
+		subAccountService,
 		interestProfileService,
 		profileProposalFacade,
+		subjectFollowService,
+		followedSubjectVisitService,
+		followingSubjectQueryService,
 	)
 	if err != nil {
 		log.Fatalf("user-service HTTP composition failed: %v", err)
 	}
-	handler := userHandler.Routes()
+	greetingHandler, err := greetinghttp.NewHandler(greetingService)
+	if err != nil {
+		log.Fatalf("GreetingRequest HTTP composition failed: %v", err)
+	}
+	contactDiscoveryHandler, err := contacthttp.NewHandler(
+		contactDiscoveryService,
+		relationshipService,
+		greetingService,
+	)
+	if err != nil {
+		log.Fatalf("ContactDiscoveryRecord HTTP composition failed: %v", err)
+	}
+	userHandler.WithAccountLifecycle(closeAccountFacade)
+	userHandler.WithAccountEnforcement(accountEnforcementFacade)
+	userHandler.WithAccountSecurityReader(accountEnforcementStore)
+	userHandler.WithFederatedLogins(
+		federatedLogins.wechat,
+		federatedLogins.alipay,
+		federatedLogins.qq,
+	)
+	serviceMux := http.NewServeMux()
+	userHandler.RegisterRoutes(serviceMux)
+	invitationHandler.RegisterRoutes(serviceMux)
+	greetingHandler.RegisterRoutes(serviceMux)
+	contactDiscoveryHandler.RegisterRoutes(serviceMux)
+	handler := userHandler.WrapAccountSecurity(serviceMux)
 
-	outerMux := http.NewServeMux()
-	outerMux.HandleFunc("/healthz", healthChecker.Handler())
-	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle(
-		httpadapter.LoginAnonymousPath,
-		rtauth.RequireGeneratedOperationAuthorizationForRoute(
-			operationsecurity.ForDomain("user"),
-			http.MethodPost,
-			httpadapter.LoginAnonymousPath,
-		)(handler),
-	)
-	outerMux.Handle(
-		httpadapter.PullUserSyncPath,
-		rtauth.RequireGeneratedOperationAuthorizationForRoute(
-			operationsecurity.ForDomain("user"),
-			http.MethodPost,
-			httpadapter.PullUserSyncPath,
-		)(handler),
-	)
-	outerMux.Handle(
-		"/",
-		rtauth.EnforceGeneratedOperationAuthorization(
-			operationsecurity.ForDomain("user"),
-		)(handler),
-	)
+	outerMux := buildUserHTTPMux(handler, healthChecker)
 
 	// 8.1 Observability middleware
 	instanceID, _ := os.Hostname()
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		log.Fatalf("user-service runtime log exporter init failed: %v", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
 	if err != nil {
 		log.Fatalf("user-service process logger init failed: %v", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
 		log.Fatalf("user-service exception logger init failed: %v", err)
 	}
@@ -507,201 +706,6 @@ func main() {
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("user-service: %v", err)
 	}
-}
-
-func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = getenvOrDefault("SERVICE_NAME", "user-service")
-	appEnv = getenvOrDefault("APP_ENV", "alpha")
-	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = os.Getenv("CONFIG_VERSION")
-	imageVersion = os.Getenv("IMAGE_VERSION")
-	if !isValidAppEnv(appEnv) {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
-	}
-	if requiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
-		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
-	}
-	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
-}
-
-func isValidAppEnv(env string) bool {
-	switch env {
-	case "alpha", "beta", "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-type externalAuthProviderMode string
-
-const (
-	externalAuthProviderModeRequired      externalAuthProviderMode = "required"
-	externalAuthProviderModeAnonymousOnly externalAuthProviderMode = "anonymous_only"
-)
-
-func configuredExternalAuthProviderMode() (externalAuthProviderMode, error) {
-	value := strings.ToLower(strings.TrimSpace(os.Getenv("USER_AUTH_EXTERNAL_PROVIDER_MODE")))
-	if value == "" {
-		return externalAuthProviderModeRequired, nil
-	}
-	mode := externalAuthProviderMode(value)
-	switch mode {
-	case externalAuthProviderModeRequired, externalAuthProviderModeAnonymousOnly:
-		return mode, nil
-	default:
-		return "", fmt.Errorf("USER_AUTH_EXTERNAL_PROVIDER_MODE must be required or anonymous_only")
-	}
-}
-
-// socialAuthProviderClient 只装配真实 OAuth provider。默认和所有已部署环境必须
-// 注入完整凭据；只有 local-gamma 明确声明 anonymous_only 时，才保留匿名设备
-// 登录并让第三方登录以结构化 unavailable 返回，绝不伪造外部身份。
-func socialAuthProviderClient(cfg config) (application.ExternalAuthProviderClient, error) {
-	mode, err := configuredExternalAuthProviderMode()
-	if err != nil {
-		return nil, err
-	}
-	providerConfigs := make(map[string]userintegration.ProviderOAuthConfig, len(cfg.Integration.Social.Providers))
-	for name, p := range cfg.Integration.Social.Providers {
-		providerConfigs[name] = userintegration.ProviderOAuthConfig{
-			AppID:                strings.TrimSpace(p.AppID),
-			AppSecret:            strings.TrimSpace(p.AppSecret),
-			AppPrivateKeyPEM:     strings.TrimSpace(p.AppPrivateKeyPEM),
-			PlatformPublicKeyPEM: strings.TrimSpace(p.PlatformPublicKeyPEM),
-			MerchantPID:          strings.TrimSpace(p.MerchantPID),
-			TokenURL:             strings.TrimSpace(p.TokenURL),
-			UserInfoURL:          strings.TrimSpace(p.UserInfoURL),
-		}
-	}
-	// 商用凭据只从部署密钥系统注入；YAML 仅允许承载非敏感 endpoint。
-	injectSocialOAuthEnv := func(provider string, envPrefix string) {
-		current := providerConfigs[provider]
-		if value := strings.TrimSpace(os.Getenv(envPrefix + "_APP_ID")); value != "" {
-			current.AppID = value
-		}
-		if value := strings.TrimSpace(os.Getenv(envPrefix + "_APP_SECRET")); value != "" {
-			current.AppSecret = value
-		}
-		if value := strings.TrimSpace(os.Getenv(envPrefix + "_APP_PRIVATE_KEY_PEM")); value != "" {
-			current.AppPrivateKeyPEM = value
-		}
-		if value := strings.TrimSpace(os.Getenv(envPrefix + "_PLATFORM_PUBLIC_KEY_PEM")); value != "" {
-			current.PlatformPublicKeyPEM = value
-		}
-		if value := strings.TrimSpace(os.Getenv(envPrefix + "_MERCHANT_PID")); value != "" {
-			current.MerchantPID = value
-		}
-		providerConfigs[provider] = current
-	}
-	if mode == externalAuthProviderModeRequired {
-		injectSocialOAuthEnv(application.SocialProviderWechat, "WECHAT_OAUTH")
-		injectSocialOAuthEnv(application.SocialProviderAlipay, "ALIPAY_OAUTH")
-		injectSocialOAuthEnv(application.SocialProviderQq, "QQ_OAUTH")
-	}
-	httpClient := userintegration.NewHTTPExternalAuthProviderClient(providerConfigs, nil)
-	if mode == externalAuthProviderModeAnonymousOnly {
-		return httpClient, nil
-	}
-	for _, provider := range []string{
-		application.SocialProviderWechat,
-		application.SocialProviderAlipay,
-		application.SocialProviderQq,
-	} {
-		if !httpClient.Supports(provider) {
-			return nil, fmt.Errorf("social OAuth provider %s is not configured", provider)
-		}
-	}
-	return httpClient, nil
-}
-
-// oneTapResolver 默认只装配真实阿里云号码认证。local-gamma 的匿名 UAT
-// 显式关闭外部号码认证，调用时仍返回结构化 carrier unavailable。
-func oneTapResolver(cfg config) (application.OneTapPhoneResolver, error) {
-	mode, err := configuredExternalAuthProviderMode()
-	if err != nil {
-		return nil, err
-	}
-	if mode == externalAuthProviderModeAnonymousOnly {
-		return application.UnavailableOneTapPhoneResolver{}, nil
-	}
-	if !strings.EqualFold(strings.TrimSpace(cfg.Integration.OneTap.Resolver), "aliyun") {
-		return nil, fmt.Errorf("one-tap resolver must be aliyun")
-	}
-	accessKeyID := strings.TrimSpace(os.Getenv("ALIYUN_DYPNS_ACCESS_KEY_ID"))
-	accessKeySecret := strings.TrimSpace(os.Getenv("ALIYUN_DYPNS_ACCESS_KEY_SECRET"))
-	if accessKeyID == "" || accessKeySecret == "" {
-		return nil, fmt.Errorf("ALIYUN_DYPNS_ACCESS_KEY_ID and ALIYUN_DYPNS_ACCESS_KEY_SECRET are required")
-	}
-	return userintegration.NewAliyunOneTapPhoneResolver(
-		accessKeyID,
-		accessKeySecret,
-		strings.TrimSpace(os.Getenv("ALIYUN_DYPNS_ENDPOINT")),
-	)
-}
-
-func requiresConfigVersion(env string) bool {
-	switch env {
-	case "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-func getenvOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
-	cfg := config{}
-	if strings.TrimSpace(configRoot) != "" {
-		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
-		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-		_ = mergeConfigFile(&cfg, defaultFile)
-		_ = mergeConfigFile(&cfg, envFile)
-		if configVersion != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
-			_ = mergeConfigFile(&cfg, versionFile)
-		}
-		return cfg, nil
-	}
-	_ = mergeConfigFile(&cfg, "configs/default/config.yaml")
-	_ = mergeConfigFile(&cfg, "configs/"+appEnv+"/config.yaml")
-	return cfg, nil
-}
-
-func mergeConfigFile(cfg *config, path string) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	return yaml.Unmarshal(raw, cfg)
-}
-
-func applyEnvOverrides(cfg *config) {
-	if v := os.Getenv("POSTGRES_DSN"); v != "" {
-		cfg.Postgres.DSN = v
-	}
-	if v := os.Getenv("MONGODB_URI"); v != "" {
-		cfg.MongoDB.URI = v
-	}
-	if v := os.Getenv("REDIS_ADDR"); v != "" {
-		cfg.Redis.General.Addr = v
-	}
-	if v := os.Getenv("REDIS_REALTIME_ADDR"); v != "" {
-		cfg.Redis.Realtime.Addr = v
-	}
-}
-
-func validateRuntimeCompatibility(cfg config, _, _ string) error {
-	if cfg.Postgres.DSN == "" {
-		return fmt.Errorf("postgres.dsn is required")
-	}
-	return nil
 }
 
 func buildRedisRouter(cfg config) *rtredis.Router {

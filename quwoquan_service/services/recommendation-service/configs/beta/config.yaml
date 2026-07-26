@@ -1,5 +1,0 @@
-service:
-  name: recommendation-service
-config:
-  env: beta
-  version: "v2026.02.28.0"

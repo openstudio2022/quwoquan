@@ -121,12 +121,12 @@ def _ensure_published_manifest_mentions(
     entity_refs: list[str],
     tag_refs: list[str],
 ) -> list[dict[str, Any]]:
-    """Active refs are compatibility projections; semanticMentions is the source.
+    """Derive active refs from canonical semantic mentions.
 
     Some refs come from brief/tag taxonomy rather than inline extraction.  Publish
     them as manifest-level semantic mentions so importer read-only projection
     checks can derive the same active entityRefs/tagRefs without trusting the
-    compatibility fields.
+    derived reference fields.
     """
     merged = [dict(row) for row in mentions]
     existing = {
@@ -349,10 +349,16 @@ def _image_source_contract(
     assets: list[dict[str, Any]],
     *,
     ref: str,
+    vertical: str,
 ) -> dict[str, Any]:
     """Resolve one work-level source identity and reject mixed-source image sets."""
+    from governance.coverage.license import rights_proof_required
+
     resolved: dict[str, Any] = {}
-    required_fields = {"sourceCollectionId", "creator", "collectionPageUrl", "license"}
+    require_rights_proof = rights_proof_required(vertical)
+    required_fields = {"sourceCollectionId", "creator", "collectionPageUrl"}
+    if require_rights_proof:
+        required_fields.add("license")
     for field in _IMAGE_SOURCE_FIELDS:
         work_value = _canonical_source_fact(compose_payload, field)
         per_asset_values = [_canonical_source_fact(asset, field) for asset in assets]
@@ -375,10 +381,11 @@ def _image_source_contract(
         if value is not None:
             resolved[field] = value
 
-    work_has_proof = _canonical_source_fact(
-        compose_payload, "termsUrl"
-    ) is not None or _canonical_source_fact(compose_payload, "authorizationProof") is not None
-    if not work_has_proof:
+    work_has_proof = (
+        _canonical_source_fact(compose_payload, "termsUrl") is not None
+        or _canonical_source_fact(compose_payload, "authorizationProof") is not None
+    )
+    if require_rights_proof and not work_has_proof:
         proof_keys: set[str] = set()
         for asset in assets:
             terms = _canonical_source_fact(asset, "termsUrl")
@@ -393,13 +400,28 @@ def _image_source_contract(
         urls = [str(url).strip() for url in (compose_payload.get("sourceUrls") or []) if str(url).strip()]
         if len(set(urls)) == 1:
             resolved["collectionPageUrl"] = urls[0]
-    missing = [
-        field
-        for field in ("sourceCollectionId", "creator", "collectionPageUrl", "license")
-        if resolved.get(field) in (None, "", {})
-    ]
-    if not resolved.get("termsUrl") and not resolved.get("authorizationProof"):
+    missing = [field for field in required_fields if resolved.get(field) in (None, "", {})]
+    if require_rights_proof and not resolved.get("termsUrl") and not resolved.get("authorizationProof"):
         missing.append("license proof (termsUrl or authorizationProof)")
+    if not require_rights_proof:
+        audit_statuses = {
+            str(asset.get("rightsAuditStatus") or "").strip()
+            for asset in assets
+        }
+        if not audit_statuses or not audit_statuses <= {"verified", "unverified"}:
+            missing.append("rightsAuditStatus")
+        else:
+            resolved["rightsAuditStatus"] = (
+                "unverified" if "unverified" in audit_statuses else "verified"
+            )
+            resolved["rightsAuditIssues"] = sorted(
+                {
+                    str(issue)
+                    for asset in assets
+                    for issue in (asset.get("rightsAuditIssues") or [])
+                    if str(issue).strip()
+                }
+            )
     if missing:
         raise RuntimeError(f"{ref}: image source contract missing {', '.join(missing)}")
     return resolved

@@ -1,0 +1,119 @@
+services:
+  prometheus:
+    image: ${OBSERVABILITY_PROMETHEUS_IMAGE:?OBSERVABILITY_PROMETHEUS_IMAGE is required}
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - service-plane
+    depends_on:
+      - alertmanager
+
+  alertmanager:
+    image: ${OBSERVABILITY_ALERTMANAGER_IMAGE:?OBSERVABILITY_ALERTMANAGER_IMAGE is required}
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${ALERTMANAGER_WEBHOOK_SECRET_FILE:?ALERTMANAGER_WEBHOOK_SECRET_FILE is required}:/etc/alertmanager/secrets/webhook_url:ro
+      - ${ALERT_INGEST_TOKEN_SECRET_FILE:?ALERT_INGEST_TOKEN_SECRET_FILE is required}:/etc/alertmanager/secrets/ingest_token:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - service-plane
+
+  otel-collector:
+    image: ${OBSERVABILITY_OTEL_COLLECTOR_IMAGE:?OBSERVABILITY_OTEL_COLLECTOR_IMAGE is required}
+    restart: unless-stopped
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    environment:
+      OTEL_TRACE_BACKEND_ENDPOINT: ${OTEL_TRACE_BACKEND_ENDPOINT:?OTEL_TRACE_BACKEND_ENDPOINT is required}
+    volumes:
+      - ./otel-collector.yml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:13133:13133"
+    networks:
+      - service-plane
+
+  # ===== 基础设施 exporter 家族（主机 / 容器 / 数据面） =====
+  node-exporter:
+    image: ${OBSERVABILITY_NODE_EXPORTER_IMAGE:?OBSERVABILITY_NODE_EXPORTER_IMAGE is required}
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.disable-defaults
+      - --collector.cpu
+      - --collector.meminfo
+      - --collector.filesystem
+      - --collector.loadavg
+      - --collector.netdev
+      - --collector.diskstats
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - service-plane
+
+  podman-exporter:
+    # rootless 容器级指标（CPU/内存/重启）；cAdvisor 需要特权，rootless 环境用
+    # podman exporter 经用户级 podman.sock 采集。
+    image: ${OBSERVABILITY_PODMAN_EXPORTER_IMAGE:?OBSERVABILITY_PODMAN_EXPORTER_IMAGE is required}
+    restart: unless-stopped
+    environment:
+      CONTAINER_HOST: unix:///run/podman/podman.sock
+    volumes:
+      - ${PODMAN_SOCKET_PATH:?PODMAN_SOCKET_PATH is required}:/run/podman/podman.sock:ro
+    networks:
+      - service-plane
+
+  mongodb-exporter:
+    image: ${OBSERVABILITY_MONGODB_EXPORTER_IMAGE:?OBSERVABILITY_MONGODB_EXPORTER_IMAGE is required}
+    restart: unless-stopped
+    command:
+      - --mongodb.uri=${MONGODB_EXPORTER_URI:?MONGODB_EXPORTER_URI is required}
+      - --collect-all
+    extra_hosts:
+      - host.containers.internal:host-gateway
+    networks:
+      - service-plane
+
+  postgres-exporter:
+    image: ${OBSERVABILITY_POSTGRES_EXPORTER_IMAGE:?OBSERVABILITY_POSTGRES_EXPORTER_IMAGE is required}
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: ${POSTGRES_EXPORTER_DSN:?POSTGRES_EXPORTER_DSN is required}
+    extra_hosts:
+      - host.containers.internal:host-gateway
+    networks:
+      - service-plane
+
+  redis-exporter:
+    image: ${OBSERVABILITY_REDIS_EXPORTER_IMAGE:?OBSERVABILITY_REDIS_EXPORTER_IMAGE is required}
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: ${REDIS_EXPORTER_ADDR:?REDIS_EXPORTER_ADDR is required}
+    extra_hosts:
+      - host.containers.internal:host-gateway
+    networks:
+      - service-plane
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+
+networks:
+  service-plane:
+    external: true
+    name: ${PROD_SERVICE_NETWORK:?PROD_SERVICE_NETWORK is required}

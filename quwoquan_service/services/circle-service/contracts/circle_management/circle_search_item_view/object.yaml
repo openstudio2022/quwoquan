@@ -1,0 +1,34 @@
+kind: projection
+description: CircleSearchItemView 的领域对象契约。
+identity:
+  fields:
+  - circleId
+  version_source: checkpoint
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: circleEvents
+  on_delete: tombstone
+  reference_fields:
+  - circleId
+  target_object: circle.Circle
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: homepage
+  on_delete: tombstone
+  reference_fields:
+  - linkedHomepageId
+  target_object: entity.Homepage
+local_identity_reasons:
+  categoryId: stable catalog or release key; resolved through its typed catalog reader and never used
+    as an aggregate Store identity
+  domainId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity

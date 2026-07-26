@@ -11,13 +11,80 @@ import (
 	"quwoquan_service/runtime/reliabletask"
 )
 
+func (s *Store) RenewTaskLease(
+	ctx context.Context,
+	taskID string,
+	leaseToken string,
+	leaseTTL time.Duration,
+	now time.Time,
+) (time.Time, error) {
+	now = now.UTC()
+	if leaseTTL <= 0 {
+		leaseTTL = 30 * time.Second
+	}
+	leaseUntil := now.Add(leaseTTL).UTC()
+	res, err := s.tasks.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":        taskID,
+			"status":     reliabletask.TaskStatusProcessing,
+			"leaseToken": leaseToken,
+			"leaseUntil": bson.M{"$gt": now},
+		},
+		bson.M{"$set": bson.M{"leaseUntil": leaseUntil, "updatedAt": now}},
+	)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if res.MatchedCount == 0 {
+		return time.Time{}, reliabletask.ErrLeaseMismatch
+	}
+	return leaseUntil, nil
+}
+
+func (s *Store) RecordTaskResult(
+	ctx context.Context,
+	taskID string,
+	leaseToken string,
+	result map[string]string,
+	now time.Time,
+) error {
+	now = now.UTC()
+	res, err := s.tasks.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":        taskID,
+			"status":     reliabletask.TaskStatusProcessing,
+			"leaseToken": leaseToken,
+			"leaseUntil": bson.M{"$gt": now},
+		},
+		bson.M{"$set": bson.M{
+			"result":    reliabletask.CloneStringMap(result),
+			"updatedAt": now,
+		}},
+	)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return reliabletask.ErrLeaseMismatch
+	}
+	return nil
+}
+
 func (s *Store) CompleteTask(ctx context.Context, taskID string, leaseToken string) error {
-	res, err := s.tasks.UpdateOne(ctx, bson.M{"_id": taskID, "leaseToken": leaseToken}, bson.M{
+	now := time.Now().UTC()
+	res, err := s.tasks.UpdateOne(ctx, bson.M{
+		"_id":        taskID,
+		"status":     reliabletask.TaskStatusProcessing,
+		"leaseToken": leaseToken,
+		"leaseUntil": bson.M{"$gt": now},
+	}, bson.M{
 		"$set": bson.M{
 			"status":     reliabletask.TaskStatusSucceeded,
 			"leaseOwner": "",
 			"leaseToken": "",
-			"updatedAt":  time.Now().UTC(),
+			"updatedAt":  now,
 		},
 	})
 	if err != nil {
@@ -38,7 +105,12 @@ func (s *Store) FailTask(
 	now time.Time,
 ) error {
 	var task reliabletask.ReliableAsyncTask
-	if err := s.tasks.FindOne(ctx, bson.M{"_id": taskID, "leaseToken": leaseToken}).Decode(&task); err != nil {
+	if err := s.tasks.FindOne(ctx, bson.M{
+		"_id":        taskID,
+		"status":     reliabletask.TaskStatusProcessing,
+		"leaseToken": leaseToken,
+		"leaseUntil": bson.M{"$gt": now.UTC()},
+	}).Decode(&task); err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return reliabletask.ErrLeaseMismatch
 		}

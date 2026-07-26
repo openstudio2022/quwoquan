@@ -42,6 +42,44 @@ void main() {
       expect(code, ContentErrorCode.invalidArgument);
     });
 
+    test('parse_interaction_type_invalid → interactionTypeInvalid', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.interaction_type_invalid',
+      );
+      expect(code, ContentErrorCode.interactionTypeInvalid);
+    });
+
+    test('parse_interaction_cursor_invalid → interactionCursorInvalid', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.interaction_cursor_invalid',
+      );
+      expect(code, ContentErrorCode.interactionCursorInvalid);
+    });
+
+    test('parse_interaction_owner_forbidden → interactionOwnerForbidden', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.interaction_owner_forbidden',
+      );
+      expect(code, ContentErrorCode.interactionOwnerForbidden);
+    });
+
+    test(
+      'parse_interaction_read_model_unavailable → interactionReadModelUnavailable',
+      () {
+        final code = ContentErrorCode.fromCode(
+          'CONTENT.SYSTEM.interaction_read_model_unavailable',
+        );
+        expect(code, ContentErrorCode.interactionReadModelUnavailable);
+      },
+    );
+
+    test('parse_publication_rejected → publicationRejected', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.publication_rejected',
+      );
+      expect(code, ContentErrorCode.publicationRejected);
+    });
+
     test('parse_invalid_content_type → invalidContentType', () {
       final code = ContentErrorCode.fromCode(
         'CONTENT.USER.invalid_content_type',
@@ -62,6 +100,20 @@ void main() {
     test('parse_media_not_ready → mediaNotReady', () {
       final code = ContentErrorCode.fromCode('CONTENT.USER.media_not_ready');
       expect(code, ContentErrorCode.mediaNotReady);
+    });
+
+    test('parse_media_file_too_large → mediaFileTooLarge', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.media_file_too_large',
+      );
+      expect(code, ContentErrorCode.mediaFileTooLarge);
+    });
+
+    test('parse_media_type_unsupported → mediaTypeUnsupported', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.media_type_unsupported',
+      );
+      expect(code, ContentErrorCode.mediaTypeUnsupported);
     });
 
     test('parse_storage_write_failed → storageWriteFailed', () {
@@ -94,6 +146,14 @@ void main() {
       expect(ContentErrorMessages.zh[ContentErrorCode.postNotFound], isNotNull);
       expect(ContentErrorMessages.zh[ContentErrorCode.rateLimited], isNotNull);
       expect(
+        ContentErrorMessages.zh[ContentErrorCode.mediaFileTooLarge],
+        isNotNull,
+      );
+      expect(
+        ContentErrorMessages.zh[ContentErrorCode.mediaTypeUnsupported],
+        isNotNull,
+      );
+      expect(
         ContentErrorMessages.zh[ContentErrorCode.upstreamTimeout],
         isNotNull,
       );
@@ -113,10 +173,17 @@ void main() {
       'CONTENT.USER.forbidden_delete': 403,
       'CONTENT.USER.unauthorized': 401,
       'CONTENT.USER.invalid_argument': 400,
+      'CONTENT.USER.interaction_type_invalid': 400,
+      'CONTENT.USER.interaction_cursor_invalid': 400,
+      'CONTENT.USER.interaction_owner_forbidden': 403,
+      'CONTENT.SYSTEM.interaction_read_model_unavailable': 503,
+      'CONTENT.USER.publication_rejected': 422,
       'CONTENT.USER.invalid_content_type': 400,
       'CONTENT.USER.rate_limited': 429,
       'CONTENT.USER.content_too_long': 400,
       'CONTENT.USER.media_not_ready': 400,
+      'CONTENT.USER.media_file_too_large': 413,
+      'CONTENT.USER.media_type_unsupported': 415,
       'CONTENT.SYSTEM.storage_write_failed': 500,
       'CONTENT.SYSTEM.storage_read_failed': 500,
       'CONTENT.SYSTEM.internal_error': 500,
@@ -132,10 +199,16 @@ void main() {
         'CONTENT.USER.forbidden_delete': 403,
         'CONTENT.USER.unauthorized': 401,
         'CONTENT.USER.invalid_argument': 400,
+        'CONTENT.USER.interaction_type_invalid': 400,
+        'CONTENT.USER.interaction_cursor_invalid': 400,
+        'CONTENT.USER.interaction_owner_forbidden': 403,
+        'CONTENT.USER.publication_rejected': 422,
         'CONTENT.USER.invalid_content_type': 400,
         'CONTENT.USER.rate_limited': 429,
         'CONTENT.USER.content_too_long': 400,
         'CONTENT.USER.media_not_ready': 400,
+        'CONTENT.USER.media_file_too_large': 413,
+        'CONTENT.USER.media_type_unsupported': 415,
       };
       for (final entry in userErrors.entries) {
         expect(
@@ -151,6 +224,7 @@ void main() {
         'CONTENT.SYSTEM.storage_write_failed': 500,
         'CONTENT.SYSTEM.storage_read_failed': 500,
         'CONTENT.SYSTEM.internal_error': 500,
+        'CONTENT.SYSTEM.interaction_read_model_unavailable': 503,
       };
       for (final entry in systemErrors.entries) {
         expect(

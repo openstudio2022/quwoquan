@@ -1,20 +1,22 @@
 part of 'start_group_chat_page.dart';
 
-/// 图四：从群聊中选择联系人 — 群聊列表（按群名首字母分区）。
+/// 图四：从群聊 / 圈子中选择联系人（按名称首字母分区）。
 ///
-/// 数据由 [startGroupFromGroupProvider] 编排（listConversations ∩ listContacts），
-/// 每个群展示「(N个朋友)」即群成员中与当前用户 mutual 的联系人数。点击某群
-/// 进入图五 [_MemberSelectSheet] 选具体成员，选中项通过同一 wizardId 并入向导。
+/// 数据由服务端 `source=group|circle` 在分页前区分来源，并统一计算会话成员与
+/// mutual 联系人的交集。点击来源后进入图五 [_MemberSelectSheet] 选具体成员，
+/// 选中项通过同一 wizardId 并入向导。
 class _GroupPickerSheet extends ConsumerStatefulWidget {
   const _GroupPickerSheet({
     super.key,
     required this.wizardId,
     required this.isDark,
+    required this.source,
     required this.onBack,
   });
 
   final String wizardId;
   final bool isDark;
+  final StartGroupSource source;
   final VoidCallback onBack;
 
   @override
@@ -25,13 +27,147 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final Map<String, GlobalKey> _sectionKeys = <String, GlobalKey>{};
+  final Set<String> _seenCursors = <String>{};
+  List<GroupWithFriendCount> _groups = const <GroupWithFriendCount>[];
+  String? _nextCursor;
   String _query = '';
+  UiErrorSemantic? _errorSemantic;
+  UiErrorSemantic? _appendErrorSemantic;
+  bool _loadingInitial = true;
+  bool _loadingMore = false;
+  int _requestVersion = 0;
+
+  bool get _hasMore => (_nextCursor ?? '').trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_maybeLoadMore);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_reloadGroups());
+      }
+    });
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() => _query = value);
+    unawaited(_reloadGroups());
+  }
+
+  void _maybeLoadMore() {
+    if (!_scrollController.hasClients ||
+        _scrollController.position.extentAfter > AppSpacing.xl) {
+      return;
+    }
+    unawaited(_loadMoreGroups());
+  }
+
+  Future<void> _reloadGroups() async {
+    final requestVersion = ++_requestVersion;
+    final query = _query.trim();
+    _seenCursors.clear();
+    setState(() {
+      _groups = const <GroupWithFriendCount>[];
+      _nextCursor = null;
+      _errorSemantic = null;
+      _appendErrorSemantic = null;
+      _loadingInitial = true;
+      _loadingMore = false;
+    });
+    try {
+      final page = await ref.read(
+        startGroupSourcePageProvider(
+          StartGroupSourcePageRequest(
+            source: widget.source,
+            query: query.isEmpty ? null : query,
+          ),
+        ).future,
+      );
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
+      setState(() {
+        _groups = page.groups;
+        _nextCursor = _acceptNextCursor(page.nextCursor);
+        _loadingInitial = false;
+      });
+    } catch (error) {
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
+      setState(() {
+        _loadingInitial = false;
+        _errorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
+      });
+    }
+  }
+
+  Future<void> _loadMoreGroups() async {
+    final cursor = _nextCursor;
+    if (_loadingInitial ||
+        _loadingMore ||
+        cursor == null ||
+        cursor.trim().isEmpty) {
+      return;
+    }
+    final requestVersion = _requestVersion;
+    final query = _query.trim();
+    setState(() {
+      _loadingMore = true;
+      _appendErrorSemantic = null;
+    });
+    try {
+      final page = await ref.read(
+        startGroupSourcePageProvider(
+          StartGroupSourcePageRequest(
+            source: widget.source,
+            query: query.isEmpty ? null : query,
+            cursor: cursor,
+          ),
+        ).future,
+      );
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
+      setState(() {
+        _groups = mergeStartGroupSourcePages(_groups, page.groups);
+        _nextCursor = _acceptNextCursor(page.nextCursor);
+        _loadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted || requestVersion != _requestVersion) {
+        return;
+      }
+      setState(() {
+        _loadingMore = false;
+        _appendErrorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.listAppend,
+          scope: UiErrorScope.section,
+        );
+      });
+    }
+  }
+
+  String? _acceptNextCursor(String? candidate) {
+    final normalized = candidate?.trim() ?? '';
+    return normalized.isEmpty || !_seenCursors.add(normalized)
+        ? null
+        : normalized;
   }
 
   ({List<String> keys, Map<String, List<GroupWithFriendCount>> map})
@@ -41,14 +177,7 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
       final key = chatContactInitial(g.title);
       map.putIfAbsent(key, () => []).add(g);
     }
-    for (final key in map.keys) {
-      map[key]!.sort((a, b) => a.title.compareTo(b.title));
-    }
-    final keys = map.keys.toList()..sort();
-    if (keys.contains('#')) {
-      keys.remove('#');
-      keys.add('#');
-    }
+    final keys = map.keys.toList(growable: false);
     return (keys: keys, map: map);
   }
 
@@ -68,12 +197,13 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
       ),
     );
     if (completed == true && mounted) {
-      navigator.pop();
+      navigator.pop(true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isCircleSource = widget.source == StartGroupSource.circle;
     final isDark = widget.isDark;
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
@@ -94,12 +224,11 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
     final listHorizontalPadding =
         SettingsSemanticConstants.insetFormListHorizontalPadding;
 
-    final asyncGroups = ref.watch(startGroupFromGroupProvider);
-    final normalizedQuery = _query.trim().toLowerCase();
-
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
-      title: UITextConstants.startGroupChatGroupPickerTitle,
+      title: isCircleSource
+          ? ChatText.startGroupChatCirclePickerTitle
+          : ChatText.startGroupChatGroupPickerTitle,
       onBack: widget.onBack,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -113,112 +242,138 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
             ),
             child: AppSearchField(
               controller: _searchController,
-              placeholder: UITextConstants.startGroupChatPickFromGroupSearch,
-              onChanged: (value) => setState(() => _query = value),
+              placeholder: isCircleSource
+                  ? ChatText.startGroupChatPickFromCircleSearch
+                  : ChatText.startGroupChatPickFromGroupSearch,
+              onChanged: _onSearchChanged,
             ),
           ),
           Expanded(
-            child: asyncGroups.when(
-              loading: () => const Center(child: CupertinoActivityIndicator()),
-              error: (error, _) => AppPageErrorState(
-                semantic: runtimeErrorSemantic(
-                  context,
-                  error: error,
-                  category: UiErrorCategory.pageLoad,
-                  scope: UiErrorScope.page,
-                ),
-                onAction: (action) async {
-                  if (action.type == UiErrorActionType.retry ||
-                      action.type == UiErrorActionType.resubmit) {
-                    ref.invalidate(startGroupFromGroupProvider);
-                  }
-                },
-              ),
-              data: (allGroups) {
-                final filtered = normalizedQuery.isEmpty
-                    ? allGroups
-                    : allGroups
-                          .where((g) => pinyinMatches(g.title, normalizedQuery))
-                          .toList(growable: false);
-                if (filtered.isEmpty) {
-                  return Center(
-                    child: Text(
-                      UITextConstants.startGroupChatGroupPickerEmpty,
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        color: fgSecondary,
-                      ),
-                    ),
-                  );
-                }
-                final grouped = _groupByLetter(filtered);
-                final indexLetters = <String>['↑', ...grouped.keys];
-                _sectionKeys
-                  ..clear()
-                  ..addAll({for (final k in grouped.keys) k: GlobalKey()});
-                final listChildren = <Widget>[
-                  for (final letter in grouped.keys) ...[
-                    _ContactListSectionBand(
-                      key: _sectionKeys[letter],
-                      title: letter,
-                      color: fgSecondary,
-                      bandColor: sectionBandColor,
-                    ),
-                    for (final group in grouped.map[letter]!)
-                      _GroupPickerRow(
-                        group: group,
-                        rowBackground: rowBackground,
-                        dividerColor: rowDividerColor,
-                        fgPrimary: fgPrimary,
-                        fgSecondary: fgSecondary,
-                        onTap: () => _openGroup(group),
-                      ),
-                  ],
-                  SizedBox(height: AppSpacing.xl),
-                ];
-                return Stack(
-                  children: [
-                    ListView(
-                      controller: _scrollController,
-                      padding: EdgeInsets.only(bottom: AppSpacing.lg),
-                      children: listChildren,
-                    ),
-                    if (normalizedQuery.isEmpty)
-                      Positioned(
-                        right: 4,
-                        top: 0,
-                        bottom: 0,
-                        child: _LetterIndex(
-                          letters: indexLetters,
-                          onTap: (i) {
-                            if (i == 0) {
-                              _scrollController.animateTo(
-                                0,
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeOut,
-                              );
-                              return;
-                            }
-                            final letter = indexLetters[i];
-                            final key = _sectionKeys[letter];
-                            if (key?.currentContext != null) {
-                              Scrollable.ensureVisible(
-                                key!.currentContext!,
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeOut,
-                                alignment: 0,
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                  ],
-                );
-              },
+            child: _buildBody(
+              isCircleSource: isCircleSource,
+              fgPrimary: fgPrimary,
+              fgSecondary: fgSecondary,
+              rowBackground: rowBackground,
+              rowDividerColor: rowDividerColor,
+              sectionBandColor: sectionBandColor,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBody({
+    required bool isCircleSource,
+    required Color fgPrimary,
+    required Color fgSecondary,
+    required Color rowBackground,
+    required Color rowDividerColor,
+    required Color sectionBandColor,
+  }) {
+    if (_loadingInitial) {
+      return const Center(child: CupertinoActivityIndicator());
+    }
+    if (_errorSemantic != null && _groups.isEmpty) {
+      return AppPageErrorState(
+        semantic: _errorSemantic!,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _reloadGroups();
+          }
+        },
+      );
+    }
+    if (_groups.isEmpty) {
+      return Center(
+        child: Text(
+          isCircleSource
+              ? ChatText.startGroupChatCirclePickerEmpty
+              : ChatText.startGroupChatGroupPickerEmpty,
+          style: TextStyle(fontSize: AppTypography.base, color: fgSecondary),
+        ),
+      );
+    }
+    final grouped = _groupByLetter(_groups);
+    final indexLetters = <String>['↑', ...grouped.keys];
+    _sectionKeys
+      ..clear()
+      ..addAll({for (final key in grouped.keys) key: GlobalKey()});
+    final listChildren = <Widget>[
+      for (final letter in grouped.keys) ...[
+        _ContactListSectionBand(
+          key: _sectionKeys[letter],
+          title: letter,
+          color: fgSecondary,
+          bandColor: sectionBandColor,
+        ),
+        for (final group in grouped.map[letter]!)
+          _GroupPickerRow(
+            group: group,
+            rowBackground: rowBackground,
+            dividerColor: rowDividerColor,
+            fgPrimary: fgPrimary,
+            fgSecondary: fgSecondary,
+            onTap: () => _openGroup(group),
+          ),
+      ],
+      if (_loadingMore)
+        const Padding(
+          padding: EdgeInsets.all(AppSpacing.md),
+          child: Center(child: CupertinoActivityIndicator()),
+        )
+      else if (_appendErrorSemantic != null)
+        AppListAppendErrorFooter(
+          semantic: _appendErrorSemantic!,
+          onAction: (_) async => _loadMoreGroups(),
+        )
+      else if (_hasMore)
+        Center(
+          child: CupertinoButton(
+            key: const ValueKey<String>('start-group-group-picker-load-more'),
+            onPressed: () => unawaited(_loadMoreGroups()),
+            child: const Text(UITextConstants.loadMore),
+          ),
+        ),
+      SizedBox(height: AppSpacing.xl),
+    ];
+    return Stack(
+      children: [
+        ListView(
+          controller: _scrollController,
+          padding: EdgeInsets.only(bottom: AppSpacing.lg),
+          children: listChildren,
+        ),
+        if (_query.trim().isEmpty)
+          Positioned(
+            right: 4,
+            top: 0,
+            bottom: 0,
+            child: _LetterIndex(
+              letters: indexLetters,
+              onTap: (index) {
+                if (index == 0) {
+                  _scrollController.animateTo(
+                    0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                  return;
+                }
+                final key = _sectionKeys[indexLetters[index]];
+                if (key?.currentContext != null) {
+                  Scrollable.ensureVisible(
+                    key!.currentContext!,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                    alignment: 0,
+                  );
+                }
+              },
+            ),
+          ),
+      ],
     );
   }
 }
@@ -288,7 +443,7 @@ class _GroupPickerRow extends StatelessWidget {
                         ),
                         SizedBox(width: AppSpacing.xs),
                         Text(
-                          '（${UITextConstants.startGroupChatFriendsCount(group.friendCount)}）',
+                          '（${ChatText.startGroupChatFriendsCount(group.friendCount)}）',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

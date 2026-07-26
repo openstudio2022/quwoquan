@@ -1,0 +1,19 @@
+{
+  "_governance": {
+    "owner": "runtime-client-foundation",
+    "reason": "assistant handwritten and search weak typing can only decrease",
+    "expires_when": "both bucket counters reach zero"
+  },
+  "version": 1,
+  "buckets": {
+    "assistant_handwritten": {
+      "map_string_dynamic": 252,
+      "dynamic_keyword": 451
+    },
+    "core_search_repository": {
+      "map_string_dynamic": 0,
+      "dynamic_keyword": 0
+    }
+  },
+  "notes": "Ratchet: any increase in map_string_dynamic or dynamic_keyword per bucket fails CI until baseline is intentionally updated."
+}

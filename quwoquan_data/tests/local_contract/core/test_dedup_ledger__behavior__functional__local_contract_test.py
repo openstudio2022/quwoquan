@@ -26,7 +26,7 @@ os.environ["QWQ_DEDUP_LEDGER_TEST_ROOT"] = str(_DEDUP_ROOT)
 from core import paths as _paths_mod  # noqa: E402
 from core import dedup  # noqa: E402
 
-TASK = "20260711--travel-homepage-dedup-ledger--cn-national--canary-001"
+TASK = "20260711--travel-homepage-dedup-ledger--test-region-all--pilot-001"
 
 
 def _retarget_root(root: Path = _DEDUP_ROOT) -> None:

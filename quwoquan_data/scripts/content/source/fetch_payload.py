@@ -11,13 +11,10 @@ from core.runtime_policy import active_runtime_policy
 from content.source.fetch_http import _http_get_bytes
 from content.source.fetch_text import (
     _USER_AGENT,
+    _baidu_baike_layout_and_text,
     _toutiao_baike_layout_and_text,
     extract_page_text,
     extract_page_text_with_inline_images,
-)
-from content.source.research.baidu_baike import (
-    baidu_baike_api_url,
-    decode_baidu_baike_payload,
 )
 from content.source.mediawiki_page import fetch_mediawiki_page_bundle_for_url
 from core.data_issue import (
@@ -30,17 +27,17 @@ from core.data_issue import (
 from core.source_fidelity import assess_source_content_fidelity
 from governance.coverage.source_registry import resolve_travel_source_runtime
 
-_RUNTIME_POLICY = active_runtime_policy()
-_DIRECT_FETCH_TIMEOUT_SECONDS = _RUNTIME_POLICY.direct_fetch_timeout_seconds
-_SOURCE_FETCH_TIMEOUT_SECONDS = _RUNTIME_POLICY.source_fetch_timeout_seconds
-
 def fetch_source(url: str, output_dir: Path) -> dict:
     """Fetch a URL and extract text content. Returns metadata dict."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     parsed = urllib.parse.urlparse(url)
     conn_cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
-    conn = conn_cls(parsed.hostname, parsed.port, timeout=_DIRECT_FETCH_TIMEOUT_SECONDS)
+    conn = conn_cls(
+        parsed.hostname,
+        parsed.port,
+        timeout=active_runtime_policy().direct_fetch_timeout_seconds,
+    )
 
     path = parsed.path or "/"
     if parsed.query:
@@ -83,7 +80,12 @@ def _source_fetchable_override(source: Mapping[str, Any] | None) -> bool:
     return False
 
 
-def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -> dict:
+def fetch_source_payload(
+    url: str,
+    *,
+    source: Mapping[str, Any] | None = None,
+    include_page_images: bool = True,
+) -> dict:
     """抓取原文但不落盘，返回 {url, statusCode, htmlBytes, text, sha256}。
 
     供来源单元写入器把 page.html/source.md 落进 `sources/{sourceUnitId}/`。
@@ -101,38 +103,11 @@ def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -
     if source_extractor:
         runtime = {**runtime, "extractor": source_extractor, "sourceExtractorOverride": True}
     extractor = str(runtime.get("extractor") or "generic_html")
-    if extractor == "baidu_baike_openapi":
-        parsed = urllib.parse.urlparse(url)
-        source_title = str((source or {}).get("sourceTitle") or "").strip()
-        if not source_title:
-            source_title = urllib.parse.unquote(parsed.path.rsplit("/", 1)[-1]).strip()
-        if not source_title:
-            raise RuntimeError("Baidu Baike API adapter requires a resolved source title")
-        api_url = baidu_baike_api_url(source_title)
-        status, body, _ = _http_get_bytes(
-            api_url,
-            timeout=_SOURCE_FETCH_TIMEOUT_SECONDS,
-        )
-        if status != 200 or not body:
-            raise RuntimeError(f"fetch failed for {url} (status={status})")
-        page = decode_baidu_baike_payload(body)
-        if page is None:
-            raise RuntimeError("Baidu Baike API returned no readable exact page")
-        return {
-            "url": url,
-            "statusCode": status,
-            "htmlBytes": body,
-            "text": page.text,
-            "inlineImages": [],
-            "sha256": hashlib.sha256(body).hexdigest(),
-            "runtime": {
-                **runtime,
-                "rawFormat": "baidu_baike_openapi_json",
-                "resolvedTitle": page.title,
-            },
-        }
     if extractor == "wikipedia_api":
-        bundle = fetch_mediawiki_page_bundle_for_url(url)
+        bundle = fetch_mediawiki_page_bundle_for_url(
+            url,
+            include_images=include_page_images,
+        )
         if bundle is None or not bundle.rendered_text or not bundle.wikitext:
             raise DataIssueError(
                 (
@@ -198,10 +173,22 @@ def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -
         }
     status, body, _ = _http_get_bytes(
         url,
-        timeout=_SOURCE_FETCH_TIMEOUT_SECONDS,
+        timeout=active_runtime_policy().source_fetch_timeout_seconds,
     )
     if status != 200 or not body:
         raise RuntimeError(f"fetch failed for {url} (status={status})")
+    if extractor == "baidu_baike_html":
+        text, layout = _baidu_baike_layout_and_text(body, url)
+        return {
+            "url": url,
+            "statusCode": status,
+            "htmlBytes": body,
+            "text": text,
+            "inlineImages": [],
+            "layout": layout,
+            "sha256": hashlib.sha256(body).hexdigest(),
+            "runtime": {**runtime, "rawFormat": "baidu_baike_html"},
+        }
     if extractor == "toutiao_baike_html":
         text, layout = _toutiao_baike_layout_and_text(body, url)
         return {

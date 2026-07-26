@@ -1,0 +1,17 @@
+errors:
+- code: OPS.USER.recovery_failure_invalid
+  kind: VALIDATION
+  http_status: 400
+  message_key: opsRecoveryFailureInvalid
+  default_message: 异常记录无效
+  recovery:
+    action: none
+    disruption_level: silent
+- code: OPS.SYSTEM.recovery_failure_unavailable
+  kind: UNAVAILABLE
+  http_status: 503
+  message_key: opsRecoveryFailureUnavailable
+  default_message: 异常记录暂未接收
+  recovery:
+    action: retry_later
+    disruption_level: silent

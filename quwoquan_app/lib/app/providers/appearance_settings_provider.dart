@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/models/appearance_settings_models.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
-import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
@@ -58,10 +58,9 @@ class AppearanceSettingsState {
 }
 
 final appearanceSettingsControllerProvider =
-    NotifierProvider<
-      AppearanceSettingsController,
-      AppearanceSettingsState
-    >(AppearanceSettingsController.new);
+    NotifierProvider<AppearanceSettingsController, AppearanceSettingsState>(
+      AppearanceSettingsController.new,
+    );
 
 class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
   bool _ensureLoadStarted = false;
@@ -86,10 +85,10 @@ class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
   Future<void> load() async {
     state = state.copyWith(isLoading: true, clearLastError: true);
     try {
-      final snapshot = await ref
-          .read(appearanceSettingsRepositoryProvider)
+      final view = await ref
+          .read(userSettingsQueryReaderProvider)
           .getAppearanceSettings();
-      _commitRemoteSnapshot(snapshot);
+      _commitRemoteSnapshot(AppearanceSettingsSnapshot.fromContract(view));
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
@@ -131,10 +130,10 @@ class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
     );
 
     try {
-      final remoteSnapshot = await ref
-          .read(appearanceSettingsRepositoryProvider)
-          .updateAppearanceSettings(mutation);
-      _commitRemoteSnapshot(remoteSnapshot);
+      final view = await ref
+          .read(userSettingsCommandWriterProvider)
+          .updateAppearanceSettings(mutation.contract);
+      _commitRemoteSnapshot(AppearanceSettingsSnapshot.fromContract(view));
     } catch (error) {
       state = state.copyWith(
         snapshot: optimisticSnapshot.copyWith(pendingSync: true),
@@ -161,10 +160,10 @@ class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
     }
     state = state.copyWith(isLoading: true, clearLastError: true);
     try {
-      final remoteSnapshot = await ref
-          .read(appearanceSettingsRepositoryProvider)
-          .updateAppearanceSettings(mutation);
-      _commitRemoteSnapshot(remoteSnapshot);
+      final view = await ref
+          .read(userSettingsCommandWriterProvider)
+          .updateAppearanceSettings(mutation.contract);
+      _commitRemoteSnapshot(AppearanceSettingsSnapshot.fromContract(view));
     } catch (error) {
       state = state.copyWith(
         isLoading: false,

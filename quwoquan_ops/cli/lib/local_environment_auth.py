@@ -17,11 +17,24 @@ from typing import Any
 from urllib import error, request
 from urllib.parse import urlparse
 
-from .output_paths import deployment_work_root
+from .output_paths import deployment_target_path
 
 
-_SECRET_KEYS = ("jwt_secret", "device_ticket_secret", "otp_code_ref_key_b64")
-_LOCAL_TARGETS = {"beta": "beta-local", "gamma": "gamma-local"}
+_SECRET_KEYS = (
+    "jwt_secret",
+    "device_ticket_secret",
+    "otp_code_ref_key_b64",
+    "push_token_encryption_key_b64",
+    "account_closure_subject_hmac_secret",
+)
+_LOCAL_TARGETS = {
+    "alpha": "alpha-local",
+    "beta": "beta-local",
+    "gamma": "gamma-local",
+    # prod-sim 使用 production 配置投影，但其认证材料仍限定在本机部署目录。
+    "prod": "prod-sim",
+}
+_REPORT_ACCOUNT_BACKFILL_KIND = "content.reporter_account_backfill"
 
 
 @dataclass(frozen=True)
@@ -60,7 +73,7 @@ def prepare_local_environment_auth(
 ) -> LocalEnvironmentAuth:
     """Create target-isolated auth material in the external deploy workspace."""
     _require_local_environment(environment, target_name)
-    secret_path = deployment_work_root(target_name) / "secrets" / "auth.env"
+    secret_path = deployment_target_path(target_name, "secrets", "auth.env")
     values = _load_or_create_secrets(secret_path)
     key_version = f"local-{environment}-k1"
     return LocalEnvironmentAuth(
@@ -78,6 +91,12 @@ def prepare_local_environment_auth(
                 {key_version: values["otp_code_ref_key_b64"]},
                 separators=(",", ":"),
             ),
+            "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": values[
+                "push_token_encryption_key_b64"
+            ],
+            "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": values[
+                "account_closure_subject_hmac_secret"
+            ],
         },
         secret_path=secret_path,
     )
@@ -88,6 +107,7 @@ def open_local_acceptance_session(
     *,
     environment: str,
     target_name: str,
+    profile: str = "",
     subject: str | None = None,
     resolve_host: str = "127.0.0.1",
     timeout_seconds: float = 30.0,
@@ -120,6 +140,7 @@ def open_local_acceptance_session(
             raise ValueError("local environment acceptance subject is invalid")
         owner_id = canonical_subject
         persona_id = canonical_subject
+    profile_value = _canonical_acceptance_profile(profile)
     auth = prepare_local_environment_auth(environment, target_name)
     process_env = os.environ.copy()
     process_env.update(auth.environment)
@@ -129,6 +150,7 @@ def open_local_acceptance_session(
             "QWQ_LOCAL_ACCEPTANCE_TARGET": target_name,
             "QWQ_ACCEPTANCE_OWNER_ID": owner_id,
             "QWQ_ACCEPTANCE_PERSONA_ID": persona_id,
+            "QWQ_ACCEPTANCE_PROFILE": profile_value,
         }
     )
     result = subprocess.run(
@@ -164,6 +186,7 @@ def request_local_environment_json(
     resolve_host: str = "127.0.0.1",
     method: str = "GET",
     body: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
     timeout_seconds: float = 12.0,
 ) -> dict[str, Any]:
     """Call a local environment JSON endpoint using bearer auth without logging it."""
@@ -172,19 +195,23 @@ def request_local_environment_json(
     payload = (
         json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     )
-    headers = {
+    request_headers = {
         "Accept": "application/json",
         "Authorization": session.authorization_header(),
         "X-Client-Session-Id": "local-acceptance-" + session.owner_id[-12:],
     }
+    for name, value in (headers or {}).items():
+        if name.lower() == "authorization":
+            raise ValueError("local environment request headers cannot override Authorization")
+        request_headers[name] = value
     if payload is not None:
-        headers["Content-Type"] = "application/json"
+        request_headers["Content-Type"] = "application/json"
     status, response = _loopback_json_request(
         method=method,
         url=base_url.rstrip("/") + normalized_path,
         resolve_host=resolve_host,
         body=payload,
-        headers=headers,
+        headers=request_headers,
         timeout_seconds=timeout_seconds,
     )
     if status < 200 or status >= 300:
@@ -282,6 +309,16 @@ def _load_acceptance_principal() -> tuple[str, str]:
     )
 
 
+def _canonical_acceptance_profile(value: str) -> str:
+    profile = value.strip()
+    allowed = frozenset(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
+    )
+    if any(character not in allowed for character in profile):
+        raise ValueError("local environment acceptance profile is invalid")
+    return profile
+
+
 def _load_or_create_secrets(path: Path) -> dict[str, str]:
     path.parent.mkdir(parents=True, exist_ok=True)
     os.chmod(path.parent, 0o700)
@@ -289,16 +326,21 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
         _require_mode(path, 0o600)
         values = _read_secret_file(path)
         missing = [key for key in _SECRET_KEYS if not values.get(key)]
-        if missing == ["otp_code_ref_key_b64"]:
-            values["otp_code_ref_key_b64"] = base64.b64encode(
-                secrets.token_bytes(32)
-            ).decode("ascii")
+        generated_keys = {
+            "otp_code_ref_key_b64",
+            "push_token_encryption_key_b64",
+            "account_closure_subject_hmac_secret",
+        }
+        if missing and set(missing).issubset(generated_keys):
             with path.open("a", encoding="utf-8") as handle:
-                handle.write(
-                    "otp_code_ref_key_b64="
-                    + values["otp_code_ref_key_b64"]
-                    + "\n"
-                )
+                for key in missing:
+                    if key == "account_closure_subject_hmac_secret":
+                        values[key] = secrets.token_urlsafe(48)
+                    else:
+                        values[key] = base64.b64encode(
+                            secrets.token_bytes(32)
+                        ).decode("ascii")
+                    handle.write(f"{key}={values[key]}\n")
                 handle.flush()
                 os.fsync(handle.fileno())
             return values
@@ -311,6 +353,10 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
         "jwt_secret": secrets.token_urlsafe(48),
         "device_ticket_secret": secrets.token_urlsafe(48),
         "otp_code_ref_key_b64": base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
+        "push_token_encryption_key_b64": base64.b64encode(
+            secrets.token_bytes(32)
+        ).decode("ascii"),
+        "account_closure_subject_hmac_secret": secrets.token_urlsafe(48),
     }
     fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     try:
@@ -349,10 +395,68 @@ def _print_shell_environment(environment: str, target_name: str) -> None:
         print(f"export {key}={shlex.quote(value)}")
 
 
+def write_local_report_account_backfill(
+    environment: str,
+    target_name: str,
+    output_path: Path,
+    *,
+    include_acceptance_principal: bool = True,
+) -> dict[str, object]:
+    """Create a target-local, reviewed Report ownership mapping.
+
+    The only populated local mapping is derived from the canonical acceptance
+    fixture. Production deployment never synthesizes a mapping: unresolved
+    ownerless rows stay fail-closed until an operator provides a verified export.
+    """
+
+    _require_local_environment(environment, target_name)
+    entries: list[dict[str, str]] = []
+    if include_acceptance_principal:
+        owner_id, persona_id = _load_acceptance_principal()
+        entries.append({"reporterId": persona_id, "accountId": owner_id})
+    payload: dict[str, object] = {
+        "kind": _REPORT_ACCOUNT_BACKFILL_KIND,
+        "entries": entries,
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = output_path.with_name(output_path.name + ".tmp")
+    temporary_path.write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    os.chmod(temporary_path, 0o600)
+    temporary_path.replace(output_path)
+    return payload
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 4 or sys.argv[1] != "--shell":
+    if len(sys.argv) == 4 and sys.argv[1] == "--shell":
+        _print_shell_environment(sys.argv[2], sys.argv[3])
+    elif (
+        len(sys.argv) in {5, 6}
+        and sys.argv[1] == "--write-report-account-backfill"
+        and (len(sys.argv) == 5 or sys.argv[5] == "--empty")
+    ):
+        result = write_local_report_account_backfill(
+            sys.argv[2],
+            sys.argv[3],
+            Path(sys.argv[4]),
+            include_acceptance_principal=len(sys.argv) == 5,
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "entryCount": len(result["entries"]),
+                },
+                ensure_ascii=False,
+            )
+        )
+    else:
         raise SystemExit(
             "usage: python -m quwoquan_ops.cli.lib.local_environment_auth "
-            "--shell <beta|gamma> <beta-local|gamma-local>"
+            "--shell <alpha|beta|gamma> <alpha-local|beta-local|gamma-local>\n"
+            "   or: python -m quwoquan_ops.cli.lib.local_environment_auth "
+            "--write-report-account-backfill <alpha|beta|gamma> "
+            "<alpha-local|beta-local|gamma-local> <output-path> [--empty]"
         )
-    _print_shell_environment(sys.argv[2], sys.argv[3])

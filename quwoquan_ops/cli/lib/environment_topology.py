@@ -9,7 +9,7 @@ from .common import ROOT, load_json_yaml
 from .port_manifest import load_port_manifest, profile_ports
 
 
-DEFAULT_PATH = ROOT / "quwoquan_ops" / "environments" / "environment_topology_manifest.yaml"
+DEFAULT_PATH = ROOT / "quwoquan_ops" / "environments"
 ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
 TARGETS = (
     "alpha-local",
@@ -21,6 +21,7 @@ TARGETS = (
 URL_FIELDS = (
     "api",
     "realtime",
+    "rtc",
     "productOps",
     "mediaAvatar",
     "mediaImage",
@@ -59,6 +60,7 @@ ENVIRONMENT_CANONICAL_TARGET = {
 LOCAL_PUBLIC_PORT_ROLES = {
     "api": "api-edge",
     "realtime": "api-edge",
+    "rtc": "api-edge",
     "productOps": "product-ops-edge",
     "mediaAvatar": "media-edge",
     "mediaImage": "media-edge",
@@ -67,16 +69,103 @@ LOCAL_PUBLIC_PORT_ROLES = {
 }
 LOCAL_ORIGIN_PORT_ROLES = {
     "mediaOrigin": "media-origin",
+    "contentService": "content-service",
 }
 DATA_RELEASE_MODES = {"projection-only", "local-import", "hosted-import"}
 DATA_RELEASE_ENV_KEY_RE = re.compile(r"^QWQ_[A-Z0-9_]+$")
+WORKLOAD_PLANES = {"edge", "media", "service", "data"}
 
 
 def load_environment_topology(path: Path | None = None) -> dict[str, Any]:
-    loaded = load_json_yaml(path or DEFAULT_PATH)
-    if not isinstance(loaded, dict):
-        raise RuntimeError("environment topology manifest must be a mapping")
-    return loaded
+    if path is not None and path.is_file():
+        loaded = load_json_yaml(path)
+        if not isinstance(loaded, dict):
+            raise RuntimeError("environment topology input must be a mapping")
+        return loaded
+
+    environment_root = path or DEFAULT_PATH
+    environments: dict[str, dict[str, Any]] = {}
+    targets: dict[str, dict[str, Any]] = {}
+    for env_name in ENVIRONMENTS:
+        runtime_path = environment_root / env_name / "runtime.yaml"
+        runtime = load_json_yaml(runtime_path)
+        if not isinstance(runtime, dict):
+            raise RuntimeError(f"{runtime_path}: environment runtime must be a mapping")
+        if runtime.get("schema") != "environment-runtime" or runtime.get("environment") != env_name:
+            raise RuntimeError(f"{runtime_path}: schema/environment identity mismatch")
+        environment = {
+            key: value
+            for key, value in runtime.items()
+            if key not in {"schema", "environment", "targets"}
+        }
+        environment["workloads"] = _scan_environment_workloads(env_name)
+        environments[env_name] = environment
+        runtime_targets = runtime.get("targets") or {}
+        if not isinstance(runtime_targets, dict):
+            raise RuntimeError(f"{runtime_path}: targets must be a mapping")
+        for target_name, target in runtime_targets.items():
+            if target_name in targets:
+                raise RuntimeError(f"duplicate target definition: {target_name}")
+            targets[str(target_name)] = target
+    return {
+        "schema": "environment-topology",
+        "environments": environments,
+        "targets": targets,
+    }
+
+
+def _scan_environment_workloads(env_name: str) -> list[dict[str, str]]:
+    workloads: list[dict[str, str]] = []
+    services_root = ROOT / "quwoquan_service" / "services"
+    for service_root in sorted(path for path in services_root.iterdir() if path.is_dir()):
+        deployment = service_root / "environments" / env_name / "deploy" / "kustomization.yaml"
+        if deployment.is_file():
+            workloads.append(
+                {
+                    "id": service_root.name,
+                    "plane": _workload_plane(service_root.name),
+                    "deploymentRef": deployment.parent.relative_to(ROOT).as_posix(),
+                }
+            )
+    external_root = ROOT / "quwoquan_ops" / "external"
+    if external_root.is_dir():
+        for workload_root in sorted(path for path in external_root.iterdir() if path.is_dir()):
+            deployment = workload_root / "environments" / env_name / "kustomization.yaml"
+            if deployment.is_file():
+                workloads.append(
+                    {
+                        "id": workload_root.name,
+                        "plane": _workload_plane(workload_root.name),
+                        "deploymentRef": deployment.parent.relative_to(ROOT).as_posix(),
+                    }
+                )
+    platform_deployment = (
+        ROOT
+        / "quwoquan_service"
+        / "control-plane"
+        / "platform-ops"
+        / "environments"
+        / env_name
+        / "deploy"
+        / "kustomization.yaml"
+    )
+    if platform_deployment.is_file():
+        workloads.append(
+            {
+                "id": "platform-ops-service",
+                "plane": "service",
+                "deploymentRef": platform_deployment.parent.relative_to(ROOT).as_posix(),
+            }
+        )
+    return workloads
+
+
+def _workload_plane(workload_id: str) -> str:
+    if workload_id == "realtime-gateway":
+        return "edge"
+    if workload_id in {"rtc-service", "coturn", "livekit"}:
+        return "media"
+    return "service"
 
 
 def get_environment(manifest: dict[str, Any], env_name: str) -> dict[str, Any]:
@@ -115,11 +204,56 @@ def validate_environment_topology(
         env = environments.get(env_name)
         if not isinstance(env, dict):
             continue
-        expected_target = ENVIRONMENT_CANONICAL_TARGET[env_name]
-        if str(env.get("dataReleaseTarget") or "") != expected_target:
-            issues.append(
-                f"{env_name}: dataReleaseTarget must be canonical target {expected_target}"
-            )
+        workloads = env.get("workloads")
+        declared_refs: set[str] = set()
+        declared_ids: set[str] = set()
+        if not isinstance(workloads, list):
+            issues.append(f"{env_name}: workloads must be a list")
+        else:
+            for index, workload in enumerate(workloads):
+                location = f"{env_name}: workloads[{index}]"
+                if not isinstance(workload, dict):
+                    issues.append(f"{location} must be a mapping")
+                    continue
+                if set(workload) != {"id", "plane", "deploymentRef"}:
+                    issues.append(
+                        f"{location} may contain only id/plane/deploymentRef"
+                    )
+                workload_id = str(workload.get("id") or "").strip()
+                plane = str(workload.get("plane") or "").strip()
+                deployment_ref = str(workload.get("deploymentRef") or "").strip()
+                if not workload_id or workload_id in declared_ids:
+                    issues.append(f"{location}.id must be non-empty and unique")
+                declared_ids.add(workload_id)
+                if plane not in WORKLOAD_PLANES:
+                    issues.append(
+                        f"{location}.plane must be one of {sorted(WORKLOAD_PLANES)}"
+                    )
+                if not deployment_ref or deployment_ref in declared_refs:
+                    issues.append(
+                        f"{location}.deploymentRef must be non-empty and unique"
+                    )
+                    continue
+                declared_refs.add(deployment_ref)
+                ref_path = ROOT / deployment_ref
+                if not (ref_path / "kustomization.yaml").is_file():
+                    issues.append(
+                        f"{location}.deploymentRef has no kustomization.yaml: {deployment_ref}"
+                    )
+            actual_refs = {
+                workload["deploymentRef"]
+                for workload in _scan_environment_workloads(env_name)
+            }
+            missing = sorted(actual_refs - declared_refs)
+            stale = sorted(declared_refs - actual_refs)
+            if missing:
+                issues.append(
+                    f"{env_name}: deployment overlays missing from topology: {missing}"
+                )
+            if stale:
+                issues.append(
+                    f"{env_name}: topology deploymentRef has no environment overlay: {stale}"
+                )
         public_bases = env.get("publicBases")
         if not isinstance(public_bases, dict):
             issues.append(f"{env_name}: publicBases must be a mapping")
@@ -145,10 +279,6 @@ def validate_environment_topology(
         aliases = env.get("serviceAliases")
         if not isinstance(aliases, dict):
             issues.append(f"{env_name}: serviceAliases must be a mapping")
-
-        mock_flags = env.get("mockBoundaryFlags")
-        if not isinstance(mock_flags, dict):
-            issues.append(f"{env_name}: mockBoundaryFlags must be a mapping")
 
         artifact_policy = env.get("artifactPolicy")
         if not isinstance(artifact_policy, dict):
@@ -202,14 +332,8 @@ def validate_environment_topology(
                         f"{env_name}: publicBases must not contain forbidden host token {token}"
                     )
 
-        if env_name == "alpha":
-            if env.get("artifactPolicy", {}).get("app", {}).get("dataSource") != "mock":
-                issues.append("alpha: artifactPolicy.app.dataSource must be mock")
-        else:
-            if env.get("artifactPolicy", {}).get("app", {}).get("dataSource") != "remote":
-                issues.append(
-                    f"{env_name}: artifactPolicy.app.dataSource must be remote"
-                )
+        if env.get("artifactPolicy", {}).get("app", {}).get("dataSource") != "remote":
+            issues.append(f"{env_name}: artifactPolicy.app.dataSource must be remote")
 
     targets = manifest.get("targets")
     if not isinstance(targets, dict):
@@ -282,17 +406,10 @@ def validate_environment_topology(
                             f"{target_name}: publicBases.{field} must use a quwoquan-env.test host"
                         )
             origins = target.get("origins")
-            environment_flags = environments.get(env_name, {}).get("mockBoundaryFlags", {})
-            requires_media_origin = bool(
-                isinstance(environment_flags, dict)
-                and environment_flags.get("mediaOrigin")
-            )
-            if origins is None and not requires_media_origin:
+            if origins is None:
                 origins = {}
             if not isinstance(origins, dict):
                 issues.append(f"{target_name}: origins must be a mapping when declared")
-            elif requires_media_origin and not origins:
-                issues.append(f"{target_name}: mediaOrigin boundary requires origins mapping")
             elif origins:
                 for field, role_name in LOCAL_ORIGIN_PORT_ROLES.items():
                     value = str(origins.get(field, "")).strip()
@@ -329,7 +446,16 @@ def validate_environment_topology(
                 if mode == "local-import":
                     if backend != "local":
                         issues.append(f"{target_name}: local-import requires local backend")
-                    for field in ("mongoPortRole", "entityReloadPortRole"):
+                    ready_timeout = data_release.get("publicReadyTimeoutSeconds")
+                    if (
+                        isinstance(ready_timeout, bool)
+                        or not isinstance(ready_timeout, int)
+                        or ready_timeout < 1
+                    ):
+                        issues.append(
+                            f"{target_name}: dataRelease.publicReadyTimeoutSeconds must be a positive integer"
+                        )
+                    for field in ("mongoPortRole",):
                         role = str(data_release.get(field) or "")
                         if not role or role not in role_ports:
                             issues.append(
@@ -346,8 +472,6 @@ def validate_environment_topology(
                     for field in (
                         "mongoUriEnv",
                         "mediaRootEnv",
-                        "entityReloadUrlEnv",
-                        "authTokenEnv",
                     ):
                         env_key = str(data_release.get(field) or "")
                         if not DATA_RELEASE_ENV_KEY_RE.fullmatch(env_key):
@@ -421,7 +545,7 @@ def _looks_like_cidr(value: str) -> bool:
 
 
 def _validate_public_base_url(label: str, field: str, value: str) -> list[str]:
-    if field == "realtime":
+    if field in {"realtime", "rtc"}:
         if value.startswith("wss://"):
             return []
         return [f"{label} must use secure wss://"]

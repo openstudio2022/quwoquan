@@ -10,7 +10,16 @@ from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[3]
-MANIFEST_PATH = ROOT / "quwoquan_ops" / "environments" / "media_delivery_manifest.json"
+MANIFEST_PATH = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "content-service"
+    / "resources"
+    / "static"
+    / "media"
+    / "media_delivery_manifest.json"
+)
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _MEDIA_BASE_KEY = {
     "avatar": "mediaAvatar",

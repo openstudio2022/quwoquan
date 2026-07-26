@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[4]
+ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 
 PLANE_KEY_HINTS = (
     "PROD_SSH_KEY_DIR",
@@ -22,29 +27,71 @@ PLANE_KEY_HINTS = (
 class ProdDeployContractTest(unittest.TestCase):
     """prod-hosted 已退役 PROD_KUBECONFIG，改为按平面 SSH 凭据 + 硬校验。"""
 
+    def _write_release_manifest(self, path: Path, image_version: str) -> None:
+        access = yaml.safe_load(ACCESS_MANIFEST.read_text(encoding="utf-8")) or {}
+        images = {}
+        for plane in access.get("planes") or []:
+            for service in plane.get("rootlessGovernedComposeServices") or []:
+                digest = f"sha256:{'a' * 64}"
+                repository = f"registry.example.invalid/quwoquan/{service}"
+                ref = f"{repository}@{digest}"
+                images[service] = {
+                    "repository": repository,
+                    "digest": digest,
+                    "ref": ref,
+                    "attestations": {
+                        "spdxSbom": f"oci://{ref}#spdxSbom",
+                        "slsaProvenance": f"oci://{ref}#slsaProvenance",
+                    },
+                }
+        payload = {
+            "schema": "mainline-release-artifact",
+            "status": "deployable",
+            "versions": {"imageVersion": image_version},
+            "images": images,
+        }
+        encoded = json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        payload["manifestDigest"] = f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, sort_keys=True),
+            encoding="utf-8",
+        )
+
     def _run_deploy(self, **env_overrides: str) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         # 清空可能从 CI 环境继承的平面凭据，保证用例确定性。
         for key in PLANE_KEY_HINTS:
             env.pop(key, None)
         env.pop("PROD_KUBECONFIG", None)
+        env.pop("SERVICE", None)
         env.update(
             {
                 "DRY_RUN": "false",
                 "ROLLOUT_STAGE": "gray-initial",
                 "IMAGE_VERSION": "img-test",
+                "PREVIOUS_IMAGE_VERSION": "img-previous",
                 "CONFIG_VERSION": "cfg-test",
+                "SERVICE": "service-plane",
             }
         )
         env.update(env_overrides)
-        return subprocess.run(
-            ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
-            cwd=str(ROOT),
-            text=True,
-            capture_output=True,
-            env=env,
-            check=False,
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            release_manifest = Path(tmp) / "release-manifest.json"
+            self._write_release_manifest(release_manifest, env["IMAGE_VERSION"])
+            env.setdefault("RELEASE_MANIFEST", str(release_manifest))
+            return subprocess.run(
+                ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
+                cwd=str(ROOT),
+                text=True,
+                capture_output=True,
+                env=env,
+                check=False,
+            )
 
     def _make_key_dir(self) -> tempfile.TemporaryDirectory[str]:
         tmp = tempfile.TemporaryDirectory()
@@ -84,7 +131,15 @@ class ProdDeployContractTest(unittest.TestCase):
         # 预览必须给出 service plane 的 SSH 发布计划与灰度命名空间。
         self.assertIn("prod-service-svc", result.stdout)
         self.assertIn("quwoquan-service-gray", result.stdout)
-        self.assertNotIn("prod-edge-svc", result.stdout)
+        self.assertIn("prod-edge-svc", result.stdout)
+        self.assertIn("quwoquan-edge-gray", result.stdout)
+        self.assertIn(
+            "credential_root='/home/prod-service-svc/credentials'",
+            result.stdout,
+        )
+        self.assertIn('push_env="$credential_dir/push.env"', result.stdout)
+        self.assertIn("INTEGRATION_PUSH_APNS_KEY_ID", result.stdout)
+        self.assertIn("integration push credentials preflight ok", result.stdout)
         # data 平面只读审计，不进 deploy 计划。
         self.assertNotIn("prod-data-svc", result.stdout)
 

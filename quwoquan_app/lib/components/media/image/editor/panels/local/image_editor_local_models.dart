@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 const String kLocalParamLightSense = 'lightSense';
 const String kLocalParamBrightness = 'brightness';
@@ -141,22 +141,22 @@ class LocalAnchor {
 }
 
 Map<String, double> createDefaultLocalAnchorValues() => <String, double>{
-      kLocalParamLightSense: 0,
-      kLocalParamBrightness: 0,
-      kLocalParamExposure: 0,
-      kLocalParamContrast: 0,
-      kLocalParamSaturation: 0,
-      kLocalParamVibrance: 0,
-      kLocalParamTexture: 0,
-      kLocalParamSharpen: 0,
-      kLocalParamStructure: 0,
-      kLocalParamHighlight: 0,
-      kLocalParamShadow: 0,
-      kLocalParamTemperature: 0,
-      kLocalParamTint: 0,
-      kLocalParamGrain: 0,
-      kLocalParamFade: 0,
-    };
+  kLocalParamLightSense: 0,
+  kLocalParamBrightness: 0,
+  kLocalParamExposure: 0,
+  kLocalParamContrast: 0,
+  kLocalParamSaturation: 0,
+  kLocalParamVibrance: 0,
+  kLocalParamTexture: 0,
+  kLocalParamSharpen: 0,
+  kLocalParamStructure: 0,
+  kLocalParamHighlight: 0,
+  kLocalParamShadow: 0,
+  kLocalParamTemperature: 0,
+  kLocalParamTint: 0,
+  kLocalParamGrain: 0,
+  kLocalParamFade: 0,
+};
 
 List<LocalAnchor> cloneLocalAnchors(List<LocalAnchor> anchors) => anchors
     .map(

@@ -23,6 +23,7 @@ class CachedContentRepository
     required PostObjectCacheService postCache,
     required ContentQuerySnapshotStore querySnapshotStore,
     UserProfileCacheService? userProfileCache,
+    Future<List<String>> Function()? blockedKeywordsLoader,
     Future<void> Function(String avatarUrl)? avatarPreloader,
     CacheTelemetrySink telemetrySink = const DeveloperLogCacheTelemetrySink(),
   }) : _readDelegate = readDelegate,
@@ -30,6 +31,7 @@ class CachedContentRepository
        _postCache = postCache,
        _querySnapshotStore = querySnapshotStore,
        _userProfileCache = userProfileCache,
+       _blockedKeywordsLoader = blockedKeywordsLoader ?? _emptyBlockedKeywords,
        _telemetrySink = telemetrySink,
        _avatarPreloader =
            avatarPreloader ?? AppImageCacheController.preloadAvatar;
@@ -39,13 +41,17 @@ class CachedContentRepository
   final PostObjectCacheService _postCache;
   final ContentQuerySnapshotStore _querySnapshotStore;
   final UserProfileCacheService? _userProfileCache;
+  final Future<List<String>> Function() _blockedKeywordsLoader;
   final CacheTelemetrySink _telemetrySink;
   final Future<void> Function(String avatarUrl) _avatarPreloader;
   final Set<String> _inflightRefreshes = <String>{};
 
+  static Future<List<String>> _emptyBlockedKeywords() async => const <String>[];
+
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
+    String? channelId,
     String? identity,
     String? type,
     String? subCategory,
@@ -59,6 +65,7 @@ class CachedContentRepository
   }) async {
     final key = contentFeedQueryKey(
       category: category,
+      channelId: channelId,
       identity: identity,
       type: type,
       subCategory: subCategory,
@@ -71,6 +78,7 @@ class CachedContentRepository
     try {
       final page = await _readDelegate.listDiscoveryFeedPage(
         category: category,
+        channelId: channelId,
         identity: identity,
         type: type,
         subCategory: subCategory,
@@ -86,10 +94,23 @@ class CachedContentRepository
       return page;
     } catch (error) {
       if (cached != null) {
+        final blockedKeywords = (await _blockedKeywordsLoader())
+            .map((keyword) => keyword.trim().toLowerCase())
+            .where((keyword) => keyword.isNotEmpty)
+            .toSet();
         _recordCacheHit(key: key, result: cached);
         final cachedPage = cached.value.toDiscoveryFeedPage();
+        final visibleItems = blockedKeywords.isEmpty
+            ? cachedPage.items
+            : cachedPage.items
+                  .where((item) {
+                    final searchable = '${item.title} ${item.normalizedBody}'
+                        .toLowerCase();
+                    return !blockedKeywords.any(searchable.contains);
+                  })
+                  .toList(growable: false);
         return DiscoveryFeedPage(
-          items: cachedPage.items,
+          items: visibleItems,
           nextCursor: cachedPage.nextCursor,
           feedRequestId: cachedPage.feedRequestId,
           rankingVersion: cachedPage.rankingVersion,
@@ -140,8 +161,14 @@ class CachedContentRepository
   }
 
   @override
-  Future<void> deletePost({required String postId}) async {
-    await _writeDelegate.deletePost(postId: postId);
+  Future<void> deletePost({
+    required String postId,
+    required String idempotencyKey,
+  }) async {
+    await _writeDelegate.deletePost(
+      postId: postId,
+      idempotencyKey: idempotencyKey,
+    );
     _postCache.removePost(postId);
     _querySnapshotStore.invalidatePost(postId);
     await _querySnapshotStore.flushPersistence();
@@ -214,16 +241,6 @@ class CachedContentRepository
       }
       rethrow;
     }
-  }
-
-  @override
-  DiscoveryPresentationWire? discoveryPresentationWireForPost(String postId) {
-    return _readDelegate.discoveryPresentationWireForPost(postId);
-  }
-
-  @override
-  List<PostBaseDto> embeddedDiscoveryArticlePostsForFollowingMix() {
-    return _readDelegate.embeddedDiscoveryArticlePostsForFollowingMix();
   }
 
   int _cacheAgeMs(DateTime fetchedAt) {

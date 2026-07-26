@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/components/conversation/message_action_menu_overlay.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 
 void main() {
   group('ConversationMessageActionMenuOverlay', () {
@@ -27,10 +27,10 @@ void main() {
         ),
       );
 
-      expect(find.text(UITextConstants.messageActionCopy), findsOneWidget);
-      expect(find.text(UITextConstants.messageActionRecall), findsOneWidget);
+      expect(find.text(ChatText.messageActionCopy), findsOneWidget);
+      expect(find.text(ChatText.messageActionRecall), findsOneWidget);
 
-      await tester.tap(find.text(UITextConstants.messageActionCopy));
+      await tester.tap(find.text(ChatText.messageActionCopy));
       await tester.pump();
 
       expect(triggeredAction, 'copy');
@@ -51,9 +51,12 @@ void main() {
         ),
       );
 
-      expect(find.text(UITextConstants.messageActionCopy), findsNothing);
-      expect(find.text(UITextConstants.messageActionRecall), findsNothing);
-      expect(find.text(UITextConstants.messageActionDelete), findsOneWidget);
+      expect(find.text(ChatText.messageActionCopy), findsNothing);
+      expect(find.text(ChatText.messageActionRecall), findsNothing);
+      // 服务端没有 DeleteMessage 契约，菜单不得暴露无副作用的假删除入口。
+      expect(find.text(ChatText.messageActionDelete), findsNothing);
+      expect(find.text(ChatText.messageActionForward), findsOneWidget);
+      expect(find.text(ChatText.messageActionSelect), findsOneWidget);
     });
   });
 }

@@ -7,5 +7,6 @@ class CloudApiDefaults {
   static const int pageLimit = 20;
   static const int syncMessagesLimit = 500;
   static const int userCirclesLimit = 50;
+  static const int chatMemberSearchLimit = 50;
   static const int callMaxParticipants = 32;
 }

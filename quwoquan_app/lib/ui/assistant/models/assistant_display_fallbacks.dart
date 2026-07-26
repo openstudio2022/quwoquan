@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 
 Map<String, dynamic> _structuredPayload(AssistantRunResponse response) {
   final direct = response.structuredResponse;
@@ -13,8 +14,9 @@ Map<String, dynamic> _structuredPayload(AssistantRunResponse response) {
     final decoded = jsonDecode(raw);
     if (decoded is Map<String, dynamic>) return decoded;
     if (decoded is Map) return decoded.cast<String, dynamic>();
-  } catch (_) {
-    /* best-effort: finalText 非 JSON 时回退到空结构化负载，由上层用文本兜底 */
+  } on FormatException {
+    // finalText 非 JSON 时明确回退空结构化负载，由上层使用文本展示。
+    return const <String, dynamic>{};
   }
   return const <String, dynamic>{};
 }
@@ -44,7 +46,7 @@ String resolveActionLikeCompletedFallback(AssistantRunResponse response) {
     return '';
   }
   if (nextAction == 'ask_user' || messageKind == 'ask_user') {
-    return '我还需要你再补充一点信息，这样才能继续。';
+    return AssistantText.assistantActionNeedsMoreInfo;
   }
-  return '这个操作我暂时还没拿到可展示结果，请再试一次。';
+  return AssistantText.assistantActionResultUnavailable;
 }

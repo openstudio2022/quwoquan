@@ -1,0 +1,20 @@
+kind: append_only_fact
+description: '外部渠道 Webhook 经验签和去重后形成的不可变接收事实。实时投递只消费该事实，
+
+  不把外部 ingress 冒充为 Connection 生命周期命令。
+
+  '
+identity:
+  fields:
+  - id
+  version_source: immutable
+access:
+  commands: append_only_sink
+  queries: none
+  cross_context: event_only
+relationships: []
+local_identity_reasons:
+  providerEventId: immutable correlation or idempotency key scoped to this fact or command; it is not
+    a business-object reference
+capabilities:
+- auditable

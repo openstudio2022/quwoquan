@@ -3,32 +3,36 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
-import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import '../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/cloud_services/repository_mock_reexports.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
 void main() {
-  test('alpha 环境契约要求端侧使用 mock repository', () {
-    final container = ProviderContainer();
+  test('alpha 测试组合根显式注入 mock repository', () {
+    final container = ProviderContainer(
+      overrides: [
+        homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
+      ],
+    );
     addTearDown(container.dispose);
 
-    expect(CloudRuntimeConfig.appRuntimeEnv, 'alpha');
-    expect(container.read(appDataSourceModeProvider), AppDataSourceMode.mock);
-    container
-        .read(appDataSourceModeProvider.notifier)
-        .setMode(AppDataSourceMode.remote);
-    expect(container.read(appDataSourceModeProvider), AppDataSourceMode.mock);
     expect(
-      container.read(homepageRepositoryProvider),
+      resolveAppDataSourceModeForEnvironment(
+        runtimeEnv: 'alpha',
+        explicitDataSource: 'remote',
+      ),
+      AppDataSourceMode.mock,
+    );
+    expect(
+      container.read(homepageFacetSetProvider),
       isA<MockHomepageRepository>(),
     );
   });
@@ -117,18 +121,22 @@ void main() {
   });
 
   test('alpha 视频播放 canary 可从默认契约 fixture 直达', () async {
+    final pack = loadContentScenarioPack();
+    final seedSet =
+        pack.seedSets['content_discovery_core'] as Map<String, dynamic>;
+    final expectedVideo = ((seedSet['posts'] as List?) ?? const <dynamic>[])
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .firstWhere((item) => item['postId'] == 'fixture_video_001');
     final repo = MockContentRepository();
 
     final detail = await repo.getPost(postId: 'fixture_video_001');
 
     expect(detail.post.id, 'fixture_video_001');
-    expect(
-      detail.post.mediaVideoUrl,
-      'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
-    );
+    expect(detail.post.mediaVideoUrl, expectedVideo['videoUrl']);
   });
 
-  test('circle mock repository 可由 contracts fixture 初始化', () async {
+  test('circle alpha query reader 可由 immutable fixture bundle 初始化', () async {
     final pack = loadCircleScenarioPack();
     final seedRefs = pack.seedRefsFor('circle_list_detail_basic');
     expect(
@@ -140,24 +148,34 @@ void main() {
         'circle_group_chat_link_core',
       ]),
     );
-    final repo = buildContractSeededCircleRepository(seedRef: 'circle_core');
+    final reader = AlphaCircleQueryReader();
 
-    final circles = await repo.listCircles(limit: 100);
-    expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
+    final circles = await reader.list(const CircleListQuery(limit: 100));
     expect(
-      circles.map((item) => item.id),
+      circles.items.map((item) => item.circleId),
+      contains('fixture_circle_photo'),
+    );
+    expect(
+      circles.items.map((item) => item.circleId),
       contains('fixture_circle_gold_invest'),
     );
-    final detail = await repo.getCircle('fixture_circle_photo');
-    expect(detail.circle.name, '契约摄影社');
-    final goldDetail = await repo.getCircle('fixture_circle_gold_invest');
-    expect(goldDetail.circle.name, '黄金投资圈');
+    final detail = await reader.get(
+      const CircleDetailQuery(circleId: 'fixture_circle_photo'),
+    );
+    expect(detail.name, '契约摄影社');
+    final goldDetail = await reader.get(
+      const CircleDetailQuery(circleId: 'fixture_circle_gold_invest'),
+    );
+    expect(goldDetail.name, '黄金投资圈');
   });
 
-  test('circle mock repository 默认优先读取 contract fixture', () async {
-    final repo = MockCircleRepository();
-    final circles = await repo.listCircles(limit: 100);
-    expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
+  test('circle alpha reader 默认优先读取 contract fixture', () async {
+    final reader = AlphaCircleQueryReader();
+    final circles = await reader.list(const CircleListQuery(limit: 100));
+    expect(
+      circles.items.map((item) => item.circleId),
+      contains('fixture_circle_photo'),
+    );
   });
 
   test('chat mock repository 可由 contracts fixture 初始化', () async {
@@ -241,6 +259,23 @@ class ContractScenarioPack {
   final List<Map<String, dynamic>> scenarios;
 
   factory ContractScenarioPack.fromJson(Map<String, dynamic> json) {
+    final rawScenarios = json['scenarios'];
+    final scenarios = switch (rawScenarios) {
+      List<dynamic> values =>
+        values
+            .whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false),
+      Map<dynamic, dynamic> values =>
+        values.entries
+            .where((entry) => entry.value is Map)
+            .map((entry) {
+              final scenario = (entry.value as Map).cast<String, dynamic>();
+              return <String, dynamic>{'id': entry.key.toString(), ...scenario};
+            })
+            .toList(growable: false),
+      _ => const <Map<String, dynamic>>[],
+    };
     return ContractScenarioPack(
       repositoryExpectations:
           (json['repositoryExpectations'] as Map? ?? const <String, dynamic>{})
@@ -248,10 +283,7 @@ class ContractScenarioPack {
       seedSets:
           (json['seedSets'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
-      scenarios: ((json['scenarios'] as List?) ?? const <dynamic>[])
-          .whereType<Map>()
-          .map((item) => item.cast<String, dynamic>())
-          .toList(growable: false),
+      scenarios: scenarios,
     );
   }
 
@@ -311,7 +343,7 @@ class SeedManifestEntry {
 ContractScenarioPack loadContentScenarioPack() {
   return ContractScenarioPack.fromJson(
     _loadContractFixtureObject(
-      'content/test_fixtures/scenarios/content_scenarios.json',
+      'quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json',
     ),
   );
 }
@@ -319,7 +351,7 @@ ContractScenarioPack loadContentScenarioPack() {
 ContractScenarioPack loadCircleScenarioPack() {
   return ContractScenarioPack.fromJson(
     _loadContractFixtureObject(
-      'social/circle/test_fixtures/scenarios/circle_scenarios.json',
+      'quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.json',
     ),
   );
 }
@@ -327,7 +359,7 @@ ContractScenarioPack loadCircleScenarioPack() {
 ContractScenarioPack loadChatScenarioPack() {
   return ContractScenarioPack.fromJson(
     _loadContractFixtureObject(
-      'messages/chat/test_fixtures/scenarios/chat_scenarios.json',
+      'quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json',
     ),
   );
 }
@@ -358,18 +390,6 @@ MockContentRepository buildContractSeededContentRepository({
       )
       .toList(growable: false);
   return MockContentRepository(seedPosts: posts);
-}
-
-MockCircleRepository buildContractSeededCircleRepository({
-  String seedRef = 'circle_core',
-}) {
-  final pack = loadCircleScenarioPack();
-  final seedSet = pack.seedSets[seedRef] as Map<String, dynamic>;
-  final circles = ((seedSet['circles'] as List?) ?? const <dynamic>[])
-      .whereType<Map>()
-      .map((item) => CircleDto.fromMap(item.cast<String, dynamic>()))
-      .toList(growable: false);
-  return MockCircleRepository(seedCircles: circles);
 }
 
 MockChatRepository buildContractSeededChatRepository({
@@ -413,11 +433,14 @@ Map<String, dynamic> _loadContractFixtureObject(String metadataRelativePath) {
   return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
 }
 
-File? _tryContractFixtureFile(String metadataRelativePath) {
+File? _tryContractFixtureFile(String repositoryOrMetadataPath) {
+  final suffix = repositoryOrMetadataPath.startsWith('quwoquan_service/')
+      ? repositoryOrMetadataPath
+      : 'quwoquan_service/contracts/metadata/$repositoryOrMetadataPath';
   final candidates = <File>[
-    File('../quwoquan_service/contracts/metadata/$metadataRelativePath'),
-    File('quwoquan_service/contracts/metadata/$metadataRelativePath'),
-    File('../../quwoquan_service/contracts/metadata/$metadataRelativePath'),
+    File('../$suffix'),
+    File(suffix),
+    File('../../$suffix'),
   ];
   for (final candidate in candidates) {
     if (candidate.existsSync()) {

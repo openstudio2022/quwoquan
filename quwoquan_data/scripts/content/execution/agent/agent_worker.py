@@ -1,7 +1,8 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
+from core.cursor_model import CursorModelSelection
 from core.runtime_policy import active_runtime_policy
-from content.execution.support import Any, Callable, ExecutionContext, MANAGED_AGENT_TIMEOUT_SECONDS, Path, _MANAGED_AGENT_SUBPROCESS_LOCK, _MANAGED_AGENT_SUBPROCESS_PIDS, _normalize_managed_agent_provider, _resolve_managed_model, json, os, signal, subprocess, sys, tempfile, time
+from content.execution.support import Callable, ExecutionContext, MANAGED_AGENT_TIMEOUT_SECONDS, Path, _MANAGED_AGENT_SUBPROCESS_LOCK, _MANAGED_AGENT_SUBPROCESS_PIDS, _normalize_managed_agent_provider, _resolve_managed_model, json, os, signal, subprocess, sys, tempfile, time
 
 _PROCESS_TERMINATION_TIMEOUT_SECONDS = active_runtime_policy().process_termination_timeout_seconds
 
@@ -19,6 +20,11 @@ def _managed_agent_worker_main() -> None:
     agent_provider = _normalize_managed_agent_provider(
         str(ctx_payload.get("agentProvider") or "cursor_sdk")
     )
+    model_selection = CursorModelSelection.from_config(
+        ctx_payload.get("model"),
+        ctx_payload.get("modelParameters"),
+        label="agent_worker.ctx",
+    )
     ctx = ExecutionContext(
         execution_id=str(ctx_payload.get("executionId") or ""),
         entity_ids=[str(item) for item in (ctx_payload.get("entityIds") or [])],
@@ -26,12 +32,16 @@ def _managed_agent_worker_main() -> None:
         managed=True,
         runtime=str(ctx_payload.get("runtime") or "local"),
         max_workers=int(ctx_payload.get("maxWorkers") or 1),
-        model=_resolve_managed_model(agent_provider, str(ctx_payload.get("model") or "")),
+        model=_resolve_managed_model(agent_provider, model_selection.model_id),
+        model_parameters=model_selection.parameters,
         agent_provider=agent_provider,
         release_only=bool(ctx_payload.get("releaseOnly")),
     )
     outcome = _managed_agent_runner_for_provider(ctx, str(payload.get("prompt") or ""))
-    output_path.write_text(json.dumps(outcome, ensure_ascii=False, indent=2), encoding="utf-8")
+    output_path.write_text(
+        json.dumps(outcome.to_document(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 def _register_managed_agent_subprocess(pid: int) -> None:
     if pid <= 0:
@@ -77,9 +87,11 @@ def _default_managed_agent_runner_isolated(
     *,
     completion_probe: Callable[[], bool] | None = None,
     completion_grace_seconds: float = 0,
-) -> dict[str, Any]:
+) -> "AgentRunOutcome":
     """Run the real Cursor SDK worker in a killable subprocess with a hard deadline."""
     from content.execution.agent.agent_runner import _redact_managed_secret
+    from content.execution.agent.outcome import AgentRunOutcome
+    from core.control_types import AgentFailureKind, AgentProvider
     with tempfile.TemporaryDirectory(prefix="qwq-managed-agent-") as tmp:
         tmp_path = Path(tmp)
         input_path = tmp_path / "input.json"
@@ -94,6 +106,7 @@ def _default_managed_agent_runner_isolated(
                         "runtime": ctx.runtime,
                         "maxWorkers": ctx.max_workers,
                         "model": ctx.model,
+                        "modelParameters": ctx.model_selection.parameters_document(),
                         "agentProvider": _normalize_managed_agent_provider(ctx.agent_provider),
                         "releaseOnly": ctx.release_only,
                     },
@@ -153,16 +166,13 @@ def _default_managed_agent_runner_isolated(
                             except OSError:
                                 pass
                             stdout, stderr = proc.communicate()
-                        return {
-                            "started": True,
-                            "status": "finished",
-                            "runId": f"contract-output:{ctx.execution_id}",
-                            "completionMode": "contract_output",
-                            "usedTokens": 0,
-                            "costUsd": 0.0,
-                            "stdoutTail": _redact_managed_secret(stdout)[-1200:],
-                            "stderrTail": _redact_managed_secret(stderr)[-1200:],
-                        }
+                        return AgentRunOutcome.finished(
+                            provider=AgentProvider.CURSOR_SDK,
+                            run_id=f"contract-output:{ctx.execution_id}",
+                            completion_mode="contract_output",
+                            stdout_tail=_redact_managed_secret(stdout)[-1200:],
+                            stderr_tail=_redact_managed_secret(stderr)[-1200:],
+                        )
                 else:
                     completion_seen_at = None
                 if now - started_at >= MANAGED_AGENT_TIMEOUT_SECONDS:
@@ -183,41 +193,46 @@ def _default_managed_agent_runner_isolated(
                     except OSError:
                         pass
                     stdout, stderr = proc.communicate()
-                return {
-                    "started": False,
-                    "status": "error",
-                    "error": f"agent subprocess timed out after {MANAGED_AGENT_TIMEOUT_SECONDS}s",
-                    "retryable": True,
-                    "errorType": "timeout",
-                    "stdoutTail": _redact_managed_secret(stdout)[-1200:],
-                    "stderrTail": _redact_managed_secret(stderr)[-1200:],
-                }
+                return AgentRunOutcome.failed(
+                    AgentFailureKind.SUBPROCESS_TIMEOUT,
+                    provider=AgentProvider.CURSOR_SDK,
+                    message=f"agent subprocess timed out after {MANAGED_AGENT_TIMEOUT_SECONDS}s",
+                    retryable=True,
+                    stdout_tail=_redact_managed_secret(stdout)[-1200:],
+                    stderr_tail=_redact_managed_secret(stderr)[-1200:],
+                )
             else:
                 stdout, stderr = proc.communicate()
             if output_path.is_file():
                 try:
                     outcome = json.loads(output_path.read_text(encoding="utf-8"))
                 except (OSError, ValueError, TypeError) as exc:
-                    return {
-                        "started": False,
-                        "status": "error",
-                        "error": f"agent subprocess wrote unreadable output: {exc}",
-                        "retryable": True,
-                    }
-                if isinstance(outcome, dict):
-                    if outcome.get("error"):
-                        outcome["error"] = _redact_managed_secret(str(outcome.get("error") or ""))
-                    return outcome
-            return {
-                "started": False,
-                "status": "error",
-                "error": (
+                    return AgentRunOutcome.failed(
+                        AgentFailureKind.SUBPROCESS_OUTPUT_INVALID,
+                        provider=AgentProvider.CURSOR_SDK,
+                        message=f"agent subprocess wrote unreadable output: {type(exc).__name__}",
+                        retryable=True,
+                    )
+                try:
+                    decoded = AgentRunOutcome.from_document(outcome)
+                except ValueError as exc:
+                    return AgentRunOutcome.failed(
+                        AgentFailureKind.SUBPROCESS_OUTPUT_INVALID,
+                        provider=AgentProvider.CURSOR_SDK,
+                        message=f"agent subprocess wrote invalid output: {exc}",
+                        retryable=True,
+                    )
+                return decoded
+            return AgentRunOutcome.failed(
+                AgentFailureKind.SUBPROCESS_EXITED,
+                provider=AgentProvider.CURSOR_SDK,
+                message=(
                     f"agent subprocess exited {proc.returncode} without outcome; "
                     f"stderr={_redact_managed_secret(stderr)[-1200:]}"
                 ),
-                "retryable": proc.returncode not in (0,),
-                "stdoutTail": _redact_managed_secret(stdout)[-1200:],
-            }
+                retryable=proc.returncode != 0,
+                stdout_tail=_redact_managed_secret(stdout)[-1200:],
+            )
         finally:
             _unregister_managed_agent_subprocess(proc.pid)
 

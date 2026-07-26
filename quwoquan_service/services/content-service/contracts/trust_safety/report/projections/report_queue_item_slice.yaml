@@ -1,0 +1,4 @@
+read_model: ReportQueueItemSlice
+description: 举报运营队列分页结果的单项读模型。
+consumers:
+- platform-ops

@@ -1,11 +1,76 @@
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/contact_discovery_match_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/relationship/contact_discovery_record_match_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+/// 通讯录匹配的强类型 App 视图；动态 wire 只在 Repository 边界解码。
+class ContactDiscoveryMatchView {
+  const ContactDiscoveryMatchView({
+    required this.hashedPhone,
+    required this.subAccountId,
+    required this.userHandle,
+    required this.displayName,
+    required this.avatarUrl,
+    required this.avatarVersion,
+    required this.region,
+    required this.relationshipCapability,
+  });
+
+  factory ContactDiscoveryMatchView.fromDto(ContactDiscoveryMatchWireDto dto) {
+    final capability = dto.relationshipCapability;
+    return ContactDiscoveryMatchView(
+      hashedPhone: dto.hashedPhone,
+      subAccountId: dto.subAccountId,
+      userHandle: dto.userHandle,
+      displayName: dto.displayName,
+      avatarUrl: dto.avatarUrl,
+      avatarVersion: dto.avatarVersion,
+      region: dto.region,
+      relationshipCapability: capability == null
+          ? RelationshipCapabilityDto(
+              viewerSubAccountId: '',
+              targetSubAccountId: dto.subAccountId,
+            )
+          : RelationshipCapabilityDto(
+              viewerSubAccountId: '',
+              targetSubAccountId: dto.subAccountId,
+              relationState: capability.relationState,
+              canFollow: capability.canFollow,
+              canUnfollow: capability.canUnfollow,
+              canOpenConversation: capability.canOpenConversation,
+              canStartVoiceCall: capability.canStartVoiceCall,
+              canStartVideoCall: capability.canStartVideoCall,
+            ),
+    );
+  }
+
+  factory ContactDiscoveryMatchView.fromContract(
+    ContactDiscoveryMatchResult result,
+  ) {
+    return ContactDiscoveryMatchView(
+      hashedPhone: result.hashedPhone,
+      subAccountId: result.subAccountId,
+      userHandle: result.userHandle,
+      displayName: result.displayName,
+      avatarUrl: result.avatarUrl,
+      avatarVersion: result.avatarVersion,
+      region: result.region,
+      relationshipCapability: RelationshipCapabilityDto.fromContract(
+        result.relationshipCapability,
+      ),
+    );
+  }
+
+  final String hashedPhone;
+  final String subAccountId;
+  final String userHandle;
+  final String displayName;
+  final String? avatarUrl;
+  final int avatarVersion;
+  final String? region;
+  final RelationshipCapabilityDto relationshipCapability;
+}
 
 /// 一次通讯录匹配的结果视图（POST initiate / GET latest 同构）。
 ///
@@ -26,14 +91,14 @@ class ContactDiscoveryResultView {
   final String status;
   final List<String> matchedSubAccountIds;
   final int matchCount;
-  final List<ContactDiscoveryMatchWireDto> matches;
+  final List<ContactDiscoveryMatchView> matches;
 
   static const ContactDiscoveryResultView empty = ContactDiscoveryResultView(
     id: '',
     status: 'completed',
     matchedSubAccountIds: <String>[],
     matchCount: 0,
-    matches: <ContactDiscoveryMatchWireDto>[],
+    matches: <ContactDiscoveryMatchView>[],
   );
 
   factory ContactDiscoveryResultView.fromMap(Map<String, dynamic> m) {
@@ -46,6 +111,7 @@ class ContactDiscoveryResultView {
         : const <String>[];
     final matches = CloudResponseDecoder.mapList(m, 'matches')
         .map(ContactDiscoveryMatchWireDto.fromMap)
+        .map(ContactDiscoveryMatchView.fromDto)
         .toList(growable: false);
     return ContactDiscoveryResultView(
       id: m['id']?.toString() ?? '',
@@ -53,6 +119,20 @@ class ContactDiscoveryResultView {
       matchedSubAccountIds: matchedIds,
       matchCount: (m['matchCount'] as num?)?.toInt() ?? matches.length,
       matches: matches,
+    );
+  }
+
+  factory ContactDiscoveryResultView.fromContract(
+    ContactDiscoveryResult result,
+  ) {
+    return ContactDiscoveryResultView(
+      id: result.id,
+      status: result.status,
+      matchedSubAccountIds: result.matchedSubAccountIds,
+      matchCount: result.matchCount,
+      matches: result.matches
+          .map(ContactDiscoveryMatchView.fromContract)
+          .toList(growable: false),
     );
   }
 }
@@ -72,79 +152,33 @@ abstract class ContactDiscoveryRepository {
   Future<void> dismiss(String id);
 }
 
-/// Mock 实现：不联网。alpha/dev 默认无注册联系人命中（0 匹配为合法态），
-/// 真实命中走 [RemoteContactDiscoveryRepository]（beta/gamma/prod）。不在此伪造
-/// 第二套业务名单（遵守 mock 数据隔离 R15）。
-class MockContactDiscoveryRepository implements ContactDiscoveryRepository {
-  ContactDiscoveryResultView? _latest;
-
-  @override
-  Future<ContactDiscoveryResultView> initiate(List<String> hashedPhones) async {
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    final result = ContactDiscoveryResultView(
-      id: 'mock_cd_${DateTime.now().millisecondsSinceEpoch}',
-      status: 'completed',
-      matchedSubAccountIds: const <String>[],
-      matchCount: 0,
-      matches: const <ContactDiscoveryMatchWireDto>[],
-    );
-    _latest = result;
-    return result;
-  }
-
-  @override
-  Future<ContactDiscoveryResultView?> getLatest() async => _latest;
-
-  @override
-  Future<void> dismiss(String id) async {
-    _latest = null;
-  }
-}
-
 class RemoteContactDiscoveryRepository implements ContactDiscoveryRepository {
-  RemoteContactDiscoveryRepository({CloudHttpClient? httpClient, String? baseUrl})
-    : _client = httpClient ?? CloudHttpClient(),
-      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  const RemoteContactDiscoveryRepository({
+    required this.commandWriter,
+    required this.query,
+  });
 
-  final CloudHttpClient _client;
-  final String _baseUrl;
-
-  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
+  final ContactDiscoveryCommandWriter commandWriter;
+  final ContactDiscoveryQuery query;
 
   @override
   Future<ContactDiscoveryResultView> initiate(List<String> hashedPhones) async {
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.initiateContactDiscoveryPath),
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.initiateContactDiscovery,
-      ),
-      body: <String, dynamic>{'hashedPhones': hashedPhones},
+    final result = await commandWriter.initiateContactDiscovery(
+      InitiateContactDiscoveryCommand(hashedPhones: hashedPhones),
     );
-    return ContactDiscoveryResultView.fromMap(
-      CloudResponseDecoder.asObject(
-        resp,
-        context: UserRequestPageIds.initiateContactDiscovery,
-      ),
-    );
+    return ContactDiscoveryResultView.fromContract(result);
   }
 
   @override
   Future<ContactDiscoveryResultView?> getLatest() async {
     try {
-      final resp = await _client.getJson(
-        _uri(UserApiMetadata.getLatestContactDiscoveryPath),
-        headers: CloudRequestHeaders.forPage(
-          UserRequestPageIds.getLatestContactDiscovery,
-        ),
+      final result = await query.getLatestContactDiscovery(
+        const GetLatestContactDiscoveryQuery(),
       );
-      final obj = CloudResponseDecoder.asObject(
-        resp,
-        context: UserRequestPageIds.getLatestContactDiscovery,
-      );
-      if (obj.isEmpty || (obj['id']?.toString() ?? '').isEmpty) {
+      if (result.id.isEmpty) {
         return null;
       }
-      return ContactDiscoveryResultView.fromMap(obj);
+      return ContactDiscoveryResultView.fromContract(result);
     } on CloudException catch (e) {
       // 无历史记录时服务端返回 404，语义上等价于「尚未匹配」。
       if (e.type == CloudErrorType.notFound) {
@@ -156,11 +190,8 @@ class RemoteContactDiscoveryRepository implements ContactDiscoveryRepository {
 
   @override
   Future<void> dismiss(String id) async {
-    await _client.deleteJson(
-      _uri(UserApiMetadata.dismissContactDiscoveryPath(id: id)),
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.dismissContactDiscovery,
-      ),
+    await commandWriter.dismissContactDiscovery(
+      DismissContactDiscoveryCommand(discoveryId: id),
     );
   }
 }

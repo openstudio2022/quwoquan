@@ -2,13 +2,13 @@
 """
 lib/ui 内 `Map<String, dynamic>` 字面量出现次数预算（防回退）。
 
-预算文件：specs/gates/ui_map_literal_budget.json
+预算文件：quwoquan_ops/policies/gates/ui_map_literal_budget.json
   { "max_ui_map_string_dynamic_occurrences": <int> }
 
 当前计数 > 预算 → exit 1。
 
 更新预算（刻意放宽时）：
-  python3 scripts/verify_ui_map_literal_budget.py --write-baseline
+  python3 quwoquan_app/scripts/runtime/verify_ui_map_literal_budget.py --write-baseline
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-BUDGET_PATH = ROOT / "specs" / "gates" / "ui_map_literal_budget.json"
+BUDGET_PATH = ROOT / "quwoquan_ops" / "policies" / "gates" / "ui_map_literal_budget.json"
 UI_LIB = ROOT / "quwoquan_app" / "lib" / "ui"
 MAP_RE = re.compile(r"Map<String,\s*dynamic>")
 
@@ -40,7 +40,7 @@ def main() -> int:
     ap.add_argument(
         "--write-baseline",
         action="store_true",
-        help="Write specs/gates/ui_map_literal_budget.json from current count",
+        help="Write quwoquan_ops/policies/gates/ui_map_literal_budget.json from current count",
     )
     args = ap.parse_args()
 

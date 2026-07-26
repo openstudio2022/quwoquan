@@ -1,18 +1,135 @@
 from __future__ import annotations
 
+import importlib.util
+import json
 import unittest
 from pathlib import Path
+from unittest import mock
+
+from quwoquan_ops.cli.lib.compose_layout import gamma_compose_files
+from quwoquan_ops.cli.alpha.content_release_runtime import _compose_build_environment
+from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
 
 
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_FILE = ROOT / "quwoquan_ops" / "environments" / "compose" / "docker-compose.gamma-local.yaml"
+CADDYFILE = ROOT / "quwoquan_ops" / "environments" / "gamma" / "local" / "Caddyfile"
+CONTENT_GAMMA_COMPOSE_FILE = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "content-service"
+    / "environments"
+    / "gamma"
+    / "deploy"
+    / "compose.yaml"
+)
+OBJECT_STORAGE_LIFECYCLE_FILE = (
+    ROOT
+    / "quwoquan_ops"
+    / "environments"
+    / "compose"
+    / "object-storage-lifecycle.json"
+)
 START_SCRIPT = ROOT / "quwoquan_app" / "scripts" / "gamma" / "start_local_gamma_mirror.sh"
+T3_SCRIPT = ROOT / "quwoquan_app" / "scripts" / "gamma" / "run_local_gamma_t3.py"
+
+
+def service_compose(service: str) -> str:
+    return (
+        ROOT
+        / "quwoquan_service"
+        / "services"
+        / service
+        / "deploy"
+        / "compose.yaml"
+    ).read_text(encoding="utf-8")
 
 
 class LocalGammaContentServiceConfigTest(unittest.TestCase):
+    def test_alpha_content_release_derives_build_images_from_environment_policy(self) -> None:
+        target = get_target(load_environment_topology(), "alpha-local")
+        build_images = target["buildImages"]
+
+        self.assertEqual(
+            _compose_build_environment(),
+            {
+                "QWQ_COMPOSE_GO_BASE_IMAGE": build_images["goBaseImage"],
+                "QWQ_COMPOSE_ALPINE_BASE_IMAGE": build_images["alpineBaseImage"],
+            },
+        )
+
+    def test_t3_runtime_setup_applies_manifest_moment_channel_supplement(self) -> None:
+        spec = importlib.util.spec_from_file_location("local_gamma_t3_seed_test", T3_SCRIPT)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with (
+            mock.patch.object(
+                module,
+                "setup_comment_thread",
+                return_value={
+                    "status": "passed",
+                    "parentCommentId": "parent",
+                    "replyCommentId": "reply",
+                },
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_moment_channel",
+                return_value={"status": "passed"},
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_social_graph",
+                return_value={"status": "passed"},
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_object_cards",
+                return_value={"status": "passed"},
+            ),
+        ):
+            result = module.setup_runtime_fixtures(
+                "https://gamma.invalid",
+                "viewer",
+            )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["momentChannelSeed"], {"status": "passed"})
+
+        with (
+            mock.patch.object(
+                module,
+                "setup_comment_thread",
+                return_value={"status": "passed"},
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_moment_channel",
+                return_value={"status": "failed"},
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_social_graph",
+                return_value={"status": "passed"},
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_object_cards",
+                return_value={"status": "passed"},
+            ),
+        ):
+            failed = module.setup_runtime_fixtures(
+                "https://gamma.invalid",
+                "viewer",
+            )
+        self.assertEqual(failed["status"], "failed")
+
     def test_content_service_declares_all_required_runtime_bindings(self) -> None:
-        content = COMPOSE_FILE.read_text(encoding="utf-8")
-        service_block = content.split("  content-service:\n", 1)[1].split("\n  chat-service:\n", 1)[0]
+        service_block = service_compose("content-service")
 
         for binding in (
             "MONGO_URI:",
@@ -37,6 +154,220 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertIn("SSL_CERT_FILE: /etc/ssl/local-ca/object-storage-ca.crt", service_block)
         self.assertIn("/etc/ssl/local-ca/object-storage-ca.crt:ro", service_block)
 
+    def test_gamma_owns_content_elasticsearch_startup_dependency(self) -> None:
+        content = service_compose("content-service")
+        gamma_content_overlay = CONTENT_GAMMA_COMPOSE_FILE.read_text(encoding="utf-8")
+        search = service_compose("search-service")
+        entity = service_compose("entity-service")
+        circle = service_compose("circle-service")
+        expected = "elasticsearch:\n        condition: service_healthy"
+        self.assertNotIn(expected, content)
+        self.assertIn(expected, gamma_content_overlay)
+        for dependency, condition in (
+            ("mongodb", "service_healthy"),
+            ("mongo-init", "service_completed_successfully"),
+            ("object-storage-init", "service_completed_successfully"),
+            ("redis", "service_healthy"),
+            ("recommendation-service", "service_healthy"),
+            ("elasticsearch", "service_healthy"),
+        ):
+            self.assertIn(
+                f"{dependency}:\n        condition: {condition}",
+                gamma_content_overlay,
+            )
+        for block in (search, entity, circle):
+            self.assertIn(expected, block)
+
+    def test_gamma_runtime_applies_service_owned_content_overlay_after_base(self) -> None:
+        compose_files = gamma_compose_files(ROOT)
+        content_base = (
+            ROOT / "quwoquan_service/services/content-service/deploy/compose.yaml"
+        )
+
+        self.assertIn(CONTENT_GAMMA_COMPOSE_FILE, compose_files)
+        self.assertLess(
+            compose_files.index(content_base),
+            compose_files.index(CONTENT_GAMMA_COMPOSE_FILE),
+        )
+        start_script = START_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn(
+            "-path '*/environments/gamma/deploy/compose.yaml' -type f | sort",
+            start_script,
+        )
+
+    def test_content_release_does_not_wait_for_full_control_plane(self) -> None:
+        script = START_SCRIPT.read_text(encoding="utf-8")
+        platform_ready = script.split("gamma_platform_ops_ready() {", 1)[1].split(
+            "\n}\n\nwait_local_gamma_host_ready", 1
+        )[0]
+
+        self.assertIn('if [[ "$WORKLOAD" == "content-release" ]]; then', platform_ready)
+        self.assertIn("gamma_platform_ops_ready", script)
+
+    def test_user_service_compose_injects_identity_fixture_material(self) -> None:
+        service_block = service_compose("user-service")
+        for key in (
+            "IDENTITY_ONE_TAP_FIXTURE_ENDPOINT:",
+            "IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_ID:",
+            "IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET:",
+            "IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL:",
+            "IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL:",
+            "IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL:",
+        ):
+            self.assertIn(key, service_block)
+
+    def test_full_gamma_optional_services_have_nonproduction_runtime_prerequisites(self) -> None:
+        product_runtime_config = (
+            ROOT
+            / "quwoquan_service"
+            / "services"
+            / "product-ops-service"
+            / "cmd"
+            / "api"
+            / "runtime_config.go"
+        ).read_text(encoding="utf-8")
+        assistant_compose = service_compose("assistant-service")
+
+        self.assertIn('case "alpha", "beta", "gamma":', product_runtime_config)
+        self.assertIn("POSTGRES_DSN:", assistant_compose)
+        self.assertIn(
+            "postgres:\n        condition: service_healthy",
+            assistant_compose,
+        )
+
+    def test_gamma_fixture_assistant_has_no_production_provider_compose_overlay(self) -> None:
+        fixture_services = {
+            "assistant-service": "ext.llm.protocol_fixture",
+            "integration-service": "ext.map.protocol_fixture",
+            "rtc-service": "infra.livekit_protocol_fixture",
+            "user-service": "ext.auth.carrier_one_tap_protocol_fixture",
+        }
+        for service, adapter in fixture_services.items():
+            service_root = ROOT / "quwoquan_service" / "services" / service
+            gamma_config = (service_root / "environments" / "gamma" / "config.yaml").read_text(
+                encoding="utf-8"
+            )
+
+            self.assertIn(adapter, gamma_config)
+            self.assertFalse(
+                (service_root / "environments" / "gamma" / "deploy" / "compose.yaml").exists()
+            )
+
+    def test_full_gamma_edge_media_builds_rtc_from_its_packaged_provenance(self) -> None:
+        rtc_compose = service_compose("rtc-service")
+        realtime_compose = service_compose("realtime-gateway")
+        start_script = START_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('profiles: ["edge-media"]', rtc_compose)
+        self.assertIn("dockerfile: services/rtc-service/build/Dockerfile", rtc_compose)
+        self.assertIn("CONFIG_ROOT: /etc/qwq-config", rtc_compose)
+        self.assertIn("USER_SERVICE_BASE_URL: http://user-service:18081", rtc_compose)
+        self.assertIn(
+            "QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro",
+            rtc_compose,
+        )
+        for binding in (
+            "RTC_MEDIA_FIXTURE_CONNECTION_URL:",
+            "RTC_MEDIA_FIXTURE_API_KEY:",
+            "RTC_MEDIA_FIXTURE_API_SECRET:",
+            "AUTH_JWT_SECRET:",
+            "AUTH_JWT_ISSUER:",
+            "AUTH_JWT_AUDIENCE:",
+            "AUTH_JWT_TOKEN_VERSION:",
+            "AUTH_DEVICE_TICKET_SECRET:",
+            "AUTH_DEVICE_TICKET_ISSUER:",
+            "AUTH_DEVICE_TICKET_AUDIENCE:",
+            "AUTH_DEVICE_TICKET_TOKEN_VERSION:",
+        ):
+            self.assertIn(binding, rtc_compose)
+        self.assertIn('profiles: ["edge-media"]', realtime_compose)
+        self.assertIn(
+            "dockerfile: services/realtime-gateway/build/Dockerfile",
+            realtime_compose,
+        )
+        self.assertIn("compose_build_services+=(realtime-gateway)", start_script)
+        self.assertIn("compose_build_services+=(rtc-service)", start_script)
+        self.assertIn(
+            "commercial-observability,assistant-runtime,edge-media",
+            start_script,
+        )
+
+    def test_user_service_image_packs_shard_directory_contract(self) -> None:
+        dockerfile = (
+            ROOT
+            / "quwoquan_service"
+            / "services"
+            / "user-service"
+            / "build"
+            / "Dockerfile"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "contracts/account/user_account/shard_directory.yaml",
+            dockerfile,
+        )
+        self.assertIn(
+            "/app/contracts/account/user_account/shard_directory.yaml",
+            dockerfile,
+        )
+
+    def test_gamma_user_service_uses_one_internal_port_across_runtime_paths(self) -> None:
+        caddy = CADDYFILE.read_text(encoding="utf-8")
+        start_script = START_SCRIPT.read_text(encoding="utf-8")
+        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+
+        self.assertEqual(caddy.count("reverse_proxy user-service:18081"), 2)
+        self.assertNotIn("reverse_proxy user-service:18082", caddy)
+        for expected in (
+            "USER_SERVICE_ADDR=:18081",
+            'LOCAL_GAMMA_USER_PORT:-19210}:18081',
+            "http://127.0.0.1:18081/healthz",
+            "NOTIFICATION_USER_BASE_URL=http://user-service:18081",
+            "-e IDENTITY_ONE_TAP_FIXTURE_ENDPOINT",
+            "-e IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL",
+        ):
+            self.assertIn(expected, start_script)
+        self.assertIn("../gamma/local/Caddyfile", compose)
+        self.assertNotIn("../local-gamma/Caddyfile", compose)
+
+    def test_skip_build_fails_before_compose_for_missing_provenance_image(self) -> None:
+        start_script = START_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("docker image inspect", start_script)
+        self.assertIn("GATE_BLOCK: packaged image is unavailable", start_script)
+        self.assertIn('if [[ "$skip_build" == "1" ]]', start_script)
+
+    def test_temporary_upload_lifecycle_is_bootstrapped_before_content_service(self) -> None:
+        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        init_block = compose.split("  object-storage-init:\n", 1)[1].split(
+            "\n  elasticsearch:\n", 1
+        )[0]
+        content_service_block = service_compose("content-service")
+        lifecycle = json.loads(OBJECT_STORAGE_LIFECYCLE_FILE.read_text(encoding="utf-8"))
+
+        self.assertIn(
+            "./object-storage-lifecycle.json:/etc/qwq-object-storage/lifecycle.json:ro",
+            init_block,
+        )
+        self.assertIn(
+            "mc ilm rule import \"qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}\" < "
+            "/etc/qwq-object-storage/lifecycle.json",
+            init_block,
+        )
+        self.assertIn("object-storage-init:\n        condition: service_completed_successfully", content_service_block)
+        self.assertEqual(
+            lifecycle,
+            {
+                "Rules": [
+                    {
+                        "ID": "expire-content-temporary-uploads-after-24h",
+                        "Status": "Enabled",
+                        "Filter": {"Prefix": "uploads/"},
+                        "Expiration": {"Days": 1},
+                    }
+                ]
+            },
+        )
+
     def test_local_single_node_search_is_not_blocked_by_colima_build_cache_watermark(self) -> None:
         content = COMPOSE_FILE.read_text(encoding="utf-8")
         service_block = content.split("  elasticsearch:\n", 1)[1].split(
@@ -49,13 +380,21 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
         self.assertIn("local-gamma-es:/usr/share/elasticsearch/data", service_block)
 
-    def test_user_service_uses_local_acceptance_identity_without_fake_provider_credentials(self) -> None:
-        content = COMPOSE_FILE.read_text(encoding="utf-8")
-        service_block = content.split("  user-service:\n", 1)[1].split(
-            "\n  assistant-service:\n", 1
-        )[0]
+    def test_user_service_uses_local_acceptance_identity_and_protocol_substitutes(self) -> None:
+        service_block = service_compose("user-service")
 
         self.assertIn("USER_AUTH_EXTERNAL_PROVIDER_MODE: anonymous_only", service_block)
+        for credential in (
+            "IDENTITY_ONE_TAP_FIXTURE_ENDPOINT",
+            "IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_ID",
+            "IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET",
+            "IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL",
+            "IDENTITY_SOCIAL_FIXTURE_WECHAT_USER_INFO_URL",
+            "IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL",
+            "IDENTITY_SOCIAL_FIXTURE_ALIPAY_USER_INFO_URL",
+            "IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL",
+        ):
+            self.assertIn(f"{credential}:", service_block)
         for credential in (
             "WECHAT_OAUTH_APP_ID",
             "WECHAT_OAUTH_APP_SECRET",
@@ -69,11 +408,32 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         ):
             self.assertNotIn(f"{credential}:", service_block)
 
+    def test_assistant_service_uses_generated_binding_without_runtime_selector(self) -> None:
+        service_block = service_compose("assistant-service")
+        start_script = START_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'ASSISTANT_MODEL_API_KEY: "${ASSISTANT_MODEL_API_KEY:-}"',
+            service_block,
+        )
+        for binding in (
+            "ASSISTANT_MODEL_FIXTURE_ENDPOINT:",
+            "ASSISTANT_PUBLIC_SEARCH_FIXTURE_URL:",
+            "ASSISTANT_WEATHER_FIXTURE_GEOCODING_URL:",
+            "ASSISTANT_WEATHER_FIXTURE_FORECAST_URL:",
+            "ASSISTANT_FINANCE_FIXTURE_CHART_URL:",
+        ):
+            self.assertIn(binding, service_block)
+        for selector in (
+            "ASSISTANT_MODEL_PROVIDER",
+            "ASSISTANT_SEARCH_PROVIDER",
+            "ALLOW_DETERMINISTIC_BETA",
+        ):
+            self.assertNotIn(selector, service_block)
+            self.assertNotIn(selector, start_script)
+
     def test_entity_service_receives_the_shared_access_token_contract(self) -> None:
-        compose = COMPOSE_FILE.read_text(encoding="utf-8")
-        service_block = compose.split("  entity-service:\n", 1)[1].split(
-            "\n  circle-service:\n", 1
-        )[0]
+        service_block = service_compose("entity-service")
         start_script = START_SCRIPT.read_text(encoding="utf-8")
 
         for key in (
@@ -89,22 +449,15 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
                 start_script,
             )
 
-    def test_product_ops_receives_real_sls_deployment_secret_bindings(self) -> None:
-        compose = COMPOSE_FILE.read_text(encoding="utf-8")
-        service_block = compose.split("  product-ops-service:\n", 1)[1].split(
-            "\n  platform-ops-service:\n", 1
-        )[0]
+    def test_product_ops_receives_local_elasticsearch_endpoint(self) -> None:
+        service_block = service_compose("product-ops-service")
         start_script = START_SCRIPT.read_text(encoding="utf-8")
 
-        for key in (
-            "PRODUCT_OPS_SLS_REGION",
-            "PRODUCT_OPS_SLS_ENDPOINT",
-            "PRODUCT_OPS_SLS_PROJECT",
-            "ALIBABA_CLOUD_ACCESS_KEY_ID",
-            "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
-        ):
-            self.assertIn(f'{key}: "${{{key}:-}}"', service_block)
-            self.assertIn(f"{key} is required", start_script)
+        key = "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"
+        self.assertIn(f'{key}: "${{{key}:-}}"', service_block)
+        self.assertIn(f"-e {key}", start_script)
+        self.assertNotIn("PRODUCT_OPS_LOCAL_LOG_SINK", service_block)
+        self.assertNotIn("PRODUCT_OPS_LOCAL_LOG_SINK", start_script)
 
     def test_premium_pool_proof_uses_a_run_scoped_actor_without_erasing_exposure(self) -> None:
         source = START_SCRIPT.read_text(encoding="utf-8")
@@ -139,6 +492,13 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
         self.assertNotIn("compose_up_failed", source)
         self.assertNotIn("ensure_docker_gamma_proxy_started || true\nfi", source)
+
+    def test_gamma_config_root_uses_flat_autonomous_service_packages(self) -> None:
+        source = START_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('config_file="${package_dir}/config/config.yaml"', source)
+        self.assertIn('cp "$config_file" "$out/${service}.yaml"', source)
+        self.assertIn('provenance.get("configVersion")', source)
+        self.assertNotIn("releases/config", source)
 
 
 if __name__ == "__main__":

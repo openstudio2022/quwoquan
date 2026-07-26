@@ -26,9 +26,8 @@ from governance.coverage.entity_extract import (
 )
 
 ENTITY_LINK_RE = re.compile(r"\[([^\]\n]+)\]\(/entity/([^)\s]+)\)")
-# 普通 markdown 链接 / 图片（含 asset://、http、/tag/ 等），标注时需整体跳过其文本区。
-_MD_LINK_RE = re.compile(r"!?\[[^\]\n]*\]\([^)\n]*\)")
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n", re.S)
+_URI_TOKEN_RE = re.compile(r"(?:asset|https?)://[^\s<>\")\]]+")
 
 
 def _iter_markdown_links(text: str) -> list[tuple[int, int, str, str]]:
@@ -102,11 +101,10 @@ def _split_frontmatter(article: str) -> tuple[str, str]:
     return "", article
 
 
-def _link_spans(body: str) -> list[tuple[int, int]]:
-    spans = [(start, end) for start, end, _label, _href in _iter_markdown_links(body)]
-    # Keep the legacy regex as a safety net for malformed non-entity links.
-    spans.extend((m.start(), m.end()) for m in _MD_LINK_RE.finditer(body))
-    return sorted(set(spans))
+def _protected_spans(body: str) -> list[tuple[int, int]]:
+    spans = [start_end[:2] for start_end in _iter_markdown_links(body)]
+    spans.extend(match.span() for match in _URI_TOKEN_RE.finditer(body))
+    return spans
 
 
 def _entity_name_from_ref(ref: str) -> str:
@@ -204,7 +202,7 @@ def annotate_inline(article: str, dictionary: Mapping[str, str]) -> tuple[str, s
         ref = dictionary[name]
         if ref in annotated:
             continue
-        spans = _link_spans(body)
+        spans = _protected_spans(body)
         for match in re.finditer(re.escape(name), body):
             if any(start <= match.start() < end for start, end in spans):
                 continue

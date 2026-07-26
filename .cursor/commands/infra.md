@@ -32,12 +32,12 @@ Step 3: 规划（/infra-plan --from audit）
 Step 4: 输出结论与下一步建议
 ```
 
-执行前先读取 `docs/agent_context_contract.md` 与 `docs/agent_command_simulation_matrix.md`，明确环境任务的 Spec Entry、Pre-work Reflection、禁止事项和出口证据。
+执行前先读取根 `AGENTS.md` 与当前命令，明确环境任务的 Spec Entry、Pre-work Reflection、禁止事项和出口证据。
 
 环境验证、打包、健康检查、巡检和修复统一经 `stackctl`：
 
 ```bash
-python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier all
+python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile <smoke|integration|release>
 python3 quwoquan_ops/cli/stackctl.py health --target <target> --scope full
 python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind all
 ```
@@ -185,4 +185,4 @@ python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind all
 └── /infra-dev     (实施开发)
 ```
 
-协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。
+协议补充：执行前按 `根 AGENTS.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

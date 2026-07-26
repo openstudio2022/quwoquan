@@ -24,7 +24,7 @@ class MediaDeliveryManifestParityTest(unittest.TestCase):
         self.assertNotEqual(public_bases["mediaImage"], public_bases["mediaUpload"])
 
     def test_stackctl_gamma_page_smoke_passes_four_media_bases(self) -> None:
-        command = stackctl._environment_page_smoke_tier_command(
+        command = stackctl._environment_page_smoke_profile_command(
             "gamma",
             "gamma-local",
             Path("/tmp/gamma-media-parity"),

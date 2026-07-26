@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -370,10 +369,7 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
       resource.loadingOverlayReady = true;
       _syncPresentation(resource);
     });
-    final candidates = _processedCoverCandidates(
-      imageUrl,
-      math.max(750, pageSize.width),
-    );
+    final candidates = _processedCoverCandidates(imageUrl);
     unawaited(
       _loadPage(
         context: context,
@@ -541,17 +537,14 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
     );
   }
 
-  List<String> _processedCoverCandidates(String imageUrl, double width) {
+  List<String> _processedCoverCandidates(String imageUrl) {
     final processed = <String>[];
     for (final candidate in resolveContentMediaUrlCandidates(imageUrl)) {
       final normalized = candidate.trim();
       if (normalized.isEmpty) {
         continue;
       }
-      final coverUrl = CdnImageUrlBuilder.cover(
-        normalized,
-        width: math.max(1, width.round()),
-      );
+      final coverUrl = CdnImageUrlBuilder.cover(normalized);
       if (!processed.contains(coverUrl)) {
         processed.add(coverUrl);
       }

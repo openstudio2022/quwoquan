@@ -8,7 +8,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 ///
 /// 产品规则：更新时间与创作时间相等或更早，只展示创作时间；更新时间更晚，才同时
 /// 展示「创作 + 更新」。容忍秒级抖动（差值 <= 1s 视为未更新），由 [_isUpdated]
-/// 统一判定，避免端各处重复实现产生口径漂移（13-coding-discipline R25）。
+/// 统一判定，避免各处重复实现产生口径漂移。
 class ContentTimeLabel {
   const ContentTimeLabel._();
 

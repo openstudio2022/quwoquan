@@ -1,4 +1,6 @@
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
@@ -33,16 +35,23 @@ void main() {
 
       final prepared = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
-        fileStorageGateway: fileStorage,
         state: state,
-        uploadObject:
+        mediaPreparationIdentity: 'video-cover-payload-draft',
+        sourceReader: _MemoryContentMediaSourceReader(fileStorage.bytesByPath),
+        uploadStream:
             (
               uri,
               bytes, {
+              required contentLength,
               required contentType,
               required expectedSha256,
+              abortTrigger,
             }) async {
-              uploads.add(_UploadCall(uri, bytes, contentType));
+              final uploadedBytes = await bytes
+                  .expand((chunk) => chunk)
+                  .toList();
+              expect(uploadedBytes.length, contentLength);
+              uploads.add(_UploadCall(uri, uploadedBytes, contentType));
             },
       );
 
@@ -67,16 +76,47 @@ void main() {
       expect(prepared.payload['width'], 1080);
       expect(prepared.payload['height'], 1920);
       expect(prepared.payload.values.toString(), isNot(contains('/tmp/')));
-      final mediaItems =
-          prepared.payload['mediaItems'] as List<Map<String, Object?>>;
-      expect(mediaItems.single['mediaId'], 'video_asset_1');
-      expect(mediaItems.single['coverAssetId'], 'image_asset_2');
-      expect(mediaItems.single, isNot(contains('url')));
-      expect(mediaItems.single, isNot(contains('coverUrl')));
+      expect(prepared.payload, isNot(contains('mediaItems')));
+      expect(media.selectedManualCovers, hasLength(1));
+      expect(media.selectedManualCovers.single.mediaId, 'video_asset_1');
+      expect(media.selectedManualCovers.single.coverAssetId, 'image_asset_2');
+      expect(media.selectedAutoCoverMediaIds, isEmpty);
       expect(
         prepared.payload.values.toString(),
         isNot(contains('cdn.quwoquan.test')),
       );
+    });
+
+    test('首次发布媒体准备意图不持久化本地路径或未生成的媒体引用', () {
+      final state =
+          CreateEditorState.initial(
+            editorKind: CreateEditorKind.media,
+          ).copyWith(
+            mediaKind: CreateMediaKind.video,
+            videoPath: '/tmp/clip.mp4',
+            videoThumbnail: '/tmp/cover.jpg',
+            videoDurationMs: 12345,
+            videoCoverTimeMs: 3200,
+            videoCoverStrategy: 'manual',
+            videoWidth: 1080,
+            videoHeight: 1920,
+            title: '视频作品',
+          );
+
+      final preparation = buildPostPublicationMediaPreparationPayload(state);
+
+      expect(preparation.mediaAssetIds, isEmpty);
+      expect(preparation.payload, isNot(contains('mediaUrls')));
+      expect(preparation.payload, isNot(contains('videoUrl')));
+      expect(preparation.payload, isNot(contains('thumbnailUrl')));
+      expect(preparation.payload, isNot(contains('coverUrl')));
+      expect(preparation.payload, isNot(contains('mediaItems')));
+      expect(preparation.payload.values.toString(), isNot(contains('/tmp/')));
+      expect(preparation.payload['coverStrategy'], 'manual');
+      expect(preparation.payload['coverFrameTimeMs'], 3200);
+      expect(preparation.payload['durationMs'], 12345);
+      expect(preparation.payload['width'], 1080);
+      expect(preparation.payload['height'], 1920);
     });
 
     test('封面上传失败会 abort 封面 session 且不返回半成品 payload', () async {
@@ -98,18 +138,24 @@ void main() {
       await expectLater(
         buildPostPublicationPayloadWithRemoteMedia(
           media: media,
-          fileStorageGateway: fileStorage,
           state: state,
-          uploadObject:
+          mediaPreparationIdentity: 'video-cover-failure-draft',
+          sourceReader: _MemoryContentMediaSourceReader(
+            fileStorage.bytesByPath,
+          ),
+          uploadStream:
               (
                 uri,
                 bytes, {
+                required contentLength,
                 required contentType,
                 required expectedSha256,
+                abortTrigger,
               }) async {
                 if (contentType == 'image/jpeg') {
                   throw StateError('cover upload failed');
                 }
+                await bytes.drain<void>();
               },
         ),
         throwsStateError,
@@ -127,6 +173,22 @@ class _UploadCall {
   final Uri uri;
   final List<int> bytes;
   final String contentType;
+}
+
+class _MemoryContentMediaSourceReader implements ContentMediaSourceReader {
+  const _MemoryContentMediaSourceReader(this.bytesByPath);
+
+  final Map<String, List<int>> bytesByPath;
+
+  @override
+  Future<PreparedContentMediaSource> prepare(String localPath) async {
+    final bytes = bytesByPath[localPath]!;
+    return PreparedContentMediaSource(
+      fileSize: bytes.length,
+      sha256Digest: sha256.convert(bytes).toString(),
+      openRead: () => Stream<List<int>>.value(bytes),
+    );
+  }
 }
 
 class _MemoryFileStorageGateway implements FileStorageGateway {

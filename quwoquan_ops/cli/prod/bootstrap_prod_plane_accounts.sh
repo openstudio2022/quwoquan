@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# 一次性 bootstrap：在 prod ECS 上按 quwoquan_ops/environments/prod_plane_access_isolation.yaml 创建
+# 一次性 bootstrap：在 prod ECS 上按 quwoquan_ops/environments/prod/access-isolation.yaml 创建
 # 非 root 中转账号 prod-ops 与四平面 rootless Linux service 账号（去 root，最小权限）。
 #
 # 设计原则（与访问隔离映射单一真相源一致）：
-#   - 账号/路径全部来自 prod_plane_access_isolation.yaml，脚本不内嵌第二套账号清单。
+#   - 账号/路径全部来自 prod/access-isolation.yaml，脚本不内嵌第二套账号清单。
 #   - rootless podman：为每个读写平面账号 enable-linger，独立 home / compose 项目根 / credentials(0700)。
 #   - data 平面：只读审计账号，不建 compose 根、不授予写。
 #   - 幂等：已存在的账号/目录跳过；可重复执行。
@@ -21,7 +21,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 
 DRY_RUN="${DRY_RUN:-true}"
-ACCESS_MANIFEST="quwoquan_ops/environments/prod_plane_access_isolation.yaml"
+ACCESS_MANIFEST="quwoquan_ops/environments/prod/access-isolation.yaml"
 
 if [[ ! -f "$ACCESS_MANIFEST" ]]; then
   echo "FAIL: 缺少访问隔离映射 $ACCESS_MANIFEST" >&2

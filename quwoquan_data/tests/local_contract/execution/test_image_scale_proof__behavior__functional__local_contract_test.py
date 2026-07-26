@@ -45,12 +45,12 @@ def _make_task(
     image_count_policy: str = "score_bonus",
     minimum_images_per_target: int = 0,
 ) -> str:
-    execution_id = f"20260711--travel-image-scale-proof--cn-zhejiang--canary-{next(_SEQUENCE):03d}"
+    execution_id = f"20260711--travel-image-scale-proof--test-region-a--pilot-{next(_SEQUENCE):03d}"
     spec = build_execution_spec(
         execution_id=execution_id,
         name=name,
         title=name,
-        region="中国/浙江省",
+        region="中国/test-region-a",
         category="景区",
         targets=[{"entityType": "地点/景区", "name": target} for target in targets],
         created_by="test",
@@ -108,12 +108,12 @@ def _write_image_plan(execution_id: str, entity: str, count: int) -> None:
 
 
 def _make_homepage_task(name: str, targets: list[str]) -> str:
-    execution_id = f"20260711--travel-homepage-scale-proof--cn-zhejiang--canary-{next(_SEQUENCE):03d}"
+    execution_id = f"20260711--travel-homepage-scale-proof--test-region-a--pilot-{next(_SEQUENCE):03d}"
     spec = build_execution_spec(
         execution_id=execution_id,
         name=name,
         title=name,
-        region="中国/浙江省",
+        region="中国/test-region-a",
         category="景区",
         targets=[{"entityType": "地点/景区", "name": target} for target in targets],
         created_by="test",
@@ -208,6 +208,31 @@ def test_open_license_scale_proof_scores_below_desired_without_failing_soft_poli
     assert report["averageImageCountScore"] == 0.75
 
 
+def test_media_scale_proof_audits_incomplete_travel_rights_without_filtering():
+    execution_id = _make_task("旅行图片授权仅审计", ["景区甲"])
+    _write_image_plan(execution_id, "景区甲", 2)
+    plan_path = (
+        resolve_entity_object_dir(execution_id, "景区甲", etype_hint="地点/景区")
+        / STAGE_DOWNLOAD
+        / "image_source_plan.json"
+    )
+    plan = read_json(plan_path)
+    for collection in plan["payload"]["collections"]:
+        for field in ("license", "termsUrl", "authorizationProof"):
+            collection.pop(field, None)
+        for image in collection["images"]:
+            for field in ("license", "termsUrl", "authorizationProof"):
+                image.pop(field, None)
+    write_json(plan_path, plan)
+
+    report = build_open_license_scale_proof(execution_id)
+
+    assert report["passed"] is True
+    assert report["proof"]["publishableImageAssets"] == 2
+    assert report["rightsAuditIssueCount"] > 0
+    assert report["rightsAuditIssueSample"]
+
+
 def test_open_license_scale_proof_fails_when_hard_quota_entity_lacks_required_images():
     execution_id = _make_task(
         "开放许可证明失败",
@@ -226,17 +251,17 @@ def test_open_license_scale_proof_fails_when_hard_quota_entity_lacks_required_im
 
 
 def test_homepage_scale_proof_accepts_images_from_the_same_page_source():
-    execution_id = _make_homepage_task("主页媒体规模证明", ["普陀山", "东钱湖"])
-    _write_homepage_plan(execution_id, "普陀山", 17)
-    _write_homepage_plan(execution_id, "东钱湖", 5)
+    execution_id = _make_homepage_task("主页媒体规模证明", ["测试实体甲", "测试实体乙"])
+    _write_homepage_plan(execution_id, "测试实体甲", 17)
+    _write_homepage_plan(execution_id, "测试实体乙", 5)
 
     report = build_open_license_scale_proof(execution_id)
 
     assert report["passed"] is True
     assert report["contentType"] == "homepage"
-    assert report["imageCountPolicy"] == "hard_quota"
-    assert report["desiredPublishableImagesPerTarget"] == 1
-    assert report["minimumPublishableImagesPerTarget"] == 1
+    assert report["imageCountPolicy"] == "score_bonus"
+    assert report["desiredPublishableImagesPerTarget"] == 0
+    assert report["minimumPublishableImagesPerTarget"] == 0
     assert report["proof"]["preScreenedEntityCount"] == 2
     assert report["proof"]["publishableImageAssets"] == 2
     assert report["failedEntitySample"] == []
@@ -244,3 +269,60 @@ def test_homepage_scale_proof_accepts_images_from_the_same_page_source():
         row["publishableSourceCollections"] == 1
         for row in report["entities"]
     )
+
+
+def test_scale_proof_reads_each_target_from_its_declared_entity_type():
+    execution_id = f"20260711--travel-image-scale-proof--test-region-a--pilot-{next(_SEQUENCE):03d}"
+    first_name = "测试景区甲"
+    second_name = "测试博物馆乙"
+    spec = build_execution_spec(
+        execution_id=execution_id,
+        name="异构目标媒体规模证明",
+        title="异构目标媒体规模证明",
+        region="中国/test-region-a",
+        category="景区",
+        targets=[
+            {"entityType": "地点/景区", "name": first_name},
+            {"entityType": "地点/博物馆", "name": second_name},
+        ],
+        created_by="test",
+        entity_articles_per_target=0,
+        entity_homepages_per_target=0,
+        image_works_per_target=1,
+        video_works_per_target=0,
+        target_entity_count=2,
+    )
+    spec["status"] = "active"
+    store.save_spec(spec)
+    store.save_progress(store.init_progress(execution_id))
+    _write_image_plan(execution_id, first_name, 1)
+    museum_download = (
+        resolve_entity_object_dir(execution_id, second_name, etype_hint="地点/博物馆")
+        / STAGE_DOWNLOAD
+    )
+    write_json(
+        museum_download / "image_source_plan.json",
+        {
+            "payload": {
+                "collections": [
+                    {
+                        "sourceCollectionId": "commons:测试博物馆乙:1",
+                        "images": [
+                            {
+                                "url": "https://upload.wikimedia.org/测试博物馆乙_1.jpg",
+                                "sourceCollectionId": "commons:测试博物馆乙:1",
+                                "researchLane": "image",
+                                "width": 1200,
+                                "height": 800,
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+    )
+
+    report = build_open_license_scale_proof(execution_id)
+
+    assert report["proof"]["scoredEntityCount"] == 2
+    assert report["proof"]["publishableImageAssets"] == 2

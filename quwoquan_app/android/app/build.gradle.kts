@@ -10,6 +10,45 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val googleServicesConfig = projectDir.resolve("google-services.json")
+val releaseKeystorePath = System.getenv("QWQ_ANDROID_RELEASE_KEYSTORE_PATH")?.trim().orEmpty()
+val releaseKeystorePassword = System.getenv("QWQ_ANDROID_RELEASE_STORE_PASSWORD")?.trim().orEmpty()
+val releaseKeyAlias = System.getenv("QWQ_ANDROID_RELEASE_KEY_ALIAS")?.trim().orEmpty()
+val releaseKeyPassword = System.getenv("QWQ_ANDROID_RELEASE_KEY_PASSWORD")?.trim().orEmpty()
+val releaseSigningConfigured =
+    releaseKeystorePath.isNotEmpty() &&
+        releaseKeystorePassword.isNotEmpty() &&
+        releaseKeyAlias.isNotEmpty() &&
+        releaseKeyPassword.isNotEmpty() &&
+        File(releaseKeystorePath).isFile
+if (googleServicesConfig.isFile) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.lifecycle(
+        "[rtc] google-services.json is absent; Firebase incoming calls remain fail-closed.",
+    )
+}
+gradle.taskGraph.whenReady {
+    val shipsProductionBinary =
+        allTasks.any { task ->
+            task.project == project &&
+                task.name.contains("Release", ignoreCase = true)
+        }
+    if (shipsProductionBinary && !googleServicesConfig.isFile) {
+        throw GradleException(
+            "production Android build requires android/app/google-services.json; " +
+                "inject the protected Firebase config before building and remove it afterwards",
+        )
+    }
+    if (shipsProductionBinary && !releaseSigningConfigured) {
+        throw GradleException(
+            "production Android release requires QWQ_ANDROID_RELEASE_KEYSTORE_PATH, " +
+                "QWQ_ANDROID_RELEASE_STORE_PASSWORD, QWQ_ANDROID_RELEASE_KEY_ALIAS and " +
+                "QWQ_ANDROID_RELEASE_KEY_PASSWORD; debug signing is forbidden",
+        )
+    }
+}
+
 val repoRootDir = rootProject.projectDir.parentFile.parentFile
 val localEnvDebugPlaceholderCert =
     projectDir.resolve("src/debug-res-templates/local_env_debug_root_placeholder.crt")
@@ -24,11 +63,21 @@ fun escapedBuildConfigString(name: String): String {
     val value = System.getenv(name)?.trim().orEmpty()
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 }
+fun escapedBuildConfigString(name: String, defaultValue: String): String {
+    val value = System.getenv(name)?.trim().takeUnless { it.isNullOrEmpty() } ?: defaultValue
+    return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+}
 val deploymentWorkRoot =
     System.getenv("QWQ_DEPLOY_WORK_ROOT")?.takeIf { it.isNotBlank() }
         ?: System.getProperty("user.home") + "/.cache/quwoquan/deploy"
 val alphaLocalCaCert =
     File(deploymentWorkRoot, "alpha-local/certificates/root.crt")
+val alphaLocalObjectStorageCaCert =
+    File(deploymentWorkRoot, "alpha-local/certificates/object-storage/ca.crt")
+val alphaLocalAppTrustBundle =
+    File(deploymentWorkRoot, "alpha-local/certificates/app-local-trust-bundle.crt")
+val localTargetTlsScript =
+    repoRootDir.resolve("quwoquan_ops/cli/lib/local_target_tls.py")
 val alphaLocalStackScript =
     repoRootDir.resolve("quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh")
 val alphaLocalAdbReversePorts = listOf("17000", "17010", "17100")
@@ -139,6 +188,16 @@ android {
             "QWQ_ALIYUN_PNVS_SECRET_INFO",
             escapedBuildConfigString("QWQ_ALIYUN_PNVS_SECRET_INFO"),
         )
+        buildConfigField(
+            "String",
+            "QWQ_RECOVERY_BASE_URL",
+            escapedBuildConfigString("QWQ_APP_RECOVERY_BASE_URL", "https://api.quwoquan.com"),
+        )
+        buildConfigField(
+            "String",
+            "QWQ_PUBLIC_WEB_URL",
+            escapedBuildConfigString("QWQ_APP_PUBLIC_WEB_URL", "https://quwoquan.com"),
+        )
         // Patrol native 接线：让 Android Test Orchestrator 能发现并执行 Dart 测试。
         testInstrumentationRunner = "pl.leancode.patrol.PatrolJUnitRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
@@ -154,9 +213,24 @@ android {
         execution = "ANDROIDX_TEST_ORCHESTRATOR"
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("officialRelease") {
+                storeFile = File(releaseKeystorePath)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("officialRelease")
         }
     }
 
@@ -374,6 +448,8 @@ val prepareLocalEnvDebugRes by tasks.registering {
     val requiredProvider = providers.environmentVariable(localEnvCaRequiredEnvVar).orElse("")
     inputs.file(localEnvDebugPlaceholderCert)
     inputs.file(alphaLocalCaCert).optional()
+    inputs.file(alphaLocalObjectStorageCaCert).optional()
+    inputs.file(localTargetTlsScript)
     inputs.property("localEnvCaPath", envProvider)
     inputs.property("localEnvCaRequired", requiredProvider)
     outputs.dir(generatedLocalEnvDebugResDir)
@@ -401,7 +477,18 @@ val prepareLocalEnvDebugRes by tasks.registering {
             if (configuredPath.isNotEmpty()) {
                 file(configuredPath)
             } else if (alphaLocalCaCert.isFile) {
-                alphaLocalCaCert
+                exec {
+                    workingDir = repoRootDir
+                    environment("PYTHONDONTWRITEBYTECODE", "1")
+                    commandLine(
+                        "python3",
+                        localTargetTlsScript.absolutePath,
+                        "materialize-app-trust-bundle",
+                        "--target",
+                        "alpha-local",
+                    )
+                }
+                alphaLocalAppTrustBundle
             } else {
                 localEnvDebugPlaceholderCert
             }
@@ -434,8 +521,12 @@ val verifyAndroidLocalAlphaCaSource by tasks.registering {
                 .dir("raw")
                 .file("local_env_debug_root.crt")
                 .asFile
-        check(packagedRoot.isFile && packagedRoot.readBytes().contentEquals(alphaLocalCaCert.readBytes())) {
-            "Android packaged local_env_debug_root.crt must exactly equal the alpha TLS proxy signing root"
+        check(
+            alphaLocalAppTrustBundle.isFile &&
+                packagedRoot.isFile &&
+                packagedRoot.readBytes().contentEquals(alphaLocalAppTrustBundle.readBytes())
+        ) {
+            "Android packaged local_env_debug_root.crt must exactly equal the alpha local trust bundle"
         }
     }
 }

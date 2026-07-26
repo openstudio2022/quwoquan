@@ -3,51 +3,19 @@ package load
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
+	"path"
+	"sort"
 	"strings"
 
 	"quwoquan_service/internal/metadata/ast"
 )
 
-type businessObjectMapWire struct {
-	Domain          string                           `json:"domain"`
-	DecisionRefs    []string                         `json:"decision_refs"`
-	BoundedContexts []boundedContextRegistrationWire `json:"bounded_contexts"`
-	Objects         []businessObjectBoundaryWire     `json:"objects"`
-}
-
-type businessObjectBoundaryWire struct {
-	CanonicalObject      string                   `json:"canonical_object"`
-	BoundedContext       string                   `json:"bounded_context"`
-	ObjectKind           ast.ObjectKind           `json:"object_kind"`
-	AggregateOwner       *string                  `json:"aggregate_owner"`
-	Identity             objectIdentityWire       `json:"identity"`
-	InvariantRefs        []string                 `json:"invariant_refs"`
-	MemberBounds         map[string]int           `json:"member_bounds"`
-	StorageRole          string                   `json:"storage_role"`
-	StorageBackend       *string                  `json:"storage_backend"`
-	MutationEntrypoints  []string                 `json:"mutation_entrypoints"`
-	EventConsumers       []string                 `json:"event_consumers"`
-	LifecycleRefs        []string                 `json:"lifecycle_refs"`
-	SourceDocument       *string                  `json:"source_document"`
-	SourceEntity         *string                  `json:"source_entity"`
-	Access               objectAccessPolicyWire   `json:"access"`
-	Relationships        []objectRelationshipWire `json:"relationships"`
-	FieldRoles           map[string][]string      `json:"field_roles"`
-	LocalIdentityReasons map[string]string        `json:"local_identity_reasons"`
-}
-
-type objectIdentityWire struct {
-	Fields        []string `json:"fields"`
-	VersionSource string   `json:"version_source"`
-	VersionField  *string  `json:"version_field"`
-}
-
-type boundedContextRegistrationWire struct {
-	ContextID    string                  `json:"context_id"`
-	Name         string                  `json:"name"`
-	Role         string                  `json:"role"`
-	AccessPolicy contextAccessPolicyWire `json:"access_policy"`
+// businessObjectMaps remains a ContractGraph projection for existing validators
+// and generators. It is derived exclusively from object-first packets; there is
+// no writable business_object_map.yaml registry.
+type contextDocument struct {
+	Role   string                  `json:"role"`
+	Access contextAccessPolicyWire `json:"access"`
 }
 
 type contextAccessPolicyWire struct {
@@ -55,6 +23,22 @@ type contextAccessPolicyWire struct {
 	Queries      string `json:"queries"`
 	ChildObjects string `json:"child_objects"`
 	CrossContext string `json:"cross_context"`
+}
+
+type objectDocument struct {
+	Kind                 ast.ObjectKind           `json:"kind"`
+	Identity             objectIdentityWire       `json:"identity"`
+	Access               objectAccessPolicyWire   `json:"access"`
+	Relationships        []objectRelationshipWire `json:"relationships"`
+	BusinessRules        []any                    `json:"business_rules"`
+	Lifecycle            any                      `json:"lifecycle"`
+	LocalIdentityReasons map[string]string        `json:"local_identity_reasons"`
+}
+
+type objectIdentityWire struct {
+	Fields        []string `json:"fields"`
+	VersionSource string   `json:"version_source"`
+	VersionField  string   `json:"version_field"`
 }
 
 type objectAccessPolicyWire struct {
@@ -75,173 +59,268 @@ type objectRelationshipWire struct {
 	OnDelete        string   `json:"on_delete"`
 }
 
-func loadBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
+type fieldsPacket struct {
+	Fields []fieldDeclaration `json:"fields"`
+}
+
+type fieldDeclaration struct {
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	Reference bool   `json:"reference"`
+}
+
+type storageDocument struct {
+	Backend string `json:"backend"`
+	Role    string `json:"role"`
+}
+
+type eventsDocument struct {
+	Subscriptions []string `json:"subscriptions"`
+}
+
+func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
+	documents := make(map[string]ast.SourceDocument, len(catalog.Documents))
 	for _, document := range catalog.Documents {
-		if filepath.Base(document.Path) != "business_object_map.yaml" {
+		documents[document.Path] = document
+	}
+	operationsByObject := map[string][]ast.Operation{}
+	for _, operation := range catalog.Operations {
+		operationsByObject[operation.ObjectID] = append(
+			operationsByObject[operation.ObjectID],
+			operation,
+		)
+	}
+
+	mapsByDomain := map[string]*ast.BusinessObjectMap{}
+	contextsSeen := map[string]map[string]struct{}{}
+	for _, object := range catalog.Objects {
+		segments := strings.Split(object.SourcePath, "/")
+		if len(segments) != 4 {
+			*errs = append(*errs, fmt.Errorf(
+				"%s: cannot derive domain/context/object from path",
+				object.SourcePath,
+			))
 			continue
 		}
-		var wire businessObjectMapWire
-		var envelope map[string]json.RawMessage
-		if err := json.Unmarshal(document.Content, &envelope); err != nil {
-			*errs = append(
-				*errs,
-				fmt.Errorf("%s: decode business object map envelope: %w", document.Path, err),
-			)
+		domainSegment, contextSegment := segments[0], segments[1]
+		objectDir := path.Dir(object.SourcePath)
+		contextPath := path.Join(domainSegment, contextSegment, "context.yaml")
+
+		objectWire, ok := decodeDerivedDocument[objectDocument](
+			documents,
+			object.SourcePath,
+			errs,
+		)
+		if !ok {
 			continue
 		}
-		for _, retiredField := range []string{"version", "schemaVersion", "registryRevision"} {
-			if _, exists := envelope[retiredField]; exists {
-				*errs = append(
-					*errs,
-					fmt.Errorf(
-						"%s: retired Registry field %q is forbidden",
-						document.Path,
-						retiredField,
-					),
-				)
-				continue
+		contextWire, ok := decodeDerivedDocument[contextDocument](
+			documents,
+			contextPath,
+			errs,
+		)
+		if !ok {
+			continue
+		}
+
+		objectMap := mapsByDomain[domainSegment]
+		if objectMap == nil {
+			objectMap = &ast.BusinessObjectMap{
+				Domain:     domainSegment,
+				SourcePath: domainSegment + "/**/object.yaml",
 			}
+			mapsByDomain[domainSegment] = objectMap
+			contextsSeen[domainSegment] = map[string]struct{}{}
 		}
-		if err := json.Unmarshal(document.Content, &wire); err != nil {
-			*errs = append(
-				*errs,
-				fmt.Errorf("%s: decode business object map: %w", document.Path, err),
-			)
-			continue
-		}
-		objectMap := ast.BusinessObjectMap{
-			Domain:          strings.TrimSpace(wire.Domain),
-			DecisionRefs:    append([]string(nil), wire.DecisionRefs...),
-			BoundedContexts: make([]ast.BoundedContextRegistration, 0, len(wire.BoundedContexts)),
-			SourcePath:      document.Path,
-			Objects: make(
-				[]ast.BusinessObjectBoundary,
-				0,
-				len(wire.Objects),
-			),
-		}
-		for _, boundedContext := range wire.BoundedContexts {
+		contextName := pascalCaseIdentifier(contextSegment)
+		contextID := domainSegment + "." + contextSegment
+		if _, exists := contextsSeen[domainSegment][contextID]; !exists {
 			objectMap.BoundedContexts = append(
 				objectMap.BoundedContexts,
 				ast.BoundedContextRegistration{
-					ContextID: strings.TrimSpace(boundedContext.ContextID),
-					Name:      strings.TrimSpace(boundedContext.Name),
-					Role:      strings.TrimSpace(boundedContext.Role),
+					ContextID: contextID,
+					Name:      contextName,
+					Role:      strings.TrimSpace(contextWire.Role),
 					AccessPolicy: ast.ContextAccessPolicy{
-						Commands:     strings.TrimSpace(boundedContext.AccessPolicy.Commands),
-						Queries:      strings.TrimSpace(boundedContext.AccessPolicy.Queries),
-						ChildObjects: strings.TrimSpace(boundedContext.AccessPolicy.ChildObjects),
-						CrossContext: strings.TrimSpace(boundedContext.AccessPolicy.CrossContext),
+						Commands: strings.TrimSpace(
+							contextWire.Access.Commands,
+						),
+						Queries: strings.TrimSpace(
+							contextWire.Access.Queries,
+						),
+						ChildObjects: strings.TrimSpace(
+							contextWire.Access.ChildObjects,
+						),
+						CrossContext: strings.TrimSpace(
+							contextWire.Access.CrossContext,
+						),
 					},
 				},
 			)
+			contextsSeen[domainSegment][contextID] = struct{}{}
 		}
-		for _, object := range wire.Objects {
-			relationships := make([]ast.ObjectRelationship, 0, len(object.Relationships))
-			for _, relationship := range object.Relationships {
-				relationships = append(relationships, ast.ObjectRelationship{
-					Name:            strings.TrimSpace(relationship.Name),
-					TargetObject:    strings.TrimSpace(relationship.TargetObject),
-					TargetObjects:   normalizedStrings(relationship.TargetObjects),
-					ReferenceFields: normalizedStrings(relationship.ReferenceFields),
-					Kind:            strings.TrimSpace(relationship.Kind),
-					Cardinality:     strings.TrimSpace(relationship.Cardinality),
-					Consistency:     strings.TrimSpace(relationship.Consistency),
-					Access:          strings.TrimSpace(relationship.Access),
-					OnDelete:        strings.TrimSpace(relationship.OnDelete),
-				})
-			}
-			objectMap.Objects = append(
-				objectMap.Objects,
-				ast.BusinessObjectBoundary{
-					CanonicalObject: strings.TrimSpace(object.CanonicalObject),
-					BoundedContext:  strings.TrimSpace(object.BoundedContext),
-					ObjectKind:      object.ObjectKind,
-					AggregateOwner:  dereferenceString(object.AggregateOwner),
-					Identity: ast.ObjectIdentity{
-						Fields:        normalizedStrings(object.Identity.Fields),
-						VersionSource: strings.TrimSpace(object.Identity.VersionSource),
-						VersionField:  dereferenceString(object.Identity.VersionField),
-					},
-					InvariantRefs:       normalizedStrings(object.InvariantRefs),
-					MemberBounds:        cloneIntMap(object.MemberBounds),
-					StorageRole:         strings.TrimSpace(object.StorageRole),
-					StorageBackend:      dereferenceString(object.StorageBackend),
-					MutationEntrypoints: normalizedStrings(object.MutationEntrypoints),
-					EventConsumers:      normalizedStrings(object.EventConsumers),
-					LifecycleRefs:       normalizedStrings(object.LifecycleRefs),
-					SourceDocument:      dereferenceString(object.SourceDocument),
-					SourceEntity:        dereferenceString(object.SourceEntity),
-					Access: ast.ObjectAccessPolicy{
-						Commands:     strings.TrimSpace(object.Access.Commands),
-						Queries:      strings.TrimSpace(object.Access.Queries),
-						CrossContext: strings.TrimSpace(object.Access.CrossContext),
-					},
-					Relationships:        relationships,
-					FieldRoles:           cloneFieldRoles(object.FieldRoles),
-					LocalIdentityReasons: cloneStringMap(object.LocalIdentityReasons),
-				},
-			)
-		}
-		catalog.BusinessObjectMaps = append(catalog.BusinessObjectMaps, objectMap)
-	}
-}
 
-func mergeBusinessObjectBoundaries(catalog *ast.Catalog, errs *[]error) {
-	objectsByDomainName := make(map[string]int, len(catalog.Objects))
-	objectIDs := make(map[string]struct{}, len(catalog.Objects))
-	for index, object := range catalog.Objects {
-		key := object.Domain + "\x00" + object.Name
-		objectsByDomainName[key] = index
-		objectIDs[object.ID] = struct{}{}
-	}
-	for _, objectMap := range catalog.BusinessObjectMaps {
-		for _, boundary := range objectMap.Objects {
-			key := objectMap.Domain + "\x00" + boundary.CanonicalObject
-			if _, exists := objectsByDomainName[key]; exists {
+		fieldRoles := cloneFieldRoles(nil)
+		fieldsPath := path.Join(objectDir, "fields.yaml")
+		if fields, exists := documents[fieldsPath]; exists {
+			var packet fieldsPacket
+			if err := json.Unmarshal(fields.Content, &packet); err != nil {
+				*errs = append(*errs, fmt.Errorf("%s: decode fields: %w", fieldsPath, err))
 				continue
 			}
-			id := objectMap.Domain + "." + snakeCaseIdentifier(
-				boundary.CanonicalObject,
-			)
-			if _, exists := objectIDs[id]; exists {
-				*errs = append(
-					*errs,
-					fmt.Errorf(
-						"%s: canonical object %q conflicts with object id %q",
-						objectMap.SourcePath,
-						boundary.CanonicalObject,
-						id,
-					),
-				)
+			for index, field := range packet.Fields {
+				name := strings.TrimSpace(field.Name)
+				role := strings.TrimSpace(field.Role)
+				if name == "" || role == "" {
+					*errs = append(*errs, fmt.Errorf(
+						"%s: fields[%d] must declare name and role",
+						fieldsPath,
+						index,
+					))
+					continue
+				}
+				fieldRoles[role] = append(fieldRoles[role], name)
+				if field.Reference {
+					fieldRoles["reference"] = append(fieldRoles["reference"], name)
+				}
+			}
+		}
+
+		storagePath := path.Join(objectDir, "storage.yaml")
+		var storage storageDocument
+		if document, exists := documents[storagePath]; exists {
+			if err := json.Unmarshal(document.Content, &storage); err != nil {
+				*errs = append(*errs, fmt.Errorf("%s: decode storage: %w", storagePath, err))
 				continue
 			}
-			catalog.Objects = append(catalog.Objects, ast.Object{
-				ID:             id,
-				Domain:         objectMap.Domain,
-				Name:           boundary.CanonicalObject,
-				Kind:           boundary.ObjectKind,
-				KindExplicit:   true,
-				AggregateOwner: boundary.AggregateOwner,
-				StorageBackend: boundary.StorageBackend,
-				SourcePath:     objectMap.SourcePath,
+		}
+		if strings.TrimSpace(storage.Role) == "" {
+			storage.Role = storageRoleForKind(objectWire.Kind)
+		}
+		eventsPath := path.Join(objectDir, "events.yaml")
+		var events eventsDocument
+		if document, exists := documents[eventsPath]; exists {
+			if err := json.Unmarshal(document.Content, &events); err != nil {
+				*errs = append(*errs, fmt.Errorf("%s: decode events: %w", eventsPath, err))
+				continue
+			}
+		}
+
+		mutationEntrypoints := make([]string, 0)
+		for _, operation := range operationsByObject[object.ID] {
+			if operation.Kind != ast.OperationKindQuery {
+				mutationEntrypoints = append(mutationEntrypoints, operation.LocalID)
+			}
+		}
+		memberBounds := map[string]int{}
+		for _, member := range object.Members {
+			if member.MaxCardinality > 0 {
+				memberBounds[member.Name] = member.MaxCardinality
+			}
+		}
+		relationships := make([]ast.ObjectRelationship, 0, len(objectWire.Relationships))
+		for _, relationship := range objectWire.Relationships {
+			relationships = append(relationships, ast.ObjectRelationship{
+				Name:            strings.TrimSpace(relationship.Name),
+				TargetObject:    strings.TrimSpace(relationship.TargetObject),
+				TargetObjects:   normalizedStrings(relationship.TargetObjects),
+				ReferenceFields: normalizedStrings(relationship.ReferenceFields),
+				Kind:            strings.TrimSpace(relationship.Kind),
+				Cardinality:     strings.TrimSpace(relationship.Cardinality),
+				Consistency:     strings.TrimSpace(relationship.Consistency),
+				Access:          strings.TrimSpace(relationship.Access),
+				OnDelete:        strings.TrimSpace(relationship.OnDelete),
 			})
-			objectsByDomainName[key] = len(catalog.Objects) - 1
-			objectIDs[id] = struct{}{}
 		}
+		invariantRefs := []string{}
+		if len(objectWire.BusinessRules) > 0 {
+			invariantRefs = append(invariantRefs, object.SourcePath+"#business_rules")
+		}
+		lifecycleRefs := []string{}
+		if objectWire.Lifecycle != nil {
+			lifecycleRefs = append(lifecycleRefs, object.SourcePath+"#lifecycle")
+		}
+		sourceDocument := ""
+		sourceEntity := ""
+		if _, exists := documents[fieldsPath]; exists {
+			sourceDocument = fieldsPath
+			sourceEntity = object.Name
+		}
+		objectMap.Objects = append(objectMap.Objects, ast.BusinessObjectBoundary{
+			CanonicalObject: object.Name,
+			BoundedContext:  contextName,
+			ObjectKind:      objectWire.Kind,
+			Identity: ast.ObjectIdentity{
+				Fields:        normalizedStrings(objectWire.Identity.Fields),
+				VersionSource: strings.TrimSpace(objectWire.Identity.VersionSource),
+				VersionField:  strings.TrimSpace(objectWire.Identity.VersionField),
+			},
+			InvariantRefs:       invariantRefs,
+			MemberBounds:        memberBounds,
+			StorageRole:         strings.TrimSpace(storage.Role),
+			StorageBackend:      strings.TrimSpace(storage.Backend),
+			MutationEntrypoints: mutationEntrypoints,
+			EventConsumers:      normalizedStrings(events.Subscriptions),
+			LifecycleRefs:       lifecycleRefs,
+			SourceDocument:      sourceDocument,
+			SourceEntity:        sourceEntity,
+			Access: ast.ObjectAccessPolicy{
+				Commands:     strings.TrimSpace(objectWire.Access.Commands),
+				Queries:      strings.TrimSpace(objectWire.Access.Queries),
+				CrossContext: strings.TrimSpace(objectWire.Access.CrossContext),
+			},
+			Relationships:        relationships,
+			FieldRoles:           fieldRoles,
+			LocalIdentityReasons: cloneStringMap(objectWire.LocalIdentityReasons),
+		})
+	}
+
+	domains := make([]string, 0, len(mapsByDomain))
+	for domain := range mapsByDomain {
+		domains = append(domains, domain)
+	}
+	sort.Strings(domains)
+	for _, domain := range domains {
+		catalog.BusinessObjectMaps = append(catalog.BusinessObjectMaps, *mapsByDomain[domain])
 	}
 }
 
-func dereferenceString(value *string) string {
-	if value == nil {
+func storageRoleForKind(kind ast.ObjectKind) string {
+	switch kind {
+	case ast.ObjectKindAggregateRoot:
+		return "authoritative"
+	case ast.ObjectKindAppendOnlyFact:
+		return "append_only"
+	case ast.ObjectKindProjection:
+		return "projection"
+	case ast.ObjectKindExternalReference:
+		return "external"
+	case ast.ObjectKindRuntimeSession:
+		return "runtime"
+	default:
 		return ""
 	}
-	return strings.TrimSpace(*value)
 }
 
-func cloneFieldRoles(
-	roles map[string][]string,
-) map[string][]string {
+func decodeDerivedDocument[T any](
+	documents map[string]ast.SourceDocument,
+	documentPath string,
+	errs *[]error,
+) (T, bool) {
+	var result T
+	document, exists := documents[documentPath]
+	if !exists {
+		*errs = append(*errs, fmt.Errorf("%s: required derived source is missing", documentPath))
+		return result, false
+	}
+	if err := json.Unmarshal(document.Content, &result); err != nil {
+		*errs = append(*errs, fmt.Errorf("%s: decode derived source: %w", documentPath, err))
+		return result, false
+	}
+	return result, true
+}
+
+func cloneFieldRoles(roles map[string][]string) map[string][]string {
 	cloned := map[string][]string{
 		"authoritative_state": {},
 		"owned_value":         {},
@@ -259,15 +338,9 @@ func cloneFieldRoles(
 func normalizedStrings(values []string) []string {
 	result := make([]string, 0, len(values))
 	for _, value := range values {
-		result = append(result, strings.TrimSpace(value))
-	}
-	return result
-}
-
-func cloneIntMap(values map[string]int) map[string]int {
-	result := make(map[string]int, len(values))
-	for key, value := range values {
-		result[strings.TrimSpace(key)] = value
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			result = append(result, trimmed)
+		}
 	}
 	return result
 }
@@ -278,19 +351,4 @@ func cloneStringMap(values map[string]string) map[string]string {
 		result[strings.TrimSpace(key)] = strings.TrimSpace(value)
 	}
 	return result
-}
-
-func snakeCaseIdentifier(value string) string {
-	var result strings.Builder
-	for index, current := range value {
-		if current >= 'A' && current <= 'Z' {
-			if index > 0 {
-				result.WriteByte('_')
-			}
-			result.WriteRune(current + ('a' - 'A'))
-			continue
-		}
-		result.WriteRune(current)
-	}
-	return result.String()
 }

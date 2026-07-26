@@ -99,6 +99,14 @@ func (r *Router) Scene(name string) Client {
 	return c
 }
 
+// LookupScene returns a configured scene without panicking. Startup preflight
+// paths use this variant so a missing declared dependency becomes a
+// fail-closed configuration error instead of an uncontrolled panic.
+func (r *Router) LookupScene(name string) (Client, bool) {
+	c, ok := r.scenes[name]
+	return c, ok
+}
+
 // ForKey returns the Client for a key based on prefix routing rules.
 // Falls back to the default scene if no prefix matches.
 func (r *Router) ForKey(key string) Client {

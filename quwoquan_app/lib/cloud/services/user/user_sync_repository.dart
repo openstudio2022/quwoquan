@@ -65,21 +65,6 @@ abstract class UserSyncRepository {
   });
 }
 
-class MockUserSyncRepository implements UserSyncRepository {
-  @override
-  Future<UserSyncPullResult> pull({
-    required int afterSeq,
-    int limit = _kUserSyncPullDefaultLimit,
-  }) async {
-    return const UserSyncPullResult(
-      patches: <UserSyncPatch>[],
-      latestSyncSeq: 0,
-      hasMore: false,
-      requiresResync: false,
-    );
-  }
-}
-
 typedef UserSyncRemoteMergeRequestContext =
     Future<Map<String, String>> Function(Map<String, String> baseHeaders);
 

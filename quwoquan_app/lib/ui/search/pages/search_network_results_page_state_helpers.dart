@@ -66,23 +66,39 @@ extension _SearchNetworkResultsPageStateHelpers
     }
 
     final contentItems = _contentItemsForActiveTab();
-    return withDegradeBanner(<Widget>[
-      if (_isLoading)
+    final relatedSearchCard = _buildRelatedSearchCard(isDark: isDark);
+    if (_isLoading) {
+      return withDegradeBanner(<Widget>[
         AppRequestFeedback.page(
           showSlowHint: _isSlow,
-          loadingLabel: UITextConstants.pageLoadingA11y('${activeTab.label}结果'),
+          loadingLabel: UITextConstants.pageLoadingA11y(
+            UITextConstants.searchTabResults(activeTab.label),
+          ),
           slowLabel: UITextConstants.searchWaitSlow,
-        )
-      else if (contentItems.isEmpty)
-        _StatusMessage(text: UITextConstants.searchEmptyResult, isDark: isDark)
-      else
-        ..._buildContentMasonryTiles(
-          isDark: isDark,
-          fgSecondary: fgSecondary,
-          items: contentItems,
-          relatedSearchCard: _buildRelatedSearchCard(isDark: isDark),
         ),
-    ]);
+      ]);
+    }
+    if (contentItems.isEmpty) {
+      return withDegradeBanner(<Widget>[
+        _SearchEmptyState(
+          title: UITextConstants.searchNoResultsForQuery(_query),
+          isDark: isDark,
+          onEditQuery: _editEmptySearchQuery,
+        ),
+        if (relatedSearchCard != null) ...[
+          SizedBox(height: AppSpacing.containerLg),
+          relatedSearchCard,
+        ],
+      ]);
+    }
+    return withDegradeBanner(
+      _buildContentMasonryTiles(
+        isDark: isDark,
+        fgSecondary: fgSecondary,
+        items: contentItems,
+        relatedSearchCard: relatedSearchCard,
+      ),
+    );
   }
 
   List<Widget> _buildAllResultChildren({
@@ -94,14 +110,39 @@ extension _SearchNetworkResultsPageStateHelpers
       return <Widget>[
         AppRequestFeedback.page(
           showSlowHint: _isSlow,
-          loadingLabel: UITextConstants.pageLoadingA11y('应用内结果'),
+          loadingLabel: UITextConstants.pageLoadingA11y(
+            UITextConstants.searchAppResults,
+          ),
           slowLabel: UITextConstants.searchWaitSlow,
         ),
       ];
     }
 
-    final sections = <Widget>[];
     final entity = _entityTopResult();
+    final relatedSearchCard = _buildRelatedSearchCard(isDark: isDark);
+    final hasPrimaryResults =
+        entity != null || _userResults.isNotEmpty || _contentResults.isNotEmpty;
+    if (!hasPrimaryResults) {
+      return <Widget>[
+        _CategorySummaryCard(
+          title: activeTab.label,
+          description: activeTab.description,
+          count: 0,
+          isDark: isDark,
+        ),
+        _SearchEmptyState(
+          title: UITextConstants.searchNoResultsForQuery(_query),
+          isDark: isDark,
+          onEditQuery: _editEmptySearchQuery,
+        ),
+        if (relatedSearchCard != null) ...[
+          SizedBox(height: AppSpacing.containerLg),
+          relatedSearchCard,
+        ],
+      ];
+    }
+
+    final sections = <Widget>[];
     if (entity != null) {
       sections.add(
         _EntityTopResultCard(
@@ -111,7 +152,27 @@ extension _SearchNetworkResultsPageStateHelpers
         ),
       );
     }
-    final relatedSearchCard = _buildRelatedSearchCard(isDark: isDark);
+    if (_userResults.isNotEmpty) {
+      if (sections.isNotEmpty) {
+        sections.add(SizedBox(height: AppSpacing.containerLg));
+      }
+      sections.add(
+        const _SearchResultSectionHeader(
+          title: UITextConstants.searchUserResultsTitle,
+        ),
+      );
+      sections.add(SizedBox(height: AppSpacing.intraGroupSm));
+      for (final hit in _userResults) {
+        sections.add(
+          _UserSearchResultCard(
+            hit: hit,
+            isDark: isDark,
+            onTap: () => _openUserProfile(hit),
+          ),
+        );
+        sections.add(SizedBox(height: AppSpacing.intraGroupSm));
+      }
+    }
     final mixedTiles = _buildContentMasonryTiles(
       isDark: isDark,
       fgSecondary: fgSecondary,
@@ -125,20 +186,6 @@ extension _SearchNetworkResultsPageStateHelpers
       sections.addAll(mixedTiles);
     }
 
-    if (sections.isEmpty) {
-      return <Widget>[
-        _CategorySummaryCard(
-          title: activeTab.label,
-          description: activeTab.description,
-          count: 0,
-          isDark: isDark,
-        ),
-        _StatusMessage(
-          text: UITextConstants.searchNoAppResults,
-          isDark: isDark,
-        ),
-      ];
-    }
     return sections;
   }
 
@@ -150,7 +197,7 @@ extension _SearchNetworkResultsPageStateHelpers
       return <Widget>[
         AppRequestFeedback.page(
           showSlowHint: _isSlow,
-          loadingLabel: '正在整理与你的交集',
+          loadingLabel: UITextConstants.searchIntersectionLoading,
           slowLabel: UITextConstants.searchWaitSlow,
         ),
       ];
@@ -170,9 +217,13 @@ extension _SearchNetworkResultsPageStateHelpers
                 .toList(growable: false);
       sections.add(
         _SearchResultSectionHeader(
-          title: '已形成的连接',
-          subtitle: '基于你的互动、关注和加入',
-          actionLabel: hasMore ? (_showAllConnections ? '收起' : '查看全部') : null,
+          title: UITextConstants.searchEstablishedConnections,
+          subtitle: UITextConstants.searchEstablishedConnectionsSubtitle,
+          actionLabel: hasMore
+              ? (_showAllConnections
+                    ? UITextConstants.searchHistoryCollapse
+                    : UITextConstants.searchViewAll)
+              : null,
           onAction: hasMore
               ? () => _setMountedState(
                   () => _showAllConnections = !_showAllConnections,
@@ -204,10 +255,10 @@ extension _SearchNetworkResultsPageStateHelpers
       }
       sections.add(
         _SearchResultSectionHeader(
-          title: '发现更多交集',
+          title: UITextConstants.searchDiscoverMoreIntersections,
           subtitle: _query.trim().isEmpty
-              ? '为你推荐更多相关内容'
-              : '为你推荐更多与“${_query.trim()}”相关的内容',
+              ? UITextConstants.searchRecommendMoreContent
+              : UITextConstants.searchRecommendForQuery(_query.trim()),
         ),
       );
       sections.add(SizedBox(height: AppSpacing.intraGroupMd));
@@ -228,18 +279,19 @@ extension _SearchNetworkResultsPageStateHelpers
 
     if (sections.isEmpty) {
       return <Widget>[
-        _StatusMessage(
-          text: UITextConstants.searchNoIntersectionResults,
+        _SearchEmptyState(
+          title: UITextConstants.searchNoIntersectionForQuery(_query),
           isDark: isDark,
+          onEditQuery: _editEmptySearchQuery,
         ),
       ];
     }
     return sections;
   }
 
-  // 已形成的连接：展示用户与搜索词之间已经存在的真实连接（connectionState=connected）。
-  // 仅展示连接态本身（你已加入 / 你关注过 / 你互动过），footer 用云侧真实计数，
-  // 不拼装交集句、不伪造好友数、不编造互动数。
+  // 已形成的连接：connectionState 只负责分组；可见事实句必须来自云侧
+  // intersectionReason.primaryText。端侧禁止把 connected 擅自翻译成
+  // 「你已加入 / 你关注过 / 你互动过」。
   List<_IntersectionCardModel> _connectionCardModels() {
     final models = <_IntersectionCardModel>[];
     for (final hit in _connectedGroupHits) {
@@ -249,12 +301,30 @@ extension _SearchNetworkResultsPageStateHelpers
           targetType: _IntersectionTargetType.circle,
           targetId: card.circleId,
           coverUrl: card.coverUrl,
-          categoryLabel: '圈子',
+          categoryLabel: UITextConstants.searchCategoryCircle,
           categoryIcon: CupertinoIcons.person_3_fill,
           title: hit.title,
           reasonIcon: CupertinoIcons.person_2_fill,
-          reasonText: '你已加入',
+          reasonText:
+              _SearchNetworkResultsPageState._hitIntersectionPrimaryText(hit),
           footerText: card.footerLabel,
+        ),
+      );
+    }
+    for (final hit in _connectedUserHits) {
+      final user = hit.asUserProfileItem;
+      models.add(
+        _IntersectionCardModel(
+          targetType: _IntersectionTargetType.user,
+          targetId: user?.userId ?? hit.objectId,
+          coverUrl: '',
+          categoryLabel: UITextConstants.searchCategoryUser,
+          categoryIcon: CupertinoIcons.person_fill,
+          title: user?.displayName ?? hit.title,
+          reasonIcon: CupertinoIcons.person_2_fill,
+          reasonText:
+              _SearchNetworkResultsPageState._hitIntersectionPrimaryText(hit),
+          footerText: user?.bio ?? hit.snippet ?? '',
         ),
       );
     }
@@ -266,11 +336,12 @@ extension _SearchNetworkResultsPageStateHelpers
           targetType: _IntersectionTargetType.locationPlace,
           targetId: hit.objectId,
           coverUrl: '',
-          categoryLabel: '地点',
+          categoryLabel: UITextConstants.searchCategoryLocation,
           categoryIcon: CupertinoIcons.location_solid,
           title: hit.title,
           reasonIcon: CupertinoIcons.location_solid,
-          reasonText: '你关注过',
+          reasonText:
+              _SearchNetworkResultsPageState._hitIntersectionPrimaryText(hit),
           footerText: hit.subtitle?.trim() ?? '',
         ),
       );
@@ -283,7 +354,9 @@ extension _SearchNetworkResultsPageStateHelpers
           targetType: _IntersectionTargetType.post,
           targetId: item.postId,
           coverUrl: item.coverUrl ?? '',
-          categoryLabel: isVideo ? '视频' : '图片',
+          categoryLabel: isVideo
+              ? UITextConstants.searchCategoryVideo
+              : UITextConstants.searchCategoryImage,
           categoryIcon: isVideo
               ? CupertinoIcons.play_rectangle_fill
               : CupertinoIcons.photo_fill,
@@ -291,7 +364,10 @@ extension _SearchNetworkResultsPageStateHelpers
           reasonIcon: isVideo
               ? CupertinoIcons.chat_bubble_fill
               : CupertinoIcons.heart_fill,
-          reasonText: isVideo ? '你互动过' : '你点赞过',
+          reasonText:
+              _SearchNetworkResultsPageState._contentIntersectionPrimaryText(
+                item,
+              ),
           footerText: card.footerLabel,
           metricLabel: item.likeCount > 0 ? '${item.likeCount}' : null,
           metricIcon: CupertinoIcons.heart,
@@ -360,380 +436,5 @@ extension _SearchNetworkResultsPageStateHelpers
         ),
     ];
     return _buildAdaptiveMasonry(cells: cells);
-  }
-
-  Future<void> _loadResults() async {
-    final token = ++_requestToken;
-    final stopwatch = Stopwatch()..start();
-    final trimmedQuery = _query.trim();
-    final activeTabId = _activeTabId;
-    ref
-        .read(pageLifecycleObservabilityProvider)
-        .recordPageState(
-          pageName: 'search_network_results',
-          route: AppRoutePaths.globalSearch,
-          surface: _activeTabId,
-          phase: 'onlineLoading',
-          copyKey: 'pageLoadingA11y',
-          waitMode: _activeTabId == _SearchNetworkResultsPageState._tabXiaoqu
-              ? 'long_task'
-              : 'foreground',
-        );
-    _setMountedState(() {
-      _isLoading = true;
-      _isSlow = false;
-      _errorSemantic = null;
-      _degradeSignals = const <SearchDegradeSignal>[];
-      if (_activeTabId == _SearchNetworkResultsPageState._tabXiaoqu) {
-        _xiaoquResult = null;
-      } else {
-        _groupResults = const <SearchHit>[];
-        _locationResults = const <SearchHit>[];
-        _contentResults = const <PostSearchItemView>[];
-        _contentCloudMetaById = const <String, _ContentCloudMeta>{};
-        _relatedTerms = const <String>[];
-      }
-    });
-    late final int generation;
-    try {
-      if (_activeTabId == _SearchNetworkResultsPageState._tabXiaoqu) {
-        generation = _waitController.start(
-          mode: AppRequestWaitMode.longTask,
-          showSlowHint: false,
-        );
-        final result = await ref
-            .read(assistantRepositoryProvider)
-            .searchXiaoquResults(query: trimmedQuery);
-        if (!_isCurrentRequest(token, generation, activeTabId)) {
-          return;
-        }
-        _setMountedState(() {
-          _xiaoquResult = result;
-          _isLoading = false;
-          _isSlow = false;
-        });
-        _waitController.complete(generation);
-        ref
-            .read(pageLifecycleObservabilityProvider)
-            .recordPageState(
-              pageName: 'search_network_results',
-              route: AppRoutePaths.globalSearch,
-              surface: _activeTabId,
-              phase: 'onlineSuccess',
-              durationMs: stopwatch.elapsedMilliseconds,
-              itemCount: result.citations?.length ?? 0,
-            );
-        return;
-      }
-
-      final cancellation = CloudOperationCancellationSignal();
-      generation = _waitController.start(
-        mode: AppRequestWaitMode.foreground,
-        cancellation: cancellation,
-        onSlow: (_) {
-          if (!_isCurrentRequest(token, generation, activeTabId)) return;
-          _setMountedState(() => _isSlow = true);
-        },
-        onTimeout: (_) {
-          if (!mounted ||
-              token != _requestToken ||
-              _activeTabId != activeTabId) {
-            return;
-          }
-          final error = TimeoutException(
-            'Canonical search exceeded the 6 second foreground budget.',
-          );
-          _setMountedState(() {
-            _errorSemantic = _searchFailureSemantic(error);
-            _isLoading = false;
-            _isSlow = false;
-          });
-        },
-        observer: (phase, durationMilliseconds) {
-          if (phase == 'complete') return;
-          ref
-              .read(pageLifecycleObservabilityProvider)
-              .recordPageState(
-                pageName: 'search_network_results',
-                route: AppRoutePaths.globalSearch,
-                surface: activeTabId,
-                phase: phase,
-                durationMs: durationMilliseconds,
-                waitMode: 'foreground',
-              );
-        },
-      );
-      if (trimmedQuery.isEmpty) {
-        if (!_isCurrentRequest(token, generation, activeTabId)) return;
-        _setMountedState(() {
-          _isLoading = false;
-          _isSlow = false;
-        });
-        _waitController.complete(generation);
-        ref
-            .read(pageLifecycleObservabilityProvider)
-            .recordPageState(
-              pageName: 'search_network_results',
-              route: AppRoutePaths.globalSearch,
-              surface: activeTabId,
-              phase: 'emptySuccess',
-              durationMs: stopwatch.elapsedMilliseconds,
-              itemCount: 0,
-              waitMode: 'foreground',
-            );
-        return;
-      }
-
-      // 正式结果页只调用 canonical POST /search 一次；云侧负责跨域 fan-out。
-      final response = await ref
-          .read(searchRepositoryProvider)
-          .search(
-            SearchRequest(
-              query: trimmedQuery,
-              mode: SearchMode.result,
-              objectTypes: _canonicalObjectTypes(activeTabId),
-              contentTypes: _canonicalContentTypes(activeTabId),
-              limit: 12,
-            ),
-            cancellation: cancellation,
-            deadlineAt: DateTime.now().add(
-              AppRequestWaitTimings.foregroundReadDeadline,
-            ),
-          );
-      if (!_isCurrentRequest(token, generation, activeTabId)) {
-        return;
-      }
-      _setMountedState(() {
-        _groupResults = _groupHitsFromResponse(response);
-        _locationResults = _locationHitsFromResponse(response);
-        _contentResults = _contentItemsFromResponse(response);
-        _relatedTerms = response.relatedTerms;
-        _degradeSignals = response.degradeSignals;
-        _isLoading = false;
-        _isSlow = false;
-      });
-      _waitController.complete(generation);
-      final itemCount =
-          _contentResults.length +
-          _locationResults.length +
-          _groupResults.length;
-      ref
-          .read(pageLifecycleObservabilityProvider)
-          .recordPageState(
-            pageName: 'search_network_results',
-            route: AppRoutePaths.globalSearch,
-            surface: activeTabId,
-            phase: response.degradeSignals.isNotEmpty
-                ? 'partial'
-                : (itemCount == 0 ? 'emptySuccess' : 'onlineSuccess'),
-            durationMs: stopwatch.elapsedMilliseconds,
-            itemCount: itemCount,
-            waitMode: 'foreground',
-          );
-    } catch (error) {
-      if (!mounted || token != _requestToken || _activeTabId != activeTabId) {
-        return;
-      }
-      if (!_waitController.isCurrent(generation)) return;
-      _setMountedState(() {
-        _errorSemantic = _searchFailureSemantic(error);
-        _isLoading = false;
-        _isSlow = false;
-      });
-      _waitController.complete(generation);
-      ref
-          .read(pageLifecycleObservabilityProvider)
-          .recordPageState(
-            pageName: 'search_network_results',
-            route: AppRoutePaths.globalSearch,
-            surface: _activeTabId,
-            phase: 'blockingFailure',
-            copyKey: 'searchUnavailableTitle',
-            error: error,
-            durationMs: stopwatch.elapsedMilliseconds,
-            waitMode: activeTabId == _SearchNetworkResultsPageState._tabXiaoqu
-                ? 'long_task'
-                : 'foreground',
-          );
-    }
-  }
-
-  bool _isCurrentRequest(int token, int generation, String activeTabId) {
-    return mounted &&
-        token == _requestToken &&
-        _activeTabId == activeTabId &&
-        _waitController.isCurrent(generation);
-  }
-
-  Set<SearchObjectType> _canonicalObjectTypes(String activeTabId) {
-    if (activeTabId == _SearchNetworkResultsPageState._tabIntersection) {
-      return const <SearchObjectType>{
-        SearchObjectType.contentPost,
-        SearchObjectType.entityHomepage,
-        SearchObjectType.locationPlace,
-        SearchObjectType.circleGroup,
-        SearchObjectType.circleCircle,
-      };
-    }
-    if (activeTabId == _SearchNetworkResultsPageState._tabAll) {
-      return const <SearchObjectType>{
-        SearchObjectType.contentPost,
-        SearchObjectType.entityHomepage,
-        SearchObjectType.locationPlace,
-      };
-    }
-    return const <SearchObjectType>{SearchObjectType.contentPost};
-  }
-
-  Set<SearchContentTypeFilter> _canonicalContentTypes(String activeTabId) {
-    return switch (activeTabId) {
-      _SearchNetworkResultsPageState._tabVideo =>
-        const <SearchContentTypeFilter>{SearchContentTypeFilter.video},
-      _SearchNetworkResultsPageState._tabImage =>
-        const <SearchContentTypeFilter>{SearchContentTypeFilter.image},
-      _SearchNetworkResultsPageState._tabArticle =>
-        const <SearchContentTypeFilter>{SearchContentTypeFilter.article},
-      _ => widget.launchContext.searchObjectSelection.normalized().contentTypes,
-    };
-  }
-
-  UiErrorSemantic _searchFailureSemantic(Object error) {
-    final resolved = runtimeErrorSemantic(
-      context,
-      error: error,
-      category: UiErrorCategory.pageLoad,
-      scope: UiErrorScope.page,
-    );
-    return UiErrorSemantic(
-      category: resolved.category,
-      scope: resolved.scope,
-      title: UITextConstants.searchUnavailableTitle,
-      message: UITextConstants.searchUnavailableMessage,
-      secondaryMessage: resolved.secondaryMessage,
-      primaryAction: resolved.primaryAction,
-      secondaryAction: resolved.secondaryAction,
-      dismissible: resolved.dismissible,
-      sourceCode: resolved.sourceCode,
-      failureKind: resolved.failureKind,
-      copyKey: 'searchUnavailableTitle',
-      recoveryAction: resolved.recoveryAction,
-      presentation: resolved.presentation,
-      tone: resolved.tone,
-    );
-  }
-
-  List<PostSearchItemView> _contentItemsFromResponse(SearchResponse response) {
-    final cloudMeta = <String, _ContentCloudMeta>{};
-    final results = <PostSearchItemView>[];
-    for (final hit in _hitsFromResponse(response)) {
-      if (hit.objectType != SearchObjectType.contentPost) {
-        continue;
-      }
-      final item =
-          hit.asContentPostItem ??
-          PostSearchItemView.fromMap(hit.payload.toWireMap());
-      results.add(item);
-      final meta = _ContentCloudMeta(
-        rankPosition: hit.rankPosition,
-        coverWidth: hit.coverWidth,
-        coverHeight: hit.coverHeight,
-        rankReasons: hit.rankReasons,
-      );
-      if (item.postId.isNotEmpty && meta.hasCloudSignal) {
-        cloudMeta[item.postId] = meta;
-      }
-    }
-    // R-001：命中携带云侧 rankPosition 时，按云侧排序而非端侧 publishedAt 兜底排序。
-    final hasCloudRank = results.any(
-      (item) => cloudMeta[item.postId]?.rankPosition != null,
-    );
-    if (hasCloudRank) {
-      results.sort((left, right) {
-        final leftRank = cloudMeta[left.postId]?.rankPosition;
-        final rightRank = cloudMeta[right.postId]?.rankPosition;
-        if (leftRank == null && rightRank == null) {
-          return 0;
-        }
-        if (leftRank == null) {
-          return 1;
-        }
-        if (rightRank == null) {
-          return -1;
-        }
-        return leftRank.compareTo(rightRank);
-      });
-    } else {
-      results.sort((left, right) {
-        final leftTime = left.publishedAt;
-        final rightTime = right.publishedAt;
-        if (leftTime == null && rightTime == null) {
-          return 0;
-        }
-        if (leftTime == null) {
-          return 1;
-        }
-        if (rightTime == null) {
-          return -1;
-        }
-        return rightTime.compareTo(leftTime);
-      });
-    }
-    final sorted = results.take(12).toList(growable: false);
-    _contentCloudMetaById = cloudMeta;
-    return sorted;
-  }
-
-  Future<void> _openPost(String postId) async {
-    if (postId.trim().isEmpty) {
-      return;
-    }
-    try {
-      final detail = await ref
-          .read(globalSearchContentPostDetailReaderProvider)
-          .getPost(postId: postId);
-      applyConfirmedInteractionPost(ref, detail.post);
-      if (!mounted) {
-        return;
-      }
-      final dto = detail.post;
-      final raw = detail.mergedArticleWireMap;
-      final interactionSnapshot = buildMediaViewerInteractionSnapshot(
-        posts: <PostBaseDto>[dto],
-        discoveryState: ref.read(discoveryStateProvider),
-        relationshipState: ref.read(userRelationshipStateProvider),
-        postInteractionState: ref.read(postInteractionStateProvider),
-      );
-      primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
-      final navFeedRequestId = ref
-          .read(feedSessionProvider.notifier)
-          .newFeedRequestId();
-      final result = await context.push<Object?>(
-        AppRoutePaths.workBrowser(
-          workId: dto.id,
-          filter: dto.isVideoLike
-              ? 'video'
-              : (dto.isArticleLike ? 'article' : 'image'),
-          source: 'global-search-network',
-          index: '0',
-        ),
-        extra: MediaViewerExtra(
-          posts: <ContentSurfaceView>[
-            ContentSurfaceViewMapper.fromDto(dto, wire: raw),
-          ],
-          dtoPosts: <PostBaseDto>[dto],
-          initialIndex: 0,
-          source: 'global-search-network',
-          rawPostsById: searchNetworkSinglePostMediaRaws(dto: dto, wire: raw),
-          interactionSnapshot: interactionSnapshot,
-          referralSource: ReferralSource.search,
-          feedRequestId: navFeedRequestId,
-        ),
-      );
-      if (result is MediaViewerResult) {
-        applyMediaViewerResultToInteractionState(ref, result);
-      }
-    } catch (error) {
-      await _showOpenPostFailure(error);
-    }
   }
 }

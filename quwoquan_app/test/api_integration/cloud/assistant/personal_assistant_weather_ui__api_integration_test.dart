@@ -52,7 +52,9 @@ void main() {
     await _pumpUntilStreamSettled(tester);
 
     expect(find.byType(AssistantMessageBubble), findsWidgets);
-    final context = tester.element(find.byType(PersonalAssistantConversationPage));
+    final context = tester.element(
+      find.byType(PersonalAssistantConversationPage),
+    );
     final state = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);
@@ -63,9 +65,10 @@ void main() {
       expect(state.answer, isNot(contains('All Regions Argentina')));
       expect(
         state.events.any((event) {
-          final payload = event.payload;
-          return payload['skillId'] == 'weather' &&
-              payload.containsKey('promptPolicy');
+          final process = event.payload['process'];
+          return process is Map &&
+              process['stage'] == 'skill_selection' &&
+              process['skillId'] == 'weather';
         }),
         isTrue,
         reason: '应在 beta stream 中选择 weather skill',
@@ -75,10 +78,11 @@ void main() {
       expect(
         state.events.map((event) => event.eventType),
         containsAll(<String>[
-          'turn_started',
-          'tool_use_requested',
-          'tool_result_received',
-          'final_answer',
+          'run_started',
+          'process_replace',
+          'process_append',
+          'answer_delta',
+          'completed',
         ]),
       );
     }

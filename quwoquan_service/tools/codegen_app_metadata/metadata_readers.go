@@ -14,7 +14,33 @@ func readShared(path string) (*sharedTypes, error) {
 
 func readFields(path string) (*fieldsFile, error) {
 	var parsed fieldsFile
-	return &parsed, decodeMetadataDocument(path, &parsed)
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
+		return &parsed, err
+	}
+	if parsed.Entities == nil {
+		parsed.Entities = map[string]entityDef{}
+	}
+	for name, definition := range parsed.Types {
+		parsed.Entities[name] = definition
+	}
+	if len(parsed.Fields) > 0 {
+		objectName := filepath.Base(filepath.Dir(path))
+		parsed.Entities[objectTypeName(objectName)] = entityDef{
+			Fields: parsed.Fields,
+		}
+	}
+	return &parsed, nil
+}
+
+func objectTypeName(value string) string {
+	parts := strings.Split(value, "_")
+	for index, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[index] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	return strings.Join(parts, "")
 }
 
 func readService(path string) (*serviceFile, error) {
@@ -132,15 +158,16 @@ func collectProjectionReadModelDartClass(metadataDir string) (map[string]string,
 func collectDomainServiceRoutes(metadataDir string) (map[string][]routeDef, error) {
 	grouped := map[string][]routeDef{}
 	seen := map[string]bool{}
-	for _, path := range metadataDocumentPaths("", "/service.yaml") {
+	for _, path := range metadataDocumentPaths("", "/operations.yaml") {
 		service, readErr := readService(path)
 		if readErr != nil {
 			return nil, readErr
 		}
-		domain := strings.TrimSpace(service.Service.Domain)
-		if domain == "" {
+		relative, relErr := filepath.Rel(metadataDir, path)
+		if relErr != nil || len(strings.Split(filepath.ToSlash(relative), "/")) < 4 {
 			continue
 		}
+		domain := strings.Split(filepath.ToSlash(relative), "/")[0]
 		for _, route := range service.APIRoutes {
 			if strings.TrimSpace(route.Operation) == "" || strings.TrimSpace(route.Path) == "" {
 				continue
@@ -191,6 +218,26 @@ func readUserDomainErrors(metadataDir string) (*errorsFile, error) {
 	return readMergedErrors(paths)
 }
 
+// contentDomainErrorsPaths 是 content 域错误码的固定合并顺序：
+// post（域共享 + Post 自有）在前，随后按对象目录字典序。
+// 与 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py 及
+// quwoquan_service/scripts/verify/verify_error_recovery_alignment.py 的列表保持一致。
+func contentDomainErrorsPaths(metadataDir string) []string {
+	return []string{
+		filepath.Join(metadataDir, "content", "content", "post", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "comment", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "content_reaction", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "deleted_post_tombstone", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "media", "filter_catalog_release", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "media", "media_asset", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "media", "media_original_access_fact", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "media", "media_upload_session", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "outbound_share_fact", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "trust_safety", "post_moderation_case", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "trust_safety", "report", "errors.yaml"),
+	}
+}
+
 func readBehaviors(path string) (*behaviorsFile, error) {
 	var parsed behaviorsFile
 	return &parsed, decodeMetadataDocument(path, &parsed)
@@ -201,9 +248,151 @@ func readPrivacy(path string) (*privacyFile, error) {
 	return &parsed, decodeMetadataDocument(path, &parsed)
 }
 
-func readUIConfig(path string) (*uiConfigFile, error) {
+func readUIConfig(
+	path string,
+	requireOnboardingInterestCatalog bool,
+) (*uiConfigFile, error) {
 	var parsed uiConfigFile
-	return &parsed, decodeMetadataDocument(path, &parsed)
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
+		return nil, err
+	}
+	catalog := parsed.OnboardingInterestCatalog
+	if !requireOnboardingInterestCatalog &&
+		strings.TrimSpace(catalog.Version) == "" &&
+		strings.TrimSpace(catalog.TaxonomyReleaseID) == "" &&
+		catalog.MinSelectionCount == 0 &&
+		catalog.MaxSelectionCount == 0 &&
+		len(catalog.Dimensions) == 0 {
+		return &parsed, nil
+	}
+	if strings.TrimSpace(catalog.Version) == "" ||
+		strings.TrimSpace(catalog.TaxonomyReleaseID) == "" ||
+		catalog.MinSelectionCount <= 0 ||
+		catalog.MaxSelectionCount < catalog.MinSelectionCount ||
+		len(catalog.Dimensions) == 0 {
+		return nil, fmt.Errorf(
+			"onboarding_interest_catalog requires version, taxonomy_release_id, valid selection bounds, and dimensions",
+		)
+	}
+	dimensionIDs := make(map[string]struct{}, len(catalog.Dimensions))
+	for _, dimension := range catalog.Dimensions {
+		if strings.TrimSpace(dimension.ID) == "" ||
+			strings.TrimSpace(dimension.TagRef) == "" ||
+			dimension.MinSelections < 0 ||
+			dimension.MaxSelections < dimension.MinSelections {
+			return nil, fmt.Errorf(
+				"onboarding_interest_catalog dimension requires id/tag_ref and valid selection bounds",
+			)
+		}
+		if _, exists := dimensionIDs[dimension.ID]; exists {
+			return nil, fmt.Errorf(
+				"onboarding_interest_catalog dimension id %q is duplicated",
+				dimension.ID,
+			)
+		}
+		dimensionIDs[dimension.ID] = struct{}{}
+	}
+	return &parsed, nil
+}
+
+func readContentPublicationPolicy(
+	path string,
+) (*contentPublicationPolicyFile, error) {
+	var parsed contentPublicationPolicyFile
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
+		return nil, err
+	}
+	if parsed.Schema != "content_post_publication_policy" {
+		return nil, fmt.Errorf("publication policy schema must be content_post_publication_policy")
+	}
+	limits := parsed.TextLimits
+	if limits.TitleMaxRunes <= 0 ||
+		limits.MicroBodyMaxRunes <= 0 ||
+		limits.ArticleMarkdownMaxRunes <= 0 ||
+		limits.SummaryMaxRunes <= 0 ||
+		limits.SemanticMentionsMaxItems <= 0 {
+		return nil, fmt.Errorf("publication policy text limits must be positive")
+	}
+	if parsed.RateLimit.PersonaWindowSeconds <= 0 ||
+		parsed.RateLimit.PersonaMaxPublications <= 0 ||
+		parsed.RateLimit.DependencyFailure != "fail_closed" {
+		return nil, fmt.Errorf("publication rate limit must be positive and fail_closed")
+	}
+	if !parsed.Safety.Required ||
+		parsed.Safety.DependencyFailure != "fail_closed" ||
+		parsed.Safety.UnavailableAction != "review" ||
+		len(parsed.Safety.Decisions) != 4 {
+		return nil, fmt.Errorf("publication safety gate must be required and fail_closed")
+	}
+	return &parsed, nil
+}
+
+func readContentMediaUploadPolicy(
+	path string,
+) (*contentMediaUploadPolicyFile, error) {
+	var parsed contentMediaUploadPolicyFile
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
+		return nil, err
+	}
+	if parsed.Schema != "content_media_upload_policy" {
+		return nil, fmt.Errorf("media upload policy schema must be content_media_upload_policy")
+	}
+	if !parsed.StreamingRequired {
+		return nil, fmt.Errorf("media upload policy must require streaming")
+	}
+	for _, mediaType := range []string{"image", "video", "audio", "file"} {
+		definition, ok := parsed.MediaTypes[mediaType]
+		if !ok ||
+			definition.MaxFileSizeBytes <= 0 ||
+			len(definition.AllowedContentTypes) == 0 {
+			return nil, fmt.Errorf("media upload policy %s limits and content types are required", mediaType)
+		}
+	}
+	if parsed.Errors.FileTooLarge == "" || parsed.Errors.UnsupportedType == "" {
+		return nil, fmt.Errorf("media upload policy error codes are required")
+	}
+	return &parsed, nil
+}
+
+func readContentImageVariantPolicy(
+	path string,
+) (*contentImageVariantPolicyFile, error) {
+	var parsed contentImageVariantPolicyFile
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
+		return nil, err
+	}
+	if parsed.Schema != "content_image_variant_policy" ||
+		parsed.DerivativePolicyVersion <= 0 {
+		return nil, fmt.Errorf(
+			"image variant policy requires schema and positive derivative policy version",
+		)
+	}
+	expected := map[string]struct {
+		width      int
+		format     string
+		quality    int
+		processing string
+	}{
+		"thumbnail": {320, "webp", 80, "image/resize,w_320/format,webp/quality,q_80"},
+		"display":   {960, "webp", 82, "image/resize,w_960/format,webp/quality,q_82"},
+		"cover":     {1280, "webp", 85, "image/resize,w_1280/format,webp/quality,q_85"},
+		"full":      {2048, "webp", 90, "image/resize,w_2048/format,webp/quality,q_90"},
+	}
+	if len(parsed.Profiles) != len(expected) {
+		return nil, fmt.Errorf("image variant policy has unexpected profiles")
+	}
+	for name, want := range expected {
+		profile, ok := parsed.Profiles[name]
+		if !ok ||
+			profile.Width != want.width ||
+			profile.Format != want.format ||
+			profile.Quality != want.quality ||
+			profile.Processing != want.processing ||
+			strings.TrimSpace(profile.Scene) == "" {
+			return nil, fmt.Errorf("image variant policy %s is invalid", name)
+		}
+	}
+	return &parsed, nil
 }
 
 func readRequestContext(path string) (*requestContextFile, error) {

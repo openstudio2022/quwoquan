@@ -1,4 +1,0 @@
-service:
-  name: platform-ops-service
-  http:
-    addr: ":18087"

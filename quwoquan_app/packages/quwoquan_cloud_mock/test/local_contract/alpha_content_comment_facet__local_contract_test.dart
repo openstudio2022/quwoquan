@@ -59,4 +59,64 @@ void main() {
       176,
     );
   });
+
+  test('alpha Comment Facet 与 hot/latest 及回复升序契约同构', () async {
+    final comments = AlphaContentCommentFacet(actorId: 'alpha-test-persona');
+    final popular = await comments.createComment(
+      CreateContentCommentCommand(
+        postId: 'alpha-sort-post',
+        content: '高互动旧评论',
+        personaContextVersion: 1,
+      ),
+    );
+    final latest = await comments.createComment(
+      CreateContentCommentCommand(
+        postId: 'alpha-sort-post',
+        content: '低互动新评论',
+        personaContextVersion: 1,
+      ),
+    );
+    await comments.reactToComment(
+      ReactToContentCommentCommand(
+        commentId: popular.id,
+        reaction: ContentCommentReactionValue.like,
+      ),
+    );
+
+    final hot = await comments.listComments(postId: 'alpha-sort-post');
+    final latestPage = await comments.listComments(
+      postId: 'alpha-sort-post',
+      sort: ContentCommentSort.latest,
+    );
+    expect(hot.items.map((item) => item.id), <String>[popular.id, latest.id]);
+    expect(latestPage.items.map((item) => item.id), <String>[
+      latest.id,
+      popular.id,
+    ]);
+
+    final firstReply = await comments.createComment(
+      CreateContentCommentCommand(
+        postId: 'alpha-sort-post',
+        content: '第一条回复',
+        replyToCommentId: popular.id,
+        personaContextVersion: 1,
+      ),
+    );
+    final secondReply = await comments.createComment(
+      CreateContentCommentCommand(
+        postId: 'alpha-sort-post',
+        content: '第二条回复',
+        replyToCommentId: popular.id,
+        personaContextVersion: 1,
+      ),
+    );
+    final replies = await comments.listReplies(
+      postId: 'alpha-sort-post',
+      commentId: popular.id,
+    );
+    expect(replies.items.map((item) => item.id), <String>[
+      firstReply.id,
+      secondReply.id,
+    ]);
+  });
 }

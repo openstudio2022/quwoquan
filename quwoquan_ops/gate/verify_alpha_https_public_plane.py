@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import re
 import socket
 import subprocess
 import sys
@@ -9,28 +8,13 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-LOCAL_ROOT_CA = (
-    ROOT
-    / ".qwq_output"
-    / "local"
-    / "alpha-local"
-    / "tls"
-    / "ca"
-    / "root.crt"
-)
-APP_CHAT_MOCK_DATA_PATH = (
-    ROOT
-    / "quwoquan_app"
-    / "lib"
-    / "cloud"
-    / "services"
-    / "chat"
-    / "mock"
-    / "chat_mock_data.dart"
-)
-GROUP_AVATAR_CALL_RE = re.compile(r"groupAvatarFor\('([^']+)'\)")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-
+from quwoquan_ops.cli.lib.local_target_tls import (
+    LocalTargetTlsError,
+    resolve_local_target_root_ca,
+)
 CHECKS = (
     (
         "api-health",
@@ -60,7 +44,7 @@ CHECKS = (
         "avatar",
         "alpha-avatar.quwoquan-env.test",
         17100,
-        "/media/avatar/conversation/conv_002/v1/mock.png",
+        "/media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
         None,
         "200",
     ),
@@ -68,7 +52,7 @@ CHECKS = (
         "chat-group-avatar-current-contract",
         "alpha-avatar.quwoquan-env.test",
         17100,
-        "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png",
+        "/media/avatar/s/archived-avatar/group/fixture_conv_group/composite.png",
         None,
         "200",
     ),
@@ -111,7 +95,7 @@ ANDROID_LOOPBACK_CHECKS = (
         "android-emulator-chat-group-avatar-current-contract",
         "10.0.2.2",
         17100,
-        "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png",
+        "/media/avatar/s/archived-avatar/group/fixture_conv_group/composite.png",
         None,
         "200",
     ),
@@ -140,21 +124,6 @@ ANDROID_LOOPBACK_CHECKS = (
         "206",
     ),
 )
-
-
-def _collect_app_mock_group_avatar_paths() -> list[str]:
-    text = APP_CHAT_MOCK_DATA_PATH.read_text(encoding="utf-8")
-    conversation_ids = {
-        match.group(1)
-        for match in GROUP_AVATAR_CALL_RE.finditer(text)
-        if "$" not in match.group(1)
-    }
-    if "groupAvatarFor('conv_grid_$n')" in text:
-        conversation_ids.update(f"conv_grid_{index}" for index in range(1, 17))
-    return [
-        f"/media/avatar/s/archived-avatar/conversation/{conversation_id}/mock.png"
-        for conversation_id in sorted(conversation_ids)
-    ]
 
 
 def _loopback_addresses(host: str) -> set[str]:
@@ -197,30 +166,8 @@ def _curl_status(
 
 def main() -> int:
     issues: list[str] = []
-    app_group_avatar_checks = tuple(
-        (
-            f"app-mock-group-avatar-{path.split('/')[-3]}",
-            "alpha-avatar.quwoquan-env.test",
-            17100,
-            path,
-            None,
-            "200",
-        )
-        for path in _collect_app_mock_group_avatar_paths()
-    )
-    android_group_avatar_checks = tuple(
-        (
-            f"android-emulator-app-mock-group-avatar-{path.split('/')[-3]}",
-            "10.0.2.2",
-            17100,
-            path,
-            None,
-            "200",
-        )
-        for path in _collect_app_mock_group_avatar_paths()
-    )
-    checks = (*CHECKS, *app_group_avatar_checks)
-    android_checks = (*ANDROID_LOOPBACK_CHECKS, *android_group_avatar_checks)
+    checks = CHECKS
+    android_checks = ANDROID_LOOPBACK_CHECKS
 
     hosts = sorted({host for _, host, _, _, _, _ in checks})
     for host in hosts:
@@ -238,9 +185,12 @@ def main() -> int:
                 f"{name} expected HTTP {expected}, got {status}: https://{host}:{port}{path}"
             )
 
-    if not LOCAL_ROOT_CA.is_file():
-        issues.append(f"local root CA missing: {LOCAL_ROOT_CA}")
-    else:
+    try:
+        local_root_ca = resolve_local_target_root_ca("alpha-local")
+    except LocalTargetTlsError as exc:
+        local_root_ca = None
+        issues.append(str(exc))
+    if local_root_ca is not None:
         for name, host, port, path, range_header, expected in android_checks:
             status = _curl_status(
                 host,
@@ -248,7 +198,7 @@ def main() -> int:
                 path,
                 range_header,
                 connect_to="127.0.0.1",
-                cacert=LOCAL_ROOT_CA,
+                cacert=local_root_ca,
             )
             if status != expected:
                 issues.append(

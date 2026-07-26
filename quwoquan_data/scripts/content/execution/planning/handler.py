@@ -42,7 +42,7 @@ def handle_plan(args: argparse.Namespace) -> None:
             vertical=args.vertical,
             subject_kind=args.subject,
             subject_type=subject_type,
-            intent=args.intent or args.angle,
+            intent=args.intent,
             audience=args.audience,
             creator_archetype=args.creator_archetype,
             region=args.region,
@@ -73,7 +73,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--subject", choices=["entity", "topic"], default="entity")
     p.add_argument("--kind", default="景区", help="Entity/topic kind, e.g. 景区, 学校, 线路")
     p.add_argument("--intent", help="Intent name, e.g. 路线推荐, 新生攻略")
-    p.add_argument("--angle", help="Backward-compatible alias of --intent")
     p.add_argument("--audience", help="Audience id")
     p.add_argument("--region", help="Region condition key, e.g. 高原, 沿海海岛, 平原都市")
     p.add_argument("--season", help="Season condition key, e.g. 春, 夏, 秋, 冬, 雨季, 旺季")

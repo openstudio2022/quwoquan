@@ -1,54 +1,69 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "唯一内容执行工作包。每个 executionId 只允许一个可恢复的中间过程根。",
+  "description": "One immutable content execution work package.",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "executionId": {
       "type": "string",
-      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
-    "vertical": { "type": "string" },
-    "contentType": { "enum": ["homepage", "article", "image", "video"] },
-    "intent": { "type": "string" },
-    "scope": { "type": "string" },
-    "milestone": { "enum": ["canary", "m1", "m2", "m3"] },
-    "sequence": { "type": "integer", "minimum": 1 },
-    "recipe": {
+    "familyRef": {
       "type": "object",
-      "properties": {
-        "ref": { "type": "string" },
-        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
-      },
+      "additionalProperties": false,
       "required": ["ref", "sha256"],
-      "additionalProperties": false
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
     },
     "sourceDigest": {
       "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest", "inputs"],
       "properties": {
-        "algorithm": { "const": "sha256" },
-        "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
         "inputs": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "minItems": 1
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
         }
-      },
-      "required": ["algorithm", "digest", "inputs"],
-      "additionalProperties": false
+      }
     },
-    "resolvedParams": { "type": "object" },
-    "selectionPolicy": { "const": "frozen" },
-    "targetSetRef": { "const": "0.plan/target_set.json" },
-    "targetSetSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "retryOf": { "type": ["string", "null"] },
-    "createdAt": { "type": "string" },
-    "repoRoot": { "type": "string" }
+    "modelBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "authorModel", "authorModelFamily", "authorModelParameters", "reviewerModel", "reviewerModelFamily", "reviewerModelParameters"],
+      "properties": {
+        "provider": {"const": "cursor_sdk"},
+        "authorModel": {"type": "string", "minLength": 1},
+        "authorModelFamily": {"type": "string", "minLength": 1},
+        "authorModelParameters": {"$ref": "#/$defs/modelParameters"},
+        "reviewerModel": {"type": "string", "minLength": 1},
+        "reviewerModelFamily": {"type": "string", "minLength": 1},
+        "reviewerModelParameters": {"$ref": "#/$defs/modelParameters"}
+      }
+    },
+    "requestRef": {"const": "0.plan/request.json"},
+    "targetSetRef": {"const": "0.plan/target_set.json"},
+    "targetSetDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "retryOf": {"type": ["string", "null"]}
   },
-  "required": [
-    "executionId", "vertical", "contentType", "intent",
-    "scope", "milestone", "sequence", "recipe", "sourceDigest", "resolvedParams", "selectionPolicy",
-    "targetSetRef", "targetSetSha256", "retryOf",
-    "createdAt", "repoRoot"
-  ],
-  "additionalProperties": false
+  "required": ["executionId", "familyRef", "sourceDigest", "modelBinding", "requestRef", "targetSetRef", "targetSetDigest", "retryOf"],
+  "$defs": {
+    "modelParameters": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "value": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
 }

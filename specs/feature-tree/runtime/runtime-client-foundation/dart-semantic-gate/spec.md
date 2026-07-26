@@ -1,41 +1,67 @@
-# L3 子特性：dart-semantic-gate
+# L3 Story：DART 语义门禁 (`dart-semantic-gate`)
 
-## 功能说明
+> 所属能力：[`runtime-client-foundation`](../spec.md)
 
-端侧 Dart 编码规范的**自动化守门**，在 Explore→PRD→Design→Dev→Verify→Commit 全链路拦截：
-- 硬编码视觉字面量（width/height/leadingSize、fontSize、EdgeInsets、Color 等）
-- iOS 语义风格违规（行尾箭头语义、Cupertino 页面混用 Material 交互、selector leading 语义）
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-确保设计系统 token（AppSpacing、AppTypography、AppColors）与 iOS 全局语义被持续执行。
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-| L4 子节点 | 职责 |
-|-----------|------|
-| `verify-script-and-gate-integration` | 新建 verify_dart_semantic.py + 纳入 gate_repo.sh |
-| `rules-and-flow-enhancement` | 02-dart-coding、06 规则、00_MASTER_DEVELOPMENT_FLOW 补充触控/布局禁止示例与约束 |
-| `ff-deliver-semantic-checklist` | design/tasks 模板增加编码规范小节；`/dev` 对 Dart 变更自动跑语义检查 |
-| `design-token-metadata-registry` | 设计 token 注册表（contracts/metadata）→ codegen/lint 联动（未来演进） |
+## 1. 用户价值
 
-## 范围
+作为维护 Flutter 客户端的开发者，
+我希望在提交前发现非语义颜色、尺寸、平台组件或文案用法并获得可定位错误，
+从而阻止页面视觉与交互规则持续漂移。
 
-- **必检**：width、height、leadingSize、fontSize、size、EdgeInsets、BorderRadius、Color(0x)
-- **必检（iOS 语义）**：`Icons.chevron_right`、`CupertinoPageScaffold` 中 `Checkbox`/`SnackBar`/`ScaffoldMessenger`、selector 页面 `CupertinoIcons.back`
-- **白名单**：lib/core/design_system/、lib/core/constants/、*_test.dart fixture
-- **不负责**：云侧 Go 代码、非 Dart 文件
+## 2. 范围与非目标
 
-## 适用范围与约束
+### In Scope
 
-- **适用**：quwoquan_app/lib/**/*.dart
-- **约束**：gate 必须调用 verify_dart_semantic，失败即阻塞
-- **不适用**：设计系统定义文件、测试 fixture
+- “DART 语义门禁”的输入、可观察主路径、失败语义以及与父能力的交接。
 
-## 与父/子节点关系
+### Out of Scope
 
-- 父节点：runtime-client-foundation L2
-- 子节点：4 个 L4（见上表）
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-## 验收标准概要
+## 3. 行为要求
 
-- A1：verify_dart_semantic.py 存在且能检出 width: 44 等硬编码
-- A2：gate_repo.sh run_app 中调用该脚本
-- A3：02-dart-coding 含 width/height/leadingSize 禁止示例
-- A4：FF 模板含编码规范小节；opsx-apply 对 Dart 变更执行语义检查
+<a id="req-001"></a>
+### REQ-001 DART 语义门禁
+
+- **约束**：gate 必须调用 verify_dart_semantic，失败即阻塞。
+
+<a id="req-002"></a>
+### REQ-002 约束：gate 必须调用 verifydartsemantic，失败即阻塞
+
+- **约束**：gate 必须调用 verify_dart_semantic，失败即阻塞。
+- 02-dart-coding 含 width/height/leadingSize 禁止示例。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 DART 语义门禁
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“DART 语义门禁”对应的公开行为。
+- THEN **约束**：gate 必须调用 verify_dart_semantic，失败即阻塞。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 DART 语义门禁 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“DART 语义门禁”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

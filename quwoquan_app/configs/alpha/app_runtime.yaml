@@ -1,7 +1,7 @@
 schema: app-runtime-config
 runtime:
   appRuntimeEnv: alpha
-  appDataSource: mock
+  appDataSource: remote
   gatewayBaseUrl: https://alpha-api.quwoquan-env.test:17000
   legalBaseUrl: https://alpha-api.quwoquan-env.test:17000/legal
   realtimeBaseUrl: wss://alpha-api.quwoquan-env.test:17000
@@ -9,8 +9,8 @@ runtime:
   mediaImageCdnBaseUrl: https://alpha-image.quwoquan-env.test:17100
   mediaVideoCdnBaseUrl: https://alpha-video.quwoquan-env.test:17100
   mediaUploadBaseUrl: https://alpha-upload.quwoquan-env.test:17100
-  contractFixtureProfile: lite
-  currentUserId: fixture_user_current
+  rtcMediaConnectionUrl: wss://alpha-rtc.quwoquan-env.test:17000
+  currentUserId: ''
 seed:
-  enabled: true
-  manifest: quwoquan_service/contracts/metadata/_shared/test_fixtures/app_alpha_seed_manifest.json
+  enabled: false
+  manifest: ''

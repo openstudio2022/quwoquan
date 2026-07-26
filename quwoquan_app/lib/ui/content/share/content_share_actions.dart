@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -22,6 +25,7 @@ class ContentShareActionResult {
     this.destinationKind,
     this.destination,
     this.providerReceiptId,
+    this.error,
   });
 
   final String actionId;
@@ -32,6 +36,7 @@ class ContentShareActionResult {
   final String? destinationKind;
   final String? destination;
   final String? providerReceiptId;
+  final Object? error;
 
   bool get isConfirmedOutboundDelivery =>
       success &&
@@ -61,12 +66,12 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
         case 'copy_link':
           await Clipboard.setData(ClipboardData(text: template.landingUrl));
           if (context.mounted) {
-            AppToast.show(context, UITextConstants.shareLinkCopied);
+            AppToast.show(context, ChatText.shareLinkCopied);
           }
           return ContentShareActionResult(
             actionId: action.id,
             success: true,
-            message: UITextConstants.shareLinkCopied,
+            message: ChatText.shareLinkCopied,
           );
         case 'system_share':
           final result = await SharePlus.instance.share(
@@ -90,23 +95,23 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
             );
           }
           if (context.mounted) {
-            AppToast.show(context, UITextConstants.shareCancelled);
+            AppToast.show(context, ChatText.shareCancelled);
           }
           return ContentShareActionResult(
             actionId: action.id,
             success: false,
             dismissed: true,
-            message: UITextConstants.shareCancelled,
+            message: ChatText.shareCancelled,
           );
         case 'save_poster':
           final savedPath = await _savePoster(template);
           if (context.mounted) {
-            AppToast.show(context, UITextConstants.sharePosterSaved);
+            AppToast.show(context, ChatText.sharePosterSaved);
           }
           return ContentShareActionResult(
             actionId: action.id,
             success: true,
-            message: UITextConstants.sharePosterSaved,
+            message: ChatText.sharePosterSaved,
             savedPath: savedPath,
           );
         default:
@@ -119,14 +124,22 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
             message: UITextConstants.operationFailed,
           );
       }
-    } catch (_) {
+    } catch (error, stackTrace) {
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.share.${action.id}',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       if (context.mounted) {
-        AppToast.show(context, UITextConstants.shareFailed);
+        AppToast.show(context, ChatText.shareFailed);
       }
       return ContentShareActionResult(
         actionId: action.id,
         success: false,
-        message: UITextConstants.shareFailed,
+        message: ChatText.shareFailed,
+        error: error,
       );
     }
   }

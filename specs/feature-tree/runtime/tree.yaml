@@ -1,4 +1,0 @@
-version: 2
-status: retired
-canonical: specs/feature-tree/tree_index.yaml
-note: runtime/tree.yaml 已退役，runtime 能力树结构请以 tree_index.yaml 与目录树为准。

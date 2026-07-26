@@ -15,7 +15,6 @@ from content.execution.support import (
     image_count_is_hard_quota,
     minimum_publishable_images_per_target,
 )
-from content.execution.workspace import load_execution_manifest
 
 
 @dataclass(frozen=True)
@@ -40,9 +39,9 @@ def resolve_content_plan_contract(
     articles = int(quotas.get("entityArticlesPerTarget") or 0)
     images = int(quotas.get("imageWorksPerTarget") or 0)
     videos = int(quotas.get("videoWorksPerTarget") or 0)
-    execution_content_type = str(
-        load_execution_manifest(ctx.execution_id).get("contentType") or ""
-    )
+    from content.execution.identity import parse_execution_id
+
+    execution_content_type = parse_execution_id(ctx.execution_id).content_type.value
     active_content_types: set[str] = set()
     if articles > 0 or int(quotas.get("routeArticles") or 0) > 0:
         active_content_types.add("article")

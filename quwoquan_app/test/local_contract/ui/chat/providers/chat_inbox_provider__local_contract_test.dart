@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 
@@ -54,7 +54,7 @@ void main() {
         ],
       );
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
       final sub = container.listen(chatInboxListProvider, (_, _) {});
@@ -72,7 +72,7 @@ void main() {
     test('markConversationRead clears unread and mention counts', () async {
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(
+          chatRepositoryCompositionProvider.overrideWithValue(
             _UnreadMentionChatRepository(),
           ),
         ],

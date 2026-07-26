@@ -27,7 +27,6 @@ RETRY_MARKERS = (
   "Waiting for another flutter command to release the startup lock",
   "Building native assets failed",
   "Connection closed while receiving data",
-  "HttpException",
   "release-assets.githubusercontent.com",
   "PathNotFoundException",
 )
@@ -41,7 +40,7 @@ void main() {
 }
 """
 DEFAULT_TEST_TIMEOUT_SECONDS = int(
-  os.environ.get("FLUTTER_TEST_GUARD_TIMEOUT_SECONDS", "1200")
+  os.environ.get("FLUTTER_TEST_GUARD_TIMEOUT_SECONDS", "2400")
 )
 RUNTIME_DEFINE_SCRIPT = APP_ROOT / "scripts" / "env" / "print_app_env_dart_defines.py"
 

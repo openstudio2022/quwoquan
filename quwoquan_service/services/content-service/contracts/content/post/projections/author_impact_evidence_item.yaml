@@ -1,0 +1,74 @@
+read_model: AuthorImpactEvidenceItem
+description: "创作者影响力单条证据明细（「我的影响力 / TA的影响」数字下钻明细行真相源，\n对应云侧读模型 rm_author_impact_evidence）。每条 evidence\
+  \ 对应一次对作者\n产生影响的真实行为（如收藏 / 分享 / 进圈 / 关注 / 读完），以「被影响内容」为\n载体呈现（内容标题与封面），云侧按 viewer 视角产出 summaryText 结论句，端只读\n\
+  直出，禁止本地拼装文案（全局验收 G2）。\n\n红线：不展示产生影响的具体用户身份（actorId 仅服务端存储用于去重 / 幂等，不下发）；\n不下发任何运营指标（转化率 / 漏斗 / 增长率）。无证据时端不编造全量。\n\
+  \n闭集枚举（端按字符串解析，与 AuthorImpactItem 一致）：\n  helpType: relationship | community | decision | knowledge\
+  \ | spread\n"
+consumers:
+- app
+client_projection:
+  dart_class: AuthorImpactEvidenceItem
+  strict: true
+  base_class: ''
+  output_path: cloud/runtime/generated/content/author_impact_evidence_item.g.dart
+  dart_imports:
+  - ../recommendation/intersection_visual.g.dart
+  - ../recommendation/intersection_target.g.dart
+  - ../recommendation/intersection_representative_actor.g.dart
+  - ../recommendation/intersection_action_hint.g.dart
+  fields:
+  - name: evidenceId
+    dart_type: String
+    nullable: false
+    source: evidenceId
+    default: ''''''
+  - name: impactId
+    dart_type: String
+    nullable: false
+    source: impactId
+    default: ''''''
+  - name: helpType
+    dart_type: String
+    nullable: false
+    source: helpType
+    default: ''''''
+  - name: action
+    dart_type: String
+    nullable: false
+    source: action
+    default: ''''''
+  - name: intersectionDimension
+    dart_type: String
+    nullable: false
+    source: intersectionDimension
+    default: ''''''
+  - name: occurredAt
+    dart_type: String
+    nullable: false
+    source: occurredAt
+    default: ''''''
+  - name: summaryText
+    dart_type: String
+    nullable: false
+    source: summaryText
+    default: ''''''
+  - name: sampleVisual
+    dart_type: IntersectionVisual
+    nullable: true
+    source: sampleVisual
+    map_from_string_key_class: IntersectionVisual
+  - name: representativeActor
+    dart_type: IntersectionRepresentativeActor
+    nullable: true
+    source: representativeActor
+    map_from_string_key_class: IntersectionRepresentativeActor
+  - name: actionHints
+    dart_type: List<IntersectionActionHint>
+    nullable: false
+    source: actionHints
+    list_element_dart_class: IntersectionActionHint
+  - name: contentTarget
+    dart_type: IntersectionTarget
+    nullable: true
+    source: contentTarget
+    map_from_string_key_class: IntersectionTarget

@@ -48,15 +48,15 @@ asset://cover
             'assets': <Object?>[
               <String, Object?>{
                 'assetId': 'cover',
-                'objectKey': 'media/image/s/seo/post_seo_1/v1/cover.jpg',
+                'publicSliceKey': 'media/image/s/seo/post_seo_1/v1/cover.jpg',
               },
               <String, Object?>{
                 'assetId': 'bridge',
-                'objectKey': 'media/image/s/seo/post_seo_1/v1/bridge.jpg',
+                'publicSliceKey': 'media/image/s/seo/post_seo_1/v1/bridge.jpg',
               },
               <String, Object?>{
                 'assetId': 'street',
-                'objectKey': 'media/image/s/seo/post_seo_1/v1/street.jpg',
+                'publicSliceKey': 'media/image/s/seo/post_seo_1/v1/street.jpg',
               },
             ],
           },
@@ -121,7 +121,8 @@ asset://cover
             'assets': <Object?>[
               <String, Object?>{
                 'assetId': 'cover',
-                'objectKey': 'media/image/s/seo/post-object-key/v1/cover.jpg',
+                'publicSliceKey':
+                    'media/image/s/seo/post-object-key/v1/cover.jpg',
               },
             ],
           },
@@ -137,7 +138,7 @@ asset://cover
       expect(doc.html, contains('data-asset-id="cover"'));
     });
 
-    test('renders display variant and keeps asset id for web preview lookup', () {
+    test('renders canonical public slice and keeps asset id for lookup', () {
       final doc = renderer.render(
         const MarkdownSeoRenderInput(
           postId: 'post_variants',
@@ -151,21 +152,8 @@ asset://cover
             'assets': <Object?>[
               <String, Object?>{
                 'assetId': 'cover',
-                'variants': <String, Object?>{
-                  'display': <String, Object?>{
-                    'objectKey':
-                        'media/image/s/seo/post_variants/v1/cover-display.webp',
-                  },
-                  'full': <String, Object?>{
-                    'objectKey':
-                        'media/image/s/seo/post_variants/v1/cover-full.webp',
-                  },
-                  'original': <String, Object?>{
-                    'objectKey':
-                        'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
-                    'requiresAccess': true,
-                  },
-                },
+                'publicSliceKey':
+                    'media/image/s/seo/post_variants/v1/cover-display.webp',
               },
             ],
           },
@@ -222,7 +210,7 @@ coverImage: asset://cover
             'assetId': 'cover',
             'fileName': 'cover.jpg',
             'sourceAssetRef': 'source/cover.jpg',
-            'objectKey': 'media/image/s/runtime-preview/cover.jpg',
+            'publicSliceKey': 'media/image/s/runtime-preview/cover.jpg',
           },
         ],
       };
@@ -288,14 +276,14 @@ coverImage: asset://海螺沟_cover_01
           'assetId': '海螺沟_cover_01',
           'fileName': '海螺沟_cover_01.jpg',
           'sourceAssetRef': 'source/海螺沟_cover_01.jpg',
-          'objectKey':
+          'publicSliceKey':
               'media/image/s/runtime-preview/topic-layout-sample/v1/cover-01.jpg',
         },
         <String, Object?>{
           'assetId': '海螺沟_detail_02',
           'fileName': '海螺沟_detail_02.jpg',
           'sourceAssetRef': 'source/海螺沟_detail_02.jpg',
-          'objectKey':
+          'publicSliceKey':
               'media/image/s/runtime-preview/topic-layout-sample/v1/detail-02.jpg',
         },
       ];

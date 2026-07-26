@@ -33,6 +33,7 @@ class ChatMessageDisplayItem {
     required this.thumbnailUrl,
     required this.audioDurationMs,
     required this.audioWaveform,
+    this.mentions = const <String>[],
     this.card,
   });
 
@@ -56,6 +57,7 @@ class ChatMessageDisplayItem {
   final String thumbnailUrl;
   final int audioDurationMs;
   final List<double> audioWaveform;
+  final List<String> mentions;
   final ChatMessageCardDto? card;
 }
 
@@ -91,6 +93,7 @@ extension ChatMessageDtoDisplay on ChatMessageDto {
       thumbnailUrl: imageUrl,
       audioDurationMs: 0,
       audioWaveform: const <double>[],
+      mentions: List<String>.unmodifiable(mentions ?? const <String>[]),
       card: card,
     );
   }

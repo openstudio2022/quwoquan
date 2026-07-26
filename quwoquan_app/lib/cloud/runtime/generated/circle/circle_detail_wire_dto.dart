@@ -1,6 +1,6 @@
 /// 圈子详情响应中的「视角」投影（GetCircle 等路径 wire 顶层字段）。
 ///
-/// 对齐：contracts/metadata/social/circle/projections/circle_detail_viewer_wire.yaml
+/// 对齐：contracts/metadata/circle/circle/circle/projections/circle_detail_viewer_wire.yaml
 class CircleDetailWireDto {
   const CircleDetailWireDto({
     this.role,

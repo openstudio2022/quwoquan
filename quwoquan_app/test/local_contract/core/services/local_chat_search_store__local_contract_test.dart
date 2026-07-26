@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation/spec.md#gwt-001
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -31,7 +32,7 @@ void main() {
           subjectType: 'owner',
           displayName: '测试用户',
           avatarUrl: '',
-          personaContextVersion: 'v1',
+          contextVersion: 1,
         ),
       );
       subNamespace = LocalSearchNamespace.fromActivePersonaContext(
@@ -41,7 +42,7 @@ void main() {
           subjectType: 'sub_account',
           displayName: '子账号',
           avatarUrl: '',
-          personaContextVersion: 'v2',
+          contextVersion: 2,
         ),
       );
       await store.ensureReady();
@@ -197,6 +198,35 @@ void main() {
       );
       expect(
         await store.searchMessages(namespace: subNamespace, query: '布光'),
+        isEmpty,
+      );
+    });
+
+    test('账号 closed 终态物理清除全部 namespace', () async {
+      await store.upsertConversationRecords(
+        namespace: namespace,
+        conversations: const <ConversationCacheRecord>[
+          ConversationCacheRecord(id: 'conv_owner_terminal', title: '主账号会话'),
+        ],
+      );
+      await store.upsertConversationRecords(
+        namespace: subNamespace,
+        conversations: const <ConversationCacheRecord>[
+          ConversationCacheRecord(
+            id: 'conv_persona_terminal',
+            title: 'Persona 会话',
+          ),
+        ],
+      );
+
+      await store.clearAllNamespaces();
+
+      expect(
+        await store.listConversationRecords(namespace: namespace),
+        isEmpty,
+      );
+      expect(
+        await store.listConversationRecords(namespace: subNamespace),
         isEmpty,
       );
     });

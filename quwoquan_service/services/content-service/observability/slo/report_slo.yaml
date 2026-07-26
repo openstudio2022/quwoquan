@@ -1,0 +1,49 @@
+version: 1
+service: content-service
+object: Report
+
+golden_metrics:
+  - id: report_valid_create_rate
+    description: 通过鉴权、校验与幂等约束后成功创建的举报占提交请求比例。
+    source: |
+      sum(rate(http_server_requests_total{service="content-service",operation="CreateReport",status=~"2.."}[30m]))
+      /
+      sum(rate(http_server_requests_total{service="content-service",operation="CreateReport"}[30m]))
+    objective_min: 0.99
+    measured: true
+
+  - id: report_closure_within_72h_rate
+    description: Report 从 created 到 resolved/dismissed 在 72 小时内闭合的比例。
+    source: |
+      sum(rate(content_report_closure_slo_total{within_72h="true"}[24h]))
+      /
+      sum(rate(content_report_closure_slo_total[24h]))
+    objective_min: 0.95
+    measured: true
+
+  - id: negative_feedback_future_window_convergence
+    description: 显式负反馈后未来窗口对同内容、同作者、同类型候选的抑制效果；精确内容抑制已有在线计数，相似内容收敛需 gamma replay/UAT。
+    source: recommendation_feed_negative_candidate_suppressed_total
+    objective_min: 0.99
+    objective_only: true
+
+  - id: blocked_keyword_filter_rate
+    description: 已配置屏蔽关键词时，候选被关键词过滤的比例。
+    source: |
+      rate(content_feed_blocked_keyword_filtered_total[30m])
+      /
+      rate(content_feed_blocked_keyword_candidates_total[30m])
+    objective_only: true
+
+alerts:
+  - id: report_create_error_rate_high
+    condition: report_valid_create_rate < 0.99 for 15m
+    severity: warning
+  - id: report_closure_slo_breached
+    condition: report_closure_within_72h_rate < 0.95 for 1h
+    severity: critical
+
+rollback:
+  report_progress_read: disable_my_reports_surface
+  report_notification_projection: disable_report_notification_consumer
+  blocked_keyword_filter: omit_blocked_keyword_context

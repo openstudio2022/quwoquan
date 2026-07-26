@@ -72,7 +72,7 @@ def test_repo_master_list_passes_gate():
     assert errors == [], errors
     assert file_count >= 2
     assert leaf_count >= 3
-    assert COVERAGE_MASTER_ROOT.name == "中国"
+    assert COVERAGE_MASTER_ROOT.name == "china"
 
 
 def test_schema_contract_is_single_source():

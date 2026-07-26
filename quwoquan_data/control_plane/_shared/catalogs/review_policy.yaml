@@ -1,0 +1,19 @@
+policyId: review
+score:
+  minimum: 1
+  maximum: 5
+  agentPublishAtLeast: 3
+  humanPublishAtLeast: 3
+  autoDiscardAtMost: 1
+qualityScoreBands:
+  - minimum: 85
+    score: 5
+  - minimum: 75
+    score: 4
+  - minimum: 60
+    score: 3
+  - minimum: 0
+    score: 2
+requireHumanWhenDoubtful: true
+reprocess:
+  maxAttempts: 3

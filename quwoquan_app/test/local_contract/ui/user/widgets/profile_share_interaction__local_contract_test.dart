@@ -1,7 +1,10 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-002
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-003
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-006
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -15,16 +18,13 @@ import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/share_interaction/share_empty_state.dart';
 import 'package:quwoquan_app/ui/user/widgets/share_interaction/share_interaction_row.dart';
 import 'package:quwoquan_app/ui/user/widgets/share_interaction/share_target_preview.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/fakes/test_profile_interaction_facets.dart';
 
 void main() {
   test('互动 metadata 移除全部、点赞默认且转发仅本人可见', () {
     final tabs = UserProfileUIConfig.interactionSubTabs;
-    expect(tabs.map((tab) => tab.id), <String>[
-      'likes',
-      'comments',
-      'shares',
-      'views',
-    ]);
+    expect(tabs.map((tab) => tab.id), <String>['likes', 'comments', 'shares']);
     expect(tabs.singleWhere((tab) => tab.id == 'likes').isDefault, isTrue);
     final shares = tabs.singleWhere((tab) => tab.id == 'shares');
     expect(shares.visibleInMode('mine'), isTrue);
@@ -53,8 +53,14 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          userProfileRepositoryProvider.overrideWithValue(
-            const MockUserProfileRepository(),
+          profileQueryProvider.overrideWith(
+            (ref, surface) => const MockUserProfileRepository(),
+          ),
+          profileInteractionQueryFacetProvider.overrideWithValue(
+            const TestProfileInteractionFacets(),
+          ),
+          profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+            const TestProfileInteractionFacets(),
           ),
         ],
         child: const CupertinoApp(

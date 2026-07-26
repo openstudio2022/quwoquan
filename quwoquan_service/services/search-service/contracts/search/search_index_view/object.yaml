@@ -1,0 +1,11 @@
+kind: projection
+description: SearchIndexView 的领域对象契约。
+identity:
+  fields:
+  - objectId
+  version_source: checkpoint
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: named_reader
+relationships: []

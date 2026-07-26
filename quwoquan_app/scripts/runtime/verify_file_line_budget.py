@@ -14,7 +14,7 @@ allowlist 冻结基线，之后任何文件超过其登记上限、或新出现�
   - quwoquan_app/lib/l10n/app_localizations*.dart
   - 任意 mock / generated / vendor / test / tests / runtime / runs 目录段
 
-allowlist：specs/gates/file_line_budget_allowlist.yaml
+allowlist：quwoquan_ops/policies/gates/file_line_budget_allowlist.yaml
   block_threshold: 1000
   allow:
     - path: <repo-relative>
@@ -34,7 +34,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-ALLOWLIST_PATH = ROOT / "specs" / "gates" / "file_line_budget_allowlist.yaml"
+ALLOWLIST_PATH = ROOT / "quwoquan_ops" / "policies" / "gates" / "file_line_budget_allowlist.yaml"
 DEFAULT_BLOCK_THRESHOLD = 1000
 
 SCAN_ROOTS = [

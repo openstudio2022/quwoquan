@@ -1,6 +1,6 @@
 import '../operation_request_payload.dart';
 
-/// Content Post 查询契约，来源于 `content/post/service.yaml`。
+/// Content Post 查询契约，来源于 `content/content/post/operations.yaml`。
 ///
 /// 这里仅描述业务请求和响应；surface、route、actor 与追踪上下文由
 /// [CloudOperationInvocationContext] 传入生成客户端。
@@ -158,6 +158,30 @@ final class ContentFootprintPage {
   final String? nextCursor;
 }
 
+/// 当前登录用户对 canonical object 的显式「想去」状态查询。
+final class EntityWishlistStateQuery {
+  const EntityWishlistStateQuery({
+    required this.objectId,
+    required this.objectKind,
+  });
+
+  final String objectId;
+  final String objectKind;
+}
+
+/// 当前登录用户对 canonical object 的显式「想去」状态。
+final class EntityWishlistState {
+  const EntityWishlistState({
+    required this.objectId,
+    required this.objectKind,
+    required this.wishlisted,
+  });
+
+  final String objectId;
+  final String objectKind;
+  final bool wishlisted;
+}
+
 CloudOperationRequestPayload encodeContentPostSearchQuery(
   ContentPostSearchQuery query,
 ) {
@@ -192,6 +216,17 @@ CloudOperationRequestPayload encodeContentFootprintQuery(
   );
 }
 
+CloudOperationRequestPayload encodeEntityWishlistStateQuery(
+  EntityWishlistStateQuery query,
+) {
+  return CloudOperationRequestPayload(
+    queryParameters: <String, String>{
+      'objectId': _requiredText(query.objectId, 'objectId'),
+      'objectKind': _requiredText(query.objectKind, 'objectKind'),
+    },
+  );
+}
+
 ContentPostSearchResultSlice decodeContentPostSearchResultSlice(
   Object? response,
 ) {
@@ -212,6 +247,21 @@ ContentFootprintPage decodeContentFootprintPage(Object? response) {
   return ContentFootprintPage(
     items: items.map(_decodeContentFootprintEntry),
     nextCursor: _optionalText(root['nextCursor']),
+  );
+}
+
+EntityWishlistState decodeEntityWishlistState(Object? response) {
+  final root = _expectObject(response, 'Entity wishlist state response');
+  final wishlisted = root['wishlisted'];
+  if (wishlisted is! bool) {
+    throw const FormatException(
+      'Entity wishlist state response.wishlisted must be a bool',
+    );
+  }
+  return EntityWishlistState(
+    objectId: _requiredText(root['objectId'], 'objectId'),
+    objectKind: _requiredText(root['objectKind'], 'objectKind'),
+    wishlisted: wishlisted,
   );
 }
 

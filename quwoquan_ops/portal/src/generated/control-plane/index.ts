@@ -1,5 +1,3 @@
-export * from './domainOnboardingDomains.generated.js';
-export * from './domainOnboardingSchema.generated.js';
 export * from './platformConfig.generated.js';
 export * from './platformControlPlane.generated.js';
 export * from './portalMenu.generated.js';

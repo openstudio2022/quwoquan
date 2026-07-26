@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_tool_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 class ImageEditorProToolEntry {
   const ImageEditorProToolEntry({
@@ -19,6 +19,59 @@ class ImageEditorProToolEntry {
   final String? semanticIconKey;
 }
 
+/// 专业工具入口的唯一有序定义。
+const List<ImageEditorProToolEntry> kImageEditorProCategoryEntries =
+    <ImageEditorProToolEntry>[
+      ImageEditorProToolEntry(
+        type: 'overall',
+        categoryIndex: kImageEditorProCategoryOverall,
+        icon: Icons.tune,
+        label: UITextConstants.imageEditorProTabOverall,
+      ),
+      ImageEditorProToolEntry(
+        type: 'local',
+        categoryIndex: kImageEditorProCategoryLocal,
+        icon: Icons.place_outlined,
+        label: UITextConstants.imageEditorProTabLocal,
+      ),
+      ImageEditorProToolEntry(
+        type: 'hsl',
+        categoryIndex: kImageEditorProCategoryHsl,
+        icon: Icons.circle_outlined,
+        label: UITextConstants.imageEditorProHsl,
+        semanticIconKey: kEditorIconHslSolid,
+      ),
+      ImageEditorProToolEntry(
+        type: 'bwLevels',
+        categoryIndex: kImageEditorProCategoryBwLevels,
+        icon: Icons.crop_16_9_outlined,
+        label: UITextConstants.imageEditorProBwLevels,
+        semanticIconKey: kEditorIconBwLevels,
+      ),
+      ImageEditorProToolEntry(
+        type: 'curves',
+        categoryIndex: kImageEditorProCategoryCurve,
+        icon: Icons.show_chart,
+        label: UITextConstants.imageEditorProCurve,
+      ),
+      ImageEditorProToolEntry(
+        type: 'whiteBalance',
+        categoryIndex: kImageEditorProCategoryWhiteBalance,
+        icon: Icons.wb_sunny_outlined,
+        label: UITextConstants.imageEditorProWhiteBalance,
+      ),
+    ];
+
+ImageEditorProToolEntry? imageEditorProCategoryEntryForType(String type) {
+  for (final entry in kImageEditorProCategoryEntries) {
+    if (entry.type == type) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+/// 整体/局部调节项的唯一有序定义。
 const List<ImageEditorProToolEntry> kImageEditorProBaseEntries = [
   ImageEditorProToolEntry(
     type: 'lightSense',
@@ -114,7 +167,3 @@ const List<ImageEditorProToolEntry> kImageEditorProBaseEntries = [
     semanticIconKey: kEditorIconFadeBands,
   ),
 ];
-
-// 兼容已有调用（后续可统一替换为 kImageEditorProBaseEntries）
-const List<ImageEditorProToolEntry> kImageEditorProToolEntries =
-    kImageEditorProBaseEntries;

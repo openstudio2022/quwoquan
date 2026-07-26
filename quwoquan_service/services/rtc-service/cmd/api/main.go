@@ -7,9 +7,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
+	configrelease "quwoquan_service/runtime/configrelease"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -22,18 +23,22 @@ import (
 	rthealth "quwoquan_service/runtime/health"
 	rtotel "quwoquan_service/runtime/otel"
 
+	runtimeconfig "quwoquan_service/runtime/config"
+	rterr "quwoquan_service/runtime/errors"
 	rthttp "quwoquan_service/runtime/http"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
-	httpadapter "quwoquan_service/services/rtc-service/internal/adapters/http"
-	"quwoquan_service/services/rtc-service/internal/adapters/mq"
-	wsadapter "quwoquan_service/services/rtc-service/internal/adapters/ws"
-	"quwoquan_service/services/rtc-service/internal/application"
-	callsession "quwoquan_service/services/rtc-service/internal/domain/call_session"
-	rtccache "quwoquan_service/services/rtc-service/internal/infrastructure/cache"
-	"quwoquan_service/services/rtc-service/internal/infrastructure/livekit"
-	"quwoquan_service/services/rtc-service/internal/infrastructure/persistence"
+	httpadapter "quwoquan_service/services/rtc-service/internal/rtc/call_session/adapters/inbound/http"
+	"quwoquan_service/services/rtc-service/internal/rtc/call_session/adapters/inbound/mq"
+	"quwoquan_service/services/rtc-service/internal/rtc/call_session/application"
+	callsession "quwoquan_service/services/rtc-service/internal/rtc/call_session/domain"
+	rtccache "quwoquan_service/services/rtc-service/internal/rtc/call_session/infrastructure/cache"
+	"quwoquan_service/services/rtc-service/internal/rtc/call_session/infrastructure/livekit"
+	"quwoquan_service/services/rtc-service/internal/rtc/call_session/infrastructure/persistence"
+	"quwoquan_service/services/rtc-service/internal/rtc/call_session/infrastructure/providerbinding"
+	rtcconfig "quwoquan_service/services/rtc-service/internal/rtc/call_session/infrastructure/runtimeconfig"
 )
 
 type redisSceneCfg struct {
@@ -62,6 +67,11 @@ type config struct {
 		} `yaml:"http"`
 	} `yaml:"service"`
 
+	UserAccountSecurityAuthority struct {
+		BaseURL   string `yaml:"base_url"`
+		TimeoutMs int    `yaml:"timeout_ms"`
+	} `yaml:"user_account_security_authority"`
+
 	MongoDB struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
@@ -71,12 +81,6 @@ type config struct {
 		Realtime redisSceneCfg `yaml:"realtime"`
 		General  redisSceneCfg `yaml:"general"`
 	} `yaml:"redis"`
-
-	LiveKit struct {
-		URL       string `yaml:"url"`
-		APIKey    string `yaml:"api_key"`
-		APISecret string `yaml:"api_secret"`
-	} `yaml:"livekit"`
 }
 
 func main() {
@@ -93,6 +97,24 @@ func main() {
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("rtc-service config compatibility failed: %v", err)
 	}
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("rtc-service access token config invalid: %v", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("rtc-service access token verifier invalid: %v", err)
+	}
+	accountSecurityAuthority, err := rtcconfig.NewAccountSecurityAuthority(
+		accessTokenConfig,
+		cfg.UserAccountSecurityAuthority.BaseURL,
+		cfg.UserAccountSecurityAuthority.TimeoutMs,
+	)
+	if err != nil {
+		log.Fatalf("rtc-service account security authority invalid: %v", err)
+	}
 
 	addr := getenvOrDefault("RTC_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if addr == "" {
@@ -102,12 +124,27 @@ func main() {
 	logger := slog.Default()
 	instanceID := getenvOrDefault("SERVICE_INSTANCE_ID", hostname())
 
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		log.Fatalf("rtc-service runtime log exporter init failed: %v", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
 	if err != nil {
 		log.Fatalf("rtc-service process logger init failed: %v", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
 		log.Fatalf("rtc-service exception logger init failed: %v", err)
 	}
@@ -116,6 +153,18 @@ func main() {
 	defer router.Close()
 
 	ctx := context.Background()
+	messageTransport, err := requireRTCMessageTransport(
+		ctx,
+		appEnv,
+		router,
+		map[string]string{
+			"general":  toSceneConfig(cfg.Redis.General).Mode,
+			"realtime": toSceneConfig(cfg.Redis.Realtime).Mode,
+		},
+	)
+	if err != nil {
+		log.Fatalf("rtc-service message transport preflight failed: %v", err)
+	}
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "rtc-service", SamplingRatio: 0.1})
 	defer otelShutdown()
@@ -128,18 +177,47 @@ func main() {
 
 	mongoDB := mongoClient.Database(cfg.MongoDB.Database)
 	callStore := persistence.NewMongoCallStore(mongoDB)
+	if err := callStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("rtc-service call session indexes unavailable: %v", err)
+	}
 	callCache := rtccache.NewCallStateCache(router.Scene("general"))
-	eventPublisher := mq.NewEventPublisher(router.Scene("realtime"))
+	realtimePublisher := mq.NewRealtimePublisher(messageTransport)
 
-	livekitCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
-	livekitClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 10 * time.Second}, livekitCB)
-	roomAdapter := livekit.NewLiveKitRoomAdapter(cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, livekit.WithHTTPClient(livekitClient))
+	mediaBinding, err := providerbinding.ResolveMediaTransport(
+		appEnv,
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("rtc-service media transport binding invalid: %v", err)
+	}
+	var roomAdapter application.MediaRoomProvider
+	switch mediaBinding.AdapterID {
+	case livekit.ProtocolFixtureAdapterID:
+		roomAdapter = livekit.NewProtocolFixtureRoomAdapter()
+	case livekit.AdapterID:
+		livekitCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
+		livekitClient := rtgov.WrapClientWithCB(
+			&http.Client{Timeout: mediaBinding.Timeout},
+			livekitCB,
+		)
+		roomAdapter = livekit.NewLiveKitRoomAdapter(
+			mediaBinding.ConnectionURL,
+			mediaBinding.APIKey,
+			mediaBinding.APISecret,
+			livekit.WithHTTPClient(livekitClient),
+		)
+	default:
+		log.Fatalf(
+			"rtc-service media transport adapter mismatch: got %q",
+			mediaBinding.AdapterID,
+		)
+	}
 	domainSvc := callsession.NewCallSessionService()
-	roomSvc := application.NewRoomService(roomAdapter)
-	tokenIssuer := livekit.NewParticipantTokenIssuer(cfg.LiveKit.APIKey, cfg.LiveKit.APISecret)
 
-	signalHandler := wsadapter.NewSignalHandler(logger)
 	userServiceBaseURL := strings.TrimSpace(os.Getenv("USER_SERVICE_BASE_URL"))
+	if userServiceBaseURL == "" && failFastEnvironment(appEnv) {
+		log.Fatalf("rtc-service requires USER_SERVICE_BASE_URL in %s for the one-to-one relationship gate", appEnv)
+	}
 	relationshipGate := application.DenyRelationshipGate()
 	if userServiceBaseURL != "" {
 		profileCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
@@ -150,13 +228,73 @@ func main() {
 		callStore,
 		callCache,
 		domainSvc,
-		roomSvc,
-		tokenIssuer,
-		eventPublisher,
+		roomAdapter,
 		relationshipGate,
-		signalHandler,
+		application.WithCallAccountSecurityGate(
+			application.NewCallAccountSecurityGate(accountSecurityAuthority),
+		),
 	)
-	handler := httpadapter.NewCallHandler(orchestrator, signalHandler).Routes()
+	outboxRelay := application.NewCallOutboxRelay(
+		callStore,
+		realtimePublisher,
+	)
+	accountSecurityFailures := rtccache.NewAccountSecurityEventFailureStore(
+		router.Scene("general"),
+	)
+	accountSecurityConsumer, err := mq.NewUserAccountSecurityConsumer(
+		messageTransport,
+		orchestrator,
+		accountSecurityFailures,
+		instanceID,
+		logger,
+		mq.DefaultUserAccountSecurityConsumerConfig(),
+	)
+	if err != nil {
+		log.Fatalf("rtc-service account security consumer invalid: %v", err)
+	}
+	workerCtx, cancelWorkers := context.WithCancel(context.Background())
+	var workerWG sync.WaitGroup
+	workerWG.Add(3)
+	go func() {
+		defer workerWG.Done()
+		runRecoveringWorker(
+			workerCtx,
+			logger,
+			"rtc call outbox relay",
+			func(runCtx context.Context) error {
+				return outboxRelay.Run(runCtx, 100*time.Millisecond)
+			},
+		)
+	}()
+	// 振铃超时收割：无人接听迁移 ended/no_answer 并经 outbox 下发 call.ended
+	//（storage.yaml lifecycle_timers.ring_timeout 同源）。
+	go func() {
+		defer workerWG.Done()
+		runRecoveringWorker(
+			workerCtx,
+			logger,
+			"rtc ring timeout sweeper",
+			func(runCtx context.Context) error {
+				return orchestrator.RunRingTimeoutSweeper(runCtx, 5*time.Second)
+			},
+		)
+	}()
+	go func() {
+		defer workerWG.Done()
+		accountSecurityConsumer.Run(workerCtx)
+	}()
+	handler := httpadapter.NewCallHandler(orchestrator).Routes()
+	handler, err = runtimemessaging.WithDeadLetterRecoveryRoute(
+		handler,
+		runtimemessaging.DeadLetterRecoveryRouteConfig{
+			Path:     "/internal/rtc/account-closure/dead-letters:recover",
+			Module:   rterr.ModuleRTC,
+			Releaser: accountSecurityConsumer,
+		},
+	)
+	if err != nil {
+		log.Fatalf("rtc account-closure recovery route failed: %v", err)
+	}
 
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("redis", func(hctx context.Context) error {
@@ -164,6 +302,12 @@ func main() {
 	})
 	healthChecker.Register("mongodb", func(hctx context.Context) error {
 		return mongoClient.Ping(hctx, nil)
+	})
+	healthChecker.Register("account_security_authority", func(hctx context.Context) error {
+		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
+	})
+	healthChecker.Register("user_account_security_consumer", func(context.Context) error {
+		return accountSecurityConsumer.Healthy(10 * time.Second)
 	})
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
@@ -187,17 +331,60 @@ func main() {
 
 	rateLimiter := rtgov.NewRateLimiter(1000)
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
+	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("rtc-service device ticket config invalid: %v", err)
+	}
+	deviceVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
+	if err != nil {
+		log.Fatalf("rtc-service device ticket verifier invalid: %v", err)
+	}
+	authenticated := rtauth.Middleware(rtauth.MiddlewareConfig{
+		AccessTokenVerifier:      accessVerifier,
+		DeviceTicketVerifier:     deviceVerifier,
+		AccountSecurityAuthority: accountSecurityAuthority,
+	})(rateLimited)
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           rateLimited,
+		Handler:           authenticated,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
 	logger.Info("rtc-service starting", "addr", addr, "env", appEnv)
-	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
-		log.Fatalf("rtc-service: %v", err)
+	serveErr := rthttp.ListenAndServeGraceful(server, 15*time.Second)
+	cancelWorkers()
+	workerWG.Wait()
+	if serveErr != nil {
+		log.Fatalf("rtc-service: %v", serveErr)
+	}
+}
+
+func runRecoveringWorker(
+	ctx context.Context,
+	logger *slog.Logger,
+	name string,
+	run func(context.Context) error,
+) {
+	for {
+		err := run(ctx)
+		if err == nil || ctx.Err() != nil {
+			return
+		}
+		logger.Error(name+" stopped", "error", err)
+		retry := time.NewTimer(time.Second)
+		select {
+		case <-ctx.Done():
+			if !retry.Stop() {
+				select {
+				case <-retry.C:
+				default:
+				}
+			}
+			return
+		case <-retry.C:
+		}
 	}
 }
 
@@ -235,6 +422,15 @@ func requiresConfigVersion(env string) bool {
 	}
 }
 
+func failFastEnvironment(appEnv string) bool {
+	switch strings.TrimSpace(appEnv) {
+	case "beta", "gamma", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
 func getenvOrDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -263,51 +459,12 @@ func mergeConfigFile(cfg *config, path string) error {
 
 func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
 	cfg := config{}
-
-	if strings.TrimSpace(configRoot) != "" {
-		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
-		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-
-		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
-			return config{}, fmt.Errorf("read default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, envFile); err != nil {
-			return config{}, fmt.Errorf("read env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
-			if err := mergeConfigFile(&cfg, versionFile); err != nil {
-				return config{}, fmt.Errorf("read version config: %w", err)
-			}
-		}
-		return cfg, nil
+	path, err := configrelease.File(configRoot, serviceName, appEnv)
+	if err != nil {
+		return config{}, err
 	}
-
-	localDefault := filepath.Join("configs", "default", "config.yaml")
-	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	if _, err := os.Stat(localDefault); err == nil {
-		if err := mergeConfigFile(&cfg, localDefault); err != nil {
-			return config{}, fmt.Errorf("read local default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, localEnv); err != nil {
-			return config{}, fmt.Errorf("read local env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
-			if _, err := os.Stat(versionFile); err == nil {
-				if err := mergeConfigFile(&cfg, versionFile); err != nil {
-					return config{}, fmt.Errorf("read local version config: %w", err)
-				}
-			}
-		}
-		return cfg, nil
-	}
-
-	currentPath := filepath.Join("configs", "config.yaml")
-	if _, err := os.Stat(currentPath); err == nil {
-		if err := mergeConfigFile(&cfg, currentPath); err != nil {
-			return config{}, fmt.Errorf("read current config: %w", err)
-		}
+	if err := mergeConfigFile(&cfg, path); err != nil {
+		return config{}, fmt.Errorf("read generated runtime config: %w", err)
 	}
 	return cfg, nil
 }
@@ -357,16 +514,6 @@ func applyEnvOverrides(cfg *config) {
 	}
 	if v := os.Getenv("MONGO_DATABASE"); v != "" {
 		cfg.MongoDB.Database = v
-	}
-
-	if v := os.Getenv("LIVEKIT_URL"); v != "" {
-		cfg.LiveKit.URL = v
-	}
-	if v := os.Getenv("LIVEKIT_API_KEY"); v != "" {
-		cfg.LiveKit.APIKey = v
-	}
-	if v := os.Getenv("LIVEKIT_API_SECRET"); v != "" {
-		cfg.LiveKit.APISecret = v
 	}
 
 	applyRedisSceneEnv("RTC_REDIS_REALTIME", &cfg.Redis.Realtime)

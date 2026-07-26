@@ -1,0 +1,270 @@
+commercial_defaults:
+  status: blocked
+  block_reason: 未显式完成商用证据的新增操作默认阻断
+  gap_id: ASSISTANT_SKILL_SUBSCRIPTION_COMMERCIAL_EVIDENCE
+  target_story: proactive-subscription-delivery
+description: SkillSubscription 对象专属 command/query packet。
+api_routes:
+- actor: persona
+  application:
+    facet: SkillSubscriptionQueryFacade
+    kind: query
+    method: listSubscriptions
+    reader: SkillSubscriptionListReader
+    slice: SkillSubscriptionListView
+  method: GET
+  operation: ListSkillSubscriptions
+  path: /assistant/skill-subscriptions
+  description: owner 自己的订阅列表。
+  commercial:
+    status: ready
+  query_params:
+  - limit
+  - status
+  response_entity: SkillSubscriptionListView
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.subscription_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_subscription_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: subscription_owner
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    aggregate_owner: SkillSubscription
+    mutation_target: SkillSubscription
+    invariant_target: SkillSubscription
+    facet: SkillSubscriptionCommandFacade
+    kind: command
+    method: createSubscription
+  method: POST
+  operation: CreateSkillSubscription
+  path: /assistant/skill-subscriptions
+  description: 一次创建订阅；clientRequestId 为稳定 intent，重放返回首个结果。
+  commercial:
+    status: ready
+  request_fields:
+  - skillId
+  - domainId
+  - tagRefs
+  - searchQueryPlan
+  - trigger
+  - destination
+  - clientRequestId
+  response_entity: SkillSubscription
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.subscription_invalid_argument
+  - ASSISTANT.USER.subscription_idempotency_conflict
+  - ASSISTANT.USER.subscription_destination_forbidden
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.subscription_storage_unavailable
+  - ASSISTANT.SYSTEM.subscription_destination_validation_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_subscription_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - replayed
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: subscription_owner
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    facet: SkillSubscriptionQueryFacade
+    kind: query
+    method: getSubscription
+    reader: SkillSubscriptionDetailReader
+    slice: SkillSubscription
+  method: GET
+  operation: GetSkillSubscription
+  path: /assistant/skill-subscriptions/{subscriptionId}
+  description: 读取 owner 自己的订阅；非 owner 返回 not_found 防枚举。
+  commercial:
+    status: ready
+  response_entity: SkillSubscription
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.subscription_not_found
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.subscription_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_subscription_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: subscription_owner
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    aggregate_owner: SkillSubscription
+    mutation_target: SkillSubscription
+    invariant_target: SkillSubscription
+    facet: SkillSubscriptionCommandFacade
+    kind: command
+    method: updateSubscriptionStatus
+  method: PATCH
+  operation: UpdateSkillSubscriptionStatus
+  path: /assistant/skill-subscriptions/{subscriptionId}/status
+  description: 命名状态迁移（active/paused/archived）；服务端内部 CAS，目标状态已满足时持久化 no-op receipt。
+  commercial:
+    status: ready
+  request_fields:
+  - status
+  response_entity: SkillSubscription
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.subscription_not_found
+  - ASSISTANT.USER.subscription_invalid_argument
+  - ASSISTANT.USER.subscription_invalid_transition
+  - ASSISTANT.USER.subscription_idempotency_conflict
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.subscription_storage_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_subscription_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - replayed
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: subscription_owner
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: none
+  application:
+    aggregate_owner: SkillSubscription
+    mutation_target: SkillSubscription
+    invariant_target: SkillSubscription
+    facet: SkillSubscriptionCommandFacade
+    kind: command
+    method: acquireDueLeases
+  method: POST
+  operation: TickSkillSubscriptionCron
+  path: /internal/assistant/skill-subscriptions:tick
+  description: 扫描到期或待补偿订阅；经状态复核、用户策略、静默时间、频控、目标成员与 Redis 租约门控后投递，并持久化审计状态。
+  commercial:
+    status: ready
+  request_fields:
+  - now
+  response_entity: SkillSubscriptionCronTickResult
+  reliability:
+    timeout_ms: 30000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.subscription_invalid_argument
+  - ASSISTANT.SYSTEM.subscription_storage_unavailable
+  - ASSISTANT.SYSTEM.subscription_delivery_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_subscription_cron
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - leases_acquired
+  slo:
+    latency_p95_ms: 5000
+    availability_percent: 99.5
+  authorization:
+    principal: service
+    scopes:
+    - assistant.skill_subscription.tick
+    ownership_policy: internal_service
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    visibility: internal

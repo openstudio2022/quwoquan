@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
@@ -18,29 +19,38 @@ class ContentSurfaceViewMapper {
     PostBaseDto dto, {
     Map<String, dynamic>? wire,
     ContentSurfaceReferral referral = const ContentSurfaceReferral(),
+    MediaDeliveryResolver? mediaResolver,
   }) {
     final read = PostReadPresentation.fromPostBase(dto, wire: wire);
-    final resolver = MediaDeliveryResolver.fromRuntimeConfig();
+    final endpoints = MediaEndpointConfig.tryCreateAvailable(
+      avatarBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+      imageBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
+      videoBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
+      attachmentBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
+    );
+    final resolver =
+        mediaResolver ??
+        (endpoints == null ? null : MediaDeliveryResolver(endpoints));
 
     final title = read.title.trim().isEmpty ? null : read.title.trim();
     final body = read.body.trim().isEmpty ? null : read.body.trim();
 
-    final projectedCover = resolver.tryResolve(
+    final projectedCover = resolver?.tryResolve(
       read.coverUrl,
       kind: MediaDeliveryKind.image,
       assetId: dto.id,
     );
-    final mediaCover = resolver.tryResolve(
+    final mediaCover = resolver?.tryResolve(
       dto.mediaCoverUrl,
       kind: MediaDeliveryKind.image,
       assetId: dto.id,
     );
-    final mediaThumbnail = resolver.tryResolve(
+    final mediaThumbnail = resolver?.tryResolve(
       dto.mediaThumbnailUrl,
       kind: MediaDeliveryKind.image,
       assetId: dto.id,
     );
-    final mediaVideo = resolver.tryResolve(
+    final mediaVideo = resolver?.tryResolve(
       dto.mediaVideoUrl,
       kind: MediaDeliveryKind.video,
       assetId: dto.id,
@@ -58,7 +68,7 @@ class ContentSurfaceViewMapper {
 
     final images = dto.mediaImageUrls
         .map(
-          (raw) => resolver.tryResolve(
+          (raw) => resolver?.tryResolve(
             raw,
             kind: MediaDeliveryKind.image,
             assetId: dto.id,
@@ -82,12 +92,12 @@ class ContentSurfaceViewMapper {
           )
         : null;
 
-    final authorAvatar = resolver.tryResolve(
+    final authorAvatar = resolver?.tryResolve(
       dto.avatarUrl,
       kind: MediaDeliveryKind.avatar,
       assetId: dto.subAccountId,
     );
-    final authorBackground = resolver.tryResolve(
+    final authorBackground = resolver?.tryResolve(
       dto.authorBackgroundUrl,
       kind: MediaDeliveryKind.background,
       assetId: dto.subAccountId,

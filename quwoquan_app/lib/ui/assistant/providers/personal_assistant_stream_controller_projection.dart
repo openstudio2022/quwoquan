@@ -6,11 +6,11 @@ List<String> extractAssistantEmergedTags(
   final result = <String>[];
   final seen = <String>{};
   for (final event in events) {
-    if (event.eventType != 'assistant.turn.completed') continue;
-    final raw = event.payload['emergedTags'];
-    if (raw is! List) continue;
-    for (final item in raw) {
-      final tag = item.toString().trim();
+    final streamEvent = AssistantRunStreamEvent.fromWire(event);
+    if (streamEvent.type != AssistantRunStreamEventType.completed) {
+      continue;
+    }
+    for (final tag in streamEvent.emergedTags) {
       if (tag.isEmpty || !seen.add(tag)) continue;
       result.add(tag);
     }
@@ -25,32 +25,6 @@ void _debugPersonalAssistant(String message) {
   debugPrint('[personal-assistant] $message');
 }
 
-void _emitAssistantModelInteractionToConsole(Map<String, dynamic> payload) {
-  if (!kDebugMode && !kProfileMode) {
-    return;
-  }
-  const collect = bool.fromEnvironment(
-    'ASSISTANT_MODEL_LOG_COLLECT',
-    defaultValue: false,
-  );
-  debugPrint('[AssistantModel] INTERACTION');
-  final collectLines = collect ? <String>[] : null;
-  for (final entry in payload.entries) {
-    final lines = ConsolePrettyLogFormatter.renderSection(
-      prefix: '[AssistantModel] ',
-      title: entry.key,
-      value: entry.value,
-    );
-    for (final line in lines) {
-      debugPrint(line);
-      collectLines?.add(line);
-    }
-  }
-  if (collect && collectLines != null) {
-    personalAssistantModelInteractionLogLinesForTest.addAll(collectLines);
-  }
-}
-
 String _debugSnippet(String value, {int maxLength = 120}) {
   final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
   if (normalized.length <= maxLength) {
@@ -61,103 +35,110 @@ String _debugSnippet(String value, {int maxLength = 120}) {
 
 PersonalAssistantProcessSummary _projectProcessSummary(
   PersonalAssistantProcessSummary current,
-  AssistantStreamEventWire event, {
+  AssistantRunStreamEvent event, {
   required int elapsedMs,
 }) {
-  final payload = _AssistantStreamPayload(event);
-  var processedCount = current.processedCount;
-  var searchCount = current.searchCount;
-  var acceptedCount = current.acceptedCount;
-  var understandingSummary = current.understandingSummary;
-  var retrievalDesignNarrative = current.retrievalDesignNarrative;
-  var processingSummary = current.processingSummary;
-  var expansionReason = current.expansionReason;
-  var finalAnswerSummary = current.finalAnswerSummary;
-  var finalAnswerReady = current.finalAnswerReady;
-  var selectedKeyPoints = current.selectedKeyPoints;
-  var acceptedReferences = current.acceptedReferences;
-  final lines = <String>[...current.lines];
-
-  if (payload.hasObject('understandingSnapshot')) {
-    understandingSummary = _firstNonEmpty(<String>[
-      payload.nestedString('understandingSnapshot', 'userFacingSummary'),
-      understandingSummary,
-    ]);
-    retrievalDesignNarrative = _firstNonEmpty(<String>[
-      payload.nestedString('understandingSnapshot', 'retrievalDesignNarrative'),
-      retrievalDesignNarrative,
-    ]);
-  }
-
-  if (payload.hasObject('retrievalProcessing')) {
-    searchCount = _firstPositiveInt(<int>[
-      payload.nestedInt('retrievalProcessing', 'searchedDocumentCount'),
-      searchCount,
-    ]);
-    processedCount = _firstPositiveInt(<int>[
-      payload.nestedInt('retrievalProcessing', 'processedDocumentCount'),
-      processedCount,
-    ]);
-    acceptedCount = _firstPositiveInt(<int>[
-      payload.nestedInt('retrievalProcessing', 'acceptedDocumentCount'),
-      acceptedCount,
-    ]);
-    processingSummary = _firstNonEmpty(<String>[
-      payload.nestedString('retrievalProcessing', 'processingSummary'),
-      processingSummary,
-    ]);
-    expansionReason = _firstNonEmpty(<String>[
-      payload.nestedString('retrievalProcessing', 'expansionReason'),
-      expansionReason,
-    ]);
-    final keyPoints = payload.nestedStringList(
-      'retrievalProcessing',
-      'selectedKeyPoints',
+  var base = current;
+  late final List<AssistantRunVisibleProcess> processes;
+  if (event.type == AssistantRunStreamEventType.processReplace ||
+      event.processes.isNotEmpty) {
+    processes = List<AssistantRunVisibleProcess>.of(event.processes)
+      ..sort((left, right) => left.order.compareTo(right.order));
+    base = const PersonalAssistantProcessSummary().copyWith(
+      elapsedMs: elapsedMs,
+      processes: List<AssistantRunVisibleProcess>.unmodifiable(processes),
     );
-    if (keyPoints.isNotEmpty) {
-      selectedKeyPoints = keyPoints;
+  } else {
+    final incoming = event.process;
+    if (incoming == null) {
+      return current.copyWith(elapsedMs: elapsedMs);
     }
-    final references = payload.nestedReferences(
-      'retrievalProcessing',
-      'acceptedReferences',
-    );
-    if (references.isNotEmpty) {
-      acceptedReferences = references;
+    final byId = <String, AssistantRunVisibleProcess>{
+      for (final process in current.processes) process.processId: process,
+    };
+    final existing = byId[incoming.processId];
+    final incomingSummary = _visibleProcessSummary(incoming);
+    byId[incoming.processId] = existing == null
+        ? incoming
+        : existing.copyWith(
+            status: incoming.status,
+            summary: incomingSummary.isEmpty
+                ? existing.summary
+                : incomingSummary,
+            searchedDocumentCount: incoming.searchedDocumentCount > 0
+                ? incoming.searchedDocumentCount
+                : existing.searchedDocumentCount,
+            processedDocumentCount: incoming.processedDocumentCount > 0
+                ? incoming.processedDocumentCount
+                : existing.processedDocumentCount,
+            acceptedDocumentCount: incoming.acceptedDocumentCount > 0
+                ? incoming.acceptedDocumentCount
+                : existing.acceptedDocumentCount,
+            acceptedReferences: incoming.acceptedReferences.isEmpty
+                ? existing.acceptedReferences
+                : incoming.acceptedReferences,
+          );
+    processes = byId.values.toList()
+      ..sort((left, right) => left.order.compareTo(right.order));
+  }
+  var processedCount = base.processedCount;
+  var searchCount = base.searchCount;
+  var acceptedCount = base.acceptedCount;
+  var understandingSummary = base.understandingSummary;
+  var retrievalDesignNarrative = base.retrievalDesignNarrative;
+  var processingSummary = base.processingSummary;
+  var expansionReason = base.expansionReason;
+  var finalAnswerSummary = base.finalAnswerSummary;
+  var finalAnswerReady = base.finalAnswerReady;
+  var selectedKeyPoints = base.selectedKeyPoints;
+  var acceptedReferences = base.acceptedReferences;
+  final lines = <String>[];
+  for (final process in processes) {
+    final line = _processLineForProcess(process);
+    final processSummary = _visibleProcessSummary(process);
+    if (line.isNotEmpty && !lines.contains(line)) {
+      lines.add(line);
+    }
+    switch (process.stage) {
+      case 'planning':
+        if (processSummary.isNotEmpty) {
+          understandingSummary = processSummary;
+          retrievalDesignNarrative = processSummary;
+        }
+        break;
+      case 'evidence_review':
+        searchCount = process.searchedDocumentCount > 0
+            ? process.searchedDocumentCount
+            : searchCount;
+        processedCount = process.processedDocumentCount > 0
+            ? process.processedDocumentCount
+            : processedCount;
+        acceptedCount = process.acceptedDocumentCount > 0
+            ? process.acceptedDocumentCount
+            : acceptedCount;
+        if (processSummary.isNotEmpty) {
+          processingSummary = processSummary;
+        }
+        if (process.acceptedReferences.isNotEmpty) {
+          acceptedReferences = process.acceptedReferences
+              .map(
+                (reference) => RetrievalProcessingReference(
+                  title: reference.title,
+                  destination: reference.destination,
+                  source: reference.source,
+                  snippet: reference.snippet,
+                ),
+              )
+              .toList(growable: false);
+        }
+        break;
+      case 'answer_generation':
+        finalAnswerSummary = AssistantText.assistantProcessFinalAnswerNarrative;
+        finalAnswerReady = finalAnswerReady || process.status == 'completed';
+        break;
     }
   }
-
-  if (event.eventType == 'search_query_generated' ||
-      event.eventType == 'assistant.search_query.generated') {
-    retrievalDesignNarrative = _firstNonEmpty(<String>[
-      _retrievalDesignFromSearchPlans(event),
-      retrievalDesignNarrative,
-    ]);
-  }
-
-  if (_isAnswerEvent(event)) {
-    finalAnswerSummary = UITextConstants.assistantProcessFinalAnswerNarrative;
-    finalAnswerReady =
-        finalAnswerReady ||
-        event.eventType == 'assistant.answer.final' ||
-        event.eventType == 'final_answer';
-  }
-
-  switch (event.eventType) {
-    case 'tool_use_requested':
-    case 'tool_result_received':
-    case 'assistant.tool.requested':
-    case 'assistant.tool.completed':
-    case 'search_query_generated':
-    case 'assistant.search_query.generated':
-    case 'search_query_accepted':
-    case 'assistant.search_query.accepted':
-      break;
-  }
-  final line = _processLineForEvent(event);
-  if (line.isNotEmpty && !lines.contains(line)) {
-    lines.add(line);
-  }
-  return current.copyWith(
+  return base.copyWith(
     processedCount: processedCount,
     searchCount: searchCount,
     acceptedCount: acceptedCount,
@@ -169,6 +150,7 @@ PersonalAssistantProcessSummary _projectProcessSummary(
     expansionReason: expansionReason,
     finalAnswerSummary: finalAnswerSummary,
     finalAnswerReady: finalAnswerReady,
+    processes: List<AssistantRunVisibleProcess>.unmodifiable(processes),
     selectedKeyPoints: List<String>.unmodifiable(selectedKeyPoints),
     acceptedReferences: List<RetrievalProcessingReference>.unmodifiable(
       acceptedReferences,
@@ -176,235 +158,34 @@ PersonalAssistantProcessSummary _projectProcessSummary(
   );
 }
 
-String _processLineForEvent(AssistantStreamEventWire event) {
-  final payload = _AssistantStreamPayload(event);
-  final understandingSummary = payload.nestedString(
-    'understandingSnapshot',
-    'userFacingSummary',
-  );
-  if (understandingSummary.isNotEmpty) {
-    return understandingSummary;
-  }
-  final retrievalDesign = payload.nestedString(
-    'understandingSnapshot',
-    'retrievalDesignNarrative',
-  );
-  if (retrievalDesign.isNotEmpty) {
-    return retrievalDesign;
-  }
-  if (event.eventType == 'search_query_generated' ||
-      event.eventType == 'assistant.search_query.generated') {
-    return _retrievalDesignFromSearchPlans(event);
-  }
-  final processingSummary = payload.nestedString(
-    'retrievalProcessing',
-    'processingSummary',
-  );
-  if (processingSummary.isNotEmpty) {
-    return processingSummary;
-  }
-  switch (event.eventType) {
-    case 'assistant.answer.delta':
-    case 'partial_answer':
-    case 'assistant.answer.final':
-    case 'final_answer':
-      return '';
-    case 'tool_result_received':
-    case 'assistant.tool.completed':
-      return '';
-  }
-  return '';
-}
-
-class _AssistantStreamPayload {
-  const _AssistantStreamPayload(this.event);
-
-  final AssistantStreamEventWire event;
-
-  Object? value(String key) => event.payload[key];
-
-  bool hasObject(String key) => _objectValue(key) != null;
-
-  String string(String key) => _stringValue(value(key));
-
-  String nestedString(String objectKey, String fieldKey) {
-    return _stringValue(_nestedValue(objectKey, fieldKey));
-  }
-
-  int nestedInt(String objectKey, String fieldKey) {
-    return _intValue(_nestedValue(objectKey, fieldKey));
-  }
-
-  List<String> nestedStringList(String objectKey, String fieldKey) {
-    return _stringListValue(_nestedValue(objectKey, fieldKey));
-  }
-
-  List<RetrievalProcessingReference> nestedReferences(
-    String objectKey,
-    String fieldKey,
-  ) {
-    final raw = _nestedValue(objectKey, fieldKey);
-    if (raw is! List) {
-      return const <RetrievalProcessingReference>[];
-    }
-    final references = <RetrievalProcessingReference>[];
-    for (final item in raw) {
-      if (item is! Map) {
-        continue;
-      }
-      references.add(
-        RetrievalProcessingReference(
-          title: _stringValue(item['title']),
-          url: _stringValue(item['url']),
-          source: _stringValue(item['source']),
-          snippet: _stringValue(item['snippet']),
-          rank: _intValue(item['rank']),
-        ),
-      );
-    }
-    return references;
-  }
-
-  String get fixedNarrative {
-    final understandingSummary = nestedString(
-      'understandingSnapshot',
-      'userFacingSummary',
-    );
-    if (understandingSummary.isNotEmpty) {
-      return understandingSummary;
-    }
-    final processingSummary = nestedString(
-      'retrievalProcessing',
-      'processingSummary',
-    );
-    if (processingSummary.isNotEmpty) {
-      return processingSummary;
-    }
-    return string('userMarkdown');
-  }
-
-  String get toolName {
-    final toolUse = value('toolUse');
-    if (toolUse is! Map) {
-      return '';
-    }
-    return _firstNonEmpty(<String>[
-      _stringValue(toolUse['toolName']),
-      _stringValue(toolUse['tool_name']),
-    ]);
-  }
-
-  String get toolSummary {
-    final toolUse = value('toolUse');
-    if (toolUse is! Map) {
-      return '';
-    }
-    final result = toolUse['result'];
-    if (result is! Map) {
-      return '';
-    }
-    return _stringValue(result['summary']);
-  }
-
-  Object? _nestedValue(String objectKey, String fieldKey) {
-    final object = _objectValue(objectKey);
-    return object == null ? null : object[fieldKey];
-  }
-
-  Map? _objectValue(String key) {
-    final raw = value(key);
-    if (raw is Map) {
-      return raw;
-    }
-    final runArtifacts = value('runArtifacts');
-    if (runArtifacts is Map) {
-      final nested = runArtifacts[key];
-      if (nested is Map) {
-        return nested;
-      }
-    }
-    return null;
-  }
-}
-
-String _stringValue(Object? value) {
-  return value is String ? value.trim() : '';
-}
-
-int _intValue(Object? value) {
-  if (value is num) {
-    return value.toInt();
-  }
-  if (value is String) {
-    return int.tryParse(value.trim()) ?? 0;
-  }
-  return 0;
-}
-
-List<String> _stringListValue(Object? raw) {
-  if (raw is! List) {
-    return const <String>[];
-  }
-  return raw
-      .map((item) => item.toString().trim())
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
-}
-
-String _firstNonEmpty(List<String> values) {
-  for (final value in values) {
-    final trimmed = value.trim();
-    if (trimmed.isNotEmpty) {
-      return trimmed;
-    }
-  }
-  return '';
-}
-
-int _firstPositiveInt(List<int> values) {
-  for (final value in values) {
-    if (value > 0) {
-      return value;
-    }
-  }
-  return 0;
-}
-
-String _retrievalDesignFromSearchPlans(AssistantStreamEventWire event) {
-  final raw = event.payload['searchPlans'];
-  if (raw is! List || raw.isEmpty) {
+String _processLineForProcess(AssistantRunVisibleProcess process) {
+  final stage = switch (process.stage) {
+    'skill_selection' => AssistantText.assistantProcessStageUnderstand,
+    'planning' => AssistantText.assistantProcessStageRetrievalDesign,
+    'tool_execution' => AssistantText.assistantProcessSearching,
+    'evidence_review' => AssistantText.assistantProcessStageRetrievalProcessing,
+    'answer_generation' => AssistantText.assistantProcessStageAnswer,
+    _ => '',
+  };
+  if (stage.isEmpty) {
     return '';
   }
-  final lines = <String>[];
-  for (final item in raw) {
-    if (item is! Map) {
-      continue;
-    }
-    final query = _stringValue(item['query']);
-    if (query.isEmpty) {
-      continue;
-    }
-    final label = _firstNonEmpty(<String>[
-      _stringValue(item['label']),
-      _stringValue(item['dimension']),
-    ]);
-    lines.add(label.isEmpty ? query : '$label：$query');
+  final summary = _visibleProcessSummary(process);
+  if (summary.isEmpty) {
+    return stage;
   }
-  if (lines.isEmpty) {
-    return '';
-  }
-  return lines.join('\n');
+  return '$stage：$summary';
 }
+
+String _visibleProcessSummary(AssistantRunVisibleProcess process) =>
+    process.summary.trim();
 
 String _openedTurnAnswer(AssistantTurnEnvelopeWire turn) {
-  final text = turn.input['text']?.toString().trim();
-  if (text != null && text.isNotEmpty) {
-    return '已打开主动提醒：$text';
+  final text = turn.input.text.trim();
+  if (text.isNotEmpty) {
+    return AssistantText.assistantProactiveReminderOpened(text);
   }
-  if (turn.skillId.trim().isNotEmpty) {
-    return '已打开主动提醒：${turn.skillId}';
-  }
-  return '已打开主动提醒。';
+  return AssistantText.assistantProactiveReminderOpenedDefault;
 }
 
 List<AssistantTranscriptTimelineRow> _appendOpenedTurnTranscript(
@@ -416,7 +197,7 @@ List<AssistantTranscriptTimelineRow> _appendOpenedTurnTranscript(
     ...current,
     _personalAssistantAssistantRow(
       id: 'proactive_source_${turn.turnId}',
-      text: '来自云侧主动触发',
+      text: AssistantText.assistantProactiveReminderSource,
       turnId: turn.turnId,
       proactive: true,
     ),
@@ -470,7 +251,7 @@ UserTranscriptTimelineRow _personalAssistantUserRow({
     type: 'text',
     content: text,
     senderId: 'current_user',
-    senderName: '我',
+    senderName: AssistantText.assistantCurrentUserSenderName,
     timestamp: _personalAssistantTimestamp(),
     status: '',
     isRead: true,
@@ -697,7 +478,7 @@ List<AssistantJourneyReference> _journeyReferences(
       .map(
         (reference) => AssistantJourneyReference(
           title: reference.title,
-          url: reference.url,
+          destination: reference.destination,
           source: reference.source,
         ),
       )
@@ -848,66 +629,25 @@ ProcessStepId _processStepIdForProcessIndex(int index) {
 
 String _personalAssistantTimestamp() => DateTime.now().toIso8601String();
 
-String _projectAnswer(String current, AssistantStreamEventWire event) {
-  final text = _payloadText(event);
-  if (text.isEmpty) {
-    return current;
-  }
-  switch (event.eventType) {
-    case 'assistant.answer.delta':
-    case 'partial_answer':
-      return '$current$text';
-    case 'assistant.answer.final':
-    case 'final_answer':
-      return text;
-    default:
-      return current;
-  }
+String _projectAnswer(String current, AssistantRunStreamEvent event) {
+  return switch (event.type) {
+    AssistantRunStreamEventType.answerDelta => '$current${event.text}',
+    AssistantRunStreamEventType.completed =>
+      event.finalAnswer.isEmpty ? current : event.finalAnswer,
+    _ => current,
+  };
 }
 
-bool _isAnswerEvent(AssistantStreamEventWire event) {
-  switch (event.eventType) {
-    case 'assistant.answer.delta':
-    case 'partial_answer':
-    case 'assistant.answer.final':
-    case 'final_answer':
-      return true;
-    default:
-      return false;
-  }
-}
+bool _isAnswerEvent(AssistantRunStreamEvent event) => event.isAnswerEvent;
 
-String _payloadText(AssistantStreamEventWire event) {
-  final directText = event.payload['text']?.toString().trim() ?? '';
-  if (directText.isNotEmpty) {
-    return directText;
-  }
-  final userMarkdown = event.payload['userMarkdown']?.toString().trim() ?? '';
-  if (userMarkdown.isNotEmpty) {
-    return userMarkdown;
-  }
-  final runArtifacts = event.payload['runArtifacts'];
-  if (runArtifacts is Map) {
-    for (final key in <String>[
-      assistantDisplayMarkdownField,
-      assistantDisplayPlainTextField,
-    ]) {
-      final text = runArtifacts[key]?.toString().trim() ?? '';
-      if (text.isNotEmpty) {
-        return text;
-      }
-    }
-  }
-  return '';
-}
-
-String _failureMessageForEvent(AssistantStreamEventWire event) {
-  final failure = event.runtimeFailure;
+String _failureMessageForEvent(AssistantRunStreamEvent event) {
+  final failure = event.wire.runtimeFailure;
   if (failure != null && failure.code.trim().isNotEmpty) {
     return _runtimeFailureMessage(failure);
   }
-  if (event.eventType == 'turn_failed') {
-    return '找私助执行遇到问题，请稍后重试。';
+  if (event.type == AssistantRunStreamEventType.failed) {
+    // 无 runtimeFailure 的 failed 兜底提示；文案归口 UITextConstants。
+    return AssistantText.assistantTurnFailedFallback;
   }
   return '';
 }

@@ -1,0 +1,13 @@
+events:
+- name: ExperimentAssigned
+  description: 用户分桶
+  producer: product-ops
+  consumers: []
+  channel: transactional_outbox
+  payload_fields:
+  - id
+  - experimentId
+  - subjectKey
+  - variant
+  - policyVersion
+  - assignedAt

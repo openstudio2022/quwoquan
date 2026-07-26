@@ -67,14 +67,16 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
           LoginPrimaryAction.continueSession) {
         if (stored.refreshToken.trim().isNotEmpty) {
           final result = await ref
-              .read(authRepositoryProvider)
-              .refreshToken(stored.refreshToken.trim());
+              .read(accountSessionLifecycleCommandWriterProvider)
+              .refreshToken(
+                RefreshTokenCommand(refreshToken: stored.refreshToken.trim()),
+              );
           if (!_isCurrentLoginAttempt(attempt)) {
             return;
           }
           await ref
               .read(authSessionControllerProvider.notifier)
-              .applyRefreshResult(result);
+              .applyRefreshGrant(result);
           if (!_isCurrentLoginAttempt(attempt)) {
             return;
           }
@@ -110,13 +112,14 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
         _enterPhoneOtp();
         return;
       }
-      Future<AuthLoginResultDto> submitOneTap({
+      Future<AuthSessionGrant> submitOneTap({
         required String token,
         required String vendor,
       }) {
         return ref
-            .read(authRepositoryProvider)
+            .read(accountSessionLoginCommandWriterProvider)
             .loginOneTap(
+              LoginOneTapCommand(
               vendor: vendor,
               carrierToken: token,
               deviceId: session.installId.isNotEmpty
@@ -126,10 +129,11 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
               appVersion: CloudRequestHeaders.appVersion,
               agreementVersion: AuthLegalConfig.agreementVersion,
               privacyVersion: AuthLegalConfig.privacyVersion,
+              ),
             );
       }
 
-      late AuthLoginResultDto result;
+      late AuthSessionGrant result;
       try {
         result = await submitOneTap(token: token, vendor: vendor);
       } on CloudException catch (error) {
@@ -155,7 +159,7 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
       }
       await ref
           .read(authSessionControllerProvider.notifier)
-          .applyRememberedLoginResult(
+          .applyRememberedLoginGrant(
             result,
             rememberedLoginMethod: AuthRememberedLoginMethod.oneTap,
             rememberedLoginMaskedIdentifier: _resolvedMaskedPhone(result),
@@ -318,9 +322,8 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
     );
   }
 
-  String _resolvedMaskedPhone(AuthLoginResultDto result) {
-    final fromResult =
-        result.accountHint?['maskedPhone']?.toString().trim() ?? '';
+  String _resolvedMaskedPhone(AuthSessionGrant result) {
+    final fromResult = result.accountHint?.maskedPhone.trim() ?? '';
     if (fromResult.isNotEmpty) {
       return fromResult;
     }

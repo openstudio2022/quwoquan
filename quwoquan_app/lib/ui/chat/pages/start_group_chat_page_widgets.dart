@@ -87,6 +87,7 @@ class _RelatedFriendRow extends StatelessWidget {
     required this.dividerColor,
     required this.onTap,
     required this.onAvatarTap,
+    this.subtitle = '',
   });
 
   static const double _avatarSize = ChatConversationAvatarTokens.listSize;
@@ -102,6 +103,9 @@ class _RelatedFriendRow extends StatelessWidget {
   final Color dividerColor;
   final VoidCallback? onTap;
   final VoidCallback onAvatarTap;
+
+  /// 事实交集证据（如认识来源 metFrom）；空则不渲染，locked 提示优先。
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -156,7 +160,22 @@ class _RelatedFriendRow extends StatelessWidget {
                         if (locked) ...[
                           SizedBox(height: AppSpacing.xs),
                           Text(
-                            UITextConstants.startGroupChatAlreadyInGroup,
+                            ChatText.startGroupChatAlreadyInGroup,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppTypography.iosFootnote,
+                              color: fgSecondary.withValues(alpha: 0.9),
+                              height: AppTypography.lineHeightCompact,
+                            ),
+                          ),
+                        ] else if (subtitle.trim().isNotEmpty) ...[
+                          SizedBox(height: AppSpacing.xs),
+                          Text(
+                            subtitle.trim(),
+                            key: ValueKey<String>(
+                              'start-group-candidate-evidence-$username',
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -333,7 +352,7 @@ class _CompanionContextBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  UITextConstants.startGroupChatCompanionContextTitle,
+                  ChatText.startGroupChatCompanionContextTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -345,7 +364,7 @@ class _CompanionContextBanner extends StatelessWidget {
                 ),
                 SizedBox(height: AppSpacing.intraGroupXs),
                 Text(
-                  UITextConstants.startGroupChatCompanionContextSubtitle,
+                  ChatText.startGroupChatCompanionContextSubtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

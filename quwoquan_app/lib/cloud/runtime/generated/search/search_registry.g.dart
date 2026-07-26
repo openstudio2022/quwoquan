@@ -160,8 +160,8 @@ class SearchRegistry {
       type: SearchObjectType.tag,
       label: '标签',
       domain: 'tag',
-      executionStrategy: SearchExecutionStrategy.remoteOnly,
-      provider: 'tag_remote',
+      executionStrategy: SearchExecutionStrategy.filterOnly,
+      provider: 'taxonomy_filter',
     ),
     SearchObjectRegistryEntry(
       type: SearchObjectType.integrationLocationPoi,
@@ -212,11 +212,6 @@ class SearchRegistry {
       id: 'users',
       title: '用户',
       defaultObjectTypes: <SearchObjectType>[SearchObjectType.userProfile],
-    ),
-    SearchSectionRegistryEntry(
-      id: 'tags',
-      title: '标签',
-      defaultObjectTypes: <SearchObjectType>[SearchObjectType.tag],
     ),
   ];
 

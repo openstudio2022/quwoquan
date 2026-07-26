@@ -1,19 +1,15 @@
-import 'dart:async';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
 enum AudioOutput {
   earpiece,
-  speaker,
-  bluetooth;
+  speaker;
 
   String get label => switch (this) {
-        AudioOutput.earpiece => '听筒',
-        AudioOutput.speaker => '扬声器',
-        AudioOutput.bluetooth => '蓝牙',
-      };
+    AudioOutput.earpiece => UITextConstants.callAudioEarpiece,
+    AudioOutput.speaker => UITextConstants.callAudioSpeaker,
+  };
 }
 
 enum CameraPosition {
@@ -30,7 +26,6 @@ class MediaDeviceState {
   final bool isMicAvailable;
   final bool isCameraAvailable;
   final bool isSpeakerAvailable;
-  final bool isBluetoothAvailable;
 
   const MediaDeviceState({
     this.audioOutput = AudioOutput.earpiece,
@@ -38,7 +33,6 @@ class MediaDeviceState {
     this.isMicAvailable = true,
     this.isCameraAvailable = true,
     this.isSpeakerAvailable = true,
-    this.isBluetoothAvailable = false,
   });
 
   MediaDeviceState copyWith({
@@ -47,7 +41,6 @@ class MediaDeviceState {
     bool? isMicAvailable,
     bool? isCameraAvailable,
     bool? isSpeakerAvailable,
-    bool? isBluetoothAvailable,
   }) {
     return MediaDeviceState(
       audioOutput: audioOutput ?? this.audioOutput,
@@ -55,7 +48,6 @@ class MediaDeviceState {
       isMicAvailable: isMicAvailable ?? this.isMicAvailable,
       isCameraAvailable: isCameraAvailable ?? this.isCameraAvailable,
       isSpeakerAvailable: isSpeakerAvailable ?? this.isSpeakerAvailable,
-      isBluetoothAvailable: isBluetoothAvailable ?? this.isBluetoothAvailable,
     );
   }
 
@@ -70,56 +62,38 @@ class MediaDeviceState {
           isCameraAvailable == other.isCameraAvailable;
 
   @override
-  int get hashCode =>
-      Object.hash(audioOutput, cameraPosition, isMicAvailable, isCameraAvailable);
+  int get hashCode => Object.hash(
+    audioOutput,
+    cameraPosition,
+    isMicAvailable,
+    isCameraAvailable,
+  );
 }
 
 class MediaDeviceNotifier extends Notifier<MediaDeviceState> {
   @override
   MediaDeviceState build() => const MediaDeviceState();
 
-  void setAudioOutput(AudioOutput output) {
-    state = state.copyWith(audioOutput: output);
-    _applyAudioOutput(output);
+  Future<void> setAudioOutput(AudioOutput output) async {
+    final applied = await ref
+        .read(callSessionProvider.notifier)
+        .setSpeakerOn(output == AudioOutput.speaker);
+    if (applied) {
+      state = state.copyWith(audioOutput: output);
+    }
   }
 
-  void toggleSpeaker() {
+  Future<void> toggleSpeaker() async {
     final next = state.audioOutput == AudioOutput.speaker
         ? AudioOutput.earpiece
         : AudioOutput.speaker;
-    state = state.copyWith(audioOutput: next);
-    _applyAudioOutput(next);
+    await setAudioOutput(next);
   }
 
-  void flipCamera() {
-    state = state.copyWith(
-      cameraPosition: state.cameraPosition.toggle(),
-    );
-    final room = ref.read(liveKitRoomServiceProvider);
-    unawaited(
-      room.switchCamera().catchError((Object e) {
-        if (kDebugMode) {
-          debugPrint('MediaDevice: switchCamera failed: $e');
-        }
-      }),
-    );
-  }
-
-  void _applyAudioOutput(AudioOutput output) {
-    final room = ref.read(liveKitRoomServiceProvider);
-    unawaited(
-      room.setSpeakerOn(output == AudioOutput.speaker).catchError((Object e) {
-        if (kDebugMode) {
-          debugPrint('MediaDevice: setSpeakerOn failed: $e');
-        }
-      }),
-    );
-  }
-
-  void setBluetoothAvailable(bool available) {
-    state = state.copyWith(isBluetoothAvailable: available);
-    if (!available && state.audioOutput == AudioOutput.bluetooth) {
-      state = state.copyWith(audioOutput: AudioOutput.earpiece);
+  Future<void> flipCamera() async {
+    final applied = await ref.read(callSessionProvider.notifier).switchCamera();
+    if (applied) {
+      state = state.copyWith(cameraPosition: state.cameraPosition.toggle());
     }
   }
 
@@ -130,5 +104,5 @@ class MediaDeviceNotifier extends Notifier<MediaDeviceState> {
 
 final mediaDeviceProvider =
     NotifierProvider<MediaDeviceNotifier, MediaDeviceState>(
-  MediaDeviceNotifier.new,
-);
+      MediaDeviceNotifier.new,
+    );

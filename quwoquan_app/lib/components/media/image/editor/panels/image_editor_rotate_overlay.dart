@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
 // ---------------------------------------------------------------------------
 // 旋转刻度盘常量
@@ -33,8 +35,7 @@ class RotateOverlayConstants {
   static double get dialBottomPadding => AppSpacing.md;
 
   /// 刻度盘实际高度
-  static double get dialHeight =>
-      AppSpacing.bottomNavHeight * dialHeightFactor;
+  static double get dialHeight => AppSpacing.bottomNavHeight * dialHeightFactor;
 
   /// 刻度盘 + 底部间距 = 图片区域需要预留的底部空间
   static double get bottomReserve => dialHeight + dialBottomPadding;
@@ -125,20 +126,24 @@ class _ImageEditorRotateOverlayState extends State<ImageEditorRotateOverlay>
     // 左 → 右 → 0 摆动
     _hintAnim = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: -RotateOverlayConstants.hintAnimDegrees)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween(
+          begin: 0.0,
+          end: -RotateOverlayConstants.hintAnimDegrees,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 30,
       ),
       TweenSequenceItem(
         tween: Tween(
-                begin: -RotateOverlayConstants.hintAnimDegrees,
-                end: RotateOverlayConstants.hintAnimDegrees)
-            .chain(CurveTween(curve: Curves.easeInOut)),
+          begin: -RotateOverlayConstants.hintAnimDegrees,
+          end: RotateOverlayConstants.hintAnimDegrees,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
         weight: 40,
       ),
       TweenSequenceItem(
-        tween: Tween(begin: RotateOverlayConstants.hintAnimDegrees, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween(
+          begin: RotateOverlayConstants.hintAnimDegrees,
+          end: 0.0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 30,
       ),
     ]).animate(_hintController);
@@ -176,9 +181,8 @@ class _ImageEditorRotateOverlayState extends State<ImageEditorRotateOverlay>
       builder: (context, constraints) {
         final topPad = MediaQuery.paddingOf(context).top;
         final availableWidth = constraints.maxWidth;
-        final availableHeight =
-            (constraints.maxHeight - topPad - bottomReserve)
-                .clamp(1.0, constraints.maxHeight);
+        final availableHeight = (constraints.maxHeight - topPad - bottomReserve)
+            .clamp(1.0, constraints.maxHeight);
         final frame = RotateGeometry.frameSize(
           availableW: availableWidth,
           availableH: availableHeight,
@@ -192,16 +196,16 @@ class _ImageEditorRotateOverlayState extends State<ImageEditorRotateOverlay>
         final minSide = math.min(frame.w, frame.h);
         final maxSide = math.max(frame.w, frame.h);
         const shortGridCount = 4;
-        final longGridCount =
-            (shortGridCount * maxSide / minSide).round().clamp(4, 12);
-        final gridColumns =
-            frame.w >= frame.h ? longGridCount : shortGridCount;
-        final gridRows =
-            frame.h >= frame.w ? longGridCount : shortGridCount;
+        final longGridCount = (shortGridCount * maxSide / minSide)
+            .round()
+            .clamp(4, 12);
+        final gridColumns = frame.w >= frame.h ? longGridCount : shortGridCount;
+        final gridRows = frame.h >= frame.w ? longGridCount : shortGridCount;
 
         // 提示动画中的虚拟角度
-        final hintAngle =
-            (!_hintDone && _hintController.isAnimating) ? _hintAnim.value : 0.0;
+        final hintAngle = (!_hintDone && _hintController.isAnimating)
+            ? _hintAnim.value
+            : 0.0;
         // 刻度盘显示的当前角度（正常旋转 + 提示动画）
         final displayAngle = widget.rotateFineDegrees + hintAngle;
 
@@ -238,7 +242,8 @@ class _ImageEditorRotateOverlayState extends State<ImageEditorRotateOverlay>
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onHorizontalDragUpdate: (details) {
-                      final next = widget.rotateFineDegrees +
+                      final next =
+                          widget.rotateFineDegrees +
                           details.delta.dx *
                               RotateOverlayConstants.fineDragSensitivity;
                       widget.onFineDragUpdate(next);
@@ -297,9 +302,8 @@ class ImageEditorRotatePreview extends StatelessWidget {
         final topPad = MediaQuery.paddingOf(context).top;
         final bottomReserve = RotateOverlayConstants.bottomReserve;
         final availableWidth = constraints.maxWidth;
-        final availableHeight =
-            (constraints.maxHeight - topPad - bottomReserve)
-                .clamp(1.0, constraints.maxHeight);
+        final availableHeight = (constraints.maxHeight - topPad - bottomReserve)
+            .clamp(1.0, constraints.maxHeight);
         final frame = RotateGeometry.frameSize(
           availableW: availableWidth,
           availableH: availableHeight,
@@ -406,11 +410,9 @@ class RotateDialPainter extends CustomPainter {
     final pointerH = AppSpacing.sm + AppSpacing.xs;
     final belowArc = majorLen + labelH + pointerH;
     final maxBowl = (size.height - belowArc).clamp(10.0, size.height);
-    final rFromDepth =
-        maxBowl / (1 - math.cos(halfArc)).clamp(0.001, 1.0);
+    final rFromDepth = maxBowl / (1 - math.cos(halfArc)).clamp(0.001, 1.0);
     final chord = size.width * 0.6;
-    final rFromChord =
-        chord / (2 * math.sin(halfArc).clamp(0.001, 1.0));
+    final rFromChord = chord / (2 * math.sin(halfArc).clamp(0.001, 1.0));
     final radius = math.min(rFromDepth, rFromChord);
     final bowlDepth = radius * (1 - math.cos(halfArc));
     const arcTopY = 2.0;
@@ -450,10 +452,7 @@ class RotateDialPainter extends CustomPainter {
         final theta = math.pi / 2 + relative * math.pi / 180;
         final cosT = math.cos(theta);
         final sinT = math.sin(theta);
-        final p1 = Offset(
-          center.dx + cosT * radius,
-          center.dy + sinT * radius,
-        );
+        final p1 = Offset(center.dx + cosT * radius, center.dy + sinT * radius);
         final p2 = Offset(
           center.dx + cosT * (radius + len),
           center.dy + sinT * (radius + len),
@@ -517,10 +516,7 @@ class RotateDialPainter extends CustomPainter {
 
 /// 旋转范围框与宫格辅助线
 class RotateFramePainter extends CustomPainter {
-  const RotateFramePainter({
-    required this.columns,
-    required this.rows,
-  });
+  const RotateFramePainter({required this.columns, required this.rows});
 
   final int columns;
   final int rows;

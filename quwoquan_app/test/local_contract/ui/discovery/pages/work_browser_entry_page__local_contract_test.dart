@@ -6,7 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
+    show contentPostDeleteIdempotencyKey;
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
@@ -14,6 +15,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/discovery/pages/work_browser_entry_page.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
   Future<String> firstReadablePostId(MockContentRepository repo) async {
@@ -67,6 +69,51 @@ void main() {
     expect(
       find.byKey(const ValueKey('work-browser-entry-loading')),
       findsNothing,
+    );
+  });
+
+  testWidgets('直达入口：软删除内容按 410 墓碑展示删除态', (tester) async {
+    final repo = MockContentRepository();
+    final postId = await firstReadablePostId(repo);
+    await repo.deletePost(
+      postId: postId,
+      idempotencyKey: contentPostDeleteIdempotencyKey(postId),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [...mockContentFacetOverrides(repo)],
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, _) => MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: WorkBrowserEntryPage(
+              workId: postId,
+              source: 'deleted-content-test',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('work-browser-entry-loading')),
+      findsOneWidget,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('work-browser-entry-error')),
+      findsOneWidget,
+    );
+    expect(
+      find.text(ContentErrorMessages.zh[ContentErrorCode.contentDeleted]!),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('work-browser-entry-error-back')),
+      findsOneWidget,
     );
   });
 

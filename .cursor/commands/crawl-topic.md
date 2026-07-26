@@ -33,13 +33,12 @@ description: quwoquan_data 单 execution 局部诊断与恢复入口
 
 ```bash
 python3 quwoquan_data/scripts/cli.py task execute \
-  --execution-id YYYYMMDD--travel-homepage-coverage--cn-zhejiang--canary-002 \
-  --retry-of YYYYMMDD--travel-homepage-coverage--cn-zhejiang--canary-001 \
-  --milestone canary \
-  --country 中国 \
-  --province 浙江省 \
-  --discovery quwoquan_data/verticals/travel/coverage/中国/浙江省 \
-  --limit 1 \
+  --execution-id YYYYMMDD--travel-homepage-coverage--cn-region-a--pilot-002 \
+  --retry-of YYYYMMDD--travel-homepage-coverage--cn-region-a--pilot-001 \
+  --family content/travel/homepage/homepage \
+  --region-ref china/test-region-a \
+  --selector priority \
+  --count 1 \
   --stage run
 ```
 

@@ -7,18 +7,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/application/user/persona_relationship/persona_relationship_facets.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 class _FakeHttpOverrides extends HttpOverrides {
   @override
@@ -265,7 +267,8 @@ class _GuestAuthSessionController extends AuthSessionController {
   );
 }
 
-class _TestUserProfileRepository extends MockUserProfileRepository {
+class _TestUserProfileRepository extends MockUserProfileRepository
+    implements PersonaRelationshipQuery {
   _TestUserProfileRepository({
     required this.bundle,
     this.followers = const <ProfileSocialRelationRowViewData>[],
@@ -288,8 +291,8 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
   }
 
   @override
-  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowersPage(
-    String userId, {
+  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowers({
+    required String subAccountId,
     String? query,
     String? cursor,
     int limit = 20,
@@ -301,8 +304,8 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
   }
 
   @override
-  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowingPage(
-    String userId, {
+  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowing({
+    required String subAccountId,
     String? query,
     String? cursor,
     int limit = 20,
@@ -345,9 +348,10 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
 }
 
 final class _TestCircleMembershipQuery implements CircleMembershipQuery {
-  const _TestCircleMembershipQuery(this.circles);
+  _TestCircleMembershipQuery(this.circles);
 
   final List<CircleDto> circles;
+  PersonaCircleListQuery? lastPersonaCircleQuery;
 
   @override
   Future<CircleMembershipSlice> getMyMembership(
@@ -362,40 +366,63 @@ final class _TestCircleMembershipQuery implements CircleMembershipQuery {
   @override
   Future<PersonaCirclePageSlice> listPersonaCircles(
     PersonaCircleListQuery query,
-  ) async => PersonaCirclePageSlice(
-    items: circles
-        .take(query.limit)
-        .map(
-          (circle) => PersonaCircleSummary(
-            circleId: circle.id,
-            name: circle.name,
-            description: circle.description ?? '',
-            coverUrl: circle.coverUrl ?? '',
-            iconUrl: circle.iconUrl ?? '',
-            ownerPersonaId: circle.ownerId,
-            ownerDisplayNameSnapshot: '',
-            category: circle.category ?? '',
-            subCategory: circle.subCategory ?? '',
-            tags: circle.tags,
-            memberCount: circle.memberCount,
-            postCount: circle.postCount,
-            weeklyActiveCount: circle.weeklyActiveCount,
-            state: circle.status,
-            visibility: circle.visibility,
-            joinPolicy: circle.joinPolicy,
-            kind: circle.kind,
-            displaySubjectType: circle.displaySubjectType,
-            followEnabled: circle.followEnabled,
-            defaultPublicGroupId: circle.defaultPublicGroupId ?? '',
-            linkedHomepageId: '',
-            linkedHomepageType: '',
-            linkedHomepageTitle: '',
-            createdAt: circle.createdAt,
-            updatedAt: circle.updatedAt,
-          ),
+  ) async {
+    lastPersonaCircleQuery = query;
+    final normalizedQuery = query.query?.trim().toLowerCase() ?? '';
+    final filtered = circles
+        .where(
+          (circle) =>
+              normalizedQuery.isEmpty ||
+              circle.name.toLowerCase().contains(normalizedQuery) ||
+              (circle.description ?? '').toLowerCase().contains(
+                normalizedQuery,
+              ),
         )
-        .toList(growable: false),
-  );
+        .toList(growable: false);
+    var start = int.tryParse(query.cursor ?? '') ?? 0;
+    if (start < 0) {
+      start = 0;
+    } else if (start > filtered.length) {
+      start = filtered.length;
+    }
+    final candidateEnd = start + query.limit;
+    final end = candidateEnd < filtered.length ? candidateEnd : filtered.length;
+    return PersonaCirclePageSlice(
+      items: filtered
+          .sublist(start, end)
+          .map(
+            (circle) => PersonaCircleSummary(
+              circleId: circle.id,
+              name: circle.name,
+              description: circle.description ?? '',
+              coverUrl: circle.coverUrl ?? '',
+              iconUrl: circle.iconUrl ?? '',
+              ownerPersonaId: circle.ownerId,
+              ownerDisplayNameSnapshot: '',
+              category: circle.category ?? '',
+              subCategory: circle.subCategory ?? '',
+              tags: circle.tags,
+              memberCount: circle.memberCount,
+              postCount: circle.postCount,
+              weeklyActiveCount: circle.weeklyActiveCount,
+              state: circle.status,
+              visibility: circle.visibility,
+              joinPolicy: circle.joinPolicy,
+              kind: circle.kind,
+              displaySubjectType: circle.displaySubjectType,
+              followEnabled: circle.followEnabled,
+              defaultPublicGroupId: circle.defaultPublicGroupId ?? '',
+              linkedHomepageId: '',
+              linkedHomepageType: '',
+              linkedHomepageTitle: '',
+              createdAt: circle.createdAt,
+              updatedAt: circle.updatedAt,
+            ),
+          )
+          .toList(growable: false),
+      nextCursor: end < filtered.length ? '$end' : null,
+    );
+  }
 }
 
 UserHomepageBundleViewData _bundle({
@@ -553,12 +580,16 @@ Widget _buildTestApp({
   required _TestUserProfileRepository repository,
   String userId = 'profile_target',
   bool authenticated = true,
+  _TestCircleMembershipQuery? circleMembershipQuery,
 }) {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(repository),
+      profileQueryProvider.overrideWith((ref, surface) => repository),
+      personaRelationshipQueryProvider.overrideWith(
+        (ref, surface) => repository,
+      ),
       userProfileCircleMembershipQueryProvider.overrideWithValue(
-        _TestCircleMembershipQuery(repository.circles),
+        circleMembershipQuery ?? _TestCircleMembershipQuery(repository.circles),
       ),
       authSessionControllerProvider.overrideWith(
         authenticated
@@ -699,10 +730,7 @@ void main() {
       expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
       expect(_segmentedLabel(UITextConstants.circleFans), findsOneWidget);
       expect(_segmentedLabel(UITextConstants.follow), findsOneWidget);
-      expect(
-        _segmentedLabel(UITextConstants.contactsTabCircles),
-        findsOneWidget,
-      );
+      expect(_segmentedLabel(ChatText.contactsTabCircles), findsOneWidget);
       expect(find.text('获赞'), findsNothing);
     });
 
@@ -896,6 +924,40 @@ void main() {
       await _pumpFrames(tester, count: 8);
 
       expect(find.text('Circle c_public'), findsOneWidget);
+    });
+
+    testWidgets('圈子搜索交给云侧 query 分页而不是仅过滤当前页', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'author_002',
+          followerCount: 0,
+          followingCount: 0,
+          circleCount: 2,
+        ),
+        circles: <CircleDto>[
+          _circle(id: 'c_photo', name: '极简摄影俱乐部'),
+          _circle(id: 'c_travel', name: '旅行手账'),
+        ],
+      );
+      final circleQuery = _TestCircleMembershipQuery(repository.circles);
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          type: 'circles',
+          repository: repository,
+          userId: 'author_002',
+          circleMembershipQuery: circleQuery,
+        ),
+      );
+      await _pumpInitialLoad(tester);
+
+      await tester.enterText(find.byType(CupertinoSearchTextField), '摄影');
+      await _pumpFrames(tester, count: 8);
+
+      expect(circleQuery.lastPersonaCircleQuery?.personaId, 'author_002');
+      expect(circleQuery.lastPersonaCircleQuery?.query, '摄影');
+      expect(find.text('极简摄影俱乐部'), findsOneWidget);
+      expect(find.text('旅行手账'), findsNothing);
     });
 
     testWidgets('我的圈子空态展示发现入口', (tester) async {

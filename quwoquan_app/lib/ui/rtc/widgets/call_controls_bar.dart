@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -16,12 +17,16 @@ class CallControlsBar extends ConsumerStatefulWidget {
     required this.callType,
     this.onHangup,
     this.onInvite,
+    this.interactionLocked = false,
+    this.onToggleInteractionLock,
     this.autoHide = true,
   });
 
   final CallType callType;
   final VoidCallback? onHangup;
   final VoidCallback? onInvite;
+  final bool interactionLocked;
+  final VoidCallback? onToggleInteractionLock;
   final bool autoHide;
 
   @override
@@ -87,80 +92,22 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
             ),
             child: SafeArea(
               top: false,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _ControlButton(
-                    icon: session.isMuted
-                        ? CupertinoIcons.mic_off
-                        : CupertinoIcons.mic,
-                    label: session.isMuted ? '已静音' : '静音',
-                    isActive: session.isMuted,
-                    onTap: () {
-                      ref.read(callSessionProvider.notifier).toggleMute();
-                      _resetHideTimer();
-                    },
-                  ),
-                  if (widget.callType.isVideo) ...[
-                    _ControlButton(
-                      icon: session.isCameraOn
-                          ? CupertinoIcons.video_camera
-                          : CupertinoIcons.video_camera_solid,
-                      label: session.isCameraOn ? '关闭摄像头' : '打开摄像头',
-                      isActive: !session.isCameraOn,
-                      onTap: () {
-                        ref.read(callSessionProvider.notifier).toggleCamera();
-                        _resetHideTimer();
-                      },
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: constraints.maxWidth,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: _buildControls(context, session, device),
+                      ),
                     ),
-                    _ControlButton(
-                      icon: CupertinoIcons.switch_camera,
-                      label: '翻转',
-                      isActive: false,
-                      onTap: () {
-                        ref.read(mediaDeviceProvider.notifier).flipCamera();
-                        _resetHideTimer();
-                      },
-                    ),
-                  ] else
-                    _ControlButton(
-                      icon: CupertinoIcons.video_camera,
-                      label: '开启视频',
-                      isActive: false,
-                      onTap: () {
-                        ref.read(callSessionProvider.notifier).toggleCamera();
-                        _resetHideTimer();
-                      },
-                    ),
-                  _ControlButton(
-                    icon: CupertinoIcons.person_add,
-                    label: '邀请',
-                    isActive: false,
-                    onTap: () {
-                      widget.onInvite?.call();
-                      _resetHideTimer();
-                    },
-                  ),
-                  GestureDetector(
-                    onLongPress: () => _showAudioOutputPicker(context, device),
-                    child: _ControlButton(
-                      icon: device.audioOutput == AudioOutput.speaker
-                          ? CupertinoIcons.speaker_2_fill
-                          : CupertinoIcons.speaker_1,
-                      label: device.audioOutput.label,
-                      isActive: device.audioOutput == AudioOutput.speaker,
-                      onTap: () {
-                        ref.read(mediaDeviceProvider.notifier).toggleSpeaker();
-                        _resetHideTimer();
-                      },
-                    ),
-                  ),
-                  _HangupButton(
-                    onTap: () {
-                      widget.onHangup?.call();
-                    },
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ),
@@ -169,38 +116,143 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
     );
   }
 
+  List<Widget> _buildControls(
+    BuildContext context,
+    CallSessionState session,
+    MediaDeviceState device,
+  ) {
+    if (widget.interactionLocked) {
+      return <Widget>[
+        _ControlButton(
+          icon: CupertinoIcons.lock_open,
+          label: UITextConstants.callUnlockControls,
+          isActive: true,
+          onTap: () {
+            widget.onToggleInteractionLock?.call();
+            _resetHideTimer();
+          },
+        ),
+      ];
+    }
+
+    return <Widget>[
+      if (widget.callType.isVideo && widget.onToggleInteractionLock != null)
+        _ControlButton(
+          icon: CupertinoIcons.lock,
+          label: UITextConstants.callLockControls,
+          isActive: false,
+          onTap: () {
+            widget.onToggleInteractionLock?.call();
+            _resetHideTimer();
+          },
+        ),
+      _ControlButton(
+        icon: session.isMuted ? CupertinoIcons.mic_off : CupertinoIcons.mic,
+        label: session.isMuted
+            ? UITextConstants.callMuted
+            : UITextConstants.callMute,
+        isActive: session.isMuted,
+        onTap: () {
+          ref.read(callSessionProvider.notifier).toggleMute();
+          _resetHideTimer();
+        },
+      ),
+      if (widget.callType.isVideo) ...[
+        _ControlButton(
+          icon: session.isCameraOn
+              ? CupertinoIcons.video_camera
+              : CupertinoIcons.video_camera_solid,
+          label: session.isCameraOn
+              ? UITextConstants.callCameraOff
+              : UITextConstants.callCameraOn,
+          isActive: !session.isCameraOn,
+          onTap: () {
+            ref.read(callSessionProvider.notifier).toggleCamera();
+            _resetHideTimer();
+          },
+        ),
+        if (session.isCameraOn && device.isCameraAvailable)
+          _ControlButton(
+            icon: CupertinoIcons.switch_camera,
+            label: UITextConstants.callFlipCamera,
+            isActive: false,
+            onTap: () {
+              unawaited(ref.read(mediaDeviceProvider.notifier).flipCamera());
+              _resetHideTimer();
+            },
+          ),
+        if (session.session?.isScreenSharing != true ||
+            session.isLocalScreenSharing)
+          _ControlButton(
+            icon: CupertinoIcons.device_desktop,
+            label: session.isLocalScreenSharing
+                ? UITextConstants.callStopScreenSharing
+                : UITextConstants.callShareScreen,
+            isActive: session.isLocalScreenSharing,
+            onTap: () {
+              final notifier = ref.read(callSessionProvider.notifier);
+              if (session.isLocalScreenSharing) {
+                unawaited(notifier.stopScreenShare());
+              } else {
+                unawaited(notifier.startScreenShare());
+              }
+              _resetHideTimer();
+            },
+          ),
+      ],
+      _ControlButton(
+        icon: CupertinoIcons.person_add,
+        label: UITextConstants.callInvite,
+        isActive: false,
+        onTap: () {
+          widget.onInvite?.call();
+          _resetHideTimer();
+        },
+      ),
+      GestureDetector(
+        onLongPress: () => _showAudioOutputPicker(context, device),
+        child: _ControlButton(
+          icon: device.audioOutput == AudioOutput.speaker
+              ? CupertinoIcons.speaker_2_fill
+              : CupertinoIcons.speaker_1,
+          label: device.audioOutput.label,
+          isActive: device.audioOutput == AudioOutput.speaker,
+          onTap: () {
+            unawaited(ref.read(mediaDeviceProvider.notifier).toggleSpeaker());
+            _resetHideTimer();
+          },
+        ),
+      ),
+      _HangupButton(onTap: () => widget.onHangup?.call()),
+    ];
+  }
+
   Future<void> _showAudioOutputPicker(
     BuildContext context,
     MediaDeviceState device,
   ) async {
     final selected = await showAppActionSheet<AudioOutput>(
       context,
-      title: '音频输出',
+      title: UITextConstants.callAudioOutput,
       sections: [
         AppActionSheetSection<AudioOutput>(
           items: [
             AppActionSheetItem<AudioOutput>(
               value: AudioOutput.earpiece,
-              label: '听筒',
+              label: UITextConstants.callAudioEarpiece,
               isSelected: device.audioOutput == AudioOutput.earpiece,
             ),
             AppActionSheetItem<AudioOutput>(
               value: AudioOutput.speaker,
-              label: '扬声器',
+              label: UITextConstants.callAudioSpeaker,
               isSelected: device.audioOutput == AudioOutput.speaker,
             ),
-            if (device.isBluetoothAvailable)
-              AppActionSheetItem<AudioOutput>(
-                value: AudioOutput.bluetooth,
-                label: '蓝牙',
-                isSelected: device.audioOutput == AudioOutput.bluetooth,
-              ),
           ],
         ),
       ],
     );
     if (selected == null) return;
-    ref.read(mediaDeviceProvider.notifier).setAudioOutput(selected);
+    await ref.read(mediaDeviceProvider.notifier).setAudioOutput(selected);
   }
 }
 
@@ -290,7 +342,7 @@ class _HangupButton extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.xs),
             Text(
-              '挂断',
+              UITextConstants.callHangup,
               style: TextStyle(
                 color: AppColors.white,
                 fontSize: AppTypography.xs,

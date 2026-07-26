@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Provider conformance matrix and release Remote evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "adapterId",
+    "capabilityId",
+    "bindingRoots",
+    "environment",
+    "testLayer",
+    "executionProfile",
+    "status",
+    "executedAt",
+    "artifactRef",
+    "artifactDigest",
+    "artifactAttestation",
+    "testArtifactRef",
+    "testArtifactDigest",
+    "testSource",
+    "testSourceDigest",
+    "testCommand",
+    "testTarget",
+    "typedPort",
+    "contractRef",
+    "commit",
+    "imageDigest",
+    "configDigest",
+    "contractGraphDigest",
+    "adapterDigest",
+    "assertionCount",
+    "assertionIds",
+    "networkBoundary",
+    "dataDigest",
+    "cleanupReceipt",
+    "acceptanceRefs",
+    "observabilityRefs"
+  ],
+  "properties": {
+    "schema": {
+      "const": "provider-conformance-evidence"
+    },
+    "version": {
+      "const": 4
+    },
+    "adapterId": {
+      "type": "string",
+      "pattern": "^(?:ext|infra|data|dev|cap)\\.[a-z0-9_]+(?:\\.[a-z0-9_]+)*$"
+    },
+    "capabilityId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z0-9_]+)+$"
+    },
+    "bindingRoots": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "environment": {
+      "enum": ["alpha", "beta", "gamma", "prod"]
+    },
+    "testLayer": {
+      "enum": ["local_contract", "api_integration", "user_acceptance"]
+    },
+    "executionProfile": {
+      "enum": ["baseline", "smoke", "integration", "release"]
+    },
+    "status": {
+      "enum": ["passed", "blocked", "failed"]
+    },
+    "executedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "artifactRef": {
+      "type": "string",
+      "pattern": "^\\.qwq_output/env/(?:alpha|beta|gamma|prod)/runs/"
+    },
+    "artifactDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "artifactAttestation": {
+      "type": "string",
+      "pattern": "^hmac-sha256:[a-f0-9]{64}$"
+    },
+    "testArtifactRef": {
+      "type": "string",
+      "pattern": "^\\.qwq_output/env/(?:alpha|beta|gamma|prod)/runs/"
+    },
+    "testArtifactDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "testSource": {
+      "type": "string",
+      "pattern": "^quwoquan_ops/tests/"
+    },
+    "testSourceDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "testCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "testTarget": {
+      "type": "string",
+      "minLength": 1
+    },
+    "typedPort": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contractRef": {
+      "type": "string",
+      "pattern": "^quwoquan_service/services/.+/operations\\.yaml$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{7,64}$"
+    },
+    "imageDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "configDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "contractGraphDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "adapterDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "assertionCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "assertionIds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"
+      }
+    },
+    "networkBoundary": {
+      "enum": [
+        "offline_harness",
+        "remote_protocol",
+        "user_journey"
+      ]
+    },
+    "dataDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "cleanupReceipt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "acceptanceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^specs/feature-tree/"
+      }
+    },
+    "observabilityRefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logs", "traces", "metrics"],
+      "properties": {
+        "logs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "traces": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "metrics": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "releaseReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bindingPreflightReceiptRef",
+        "adapterHealthReceiptRef",
+        "switchCompatibilityReceiptRef",
+        "callbackDrainReceiptRef",
+        "lastGoodReceiptRef",
+        "rollbackReceiptRef"
+      ],
+      "properties": {
+        "bindingPreflightReceiptRef": {
+          "type": "string",
+          "pattern": "^receipt:[a-z0-9][a-z0-9._:-]{2,255}$"
+        },
+        "adapterHealthReceiptRef": {
+          "type": "string",
+          "pattern": "^receipt:[a-z0-9][a-z0-9._:-]{2,255}$"
+        },
+        "switchCompatibilityReceiptRef": {
+          "type": "string",
+          "pattern": "^receipt:[a-z0-9][a-z0-9._:-]{2,255}$"
+        },
+        "callbackDrainReceiptRef": {
+          "type": "string",
+          "pattern": "^receipt:[a-z0-9][a-z0-9._:-]{2,255}$"
+        },
+        "lastGoodReceiptRef": {
+          "type": "string",
+          "pattern": "^receipt:[a-z0-9][a-z0-9._:-]{2,255}$"
+        },
+        "rollbackReceiptRef": {
+          "type": "string",
+          "pattern": "^receipt:[a-z0-9][a-z0-9._:-]{2,255}$"
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "recoveryAction"],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "recoveryAction": {
+          "enum": ["retry", "configure", "rollback", "investigate"]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "passed"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": ["failure"]
+        }
+      },
+      "else": {
+        "required": ["failure"]
+      }
+    },
+    {
+      "if": {
+        "required": ["environment", "testLayer"],
+        "properties": {
+          "environment": {
+            "enum": ["gamma", "prod"]
+          },
+          "testLayer": {
+            "const": "user_acceptance"
+          }
+        }
+      },
+      "then": {
+        "required": ["releaseReadiness"]
+      },
+      "else": {
+        "not": {
+          "required": ["releaseReadiness"]
+        }
+      }
+    }
+  ]
+}

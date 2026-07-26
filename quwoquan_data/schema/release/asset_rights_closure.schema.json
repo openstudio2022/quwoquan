@@ -78,7 +78,9 @@
         "snapshot",
         "asset",
         "authorizationProof",
-        "modelReleaseStatus"
+        "modelReleaseStatus",
+        "rightsAuditStatus",
+        "rightsAuditIssues"
       ],
       "properties": {
         "assetId": {
@@ -92,7 +94,8 @@
         "sourceUseMode": {
           "enum": [
             "licensed_adaptation",
-            "self_generated_original"
+            "self_generated_original",
+            "rights_audit_only"
           ]
         },
         "canonicalFilePage": {
@@ -112,8 +115,7 @@
           "pattern": "^https://"
         },
         "author": {
-          "type": "string",
-          "minLength": 1
+          "type": "string"
         },
         "source": {
           "type": "string",
@@ -129,7 +131,7 @@
         },
         "licenseUrl": {
           "type": "string",
-          "pattern": "^https://"
+          "pattern": "^(https://.*)?$"
         },
         "usageScope": {
           "enum": [
@@ -190,7 +192,7 @@
         },
         "authorizationProof": {
           "type": "string",
-          "pattern": "^https://"
+          "pattern": "^(https://.*)?$"
         },
         "modelReleaseStatus": {
           "enum": [
@@ -198,8 +200,43 @@
             "obtained",
             "editorial_only"
           ]
+        },
+        "rightsAuditStatus": {
+          "enum": ["verified", "unverified"]
+        },
+        "rightsAuditIssues": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "rightsAuditStatus": { "const": "verified" }
+            },
+            "required": ["rightsAuditStatus"]
+          },
+          "then": {
+            "properties": {
+              "sourceUseMode": {
+                "enum": ["licensed_adaptation", "self_generated_original"]
+              },
+              "author": { "minLength": 1 },
+              "licenseName": { "minLength": 1 },
+              "licenseShortName": { "minLength": 1 },
+              "authorizationProof": { "pattern": "^https://" },
+              "rightsAuditIssues": { "maxItems": 0 }
+            }
+          },
+          "else": {
+            "properties": {
+              "sourceUseMode": { "const": "rights_audit_only" },
+              "rightsAuditIssues": { "minItems": 1 }
+            }
+          }
+        }
+      ]
     }
   }
 }

@@ -9,13 +9,13 @@ import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
-import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
+import '../../../../support/cloud_services/content/content_mock_data.dart';
 import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
   group('Article getPost hydration contract', () {
@@ -183,6 +183,7 @@ Map<String, dynamic> _getPostResponseFromAppProjection(
       'contentIdentity': projection['identity'],
       'authorDisplayName': projection['displayName'],
       'authorAvatarUrl': projection['avatarUrl'],
+      'status': projection['status'] ?? 'published',
     });
   return response;
 }

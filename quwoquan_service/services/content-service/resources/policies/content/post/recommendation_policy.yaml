@@ -1,0 +1,270 @@
+abAdmission:
+  maxBucketSkewPct: 5.0
+  minDetectableEffect: 0.02
+  minSamplesPerBucket: 1000
+  primaryMetric: ctr
+  rollback:
+    autoRollback: false
+    regressionRatio: 0.95
+  significanceLevel: 0.05
+defaultPreset: control
+experiments:
+- buckets:
+  - name: control
+    weightPct: 60
+  - name: engagement_heavy
+    weightPct: 15
+  - name: freshness_heavy
+    weightPct: 15
+  - name: explore_heavy
+    weightPct: 10
+  eligibleSegments: []
+  enabled: true
+  id: rec_scoring_weights
+- buckets:
+  # S0 冷启动期 LTR 维持 shadow-only（W9/B11 阶段门）：rule 100% 主打，模型分
+  # 经 engine 异步 shadow 常开采样留档（训练样本 + replay 对比证据），不影响
+  # 线上排序。爬坡触发条件（S1）：challenger shadow 样本量达
+  # abAdmission.minSamplesPerBucket 统计功效门槛后，按 promote_gate +
+  # online_guardrail 证据推进 model 桶 20% -> 50% -> 默认；不按时间表强推。
+  - name: rule
+    weightPct: 100
+  - name: model
+    weightPct: 0
+  eligibleSegments: []
+  enabled: true
+  id: rec_model_vs_rule
+- buckets:
+  - name: champion
+    weightPct: 90
+  - name: challenger
+    weightPct: 10
+  eligibleSegments: []
+  enabled: true
+  id: rec_model_version
+exposureGovernance:
+  collaborativeRecall:
+    enabled: true
+    maxI2ICandidates: 80
+    maxU2ICandidates: 80
+    quotaPct: 15
+  dynamicBudget:
+    enabled: false
+    promotionCompletionThreshold: 0.4
+    promotionCtrThreshold: 0.05
+    retirementNegativeRateThreshold: 0.2
+    trialMinServed: 100
+  frequencyAndNearDup:
+    enabled: true
+    maxSameAuthorPerWindow: 2
+    maxSameTagPerWindow: 3
+    maxSameTopicPerWindow: 3
+    nearDupJaccardMax: 0.8
+    softFallbackMinFillPct: 80
+  memory:
+    dayBucketCardinalityBudget: 10000
+    fatigueHalfLifeHours: 72
+    impressedTtlHours: 168
+    negativeTtlHours: 168
+    servedTtlHours: 48
+    smembersFallbackAllowed: false
+  reporting:
+    behaviorBatchMaxSize: 50
+    behaviorFlushIntervalMs: 5000
+    clientEventIdWindowMs: 86400000
+    ingestGlobalRateLimitPerSecond: 5000
+    ingestInflightLimit: 256
+    ingestRateLimitPerUserPerMinute: 120
+  sampling:
+    dwellSampleRate: 1.0
+    impressionSampleRate: 1.0
+    visibleSampleRate: 0.1
+  visibility:
+    dwellMinReportMs: 1000
+    impressionAreaThreshold: 0.5
+    impressionMinDwellMs: 1000
+guardrails:
+- action: suggest_only
+  baselinePreset: control
+  metric: ctr
+  minRatio: 0.95
+  minSamples: 1000
+  window: 24h
+- action: suggest_only
+  baselinePreset: control
+  metric: dwell
+  minRatio: 0.93
+  minSamples: 1000
+  window: 24h
+- action: suggest_only
+  baselinePreset: control
+  metric: next_day_retention
+  minRatio: 0.97
+  minSamples: 2000
+  window: 168h
+intersection:
+  cooldownDays: 14
+  freshnessTtlDaysByDimension:
+    content: 7
+    identity: 30
+    interest: 7
+    location: 14
+    relationship: 30
+  graphWeights:
+    interactionFrequencyCap: 5.0
+    recencyHalfLifeDaysDefault: 14
+    valueTierStrength:
+      T1: 1.0
+      T2: 0.75
+      T3: 0.5
+      T4: 0.3
+  lifecycleWeights:
+    new: 1.0
+    reactivated: 0.9
+    stable: 0.6
+    strengthened: 0.8
+    weakened: 0.3
+  maxCandidateWindow: 20
+  mixing:
+    affinityWeight: 0.4
+    factWeight: 1.0
+    maxAffinityPerSurface: 3
+  negativeFeedbackCooldownDays: 30
+  propagation:
+    maxHopCount: 2
+    maxPathNodesPerSurface: 3
+    secondarySpreadEnabled: false
+objectCards:
+  # 首页混合对象卡（S0 插卡模式，B4）：实体主页卡由独立召回器产出，按 everyN
+  # 间隔混排进内容流。S0 默认关闭（alpha/gamma 灰度开启验证后再放量）；
+  # user_card/circle_card 为 S1 触发开启（需社交图密度达标）。
+  enabled: false
+  everyN: 8
+  maxCards: 3
+  allowedKinds:
+  - entity_homepage
+recallFusion:
+  # 轻量融合（W9/B10，S0 反过度设计）：policy 权重表 + 源配额，不做 RRF。
+  # sourceQuotaPct 限制单源候选占召回池比例（防单源霸屏）；sourceBoost 做
+  # 源间精排分校准（默认全 1.0 中性起步，运营按 replay 证据调参）。
+  enabled: true
+  sourceQuotaPct:
+    collab_i2i: 15
+    collab_u2i: 15
+    vector_recall: 20
+    explore_recall: 20
+  sourceBoost: {}
+opsIntervention:
+  enabled: false
+  interventions: []
+policyVersion: v1
+scenarioRouting:
+  circle: engagement_heavy
+  homepage: premium
+  search: engagement_heavy
+  similar: premium
+  topic: engagement_heavy
+scorer:
+  circleTagAffinityFactor: 0.5
+  coldStartAgeHours: 24.0
+  coldStartViewThreshold: 100
+  diversityLambda: 0.7
+  diversityStrategy: greedy
+  enerBonusFactor: 0.5
+  engagementBonusFactor: 0.5
+  entityCategoryFactor: 0.4
+  exploreFraction: 0.1
+  freshnessHalfLifeHours: 24.0
+  intersectionAffinityFactor: 0.15
+  intersectionFactFactor: 0.45
+  intersectionFreshnessFactor: 0.2
+  intersectionSignalFactor: 0.3
+  longTermTagBoostFactor: 0.3
+  maxAuthorPerFeed: 3
+  negativePenaltyFactor: 0.1
+  popularity:
+    commentCoefficient: 1.5
+    likeCoefficient: 1.0
+    shareCoefficient: 2.0
+    viewCoefficient: 0.1
+  qualityScoreFactor: 1.0
+  searchIntentFactor: 0.4
+  socialInterestFactor: 0.3
+segmentTargeting:
+- presetOverride: engagement_heavy
+  segment: travel_enthusiast
+- segment: visual_content_lover
+  weightDeltas:
+    formatMatch: 0.4
+    topicMatch: 0.2
+weightPresets:
+  control:
+    audienceMatch: 0.8
+    authorAffinity: 1.5
+    dwellBonus: 0.8
+    entityAffinity: 1.2
+    exploreBoost: 0.5
+    formatMatch: 0.6
+    freshness: 1.5
+    negativePenalty: 5.0
+    popularity: 2.0
+    searchIntent: 0.9
+    socialPrior: 1.0
+    tagRelevance: 3.0
+    topicMatch: 1.0
+  engagement_heavy:
+    audienceMatch: 1.0
+    authorAffinity: 1.0
+    dwellBonus: 1.5
+    entityAffinity: 1.0
+    exploreBoost: 0.3
+    formatMatch: 0.8
+    freshness: 1.0
+    negativePenalty: 5.0
+    popularity: 4.0
+    searchIntent: 1.2
+    socialPrior: 0.5
+    tagRelevance: 2.0
+    topicMatch: 1.2
+  explore_heavy:
+    audienceMatch: 0.5
+    authorAffinity: 1.0
+    dwellBonus: 0.5
+    entityAffinity: 1.0
+    exploreBoost: 2.0
+    formatMatch: 0.4
+    freshness: 1.5
+    negativePenalty: 5.0
+    popularity: 1.5
+    searchIntent: 0.6
+    socialPrior: 1.0
+    tagRelevance: 2.0
+    topicMatch: 0.6
+  freshness_heavy:
+    audienceMatch: 0.6
+    authorAffinity: 1.5
+    dwellBonus: 0.5
+    entityAffinity: 1.2
+    exploreBoost: 0.8
+    formatMatch: 0.4
+    freshness: 4.0
+    negativePenalty: 5.0
+    popularity: 1.5
+    searchIntent: 0.8
+    socialPrior: 1.0
+    tagRelevance: 2.5
+    topicMatch: 0.8
+  premium:
+    audienceMatch: 1.0
+    authorAffinity: 2.0
+    dwellBonus: 2.5
+    entityAffinity: 1.5
+    exploreBoost: 0.4
+    formatMatch: 0.8
+    freshness: 1.2
+    negativePenalty: 5.0
+    popularity: 1.0
+    searchIntent: 1.0
+    socialPrior: 1.2
+    tagRelevance: 3.5
+    topicMatch: 1.5

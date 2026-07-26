@@ -1,6 +1,7 @@
 schema: quwoquan.photography_license_policy
 vertical: photography
 defaultAction: block
+enforcementMode: enforce
 discoveryPlatformRoles:
   - platform: Pinterest
     defaultDiscoveryRole: publish_candidate

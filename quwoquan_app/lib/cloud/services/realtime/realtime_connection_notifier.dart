@@ -1,9 +1,13 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/realtime/remote_realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
 
 typedef RealtimeCurrentUserIdResolver = String Function(Ref ref);
 typedef RealtimeConnectionDelegateFactory =
@@ -51,6 +55,33 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
         () => ref.read(authSessionControllerProvider).accessToken,
       ),
       onStateChanged: onStateChanged,
+      telemetryRecorder:
+          ({
+            required transport,
+            required result,
+            required durationMs,
+            failReasonCode,
+          }) async {
+            try {
+              await ref
+                  .read(appTelemetryReporterProvider)
+                  .record(
+                    AppTelemetryPayload.realtimeConnectResult(
+                      transport: transport,
+                      result: result,
+                      durationMs: durationMs,
+                      failReasonCode: failReasonCode,
+                    ),
+                  );
+            } catch (error, stackTrace) {
+              developer.log(
+                'realtime connect telemetry failed',
+                name: 'RealtimeConnectionNotifier',
+                error: error,
+                stackTrace: stackTrace,
+              );
+            }
+          },
     );
   }
 

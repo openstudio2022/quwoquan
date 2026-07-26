@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -17,6 +19,9 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 ///
 /// 首帧固定为全开终态；冷启动只在完整周期的全开边界检查 Shell readiness。
 /// 生产默认一轮约 1.48 秒，6 秒仅为从进程启动起计算的硬退出上限。
+///
+/// 信息结构固定为：深蓝渐变背景 + 八瓣花 + slogan + 底部品牌名 +
+/// （仅首轮未 ready 时）单行启动提示；无标题、按钮、进度与装饰层。
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({
     super.key,
@@ -81,8 +86,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         // 可见回调失败不得阻断动效/退出；否则会永久停在欢迎终态。
         try {
           widget.onWelcomeVisible?.call();
-        } catch (_) {
-          // Shell 初始化 best effort；欢迎状态机必须继续。
+        } catch (error, stackTrace) {
+          _reportNonBlockingFailure(
+            'notify shell welcome visibility',
+            error,
+            stackTrace,
+          );
         }
         unawaited(_begin());
       });
@@ -179,8 +188,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       await AppStartupRuntime.instance.hydrateNativeProcessSegments(
         cancellationSignal: _disposedCompleter.future,
       );
-    } catch (_) {
-      // MethodChannel 超时或未知平台错误只降级到 Dart 时钟。
+    } catch (error, stackTrace) {
+      // MethodChannel 超时或未知平台错误只降级到 Dart 时钟，但必须留下诊断。
+      _reportNonBlockingFailure(
+        'hydrate native process segments; fallback to Dart clock',
+        error,
+        stackTrace,
+      );
     }
   }
 
@@ -422,25 +436,36 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       _controller
         ..stop(canceled: false)
         ..value = 1;
-    } catch (_) {
-      // dispose 竞态下仍必须回调 onFinish。
+    } catch (error, stackTrace) {
+      _reportNonBlockingFailure(
+        'commit welcome animation terminal state',
+        error,
+        stackTrace,
+      );
     }
     _phase = WelcomeMotionPhase.finished;
     try {
       _emit(exitReason: reason);
-    } catch (_) {
+    } catch (error, stackTrace) {
       // 观测回调失败不得阻断进入主壳。
+      _reportNonBlockingFailure(
+        'emit welcome sequence exit telemetry',
+        error,
+        stackTrace,
+      );
     }
     if (mounted) {
-      try {
-        setState(() {});
-      } catch (_) {}
+      setState(() {});
     }
     scheduleMicrotask(() {
       try {
         widget.onFinish();
-      } catch (_) {
-        // Shell 进入失败由上层 watchdog 兜底。
+      } catch (error, stackTrace) {
+        _reportNonBlockingFailure(
+          'enter app shell from welcome',
+          error,
+          stackTrace,
+        );
       }
     });
   }
@@ -470,9 +495,32 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           slowFrameStreakDetected: _slowFrameStreakDetected,
         ),
       );
-    } catch (_) {
-      // 外部观测者不可中断欢迎状态机和根级 deadline。
+    } catch (error, stackTrace) {
+      _reportNonBlockingFailure(
+        'emit welcome sequence telemetry',
+        error,
+        stackTrace,
+      );
     }
+  }
+
+  void _reportNonBlockingFailure(
+    String operation,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    unawaited(
+      AppExceptionTelemetryService.instance.recordHandledException(
+        source: 'welcome.$operation',
+        error: error,
+        stackTrace: stackTrace,
+        pageId: 'welcome',
+        pageName: 'welcome',
+        surfaceId: 'welcome',
+        routeId: 'welcome',
+        operationId: 'app.welcome.sequence',
+      ),
+    );
   }
 
   void _recordFrameTimings(List<FrameTiming> timings) {
@@ -522,46 +570,37 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     super.dispose();
   }
 
+  /// 启动提示淡入时长：轻微淡入出现，不推动其他元素重新布局。
+  static const Duration _hintFadeDuration = Duration(milliseconds: 240);
+
+  /// 品牌屏统一状态栏语义：透明背景 + 适合深蓝底的浅色内容，
+  /// 与原生启动阶段一致，深浅色系统模式下不切换。
+  static const SystemUiOverlayStyle _brandOverlayStyle = SystemUiOverlayStyle(
+    statusBarColor: AppColors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: AppColors.transparent,
+    systemNavigationBarIconBrightness: Brightness.light,
+  );
+
   @override
   Widget build(BuildContext context) {
     final appearance = WelcomeAppearance.of(context);
-    return AppScaffold(
-      backgroundColor: appearance.background,
-      resizeToAvoidBottomInset: false,
-      body: DefaultTextStyle.merge(
-        style: const TextStyle(
-          decoration: TextDecoration.none,
-          decorationThickness: 0,
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _buildBackground(appearance),
-            WelcomeBrandCluster(
-              flower: _buildGraphicArea(appearance),
-              typography: WelcomeBrandCluster.buildTypography(appearance),
-            ),
-            if (_hintVisible)
-              _buildStartupInlineHint(appearance)
-            else
-              _buildAssistantWhisper(appearance),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackground(WelcomeAppearance appearance) {
-    return Positioned.fill(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              appearance.gradientStart,
-              appearance.background,
-              appearance.gradientEnd,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: _brandOverlayStyle,
+      child: AppScaffold(
+        backgroundColor: appearance.background,
+        resizeToAvoidBottomInset: false,
+        body: DefaultTextStyle.merge(
+          style: const TextStyle(
+            decoration: TextDecoration.none,
+            decorationThickness: 0,
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              WelcomeStaticFrame(flower: _buildAnimatedFlower(appearance)),
+              _buildStartupInlineHint(appearance),
             ],
           ),
         ),
@@ -569,101 +608,55 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  Widget _buildGraphicArea(WelcomeAppearance appearance) {
-    return SizedBox.square(
-      dimension: AppSpacing.welcomeGraphicDiameter,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, child) => WelcomeFlowerMark(
-          appearance: appearance,
-          petalBloomAmounts: WelcomeMotionTimeline.petalBloomAmounts(
-            phase: _phase,
-            phaseProgress: _controller.value,
-            timing: widget.timing,
-          ),
+  Widget _buildAnimatedFlower(WelcomeAppearance appearance) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) => WelcomeFlowerMark(
+        appearance: appearance,
+        petalBloomAmounts: WelcomeMotionTimeline.petalBloomAmounts(
+          phase: _phase,
+          phaseProgress: _controller.value,
+          timing: widget.timing,
         ),
       ),
     );
   }
 
-  Widget _buildAssistantWhisper(WelcomeAppearance appearance) {
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: AppSpacing.lg,
-            right: AppSpacing.lg,
-            bottom: AppSpacing.xl,
-          ),
-          child: Text.rich(
-            TextSpan(
-              style: TextStyle(
-                fontSize: AppTypography.xs,
-                fontWeight: AppTypography.regular,
-                color: appearance.foregroundMuted.withValues(alpha: 0.78),
-                height: AppTypography.lineHeightCompact,
-                decoration: TextDecoration.none,
-              ),
-              children: <InlineSpan>[
-                WidgetSpan(
-                  alignment: PlaceholderAlignment.middle,
-                  child: Padding(
-                    padding: EdgeInsets.only(right: AppSpacing.xs),
-                    child: Icon(
-                      CupertinoIcons.sparkles,
-                      size: AppSpacing.fourteen,
-                      color: AppColors.assistantMarkColorOnDark,
-                    ),
-                  ),
-                ),
-                TextSpan(
-                  text: '${UITextConstants.assistantWhisperSignature}  ',
-                  style: TextStyle(
-                    fontWeight: AppTypography.semiBold,
-                    color: AppColors.welcomeForeground.withValues(alpha: 0.85),
-                  ),
-                ),
-                TextSpan(text: UITextConstants.assistantWhisperLine),
-              ],
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    );
-  }
-
+  /// 单行启动提示：固定 24px 槽位挂在底部品牌名上方，文案只做轻微淡入，
+  /// 出现与消失都不会推动品牌簇或品牌名重新布局。
   Widget _buildStartupInlineHint(WelcomeAppearance appearance) {
+    final media = MediaQuery.of(context);
+    final hintBottom =
+        WelcomeBrandFooter.resolveStripHeight(
+          viewportHeight: media.size.height,
+          bottomInset: media.padding.bottom,
+        ) +
+        AppSpacing.welcomeStartupHintToBrandGap;
     return Positioned(
       left: AppSpacing.containerLg,
       right: AppSpacing.containerLg,
-      bottom: 0,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.only(bottom: AppSpacing.xl),
-          child: SizedBox(
-            height: AppSpacing.radiusTwentyFour,
-            child: Text(
-              UITextConstants.startupStillStartingInline,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.xs,
-                fontWeight: AppTypography.medium,
-                color: appearance.foregroundMuted.withValues(alpha: 0.82),
-                height: AppTypography.lineHeightCompact,
-                decoration: TextDecoration.none,
-              ),
-            ),
-          ),
+      bottom: hintBottom,
+      child: SizedBox(
+        height: AppSpacing.welcomeStartupHintSlotHeight,
+        child: AnimatedSwitcher(
+          duration: _hintFadeDuration,
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeOutCubic,
+          child: !_hintVisible
+              ? const SizedBox.shrink()
+              : Text(
+                  UITextConstants.startupStillStartingInline,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: AppTypography.xs,
+                    fontWeight: AppTypography.medium,
+                    color: appearance.foregroundMuted.withValues(alpha: 0.82),
+                    height: AppTypography.lineHeightCompact,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
         ),
       ),
     );

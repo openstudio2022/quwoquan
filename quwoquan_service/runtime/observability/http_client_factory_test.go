@@ -100,7 +100,7 @@ func TestNewObservedHTTPClient_RetryAndSingleTerminalLogging(t *testing.T) {
 		t.Fatalf("expected 2 attempts by retry transport, got=%d", seqRT.attempts)
 	}
 
-	standardLogs, err := parseDelimitedLogs(standard.String())
+	standardLogs, err := parseRuntimeLogs(standard.String())
 	if err != nil {
 		t.Fatalf("parse logs failed: %v", err)
 	}

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/voice_message_observability.dart';
 
@@ -198,7 +198,7 @@ class VoicePlayerManager extends Notifier<VoicePlaybackState> {
         activeMessageId: messageId,
         isPlaying: false,
         failedMessageId: messageId,
-        error: UITextConstants.chatVoicePlayUnavailable,
+        error: ChatText.chatVoicePlayUnavailable,
       );
       return;
     }
@@ -234,7 +234,7 @@ class VoicePlayerManager extends Notifier<VoicePlaybackState> {
       state = VoicePlaybackState(
         activeMessageId: messageId,
         failedMessageId: messageId,
-        error: UITextConstants.chatVoicePlayUnavailable,
+        error: ChatText.chatVoicePlayUnavailable,
       );
     }
   }

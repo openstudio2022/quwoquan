@@ -1,226 +1,26 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
-import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_setting_model.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
+import '../../../../support/fakes/test_persona_facets.dart';
 
-class _StubUserRepository implements UserRepository {
-  _StubUserRepository(this._items, {this.summaryFailure});
-
-  final List<Map<String, dynamic>> _items;
-  Object? summaryFailure;
-  int summaryLoadCount = 0;
-  int syncAppliedCount = 0;
-  int deleteCount = 0;
-
-  @override
-  Future<void> activatePersona(String subAccountId) async {
-    for (final item in _items) {
-      item['isActive'] = item['subAccountId'] == subAccountId;
-    }
-  }
-
-  @override
-  Future<int> applyPersonaProfileSync(
-    String subAccountId, {
-    required List<String> fieldsMask,
-    String applyScope = 'all_sub_accounts',
-    List<String> syncTargetIds = const <String>[],
-  }) async {
-    syncAppliedCount++;
-    return syncTargetIds.isEmpty ? 1 : syncTargetIds.length;
-  }
-
-  @override
-  Future<PersonaManagementItemViewData> createPersona({
-    required String displayName,
-    String isolationLevel = 'open',
-    String? purposeHint,
-  }) async {
-    final created = <String, dynamic>{
-      'subAccountId': 'created_persona',
-      'displayName': displayName,
-      'userHandle': 'qw_created_persona',
-      'phone': '13800000000',
-      'email': '',
-      'isolationLevel': isolationLevel,
-      'profileVisibility': 'public',
-      'isPrimary': false,
-      'isActive': false,
-      'status': 'active',
-      'inheritsProfileFromOwner': true,
-      'overriddenProfileFields': const <String>[],
-    };
-    _items.add(created);
-    return PersonaManagementItemViewData.fromMap(created);
-  }
-
-  @override
-  Future<void> deleteEmptyPersona(String subAccountId) async {
-    deleteCount++;
-    _items.removeWhere((item) => item['subAccountId'] == subAccountId);
-  }
-
-  @override
-  Future<ActivePersonaContextViewData> getActivePersonaContext() async {
-    final active = _items.firstWhere((item) => item['isActive'] == true);
-    return ActivePersonaContextViewData.fromMap(active);
-  }
-
-  @override
-  Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String subAccountId,
-  ) async {
-    return PersonaLifecycleGuardViewData(
-      subAccountId: subAccountId,
-      canDelete: subAccountId != 'persona_primary',
-      canRetire: subAccountId != 'persona_primary',
-      requiredAction: '',
-      reasonCode: '',
-      message: '',
-    );
-  }
-
-  @override
-  Future<PersonaManagementSummaryViewData> getPersonaManagementSummary() async {
-    summaryLoadCount++;
-    final failure = summaryFailure;
-    if (failure != null) {
-      throw failure;
-    }
-    return PersonaManagementSummaryViewData(
-      items: _items
-          .map(PersonaManagementItemViewData.fromMap)
-          .toList(growable: false),
-      quota: PersonaManagementQuotaViewData(
-        maxSubAccounts: 5,
-        usedSubAccounts: _items.length,
-      ),
-      activeContext: ActivePersonaContextViewData.fromMap(
-        _items.firstWhere((item) => item['isActive'] == true),
-      ),
-    );
-  }
-
-  @override
-  Future<UserSettingModel> getNotificationSettings() async {
-    return UserSettingModel.fromWire(<String, dynamic>{
-      'userId': '',
-      'enablePush': true,
-    });
-  }
-
-  @override
-  Future<UserSettingModel> getPrivacySettings() async {
-    return UserSettingModel.fromWire(<String, dynamic>{
-      'userId': '',
-      'profileVisibility': 'public',
-    });
-  }
-
-  @override
-  Future<List<PersonaManagementItemViewData>> listPersonas() async {
-    return _items
-        .map(PersonaManagementItemViewData.fromMap)
-        .toList(growable: false);
-  }
-
-  @override
-  Future<void> retirePersona(String subAccountId) async {
-    final index = _items.indexWhere(
-      (item) => item['subAccountId'] == subAccountId,
-    );
-    if (index == -1) return;
-    _items[index] = <String, dynamic>{
-      ..._items[index],
-      'status': 'retired',
-      'retiredAt': DateTime(2026, 4, 23).toIso8601String(),
-      'isActive': false,
-    };
-  }
-
-  @override
-  Future<PersonaManagementItemViewData> updatePersona(
-    String subAccountId, {
-    String? displayName,
-    String? phone,
-    String? email,
-    String? avatarUrl,
-    String? isolationLevel,
-    String? purposeHint,
-    String? applyScope,
-    List<String>? syncTargetIds,
-    List<String>? fieldsMask,
-  }) async {
-    final index = _items.indexWhere(
-      (item) => item['subAccountId'] == subAccountId,
-    );
-    final updated = Map<String, dynamic>.from(_items[index]);
-    if (displayName != null) updated['displayName'] = displayName;
-    if (phone != null) updated['phone'] = phone;
-    if (email != null) updated['email'] = email;
-    updated['inheritsProfileFromOwner'] = false;
-    updated['overriddenProfileFields'] =
-        fieldsMask ??
-        <String>[
-          if (displayName != null) 'displayName',
-          if (phone != null) 'phone',
-          if (email != null) 'email',
-        ];
-    _items[index] = updated;
-    return PersonaManagementItemViewData.fromMap(updated);
-  }
-}
-
-Widget _wrap(_StubUserRepository repo) {
+Widget _wrap(TestPersonaFacets facets) {
   return ProviderScope(
-    overrides: [userRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      personaQueryProvider.overrideWith((ref, surface) => facets),
+      personaCommandWriterProvider.overrideWithValue(facets),
+    ],
     child: const CupertinoApp(home: PersonaManagementPage()),
   );
-}
-
-List<Map<String, dynamic>> _seed() {
-  return <Map<String, dynamic>>[
-    <String, dynamic>{
-      'subAccountId': 'persona_primary',
-      'displayName': '主分身',
-      'userHandle': 'main_handle',
-      'phone': '13800000000',
-      'email': 'main@example.com',
-      'isPrimary': true,
-      'isActive': true,
-      'isolationLevel': 'open',
-      'profileVisibility': 'public',
-      'inheritsProfileFromOwner': true,
-      'status': 'active',
-      'overriddenProfileFields': const <String>[],
-    },
-    <String, dynamic>{
-      'subAccountId': 'persona_photo',
-      'displayName': '摄影分身',
-      'userHandle': 'photo_handle',
-      'phone': '13800000000',
-      'email': 'photo@example.com',
-      'isPrimary': false,
-      'isActive': false,
-      'isolationLevel': 'semi',
-      'profileVisibility': 'public',
-      'inheritsProfileFromOwner': false,
-      'status': 'active',
-      'overriddenProfileFields': const <String>['email'],
-    },
-  ];
 }
 
 void main() {
   group('PersonaManagementPage', () {
     testWidgets('展示分身资料字段', (tester) async {
-      final repo = _StubUserRepository(_seed());
-      await tester.pumpWidget(_wrap(repo));
+      await tester.pumpWidget(_wrap(TestPersonaFacets()));
       await tester.pumpAndSettle();
 
       expect(find.text('主分身'), findsWidgets);
@@ -229,11 +29,10 @@ void main() {
     });
 
     testWidgets('分身首屏失败只保留顶栏返回与恢复动作', (tester) async {
-      final repo = _StubUserRepository(
-        _seed(),
+      final facets = TestPersonaFacets(
         summaryFailure: StateError('persona summary unavailable'),
       );
-      await tester.pumpWidget(_wrap(repo));
+      await tester.pumpWidget(_wrap(facets));
       await tester.pumpAndSettle();
 
       expect(
@@ -245,23 +44,23 @@ void main() {
       expect(find.text(UITextConstants.back), findsNothing);
       expect(find.text(UITextConstants.tryAgain), findsOneWidget);
 
-      repo.summaryFailure = null;
+      facets.summaryFailure = null;
       await tester.tap(find.text(UITextConstants.tryAgain));
       await tester.pumpAndSettle();
 
-      expect(repo.summaryLoadCount, 2);
+      expect(facets.summaryLoadCount, 2);
       expect(find.text('主分身'), findsWidgets);
     });
 
     testWidgets('编辑资料后出现同步建议', (tester) async {
-      final repo = _StubUserRepository(_seed());
-      await tester.pumpWidget(_wrap(repo));
+      final facets = TestPersonaFacets();
+      await tester.pumpWidget(_wrap(facets));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text(UITextConstants.profileEditLabel).first);
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(CupertinoTextField).at(0), '新主分身');
-      await tester.tap(find.text(UITextConstants.confirm));
+      await tester.tap(find.text(UITextConstants.editProfileSaveAction));
       await tester.pumpAndSettle();
 
       expect(
@@ -271,8 +70,8 @@ void main() {
     });
 
     testWidgets('同步建议可执行应用', (tester) async {
-      final repo = _StubUserRepository(_seed());
-      await tester.pumpWidget(_wrap(repo));
+      final facets = TestPersonaFacets();
+      await tester.pumpWidget(_wrap(facets));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text(UITextConstants.profileEditLabel).first);
@@ -281,28 +80,31 @@ void main() {
         find.byType(CupertinoTextField).at(1),
         '13900000000',
       );
-      await tester.tap(find.text(UITextConstants.confirm));
+      await tester.tap(find.text(UITextConstants.editProfileSaveAction));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text(UITextConstants.personaSyncApplyAll));
       await tester.pumpAndSettle();
 
-      expect(repo.syncAppliedCount, 1);
+      expect(facets.syncAppliedCount, 1);
     });
 
-    testWidgets('已退役分身展示退役态并隐藏删除按钮', (tester) async {
-      final items = _seed();
-      items[1] = <String, dynamic>{
-        ...items[1],
-        'status': 'retired',
-        'retiredAt': DateTime(2026, 4, 23).toIso8601String(),
-      };
-      final repo = _StubUserRepository(items);
-      await tester.pumpWidget(_wrap(repo));
+    testWidgets('已退役分身展示退役态并隐藏重复退役操作', (tester) async {
+      final seed = TestPersonaFacets.defaultSeed()
+          .map(
+            (item) => item.subAccountId == 'persona_photo'
+                ? item.copyWith(
+                    status: 'retired',
+                    retiredAt: DateTime.utc(2026, 4, 23),
+                  )
+                : item,
+          )
+          .toList(growable: false);
+      await tester.pumpWidget(_wrap(TestPersonaFacets(seed: seed)));
       await tester.pumpAndSettle();
 
       expect(find.text(UITextConstants.personaRetired), findsWidgets);
-      expect(find.text(UITextConstants.personaDelete), findsNothing);
+      expect(find.text(UITextConstants.personaRetire), findsNothing);
     });
   });
 }

@@ -1,39 +1,67 @@
-# L3 特性：daily-merge-release-strategy
+# L3 Story：每日合并发布策略 (`daily-merge-release-strategy`)
 
-## 功能说明
+> 所属能力：[`deliver-deploy-prod-pipeline`](../spec.md)
 
-建立「显式 PR + required checks 进入 main」的 release 策略，替代旧的“每日定时自动合并 `dev1.0 -> main`”模型。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-## 范围
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- **分支策略**：支持 `dev1.0` 分支开发与 trunk development，但进入 `main` 统一走显式 PR
-- **PR 合入规则**：`main` 的 required checks 统一由 `03/04/05` 承担，其中 `04` 是 local-gamma preflight 主门禁、`05` 是本地 self-hosted alpha/beta Android+iOS 设备矩阵
-- **部署触发**：进入 `main` 后自动触发 `02` 与 `07`（`07` 在 prod `gray-initial` 承接真实远端集成复验），手动发布保留 `06`
+## 1. 用户价值
 
-## 适用范围与约束
+作为开发、测试或运维角色，
+我希望支持 `dev1.0` 分支开发与 trunk development，但进入 `main` 统一走显式 PR，
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-- **适用**：日节奏发布、local-gamma 左移与 prod 自动化部署（远端只有 prod-hosted）
-- **约束**：需 GitHub Actions 权限（PAT 或 GITHUB_TOKEN 用于 merge）；deploy-prod-auto 依赖 `03/04/05` 全绿
-- **不适用**：紧急 hotfix 直推 main（可保留 workflow_dispatch 或临时放开策略）
+## 2. 范围与非目标
 
-## 与父/子节点关系
+### In Scope
 
-**父节点**：deliver-deploy-prod-pipeline（L2）
+- “每日合并发布策略”的输入、可观察主路径、失败语义以及与父能力的交接。
 
-| 关联节点 | 说明 |
-|----------|------|
-| integration-deploy-and-l3-l4-gate | 已收口为 local-gamma 左移 + prod gray-initial 远端复验 + 本地 self-hosted gamma 旅程 |
-| gray-release-to-prod | deploy-prod-auto Stage 1 全自动 |
+### Out of Scope
 
-## 多环境与波次（跨节点口径）
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-**四类逻辑环境**（alpha / beta / gamma / prod）与 **B→C→(D→E)** 大波段、prod 内 **wave**，以 **[environment_matrix.md](../../../../../quwoquan_ops/environments/environment_matrix.md)** 为总览，与 [ci_cd_end_to_end_design.md](../../../../../quwoquan_ops/environments/ci_cd_end_to_end_design.md) 一致。
+## 3. 行为要求
 
-## 验收标准概要
+<a id="req-001"></a>
+### REQ-001 每日合并发布策略
 
-- A1：分支策略文档明确「显式 PR + required checks 进入 main」，且不再存在定时 merge 口径
-- A2：`03` / `04` / `05` 仅在 `pull_request(main)` / 手动路径运行，不在分支 push 上重复执行
-- A3：PR required checks 全绿后进入 `main`
-- A4：进入 `main` 后触发 `02` 与 `07`
-- A5：deliver_to_production_runbook、ci_cd_end_to_end_design 与策略一致
-- A6：环境矩阵与上述 release 波次、local-gamma / prod gray-initial / self-hosted Android+iOS 口径在文档层面对齐
+- **分支策略**：支持 `dev1.0` 分支开发与 trunk development，但进入 `main` 统一走显式 PR。
+
+<a id="req-002"></a>
+### REQ-002 dev1.0 开发分支与 main 显式 PR 准入
+
+- **分支策略**：支持 `dev1.0` 分支开发与 trunk development，但进入 `main` 统一走显式 PR。
+- **PR 合入规则**：`main` 的 required checks 统一由 `03/04/05` 承担，其中 `04` 是 local-gamma preflight 主门禁、`05` 是本地 self-hosted alpha/beta Android+iOS 设备矩阵。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 每日合并发布策略
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“每日合并发布策略”对应的公开行为。
+- THEN **分支策略**：支持 `dev1.0` 分支开发与 trunk development，但进入 `main` 统一走显式 PR。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`deliver-deploy-prod-pipeline`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 每日合并发布策略 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“每日合并发布策略”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

@@ -12,7 +12,7 @@ func TestWithCORSAllowsLocalhostPreflight(t *testing.T) {
 		w.WriteHeader(http.StatusTeapot)
 	}), DefaultCORSOptions())
 
-	req := httptest.NewRequest(http.MethodOptions, "/content/posts", nil)
+	req := httptest.NewRequest(http.MethodOptions, "/content/content/posts", nil)
 	req.Header.Set("Origin", "http://127.0.0.1:43123")
 	req.Header.Set("Access-Control-Request-Method", http.MethodPatch)
 	req.Header.Set(
@@ -43,7 +43,6 @@ func TestWithCORSAllowsLocalhostPreflight(t *testing.T) {
 		"X-Client-Page-Id",
 		"X-Client-Session-Id",
 		"X-Client-User-Id",
-		"X-Client-Sub-Account-Context-Version",
 	} {
 		if !strings.Contains(allowHeaders, header) {
 			t.Fatalf("allow headers %q missing %s", allowHeaders, header)

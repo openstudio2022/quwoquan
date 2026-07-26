@@ -62,7 +62,7 @@ LocationSearchReader _searchReaderFrom(NearbyLocationReader reader) {
 
 /// L1b Widget 测试：位置选择页权限永久拒绝 → 展示 locationAppPermissionRequired + 去设置
 ///
-/// 规范：specs/ux/error-and-permission-semantics.md
+/// 规范：specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
 /// 特性树：permission-card-display-contract
 void main() {
   for (final profile in <({String name, Size size, Brightness brightness})>[

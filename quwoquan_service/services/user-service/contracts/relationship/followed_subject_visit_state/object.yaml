@@ -1,0 +1,52 @@
+kind: aggregate_root
+description: '当前 viewer 对单个关注对象的私有访问水位。该对象独立承载 viewer × subject
+
+  的幂等更新，不把无界访问状态塞入 UserProfile，也不允许 FollowingSubject
+
+  projection 成为 command owner。
+
+  '
+identity:
+  fields:
+  - personaId
+  - subjectType
+  - subjectId
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: viewer
+  on_delete: cascade
+  reference_fields:
+  - personaId
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: subject
+  on_delete: tombstone
+  reference_fields:
+  - subjectType
+  - subjectId
+  target_objects:
+  - entity.Homepage
+  - circle.Circle
+  - integration.Location
+capabilities:
+- mutable
+- queryable
+business_rules:
+- personaId + subjectType + subjectId 唯一
+- lastVisitedAt 只能单调推进，重复 clientRequestId 返回同一 receipt
+lifecycle:
+  states:
+  - active
+  optimistic_concurrency: store_commit
+  idempotency: command_receipt

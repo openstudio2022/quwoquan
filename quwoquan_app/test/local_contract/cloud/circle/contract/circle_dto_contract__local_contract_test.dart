@@ -355,14 +355,16 @@ void main() {
   });
 
   group('CircleStatsWireDto', () {
-    test('fromMap 保留 raw 并可供 CircleStatsViewData 解析', () {
+    test('fromMap 解析 canonical 字段并可供 CircleStatsViewData 投影', () {
       final dto = CircleStatsWireDto.fromMap({
+        'circleId': 'circle-1',
         'memberCount': 10,
         'weeklyActiveCount': 3,
         'postCount': 20,
         'likeCount': 99,
       });
       final view = CircleStatsViewData.fromStatsWire(dto);
+      expect(dto.circleId, 'circle-1');
       expect(view.members, 10);
       expect(view.weeklyActive, 3);
       expect(view.posts, 20);

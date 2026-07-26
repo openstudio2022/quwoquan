@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
@@ -20,6 +22,33 @@ final class _ProfileUpdateProposalReviewSheetState
   bool _busy = false;
   String? _errorMessage;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _track('expose', result: widget.proposal.status.name);
+    });
+  }
+
+  void _track(String action, {String? result, String? failReasonCode}) {
+    unawaited(
+      ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'profile_update_proposal',
+            action: action,
+            pageName: 'ProfileUpdateProposalReviewSheet',
+            targetType: 'profile_update_proposal',
+            targetKey: widget.proposal.id,
+            payload: <String, dynamic>{
+              'result': ?result,
+              'failReasonCode': ?failReasonCode,
+            },
+          ),
+    );
+  }
+
   Future<void> _approve() async {
     if (_busy) return;
     setState(() {
@@ -41,6 +70,7 @@ final class _ProfileUpdateProposalReviewSheetState
         );
       }
       if (!mounted) return;
+      _track('apply', result: 'succeeded');
       AppToast.show(context, UITextConstants.editProfileProposalApplied);
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -55,6 +85,7 @@ final class _ProfileUpdateProposalReviewSheetState
         _busy = false;
         _errorMessage = semantic.message;
       });
+      _track('apply', result: 'failed', failReasonCode: semantic.sourceCode);
     }
   }
 
@@ -71,6 +102,7 @@ final class _ProfileUpdateProposalReviewSheetState
             RejectProfileUpdateProposalCommand(proposalId: widget.proposal.id),
           );
       if (!mounted) return;
+      _track('reject', result: 'succeeded');
       AppToast.show(context, UITextConstants.editProfileProposalRejected);
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -85,6 +117,7 @@ final class _ProfileUpdateProposalReviewSheetState
         _busy = false;
         _errorMessage = semantic.message;
       });
+      _track('reject', result: 'failed', failReasonCode: semantic.sourceCode);
     }
   }
 
@@ -117,7 +150,7 @@ final class _ProfileUpdateProposalReviewSheetState
               UITextConstants.editProfileProposalTitle,
               style: TextStyle(
                 fontSize: AppTypography.iosTitle2,
-                fontWeight: FontWeight.w600,
+                fontWeight: AppTypography.semiBold,
                 color: AppColors.iosLabel(context),
               ),
             ),
@@ -205,14 +238,20 @@ List<Widget> _changeRows(ProfileChangeSet changes) {
   add(UITextConstants.editProfileBioLabel, changes.bio, allowEmpty: true);
   add(UITextConstants.editProfileAvatarLabel, changes.avatarMediaAssetId);
   add(UITextConstants.editProfileCoverLabel, changes.backgroundMediaAssetId);
-  add('私密资料', changes.isPrivate);
-  add('资料隔离级别', changes.isolationLevel);
-  add('用途说明', changes.purposeHint);
+  add(UITextConstants.editProfileProposalPrivateField, changes.isPrivate);
+  add(
+    UITextConstants.editProfileProposalIsolationField,
+    changes.isolationLevel,
+  );
+  add(UITextConstants.editProfileProposalPurposeField, changes.purposeHint);
   return rows;
 }
 
 String _sourceLabel(ProfileUpdateProposalSource source) => switch (source) {
-  ProfileUpdateProposalSource.assistant => '来自私助的建议',
-  ProfileUpdateProposalSource.external => '来自已授权外部服务的建议',
-  ProfileUpdateProposalSource.persona => '来自当前身份的建议',
+  ProfileUpdateProposalSource.assistant =>
+    UITextConstants.editProfileProposalSourceAssistant,
+  ProfileUpdateProposalSource.external =>
+    UITextConstants.editProfileProposalSourceExternal,
+  ProfileUpdateProposalSource.persona =>
+    UITextConstants.editProfileProposalSourcePersona,
 };

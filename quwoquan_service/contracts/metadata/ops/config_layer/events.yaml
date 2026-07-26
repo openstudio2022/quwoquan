@@ -1,9 +1,0 @@
-aggregate: ConfigLayer
-events:
-  - name: ConfigLayerValueSet
-    description: 一个配置层完成强类型值变更并提交新版本。
-    producer: platform-ops-service
-    consumers: [runtime-config-distributor, platform-ops]
-    channel: transactional_outbox
-    payload_entity: ConfigLayer
-    payload_fields: [id, version, scopeLevel, scopeId, environment, cluster, service, entries, updatedAt]

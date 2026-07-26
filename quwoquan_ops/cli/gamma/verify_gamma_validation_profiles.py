@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SUITES_PATH = REPO_ROOT / "quwoquan_ops" / "environments" / "gamma_validation_suites.json"
+SUITES_PATH = REPO_ROOT / "quwoquan_ops" / "environments" / "gamma" / "validation_suites.json"
 KNOWN_ENVS = {"alpha", "beta", "gamma", "local-gamma", "prod"}
 VALID_PROFILES = {
     "pr_light",

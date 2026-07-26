@@ -1,0 +1,165 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_content_object_alert_coverage.py --write-recording-rules.
+groups:
+  - name: quwoquan_content_contract_media_asset
+    rules:
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route=~"^/content/media/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.GetMediaAsset"
+          contract_metric: "content_media_asset_public_get"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route=~"^/content/media/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.GetMediaAsset"
+          contract_metric: "content_media_asset_public_get"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route=~"^/internal/content/media/[^/]+:delivery-reference$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.GetMediaAssetDeliveryReference"
+          contract_metric: "content_media_asset_delivery_reference_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route=~"^/internal/content/media/[^/]+:delivery-reference$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.GetMediaAssetDeliveryReference"
+          contract_metric: "content_media_asset_delivery_reference_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route=~"^/internal/content/media/[^/]+:reference$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.GetMediaAssetReference"
+          contract_metric: "content_media_asset_reference_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route=~"^/internal/content/media/[^/]+:reference$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.GetMediaAssetReference"
+          contract_metric: "content_media_asset_reference_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route=~"^/internal/content/media/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.GetOwnedMediaAsset"
+          contract_metric: "content_media_asset_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route=~"^/internal/content/media/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.GetOwnedMediaAsset"
+          contract_metric: "content_media_asset_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/internal/content/media/[^/]+:processing-result$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.RecordMediaProcessingResult"
+          contract_metric: "content_media_processing_result"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1200"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/internal/content/media/[^/]+:processing-result$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.RecordMediaProcessingResult"
+          contract_metric: "content_media_processing_result"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1200"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/media/[^/]+/cover:auto$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.SelectAutoVideoCover"
+          contract_metric: "content_media_cover_auto_select"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/media/[^/]+/cover:auto$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.SelectAutoVideoCover"
+          contract_metric: "content_media_cover_auto_select"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/media/[^/]+/cover:manual$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.SelectManualVideoCover"
+          contract_metric: "content_media_cover_manual_select"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/media/[^/]+/cover:manual$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.SelectManualVideoCover"
+          contract_metric: "content_media_cover_manual_select"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="PATCH",route=~"^/internal/content/media/[^/]+:access-policy$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.UpdateMediaAssetAccessPolicy"
+          contract_metric: "content_media_access_policy_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="PATCH",route=~"^/internal/content/media/[^/]+:access-policy$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.UpdateMediaAssetAccessPolicy"
+          contract_metric: "content_media_access_policy_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"

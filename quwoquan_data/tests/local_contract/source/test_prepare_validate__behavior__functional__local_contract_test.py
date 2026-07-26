@@ -16,7 +16,7 @@ from content.source.discovery.gate import gate_explore
 
 
 def test_gate_explore_passes_with_valid_catalog():
-    execution_id = "20260712--travel-homepage-explore--cn-zhejiang--canary-001"
+    execution_id = "20260712--travel-homepage-explore--test-region-a--pilot-001"
     ensure_execution_layout(execution_id)
 
     rows = [{"topic_id": f"poi_{i}", "canonicalName": f"Place {i}", "entityType": "scenic"} for i in range(15)]
@@ -27,7 +27,7 @@ def test_gate_explore_passes_with_valid_catalog():
 
 
 def test_gate_explore_fails_with_too_few():
-    execution_id = "20260712--travel-homepage-explore--cn-zhejiang--canary-002"
+    execution_id = "20260712--travel-homepage-explore--test-region-a--pilot-002"
     ensure_execution_layout(execution_id)
 
     rows = [{"topic_id": f"poi_{i}", "canonicalName": f"Place {i}", "entityType": "scenic"} for i in range(3)]

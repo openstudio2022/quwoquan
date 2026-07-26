@@ -2,12 +2,12 @@
 from __future__ import annotations
 import hashlib
 import io
+import warnings
 from pathlib import Path
-from typing import Iterable, Sequence
-from core.image_safety import (
-    ImageVerdict, NEAR_DUP_HAMMING, STATUS_NEEDS_REVIEW, STATUS_UNSAFE,
-    _HASH_OK, assess_image, backend_status,
-)
+from typing import TYPE_CHECKING, Iterable, Sequence
+
+if TYPE_CHECKING:
+    from core.image_safety import ImageVerdict
 try:
     from PIL import Image  # type: ignore
     import imagehash  # type: ignore
@@ -15,41 +15,65 @@ except Exception:
     Image = None
     imagehash = None
 
+def _near_duplicate_threshold(value: int | None) -> int:
+    if value is not None:
+        return value
+    from core.image_safety import NEAR_DUP_HAMMING
+
+    return NEAR_DUP_HAMMING
+
+
+def _hash_backend_available() -> bool:
+    from core.image_safety import _HASH_OK
+
+    return _HASH_OK
+
+
 def _avg_hash(path: Path):
-    if not _HASH_OK:
+    if not _hash_backend_available():
         return None
     try:
-        with Image.open(path) as im:
-            return imagehash.phash(im.convert("RGB"))
-    except Exception:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(path) as im:
+                return imagehash.phash(im.convert("RGB"))
+    except (Image.DecompressionBombWarning, Image.DecompressionBombError, OSError, ValueError):
         return None
 
-def is_near_duplicate(path_a: str | Path, path_b: str | Path, *, threshold: int = NEAR_DUP_HAMMING) -> bool:
+def is_near_duplicate(
+    path_a: str | Path,
+    path_b: str | Path,
+    *,
+    threshold: int | None = None,
+) -> bool:
     ha = _avg_hash(Path(path_a))
     hb = _avg_hash(Path(path_b))
     if ha is None or hb is None:
         return False
-    return bool((ha - hb) <= threshold)
+    return bool((ha - hb) <= _near_duplicate_threshold(threshold))
 
 def _avg_hash_bytes(data: bytes):
-    if not _HASH_OK or not data:
+    if not _hash_backend_available() or not data:
         return None
     import io
 
     try:
-        with Image.open(io.BytesIO(data)) as im:
-            return imagehash.phash(im.convert("RGB"))
-    except Exception:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(data)) as im:
+                return imagehash.phash(im.convert("RGB"))
+    except (Image.DecompressionBombWarning, Image.DecompressionBombError, OSError, ValueError):
         return None
 
 def dedupe_image_payloads(
-    payloads: Sequence[dict], *, threshold: int = NEAR_DUP_HAMMING
+    payloads: Sequence[dict], *, threshold: int | None = None
 ) -> tuple[list[dict], list[int]]:
     """对内存图片字节按感知哈希去重（下载落盘前），保留先出现者。
 
     每项需含 "bytes"。返回 (保留项, 被判重复的原索引列表)。
     哈希后端缺失时退化为按 sha256/字节恒等去重，绝不放水成「全保留」。
     """
+    resolved_threshold = _near_duplicate_threshold(threshold)
     kept: list[dict] = []
     kept_hashes: list = []
     seen_sha: set[str] = set()
@@ -63,7 +87,7 @@ def dedupe_image_payloads(
             dup_indices.append(idx)
             continue
         h = _avg_hash_bytes(data)
-        if h is not None and any((h - kh) <= threshold for kh in kept_hashes):
+        if h is not None and any((h - kh) <= resolved_threshold for kh in kept_hashes):
             dup_indices.append(idx)
             continue
         seen_sha.add(sha)
@@ -72,8 +96,9 @@ def dedupe_image_payloads(
         kept.append(payload)
     return kept, dup_indices
 
-def dedupe_images(paths: Sequence[str | Path], *, threshold: int = NEAR_DUP_HAMMING) -> list[Path]:
+def dedupe_images(paths: Sequence[str | Path], *, threshold: int | None = None) -> list[Path]:
     """按感知哈希去重，保留先出现者。哈希后端缺失时退化为按解析路径去重。"""
+    resolved_threshold = _near_duplicate_threshold(threshold)
     kept: list[Path] = []
     kept_hashes: list = []
     seen_resolved: set[str] = set()
@@ -87,13 +112,15 @@ def dedupe_images(paths: Sequence[str | Path], *, threshold: int = NEAR_DUP_HAMM
         if h is None:
             kept.append(p)
             continue
-        if any((h - kh) <= threshold for kh in kept_hashes):
+        if any((h - kh) <= resolved_threshold for kh in kept_hashes):
             continue
         kept.append(p)
         kept_hashes.append(h)
     return kept
 
 def assess_images(paths: Iterable[str | Path]) -> list[ImageVerdict]:
+    from core.image_safety import assess_image
+
     return [assess_image(p) for p in paths]
 
 def assess_asset_sources(assets: Sequence[dict]) -> dict:
@@ -103,6 +130,14 @@ def assess_asset_sources(assets: Sequence[dict]) -> dict:
             duplicateGroups:[[idx...]], backends:{...}, summary:{...}}。
     near-dup 以 sourcePath 的感知哈希在集合内两两比较。
     """
+    from core.image_safety import (
+        NEAR_DUP_HAMMING,
+        STATUS_NEEDS_REVIEW,
+        STATUS_UNSAFE,
+        assess_image,
+        backend_status,
+    )
+
     verdicts: list[dict] = []
     paths: list[Path] = []
     unsafe: list[str] = []

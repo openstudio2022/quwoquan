@@ -1,0 +1,151 @@
+domain: OPS
+aggregate: EventRecord
+description: 产品遥测、启动恢复与受限启动遥测的稳定错误语义。
+errors:
+- code: OPS.USER.event_batch_invalid
+  kind: USER
+  reason: event_batch_invalid
+  http_status: 422
+  recovery_action: absorb
+  dart_const: eventBatchInvalid
+  go_const: ErrEventBatchInvalid
+  user_message:
+    zh: 事件批次不符合目录契约
+    en: The event batch does not match the telemetry catalog.
+- code: OPS.USER.runtime_log_batch_invalid
+  kind: USER
+  reason: runtime_log_batch_invalid
+  http_status: 422
+  recovery_action: absorb
+  dart_const: runtimeLogBatchInvalid
+  go_const: ErrRuntimeLogBatchInvalid
+  user_message:
+    zh: 诊断日志批次不符合统一日志目录
+    en: The runtime diagnostic batch does not match the log catalog.
+- code: OPS.USER.idempotency_key_invalid
+  kind: USER
+  reason: idempotency_key_invalid
+  http_status: 400
+  recovery_action: absorb
+  dart_const: idempotencyKeyInvalid
+  go_const: ErrIdempotencyKeyInvalid
+  user_message:
+    zh: 事件批次校验失败
+    en: The event batch digest is invalid.
+- code: OPS.USER.query_window_invalid
+  kind: USER
+  reason: query_window_invalid
+  http_status: 400
+  recovery_action: absorb
+  dart_const: queryWindowInvalid
+  go_const: ErrQueryWindowInvalid
+  user_message:
+    zh: 日志查询时间范围无效
+    en: The telemetry query window is invalid.
+- code: OPS.USER.event_drilldown_forbidden
+  kind: USER
+  reason: event_drilldown_forbidden
+  http_status: 403
+  recovery_action: request_permission
+  dart_const: eventDrilldownForbidden
+  go_const: ErrEventDrilldownForbidden
+  user_message:
+    zh: 没有日志明细查询权限
+    en: You do not have permission to query telemetry details.
+- code: OPS.SYSTEM.logstore_unavailable
+  kind: SYSTEM
+  reason: logstore_unavailable
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: logstoreUnavailable
+  go_const: ErrLogstoreUnavailable
+  user_message:
+    zh: 日志服务暂时不可用
+    en: Telemetry storage is temporarily unavailable.
+- code: OPS.SYSTEM.runtime_logstore_unavailable
+  kind: SYSTEM
+  reason: runtime_logstore_unavailable
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: runtimeLogstoreUnavailable
+  go_const: ErrRuntimeLogstoreUnavailable
+  user_message:
+    zh: 诊断日志服务暂时不可用
+    en: Runtime diagnostics storage is temporarily unavailable.
+- code: OPS.SYSTEM.startup_configuration_invalid
+  kind: SYSTEM
+  reason: startup_configuration_invalid
+  http_status: 500
+  recovery_action: retry
+  recovery_after_seconds: 0
+  dart_const: startupConfigurationInvalid
+  go_const: ErrStartupConfigurationInvalid
+  user_message:
+    zh: 启动配置不可用，请检查网络后重试
+    en: Startup configuration is unavailable. Check your connection and retry.
+- code: OPS.SYSTEM.startup_initialization_failed
+  kind: SYSTEM
+  reason: startup_initialization_failed
+  http_status: 500
+  recovery_action: retry
+  recovery_after_seconds: 0
+  dart_const: startupInitializationFailed
+  go_const: ErrStartupInitializationFailed
+  user_message:
+    zh: 应用启动遇到问题，请重试
+    en: The app could not start. Please retry.
+- code: OPS.SYSTEM.startup_router_unavailable
+  kind: SYSTEM
+  reason: startup_router_unavailable
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 1
+  dart_const: startupRouterUnavailable
+  go_const: ErrStartupRouterUnavailable
+  user_message:
+    zh: 页面暂时无法打开，请重试
+    en: The page is temporarily unavailable. Please retry.
+- code: OPS.SYSTEM.unclassified_page_failure
+  kind: SYSTEM
+  reason: unclassified_page_failure
+  http_status: 500
+  recovery_action: absorb
+  dart_const: unclassifiedPageFailure
+  go_const: ErrUnclassifiedPageFailure
+  user_message:
+    zh: 页面遇到未分类异常
+    en: The page encountered an unclassified failure.
+- code: OPS.SYSTEM.startup_native_first_frame_timeout
+  kind: SYSTEM
+  reason: startup_native_first_frame_timeout
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 1
+  dart_const: startupNativeFirstFrameTimeout
+  go_const: ErrStartupNativeFirstFrameTimeout
+  user_message:
+    zh: 应用界面未能及时显示，请重试
+    en: The app interface did not appear in time. Please retry.
+- code: OPS.USER.startup_event_invalid
+  kind: USER
+  reason: startup_event_invalid
+  http_status: 400
+  recovery_action: absorb
+  dart_const: startupEventInvalid
+  go_const: ErrStartupEventInvalid
+  user_message:
+    zh: 启动诊断事件无效
+    en: The startup diagnostic event is invalid.
+- code: OPS.SYSTEM.startup_telemetry_unavailable
+  kind: SYSTEM
+  reason: startup_telemetry_unavailable
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: startupTelemetryUnavailable
+  go_const: ErrStartupTelemetryUnavailable
+  user_message:
+    zh: 启动诊断暂时不可用
+    en: Startup diagnostics are temporarily unavailable.

@@ -2,6 +2,7 @@ package reliabletask
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -18,6 +19,9 @@ type OutboxStore interface {
 type ReadyQueue interface {
 	ClaimReadyTask(ctx context.Context, taskTypes []string, workerID string, leaseTTL time.Duration, now time.Time) (*ReliableAsyncTask, error)
 	ClaimReadyTaskByID(ctx context.Context, taskID string, workerID string, leaseTTL time.Duration, now time.Time) (*ReliableAsyncTask, error)
+	ListReadyTasks(ctx context.Context, taskTypes []string, limit int, now time.Time) ([]ReliableAsyncTask, error)
+	RenewTaskLease(ctx context.Context, taskID string, leaseToken string, leaseTTL time.Duration, now time.Time) (time.Time, error)
+	RecordTaskResult(ctx context.Context, taskID string, leaseToken string, result map[string]string, now time.Time) error
 	CompleteTask(ctx context.Context, taskID string, leaseToken string) error
 	FailTask(ctx context.Context, taskID string, leaseToken string, failure RuntimeFailure, policy RetryPolicy, now time.Time) error
 }
@@ -184,7 +188,7 @@ func (w Worker) ProcessOne(ctx context.Context, handler TaskHandler) (bool, erro
 	if err != nil || task == nil {
 		return false, err
 	}
-	if err := handler(ctx, *task); err != nil {
+	if err := w.runHandlerWithLeaseRenewal(ctx, *task, handler); err != nil {
 		policy := w.Retry
 		if policy.MaxAttempts <= 0 {
 			policy = DefaultRetryPolicy()
@@ -212,6 +216,66 @@ func (w Worker) ProcessOne(ctx context.Context, handler TaskHandler) (bool, erro
 		}
 	}
 	return true, nil
+}
+
+func (w Worker) runHandlerWithLeaseRenewal(
+	ctx context.Context,
+	task ReliableAsyncTask,
+	handler TaskHandler,
+) error {
+	leaseTTL := w.LeaseTTL
+	if leaseTTL <= 0 {
+		leaseTTL = 30 * time.Second
+	}
+	interval := leaseTTL / 3
+	if interval < time.Millisecond {
+		interval = time.Millisecond
+	}
+	handlerCtx, cancelHandler := context.WithCancel(ctx)
+	defer cancelHandler()
+	stopRenewal := make(chan struct{})
+	renewalResult := make(chan error, 1)
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopRenewal:
+				renewalResult <- nil
+				return
+			case <-ctx.Done():
+				renewalResult <- ctx.Err()
+				return
+			case <-ticker.C:
+				now := time.Now().UTC()
+				if w.Now != nil {
+					now = w.Now().UTC()
+				}
+				if _, err := w.Store.RenewTaskLease(
+					ctx,
+					task.TaskID,
+					task.LeaseToken,
+					leaseTTL,
+					now,
+				); err != nil {
+					cancelHandler()
+					renewalResult <- fmt.Errorf(
+						"reliabletask: renew task lease %s: %w",
+						task.TaskID,
+						err,
+					)
+					return
+				}
+			}
+		}
+	}()
+	handlerErr := handler(handlerCtx, task)
+	close(stopRenewal)
+	renewalErr := <-renewalResult
+	if handlerErr != nil {
+		return handlerErr
+	}
+	return renewalErr
 }
 
 func (w Worker) claimWithMessage(ctx context.Context) (*ReliableAsyncTask, *ReadyIndexMessage, error) {

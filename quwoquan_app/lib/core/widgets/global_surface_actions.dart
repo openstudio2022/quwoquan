@@ -8,9 +8,12 @@ import 'package:quwoquan_app/app/navigation/generated/page_access_internal_route
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show ReferralSource;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
+import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
@@ -474,7 +477,12 @@ class GlobalQuickActionSheet {
           if (!context.mounted || circleId == null || circleId.isEmpty) {
             return;
           }
-          context.push(AppRoutePaths.circleDetail(id: circleId));
+          context.push(
+            AppRoutePaths.circleDetail(id: circleId),
+            extra: const CircleDetailPageRouteExtra(
+              referralSource: ReferralSource.organicFeed,
+            ),
+          );
         });
   }
 

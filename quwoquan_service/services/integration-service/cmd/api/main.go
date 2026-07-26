@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,16 +19,18 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	rtgov "quwoquan_service/runtime/governance"
+	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
-	httpadapter "quwoquan_service/services/integration-service/internal/adapters/http"
-	"quwoquan_service/services/integration-service/internal/application"
-	"quwoquan_service/services/integration-service/internal/domain/location/model"
-	"quwoquan_service/services/integration-service/internal/infrastructure/provider"
+	httpadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/http"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/providerbinding"
+	locationapplication "quwoquan_service/services/integration-service/internal/external_integration/location/application"
 )
 
 func main() {
@@ -57,6 +61,28 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("access token verifier invalid: %w", err)
 	}
+	accountSecurityAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"integration-service",
+		[]string{"user.account.security.read"},
+	)
+	if err != nil {
+		return fmt.Errorf("account security authority credential init failed: %w", err)
+	}
+	accountSecurityAuthorityTimeout := time.Duration(
+		cfg.AccountSecurityAuthority.TimeoutMs,
+	) * time.Millisecond
+	accountSecurityAuthority, err := rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL:     cfg.AccountSecurityAuthority.BaseURL,
+			HTTPClient:  &http.Client{Timeout: accountSecurityAuthorityTimeout},
+			Credentials: accountSecurityAuthorityCredentials,
+			Timeout:     accountSecurityAuthorityTimeout,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("account security authority config invalid: %w", err)
+	}
 	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
@@ -67,6 +93,17 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("device ticket verifier invalid: %w", err)
 	}
+	locationBinding, locationBindingErr := providerbinding.ResolveLocationLookup(
+		cfg.Environment,
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	locationCapabilityBlocked := errors.Is(
+		locationBindingErr,
+		providerbinding.ErrLocationLookupCapabilityBlocked,
+	)
+	if locationBindingErr != nil && !locationCapabilityBlocked {
+		return fmt.Errorf("location provider binding invalid: %w", locationBindingErr)
+	}
 
 	ctx, cancelRuntime := context.WithCancel(context.Background())
 	defer cancelRuntime()
@@ -74,45 +111,74 @@ func run() error {
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "integration-service", SamplingRatio: 0.1})
 	defer otelShutdown()
 
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		return fmt.Errorf("runtime log exporter init failed: %w", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
 	kvFilter := robs.NewKVMetadataFilter(nil)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, robs.TraceLogLevelInfo, kvFilter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, robs.TraceLogLevelInfo, kvFilter)
 	if err != nil {
 		return fmt.Errorf("process logger init failed: %w", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, kvFilter)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, kvFilter)
 	if err != nil {
 		return fmt.Errorf("exception logger init failed: %w", err)
 	}
 
-	factoryCfg := rthttp.DefaultHTTPClientFactoryConfig()
-	factoryCfg.Timeout = time.Duration(cfg.Integration.Location.TimeoutMs) * time.Millisecond
-	factoryCfg.MaxRetries = 0
-	factoryCfg.RetryBackoff = 0
-	factoryCfg.RetryOnCodes = map[int]struct{}{}
-	logCfg := rthttp.HTTPClientMiddlewareConfig{
-		Service:           "integration-service",
-		Origin:            "cloud",
-		Direction:         "outbound",
-		SourceID:          "integration-service.map-provider",
-		Src:               "integration-service",
-		ServiceName:       "integration-service",
-		ServiceInstanceID: "local",
+	var locationService *locationapplication.Service
+	locationAdapter := "blocked"
+	locationTimeout := int64(0)
+	if locationCapabilityBlocked {
+		locationService, err = locationapplication.NewService(
+			provider.NewUnavailableLocationProvider(locationBindingErr.Error()),
+		)
+	} else {
+		factoryCfg := rthttp.DefaultHTTPClientFactoryConfig()
+		factoryCfg.Timeout = locationBinding.Timeout
+		factoryCfg.MaxRetries = 0
+		factoryCfg.RetryBackoff = 0
+		factoryCfg.RetryOnCodes = map[int]struct{}{}
+		logCfg := rthttp.HTTPClientMiddlewareConfig{
+			Service:           "integration-service",
+			Origin:            "cloud",
+			Direction:         "outbound",
+			SourceID:          "integration-service.map-provider",
+			Src:               "integration-service",
+			ServiceName:       "integration-service",
+			ServiceInstanceID: "local",
+		}
+		mapObservedClient := rthttp.NewObservedHTTPClient(
+			nil,
+			factoryCfg,
+			logCfg,
+			ioLogger,
+			processLogger,
+			exceptionLogger,
+		)
+		mapCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
+		cbClient := rtgov.WrapClientWithCB(mapObservedClient, mapCB)
+		locationProvider, providerErr := provider.NewLocationProvider(locationBinding, cbClient)
+		if providerErr != nil {
+			return fmt.Errorf("location provider initialization failed: %w", providerErr)
+		}
+		locationService, err = locationapplication.NewService(locationProvider)
+		locationAdapter = locationBinding.AdapterID
+		locationTimeout = locationBinding.Timeout.Milliseconds()
 	}
-	mapObservedClient := rthttp.NewObservedHTTPClient(
-		nil,
-		factoryCfg,
-		logCfg,
-		ioLogger,
-		processLogger,
-		exceptionLogger,
-	)
-
-	mapCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
-	cbClient := rtgov.WrapClientWithCB(mapObservedClient, mapCB)
-	clients := map[model.Provider]model.ProviderClient{
-		model.ProviderBaidu: provider.NewBaiduClient(cfg.Integration.Location.BaiduBaseURL, cfg.Integration.Location.BaiduAK, cbClient),
-		model.ProviderAMap:  provider.NewAMapClient(cfg.Integration.Location.AMapBaseURL, cfg.Integration.Location.AMapKey, cbClient),
+	if err != nil {
+		return fmt.Errorf("location application service initialization failed: %w", err)
 	}
 
 	mongoClient, err := mongodb.Connect(
@@ -149,22 +215,6 @@ func run() error {
 		}
 	}
 	_ = prometheus.Register(reliabletask.NewMetricsCollector(reliableStore))
-	catalogClient := provider.NewMongoCatalogClient(
-		mongoClient.Database(cfg.MongoDB.Database),
-	)
-	catalogIndexCtx, cancelCatalogIndexes := context.WithTimeout(ctx, 30*time.Second)
-	catalogIndexErr := catalogClient.EnsureIndexes(catalogIndexCtx)
-	cancelCatalogIndexes()
-	if catalogIndexErr != nil {
-		return fmt.Errorf("location catalog EnsureIndexes failed: %w", catalogIndexErr)
-	}
-	clients[model.ProviderCatalog] = catalogClient
-	locationService := application.NewService(
-		cfg.Integration.Location.PrimaryProvider,
-		cfg.Integration.Location.BackupProvider,
-		clients,
-		log.Default(),
-	)
 
 	externalObservedClient := newExternalObservedHTTPClient(
 		cfg,
@@ -182,6 +232,7 @@ func run() error {
 	externalProviders, policies, err := buildExternalProviders(
 		cfg,
 		externalObservedClient,
+		accessTokenConfig,
 		otpCodeSealer,
 		otpCodeReferenceStore,
 	)
@@ -226,11 +277,11 @@ func run() error {
 	).Routes()
 
 	rootMux := http.NewServeMux()
-	rootMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("account_security_authority", func(hctx context.Context) error {
+		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
 	})
+	rootMux.HandleFunc("/healthz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
 	rootMux.Handle(
 		"/",
@@ -256,8 +307,9 @@ func run() error {
 	server := &http.Server{
 		Addr: cfg.Service.HTTP.Addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
-			AccessTokenVerifier:  accessVerifier,
-			DeviceTicketVerifier: deviceVerifier,
+			AccessTokenVerifier:      accessVerifier,
+			DeviceTicketVerifier:     deviceVerifier,
+			AccountSecurityAuthority: accountSecurityAuthority,
 		})(rateLimited),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
@@ -265,11 +317,10 @@ func run() error {
 		IdleTimeout:       60 * time.Second,
 	}
 	log.Printf(
-		"integration-service listening on %s primary=%s backup=%s timeout_ms=%d",
+		"integration-service listening on %s location_adapter=%s timeout_ms=%d",
 		cfg.Service.HTTP.Addr,
-		cfg.Integration.Location.PrimaryProvider,
-		cfg.Integration.Location.BackupProvider,
-		cfg.Integration.Location.TimeoutMs,
+		locationAdapter,
+		locationTimeout,
 	)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		cancelRuntime()
@@ -315,101 +366,4 @@ func waitForWorkerShutdown(done <-chan struct{}, name string) {
 	case <-timer.C:
 		log.Printf("integration-service %s worker shutdown timed out", name)
 	}
-}
-
-func newExternalObservedHTTPClient(
-	cfg config,
-	ioLogger *robs.IOAccessLogger,
-	processLogger *robs.ProcessTraceLogger,
-	exceptionLogger *robs.ExceptionLogger,
-) *http.Client {
-	timeout := 2 * time.Second
-	for _, providerCfg := range []externalProviderConfig{
-		cfg.Integration.ExternalInteraction.SMS,
-		cfg.Integration.ExternalInteraction.Push,
-	} {
-		if providerCfg.Enabled && time.Duration(providerCfg.TimeoutMs)*time.Millisecond > timeout {
-			timeout = time.Duration(providerCfg.TimeoutMs) * time.Millisecond
-		}
-	}
-	factoryCfg := rthttp.DefaultHTTPClientFactoryConfig()
-	factoryCfg.Timeout = timeout
-	factoryCfg.MaxRetries = -1
-	factoryCfg.RetryBackoff = -1
-	factoryCfg.RetryOnCodes = map[int]struct{}{}
-	logCfg := rthttp.HTTPClientMiddlewareConfig{
-		Service:           "integration-service",
-		Origin:            "cloud",
-		Direction:         "outbound",
-		SourceID:          "integration-service.external-provider",
-		Src:               "integration-service",
-		ServiceName:       "integration-service",
-		ServiceInstanceID: "local",
-	}
-	return rthttp.NewObservedHTTPClient(
-		nil,
-		factoryCfg,
-		logCfg,
-		ioLogger,
-		processLogger,
-		exceptionLogger,
-	)
-}
-
-func buildExternalProviders(
-	cfg config,
-	client *http.Client,
-	otpCodeSealer *otpseal.Sealer,
-	otpCodeReferences otpseal.ReferenceStore,
-) (
-	map[string]reliabletask.ExternalProvider,
-	map[string]reliabletask.ProviderPolicy,
-	error,
-) {
-	providers := map[string]reliabletask.ExternalProvider{}
-	policies := map[string]reliabletask.ProviderPolicy{}
-	for _, item := range []struct {
-		operation string
-		config    externalProviderConfig
-	}{
-		{
-			operation: reliabletask.ExternalInteractionOperationSmsOTP,
-			config:    cfg.Integration.ExternalInteraction.SMS,
-		},
-		{
-			operation: reliabletask.ExternalInteractionOperationPush,
-			config:    cfg.Integration.ExternalInteraction.Push,
-		},
-	} {
-		if !item.config.Enabled {
-			continue
-		}
-		timeout := time.Duration(item.config.TimeoutMs) * time.Millisecond
-		externalProvider, err := provider.NewHTTPExternalProvider(
-			provider.HTTPExternalProviderConfig{
-				Name:              item.config.Provider,
-				Operation:         item.operation,
-				Endpoint:          item.config.Endpoint,
-				BearerToken:       item.config.Token,
-				Timeout:           timeout,
-				OTPCodeSealer:     otpCodeSealer,
-				OTPCodeReferences: otpCodeReferences,
-			},
-			client,
-		)
-		if err != nil {
-			return nil, nil, fmt.Errorf(
-				"external provider init failed for %s: %w",
-				item.operation,
-				err,
-			)
-		}
-		providers[item.config.Provider] = externalProvider
-		policies[item.operation] = reliabletask.ProviderPolicy{
-			Providers:   []string{item.config.Provider},
-			Timeout:     timeout,
-			RetryPolicy: reliabletask.DefaultRetryPolicy(),
-		}
-	}
-	return providers, policies, nil
 }

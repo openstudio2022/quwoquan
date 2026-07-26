@@ -42,12 +42,14 @@ void main() {
         senderId: 'user_001',
         isRead: true,
       );
-      await tester.pumpWidget(_wrapBubble(
-        message: message,
-        isRight: true,
-        receiptEnabled: true,
-        memberCount: 2,
-      ));
+      await tester.pumpWidget(
+        _wrapBubble(
+          message: message,
+          isRight: true,
+          receiptEnabled: true,
+          memberCount: 2,
+        ),
+      );
       await tester.pump();
 
       expect(find.byIcon(Icons.done_all), findsOneWidget);
@@ -103,12 +105,14 @@ void main() {
         type: 'image',
         imageUrl: 'https://example.com/img.jpg',
       );
-      await tester.pumpWidget(_wrapBubble(
-        message: message,
-        isRight: true,
-        receiptEnabled: true,
-        memberCount: 2,
-      ));
+      await tester.pumpWidget(
+        _wrapBubble(
+          message: message,
+          isRight: true,
+          receiptEnabled: true,
+          memberCount: 2,
+        ),
+      );
       await tester.pump();
 
       expect(find.byIcon(Icons.done_all), findsOneWidget);
@@ -147,10 +151,12 @@ void main() {
     });
 
     testWidgets('空 map 消息安全渲染回执区域', (tester) async {
-      await tester.pumpWidget(_wrapBubble(
-        message: _message(content: '', senderId: '', isRead: false),
-        isRight: true,
-      ));
+      await tester.pumpWidget(
+        _wrapBubble(
+          message: _message(content: '', senderId: '', isRead: false),
+          isRight: true,
+        ),
+      );
       await tester.pump();
 
       expect(find.byType(ChatMessageBubble), findsOneWidget);

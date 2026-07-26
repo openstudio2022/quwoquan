@@ -1,0 +1,222 @@
+fields:
+- name: runId
+  source: runId
+  type: string
+  constraints:
+  - PK
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: version
+  source: version
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_1
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: targetDerivativePolicyVersion
+  source: targetDerivativePolicyVersion
+  type: int
+  constraints:
+  - NOT_NULL
+  - POSITIVE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: 本 run 固定的 image_variant_policy 版本；由服务端 metadata 解析，不允许调用方伪造。
+  role: authoritative_state
+- name: status
+  source: status
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: assetIds
+  source: assetIds
+  type: string[]
+  constraints:
+  - NOT_NULL
+  - MIN_ITEMS_1
+  - MAX_ITEMS_500
+  - UNIQUE_ITEMS
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  description: 运维显式授权的 image MediaAsset 目标集；不进行全库隐式扫描。
+  role: authoritative_state
+  reference: true
+- name: nextAssetIndex
+  source: nextAssetIndex
+  type: int
+  constraints:
+  - NOT_NULL
+  - NON_NEGATIVE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: processedCount
+  source: processedCount
+  type: int
+  constraints:
+  - NOT_NULL
+  - NON_NEGATIVE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: failedCount
+  source: failedCount
+  type: int
+  constraints:
+  - NOT_NULL
+  - NON_NEGATIVE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: rollbackIndex
+  source: rollbackIndex
+  type: int
+  constraints:
+  - NOT_NULL
+  - NON_NEGATIVE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: activations
+  source: activations
+  type: MediaImageReprocessActivation[]
+  constraints:
+  - NOT_NULL
+  - MAX_ITEMS_500
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  role: owned_value
+- name: failureReason
+  source: failureReason
+  type: string
+  constraints:
+  - NULLABLE
+  - MAX_LENGTH_512
+  classification: INTERNAL
+  log_policy: redact
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: startedAt
+  source: startedAt
+  type: datetime
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: pausedAt
+  source: pausedAt
+  type: datetime
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: completedAt
+  source: completedAt
+  type: datetime
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: rolledBackAt
+  source: rolledBackAt
+  type: datetime
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: updatedAt
+  source: updatedAt
+  type: datetime
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: assetId
+  source: assetId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  owner: MediaImageReprocessActivation
+  role: owned_value
+  reference: true
+- name: previousRevision
+  source: previousRevision
+  type: int
+  constraints:
+  - NOT_NULL
+  - POSITIVE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  owner: MediaImageReprocessActivation
+  role: owned_value
+- name: activatedRevision
+  source: activatedRevision
+  type: int
+  constraints:
+  - NOT_NULL
+  - POSITIVE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  owner: MediaImageReprocessActivation
+  role: owned_value
+- name: activatedAt
+  source: activatedAt
+  type: datetime
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  owner: MediaImageReprocessActivation
+  role: owned_value

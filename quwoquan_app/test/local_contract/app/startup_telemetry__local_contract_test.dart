@@ -46,6 +46,27 @@ void main() {
     expect(await store.readEvents(), isEmpty);
   });
 
+  test('SLS 或 product-ops 不可用时保留 journal 且不阻断安全终态', () async {
+    final store = _MemoryStartupJournalStore();
+    final reporter = StartupTelemetryReporter(
+      journal: StartupJournal(store),
+      transport: _UnavailableStartupTelemetryTransport(),
+      platform: 'ios',
+      runtimeEnv: 'gamma',
+      appVersion: '1.0.0',
+      isDetailedAttemptSampled: (_) => true,
+    );
+
+    await reporter.record(
+      phase: StartupTelemetryPhase.terminal,
+      elapsedMs: 1200,
+      outcome: 'success',
+    );
+    await expectLater(reporter.flush(), completes);
+
+    expect(await store.readEvents(), hasLength(1));
+  });
+
   test('原生 journal 使用同一 attempt 并在转存后清空来源', () async {
     const nativeAttemptId = 'nativeattemptidentifier000001';
     final nativeEvent = <String, Object?>{
@@ -71,8 +92,8 @@ void main() {
       'outcome': 'painted',
     };
     SharedPreferences.setMockInitialValues(<String, Object>{
-      'startup_telemetry_native_attempt_v1': nativeAttemptId,
-      'startup_telemetry_native_journal_v1': <String>[
+      'startup_telemetry_native_attempt': nativeAttemptId,
+      'startup_telemetry_native_journal': <String>[
         jsonEncode(nativeEventLater),
         jsonEncode(nativeEvent),
       ],
@@ -101,7 +122,7 @@ void main() {
     expect(events.every((event) => event.attemptId == nativeAttemptId), isTrue);
     final preferences = await SharedPreferences.getInstance();
     expect(
-      preferences.getStringList('startup_telemetry_native_journal_v1'),
+      preferences.getStringList('startup_telemetry_native_journal'),
       isNull,
     );
   });
@@ -549,6 +570,17 @@ final class _RecordingTransport implements StartupTelemetryTransport {
   }) async {
     batches.add(List<StartupTelemetryEvent>.from(events));
     return ack;
+  }
+}
+
+final class _UnavailableStartupTelemetryTransport
+    implements StartupTelemetryTransport {
+  @override
+  Future<StartupTelemetryBatchAck> report(
+    List<StartupTelemetryEvent> events, {
+    required String proof,
+  }) {
+    throw StateError('product-ops unavailable');
   }
 }
 

@@ -40,7 +40,6 @@ from content.source.research.source_quality import (
     _collection_gate,
     _source_category,
 )
-from content.source.research.homepage_text_quality import _homepage_text_quality_issue
 from content.source.research.source_registry import _travel_registry_url_fetchable
 from content.source.research.text_match import _normalized_title, _text_mentions_entity
 
@@ -91,6 +90,7 @@ def _source(
     url: str,
     source_kind: str = "",
     source_title: str = "",
+    qualified_authority_title: str = "",
     image: dict[str, Any] | None = None,
     images: list[dict[str, Any]] | None = None,
     category: str = "",
@@ -127,6 +127,8 @@ def _source(
             }
         )
         row.update(SOURCE_LICENSE_METADATA.get(explicit_source_kind, {}))
+    if qualified_authority_title.strip():
+        row["qualifiedAuthorityTitle"] = qualified_authority_title.strip()
     if fetchable_override is True:
         row["fetchable"] = True
         row["fetchableOverride"] = True
@@ -214,12 +216,14 @@ def _accept_source(
     *,
     entity_id: str,
     lane: str,
+    vertical: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
 ) -> dict[str, Any] | None:
     verdict = _candidate_gate(
         source,
         entity_id=entity_id,
         lane=lane,
+        vertical=vertical,
         entity_aliases=entity_aliases,
     )
     source["candidateGate"] = verdict
@@ -281,6 +285,7 @@ def _accept_source_with_reject_memory(
     *,
     entity_id: str,
     lane: str,
+    vertical: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
     rejected_source_urls: set[str] | None = None,
 ) -> dict[str, Any] | None:
@@ -294,6 +299,7 @@ def _accept_source_with_reject_memory(
                 source,
                 entity_id=entity_id,
                 lane=lane,
+                vertical=vertical,
                 entity_aliases=entity_aliases,
             )
         _reject_source_candidate(
@@ -309,6 +315,7 @@ def _accept_source_with_reject_memory(
         source,
         entity_id=entity_id,
         lane=lane,
+        vertical=vertical,
         entity_aliases=entity_aliases,
     )
 

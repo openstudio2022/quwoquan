@@ -2,7 +2,7 @@
 """
 verify_settings_canonical.py
 
-Ensures settings-family pages stay on the canonical shells (see specs/ux/page-layout-semantics.md §4.3).
+Ensures settings-family pages stay on the canonical shells (see runtime/runtime-client-foundation/page-layout-semantics/spec.md).
 
 Reads scripts/settings_canonical_manifest.yaml and:
 - For inset_form: file must contain SettingsInsetFormPageScaffold

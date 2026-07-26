@@ -1,12 +1,5 @@
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
-import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 关系能力位投影 DTO
 /// 对应 GET /user/{userId}/relationship/capability
@@ -29,28 +22,41 @@ class RelationshipCapabilityDto {
     bool? canStartVideoCall,
     bool? isBlocked,
     bool? isBlockedBy,
-  })  : relationState = _normalizeRelationState(relationState ?? 'not_following'),
-        canFollow = canFollow ??
-            _defaultCanFollow(_normalizeRelationState(relationState ?? 'not_following')),
-        canUnfollow = canUnfollow ??
-            _defaultCanUnfollow(_normalizeRelationState(relationState ?? 'not_following')),
-        canFollowBack = canFollowBack ??
-            _defaultCanFollowBack(_normalizeRelationState(relationState ?? 'not_following')),
-        canGreet = canGreet ??
-            _defaultCanGreet(
-              _normalizeRelationState(relationState ?? 'not_following'),
-              isBlocked: isBlocked ?? false,
-              isBlockedBy: isBlockedBy ?? false,
-            ),
-        canCreateDirectConversation = canCreateDirectConversation ?? false,
-        canSendMessage = canSendMessage ?? false,
-        canOpenConversation = canOpenConversation ?? canCreateDirectConversation ?? false,
-        hasPendingGreeting = hasPendingGreeting ?? false,
-        hasFormalConversation = hasFormalConversation ?? false,
-        canStartVoiceCall = canStartVoiceCall ?? false,
-        canStartVideoCall = canStartVideoCall ?? false,
-        isBlocked = isBlocked ?? false,
-        isBlockedBy = isBlockedBy ?? false;
+  }) : relationState = _normalizeRelationState(
+         relationState ?? 'not_following',
+       ),
+       canFollow =
+           canFollow ??
+           _defaultCanFollow(
+             _normalizeRelationState(relationState ?? 'not_following'),
+           ),
+       canUnfollow =
+           canUnfollow ??
+           _defaultCanUnfollow(
+             _normalizeRelationState(relationState ?? 'not_following'),
+           ),
+       canFollowBack =
+           canFollowBack ??
+           _defaultCanFollowBack(
+             _normalizeRelationState(relationState ?? 'not_following'),
+           ),
+       canGreet =
+           canGreet ??
+           _defaultCanGreet(
+             _normalizeRelationState(relationState ?? 'not_following'),
+             isBlocked: isBlocked ?? false,
+             isBlockedBy: isBlockedBy ?? false,
+           ),
+       canCreateDirectConversation = canCreateDirectConversation ?? false,
+       canSendMessage = canSendMessage ?? false,
+       canOpenConversation =
+           canOpenConversation ?? canCreateDirectConversation ?? false,
+       hasPendingGreeting = hasPendingGreeting ?? false,
+       hasFormalConversation = hasFormalConversation ?? false,
+       canStartVoiceCall = canStartVoiceCall ?? false,
+       canStartVideoCall = canStartVideoCall ?? false,
+       isBlocked = isBlocked ?? false,
+       isBlockedBy = isBlockedBy ?? false;
 
   final String viewerSubAccountId;
   final String targetSubAccountId;
@@ -113,7 +119,10 @@ class RelationshipCapabilityDto {
     required bool isBlocked,
     required bool isBlockedBy,
   }) {
-    if (isBlocked || isBlockedBy || relationState == 'self' || relationState == 'mutual') {
+    if (isBlocked ||
+        isBlockedBy ||
+        relationState == 'self' ||
+        relationState == 'mutual') {
       return false;
     }
     return true;
@@ -142,6 +151,29 @@ class RelationshipCapabilityDto {
     );
   }
 
+  factory RelationshipCapabilityDto.fromContract(
+    RelationshipCapabilityResult result,
+  ) {
+    return RelationshipCapabilityDto(
+      viewerSubAccountId: result.viewerSubAccountId,
+      targetSubAccountId: result.targetSubAccountId,
+      relationState: result.relationState,
+      canFollow: result.canFollow,
+      canUnfollow: result.canUnfollow,
+      canFollowBack: result.canFollowBack,
+      canGreet: result.canGreet,
+      canCreateDirectConversation: result.canCreateDirectConversation,
+      canSendMessage: result.canSendMessage,
+      canOpenConversation: result.canOpenConversation,
+      hasPendingGreeting: result.hasPendingGreeting,
+      hasFormalConversation: result.hasFormalConversation,
+      canStartVoiceCall: result.canStartVoiceCall,
+      canStartVideoCall: result.canStartVideoCall,
+      isBlocked: result.isBlocked,
+      isBlockedBy: result.isBlockedBy,
+    );
+  }
+
   factory RelationshipCapabilityDto.fromMap(Map<String, dynamic> map) {
     return RelationshipCapabilityDto.fromRelationshipCapabilityWire(
       RelationshipCapabilityWireDto.fromMap(map),
@@ -164,17 +196,18 @@ class RelationshipCapabilityDto {
     final relationState = isSelf
         ? 'self'
         : isMutual
-            ? 'mutual'
-            : isFollowing
-                ? 'following'
-                : isFollowedBy
-                    ? 'followed_by'
-                    : 'not_following';
+        ? 'mutual'
+        : isFollowing
+        ? 'following'
+        : isFollowedBy
+        ? 'followed_by'
+        : 'not_following';
 
     final blocked = isBlocked || isBlockedBy;
     final canCreateDirect = !blocked && isMutual;
     final canSend = !blocked && (isMutual || hasFormalConversation);
-    final canGreet = !blocked &&
+    final canGreet =
+        !blocked &&
         !isSelf &&
         !isMutual &&
         !hasPendingGreeting &&
@@ -228,7 +261,8 @@ class RelationshipCapabilityDto {
       canSendMessage: canSendMessage ?? this.canSendMessage,
       canOpenConversation: canOpenConversation ?? this.canOpenConversation,
       hasPendingGreeting: hasPendingGreeting ?? this.hasPendingGreeting,
-      hasFormalConversation: hasFormalConversation ?? this.hasFormalConversation,
+      hasFormalConversation:
+          hasFormalConversation ?? this.hasFormalConversation,
       canStartVoiceCall: canStartVoiceCall ?? this.canStartVoiceCall,
       canStartVideoCall: canStartVideoCall ?? this.canStartVideoCall,
       isBlocked: isBlocked ?? this.isBlocked,
@@ -244,79 +278,20 @@ abstract class RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState;
 }
 
-class MockRelationshipCapabilityRepository
-    extends RelationshipCapabilityRepository {
-  @override
-  bool get reconcilesCapabilityWithSharedRelationshipState => true;
-
-  @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
-    final relationState = UserProfileMockData.relationStateFor(targetUserId);
-    return RelationshipCapabilityDto.fromFollowFlags(
-      viewerId: ChatMockData.currentUserProfileId,
-      targetId: targetUserId,
-      isFollowing: UserProfileMockData.viewerFollowsTarget(targetUserId),
-      isFollowedBy: UserProfileMockData.targetFollowsViewer(targetUserId),
-      isSelf: relationState == MockProfileRelationState.self,
-      hasFormalConversation: _hasFormalDirectConversation(targetUserId),
-    );
-  }
-
-  /// 与目标用户已存在正式单聊会话时，发送能力保持开启（对齐云侧语义）。
-  bool _hasFormalDirectConversation(String targetUserId) {
-    for (final conversation in ChatMockData.conversations) {
-      if (conversation['type'] != 'direct' ||
-          conversation['status'] == 'blocked') {
-        continue;
-      }
-      final conversationId = (conversation['id'] ?? '').toString();
-      if (conversationId.isEmpty) {
-        continue;
-      }
-      final members = ChatMockData.membersFor(conversationId);
-      final isMember = members.any(
-        (member) => (member['userId'] ?? '').toString() == targetUserId,
-      );
-      if (isMember) {
-        return true;
-      }
-    }
-    return false;
-  }
-}
-
 class RemoteRelationshipCapabilityRepository
-    extends RelationshipCapabilityRepository {
-  RemoteRelationshipCapabilityRepository({
-    CloudHttpClient? httpClient,
-    String? baseUrl,
-  })  : _httpClient = httpClient ?? CloudHttpClient(),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+    implements RelationshipCapabilityRepository {
+  const RemoteRelationshipCapabilityRepository({required this.query});
 
-  final CloudHttpClient _httpClient;
-  final String _baseUrl;
+  final RelationshipCapabilityQuery query;
 
   @override
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
-    final path = UserApiMetadata.getRelationshipCapabilityPath(
-      subAccountId: targetUserId,
+    final result = await query.getRelationshipCapability(
+      GetRelationshipCapabilityQuery(targetSubAccountId: targetUserId),
     );
-    final uri = Uri.parse('$_baseUrl$path');
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.getRelationshipCapability,
-      ),
-    );
-    final body = CloudResponseDecoder.asObject(
-      decoded,
-      context: UserRequestPageIds.getRelationshipCapability,
-    );
-    return RelationshipCapabilityDto.fromRelationshipCapabilityWire(
-      RelationshipCapabilityWireDto.fromMap(body),
-    );
+    return RelationshipCapabilityDto.fromContract(result);
   }
 }

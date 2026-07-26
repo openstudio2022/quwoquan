@@ -1,47 +1,46 @@
-# L2 设计：runtime-data-engineering
+# L2 Design：运行时数据工程 (`runtime-data-engineering`)
 
-## 设计目标
+> 对应规格：[L2 spec](./spec.md)
 
-运行时数据工程以“发布物可校验、引用可追踪、环境可隔离”为目标，为内容、推荐、小艺和对象主页网络提供同源数据输入。
+> 设计触发原因：“`runtime-data-engineering` 是运行时数据工程能力，负责把离线/半自动数据产物整理为 App 与云服务可消费的稳定契约输入”需要 `article-commercial-scale-closure`、`geo-content-trinity`、`image-commercial-scale-closure`、`video-commercial-scale-closure` 共享状态 owner、契约或质量边界。
 
-## 设计原则
+## 1. 背景、目标与非目标
 
-- metadata-first：字段、路由、错误码和读模型仍由 metadata 管理，数据工程只提供事实输入。
-- seed-first：alpha/beta/gamma 的测试数据必须来自 contract fixture 与 seed manifest。
-- single-source：taxonomy、实体归一、对象关系边各自只能有一个权威源。
+- 设计目标：`runtime-data-engineering` 是运行时数据工程能力，负责把离线/半自动数据产物整理为 App 与云服务可消费的稳定契约输入。
+- 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
-## 数据流
+## 2. Story 协作与状态流
 
-```text
-原始数据/运营导入/内容反抽
-  -> 数据工程清洗与归一
-  -> control-plane taxonomy + canonical entity + relation edge
-  -> metadata/codegen + 服务端投影 + App Mock/Remote
-  -> 行为回流与推荐/小艺学习
-```
+- [`article-commercial-scale-closure`](./article-commercial-scale-closure/spec.md)：缺来源或权利的对象保持 typed GATE_BLOCK，不能进入 canonical publish。
+- [`geo-content-trinity`](./geo-content-trinity/spec.md)：图片来源、下载字节、授权与发布引用均可回放。
+- [`image-commercial-scale-closure`](./image-commercial-scale-closure/spec.md)：缺任一 required rights 字段的资产不能进入 release。
+- [`video-commercial-scale-closure`](./video-commercial-scale-closure/spec.md)：不满足 admission 的候选以 typed issue 阻断。
 
-## 输出根边界
+## 3. 端云与数据流
 
-- 仓内（版本控制）：`control_plane/**`、`verticals/**`、`schema/**`、`templates/**`、`prompts/**` 与
-  唯一入库生成输出 `publish/{creators,entities,posts,media}/**`。
-- 仓外（`.qwq_output/data/`，gitignore 隔离、可清理重建）：单一
-  `tasks/<executionId>/` 工作包、`releases/<releaseId>/` 及 `local/{cache,workspace}/`。
-- 过程产物不得反向回写可复用层；唯一通道是 approved 对象经 promote/ship 进入 `publish/**`。
-- 门禁：`qwq-data verify all`、`verify_content_execution_layout`、`verify_publish_closure` 与 release
-  环境验证共同构成证据面门。
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-## 与对象主页网络的关系
+## 4. 关键决策
 
-`object-homepage-network` 需要数据工程提供：
+<a id="dec-001"></a>
+### DEC-001 数据任务先固定 Seed 与来源事实再执行生产
+- 决策：数据任务先固定 Seed 与来源事实再执行生产。
+- 理由：`runtime-data-engineering` 是运行时数据工程能力，负责把离线/半自动数据产物整理为 App 与云服务可消费的稳定契约输入。
+- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 关联要求：`REQ-001`
+- 影响 Story：[`article-commercial-scale-closure`](./article-commercial-scale-closure/spec.md)、[`geo-content-trinity`](./geo-content-trinity/spec.md)、[`image-commercial-scale-closure`](./image-commercial-scale-closure/spec.md)、[`video-commercial-scale-closure`](./video-commercial-scale-closure/spec.md)
+- 关联验收：`SIT-001`
 
-- `tagRef`：解释交集与内容分类。
-- `canonicalEntityId`：统一离线实体和运行时共享主页。
-- `entityRef`：内容、评论、圈子与实体的引用关系。
-- `relationEdge`：构成 ObjectRelationEdge 的候选事实。
+## 5. 失败与恢复
 
-## 校验策略
+- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
+- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
+- 恢复动作：调用方按 canonical recovery action 重试、刷新或停止；不得自行合成成功结果。
+- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
 
-- local_contract：schema、路径、tagRef、实体引用、seed manifest 静态校验。
-- local_contract：App Mock 与 contract fixture 同构测试。
-- api_integration：local-gamma 使用 RemoteRepository 读取云侧 seed。
-- user_acceptance：对象主页和推荐旅程验证数据闭环。
+## 6. 质量与观测
+
+- 沿用父 L1 质量约束；新增特有 SLO 时在本节声明。

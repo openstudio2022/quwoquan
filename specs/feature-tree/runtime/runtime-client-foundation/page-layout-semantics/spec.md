@@ -1,29 +1,77 @@
-# L3 子特性：page-layout-semantics
+# L3 Story：页面布局语义 (`page-layout-semantics`)
 
-## 功能说明
+> 所属能力：[`runtime-client-foundation`](../spec.md)
 
-端侧**页面布局**统一语义（iOS 设计语言 v1）：顶部栏 leading（Modal 用 `CupertinoIcons.xmark`、Stack 用 `CupertinoIcons.back/chevron_back`）、内容区结构、底部栏（多选选择器 取消|确认）。与 `specs/ux/page-layout-semantics.md` 一一对应。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-| L4 子节点 | 职责 |
-|-----------|------|
-| `top-toolbar-and-selection-pattern` | 顶部 leading 统一、选择器（单选 tap 即返回/多选 select-then-confirm） |
-| `settings-page-structure` | 设置类页面统一使用 SettingsSemanticConstants、Section/Block 结构 |
-| `circles-channel-management-panel` | 圈子一级 tab 下方频道管理面板（我的频道/全部频道、增删、拖拽排序、本地持久化） |
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 范围
+## 1. 用户价值
 
-**适用**：创作、选择器、设置、聊天、资料管理等页面。  
-**排除**：用户主页、作者主页、圈子主页（后续单独规范「主页设计」）。
+作为开发、测试或运维角色，
+我希望Cupertino 场景不混用 Material 交互组件（Checkbox/SnackBar），选择态统一 iOS 语义，
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-## 与父/子节点关系
+## 2. 范围与非目标
 
-- 父节点：`runtime-client-foundation` L2
-- 子节点：`top-toolbar-and-selection-pattern` L4、`settings-page-structure` L4、`circles-channel-management-panel` L4
+### In Scope
 
-## 验收标准概要
+- “页面布局语义”的输入、可观察主路径、失败语义以及与父能力的交接。
+- Modal/Stack 顶部导航、设置/列表页面壳、贴底 Sheet、单选/多选选择器和响应式几何。
 
-- A1：Modal 页（创作、选择器）使用 close；Stack 页（设置、管理）使用 arrow_back
-- A2：多选选择器底部固定「取消 | 完成」；单选 tap 即返回
-- A3：设置类页面统一使用 SettingsSemanticConstants 与块结构
-- A4：Cupertino 场景不混用 Material 交互组件（Checkbox/SnackBar），选择态统一 iOS 语义
-- A5：圈子页支持微博式频道管理面板：在一级 tab 下方滑出、蓝色主题动作、频道顺序与本地偏好一致
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 页面布局语义
+
+- Cupertino 场景不混用 Material 交互组件（Checkbox/SnackBar），选择态统一 iOS 语义。
+
+<a id="req-002"></a>
+### REQ-002 设置类页面统一使用 SettingsSemanticConstants 与块结构
+
+- 设置类页面统一使用 SettingsSemanticConstants 与块结构。
+- Cupertino 场景不混用 Material 交互组件（Checkbox/SnackBar），选择态统一 iOS 语义。
+- 全屏设置/表单使用 `SettingsInsetFormPageScaffold`；贴底选项/说明使用 `AppBottomModalSurface` 与 `ConversationSheet*`。
+- 列表页面使用 `AppListPageScaffold`、`AppListSurface`、`AppListRowCard` 及统一空/错/分页载体。
+
+<a id="req-003"></a>
+### REQ-003 对齐要求：圈子一级 tab 必须左对齐并与内容区左边缘一致（使用内容区同一水平内边距语义）
+
+- 对齐要求：圈子一级 tab 必须左对齐并与内容区左边缘一致（使用内容区同一水平内边距语义）
+- 视觉约束：主操作与强调色使用蓝色主题（`AppColors.primaryColor`），禁止橘色动作色。
+- 稳定性约束：一级 tab 在滚动、切换、面板展开/收起过程中不得出现位置跳变。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 页面布局语义
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“页面布局语义”对应的公开行为。
+- THEN Cupertino 场景不混用 Material 交互组件（Checkbox/SnackBar），选择态统一 iOS 语义。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 页面布局语义 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“页面布局语义”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

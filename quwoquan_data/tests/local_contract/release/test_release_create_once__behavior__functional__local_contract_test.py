@@ -22,7 +22,7 @@ def _json(path: Path, payload: dict) -> None:
 def test_release_is_create_once_and_contains_only_compact_review_evidence(
     tmp_path: Path, monkeypatch
 ) -> None:
-    batch = tmp_path / ".qwq_output/data/tasks/20260711--travel-article-release--test--canary-001"
+    batch = tmp_path / ".qwq_output/data/tasks/20260711--travel-article-release--test--pilot-001"
     post = batch / "posts/article/a"
     _json(post / "manifest.json", {"contentType": "article", "ref": "article/a"})
     (post / "article.md").write_text("# final\n", encoding="utf-8")
@@ -37,7 +37,7 @@ def test_release_is_create_once_and_contains_only_compact_review_evidence(
     monkeypatch.setattr(assemble, "collect_execution_entity_objects", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(assemble, "_execution_is_homepage_only", lambda _execution_id: False)
 
-    release = assemble.assemble_release("20260711--travel-article-release--test--canary-001", "release-1")
+    release = assemble.assemble_release("20260711--travel-article-release--test--pilot-001", "release-1")
     released_post = release / "posts/article/a"
     assert (released_post / "article.md").is_file()
     assert (released_post / "attestation.json").is_file()
@@ -47,4 +47,4 @@ def test_release_is_create_once_and_contains_only_compact_review_evidence(
     assert not (released_post / "prompt.md").exists()
 
     with pytest.raises(FileExistsError, match="create-once"):
-        assemble.assemble_release("20260711--travel-article-release--test--canary-001", "release-1")
+        assemble.assemble_release("20260711--travel-article-release--test--pilot-001", "release-1")

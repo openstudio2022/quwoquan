@@ -142,7 +142,7 @@ def test_contact_info_blocks_private_phone_and_im():
 
 
 def test_mechanical_heading_blocks_listy_titles():
-    listy = "## 节点顺序：为什么建议四姑娘山 → 海螺沟 → 亚丁\n\n正文。\n\n## 实用信息\n\n更多。"
+    listy = "## 节点顺序：为什么建议四姑娘山 → 测试实体丙 → 亚丁\n\n正文。\n\n## 实用信息\n\n更多。"
     assert qg.mechanical_heading_issues(listy)
     humanized = "## 先去哪后去哪：我推荐的顺序\n\n正文。\n\n## 去之前我踩过的坑\n\n更多。"
     assert qg.mechanical_heading_issues(humanized) == []
@@ -156,6 +156,17 @@ def test_public_contacts_catalog_loads():
     nums = pc.default_public_numbers()
     assert "110" in nums and "12301" in nums
     assert pc.normalize_number("0836-6966022") == "08366966022"
+
+
+def test_source_verified_contacts_require_public_venue_context():
+    from core import public_contacts as pc
+
+    source = (
+        "测试景区票务咨询：010-12345678。\n"
+        "作者联系手机 13912345678。\n"
+        "平台客服电话：400-830-6666。"
+    )
+    assert pc.verified_contact_numbers_from_source(source) == ("01012345678",)
 
 
 def test_numeric_traceability_normalizes_thousand_separators():
@@ -209,11 +220,11 @@ def test_out_of_draft_and_cross_source_overlap():
     from content.post import fidelity
 
     base = (
-        "毕棚沟位于四川省阿坝州理县，是国家级风景名胜区，"
+        "毕棚沟位于test-region-b阿坝州理县，是国家级风景名胜区，"
         "以高山彩林、红叶和雪山瀑布闻名，秋季景色最为壮丽。"
     )
     light = (
-        "# 毕棚沟\n\n## 概况\n\n毕棚沟位于四川省阿坝州理县，是国家级风景名胜区，"
+        "# 毕棚沟\n\n## 概况\n\n毕棚沟位于test-region-b阿坝州理县，是国家级风景名胜区，"
         "以高山彩林、红叶和雪山瀑布闻名，秋季的景色最为壮丽迷人。"
     )
     assert fidelity.out_of_draft_issues(light, base, source_use_mode="factual_reference_only") == []

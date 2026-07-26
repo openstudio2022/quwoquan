@@ -39,12 +39,13 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
   Future<void>? _pendingLoad;
   bool _cacheListenerRegistered = false;
 
-  ChatRepository get _repo => ref.read(chatRepositoryProvider);
+  ChatConversationRepository get _repo =>
+      ref.read(chatConversationRepositoryProvider);
   ConversationCacheService get _cache => ref.read(conversationCacheProvider);
 
   @override
   ChatInboxListState build() {
-    ref.watch(chatRepositoryProvider);
+    ref.watch(chatConversationRepositoryProvider);
     ref.listen(activePersonaContextProvider, (_, _) {
       _loaded = false;
       Future<void>.microtask(() {

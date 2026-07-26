@@ -78,12 +78,10 @@
                   "minLength": 1
                 },
                 "creator": {
-                  "type": "string",
-                  "minLength": 1
+                  "type": "string"
                 },
                 "license": {
-                  "type": "string",
-                  "minLength": 1
+                  "type": "string"
                 },
                 "sha256": {
                   "type": "string",
@@ -95,6 +93,14 @@
                 "sourceCollectionId": {
                   "type": "string",
                   "minLength": 1
+                },
+                "rightsAuditStatus": {
+                  "type": "string",
+                  "enum": ["verified", "unverified"]
+                },
+                "rightsAuditIssues": {
+                  "type": "array",
+                  "items": { "type": "string" }
                 }
               },
               "required": [
@@ -105,10 +111,14 @@
                 "creator",
                 "license",
                 "sha256",
-                "sourceCollectionId"
+                "sourceCollectionId",
+                "rightsAuditStatus"
               ],
               "additionalProperties": false
             }
+          },
+          "sourceVideo": {
+            "$ref": "sourced_video_evidence.schema.json"
           },
           "entityRefs": {
             "type": "array",
@@ -207,14 +217,23 @@
               "required": [
                 "title",
                 "researchLane",
-                "assetRefs",
-                "sourceFrames"
+                "assetRefs"
               ],
               "properties": {
                 "researchLane": {
                   "const": "video"
                 }
-              }
+              },
+              "oneOf": [
+                {
+                  "required": ["sourceVideo"],
+                  "not": { "required": ["sourceFrames"] }
+                },
+                {
+                  "required": ["sourceFrames"],
+                  "not": { "required": ["sourceVideo"] }
+                }
+              ]
             }
           },
           {

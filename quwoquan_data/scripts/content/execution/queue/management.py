@@ -1,13 +1,17 @@
-"""Administrative queue operations and read-only runtime snapshots."""
+"""Typed administrative queue transitions and immutable snapshots."""
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Iterable
 
-from core.io import read_json, write_json
+from core.control_types import (
+    QueueFailureKind,
+    QueueJobStage,
+    QueueJobState,
+    QueueTimelineEvent,
+)
+from core.data_issue import DataRecoveryAction
 from content.execution import store
 from content.execution.queue.core import (
-    QUEUE_BACKEND_LOCAL,
-    STATE_BLOCKED,
     STATE_DEAD,
     STATE_FAILED,
     STATE_LEASED,
@@ -15,102 +19,118 @@ from content.execution.queue.core import (
     _job_path,
     _load_jobs,
     _now,
+    _read_job,
+    _write_job,
     stable_job_id,
 )
+from content.execution.queue.model import QueueJob, QueueLease
 
 
-def dead_jobs(execution_id: str) -> list[dict[str, Any]]:
-    """Return dead jobs that require an explicit operator decision."""
+def _queue_stage(value: QueueJobStage | str) -> QueueJobStage:
+    try:
+        return QueueJobStage(str(value))
+    except ValueError as exc:
+        raise ValueError(f"unsupported object queue stage: {value!r}") from exc
+
+
+def dead_jobs(execution_id: str) -> list[dict[str, object]]:
+    """Return presentation projections of jobs requiring operator action."""
     return [
         {
-            "jobId": job.get("jobId"),
-            "ref": job.get("ref"),
-            "stage": job.get("stage"),
-            "attempt": job.get("attempt"),
-            "lastError": job.get("lastError"),
+            "jobId": job.job_id,
+            "ref": job.ref,
+            "stage": job.stage.value,
+            "attempt": job.attempt,
+            "lastIssue": job.last_issue.as_dict() if job.last_issue else None,
         }
         for job in _load_jobs(execution_id)
-        if job.get("state") == STATE_DEAD
+        if job.state is STATE_DEAD
     ]
 
 
-def block_job(execution_id: str, job_id: str, *, reason: str) -> dict[str, Any]:
-    path = _job_path(execution_id, job_id)
-    job = read_json(path)
-    job["state"] = STATE_BLOCKED
-    job["lease"] = None
-    job["lastError"] = reason
-    job["updatedAt"] = store.now_iso()
-    write_json(path, job)
-    return job
+def block_job(execution_id: str, job_id: str, *, reason: str) -> QueueJob:
+    job = _read_job(execution_id, job_id)
+    issue = job.issue(
+        kind=QueueFailureKind.GOVERNANCE,
+        message=reason,
+        recovery=DataRecoveryAction.STOP,
+    )
+    blocked = job.with_timing(
+        QueueTimelineEvent.BLOCKED,
+        at=store.now_iso(),
+        attributes={"reason": reason},
+        state=QueueJobState.BLOCKED,
+        lease=QueueLease(),
+        last_issue=issue,
+    )
+    _write_job(blocked)
+    return blocked
 
 
 def requeue_refs(
     execution_id: str,
     refs: Iterable[str],
-    stage: str,
+    stage: QueueJobStage | str,
     *,
-    reason: str = "reducer_fail",
+    reason: str,
 ) -> list[str]:
-    """Requeue selected refs in the current execution with an audit event."""
+    """Explicit operator transition that resets a selected current execution job."""
+    queue_stage = _queue_stage(stage)
     touched: list[str] = []
     for ref in refs:
-        job_id = stable_job_id(execution_id, ref, stage)
+        job_id = stable_job_id(execution_id, ref, queue_stage.value)
         path = _job_path(execution_id, job_id)
         if not path.is_file():
             continue
-        job = read_json(path)
-        job["state"] = STATE_QUEUED
-        job["lease"] = None
-        job["leaseExpiresEpoch"] = 0
-        job["deadlineEpoch"] = 0
-        job["notBeforeEpoch"] = 0
-        job["sameRunRetryable"] = True
-        job["startupFailureCount"] = 0
-        job["lastError"] = None
-        job["failureFingerprints"] = []
-        job.pop("stuckDetected", None)
-        job["timings"].append(
-            {"event": "requeued", "at": store.now_iso(), "reason": reason}
+        job = _read_job(execution_id, job_id)
+        requeued = job.with_timing(
+            QueueTimelineEvent.REQUEUED,
+            at=store.now_iso(),
+            attributes={"reason": reason},
+            state=STATE_QUEUED,
+            lease=QueueLease(),
+            not_before_epoch=0.0,
+            same_run_retryable=True,
+            startup_failure_count=0,
+            last_issue=None,
+            failure_fingerprints=(),
+            stuck_detected=False,
         )
-        job["updatedAt"] = store.now_iso()
-        write_json(path, job)
-        touched.append(ref)
+        _write_job(requeued)
+        touched.append(job.ref)
     return touched
 
 
 def purge_jobs(
     execution_id: str,
     *,
-    stage: str | None = None,
+    stage: QueueJobStage | str | None = None,
     refs: Iterable[str] | None = None,
-) -> dict[str, Any]:
-    """Delete derived jobs invalidated by an explicit upstream reset."""
+) -> dict[str, object]:
+    """Delete derived jobs invalidated by a typed upstream reset."""
+    queue_stage = _queue_stage(stage) if stage is not None else None
     ref_filter = {str(ref) for ref in refs} if refs is not None else None
     removed: list[str] = []
     for job in _load_jobs(execution_id):
-        if stage and job.get("stage") != stage:
+        if queue_stage is not None and job.stage is not queue_stage:
             continue
-        ref = str(job.get("ref") or "")
-        if ref_filter is not None and ref not in ref_filter:
+        if ref_filter is not None and job.ref not in ref_filter:
             continue
-        path = _job_path(execution_id, str(job.get("jobId") or ""))
         try:
-            path.unlink()
+            _job_path(execution_id, job.job_id).unlink()
         except FileNotFoundError:
             continue
-        removed.append(ref)
+        removed.append(job.ref)
     return {"removed": sorted(removed), "summary": queue_summary(execution_id)}
 
 
-def queue_summary(execution_id: str) -> dict[str, Any]:
+def queue_summary(execution_id: str) -> dict[str, object]:
     jobs = _load_jobs(execution_id)
     by_state: dict[str, list[str]] = {}
     by_backend: dict[str, int] = {}
     for job in jobs:
-        by_state.setdefault(str(job.get("state")), []).append(str(job.get("ref")))
-        backend = str(job.get("queueBackend") or QUEUE_BACKEND_LOCAL)
-        by_backend[backend] = by_backend.get(backend, 0) + 1
+        by_state.setdefault(job.state.value, []).append(job.ref)
+        by_backend[job.backend.value] = by_backend.get(job.backend.value, 0) + 1
     return {
         "total": len(jobs),
         "byState": {key: sorted(values) for key, values in sorted(by_state.items())},
@@ -121,11 +141,12 @@ def queue_summary(execution_id: str) -> dict[str, Any]:
 def queue_runtime_snapshot(
     execution_id: str,
     *,
-    stage: str | None = None,
+    stage: QueueJobStage | str | None = None,
     refs: Iterable[str] | None = None,
     now: float | None = None,
-) -> dict[str, Any]:
-    """Describe current leaseability without mutating queue state."""
+) -> dict[str, object]:
+    """Describe leaseability from typed job state without mutating documents."""
+    queue_stage = _queue_stage(stage) if stage is not None else None
     current = _now() if now is None else float(now)
     ref_filter = {str(ref) for ref in refs} if refs is not None else None
     by_state: dict[str, int] = {}
@@ -136,42 +157,41 @@ def queue_runtime_snapshot(
     next_lease_expiry_epoch: float | None = None
     next_deadline_epoch: float | None = None
     for job in _load_jobs(execution_id):
-        if stage and job.get("stage") != stage:
+        if queue_stage is not None and job.stage is not queue_stage:
             continue
-        ref = str(job.get("ref") or "")
-        if ref_filter is not None and ref not in ref_filter:
+        if ref_filter is not None and job.ref not in ref_filter:
             continue
-        state = str(job.get("state") or "")
-        by_state[state] = by_state.get(state, 0) + 1
-        if state == STATE_QUEUED:
+        by_state[job.state.value] = by_state.get(job.state.value, 0) + 1
+        if job.state is STATE_QUEUED:
             waitable_live += 1
             leaseable_now += 1
             continue
-        if state == STATE_LEASED:
+        if job.state is STATE_LEASED:
             waitable_live += 1
-            lease_expiry = float(job.get("leaseExpiresEpoch") or 0)
-            if lease_expiry and lease_expiry <= current:
+            if job.lease.expires_epoch and job.lease.expires_epoch <= current:
                 leaseable_now += 1
-            elif lease_expiry:
+            elif job.lease.expires_epoch:
                 next_lease_expiry_epoch = min(
-                    value for value in (next_lease_expiry_epoch, lease_expiry) if value is not None
+                    value
+                    for value in (next_lease_expiry_epoch, job.lease.expires_epoch)
+                    if value is not None
                 )
-            deadline = float(job.get("deadlineEpoch") or 0)
-            if deadline:
+            if job.lease.deadline_epoch:
                 next_deadline_epoch = min(
-                    value for value in (next_deadline_epoch, deadline) if value is not None
+                    value
+                    for value in (next_deadline_epoch, job.lease.deadline_epoch)
+                    if value is not None
                 )
             continue
-        if state != STATE_FAILED or not bool(job.get("sameRunRetryable", True)):
+        if job.state is not STATE_FAILED or not job.same_run_retryable:
             continue
         waitable_live += 1
-        not_before = float(job.get("notBeforeEpoch") or 0)
-        if not_before <= current:
+        if job.not_before_epoch <= current:
             leaseable_now += 1
         else:
             failed_backoff_same_run += 1
             next_retry_epoch = min(
-                value for value in (next_retry_epoch, not_before) if value is not None
+                value for value in (next_retry_epoch, job.not_before_epoch) if value is not None
             )
     return {
         "total": sum(by_state.values()),

@@ -20,7 +20,7 @@ _TMP = tempfile.mkdtemp(prefix="qwq_ops_governance_test_")
 from core import ops_governance as og  # noqa: E402
 from core.io import read_json  # noqa: E402
 
-EXECUTION_ID = "20260711--travel-homepage-ops-governance--cn-sichuan--canary-001"
+EXECUTION_ID = "20260711--travel-homepage-ops-governance--test-region-b--pilot-001"
 
 
 def test_startup_internal_error_is_infra_retry():
@@ -111,7 +111,7 @@ def test_assignment_upsert_state_is_idempotent_and_events_are_deduped():
     assignment = og.build_assignment(
         execution_id=EXECUTION_ID,
         controller_run_id="ctrl-upsert",
-        assignment_path=["四川省", "阿坝藏族羌族自治州"],
+        assignment_path=["test-region-b", "阿坝藏族羌族自治州"],
         role="partition_agent",
         parent_assignment_id="execution-root",
         scope={"sliceType": "city", "name": "阿坝藏族羌族自治州"},
@@ -137,7 +137,7 @@ def test_delegated_assignment_requires_parent_deadline_heartbeat_and_budget():
     assignment = og.build_assignment(
         execution_id=EXECUTION_ID,
         controller_run_id="ctrl-validate",
-        assignment_path=["四川省", "成都市", "都江堰"],
+        assignment_path=["test-region-b", "成都市", "都江堰"],
         role="author_subagent",
         parent_assignment_id="partition-parent",
         scope={"sliceType": "content_ref", "ref": "都江堰_article_1"},

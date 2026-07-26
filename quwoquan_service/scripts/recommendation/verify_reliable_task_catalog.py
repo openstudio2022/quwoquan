@@ -11,8 +11,8 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-CATALOG = ROOT / "quwoquan_ops/environments/reliable_task_module_catalog.yaml"
-RETENTION = ROOT / "quwoquan_ops/environments/reliable_task_retention_policy.yaml"
+CATALOG = ROOT / "quwoquan_service/runtime/reliabletask/resources/module_catalog.yaml"
+RETENTION = ROOT / "quwoquan_service/runtime/reliabletask/resources/retention_policy.yaml"
 
 MODULE_RE = re.compile(r"^[a-z][a-z0-9-]*\.[a-z][a-z0-9_]*$")
 

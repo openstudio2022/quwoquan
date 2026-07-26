@@ -17,7 +17,7 @@ import tempfile
 import time
 import urllib.parse
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
@@ -46,6 +46,9 @@ from quwoquan_ops.cli.lib.flutter_android_device_proxy import (
     ANDROID_DEVICE_INVENTORY_ENV,
     REAL_FLUTTER_ENV,
 )
+from quwoquan_ops.cli.lib.video_playback_evidence import (
+    read_native_video_playback_evidence,
+)
 
 
 APP_DIR = REPO_ROOT / "quwoquan_app"
@@ -54,14 +57,28 @@ DEFAULT_TARGET = (
     "test/user_acceptance/patrol/environment/"
     "video_playback_canary__user_acceptance_test.dart"
 )
+ACCOUNT_CLOSURE_TARGET = (
+    "test/user_acceptance/patrol/settings/"
+    "account_closure_journey__user_acceptance_test.dart"
+)
 IOS_SDK_VERSION_PATTERN = re.compile(r"iOS[- ](\d+)(?:[-._](\d+))?")
+IOS_RUNTIME_VERSION_PATTERN = re.compile(r"^\d+\.\d+(?:\.\d+)?$")
 XCODE_IOS_SIMULATOR_SDK_PATTERN = re.compile(
     r"-sdk\s+iphonesimulator(\d+)(?:\.(\d+))?"
 )
 XCODE_GLOBAL_PRODUCTS_DIR = Path.home() / "Library" / "Developer" / "Xcode" / "XcodeDerivedData" / "Build" / "Products"
 PATROL_IOS_PRODUCTS_DIR = APP_DIR / "build" / "ios_integ" / "Build" / "Products"
 LOCAL_TARGETS = {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
-LOCAL_ENVIRONMENT_ALIAS_TARGETS = {"local-gamma": "gamma-local"}
+LOCAL_ENVIRONMENT_ALIAS_TARGETS = {
+    "local-beta": "beta-local",
+    "local-gamma": "gamma-local",
+    "local-prod-sim": "prod-sim",
+}
+RUNTIME_ANONYMOUS_SESSION_MODES = {
+    "local-beta": "beta_local_anonymous_runtime",
+    "local-gamma": "gamma_local_anonymous_runtime",
+    "local-prod-sim": "prod_sim_anonymous_runtime",
+}
 PUBLIC_TEST_SUFFIX = ".quwoquan-env.test"
 LOCALHOST_SUFFIX = ".localhost"
 FORBIDDEN_PROD_PLAYBACK_CANARY_TOKENS = frozenset(
@@ -94,7 +111,21 @@ def _runtime_env_for_alias(alias: str) -> str:
 
 
 def _data_source_for_runtime(runtime_env: str) -> str:
-    return "mock" if runtime_env == "alpha" else "remote"
+    del runtime_env
+    return "remote"
+
+
+def _evidence_class_for_runtime(runtime_env: str) -> str:
+    del runtime_env
+    return "user_acceptance_remote"
+
+
+def _requires_native_video_playback_signals(device: dict[str, Any]) -> bool:
+    return str(device.get("targetPlatform") or "").lower().startswith("android")
+
+
+def _read_video_playback_evidence(patrol_log: Path) -> dict[str, bool]:
+    return read_native_video_playback_evidence(patrol_log)
 
 
 def _local_target_for_environment_alias(env_name: str) -> str:
@@ -128,11 +159,51 @@ def _requires_video_playback_canary(args: argparse.Namespace) -> bool:
     return target.endswith(DEFAULT_TARGET)
 
 
+def _requires_account_closure(args: argparse.Namespace) -> bool:
+    target = str(getattr(args, "target", "") or "").replace("\\", "/")
+    return target.endswith(ACCOUNT_CLOSURE_TARGET)
+
+
+def _validate_account_closure_execution(
+    args: argparse.Namespace,
+    runtime_env: str,
+) -> None:
+    if not _requires_account_closure(args):
+        return
+    install_id = str(getattr(args, "patrol_install_id", "") or "").strip()
+    if not install_id or "{device}" not in install_id:
+        raise ValueError(
+            "account closure Patrol requires --patrol-install-id with a "
+            "{device} placeholder"
+        )
+    if runtime_env != "prod":
+        return
+    if _uses_runtime_anonymous_session(args):
+        raise ValueError(
+            "prod account closure Patrol requires an injected disposable session"
+        )
+    if not bool(getattr(args, "account_closure_disposable_ack", False)):
+        raise ValueError(
+            "prod account closure Patrol requires "
+            "--account-closure-disposable-ack"
+        )
+
+
 def _uses_runtime_anonymous_session(args: argparse.Namespace) -> bool:
     return (
-        args.env_name.strip().lower() == "local-gamma"
+        args.env_name.strip().lower() in RUNTIME_ANONYMOUS_SESSION_MODES
         and not _uses_public_video_canary_anonymous_session(args)
     )
+
+
+def _runtime_anonymous_session_mode(args: argparse.Namespace) -> str:
+    alias = args.env_name.strip().lower()
+    try:
+        return RUNTIME_ANONYMOUS_SESSION_MODES[alias]
+    except KeyError as exc:
+        raise ValueError(
+            f"{alias or '<empty>'} does not support runtime anonymous login"
+        ) from exc
 
 
 def _public_video_canary_session_mode(args: argparse.Namespace) -> str:
@@ -217,6 +288,7 @@ def _effective_base_urls_for_device(
 ) -> dict[str, str]:
     gateway_base_url = args.gateway_base_url.strip()
     product_ops_base_url = args.product_ops_base_url.strip()
+    rtc_media_connection_url = args.rtc_media_connection_url.strip()
     media_urls = _resolved_media_base_urls(args)
     if _is_local_target(args.env_name) and _device_uses_local_loopback(device):
         target_platform = str(device.get("targetPlatform", "")).strip().lower()
@@ -227,6 +299,7 @@ def _effective_base_urls_for_device(
         )
         gateway_base_url = rewrite_base(gateway_base_url)
         product_ops_base_url = rewrite_base(product_ops_base_url)
+        rtc_media_connection_url = rewrite_base(rtc_media_connection_url)
         media_urls = {
             key: rewrite_base(value) if value else value
             for key, value in media_urls.items()
@@ -234,6 +307,7 @@ def _effective_base_urls_for_device(
     return {
         "gatewayBaseUrl": gateway_base_url,
         "productOpsBaseUrl": product_ops_base_url,
+        "rtcMediaConnectionUrl": rtc_media_connection_url,
         **media_urls,
     }
 
@@ -271,7 +345,7 @@ def _local_debug_ca_path(env_name: str) -> Path:
     )
 
 
-def _install_simulator_root_ca(
+def _install_simulator_trust_roots(
     env_name: str,
     simulator_udid: str,
 ) -> dict[str, Any]:
@@ -360,12 +434,12 @@ def _prepare_android_local_port_reverse(
     ports: set[int] = set()
     for value in base_urls.values():
         parsed = urllib.parse.urlsplit(value)
-        if parsed.scheme != "https" or not parsed.hostname:
+        if parsed.scheme not in {"https", "wss"} or not parsed.hostname:
             continue
         ports.add(parsed.port or 443)
     if not ports:
         raise RuntimeError(
-            "GATE_BLOCK: no HTTPS local target ports are available for Android Patrol",
+            "GATE_BLOCK: no secure HTTP/WebSocket local target ports are available for Android Patrol",
         )
     mappings: list[dict[str, int]] = []
     for port in sorted(ports):
@@ -513,6 +587,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target", default=DEFAULT_TARGET)
     parser.add_argument("--timeout-seconds", type=int, default=1200)
     parser.add_argument("--env-name", "--environment-alias", dest="env_name", default="local-gamma")
+    parser.add_argument(
+        "--rollout-stage",
+        choices=("gray-initial", "carry-on", "full"),
+        default="",
+        help="Prod rollout stage; it is evidence metadata, never a fifth environment.",
+    )
     parser.add_argument("--runtime-env", default="")
     parser.add_argument("--api-contract-env", default="")
     parser.add_argument("--data-source", choices=("mock", "remote"), default="")
@@ -522,9 +602,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--media-image-base-url", default="")
     parser.add_argument("--media-video-base-url", default="")
     parser.add_argument("--media-upload-base-url", default="")
+    parser.add_argument("--rtc-media-connection-url", default="")
     parser.add_argument(
         "--video-playback-canary-work-id",
         default=os.environ.get("VIDEO_PLAYBACK_CANARY_WORK_ID", "").strip(),
+    )
+    parser.add_argument(
+        "--patrol-install-id",
+        default=os.environ.get("QWQ_PATROL_INSTALL_ID", "").strip(),
+        help=(
+            "Optional one-run install identity template. Destructive account-closure "
+            "journeys require a {device} placeholder."
+        ),
+    )
+    parser.add_argument(
+        "--account-closure-disposable-ack",
+        action="store_true",
+        help="Acknowledge irreversible closure of the injected disposable prod account.",
+    )
+    parser.add_argument(
+        "--unauthenticated-auth-entry",
+        action="store_true",
+        help="Run a login Provider journey without preloading an authenticated session.",
     )
     parser.add_argument("--test-auth-token", default=os.environ.get("TEST_AUTH_TOKEN", "").strip())
     parser.add_argument(
@@ -534,7 +633,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--release-uat-cases",
         default="",
-        help="Gamma data-release 生成的 homepage_verification_cases.json；只用于两省实体主页真实消费验证",
+        help="Gamma data-release 生成的 homepage_verification_cases.json；用于 release-bound 实体主页真实消费验证",
     )
     parser.add_argument(
         "--current-owner-id",
@@ -601,6 +700,15 @@ def _redact_command(command: list[str]) -> list[str]:
     secret_defines = {
         "--dart-define=TEST_AUTH_TOKEN=": "--dart-define=TEST_AUTH_TOKEN=<redacted>",
         "--dart-define=TEST_REFRESH_TOKEN=": "--dart-define=TEST_REFRESH_TOKEN=<redacted>",
+        "--dart-define=APP_CURRENT_OWNER_ID=": (
+            "--dart-define=APP_CURRENT_OWNER_ID=<redacted>"
+        ),
+        "--dart-define=APP_CURRENT_SUB_ACCOUNT_ID=": (
+            "--dart-define=APP_CURRENT_SUB_ACCOUNT_ID=<redacted>"
+        ),
+        "--dart-define=APP_CURRENT_USER_ID=": (
+            "--dart-define=APP_CURRENT_USER_ID=<redacted>"
+        ),
     }
     redacted: list[str] = []
     for item in command:
@@ -716,6 +824,103 @@ def ios_sdk_version(device: dict[str, Any]) -> tuple[int, int] | None:
     major = int(match.group(1))
     minor = int(match.group(2) or 0)
     return (major, minor)
+
+
+def _enrich_ios_simulator_runtime_versions(
+    devices: list[dict[str, Any]],
+    *,
+    xcrun_path: str | None = None,
+    command_runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[dict[str, Any]]:
+    simulators = [
+        device
+        for device in devices
+        if str(device.get("targetPlatform", "")).strip().lower() == "ios"
+        and bool(device.get("emulator", False))
+    ]
+    if not simulators:
+        return devices
+    executable = xcrun_path or shutil.which("xcrun")
+    if not executable:
+        raise RuntimeError(
+            "GATE_BLOCK: xcrun is required to resolve the exact iOS Simulator runtime"
+        )
+    result = command_runner(
+        [executable, "simctl", "list", "--json"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = ((result.stderr or result.stdout) or "unknown simctl failure").strip()
+        raise RuntimeError(
+            "GATE_BLOCK: cannot resolve iOS Simulator runtimes: " + detail
+        )
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "GATE_BLOCK: simctl returned invalid iOS Simulator runtime JSON"
+        ) from exc
+    runtime_versions = {
+        str(runtime.get("identifier") or "").strip(): str(
+            runtime.get("version") or ""
+        ).strip()
+        for runtime in payload.get("runtimes") or []
+        if isinstance(runtime, dict)
+        and bool(runtime.get("isAvailable", True))
+        and IOS_RUNTIME_VERSION_PATTERN.fullmatch(
+            str(runtime.get("version") or "").strip()
+        )
+    }
+    device_versions: dict[str, str] = {}
+    raw_devices = payload.get("devices")
+    if isinstance(raw_devices, dict):
+        for runtime_identifier, runtime_devices in raw_devices.items():
+            version = runtime_versions.get(str(runtime_identifier).strip(), "")
+            if not version or not isinstance(runtime_devices, list):
+                continue
+            for device in runtime_devices:
+                if not isinstance(device, dict) or not bool(
+                    device.get("isAvailable", True)
+                ):
+                    continue
+                device_id = str(device.get("udid") or "").strip()
+                if device_id:
+                    device_versions[device_id] = version
+    enriched: list[dict[str, Any]] = []
+    for device in devices:
+        if device not in simulators:
+            enriched.append(device)
+            continue
+        device_id = str(device.get("id") or "").strip()
+        version = device_versions.get(device_id, "")
+        if not version:
+            raise RuntimeError(
+                "GATE_BLOCK: exact iOS Simulator runtime is unavailable for "
+                f"device {device_id or '<empty>'}"
+            )
+        enriched.append({**device, "runtimeVersion": version})
+    return enriched
+
+
+def patrol_ios_runtime_argument(device: dict[str, Any]) -> str | None:
+    """Return Patrol's explicit simulator runtime argument for an iOS device."""
+    if str(device.get("targetPlatform", "")).strip().lower() != "ios":
+        return None
+    if not bool(device.get("emulator", False)):
+        return None
+    runtime_version = str(device.get("runtimeVersion") or "").strip()
+    if runtime_version:
+        if not IOS_RUNTIME_VERSION_PATTERN.fullmatch(runtime_version):
+            raise ValueError(
+                f"invalid iOS simulator runtime version: {runtime_version!r}"
+            )
+        return f"--ios={runtime_version}"
+    version = ios_sdk_version(device)
+    if version is None:
+        raise ValueError("iOS simulator runtime is missing or unparseable")
+    return f"--ios={version[0]}.{version[1]}"
 
 
 def xcode_ios_simulator_sdk_version() -> tuple[int, int]:
@@ -884,6 +1089,7 @@ def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any
         if platform == "all" and target != "ios" and not target.startswith("android"):
             continue
         selected.append(device)
+    selected = _enrich_ios_simulator_runtime_versions(selected)
     if not allowed_ids and platform in ("ios", "all"):
         selected = _select_compatible_ios_devices(
             selected,
@@ -895,6 +1101,23 @@ def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any
 def _prepare_execution_session(args: argparse.Namespace) -> str:
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
     data_source = args.data_source.strip() or _data_source_for_runtime(runtime_env)
+    _validate_account_closure_execution(args, runtime_env)
+    if bool(getattr(args, "unauthenticated_auth_entry", False)):
+        supplied = (
+            args.test_auth_token,
+            args.test_refresh_token,
+            _resolved_owner_id(args),
+            _resolved_sub_account_id(args),
+        )
+        if any(str(value).strip() for value in supplied):
+            raise ValueError(
+                "unauthenticated auth-entry Patrol cannot preload a session"
+            )
+        if data_source != "remote":
+            raise ValueError(
+                "unauthenticated auth-entry Patrol requires Remote composition"
+            )
+        return "unauthenticated_auth_entry"
     if _uses_public_video_canary_anonymous_session(args):
         return _public_video_canary_session_mode(args)
     if _uses_runtime_anonymous_session(args):
@@ -906,22 +1129,10 @@ def _prepare_execution_session(args: argparse.Namespace) -> str:
         }
         if any(str(value).strip() for value in supplied.values()):
             raise ValueError(
-                "local-gamma Patrol must use device-runtime anonymous login; "
+                "local Remote Patrol must use device-runtime anonymous login; "
                 "do not inject auth tokens or actor identities"
             )
-        return "gamma_local_anonymous_runtime"
-    if runtime_env == "alpha" and data_source == "mock":
-        args.test_auth_token = args.test_auth_token.strip() or "alpha-contract-fixture-access"
-        args.test_refresh_token = (
-            args.test_refresh_token.strip() or "alpha-contract-fixture-refresh"
-        )
-        args.current_owner_id = (
-            _resolved_owner_id(args) or "fixture_user_current_owner"
-        )
-        args.current_sub_account_id = (
-            _resolved_sub_account_id(args) or "fixture_user_current"
-        )
-        return "alpha_contract_fixture"
+        return _runtime_anonymous_session_mode(args)
     return "provided_remote_session"
 
 
@@ -931,14 +1142,44 @@ def _create_patrol_secret_define_file(args: argparse.Namespace) -> Path:
     try:
         os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(
-                {
-                    "TEST_AUTH_TOKEN": args.test_auth_token.strip(),
-                    "TEST_REFRESH_TOKEN": args.test_refresh_token.strip(),
-                },
-                handle,
-                ensure_ascii=False,
+            definitions = {
+                "TEST_AUTH_TOKEN": args.test_auth_token.strip(),
+                "TEST_REFRESH_TOKEN": args.test_refresh_token.strip(),
+                "APP_CURRENT_OWNER_ID": _resolved_owner_id(args),
+                "APP_CURRENT_SUB_ACCOUNT_ID": _resolved_sub_account_id(args),
+                "APP_CURRENT_USER_ID": _resolved_sub_account_id(args),
+            }
+            provider_define_keys = tuple(
+                key.strip()
+                for key in os.environ.get(
+                    "QWQ_PROVIDER_UAT_DART_DEFINE_KEYS", ""
+                ).split(",")
+                if key.strip()
             )
+            invalid_provider_keys = [
+                key
+                for key in provider_define_keys
+                if not re.fullmatch(r"QWQ_PROVIDER_UAT_[A-Z0-9_]+", key)
+            ]
+            if invalid_provider_keys:
+                raise ValueError(
+                    "Provider UAT Dart define keys must use the "
+                    "QWQ_PROVIDER_UAT_* namespace"
+                )
+            missing_provider_keys = [
+                key
+                for key in provider_define_keys
+                if not os.environ.get(key, "").strip()
+            ]
+            if missing_provider_keys:
+                raise ValueError(
+                    "Provider UAT Dart define values are required: "
+                    + ", ".join(missing_provider_keys)
+                )
+            definitions.update(
+                {key: os.environ[key].strip() for key in provider_define_keys}
+            )
+            json.dump(definitions, handle, ensure_ascii=False)
             handle.write("\n")
     except Exception:
         path.unlink(missing_ok=True)
@@ -963,49 +1204,71 @@ def patrol_command(
     media_image_base_url = base_urls["mediaImageBaseUrl"]
     media_video_base_url = base_urls["mediaVideoBaseUrl"]
     media_upload_base_url = base_urls["mediaUploadBaseUrl"]
-    current_owner_id = _resolved_owner_id(args)
-    current_sub_account_id = _resolved_sub_account_id(args)
+    rtc_media_connection_url = base_urls["rtcMediaConnectionUrl"]
     video_playback_canary_work_id = str(
         getattr(args, "video_playback_canary_work_id", "") or ""
     ).strip()
+    patrol_install_id = str(getattr(args, "patrol_install_id", "") or "").strip()
+    _validate_account_closure_execution(args, runtime_env)
+    if patrol_install_id:
+        patrol_install_id = patrol_install_id.replace(
+            "{device}",
+            sanitize_device_id(str(device["id"])),
+        )
     command = [
         patrol_executable,
         "test",
+        "--verbose",
         "-t",
         args.target,
         "-d",
         str(device["id"]),
         "--dart-define=RUN_T4_PATROL=true",
+        "--dart-define=REQUIRE_NATIVE_VIDEO_PLAYBACK_SIGNALS="
+        + (
+            "true"
+            if _requires_native_video_playback_signals(device)
+            else "false"
+        ),
         f"--dart-define=APP_RUNTIME_ENV={runtime_env}",
         f"--dart-define=APP_DATA_SOURCE={data_source}",
         f"--dart-define=API_CONTRACT_ENV={api_contract_env}",
         f"--dart-define=CLOUD_GATEWAY_BASE_URL={gateway_base_url}",
         f"--dart-define=API_CONTRACT_BASE_URL={gateway_base_url}",
         f"--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL={product_ops_base_url}",
+        f"--dart-define=RTC_MEDIA_CONNECTION_URL={rtc_media_connection_url}",
         f"--dart-define=VIDEO_PLAYBACK_CANARY_WORK_ID={video_playback_canary_work_id}",
     ]
+    ios_runtime_argument = patrol_ios_runtime_argument(device)
+    if ios_runtime_argument:
+        command.append(ios_runtime_argument)
+    if patrol_install_id:
+        command.append(f"--dart-define=QWQ_PATROL_INSTALL_ID={patrol_install_id}")
+    if _requires_account_closure(args) and runtime_env == "prod":
+        command.append(
+            "--dart-define=QWQ_ACCOUNT_CLOSURE_DISPOSABLE_ACK=true"
+        )
     if _uses_public_video_canary_anonymous_session(args):
         command.append(
             "--dart-define=QWQ_PATROL_SESSION_MODE="
             f"{_public_video_canary_session_mode(args)}"
         )
     elif _uses_runtime_anonymous_session(args):
-        command.append("--dart-define=QWQ_PATROL_SESSION_MODE=local_gamma_anonymous")
+        command.append(
+            "--dart-define=QWQ_PATROL_SESSION_MODE="
+            f"{_runtime_anonymous_session_mode(args)}"
+        )
     else:
         if dart_define_file is None:
             raise ValueError("remote Patrol session requires a private Dart define file")
         command.extend(
             [
                 f"--dart-define-from-file={dart_define_file}",
-                f"--dart-define=APP_CURRENT_OWNER_ID={current_owner_id}",
-                f"--dart-define=APP_CURRENT_SUB_ACCOUNT_ID={current_sub_account_id}",
-                f"--dart-define=APP_CURRENT_USER_ID={current_sub_account_id}",
             ]
         )
-    if str(device.get("targetPlatform", "")).strip().lower() == "ios":
-        sdk_version = ios_sdk_version(device)
-        if sdk_version is not None:
-            command.append(f"--ios={sdk_version[0]}.{sdk_version[1]}")
+    # Patrol 4.4 uses Xcode's SDK when `--ios` is omitted.  That is not the
+    # booted simulator runtime, so always pass the runtime parsed from device
+    # discovery and let Xcode resolve the destination against that device.
     if media_avatar_base_url or media_image_base_url or media_video_base_url or media_upload_base_url:
         command.extend(
             [
@@ -1017,7 +1280,7 @@ def patrol_command(
         )
     release_uat_cases_b64 = str(getattr(args, "release_uat_cases_b64", "") or "")
     if release_uat_cases_b64:
-        command.append(f"--dart-define=QWQ_TWO_PROVINCE_UAT_CASES_B64={release_uat_cases_b64}")
+        command.append(f"--dart-define=QWQ_RELEASE_HOMEPAGE_UAT_CASES_B64={release_uat_cases_b64}")
     return command
 
 
@@ -1076,6 +1339,10 @@ def _missing_required_args(args: argparse.Namespace) -> list[str]:
         ("media_image_base_url", getattr(args, "media_image_base_url", "")),
         ("media_video_base_url", getattr(args, "media_video_base_url", "")),
         ("media_upload_base_url", getattr(args, "media_upload_base_url", "")),
+        (
+            "rtc_media_connection_url",
+            getattr(args, "rtc_media_connection_url", ""),
+        ),
     ]
     if _requires_video_playback_canary(args):
         required.append(
@@ -1085,6 +1352,7 @@ def _missing_required_args(args: argparse.Namespace) -> list[str]:
             )
         )
     if not (
+        bool(getattr(args, "unauthenticated_auth_entry", False)) or
         _uses_runtime_anonymous_session(args) or
         _uses_public_video_canary_anonymous_session(args)
     ):
@@ -1114,19 +1382,27 @@ def main() -> int:
         "startedAt": utc_now(),
         "endedAt": "",
         "environmentAlias": args.env_name,
+        "rolloutStage": getattr(args, "rollout_stage", ""),
         "runtimeEnv": runtime_env,
         "apiContractEnv": api_contract_env,
         "dataSource": data_source,
+        "evidenceClass": _evidence_class_for_runtime(runtime_env),
         "target": args.target,
         "platform": args.platform,
         "gatewayBaseUrl": args.gateway_base_url,
         "productOpsBaseUrl": args.product_ops_base_url,
+        "rtcMediaConnectionUrl": args.rtc_media_connection_url,
         **_resolved_media_base_urls(args),
         "videoPlaybackCanaryWorkId": str(
             getattr(args, "video_playback_canary_work_id", "") or ""
         ).strip(),
-        "currentOwnerId": _resolved_owner_id(args),
-        "currentSubAccountId": _resolved_sub_account_id(args),
+        "accountClosureDisposableAck": (
+            bool(getattr(args, "account_closure_disposable_ack", False))
+            if _requires_account_closure(args)
+            else False
+        ),
+        "hasCurrentOwnerIdentity": bool(_resolved_owner_id(args)),
+        "hasCurrentPersonaIdentity": bool(_resolved_sub_account_id(args)),
         "sessionSource": "",
         "releaseUatCasesPath": "",
         "devices": [],
@@ -1144,8 +1420,10 @@ def main() -> int:
             report["endedAt"] = utc_now()
             write_report(report_path, report)
             return 2
-        report["currentOwnerId"] = _resolved_owner_id(args)
-        report["currentSubAccountId"] = _resolved_sub_account_id(args)
+        report["hasCurrentOwnerIdentity"] = bool(_resolved_owner_id(args))
+        report["hasCurrentPersonaIdentity"] = bool(
+            _resolved_sub_account_id(args)
+        )
     else:
         report["sessionSource"] = "dry_run"
     patrol_resolution = resolve_patrol_cli()
@@ -1234,16 +1512,21 @@ def main() -> int:
             suite="environment-page-smoke",
             extra={"target": args.target, "runtimeEnv": runtime_env},
         )
-        if str(device.get("targetPlatform", "")).lower() == "ios":
+        if (
+            not args.dry_run
+            and str(device.get("targetPlatform", "")).lower() == "ios"
+        ):
             ensure_patrol_ios_products_bridge()
         tls_trust = {"status": "skipped", "reason": "not-required"}
         if (
+            not args.dry_run
+            and
             _is_local_target(args.env_name)
             and str(device.get("targetPlatform", "")).lower() == "ios"
             and bool(device.get("emulator", False))
         ):
             try:
-                tls_trust = _install_simulator_root_ca(
+                tls_trust = _install_simulator_trust_roots(
                     args.env_name,
                     str(device.get("id", "")),
                 )
@@ -1271,7 +1554,10 @@ def main() -> int:
                 gate_blocked = True
                 continue
         android_port_reverse = {"status": "skipped", "reason": "not-required"}
-        if str(device.get("targetPlatform", "")).lower().startswith("android"):
+        if (
+            not args.dry_run
+            and str(device.get("targetPlatform", "")).lower().startswith("android")
+        ):
             try:
                 android_port_reverse = _prepare_android_local_port_reverse(
                     args,
@@ -1352,7 +1638,11 @@ def main() -> int:
                 "releaseUatStateReset": release_uat_state_reset,
             },
         )
-        before_screenshot = capture_device_screenshot(device, run_dir / "before.png")
+        before_screenshot = (
+            {"status": "skipped", "reason": "dry-run"}
+            if args.dry_run
+            else capture_device_screenshot(device, run_dir / "before.png")
+        )
         print(
             f"[environment-page-smoke] run {args.env_name} on "
             f"{device['name']} ({device['id']}, {device['targetPlatform']})",
@@ -1381,6 +1671,8 @@ def main() -> int:
                     secret_values=(
                         args.test_auth_token.strip(),
                         args.test_refresh_token.strip(),
+                        _resolved_owner_id(args),
+                        _resolved_sub_account_id(args),
                     ),
                 )
             finally:
@@ -1402,6 +1694,9 @@ def main() -> int:
             "deviceManifestPath": device_manifest_path,
             "commandPath": command_path,
             "rawLogPath": result.get("logPath", ""),
+            "videoPlayback": _read_video_playback_evidence(
+                run_dir / "patrol.log",
+            ),
             "beforeScreenshot": before_screenshot,
             "afterScreenshot": after_screenshot,
             "failureScreenshot": failure_screenshot,

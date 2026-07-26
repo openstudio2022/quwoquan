@@ -13,6 +13,31 @@ def _normalized_title(value: str) -> str:
         fold_to_simplified(str(value or "")),
     ).lower()
 
+
+def _geo_context_matches(
+    value: str,
+    geo_context_terms: list[str] | tuple[str, ...],
+) -> bool:
+    """要求正文或实体名包含至少一个规范行政区全称/去后缀短名。"""
+    if not geo_context_terms:
+        return True
+    normalized_value = _normalized_title(value)
+    for term in geo_context_terms:
+        normalized_term = _normalized_title(term)
+        short_term = _normalized_title(
+            re.sub(
+                r"(特别行政区|自治区|自治州|地区|省|市|区|县)$",
+                "",
+                str(term or "").strip(),
+            )
+        )
+        if normalized_term and normalized_term in normalized_value:
+            return True
+        if len(short_term) >= 2 and short_term in normalized_value:
+            return True
+    return False
+
+
 def _dedupe_terms(values: list[str] | tuple[str, ...], *, limit: int = 12) -> list[str]:
     out: list[str] = []
     for raw in values:

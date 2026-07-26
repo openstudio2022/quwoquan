@@ -41,7 +41,7 @@ schema/                   execution、post、publish 等契约
 `executionId` 是唯一运行身份：
 
 ```text
-YYYYMMDD--<vertical>-<contentType>-<intent>--<scope>--<milestone>-<sequence>
+YYYYMMDD--<vertical>-<contentType>-<intent>--<scope>--<pilot|scale|full>-<sequence>
 ```
 
 同一 ID 只允许参数完全相同的 resume；新尝试递增 sequence，并通过 `retryOf` 关联。
@@ -82,19 +82,11 @@ python3 quwoquan_data/scripts/cli.py task preflight --json
 
 # 结构与发布门禁
 python3 quwoquan_data/scripts/cli.py verify content-execution-layout
+python3 quwoquan_data/scripts/cli.py verify reusable-data-contract
+python3 quwoquan_data/scripts/cli.py verify runtime-input-ownership
 python3 quwoquan_data/scripts/cli.py verify publish-purity
 python3 quwoquan_data/scripts/cli.py verify output-root-isolation
-python3 quwoquan_data/scripts/cli.py verify two-province-coverage-release --release <releaseId>
-
-# Zhejiang/Sichuan milestone closure: Gamma import, API, App UAT, rollback and replay
-python3 quwoquan_data/scripts/cli.py release attest-rollout-milestone \
-  --release-id <releaseId> \
-  --import-run-id <gammaImportRunId> \
-  --api-run-id <gammaApiRunId> \
-  --app-uat-report .qwq_output/env/gamma/runs/<appRunId>/report.json \
-  --rollback-target-release-id <immutableBaselineReleaseId> \
-  --rollback-run-id <gammaRollbackRunId> \
-  --replay-run-id <gammaReplayRunId>
+python3 quwoquan_data/scripts/cli.py verify release-lifecycle --release <releaseId>
 
 # Canonical 发布与 taxonomy
 python3 quwoquan_data/scripts/cli.py release --help

@@ -1,15 +1,12 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from collections import defaultdict
-from content.execution.coverage import coverage_entity_type
+from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, Path, article_commercial_closure_enabled, data_issue, data_issues, execution_content_plan_packet_path, execution_root, image_count_is_hard_quota, minimum_publishable_images_per_target, read_json, relative_execution_ref, write_json
 from content.execution.controller.content_plan_assets import (
     article_asset_claims as _article_asset_claims,
-    asset_ref as _asset_ref,
-    asset_rows as _asset_rows,
-    asset_sha as _asset_sha,
-    claim as _claim,
-    claims_conflict as _claims_conflict,
+    asset_ref as _asset_ref, asset_rows as _asset_rows, asset_sha as _asset_sha,
+    claim as _claim, claims_conflict as _claims_conflict,
     image_claims as _image_claims,
     source_ref as _source_ref,
 )
@@ -95,7 +92,10 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
     issues: list[DataIssue] = []
     source_diagnostics: dict[str, dict[str, Any]] = {}
     for target in targets:
-        object_dir = resolve_entity_object_dir(ctx.execution_id, target, etype_hint=etype)
+        # 目标集可以跨实体类型（如金丝雀 景区+自然景观），必须按冻结目标逐一解析类型，
+        # 不能用批级同质 etype（异构集合时为空串，会把对象目录解析到错误类型）。
+        target_etype = coverage_entity_type_for_entity(active_spec, target) or etype
+        object_dir = resolve_entity_object_dir(ctx.execution_id, target, etype_hint=target_etype)
         from content.source.source_unit import iter_source_units
         source_units = iter_source_units(object_dir)
         if video_lane_enabled:
@@ -105,7 +105,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
             video_outcome = build_video_plan_for_target(
                 ctx=ctx,
                 scheduler=scheduler,
-                entity_type=etype,
+                entity_type=target_etype,
                 target=target,
                 object_dir=object_dir,
                 videos_per_target=per_target_videos,
@@ -463,7 +463,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
         append_article_plan_items(
             ctx=ctx,
             scheduler=scheduler,
-            entity_type=etype,
+            entity_type=target_etype,
             target=target,
             candidates=picked_articles,
             items=items,
@@ -471,7 +471,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
         append_image_plan_items(
             ctx=ctx,
             scheduler=scheduler,
-            entity_type=etype,
+            entity_type=target_etype,
             target=target,
             candidates=picked_images,
             items=items,

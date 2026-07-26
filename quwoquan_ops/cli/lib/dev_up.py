@@ -19,9 +19,9 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
 from quwoquan_ops.cli.lib.local_target_tls import (
     LOCAL_TLS_TARGETS,
-    resolve_local_target_root_ca,
+    materialize_local_target_trust_bundle,
 )
-from quwoquan_ops.cli.lib.output_paths import deployment_work_root
+from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 
 
@@ -73,7 +73,10 @@ def env_output_root(env_name: str) -> Path:
 
 def deployment_render_root(target_name: str) -> Path:
     """Rendered deployment input is ephemeral and must not enter .qwq_output."""
-    return deployment_work_root(target_name) / "rendered"
+    return deployment_render_dir(
+        target_name.split("-", 1)[0],
+        target=target_name,
+    )
 
 
 def env_cache_target_root(env_name: str, target_name: str) -> Path:
@@ -610,7 +613,7 @@ def local_target_android_debug_ca_cert(target_name: str) -> Path:
         raise RuntimeError(
             f"GATE_BLOCK: local Android debug CA path is undefined for target {target_name}"
         )
-    return resolve_local_target_root_ca(target_name)
+    return materialize_local_target_trust_bundle(target_name)
 
 
 def _android_local_loopback_host(host: str, *, collapse_to_localhost: bool = False) -> str:

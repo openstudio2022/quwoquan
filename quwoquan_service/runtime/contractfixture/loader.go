@@ -8,36 +8,38 @@ import (
 	"runtime"
 )
 
-func LoadMetadataJSON[T any](metadataRelativePath string) (T, error) {
+func LoadRepositoryJSON[T any](repositoryRelativePath string) (T, error) {
 	var out T
-	path, err := MetadataPath(metadataRelativePath)
+	path, err := RepositoryPath(repositoryRelativePath)
 	if err != nil {
 		return out, err
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return out, fmt.Errorf("read metadata fixture %s: %w", metadataRelativePath, err)
+		return out, fmt.Errorf("read repository fixture %s: %w", repositoryRelativePath, err)
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return out, fmt.Errorf("decode metadata fixture %s: %w", metadataRelativePath, err)
+		return out, fmt.Errorf("decode repository fixture %s: %w", repositoryRelativePath, err)
 	}
 	return out, nil
 }
 
-func MetadataPath(metadataRelativePath string) (string, error) {
+func RepositoryPath(repositoryRelativePath string) (string, error) {
+	if filepath.IsAbs(repositoryRelativePath) || filepath.Clean(repositoryRelativePath) != repositoryRelativePath {
+		return "", fmt.Errorf("repository fixture path must be a clean relative path: %s", repositoryRelativePath)
+	}
 	candidates := []string{
-		filepath.Join("contracts", "metadata", metadataRelativePath),
-		filepath.Join("quwoquan_service", "contracts", "metadata", metadataRelativePath),
-		filepath.Join("..", "contracts", "metadata", metadataRelativePath),
-		filepath.Join("..", "..", "contracts", "metadata", metadataRelativePath),
-		filepath.Join("..", "..", "..", "contracts", "metadata", metadataRelativePath),
-		filepath.Join("..", "..", "..", "..", "contracts", "metadata", metadataRelativePath),
+		repositoryRelativePath,
+		filepath.Join("..", repositoryRelativePath),
+		filepath.Join("..", "..", repositoryRelativePath),
+		filepath.Join("..", "..", "..", repositoryRelativePath),
+		filepath.Join("..", "..", "..", "..", repositoryRelativePath),
+		filepath.Join("..", "..", "..", "..", "..", repositoryRelativePath),
 	}
 	if _, file, _, ok := runtime.Caller(0); ok {
 		candidates = append(candidates, filepath.Join(
 			filepath.Dir(file),
-			"..", "..",
-			"contracts", "metadata", metadataRelativePath,
+			"..", "..", "..", repositoryRelativePath,
 		))
 	}
 	for _, candidate := range candidates {
@@ -45,5 +47,5 @@ func MetadataPath(metadataRelativePath string) (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("metadata fixture not found: %s", metadataRelativePath)
+	return "", fmt.Errorf("repository fixture not found: %s", repositoryRelativePath)
 }

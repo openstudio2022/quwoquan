@@ -4,6 +4,7 @@ class ClientStateSyncOutboxNotifier
     extends Notifier<ClientStateSyncOutboxState> {
   Timer? _flushTimer;
   final Map<String, bool> _inFlightDesiredValues = <String, bool>{};
+  bool _terminallyPurged = false;
 
   @override
   ClientStateSyncOutboxState build() {
@@ -19,7 +20,7 @@ class ClientStateSyncOutboxNotifier
     final raw = await _readPersistedInteractionMap(
       _clientStateSyncOutboxStorageKey,
     );
-    if (!ref.mounted) {
+    if (!ref.mounted || _terminallyPurged) {
       return;
     }
     if (raw == null) {
@@ -37,6 +38,7 @@ class ClientStateSyncOutboxNotifier
     required String subAccountId,
     required bool currentFollowing,
     required bool shouldFollow,
+    required String sourceSurfaceId,
     bool flushImmediately = false,
   }) {
     _upsertEntry(
@@ -45,6 +47,7 @@ class ClientStateSyncOutboxNotifier
       intentType: 'follow',
       currentBoolValue: currentFollowing,
       desiredBoolValue: shouldFollow,
+      sourceSurfaceId: sourceSurfaceId,
       flushImmediately: flushImmediately,
     );
   }
@@ -66,6 +69,9 @@ class ClientStateSyncOutboxNotifier
   }
 
   Future<void> flushNow() async {
+    if (_terminallyPurged) {
+      return;
+    }
     final config = ref.read(contentRuntimeConfigProvider).clientStateSync;
     final now = DateTime.now();
     final dueKeys = state.entries
@@ -84,6 +90,9 @@ class ClientStateSyncOutboxNotifier
     }
 
     for (final coalesceKey in dueKeys) {
+      if (_terminallyPurged) {
+        break;
+      }
       final entry = _entryForKey(coalesceKey);
       if (entry == null ||
           _isInFlight(coalesceKey) ||
@@ -94,15 +103,23 @@ class ClientStateSyncOutboxNotifier
       _inFlightDesiredValues[coalesceKey] = entry.desiredBoolValue;
       try {
         await _flushEntry(entry);
+        if (_terminallyPurged) {
+          continue;
+        }
         _onFlushSucceeded(
           coalesceKey: coalesceKey,
           flushedDesiredBoolValue: entry.desiredBoolValue,
         );
       } catch (_) {
-        _onFlushFailed(coalesceKey: coalesceKey, config: config);
+        if (!_terminallyPurged) {
+          _onFlushFailed(coalesceKey: coalesceKey, config: config);
+        }
       } finally {
         _inFlightDesiredValues.remove(coalesceKey);
       }
+    }
+    if (_terminallyPurged) {
+      return;
     }
     unawaited(_persistState());
     _scheduleNextFlush();
@@ -111,24 +128,18 @@ class ClientStateSyncOutboxNotifier
   Future<void> _flushEntry(ClientStateSyncOutboxEntry entry) async {
     switch ('${entry.objectType}:${entry.intentType}') {
       case 'profile:follow':
-        final repo = ref.read(userProfileRepositoryProvider);
-        final activeContext = await ref.read(
-          activePersonaContextProvider.future,
+        final sourceSurfaceId = entry.sourceSurfaceId.trim();
+        final surface = AppUiSurfaces.byId[sourceSurfaceId];
+        if (surface == null) {
+          throw StateError('关注同步缺少有效 source surface: ${entry.sourceSurfaceId}');
+        }
+        final writer = ref.read(
+          personaRelationshipCommandWriterProvider(surface),
         );
         if (entry.desiredBoolValue) {
-          await repo.followUser(
-            entry.objectId,
-            ownerUserId: activeContext.ownerUserId,
-            subAccountId: activeContext.subAccountId,
-            subAccountContextVersion: activeContext.contextVersion,
-          );
+          await writer.follow(entry.objectId, sourceSurfaceId: sourceSurfaceId);
         } else {
-          await repo.unfollowUser(
-            entry.objectId,
-            ownerUserId: activeContext.ownerUserId,
-            subAccountId: activeContext.subAccountId,
-            subAccountContextVersion: activeContext.contextVersion,
-          );
+          await writer.unfollow(entry.objectId);
         }
         return;
       case 'post:like':
@@ -150,8 +161,12 @@ class ClientStateSyncOutboxNotifier
     required String intentType,
     required bool? currentBoolValue,
     required bool desiredBoolValue,
+    String sourceSurfaceId = '',
     required bool flushImmediately,
   }) {
+    if (_terminallyPurged) {
+      return;
+    }
     final config = ref.read(contentRuntimeConfigProvider).clientStateSync;
     final now = DateTime.now();
     final coalesceKey = '$objectType:$intentType:$objectId';
@@ -173,6 +188,7 @@ class ClientStateSyncOutboxNotifier
         objectId: objectId,
         intentType: intentType,
         desiredBoolValue: desiredBoolValue,
+        sourceSurfaceId: sourceSurfaceId,
         nextFlushAt: flushImmediately ? now : now.add(config.flushDelay),
         confirmedBoolValue: confirmedBoolValue,
         retryCount: existingEntry?.retryCount ?? 0,
@@ -184,7 +200,7 @@ class ClientStateSyncOutboxNotifier
 
   void _scheduleNextFlush() {
     _flushTimer?.cancel();
-    if (state.entries.isEmpty) return;
+    if (_terminallyPurged || state.entries.isEmpty) return;
     final wakeTimes = state.entries
         .where(
           (entry) => !_isInFlight(entry.coalesceKey) && entry.hasPendingDelta,
@@ -277,10 +293,21 @@ class ClientStateSyncOutboxNotifier
   }
 
   Future<void> _persistState() async {
+    if (_terminallyPurged) {
+      return;
+    }
     await _writePersistedInteractionMap(
       _clientStateSyncOutboxStorageKey,
       state.toMap(),
     );
+  }
+
+  void purgeForTerminalAccountClosure() {
+    _terminallyPurged = true;
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    _inFlightDesiredValues.clear();
+    state = const ClientStateSyncOutboxState();
   }
 }
 
@@ -299,22 +326,61 @@ final clientStateSyncOutboxProvider =
       ClientStateSyncOutboxNotifier.new,
     );
 
-final assistantRepositoryProvider = Provider<AssistantRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
+/// assistant 域共享 Remote 实例：8 个窄 Facet provider 共用同一个
+/// [RemoteAssistantRepository]（一个类实现多个窄面，与 content 域同构）。
+final _assistantRemoteProvider = Provider<RemoteAssistantRepository>((ref) {
   final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
   final personaId = ref.watch(currentUserIdProvider).trim();
   final consentActorScope = '$accountId/$personaId';
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteAssistantRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-      consentActorScope: consentActorScope,
-    ),
-    mock: () => MockAssistantRepository(
-      store: AssistantConsentStore(actorScope: consentActorScope),
-    ),
+  return RemoteAssistantRepository(
+    httpClient: ref.watch(cloudHttpClientProvider),
+    consentActorScope: consentActorScope,
   );
 });
+
+/// Production composition is Remote-only. Alpha/test adapters must override
+/// these Facets from their physically separate composition root.
+final assistantConversationRunFacetProvider =
+    Provider<AssistantConversationRunFacet>(
+      (ref) => ref.watch(_assistantRemoteProvider),
+    );
+
+final assistantSkillSubscriptionFacetProvider =
+    Provider<AssistantSkillSubscriptionFacet>(
+      (ref) => ref.watch(_assistantRemoteProvider),
+    );
+
+final assistantSkillConsentFacetProvider = Provider<AssistantSkillConsentFacet>(
+  (ref) => ref.watch(_assistantRemoteProvider),
+);
+
+final assistantLearningAppendFacetProvider =
+    Provider<AssistantLearningAppendFacet>(
+      (ref) => ref.watch(_assistantRemoteProvider),
+    );
+
+final assistantPersonalizationFacetProvider =
+    Provider<AssistantPersonalizationFacet>(
+      (ref) => ref.watch(_assistantRemoteProvider),
+    );
+
+final assistantPersonalDataFacetProvider = Provider<AssistantPersonalDataFacet>(
+  (ref) => ref.watch(_assistantRemoteProvider),
+);
+
+final assistantPreferenceFactFacetProvider =
+    Provider<AssistantPreferenceFactFacet>(
+      (ref) => ref.watch(_assistantRemoteProvider),
+    );
+
+final assistantXiaoquSearchFacetProvider = Provider<AssistantXiaoquSearchFacet>(
+  (ref) => ref.watch(_assistantRemoteProvider),
+);
+
+final assistantCreationSuggestFacetProvider =
+    Provider<AssistantCreationSuggestFacet>(
+      (ref) => ref.watch(_assistantRemoteProvider),
+    );
 
 final _remoteAppMessageAdapterProvider = Provider<RemoteAppMessageAdapter>((
   ref,
@@ -343,10 +409,12 @@ CloudOperationInvocationContext _notificationInvocationContext(
   final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
   final persona = ref.read(activePersonaContextProvider).asData?.value;
   final personaId = persona?.subAccountId.trim() ?? '';
+  // AppMessage inbox 的宿主面是消息页通知维度（chatList surface）；
+  // metadata ui_surfaces.yaml 已绑定对应 operation。
   return CloudOperationInvocationContext(
-    surfaceId: AppUiSurfaces.personalAssistantDialog.id,
+    surfaceId: AppUiSurfaces.chatList.id,
     clientPageId: clientPageId,
-    routeId: AppUiSurfaces.personalAssistantDialog.routeId,
+    routeId: AppUiSurfaces.chatList.routeId,
     actor: CloudOperationActorContext(
       accountId: accountId.isEmpty ? null : accountId,
       personaId: personaId.isEmpty ? null : personaId,
@@ -408,18 +476,25 @@ class _AppLogCacheTelemetrySink implements CacheTelemetrySink {
   }
 }
 
-/// Homepage Repository（主页搜索、详情、认领与治理）
-final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteHomepageRepository(
-      queryAdapter: ref.watch(_homepageQueryAdapterProvider),
-      httpClient: ref.watch(cloudHttpClientProvider),
-    ),
-    mock: MockHomepageRepository.new,
+/// Homepage facet bundle 只在 composition root 聚合同一 Remote 实例。
+/// 页面只能注入下方的窄 Query / CommandWriter capability。
+final homepageFacetSetProvider = Provider<HomepageFacetSet>((ref) {
+  final commandWriter = ref.watch(_homepageCommandWriterProvider);
+  return HomepageFacetProjectionAdapter(
+    query: ref.watch(_homepageQueryAdapterProvider),
+    candidateWriter: commandWriter,
+    claimRequestWriter: commandWriter,
+    statusReportWriter: commandWriter,
   );
 });
+
+final homepageQueryProvider = Provider<HomepageQuery>(
+  (ref) => ref.watch(homepageFacetSetProvider),
+);
+
+final homepageCommandWriterProvider = Provider<HomepageCommandWriter>(
+  (ref) => ref.watch(homepageFacetSetProvider),
+);
 
 final homepageQueryActorContextProvider = Provider<CloudOperationActorContext>((
   ref,
@@ -457,469 +532,20 @@ final _homepageQueryAdapterProvider = Provider<RemoteHomepageQueryAdapter>((
   );
 });
 
-/// Chat Repository（按业务对象组织的端侧入口）
-final chatRepositoryProvider = Provider<ChatRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  final ownerUserId = ref.watch(resolvedOwnerUserIdProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteChatRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-      mergeRequestContext: (base) async {
-        final ctx = ref.read(activePersonaContextProvider).asData?.value;
-        final resolvedOwnerUserId = ctx?.ownerUserId.trim() ?? '';
-        return CloudRequestHeaders.withOwnerSubAccountContext(
-          base,
-          ownerUserId: resolvedOwnerUserId.isNotEmpty
-              ? resolvedOwnerUserId
-              : ownerUserId,
-          subAccountId: ctx?.subAccountId ?? '',
-          subAccountContextVersion: ctx?.personaContextVersion ?? '',
-        );
-      },
-    ),
-    mock: MockChatRepository.new,
-  );
-});
-
-/// Message command production composition is Remote-only. Alpha and tests
-/// override this Facet from their separate composition roots.
-final chatMessageCommandWriterProvider = Provider<ChatMessageCommandWriter>((
+/// production 命令写面只绑定 generated Remote adapter；不含 fixture 回退。
+final _homepageCommandWriterProvider = Provider<RemoteHomepageCommandWriter>((
   ref,
 ) {
-  return RemoteChatMessageCommandWriter(
+  final actorContext = ref.watch(homepageQueryActorContextProvider);
+  return RemoteHomepageCommandWriter(
     client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId, idempotencyKey) {
-      final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
-      final persona = ref.read(activePersonaContextProvider).asData?.value;
-      final personaId = persona?.subAccountId.trim() ?? '';
-      return CloudOperationInvocationContext(
-        surfaceId: AppUiSurfaces.chatDetail.id,
-        clientPageId: clientPageId,
-        routeId: AppUiSurfaces.chatDetail.routeId,
-        actor: CloudOperationActorContext(
-          accountId: accountId.isEmpty ? null : accountId,
-          personaId: personaId.isEmpty ? null : personaId,
+    invocationContext: (clientPageId, surface) =>
+        CloudOperationInvocationContext(
+          surfaceId: surface.id,
+          routeId: surface.routeId,
+          clientPageId: clientPageId,
+          idempotencyKey: const Uuid().v4(),
+          actor: actorContext,
         ),
-        idempotencyKey: idempotencyKey,
-      );
-    },
-  );
-});
-
-/// Production realtime 连接：固定 Remote-only。
-/// Alpha fixture 只能由独立 runner 在 composition root 覆盖整个 notifier。
-final realtimeConnectionManagerProvider =
-    NotifierProvider<RealtimeConnectionNotifier, TransportState>(
-      () => RealtimeConnectionNotifier(
-        currentUserIdResolver: (ref) => ref.watch(currentUserIdProvider).trim(),
-      ),
-    );
-
-/// 会话缓存（按 namespace 隔离，支持列表增量监听）
-final conversationCacheProvider = Provider<ConversationCacheService>((ref) {
-  return ConversationCacheService();
-});
-
-/// 用户资料缓存（LRU 内存 200 条 + 磁盘持久化无 TTL）
-final userProfileCacheProvider = Provider<UserProfileCacheService>((ref) {
-  return UserProfileCacheService(persistToPreferences: true);
-});
-
-final postObjectCacheProvider = Provider<PostObjectCacheService>((ref) {
-  final profile = ref.watch(appResourceCacheProfileProvider);
-  return PostObjectCacheService(
-    maxMemoryEntries: profile.maxPostObjectCacheEntries,
-  );
-});
-
-final contentQuerySnapshotStoreProvider = Provider<ContentQuerySnapshotStore>((
-  ref,
-) {
-  return ContentQuerySnapshotStore(
-    persistToPreferences: true,
-    telemetrySink: ref.watch(cacheTelemetrySinkProvider),
-  );
-});
-
-final cacheManagementServiceProvider = Provider<CacheManagementService>((ref) {
-  Future<void> clearEphemeralResources() async {
-    await AppImageCacheController.clearTemporaryImages();
-    await ref.read(mediaDownloadCacheProvider).clear();
-  }
-
-  Future<void> clearAllRebuildableResources() async {
-    await AppImageCacheController.clearAllRebuildableImages();
-    await ref.read(mediaDownloadCacheProvider).clear();
-  }
-
-  return CacheManagementService(
-    postCache: ref.watch(postObjectCacheProvider),
-    querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
-    userProfileCache: ref.watch(userProfileCacheProvider),
-    conversationCache: ref.watch(conversationCacheProvider),
-    clearTemporaryImages: clearEphemeralResources,
-    clearAllRebuildableImages: clearAllRebuildableResources,
-  );
-});
-
-/// 会话同步引擎
-final conversationSyncProvider = Provider<ConversationSyncService>((ref) {
-  return ConversationSyncService(
-    repo: ref.watch(chatRepositoryProvider),
-    cache: ref.watch(conversationCacheProvider),
-    userSyncRepository: ref.watch(userSyncRepositoryProvider),
-    store: ref.watch(localChatSearchStoreProvider),
-    personaContextLoader: ref.read(activePersonaContextLoaderProvider),
-  );
-});
-
-final localChatSearchStoreProvider = Provider<LocalChatSearchStore>((ref) {
-  return LocalChatSearchStore.shared;
-});
-
-final localCircleGroupSnapshotStoreProvider =
-    Provider<LocalCircleGroupSnapshotStore>((ref) {
-      return LocalCircleGroupSnapshotStore.shared;
-    });
-
-/// User Repository（按业务对象组织的端侧入口）
-final userRepositoryProvider = Provider<UserRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  final ownerUserId = ref.watch(resolvedOwnerUserIdProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteUserRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-      mergeRequestContext: (base) async {
-        return CloudRequestHeaders.withOwnerSubAccountContext(
-          base,
-          ownerUserId: ownerUserId,
-        );
-      },
-    ),
-    mock: MockUserRepository.new,
-  );
-});
-
-final userSyncRepositoryProvider = Provider<UserSyncRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  final ownerUserId = ref.watch(resolvedOwnerUserIdProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteUserSyncRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-      mergeRequestContext: (base) async {
-        return CloudRequestHeaders.withOwnerSubAccountContext(
-          base,
-          ownerUserId: ownerUserId,
-        );
-      },
-    ),
-    mock: MockUserSyncRepository.new,
-  );
-});
-
-final followingSubjectRepositoryProvider = Provider<FollowingSubjectRepository>(
-  (ref) {
-    final mode = ref.watch(appDataSourceModeProvider);
-    return cloudRepositoryImplForMode(
-      mode,
-      remote: () => RemoteFollowingSubjectRepository(
-        httpClient: ref.watch(cloudHttpClientProvider),
-      ),
-      mock: MockFollowingSubjectRepository.new,
-    );
-  },
-);
-
-/// 当前活动分身上下文。只有 mock 模式允许本地回退；remote 模式必须显式失败，避免关键写路径静默降级到 user。
-final activePersonaContextProvider =
-    FutureProvider<ActivePersonaContextViewData>((ref) async {
-      final mode = ref.read(appDataSourceModeProvider);
-      try {
-        return await ref.read(userRepositoryProvider).getActivePersonaContext();
-      } catch (_) {
-        if (mode == AppDataSourceMode.remote) {
-          rethrow;
-        }
-        final currentUser = ref.read(userDataProvider);
-        final fallbackId = currentUser?.id.isNotEmpty == true
-            ? currentUser!.id
-            : ref.read(currentUserIdProvider);
-        return ActivePersonaContextViewData.fallback(
-          subAccountId:
-              currentUser?.metadata?['subAccountId']?.toString() ?? fallbackId,
-          ownerUserId:
-              currentUser?.metadata?['ownerUserId']?.toString() ?? fallbackId,
-          subjectType:
-              currentUser?.metadata?['subjectType']?.toString() ?? 'owner',
-          displayName:
-              currentUser?.displayName ?? currentUser?.username ?? fallbackId,
-          avatarUrl: currentUser?.avatarUrlOrAvatar ?? '',
-          personaContextVersion:
-              currentUser?.metadata?['personaContextVersion']?.toString() ?? '',
-        );
-      }
-    });
-
-/// ContactDiscovery Repository（通讯录批量哈希匹配）
-final contactDiscoveryRepositoryProvider = Provider<ContactDiscoveryRepository>(
-  (ref) {
-    final mode = ref.watch(appDataSourceModeProvider);
-    return cloudRepositoryImplForMode(
-      mode,
-      remote: () => RemoteContactDiscoveryRepository(
-        httpClient: ref.watch(cloudHttpClientProvider),
-      ),
-      mock: MockContactDiscoveryRepository.new,
-    );
-  },
-);
-
-/// Behavior Repository（行为上报，驱动实时推荐）
-final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    final feedSessionNotifier = ref.read(feedSessionProvider.notifier);
-    final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
-    final personaId = ref.watch(currentUserIdProvider).trim();
-    final repo = RemoteBehaviorRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-      queuePartition: ActorQueuePartition(
-        environment: CloudRuntimeConfig.appRuntimeEnv,
-        accountId: accountId,
-        personaId: personaId,
-        deviceId: CloudRequestHeaders.deviceActorId ?? '',
-      ),
-      queueStorage: ref.watch(actorQueueStorageProvider),
-      feedSessionIdProvider: () => feedSessionNotifier.sessionId,
-    );
-    ref.onDispose(repo.dispose);
-    return repo;
-  }
-  return MockBehaviorRepository();
-});
-
-/// 推荐反馈唯一上报端口。采集/计算 Tracker 只能依赖该端口。
-final behaviorReporterProvider = Provider<BehaviorReporter>(
-  (ref) => ref.watch(behaviorRepositoryProvider),
-);
-
-/// Content Engagement Tracker（统一深度行为追踪 SDK）
-final contentEngagementTrackerProvider = Provider<ContentEngagementTracker>((
-  ref,
-) {
-  final tracker = ContentEngagementTracker(
-    reporter: ref.watch(behaviorReporterProvider),
-  );
-  ref.onDispose(() => tracker.dispose());
-  return tracker;
-});
-
-/// Lightweight OpsEvent journey funnel tracker（无完整 Behavior schema 的页面场景）
-final journeyEventTrackerProvider = Provider<JourneyEventTracker>((ref) {
-  return JourneyEventTracker(
-    telemetryReporter: ref.watch(appTelemetryReporterProvider),
-  );
-});
-
-/// UserProfile Repository（用户主页：帖子 / 作品集 / 生活记录）
-final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteUserProfileRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-    ),
-    mock: () => const MockUserProfileRepository(),
-  );
-});
-
-/// Block Repository（拉黑/取消拉黑用户）
-final blockRepositoryProvider = Provider<BlockRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () =>
-        RemoteBlockRepository(httpClient: ref.watch(cloudHttpClientProvider)),
-    mock: MockBlockRepository.new,
-  );
-});
-
-/// Intersection Repository
-final intersectionRepositoryProvider = Provider<IntersectionRepository>(
-  (ref) => cloudRepositoryImplForMode(
-    ref.watch(appDataSourceModeProvider),
-    remote: () => RemoteIntersectionRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-      currentUserId: ref.watch(currentUserIdProvider),
-    ),
-    mock: MockIntersectionRepository.new,
-  ),
-);
-
-/// KeywordBlock Repository（屏蔽词设置）
-final keywordBlockRepositoryProvider = Provider<KeywordBlockRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteKeywordBlockRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-    ),
-    mock: MockKeywordBlockRepository.new,
-  );
-});
-
-/// Circle Repository（圈子管理、成员、存储、Feed）
-final circleRepositoryProvider = Provider<CircleRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () =>
-        RemoteCircleRepository(httpClient: ref.watch(cloudHttpClientProvider)),
-    mock: MockCircleRepository.new,
-  );
-});
-
-final activePersonaContextLoaderProvider = Provider<PersonaContextLoader>((
-  ref,
-) {
-  return ref.read(userRepositoryProvider).getActivePersonaContext;
-});
-
-final localChatSearchSyncProvider = Provider<LocalChatSearchSyncService>((ref) {
-  return LocalChatSearchSyncService(
-    chatRepository: ref.watch(chatRepositoryProvider),
-    conversationCache: ref.watch(conversationCacheProvider),
-    store: ref.watch(localChatSearchStoreProvider),
-    personaContextLoader: ref.watch(activePersonaContextLoaderProvider),
-    telemetrySink: ref.watch(cacheTelemetrySinkProvider),
-  );
-});
-
-final searchRepositoryProvider = Provider<SearchRepository>((ref) {
-  // 本地扇出 composite：内部子仓库（content/circle/user/entity/integration）在 remote
-  // 模式下本身即 Remote 实现，叠加 chat/circle.group 本地命名空间检索。suggest 模式与
-  // mock 模式都复用它；remote 结果模式由 RemoteSearchRepository 接管云侧 /search。
-  final localFanout = buildAppSearchRepository(
-    circleRepository: ref.watch(circleRepositoryProvider),
-    circleGroupQuery: ref.watch(globalSearchCircleGroupQueryProvider),
-    contentPostSearchRepository: ref.watch(contentPostSearchRepositoryProvider),
-    homepageRepository: ref.watch(homepageRepositoryProvider),
-    locationSearchReader: ref.watch(globalSearchLocationReaderProvider),
-    userProfileRepository: ref.watch(userProfileRepositoryProvider),
-    localChatSearchStore: ref.watch(localChatSearchStoreProvider),
-    localChatSearchSyncService: ref.watch(localChatSearchSyncProvider),
-    localCircleGroupSnapshotStore: ref.watch(
-      localCircleGroupSnapshotStoreProvider,
-    ),
-    personaContextLoader: ref.watch(activePersonaContextLoaderProvider),
-  );
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteSearchRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-      localFanout: localFanout,
-    ),
-    mock: () => localFanout,
-  );
-});
-
-/// RTC Repository（实时通话：发起、接听、挂断、录制等）
-final rtcRepositoryProvider = Provider<RtcRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () =>
-        RemoteRtcRepository(httpClient: ref.watch(cloudHttpClientProvider)),
-    mock: MockRtcRepository.new,
-  );
-});
-
-/// RelationshipCapability Repository（关系能力位投影，用户主页五态按钮矩阵 + RTC 门禁）
-final relationshipCapabilityRepositoryProvider =
-    Provider<RelationshipCapabilityRepository>((ref) {
-      final mode = ref.watch(appDataSourceModeProvider);
-      return cloudRepositoryImplForMode(
-        mode,
-        remote: () => RemoteRelationshipCapabilityRepository(
-          httpClient: ref.watch(cloudHttpClientProvider),
-        ),
-        mock: MockRelationshipCapabilityRepository.new,
-      );
-    });
-
-/// CallSettings Repository（来电铃声与响铃偏好）
-final callSettingsRepositoryProvider = Provider<CallSettingsRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteCallSettingsRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-    ),
-    mock: MockCallSettingsRepository.new,
-  );
-});
-
-/// AppearanceSettings Repository（外观与字号偏好）
-final appearanceSettingsRepositoryProvider =
-    Provider<AppearanceSettingsRepository>((ref) {
-      final mode = ref.watch(appDataSourceModeProvider);
-      return cloudRepositoryImplForMode(
-        mode,
-        remote: () => RemoteAppearanceSettingsRepository(
-          httpClient: ref.watch(cloudHttpClientProvider),
-        ),
-        mock: MockAppearanceSettingsRepository.new,
-      );
-    });
-
-/// Greeting Repository（打招呼请求箱）
-final greetingRepositoryProvider = Provider<GreetingRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteGreetingRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-    ),
-    mock: MockGreetingRepository.new,
-  );
-});
-
-/// Tag Repository（标签体系查询、建议、校验与关系图谱）
-final tagRepositoryProvider = Provider<TagRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    return RemoteTagRepository(httpClient: ref.watch(cloudHttpClientProvider));
-  }
-  return MockTagRepository();
-});
-
-/// Media Upload Manager（统一媒体上传队列 + 并发 + 重试 + 离线恢复）
-final mediaUploadManagerProvider = Provider<MediaUploadManager>((ref) {
-  final coordinator = ContentMediaUploadCoordinator(
-    media: ref.watch(chatDetailContentMediaFacetProvider),
-    fileStorage: ref.watch(fileStorageGatewayProvider),
-    uploadObject: ref.watch(contentMediaObjectUploadProvider),
-  );
-  final manager = MediaUploadManager(
-    coordinator: coordinator,
-    sourceReader: ref.watch(contentMediaSourceReaderProvider),
-    uploadStream: ref.watch(contentMediaStreamObjectUploadProvider),
-  );
-  manager.startOfflineMonitor();
-  ref.onDispose(manager.dispose);
-  return manager;
-});
-
-/// Media Download Cache（LRU 媒体下载缓存，默认 200MB）
-final mediaDownloadCacheProvider = Provider<MediaDownloadCache>((ref) {
-  final profile = ref.watch(appResourceCacheProfileProvider);
-  return MediaDownloadCache(
-    maxCacheSizeMb: profile.maxMediaDownloadCacheSizeMb,
-    maxConcurrentDownloads: profile.maxConcurrentMediaDownloads,
-    telemetrySink: ref.watch(cacheTelemetrySinkProvider),
   );
 });

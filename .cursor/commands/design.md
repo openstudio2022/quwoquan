@@ -1,35 +1,18 @@
 # /design
 
-目标：冻结架构设计。
+目标：记录满足已冻结规格所需的当前有效架构决定。
 
-准入：
-- `/prd` 或 `/explore` 已明确目标、范围、验收和一棵树归属。
-- 需要明确边界、依赖、数据流、metadata/codegen、观测、回滚或迁移方案。
-
-设计只作用于：
-- AppRoot
-- `L1_domain_service`
-- `L2_business_capability`
-
-Story 不产生 `design.md`；Story 发现设计缺口时，上收到所属业务能力。
+设计只作用于 AppRoot、L1 和达到门槛的 L2；L3 不创建 `design.md`。L2 只有跨域/服务、外部依赖、状态或所有权变化、迁移、非平凡质量权衡、多方案或特有 rollout/rollback 时创建 design，否则指向父 L1 `DEC-###`。
 
 执行：
-- 读取 `docs/agent_context_contract.md`，完成 `Pre-work Reflection`。
-- 对齐 `quwoquan_service/contracts/metadata/**`、DDD 依赖方向、环境/seed、错误码、观测和测试证据。
-- 只在 AppRoot / L1 / L2 层写设计；Story 只引用上层设计。
 
-产出：
-- 对应层级 `design.md`。
-- metadata/codegen、数据迁移、feature flag、观测、回滚方案。
-- 三层测试 证据矩阵。
+1. 读取最小规格父链和 canonical metadata。
+2. 写清背景/非目标、所有权、协作与数据流、DEC、失败恢复、特有质量与观测、当前迁移回滚。
+3. schema/DTO/path/error 文本不复制，只引用 metadata；类和文件清单回到代码。
+4. Story 发现设计缺口时上收到 L2/L1 DEC，并让 Story spec 指向该 DEC。
+5. 删除已失效设计，不保留 decision log、revision、兼容方案或历史记录。
+6. 运行 `make verify-feature-tree`。
 
-出口：
-- 设计能被 `/baseline` 或 `/dev` 消费。
-- 明确 metadata/codegen、测试、观测、回滚和风险处置。
-- 无 Story 级 `design.md` 漂移。
+设计复述规格、绕过 metadata、缺 owner/一致性/失败恢复或为 L3 建 design 时返回 `GATE_BLOCK`。
 
-阻断：设计复述需求、绕过 metadata、缺回滚或测试证据时返回 `GATE_BLOCK`。
-
-自然语言等价触发：用户说“设计一下方案”“梳理架构”“明确边界/回滚/观测”时，也按 `/design` 语义执行。
-
-协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。
+自然语言等价触发：“设计方案”“梳理架构”“明确边界/回滚/观测”。

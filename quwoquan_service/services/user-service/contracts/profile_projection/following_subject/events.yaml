@@ -1,0 +1,7 @@
+events: []
+subscriptions:
+- PersonaFollowStateChanged
+- CircleJoined
+- CircleLeft
+- SubjectFollowStateChanged
+- FollowingSubjectVisited

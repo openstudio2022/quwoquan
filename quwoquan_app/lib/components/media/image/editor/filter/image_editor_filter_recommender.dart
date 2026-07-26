@@ -67,7 +67,7 @@ class ImageEditorFilterRecommender {
     required ImageEditorFilterImageFeatures features,
     required List<ImageEditorFilterSceneRecognition> scenes,
   }) {
-    final p = preset.params;
+    final p = preset.adjustments;
     double score = 0;
 
     final darkNeed = (0.52 - features.meanLuma).clamp(0.0, 0.52) / 0.52;
@@ -82,7 +82,7 @@ class ImageEditorFilterRecommender {
     final flatNeed = (0.09 - features.texture).clamp(0.0, 0.09) / 0.09;
     final harshNeed = (features.texture - 0.17).clamp(0.0, 0.83) / 0.83;
 
-    double param(String key) => (p[key] ?? 0).toDouble();
+    double param(String key) => p[key];
     score +=
         darkNeed *
         (param('brightness') +
@@ -184,7 +184,7 @@ class ImageEditorFilterRecommender {
   }
 
   double _sceneParamBonus({
-    required Map<String, double> params,
+    required ImageEditorFilterAdjustments params,
     required List<ImageEditorFilterSceneRecognition> scenes,
   }) {
     if (scenes.isEmpty) return 0;
@@ -231,7 +231,7 @@ class ImageEditorFilterRecommender {
       final expected = expectations[scene.type];
       if (expected == null) continue;
       expected.forEach((key, direction) {
-        final value = (params[key] ?? 0).clamp(-100, 100) / 100.0;
+        final value = params[key].clamp(-100, 100) / 100.0;
         final align = (value * direction).clamp(-1.0, 1.0);
         bonus += align * scene.score * 1.2;
       });
@@ -250,9 +250,9 @@ class ImageEditorFilterRecommender {
   /// 降色类预设：黑白分类或明显降低饱和度/鲜艳度的参数。
   bool _isColorReducingPreset(ImageEditorFilterPreset preset) {
     if (preset.categoryId == 'bw_art') return true;
-    final p = preset.params;
-    final sat = (p['saturation'] ?? 0).toDouble();
-    final vibrance = (p['vibrance'] ?? 0).toDouble();
+    final p = preset.adjustments;
+    final sat = p.saturation;
+    final vibrance = p.vibrance;
     if (sat <= -25) return true;
     if (sat <= 0 && vibrance <= -15) return true;
     return false;
@@ -264,16 +264,16 @@ class ImageEditorFilterRecommender {
   /// - 高光/阴影失衡时，优先纠偏参数
   double _whitelistBonus({
     required ImageEditorFilterImageFeatures features,
-    required Map<String, double> params,
+    required ImageEditorFilterAdjustments params,
   }) {
     double bonus = 0;
-    final saturation = (params['saturation'] ?? 0).toDouble();
-    final vibrance = (params['vibrance'] ?? 0).toDouble();
-    final contrast = (params['contrast'] ?? 0).toDouble();
-    final structure = (params['structure'] ?? 0).toDouble();
-    final sharpen = (params['sharpen'] ?? 0).toDouble();
-    final highlight = (params['highlight'] ?? 0).toDouble();
-    final shadow = (params['shadow'] ?? 0).toDouble();
+    final saturation = params.saturation;
+    final vibrance = params.vibrance;
+    final contrast = params.contrast;
+    final structure = params.structure;
+    final sharpen = params.sharpen;
+    final highlight = params.highlight;
+    final shadow = params.shadow;
 
     if (features.meanSaturation > 0.24 && (saturation > 4 || vibrance > 4)) {
       bonus += 1.2;
@@ -300,12 +300,12 @@ class ImageEditorFilterRecommender {
   double _blacklistPenalty({
     required ImageEditorFilterPreset preset,
     required ImageEditorFilterImageFeatures features,
-    required Map<String, double> params,
+    required ImageEditorFilterAdjustments params,
   }) {
     double penalty = 0;
-    final saturation = (params['saturation'] ?? 0).toDouble();
-    final vibrance = (params['vibrance'] ?? 0).toDouble();
-    final contrast = (params['contrast'] ?? 0).toDouble();
+    final saturation = params.saturation;
+    final vibrance = params.vibrance;
+    final contrast = params.contrast;
 
     // 灰度风险：图像越偏灰，降色越要谨慎。
     if (features.grayRatio > 0.45 && saturation <= 0) {

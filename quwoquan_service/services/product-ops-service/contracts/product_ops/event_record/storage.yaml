@@ -1,0 +1,133 @@
+backend: observability_log_sink
+environment_backends:
+  alpha:
+    adapter: ext.obs.postgres_telemetry_local
+    backend: postgres
+  beta:
+    adapter: ext.obs.postgres_telemetry_local
+    backend: postgres
+  gamma:
+    adapter: ext.obs.elasticsearch_local
+    backend: elasticsearch
+  prod:
+    adapter: ext.obs.aliyun_sls
+    backend: aliyun_sls
+fallback: forbidden
+logstores:
+  raw:
+    provider_config_keys:
+      elasticsearch_local: elasticsearch.raw_index
+      aliyun_sls: sls.raw_logstore
+    default_name: app-product-telemetry-raw
+    ttl_days: 3
+    time_field: ingestedAt
+    business_time_field: occurredAt
+    internal_fields:
+    - _batchKey
+    - _batchIndex
+    - ingestedAt
+    indexed_fields:
+    - logType
+    - eventType
+    - pageName
+    - appVersion
+    - networkClass
+    - deviceManufacturer
+    - deviceModel
+    - errorCode
+    - operationId
+    - httpStatus
+    - occurredAt
+    - sessionId
+    non_indexed_fields:
+    - callStack
+  startup_diagnostic:
+    provider_config_keys:
+      elasticsearch_local: elasticsearch.startup_diagnostic_index
+      aliyun_sls: sls.startup_diagnostic_logstore
+    default_name: app-startup-diagnostic-raw
+    ttl_days: 3
+    forbidden_fields:
+    - sessionId
+    - userId
+    - pageName
+    - callStack
+  runtime_diagnostic:
+    provider_config_keys:
+      elasticsearch_local: elasticsearch.runtime_log_index
+      aliyun_sls: sls.runtime_logstore
+    default_name: runtime-diagnostics-raw
+    ttl_days: 3
+    forbidden_fields:
+    - rawCredential
+    - rawToken
+    - rawEndpoint
+  aggregate:
+    provider_config_keys:
+      elasticsearch_local: elasticsearch.aggregate_index
+      aliyun_sls: sls.aggregate_logstore
+    default_name: app-product-telemetry-hourly
+    ttl_days: 90
+    internal_fields:
+    - sessionHashes
+    forbidden_fields:
+    - sessionId
+    - userId
+    - callStack
+    - _batchKey
+idempotency:
+  request_header: Idempotency-Key
+  digest: canonical_json_sha256
+  batch_key: sha256_hex_256_bits
+  redis_state_ttl_hours: 72
+  raw_deduplication_fields:
+  - _batchKey
+  - _batchIndex
+  duplicate_ack_requires_complete_batch: true
+  proof_is_not_batch_identity: true
+wire_projection:
+  query_metadata:
+    source_field: sourceKind
+    allowed_values:
+    - raw_records
+    - hourly_rollup
+    freshness_field: freshness
+    generated_through_field: generatedThrough
+    lag_seconds_field: lagSeconds
+  backend_identity:
+    response_exposure: forbidden
+    internal_metric_only: true
+local_adapters:
+  canonical_port: ObservabilityLogSinkPort
+  alpha:
+    backend: postgres_telemetry_local
+    schema: telemetry_local_integration
+    fallback: forbidden
+  beta:
+    backend: postgres_telemetry_local
+    database: quwoquan_telemetry_local
+    schema: telemetry_local_beta
+    roles:
+    - telemetry_writer
+    - telemetry_reader
+    - telemetry_rollup
+    - telemetry_migrator
+    random_schema_per_test: true
+    destructive_cleanup: drop_schema_cascade
+    fallback: forbidden
+  gamma:
+    backend: elasticsearch_local
+    endpoint_source: local_env_port_manifest
+    indices:
+    - app-product-telemetry-raw
+    - app-startup-diagnostic-raw
+    - runtime-diagnostics-raw
+    - app-product-telemetry-hourly
+    fallback: forbidden
+query_facade:
+  portal_direct_cloud_access: false
+  summary_source: hourly_rollup
+  drilldown_source: raw_records
+  raw_window_days: 3
+  drilldown_max_items: 100
+role: append_only

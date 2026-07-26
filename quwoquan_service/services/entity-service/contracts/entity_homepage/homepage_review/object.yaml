@@ -1,0 +1,56 @@
+kind: aggregate_root
+description: '共享主页评价。每条评价拥有独立生命周期并通过 homepageId 引用 Homepage；
+
+  Homepage 仅消费评价摘要 Slice，不拥有无界评价集合。
+
+  '
+identity:
+  fields:
+  - reviewId
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: command_facade
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: homepage
+  on_delete: tombstone
+  reference_fields:
+  - homepageId
+  target_object: entity.Homepage
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: author
+  on_delete: retain
+  reference_fields:
+  - authorPersonaId
+  target_object: user.Persona
+capabilities:
+- auditable
+business_rules:
+- author persona 对同一 homepage 仅持有一条评价记录（唯一索引 authorPersonaId+homepageId）
+- 软删后再次创建复活同一聚合：重置 rating/body/tagRefs、status 回 active、version 继续递增
+- rating 必须处于 1 到 5，修改使用服务端内部 version CAS 并有限重放；调用方不提交版本
+- 只有 author 可以更新或删除自己的评价；删除为 active -> deleted 命名迁移
+- authorDisplayNameSnapshot/authorAvatarUrlSnapshot 由端侧在发表/更新时快照提交，不跨域回填
+- Homepage 只消费评价投影（averageRating/ratingCount/highlightTags），不与评价聚合强一致提交
+lifecycle:
+  states:
+  - active
+  - deleted
+  transitions:
+  - from: active
+    command: DeleteHomepageReview
+    to: deleted
+  - from: deleted
+    command: CreateHomepageReview
+    to: active
+  optimistic_concurrency: version
+  idempotency: command_receipt

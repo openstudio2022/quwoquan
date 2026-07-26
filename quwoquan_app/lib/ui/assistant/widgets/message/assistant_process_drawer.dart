@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
@@ -40,7 +41,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   }
 
   String _referenceCountLabel(int count) {
-    return UITextConstants.assistantProcessReferenceCountTemplate.replaceFirst(
+    return AssistantText.assistantProcessReferenceCountTemplate.replaceFirst(
       '%s',
       count.toString(),
     );
@@ -56,7 +57,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
         : _viewModel.processedDocumentCount;
     if (searchedCount > 0) {
       metrics.add(
-        UITextConstants.assistantProcessProcessedCountTemplate.replaceFirst(
+        AssistantText.assistantProcessProcessedCountTemplate.replaceFirst(
           '%s',
           searchedCount.toString(),
         ),
@@ -64,7 +65,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     }
     if (acceptedCount > 0) {
       metrics.add(
-        UITextConstants.assistantProcessAcceptedCountChipTemplate.replaceFirst(
+        AssistantText.assistantProcessAcceptedCountChipTemplate.replaceFirst(
           '%s',
           acceptedCount.toString(),
         ),
@@ -72,7 +73,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     }
     if (_viewModel.elapsedMs >= 1000) {
       metrics.add(
-        UITextConstants.assistantProcessElapsedTemplate.replaceFirst(
+        AssistantText.assistantProcessElapsedTemplate.replaceFirst(
           '%s',
           _elapsedSeconds().toString(),
         ),
@@ -83,9 +84,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
 
   String _headerLabel() {
     if (_viewModel.isRunning) {
-      return UITextConstants.assistantProcessRunningSummary;
+      return AssistantText.assistantProcessRunningSummary;
     }
-    return UITextConstants.assistantProcessCompletedSummary;
+    return AssistantText.assistantProcessCompletedSummary;
   }
 
   @override
@@ -519,13 +520,14 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     final source = reference.source.trim();
     final title = reference.title.trim().isNotEmpty
         ? reference.title.trim()
-        : (source.isNotEmpty ? source : '参考来源 ${index + 1}');
-    final url = reference.url.trim();
+        : (source.isNotEmpty
+              ? source
+              : AssistantText.assistantReferenceIndexed(index + 1));
     return GestureDetector(
-      onTap: url.isNotEmpty
+      onTap: widget.onReferenceTap != null
           ? () => widget.onReferenceTap?.call(
-              AssistantCitation(
-                url: url,
+              AssistantCitation.fromDestination(
+                destination: reference.destination,
                 title: reference.title,
                 source: reference.source,
               ),
@@ -541,7 +543,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
             style: TextStyle(
               fontSize: AppTypography.base,
               fontWeight: FontWeight.w500,
-              color: url.isNotEmpty
+              color: widget.onReferenceTap != null
                   ? linkColor
                   : textColor.withValues(alpha: 0.88),
               height: AppTypography.lineHeightRelaxed,

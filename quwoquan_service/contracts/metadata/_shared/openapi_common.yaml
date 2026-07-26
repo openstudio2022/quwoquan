@@ -137,13 +137,6 @@ components:
       schema:
         type: string
       description: subAccountID，对外可见主体标识
-    XClientSubAccountContextVersion:
-      name: X-Client-Sub-Account-Context-Version
-      in: header
-      required: false
-      schema:
-        type: string
-      description: subAccount 上下文版本
     XClientPageId:
       name: X-Client-Page-Id
       in: header
@@ -187,6 +180,22 @@ components:
       schema:
         type: string
       description: 端侧版本标识（用于回归与影响范围定位）
+    XClientRegionCode:
+      name: X-Client-Region-Code
+      in: header
+      required: false
+      schema:
+        type: string
+        pattern: '^[0-9]{6}$'
+      description: 端侧省级行政区划码（GB/T 2260 六位，如 330000=浙江）；用于灰度路由与影响范围分析，缺失时不参与地域维度匹配
+    XClientCarrier:
+      name: X-Client-Carrier
+      in: header
+      required: false
+      schema:
+        type: string
+        enum: [chinamobile, chinaunicom, chinatelecom, chinabroadnet]
+      description: 端侧电信运营商；用于灰度路由与网络质量分析，缺失时不参与运营商维度匹配
     Cursor:
       name: cursor
       in: query
@@ -249,9 +258,11 @@ components:
             - USER
             - CHAT
             - RTC
+            - REALTIME
             - OPS
             - ASSISTANT
             - NOTIFICATION
+            - TAG
             - DB
             - MQ
             - CACHE

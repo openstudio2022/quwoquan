@@ -1,0 +1,57 @@
+read_model: AppMessageDetailSlice
+description: '当前账户拥有的单条 AppMessage 权威查询切片。HTTP body 直接展开为
+
+  AppMessage 字段；Reader 必须同时以 messageId 与 authenticated account
+
+  过滤，未命中统一返回 app_message_not_found，避免泄露对象存在性。
+
+  '
+storage_backend: mongodb
+collection: app_messages
+projection_mode: authoritative_query
+source_entities:
+- Notification
+consumers:
+- notification-service
+- app
+client_projection:
+  dart_class: AppMessage
+  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/notification/app_message_contracts.dart
+fields:
+- name: messageId
+  type: string
+- name: userId
+  type: string
+- name: messageType
+  type: string
+- name: source
+  type: string
+- name: sourceId
+  type: string
+- name: destination
+  type: AppMessageDestination
+- name: title
+  type: string
+- name: summary
+  type: string
+- name: target
+  type: AppMessageTarget
+- name: read
+  type: bool
+- name: createdAt
+  type: timestamp
+- name: deliveredAt
+  type: timestamp
+  nullable: true
+- name: ackedAt
+  type: timestamp
+  nullable: true
+- name: readAt
+  type: timestamp
+  nullable: true
+indexes:
+- name: ux_app_message_owner_id
+  keys:
+    userId: 1
+    messageId: 1
+  unique: true

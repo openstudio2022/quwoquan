@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_user_state_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -9,7 +12,10 @@ class ChatSettingsNotifier extends Notifier<ConversationUserStateDto?> {
 
   final String conversationId;
 
-  ChatRepository get _repo => ref.read(chatRepositoryProvider);
+  ChatMessageRepository get _messageRepo =>
+      ref.read(chatMessageRepositoryProvider);
+  ChatConversationRepository get _conversationRepo =>
+      ref.read(chatConversationRepositoryProvider);
 
   @override
   ConversationUserStateDto? build() => null;
@@ -36,12 +42,20 @@ class ChatSettingsNotifier extends Notifier<ConversationUserStateDto?> {
       updatedAt: DateTime.now(),
     );
     try {
-      await _repo.updateConversationSettings(
+      await _conversationRepo.updateConversationSettings(
         conversationId: conversationId,
         muted: newMuted,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 乐观切换失败回滚，并结构化上报。
       state = current;
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'chat.settings.toggle_mute',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     }
   }
 
@@ -62,19 +76,27 @@ class ChatSettingsNotifier extends Notifier<ConversationUserStateDto?> {
       updatedAt: DateTime.now(),
     );
     try {
-      await _repo.updateConversationSettings(
+      await _conversationRepo.updateConversationSettings(
         conversationId: conversationId,
         pinned: newPinned,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 乐观切换失败回滚，并结构化上报。
       state = current;
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'chat.settings.toggle_pin',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     }
   }
 
   /// 标记消息已读，同时更新本地 unreadCount。
   Future<void> markAsRead(String messageId) async {
     try {
-      await _repo.markAsRead(
+      await _messageRepo.markAsRead(
         conversationId: conversationId,
         messageId: messageId,
       );
@@ -92,14 +114,23 @@ class ChatSettingsNotifier extends Notifier<ConversationUserStateDto?> {
           updatedAt: DateTime.now(),
         );
       }
-    } catch (_) {
-      // 静默失败，下次打开会话时再同步
+    } catch (error, stackTrace) {
+      // 已读失败允许下次打开会话再同步，但必须上报（静默即未读角标漂移不可查）。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'chat.settings.mark_as_read',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     }
   }
 }
 
 /// 按 conversationId 创建独立的会话设置管理器。
-final chatSettingsProvider = NotifierProvider.family<
-    ChatSettingsNotifier, ConversationUserStateDto?, String>(
-  ChatSettingsNotifier.new,
-);
+final chatSettingsProvider =
+    NotifierProvider.family<
+      ChatSettingsNotifier,
+      ConversationUserStateDto?,
+      String
+    >(ChatSettingsNotifier.new);

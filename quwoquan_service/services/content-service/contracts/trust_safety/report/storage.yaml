@@ -1,0 +1,151 @@
+backend: postgres
+tables:
+  reports:
+    entity: Report
+    pk: id
+    columns:
+    - name: id
+      type: VARCHAR(36)
+      constraints:
+      - PK
+    - name: version
+      type: BIGINT
+      constraints:
+      - NOT_NULL
+      default: '1'
+    - name: reporter_id
+      type: VARCHAR(64)
+      constraints:
+      - NOT_NULL
+    - name: reporter_account_id
+      type: VARCHAR(64)
+      constraints:
+      - NOT_NULL
+    - name: target_type
+      type: VARCHAR(16)
+      constraints:
+      - NOT_NULL
+    - name: target_id
+      type: VARCHAR(64)
+      constraints:
+      - NOT_NULL
+    - name: reason
+      type: VARCHAR(32)
+      constraints:
+      - NOT_NULL
+    - name: description
+      type: TEXT
+    - name: status
+      type: VARCHAR(16)
+      constraints:
+      - NOT_NULL
+      default: '''pending'''
+    - name: reviewer_id
+      type: VARCHAR(64)
+    - name: resolution
+      type: VARCHAR(32)
+    - name: created_at
+      type: TIMESTAMPTZ
+      constraints:
+      - NOT_NULL
+      default: NOW()
+    - name: updated_at
+      type: TIMESTAMPTZ
+      constraints:
+      - NOT_NULL
+      default: NOW()
+    - name: resolved_at
+      type: TIMESTAMPTZ
+    indexes:
+    - name: idx_reports_target
+      columns:
+      - target_type
+      - target_id
+    - name: idx_reports_status
+      columns:
+      - status
+      - created_at
+    - name: idx_reports_reporter
+      columns:
+      - reporter_id
+  report_command_receipts:
+    entity: Report
+    description: Report command 幂等结果；与 aggregate/outbox 在同一 PostgreSQL 事务提交
+    pk: idempotency_key
+    columns:
+    - name: idempotency_key
+      type: VARCHAR(128)
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: aggregate_id
+      type: VARCHAR(36)
+      constraints:
+      - NOT_NULL
+    - name: aggregate_version
+      type: BIGINT
+      constraints:
+      - NOT_NULL
+    - name: command_name
+      type: VARCHAR(64)
+      constraints:
+      - NOT_NULL
+    - name: command_digest
+      type: VARCHAR(64)
+      constraints:
+      - NOT_NULL
+    - name: result_json
+      type: JSONB
+      constraints:
+      - NOT_NULL
+    - name: created_at
+      type: TIMESTAMPTZ
+      constraints:
+      - NOT_NULL
+      default: NOW()
+    - name: expires_at
+      type: TIMESTAMPTZ
+      constraints:
+      - NOT_NULL
+    indexes:
+    - name: idx_report_receipts_expires
+      columns:
+      - expires_at
+  report_outbox:
+    entity: Report
+    description: Report 领域事件 outbox；与 aggregate change 同一 PostgreSQL 事务提交
+    pk: event_id
+    columns:
+    - name: event_id
+      type: VARCHAR(64)
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: aggregate_id
+      type: VARCHAR(36)
+      constraints:
+      - NOT_NULL
+    - name: aggregate_version
+      type: BIGINT
+      constraints:
+      - NOT_NULL
+    - name: event_type
+      type: VARCHAR(64)
+      constraints:
+      - NOT_NULL
+    - name: payload_json
+      type: JSONB
+      constraints:
+      - NOT_NULL
+    - name: occurred_at
+      type: TIMESTAMPTZ
+      constraints:
+      - NOT_NULL
+    - name: published_at
+      type: TIMESTAMPTZ
+    indexes:
+    - name: idx_report_outbox_unpublished
+      columns:
+      - published_at
+      - occurred_at
+role: authoritative

@@ -1,63 +1,101 @@
-# L2 特性：exposure-governance
+# L2 Business Capability：曝光治理 (`exposure-governance`)
 
-## 功能说明
+> 所属领域：[`discovery-content`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-`exposure-governance` 是发现内容域的曝光治理主能力，负责把“下发去重、真实曝光疲劳、动态曝光预算、内容生命周期复活、活跃度自适应和曝光健康观测”统一成商用推荐体验的单一业务能力。
+## 1. 能力目标
 
-本能力与 `feed-orchestration-recommendation` 平级：
+推荐曝光治理的商用成熟度能力：served/impressed 双轨、疲劳、频控、动态预算、复活、活跃度自适应与曝光健康。
 
-- `feed-orchestration-recommendation` 负责首页 feed 编排、流式体验、端云行为回流和交集理由消费。
-- `exposure-governance` 负责曝光记忆、曝光预算、生命周期、复活和曝光健康 SLI。
-- `runtime/runtime-recommendation` 提供 HotPath、MMR、UCB、bandit、缓存与存储接口原语，不拥有页面 IA 或业务口径。
-
-## 商用目标
-
-- 同一用户在可配置窗口内不重复看到同一内容或近重复内容。
-- 反馈状态七态分离：`served`（下发）/`visible`（进入视窗）/`impressed`（达可见面积+停留阈值）/`dwell`（停留）/`interaction`（互动）/`negative`（负反馈）/`training_sample`（云侧派生），只能派生不能互替，详见 design.md。
-- 曝光记忆与过滤满足商用并发 / 容量 / 实时性：禁止长窗口全量 `SMembers` 回读，过滤走 membership 点查或近似结构。
-- 端侧上报抗冲击：统一通道、分级上报、采样合并、幂等与归因闭环，降低云侧上行流量冲击。
-- 优质内容随反馈获得更多曝光预算，低质或负反馈内容被降级或淘汰。
-- 优质老内容可被季节、事件、社交、常青或二次分发触发复活。
-- 曝光分布受覆盖率与基尼约束，避免赢家通吃。
-
-## 范围
+## 2. 范围与非目标
 
 ### In Scope
 
-- served/impressed/visible/dwell/interaction/negative/training_sample 七态分离与短窗口翻页去重。
-- 曝光记忆去全量化：membership 点查 / 短 Bloom / day bucket / cardinality budget（运行时边界由 runtime-recommendation 提供）。
-- 端侧上报抗冲击的能力边界引用（统一通道 / 采样 / 幂等 / 归因，细则归 feed-orchestration-recommendation/feedback-ingestion-sampling）。
-- per-user 跨会话疲劳记忆与时间衰减。
-- 作者、标签、话题频控与 near-dup 去重。
-- 动态曝光预算：分级流量池赛马、bandit 先验和晋级/淘汰阈值。
-- 内容生命周期状态机与复活召回。
-- 活跃度自适应：新用户、活跃用户、沉默回流用户的窗口、探索比和复活比。
-- 曝光健康 SLI：重复曝光率、覆盖率、曝光基尼、复活率、各池 CTR。
+- served/impressed 双轨和跨页、跨会话去重规格。
+- 作者、标签、话题和 near-dup 频控规格。
+- 动态曝光预算、分级流量池和 bandit 先验规格。
+- 内容生命周期复活与活跃度自适应规格。
+- 曝光健康 SLI、容量与回滚策略。
+- 行为事件分桶字段：feedRequestId/channelId/vertical/recallPath/rankingVersion/reasonVersion/intersectionSourceRef/intersectionClass。
 
 ### Out of Scope
 
-- 深度排序模型平台轨（MMoE/PLE/ESMM、双塔 ANN、IPS）。
+- P1/P2 的动态预算、生命周期复活、协同召回和模型容量按各自 Story 推进。
+- 深度排序模型平台轨。
+- 交集 affinity 异步模型化与四主页真实数据 api_integration/user_acceptance。
+
+## 3. Journey / Scenario 贡献
+
+- [`JNY-003 / SCN-007`](../../spec.md#scn-007)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：推荐曝光治理的商用成熟度能力：served/impressed 双轨、疲劳、频控、动态预算、复活、活跃度自适应与曝光健康，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+
+## 4. Story
+
+
+
+- [`activity-adaptive-exposure`](./activity-adaptive-exposure/spec.md)：按用户活跃度调整曝光窗口、探索比、复活比和频控强度，不突破全局安全边界。
+- [`content-lifecycle-resurfacing`](./content-lifecycle-resurfacing/spec.md)：`retired` 内容不得因复活源绕过合规准入。
+- [`cross-session-fatigue-memory`](./cross-session-fatigue-memory/spec.md)：过滤路径用 membership 点查或近似结构，禁止长窗口全量 `SMembers`。
+- [`dimension-frequency-and-neardup`](./dimension-frequency-and-neardup/spec.md)：定义“维度频控与近重复”的可观察主路径、失败语义及父能力交接。
+- [`dynamic-exposure-budget`](./dynamic-exposure-budget/spec.md)：按内容池质量和反馈动态分配曝光预算，同时保留探索下限、总预算与回滚边界。
+- [`exposure-observability-capacity`](./exposure-observability-capacity/spec.md)：定义“曝光可观测性容量”的可观察主路径、失败语义及父能力交接。
+- [`ops-intervention-and-policy-ejection`](./ops-intervention-and-policy-ejection/spec.md)：所有干预必须可审计，可过期，可回滚。
+- [`served-dedup-write-behind`](./served-dedup-write-behind/spec.md)：召回/过滤阶段下推 served exclude，过滤用候选集 `SISMEMBER` 批量点查或短 Bloom，禁止长窗口全量 `SMembers` 回读。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 曝光治理商用成熟度 SIT
+
+- 七态状态分离（served/visible/impressed/dwell/interaction/negative/training_sample），短窗口下发去重和真实曝光疲劳分别有契约定义。
+- 曝光记忆与过滤不依赖长窗口全量 SMembers，served/impressed 按 user+day 分桶、negative 用户级，容量有 cardinality budget。
+- 端侧反馈上报统一通道、分级采样、clientEventId 幂等与 feedRequestId 归因闭环，细则归 feed-orchestration-recommendation/feedback-ingestion-sampling。
+- 动态曝光预算、生命周期复活与活跃度自适应均通过 metadata-first 前置清单约束，不形成第二套推荐引擎。
+- 曝光健康 SLI 与 `recommendation_slo.yaml` 同名；P0 emitter 已 measured，P1/P2 无 emitter 告警保持前置标注。
+- 运营干预与违规/下架剔除有审计、过期、回滚和 SLO 口径。
+- `feed-orchestration-recommendation` 只引用 exposure-governance 的能力边界，不再拥有独立曝光预算或生命周期真相源。
+
+<a id="req-002"></a>
+### REQ-002 反馈状态七态分离：`served`（下发）/`visible`（进入视窗）/`impressed`（达可见面积+停留阈值）/`dwell`（停留）/`interaction`（互动）/`negative`（负反馈）/`training_sample`（云侧派生），只能派生不能互替，详见 design.md
+
+- 反馈状态七态分离：`served`（下发）/`visible`（进入视窗）/`impressed`（达可见面积+停留阈值）/`dwell`（停留）/`interaction`（互动）/`negative`（负反馈）/`training_sample`（云侧派生），只能派生不能互替，详见 design.md。
+- 曝光记忆与过滤满足商用并发 / 容量 / 实时性：禁止长窗口全量 `SMembers` 回读，过滤走 membership 点查或近似结构。
+- 端侧上报抗冲击：统一通道、分级上报、采样合并、幂等与归因闭环，降低云侧上行流量冲击。
+- 端侧上报抗冲击的能力边界引用（统一通道 / 采样 / 幂等 / 归因，细则归 feed-orchestration-recommendation/feedback-ingestion-sampling）。
 - P0 已实现状态分离、去全量化过滤、端侧统一上报、云侧 FeedbackIngestor 与基础观测；P1/P2 的动态预算、生命周期复活、协同召回和模型容量仍按各自 Story 推进。
-- 交集 affinity 概率分模型化、四主页真实数据 api_integration/user_acceptance、精品池全局运营写入能力，按各自 backlog 单独推进。
+- 作者、标签、话题和 near-dup 频控不会导致空 feed，必须有降级和保底。
 
-## Metadata-First 约束
+## 6. 契约与依赖
 
-后续实现前必须先声明：
+- 上游能力：[`discovery-content`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-- Redis key：`rec:served:{<userId>}:{<yyyyMMdd>}`、`rec:impressed:{<userId>}:{<yyyyMMdd>}`、`rec:freq:{<userId>}:{dimension}:{<yyyyMMdd>}`、`rec:near_dup:{<userId>}:{<yyyyMMdd>}`、`rec:exposure_budget:{contentId}`。
-- recpolicy：曝光窗口、疲劳半衰期、频控阈值、near-dup 阈值、bandit 先验、流量池阈值、复活配额、校准因子。
-- 读模型：`rm_exposure_state` 承载内容生命周期状态、曝光预算、复活触发器与统计窗口。
-- 指标：所有曝光健康指标以 `recommendation_slo.yaml` 为真相源。
+## 7. 集成验收
 
-## 验收标准
+<a id="sit-001"></a>
+### SIT-001 曝光治理商用成熟度 SIT
 
-- A1：同 session 跨页重复率低于 1%，cursor 候选变化时不扩大跳过/重复。
-- A2：served 与 impressed 语义分离，served 只负责短窗口翻页去重，impressed 负责疲劳、训练与长期体验。
-- A3：跨会话已看内容按时间衰减降权或过滤，强负反馈仍优先过滤未来窗口。
-- A4：作者、标签、话题和 near-dup 频控不会导致空 feed，必须有降级和保底。
-- A5：动态曝光预算能表达“少量试投、反馈达标晋级、负反馈淘汰”的状态机。
-- A6：复活召回不绕过去重与合规准入，且可解释复活触发器。
-- A7：曝光健康 SLI 与告警引用 `recommendation_slo.yaml` 同名指标。
-- A8：P0 的 local_contract 已登记为 recorded；api_integration/user_acceptance 以 local-gamma 和旅程压测补齐，P1/P2 实现测试仍登记为 planned。
-- A9：曝光记忆与过滤路径不依赖长窗口全量 `SMembers`，容量按规模分层并有 cardinality budget。
-- A10：七态状态分离，`served`/`visible` 不作训练样本，`training_sample` 仅云侧派生；端侧上报有采样、幂等与归因闭环。
+- GIVEN 执行“曝光治理商用成熟度”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“曝光治理商用成熟度”对应动作。
+- THEN 七态状态分离（served/visible/impressed/dwell/interaction/negative/training_sample），短窗口下发去重和真实曝光疲劳分别有契约定义。
+- THEN 曝光记忆与过滤不依赖长窗口全量 SMembers，served/impressed 按 user+day 分桶、negative 用户级，容量有 cardinality budget。
+- THEN 端侧反馈上报统一通道、分级采样、clientEventId 幂等与 feedRequestId 归因闭环，细则归 feed-orchestration-recommendation/feedback-ingestion-sampling。
+- THEN 动态曝光预算、生命周期复活与活跃度自适应均通过 metadata-first 前置清单约束，不形成第二套推荐引擎。
+- THEN 曝光健康 SLI 与 `recommendation_slo.yaml` 同名；P0 emitter 已 measured，P1/P2 无 emitter 告警保持前置标注。
+- THEN 运营干预与违规/下架剔除有审计、过期、回滚和 SLO 口径。
+- THEN `feed-orchestration-recommendation` 只引用 exposure-governance 的能力边界，不再拥有独立曝光预算或生命周期真相源。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 曝光治理商用成熟度 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：七态状态分离（served/visible/impressed/dwell/interaction/negative/training_sample），短窗口下发去重和真实曝光疲劳分别有契约定义。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

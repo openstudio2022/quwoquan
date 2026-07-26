@@ -6,6 +6,29 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.lib.common import ROOT, utc_now, write_json
+from quwoquan_ops.cli.lib.generated.runtime_log_catalog import (
+    CORRELATION_OPTIONAL_FIELDS,
+    ENVELOPE_OPTIONAL_FIELDS,
+    ENVELOPE_REQUIRED_FIELDS,
+    FORBIDDEN_ATTRIBUTE_KEYS,
+    FORBIDDEN_FIELDS,
+    HIGH_CARDINALITY_METRIC_KEYS,
+    LEVELS,
+    LOG_FIELD_ORDER,
+    LOG_KINDS,
+    MAX_ATTRIBUTES,
+    MAX_ATTRIBUTES_BYTES,
+    MAX_ATTRIBUTE_KEY_LENGTH,
+    MAX_ATTRIBUTE_VALUE_LENGTH,
+    MAX_MESSAGE_BYTES,
+    OBSERVABILITY_SCHEMA,
+    REQUIRED_KIND_FIELDS as CATALOG_REQUIRED_KIND_FIELDS,
+    RESOURCE_OPTIONAL_FIELDS,
+    RESOURCE_REQUIRED_FIELDS,
+    SIGNAL_REGISTRY,
+    SIGNAL_LOG_KINDS,
+    SIGNALS,
+)
 from quwoquan_ops.cli.lib.output_paths import (
     env_observability_run_dir,
     normalize_env,
@@ -14,69 +37,31 @@ from quwoquan_ops.cli.lib.output_paths import (
 
 
 OBSERVABILITY_ROOT = ROOT / ".qwq_output"
-OBSERVABILITY_CONTRACT_VERSION = "observability.slim.v1"
 
 ENVS = frozenset({"alpha", "beta", "gamma", "prod", "repo"})
-LOG_KINDS = frozenset(
-    {"deploy", "runtime", "access", "event", "exception", "audit"}
-)
-LEVELS = frozenset({"DEBUG", "INFO", "WARN", "ERROR"})
 FORBIDDEN_INLINE_FIELDS = frozenset(
     {
-        "schema" + "Version",
-        "signal",
-        "log" + "Kind",
-        "env",
-        "source" + "Type",
-        "service",
-        "component",
-        "instanceId",
-        "runId",
-        "releaseId",
-        "dataReleaseId",
+        *FORBIDDEN_FIELDS,
         "sessionId",
-        "timestamp",
-        "severity",
-        "message",
-        "requestId",
-        "traceId",
-        "spanId",
     }
 )
-COMMON_LOG_FIELDS = frozenset({"ts", "level", "msg", "req", "trace", "span", "attrs"})
+COMMON_LOG_FIELDS = frozenset(ENVELOPE_REQUIRED_FIELDS)
 LOG_FILE_SUFFIX = ".log"
-LOG_FIELD_ORDER = {
-    "deploy": ("ts", "level", "step", "result", "msg"),
-    "runtime": ("ts", "level", "event", "result", "req", "trace", "msg"),
-    "access": ("ts", "level", "method", "route", "status", "durMs", "req", "trace", "msg"),
-    "event": ("ts", "level", "event", "result", "req", "trace", "msg"),
-    "exception": ("ts", "level", "err", "req", "trace", "msg"),
-    "audit": ("ts", "level", "action", "target", "result", "msg"),
-}
 KIND_FIELDS = {
-    kind: frozenset(fields) - {"ts", "level", "msg"}
+    kind: frozenset(fields)
     for kind, fields in LOG_FIELD_ORDER.items()
 }
 REQUIRED_KIND_FIELDS = {
-    "deploy": frozenset({"step", "result"}),
-    "runtime": frozenset({"event", "result"}),
-    "access": frozenset({"method", "route", "status", "durMs"}),
-    "event": frozenset({"event", "result"}),
-    "exception": frozenset({"err"}),
-    "audit": frozenset({"action", "target", "result"}),
+    kind: frozenset(fields)
+    for kind, fields in CATALOG_REQUIRED_KIND_FIELDS.items()
 }
-ATTRS_MAX_BYTES = 4096
-SECRET_KEY_PATTERN = re.compile(r"(password|passwd|secret|token|api[_-]?key|credential)", re.I)
-RECORD_START_PATTERN = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T[^,]*,(DEBUG|INFO|WARN|ERROR),"
-)
-
-
 def run_dir(env_name: str, run_id: str) -> Path:
-    if env_name == "data":
-        return repo_root() / "observability" / "data" / _safe_segment(run_id)
     if env_name == "repo":
         return repo_root() / "observability" / _safe_segment(run_id)
+    if env_name == "data":
+        raise ValueError(
+            "data observability must use the repo run root, not a second data root"
+        )
     return env_observability_run_dir(normalize_env(env_name), run_id)
 
 
@@ -92,8 +77,6 @@ def env_from_report_dir(report_dir: Path, target: str = "") -> str:
             env_segment = parts[index + 2]
             if env_segment in ENVS:
                 return env_segment
-        if len(parts) > index + 1 and parts[index + 1] == "data":
-            return "data"
     parent = report_dir.parent.name
     if parent in ENVS:
         return parent
@@ -117,17 +100,13 @@ def write_run_manifest(
     command: str,
     target: str,
     report_dir: Path,
-    release_id: str = "",
-    data_release_id: str = "",
 ) -> Path:
     manifest = {
-        "schema": OBSERVABILITY_CONTRACT_VERSION,
+        "schema": OBSERVABILITY_SCHEMA,
         "env": env_name,
         "runId": run_id,
         "command": command,
         "target": target,
-        "releaseId": release_id,
-        "dataReleaseId": data_release_id,
         "reportDir": _repo_rel(report_dir),
         "generatedAt": utc_now(),
     }
@@ -136,79 +115,189 @@ def write_run_manifest(
     return path
 
 
-def append_log_line(path: Path, payload: dict[str, Any]) -> None:
+def append_log_line(
+    path: Path,
+    payload: dict[str, Any],
+    *,
+    resource: dict[str, str] | None = None,
+    correlation: dict[str, str] | None = None,
+    signal: str = "",
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     kind = path.stem
+    record = canonical_log_record(
+        kind,
+        payload,
+        path=path,
+        resource=resource,
+        correlation=correlation,
+        signal=signal,
+    )
+    issues = validate_log_payload(kind, record)
+    if issues:
+        raise ValueError(f"invalid {kind} runtime log: {'; '.join(issues)}")
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(format_log_record(kind, compact_log_payload(payload)) + "\n")
+        handle.write(format_log_record(kind, record) + "\n")
 
 
-def compact_log_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    cleaned = {key: value for key, value in payload.items() if value not in ("", None, {}, [])}
-    if "ts" not in cleaned:
-        cleaned["ts"] = utc_now()
-    if "level" not in cleaned:
-        cleaned["level"] = "INFO"
-    if "msg" not in cleaned:
-        cleaned["msg"] = str(cleaned.get("event") or cleaned.get("step") or cleaned.get("action") or "")
-    return cleaned
+def append_canonical_log_record(path: Path, payload: dict[str, Any]) -> None:
+    """追加一个已规范化的运行日志，保留信封语义并再次执行脱敏。"""
+    kind = str(payload.get("logKind") or "")
+    if kind not in LOG_KINDS:
+        raise ValueError(f"unknown canonical runtime log kind: {kind}")
+    if path.stem != kind:
+        raise ValueError(
+            f"canonical runtime log path mismatch: expected {kind}.log, received {path.name}"
+        )
+    record = dict(payload)
+    record["message"] = _bounded(
+        _redact_text(str(record.get("message") or "")),
+        MAX_MESSAGE_BYTES,
+    )
+    signal = str(record.get("signal") or "")
+    attributes = record.get("attributes")
+    if attributes is not None:
+        normalized_attributes = _canonical_attributes(
+            attributes,
+            set(SIGNAL_REGISTRY.get(signal, {}).get("attributeAllowlist", ())),
+        )
+        if normalized_attributes:
+            record["attributes"] = normalized_attributes
+        else:
+            record.pop("attributes", None)
+    issues = validate_log_payload(kind, record)
+    if issues:
+        raise ValueError(f"invalid canonical {kind} runtime log: {'; '.join(issues)}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(format_log_record(kind, record) + "\n")
+
+
+def canonical_log_record(
+    kind: str,
+    payload: dict[str, Any],
+    *,
+    path: Path | None = None,
+    resource: dict[str, str] | None = None,
+    correlation: dict[str, str] | None = None,
+    signal: str = "",
+) -> dict[str, Any]:
+    if kind not in LOG_KINDS:
+        raise ValueError(f"unknown log kind: {kind}")
+    source = dict(payload)
+    source.pop("schema", None)
+    declared_kind = str(source.pop("logKind", kind) or kind)
+    if declared_kind != kind:
+        raise ValueError(
+            f"runtime log kind mismatch: expected {kind}, received {declared_kind}"
+        )
+    declared_signal = str(source.pop("signal", "") or "")
+    occurred_at = str(source.pop("occurredAt", utc_now()))
+    observed_at = str(source.pop("observedAt", occurred_at))
+    severity = str(source.pop("severity", "INFO")).upper()
+    message = _bounded(
+        _redact_text(
+            str(
+                source.pop(
+                    "message",
+                    source.get("event")
+                    or source.get("step")
+                    or source.get("action")
+                    or kind,
+                )
+            )
+        ),
+        MAX_MESSAGE_BYTES,
+    )
+    resolved_resource = dict(resource or source.pop("resource", {}) or {})
+    if not resolved_resource:
+        resolved_resource = _default_resource(path)
+    resolved_correlation = dict(correlation or source.pop("correlation", {}) or {})
+    _move_if_present(source, resolved_correlation, "requestId")
+    _move_if_present(source, resolved_correlation, "traceId")
+    _move_if_present(source, resolved_correlation, "spanId")
+    _move_if_present(source, resolved_correlation, "operationId")
+    _move_if_present(source, resolved_correlation, "pageName")
+    _move_if_present(source, resolved_correlation, "surfaceId")
+    _move_if_present(source, resolved_correlation, "executionId")
+    _move_if_present(source, resolved_correlation, "workPackageId")
+    _move_if_present(source, resolved_correlation, "environmentRunId")
+    raw_attributes = source.pop("attributes", {})
+    resolved_signal = signal or declared_signal or _default_signal(kind, resolved_resource)
+    record: dict[str, Any] = {
+        "schema": OBSERVABILITY_SCHEMA,
+        "occurredAt": occurred_at,
+        "observedAt": observed_at,
+        "logKind": kind,
+        "severity": severity,
+        "signal": resolved_signal,
+        "message": message,
+        "resource": {
+            key: str(value)
+            for key, value in resolved_resource.items()
+            if value not in ("", None)
+        },
+    }
+    if resolved_correlation:
+        record["correlation"] = {
+            key: str(value)
+            for key, value in resolved_correlation.items()
+            if value not in ("", None)
+        }
+    for field in ENVELOPE_OPTIONAL_FIELDS:
+        if field == "attributes":
+            continue
+        if field in source and source[field] not in ("", None, {}, []):
+            value = source.pop(field)
+            if field == "status":
+                value = str(value)
+            elif field == "durationMs":
+                value = int(value)
+            record[field] = value
+    attribute_source = dict(raw_attributes) if isinstance(raw_attributes, dict) else {}
+    attribute_source.update(source)
+    signal_contract = SIGNAL_REGISTRY.get(resolved_signal, {})
+    attributes = _canonical_attributes(
+        attribute_source,
+        set(signal_contract.get("attributeAllowlist", ())),
+    )
+    if attributes:
+        record["attributes"] = attributes
+    return record
 
 
 def format_log_record(kind: str, payload: dict[str, Any]) -> str:
-    fields = LOG_FIELD_ORDER.get(kind)
-    if not fields:
+    if kind not in LOG_KINDS:
         raise ValueError(f"unknown log kind: {kind}")
-    message = _message_with_attrs(payload)
-    values: list[str] = []
-    for field in fields:
-        value = message if field == "msg" else payload.get(field, "")
-        values.append(_field_text(value, allow_newline=field == "msg"))
-    first, *continuation = values[-1].split("\n")
-    line = ",".join(values[:-1] + [first])
-    if continuation:
-        line += "".join(f"\n\t{part}" for part in continuation)
-    return line
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
-def parse_log_records(kind: str, lines: list[str]) -> tuple[list[dict[str, str]], list[str]]:
-    records: list[dict[str, str]] = []
+def parse_log_records(kind: str, lines: list[str]) -> tuple[list[dict[str, Any]], list[str]]:
+    records: list[dict[str, Any]] = []
     issues: list[str] = []
-    current: dict[str, str] | None = None
-    current_line = 0
     for index, raw_line in enumerate(lines, start=1):
         if not raw_line.strip():
-            continue
-        if raw_line.startswith((" ", "\t")):
-            if current is None:
-                issues.append(f"{index}: continuation without a record")
-            else:
-                current["msg"] = f"{current.get('msg', '')}\n{raw_line.lstrip()}"
-            continue
-        if not RECORD_START_PATTERN.match(raw_line):
-            issues.append(f"{index}: log record must start with ts,level")
-            current = None
             continue
         parsed, parse_issues = parse_log_line(kind, raw_line)
         if parse_issues:
             issues.extend(f"{index}: {issue}" for issue in parse_issues)
-            current = None
             continue
-        current = parsed
-        current_line = index
         records.append(parsed)
         if len(records) >= 200:
             break
     return records, issues
 
 
-def parse_log_line(kind: str, line: str) -> tuple[dict[str, str], list[str]]:
-    fields = LOG_FIELD_ORDER.get(kind)
-    if not fields:
+def parse_log_line(kind: str, line: str) -> tuple[dict[str, Any], list[str]]:
+    if kind not in LOG_KINDS:
         return {}, [f"unknown log kind: {kind}"]
-    values = _split_fixed(line, len(fields))
-    if len(values) != len(fields):
-        return {}, [f"expected {len(fields)} comma fields, got {len(values)}"]
-    return dict(zip(fields, values, strict=True)), []
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError as exc:
+        return {}, [f"runtime log must be one JSON object: {exc.msg}"]
+    if not isinstance(payload, dict):
+        return {}, ["runtime log must be a JSON object"]
+    return payload, []
 
 
 def write_stackctl_links(
@@ -236,42 +325,101 @@ def validate_log_payload(kind: str, payload: dict[str, Any]) -> list[str]:
     issues: list[str] = []
     if kind not in LOG_KINDS:
         return [f"unknown log kind: {kind}"]
-    allowed = COMMON_LOG_FIELDS | KIND_FIELDS[kind]
+    allowed = COMMON_LOG_FIELDS | ENVELOPE_OPTIONAL_FIELDS | KIND_FIELDS[kind]
     unknown = sorted(set(payload) - allowed)
     if unknown:
         issues.append(f"unknown field(s): {', '.join(unknown)}")
     forbidden = sorted(set(payload) & FORBIDDEN_INLINE_FIELDS)
     if forbidden:
-        issues.append(f"forbidden repeated field(s): {', '.join(forbidden)}")
-    for field in ("ts", "level", "msg"):
+        issues.append(f"forbidden field(s): {', '.join(forbidden)}")
+    for field in ENVELOPE_REQUIRED_FIELDS:
         if field not in payload or payload.get(field) in ("", None):
             issues.append(f"missing required field: {field}")
-    level = str(payload.get("level") or "")
-    if level and level not in LEVELS:
-        issues.append(f"invalid level: {level}")
+    if payload.get("schema") not in ("", None, OBSERVABILITY_SCHEMA):
+        issues.append("invalid schema")
+    if payload.get("logKind") not in ("", None, kind):
+        issues.append(f"logKind must equal {kind}")
+    severity = str(payload.get("severity") or "")
+    if severity and severity not in LEVELS:
+        issues.append(f"invalid severity: {severity}")
+    signal = str(payload.get("signal") or "")
+    if signal and signal not in SIGNALS:
+        issues.append(f"unregistered signal: {signal}")
+    elif signal and SIGNAL_LOG_KINDS.get(signal) != kind:
+        issues.append(f"signal {signal} does not match log kind {kind}")
+    signal_contract = SIGNAL_REGISTRY.get(signal, {})
+    message = str(payload.get("message") or "")
+    if len(message.encode("utf-8")) > MAX_MESSAGE_BYTES:
+        issues.append(f"message too large: {len(message.encode('utf-8'))} > {MAX_MESSAGE_BYTES}")
     for field in sorted(REQUIRED_KIND_FIELDS[kind]):
         if field not in payload or payload.get(field) in ("", None):
             issues.append(f"missing {kind} field: {field}")
-    attrs = payload.get("attrs")
+    if "status" in payload and not isinstance(payload["status"], str):
+        issues.append("status must be a string")
+    if "durationMs" in payload and (
+        isinstance(payload["durationMs"], bool)
+        or not isinstance(payload["durationMs"], int)
+        or payload["durationMs"] < 0
+    ):
+        issues.append("durationMs must be a non-negative integer")
+    resource = payload.get("resource")
+    if not isinstance(resource, dict):
+        issues.append("resource must be an object")
+    else:
+        _validate_context_object(
+            issues,
+            "resource",
+            resource,
+            required=RESOURCE_REQUIRED_FIELDS,
+            optional=RESOURCE_OPTIONAL_FIELDS,
+        )
+    correlation = payload.get("correlation")
+    if correlation is not None:
+        if not isinstance(correlation, dict):
+            issues.append("correlation must be an object")
+        else:
+            _validate_context_object(
+                issues,
+                "correlation",
+                correlation,
+                required=(),
+                optional=CORRELATION_OPTIONAL_FIELDS,
+            )
+            allowed_correlation = set(signal_contract.get("correlationKeys", ()))
+            unregistered_correlation = sorted(
+                set(correlation) - allowed_correlation
+            )
+            if unregistered_correlation:
+                issues.append(
+                    "correlation contains unregistered key(s): "
+                    + ", ".join(unregistered_correlation)
+                )
+    attrs = payload.get("attributes")
     if attrs is not None:
         if not isinstance(attrs, dict):
-            issues.append("attrs must be an object")
+            issues.append("attributes must be an object")
         else:
             encoded = json.dumps(attrs, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-            if len(encoded) > ATTRS_MAX_BYTES:
-                issues.append(f"attrs too large: {len(encoded)} > {ATTRS_MAX_BYTES}")
+            if len(attrs) > MAX_ATTRIBUTES:
+                issues.append(f"too many attributes: {len(attrs)} > {MAX_ATTRIBUTES}")
+            if len(encoded) > MAX_ATTRIBUTES_BYTES:
+                issues.append(f"attributes too large: {len(encoded)} > {MAX_ATTRIBUTES_BYTES}")
             for key in _iter_attr_keys(attrs):
-                if SECRET_KEY_PATTERN.search(key):
-                    issues.append(f"attrs contains secret-like key: {key}")
+                if _forbidden_attribute_key(key):
+                    issues.append(f"attributes contains forbidden key: {key}")
+                    break
+                if key not in set(signal_contract.get("attributeAllowlist", ())):
+                    issues.append(f"attributes contains unregistered key: {key}")
+                    break
+            for key, value in attrs.items():
+                if not isinstance(value, str):
+                    issues.append(f"attributes.{key} must be a string")
                     break
     return issues
 
 
-def validate_log_record(kind: str, payload: dict[str, str]) -> list[str]:
-    issues = validate_log_payload(kind, payload)
-    if any("," in str(payload.get(field, "")) for field in LOG_FIELD_ORDER.get(kind, ()) if field != "msg"):
-        issues.append("non-message fields must not contain commas")
-    return issues
+def validate_log_record(kind: str, payload: dict[str, Any]) -> list[str]:
+    return validate_log_payload(kind, payload)
 
 
 def _iter_attr_keys(value: Any) -> list[str]:
@@ -286,35 +434,160 @@ def _iter_attr_keys(value: Any) -> list[str]:
     return keys
 
 
-def _message_with_attrs(payload: dict[str, Any]) -> str:
-    message = str(payload.get("msg") or "")
-    attrs = payload.get("attrs")
-    if attrs in (None, {}, []):
-        return message
-    encoded = json.dumps(attrs, ensure_ascii=False, separators=(",", ":"))
-    return f"{message} attrs={encoded}" if message else f"attrs={encoded}"
+def _canonical_attributes(value: Any, allowed_keys: set[str]) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, str] = {}
+    for raw_key in sorted(value, key=str):
+        key = str(raw_key).strip()
+        if (
+            not key
+            or len(key) > MAX_ATTRIBUTE_KEY_LENGTH
+            or _forbidden_attribute_key(key)
+            or key not in allowed_keys
+        ):
+            continue
+        item = value[raw_key]
+        if isinstance(item, str):
+            text = item
+        else:
+            text = json.dumps(item, ensure_ascii=False, separators=(",", ":"), default=str)
+        text = _bounded(_redact_text(text), MAX_ATTRIBUTE_VALUE_LENGTH)
+        candidate = {**result, key: text}
+        encoded = json.dumps(
+            candidate,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if len(candidate) > MAX_ATTRIBUTES or len(encoded) > MAX_ATTRIBUTES_BYTES:
+            break
+        result[key] = text
+    return result
 
 
-def _field_text(value: Any, *, allow_newline: bool = False) -> str:
-    text = str(value if value is not None else "")
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    if not allow_newline:
-        text = " ".join(text.splitlines())
-        text = text.replace(",", "%2C")
-    return text
+def _forbidden_attribute_key(key: str) -> bool:
+    normalized = _normalize_key(key)
+    candidates = (
+        *FORBIDDEN_FIELDS,
+        *FORBIDDEN_ATTRIBUTE_KEYS,
+        *HIGH_CARDINALITY_METRIC_KEYS,
+    )
+    for candidate in candidates:
+        blocked = _normalize_key(candidate)
+        if normalized == blocked or (blocked != "ip" and blocked in normalized):
+            return True
+    return False
 
 
-def _split_fixed(line: str, field_count: int) -> list[str]:
-    values: list[str] = []
-    start = 0
-    for _ in range(field_count - 1):
-        index = line.find(",", start)
-        if index < 0:
-            return []
-        values.append(line[start:index])
-        start = index + 1
-    values.append(line[start:])
-    return values
+def _normalize_key(value: str) -> str:
+    return "".join(character for character in value.lower() if character.isalnum())
+
+
+def _redact_text(value: str) -> str:
+    value = re.sub(r"\bBearer\s+[A-Za-z0-9._~+/=-]+", "Bearer ***", value, flags=re.I)
+    value = re.sub(
+        r"(access_token|token|authcode|authorization|signature|"
+        r"x-amz-signature|x-amz-credential|secret)=([^&#\s]+)",
+        r"\1=***",
+        value,
+        flags=re.I,
+    )
+    value = re.sub(
+        r"\b(?:\d{3}[- ]?\d{4}[- ]?\d{4}|"
+        r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b",
+        "***",
+        value,
+    )
+    return value
+
+
+def _bounded(value: str, max_length: int) -> str:
+    if len(value.encode("utf-8")) <= max_length:
+        return value
+    suffix = "…"
+    while value and len((value + suffix).encode("utf-8")) > max_length:
+        value = value[:-1]
+    return value + suffix
+
+
+def _validate_context_object(
+    issues: list[str],
+    name: str,
+    value: dict[str, Any],
+    *,
+    required: tuple[str, ...] | list[str],
+    optional: frozenset[str],
+) -> None:
+    allowed = set(required) | set(optional)
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        issues.append(f"{name} has unknown field(s): {', '.join(unknown)}")
+    forbidden = sorted(set(value) & FORBIDDEN_INLINE_FIELDS)
+    if forbidden:
+        issues.append(f"{name} has forbidden field(s): {', '.join(forbidden)}")
+    for field in required:
+        if value.get(field) in ("", None):
+            issues.append(f"{name} missing required field: {field}")
+    for field, item in value.items():
+        if item is not None and not isinstance(item, str):
+            issues.append(f"{name}.{field} must be a string")
+
+
+def _default_resource(path: Path | None) -> dict[str, str]:
+    environment = "repo"
+    service = "quwoquan-ops"
+    source_type = "ops"
+    if path is not None:
+        parts = path.parts
+        if "stackctl" in parts:
+            service = "stackctl"
+        if "logs" in parts:
+            index = parts.index("logs")
+            if len(parts) > index + 2:
+                candidate_source_type = parts[index + 1]
+                candidate_service = parts[index + 2]
+                if candidate_source_type in {
+                    "app",
+                    "data",
+                    "ops",
+                    "portal",
+                    "service",
+                } and candidate_service:
+                    source_type = candidate_source_type
+                    service = candidate_service
+        if ".qwq_output" in parts:
+            index = parts.index(".qwq_output")
+            if len(parts) > index + 2 and parts[index + 1] == "env":
+                environment = parts[index + 2]
+    return {
+        "sourceType": source_type,
+        "service": service,
+        "environment": environment,
+    }
+
+
+def _default_signal(kind: str, resource: dict[str, str]) -> str:
+    source_type = resource.get("sourceType", "")
+    if source_type == "data":
+        if kind == "exception":
+            return "data.exception.stage"
+        return "data.runtime.stage"
+    if kind == "audit":
+        return "ops.audit.control"
+    if kind == "deploy":
+        return "ops.deploy.stackctl"
+    if kind == "exception":
+        return "ops.exception.runtime"
+    return "ops.runtime.process"
+
+
+def _move_if_present(
+    source: dict[str, Any],
+    destination: dict[str, Any],
+    canonical: str,
+) -> None:
+    if canonical in source:
+        destination[canonical] = source.pop(canonical)
 
 
 def _repo_rel(path: Path) -> str:

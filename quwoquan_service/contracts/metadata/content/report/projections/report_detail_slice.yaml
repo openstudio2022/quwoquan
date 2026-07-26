@@ -1,3 +1,0 @@
-read_model: ReportDetailSlice
-description: 举报详情的具名只读 Slice。
-consumers: [platform-ops]

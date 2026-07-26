@@ -17,6 +17,8 @@ defaults:
     research:
       lanes:
       - article
+      imageAssetStrategy: attribution_audited_publish
+      imageCountPolicy: score_bonus
       allowAiImages: false
     quotas:
       entityHomepagesPerTarget: 0

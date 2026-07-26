@@ -1,109 +1,83 @@
 # quwoquan Codex Guide
 
-本仓库为 Codex 提供分层指令。进入任一子目录工作时，先读取本文件，再读取当前工作目录路径上更近的 `AGENTS.md`。
+本仓库使用“目录即树、节点自解释”的规格驱动开发。进入子目录时，先读取本文件，再读取路径上更近的 `AGENTS.md`。
 
-## 每次任务的起手式
+## 唯一执行入口
 
-对所有非纯查询任务，先按 `docs/codex_workflow.md` 的命令语义判断当前处于哪一阶段：
+非纯查询任务按以下顺序建立最小上下文：
 
-- `/explore`
-- `/prd`
-- `/design`
-- `/baseline`
-- `/extend`
-- `/dev`
-- `/verify`
-- `/plan-review`
-- `/plan-next`
+1. 最近的 `AGENTS.md`。
+   进入 `quwoquan_data/**` 时必须继续读取 `quwoquan_data/AGENTS.md`。
+2. [`specs/feature-tree/README.md`](specs/feature-tree/README.md)。
+3. AppRoot `spec.md/design.md`。
+4. 目标 L1 `spec.md/design.md`。
+5. 目标 L2 `spec.md` 与按需 `design.md`。
+6. 目标 L3 `spec.md`。
+7. 节点引用的 metadata 与测试。
 
-开始实现前，必须先明确并在工作说明中自检：
+已知目标路径时执行 `make feature-context TARGET=<spec-or-code-path>`；代码路径若被多个 L1 同优先级认领或没有 owner，返回 `GATE_BLOCK`，先修规格归属。
 
-- `AppRoot Journey/Scenario`
-- `L1_domain_service`
-- `L2_business_capability`
-- `L3_story`
-- 验收意图：`UAT / SIT / GWT / contract`
-- 测试证据：`local_contract / api_integration / user_acceptance`
+阶段语义由对应 `.cursor/commands/*.md` 定义：`/explore`、`/prd`、`/design`、`/baseline`、`/extend`、`/dev`、`/verify`、`/plan-review`、`/plan-next`。自然语言请求与最接近的阶段命令等价，不因用户未输入 slash command 而跳过规格理解和验证。
 
-如果以上任一项无法明确，先刷新规格或特性树文档，不要直接写实现。
+## 每次任务三段协议
 
-## 遗留事项与风险待办
+### Spec Entry
 
-- 所有非纯查询任务开始前，先审视 `docs/outstanding_risks_backlog.md` 的未解决项，判断是否与当前任务直接相关、是否需要一并收口。
-- 发现新的长期遗留或风险时，先向用户复述事项、原因和影响；只有用户确认后，才能把它登记到 backlog。
-- 解决 backlog 中已有事项时，必须同步回写状态、日期与验证证据；禁止只在会话里口头说明“已修复”而不打勾。
-- 禁止维护第二套遗留事项清单；正式遗留与风险只记录在 `docs/outstanding_risks_backlog.md`。
+开始实施前明确：
 
-## 必读真相源
+- 目标与用户价值。
+- In Scope / Out of Scope。
+- AppRoot Journey/Scenario。
+- `L1_domain_service / L2_business_capability / L3_story` 父链。
+- 验收意图：`UAT / DOM / SIT / GWT / contract`。
+- 测试证据：`local_contract / api_integration / user_acceptance`。
+- 当前 OPEN 与准出影响。
 
-1. `specs/00_MASTER_DEVELOPMENT_FLOW.md`
-2. `specs/feature-tree/README.md`
-3. `specs/feature-tree/journey_scenario_registry.yaml`
-4. `specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md`
-5. `quwoquan_service/contracts/metadata/README.md`
-6. `docs/agent_context_contract.md`
-7. `docs/agent_command_simulation_matrix.md`
-8. `docs/codex_workflow.md`
+任一项无法明确时，先执行 `/explore` 或 `/prd` 刷新对应 `spec.md`，不要直接写实现。
 
-只有在任务相关时，再继续读取对应 `.cursor/commands/*.md` 与 `.cursor/rules/*.md`，避免一次性灌入无关规则。
+### Pre-work Reflection
 
-## 自然语言与命令等价
+实施前逐项判断：metadata-first、runtime error 链路、Mock 隔离、页面质量、Data CLI-first、stackctl、跨域 E2E、四环境、观测与回滚是否被触发。触达多个区域时证明 `Data -> Service -> App -> Behavior -> Recommendation -> Observability -> Environment` 无断点。
 
-用户直接输入自然语言时，也必须按 `docs/agent_context_contract.md` 路由：先识别阶段、特性树、触达区域和三层测试证据，再做正向规格理解与执行前自检反思。不能因为用户没有显式输入 `/explore`、`/dev` 或 `/verify` 就跳过项目规约。
+### Exit Review
 
-触达多个区域（App / Service / Data / Ops / Portal）时，必须自动启用端到端模式，证明 `Data -> Service -> App -> Behavior -> Recommendation -> Observability -> Environment` 无断点。
+交付时如实说明：规格达成、三层测试、E2E、产品/UX、运营观测、自动化/门禁、OPEN 变化和剩余阻断。失败门禁不得包装为成功。
 
-每次非纯查询任务必须显式遵守三段协议：
+## 特性树与文档规则
 
-- **Spec Entry**：目标、用户价值、范围、Out of Scope、特性树、验收意图、三层测试证据、风险。
-- **Pre-work Reflection**：metadata-first、runtime error、mock 隔离、页面质量、data CLI-first、stackctl、跨域 E2E 是否触发。
-- **Exit Review**：规格达成、测试证据、E2E、产品/UX、运营观测、自动化/门禁、剩余风险。
-
-命令端到端模拟和 Cursor/Codex 执行语气见 `docs/agent_command_simulation_matrix.md`。不允许“只改文件、无验收、无测试、无风险说明”。
+- AppRoot `spec.md` 拥有全应用目标、Journey、Scenario、UAT；AppRoot `design.md` 拥有全局架构与跨域约束。
+- L1 `spec.md/design.md` 拥有领域事实、边界、工程归属、DOM 与领域设计。
+- L2 `spec.md` 拥有能力组合行为和 SIT；仅达到设计门槛时保留 `design.md`。
+- L3 只保留 `spec.md`，使用 REQ/GWT，设计决定上收到 L2/L1 DEC。
+- 字段、path、operation、surface、route、event、metric、错误码和恢复语义只引用所属服务 `contracts/**`；跨服务 schema、共享协议和值定义引用 `quwoquan_service/contracts/metadata/**`，不在规格复制。
+- 未完成能力、外部阻断、风险与未来规划写入最低可关闭节点的 `OPEN-###`。解决后删除 OPEN，并转为当前 REQ/设计事实；禁止中央 backlog 或完成日志。
+- 不维护 feature registry/index、Journey registry、acceptance YAML、changelog、成熟度矩阵或第二套状态台账。
+- 增量由当前会话目标、Git diff、代码/测试结果和 `make feature-tree-change-report` 表达；历史使用 `git log --follow`。
+- 修改规格后运行 `make verify-feature-tree`；需要总览运行 `make feature-tree-overview`。
 
 ## 商用品质默认门
 
-Codex 在本仓库做任何增量，都必须同时用这些视角审视，不得只完成代码表面改动：
-
-- **Review 视角**：按产品、架构、代码评审、质量、测试、用户、运维、运营八角色检查；优先发现 bug、契约漂移、无测试、无观测、体验断点、第二真相源和不合理抽象。
-- **三层测试视角**：`local_contract`、`api_integration`、`user_acceptance` 必须与 `UAT/SIT/GWT/contract` 映射；远端行为在 `api_integration` 中验证的字段、错误码和边界，必须能在 `local_contract` 的 Mock/Provider/Widget/领域规则中找到对应覆盖。
-- **四环境视角**：`alpha`、`beta`、`gamma`、`prod` 的数据源、配置、包纯度、URL/topology、部署与回滚证据必须分层；不存在 `prod-gray`，生产灰度只是 `prod` rollout stage。
-- **错误码端云链路视角**：错误码、用户提示、恢复动作、HTTP 响应、端侧 `CloudException`/`RuntimeFailure`、埋点、日志、告警和测试必须同源；禁止只改 UI 文案、只改 mapper 或只改服务错误响应。
-- **可观测与可配置视角**：新增页面、API、行为信号、推荐策略、数据工程发布都必须声明 SLI/SLO、指标、采样、保留周期、告警阈值、配置来源、灰度与回滚。
-- **端到端闭环视角**：从数据工程两条内容生产线、素材/实体/标签治理、内容入库、用户发现与消费、互动反馈、推荐特征回流、运营分析和四层监控，链路不得有断点。
-
-任何一项无法证明，应先返回 `GATE_BLOCK` 并补规格、契约、测试或运维证据。
-
-## 文档刷新规则
-
-- 需求归属不清：先按 `/explore` 补树归属。
-- 规格或验收变化：更新对应 `spec.md` 与 `acceptance.yaml`。
-- 跨领域 Journey/Scenario 变化：更新 `specs/feature-tree/journey_scenario_registry.yaml`。
-- AppRoot / `L1_domain_service` / `L2_business_capability` 设计变化：更新对应 `design.md`；`L3_story` 禁止新增 `design.md`。
-- 形成可追踪增量：补 `specs/changelog/CR-*.yaml`。
-- 调整特性树节点后：重建 `specs/feature-tree/tree_index.yaml` 并跑对应校验。
-- 触及错误码、权限/异常语义、用户提示、恢复策略或服务 HTTP 边界：同步刷新 metadata `errors.yaml`、codegen、端侧 mapper/UI、服务响应、观测指标与测试证据。
-- 触及推荐、观测、环境部署或内容生产闭环：同步刷新对应能力/Story 的 `acceptance.yaml` 证据、CR 与必要的 `design.md`，不得只改实现。
-- 发现新的长期遗留/风险且用户确认后：追加 `docs/outstanding_risks_backlog.md`。
-- 关闭已有遗留/风险事项：同步更新 `docs/outstanding_risks_backlog.md` 的状态、日期与验证证据。
+- Review：从产品、架构、代码、质量、测试、用户、运维、运营八角色检查契约漂移、无测试、无观测、体验断点、第二真相源和不合理抽象。
+- 三层测试：`local_contract`、`api_integration`、`user_acceptance` 必须映射 UAT/DOM/SIT/GWT/contract；Remote 行为必须能回到端侧 Mock/Provider/Widget/领域规则覆盖。
+- 四环境：`alpha`、`beta`、`gamma`、`prod` 分层证明数据源、配置、包纯度、URL/topology、部署与回滚；不存在 `prod-gray`，生产灰度只是 `prod` rollout stage。
+- 错误链路：metadata errors、HTTP 响应、端侧 mapper/UI、恢复动作、埋点、日志、告警和测试必须同源。
+- 可观测与配置：新增页面、API、行为信号、推荐策略和数据发布必须声明 SLI/SLO、指标、采样、保留、告警、配置来源、灰度与回滚。
+- 无法证明时返回 `GATE_BLOCK`，补规格、metadata、测试或运维证据。
 
 ## 编码总约束
 
-- `quwoquan_service/contracts/metadata/**` 是字段、错误码、path、route、surface、operation、decoder context 的唯一真相源。
-- `quwoquan_service/contracts/metadata/**/errors.yaml` 是错误码、用户可见提示、恢复动作和端云错误语义的唯一真相源；稳定错误码使用 `MODULE.KIND.REASON`，上下文只进 string-only `context.attributes`。
-- `.qwq_output/` 只承载可删除的运行产物、派生发布包、证据与缓存。任何配置、schema、prompt、template、policy、reference、依赖声明或构建规则必须归仓库内领域目录；删除 `.qwq_output/` 后，仓库必须仍可只凭受版本控制的真相源和外部依赖重新构建。禁止让跨任务执行把 output 当作唯一输入或持久状态。
-- 先 metadata，后 verify/codegen，再写业务逻辑；禁止手改 codegen 产物。
-- 不维护第二套路由、错误码、UI IA、mock 数据或特性树。
-- 当前阶段按未上线处理：对不合理实现零兼容、零技术债容忍，优先替换为正确契约与正确架构；禁止为错误实现继续加 shim、fallback、allowlist 或旁路。
-- 契约单轨：禁止协议版本信封与 wire 多键双读；正向「旧键仍可解析」测试与 `--warn-only`/`mode=compat` 逃逸一律阻断；门禁 `python3 quwoquan_ops/gate/verify_single_track_contracts.py`。
-- 存储 vs wire：Mongo/bson 可用 `_id`；客户端 HTTP/WS/DTO JSON 只认 canonical `id`/`postId`/`conversationId`/`callId`/`homepageId` 等；`source: _id` 仅表示存储投影源，不得作为 wire 键。
-- 禁止以“后续补”“临时兼容”“测试先放宽”“先绕过 gate”为交付策略；无法闭环就明确阻断。
-- 仓库本地长期工作分支只允许 `dev1.0`；远端只保留 `dev1.0` 与 `main`。未经用户明确同意，不得创建、提交或推送其他分支；若确需例外，先更新 `quwoquan_ops/policies/branch_policy.yaml` 再执行。
-- 脏工作树是常态；禁止回滚或覆盖与你当前任务无关的用户改动。
-- 优先做可验证的小改动，并执行与触达范围匹配的 gate/test。
+- `quwoquan_service/services/<service>/contracts/**` 是该服务业务对象、wire 字段、错误码、path、route、surface、operation 与 decoder context 的唯一真相源；`quwoquan_service/contracts/metadata/**` 只保留跨服务 schema、共享协议和值定义。先 contracts，后 verify/codegen，再写业务逻辑，禁止手改 codegen 产物。
+- 错误码使用 `MODULE.KIND.REASON`；动态上下文只进入 string-only `context.attributes`。
+- Mongo/bson 可用 `_id`；客户端 HTTP/WS/DTO JSON 只认 canonical `id`/`postId` 等键。
+- 契约单轨：禁止版本信封、wire 多键双读、dual-read/dual-write、长期 shim、compat/warn-only 逃逸和为错误实现加 fallback。
+- `.qwq_output/` 只存可删除、可重建的运行输出；删除后仍必须能凭受版本控制真相源重建。
+- 源码树不得保留 `__pycache__/`、`*.pyc`、`*.pyo`、`.pytest_cache/`；缓存重定向到 `.qwq_output/env/repo/local/**`。
+- 每个第一方服务以 `environments/<alpha|beta|gamma|prod>/` 作为环境自治入口，共享定义只存在于服务内 `config/schema.yaml`、`resources/` 与 `deploy/base/`；环境之间禁止继承。环境装配、部署、巡检、修复统一使用 `python3 quwoquan_ops/cli/stackctl.py`。
+- 本地长期分支只允许 `dev1.0`；未经用户明确同意不得创建、提交或推送其他分支。
+- 脏工作树是常态；禁止回滚、覆盖或清理与当前任务无关的用户改动。
 
 ## 工作方式
 
-- 输出与注释默认使用中文；代码标识符、命令、路径保持原文。
-- 完成任务时，不只说明改了哪些文件；必须按适用项说明规格达成、测试证据、E2E 验证、产品/UX、运营观测、自动化/门禁和剩余风险。
-- 若用户纠正了反复出现的项目约束，把稳定规则补到离作用域最近的 `AGENTS.md` 或长期文档里，而不是只记在当前会话。
+- 默认中文说明与注释；代码标识符、命令和路径保持原文。
+- 优先做可验证的小改动，执行与影响面匹配的 gate/test。
+- 稳定、反复出现的规则写入最近的 `AGENTS.md`、特性树 README 或对应命令，不留在会话临时约定中。

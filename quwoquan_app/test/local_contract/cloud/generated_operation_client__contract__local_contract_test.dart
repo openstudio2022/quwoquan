@@ -30,6 +30,41 @@ void main() {
     });
   });
 
+  test('generated my reports method uses private typed query ABI', () async {
+    final executor = _RecordingExecutor(
+      response: <String, Object?>{
+        'items': <Object?>[
+          <String, Object?>{
+            'id': 'report-1',
+            'targetType': 'post',
+            'targetId': 'post-1',
+            'reason': 'spam',
+            'status': 'pending',
+            'createdAt': '2026-07-20T00:00:00Z',
+            'updatedAt': '2026-07-20T00:00:00Z',
+          },
+        ],
+      },
+    );
+    final client = GeneratedCloudOperationClient(executor);
+
+    final page = await client.contentReportListMyReports(
+      const ContentMyReportsQuery(limit: 10),
+      context: const CloudOperationInvocationContext(
+        surfaceId: 'myReports',
+        clientPageId: 'content.list.my.reports',
+        actor: CloudOperationActorContext(personaId: 'persona-1'),
+      ),
+    );
+
+    expect(
+      executor.operation?.canonicalOperationId,
+      AppCloudOperationIds.contentReportListMyReports,
+    );
+    expect(executor.queryParameters, <String, String>{'limit': '10'});
+    expect(page.items.single.status, ContentReportStatus.pending);
+  });
+
   test(
     'generated location method returns typed Slice without adapter cast',
     () async {
@@ -65,48 +100,51 @@ void main() {
   );
 
   test(
-    'generated post search method encodes typed query and decodes view',
+    'generated canonical search method encodes typed query and decodes view',
     () async {
       final executor = _RecordingExecutor(
         response: <String, Object?>{
-          'items': <Object?>[
+          'hits': <Object?>[
             <String, Object?>{
-              'postId': 'post-1',
-              'contentType': 'article',
+              'target': 'article',
+              'objectId': 'post-1',
               'title': '西湖摄影',
-              'likeCount': 3,
+              'payload': <String, Object?>{'likeCount': 3},
             },
           ],
+          'requestId': 'search-request-1',
+          'rankingVersion': 'search-current',
+          'relatedTerms': <Object?>[],
+          'degradeSignals': <Object?>[],
         },
       );
       final client = GeneratedCloudOperationClient(executor);
 
-      final result = await client.contentPostSearchPosts(
-        const ContentPostSearchQuery(
+      final result = await client.searchSearchQuerySearchQuery(
+        CanonicalSearchQuery(
           query: '西湖',
-          identity: 'work',
-          type: 'article',
+          objectTypes: const <String>['article'],
           limit: 10,
         ),
         context: const CloudOperationInvocationContext(
           surfaceId: 'globalSearchNetworkResults',
-          clientPageId: 'content.post.search',
+          clientPageId: 'search.query',
           actor: CloudOperationActorContext(personaId: 'persona-1'),
         ),
       );
 
       expect(
         executor.operation?.canonicalOperationId,
-        AppCloudOperationIds.contentPostSearchPosts,
+        AppCloudOperationIds.searchSearchQuerySearchQuery,
       );
-      expect(executor.queryParameters, <String, String>{
+      expect(executor.body, <String, Object?>{
         'query': '西湖',
-        'identity': 'work',
-        'type': 'article',
-        'limit': '10',
+        'mode': 'result',
+        'objectTypes': <String>['article'],
+        'limit': 10,
       });
-      expect(result.items.single.postId, 'post-1');
-      expect(result.items.single.title, '西湖摄影');
+      expect(result.hits.single.objectId, 'post-1');
+      expect(result.hits.single.content?.title, '西湖摄影');
     },
   );
 
@@ -163,6 +201,7 @@ void main() {
           'body': '正文',
           'authorId': 'author-1',
           'displayName': '作者',
+          'status': 'published',
           'articleMarkdown': '# 西湖摄影',
           'articleAssetManifest': <String, Object?>{
             'assets': <Object?>['cover-1'],
@@ -262,15 +301,14 @@ void main() {
         contentIdentity: ContentPostIdentity.work,
         title: '对象闭环',
         articleMarkdown: '# 对象闭环',
-        articleAssetManifest:
-            ContentPostStructuredObject(<String, ContentPostStructuredValue>{
-              'schema': const ContentPostStructuredText(
-                'article-asset-manifest',
-              ),
-              'assets': ContentPostStructuredArray(
-                const <ContentPostStructuredValue>[],
-              ),
-            }),
+        articleAssetManifest: ContentPostStructuredObject(
+          <String, ContentPostStructuredValue>{
+            'schema': const ContentPostStructuredText('article-asset-manifest'),
+            'assets': ContentPostStructuredArray(
+              const <ContentPostStructuredValue>[],
+            ),
+          },
+        ),
         mediaAssetIds: const <String>['asset-1'],
         visibility: ContentPostVisibility.public,
       ),

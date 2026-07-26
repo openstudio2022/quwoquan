@@ -1,10 +1,6 @@
 package runtimeobservability
 
-import (
-	"encoding/json"
-	"fmt"
-	"strings"
-)
+import "strings"
 
 func compactIOAccessLog(entry IOAccessLog) map[string]any {
 	payload := map[string]any{
@@ -17,6 +13,16 @@ func compactIOAccessLog(entry IOAccessLog) map[string]any {
 		"durMs":  entry.DurationMs,
 		"req":    entry.Req,
 		"trace":  entry.Trace,
+		"resource": serviceLogResource(
+			entry.ServiceName,
+			entry.Service,
+			entry.Origin,
+			entry.AppVersion,
+		),
+		"correlation": serviceLogCorrelation(entry.Req, entry.Trace, entry.PageID),
+	}
+	if entry.ErrorCode != "" {
+		payload["err"] = entry.ErrorCode
 	}
 	return compactMap(payload)
 }
@@ -30,6 +36,13 @@ func compactProcessTraceLog(entry ProcessTraceLog) map[string]any {
 		"result": entry.Result,
 		"req":    entry.Req,
 		"trace":  entry.Trace,
+		"resource": serviceLogResource(
+			entry.ServiceName,
+			entry.Service,
+			entry.Origin,
+			entry.AppVersion,
+		),
+		"correlation": serviceLogCorrelation(entry.Req, entry.Trace, entry.PageID),
 	}
 	attrs := map[string]any{}
 	if len(entry.IO.InputKV) > 0 {
@@ -56,6 +69,13 @@ func compactExceptionLog(entry ExceptionLog) map[string]any {
 		"err":   entry.ErrorCode,
 		"req":   entry.Req,
 		"trace": entry.Trace,
+		"resource": serviceLogResource(
+			entry.ServiceName,
+			entry.Service,
+			entry.Origin,
+			entry.AppVersion,
+		),
+		"correlation": serviceLogCorrelation(entry.Req, entry.Trace, entry.PageID),
 	}
 	attrs := map[string]any{
 		"module":       entry.ErrorModule,
@@ -70,6 +90,13 @@ func compactExceptionLog(entry ExceptionLog) map[string]any {
 		attrs["outputKv"] = entry.IO.OutputKV
 	}
 	payload["attrs"] = compactMap(attrs)
+	if entry.StackHash != "" || entry.FailurePoint != "" {
+		payload["fingerprint"] = exceptionFingerprint(
+			entry.ErrorCode,
+			entry.FailurePoint,
+			entry.StackHash,
+		)
+	}
 	return compactMap(payload)
 }
 
@@ -128,66 +155,37 @@ func compactMap(input map[string]any) map[string]any {
 	return output
 }
 
-func formatDelimitedLog(kind string, payload map[string]any) string {
-	fields := logFieldOrder(kind)
-	if len(fields) == 0 {
-		fields = []string{"ts", "level", "msg"}
-	}
-	values := make([]string, 0, len(fields))
-	message := compactLogMessage(payload)
-	for _, field := range fields {
-		if field == "msg" {
-			values = append(values, message)
-		} else {
-			values = append(values, compactPrefixField(payload[field]))
-		}
-	}
-	msgLines := strings.Split(strings.ReplaceAll(values[len(values)-1], "\r\n", "\n"), "\n")
-	line := strings.Join(append(values[:len(values)-1], msgLines[0]), ",")
-	for _, continuation := range msgLines[1:] {
-		line += "\n\t" + continuation
-	}
-	return line
+func formatRuntimeLog(kind string, payload map[string]any) string {
+	return formatCanonicalRuntimeLog(kind, payload)
 }
 
-func logFieldOrder(kind string) []string {
-	switch kind {
-	case "access":
-		return []string{"ts", "level", "method", "route", "status", "durMs", "req", "trace", "msg"}
-	case "runtime", "event":
-		return []string{"ts", "level", "event", "result", "req", "trace", "msg"}
-	case "exception":
-		return []string{"ts", "level", "err", "req", "trace", "msg"}
-	case "audit":
-		return []string{"ts", "level", "action", "target", "result", "msg"}
-	default:
-		return []string{"ts", "level", "msg"}
-	}
+func serviceLogResource(
+	serviceName string,
+	service string,
+	component string,
+	appVersion string,
+) map[string]any {
+	return compactMap(map[string]any{
+		"sourceType": "service",
+		"service":    firstNonEmpty(serviceName, service, "runtime-observability"),
+		"component":  component,
+		"service.version": appVersion,
+	})
 }
 
-func compactLogMessage(payload map[string]any) string {
-	message := fmt.Sprint(payload["msg"])
-	attrs, ok := payload["attrs"]
-	if !ok || attrs == nil {
-		return message
-	}
-	encoded, err := json.Marshal(attrs)
-	if err != nil || len(encoded) == 0 || string(encoded) == "{}" {
-		return message
-	}
-	if strings.TrimSpace(message) == "" {
-		return "attrs=" + string(encoded)
-	}
-	return message + " attrs=" + string(encoded)
+func serviceLogCorrelation(
+	requestID string,
+	traceID string,
+	pageName string,
+) map[string]any {
+	return compactMap(map[string]any{
+		"requestId": requestID,
+		"traceId":   traceID,
+		"pageName":  pageName,
+	})
 }
 
-func compactPrefixField(value any) string {
-	if value == nil {
-		return ""
-	}
-	text := fmt.Sprint(value)
-	text = strings.ReplaceAll(text, "\r\n", " ")
-	text = strings.ReplaceAll(text, "\n", " ")
-	text = strings.ReplaceAll(text, ",", "%2C")
-	return text
+func exceptionFingerprint(errorCode string, failurePoint string, stackHash string) string {
+	parts := []string{strings.TrimSpace(errorCode), strings.TrimSpace(failurePoint), strings.TrimSpace(stackHash)}
+	return strings.Join(parts, ":")
 }

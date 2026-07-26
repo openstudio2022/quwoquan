@@ -1,2 +1,2 @@
-export 'package:quwoquan_app/cloud/runtime/generated/rtc/call_session_dtos.g.dart'
+export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show CallSessionDto;

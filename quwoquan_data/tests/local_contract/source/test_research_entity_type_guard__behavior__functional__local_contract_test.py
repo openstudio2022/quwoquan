@@ -35,7 +35,7 @@ from content.source.prepare import (  # noqa: E402
 from content.execution import store  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 
-EXECUTION_ID = "20260711--travel-homepage-research-type--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260711--travel-homepage-research-type--test-region-a--pilot-001"
 
 
 def _mixed_type_task() -> str:

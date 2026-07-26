@@ -1,0 +1,11 @@
+overrides:
+  sys.circle-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.circle-service.user_account_security_authority.timeout_ms: 300
+  sys.circle-service.es.enabled: true
+  sys.circle-service.es.requestTimeoutMs: 5000
+secretRefs:
+  sys.circle-service.mongo.uri: CIRCLE_MONGO_URI
+  sys.circle-service.redis.password: CIRCLE_REDIS_PASSWORD
+externalBindings:
+  runtime.message.transport:
+    state: enabled

@@ -1,24 +1,66 @@
-# L3 Story：time-decay-contextual-ranking
+# L3 Story：时间衰减与上下文排序 (`time-decay-contextual-ranking`)
 
-## 功能说明
+> 所属能力：[`feed-orchestration-recommendation`](../spec.md)
 
-时间维度不只包含内容 freshness，也包括统计量时间衰减、时段上下文、季节性和事件窗口。该 Story 冻结时间加权统计与上下文化排序规格，避免老统计量长期钉死排序。
+> Journey / Scenario：[`JNY-003 / SCN-007`](../../../spec.md#scn-007)
 
-## 范围
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- CTR、完成率、互动率等统计量按时间加权衰减。
-- requestHour、weekday、season、eventWindow 等上下文进入排序策略。
-- 时间衰减特征新鲜度进入 SLO。
-- 与内容生命周期复活共享季节/事件触发器，但不拥有复活状态机。
+## 1. 用户价值
 
-## 非目标
+作为内容创作者或浏览者，
+我希望按时间衰减、时段、季节和事件上下文调整候选分数，同时保持策略版本可解释，
+从而完成可恢复的内容创作、发现或互动。
 
-- 本轮不实现特征作业或 scorer 改动。
-- 不把时间上下文硬编码到 UI。
+## 2. 范围与非目标
 
-## 验收标准
+### In Scope
 
-- A1：统计量时间衰减替代全量均值作为排序输入。
-- A2：时段、季节、事件上下文来自 metadata/feature store。
-- A3：时间特征新鲜度进入 `time_decay_feature_freshness`。
-- A4：时间策略异常时回退 freshness 与规则排序。
+- “时间衰减与上下文排序”的输入、可观察主路径、失败语义以及与父能力的交接。
+- CTR/完成率/互动率等统计量时间加权。
+- requestHour、weekday、season、eventWindow 上下文。
+- 时间特征新鲜度 SLI。
+- 本 Story 不包含特征作业、scorer 改动或 UI 分叉实现。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 时间衰减与上下文排序
+
+- 按时间衰减、时段、季节和事件上下文调整候选分数，同时保持策略版本可解释。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/recommendation-service/config/schema.yaml`
+- canonical：`quwoquan_service/services/content-service/observability/slo/recommendation_slo.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 时间衰减与上下文排序
+
+- GIVEN 内容创作者或浏览者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“时间衰减与上下文排序”对应的公开行为。
+- THEN 按时间衰减、时段、季节和事件上下文调整候选分数，同时保持策略版本可解释。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`feed-orchestration-recommendation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 时间衰减与上下文排序 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“时间衰减与上下文排序”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

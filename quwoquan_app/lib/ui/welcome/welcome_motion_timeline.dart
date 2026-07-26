@@ -139,7 +139,7 @@ class WelcomeSequenceEvent {
     this.slowFrameStreakDetected = false,
   });
 
-  static const String motionSpecVersion = 'petal_bloom_v2';
+  static const String motionSpec = 'petal_bloom';
 
   final WelcomeMotionPhase phase;
   final int cycleIndex;
@@ -159,7 +159,7 @@ class WelcomeSequenceEvent {
 
   Map<String, Object?> toProperties() => <String, Object?>{
     'phase': phase.name,
-    'motionSpecVersion': motionSpecVersion,
+    'motionSpec': motionSpec,
     'cycleIndex': cycleIndex,
     'replayCount': replayCount,
     'deadlineOrigin': deadlineOrigin,

@@ -10,7 +10,11 @@ import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 
-class LocalChatSearchSyncService {
+abstract interface class LocalChatSearchSynchronizer {
+  Future<bool> sync({bool force = false});
+}
+
+class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
   LocalChatSearchSyncService({
     required this._chatRepository,
     required this._conversationCache,
@@ -44,6 +48,7 @@ class LocalChatSearchSyncService {
     await _activeSyncCompleter?.future;
   }
 
+  @override
   Future<bool> sync({bool force = false}) async {
     if (_syncing) {
       return false;

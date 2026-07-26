@@ -1,7 +1,30 @@
+/// compile-time 业务环境配置缺失或非法。
+///
+/// 该异常只承载脱敏的 define 键集合，不承载 URL、token 或原始异常文本。
+final class CloudRuntimeConfigurationException implements Exception {
+  CloudRuntimeConfigurationException({
+    required this.runtimeEnv,
+    required Iterable<String> invalidKeys,
+  }) : invalidKeys = List<String>.unmodifiable(invalidKeys);
+
+  final String runtimeEnv;
+  final List<String> invalidKeys;
+
+  String get source => 'runtime_define_validation';
+
+  String get message {
+    final keys = invalidKeys.isEmpty ? 'unknown' : invalidKeys.join(', ');
+    return 'App runtime package is missing or invalid: $keys';
+  }
+
+  @override
+  String toString() => '$source: $message';
+}
+
 /// 云侧运行时配置（端云协同时使用）。
 ///
-/// 约定：alpha 先跑通单实例验证，beta 做本地端云联调，再切到 gamma/prod。
-/// 生产灰度属于 `prod` 语义下的 rollout stage，不额外占用环境枚举。
+/// 环境和业务 endpoint 必须由 Flutter CLI/Xcode build 的同一环境包显式注入。
+/// 未注入时不再使用 alpha 作为业务运行时默认值。
 class CloudRuntimeConfig {
   const CloudRuntimeConfig._();
 
@@ -10,7 +33,7 @@ class CloudRuntimeConfig {
   /// 通过 `--dart-define=APP_RUNTIME_ENV=...` 注入。
   static const String appRuntimeEnv = String.fromEnvironment(
     'APP_RUNTIME_ENV',
-    defaultValue: 'alpha',
+    defaultValue: '',
   );
 
   /// Gateway Base URL（例如本机联调网关、或 dev/staging/prod）。
@@ -39,6 +62,15 @@ class CloudRuntimeConfig {
 
   static const String mediaUploadBaseUrl = String.fromEnvironment(
     'MEDIA_UPLOAD_BASE_URL',
+    defaultValue: '',
+  );
+
+  /// 媒体房间连接地址，仅由受控环境包注入平台媒体 adapter。
+  ///
+  /// 通过 `--dart-define=RTC_MEDIA_CONNECTION_URL=...` 注入；它绝不能由
+  /// CallSession operation 响应透传。
+  static const String rtcMediaConnectionUrl = String.fromEnvironment(
+    'RTC_MEDIA_CONNECTION_URL',
     defaultValue: '',
   );
 
@@ -97,6 +129,12 @@ class CloudRuntimeConfig {
     defaultValue: '',
   );
 
+  /// 启动入口标识，仅用于诊断；热重启不会重新编译该值。
+  static const String launchMode = String.fromEnvironment(
+    'QWQ_APP_LAUNCH_MODE',
+    defaultValue: 'unknown',
+  );
+
   /// 当前 prod rollout 诊断阶段，仅用于演练/观测，不参与环境枚举。
   static const String appRolloutMode = String.fromEnvironment(
     'APP_ROLLOUT_MODE',
@@ -125,10 +163,61 @@ class CloudRuntimeConfig {
         appRolloutMode == 'full';
   }
 
+  /// 返回编译期业务 define 中缺失或非法的键，不包含任何 endpoint 值。
+  static List<String> get missingRequiredDefineKeys {
+    final invalid = <String>[
+      if (!isValidAppRuntimeEnv) 'APP_RUNTIME_ENV',
+      if (!_isValidHttpsBaseUrl(gatewayBaseUrl)) 'CLOUD_GATEWAY_BASE_URL',
+      if (!_isValidHttpsBaseUrl(mediaAvatarCdnBaseUrl))
+        'MEDIA_AVATAR_CDN_BASE_URL',
+      if (!_isValidHttpsBaseUrl(mediaImageCdnBaseUrl))
+        'MEDIA_IMAGE_CDN_BASE_URL',
+      if (!_isValidHttpsBaseUrl(mediaVideoCdnBaseUrl))
+        'MEDIA_VIDEO_CDN_BASE_URL',
+      if (!_isValidHttpsBaseUrl(mediaUploadBaseUrl)) 'MEDIA_UPLOAD_BASE_URL',
+      if (!_isValidSecureWebSocketUrl(rtcMediaConnectionUrl))
+        'RTC_MEDIA_CONNECTION_URL',
+    ];
+    return List<String>.unmodifiable(invalid);
+  }
+
+  /// 只用于启动证据的环境摘要；绝不返回 URL。
+  static Map<String, String> get runtimeDefineSummary {
+    return <String, String>{
+      'runtimeEnv': appRuntimeEnv.isEmpty ? 'unknown' : appRuntimeEnv,
+      'launchMode': launchMode,
+      'configurationState': missingRequiredDefineKeys.isEmpty
+          ? 'complete'
+          : 'invalid',
+      'missingKeys': missingRequiredDefineKeys.join(','),
+    };
+  }
+
   /// 正式启动必须显式注入同一环境包的网关与四类媒体 authority。
   ///
   /// 缺失时直接终止启动，避免直接执行 `flutter run` 意外连接到 alpha。
   static void validateRequiredEndpoints() {
+    validateRuntimePackage(
+      runtimeEnv: appRuntimeEnv,
+      gatewayBaseUrl: gatewayBaseUrl,
+      mediaAvatarCdnBaseUrl: mediaAvatarCdnBaseUrl,
+      mediaImageCdnBaseUrl: mediaImageCdnBaseUrl,
+      mediaVideoCdnBaseUrl: mediaVideoCdnBaseUrl,
+      mediaUploadBaseUrl: mediaUploadBaseUrl,
+      rtcMediaConnectionUrl: rtcMediaConnectionUrl,
+    );
+  }
+
+  /// 验证业务运行环境包；观测/SLS 不属于客户端启动前置条件。
+  static void validateRuntimePackage({
+    required String runtimeEnv,
+    required String gatewayBaseUrl,
+    required String mediaAvatarCdnBaseUrl,
+    required String mediaImageCdnBaseUrl,
+    required String mediaVideoCdnBaseUrl,
+    required String mediaUploadBaseUrl,
+    required String rtcMediaConnectionUrl,
+  }) {
     final endpoints = <String, String>{
       'CLOUD_GATEWAY_BASE_URL': gatewayBaseUrl,
       'MEDIA_AVATAR_CDN_BASE_URL': mediaAvatarCdnBaseUrl,
@@ -136,18 +225,28 @@ class CloudRuntimeConfig {
       'MEDIA_VIDEO_CDN_BASE_URL': mediaVideoCdnBaseUrl,
       'MEDIA_UPLOAD_BASE_URL': mediaUploadBaseUrl,
     };
-    final invalid = endpoints.entries
-        .where((entry) => !_isValidHttpsBaseUrl(entry.value))
-        .map((entry) => entry.key)
-        .toList(growable: false);
-    if (!isValidAppRuntimeEnv || invalid.isNotEmpty) {
-      final missing = <String>[
-        if (!isValidAppRuntimeEnv) 'APP_RUNTIME_ENV',
-        ...invalid,
+    // 必须用可变 List 字面量；空 where().toList() 在部分运行时会得到定长列表，
+    // 随后 add RTC 键会抛 UnsupportedError，掩盖真正的配置错误。
+    final invalidEndpoints = <String>[
+      for (final entry in endpoints.entries)
+        if (!_isValidHttpsBaseUrl(entry.value)) entry.key,
+    ];
+    if (!_isValidSecureWebSocketUrl(rtcMediaConnectionUrl)) {
+      invalidEndpoints.add('RTC_MEDIA_CONNECTION_URL');
+    }
+    final validRuntimeEnv =
+        runtimeEnv == 'alpha' ||
+        runtimeEnv == 'beta' ||
+        runtimeEnv == 'gamma' ||
+        runtimeEnv == 'prod';
+    if (!validRuntimeEnv || invalidEndpoints.isNotEmpty) {
+      final invalid = <String>[
+        if (!validRuntimeEnv) 'APP_RUNTIME_ENV',
+        ...invalidEndpoints,
       ];
-      throw StateError(
-        'App runtime endpoints must be injected by the environment launcher: '
-        '${missing.join(', ')}',
+      throw CloudRuntimeConfigurationException(
+        runtimeEnv: runtimeEnv,
+        invalidKeys: invalid,
       );
     }
   }
@@ -156,6 +255,15 @@ class CloudRuntimeConfig {
     final uri = Uri.tryParse(raw.trim());
     return uri != null &&
         uri.scheme.toLowerCase() == 'https' &&
+        uri.host.isNotEmpty &&
+        !uri.hasQuery &&
+        !uri.hasFragment;
+  }
+
+  static bool _isValidSecureWebSocketUrl(String raw) {
+    final uri = Uri.tryParse(raw.trim());
+    return uri != null &&
+        uri.scheme.toLowerCase() == 'wss' &&
         uri.host.isNotEmpty &&
         !uri.hasQuery &&
         !uri.hasFragment;

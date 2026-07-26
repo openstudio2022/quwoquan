@@ -74,7 +74,13 @@ public final class VideoPlayerTest {
         @NonNull VideoPlayerOptions options,
         @Nullable SurfaceProducer surfaceProducer,
         @NonNull ExoPlayerProvider exoPlayerProvider) {
-      super(events, mediaItem, options, surfaceProducer, exoPlayerProvider);
+      super(
+          events,
+          mediaItem,
+          options,
+          surfaceProducer,
+          exoPlayerProvider,
+          /* rendererMode= */ "platform_view");
     }
 
     @NonNull
@@ -105,7 +111,10 @@ public final class VideoPlayerTest {
     VideoPlayer videoPlayer = createVideoPlayer();
 
     verify(mockExoPlayer).setMediaItem(fakeVideoAsset.getMediaItem());
+    verify(mockExoPlayer).addListener(any(ExoPlayerEventListener.class));
+    verify(mockExoPlayer).addAnalyticsListener(any(ExoPlayerEventListener.class));
     verify(mockExoPlayer).prepare();
+    verify(mockEvents).onPlaybackDiagnostics("platform_view", "synchronous", true);
 
     verify(mockExoPlayer).setAudioAttributes(attributesCaptor.capture(), eq(true));
     assertEquals(C.AUDIO_CONTENT_TYPE_MOVIE, attributesCaptor.getValue().contentType);

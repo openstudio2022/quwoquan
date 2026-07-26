@@ -336,7 +336,7 @@ def analyze_sequence(
     )
     return {
         "schema": "welcome-motion-frames-report",
-        "motionSpecVersion": "petal_bloom_v2",
+        "motionSpec": "petal_bloom",
         "passed": passed,
         "frameCount": len(frames),
         "budFrameIndex": bud_index,

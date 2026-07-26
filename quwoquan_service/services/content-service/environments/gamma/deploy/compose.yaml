@@ -1,0 +1,18 @@
+services:
+  # 仅 gamma 启用搜索投影；beta content-release 关闭该能力且不启动
+  # Elasticsearch。Compose 对 depends_on 采用后置文件覆盖，因此此处必须
+  # 完整重申 content 的所有硬依赖，不能只追加 Elasticsearch。
+  content-service:
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      object-storage-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      recommendation-service:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy

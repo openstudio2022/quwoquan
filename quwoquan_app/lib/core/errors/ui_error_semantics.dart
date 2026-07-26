@@ -9,6 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_loc
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
@@ -618,7 +619,7 @@ class UiErrorSemanticResolver {
       return UITextConstants.workOpenFailedTitle;
     }
     if (code.startsWith('CHAT.')) {
-      return UITextConstants.chatOpenFailedTitle;
+      return ChatText.chatOpenFailedTitle;
     }
     if (code.startsWith('ENTITY.')) {
       return UITextConstants.homepageLoadFailedTitle;
@@ -646,7 +647,7 @@ class UiErrorSemanticResolver {
   static String _notFoundMessage(Object error, RuntimeFailureBase? failure) {
     final code = _sourceCode(error, failure) ?? '';
     if (code.startsWith('CHAT.')) {
-      return UITextConstants.chatOpenFailedMessage;
+      return ChatText.chatOpenFailedMessage;
     }
     return UITextConstants.contentUnavailableReason;
   }
@@ -663,6 +664,18 @@ class UiErrorSemanticResolver {
     }
     if (continuation is SubmitCommentContinuation) {
       return '登录后将继续提交刚刚输入的评论';
+    }
+    if (continuation is FollowHomepageContinuation) {
+      return '登录后将继续关注当前主页';
+    }
+    if (continuation is WishlistHomepageContinuation) {
+      return '登录后将继续把当前主页标记为想去';
+    }
+    if (continuation is OpenHomepageReviewComposerContinuation) {
+      return '登录后将继续打开当前主页的评价编辑器';
+    }
+    if (continuation is OpenHomepageOwnerConversationContinuation) {
+      return '登录后将继续联系当前主页的认领主体';
     }
     if (continuation is FollowProfileContinuation) {
       return '登录后将继续关注当前对象';

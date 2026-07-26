@@ -11,14 +11,9 @@ part 'comment_provider_state.dart';
 part 'comment_provider_reply_tree.dart';
 part 'comment_provider_counts_sync.dart';
 
-const String _commentOrdering = 'pinned_first';
-
 class CommentNotifier extends Notifier<CommentState>
     with _CommentCountsSyncMixin {
   CommentNotifier(this.postId);
-
-  static final Map<String, _CommentPageCacheEntry> _commentPageCache =
-      <String, _CommentPageCacheEntry>{};
 
   @override
   final String postId;
@@ -33,13 +28,7 @@ class CommentNotifier extends Notifier<CommentState>
       ref.read(workBrowserContentCommentFacetProvider);
 
   @override
-  CommentState build() {
-    final cached = _commentPageCache[postId]?.state;
-    if (cached != null) {
-      return cached.copyWith(sessionLoadVersion: 0);
-    }
-    return const CommentState();
-  }
+  CommentState build() => const CommentState();
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
     final requiresResolvedPersonaForMutations = ref
@@ -71,7 +60,7 @@ class CommentNotifier extends Notifier<CommentState>
     );
     try {
       await _hydrateCommentConfig();
-      final page = await _repo.listComments(postId: postId);
+      final page = await _repo.listComments(postId: postId, sort: state.sort);
       if (!ref.mounted) {
         return;
       }
@@ -83,7 +72,6 @@ class CommentNotifier extends Notifier<CommentState>
         status: CommentListStatus.idle,
       );
       _syncConfirmedCommentTotal(page.total);
-      _storeSnapshot();
       _trackLatency(
         metricName: CommentMetricNames.listLoadMs,
         stopwatch: stopwatch,
@@ -138,6 +126,18 @@ class CommentNotifier extends Notifier<CommentState>
     }
   }
 
+  /// 切换服务端排序档位并重新加载首屏；排序真相源在服务端，禁止本地重排。
+  Future<void> changeSort(ContentCommentSort sort) async {
+    if (state.sort == sort || state.isLoading) return;
+    state = state.copyWith(
+      sort: sort,
+      comments: const [],
+      nextCursor: () => null,
+      expandedReplyCommentIds: const {},
+    );
+    await loadComments();
+  }
+
   Future<void> loadMore() async {
     if (!state.hasMore || state.status == CommentListStatus.loadingMore) {
       return;
@@ -158,6 +158,7 @@ class CommentNotifier extends Notifier<CommentState>
       final page = await _repo.listComments(
         postId: postId,
         cursor: state.nextCursor,
+        sort: state.sort,
       );
       if (!ref.mounted) {
         return;
@@ -169,7 +170,6 @@ class CommentNotifier extends Notifier<CommentState>
         status: CommentListStatus.idle,
       );
       _syncConfirmedCommentTotal(page.total);
-      _storeSnapshot();
       _lifecycleObservability.recordAppend(
         pageName: 'comment_thread',
         result: 'success',
@@ -216,13 +216,9 @@ class CommentNotifier extends Notifier<CommentState>
     final parentCommentId = replyToCommentId == null
         ? null
         : _parentIdForReplyTarget(replyToCommentId);
-    final rawContextVersion = activeContext.contextVersion.trim();
-    final personaContextVersion = rawContextVersion.isEmpty
-        ? null
-        : int.tryParse(rawContextVersion);
-    if (rawContextVersion.isNotEmpty && personaContextVersion == null) {
-      throw StateError('active persona context version is not an integer');
-    }
+    final personaContextVersion = activeContext.contextVersion > 0
+        ? activeContext.contextVersion
+        : null;
     try {
       final result = await _repo.createComment(
         CreateContentCommentCommand(
@@ -253,7 +249,7 @@ class CommentNotifier extends Notifier<CommentState>
         eventName: CommentEventNames.submitSucceeded,
         postId: postId,
         commentId: confirmed.id,
-        sortMode: _commentOrdering,
+        sortMode: state.sort.wireValue,
         replyDepth: replyToCommentId == null ? 0 : 1,
         latencyMs: stopwatch.elapsedMilliseconds,
         attachmentCount: attachmentMediaIds.length,
@@ -272,7 +268,7 @@ class CommentNotifier extends Notifier<CommentState>
       _observability.trackAction(
         eventName: CommentEventNames.submitFailed,
         postId: postId,
-        sortMode: _commentOrdering,
+        sortMode: state.sort.wireValue,
         replyDepth: replyToCommentId == null ? 0 : 1,
         latencyMs: stopwatch.elapsedMilliseconds,
         failureKind: e.runtimeType.toString(),
@@ -287,7 +283,7 @@ class CommentNotifier extends Notifier<CommentState>
     required String createdCommentId,
     required String? parentCommentId,
   }) async {
-    final page = await _repo.listComments(postId: postId);
+    final page = await _repo.listComments(postId: postId, sort: state.sort);
     if (!ref.mounted) {
       throw StateError('comment surface disposed during authoritative refresh');
     }
@@ -301,7 +297,6 @@ class CommentNotifier extends Notifier<CommentState>
           : {...state.expandedReplyCommentIds, parentCommentId},
     );
     _syncConfirmedCommentTotal(page.total);
-    _storeSnapshot();
     final visible = _findComment(createdCommentId);
     if (visible != null) return visible;
     if (parentCommentId == null) {
@@ -335,7 +330,6 @@ class CommentNotifier extends Notifier<CommentState>
           )
           .toList(growable: false),
     );
-    _storeSnapshot();
     return created;
   }
 
@@ -452,7 +446,7 @@ class CommentNotifier extends Notifier<CommentState>
         eventName: CommentEventNames.reactionChanged,
         postId: postId,
         commentId: commentId,
-        sortMode: _commentOrdering,
+        sortMode: state.sort.wireValue,
         latencyMs: stopwatch.elapsedMilliseconds,
         reaction: reaction.name,
       );
@@ -531,7 +525,7 @@ class CommentNotifier extends Notifier<CommentState>
         eventName: CommentEventNames.pinChanged,
         postId: postId,
         commentId: commentId,
-        sortMode: _commentOrdering,
+        sortMode: state.sort.wireValue,
         latencyMs: stopwatch.elapsedMilliseconds,
         reaction: nextPinned ? 'pin' : 'unpin',
       );
@@ -573,7 +567,7 @@ class CommentNotifier extends Notifier<CommentState>
           eventName: CommentEventNames.replyExpanded,
           postId: postId,
           commentId: commentId,
-          sortMode: _commentOrdering,
+          sortMode: state.sort.wireValue,
           replyDepth: 1,
         );
       }
@@ -623,7 +617,7 @@ class CommentNotifier extends Notifier<CommentState>
         eventName: CommentEventNames.replyExpanded,
         postId: postId,
         commentId: commentId,
-        sortMode: _commentOrdering,
+        sortMode: state.sort.wireValue,
         replyDepth: 1,
         latencyMs: stopwatch.elapsedMilliseconds,
       );
@@ -659,7 +653,7 @@ class CommentNotifier extends Notifier<CommentState>
       eventName: CommentEventNames.replyCollapsed,
       postId: postId,
       commentId: commentId,
-      sortMode: _commentOrdering,
+      sortMode: state.sort.wireValue,
       replyDepth: 1,
     );
   }
@@ -696,25 +690,6 @@ class CommentNotifier extends Notifier<CommentState>
     }
     return null;
   }
-
-  void _storeSnapshot() {
-    _commentPageCache[postId] = _CommentPageCacheEntry(
-      state: state.copyWith(
-        sessionLoadVersion: 0,
-        status: CommentListStatus.idle,
-        failure: () => null,
-        appendFailure: () => null,
-      ),
-      cachedAt: DateTime.now(),
-    );
-  }
-}
-
-class _CommentPageCacheEntry {
-  const _CommentPageCacheEntry({required this.state, required this.cachedAt});
-
-  final CommentState state;
-  final DateTime cachedAt;
 }
 
 final commentProviderFamily = NotifierProvider.autoDispose

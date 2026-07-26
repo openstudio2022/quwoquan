@@ -2,11 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 
-	"quwoquan_service/services/product-ops-service/internal/application"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 )
 
 func (s *productService) handleRecordVisit(w http.ResponseWriter, r *http.Request) {
@@ -36,23 +37,38 @@ func (s *productService) handleRecordVisit(w http.ResponseWriter, r *http.Reques
 		writeRuntimeError(w, r, http.StatusUnauthorized, "请先登录", "verified telemetry actor is required")
 		return
 	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 	record, err := s.telemetry.RecordVisit(r.Context(), application.VisitInput{
 		UserID:     actorHash,
 		TargetType: body.TargetType,
 		TargetKey:  body.TargetKey,
 		SessionID:  body.SessionID,
 		Source:     body.Source,
-	})
+	}, idempotencyKey)
 	if err != nil {
+		if errors.Is(err, application.ErrVisitIdempotencyKeyRequired) {
+			writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", err.Error())
+			return
+		}
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"targetType": record.TargetType,
-		"targetKey":  record.TargetKey,
-		"visitCount": record.VisitCount,
-		"lastSeenAt": record.LastSeenAt,
+	writeJSON(w, http.StatusOK, visitCommandResponse{
+		TargetType: record.TargetType,
+		TargetKey:  record.TargetKey,
+		VisitCount: record.VisitCount,
+		LastSeenAt: record.LastSeenAt,
+		Replayed:   record.Replayed,
 	})
+}
+
+// visitCommandResponse 是 RecordVisit 的强类型 wire 响应。
+type visitCommandResponse struct {
+	TargetType string `json:"targetType"`
+	TargetKey  string `json:"targetKey"`
+	VisitCount int    `json:"visitCount"`
+	LastSeenAt string `json:"lastSeenAt,omitempty"`
+	Replayed   bool   `json:"replayed,omitempty"`
 }
 
 func (s *productService) handleGetVisitStats(w http.ResponseWriter, r *http.Request) {

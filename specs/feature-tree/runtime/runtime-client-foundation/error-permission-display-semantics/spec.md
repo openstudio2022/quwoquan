@@ -1,82 +1,185 @@
-# L3 子特性：error-permission-display-semantics
+# L3 Story：错误权限展示语义 (`error-permission-display-semantics`)
 
-## 功能说明
+> 所属能力：[`runtime-client-foundation`](../spec.md)
 
-端侧**云端/网络错误**、**权限类**、**登录门禁**与**提交/局部动作失败**的统一展示语义与交互契约，适用于所有涉及云端交互、系统权限与需要账号身份的页面。与 `specs/ux/error-and-permission-semantics.md` 一一对应。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-| L4 子节点 | 职责 |
-|-----------|------|
-| `cloud-network-error-display-contract` | 云端/网络错误的展示方式（内联 vs SnackBar）、语义 token、l10n 约定 |
-| `permission-card-display-contract` | 权限卡片统一形态、权限类型与 l10n、去设置交互 |
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 范围
+## 1. 用户价值
 
-**云端/网络错误**：
-- 页面加载、列表加载、编辑/提交失败的展示方式选择
-- 阻塞性 → 内联占位；次要 → SnackBar
-- 颜色、字号、间距等语义 token
-- 通用 l10n key：loadFailed、submitFailed、networkUnavailable
+作为遇到错误或权限限制的用户，
+我希望在页面、分身和评论等入口看到同源错误提示与可执行恢复动作，
+从而知道发生了什么并能安全继续。
 
-**权限类**：
-- 定位、相册、相机、麦克风等权限的卡片形态
-- 永久拒绝时的「去设置」主操作
-- 权限类型与 l10n key 映射
+## 2. 范围与非目标
 
-**登录门禁与动作失败**：
-- `AuthGateReason` + `AuthContinuation` 的统一用户语义
-- 页面首屏 / 区块 / 列表追加 / 提交 / dialog 操作五类错误载体
-- `UiErrorSemantic` 与统一 resolver 契约
-- 有旧数据时的非阻塞错误展示
-- 表单提交与字段校验分层：`UiErrorScope.form` 使用 `formInlineCard`，字段校验使用 `inlineField`
-- 字段、表单、操作与服务状态的非阻断内联错误共用透明错误行：16px 圆形感叹号、14px 常规文字、6px 间距；错误前景/边框浅色为 `#E5484D`、深色为 `#FF6B6B`
-- 错误标题、说明与操作的互斥语义，以及从错误态退出的唯一清晰路径
-- 视频播放失败的内联覆盖层：可重试时只展示“再试一次”，不可重试时提供非按钮替代路径
+### In Scope
 
-**导航与错误容器边界**：
-- 栈页面保留宿主导航栏返回，错误组件不再额外注入 X 或“返回” CTA
-- 模态容器使用 X / barrier / 下滑关闭，不在内容错误态中复制退出控件
-- 整页阻塞、区块阻塞、局部软失败、刷新失败、分页失败必须选择不同载体，不得用同一灰色卡片覆盖所有失败
+- “错误权限展示语义”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 页面级错误按 UiErrorSemantic.presentation 选择载体。
+- 跨页面/沉浸入口失败态按 sourceAppearanceMode 保持来源外观。
+- 错误组件与宿主页面/模态的导航所有权。
+- 整页、区块、刷新、分页和动作失败的分层载体。
 
-## 适用范围与约束
+### Out of Scope
 
-- **适用**：发现、创作、聊天、圈子、设置、对象页、评论弹层等所有涉及云端请求、系统权限或登录门禁的页面
-- **不适用**：纯本地逻辑、无网络/权限依赖的页面
-- **约束**：必须使用设计系统 token（AppTypography、AppSpacing、AppColors）；文案必须来自 l10n
-- **门禁**：页面不得直接消费裸 `RuntimeFailureKind` 或手写 “加载失败/请先登录/操作失败” 作为最终页态语义
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+- 启动或运行时根级不可恢复异常页面；该页面由 `cold-start-performance` 与 `unrecoverable-runtime-recovery` 的业务栈外恢复宿主持有，不复用普通页面错误卡、诊断或重试语义。
 
-## 与父/子节点关系
+## 3. 行为要求
 
-- 父节点：`runtime-client-foundation` L2
-- 子节点：`cloud-network-error-display-contract` L4、`permission-card-display-contract` L4
+<a id="req-001"></a>
+### REQ-001 错误权限展示语义
 
-## 与上下游关系
+- 统一错误组件、Persona 页、评论区与栈页面必须按相同 canonical error 选择展示层级和恢复动作。
 
-- **依赖**：`app-locale-infrastructure`（l10n 基础设施）、`fullstack-error-behavior-contract`（错误码 codegen）、`auth-gate-matrix`（登录门禁矩阵）
-- **被依赖**：创作页、发现页、位置选择器、媒体选择器、评论弹层、群聊发起、对象页表单等
+<a id="req-002"></a>
+### REQ-002 错误恢复不复制宿主导航
 
-## 验收标准概要
+- 错误恢复不得复制或重置宿主导航；恢复成功后返回原页面上下文。
 
-- A1：云端阻塞性错误使用页态/区块态，次要动作失败使用轻量反馈
-- A2：错误/权限/登录门禁展示均使用 AppTypography、AppSpacing、AppColors
-- A3：权限永久拒绝时展示「去设置」主操作
-- A4：登录门禁提示能表达“为何需要登录”与“登录后继续什么动作”
-- A5：首屏失败、缓存回退失败、分页追加失败在列表页中有不同载体
-- A6：07-error-permission-semantics 规则与特性树节点一致
-- A7：沉浸式或跨页面入口的首屏错误必须保留来源 `sourceAppearanceMode`，错误页不继承错误的深色沉浸上下文
-- A8：JIT 权限（按住说话、RTC）默认无 L2 App primer，同手势无 2+ App modal
-- A9：聊天语音发送失败仅 status bar（`chatVoicePendingRetry`），禁止 actionDialog 叠加
-- A10：L2 primer 文案与「继续」按钮一致，含系统弹窗说明
-- A11：错误组件不拥有页面导航；栈页面只有返回，模态只有关闭，恢复 CTA 只表达重试/登录/去设置等恢复语义
-- A12：自动降级到可操作表单后使用无嵌套动作的紧凑透明表单错误行，目标表单主按钮是唯一恢复动作
-- A12：区块首屏完全失败使用无卡片外框的空错态；已有数据刷新失败保留旧数据；分页失败只占用列表尾部
-- A13：表单发送/提交/依赖失败在操作点附近使用 `AppFormErrorCard`，字段校验使用 `AppInlineFieldError`；二者必须复用同一透明圆形感叹号错误行，同一失败不得再叠加 Toast、dialog 或第二段弱提示
-- A14：错误标题只说明状态；可点恢复动作不在说明或 `user_message` 中重复。可重试播放失败只展示一个“再试一次”CTA，不可重试播放失败不展示伪重试。
-- A15：首屏、区块、分页、刷新、动作、登录/权限和媒体错误均有与载体匹配的退出路径，错误组件不复制宿主返回或关闭控件。
+<a id="req-003"></a>
+### REQ-003 表单失败按操作锚点单通道呈现
 
-## 测试目录约定（按领域服务划分）
+- 表单失败必须在操作锚点单通道呈现，并与共享 `UiErrorSemantic` 使用同一错误分类。
 
-- 统一按领域服务划分：禁止 `test/features/`、禁止 `test/cloud/integration/` 顶层
-- 集成归属使用它的领域：content 使用 location → `test/cloud/content/location/`、`test/ui/content/entry/`
-- 领域与实体使用名词：entry（创作入口）、location、post；禁止 create、publish 等动词
-- 验证核心：**交互过程的异常**（权限拒绝、云端超时、加载失败）的 UI 表现；弱化纯 l10n key 存在性测试
-- 统一错误语义层需补 `UiErrorSemanticResolver` 的 contract / widget / journey 三类测试
+<a id="req-004"></a>
+### REQ-004 播放与加载失败提供无歧义恢复或退出路径
+
+- 媒体播放或页面加载失败必须只提供真实可用的重试、替代路径或退出动作。
+
+<a id="req-005"></a>
+### REQ-005 AuthGateReason + AuthContinuation 的统一用户语义
+
+- `AuthGateReason` + `AuthContinuation` 的统一用户语义。
+- `UiErrorSemantic` 与统一 resolver 契约。
+- 视频播放失败的内联覆盖层：可重试时只展示“再试一次”，不可重试时提供非按钮替代路径。
+- 整页阻塞、区块阻塞、局部软失败、刷新失败、分页失败必须选择不同载体，不得用同一灰色卡片覆盖所有失败。
+- **约束**：必须使用设计系统 token（AppTypography、AppSpacing、AppColors）；文案必须来自 l10n。
+- **门禁**：页面不得直接消费裸 `RuntimeFailureKind` 或手写 “加载失败/请先登录/操作失败” 作为最终页态语义。
+- 沉浸式或跨页面入口的首屏错误必须保留来源 `sourceAppearanceMode`，错误页不继承错误的深色沉浸上下文。
+- 聊天语音发送失败仅 status bar（`chatVoicePendingRetry`），禁止 actionDialog 叠加。
+- 表单发送/提交/依赖失败在操作点附近使用 `AppFormErrorCard`，字段校验使用 `AppInlineFieldError`；二者必须复用同一透明圆形感叹号错误行，同一失败不得再叠加 Toast、dialog 或第二段弱提示。
+- 错误标题只说明状态；可点恢复动作不在说明或 `user_message` 中重复。可重试播放失败只展示一个“再试一次”CTA，不可重试播放失败不展示伪重试。
+
+<a id="req-006"></a>
+### REQ-006 必须完成“error-permission-display-semantics”并获得明确的成功或失败结果，且失败时不得写入成功事实
+
+- 系统必须完成“error-permission-display-semantics”并获得明确的成功或失败结果，且失败时不得写入成功事实。
+
+<a id="req-007"></a>
+### REQ-007 列表首屏失败 / 缓存回退失败 / 分页追加失败三类语义必须区分
+
+- 列表首屏失败 / 缓存回退失败 / 分页追加失败三类语义必须区分。
+
+<a id="req-008"></a>
+### REQ-008 JIT 麦克风权限 — 无冗余 App modal
+
+- 同一次手势无 2+ App modal。
+
+<a id="req-009"></a>
+### REQ-009 语音发送失败 — 单一低打扰载体
+
+- modal 与 status bar 不同时出现。
+
+<a id="req-010"></a>
+### REQ-010 权限说明与继续动作一致
+
+- 权限说明必须解释当前阻断原因，继续按钮只能触发说明中声明的下一步动作。
+
+<a id="req-011"></a>
+### REQ-011 统一协调层：AppPermissionCoordinator + AppPermissionSurface（jit / page）
+
+- **统一协调层**：`AppPermissionCoordinator` + `AppPermissionSurface`（`jit` / `page`）
+- gate 语义：权限被拒绝时说明“当前为什么不能继续”以及“继续所需动作”。
+- **统一 gate 载体**：权限态与登录门禁态共享 `AppInlineGateState` 结构，但图标、按钮和副说明由权限语义决定。
+
+## 4. 契约引用
+
+- 父级设计：[`runtime-client-foundation`](../design.md)
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/errors.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 错误权限展示语义
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“错误权限展示语义”对应的公开行为。
+- THEN 页面使用与错误类别匹配的唯一载体，恢复成功后回到原上下文，无法恢复时提供明确退出路径。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+<a id="gwt-006"></a>
+### GWT-006 JIT 麦克风权限无冗余 App modal
+
+- GIVEN 用户以一次手势触发需要麦克风权限的操作。
+- WHEN 权限说明或系统授权流程显示。
+- THEN App 只展示一个必要的权限载体，不叠加第二个 App modal。
+
+<a id="gwt-007"></a>
+### GWT-007 语音发送失败使用单一低打扰载体
+
+- GIVEN 语音消息发送失败。
+- WHEN 页面呈现该失败。
+- THEN 用户只看到可恢复的单一低打扰载体，modal 与 status bar 不同时出现。
+
+<a id="gwt-008"></a>
+### GWT-008 权限说明与继续动作一致
+
+- GIVEN 页面显示权限 primer。
+- WHEN 用户阅读说明并选择继续。
+- THEN 文案解释当前阻断原因，继续动作只触发说明声明的下一步。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 结构化错误页保持来源外观且使用统一载体
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：完成“error-permission-display-semantics”并获得明确的成功或失败结果。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 错误权限展示语义 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“错误权限展示语义”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-003"></a>
+### OPEN-003 JIT 麦克风权限 — 无冗余 App modal
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：同一次手势无 2+ App modal。
+- 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-004"></a>
+### OPEN-004 语音发送失败 — 单一低打扰载体
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：modal 与 status bar 不同时出现。
+- 完成判定：`GWT-007` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-005"></a>
+### OPEN-005 Page L2 primer 文案与继续按钮一致
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：verify_permission_primer_copy.py 通过。
+- 完成判定：`GWT-008` 对应行为满足且真实测试 `spec_ref` 有效。

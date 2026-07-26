@@ -7,11 +7,10 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 
 /// Installs the repo-managed local HTTPS CA for Dart's networking stack.
 ///
-/// Android `network_security_config` is honored by the platform networking
-/// stack, while `cached_network_image` and `flutter_cache_manager` use
-/// `dart:io` [HttpClient]. Loading the same debug/profile CA into
-/// [SecurityContext.defaultContext] keeps local Android HTTPS media working
-/// without certificate-validation bypasses or HTTP fallback paths.
+/// 平台系统信任库与 `dart:io` [HttpClient] 的信任库并不总是同源。加载由
+/// 本地 target 构建步骤注入的 Debug/Profile CA 到 [SecurityContext.defaultContext]
+/// 后，iOS Simulator 与 Android 均可使用同一条本地 HTTPS 连接，不需要关闭
+/// 证书校验或回退 HTTP。
 ///
 /// Install decisions are based on **injected runtime bases** (host plane) and
 /// release mode — never on `APP_RUNTIME_ENV` name strings — so prod-sim
@@ -29,6 +28,7 @@ class LocalDevHttpsTrust {
       'quwoquan-local-debug-placeholder';
 
   static bool _installed = false;
+  static bool _loopbackResolverInstalled = false;
 
   /// Whether [installForCurrentRuntime] successfully loaded a real CA.
   static bool get isInstalled => _installed;
@@ -45,6 +45,7 @@ class LocalDevHttpsTrust {
     final shouldInstall = shouldInstallForRuntime(
       isReleaseMode: kReleaseMode,
       isAndroid: Platform.isAndroid,
+      isIos: Platform.isIOS,
       runtimeBases: const <String>[
         CloudRuntimeConfig.gatewayBaseUrl,
         CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
@@ -62,30 +63,42 @@ class LocalDevHttpsTrust {
     );
     if (certBytes == null || certBytes.isEmpty) {
       throw StateError(
-        'Android local HTTPS trust root is required for local HTTPS bases, '
-        'but the APK did not expose local_env_debug_root.',
+        'Local HTTPS trust root is required for local HTTPS bases, '
+        'but the Debug/Profile bundle did not expose local_env_debug_root.',
       );
     }
     if (isPlaceholderLocalEnvCertificate(certBytes)) {
       throw StateError(
-        'Android local HTTPS trust root is the debug placeholder CA; refuse '
-        'to install it. Launch via make dev-up / stackctl with a real exported '
-        'CA, or set QWQ_ANDROID_LOCAL_ENV_CA_PATH.',
+        'Local HTTPS trust root is the debug placeholder CA; refuse to install '
+        'it. Launch via stackctl so the canonical target CA is exported.',
       );
     }
     SecurityContext.defaultContext.setTrustedCertificatesBytes(certBytes);
+    _installLocalLoopbackResolver();
     _installed = true;
+  }
+
+  static void _installLocalLoopbackResolver() {
+    if (_loopbackResolverInstalled) {
+      return;
+    }
+    // iOS Simulator 会优先把 `*.localhost` 解析为 ::1；而 Colima 的本地
+    // target 端口只发布在 127.0.0.1。保留原始 host 作为 TLS SNI 与证书校验名，
+    // 仅将本地 Debug/Profile 连接的 TCP peer 固定到 IPv4 loopback。
+    HttpOverrides.global = _LocalLoopbackHttpOverrides();
+    _loopbackResolverInstalled = true;
   }
 
   @visibleForTesting
   static bool shouldInstallForRuntime({
     required bool isReleaseMode,
     required bool isAndroid,
+    bool isIos = false,
     required Iterable<String> runtimeBases,
     @Deprecated('Ignored; install is plane-based, not env-name-based')
     String? appRuntimeEnv,
   }) {
-    if (isReleaseMode || !isAndroid) {
+    if (isReleaseMode || (!isAndroid && !isIos)) {
       return false;
     }
     return runtimeBases.any(isLocalHttpsTransportBase);
@@ -106,6 +119,25 @@ class LocalDevHttpsTrust {
         host == '::1' ||
         host == '10.0.2.2' ||
         host.endsWith('.localhost');
+  }
+
+  /// Whether an HTTPS request in an already-established local target runtime
+  /// must connect through the device loopback transport.
+  ///
+  /// Upload tickets are signed by the target with its canonical
+  /// `*.quwoquan-env.test` authority. Rewriting that URI would invalidate the
+  /// signature. The Simulator can nevertheless resolve the canonical host to
+  /// an unroutable host-side address, so the socket peer is projected to
+  /// loopback while [SecureSocket.secure] keeps the original host for SNI and
+  /// certificate verification.
+  @visibleForTesting
+  static bool shouldResolveThroughLocalLoopback(String raw) {
+    final uri = Uri.tryParse(raw.trim());
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      return false;
+    }
+    return isLocalHttpsTransportBase(raw) ||
+        uri.host.toLowerCase().endsWith('.quwoquan-env.test');
   }
 
   @visibleForTesting
@@ -129,5 +161,38 @@ class LocalDevHttpsTrust {
       return true;
     }
     return false;
+  }
+}
+
+final class _LocalLoopbackHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client = super.createHttpClient(
+      context ?? SecurityContext.defaultContext,
+    );
+    client.findProxy = (_) => 'DIRECT';
+    client.connectionFactory = (uri, proxyHost, proxyPort) {
+      final secure = uri.scheme == 'https';
+      final socketTask = Socket.startConnect(
+        LocalDevHttpsTrust.shouldResolveThroughLocalLoopback(uri.toString())
+            ? InternetAddress.loopbackIPv4.address
+            : uri.host,
+        uri.port,
+      );
+      return socketTask.then((task) {
+        if (!secure) {
+          return task;
+        }
+        final secureSocket = task.socket.then<Socket>(
+          (socket) => SecureSocket.secure(
+            socket,
+            host: uri.host,
+            context: context ?? SecurityContext.defaultContext,
+          ),
+        );
+        return ConnectionTask.fromSocket<Socket>(secureSocket, task.cancel);
+      });
+    };
+    return client;
   }
 }

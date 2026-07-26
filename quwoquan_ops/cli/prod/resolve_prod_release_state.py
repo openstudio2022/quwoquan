@@ -16,8 +16,12 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
-TOPOLOGY_MANIFEST = ROOT / "quwoquan_ops/environments/environment_topology_manifest.yaml"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
+
+ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 
 
 @dataclass(frozen=True)
@@ -26,6 +30,7 @@ class ServicePlaneAccess:
     account: str
     ssh_key_secret: str
     instance_suffix: str
+    services: tuple[str, ...]
 
 
 def _load_yaml(path: Path) -> dict:
@@ -62,47 +67,67 @@ def _resolve_service_plane(access: dict, topology: dict, instance_suffix: str) -
     ssh_key_secret = str(service_plane.get("sshKeySecret") or "").strip()
     if not account or not ssh_key_secret:
         raise RuntimeError("service 平面缺少账号或 SSH secret 声明")
+    services = tuple(
+        str(item).strip()
+        for item in (service_plane.get("rootlessGovernedComposeServices") or [])
+        if str(item).strip()
+    )
+    if not services:
+        raise RuntimeError("service 平面缺少 governed compose services")
     return ServicePlaneAccess(
         host=_resolve_prod_host(topology),
         account=account,
         ssh_key_secret=ssh_key_secret,
         instance_suffix=instance_suffix,
+        services=services,
     )
 
 
-def _remote_probe_script(instance_suffix: str) -> str:
-    pattern = f"^quwoquan-service-{instance_suffix}[_-]seed-box[_-][0-9]+$"
+def _remote_probe_script(instance_suffix: str, services: tuple[str, ...]) -> str:
+    quoted_services = " ".join(shlex.quote(service) for service in services)
     return f"""set -euo pipefail
-container="$(podman ps -a --format '{{{{.Names}}}}' | grep -E '{pattern}' | head -n 1 || true)"
-if [[ -z "$container" ]]; then
-  echo "FAIL: missing seed-box container for instance_suffix={instance_suffix}" >&2
-  exit 2
-fi
-image_version="$(podman inspect -f '{{{{index .Config.Labels "org.opencontainers.image.version"}}}}' "$container" 2>/dev/null || true)"
-if [[ -z "$image_version" || "$image_version" == "<no value>" ]]; then
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+for service in {quoted_services}; do
+  pattern="^quwoquan-service-{instance_suffix}[_-]${{service}}[_-][0-9]+$"
+  container="$(podman ps -a --format '{{{{.Names}}}}' | grep -E "$pattern" | head -n 1 || true)"
+  if [[ -z "$container" ]]; then
+    echo "FAIL: missing $service container for instance_suffix={instance_suffix}" >&2
+    exit 2
+  fi
   image_ref="$(podman inspect -f '{{{{.Config.Image}}}}' "$container")"
   image_version="${{image_ref##*:}}"
-fi
-config_version="$(
-  podman inspect -f '{{{{range .Config.Env}}}}{{{{println .}}}}{{{{end}}}}' "$container" \
-    | awk -F= '/^CONFIG_VERSION=/ {{print $2; exit}}'
-)"
-if [[ -z "$image_version" ]]; then
-  echo "FAIL: seed-box current image version is empty" >&2
-  exit 2
-fi
-if [[ -z "$config_version" ]]; then
-  echo "FAIL: seed-box current config version is empty" >&2
-  exit 2
-fi
-CONTAINER_NAME="$container" IMAGE_VERSION_VALUE="$image_version" CONFIG_VERSION_VALUE="$config_version" python3 - <<'PY'
+  config_version="$(
+    podman inspect -f '{{{{range .Config.Env}}}}{{{{println .}}}}{{{{end}}}}' "$container" \
+      | awk -F= '/^CONFIG_VERSION=/ {{print $2; exit}}'
+  )"
+  if [[ -z "$image_version" || "$image_version" == "$image_ref" ]]; then
+    echo "FAIL: $service current image version is empty or digest-only" >&2
+    exit 2
+  fi
+  if [[ -z "$config_version" ]]; then
+    echo "FAIL: $service current config version is empty" >&2
+    exit 2
+  fi
+  printf '%s\\t%s\\t%s\\t%s\\n' "$service" "$container" "$image_version" "$config_version" >> "$tmp"
+done
+PROBE_FILE="$tmp" python3 - <<'PY'
 import json
 import os
+from pathlib import Path
 
+rows = []
+for line in Path(os.environ["PROBE_FILE"]).read_text(encoding="utf-8").splitlines():
+    service, container, image, config = line.split("\\t")
+    rows.append({{"service": service, "container": container, "image": image, "config": config}})
+images = {{row["image"] for row in rows}}
+configs = {{row["config"] for row in rows}}
+if len(images) != 1 or len(configs) != 1:
+    raise SystemExit(f"FAIL: production workload version drift: images={{sorted(images)}} configs={{sorted(configs)}}")
 payload = {{
-    "container": os.environ["CONTAINER_NAME"],
-    "from_image": os.environ["IMAGE_VERSION_VALUE"],
-    "from_config": os.environ["CONFIG_VERSION_VALUE"],
+    "from_image": next(iter(images)),
+    "from_config": next(iter(configs)),
+    "workloads": rows,
 }}
 print(json.dumps(payload, ensure_ascii=False))
 PY
@@ -131,7 +156,7 @@ def _run_remote_probe(access: ServicePlaneAccess) -> dict[str, str]:
                 "bash",
                 "-s",
             ],
-            input=_remote_probe_script(access.instance_suffix),
+            input=_remote_probe_script(access.instance_suffix, access.services),
             text=True,
             capture_output=True,
             check=False,
@@ -173,7 +198,7 @@ def main() -> int:
     try:
         access = _resolve_service_plane(
             _load_yaml(ACCESS_MANIFEST),
-            _load_yaml(TOPOLOGY_MANIFEST),
+            load_environment_topology(),
             args.instance_suffix,
         )
         payload = _run_remote_probe(access)

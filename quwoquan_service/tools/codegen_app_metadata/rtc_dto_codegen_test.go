@@ -11,7 +11,7 @@ import (
 
 func TestRtcCallSessionDtoGeneration_containsAllEntityFieldNames(t *testing.T) {
 	metadataDir := initializeTestContractGraph(t)
-	root := filepath.Join(metadataDir, "rtc", "call_session", "fields.yaml")
+	root := filepath.Join(metadataDir, "rtc", "rtc", "call_session", "fields.yaml")
 	ff, err := readFields(root)
 	if err != nil {
 		t.Fatalf("read fields: %v", err)

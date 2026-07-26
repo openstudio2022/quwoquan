@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
-from core.control_types import ContentType, RolloutMilestone, SelectionPolicy
+from core.control_types import ContentType, ExecutionPhase, SelectionPolicy
 
 
 _EXECUTION_ID_RE = re.compile(
@@ -14,7 +14,7 @@ _EXECUTION_ID_RE = re.compile(
     r"(?P<content_type>homepage|article|image|video)-"
     r"(?P<intent>[a-z][a-z0-9-]*)--"
     r"(?P<scope>[a-z0-9][a-z0-9-]*)--"
-    r"(?P<milestone>canary|m1|m2|m3)-"
+    r"(?P<phase>pilot|scale|full)-"
     r"(?P<sequence>[0-9]{3,})$"
 )
 
@@ -27,7 +27,7 @@ class ExecutionIdentity:
     content_type: ContentType
     intent: str
     scope: str
-    milestone: RolloutMilestone
+    phase: ExecutionPhase
     sequence: int
 
 
@@ -38,7 +38,7 @@ def validate_execution_id(value: str) -> str:
     if match is None:
         raise ValueError(
             "executionId must be YYYYMMDD--<vertical>-<contentType>-<intent>--"
-            "<scope>--<canary|m1|m2|m3>-<sequence>"
+            "<scope>--<pilot|scale|full>-<sequence>"
         )
     try:
         date.fromisoformat(
@@ -61,7 +61,7 @@ def parse_execution_id(value: str) -> ExecutionIdentity:
         content_type=ContentType(fields["content_type"]),
         intent=fields["intent"],
         scope=fields["scope"],
-        milestone=RolloutMilestone(fields["milestone"]),
+        phase=ExecutionPhase(fields["phase"]),
         sequence=int(fields["sequence"]),
     )
 
@@ -73,11 +73,11 @@ def build_execution_id(
     content_type: str,
     intent: str,
     scope: str,
-    milestone: str,
+    phase: str,
     sequence: int,
 ) -> str:
     candidate = (
         f"{run_date}--{vertical}-{content_type}-{intent}--{scope}--"
-        f"{milestone}-{int(sequence):03d}"
+        f"{phase}-{int(sequence):03d}"
     )
     return validate_execution_id(candidate)

@@ -2,35 +2,51 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
+	configrelease "quwoquan_service/runtime/configrelease"
 	"strconv"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
+	"quwoquan_service/generated/operationsecurity"
 	rtmongodb "quwoquan_service/internal/platform/mongodb"
 	platformredis "quwoquan_service/internal/platform/redis"
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
+	rterr "quwoquan_service/runtime/errors"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
-	httpadapter "quwoquan_service/services/search-service/internal/adapters/http"
-	"quwoquan_service/services/search-service/internal/application"
-	"quwoquan_service/services/search-service/internal/application/queryheat"
-	"quwoquan_service/services/search-service/internal/infrastructure/feedbackstore"
-	"quwoquan_service/services/search-service/internal/infrastructure/queryheatstore"
-	"quwoquan_service/services/search-service/internal/infrastructure/searchbackend"
-	"quwoquan_service/services/search-service/internal/infrastructure/searchmetrics"
-	"quwoquan_service/services/search-service/internal/infrastructure/searchsignals"
+	searchruntimees "quwoquan_service/runtime/search/es"
+	feedbackhttp "quwoquan_service/services/search-service/internal/search/feedback_fact/adapters/inbound/http"
+	feedbackapplication "quwoquan_service/services/search-service/internal/search/feedback_fact/application"
+	"quwoquan_service/services/search-service/internal/search/feedback_fact/infrastructure/feedbackstore"
+	recenthttp "quwoquan_service/services/search-service/internal/search/recent_search_state/adapters/inbound/http"
+	"quwoquan_service/services/search-service/internal/search/recent_search_state/application"
+	"quwoquan_service/services/search-service/internal/search/recent_search_state/infrastructure/persistence"
+	"quwoquan_service/services/search-service/internal/search/recommendation_signal_fact/infrastructure/searchsignals"
+	httpadapter "quwoquan_service/services/search-service/internal/search/search_query/adapters/inbound/http"
+	mqadapter "quwoquan_service/services/search-service/internal/search/search_query/adapters/inbound/mq"
+	"quwoquan_service/services/search-service/internal/search/search_query/application"
+	"quwoquan_service/services/search-service/internal/search/search_query/application/queryheat"
+	accountclosureinfra "quwoquan_service/services/search-service/internal/search/search_query/infrastructure/accountclosure"
+	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/intersectionclient"
+	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/queryheatstore"
+	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/querylogstore"
+	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/searchbackend"
+	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/searchmetrics"
 )
 
 const serviceName = "search-service"
@@ -47,6 +63,11 @@ type config struct {
 			Addr string `yaml:"addr"`
 		} `yaml:"http"`
 	} `yaml:"service"`
+
+	AccountSecurityAuthority struct {
+		BaseURL   string `yaml:"baseUrl"`
+		TimeoutMs int    `yaml:"timeoutMs"`
+	} `yaml:"accountSecurityAuthority"`
 
 	ES searchbackend.ESConfig `yaml:"es"`
 
@@ -74,6 +95,10 @@ type config struct {
 			} `yaml:"buckets"`
 		} `yaml:"experiment"`
 	} `yaml:"ranking"`
+
+	ContentService struct {
+		BaseURL string `yaml:"baseUrl"`
+	} `yaml:"contentService"`
 }
 
 func main() {
@@ -87,6 +112,46 @@ func main() {
 	applyRedisEnvOverrides(&cfg)
 
 	ctx := context.Background()
+	appEnv := getenvOrDefault("APP_ENV", "alpha")
+	configProvider := runtimeconfig.EnvRuntimeConfigProvider{}
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(configProvider)
+	if err != nil {
+		log.Fatalf("%s access token config invalid: %v", serviceName, err)
+	}
+	accountSecurityAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		serviceName,
+		[]string{"user.account.security.read"},
+	)
+	if err != nil {
+		log.Fatalf("%s account security authority credential init failed: %v", serviceName, err)
+	}
+	accountSecurityAuthorityTimeout := time.Duration(
+		cfg.AccountSecurityAuthority.TimeoutMs,
+	) * time.Millisecond
+	accountSecurityAuthority, err := rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL:     cfg.AccountSecurityAuthority.BaseURL,
+			HTTPClient:  &http.Client{Timeout: accountSecurityAuthorityTimeout},
+			Credentials: accountSecurityAuthorityCredentials,
+			Timeout:     accountSecurityAuthorityTimeout,
+		},
+	)
+	if err != nil {
+		log.Fatalf("%s account security authority config invalid: %v", serviceName, err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("%s access token verifier invalid: %v", serviceName, err)
+	}
+	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(configProvider)
+	if err != nil {
+		log.Fatalf("%s device ticket config invalid: %v", serviceName, err)
+	}
+	deviceVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
+	if err != nil {
+		log.Fatalf("%s device ticket verifier invalid: %v", serviceName, err)
+	}
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: serviceName, SamplingRatio: 0.1})
 	defer otelShutdown()
@@ -96,6 +161,9 @@ func main() {
 		log.Fatalf("%s backend assembly failed: %v", serviceName, err)
 	}
 	if err := built.EnsureIndex(ctx); err != nil {
+		if errors.Is(err, searchruntimees.ErrIndexSchemaIncompatible) {
+			log.Fatalf("%s search index schema migration failed: %v", serviceName, err)
+		}
 		// Non-fatal: the service still boots; queries degrade via Retrieve until
 		// ES recovers. The failure is surfaced through /healthz.
 		log.Printf("%s WARN: ensure ES index failed: %v", serviceName, err)
@@ -103,27 +171,53 @@ func main() {
 
 	logger := slog.Default()
 	metricsRecorder := searchmetrics.NewRecorder()
-	redisRouter := buildRedisRouter(cfg)
+	redisRouter, messageTransportSceneModes := buildRedisRouter(cfg)
 	defer redisRouter.Close()
+	messageTransport, err := requireSearchAPIMessageTransport(
+		ctx,
+		appEnv,
+		redisRouter,
+		messageTransportSceneModes,
+	)
+	if err != nil {
+		log.Fatalf("%s message transport construction failed: %v", serviceName, err)
+	}
 	if err := redisRouter.PingAll(ctx); err != nil {
 		log.Printf("%s WARN: redis ping: %v", serviceName, err)
 	}
-	searchSignalPublisher := searchsignals.NewStreamPublisher(redisRouter.Scene("general"), logger)
+	searchSignalPublisher, err := searchsignals.NewStreamPublisher(messageTransport, logger)
+	if err != nil {
+		log.Fatalf("%s search signal publisher init failed: %v", serviceName, err)
+	}
 
 	// Persistence + heat read model are optional: without Mongo the service still
 	// serves searches (base ranking, no query log, no related terms). With Mongo
-	// it closes the feedback loop (query log -> heat -> ranking + relatedTerms).
-	var feedbackSink application.FeedbackSink
+	// it closes the feedback loop (query log -> heat -> ranking + relatedTerms)
+	// and enables the RecentSearchState packet.
+	var feedbackSink feedbackapplication.Sink
 	var termHeat application.TermHeatProvider
 	var queryLogSink application.QueryLogSink
+	var recentFacade *recentsearch.Facade
+	var accountClosureConsumer *mqadapter.UserAccountClosedConsumer
 	if strings.TrimSpace(cfg.Mongo.URI) != "" {
 		client := rtmongodb.MustConnect(ctx, rtmongodb.ConnectConfig{
 			URI: cfg.Mongo.URI, Database: cfg.Mongo.Database,
 		}, serviceName)
 		db := client.Database(cfg.Mongo.Database)
-		store := feedbackstore.NewStore(db, logger)
-		feedbackSink = store
-		queryLogSink = store
+		feedbackStore := feedbackstore.NewStore(db)
+		queryStore := querylogstore.NewStore(db)
+		indexCtx, indexCancel := context.WithTimeout(ctx, 30*time.Second)
+		if err := feedbackStore.EnsureIndexes(indexCtx); err != nil {
+			indexCancel()
+			log.Fatalf("%s search feedback index initialization failed: %v", serviceName, err)
+		}
+		if err := queryStore.EnsureIndexes(indexCtx); err != nil {
+			indexCancel()
+			log.Fatalf("%s search query index initialization failed: %v", serviceName, err)
+		}
+		indexCancel()
+		feedbackSink = feedbackStore
+		queryLogSink = queryStore
 		heatStore := queryheatstore.NewStore(db, queryheat.Config{}, logger)
 		// Hot-query related-terms cache: collapses the per-search Mongo read for
 		// repeated hot queries into one read per key per TTL window (backpressure
@@ -133,42 +227,185 @@ func main() {
 			getenvInt("SEARCH_RELATED_TERMS_CACHE_MAX", 1024),
 			metricsRecorder)
 		startHeatRebuildLoop(ctx, heatStore, logger)
-		log.Printf("%s feedback/query-log + term-heat read model enabled (db=%s)", serviceName, cfg.Mongo.Database)
+		recentStore := recentsearchstore.NewStore(db)
+		if err := recentStore.EnsureIndexes(ctx); err != nil {
+			log.Printf("%s WARN: ensure recent search indexes failed: %v", serviceName, err)
+		}
+		recentFacade, err = recentsearch.NewFacade(recentStore)
+		if err != nil {
+			log.Fatalf("%s recent search facade init failed: %v", serviceName, err)
+		}
+		accountClosureProjection, err := accountclosureinfra.NewMongoProjection(db)
+		if err != nil {
+			log.Fatalf(
+				"%s UserAccountClosed projection init failed: %v",
+				serviceName,
+				err,
+			)
+		}
+		if err := accountClosureProjection.EnsureIndexes(ctx); err != nil {
+			log.Fatalf(
+				"%s UserAccountClosed projection indexes failed: %v",
+				serviceName,
+				err,
+			)
+		}
+		accountClosureConsumer, err = mqadapter.NewUserAccountClosedConsumer(
+			messageTransport,
+			accountClosureProjection,
+			accountClosureProjection,
+			serviceName+"-"+hostname(),
+			logger,
+			mqadapter.DefaultUserAccountClosedConsumerConfig(),
+		)
+		if err != nil {
+			log.Fatalf(
+				"%s UserAccountClosed consumer init failed: %v",
+				serviceName,
+				err,
+			)
+		}
+		if err := accountClosureConsumer.EnsureGroup(ctx); err != nil {
+			log.Fatalf(
+				"%s UserAccountClosed consumer group init failed: %v",
+				serviceName,
+				err,
+			)
+		}
+		go accountClosureConsumer.Run(ctx)
+		log.Printf("%s feedback/query-log + term-heat + recent-search enabled (db=%s)", serviceName, cfg.Mongo.Database)
 	} else {
-		log.Printf("%s WARN: mongo.uri unset; query logging + term-heat disabled (base ranking only)", serviceName)
+		switch getenvOrDefault("APP_ENV", "alpha") {
+		case "beta", "gamma", "prod":
+			log.Fatalf(
+				"%s mongo.uri is required for UserAccountClosed compliance",
+				serviceName,
+			)
+		}
+		log.Printf("%s WARN: mongo.uri unset; query logging + term-heat + recent-search disabled (base ranking only)", serviceName)
 	}
 
-	searchSvc := application.NewSearchService(built.Backend, feedbackSink,
+	searchSvc := application.NewSearchService(built.Backend,
 		application.WithQueryLogSink(queryLogSink),
 		application.WithSearchSignalPublisher(searchSignalPublisher),
 		application.WithLogger(logger))
+	feedbackSvc := feedbackapplication.NewService(
+		feedbackSink,
+		feedbackapplication.WithSignalPublisher(searchSignalPublisher),
+	)
 	decorator := application.NewRankingDecorator(termHeat, application.NewExperiments(experimentConfig(cfg)), cfg.Ranking.TermHeatBoost, logger)
+	contentBaseURL := strings.TrimSpace(cfg.ContentService.BaseURL)
+	if override, ok := configProvider.GetString("CONTENT_SERVICE_BASE_URL"); ok {
+		contentBaseURL = override
+	}
+	contentAuthorization, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		accessTokenConfig,
+		serviceName,
+		[]string{"content.object_intersections.read"},
+	)
+	if err != nil {
+		log.Fatalf("%s content intersection credential init failed: %v", serviceName, err)
+	}
+	intersectionReader, err := intersectionclient.New(intersectionclient.Config{
+		BaseURL:       contentBaseURL,
+		Authorization: contentAuthorization,
+	})
+	if err != nil {
+		log.Fatalf("%s content intersection reader init failed: %v", serviceName, err)
+	}
+	intersectionAttacher := application.NewIntersectionAttacher(
+		intersectionReader,
+		application.IntersectionAttacherConfig{
+			Timeout:       300 * time.Millisecond,
+			MaxHits:       8,
+			MaxConcurrent: 4,
+			ReasonLimit:   1,
+		},
+		logger,
+		metricsRecorder,
+	)
 
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, robs.TraceLogLevelInfo, nil)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		log.Fatalf("%s runtime log exporter init failed: %v", serviceName, err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, robs.TraceLogLevelInfo, nil)
 	if err != nil {
 		log.Fatalf("%s process logger init failed: %v", serviceName, err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
 		log.Fatalf("%s exception logger init failed: %v", serviceName, err)
 	}
 
-	handler := httpadapter.NewHandler(searchSvc, decorator, metricsRecorder).Routes()
+	routesMux := http.NewServeMux()
+	httpadapter.NewHandlerWithConfig(
+		searchSvc,
+		decorator,
+		metricsRecorder,
+		httpadapter.HandlerConfig{
+			HotQueries:    termHeat,
+			Intersections: intersectionAttacher,
+		},
+	).Register(routesMux)
+	feedbackhttp.NewHandler(feedbackSvc, metricsRecorder).Register(routesMux)
+	if recentFacade != nil {
+		recenthttp.NewRecentSearchHandler(recentFacade, metricsRecorder).Register(routesMux)
+	}
+	var handler http.Handler = routesMux
 	// Backpressure: cap concurrent in-flight searches so a slow ES sheds load
 	// (typed 503) instead of piling up and collapsing the instance. Aligned with
 	// search_slo.yaml#load_model.max_concurrency_per_instance; applied only to the
 	// search routes so /healthz and /metrics stay reachable while shedding.
 	inflightLimiter := rtgov.NewInflightLimiter(getenvInt("SEARCH_MAX_INFLIGHT", 256))
 	searchHandler := httpadapter.MaxInflightMiddleware(inflightLimiter, metricsRecorder)(handler)
+	if accountClosureConsumer != nil {
+		searchHandler, err = runtimemessaging.WithDeadLetterRecoveryRoute(
+			searchHandler,
+			runtimemessaging.DeadLetterRecoveryRouteConfig{
+				Path:     "/internal/search/account-closure/dead-letters:recover",
+				Module:   rterr.ModuleSearch,
+				Releaser: accountClosureConsumer,
+			},
+		)
+		if err != nil {
+			log.Fatalf("%s account-closure recovery route failed: %v", serviceName, err)
+		}
+	}
 	rootMux := http.NewServeMux()
 	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("account-security-authority", func(hctx context.Context) error {
+		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
+	})
 	if ping := built.HealthPing(); ping != nil {
 		healthChecker.Register("elasticsearch", ping)
 	}
+	if accountClosureConsumer != nil {
+		healthChecker.Register(
+			"user-account-closed-consumer",
+			func(context.Context) error {
+				return accountClosureConsumer.Healthy(15 * time.Second)
+			},
+		)
+	}
 	rootMux.HandleFunc("/healthz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
-	rootMux.Handle("/", searchHandler)
+	rootMux.Handle(
+		"/",
+		generatedSearchOperationHandler(searchHandler),
+	)
 
 	serverCfg := rthttp.HTTPServerMiddlewareConfig{
 		Service:           serviceName,
@@ -183,8 +420,12 @@ func main() {
 	rateLimited := rtgov.RateLimitMiddleware(rtgov.NewRateLimiter(1000))(withObs)
 
 	server := &http.Server{
-		Addr:              cfg.Service.HTTP.Addr,
-		Handler:           rateLimited,
+		Addr: cfg.Service.HTTP.Addr,
+		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
+			AccessTokenVerifier:      accessVerifier,
+			DeviceTicketVerifier:     deviceVerifier,
+			AccountSecurityAuthority: accountSecurityAuthority,
+		})(rateLimited),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -196,9 +437,15 @@ func main() {
 	}
 }
 
+func generatedSearchOperationHandler(next http.Handler) http.Handler {
+	return rtauth.RequireGeneratedOperationAuthorization(
+		operationsecurity.ForDomain("search"),
+	)(next)
+}
+
 func loadRuntimeConfig() (config, error) {
 	cfg := config{}
-	name := getenvOrDefault("SERVICE_NAME", serviceName)
+	serviceName := getenvOrDefault("SERVICE_NAME", "search-service")
 	appEnv := getenvOrDefault("APP_ENV", "alpha")
 	configRoot := strings.TrimSpace(os.Getenv("CONFIG_ROOT"))
 	configVersion := strings.TrimSpace(os.Getenv("CONFIG_VERSION"))
@@ -208,36 +455,12 @@ func loadRuntimeConfig() (config, error) {
 	if requiresConfigVersion(appEnv) && configVersion == "" {
 		return config{}, fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
 	}
-
-	if configRoot != "" {
-		defaultFile := filepath.Join(configRoot, "configs", name, "default", "config.yaml")
-		envFile := filepath.Join(configRoot, "configs", name, appEnv, "config.yaml")
-		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
-			return config{}, err
-		}
-		if err := mergeConfigFile(&cfg, envFile); err != nil {
-			return config{}, err
-		}
-		if configVersion != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", name, "configs", "releases", configVersion+".yaml")
-			if err := mergeConfigFile(&cfg, versionFile); err != nil {
-				return config{}, err
-			}
-		}
-		return cfg, nil
+	path, err := configrelease.File(configRoot, serviceName, appEnv)
+	if err != nil {
+		return config{}, err
 	}
-
-	if err := mergeConfigFile(&cfg, filepath.Join("configs", "default", "config.yaml")); err == nil {
-		_ = mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml"))
-		if configVersion != "" {
-			_ = mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml"))
-		}
-		return cfg, nil
-	}
-
-	current := filepath.Join("configs", "config.yaml")
-	if err := mergeConfigFile(&cfg, current); err != nil {
-		return config{}, fmt.Errorf("read config failed: %w", err)
+	if err := mergeConfigFile(&cfg, path); err != nil {
+		return config{}, fmt.Errorf("read generated runtime config: %w", err)
 	}
 	return cfg, nil
 }
@@ -369,11 +592,14 @@ func applyRedisSceneEnv(prefix string, cfg *redisSceneCfg) {
 	}
 }
 
-func buildRedisRouter(cfg config) *rtredis.Router {
+func buildRedisRouter(cfg config) (*rtredis.Router, map[string]string) {
 	base := rtredis.DefaultRouterConfig()
-	base.Scenes["general"] = toSceneConfig(cfg.Redis.General)
+	generalScene := toSceneConfig(cfg.Redis.General)
+	base.Scenes["general"] = generalScene
 	base.Scenes["rec"] = toSceneConfig(cfg.Redis.Rec)
-	return platformredis.MustNewRouter(base)
+	return platformredis.MustNewRouter(base), map[string]string{
+		"general": generalScene.Mode,
+	}
 }
 
 func toSceneConfig(cfg redisSceneCfg) rtredis.SceneConfig {

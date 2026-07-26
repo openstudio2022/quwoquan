@@ -9,10 +9,13 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.article_package import compute_document_sha256
+from content.execution.runtime_contract import file_sha256
 from core.io import read_json
 from core.paths import DATA_EXECUTIONS_ROOT, is_execution_id
 from core.schema import assert_valid
 from content.execution.workspace import load_execution_manifest
+from content.execution.identity import parse_execution_id
+from core.control_types import ContentType, expected_content_generator
 from verify.verify_content_execution_layout import content_execution_layout_issues
 from verify.verify_homepage_media_completeness import homepage_media_completeness_report
 
@@ -86,6 +89,7 @@ def _reviewed_object_issues(
     execution_id: str,
     *,
     model_readiness: dict,
+    content_type: ContentType,
 ) -> list[str]:
     rel = object_root.relative_to(root)
     issues: list[str] = []
@@ -96,6 +100,12 @@ def _reviewed_object_issues(
     draft_dir = object_root / "4.draft"
     draft_meta = _read_valid_json(draft_dir / "draft_meta.json", "content", "draft_meta", issues)
     draft_page = draft_dir / "page.md"
+    if content_type is ContentType.ARTICLE:
+        draft_page = draft_dir / "draft.article.md"
+    elif content_type is ContentType.VIDEO:
+        draft_page = draft_dir / "video_script.json"
+    elif content_type is ContentType.IMAGE:
+        draft_page = Path()
     if draft_meta:
         if str(draft_meta.get("executionId") or "") != execution_id:
             issues.append(f"{rel}/4.draft: executionId drift")
@@ -111,11 +121,18 @@ def _reviewed_object_issues(
         author = model_readiness.get("author") if isinstance(model_readiness.get("author"), dict) else {}
         if author and draft_meta.get("model") != author.get("model"):
             issues.append(f"{rel}/4.draft: author model drift from execution readiness")
-        if not draft_page.is_file():
+        if content_type is ContentType.IMAGE:
+            if not str(draft_meta.get("draftSha256") or "").startswith("sha256:"):
+                issues.append(f"{rel}/4.draft: image evidence digest is missing")
+        elif not draft_page.is_file():
             issues.append(f"{rel}/4.draft: page.md is missing")
         else:
             try:
-                actual_digest = compute_document_sha256(draft_page.read_text(encoding="utf-8"))
+                actual_digest = (
+                    file_sha256(draft_page)
+                    if content_type is ContentType.VIDEO
+                    else compute_document_sha256(draft_page.read_text(encoding="utf-8"))
+                )
             except OSError as exc:
                 issues.append(f"{rel}/4.draft: page.md is unreadable ({exc})")
             else:
@@ -135,12 +152,18 @@ def _reviewed_object_issues(
             issues.append(f"{rel}/manifest.json: manifest must be an object")
             manifest = {}
         if manifest:
-            if str(manifest.get("generator") or "") != "agent":
-                issues.append(f"{rel}/manifest.json: generator is not agent")
-            if not str(manifest.get("agentRunId") or "").strip():
-                issues.append(f"{rel}/manifest.json: agentRunId is missing")
-            if draft_meta and manifest.get("agentRunId") != draft_meta.get("agentRunId"):
-                issues.append(f"{rel}/manifest.json: agentRunId drift from draft_meta")
+            expected_generator = expected_content_generator(content_type)
+            if str(manifest.get("generator") or "") != expected_generator.value:
+                issues.append(
+                    f"{rel}/manifest.json: generator must be {expected_generator.value}"
+                )
+            if content_type is ContentType.HOMEPAGE:
+                if not str(manifest.get("agentRunId") or "").strip():
+                    issues.append(f"{rel}/manifest.json: agentRunId is missing")
+                if draft_meta and manifest.get("agentRunId") != draft_meta.get("agentRunId"):
+                    issues.append(f"{rel}/manifest.json: agentRunId drift from draft_meta")
+            elif str(manifest.get("contentType") or "") != content_type.value:
+                issues.append(f"{rel}/manifest.json: contentType drift")
 
     review_dir = object_root / "5.review"
     reviewer_result = _read_valid_json(
@@ -195,8 +218,19 @@ def _reviewed_object_issues(
     return issues
 
 
-def execution_readiness_issues(execution_id: str, *, require_reviewed: bool) -> list[str]:
-    issues = content_execution_layout_issues()
+def execution_readiness_issues(
+    execution_id: str,
+    *,
+    require_reviewed: bool,
+    min_pass_rate: float = 1.0,
+    mode: str = "commercial",
+    fail_on_no_go: bool = True,
+) -> list[str]:
+    issues = content_execution_layout_issues(execution_id=execution_id)
+    if not 0 <= min_pass_rate <= 1:
+        return [*issues, "minPassRate must be between 0 and 1"]
+    if mode not in {"calibration", "commercial"}:
+        return [*issues, f"readiness mode is invalid: {mode}"]
     if not is_execution_id(execution_id):
         return [*issues, f"invalid executionId: {execution_id}"]
     root = DATA_EXECUTIONS_ROOT / execution_id
@@ -212,31 +246,60 @@ def execution_readiness_issues(execution_id: str, *, require_reviewed: bool) -> 
 
     issues.extend(_terminal_execution_issues(root, execution_id))
     model_readiness = _execution_model_readiness(root, execution_id, issues)
-    media_report = homepage_media_completeness_report(execution_id)
-    if not bool(media_report.get("passed")):
-        for row in media_report.get("issues") or []:
-            if not isinstance(row, dict):
-                continue
-            issues.append(
-                "homepage media completeness: {code} {ref}: {message}".format(
-                    code=str(row.get("code") or "DATA.MEDIA.DOWNLOAD_INCOMPLETE"),
-                    ref=str(row.get("ref") or ""),
-                    message=str(row.get("message") or "media closure failed"),
+    content_type = parse_execution_id(execution_id).content_type
+    if content_type is ContentType.HOMEPAGE:
+        media_report = homepage_media_completeness_report(execution_id)
+        if not bool(media_report.get("passed")):
+            for row in media_report.get("issues") or []:
+                if not isinstance(row, dict):
+                    continue
+                issues.append(
+                    "homepage media completeness: {code} {ref}: {message}".format(
+                        code=str(row.get("code") or "DATA.MEDIA.DOWNLOAD_INCOMPLETE"),
+                        ref=str(row.get("ref") or ""),
+                        message=str(row.get("message") or "media closure failed"),
+                    )
                 )
-            )
-    objects = [path.parent for path in root.rglob("1.download")]
+    object_search_root = (
+        root / "entities"
+        if content_type is ContentType.HOMEPAGE
+        else root / "posts" / content_type.value
+    )
+    objects = [path.parent for path in object_search_root.rglob("1.download")]
     if not objects:
         issues.append("reviewed execution has no content objects")
         return issues
-    for object_root in objects:
-        issues.extend(
-            _reviewed_object_issues(
-                root,
-                object_root,
-                execution_id,
-                model_readiness=model_readiness,
-            )
+    object_issue_groups = [
+        _reviewed_object_issues(
+            root,
+            object_root,
+            execution_id,
+            model_readiness=model_readiness,
+            content_type=content_type,
         )
+        for object_root in objects
+    ]
+    selected_count = len(objects)
+    selection_path = root / "_shared" / "target_selection.json"
+    if content_type is ContentType.HOMEPAGE and selection_path.is_file():
+        try:
+            selection = read_json(selection_path)
+            selected_count = max(
+                selected_count,
+                int(selection.get("selectedCount") or 0),
+            )
+        except (OSError, ValueError, TypeError):
+            issues.append("target selection is unreadable")
+    passed_count = sum(1 for group in object_issue_groups if not group)
+    pass_rate = passed_count / selected_count if selected_count else 0.0
+    if pass_rate < min_pass_rate:
+        issues.append(
+            f"reviewed object pass rate below contract: "
+            f"required={min_pass_rate:.6f} actual={pass_rate:.6f}"
+        )
+    if fail_on_no_go:
+        for group in object_issue_groups:
+            issues.extend(group)
     return issues
 
 
@@ -246,11 +309,27 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execution-id", required=True)
     parser.add_argument("--require-reviewed", action="store_true")
+    parser.add_argument("--min-pass-rate", type=float, default=1.0)
+    parser.add_argument(
+        "--mode",
+        choices=("calibration", "commercial"),
+        default="commercial",
+    )
+    parser.add_argument("--fail-on-no-go", action="store_true")
     args = parser.parse_args(argv)
-    issues = execution_readiness_issues(args.execution_id, require_reviewed=bool(args.require_reviewed))
+    issues = execution_readiness_issues(
+        args.execution_id,
+        require_reviewed=bool(args.require_reviewed),
+        min_pass_rate=float(args.min_pass_rate),
+        mode=str(args.mode),
+        fail_on_no_go=bool(args.fail_on_no_go),
+    )
     report = {
         "executionId": args.execution_id,
         "requireReviewed": bool(args.require_reviewed),
+        "minPassRate": float(args.min_pass_rate),
+        "mode": str(args.mode),
+        "failOnNoGo": bool(args.fail_on_no_go),
         "passed": not issues,
         "issues": issues,
     }

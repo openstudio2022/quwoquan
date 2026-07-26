@@ -1,0 +1,32 @@
+version: 1
+service: rtc-service
+domain: rtc
+capability: account-security-authority
+
+# HTTP 与通话准入共用同步账号安全权威；指标只允许固定 outcome/check 标签，
+# 禁止记录 account、persona、token、authorization、call 或 room 标识。
+metrics:
+  authority_checks_total: runtime_auth_account_security_authority_checks_total # labels: outcome
+  authority_check_duration_seconds: runtime_auth_account_security_authority_check_duration_seconds # labels: outcome
+  readiness_status: runtime_health_check_status # labels: check
+
+privacy:
+  permitted_labels: [outcome, check]
+  prohibited_labels: [account_id, persona_id, token, authorization, call_id, room_id]
+
+slis:
+  - id: account_security_authority_latency
+    sli: histogram_quantile(0.95, sum(rate(runtime_auth_account_security_authority_check_duration_seconds_bucket[5m])) by (le))
+    objective:
+      p95_ms: 250
+      timeout_ms: 500
+  - id: account_security_authority_availability
+    sli: 1 - sum(rate(runtime_auth_account_security_authority_checks_total{outcome="unavailable"}[5m])) / sum(rate(runtime_auth_account_security_authority_checks_total[5m]))
+    objective: 0.999
+  - id: account_security_authority_readiness
+    sli: runtime_health_check_status{check="account_security_authority"}
+    objective: 1
+
+failure_semantics:
+  authority_unavailable: deny_http_and_call_admission
+  readiness_failure: remove_instance_from_ready_pool

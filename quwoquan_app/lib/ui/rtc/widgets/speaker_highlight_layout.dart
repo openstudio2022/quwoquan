@@ -12,16 +12,19 @@ class SpeakerHighlightLayout extends StatelessWidget {
     required this.activeSpeaker,
     this.lockedSpeakerId,
     this.onTapThumbnail,
+    this.highlightedContent,
   });
 
   final List<CallParticipant> participants;
   final CallParticipant? activeSpeaker;
   final String? lockedSpeakerId;
   final ValueChanged<String>? onTapThumbnail;
+  final Widget? highlightedContent;
 
   @override
   Widget build(BuildContext context) {
-    final speaker = activeSpeaker ?? (participants.isNotEmpty ? participants.first : null);
+    final speaker =
+        activeSpeaker ?? (participants.isNotEmpty ? participants.first : null);
     if (speaker == null) return const SizedBox.shrink();
 
     final thumbnails = participants
@@ -34,11 +37,13 @@ class SpeakerHighlightLayout extends StatelessWidget {
           flex: 7,
           child: Padding(
             padding: EdgeInsets.all(AppSpacing.xs),
-            child: ParticipantTile(
-              participant: speaker,
-              isActiveSpeaker: true,
-              borderRadius: BorderRadius.circular(AppSpacing.sm),
-            ),
+            child:
+                highlightedContent ??
+                ParticipantTile(
+                  participant: speaker,
+                  isActiveSpeaker: true,
+                  borderRadius: BorderRadius.circular(AppSpacing.sm),
+                ),
           ),
         ),
         if (thumbnails.isNotEmpty)
@@ -67,8 +72,9 @@ class SpeakerHighlightLayout extends StatelessWidget {
                               participant: p,
                               isActiveSpeaker: isLocked,
                               showName: true,
-                              borderRadius:
-                                  BorderRadius.circular(AppSpacing.sm),
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.sm,
+                              ),
                             ),
                           ),
                           if (isLocked)

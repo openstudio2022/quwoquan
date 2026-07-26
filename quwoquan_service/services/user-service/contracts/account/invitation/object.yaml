@@ -1,0 +1,48 @@
+kind: aggregate_root
+description: >-
+  Persona 发起的邀请归因聚合；拥有独立邀请 ID、七天有效期和从生成到接受/激活的生命周期，
+  主账号仅用于鉴权与审计且绝不进入公开响应。
+identity:
+  fields:
+  - id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: inviterPersona
+  on_delete: retain
+  reference_fields:
+  - inviterSubAccountId
+  target_object: user.Persona
+local_identity_reasons:
+  inviterOwnerAccountId: immutable audit snapshot used for authorization evidence; never used as Invitation store identity
+capabilities:
+- queryable
+- idempotent_commands
+- auditable
+taggable: false
+vector_enabled: false
+business_rules:
+- inviterSubAccountId 必须属于当前受信 Account，禁止由请求体切换邀请主体
+- 同一 inviterSubAccountId、channel、inviteePhoneHash 的有效 generated 邀请必须复用
+- 每个 Persona 每日最多生成 1000 条邀请
+- inviterOwnerAccountId 与 inviteePhoneHash 只用于内部审计和幂等，禁止进入公开响应、日志或事件
+- 邀请七天后失效；expired/revoked 为终态，accepted 重放为幂等成功
+- 状态迁移必须在行锁内提交，禁止并发接受或送达覆盖终态
+lifecycle:
+  states:
+  - generated
+  - delivered
+  - viewed
+  - accepted
+  - activated
+  - expired
+  - revoked
+  optimistic_concurrency: row_lock
+  idempotency: natural_key_and_state_transition

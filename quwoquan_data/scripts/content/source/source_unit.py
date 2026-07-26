@@ -1,4 +1,4 @@
-"""来源单元 + 对象证据链统一读写（真相源：specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md）。
+"""来源单元 + 对象证据链统一读写（真相源：object-homepage-coverage-scaling/design.md）。
 
 替代「对象级散落 images/ + 实体目录承载来源」的旧布局。每个来源是一个自包含、
 稳定 ID、带类目与相关性说明的单元；实体/作品对象只保存 `1.download/source_refs.json`

@@ -1,39 +1,57 @@
-/// user_acceptance Patrol: 系统通知点击打开聊天详情
+/// user_acceptance Patrol: 真实系统通知点击打开指定聊天详情。
 ///
-/// 守护：flutter_test 无法覆盖的系统推送通知交互场景。
-/// 验证收到聊天通知 → 点击通知 → 正确打开 ChatConversationPage 的完整链路。
-///
-/// 注：每个用例自启动真实 App（launchPatrolAppOnce），对齐已绿的
-///     home_recommendation_journey_test，不依赖 patrol_test_main 预启动。
-///     后台切前台用 $.native.openApp() 需要 QUERY_ALL_PACKAGES（仅 debug/androidTest
-///     维度声明，见 android/app/src/debug/AndroidManifest.xml，不污染 release）。
+/// 外部设备编排器必须在 `QWQ_CHAT_NOTIFICATION_UAT_READY` 出现后投递带唯一
+/// correlation 文案的真实 Push。本用例不允许在通知缺失时降格为“不崩溃”通过。
 library;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
   defaultValue: 'gamma',
 );
-
-// 被测 App 的 Android applicationId（见 android/app/build.gradle.kts）。
-// $.native.openApp() 无参时无法解析 package，必须显式传入。
-const _appUnderTestId = 'com.quwoquan.quwoquan_app';
+const _expectedConversationId = String.fromEnvironment(
+  'CHAT_NOTIFICATION_EXPECTED_CONVERSATION_ID',
+);
+const _expectedNotificationText = String.fromEnvironment(
+  'CHAT_NOTIFICATION_EXPECTED_TEXT',
+);
+const _notificationCorrelationId = String.fromEnvironment(
+  'CHAT_NOTIFICATION_CORRELATION_ID',
+);
 
 void main() {
   patrolTest(
-    '系统通知点击打开聊天详情',
+    '后台真实 Push 点击后打开指定聊天详情',
     tags: ['t4', 'chat', 'notification'],
     skip: !kRunPatrolT4,
-    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 20)),
+    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 30)),
     ($) async {
-      assert(
+      expect(
         _apiContractEnv == 'gamma',
-        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
+        isTrue,
+        reason:
+            'notification UAT must run against the Gamma Remote environment',
+      );
+      expect(
+        _expectedConversationId.trim(),
+        isNotEmpty,
+        reason: 'the device orchestrator must inject the expected conversation',
+      );
+      expect(
+        _expectedNotificationText.trim(),
+        isNotEmpty,
+        reason:
+            'the device orchestrator must inject a unique notification text',
+      );
+      expect(
+        _notificationCorrelationId.trim(),
+        isNotEmpty,
+        reason: 'the device orchestrator must inject a unique correlation id',
       );
 
       await launchPatrolAppOnce($);
@@ -41,59 +59,44 @@ void main() {
         find.byType(WidgetsApp),
       ).waitUntilVisible(timeout: const Duration(seconds: 30));
 
-      // 打开系统通知栏
-      await $.platform.mobile.openNotifications();
-      await Future<void>.delayed(const Duration(seconds: 2));
-
-      // 查找聊天通知（通知文案由服务端推送，此处匹配通用模式）
-      final chatNotification = $.platform.mobile.getNotifications();
-
-      // 如果有聊天通知则点击，否则验证 App 仍在前台且不崩溃。
-      if ((await chatNotification).isEmpty) {
-        if (defaultTargetPlatform == TargetPlatform.android) {
-          await $.platform.android.pressBack();
-        }
-        await $.pump(const Duration(seconds: 1));
-        expect(find.byType(WidgetsApp), findsOneWidget);
-        return;
-      }
-
-      // 点击第一条通知
-      await $.platform.mobile.tapOnNotificationByIndex(0);
-      await $.pump(const Duration(seconds: 1));
-
-      // 断言打开了某个页面（不崩溃即通过）
-      expect(find.byType(WidgetsApp), findsWidgets);
-    },
-  );
-
-  patrolTest(
-    '后台收到通知后前台打开不崩溃',
-    tags: ['t4', 'chat', 'notification'],
-    skip: !kRunPatrolT4,
-    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 20)),
-    ($) async {
-      assert(
-        _apiContractEnv == 'gamma',
-        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
-      );
-
-      await launchPatrolAppOnce($);
-      await $(
-        find.byType(WidgetsApp),
-      ).waitUntilVisible(timeout: const Duration(seconds: 30));
-
-      // 模拟 Home 键切后台
       await $.platform.mobile.pressHome();
-      await Future<void>.delayed(const Duration(seconds: 2));
+      // 设备编排器以此稳定标记为投递起点；标记只含随机 correlation，不含 token/PII。
+      // ignore: avoid_print
+      print('QWQ_CHAT_NOTIFICATION_UAT_READY:$_notificationCorrelationId');
 
-      // 切回前台（需要 QUERY_ALL_PACKAGES，见 debug manifest）。openApp() 无参时
-      // patrol 解析到的 package 为空（intent null），必须显式传入被测 App 的 applicationId。
-      await $.platform.mobile.openApp(appId: _appUnderTestId);
-      await $.pump(const Duration(seconds: 1));
+      final deadline = DateTime.now().add(const Duration(seconds: 30));
+      var matched = false;
+      while (DateTime.now().isBefore(deadline) && !matched) {
+        final notifications = await $.platform.mobile.getNotifications();
+        matched = notifications.any(
+          (notification) =>
+              notification.title.contains(_expectedNotificationText) ||
+              notification.content.contains(_expectedNotificationText),
+        );
+        if (!matched) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+      }
+      expect(
+        matched,
+        isTrue,
+        reason: 'the expected correlated system notification must be delivered',
+      );
 
-      // 断言 App 恢复正常
-      expect(find.byType(WidgetsApp), findsOneWidget);
+      await $.platform.mobile.openNotifications();
+      await $.platform.mobile.tapOnNotificationBySelector(
+        Selector(textContains: _expectedNotificationText),
+      );
+
+      final expectedPage = find.byWidgetPredicate(
+        (widget) =>
+            widget is ChatConversationPage &&
+            widget.conversationId == _expectedConversationId,
+      );
+      await $(
+        expectedPage,
+      ).waitUntilVisible(timeout: const Duration(seconds: 30));
+      expect(expectedPage, findsOneWidget);
     },
   );
 }

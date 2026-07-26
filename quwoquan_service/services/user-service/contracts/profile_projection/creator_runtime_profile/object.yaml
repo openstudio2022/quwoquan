@@ -1,0 +1,29 @@
+kind: projection
+description: 'immutable release desired-state 引用的 canonical creator package 只读运行时投影。
+
+  归属 user-service，复用既有 creator/profile/works API；不创建可登录用户，不复制作品正文。
+
+  '
+identity:
+  fields:
+  - creatorId
+  version_source: checkpoint
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: persona
+  on_delete: tombstone
+  reference_fields:
+  - subAccountId
+  target_object: user.Persona
+local_identity_reasons:
+  preferredBlueprintIds: stable catalog or release key; resolved through its typed catalog reader and
+    never used as an aggregate Store identity
+  releaseId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity

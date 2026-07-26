@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
 /// 底栏/工具列表通用入口（图标 + 文案）
 class ImageEditorToolEntryChip extends StatelessWidget {
@@ -22,9 +24,14 @@ class ImageEditorToolEntryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const isDark = true;
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final color = isSelected ? fg : fgSecondary.withValues(alpha: 0.82);
     return GestureDetector(
       onTap: onTap,
@@ -48,11 +55,7 @@ class ImageEditorToolEntryChip extends StatelessWidget {
                   color: color,
                 )
               else
-                Icon(
-                  icon,
-                  size: AppSpacing.iconLarge,
-                  color: color,
-                ),
+                Icon(icon, size: AppSpacing.iconLarge, color: color),
               SizedBox(height: AppSpacing.toolPanelItemIconLabelGap),
               Text(
                 label,

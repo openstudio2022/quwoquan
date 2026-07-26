@@ -1,43 +1,77 @@
-# L3 Story：contact-home-relationship-projection
+# L3 Story：联系首页关系投影 (`contact-home-relationship-projection`)
 
-## 最小价值点
+> 所属能力：[`commercial-message-system`](../spec.md)
 
-让联系首页的全部、互关、圈子、群聊视图由真实关系聚合和交集摘要支撑，而不是 App 侧拼业务事实。
+> Journey / Scenario：[`JNY-003 / SCN-008`](../../../spec.md#scn-008)
 
-## 归属
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-- 领域服务：`chat-conversation`
-- 业务能力：`commercial-message-system`
-- 关联 Journey / Scenario：联系首页真实关系聚合
+## 1. 用户价值
 
-## 行为范围
+作为发起或接收消息的用户，
+我希望联系首页 read model 与交集摘要字段均有稳定契约来源，
+从而稳定完成会话、消息或通话协作。
+
+## 2. 范围与非目标
 
 ### In Scope
 
-- 联系首页混排用户和群的真实聚合。
-- 互关索引阈值、圈子 tab、群聊 tab 的 read model 边界。
-- 交集摘要最多展示 2 个具体点。
+- “联系首页关系投影”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 消息首页通知筛选。
 
 ### Out of Scope
 
-- 消息首页通知 inbox。
-- 群主页治理能力细项。
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-## 行为规则
+## 3. 行为要求
 
-- Given：用户已建立关系、圈子和群聊数据。
-- When：用户查看联系首页不同筛选。
-- Then：联系首页展示真实关系聚合、最近互动排序和受限交集摘要，不由 UI 临时拼接。
+<a id="req-001"></a>
+### REQ-001 联系首页关系投影
 
-## 接口契约
+- 联系首页 read model 与交集摘要字段均有稳定契约来源。
 
-- API path / operation：`ListContactHome` 对应 metadata operation。
-- DTO / projection：`ContactHome`、`IntersectionSummary`。
-- error code：消息域、推荐交集域与 runtime error metadata。
-- surface / route：联系首页与圈子联系人页 route / surface metadata。
+<a id="req-002"></a>
+### REQ-002 联系首页关系投影与交集摘要契约一致
 
-## 验收关注点
+- 联系首页 read model 与交集摘要字段均有稳定契约来源。
 
-- done_when：联系首页关系、圈子、群和交集都由真实投影支撑。
-- edge cases：空交集、互关人数阈值、只有圈子或只有群的混排场景。
-- test evidence：`T2_module_interaction`、`T3_service_contract`。
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
+- canonical：`quwoquan_app/lib/cloud/runtime/generated/recommendation/intersection_reason.g.dart`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 联系首页关系投影
+
+- GIVEN 发起或接收消息的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“联系首页关系投影”对应的公开行为。
+- THEN 联系首页 read model 与交集摘要字段均有稳定契约来源。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`commercial-message-system`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 联系首页关系、圈子、群和交集由真实聚合驱动
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：联系首页的各类关系视图都可映射到真实 projection 和交集契约。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 联系首页关系投影与交集摘要契约一致
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：联系首页 read model 与交集摘要字段均有稳定契约来源。
+- 完成判定：联系首页 read model 与交集摘要字段均有稳定契约来源。

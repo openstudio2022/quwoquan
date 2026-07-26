@@ -26,6 +26,10 @@ from content.release.environment.homepage_api_verification import (
     HomepageApiVerificationError,
     write_homepage_api_verification,
 )
+from content.release.environment.post_api_verification import (
+    PostApiVerificationError,
+    write_post_api_verification,
+)
 from content.release.environment.baseline_api_verification import (
     BaselineApiVerificationError,
     write_baseline_api_verification,
@@ -35,13 +39,11 @@ from content.release.environment.homepage_verification_cases import (
     write_homepage_verification_case_manifest,
 )
 from content.release.environment.importers import (
+    run_creator_importer as _run_creator_importer,
     run_content_importer as _run_content_importer,
     run_homepage_importer as _run_homepage_importer,
 )
-from content.release.environment.reload import (
-    authorization_header_for_target as _authorization_header_for_target,
-    trigger_entity_reload as _trigger_entity_reload,
-)
+from content.release.environment.readiness import require_environment_readiness
 from content.release.environment.topology import (
     EnvironmentReleaseMode,
     EnvironmentReleaseTarget,
@@ -49,15 +51,14 @@ from content.release.environment.topology import (
 )
 from content.release.model import (
     DEPLOYMENT_ENVIRONMENTS,
-    FULL_SYNC_MILESTONES,
+    FULL_SYNC_RELEASE_KINDS,
     DeletePolicy,
     DeploymentEnvironment,
     EvidenceStatus,
     ImportMode,
-    ReleaseRunKind,
-    ReleaseRunStatus,
     ReleaseKind,
 )
+from core.control_types import ReleaseRunKind, ReleaseRunStatus
 VALID_ENVS = frozenset(DEPLOYMENT_ENVIRONMENTS)
 
 
@@ -82,7 +83,22 @@ def _load_release(release_id: str) -> tuple[Path, dict[str, Any]]:
 
 def _release_requires_full_sync(release: Path) -> bool:
     header = read_json(payload_file(release, "release.json"))
-    return str(header.get("rolloutMilestone") or "") in FULL_SYNC_MILESTONES
+    try:
+        return ReleaseKind(str(header.get("releaseKind") or "")) in FULL_SYNC_RELEASE_KINDS
+    except ValueError as exc:
+        raise SystemExit("[ship] releaseKind is invalid") from exc
+
+
+def _release_has_posts(contract: Mapping[str, Any]) -> bool:
+    """Return whether this immutable release owns post consumers to verify."""
+
+    desired_refs = contract.get("desiredRefs")
+    if not isinstance(desired_refs, Mapping):
+        raise SystemExit("[ship] release desiredRefs is invalid")
+    posts = desired_refs.get("posts")
+    if not isinstance(posts, list):
+        raise SystemExit("[ship] release desiredRefs.posts is invalid")
+    return bool(posts)
 
 
 def _create_run(
@@ -193,7 +209,7 @@ def _apply_release(args: argparse.Namespace) -> None:
     full_sync = bool(args.full_sync)
     if _release_requires_full_sync(release) and not full_sync:
         raise SystemExit(
-            "[ship] rollout baseline/canary/m1/m2/m3 release requires --full-sync"
+            "[ship] immutable release requires --full-sync"
         )
     for env in envs:
         target = resolve_environment_release_target(env)
@@ -205,11 +221,29 @@ def _apply_release(args: argparse.Namespace) -> None:
         )
         run_id = str(args.run_id or f"apply-{_now_compact()}")
         run = _create_run(env, release_id, run_id, kind=ReleaseRunKind.APPLY)
+        if args.import_to_db and not args.dry_run:
+            require_environment_readiness(
+                environment=target.environment,
+                consumer=False,
+                run=run,
+            )
         write_json(run / "consistency-preflight.json", preflight)
         if target.media_sync_root is not None and not args.dry_run:
             _sync_media(release=release, destination=str(target.media_sync_root), run=run)
         verification_cases_ref = ""
+        creator_import_ref = ""
+        content_import_ref = ""
         if args.import_to_db:
+            creator_receipt = _run_creator_importer(
+                release=release,
+                env=env,
+                run=run,
+                mongo_uri=target.mongo_uri,
+                postgres_dsn=target.user_postgres_dsn,
+                dry_run=bool(args.dry_run),
+                mode=ImportMode.SYNC if full_sync else ImportMode.UPSERT,
+            )
+            creator_import_ref = creator_receipt.relative_to(OUTPUT_ROOT).as_posix()
             _run_content_importer(
                 release=release,
                 env=env,
@@ -219,11 +253,14 @@ def _apply_release(args: argparse.Namespace) -> None:
                 dry_run=bool(args.dry_run),
                 mode=ImportMode.SYNC if full_sync else ImportMode.UPSERT,
                 delete_policy=DeletePolicy.TOMBSTONE if full_sync else DeletePolicy.NONE,
+                creator_receipt=creator_receipt,
             )
+            content_import_ref = (run / "import.json").relative_to(OUTPUT_ROOT).as_posix()
             homepage_import_report = _run_homepage_importer(
                 release=release,
                 env=env,
                 run=run,
+                run_id=run_id,
                 mongo_uri=target.mongo_uri,
                 media_base_url=target.media_base_url,
                 dry_run=bool(args.dry_run),
@@ -242,16 +279,6 @@ def _apply_release(args: argparse.Namespace) -> None:
                 except HomepageVerificationCaseError as exc:
                     raise SystemExit(f"[ship] homepage verification case manifest failed: {exc}") from exc
                 verification_cases_ref = verification_cases.relative_to(OUTPUT_ROOT).as_posix()
-            reload_url = target.entity_reload_url
-            if reload_url and not args.dry_run:
-                reload_report = _trigger_entity_reload(
-                    reload_url,
-                    authorization_header=_authorization_header_for_target(target),
-                    release_id=release_id,
-                    run=run,
-                )
-                if not read_json(reload_report).get("ok"):
-                    raise SystemExit("[ship] entity-service reload failed")
         if args.import_to_db and not args.dry_run:
             _write_applied_ref(run=run, env=env, release_id=release_id)
         write_json(
@@ -263,6 +290,8 @@ def _apply_release(args: argparse.Namespace) -> None:
                 "runId": run_id,
                 "status": ReleaseRunStatus.DRY_RUN if args.dry_run else ReleaseRunStatus.COMPLETED,
                 "homepageVerificationCasesRef": verification_cases_ref,
+                "creatorImportReportRef": creator_import_ref,
+                "contentImportReportRef": content_import_ref,
             },
         )
         print(f"[ship] {env} release={release_id} run={run_id} evidence={run}")
@@ -293,6 +322,12 @@ def _rollback_release(args: argparse.Namespace) -> None:
     )
     run_id = str(args.run_id or f"rollback-{_now_compact()}")
     run = _create_run(env, target_id, run_id, kind=ReleaseRunKind.ROLLBACK)
+    if args.import_to_db and not args.dry_run:
+        require_environment_readiness(
+            environment=target.environment,
+            consumer=False,
+            run=run,
+        )
     write_json(
         run / "rollback_ref.json",
         {
@@ -306,6 +341,15 @@ def _rollback_release(args: argparse.Namespace) -> None:
     if target.media_sync_root is not None and not args.dry_run:
         _sync_media(release=release, destination=str(target.media_sync_root), run=run)
     if args.import_to_db:
+        creator_receipt = _run_creator_importer(
+            release=release,
+            env=env,
+            run=run,
+            mongo_uri=target.mongo_uri,
+            postgres_dsn=target.user_postgres_dsn,
+            dry_run=bool(args.dry_run),
+            mode=ImportMode.SYNC,
+        )
         _run_content_importer(
             release=release,
             env=env,
@@ -315,26 +359,18 @@ def _rollback_release(args: argparse.Namespace) -> None:
             dry_run=bool(args.dry_run),
             mode=ImportMode.SYNC,
             delete_policy=DeletePolicy.TOMBSTONE,
+            creator_receipt=creator_receipt,
         )
         _run_homepage_importer(
             release=release,
             env=env,
             run=run,
+            run_id=run_id,
             mongo_uri=target.mongo_uri,
             media_base_url=target.media_base_url,
             dry_run=bool(args.dry_run),
             mode=ImportMode.SYNC,
         )
-        reload_url = target.entity_reload_url
-        if reload_url and not args.dry_run:
-            reload_report = _trigger_entity_reload(
-                reload_url,
-                authorization_header=_authorization_header_for_target(target),
-                release_id=target_id,
-                run=run,
-            )
-            if not read_json(reload_report).get("ok"):
-                raise SystemExit("[ship] entity-service reload failed")
     if args.import_to_db and not args.dry_run:
         _write_applied_ref(run=run, env=env, release_id=target_id)
     write_json(
@@ -350,7 +386,7 @@ def _rollback_release(args: argparse.Namespace) -> None:
     print(f"[ship] rollback env={env} target={target_id} run={run_id}")
 
 
-def _verify_homepages(args: argparse.Namespace) -> None:
+def _verify_release_consumers(args: argparse.Namespace) -> None:
     release_id = str(args.release_id).strip()
     release, contract = _load_release(release_id)
     env = str(args.env).strip()
@@ -375,12 +411,17 @@ def _verify_homepages(args: argparse.Namespace) -> None:
         release_kind = ReleaseKind(str(header.get("releaseKind") or ""))
     except ValueError as exc:
         raise SystemExit("[ship] releaseKind is invalid") from exc
-    run_id = str(args.run_id or f"homepage-api-{_now_compact()}")
+    run_id = str(args.run_id or f"consumer-api-{_now_compact()}")
     run = _create_run(
         env,
         release_id,
         run_id,
         kind=ReleaseRunKind.VERIFY,
+    )
+    require_environment_readiness(
+        environment=target.environment,
+        consumer=True,
+        run=run,
     )
     if release_kind is ReleaseKind.EMPTY_BASELINE:
         if import_result.get("homepageVerificationCasesRef"):
@@ -411,6 +452,23 @@ def _verify_homepages(args: argparse.Namespace) -> None:
         )
         print(f"[ship] {env} baseline API release={release_id} run={run_id} evidence={run}")
         return
+    post_report: Path | None = None
+    if _release_has_posts(contract):
+        try:
+            post_report = write_post_api_verification(
+                environment=target.environment,
+                release_id=release.name,
+                run_id=run_id,
+                release_root=release,
+                importer_report_path=import_run / "import.json",
+                creator_importer_report_path=import_run / "creator-import.json",
+                output_path=run / "post-api-verification.json",
+                api_base_url=target.api_base_url,
+                insecure_tls=target.api_insecure_tls,
+                resolve_host=target.api_resolve_host,
+            )
+        except PostApiVerificationError as exc:
+            raise SystemExit(f"[ship] {env} post API verification failed: {exc}") from exc
     case_manifest = import_run / "homepage_verification_cases.json"
     if not case_manifest.is_file():
         raise SystemExit(f"[ship] homepage verification cases missing from import run: {case_manifest}")
@@ -420,7 +478,7 @@ def _verify_homepages(args: argparse.Namespace) -> None:
     ):
         raise SystemExit("[ship] import run does not bind a completed homepage verification case manifest")
     try:
-        report = write_homepage_api_verification(
+        homepage_report = write_homepage_api_verification(
             environment=target.environment,
             release_id=release.name,
             run_id=run_id,
@@ -432,18 +490,18 @@ def _verify_homepages(args: argparse.Namespace) -> None:
         )
     except HomepageApiVerificationError as exc:
         raise SystemExit(f"[ship] {env} homepage API verification failed: {exc}") from exc
-    write_json(
-        run / "result.json",
-        {
-            "schema": "quwoquan_data.environment_release_result",
-            "environment": env,
-            "releaseId": release_id,
-            "runId": run_id,
-            "status": ReleaseRunStatus.COMPLETED,
-            "homepageApiVerificationRef": report.relative_to(OUTPUT_ROOT).as_posix(),
-        },
-    )
-    print(f"[ship] {env} homepage API release={release_id} run={run_id} evidence={run}")
+    result = {
+        "schema": "quwoquan_data.environment_release_result",
+        "environment": env,
+        "releaseId": release_id,
+        "runId": run_id,
+        "status": ReleaseRunStatus.COMPLETED,
+        "homepageApiVerificationRef": homepage_report.relative_to(OUTPUT_ROOT).as_posix(),
+    }
+    if post_report is not None:
+        result["postApiVerificationRef"] = post_report.relative_to(OUTPUT_ROOT).as_posix()
+    write_json(run / "result.json", result)
+    print(f"[ship] {env} consumer API release={release_id} run={run_id} evidence={run}")
 
 
 def handle_ship(args: argparse.Namespace) -> None:
@@ -452,7 +510,7 @@ def handle_ship(args: argparse.Namespace) -> None:
     elif args.ship_command == ReleaseRunKind.ROLLBACK:
         _rollback_release(args)
     elif args.ship_command == ReleaseRunKind.VERIFY:
-        _verify_homepages(args)
+        _verify_release_consumers(args)
     else:
         raise SystemExit("[ship] subcommand required")
 

@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-part 'article_document_models_projection.dart';
 
 enum ArticleDocumentNodeType {
   documentTitle,
@@ -22,9 +21,6 @@ enum ArticleDocumentBlockType {
   bulletItem,
   image,
 }
-
-final RegExp _orderedArticleLinePattern = RegExp(r'^\s*(\d+)[\.\u3001]\s+');
-final RegExp _bulletArticleLinePattern = RegExp(r'^\s*[•\-]\s+');
 
 String _normalizeArticleText(String value) {
   return value.replaceAll('\r\n', '\n');
@@ -237,7 +233,7 @@ bool _isWrapParagraphCandidate(ArticleDocumentNode node) {
   return node.type == ArticleDocumentNodeType.paragraph;
 }
 
-/// 行内样式 span（与 contracts/metadata/content/post/article_document_schema.yaml 对齐）
+/// 行内样式 span（与 quwoquan_service/services/content-service/contracts/content/post/article_document_schema.yaml 对齐）
 @immutable
 class ArticleInlineSpan {
   const ArticleInlineSpan({
@@ -324,37 +320,6 @@ class ArticleDocumentBlock {
     this.spans = const <ArticleInlineSpan>[],
   });
 
-  factory ArticleDocumentBlock.fromMap(Map<String, dynamic> map) {
-    final typeName = (map['type'] ?? 'paragraph').toString().trim();
-    final type = switch (typeName) {
-      'heading2' => ArticleDocumentBlockType.heading2,
-      'heading3' => ArticleDocumentBlockType.heading3,
-      'sectionTitle' => ArticleDocumentBlockType.sectionTitle,
-      'orderedItem' => ArticleDocumentBlockType.orderedItem,
-      'bulletItem' => ArticleDocumentBlockType.bulletItem,
-      'image' => ArticleDocumentBlockType.image,
-      _ => ArticleDocumentBlockType.paragraph,
-    };
-    final spansRaw = (map['spans'] as List?) ?? const <Object?>[];
-    final spans = spansRaw
-        .whereType<Map>()
-        .map((e) => ArticleInlineSpan.fromMap(Map<String, dynamic>.from(e)))
-        .toList(growable: false);
-    return ArticleDocumentBlock(
-      id: (map['id'] ?? '').toString(),
-      type: type,
-      offset: (map['offset'] as num?)?.toInt() ?? 0,
-      text: (map['text'] ?? '').toString(),
-      imageUrl: (map['imageUrl'] ?? '').toString(),
-      imageLayout: (map['imageLayout'] ?? 'fullWidth').toString(),
-      caption: (map['caption'] ?? '').toString(),
-      orderedIndex: (map['orderedIndex'] as num?)?.toInt(),
-      textAlign: (map['textAlign'] ?? '').toString(),
-      listDepth: (map['listDepth'] as num?)?.toInt() ?? 0,
-      spans: spans,
-    );
-  }
-
   final String id;
   final ArticleDocumentBlockType type;
   final int offset;
@@ -376,51 +341,6 @@ class ArticleDocumentBlock {
   bool get hasImage => imageUrl.trim().isNotEmpty;
   bool get usesWrappedLayout =>
       imageLayout == 'wrapLeft' || imageLayout == 'wrapRight';
-
-  ArticleDocumentBlock copyWith({
-    String? id,
-    ArticleDocumentBlockType? type,
-    int? offset,
-    String? text,
-    String? imageUrl,
-    String? imageLayout,
-    String? caption,
-    int? orderedIndex,
-    String? textAlign,
-    int? listDepth,
-    List<ArticleInlineSpan>? spans,
-  }) {
-    return ArticleDocumentBlock(
-      id: id ?? this.id,
-      type: type ?? this.type,
-      offset: offset ?? this.offset,
-      text: text ?? this.text,
-      imageUrl: imageUrl ?? this.imageUrl,
-      imageLayout: imageLayout ?? this.imageLayout,
-      caption: caption ?? this.caption,
-      orderedIndex: orderedIndex ?? this.orderedIndex,
-      textAlign: textAlign ?? this.textAlign,
-      listDepth: listDepth ?? this.listDepth,
-      spans: spans ?? this.spans,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'id': id,
-      'type': type.name,
-      'offset': offset,
-      'text': text,
-      'imageUrl': imageUrl,
-      'imageLayout': imageLayout,
-      'caption': caption,
-      if (orderedIndex != null) 'orderedIndex': orderedIndex,
-      if (textAlign.isNotEmpty) 'textAlign': textAlign,
-      if (listDepth > 0) 'listDepth': listDepth,
-      if (spans.isNotEmpty)
-        'spans': spans.map((s) => s.toMap()).toList(growable: false),
-    };
-  }
 }
 
 @immutable
@@ -433,16 +353,6 @@ class ArticleDocumentAsset {
     this.caption = '',
   });
 
-  factory ArticleDocumentAsset.fromMap(Map<String, dynamic> map) {
-    return ArticleDocumentAsset(
-      id: (map['id'] ?? '').toString(),
-      offset: (map['offset'] as num?)?.toInt() ?? 0,
-      imageUrl: (map['imageUrl'] ?? '').toString(),
-      imageLayout: (map['imageLayout'] ?? 'fullWidth').toString(),
-      caption: (map['caption'] ?? '').toString(),
-    );
-  }
-
   final String id;
   final int offset;
   final String imageUrl;
@@ -452,64 +362,22 @@ class ArticleDocumentAsset {
   bool get hasImage => imageUrl.trim().isNotEmpty;
   bool get usesWrappedLayout =>
       imageLayout == 'wrapLeft' || imageLayout == 'wrapRight';
-
-  ArticleDocumentAsset copyWith({
-    String? id,
-    int? offset,
-    String? imageUrl,
-    String? imageLayout,
-    String? caption,
-  }) {
-    return ArticleDocumentAsset(
-      id: id ?? this.id,
-      offset: offset ?? this.offset,
-      imageUrl: imageUrl ?? this.imageUrl,
-      imageLayout: imageLayout ?? this.imageLayout,
-      caption: caption ?? this.caption,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'id': id,
-      'offset': offset,
-      'imageUrl': imageUrl,
-      'imageLayout': imageLayout,
-      'caption': caption,
-    };
-  }
 }
 
 @immutable
 class ArticleDocumentData {
   /// 文章文档数据。
   ///
-  /// [nodes] 是唯一编辑真相源。当 [nodes] 非空时，[title]、[body]、[assets]、
-  /// [blocks] 均从 [nodes] 自动投影派生，外部传入的同名参数会被忽略。
-  ///
-  /// 当 [nodes] 为空时（兼容旧格式反序列化），会从 [title]、[body]、[assets]、
-  /// [blocks] 反向构建 [nodes]。新代码应始终传入 [nodes]。
+  /// [nodes] 是唯一编辑真相源；[title]、[body]、[assets]、[blocks] 均为只读投影。
   ArticleDocumentData({
     List<ArticleDocumentNode> nodes = const <ArticleDocumentNode>[],
     this.template = 'gentle',
     this.fontPreset = 'clean',
     this.coverImageUrl = '',
     this.titleStyle = ArticleDocumentTitleStyle.major,
-    String title = '',
-    String body = '',
-    List<ArticleDocumentAsset> assets = const <ArticleDocumentAsset>[],
-    List<ArticleDocumentBlock> blocks = const <ArticleDocumentBlock>[],
-  }) : nodes = nodes.isNotEmpty
-           ? _normalizeDocumentNodes(nodes)
-           : _buildDocumentNodesFromCurrent(
-               title: title,
-               body: body,
-               assets: assets,
-               blocks: blocks,
-               useFullBlockSequence: false,
-             );
+  }) : nodes = _normalizeDocumentNodes(nodes);
 
-  /// 从 wire JSON 构造，支持新格式（blocks 含 image/paragraph 完整序列）。
+  /// 从 canonical nodes JSON 构造。
   factory ArticleDocumentData.fromMap(Map<String, dynamic> map) {
     final nodeEntries = ((map['nodes'] as List?) ?? const <Object?>[])
         .whereType<Map>()
@@ -526,24 +394,6 @@ class ArticleDocumentData {
                   node.type == ArticleDocumentNodeType.paragraph),
         )
         .toList(growable: false);
-    final assets = ((map['assets'] as List?) ?? const <Object?>[])
-        .whereType<Map>()
-        .map(
-          (entry) =>
-              ArticleDocumentAsset.fromMap(Map<String, dynamic>.from(entry)),
-        )
-        .where((asset) => asset.id.trim().isNotEmpty && asset.hasImage)
-        .toList(growable: false);
-    final blocks = ((map['blocks'] as List?) ?? const <Object?>[])
-        .whereType<Map>()
-        .map(
-          (entry) =>
-              ArticleDocumentBlock.fromMap(Map<String, dynamic>.from(entry)),
-        )
-        .where((block) => block.id.trim().isNotEmpty)
-        .toList(growable: false);
-    final title = _normalizeArticleText((map['title'] ?? '').toString()).trim();
-    final body = _normalizeArticleText((map['body'] ?? '').toString());
     final template = (map['template'] ?? 'gentle').toString();
     final fontPreset = (map['fontPreset'] ?? 'clean').toString();
     final coverImageUrl = (map['coverImageUrl'] ?? '').toString().trim();
@@ -552,46 +402,14 @@ class ArticleDocumentData {
       orElse: () => ArticleDocumentTitleStyle.major,
     );
 
-    // 新格式检测：wire 中 blocks 含有带有效 imageUrl 的 image 类型，
-    // 说明 blocks 是完整节点序列，直接从 blocks 构建 nodes。
-    final useFullBlockSequence = blocks.any(
-      (b) => b.type == ArticleDocumentBlockType.image && b.hasImage,
-    );
-
-    return ArticleDocumentData._wire(
+    return ArticleDocumentData(
       nodes: nodeEntries,
       template: template,
       fontPreset: fontPreset,
       coverImageUrl: coverImageUrl,
       titleStyle: titleStyle,
-      title: title,
-      body: body,
-      assets: assets,
-      blocks: blocks,
-      useFullBlockSequence: useFullBlockSequence,
     );
   }
-
-  ArticleDocumentData._wire({
-    List<ArticleDocumentNode> nodes = const <ArticleDocumentNode>[],
-    this.template = 'gentle',
-    this.fontPreset = 'clean',
-    this.coverImageUrl = '',
-    this.titleStyle = ArticleDocumentTitleStyle.major,
-    String title = '',
-    String body = '',
-    List<ArticleDocumentAsset> assets = const <ArticleDocumentAsset>[],
-    List<ArticleDocumentBlock> blocks = const <ArticleDocumentBlock>[],
-    bool useFullBlockSequence = false,
-  }) : nodes = nodes.isNotEmpty
-           ? _normalizeDocumentNodes(nodes)
-           : _buildDocumentNodesFromCurrent(
-               title: title,
-               body: body,
-               assets: assets,
-               blocks: blocks,
-               useFullBlockSequence: useFullBlockSequence,
-             );
 
   final List<ArticleDocumentNode> nodes;
   final String template;
@@ -631,36 +449,16 @@ class ArticleDocumentData {
 
   /// 复制并修改文档。
   ///
-  /// 当显式传入 [nodes] 时，[title]、[body]、[assets]、[blocks] 参数会被忽略，
-  /// 因为它们会从 [nodes] 自动投影。
-  ///
-  /// 当未传入 [nodes] 但传入了 [body]/[assets]/[blocks] 时，会从这些参数反向
-  /// 构建 nodes（兼容旧路径，已标记 @Deprecated 的方法仍依赖此行为）。
+  /// 内容变更只能显式传入 [nodes]；投影字段不能反向改写文档。
   ArticleDocumentData copyWith({
     List<ArticleDocumentNode>? nodes,
     String? template,
     String? fontPreset,
     String? coverImageUrl,
     ArticleDocumentTitleStyle? titleStyle,
-    String? title,
-    String? body,
-    List<ArticleDocumentAsset>? assets,
-    List<ArticleDocumentBlock>? blocks,
   }) {
-    final nextNodes =
-        nodes ??
-        ((title != null || body != null || assets != null || blocks != null)
-            ? (body != null || assets != null || blocks != null
-                  ? _buildDocumentNodesFromCurrent(
-                      title: title ?? this.title,
-                      body: body ?? this.body,
-                      assets: assets ?? this.assets,
-                      blocks: blocks ?? this.blocks,
-                    )
-                  : _replaceDocumentTitleNode(this.nodes, title ?? this.title))
-            : this.nodes);
     return ArticleDocumentData(
-      nodes: nextNodes,
+      nodes: nodes ?? this.nodes,
       template: template ?? this.template,
       fontPreset: fontPreset ?? this.fontPreset,
       coverImageUrl: coverImageUrl ?? this.coverImageUrl,
@@ -749,67 +547,6 @@ List<ArticleDocumentNode> _normalizeDocumentNodes(
         ),
       )
       .toList(growable: false);
-}
-
-int _countTextNodesFromBodySegment(String segment) {
-  return _normalizeArticleText(segment)
-      .split('\n')
-      .map((line) => line.trim())
-      .where((line) => line.isNotEmpty)
-      .length;
-}
-
-void _appendTextNodesFromBodySegment(
-  List<ArticleDocumentNode> nodes,
-  String segment, {
-  required String seedPrefix,
-  required int seedStart,
-}) {
-  var seed = seedStart;
-  final lines = _normalizeArticleText(segment)
-      .split('\n')
-      .map((line) => line.trim())
-      .where((line) => line.isNotEmpty)
-      .toList(growable: false);
-  for (final line in lines) {
-    final orderedMatch = _orderedArticleLinePattern.firstMatch(line);
-    if (orderedMatch != null) {
-      final content = line.substring(orderedMatch.end).trim();
-      if (content.isEmpty) {
-        continue;
-      }
-      nodes.add(
-        ArticleDocumentNode(
-          id: 'ordered_${seed++}',
-          type: ArticleDocumentNodeType.orderedItem,
-          text: content,
-        ),
-      );
-      continue;
-    }
-    final bulletMatch = _bulletArticleLinePattern.firstMatch(line);
-    if (bulletMatch != null) {
-      final content = line.substring(bulletMatch.end).trim();
-      if (content.isEmpty) {
-        continue;
-      }
-      nodes.add(
-        ArticleDocumentNode(
-          id: 'bullet_${seed++}',
-          type: ArticleDocumentNodeType.bulletItem,
-          text: content,
-        ),
-      );
-      continue;
-    }
-    nodes.add(
-      ArticleDocumentNode(
-        id: '${seedPrefix}_${seed++}',
-        type: ArticleDocumentNodeType.paragraph,
-        text: line,
-      ),
-    );
-  }
 }
 
 class _ArticleDocumentProjection {
@@ -968,26 +705,4 @@ _ArticleDocumentProjection _projectArticleDocument(
     blocks: blocks,
     allBlocks: allBlocks,
   );
-}
-
-List<ArticleDocumentNode> _replaceDocumentTitleNode(
-  List<ArticleDocumentNode> nodes,
-  String title,
-) {
-  final normalizedTitle = _normalizeArticleText(title).trim();
-  final nextNodes = nodes
-      .where((node) => !node.isDocumentTitle)
-      .toList(growable: true);
-  if (normalizedTitle.isEmpty) {
-    return nextNodes;
-  }
-  nextNodes.insert(
-    0,
-    ArticleDocumentNode(
-      id: 'document_title',
-      type: ArticleDocumentNodeType.documentTitle,
-      text: normalizedTitle,
-    ),
-  );
-  return nextNodes;
 }

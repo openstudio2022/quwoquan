@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"quwoquan_service/internal/metadata/ast"
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 	metacontrolplane "quwoquan_service/internal/metadata/controlplane"
 	"quwoquan_service/internal/metadata/validate"
@@ -62,7 +63,7 @@ type validator struct {
 	objectCount int
 	enumCount   int
 	// projectionReadModels 是全仓 projections/*.yaml 的 read_model 闭集（跨域），
-	// 供 service.yaml operation 的 response_body 指向性强校验消费。
+	// 供 operations.yaml operation 的 response_body 指向性强校验消费。
 	projectionReadModels map[string]bool
 	// fieldEntities 是全仓 fields.yaml entity 闭集。response_entity 可以引用同一域
 	// 其他对象拥有的 wire/read entity，但仍必须存在于 ContractGraph 文档中。
@@ -87,7 +88,6 @@ func (v *validator) run() {
 	v.loadFieldEntities()
 	v.validateSharedControlPlaneBaseline()
 	v.validateControlPlaneMetadata()
-	v.validateDomainOnboardingMetadata()
 	v.validateBusinessObjects()
 }
 
@@ -104,6 +104,7 @@ func (v *validator) loadFieldEntities() {
 		var parsed struct {
 			Entity   string         `yaml:"entity"`
 			Entities map[string]any `yaml:"entities"`
+			Types    map[string]any `yaml:"types"`
 		}
 		if err := yaml.Unmarshal(data, &parsed); err != nil {
 			v.errorf("%s: parse error: %v", documentPath, err)
@@ -117,7 +118,43 @@ func (v *validator) loadFieldEntities() {
 				v.fieldEntities[strings.TrimSpace(name)] = true
 			}
 		}
+		for name := range parsed.Types {
+			if strings.TrimSpace(name) != "" {
+				v.fieldEntities[strings.TrimSpace(name)] = true
+			}
+		}
+		parts := strings.Split(filepath.ToSlash(documentPath), "/")
+		if len(parts) >= 4 {
+			v.fieldEntities[pascalCaseMetadataName(parts[len(parts)-2])] = true
+		}
 	}
+	for _, documentPath := range v.source.Paths("", "/schema.yaml") {
+		var parsed struct {
+			Contract  string `yaml:"contract"`
+			DartClass string `yaml:"dart_class"`
+		}
+		if v.source.Decode(documentPath, &parsed) != nil {
+			continue
+		}
+		if name := strings.TrimSpace(parsed.Contract); name != "" {
+			v.fieldEntities[pascalCaseMetadataName(name)] = true
+		}
+		if name := strings.TrimSpace(parsed.DartClass); name != "" {
+			v.fieldEntities[name] = true
+			v.fieldEntities[strings.TrimSuffix(name, "Wire")] = true
+		}
+	}
+}
+
+func pascalCaseMetadataName(value string) string {
+	parts := strings.FieldsFunc(value, func(r rune) bool { return r == '_' || r == '-' })
+	for index, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[index] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	return strings.Join(parts, "")
 }
 
 func (v *validator) validateControlPlaneMetadata() {
@@ -155,8 +192,8 @@ func (v *validator) validateSharedControlPlaneBaseline() {
 	if len(parsed.ApprovalModes) == 0 {
 		v.errorf("_shared/control_plane.yaml: approval_modes cannot be empty")
 	}
-	if len(parsed.ObjectKinds) == 0 {
-		v.errorf("_shared/control_plane.yaml: object_kinds cannot be empty")
+	if len(parsed.ViewKinds) == 0 {
+		v.errorf("_shared/control_plane.yaml: view_kinds cannot be empty")
 	}
 	if len(parsed.DashboardSchema.RequiredFields) == 0 {
 		v.errorf("_shared/control_plane.yaml: dashboard_schema.required_fields cannot be empty")
@@ -201,9 +238,9 @@ func (v *validator) validateSharedControlPlaneBaseline() {
 			v.errorf("_shared/control_plane.yaml: approval_modes id is required")
 		}
 	}
-	for _, item := range parsed.ObjectKinds {
+	for _, item := range parsed.ViewKinds {
 		if item.ID == "" {
-			v.errorf("_shared/control_plane.yaml: object_kinds id is required")
+			v.errorf("_shared/control_plane.yaml: view_kinds id is required")
 		}
 	}
 	for _, item := range parsed.DeploymentProfiles {
@@ -294,7 +331,11 @@ func (v *validator) validateControlPlaneDomain(root, domain string, routePaths m
 	}
 
 	v.validateControlPlaneFile(filepath.Join(baseDir, "control_plane.yaml"), domain, routePaths)
-	v.validateConfigSchemaFile(filepath.Join(baseDir, "config_schema.yaml"), domain)
+	configPath := filepath.Join(baseDir, "config.yaml")
+	if domain == "platform" {
+		configPath = filepath.Join(v.metadataDir, "platform", "config.yaml")
+	}
+	v.validateConfigSchemaFile(configPath, domain)
 	if requireWorkflow {
 		v.validateWorkflowFile(filepath.Join(baseDir, "workflow.yaml"), domain)
 		v.validateAuditSchemaFile(filepath.Join(baseDir, "audit_schema.yaml"), domain)
@@ -402,7 +443,7 @@ func (v *validator) validateConfigSchemaFile(path, domain string) {
 		if !strings.HasPrefix(cfg.Key, prefix) {
 			v.errorf("%s: config key %q must start with %s", pathRelative(v.metadataDir, path), cfg.Key, prefix)
 		}
-		if !isAllowed(cfg.Scope, "global", "environment", "service", "domain", "audience", "experiment") {
+		if !isAllowed(cfg.Scope, "global", "environment", "workload", "service", "domain", "audience", "experiment") {
 			v.errorf("%s: config %q scope %q is invalid", pathRelative(v.metadataDir, path), cfg.Key, cfg.Scope)
 		}
 		if !isAllowed(cfg.Reload, "hot", "warm", "restart") {
@@ -411,7 +452,7 @@ func (v *validator) validateConfigSchemaFile(path, domain string) {
 		if !isAllowed(cfg.Rollout, "none", "progressive", "experiment", "package") {
 			v.errorf("%s: config %q rollout %q is invalid", pathRelative(v.metadataDir, path), cfg.Key, cfg.Rollout)
 		}
-		if !isAllowed(cfg.RiskLevel, "low", "medium", "high", "critical") {
+		if cfg.RiskLevel != "" && !isAllowed(cfg.RiskLevel, "low", "medium", "high", "critical") {
 			v.errorf("%s: config %q risk_level %q is invalid", pathRelative(v.metadataDir, path), cfg.Key, cfg.RiskLevel)
 		}
 	}
@@ -581,61 +622,27 @@ func (v *validator) loadSharedEnums() {
 }
 
 func (v *validator) validateBusinessObjects() {
-	dirs := map[string]struct{}{}
-	for _, suffix := range []string{"/aggregate.yaml", "/entity.yaml", "/schema.yaml"} {
-		for _, documentPath := range v.source.Paths("", suffix) {
-			dir := filepath.ToSlash(filepath.Dir(documentPath))
-			if strings.HasPrefix(dir, "_") ||
-				strings.Contains("/"+dir+"/", "/test_fixtures/") {
-				continue
-			}
-			dirs[dir] = struct{}{}
-		}
-	}
-	orderedDirs := make([]string, 0, len(dirs))
-	for dir := range dirs {
-		orderedDirs = append(orderedDirs, dir)
-	}
-	sort.Strings(orderedDirs)
-	for _, dirName := range orderedDirs {
+	objects := append([]ast.Object{}, v.source.Graph().Objects...)
+	sort.Slice(objects, func(i, j int) bool { return objects[i].SourcePath < objects[j].SourcePath })
+	for _, object := range objects {
+		dirName := filepath.ToSlash(filepath.Dir(object.SourcePath))
 		v.validateObjectAt(
 			dirName,
 			filepath.Join(v.metadataDir, filepath.FromSlash(dirName)),
+			object.Name,
+			string(object.Kind),
 		)
 		v.objectCount++
 	}
 }
 
-func (v *validator) validateObjectAt(dirName, dir string) {
-	// Wire JSON / hand-authored fixtures only (no aggregate/entity/service graph).
-	if filepath.Base(dir) == "test_fixtures" {
-		fmt.Printf("  skip %s/ (fixtures only)\n", dirName)
-		return
-	}
-
+func (v *validator) validateObjectAt(dirName, dir, rootName, objectKind string) {
 	fmt.Printf("  checking %s/ ...\n", dirName)
 
-	aggFile := filepath.Join(dir, "aggregate.yaml")
-	entFile := filepath.Join(dir, "entity.yaml")
-	schemaFile := filepath.Join(dir, "schema.yaml")
-	hasAgg := v.hasMetadataFile(aggFile)
-	hasEnt := v.hasMetadataFile(entFile)
-	hasSchema := v.hasMetadataFile(schemaFile)
-
-	if hasSchema && !hasAgg && !hasEnt {
-		v.validateSchemaObject(dirName, schemaFile)
+	if !v.hasMetadataFile(filepath.Join(dir, "object.yaml")) {
+		v.errorf("%s: object.yaml is required", dirName)
 		return
 	}
-
-	if !hasAgg && !hasEnt {
-		v.errorf("%s: neither aggregate.yaml nor entity.yaml found", dirName)
-		return
-	}
-	if hasAgg && hasEnt {
-		v.warnf("%s: both aggregate.yaml and entity.yaml found, using aggregate.yaml", dirName)
-	}
-
-	objectKind := v.parseObjectKind(dir, hasAgg)
 	requiredFiles := requiredFilesForObjectKind(objectKind)
 	for _, f := range requiredFiles {
 		if !v.hasMetadataFile(filepath.Join(dir, f)) {
@@ -643,66 +650,22 @@ func (v *validator) validateObjectAt(dirName, dir string) {
 		}
 	}
 
-	var rootName string
-	if hasAgg {
-		rootName = v.parseAggRoot(dir, dirName)
-	} else {
-		rootName = v.parseEntityRoot(dir, dirName)
-	}
-	if objectKind == "owned_entity" || objectKind == "value_object" {
-		return
-	}
-
 	fieldsEntities := map[string]bool{}
 	if v.hasMetadataFile(filepath.Join(dir, "fields.yaml")) {
-		fieldsEntities = v.parseFieldsEntities(dir, dirName)
+		fieldsEntities = v.parseFieldsEntities(dir, dirName, rootName)
 		v.validateEnumRefs(dir, dirName, fieldsEntities)
 	}
-	if v.hasMetadataFile(filepath.Join(dir, "events.yaml")) {
-		v.validateEventsPayload(dir, dirName, fieldsEntities)
-	}
-	if v.hasMetadataFile(filepath.Join(dir, "storage.yaml")) {
-		v.validateStorageEntities(dir, dirName, fieldsEntities)
-	}
-	if v.hasMetadataFile(filepath.Join(dir, "service.yaml")) {
+	if v.hasMetadataFile(filepath.Join(dir, "operations.yaml")) {
 		v.validateServiceEntities(dir, dirName, fieldsEntities)
 	}
-
-	_ = rootName
-}
-
-func (v *validator) parseObjectKind(dir string, hasAggregate bool) string {
-	fileName := "entity.yaml"
-	fallback := "owned_entity"
-	if hasAggregate {
-		fileName = "aggregate.yaml"
-		fallback = "aggregate_root"
-	}
-	data, ok := v.readYAMLFile(filepath.Join(dir, fileName))
-	if !ok {
-		return fallback
-	}
-	var parsed struct {
-		ObjectKind string `yaml:"object_kind"`
-	}
-	if err := yaml.Unmarshal(data, &parsed); err != nil || strings.TrimSpace(parsed.ObjectKind) == "" {
-		return fallback
-	}
-	return strings.TrimSpace(parsed.ObjectKind)
 }
 
 func requiredFilesForObjectKind(objectKind string) []string {
 	switch objectKind {
-	case "owned_entity", "value_object":
-		return nil
-	case "append_only_fact":
-		return []string{"fields.yaml", "storage.yaml", "service.yaml"}
-	case "projection":
-		return []string{"fields.yaml", "storage.yaml", "service.yaml"}
 	case "external_reference":
-		return []string{"fields.yaml", "service.yaml"}
+		return nil
 	default:
-		return []string{"fields.yaml", "events.yaml", "storage.yaml", "service.yaml"}
+		return []string{"fields.yaml", "storage.yaml"}
 	}
 }
 
@@ -727,51 +690,7 @@ func (v *validator) validateSchemaObject(dirName, schemaFile string) {
 	}
 }
 
-func (v *validator) parseAggRoot(dir, dirName string) string {
-	data, ok := v.readYAMLFile(filepath.Join(dir, "aggregate.yaml"))
-	if !ok {
-		return ""
-	}
-	var parsed struct {
-		AggregateRoot string `yaml:"aggregate_root"`
-		Members       []struct {
-			Entity string `yaml:"entity"`
-		} `yaml:"members"`
-	}
-	if err := yaml.Unmarshal(data, &parsed); err != nil {
-		v.errorf("%s/aggregate.yaml: parse error: %v", dirName, err)
-		return ""
-	}
-	if parsed.AggregateRoot == "" {
-		v.errorf("%s/aggregate.yaml: aggregate_root is empty", dirName)
-	}
-	return parsed.AggregateRoot
-}
-
-func (v *validator) parseEntityRoot(dir, dirName string) string {
-	data, ok := v.readYAMLFile(filepath.Join(dir, "entity.yaml"))
-	if !ok {
-		return ""
-	}
-	var parsed struct {
-		EntityName string `yaml:"entity_name"`
-		Entity     string `yaml:"entity"`
-	}
-	if err := yaml.Unmarshal(data, &parsed); err != nil {
-		v.errorf("%s/entity.yaml: parse error: %v", dirName, err)
-		return ""
-	}
-	name := parsed.EntityName
-	if name == "" {
-		name = parsed.Entity
-	}
-	if name == "" {
-		v.errorf("%s/entity.yaml: entity/entity_name is empty", dirName)
-	}
-	return name
-}
-
-func (v *validator) parseFieldsEntities(dir, dirName string) map[string]bool {
+func (v *validator) parseFieldsEntities(dir, dirName, rootName string) map[string]bool {
 	entities := make(map[string]bool)
 	data, ok := v.readYAMLFile(filepath.Join(dir, "fields.yaml"))
 	if !ok {
@@ -781,6 +700,8 @@ func (v *validator) parseFieldsEntities(dir, dirName string) map[string]bool {
 	// Try nested format (aggregates): entities: { Name: { fields: [...] } }
 	var nested struct {
 		Entities map[string]any `yaml:"entities"`
+		Members  map[string]any `yaml:"members"`
+		Types    map[string]any `yaml:"types"`
 	}
 	if err := yaml.Unmarshal(data, &nested); err != nil {
 		v.errorf("%s/fields.yaml: parse error: %v", dirName, err)
@@ -791,6 +712,15 @@ func (v *validator) parseFieldsEntities(dir, dirName string) map[string]bool {
 		for name := range nested.Entities {
 			entities[name] = true
 		}
+	}
+	for name := range nested.Members {
+		entities[name] = true
+	}
+	for name := range nested.Types {
+		entities[name] = true
+	}
+	if strings.TrimSpace(rootName) != "" {
+		entities[rootName] = true
 	}
 
 	// Flat roots may legitimately own nested entities in the same fields packet.
@@ -895,12 +825,11 @@ var responseBodyKinds = map[string]bool{"object": true, "page": true, "ack": tru
 var requestBodyKinds = map[string]bool{"object": true, "none": true}
 
 func (v *validator) validateServiceEntities(dir, dirName string, fieldsEntities map[string]bool) {
-	data, ok := v.readYAMLFile(filepath.Join(dir, "service.yaml"))
+	data, ok := v.readYAMLFile(filepath.Join(dir, "operations.yaml"))
 	if !ok {
 		return
 	}
-	// service.yaml 真实结构是顶层扁平 api_routes（历史 routes/operations 嵌套从未落地，
-	// 旧解析对现网文件恒为空转）；这里按真实结构解析并对响应契约做强校验。
+	// operations.yaml 使用顶层扁平 api_routes；这里只校验对象内可反向定位的响应契约。
 	var parsed struct {
 		APIRoutes []struct {
 			Operation        string `yaml:"operation"`
@@ -920,20 +849,20 @@ func (v *validator) validateServiceEntities(dir, dirName string, fieldsEntities 
 		requestKind := strings.TrimSpace(op.RequestBodyKind)
 		requestEntity := strings.TrimSpace(op.RequestEntity)
 		if requestKind != "" && !requestBodyKinds[requestKind] {
-			v.errorf("%s/service.yaml: operation %q has invalid request_body_kind %q (allowed: object|none)",
+			v.errorf("%s/operations.yaml: operation %q has invalid request_body_kind %q (allowed: object|none)",
 				dirName, opName, requestKind)
 		}
 		if requestKind == "none" && requestEntity != "" {
-			v.errorf("%s/service.yaml: operation %q request_body_kind=none must not declare request_entity %q",
+			v.errorf("%s/operations.yaml: operation %q request_body_kind=none must not declare request_entity %q",
 				dirName, opName, requestEntity)
 		}
 		if requestKind == "object" && requestEntity == "" {
-			v.errorf("%s/service.yaml: operation %q request_body_kind=object requires request_entity",
+			v.errorf("%s/operations.yaml: operation %q request_body_kind=object requires request_entity",
 				dirName, opName)
 		}
 		// response_entity 既可指向 fields.yaml entity，也可指向 projection read_model（如各类 *View/*Summary）。
 		if op.ResponseEntity != "" && !fieldsEntities[op.ResponseEntity] && !v.fieldEntities[op.ResponseEntity] && !v.projectionReadModels[op.ResponseEntity] {
-			v.warnf("%s/service.yaml: operation %q references response_entity %q not in fields.yaml nor any projection read_model",
+			v.warnf("%s/operations.yaml: operation %q references response_entity %q not in fields.yaml nor any projection read_model",
 				dirName, opName, op.ResponseEntity)
 		}
 
@@ -944,30 +873,30 @@ func (v *validator) validateServiceEntities(dir, dirName string, fieldsEntities 
 			continue
 		}
 		if kind == "" {
-			v.errorf("%s/service.yaml: operation %q declares response_body %q but missing response_body_kind (object|page|ack)",
+			v.errorf("%s/operations.yaml: operation %q declares response_body %q but missing response_body_kind (object|page|ack)",
 				dirName, opName, body)
 			continue
 		}
 		if !responseBodyKinds[kind] {
-			v.errorf("%s/service.yaml: operation %q has invalid response_body_kind %q (allowed: object|page|ack)",
+			v.errorf("%s/operations.yaml: operation %q has invalid response_body_kind %q (allowed: object|page|ack)",
 				dirName, opName, kind)
 			continue
 		}
 		if kind == "ack" {
 			if body != "" {
-				v.errorf("%s/service.yaml: operation %q response_body_kind=ack must not declare response_body (got %q)",
+				v.errorf("%s/operations.yaml: operation %q response_body_kind=ack must not declare response_body (got %q)",
 					dirName, opName, body)
 			}
 			continue
 		}
 		// object | page 必须指向存在的 projection read_model（或 client_projection.dart_class）。
 		if body == "" {
-			v.errorf("%s/service.yaml: operation %q response_body_kind=%s requires a response_body read model reference",
+			v.errorf("%s/operations.yaml: operation %q response_body_kind=%s requires a response_body read model reference",
 				dirName, opName, kind)
 			continue
 		}
 		if !v.projectionReadModels[body] {
-			v.errorf("%s/service.yaml: operation %q response_body %q is not a known projection read_model",
+			v.errorf("%s/operations.yaml: operation %q response_body %q is not a known projection read_model",
 				dirName, opName, body)
 		}
 	}

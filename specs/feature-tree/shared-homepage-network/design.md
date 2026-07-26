@@ -1,375 +1,52 @@
-# L1 共享主页网络 v1 — 整体架构设计
+# L1 Design：共享主页网络 (`shared-homepage-network`)
 
-## 设计动因
+> 对应规格：[L1 spec](./spec.md)
 
-`shared-homepage-network` 要解决的不是单一详情页样式问题，而是以下跨切设计问题：
+## 1. 背景与设计目标
 
-1. 如何让“具体事物”拥有统一、长期、可复用的主页。
-2. 如何把网络抓取、AI 抽取、用户补充、认领维护和下线治理接成一条生命周期主线。
-3. 如何让主页成为内容挂载、口碑沉淀和群组关联的统一锚点。
-4. 如何在不向用户暴露“实体”或“directory”的前提下，为端云建立稳定领域服务与 typed contract。
+- 设计目标：让用户发现具体事物的长期主页、挂载内容和评价，并让可信主体通过认领、维护、状态上报与软下线保持主页事实可靠。
 
-## 上游输入评审
+## 2. 领域模型与所有权
 
-| 上游 | 状态 | 设计影响 |
-|------|------|----------|
-| `specs/00_PRODUCT_CONCEPT_SYSTEM.md` | ✅ 已冻结 | 共享主页、群组、群、内容四层骨架已固定 |
-| `specs/00_GLOBAL_TERMINOLOGY.md` | ✅ 已冻结 | 前台不用“实体”与“directory”，PRD 统一用共享主页 |
-| `shared-homepage-network/spec.md` | ✅ 已冻结 | baseline 范围、KPI/SLO、边界与 OOS 已明确 |
-| `content` 现有发布与 Post 模型 | ✅ 可复用 | 主页只做挂载与聚合，不重造内容域 |
-| `circle` / 群组设计主线 | ⚠️ 单独会话推进 | 当前只定义主页消费群组摘要契约，不展开群组模板细节 |
-| 现有 metadata 路由与 surface 生成机制 | ✅ 可复用 | 新主页 route/surface/request context 必须并入 `_shared` 真相源 |
+- authoritative ownership：拥有 `Homepage`、主页候选、认领、基础资料维护、评价和状态报告的生命周期与写入决定权。
+- write boundary：只能通过本领域公开 command 修改其拥有事实。
+- 非本域对象：不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
+- 非本域对象：不复制 metadata 中的字段、path、错误码和 wire 语义。
 
-## 对标输入分析
+## 3. 上下文边界与协作
 
-| 对标对象 | 借鉴点 | 不借鉴点 | 适用边界 |
-|----------|--------|----------|----------|
-| 小红书 | 内容发布后挂载具体事物、搜索/推荐二次分发、达人传播 | 纯标签化心智、强广告感运营方式 | 适合主页作为内容锚点，不适合把主页弱化成标签页 |
-| 大众点评 | 围绕地点形成稳定主页与口碑心智、下线后仍保留记录 | 只做本地生活目录 | 适合酒店/餐厅/景点等主页生命周期设计 |
-| 汽车之家 | 车型主页、结构化信息、口碑和社区并存 | 只做单一垂类、重参数站体验 | 适合车型主页模板与内容/口碑/群组三位一体 |
-| Booking/Airbnb | 经营主体认领、验证、主理方维护、房源/主页的长期经营语义 | 交易、支付、重供应链后台 | 适合酒店/民宿认领与后续 owner-managed 扩展 |
+- [`JNY-003 / SCN-009`](../spec.md#scn-009) — 在“内容详情跳转作者主页”中，维护 Homepage 及其聚合读模型，解析稳定主页引用并交付可导航对象页。
+- [`JNY-005 / SCN-011`](../spec.md#scn-011) — 在“全局搜索查询与筛选”中，维护 Homepage 及其聚合读模型，解析稳定主页引用并交付可导航对象页。
+- [`JNY-007 / SCN-013`](../spec.md#scn-013) — 在“私建群、圈子群、组织节点群与主页相关群入口”中，维护 Homepage 及其聚合读模型，解析稳定主页引用并交付可导航对象页。
+- [`JNY-008 / SCN-014`](../spec.md#scn-014) — 在“实体主页到圈子、组织节点、群单元与会话协作”中，维护 Homepage 及其聚合读模型，解析稳定主页引用并交付可导航对象页。
+- [`JNY-009 / SCN-019`](../spec.md#scn-019) — 在“搜索 handoff 与统一 grounding”中，维护 Homepage 及其聚合读模型，解析稳定主页引用并交付可导航对象页。
+- [`JNY-010 / SCN-023`](../spec.md#scn-023) — 在“对象对外分享分发”中，维护 Homepage 及其聚合读模型，解析稳定主页引用并交付可导航对象页。
 
-## 方案对比
+## 4. 架构与数据流
 
-### D-1：能力命名与服务边界
+- [`homepage-claim-maintain-and-offline`](./homepage-claim-maintain-and-offline/spec.md)：提供主页从候选、发布、认领维护到现实对象消亡后软下线并保留记录的完整治理链路。
+- [`homepage-discovery-and-attach`](./homepage-discovery-and-attach/spec.md)：让用户发现具体事物的主页，并在发布内容时以单一引用把内容挂接到该主页。
+- [`homepage-review-and-content`](./homepage-review-and-content/spec.md)：让用户围绕共享主页完成理解、比较、浏览内容、查看评价与继续贡献内容。
+- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
 
-#### 方案 A：产品叫共享主页，服务保留 `entity-service`（推荐）
+## 5. 关键决策
 
-- 前台对用户统一说“主页”
-- PRD 与能力域统一说“共享主页”
-- 云侧服务保留 `entity-service`
+<a id="dec-001"></a>
+### DEC-001 具体事物统一为可长期维护的共享主页对象
+- 决策：具体事物统一为可长期维护的共享主页对象。
+- 理由：让用户发现具体事物的长期主页、挂载内容和评价，并让可信主体通过认领、维护、状态上报与软下线保持主页事实可靠。
+- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 关联要求：`REQ-001`
+- 关联能力：[`homepage-claim-maintain-and-offline`](./homepage-claim-maintain-and-offline/spec.md)、[`homepage-discovery-and-attach`](./homepage-discovery-and-attach/spec.md)、[`homepage-review-and-content`](./homepage-review-and-content/spec.md)
 
-**优点**：用户语言友好，工程命名稳定，不需要把 `entity` 暴露到产品层。  
-**缺点**：产品词与服务词不是同一个词，需要文档分层。  
-**适用条件**：用户语言与服务语言明确分层的场景。
+## 6. 质量与运行约束
 
-#### 方案 B：产品与服务一律改名为 homepage/directory
+- 沿用 AppRoot 全局质量约束并保持 metadata/code/test 单轨。
 
-**优点**：看似统一。  
-**缺点**：`homepage-service` 太像纯前端，`directory-service` 太像黄页目录，不适合作为生命周期与治理型服务。  
-**适用条件**：纯目录型产品，不适合本项目。
+## 7. 失败与恢复
 
-**选型决策**：**方案 A**。产品与用户语言收口为“主页/共享主页”，服务层保留 `entity-service`。
-
----
-
-### D-2：主页域建模方式
-
-#### 方案 A：单域聚合 + 模板驱动读模型（推荐）
-
-在 `entity-service` 中建立：
-
-- `EntityProfile`：主页主档聚合
-- `EntityTypeTemplate`：类目模板
-- `EntityReviewTemplate`：口碑模板
-- `EntityClaimRequest`：认领申请
-- `EntityStatusReport`：下线/错误上报
-- `EntitySourceEvidence`：来源与可信度证据
-
-主页详情页由 `EntityProfile + 模板 + 聚合摘要` 组成。
-
-**优点**：领域边界清晰，主页生命周期统一，口碑、认领、下线可复用。  
-**缺点**：需要新增完整业务域和 metadata。  
-**适用条件**：需要跨类目统一主页能力的场景。
-
-#### 方案 B：每个类目各自独立主页模型
-
-例如车型一套、酒店一套、景点一套、餐厅一套。
-
-**优点**：单类目看似直观。  
-**缺点**：无法复用主页生命周期、认领、下线和挂载契约；后续类目扩张成本高。  
-**适用条件**：单垂类产品，不适合当前多类目目标。
-
-**选型决策**：**方案 A**。主页统一由 `entity-service` 承载，类目差异交给模板层。
-
----
-
-### D-3：0→1 建档主线
-
-#### 方案 A：网络抓取 + AI 抽取补全 + 用户补充 + 审核发布（推荐）
-
-统一建档管线：
-
-1. 网络抓取 / 导入 / 内容反抽产生候选记录
-2. AI 补全摘要、别名、标签、字段建议
-3. 平台规则或人工审核做去重、归类、可信度确认
-4. 发布为正式主页
-5. 开放认领、维护、内容挂载和口碑
-
-**优点**：适合冷启动，能同时承接标准化类目和用户补充。  
-**缺点**：需要治理链路和审核状态。  
-**适用条件**：0→1 冷启动与长期运营并存的场景。
-
-#### 方案 B：仅靠用户自建主页
-
-**优点**：实现简单。  
-**缺点**：标准化差、重复率高、很难形成大众点评/汽车之家式稳定主页心智。  
-**适用条件**：轻社区 wiki 式产品，不适合本项目。
-
-**选型决策**：**方案 A**。冷启动优先由抓取和导入建立公共主页基线，再由社区和认领方持续补全。
-
----
-
-### D-4：认领模型
-
-#### 方案 A：分层验证认领（推荐）
-
-至少分为：
-
-- `基础认领`：营业执照/经营主体证明 + 官方手机号/邮箱 + 操作者身份 + 授权书
-- `强验证认领`：在基础认领上补身份证件、地址/经营证明、必要行业许可
-
-**优点**：兼顾效率与风险控制，适合 baseline 分阶段上线。  
-**缺点**：审核流程设计稍复杂。  
-**适用条件**：不同类目风险等级不同的场景。
-
-#### 方案 B：一刀切重 KYC
-
-所有主页都要求重材料。
-
-**优点**：规则统一。  
-**缺点**：门槛高，冷启动慢，商家/主理人流失大。  
-**适用条件**：强监管交易平台，不适合 baseline。
-
-**选型决策**：**方案 A**。
-
----
-
-### D-5：下线合同
-
-#### 方案 A：软下线并保留记录（推荐）
-
-- 页面进入 `已下线`
-- 保留 URL、记录内容、记录口碑、相关群组
-- 搜索和推荐降级
-
-**优点**：能建立长期口碑与记录可信度，不破坏内容和关系。  
-**缺点**：需要额外处理下线标识与排序策略。  
-**适用条件**：酒店、餐厅、景点等现实对象会自然消亡的场景。
-
-#### 方案 B：直接删除或彻底隐藏
-
-**优点**：实现简单。  
-**缺点**：破坏内容记录和用户信任，不符合点评/主页产品心智。  
-**适用条件**：不适合本项目。
-
-**选型决策**：**方案 A**。baseline 不做合并，只做软下线与记录保留。
-
----
-
-### D-6：与内容和群组的集成方式
-
-#### 方案 A：主页作为内容挂载锚点、群组消费主页摘要（推荐）
-
-- 内容域拥有内容本身
-- 主页域拥有主页主档、口碑模板和主页详情
-- 群组域只消费主页摘要与关联结果
-
-**优点**：边界清晰，主页不会吞掉内容域和群组域。  
-**缺点**：跨域读模型需要明确 contract。  
-**适用条件**：多域协同场景。
-
-#### 方案 B：在内容域或群组域复制主页主档
-
-**优点**：局部实现看似简单。  
-**缺点**：形成第二真相源，生命周期漂移严重。  
-**适用条件**：不适合本项目。
-
-**选型决策**：**方案 A**。
-
----
-
-### D-7：baseline 类目范围
-
-#### 方案 A：只做 4 类高价值主页（推荐）
-
-- 车型
-- 酒店/民宿
-- 餐厅
-- 景点
-
-**优点**：口碑模板、认领逻辑、下线治理和商业承接边界清晰。  
-**缺点**：首版范围收缩。  
-**适用条件**：需要先形成可落地闭环的 baseline。
-
-#### 方案 B：同时纳入学校、公司、院系、班级
-
-**优点**：看起来覆盖更全。  
-**缺点**：会把组织型关系主页与共享主页混为一谈，范围失控。  
-**适用条件**：不适合当前“群组主线单独推进”的要求。
-
-**选型决策**：**方案 A**。
-
-## 关键设计决策汇总
-
-| 编号 | 决策 | 方案 | 状态 |
-|------|------|------|------|
-| D-1 | 能力命名与服务边界 | 共享主页 + `entity-service` | 已定 |
-| D-2 | 主页域建模 | 单域聚合 + 模板驱动读模型 | 已定 |
-| D-3 | 建档主线 | 抓取/导入 + AI 补全 + 用户补充 + 审核发布 | 已定 |
-| D-4 | 认领模型 | 分层验证认领 | 已定 |
-| D-5 | 下线合同 | 软下线并保留记录 | 已定 |
-| D-6 | 内容/群组集成 | 主页作为锚点，其他域消费摘要 | 已定 |
-| D-7 | baseline 类目范围 | 车型/酒店民宿/餐厅/景点 | 已定 |
-
-## 整体架构图
-
-```text
-┌──────────────────────────────────────────────────────────────────────┐
-│                         端侧 (Flutter/Dart)                          │
-│                                                                      │
-│  lib/ui/entity/                                                      │
-│  ├── pages/                                                          │
-│  │   ├── entity_detail_page.dart      ← 主页详情                      │
-│  │   ├── entity_claim_page.dart       ← 认领申请                      │
-│  │   ├── entity_suggest_page.dart     ← 补充主页                      │
-│  │   └── entity_status_report_page.dart ← 下线/错误上报               │
-│  ├── providers/                                                      │
-│  │   ├── entity_page_provider.dart                                    │
-│  │   └── entity_search_provider.dart                                  │
-│  └── widgets/                                                        │
-│      ├── entity_header.dart                                           │
-│      ├── entity_rating_summary.dart                                   │
-│      ├── entity_content_section.dart                                  │
-│      └── entity_related_groups.dart                                   │
-│                                                                      │
-│  lib/cloud/services/entity/                                          │
-│  ├── entity_repository.dart        ← Abstract + Mock + Remote         │
-│  └── mock/entity_mock_data.dart                                      │
-│                                                                      │
-├──────────────────────────────────────────────────────────────────────┤
-│                        云侧 (Go / metadata / storage)                │
-│                                                                      │
-│  entity-service                                                      │
-│  ├── EntityProfile                                                   │
-│  ├── EntityTypeTemplate                                              │
-│  ├── EntityReviewTemplate                                            │
-│  ├── EntityClaimRequest                                              │
-│  ├── EntityStatusReport                                              │
-│  └── EntitySourceEvidence                                            │
-│                                                                      │
-│  content-service  ─────▶ 主页内容聚合（通过 primary_entity_id 等挂载） │
-│  circle-service   ─────▶ 主页相关群组摘要消费                         │
-│  search / gateway  ─────▶ 主页搜索与详情路由                          │
-│                                                                      │
-│  _shared/app_routes.yaml     ← 主页 route 真相源                     │
-│  _shared/ui_surfaces.yaml    ← 主页 surface 真相源                   │
-│  _shared/request_context.yaml ← 主页请求上下文真相源                 │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-## 跨域数据流
-
-### 1. 冷启动建档
-
-```text
-抓取源 / 运营导入 / 内容反抽
-  └──▶ entity-service.intake
-         ├── 生成候选记录
-         ├── AI 补全摘要、别名、标签、字段建议
-         ├── 规则/人工校验
-         └── 发布为正式主页
-```
-
-### 2. 发布内容挂载主页
-
-```text
-用户发布内容
-  ├── 搜索主页
-  ├── 若未找到则补充主页
-  ├── 选择主主页（口碑必选）
-  └── content-service 写入内容 + 主页挂载字段
-         └── entity-service 读模型聚合更新
-```
-
-### 3. 认领主页
-
-```text
-认领方提交材料
-  └──▶ entity-service.claim
-         ├── 校验主体与材料完整性
-         ├── 审核通过后打上认领标识
-         └── 开放基础维护能力
-```
-
-### 4. 下线治理
-
-```text
-用户/认领方上报状态
-  └──▶ entity-service.lifecycle
-         ├── 审核原因
-         ├── 切换为已下线
-         ├── 保留记录内容与口碑
-         └── 降级搜索与推荐曝光
-```
-
-## metadata / codegen 方案
-
-### 新增或扩展 metadata
-
-建议新增域：
-
-- `quwoquan_service/contracts/metadata/entity/homepage/`
-
-建议至少包含：
-
-- `aggregate.yaml`
-- `fields.yaml`
-- `service.yaml`
-- `ui_config.yaml`
-- `errors.yaml`
-- `storage.yaml`
-
-建议新增共享配置：
-
-- `_shared/app_routes.yaml`：主页详情、认领页、补充页、状态上报页
-- `_shared/ui_surfaces.yaml`：主页详情、主页搜索选择器、认领流程、下线报告流程
-- `_shared/request_context.yaml`：主页读取、主页搜索、认领、状态上报的 page context
-
-### 端侧 codegen/目录约束
-
-- `lib/cloud/runtime/generated/entity/`
-- `lib/cloud/services/entity/entity_repository.dart`
-- `lib/ui/entity/`
-
-### 关键 contract 方向
-
-- `SearchEntities`
-- `GetEntityPage`
-- `GetEntityReviewTemplate`
-- `SuggestEntity`
-- `RequestEntityClaim`
-- `ReportEntityOfflineStatus`
-- `ListEntityContents`
-- `ListRelatedCircles`
-
-## iOS 体验基线
-
-共享主页设计必须同步冻结以下体验要求：
-
-- 大标题 + 沉浸式头图
-- 首屏优先展示名称、评分、认领状态与关键操作
-- 口碑评分采用半星交互与轻触觉反馈
-- 发布器中的主页选择器采用搜索优先、单手友好的原生 sheet/fullscreen flow
-- 已下线提示采用非打断式 banner，不用强弹窗
-- 内容、口碑、问答区块支持 skeleton 和分模块降级
-
-## plan slice 与 三层测试 证据矩阵映射
-
-| Slice | 核心交付 | 主要证据层 |
-|------|----------|-----------|
-| P1 | 能力域、命名、metadata 拓扑冻结 | local_contract |
-| P2 | 主档、模板、口碑、认领、下线模型冻结 | local_contract / local_contract |
-| P3 | 发布挂载、群组消费主页摘要契约冻结 | local_contract / api_integration |
-| P4 | iOS 体验、SLO、灰度与回滚口径冻结 | api_integration / user_acceptance |
-
-## 设计结论
-
-`shared-homepage-network` 的 baseline 设计已经足够支撑进入下一阶段：
-
-- 用户语言收口为“主页”
-- 产品能力收口为“共享主页”
-- 云侧领域稳定落在 `entity-service`
-- 主页主档、口碑、认领、下线、内容挂载与群组消费边界已冻结
-
-后续如需扩展学校/公司等组织型主页，应优先在群组/关系主页主线下定义，再决定是否回流复用主页基础设施，而不是在本 L1 baseline 中提前混入。
+- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
+- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
+- 恢复动作：按 canonical recovery action 重试、刷新或回滚到上一份已验证配置。
+- 禁止 fallback：不得使用 Mock、旧 wire、双读双写或跨域直写伪造成功。

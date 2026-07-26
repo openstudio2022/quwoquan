@@ -33,41 +33,46 @@ void main() {
       ));
     });
 
-    test('host keeps forward and BACK on the shared soft projection pipeline', () {
-      final source = File(
-        'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
-      ).readAsStringSync();
-      final dynamicGeometryStart = source.indexOf(
-        'SoftPageLayerGeometry? _resolveDynamicLayerGeometry',
-      );
-      expect(dynamicGeometryStart, isNonNegative);
-      final dynamicGeometryEnd = source.indexOf(
-        'List<Offset> _localPolygonFromArea',
-        dynamicGeometryStart,
-      );
-      expect(dynamicGeometryEnd, greaterThan(dynamicGeometryStart));
-      final dynamicGeometrySource = source.substring(
-        dynamicGeometryStart,
-        dynamicGeometryEnd,
-      );
+    test(
+      'host keeps forward and BACK on the shared soft projection pipeline',
+      () {
+        final source = File(
+          'lib/ui/content/article_reader/pageflip/host/'
+          'article_read_only_book_deck_diagnostic_geometry.dart',
+        ).readAsStringSync();
+        final dynamicGeometryStart = source.indexOf(
+          'SoftPageLayerGeometry? _resolveDynamicLayerGeometry',
+        );
+        expect(dynamicGeometryStart, isNonNegative);
+        final dynamicGeometryEnd = source.indexOf(
+          '_BackwardDiagnosticGeometry? _resolveBackwardDiagnosticGeometry',
+          dynamicGeometryStart,
+        );
+        expect(dynamicGeometryEnd, greaterThan(dynamicGeometryStart));
+        final dynamicGeometrySource = source.substring(
+          dynamicGeometryStart,
+          dynamicGeometryEnd,
+        );
 
-      expect(
-        dynamicGeometrySource,
-        contains('visualGeometryDirection'),
-        reason:
-            'BACK may use forward-isomorphic frame geometry, but the host must '
-            'still feed the same soft projection resolver instead of cloning '
-            'a second projection path.',
-      );
-      expect(
-        dynamicGeometrySource,
-        contains('convertBookPointToViewport('),
-        reason: 'forward projection must stay anchored in StPageFlip geometry.',
-      );
-      expect(
-        dynamicGeometrySource,
-        isNot(contains('resolveBackwardSoftPageGeometry(')),
-      );
-    });
+        expect(
+          dynamicGeometrySource,
+          contains('visualGeometryDirection'),
+          reason:
+              'BACK may use forward-isomorphic frame geometry, but the host must '
+              'still feed the same soft projection resolver instead of cloning '
+              'a second projection path.',
+        );
+        expect(
+          dynamicGeometrySource,
+          contains('convertBookPointToViewport('),
+          reason:
+              'forward projection must stay anchored in StPageFlip geometry.',
+        );
+        expect(
+          dynamicGeometrySource,
+          isNot(contains('resolveBackwardSoftPageGeometry(')),
+        );
+      },
+    );
   });
 }

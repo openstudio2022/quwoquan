@@ -1,9 +1,0 @@
-aggregate: CircleBehaviorFact
-events:
-  - name: CircleBehaviorFactAppended
-    producer: circle-service
-    consumers: [circle-weekly-active-projector, recommendation-engine]
-    channel: transactional_outbox
-    payload_entity: CircleBehaviorFact
-    payload_fields: [_id, actorKind, personaId, deviceActorId, circleId, eventType, sessionId, requestId, occurredAt]
-    recommend_impact: hot_path_signal

@@ -214,37 +214,6 @@ List<double> _exposureMatrix(double value) {
   ];
 }
 
-List<double> _hueRotationMatrix(double value) {
-  final angle = (value / 100) * (math.pi / 2);
-  final cosA = math.cos(angle);
-  final sinA = math.sin(angle);
-  const lR = 0.213;
-  const lG = 0.715;
-  const lB = 0.072;
-  return <double>[
-    lR + cosA * (1 - lR) + sinA * (-lR),
-    lG + cosA * (-lG) + sinA * (-lG),
-    lB + cosA * (-lB) + sinA * (1 - lB),
-    0,
-    0,
-    lR + cosA * (-lR) + sinA * 0.143,
-    lG + cosA * (1 - lG) + sinA * 0.140,
-    lB + cosA * (-lB) + sinA * (-0.283),
-    0,
-    0,
-    lR + cosA * (-lR) + sinA * (-(1 - lR)),
-    lG + cosA * (-lG) + sinA * lG,
-    lB + cosA * (1 - lB) + sinA * lB,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-  ];
-}
-
 List<double> buildImageEditorBaseColorMatrix(Map<String, double> values) {
   final lightSense = values['lightSense'] ?? 0;
   final brightness = values['brightness'] ?? 0;
@@ -316,14 +285,10 @@ List<double> buildImageEditorFilterColorMatrix(
 ) {
   final ratio = (strength / 100).clamp(0.0, 1.0);
   final scaledValues = <String, double>{
-    for (final entry in preset.params.entries)
+    for (final entry in preset.adjustments.entries)
       entry.key: _boostFilterParam(entry.key, entry.value) * ratio,
   };
   var matrix = buildImageEditorBaseColorMatrix(scaledValues);
-  final hue = (preset.params['hue'] ?? 0) * ratio;
-  if (hue.abs() > 0.001) {
-    matrix = multiplyImageEditorColorMatrices(_hueRotationMatrix(hue), matrix);
-  }
   return matrix;
 }
 

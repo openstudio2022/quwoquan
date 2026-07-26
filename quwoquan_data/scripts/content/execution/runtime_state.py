@@ -53,7 +53,7 @@ def write_execution_runtime_state(
         manifest = {
             "schema": RUNTIME_STATE_SCHEMA,
             "executionId": execution_id,
-            "targetSetSha256": str(identity["targetSetSha256"]),
+            "targetSetDigest": str(identity["targetSetDigest"]),
             "commandChain": [],
             "createdAt": now,
             "executionSequence": allocate_execution_sequence(),
@@ -65,7 +65,7 @@ def write_execution_runtime_state(
             manifest["executionSequence"] = seq
         else:
             manifest["executionSequence"] = allocate_execution_sequence()
-        if manifest.get("targetSetSha256") != identity.get("targetSetSha256"):
+        if manifest.get("targetSetDigest") != identity.get("targetSetDigest"):
             raise ValueError("runtime state target set digest drift")
     if command:
         workspace_command = normalize_execution_workspace_command(command)

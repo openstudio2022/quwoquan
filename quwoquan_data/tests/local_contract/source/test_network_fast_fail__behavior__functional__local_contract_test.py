@@ -145,7 +145,7 @@ def test_write_auto_research_plans_no_progress_timeout_yields_resumable_outage(m
     monkeypatch.setattr(app, "_write_auto_research_plans_impl", _stuck_impl)
     monkeypatch.setattr(app, "prepare_source_plan", lambda *a, **k: None)
     started = time.monotonic()
-    execution_id = "20260712--travel-homepage-outage--cn-test--canary-001"
+    execution_id = "20260712--travel-homepage-outage--cn-test--pilot-001"
     report = app.write_auto_research_plans(
         execution_id,
         ["实体甲", "实体乙", "实体丙"],

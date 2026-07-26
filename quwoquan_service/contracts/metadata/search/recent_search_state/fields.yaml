@@ -1,8 +1,0 @@
-entity: RecentSearchState
-fields:
-  - { name: id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
-  - { name: personaId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read }
-  - { name: scope, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
-  - { name: entries, type: array, constraints: [NOT_NULL], classification: PII, log_policy: metadata_only, api_exposure: read, ops_exposure: read }
-  - { name: version, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
-  - { name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }

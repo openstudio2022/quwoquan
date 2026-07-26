@@ -29,7 +29,6 @@ class CommentEventNames {
   static const String reported = 'comment_reported';
   static const String newNoticeClicked = 'comment_new_notice_clicked';
   static const String surfaceClosed = 'comment_surface_closed';
-  static const String listCacheHit = 'comment_list_cache_hit';
 
   /// 评论深链：从入口（如「我的-互动」）跳转打开评论区，或评论列表定位高亮命中目标。
   /// entrySource 区分入口（profile-interaction）与落地（deeplink-highlight）。

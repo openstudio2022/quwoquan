@@ -3,23 +3,33 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
+# Pin disposable-output root for the whole hook. A polluted shell export can
+# otherwise redirect make/stackctl into pytest isolation dirs and fail later
+# gates with incomplete report.json artifacts.
+export QWQ_OUTPUT_ROOT="$ROOT/.qwq_output"
+export PYTHONDONTWRITEBYTECODE=1
 
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
 
-changed="$(git diff --cached --name-only)"
-
 has_service=false
 has_app=false
+has_data=false
+has_ops=false
 
-if echo "$changed" | grep -qE '^quwoquan_service/'; then
-  has_service=true
-fi
-if echo "$changed" | grep -qE '^quwoquan_app/'; then
-  has_app=true
-fi
+while IFS= read -r path; do
+  case "$path" in
+    quwoquan_service/*) has_service=true ;;
+    quwoquan_app/*) has_app=true ;;
+    quwoquan_data/*) has_data=true ;;
+    quwoquan_ops/*|specs/*) has_ops=true ;;
+  esac
+done < <(git diff --cached --name-only)
 
-if [[ "$has_service" == true && "$has_app" == true ]]; then
-  echo "[pre-commit] running repo gate (service+app)"
+# 跨 App/Service 或触及 Data/Ops/specs 时跑全量门禁，避免 echo|grep 漏检。
+if [[ "$has_service" == true && "$has_app" == true ]] ||
+  [[ "$has_data" == true ]] ||
+  [[ "$has_ops" == true && ( "$has_service" == true || "$has_app" == true ) ]]; then
+  echo "[pre-commit] running repo gate (cross-area)"
   make gate
 elif [[ "$has_service" == true ]]; then
   echo "[pre-commit] running gate (service)"
@@ -27,4 +37,7 @@ elif [[ "$has_service" == true ]]; then
 elif [[ "$has_app" == true ]]; then
   echo "[pre-commit] running gate (app)"
   bash quwoquan_ops/gate/gate_repo.sh --scope app
+elif [[ "$has_ops" == true || "$has_data" == true ]]; then
+  echo "[pre-commit] running repo gate (ops/data)"
+  make gate
 fi

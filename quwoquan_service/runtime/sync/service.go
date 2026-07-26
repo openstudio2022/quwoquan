@@ -124,11 +124,12 @@ func (s *Service) AppendPatch(
 		return Patch{}, fmt.Errorf("store sync patch: %w", err)
 	}
 	if s.realtime != nil {
-		_ = s.realtime.Publish(ctx, s.userChannel(userID), string(mustJSON(map[string]any{
+		fanoutErr := s.realtime.Publish(ctx, s.userChannel(userID), string(mustJSON(map[string]any{
 			"type":          "sync_hint",
 			"userId":        userID,
 			"latestSyncSeq": seq,
 		})))
+		s.metrics.RecordPatchFanout(fanoutErr)
 	}
 	s.metrics.RecordAppend(1)
 	return patch, nil
@@ -185,11 +186,12 @@ func (s *Service) AppendPatchBatch(
 	}
 	if s.realtime != nil {
 		for _, patch := range patches {
-			_ = s.realtime.Publish(ctx, s.userChannel(patch.UserID), string(mustJSON(map[string]any{
+			fanoutErr := s.realtime.Publish(ctx, s.userChannel(patch.UserID), string(mustJSON(map[string]any{
 				"type":          "sync_hint",
 				"userId":        patch.UserID,
 				"latestSyncSeq": patch.SyncSeq,
 			})))
+			s.metrics.RecordPatchFanout(fanoutErr)
 		}
 	}
 	s.metrics.RecordAppendBatch(len(normalizedUserIDs), len(storedUserIDs))
@@ -254,6 +256,12 @@ func (s *Service) Pull(
 	sort.Slice(patches, func(i, j int) bool {
 		return patches[i].SyncSeq < patches[j].SyncSeq
 	})
+	if len(patches) > 0 {
+		newestOccurredAt := patches[len(patches)-1].OccurredAt
+		if !newestOccurredAt.IsZero() {
+			s.metrics.RecordHintToPullDelay(time.Since(newestOccurredAt))
+		}
+	}
 	response := PullResponse{
 		Patches:        patches,
 		LatestSyncSeq:  latestSeq,

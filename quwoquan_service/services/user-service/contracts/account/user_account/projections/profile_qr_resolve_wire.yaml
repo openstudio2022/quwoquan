@@ -1,0 +1,36 @@
+read_model: ProfileQrResolveWire
+description: 'GET /public/profile/qr/resolve 返回的公开扫码解析结果。只返回规范主页目标，
+
+  不包含手机号、ownerId 或 bearer token。
+
+  '
+source_entities:
+- ProfileQrToken
+- Persona
+consumers:
+- app
+client_projection:
+  dart_class: ProfileQrResolveWireDto
+  base_class: ''
+  output_path: cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart
+  fields:
+  - name: subAccountId
+    dart_type: String
+    nullable: false
+    source: subAccountId
+    default: ''''''
+  - name: userHandle
+    dart_type: String
+    nullable: false
+    source: userHandle
+    default: ''''''
+  - name: publicProfileUrl
+    dart_type: String
+    nullable: false
+    source: publicProfileUrl
+    default: ''''''
+  - name: scanStatus
+    dart_type: String
+    nullable: false
+    source: scanStatus
+    default: '''accepted'''

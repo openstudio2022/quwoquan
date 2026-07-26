@@ -1,0 +1,47 @@
+kind: aggregate_root
+description: Persona 对 Conversation 的已读水位、静音与置顶私有状态聚合。
+identity:
+  fields:
+  - _id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: conversation
+  on_delete: tombstone
+  reference_fields:
+  - conversationId
+  target_object: chat.Conversation
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: persona
+  on_delete: cascade
+  reference_fields:
+  - userId
+  target_object: user.Persona
+capabilities:
+- commandable
+- queryable
+- idempotent_commands
+business_rules:
+- identity 固定为 conversationId + personaId
+- readSeq 只能单调增加且不得超过 Conversation maxSeq
+- inboxProjectedSeq 只能随 MessageSent seq 单调推进；同一或旧 seq 重放不得重复增加未读
+- unreadCount 与 mentionUnreadCount 是投影，不接受客户端直接写入
+- MarkAsRead 必须以命令事务开始前的 Conversation maxSeq 为重算上界，并原子推进 inboxProjectedSeq，避免未消费投影漏计或迟到投影二次累加
+- MarkAsRead 后 mentionUnreadCount 必须等于 readSeq 之后提及当前 persona 或 __all__ 且发送者非本人的消息数，不得无条件清零
+- muted、pinned 和 readSeq 只能由 owner persona 修改
+lifecycle:
+  states:
+  - active
+  - removed
+  optimistic_concurrency: version
+  idempotency: command_receipt

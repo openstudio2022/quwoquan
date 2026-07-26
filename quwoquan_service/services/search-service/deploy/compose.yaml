@@ -1,0 +1,56 @@
+# 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
+services:
+  search-service:
+    image: "${QWQ_COMPOSE_SEARCH_SERVICE_IMAGE:-localhost/quwoquan_service_search-service:latest}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/search-service/build/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${QWQ_COMPOSE_GO_BASE_IMAGE:?QWQ_COMPOSE_GO_BASE_IMAGE is required}"
+        ALPINE_BASE_IMAGE: "${QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}"
+        GO_BUILD_FLAGS: "${QWQ_COMPOSE_GO_BUILD_FLAGS:--p=1}"
+    environment:
+      SERVICE_NAME: search-service
+      APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${QWQ_COMPOSE_SEARCH_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_SEARCH_SERVICE_CONFIG_VERSION is required}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      # ES 召回主链路：endpoints 经 SEARCH_ES_* 注入（部署密钥口径），gamma config es.enabled=true。
+      SEARCH_ES_ENABLED: "true"
+      SEARCH_ES_ENDPOINTS: "http://elasticsearch:9200"
+      # query log / feedback / 搜索词热力读模型落 Mongo（R-S07 闭环）。
+      SEARCH_MONGO_URI: "mongodb://mongodb:27017"
+      SEARCH_MONGO_DATABASE: "quwoquan_search"
+      # R-S07-5：搜索信号发布到 Redis Stream，供 content-service 消费注入推荐特征。
+      SEARCH_REDIS_GENERAL_MODE: standalone
+      SEARCH_REDIS_GENERAL_ADDR: redis:6379
+      CONTENT_SERVICE_BASE_URL: http://content-service:18080
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
+      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
+      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
+      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      content-service:
+        condition: service_healthy
+    ports:
+      - "${QWQ_COMPOSE_SEARCH_PORT:-19280}:18095"
+    volumes:
+      - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18095/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
+      retries: 10

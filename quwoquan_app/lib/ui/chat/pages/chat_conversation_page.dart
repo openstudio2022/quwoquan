@@ -3,53 +3,60 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.dart';
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
 import 'package:quwoquan_app/components/conversation/message_action_menu_overlay.dart';
+import 'package:quwoquan_app/components/input/chat_mention_text_editing_controller.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
+import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/microphone_permission_guard.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
-import 'package:quwoquan_app/ui/chat/providers/voice_offline_queue.dart';
+import 'package:quwoquan_app/ui/chat/providers/chat_send_outbox.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_player_manager.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
+import 'package:quwoquan_app/ui/chat/widgets/chat_mention_picker.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
-import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
-import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
-import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
-import 'package:quwoquan_app/ui/rtc/widgets/call_permission_guard.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
+
+part 'chat_conversation_page_actions.dart';
+part 'chat_conversation_page_selection_actions.dart';
 
 String formatChatTime(String? raw) {
   if (raw == null || raw.isEmpty) return '';
   return raw;
 }
 
-final RouteObserver<ModalRoute<dynamic>> chatRouteObserver =
-    RouteObserver<ModalRoute<dynamic>>();
+final RouteObserver<ModalRoute<Object?>> chatRouteObserver =
+    RouteObserver<ModalRoute<Object?>>();
 
 class ChatConversationPage extends ConsumerStatefulWidget {
   const ChatConversationPage({
@@ -70,28 +77,8 @@ class ChatConversationPage extends ConsumerStatefulWidget {
       _ChatConversationPageState();
 }
 
-class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
+class _ChatConversationPageState extends _ChatConversationPageActionsState
     with RouteAware {
-  final TextEditingController _inputController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  final FocusNode _inputFocusNode = FocusNode();
-  final ImagePicker _imagePicker = ImagePicker();
-  final VoiceRecorder _voiceRecorder = VoiceRecorder(
-    maxDurationMs: kMaxRecordDurationMs + 1000,
-  );
-
-  ConversationDto? _conversationDto;
-  String? _resolvedTitle;
-  String? _otherParticipantId;
-  RelationshipCapabilityDto? _relationshipCapability;
-  bool _isSelectionMode = false;
-  final Set<String> _selectedIds = <String>{};
-  ChatMessageDisplayItem? _actionMenuMessage;
-  Offset? _actionMenuPosition;
-  ModalRoute<dynamic>? _subscribedRoute;
-  bool _realtimeAttached = false;
-  RealtimeConnectionNotifier? _realtimeNotifier;
-
   @override
   void initState() {
     super.initState();
@@ -130,6 +117,21 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
     final notifier = ref.read(chatMessageProvider(conversationId).notifier);
     await notifier.loadMessages();
     final marked = await notifier.markConversationRead();
+    unawaited(
+      ref
+          .read(chatInteractionTelemetryTrackerProvider)
+          .track(
+            action: ChatInteractionAction.readWatermark,
+            outcome: marked
+                ? ChatInteractionOutcome.succeeded
+                : ChatInteractionOutcome.failed,
+            watermarkResult: marked
+                ? ChatWatermarkResult.advanced
+                : ChatWatermarkResult.failed,
+            pageName: PageNames.chatDetail,
+            surfaceId: AppUiSurfaces.chatDetail.id,
+          ),
+    );
     if (!marked || !mounted) {
       return;
     }
@@ -204,891 +206,17 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
     _detachRealtime();
   }
 
-  void _onInputChanged() {
-    if (mounted) setState(() {});
-  }
-
-  Future<bool> _requestMicPermissionForChat() async {
-    final outcome = await MicrophonePermissionGuard.ensure(
-      context,
-      surface: AppPermissionSurface.jit,
-    );
-    return outcome == MicrophonePermissionOutcome.granted;
-  }
-
-  Future<void> _showAttachmentFailure({
-    required String title,
-    required String message,
-  }) async {
-    if (!mounted) {
-      return;
-    }
-    await AppActionErrorFeedback.show(
-      context,
-      semantic: UiErrorSemantic(
-        category: UiErrorCategory.submit,
-        scope: UiErrorScope.global,
-        title: title,
-        message: message,
-        primaryAction: const UiErrorAction(
-          type: UiErrorActionType.dismiss,
-          label: UITextConstants.confirm,
-        ),
-        dismissible: true,
-        presentation: UiErrorPresentation.actionDialog,
-        tone: UiErrorTone.caution,
-      ),
-    );
-  }
-
-  Future<bool> _startVoiceRecordForChat() async {
-    final started = await _voiceRecorder.start();
-    if (!started && mounted) {
-      AppToast.show(context, UITextConstants.chatVoiceRecordUnavailable);
-    }
-    return started;
-  }
-
-  Future<void> _loadConversationTitle() async {
-    if (_resolvedTitle != null) return;
-    try {
-      final repo = ref.read(chatRepositoryProvider);
-      final dto = await repo.getConversation(widget.conversationId);
-      if (!mounted) return;
-      setState(() {
-        _resolvedTitle = dto.title ?? widget.conversationId;
-        _conversationDto = dto;
-      });
-      if (dto.type == 'direct') {
-        _loadOtherParticipantId(repo);
-      }
-    } catch (_) {
-      /* best-effort: 加载会话标题失败时回退到 conversationId 作为标题，不阻断聊天 */
-    }
-  }
-
-  Future<void> _loadOtherParticipantId(ChatRepository repo) async {
-    try {
-      final currentUserId = ref.read(userDataProvider)?.id ?? '';
-      final members = await repo.listMembers(
-        conversationId: widget.conversationId,
-        limit: 10,
-      );
-      final others = members.where((m) => m.userId != currentUserId).toList();
-      final otherId = others.isEmpty ? null : others.first.userId;
-      if (mounted && otherId != null && otherId.isNotEmpty) {
-        setState(() => _otherParticipantId = otherId);
-        await _loadRelationshipCapability(otherId);
-      }
-    } catch (_) {
-      /* best-effort: 解析单聊对端 userId 失败仅影响关系能力展示，不阻断聊天主流程 */
-    }
-  }
-
-  Future<void> _loadRelationshipCapability(String otherId) async {
-    try {
-      final capability = await ref
-          .read(relationshipCapabilityRepositoryProvider)
-          .getCapability(otherId);
-      if (!mounted) return;
-      setState(() => _relationshipCapability = capability);
-    } catch (_) {
-      /* best-effort: 获取关系能力失败时维持空能力态，相关入口按默认隐藏处理 */
-    }
-  }
-
-  bool get _isGroupChat => _conversationDto?.type == 'group';
-
-  int get _memberCount {
-    if (!_isGroupChat) {
-      return _conversationDto?.memberCount ?? 0;
-    }
-    final roster = ref
-        .read(conversationMembersProvider(widget.conversationId))
-        .members;
-    if (roster.isNotEmpty) {
-      return roster.length;
-    }
-    return _conversationDto?.memberCount ?? 0;
-  }
-
-  bool get _isBlockedConversation => _conversationDto?.status == 'blocked';
-
-  bool get _canInitiateOneToOneCall {
-    if (_isGroupChat) {
-      return true;
-    }
-    return _otherParticipantId != null &&
-        !_isBlockedConversation &&
-        (_relationshipCapability?.canStartVoiceCall == true ||
-            _relationshipCapability?.canStartVideoCall == true);
-  }
-
-  bool get _shouldDisableComposer {
-    if (_isGroupChat) {
-      return false;
-    }
-    if (_isBlockedConversation) {
-      return true;
-    }
-    final capability = _relationshipCapability;
-    if (capability == null) {
-      return false;
-    }
-    return !capability.canSendMessage;
-  }
-
-  String get _conversationTitle {
-    if (_resolvedTitle != null) return _resolvedTitle!;
-    _loadConversationTitle();
-    return widget.conversationId;
-  }
-
-  Future<List<ChatInputAttachment>> _pickChatImages(int remaining) async {
-    final picked = await _imagePicker.pickMultiImage(
-      imageQuality: 85,
-      limit: remaining,
-    );
-    return picked
-        .take(remaining)
-        .map<ChatInputAttachment>(
-          (image) => ChatInputAttachment(
-            id: 'img_${DateTime.now().millisecondsSinceEpoch}_${image.name}',
-            type: ChatInputAttachmentType.image,
-            name: image.name,
-            localPath: image.path,
-            subtitle: '',
-            thumbnailProvider: FileImage(File(image.path)),
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  Future<ChatInputAttachment?> _captureChatPhoto() async {
-    final picked = await _imagePicker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 85,
-    );
-    if (picked == null) return null;
-    return ChatInputAttachment(
-      id: 'cam_${DateTime.now().millisecondsSinceEpoch}_${picked.name}',
-      type: ChatInputAttachmentType.image,
-      name: picked.name,
-      localPath: picked.path,
-      thumbnailProvider: FileImage(File(picked.path)),
-    );
-  }
-
-  Future<List<ChatInputAttachment>> _pickChatFiles(int remaining) async {
-    final result = await FilePicker.pickFiles();
-    if (result == null) return const <ChatInputAttachment>[];
-    final now = DateTime.now().millisecondsSinceEpoch;
-    return result.files
-        .take(remaining)
-        .map<ChatInputAttachment>(
-          (file) => ChatInputAttachment(
-            id: 'file_${now}_${file.name}',
-            type: ChatInputAttachmentType.file,
-            name: file.name,
-            localPath: file.path,
-            subtitle: _formatFileSize(file.size),
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '${bytes}B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)}KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)}MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)}GB';
-  }
-
-  static const Set<String> _imageExtensions = <String>{
-    'jpg',
-    'jpeg',
-    'png',
-    'gif',
-    'webp',
-    'heic',
-  };
-
-  static const Set<String> _videoExtensions = <String>{
-    'mp4',
-    'mov',
-    'm4v',
-    'avi',
-    'mkv',
-    'webm',
-    '3gp',
-  };
-
-  String _attachmentSourcePath(ChatInputAttachment item) {
-    return item.localPath?.trim() ?? '';
-  }
-
-  String _attachmentExtension(ChatInputAttachment item) {
-    final source = _attachmentSourcePath(item).isNotEmpty
-        ? _attachmentSourcePath(item)
-        : item.name;
-    final dot = source.lastIndexOf('.');
-    if (dot < 0 || dot == source.length - 1) {
-      return '';
-    }
-    return source.substring(dot + 1).toLowerCase();
-  }
-
-  bool _looksLikeImageAttachment(ChatInputAttachment item) {
-    if (item.type == ChatInputAttachmentType.image) return true;
-    return _imageExtensions.contains(_attachmentExtension(item));
-  }
-
-  bool _looksLikeVideoAttachment(ChatInputAttachment item) {
-    return _videoExtensions.contains(_attachmentExtension(item));
-  }
-
-  MediaCategory _attachmentCategory(ChatInputAttachment item) {
-    if (_looksLikeImageAttachment(item)) {
-      return MediaCategory.chatImage;
-    }
-    if (_looksLikeVideoAttachment(item)) {
-      return MediaCategory.chatVideo;
-    }
-    return MediaCategory.chatFile;
-  }
-
-  String _attachmentContentType(ChatInputAttachment item) {
-    final ext = _attachmentExtension(item);
-    switch (ext) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'gif':
-        return 'image/gif';
-      case 'webp':
-        return 'image/webp';
-      case 'heic':
-        return 'image/heic';
-      case 'mp4':
-      case 'm4v':
-      case '3gp':
-        return 'video/mp4';
-      case 'mov':
-        return 'video/quicktime';
-      case 'avi':
-        return 'video/x-msvideo';
-      case 'mkv':
-        return 'video/x-matroska';
-      case 'webm':
-        return 'video/webm';
-      default:
-        return _attachmentCategory(item) == MediaCategory.chatImage
-            ? 'image/*'
-            : _attachmentCategory(item) == MediaCategory.chatVideo
-            ? 'video/*'
-            : 'application/octet-stream';
-    }
-  }
-
-  String _attachmentMessageType(ChatInputAttachment item) {
-    if (_looksLikeImageAttachment(item)) return 'image';
-    if (_looksLikeVideoAttachment(item)) return 'video';
-    return 'file';
-  }
-
-  String _attachmentFallbackLabel(ChatInputAttachment item) {
-    if (_looksLikeVideoAttachment(item)) {
-      return UITextConstants.chatMoreVideo;
-    }
-    if (_looksLikeImageAttachment(item)) {
-      return UITextConstants.chatMorePhoto;
-    }
-    return UITextConstants.chatMoreFile;
-  }
-
-  Future<UploadTask> _awaitUploadCompletion(
-    MediaUploadManager manager,
-    UploadTask task,
-  ) async {
-    if (task.status == UploadStatus.completed ||
-        task.status == UploadStatus.failed) {
-      return task;
-    }
-    final completer = Completer<UploadTask>();
-    late final StreamSubscription<UploadTask> subscription;
-    subscription = manager.onTaskUpdate.listen((update) {
-      if (update.localPath != task.localPath) return;
-      if (update.status != UploadStatus.completed &&
-          update.status != UploadStatus.failed) {
-        return;
-      }
-      if (!completer.isCompleted) {
-        completer.complete(update);
-      }
-      unawaited(subscription.cancel());
-    });
-    return completer.future.timeout(
-      const Duration(seconds: 120),
-      onTimeout: () {
-        unawaited(subscription.cancel());
-        return task
-          ..status = UploadStatus.failed
-          ..error = 'upload timeout';
-      },
-    );
-  }
-
-  Future<void> _sendChatAttachment(
-    ChatInputAttachment item,
-    ChatMessageNotifier notifier,
-  ) async {
-    final localPath = _attachmentSourcePath(item);
-    if (localPath.isEmpty) {
-      await notifier.sendMessage(
-        'text',
-        '[${_attachmentFallbackLabel(item)}] ${item.name}',
-      );
-      return;
-    }
-    final file = File(localPath);
-    if (!await file.exists()) {
-      await _showAttachmentFailure(
-        title: UITextConstants.chatAttachmentUploadFailed,
-        message: '本地附件不存在，请重新选择后再试。',
-      );
-      return;
-    }
-    final category = _attachmentCategory(item);
-    final uploadManager = ref.read(mediaUploadManagerProvider);
-    final queued = await uploadManager.enqueue(
-      UploadTask(
-        localPath: localPath,
-        category: category,
-        contentType: _attachmentContentType(item),
-        fileSize: await file.length(),
-      ),
-    );
-    final uploaded = await _awaitUploadCompletion(uploadManager, queued);
-    final cdnUrl = uploaded.cdnUrl?.trim() ?? '';
-    final assetId = uploaded.assetId?.trim() ?? '';
-    if (uploaded.status == UploadStatus.failed ||
-        cdnUrl.isEmpty ||
-        assetId.isEmpty) {
-      await _showAttachmentFailure(
-        title: UITextConstants.chatAttachmentUploadFailed,
-        message: '附件上传未完成，请稍后再试。',
-      );
-      return;
-    }
-    final messageType = _attachmentMessageType(item);
-    final media = ChatMessageMediaViewData(
-      assetId: assetId,
-      deliveryUrl: cdnUrl,
-      mediaType: messageType,
-      fileName: item.name,
-      contentType: _attachmentContentType(item),
-      fileSizeBytes: uploaded.fileSize,
-      thumbnailUrl: messageType == 'image' || messageType == 'video'
-          ? cdnUrl
-          : null,
-    );
-    final sent = await notifier.sendMessage(
-      messageType,
-      messageType == 'image' ? '' : item.name,
-      media: media,
-    );
-    if (!sent) {
-      await _showAttachmentFailure(
-        title: UITextConstants.chatAttachmentSendFailed,
-        message: '附件发送未完成，请稍后再试。',
-      );
-    }
-  }
-
-  Future<void> _stopVoiceRecordForChat(Duration duration) async {
-    final result = await _voiceRecorder.stop();
-    if (!mounted) return;
-    if (result == null) {
-      AppToast.show(context, UITextConstants.chatVoiceTooShort);
-      return;
-    }
-    if (!await requireLogin(ref, context, AuthGateReason.sendMessage)) {
-      return;
-    }
-    if (!mounted) return;
-    await ref
-        .read(voiceSendProvider(widget.conversationId).notifier)
-        .sendVoice(result);
-    if (!mounted) return;
-    final sendState = ref.read(voiceSendProvider(widget.conversationId));
-    if (sendState.status == VoiceSendStatus.failed &&
-        (sendState.error ?? '').isNotEmpty) {
-      await ref
-          .read(voiceOfflineQueueProvider(widget.conversationId).notifier)
-          .enqueue(result);
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  Future<void> _cancelVoiceRecordForChat() async {
-    await _voiceRecorder.cancel();
-    if (mounted) {
-      AppToast.show(context, UITextConstants.chatVoiceCanceled);
-    }
-  }
-
-  Future<void> _submitChatInput(ChatInputSubmitPayload payload) async {
-    if (_shouldDisableComposer) {
-      return;
-    }
-    // 防御性二次拦截：私信发送是需登录写动作。会话页虽已被路由守卫保护，
-    // 这里再兜底一次，避免任何绕过路由的发送路径让游客写入。
-    if (!await requireLogin(ref, context, AuthGateReason.sendMessage)) {
-      return;
-    }
-    if (!mounted) return;
-    final notifier = ref.read(
-      chatMessageProvider(widget.conversationId).notifier,
-    );
-    if (payload.attachments.isNotEmpty) {
-      for (final item in payload.attachments) {
-        await _sendChatAttachment(item, notifier);
-      }
-    }
-    var text = payload.text.trim();
-    if (text.isNotEmpty) {
-      await _sendMessage(draftText: text, mentions: payload.mentions);
-    }
-  }
-
-  Future<void> _sendMessage({String? draftText, List<String>? mentions}) async {
-    if (_shouldDisableComposer) {
-      return;
-    }
-    _inputFocusNode.unfocus();
-    await Future<void>.delayed(const Duration(milliseconds: 150));
-    final text = (draftText ?? _inputController.text).trim();
-    if (text.isEmpty) return;
-    if (draftText == null) _inputController.clear();
-    final resolvedMentions = _resolveAssistantMentions(
-      text: text,
-      mentions: mentions,
-    );
-    ref
-        .read(chatMessageProvider(widget.conversationId).notifier)
-        .sendMessage('text', text, mentions: resolvedMentions);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  List<String>? _resolveAssistantMentions({
-    required String text,
-    List<String>? mentions,
-  }) {
-    if (!_isGroupChat) {
-      return null;
-    }
-    final values = <String>{...?mentions};
-    if (text.contains(UITextConstants.commentAtXiaoqu)) {
-      values.add('assistant');
-    }
-    return values.isEmpty ? null : values.toList(growable: false);
-  }
-
-  List<ChatInputExtraPanelItem> _buildCallPanelItems() {
-    final canCall = _canInitiateOneToOneCall;
-    if (!canCall) return const <ChatInputExtraPanelItem>[];
-    final voiceLabel = _isGroupChat
-        ? UITextConstants.callGroupVoice
-        : UITextConstants.callVoice;
-    final videoLabel = _isGroupChat
-        ? UITextConstants.callGroupVideo
-        : UITextConstants.callVideo;
-    final items = <ChatInputExtraPanelItem>[
-      ChatInputExtraPanelItem(
-        icon: CupertinoIcons.phone,
-        text: voiceLabel,
-        onTap: () async => _initiateCall('voice'),
-      ),
-      ChatInputExtraPanelItem(
-        icon: CupertinoIcons.video_camera,
-        text: videoLabel,
-        onTap: () async => _initiateCall('video'),
-      ),
-    ];
-    if (kDebugMode) {
-      items.addAll(<ChatInputExtraPanelItem>[
-        ChatInputExtraPanelItem(
-          icon: CupertinoIcons.phone_badge_plus,
-          text: UITextConstants.callDebugSimulateIncomingVoice,
-          onTap: () async => _simulateIncomingCall('voice'),
-        ),
-        ChatInputExtraPanelItem(
-          icon: CupertinoIcons.video_camera_solid,
-          text: UITextConstants.callDebugSimulateIncomingVideo,
-          onTap: () async => _simulateIncomingCall('video'),
-        ),
-      ]);
-    }
-    return items;
-  }
-
-  Future<void> _initiateCall(String callType) async {
-    if (!_isGroupChat && !_canInitiateOneToOneCall) {
-      if (!mounted) {
-        return;
-      }
-      final resolved = runtimeErrorSemantic(
-        context,
-        error: StateError('relationship gate denied call'),
-        category: UiErrorCategory.submit,
-        scope: UiErrorScope.global,
-      );
-      await AppActionErrorFeedback.show(context, semantic: resolved);
-      return;
-    }
-    final requestedType = CallType.fromString(callType);
-    final permissionOutcome = await CallPermissionGuard.ensure(
-      context,
-      callType: requestedType,
-    );
-    if (!mounted || permissionOutcome == CallPermissionOutcome.blocked) {
-      return;
-    }
-    final effectiveType =
-        permissionOutcome == CallPermissionOutcome.fallbackVoiceOnly
-        ? CallType.audio
-        : requestedType;
-    final notifier = ref.read(callSessionProvider.notifier);
-    final List<String> targetIds;
-    if (_isGroupChat) {
-      final result = await context.push<List<String>>(
-        AppRoutePaths.rtcPickParticipants,
-        extra: CallParticipantPickerRouteExtra(
-          conversationId: widget.conversationId,
-          defaultSelectAll: _memberCount <= 8,
-        ),
-      );
-      if (result == null || result.isEmpty || !mounted) return;
-      targetIds = result;
-    } else {
-      final otherId = _otherParticipantId;
-      if (otherId == null || otherId.isEmpty) return;
-      targetIds = <String>[otherId];
-    }
-    final callId = await notifier.initiateCall(
-      callTypeStr: effectiveType.toApiString(),
-      targetUserIds: targetIds,
-      conversationId: widget.conversationId,
-    );
-    if (callId != null && mounted) {
-      context.push(AppRoutePaths.rtcOutgoing(callId: callId));
-    }
-  }
-
-  Future<void> _simulateIncomingCall(String callType) async {
-    final callId = 'debug_incoming_${DateTime.now().millisecondsSinceEpoch}';
-    ref
-        .read(callSessionProvider.notifier)
-        .debugSeedIncomingCall(
-          callId: callId,
-          callerName: _conversationTitle,
-          callType: callType,
-          conversationId: widget.conversationId,
-        );
-    if (!mounted) return;
-    await context.push(AppRoutePaths.rtcIncoming(callId: callId));
-  }
-
-  Widget _buildMutualFollowRtcHintBar() {
-    return Container(
-      width: double.infinity,
-      margin: EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.primaryColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        border: Border.all(
-          color: AppColors.primaryColor.withValues(alpha: 0.18),
-        ),
-      ),
-      child: Text(
-        UITextConstants.chatMutualFollowRtcHint,
-        style: TextStyle(
-          color: AppColors.primaryColor,
-          fontSize: AppTypography.sm,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBlockedConversationHintBar() {
-    return Container(
-      width: double.infinity,
-      margin: EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        border: Border.all(color: AppColors.error.withValues(alpha: 0.18)),
-      ),
-      child: Text(
-        UITextConstants.chatBlockedConversationHint,
-        style: TextStyle(
-          color: AppColors.error,
-          fontSize: AppTypography.sm,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVoiceSendStatusBar(VoiceSendState state) {
-    final queuedCount = ref.watch(
-      voiceOfflineQueueProvider(widget.conversationId),
-    );
-    if (state.status == VoiceSendStatus.idle ||
-        state.status == VoiceSendStatus.completed) {
-      if (queuedCount > 0) {
-        return _buildVoiceQueuedStatusBar(queuedCount);
-      }
-      return const SizedBox.shrink();
-    }
-    final isFailed = state.status == VoiceSendStatus.failed;
-    final fg = isFailed ? AppColors.error : AppColors.primaryColor;
-    final label = switch (state.status) {
-      VoiceSendStatus.uploading => UITextConstants.chatVoiceUploading,
-      VoiceSendStatus.sending => UITextConstants.chatVoiceSending,
-      VoiceSendStatus.failed => UITextConstants.chatVoicePendingRetry,
-      _ => UITextConstants.chatVoiceSending,
-    };
-    return Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.sm),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: fg.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-          border: Border.all(color: fg.withValues(alpha: 0.18)),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.containerSm,
-            vertical: AppSpacing.intraGroupSm,
-          ),
-          child: Row(
-            children: [
-              Icon(
-                isFailed
-                    ? CupertinoIcons.arrow_clockwise_circle_fill
-                    : CupertinoIcons.waveform,
-                size: AppSpacing.iconSmall,
-                color: fg,
-              ),
-              SizedBox(width: AppSpacing.intraGroupXs),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    fontWeight: AppTypography.medium,
-                    color: fg,
-                  ),
-                ),
-              ),
-              if (isFailed)
-                CupertinoButton(
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                  minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-                  onPressed: () async {
-                    await ref
-                        .read(
-                          voiceOfflineQueueProvider(
-                            widget.conversationId,
-                          ).notifier,
-                        )
-                        .drain();
-                    ref
-                        .read(voiceSendProvider(widget.conversationId).notifier)
-                        .reset();
-                  },
-                  child: Text(
-                    UITextConstants.retry,
-                    style: TextStyle(fontSize: AppTypography.sm, color: fg),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVoiceQueuedStatusBar(int queuedCount) {
-    final fg = AppColors.primaryColor;
-    return Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.sm),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: fg.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-          border: Border.all(color: fg.withValues(alpha: 0.18)),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.containerSm,
-            vertical: AppSpacing.intraGroupSm,
-          ),
-          child: Row(
-            children: [
-              Icon(CupertinoIcons.clock, size: AppSpacing.iconSmall, color: fg),
-              SizedBox(width: AppSpacing.intraGroupXs),
-              Expanded(
-                child: Text(
-                  '${UITextConstants.chatVoiceQueued} ($queuedCount)',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    fontWeight: AppTypography.medium,
-                    color: fg,
-                  ),
-                ),
-              ),
-              CupertinoButton(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-                onPressed: () => ref
-                    .read(
-                      voiceOfflineQueueProvider(widget.conversationId).notifier,
-                    )
-                    .drain(),
-                child: Text(
-                  UITextConstants.tryAgain,
-                  style: TextStyle(fontSize: AppTypography.sm, color: fg),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _onLongPressMessage(
-    ChatMessageDisplayItem message,
-    Offset globalPosition,
-  ) {
-    setState(() {
-      _actionMenuMessage = message;
-      _actionMenuPosition = globalPosition;
-    });
-  }
-
-  void _onMessageAction(String action) {
-    final msg = _actionMenuMessage;
-    if (msg == null) return;
-    switch (action) {
-      case 'forward':
-        _shareMessages(<ChatMessageDisplayItem>[msg]);
-        break;
-      case 'select':
-        setState(() {
-          _isSelectionMode = true;
-          _selectedIds.add(msg.id);
-        });
-        break;
-      case 'copy':
-        final content = msg.content;
-        if (content.isNotEmpty) {
-          Clipboard.setData(ClipboardData(text: content));
-          if (mounted) {
-            AppToast.show(context, UITextConstants.copiedToClipboard);
-          }
-        }
-        break;
-      case 'recall':
-        if (msg.isSelf) {
-          if (msg.type == 'audio') {
-            unawaited(ref.read(voicePlayerManagerProvider.notifier).stop());
-          }
-          ref
-              .read(chatMessageProvider(widget.conversationId).notifier)
-              .recallMessage(msg.id);
-        }
-        break;
-      case 'delete':
-        break;
-    }
-    setState(() {
-      _actionMenuMessage = null;
-      _actionMenuPosition = null;
-    });
-  }
-
-  Future<void> _shareMessages(List<ChatMessageDisplayItem> messages) async {
-    final lines = messages
-        .map((item) => item.content.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    if (lines.isEmpty) return;
-    final text = lines.join('\n\n');
-    await SharePlus.instance.share(ShareParams(text: text));
-  }
-
-  void _toggleSelect(String id) {
-    setState(() {
-      if (_selectedIds.contains(id)) {
-        _selectedIds.remove(id);
-      } else {
-        _selectedIds.add(id);
-      }
-    });
-  }
-
-  void _cancelSelection() {
-    setState(() {
-      _isSelectionMode = false;
-      _selectedIds.clear();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    if (_isGroupChat) {
-      ref.watch(conversationMembersProvider(widget.conversationId));
-    }
+    final memberState = _isGroupChat
+        ? ref.watch(conversationMembersProvider(widget.conversationId))
+        : null;
+    final mentionDisplayNames = <String, String>{
+      if (memberState != null)
+        for (final member in memberState.members)
+          member.userId: member.displayName,
+    };
     final currentUserId = ref.watch(currentUserIdProvider);
     final bgColor = AppColorsFunctional.getColor(
       isDark,
@@ -1099,9 +227,8 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
       ColorType.foregroundPrimary,
     );
     final chatListBg = isDark ? bgColor : AppColors.chatBackground;
-    final displayMessages = ref
-        .watch(chatMessageProvider(widget.conversationId))
-        .messages
+    final messageState = ref.watch(chatMessageProvider(widget.conversationId));
+    final displayMessages = messageState.messages
         .map((dto) => dto.toDisplayItem(currentUserId: currentUserId))
         .toList();
     final voiceSendState = ref.watch(voiceSendProvider(widget.conversationId));
@@ -1134,75 +261,122 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
         if (widget.searchAnchorContext case final anchor?)
           _SearchAnchorBanner(sourceQuery: anchor.sourceQuery, isDark: isDark),
         Expanded(
-          child: ConversationTimeline(
-            controller: _scrollController,
-            backgroundColor: chatListBg,
-            padding: timelinePadding,
-            itemCount: displayMessages.length,
-            itemBuilder: (context, index) {
-              final msg = displayMessages[index];
-              final showTime = showTimeFlags[index];
-              final timeStr = formatChatTime(msg.timestampLabel);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showTime && timeStr.isNotEmpty)
-                    Padding(
-                      padding: EdgeInsets.only(
-                        bottom:
-                            AppSpacing.semantic[DesignSemanticConstants
-                                .intraGroup]?[DesignSemanticConstants.sm] ??
-                            AppSpacing.intraGroupSm,
-                      ),
-                      child: Center(
-                        child: Text(
-                          timeStr,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm,
-                            color: fgPrimary.withValues(alpha: 0.5),
-                          ),
-                        ),
+          child: messageState.isLoading && displayMessages.isEmpty
+              ? const Center(child: CupertinoActivityIndicator())
+              : messageState.error != null && displayMessages.isEmpty
+              ? AppPageErrorState(
+                  semantic: runtimeErrorSemantic(
+                    context,
+                    error: messageState.error!,
+                    category: UiErrorCategory.pageLoad,
+                    scope: UiErrorScope.page,
+                  ),
+                  onAction: (action) async {
+                    if (action.type == UiErrorActionType.retry ||
+                        action.type == UiErrorActionType.resubmit) {
+                      await ref
+                          .read(
+                            chatMessageProvider(widget.conversationId).notifier,
+                          )
+                          .loadMessages();
+                    }
+                  },
+                )
+              : displayMessages.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(AppSpacing.xl),
+                    child: Text(
+                      ChatText.chatConversationNoMessages,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        color: fgPrimary.withValues(alpha: 0.65),
                       ),
                     ),
-                  ChatMessageBubble(
-                    message: msg,
-                    isRight: msg.isSelf,
-                    bubbleColor: msg.isSelf
-                        ? AppColors.chatBubbleOutgoing
-                        : AppColors.chatBubbleIncoming,
-                    textColor: msg.isSelf ? AppColors.white : fgPrimary,
-                    isSelectionMode: _isSelectionMode,
-                    isSelected: _selectedIds.contains(msg.id),
-                    onLongPressStart: (details) =>
-                        _onLongPressMessage(msg, details.globalPosition),
-                    onTap: _isSelectionMode
-                        ? () => _toggleSelect(msg.id)
-                        : null,
-                    receiptEnabled: false,
-                    memberCount: _memberCount,
-                    onAvatarTap: () {
-                      final senderId = msg.senderId;
-                      if (msg.isSelf) {
-                        final currentUser = ref.read(userDataProvider);
-                        final userId = currentUser?.username ?? currentUser?.id;
-                        if (userId != null && userId.isNotEmpty) {
-                          context.push(
-                            AppRoutePaths.userProfile(username: userId),
-                          );
-                        }
-                      } else if (senderId.isNotEmpty) {
-                        context.push(
-                          AppRoutePaths.userProfile(username: senderId),
-                          extra: UserProfileRouteExtra(subAccountId: senderId),
-                        );
-                      }
-                    },
                   ),
-                ],
-              );
-            },
-          ),
+                )
+              : ConversationTimeline(
+                  controller: _scrollController,
+                  backgroundColor: chatListBg,
+                  padding: timelinePadding,
+                  itemCount: displayMessages.length,
+                  itemBuilder: (context, index) {
+                    final msg = displayMessages[index];
+                    final showTime = showTimeFlags[index];
+                    final timeStr = formatChatTime(msg.timestampLabel);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (showTime && timeStr.isNotEmpty)
+                          Padding(
+                            padding: EdgeInsets.only(
+                              bottom:
+                                  AppSpacing.semantic[DesignSemanticConstants
+                                      .intraGroup]?[DesignSemanticConstants
+                                      .sm] ??
+                                  AppSpacing.intraGroupSm,
+                            ),
+                            child: Center(
+                              child: Text(
+                                timeStr,
+                                style: TextStyle(
+                                  fontSize: AppTypography.sm,
+                                  color: fgPrimary.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ChatMessageBubble(
+                          message: msg,
+                          isRight: msg.isSelf,
+                          bubbleColor: msg.isSelf
+                              ? AppColors.chatBubbleOutgoing
+                              : AppColors.chatBubbleIncoming,
+                          textColor: msg.isSelf ? AppColors.white : fgPrimary,
+                          isSelectionMode: _isSelectionMode,
+                          isSelected: _selectedIds.contains(msg.id),
+                          onLongPressStart: (details) =>
+                              _onLongPressMessage(msg, details.globalPosition),
+                          onTap: _isSelectionMode
+                              ? () => _toggleSelect(msg.id)
+                              : msg.type == 'system_call_log'
+                              ? () => unawaited(
+                                  _initiateCall(_callTypeFromLog(msg)),
+                                )
+                              : null,
+                          hideAvatarAndName: msg.type == 'system_call_log',
+                          useFullWidth: msg.type == 'system_call_log',
+                          receiptEnabled: false,
+                          memberCount: _memberCount,
+                          mentionDisplayNames: mentionDisplayNames,
+                          onMentionTap: _openMentionProfile,
+                          onAvatarTap: () {
+                            final senderId = msg.senderId;
+                            if (msg.isSelf) {
+                              final currentUser = ref.read(userDataProvider);
+                              final userId =
+                                  currentUser?.username ?? currentUser?.id;
+                              if (userId != null && userId.isNotEmpty) {
+                                context.push(
+                                  AppRoutePaths.userProfile(username: userId),
+                                );
+                              }
+                            } else if (senderId.isNotEmpty) {
+                              context.push(
+                                AppRoutePaths.userProfile(username: senderId),
+                                extra: UserProfileRouteExtra(
+                                  subAccountId: senderId,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
         ),
         ColoredBox(
           color: isDark ? bgColor : AppColors.chatToolbarBackground,
@@ -1225,7 +399,10 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
                   if (_isBlockedConversation)
                     _buildBlockedConversationHintBar(),
                   if (!_isGroupChat &&
+                      !_isBlockedConversation &&
                       _relationshipCapability?.isMutual != true &&
+                      _relationshipCapability?.isBlocked != true &&
+                      _relationshipCapability?.isBlockedBy != true &&
                       _otherParticipantId != null)
                     _buildMutualFollowRtcHintBar(),
                   _buildVoiceSendStatusBar(voiceSendState),
@@ -1245,6 +422,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
                     onCancelRecord: _cancelVoiceRecordForChat,
                     voiceAmplitudeStream: _voiceRecorder.onAmplitude,
                     onSend: _submitChatInput,
+                    onMentionRequested: _requestChatMention,
                     enableVoiceInput: true,
                     showEmojiButton: true,
                     showXiaoquMentionButton: _isGroupChat,
@@ -1274,13 +452,13 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
               ),
               middle: Text(
                 _isSelectionMode
-                    ? '已选 ${_selectedIds.length} 条'
+                    ? ChatText.selectedMessagesCount(_selectedIds.length)
                     : _conversationTitle,
                 style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
               ),
               trailing: _isSelectionMode
                   ? AppNavigationBarTextAction(
-                      label: UITextConstants.messageActionForward,
+                      label: ChatText.messageActionForward,
                       onPressed: () async {
                         final selectedMessages = displayMessages
                             .where((item) => _selectedIds.contains(item.id))
@@ -1378,8 +556,8 @@ class _SearchAnchorBanner extends StatelessWidget {
               Expanded(
                 child: Text(
                   sourceQuery == null || sourceQuery!.isEmpty
-                      ? '已从搜索结果进入该聊天，消息锚点将在后续服务接入后补齐。'
-                      : '已从“$sourceQuery”定位到相关聊天，消息锚点将在后续服务接入后补齐。',
+                      ? ChatText.searchEntry
+                      : ChatText.searchEntryForQuery(sourceQuery!),
                   style: TextStyle(
                     fontSize: AppTypography.iosCaption1,
                     color: fgPrimary,

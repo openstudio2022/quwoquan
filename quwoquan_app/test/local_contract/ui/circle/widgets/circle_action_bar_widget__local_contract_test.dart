@@ -20,7 +20,10 @@ void main() {
       );
 
       expect(find.text(UITextConstants.joinedCircle), findsOneWidget);
-      expect(find.text(UITextConstants.circleActionEnterDiscussion), findsOneWidget);
+      expect(
+        find.text(UITextConstants.circleActionEnterDiscussion),
+        findsOneWidget,
+      );
       expect(find.text(UITextConstants.editCircle), findsNothing);
       expect(find.text(UITextConstants.manageCenter), findsNothing);
     });
@@ -37,7 +40,10 @@ void main() {
       );
 
       expect(find.text(UITextConstants.joinCircle), findsOneWidget);
-      expect(find.text(UITextConstants.circleActionEnterDiscussion), findsOneWidget);
+      expect(
+        find.text(UITextConstants.circleActionEnterDiscussion),
+        findsOneWidget,
+      );
       expect(find.text(UITextConstants.followCircle), findsNothing);
     });
 
@@ -54,7 +60,10 @@ void main() {
       );
 
       expect(find.text(UITextConstants.circleJoinApproval), findsOneWidget);
-      expect(find.text(UITextConstants.circleActionEnterDiscussion), findsOneWidget);
+      expect(
+        find.text(UITextConstants.circleActionEnterDiscussion),
+        findsOneWidget,
+      );
     });
 
     testWidgets('待审核态显示加入审批中和进入讨论', (tester) async {
@@ -69,7 +78,10 @@ void main() {
       );
 
       expect(find.text(UITextConstants.joinPending), findsOneWidget);
-      expect(find.text(UITextConstants.circleActionEnterDiscussion), findsOneWidget);
+      expect(
+        find.text(UITextConstants.circleActionEnterDiscussion),
+        findsOneWidget,
+      );
     });
   });
 

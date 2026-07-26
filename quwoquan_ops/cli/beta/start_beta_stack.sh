@@ -3,10 +3,35 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
+QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
+DEPLOY_TARGET_ROOT="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_work_root
+
+print(deployment_work_root("beta-local"))
+PY
+)"
+QWQ_DEPLOY_WORK_ROOT="$(dirname "$DEPLOY_TARGET_ROOT")"
+export QWQ_DEPLOY_WORK_ROOT
 ACTION="${1:-up}"
+if [[ "$ACTION" == "-h" || "$ACTION" == "--help" || "$ACTION" == "help" ]]; then
+  cat <<'EOF'
+Usage:
+  quwoquan_ops/cli/beta/start_beta_stack.sh {up|down|status} [options]
+
+Set QWQ_WORKLOAD=content-release to start only the content data plane, or
+QWQ_WORKLOAD=full to include commercial telemetry, Ops services and Portal.
+EOF
+  exit 0
+fi
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
   --env beta --target beta-local --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
-RUNTIME_CONFIG_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process/config"
+export QWQ_OUTPUT_ROOT QWQ_DEPLOY_WORK_ROOT QWQ_OBSERVABILITY_RUN_ROOT QWQ_RUN_ROOT
+RUNTIME_CONFIG_DIR="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
+
+print(deployment_render_dir("beta", target="beta-local"))
+PY
+)"
 STATE_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process"
 LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
 ENV_FILE="${RUNTIME_CONFIG_DIR}/beta.env"
@@ -33,10 +58,14 @@ OPS_POSTGRES_DSN="${OPS_POSTGRES_DSN:-postgres://quwoquan:quwoquan@127.0.0.1:${B
 CDN_DOMAIN="${CDN_DOMAIN:-cdn.beta.local}"
 DEVICE_ID="${DEVICE_ID:-}"
 START_APP="${START_APP:-1}"
+SKIP_BUILD=0
 AUTO_OPEN_OPS="${AUTO_OPEN_OPS:-1}"
+PRODUCT_TELEMETRY_AVAILABLE="${QWQ_PRODUCT_TELEMETRY_AVAILABLE:-1}"
+WORKLOAD="${QWQ_WORKLOAD:-full}"
 SEED_VERIFY_MODE="${SEED_VERIFY_MODE:-}"
 MEDIA_MODE="${MEDIA_MODE:-}"
 LOCAL_PUBLIC_HOST="${LOCAL_PUBLIC_HOST:-}"
+BETA_BACKEND_READY_TIMEOUT_SECONDS="${BETA_BACKEND_READY_TIMEOUT_SECONDS:-1200}"
 MEDIA_AVATAR_BASE_URL="${MEDIA_AVATAR_BASE_URL:-}"
 MEDIA_IMAGE_BASE_URL="${MEDIA_IMAGE_BASE_URL:-}"
 MEDIA_VIDEO_BASE_URL="${MEDIA_VIDEO_BASE_URL:-}"
@@ -54,6 +83,7 @@ Usage:
 Options for "up":
   --device-id <id>         指定 Flutter 设备 id；也可通过 DEVICE_ID 传入。
   --skip-app               仅启动云侧 + Ops，不启动 Flutter 端。
+  --skip-build             复用已构建镜像，禁止 Compose 隐式重建。
   --with-app               显式开启 Flutter 端启动（默认开启）。
   --no-open-ops            不自动打开 Ops Portal 页面。
   --seed-verify <mode>     透传给 start_app_beta_manual.sh。
@@ -83,6 +113,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-app)
       START_APP=0
+      shift
+      ;;
+    --skip-build)
+      SKIP_BUILD=1
       shift
       ;;
     --with-app)
@@ -142,6 +176,29 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "$WORKLOAD" in
+  content-release)
+    # 内容导入与消费只依赖内容数据面；商业观测和运营控制面只属于 full。
+    PRODUCT_TELEMETRY_AVAILABLE=0
+    AUTO_OPEN_OPS=0
+    ;;
+  full)
+    if [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]]; then
+      echo "GATE_BLOCK: beta full workload requires product telemetry; use QWQ_WORKLOAD=content-release for the content data plane." >&2
+      exit 2
+    fi
+    ;;
+  *)
+    echo "GATE_BLOCK: unsupported beta workload: $WORKLOAD" >&2
+    exit 2
+    ;;
+esac
+
+if ! [[ "$BETA_BACKEND_READY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "GATE_BLOCK: BETA_BACKEND_READY_TIMEOUT_SECONDS must be a positive integer." >&2
+  exit 2
+fi
+
 write_env() {
   cat > "$ENV_FILE" <<EOF
 APP_RUNTIME_ENV=beta
@@ -173,8 +230,20 @@ wrapper = sys.argv[3]
 log_path = sys.argv[4]
 event = sys.argv[5]
 argv = sys.argv[6:]
+diagnostic_log = pid_path.parent / "stdout" / f"{event}.log"
 proc = subprocess.Popen(
-    [sys.executable, wrapper, "--log-file", log_path, "--event", event, "--", *argv],
+    [
+        sys.executable,
+        wrapper,
+        "--log-file",
+        log_path,
+        "--diagnostic-log",
+        str(diagnostic_log),
+        "--event",
+        event,
+        "--",
+        *argv,
+    ],
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
     stdin=subprocess.DEVNULL,
@@ -303,6 +372,12 @@ build_app_beta_command() {
   if [[ "$START_APP" != "1" ]]; then
     APP_BETA_CMD+=(--skip-app)
   fi
+  if [[ "$SKIP_BUILD" == "1" ]]; then
+    APP_BETA_CMD+=(--skip-build)
+  fi
+  if [[ "$WORKLOAD" == "content-release" ]]; then
+    APP_BETA_CMD+=(--content-release)
+  fi
   if [[ -n "$DEVICE_ID" ]]; then
     APP_BETA_CMD+=(--device-id "$DEVICE_ID")
   fi
@@ -360,21 +435,27 @@ case "$ACTION" in
     # beta services alive while launching Flutter separately.
     build_app_beta_command
     start_bg app-beta "${APP_BETA_CMD[@]}"
-    wait_service_ok app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz" 120 || {
+    # 冷缓存下 `docker compose up --build` 会先完成 Go 镜像构建，再创建内容数据面。
+    # 不能把构建期误报为后端不可用；仍保留可配置且有上界语义的 readiness 失败。
+    wait_service_ok app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz" "$BETA_BACKEND_READY_TIMEOUT_SECONDS" || {
       echo "[beta] app-beta backend did not become ready" >&2
       exit 1
     }
-    start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/platform-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
-    wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60
-    start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' MONGODB_URI='mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true' MONGODB_DATABASE='quwoquan_product_ops' REDIS_GENERAL_ADDR='127.0.0.1:${BETA_REDIS_PORT}' REDIS_REC_ADDR='127.0.0.1:${BETA_REDIS_PORT}' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' AUTH_DEVICE_TICKET_SECRET='$AUTH_DEVICE_TICKET_SECRET' AUTH_DEVICE_TICKET_ISSUER='$AUTH_DEVICE_TICKET_ISSUER' AUTH_DEVICE_TICKET_AUDIENCE='$AUTH_DEVICE_TICKET_AUDIENCE' AUTH_DEVICE_TICKET_TOKEN_VERSION='$AUTH_DEVICE_TICKET_TOKEN_VERSION' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
-    start_bg ops-portal env VITE_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}" VITE_PLATFORM_OPS_BASE_URL="http://127.0.0.1:${PLATFORM_OPS_PORT}" VITE_GATEWAY_BASE_URL="http://127.0.0.1:${CONTENT_PORT}" npm --prefix "$OPS_PORTAL_DIR" run dev -- --host 127.0.0.1 --port "${OPS_PORTAL_PORT}"
-    wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz" 60
-    wait_service_ok ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/" 60
-    maybe_open_ops
+    if [[ "$WORKLOAD" == "full" ]]; then
+      start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/control-plane/platform-ops' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+      wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60
+      start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' MONGODB_URI='mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true' MONGODB_DATABASE='quwoquan_product_ops' REDIS_GENERAL_ADDR='127.0.0.1:${BETA_REDIS_PORT}' REDIS_REC_ADDR='127.0.0.1:${BETA_REDIS_PORT}' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' AUTH_DEVICE_TICKET_SECRET='$AUTH_DEVICE_TICKET_SECRET' AUTH_DEVICE_TICKET_ISSUER='$AUTH_DEVICE_TICKET_ISSUER' AUTH_DEVICE_TICKET_AUDIENCE='$AUTH_DEVICE_TICKET_AUDIENCE' AUTH_DEVICE_TICKET_TOKEN_VERSION='$AUTH_DEVICE_TICKET_TOKEN_VERSION' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+      wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz" 60
+      start_bg ops-portal env VITE_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}" VITE_PLATFORM_OPS_BASE_URL="http://127.0.0.1:${PLATFORM_OPS_PORT}" VITE_GATEWAY_BASE_URL="http://127.0.0.1:${CONTENT_PORT}" npm --prefix "$OPS_PORTAL_DIR" run dev -- --host 127.0.0.1 --port "${OPS_PORTAL_PORT}"
+      wait_service_ok ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/" 60
+      maybe_open_ops
+      status_one product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz"
+      status_one platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz"
+      status_one ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/"
+    else
+      echo "[beta] workload=content-release; product-ops, platform-ops and ops-portal are not started."
+    fi
     status_one app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz"
-    status_one product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz"
-    status_one platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz"
-    status_one ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/"
     ;;
   down)
     stop_bg app-beta

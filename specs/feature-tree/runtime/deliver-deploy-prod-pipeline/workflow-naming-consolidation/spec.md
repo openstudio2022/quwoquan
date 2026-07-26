@@ -1,33 +1,66 @@
-# L3 特性：workflow-naming-consolidation
+# L3 Story：工作流命名收敛 (`workflow-naming-consolidation`)
 
-## 功能说明
+> 所属能力：[`deliver-deploy-prod-pipeline`](../spec.md)
 
-统一主干治理后的 GitHub Actions Workflow 命名规范：01～08 顺序唯一、名称可在 Actions UI 直接表达职责，并校验 PR rule / post-main / manual 三类职责边界。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-## 范围
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- **命名规范**：01. App Pipeline → 07. Deploy To Prod (Auto)（旧 08. Deploy Gamma ECS 已随远端 gamma 退役）
-- **职责边界**：PR rule（03/04/05）、post-main（02/07）、manual（01/06）
-- **02/03 去重检查**：确认 Service Pipeline 与 Delivery Gate 职责互补、无冗余执行
+## 1. 用户价值
 
-## 适用范围与约束
+作为维护持续交付的工程角色，
+我希望让每个 CI/CD 职责只有一个稳定命名与触发链，删除重复编号和隐式 `workflow_run` 合流，
+从而快速定位门禁并避免同一发布被多条流程重复执行。
 
-- **适用**：deliver-deploy-prod-pipeline 下所有 workflow；与 `workflow_consolidation_plan.md` 对齐
-- **约束**：不得保留重复名称（如 05/05b、08b/08b）或依赖旧的 `workflow_run` 定时合流链
-- **不适用**：非 workflow 命名、与主干治理无关的业务设计
+## 2. 范围与非目标
 
-## 与父/子节点关系
+### In Scope
 
-**父节点**：deliver-deploy-prod-pipeline（L2）
+- “工作流命名收敛”的输入、可观察主路径、失败语义以及与父能力的交接。
 
-| 关联节点 | 说明 |
-|----------|------|
-| integration-deploy-and-l3-l4-gate | 含 04. Pre-Release Gate（local-gamma preflight 主门禁；远端复验在 prod gray-initial） |
-| gray-release-to-prod | 含 06/07 Deploy To Prod |
+### Out of Scope
 
-## 验收标准概要
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-- A1：主工作流名称唯一且符合 01～08 序号
-- A2：`workflow_consolidation_plan.md` 含最新命名规范与 02/03 去重结论，并明确 `04/05` 的 local-gamma / self-hosted 分工（旧 08 Deploy Gamma ECS 已退役，远端复验下沉到 prod gray-initial）
-- A3：不存在 `merge-dev1.0-to-main.yml`、`05 wrapper` 等已删除的重复入口
-- A4：`ci_cd_end_to_end_design.md`、`deliver_to_production_runbook.md`、`branch_strategy.md` 与规范一致
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 工作流命名收敛
+
+- **约束**：不得保留重复名称（如 05/05b、08b/08b）或依赖旧的 `workflow_run` 定时合流链。
+
+<a id="req-002"></a>
+### REQ-002 约束：不得保留重复名称（如 05/05b、08b/08b）或依赖旧的 workflow_run 定时合流链
+
+- **约束**：不得保留重复名称（如 05/05b、08b/08b）或依赖旧的 `workflow_run` 定时合流链。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 工作流命名收敛
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“工作流命名收敛”对应的公开行为。
+- THEN **约束**：不得保留重复名称（如 05/05b、08b/08b）或依赖旧的 `workflow_run` 定时合流链。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`deliver-deploy-prod-pipeline`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 工作流命名收敛 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“工作流命名收敛”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

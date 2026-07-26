@@ -14,6 +14,9 @@ class CommentState {
   final int replyFirstExpandPageSize;
   final int replyExpandPageSize;
 
+  /// 一级评论服务端排序档位（hot 默认 / latest）；切换只重新请求，不本地重排。
+  final ContentCommentSort sort;
+
   /// 长评论折叠阈值（超过该行数折叠并显示「展开全文」）。
   final int foldLineCount;
   final Set<String> loadingReplyCommentIds;
@@ -33,6 +36,7 @@ class CommentState {
     this.replyPreviewCount = 1,
     this.replyFirstExpandPageSize = 5,
     this.replyExpandPageSize = 10,
+    this.sort = ContentCommentSort.hot,
     this.foldLineCount = 3,
     this.loadingReplyCommentIds = const {},
     this.expandedReplyCommentIds = const {},
@@ -52,6 +56,7 @@ class CommentState {
     int? replyPreviewCount,
     int? replyFirstExpandPageSize,
     int? replyExpandPageSize,
+    ContentCommentSort? sort,
     int? foldLineCount,
     Set<String>? loadingReplyCommentIds,
     Set<String>? expandedReplyCommentIds,
@@ -70,6 +75,7 @@ class CommentState {
       replyFirstExpandPageSize:
           replyFirstExpandPageSize ?? this.replyFirstExpandPageSize,
       replyExpandPageSize: replyExpandPageSize ?? this.replyExpandPageSize,
+      sort: sort ?? this.sort,
       foldLineCount: foldLineCount ?? this.foldLineCount,
       loadingReplyCommentIds:
           loadingReplyCommentIds ?? this.loadingReplyCommentIds,

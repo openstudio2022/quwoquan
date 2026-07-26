@@ -37,6 +37,9 @@ class AppRoutePaths {
   static const String interestMatch = '/interest-match';
   static const String interestMatchSegment = 'interest-match';
 
+  static const String interestOnboarding = '/onboarding/interests';
+  static const String interestOnboardingSegment = 'interests';
+
   static const String chat = '/chat';
   static const String chatSegment = 'chat';
 
@@ -224,8 +227,29 @@ class AppRoutePaths {
   static const String settingsPermissions = '/settings/permissions';
   static const String settingsPermissionsSegment = 'permissions';
 
+  static const String blockedUsers = '/settings/blocked-users';
+  static const String blockedUsersSegment = 'blocked-users';
+
   static const String settingsDarkMode = '/settings/dark-mode';
   static const String settingsDarkModeSegment = 'dark-mode';
+
+  static const String settingsNotifications = '/settings/notifications';
+  static const String settingsNotificationsSegment = 'notifications';
+
+  static const String settingsPrivacy = '/settings/privacy';
+  static const String settingsPrivacySegment = 'privacy';
+
+  static const String settingsCalls = '/settings/calls';
+  static const String settingsCallsSegment = 'calls';
+
+  static const String settingsAccountSecurity = '/settings/account-security';
+  static const String settingsAccountSecuritySegment = 'account-security';
+
+  static const String blockedKeywords = '/settings/blocked-keywords';
+  static const String blockedKeywordsSegment = 'blocked-keywords';
+
+  static const String myReports = '/settings/my-reports';
+  static const String myReportsSegment = 'my-reports';
 
   static const String settingsAbout = '/settings/about';
   static const String settingsAboutSegment = 'about';
@@ -238,9 +262,6 @@ class AppRoutePaths {
 
   static const String profilePersonas = '/profile/personas';
   static const String profilePersonasSegment = 'personas';
-
-  static const String profileComments = '/profile/comments';
-  static const String profileCommentsSegment = 'comments';
 
   static const String profileStatsPathTemplate = '/profile/stats';
   static String profileStats({String? type, String? userId}) {
@@ -293,6 +314,9 @@ class AppRoutePaths {
     });
   }
   static const String chatDetailSegment = '{id}';
+
+  static const String greetingInbox = '/chat/greetings';
+  static const String greetingInboxSegment = 'greetings';
 
   static const String chatSettingsPathTemplate = '/chat/{id}/settings';
   static String chatSettings({required String id}) {
@@ -347,6 +371,15 @@ class AppRoutePaths {
     });
   }
   static const String chatMemberSearchSegment = 'member-search';
+
+  static const String chatAnnouncementPathTemplate = '/chat/{id}/announcement';
+  static String chatAnnouncement({required String id}) {
+    return _buildPath(chatAnnouncementPathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String chatAnnouncementSegment = 'announcement';
 
   static const String rtcOutgoingPathTemplate = '/rtc/outgoing/{callId}';
   static String rtcOutgoing({required String callId}) {

@@ -1,0 +1,133 @@
+description: 搜索会话信号流事件，供推荐 Feed 在线特征投影消费
+fields:
+- name: signalId
+  source: signalId
+  type: string
+  constraints:
+  - PK
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  description: query 或 engagement 信号的稳定幂等标识
+  role: append_only_fact
+- name: signalType
+  source: signalType
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  description: query | click；禁止把曝光结果冒充点击
+  role: append_only_fact
+- name: searchRequestId
+  source: searchRequestId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  description: 单次搜索请求 ID，用于幂等去重与观测串联
+  role: append_only_fact
+  reference: true
+- name: sessionId
+  source: sessionId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PII
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  description: 端侧会话 ID，优先用于推荐 session 热路径回流
+  role: append_only_fact
+- name: userId
+  source: userId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PII
+  log_policy: deny
+  api_exposure: none
+  ops_exposure: read
+  description: 登录态用户 ID，用于 rm_recommend_feature 用户级特征投影
+  role: append_only_fact
+  reference: true
+- name: normalizedQuery
+  source: normalizedQuery
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PII
+  log_policy: deny
+  api_exposure: none
+  ops_exposure: read
+  description: 与 query log / term-heat 同源的归一化查询词
+  role: append_only_fact
+- name: relatedTerms
+  source: relatedTerms
+  type: '[]string'
+  constraints:
+  - NULLABLE
+  classification: PII
+  log_policy: deny
+  api_exposure: none
+  ops_exposure: read
+  description: search term-heat 选出的相关热词，已按相关性排序
+  role: append_only_fact
+- name: engagedObjectIds
+  source: engagedObjectIds
+  type: '[]string'
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: deny
+  api_exposure: none
+  ops_exposure: read
+  description: click 信号中由用户真实点击的对象 ID；query 信号必须为空
+  role: append_only_fact
+  reference: true
+- name: rankingVersion
+  source: rankingVersion
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: append_only_fact
+- name: experimentBucket
+  source: experimentBucket
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: append_only_fact
+- name: resultCount
+  source: resultCount
+  type: int
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: append_only_fact
+- name: createdAt
+  source: createdAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: append_only_fact

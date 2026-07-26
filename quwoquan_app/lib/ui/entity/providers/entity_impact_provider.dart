@@ -8,5 +8,5 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 /// 不在端侧拼装影响事实（G2 不造假、不占位）。
 final entityImpactProvider = FutureProvider.autoDispose
     .family<EntityImpactSummary, String>((ref, homepageId) {
-      return ref.watch(homepageRepositoryProvider).getEntityImpact(homepageId);
+      return ref.watch(homepageQueryProvider).getEntityImpact(homepageId);
     });

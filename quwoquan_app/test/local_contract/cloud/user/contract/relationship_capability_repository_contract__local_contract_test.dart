@@ -1,13 +1,13 @@
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/conversation-entry-matrix/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-005
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:test/test.dart';
-import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 
-/// T1 契约测试：RelationshipCapabilityRepository
-///
-/// 守护：DTO 解析正确性 + MockRepository 行为一致性 + RelationshipState 推导逻辑
 void main() {
-  group('RelationshipCapabilityDto — 常规契约', () {
-    test('fromMap 全字段正确解析', () {
-      final dto = RelationshipCapabilityDto.fromMap(<String, dynamic>{
+  group('RelationshipCapability typed contract', () {
+    test('decoder 严格解析 canonical capability', () {
+      final result = decodeRelationshipCapabilityResult(const <String, Object?>{
         'viewerSubAccountId': 'viewer_1',
         'targetSubAccountId': 'target_1',
         'relationState': 'mutual',
@@ -15,9 +15,9 @@ void main() {
         'canUnfollow': true,
         'canFollowBack': false,
         'canGreet': false,
+        'canOpenConversation': true,
         'canCreateDirectConversation': true,
         'canSendMessage': true,
-        'canOpenConversation': true,
         'hasPendingGreeting': false,
         'hasFormalConversation': true,
         'canStartVoiceCall': true,
@@ -25,145 +25,79 @@ void main() {
         'isBlocked': false,
         'isBlockedBy': false,
       });
-      expect(dto.viewerSubAccountId, 'viewer_1');
-      expect(dto.targetSubAccountId, 'target_1');
-      expect(dto.relationState, 'mutual');
-      expect(dto.isMutual, isTrue);
-      expect(dto.canGreet, false);
-      expect(dto.canSendMessage, true);
-      expect(dto.canStartVoiceCall, true);
-      expect(dto.isBlocked, false);
+
+      expect(result.viewerSubAccountId, 'viewer_1');
+      expect(result.targetSubAccountId, 'target_1');
+      expect(result.relationState, 'mutual');
+      expect(result.canSendMessage, isTrue);
+      expect(result.canStartVoiceCall, isTrue);
     });
 
-    test('isSelf 对 self 状态返回 true', () {
-      final dto = RelationshipCapabilityDto.fromMap(<String, dynamic>{
-        'relationState': 'self',
-        'canGreet': false,
-        'canCreateDirectConversation': false,
-        'canSendMessage': false,
-        'canOpenConversation': false,
-        'canStartVoiceCall': false,
-        'canStartVideoCall': false,
-        'isBlocked': false,
-        'isBlockedBy': false,
-      });
-      expect(dto.isSelf, true);
-      expect(dto.isMutual, false);
+    test('decoder 不为缺失能力位合成默认值', () {
+      expect(
+        () => decodeRelationshipCapabilityResult(const <String, Object?>{
+          'viewerSubAccountId': 'viewer_1',
+          'targetSubAccountId': 'target_1',
+          'relationState': 'mutual',
+        }),
+        throwsFormatException,
+      );
     });
 
-    test('isMutual 对 mutual 状态返回 true', () {
-      final dto = RelationshipCapabilityDto.fromMap(<String, dynamic>{
-        'relationState': 'mutual',
-        'canGreet': false,
-        'canCreateDirectConversation': true,
-        'canSendMessage': true,
-        'canOpenConversation': true,
-        'canStartVoiceCall': true,
-        'canStartVideoCall': true,
-        'isBlocked': false,
-        'isBlockedBy': false,
+    test('query encoder 只携带 canonical subAccountId path 参数', () {
+      final payload = encodeGetRelationshipCapabilityQuery(
+        GetRelationshipCapabilityQuery(targetSubAccountId: 'target_1'),
+      );
+      expect(payload.pathParameters, <String, String>{
+        'subAccountId': 'target_1',
       });
-      expect(dto.isMutual, true);
-      expect(dto.viewerFollowsTarget, isTrue);
-      expect(dto.targetFollowsViewer, isTrue);
-    });
-
-    test('isFollowing 对 following 状态返回 true', () {
-      final dto = RelationshipCapabilityDto.fromMap(<String, dynamic>{
-        'relationState': 'following',
-        'canGreet': true,
-        'canCreateDirectConversation': false,
-        'canSendMessage': false,
-        'canOpenConversation': false,
-        'canStartVoiceCall': false,
-        'canStartVideoCall': false,
-        'isBlocked': false,
-        'isBlockedBy': false,
-      });
-      expect(dto.isFollowing, true);
-      expect(dto.canGreet, true);
-      expect(dto.canSendMessage, false);
     });
   });
 
-  group('RelationshipCapabilityDto — 默认值', () {
-    test('fromMap 缺失字段使用安全默认值', () {
-      final dto = RelationshipCapabilityDto.fromMap(const <String, dynamic>{});
-      expect(dto.relationState, 'not_following');
-      expect(dto.canGreet, false);
-      expect(dto.canSendMessage, false);
-      expect(dto.canStartVoiceCall, false);
-      expect(dto.isNotFollowing, true);
-    });
-
-    test('fromFollowFlags 互关推导为 mutual', () {
-      final dto = RelationshipCapabilityDto.fromFollowFlags(
-        viewerId: 'viewer',
-        targetId: 'target',
-        isFollowing: true,
-        isFollowedBy: true,
+  group('AlphaPersonaRelationshipFacet', () {
+    test('fixture 互关对象开放消息、会话与 RTC', () async {
+      final facet = AlphaPersonaRelationshipFacet();
+      final result = await facet.getRelationshipCapability(
+        GetRelationshipCapabilityQuery(
+          targetSubAccountId: 'fixture_user_photo',
+        ),
       );
-      expect(dto.relationState, 'mutual');
-      expect(dto.canCreateDirectConversation, true);
-      expect(dto.canStartVoiceCall, true);
-      expect(dto.canGreet, false);
+
+      expect(result.relationState, 'mutual');
+      expect(result.canSendMessage, isTrue);
+      expect(result.canCreateDirectConversation, isTrue);
+      expect(result.canStartVoiceCall, isTrue);
+      expect(result.canGreet, isFalse);
     });
 
-    test('fromFollowFlags 单向关注推导为 following 且 canGreet=true', () {
-      final dto = RelationshipCapabilityDto.fromFollowFlags(
-        viewerId: 'viewer',
-        targetId: 'target',
-        isFollowing: true,
-        isFollowedBy: false,
+    test('未知对象返回可关注、可打招呼的 typed 能力位', () async {
+      final facet = AlphaPersonaRelationshipFacet();
+      final result = await facet.getRelationshipCapability(
+        GetRelationshipCapabilityQuery(targetSubAccountId: 'fixture_user_new'),
       );
-      expect(dto.relationState, 'following');
-      expect(dto.canGreet, true);
-      expect(dto.canCreateDirectConversation, false);
+
+      expect(result.relationState, 'not_following');
+      expect(result.canFollow, isTrue);
+      expect(result.canGreet, isTrue);
+      expect(result.canSendMessage, isFalse);
     });
 
-    test('fromFollowFlags 被关注推导为 followed_by', () {
-      final dto = RelationshipCapabilityDto.fromFollowFlags(
-        viewerId: 'viewer',
-        targetId: 'target',
-        isFollowing: false,
-        isFollowedBy: true,
+    test('block command 后 query 关闭打招呼、会话与 RTC', () async {
+      final facet = AlphaPersonaRelationshipFacet();
+      await facet.blockUser(
+        BlockUserCommand(targetSubAccountId: 'fixture_user_photo'),
       );
-      expect(dto.relationState, 'followed_by');
-      expect(dto.canFollowBack, true);
-      expect(dto.canGreet, true);
-    });
-
-    test('拉黑时禁止打招呼与 RTC', () {
-      final dto = RelationshipCapabilityDto.fromFollowFlags(
-        viewerId: 'viewer',
-        targetId: 'target',
-        isFollowing: true,
-        isFollowedBy: true,
-        isBlocked: true,
+      final result = await facet.getRelationshipCapability(
+        GetRelationshipCapabilityQuery(
+          targetSubAccountId: 'fixture_user_photo',
+        ),
       );
-      expect(dto.canGreet, false);
-      expect(dto.canStartVoiceCall, false);
-      expect(dto.canCreateDirectConversation, false);
-    });
-  });
 
-  group('MockRelationshipCapabilityRepository', () {
-    late MockRelationshipCapabilityRepository repo;
-
-    setUp(() {
-      repo = MockRelationshipCapabilityRepository();
-    });
-
-    test('getCapability 返回非空 relationState', () async {
-      final dto = await repo.getCapability('user_001');
-      expect(dto.relationState, isNotEmpty);
-    });
-
-    test('getCapability 对互关 mock 用户返回 mutual', () async {
-      final dto = await repo.getCapability('user_mutual_01');
-      if (dto.isMutual) {
-        expect(dto.canSendMessage || dto.canCreateDirectConversation, isTrue);
-      }
+      expect(result.isBlocked, isTrue);
+      expect(result.canGreet, isFalse);
+      expect(result.canOpenConversation, isFalse);
+      expect(result.canStartVoiceCall, isFalse);
+      expect(result.canStartVideoCall, isFalse);
     });
   });
 }

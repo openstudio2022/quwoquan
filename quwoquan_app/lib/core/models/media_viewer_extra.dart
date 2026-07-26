@@ -26,6 +26,30 @@ class MediaViewerPostWireRow {
     return MediaViewerPostWireRow._(Map<String, dynamic>.from(map));
   }
 
+  factory MediaViewerPostWireRow.fromPostBase(
+    PostBaseDto post, {
+    String? circleId,
+    int? likeCount,
+    int? commentCount,
+    int? shareCount,
+    bool isLiked = false,
+    bool isFollowingAuthor = false,
+  }) {
+    final wire = Map<String, dynamic>.from(post.toMap())
+      ..['postId'] = post.id
+      ..['contentType'] = post.type
+      ..['likeCount'] = likeCount ?? post.likeCount
+      ..['commentCount'] = commentCount ?? post.commentCount
+      ..['shareCount'] = shareCount ?? post.shareCount
+      ..['isLiked'] = isLiked
+      ..['isFollowingAuthor'] = isFollowingAuthor;
+    final normalizedCircleId = circleId?.trim() ?? '';
+    if (normalizedCircleId.isNotEmpty) {
+      wire['circleId'] = normalizedCircleId;
+    }
+    return MediaViewerPostWireRow._(wire);
+  }
+
   factory MediaViewerPostWireRow.fromObjectEntries(
     Map<String, Object?> entries,
   ) {
@@ -156,6 +180,7 @@ class MediaViewerCommentContext {
   /// 评论深链入口来源（用于分析口径与落地 mode 判定）。
   static const String entrySourceProfileInteraction = 'profile-interaction';
   static const String entrySourceProfileComments = 'profile-comments';
+  static const String entrySourceNotification = 'notification';
 
   final bool openComments;
 
@@ -288,4 +313,15 @@ class MediaViewerExtra {
       commentContext: commentContext ?? this.commentContext,
     );
   }
+}
+
+/// 只有 workId 的直达浏览器仍需保留来源与 feed 归因。
+class WorkBrowserEntryRouteExtra {
+  const WorkBrowserEntryRouteExtra({
+    required this.referralSource,
+    this.feedRequestId,
+  });
+
+  final ReferralSource referralSource;
+  final String? feedRequestId;
 }

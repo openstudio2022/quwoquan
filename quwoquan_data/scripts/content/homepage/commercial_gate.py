@@ -1,11 +1,7 @@
 """主页商用质量硬门（P2 单一真相源，100% deterministic、可对任意 page.md 重放）。
 
-审计 P0 逃逸样本驱动（M1 实测）：
-- 罗泉古镇：360/百科编辑壳（「折叠编辑本段」）、infobox 键值堆（「## 基本信息」+
-  中文名/车牌代码/邮政编码…）作为正文穿透 approved；
-- 隆昌石牌坊/泸沽湖：模型在 `[[IMG:fig_NN]]` 占位行尾追加图注，违反独占行协议；
-- 浙江多成品缺 H1；
-- factual_reference_only 与 licensed_adaptation 同策略（近逐字复用 99.5% fidelity）。
+历史缺陷归因：编辑壳与 infobox 键值堆不得进入正文；图片占位符必须独占行；成品必须有
+H1；`factual_reference_only` 与 `licensed_adaptation` 必须遵守不同的版权策略。
 
 分层：
 - `final_page_hard_issues`：成品 page.md 最终页硬门（结构/污染/乱码/重复/最小信息量）。

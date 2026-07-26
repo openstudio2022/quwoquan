@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Iterable
 
-from test_directory_inventory_lib import ROOT, iter_canonical_files
+from test_directory_layout_lib import ROOT, iter_canonical_files
 
 
 FEATURE_TREE = ROOT / "specs" / "feature-tree"

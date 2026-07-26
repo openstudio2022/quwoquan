@@ -1,0 +1,13 @@
+overrides:
+  sys.search-service.accountSecurityAuthority.baseUrl: http://user-service:18081
+  sys.search-service.accountSecurityAuthority.timeoutMs: 300
+  sys.search-service.contentService.baseUrl: http://content-service:18080
+  sys.search-service.es.enabled: true
+  sys.search-service.es.requestTimeoutMs: 5000
+  sys.search-service.redis.general.db: 0
+secretRefs:
+  sys.search-service.redis.general.password: SEARCH_REDIS_GENERAL_PASSWORD
+  sys.search-service.redis.rec.password: SEARCH_REDIS_REC_PASSWORD
+externalBindings:
+  runtime.message.transport:
+    state: enabled

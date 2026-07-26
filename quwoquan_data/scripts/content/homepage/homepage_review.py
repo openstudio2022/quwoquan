@@ -57,6 +57,38 @@ def homepage_media_review_dispositions(manifest: Mapping[str, Any]) -> list[dict
         )
     return rows
 
+
+def homepage_asset_file_evidence(
+    object_dir: Path,
+    manifest: Mapping[str, Any],
+) -> list[dict[str, object]]:
+    """Project deterministic asset existence into the semantic review packet."""
+    raw_assets = manifest.get("assets") or []
+    if not isinstance(raw_assets, list):
+        return []
+    assets_dir = (object_dir / "assets").resolve()
+    rows: list[dict[str, object]] = []
+    for raw in raw_assets:
+        if not isinstance(raw, Mapping):
+            continue
+        asset_id = str(raw.get("assetId") or "").strip()
+        file_name = str(raw.get("fileName") or "").strip()
+        if not asset_id or not file_name:
+            continue
+        candidate = (assets_dir / file_name).resolve()
+        inside_assets = candidate.is_relative_to(assets_dir)
+        exists = inside_assets and candidate.is_file()
+        rows.append(
+            {
+                "assetId": asset_id,
+                "fileName": file_name,
+                "relativePath": f"assets/{file_name}",
+                "exists": exists,
+                "sha256": sha256_file(candidate) if exists else "",
+            }
+        )
+    return rows
+
 def _entity_draft_dir(execution_id: str, domain: str, etype: str, name: str) -> Path:
     return execution_entity_stage_dir(execution_id, domain, etype, name, STAGE_DRAFT)
 def _entity_draft_path(execution_id: str, domain: str, etype: str, name: str) -> Path:
@@ -98,22 +130,16 @@ def _entity_homepage_agent_run_id(
         state = load_execution_state(execution_id)
     except (ImportError, OSError, ValueError, TypeError):
         return ""
-    rows: list[Any] = []
-    history = state.agent_run_history
-    if isinstance(history, list):
-        rows.extend(history)
-    last = state.last_agent_run
-    if isinstance(last, dict):
-        rows.append(last)
-    for run in reversed(rows):
-        if str(run.get("stage") or "") != "build_homepage":
+    from content.execution.agent.history import state_managed_agent_runs
+    from core.control_types import ExecutionStage
+
+    for run in reversed(state_managed_agent_runs(state)):
+        if run.stage is not ExecutionStage.BUILD_HOMEPAGE:
             continue
-        for outcome in run.get("outcomes") or []:
-            if not isinstance(outcome, dict):
+        for job_outcome in run.outcomes:
+            if not job_outcome.succeeded:
                 continue
-            if str(outcome.get("status") or "") != "finished":
-                continue
-            run_id = str(outcome.get("runId") or "").strip()
+            run_id = job_outcome.outcome.run_id
             if run_id:
                 return run_id
     return ""
@@ -362,6 +388,7 @@ def _write_entity_review_sidecars(
         "schema": "quwoquan_data.evidence_index",
         "stage": "5.review",
         "executionId": execution["executionId"],
+        "executionBinding": execution["executionBinding"],
         "objectRef": object_ref,
         "evidence": [
             {

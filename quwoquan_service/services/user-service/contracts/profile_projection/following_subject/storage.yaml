@@ -1,0 +1,18 @@
+backend: mongodb
+collections:
+  following_subjects:
+    entity: FollowingSubjectItemView
+    role: projection
+    indexes:
+    - name: idx_following_subject_viewer_type_changed
+      keys:
+        viewerSubAccountId: 1
+        subjectType: 1
+        latestChangedAt: -1
+    - name: idx_following_subject_viewer_subject
+      keys:
+        viewerSubAccountId: 1
+        subjectType: 1
+        subjectId: 1
+      unique: true
+role: projection

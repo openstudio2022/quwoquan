@@ -86,7 +86,7 @@ void main() {
       await client.circleCircleBehaviorFactReportCircleBehavior(
         AppendCircleBehaviorFactCommand(
           circleId: 'circle-1',
-          eventType: CircleBehaviorEventType.impression,
+          eventType: CircleBehaviorEventType.effectivePlay,
         ),
         context: const CloudOperationInvocationContext(
           surfaceId: 'circleDetail',
@@ -98,7 +98,7 @@ void main() {
 
       expect(executor.body, <String, Object?>{
         'circleId': 'circle-1',
-        'eventType': 'impression',
+        'eventType': 'effective_play',
       });
       expect(executor.body, isNot(contains('personaId')));
       expect(executor.body, isNot(contains('sessionId')));

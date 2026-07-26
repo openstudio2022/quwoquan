@@ -25,6 +25,7 @@ enum SearchExecutionStrategy {
   localOnly('local_only'),
   remoteOnly('remote_only'),
   hybridRemoteFallbackLocal('hybrid_remote_fallback_local'),
+  filterOnly('filter_only'),
   ;
 
   const SearchExecutionStrategy(this.wireValue);
@@ -39,6 +40,8 @@ enum SearchExecutionStrategy {
         return SearchExecutionStrategy.remoteOnly;
       case 'hybrid_remote_fallback_local':
         return SearchExecutionStrategy.hybridRemoteFallbackLocal;
+      case 'filter_only':
+        return SearchExecutionStrategy.filterOnly;
       default:
         return SearchExecutionStrategy.localOnly;
     }

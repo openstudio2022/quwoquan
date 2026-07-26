@@ -355,6 +355,7 @@ def _compose_payload_from_pack(
         "summary": _build_summary(article),
         "articleMarkdown": article,
         "carrier": carrier,
+        "vertical": pack.get("vertical") or brief.get("vertical"),
         "entityRefs": merge_entity_refs(brief, draft_meta),
         "tagRefs": resolved_content_tag_refs(brief, carrier),
         "sourceUrls": image_source_urls if is_image else list(quality_payload.get("sourceUrls") or []),
@@ -395,7 +396,6 @@ def _compose_payload_from_pack(
         payload["articleMarkdown"] = ""
         payload["caption"] = caption
     return payload
-
 
 
 

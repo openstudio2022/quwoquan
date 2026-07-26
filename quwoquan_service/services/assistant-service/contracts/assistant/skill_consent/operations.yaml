@@ -1,0 +1,191 @@
+commercial_defaults:
+  block_reason: canonical operation awaits object-centered commercial migration
+  gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
+  status: blocked
+  target_story: app-cloud-business-object-commercial-closure
+api_routes:
+- actor: account
+  application:
+    aggregate_owner: SkillConsent
+    mutation_target: SkillConsent
+    invariant_target: SkillConsent
+    facet: SkillConsentCommandFacade
+    kind: command
+    method: grantConsent
+  description: 授权 Skill；命名状态迁移，重复授权持久化 no-op receipt，产生版本化事实与事件。
+  method: POST
+  operation: GrantSkillConsent
+  path: /assistant/skills/{skillId}/consent
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.consent_invalid_argument
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.consent_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_consent_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - replayed
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: account
+    ownership_policy: consent_owner
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: account
+  application:
+    aggregate_owner: SkillConsent
+    mutation_target: SkillConsent
+    invariant_target: SkillConsent
+    facet: SkillConsentCommandFacade
+    kind: command
+    method: revokeConsent
+  description: 撤销 Skill 授权；命名状态迁移，撤权即时生效，执行点失败关闭。
+  method: DELETE
+  operation: RevokeSkillConsent
+  path: /assistant/skills/{skillId}/consent
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.consent_invalid_argument
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.consent_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_consent_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - replayed
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: account
+    ownership_policy: consent_owner
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: account
+  application:
+    facet: SkillConsentQueryFacade
+    kind: query
+    method: listConsents
+    reader: SkillConsentListReader
+    slice: SkillConsentListSlice
+  description: 授权列表；store 不可用时返回结构化 503，禁止按未授权静默放行或按已授权静默降级。
+  method: GET
+  operation: ListConsents
+  path: /assistant/consents
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.consent_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_consent_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+  authorization:
+    principal: account
+    ownership_policy: consent_owner
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+consumers:
+- capabilities:
+  - grant
+  - revoke
+  - list
+  name: app
+- capabilities:
+  - read
+  - revoke_any
+  name: platform-ops
+contract_test:
+  mock_strategy:
+    app_side:
+      scenarios:
+      - assertions:
+        - consent_granted
+        - consent_revoked
+        name: consent_lifecycle
+        routes:
+        - POST /assistant/skills/{skillId}/consent
+        - DELETE /assistant/skills/{skillId}/consent
+    service_side:
+      data_management:
+        cleanup: TRUNCATE skill_consents CASCADE
+        seed: fixture 工厂预制到真实 PG
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        postgres: embedded-postgres
+      scenarios:
+      - assertions:
+        - SELECT * FROM skill_consents WHERE user_id=? AND skill_id=? → row exists, revoked_at IS NULL
+        - eventSpy.AssertPublished('SkillConsentGranted', {skillId, grantedScope})
+        command: GrantSkillConsent
+        name: grant_consent
+        seed: []
+      - assertions:
+        - PG unique violation (partial index) → handled gracefully
+        command: GrantSkillConsent x2 (same user+skill)
+        name: duplicate_consent_rejected
+        seed:
+        - fixture.NewSkillConsent()
+      - assertions:
+        - SELECT revoked_at FROM skill_consents → NOT NULL
+        - eventSpy.AssertPublished('SkillConsentRevoked')
+        command: RevokeSkillConsent
+        name: revoke_consent
+        seed:
+        - fixture.NewSkillConsent()
+      spy_targets:
+      - event_publisher

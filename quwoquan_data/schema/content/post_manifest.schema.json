@@ -23,9 +23,62 @@
         "candidateId": { "type": ["string", "null"] },
         "targetRef": { "type": ["string", "null"] }
       }
+    },
+    "sourceAttribution": {
+      "type": "object",
+      "required": [
+        "isOriginal",
+        "originalCreatorName",
+        "platform",
+        "sourcePostUrl",
+        "originalAssetUrl",
+        "attributionText",
+        "rightsBasis",
+        "commercialAuthorizationStatus",
+        "publicationAdmission",
+        "watermarkStatus",
+        "audioRightsStatus",
+        "modelReleaseStatus",
+        "propertyReleaseStatus",
+        "collectedAt",
+        "takedownPolicy"
+      ],
+      "properties": {
+        "isOriginal": { "type": "boolean" },
+        "originalCreatorId": { "type": ["string", "null"] },
+        "originalCreatorName": { "type": "string", "minLength": 1 },
+        "originalCreatorProfileUrl": { "type": ["string", "null"] },
+        "platform": { "type": "string", "minLength": 1 },
+        "sourcePostUrl": { "type": "string", "minLength": 1 },
+        "originalAssetUrl": { "type": "string", "minLength": 1 },
+        "attributionText": { "type": "string", "minLength": 1 },
+        "rightsBasis": { "type": "string", "minLength": 1 },
+        "commercialAuthorizationStatus": { "type": "string", "minLength": 1 },
+        "publicationAdmission": {
+          "enum": ["commercial_release", "risk_accepted_attribution_only"]
+        },
+        "authorizationProofUrl": { "type": ["string", "null"] },
+        "termsUrl": { "type": ["string", "null"] },
+        "riskAcceptanceId": { "type": ["string", "null"] },
+        "watermarkStatus": { "const": "absent" },
+        "audioRightsStatus": {
+          "enum": [
+            "licensed",
+            "original_authorized",
+            "replaced_with_licensed_track",
+            "no_audio"
+          ]
+        },
+        "modelReleaseStatus": { "type": "string", "minLength": 1 },
+        "propertyReleaseStatus": { "type": "string", "minLength": 1 },
+        "collectedAt": { "type": "string", "minLength": 1 },
+        "takedownPolicy": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
     }
   },
   "properties": {
+    "vertical": { "type": "string", "minLength": 1 },
     "topicId": { "type": "string", "description": "如'峨眉山_金顶日出攻略'" },
     "contentType": { "type": "string", "enum": ["article", "image", "video"] },
     "title": { "type": "string" },
@@ -54,6 +107,13 @@
     },
     "authorQualitySignals": { "type": "object" },
     "sourceUrls": { "type": "array", "items": { "type": "string" } },
+    "allowedContactNumbers": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[0-9]+$" },
+      "uniqueItems": true,
+      "description": "来源已核实的公共联系电话，仅供内容安全复核"
+    },
+    "sourceAttribution": { "$ref": "#/$defs/sourceAttribution" },
     "assets": {
       "type": "array",
       "items": {
@@ -92,6 +152,8 @@
           "license": { "$ref": "#/$defs/sourceFact" },
           "termsUrl": { "$ref": "#/$defs/sourceFact" },
           "authorizationProof": { "$ref": "#/$defs/sourceFact" },
+          "rightsAuditStatus": { "enum": ["verified", "unverified"] },
+          "rightsAuditIssues": { "type": "array", "items": { "type": "string" } },
           "imageLayout": { "type": "string", "enum": ["fullWidth", "wrapLeft", "wrapRight", "gallery"] }
         },
         "required": ["assetId", "fileName"]
@@ -103,6 +165,8 @@
     "license": { "$ref": "#/$defs/sourceFact" },
     "termsUrl": { "$ref": "#/$defs/sourceFact" },
     "authorizationProof": { "$ref": "#/$defs/sourceFact" },
+    "rightsAuditStatus": { "enum": ["verified", "unverified"] },
+    "rightsAuditIssues": { "type": "array", "items": { "type": "string" } },
     "template": { "type": "string", "description": "使用的模板名称" },
     "carrier": { "type": "string", "enum": ["article", "image", "video", "review"] },
     "generator": { "type": "string", "enum": ["agent"], "description": "正文创作来源；交付面仅允许 agent（会话模型创作），脚本拼接/占位被门禁拒绝" },
@@ -153,7 +217,7 @@
       }
     }
   },
-  "required": ["topicId", "contentType", "entityRefs", "tagRefs", "sourceUrls", "generator", "createdAt", "updatedAt"],
+  "required": ["vertical", "topicId", "contentType", "entityRefs", "tagRefs", "sourceUrls", "generator", "createdAt", "updatedAt"],
   "allOf": [
     {
       "if": {
@@ -166,7 +230,7 @@
           "sourceCollectionId",
           "creator",
           "collectionPageUrl",
-          "license"
+          "rightsAuditStatus"
         ],
         "properties": {
           "title": { "type": "string", "maxLength": 80 },
@@ -175,18 +239,9 @@
           "sourceCollectionId": { "type": "string", "minLength": 1 },
           "creator": { "$ref": "#/$defs/sourceFact" },
           "collectionPageUrl": { "$ref": "#/$defs/sourceFact" },
-          "license": { "$ref": "#/$defs/sourceFact" }
-        },
-        "anyOf": [
-          {
-            "required": ["termsUrl"],
-            "properties": { "termsUrl": { "$ref": "#/$defs/sourceFact" } }
-          },
-          {
-            "required": ["authorizationProof"],
-            "properties": { "authorizationProof": { "$ref": "#/$defs/sourceFact" } }
-          }
-        ]
+          "license": { "$ref": "#/$defs/sourceFact" },
+          "rightsAuditStatus": { "enum": ["verified", "unverified"] }
+        }
       }
     },
     {

@@ -11,8 +11,6 @@
 ///     home_recommendation_journey_test，不依赖 patrol_test_main 预启动。
 library;
 
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:patrol/patrol.dart';
@@ -22,6 +20,8 @@ import 'package:quwoquan_app/core/test_keys.dart';
 const _apiContractBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const _cloudGatewayBase = String.fromEnvironment('CLOUD_GATEWAY_BASE_URL');
 const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
+// app_gamma_seed_manifest.json → content_discovery_core 的 canonical 预置对象。
+const _seededPostId = 'fixture_photo_001';
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
   defaultValue: 'gamma',
@@ -29,35 +29,6 @@ const _apiContractEnv = String.fromEnvironment(
 
 String get _apiBase =>
     _apiContractBase.isNotEmpty ? _apiContractBase : _cloudGatewayBase;
-
-// ─── Staging 数据辅助 ─────────────────────────────────────────────────────
-
-Future<String> _seedPhotoPost(http.Client client) async {
-  final resp = await client.post(
-    Uri.parse('$_apiBase/content/posts'),
-    headers: {
-      'Content-Type': 'application/json',
-      if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
-    },
-    body: jsonEncode({
-      'contentType': 'image',
-      'title': 'patrol like_post_realtime seed',
-      'body': 'patrol test fixture',
-      'mediaUrls': ['https://example.com/patrol.jpg'],
-    }),
-  );
-  if (resp.statusCode != 201) {
-    throw Exception('seed failed: ${resp.statusCode} ${resp.body}');
-  }
-  return (jsonDecode(resp.body) as Map<String, dynamic>)['postId'] as String;
-}
-
-Future<void> _deletePost(http.Client client, String postId) async {
-  await client.delete(
-    Uri.parse('$_apiBase/content/posts/$postId'),
-    headers: {if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken'},
-  );
-}
 
 Future<void> _resetLikeState(http.Client client, String postId) async {
   // unlike（即使未点赞也不报错）
@@ -71,7 +42,6 @@ Future<void> _resetLikeState(http.Client client, String postId) async {
 
 void main() {
   late http.Client client;
-  late String seededPostId;
 
   setUp(() async {
     assert(
@@ -83,14 +53,10 @@ void main() {
       'Patrol user_acceptance tests require API_CONTRACT_BASE_URL',
     );
     client = http.Client();
-    seededPostId = await _seedPhotoPost(client);
-    await _resetLikeState(client, seededPostId);
+    await _resetLikeState(client, _seededPostId);
   });
 
-  tearDown(() async {
-    await _deletePost(client, seededPostId);
-    client.close();
-  });
+  tearDown(() => client.close());
 
   patrolTest(
     'like_post_realtime — 乐观更新 + server 确认',
@@ -137,7 +103,7 @@ void main() {
   );
 
   patrolTest(
-    'like_post_realtime — 重复点赞幂等（不双计）',
+    'like_post_realtime — 点赞后取消回落到初始计数',
     tags: ['t4', 'content', 'like'],
     skip: !kRunPatrolT4,
     ($) async {
@@ -151,13 +117,13 @@ void main() {
       final countBefore =
           int.tryParse($(TestKeys.likeCountText).text ?? '0') ?? 0;
 
-      // 连续 tap 两次（模拟快速双击）
+      // 首次 tap 点赞，第二次 tap 走 UnlikePost；重复 Like 的服务端幂等由
+      // api_integration 锁定，UI 不能把 unlike 误写成“重复点赞”证据。
       await $(TestKeys.likeButton).tap();
       await $.pumpAndSettle();
       await $(TestKeys.likeButton).tap();
       await $.pumpAndSettle();
 
-      // 两次点同一帖子：期望幂等（server 端 upsert）
       await $(
         TestKeys.likeCountText,
       ).waitUntilVisible(timeout: const Duration(seconds: 5));
@@ -165,8 +131,8 @@ void main() {
           int.tryParse($(TestKeys.likeCountText).text ?? '0') ?? 0;
       expect(
         countAfter,
-        countBefore + 1,
-        reason: 'Idempotent like: second tap should not double-increment count',
+        countBefore,
+        reason: 'Unlike should converge the optimistic count back to baseline',
       );
     },
   );

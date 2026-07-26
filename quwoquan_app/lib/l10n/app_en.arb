@@ -63,9 +63,6 @@
   "comment": "TODO: translate",
   "welcomeTitle": "TODO: translate",
   "welcomeMainSlogan": "TODO: translate",
-  "welcomeButtonLabel": "TODO: translate",
-  "assistantWhisperSignature": "TODO: translate",
-  "assistantWhisperLine": "TODO: translate",
   "commentPlaceholder": "TODO: translate",
   "commentTooLong": "TODO: translate",
   "commentEmpty": "TODO: translate",
@@ -275,10 +272,6 @@
   "assistantDevReplayScore": "TODO: translate",
   "assistantNoReplayData": "TODO: translate",
   "assistantSkillCenterTitle": "Skill Center",
-  "assistantSkillCenterDefaultAllSubscribedTitle": "Default all subscriptions enabled",
-  "assistantSkillCenterDefaultAllSubscribedDesc": "All assistant capabilities are ready by default; execution is still gated by risk policy and scene gates.",
-  "assistantSkillCenterRestoreDefaultAll": "Restore default all subscriptions",
-  "assistantSkillCenterSimpleMode": "Simple mode",
   "assistantSkillCenterPackagesTitle": "Capability packages",
   "assistantSkillCenterPackageLife": "Life Assistant",
   "assistantSkillCenterPackageWork": "Work Assistant",
@@ -293,23 +286,6 @@
       }
     }
   },
-  "assistantSkillCenterRiskPolicyTitle": "Risk Policy",
-  "assistantSkillCenterLowRiskAuto": "Auto run for low risk",
-  "assistantSkillCenterLowRiskDesc": "Search, summary and Q&A run automatically",
-  "assistantSkillCenterMediumRiskConfirm": "Light confirm for medium risk",
-  "assistantSkillCenterMediumRiskDesc": "Creating reminders and tasks requires confirmation",
-  "assistantSkillCenterHighRiskDoubleConfirm": "Double confirmation for high risk",
-  "assistantSkillCenterHighRiskDesc": "Transactions and external submissions require double confirmation",
-  "assistantSkillCenterHighRiskRequired": "High-risk actions must keep double confirmation",
-  "assistantSkillCenterSceneGateTitle": "Scene Gates",
-  "assistantSkillCenterSceneDiscovery": "Discovery",
-  "assistantSkillCenterSceneDiscoveryDesc": "Only gentle hints while browsing, no interruption",
-  "assistantSkillCenterSceneCircle": "Circles",
-  "assistantSkillCenterSceneCircleDesc": "Trigger circle discussion suggestions on demand",
-  "assistantSkillCenterSceneChat": "Chat",
-  "assistantSkillCenterSceneChatDesc": "Participate by invitation by default (@assistant or manual tap)",
-  "assistantSkillCenterSceneSystem": "External Scenes",
-  "assistantSkillCenterSceneSystemDesc": "Cross-scene capabilities like clipboard, images and links",
   "assistantSkillCenterRecentSessionsTitle": "Recent Sessions",
   "assistantSkillCenterNoRecentSessions": "No session history",
   "assistantSkillCenterMessagesCount": "{count} messages",
@@ -317,6 +293,30 @@
     "placeholders": {
       "count": {
         "type": "int"
+      }
+    }
+  },
+  "assistantSkillCenterSubscribedCount": "{count} subscribed",
+  "@assistantSkillCenterSubscribedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "assistantTaskDueAt": "Scheduled for {dueAt}",
+  "@assistantTaskDueAt": {
+    "placeholders": {
+      "dueAt": {
+        "type": "String"
+      }
+    }
+  },
+  "assistantMemoryUpdatedAt": "Updated {date}",
+  "@assistantMemoryUpdatedAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
       }
     }
   },

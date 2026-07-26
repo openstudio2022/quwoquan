@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import '../../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../../support/cloud_services/content/mock_content_repository.dart';
 
 class _RuntimeConfigRepository extends MockContentRepository {
   _RuntimeConfigRepository(this._config);
@@ -37,14 +37,8 @@ class _SwitchableModeNotifier extends AppDataSourceModeNotifier {
 }
 
 void main() {
-  test('mock mode 会刷新出文章阅读相关 runtime flags', () async {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-
-    container.read(contentRuntimeConfigProvider);
-    await Future<void>.delayed(const Duration(milliseconds: 1));
-    await Future<void>.delayed(const Duration(milliseconds: 1));
-    final state = _effectiveState(container);
+  test('alpha runner 显式配置会启用内容 story runtime flags', () {
+    final state = buildAlphaContentRuntimeConfigDefaults();
 
     expect(state.isEnabled('enable_create_action_entry'), isTrue);
     expect(state.isEnabled('enable_unified_create_editor'), isTrue);

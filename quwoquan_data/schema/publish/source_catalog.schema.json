@@ -18,7 +18,20 @@
       "minLength": 1
     },
     "primarySource": {
-      "$ref": "#/$defs/source"
+      "allOf": [
+        { "$ref": "#/$defs/source" },
+        {
+          "properties": {
+            "sourceKind": {
+              "enum": ["wikipedia", "baidu_baike", "toutiao_baike"]
+            },
+            "extractor": {
+              "enum": ["wikipedia_api", "baidu_baike_html", "toutiao_baike_html"]
+            },
+            "policyRevision": { "const": "encyclopedia-primary" }
+          }
+        }
+      ]
     },
     "sources": {
       "type": "array",
@@ -61,14 +74,16 @@
           "enum": [
             "wikipedia",
             "baidu_baike",
-            "toutiao_baike"
+            "toutiao_baike",
+            "image_collection"
           ]
         },
         "extractor": {
           "enum": [
             "wikipedia_api",
-            "baidu_baike_openapi",
-            "toutiao_baike_html"
+            "baidu_baike_html",
+            "toutiao_baike_html",
+            ""
           ]
         },
         "canonicalUrl": {
@@ -92,7 +107,7 @@
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
         "policyRevision": {
-          "const": "encyclopedia-primary"
+          "enum": ["encyclopedia-primary", ""]
         },
         "sourceUseMode": {
           "enum": [

@@ -102,7 +102,7 @@ def test_declared_opening_strategy_mismatch_is_observation_not_revision():
     assert any("not reflected" in i for i in res["observations"]), res
 
 
-_EXECUTION_ID = "20260711--travel-article-style-gates--cn-sichuan--canary-001"
+_EXECUTION_ID = "20260711--travel-article-style-gates--test-region-b--pilot-001"
 
 
 def _seed_draft(ref: str, article: str) -> None:
@@ -123,10 +123,10 @@ def _seed_draft(ref: str, article: str) -> None:
 def test_cross_article_similarity_blocks_cloned_opening():
     ensure_execution_layout(_EXECUTION_ID)
     ensure_execution_command_layout(_EXECUTION_ID, "post")
-    a = "清晨我推开客栈木门，雾还压在山脊上，风从谷底一阵阵涌上来。\n\n## 正文\n海螺沟的内容。"
+    a = "清晨我推开客栈木门，雾还压在山脊上，风从谷底一阵阵涌上来。\n\n## 正文\n测试实体丙的内容。"
     # 换地名不换句式的克隆开篇（量产千篇一律的典型）。
     b = "清晨我推开客栈木门，雾还压在山脊上，风从河谷一阵阵涌上来。\n\n## 正文\n四姑娘山的内容。"
-    _seed_draft("海螺沟_体验", a)
+    _seed_draft("测试实体丙_体验", a)
     _seed_draft("四姑娘山_体验", b)
     res = _check_cross_article_similarity(_EXECUTION_ID, "四姑娘山_体验", b)
     assert not res["passed"], res

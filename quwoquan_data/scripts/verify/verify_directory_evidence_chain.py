@@ -12,8 +12,8 @@
 5. manifest.assets[].sourceAssetRef 指向的源图缺失（资产闭环断裂）。
 6. 【命名门】对象目录层级/命名不符（posts/{type}/{angle}/{title}/{seq}、entities/{domain}/{type}/{name}、
    阶段子目录 ∉ 编号阶段∪assets、来源单元 ∉ {NN}.{kind}）。
-7. 【回退门】`_shared/workspace/post` 的 stage-first 扁平面被重新写入，
-   即 M3/M4 已迁对象根的成品/草稿/brief/阶段报告/账本不得回退。
+7. 【回退门】`_shared/workspace/post` 的 retired stage-first 扁平面被重新写入，
+   已归位对象根的成品/草稿/brief/阶段报告/账本不得回退。
 8. 【同步门】成品对象目录与 `_shared/content_object_index.json` 路由漂移（对象在盘上但未登记）。
 9. 【证据面门】execution/_shared 出现未登记条目（不属于 paths.EXECUTION_SHARED_AUTHORITATIVE_ENTRIES
    权威证据，也不属于 EXECUTION_SHARED_RECLAIMABLE_ENTRIES / `tmp_*` 可清理层）。
@@ -90,7 +90,7 @@ _OBJECT_CHILD_ALLOW = set(OBJECT_STAGES) | {"assets", "evidence"}
 # execution 顶层只允许稳定工作包合同；内部命令临时面统一在 `_shared/workspace/`。
 _EXECUTION_TOP_ALLOW = set(EXECUTION_ROOT_ALLOWED_ENTRIES)
 
-# M3/M4 已迁对象根的 post 扁平面：若被重新写入（非空）即 stage-first 回退，BLOCK。
+# 已归位对象根的 post 扁平面：若被重新写入（非空）即 stage-first 回退，BLOCK。
 _REGRESSION_FACES = (
     ("_shared/workspace/post/posts", "manifest.json", True, "成品须落对象根 posts/{type}/{angle}/{title}/{seq}"),
     ("_shared/workspace/post/inputs/compose", "*.json", False, "compose 输入须落对象 3.compose/brief.json"),

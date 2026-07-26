@@ -20,6 +20,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   List<ProfileUpdateProposalView> _profileProposals =
       const <ProfileUpdateProposalView>[];
   Object? _profileProposalLoadError;
+  Object? _snapshotLoadError;
 
   @override
   void initState() {
@@ -40,9 +41,15 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   }
 
   Future<void> _loadSnapshot() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _snapshotLoadError = null;
+      });
+    }
     try {
       final snapshot = await ref
-          .read(userProfileRepositoryProvider)
+          .read(profileEditQueryProvider(AppUiSurfaces.profileEdit))
           .getProfileEditSnapshot();
       ProfileUpdateProposalSlice? proposalSlice;
       Object? proposalError;
@@ -83,11 +90,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         _profileProposalLoadError = proposalError;
         _loading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _snapshotLoadError = error;
+      });
     }
   }
 
@@ -169,6 +179,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     if (snapshot == null || !_isDirty || _isSaving) {
       return;
     }
+    _trackProfileAction('save', outcome: 'started');
     setState(() => _isSaving = true);
     try {
       final mediaGateway = ref.read(profileMediaUploadGatewayProvider);
@@ -185,21 +196,15 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
               target: ProfileMediaTarget.cover,
             );
       await ref
-          .read(userProfileRepositoryProvider)
-          .updateProfile(
-            ProfileEditUpdatePayload(
+          .read(profileCommandWriterProvider)
+          .updateUserProfile(
+            UpdateUserProfileCommand(
               nickname: _nicknameController.text.trim() != snapshot.nickname
                   ? _nicknameController.text.trim()
                   : null,
               bio: _signature != snapshot.bio ? _signature : null,
               avatarAssetId: avatarUpload?.assetId,
-              avatarUrl: avatarUpload?.cdnUrl.isEmpty == true
-                  ? null
-                  : avatarUpload?.cdnUrl,
               backgroundAssetId: coverUpload?.assetId,
-              backgroundUrl: coverUpload?.cdnUrl.isEmpty == true
-                  ? null
-                  : coverUpload?.cdnUrl,
               gender: _gender != _normalizeGender(snapshot.gender)
                   ? _gender
                   : null,
@@ -217,7 +222,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             ),
           );
       final currentUserId = ref.read(currentUserIdProvider);
-      await ref.read(userDataProvider.notifier).loadUser(currentUserId);
+      await ref
+          .read(userDataProvider.notifier)
+          .loadUser(currentUserId, sourceSurface: AppUiSurfaces.profileEdit);
       final _ = await ref.refresh(activePersonaContextProvider.future);
       if (currentUserId.isNotEmpty) {
         await ref
@@ -228,6 +235,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         return;
       }
       setState(() => _isSaving = false);
+      _trackProfileAction('save', outcome: 'succeeded');
       AppToast.show(context, UITextConstants.editProfileSavedToast);
       _doClose();
     } catch (error) {
@@ -235,6 +243,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         return;
       }
       setState(() => _isSaving = false);
+      _trackProfileAction('save', outcome: 'failed');
       await _showSubmitError(error);
     }
   }
@@ -272,6 +281,19 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
           await _save();
         }
       },
+    );
+  }
+
+  void _trackProfileAction(String action, {required String outcome}) {
+    unawaited(
+      ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'profile_edit',
+            action: action,
+            pageName: 'EditProfilePage',
+            payload: <String, dynamic>{'result': outcome},
+          ),
     );
   }
 
@@ -320,6 +342,10 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
           _pickedCoverSource = path.trim();
       }
     });
+    _trackProfileAction(
+      target == _EditProfileMediaTarget.avatar ? 'avatar_pick' : 'cover_pick',
+      outcome: 'selected',
+    );
   }
 
   Future<void> _editNickname() async {
@@ -527,6 +553,20 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         ),
         body: _loading
             ? const Center(child: CupertinoActivityIndicator())
+            : _snapshotLoadError != null
+            ? AppPageErrorState(
+                semantic: UiErrorSemanticResolver.resolve(
+                  context,
+                  error: _snapshotLoadError!,
+                  category: UiErrorCategory.pageLoad,
+                  scope: UiErrorScope.page,
+                ),
+                onAction: (action) async {
+                  if (action.type == UiErrorActionType.retry) {
+                    await _loadSnapshot();
+                  }
+                },
+              )
             : ListView(
                 padding: EdgeInsets.fromLTRB(
                   0,

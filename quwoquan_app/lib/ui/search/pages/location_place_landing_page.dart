@@ -119,9 +119,7 @@ class _LocationPlaceLandingPageState
             CupertinoButton.filled(
               key: TestKeys.locationPlaceLandingPromoteButton,
               onPressed: _promoteToHomepage,
-              child: const Text(
-                UITextConstants.locationPlaceLandingPromoteCta,
-              ),
+              child: const Text(UITextConstants.locationPlaceLandingPromoteCta),
             ),
           ],
         ),
@@ -131,9 +129,7 @@ class _LocationPlaceLandingPageState
 
   void _promoteToHomepage() {
     _trackJourney('promote_click');
-    context.push(
-      AppRoutePaths.suggestHomepage(query: _displayName),
-    );
+    context.push(AppRoutePaths.suggestHomepage(query: _displayName));
   }
 
   void _handleClose() {

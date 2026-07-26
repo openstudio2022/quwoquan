@@ -1,0 +1,11 @@
+read_model: ContentFootprintEntry
+description: 'GetMyFootprint 分页结果的单项私有读模型。分页 envelope 只包含 items、
+
+  nextCursor，不承载写入语义。
+
+  '
+consumers:
+- app
+client_projection:
+  dart_class: ContentFootprintEntry
+  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_queries.dart

@@ -50,8 +50,8 @@ PROTECTED_CONTENT_ROOT_FILES: set[str] = set()
 
 RETIRED_PATH_FRAGMENTS = (
     "package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart",
-    "package:quwoquan_app/ui/content/post_read_ui_bundle.dart",
-    "package:quwoquan_app/ui/content/post_view_projection.dart",
+    "package:quwoquan_app/ui/content/content/post_read_ui_bundle.dart",
+    "package:quwoquan_app/ui/content/content/post_view_projection.dart",
     "package:quwoquan_app/ui/content/models/content_time_label.dart",
     "package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart",
     "package:quwoquan_app/ui/content/widgets/record_post_card.dart",

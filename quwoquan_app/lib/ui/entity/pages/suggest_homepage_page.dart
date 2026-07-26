@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_action_observability.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_type_labels.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_write_access.dart';
 
 class SuggestHomepagePage extends ConsumerStatefulWidget {
   const SuggestHomepagePage({super.key, this.initialQuery = ''});
@@ -19,37 +25,31 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
   static const List<_HomepageTypeOption> _typeOptions = <_HomepageTypeOption>[
     _HomepageTypeOption(
       id: 'sight',
-      label: UITextConstants.homepageTypeSight,
       cluePlaceholder: UITextConstants.addHomepageSightCluePlaceholder,
       usesLocationFields: true,
     ),
     _HomepageTypeOption(
       id: 'hotel',
-      label: UITextConstants.homepageTypeHotel,
       cluePlaceholder: UITextConstants.addHomepageHotelCluePlaceholder,
       usesLocationFields: true,
     ),
     _HomepageTypeOption(
       id: 'restaurant',
-      label: UITextConstants.homepageTypeRestaurant,
       cluePlaceholder: UITextConstants.addHomepageRestaurantCluePlaceholder,
       usesLocationFields: true,
     ),
     _HomepageTypeOption(
       id: 'vehicle',
-      label: UITextConstants.homepageTypeVehicle,
       cluePlaceholder: UITextConstants.addHomepageVehicleCluePlaceholder,
       usesLocationFields: false,
     ),
     _HomepageTypeOption(
       id: 'university',
-      label: UITextConstants.homepageTypeUniversity,
       cluePlaceholder: UITextConstants.addHomepageUniversityCluePlaceholder,
       usesLocationFields: true,
     ),
     _HomepageTypeOption(
       id: 'travel_photo',
-      label: UITextConstants.homepageTypeTravelPhoto,
       cluePlaceholder: UITextConstants.addHomepageTravelPhotoCluePlaceholder,
       usesLocationFields: true,
     ),
@@ -66,6 +66,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
 
   String _homepageType = 'sight';
   bool _isSubmitting = false;
+  bool _authResumeScheduled = false;
 
   _HomepageTypeOption get _selectedType => _typeOptions.firstWhere(
     (option) => option.id == _homepageType,
@@ -119,6 +120,9 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
     ]) {
       controller.addListener(_handleFieldChanged);
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_gateEntry());
+    });
   }
 
   @override
@@ -146,6 +150,20 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      if (next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated)) {
+        _scheduleAuthContinuationResume();
+      }
+    });
+    if (ref.watch(authSessionControllerProvider).isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scheduleAuthContinuationResume();
+      });
+    }
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return IosSelectionPageScaffold(
       pageKey: TestKeys.suggestHomepagePage,
@@ -213,7 +231,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
                       vertical: AppSpacing.intraGroupSm,
                     ),
                     child: Text(
-                      option.label,
+                      homepageTypeLabel(option.id),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: AppTypography.iosSubheadline,
@@ -242,68 +260,68 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
       child: Column(
         children: <Widget>[
           if (_selectedType.usesLocationFields) ...<Widget>[
-            _FormInputRow(
+            IosSelectionFormFieldRow(
               label: UITextConstants.addHomepageNameLabel,
-              child: _PlainFormTextField(
+              child: IosSelectionTextField(
                 controller: _titleController,
                 placeholder: UITextConstants.addHomepageNamePlaceholder,
               ),
             ),
             _buildDivider(),
-            _FormInputRow(
+            IosSelectionFormFieldRow(
               label: UITextConstants.addHomepageClueLabel,
-              child: _PlainFormTextField(
+              child: IosSelectionTextField(
                 controller: _clueController,
                 placeholder: _selectedType.cluePlaceholder,
               ),
             ),
             _buildDivider(),
-            _FormInputRow(
+            IosSelectionFormFieldRow(
               label: UITextConstants.addHomepageCityLabel,
-              child: _PlainFormTextField(
+              child: IosSelectionTextField(
                 controller: _cityController,
                 placeholder: UITextConstants.addHomepageCityPlaceholder,
               ),
             ),
             _buildDivider(),
-            _FormInputRow(
+            IosSelectionFormFieldRow(
               label: UITextConstants.addHomepageAddressLabel,
-              child: _PlainFormTextField(
+              child: IosSelectionTextField(
                 controller: _addressController,
                 placeholder: UITextConstants.addHomepageAddressPlaceholder,
                 maxLines: 2,
               ),
             ),
           ] else ...<Widget>[
-            _FormInputRow(
+            IosSelectionFormFieldRow(
               label: UITextConstants.addHomepageVehicleManufacturerLabel,
-              child: _PlainFormTextField(
+              child: IosSelectionTextField(
                 controller: _vehicleManufacturerController,
                 placeholder:
                     UITextConstants.addHomepageVehicleManufacturerPlaceholder,
               ),
             ),
             _buildDivider(),
-            _FormInputRow(
+            IosSelectionFormFieldRow(
               label: UITextConstants.addHomepageVehicleSeriesLabel,
-              child: _PlainFormTextField(
+              child: IosSelectionTextField(
                 controller: _vehicleSeriesController,
                 placeholder:
                     UITextConstants.addHomepageVehicleSeriesPlaceholder,
               ),
             ),
             _buildDivider(),
-            _FormInputRow(
+            IosSelectionFormFieldRow(
               label: UITextConstants.addHomepageVehicleTrimLabel,
-              child: _PlainFormTextField(
+              child: IosSelectionTextField(
                 controller: _vehicleTrimController,
                 placeholder: UITextConstants.addHomepageVehicleTrimPlaceholder,
               ),
             ),
             _buildDivider(),
-            _FormInputRow(
+            IosSelectionFormFieldRow(
               label: UITextConstants.addHomepageClueLabel,
-              child: _PlainFormTextField(
+              child: IosSelectionTextField(
                 controller: _clueController,
                 placeholder: _selectedType.cluePlaceholder,
               ),
@@ -330,6 +348,51 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
     setState(() {
       _homepageType = nextType;
     });
+  }
+
+  Future<void> _gateEntry() async {
+    await requireHomepageWriteAccess(
+      ref,
+      context,
+      action: HomepageWriteContinuationAction.suggest,
+      dismissFallback: AppRoutePaths.home,
+    );
+  }
+
+  void _scheduleAuthContinuationResume({int remainingFrames = 30}) {
+    if (!mounted || !AuthGate.isAuthenticated(ref) || _authResumeScheduled) {
+      return;
+    }
+    _authResumeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _authResumeScheduled = false;
+      if (!mounted || !AuthGate.isAuthenticated(ref)) {
+        return;
+      }
+      if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+        if (remainingFrames > 0) {
+          _scheduleAuthContinuationResume(remainingFrames: remainingFrames - 1);
+        }
+        return;
+      }
+      final pending = takeHomepageWriteContinuation(
+        ref,
+        action: HomepageWriteContinuationAction.suggest,
+      );
+      if (pending?.submitAfterLogin == true) {
+        unawaited(_submit());
+      }
+    });
+  }
+
+  Future<bool> _ensureSubmitAuthentication() {
+    return requireHomepageWriteAccess(
+      ref,
+      context,
+      action: HomepageWriteContinuationAction.suggest,
+      dismissFallback: AppRoutePaths.home,
+      submitAfterLogin: true,
+    );
   }
 
   Future<void> _handleCloseRequest() async {
@@ -364,6 +427,9 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
   }
 
   Future<void> _submit() async {
+    if (!await _ensureSubmitAuthentication() || !mounted) {
+      return;
+    }
     if (!_canSubmit) {
       AppToast.show(
         context,
@@ -385,9 +451,10 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
       _isSubmitting = true;
     });
     UiErrorSemantic? submitErrorSemantic;
+    final startedAt = DateTime.now();
     try {
       await ref
-          .read(homepageRepositoryProvider)
+          .read(homepageCommandWriterProvider)
           .suggestHomepageCandidate(
             draft: HomepageSuggestionDraft(
               title: title,
@@ -405,6 +472,16 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
       if (!mounted) {
         return;
       }
+      await trackHomepageProductAction(
+        ref,
+        action: 'suggest_candidate_submit',
+        pageName: 'suggestHomepage',
+        result: 'success',
+        startedAt: startedAt,
+      );
+      if (!mounted) {
+        return;
+      }
       AppToast.show(context, UITextConstants.addHomepageSubmitted);
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -418,7 +495,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
         submitErrorSemantic = UiErrorSemantic(
           category: resolved.category,
           scope: resolved.scope,
-          title: '建议主页未完成',
+          title: UITextConstants.addHomepageSubmitFailedTitle,
           message: resolved.message,
           secondaryMessage: resolved.secondaryMessage,
           primaryAction: const UiErrorAction(
@@ -432,6 +509,14 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
           recoveryAction: resolved.recoveryAction,
           presentation: resolved.presentation,
           tone: resolved.tone,
+        );
+        await trackHomepageProductAction(
+          ref,
+          action: 'suggest_candidate_submit',
+          pageName: 'suggestHomepage',
+          result: 'failure',
+          startedAt: startedAt,
+          error: error,
         );
       }
     } finally {
@@ -493,13 +578,11 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
 class _HomepageTypeOption {
   const _HomepageTypeOption({
     required this.id,
-    required this.label,
     required this.cluePlaceholder,
     required this.usesLocationFields,
   });
 
   final String id;
-  final String label;
   final String cluePlaceholder;
   final bool usesLocationFields;
 }
@@ -518,76 +601,6 @@ class _SectionTitle extends StatelessWidget {
         fontWeight: AppTypography.semiBold,
         color: AppColors.iosSecondaryLabel(context),
       ),
-    );
-  }
-}
-
-class _FormInputRow extends StatelessWidget {
-  const _FormInputRow({required this.label, required this.child});
-
-  final String label;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerMd,
-        vertical: AppSpacing.containerSm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-          ),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _PlainFormTextField extends StatelessWidget {
-  const _PlainFormTextField({
-    required this.controller,
-    required this.placeholder,
-    this.maxLines = 1,
-  });
-
-  final TextEditingController controller;
-  final String placeholder;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    return CupertinoTextField(
-      controller: controller,
-      maxLines: maxLines,
-      minLines: maxLines,
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerXs,
-        vertical: maxLines > 1
-            ? AppSpacing.intraGroupSm
-            : AppSpacing.intraGroupXs,
-      ),
-      style: TextStyle(
-        fontSize: AppTypography.iosBody,
-        color: AppColors.iosLabel(context),
-      ),
-      placeholder: placeholder,
-      placeholderStyle: TextStyle(
-        fontSize: AppTypography.iosBody,
-        color: SettingsSemanticConstants.createInputHintColor(isDark),
-      ),
-      decoration: const BoxDecoration(),
-      cursorColor: AppColors.iosAccent(context),
     );
   }
 }

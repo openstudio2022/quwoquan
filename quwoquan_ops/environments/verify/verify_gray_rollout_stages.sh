@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
-YAML="$ROOT/quwoquan_ops/environments/gray_rollout_stages.yaml"
+YAML="$ROOT/quwoquan_ops/environments/prod/rollout/stages.yaml"
 
 if [[ ! -f "$YAML" ]]; then
   echo "FAIL: gray_rollout_stages.yaml not found: $YAML" >&2
@@ -11,27 +11,31 @@ if [[ ! -f "$YAML" ]]; then
 fi
 
 # 基本结构检查
-grep -q '^total_replicas:' "$YAML" || { echo "FAIL: missing total_replicas"; exit 1; }
 grep -q '^stages:' "$YAML" || { echo "FAIL: missing stages"; exit 1; }
-grep -q 'name: initial' "$YAML" || { echo "FAIL: missing initial stage"; exit 1; }
+grep -q 'name: gray-initial' "$YAML" || { echo "FAIL: missing gray-initial stage"; exit 1; }
 
-# Python 解析（若可用）
-if command -v python3 &>/dev/null; then
-  python3 -c "
-import sys
-try:
-    import yaml
-except ImportError:
-    sys.exit(0)  # skip if no PyYAML
+# Python 解析
+python3 -c "
+import yaml
 with open('$YAML') as f:
     cfg = yaml.safe_load(f)
-assert 'total_replicas' in cfg, 'total_replicas required'
 assert 'stages' in cfg, 'stages required'
-assert len(cfg['stages']) >= 2, 'need initial + full stages'
-names = [s.get('name') for s in cfg['stages']]
-assert 'initial' in names and 'full' in names, 'need initial and full'
+expected = {'gray-initial': (5, 'gray'), 'carry-on': (25, 'gray'), 'full': (100, 'prod')}
+actual = {
+    stage.get('name'): (stage.get('step'), stage.get('execution_target'))
+    for stage in cfg['stages']
+}
+assert actual == expected, f'canonical stage drift: {actual}'
+forbidden = {
+    'replicas', 'min_dwell_seconds', 'min_samples', 'approval_required',
+    'auto', 'traffic_target'
+}
+for stage in cfg['stages']:
+    overlap = forbidden & set(stage)
+    assert not overlap, f'stage {stage.get(\"name\")} carries forbidden fields: {sorted(overlap)}'
+    assert stage.get('routing_profile') == stage.get('name')
+    assert stage.get('rollback_on_slo_gate') is True
 print('OK: gray_rollout_stages valid')
-" 2>/dev/null || echo "OK: gray_rollout_stages structure checked"
-fi
+"
 
 echo "[verify] gray_rollout_stages OK"

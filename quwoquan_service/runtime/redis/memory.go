@@ -73,6 +73,18 @@ func (m *memoryClient) GetBytes(_ context.Context, key string) ([]byte, error) {
 	return e.binVal, nil
 }
 
+func (m *memoryClient) GetDel(_ context.Context, key string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, ok := m.strings[key]
+	if !ok || e.expired() {
+		delete(m.strings, key)
+		return "", ErrKeyNotFound
+	}
+	delete(m.strings, key)
+	return e.strVal, nil
+}
+
 func (m *memoryClient) Set(_ context.Context, key, value string, ttl time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -604,6 +616,16 @@ func (m *memoryClient) XAutoClaim(
 	return out, "0-0", nil
 }
 
+func (m *memoryClient) XPendingCount(_ context.Context, stream string, group string) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ms := m.ensureStream(stream)
+	if currentGroup := ms.groups[group]; currentGroup != nil {
+		return int64(len(currentGroup.pending)), nil
+	}
+	return 0, nil
+}
+
 func (m *memoryClient) ensureStream(stream string) *memStream {
 	ms := m.streams[stream]
 	if ms == nil {
@@ -658,6 +680,18 @@ func (p *memPipeline) SMembers(ctx context.Context, key string) *SliceResult {
 	r := &SliceResult{}
 	p.ops = append(p.ops, func() {
 		r.val, r.err = p.m.SMembers(ctx, key)
+	})
+	return r
+}
+
+func (p *memPipeline) SIsMember(
+	ctx context.Context,
+	key string,
+	member string,
+) *BoolResult {
+	r := &BoolResult{}
+	p.ops = append(p.ops, func() {
+		r.val, r.err = p.m.SIsMember(ctx, key, member)
 	})
 	return r
 }

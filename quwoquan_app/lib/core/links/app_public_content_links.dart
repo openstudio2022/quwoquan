@@ -56,6 +56,10 @@ class AppPublicContentLinks {
   static String entityHomepageWebUrl(String homepageId) =>
       publicWebUrlForPath(AppLinkTemplates.entityHomepageWebPath(homepageId));
 
+  /// 圈子主页站外分享/复制用 HTTPS 链接（浏览器可打开）。
+  static String circleWebUrl(String circleId) =>
+      publicWebUrlForPath(AppLinkTemplates.circleWebPath(circleId));
+
   /// HTTP `Referer` / 品牌来源等场景使用的站点根（无路径）。
   static String siteOriginForHttpHeaders() => _normalizedBase();
 }

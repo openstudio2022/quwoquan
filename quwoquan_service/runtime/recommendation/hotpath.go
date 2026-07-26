@@ -16,6 +16,7 @@ type RedisClient interface {
 	SetNX(ctx context.Context, key string, value string, ttl time.Duration) (bool, error)
 	Del(ctx context.Context, keys ...string) error
 	SAdd(ctx context.Context, key string, members ...string) error
+	SRem(ctx context.Context, key string, members ...string) error
 	SMembers(ctx context.Context, key string) ([]string, error)
 	SIsMember(ctx context.Context, key string, member string) (bool, error)
 	HIncrByFloat(ctx context.Context, key, field string, incr float64) error
@@ -35,17 +36,21 @@ type RedisPipeliner interface {
 type PipelineOpType int
 
 const (
-	PipelineHGetAll  PipelineOpType = iota // result in Op.Hash
-	PipelineSMembers                       // result in Op.Set
+	PipelineHGetAll   PipelineOpType = iota // result in Op.Hash
+	PipelineSMembers                        // result in Op.Set
+	PipelineSIsMember                       // input Op.Member, result in Op.Bool（N3-2）
 )
 
 // PipelineOp represents a single command in a pipeline batch.
-// Callers populate Type+Key before exec; the implementation fills Hash or Set.
+// Callers populate Type+Key (and Member for SIsMember) before exec;
+// the implementation fills Hash, Set or Bool.
 type PipelineOp struct {
-	Type PipelineOpType
-	Key  string
-	Hash map[string]string // populated after exec for PipelineHGetAll
-	Set  []string          // populated after exec for PipelineSMembers
+	Type   PipelineOpType
+	Key    string
+	Member string            // input for PipelineSIsMember
+	Hash   map[string]string // populated after exec for PipelineHGetAll
+	Set    []string          // populated after exec for PipelineSMembers
+	Bool   bool              // populated after exec for PipelineSIsMember
 }
 
 // SessionReader reads session state for feed generation.
@@ -79,6 +84,23 @@ type ExposureFilter interface {
 // FeedbackIngestor provides cloud-side idempotency for client behavior events.
 type FeedbackIngestor interface {
 	AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error)
+}
+
+// FeedbackReplayReader performs the read-only half of behavior idempotency.
+// Command handlers use it before contacting mutable dependencies so an already
+// committed client event keeps its successful outcome during dependency outages.
+type FeedbackReplayReader interface {
+	HasAcceptedEvent(ctx context.Context, userID, clientEventID string) (bool, error)
+}
+
+// RedisKeyPresenceReader lets idempotency readers distinguish an absent key
+// from a Redis failure without coupling recommendation to a concrete adapter.
+type RedisKeyPresenceReader interface {
+	HasKey(ctx context.Context, key string) (bool, error)
+}
+
+type SubjectClosureGuard interface {
+	IsSubjectClosed(ctx context.Context, subjectID string) (bool, error)
 }
 
 // Key patterns aligned with contracts/metadata/_shared/redis_keyspace.yaml.
@@ -122,6 +144,7 @@ type BehaviorSignal struct {
 	ClientEventID   string    `json:"clientEventId,omitempty"`
 	State           string    `json:"state,omitempty"`
 	UserID          string    `json:"userId"`
+	PersonaID       string    `json:"personaId,omitempty"`
 	DeviceActorID   string    `json:"deviceActorId,omitempty"`
 	SessionID       string    `json:"sessionId"`
 	FeedSessionID   string    `json:"feedSessionId,omitempty"`
@@ -136,6 +159,7 @@ type BehaviorSignal struct {
 	EngagementDepth int       `json:"engagementDepth,omitempty"`
 	ConsumedRatio   float64   `json:"consumedRatio,omitempty"`
 	TotalUnits      int       `json:"totalUnits,omitempty"`
+	EffectivePlayMS int       `json:"effectivePlayMs,omitempty"`
 	EntityRefs      []string  `json:"entityRefs,omitempty"`
 	FeedRequestID   string    `json:"feedRequestId,omitempty"`
 	Position        int       `json:"position,omitempty"`
@@ -148,6 +172,9 @@ type BehaviorSignal struct {
 	RecallPath      string `json:"recallPath,omitempty"`
 	ContentVertical string `json:"contentVertical,omitempty"`
 	SupplySource    string `json:"supplySource,omitempty"`
+	// ExperimentBucket（N1-3）：服务端按 policy 确定性分桶重算（不信任端侧），
+	// 使行为归因指标可按 experiment_bucket 切分（AB 漏斗对比的分子侧）。
+	ExperimentBucket string `json:"experimentBucket,omitempty"`
 	// 交集转化归因（S6）：触发该行为的交集维度（identity/location/content/interest/relationship）
 	// 与路径制 tagRef 锚点（唯一真相源 control_plane/governance/taxonomy），供推荐回流与交集转化漏斗按维度/tagRef 下钻。
 	IntersectionDimension string   `json:"intersectionDimension,omitempty"`
@@ -174,28 +201,36 @@ func (s BehaviorSignal) EffectiveSessionID() string {
 // base tag-weight contribution, aligned with behaviors.yaml signal_weight.
 // An action absent from this map is rejected by BehaviorService.ProcessBatch.
 var SignalWeights = map[string]float64{
-	"impression":        0.1,
-	"click":             0.5,
-	"dwell":             1.0,
-	"like":              2.0,
-	"share":             3.0,
-	"dislike":           -5.0,
-	"hide_author":       -5.0,
-	"hide_content_type": -4.0,
-	"report":            -10.0,
-	"skip":              -0.3,
-	"comment":           2.5,
-	"follow":            4.0,
-	"author_view":       1.5,
-	"entity_page_view":  1.2,
-	"tag_click":         1.8,
-	"play_progress":     1.0,
-	"content_depth":     1.0,
+	"impression":          0.1,
+	"click":               0.5,
+	"intersection_expand": 0.2,
+	"dwell":               1.0,
+	"like":                2.0,
+	"share":               3.0,
+	"dislike":             -5.0,
+	"undo_dislike":        0.0,
+	"hide_author":         -5.0,
+	"hide_content_type":   -4.0,
+	"report":              -10.0,
+	"skip":                -0.3,
+	"comment":             2.5,
+	"follow":              4.0,
+	"author_view":         1.5,
+	"entity_page_view":    1.5,
+	"tag_click":           1.8,
+	// 播放位置比例只用于观测；seek 可直接跨越阈值，不能作为推荐正反馈。
+	"play_progress": 0.0,
+	// 只有服务端有效播放 policy 准入后的事件才能进入推荐。
+	"effective_play": 1.0,
+	"content_depth":  1.0,
 	// 交集转化三类行动（S6）：关注人 follow / 进圈子 join_circle / 加联系人 add_contact。
 	"join_circle": 4.0,
 	"add_contact": 4.5,
 	// 小艺对话浮现兴趣回流（P3）：payload 仅带 tagRefs，不绑定具体 post。
 	"assistant_interest": 1.6,
+	// 新用户首启兴趣采集（W11 interest-onboarding-prior）：四维标签选择写入
+	// 推荐先验，首刷 TagRecall 立即可用；不绑定具体 post。
+	"onboarding_interest": 2.5,
 	// 交集负反馈（F 推荐差异化）：不绑定 post（subjectId 为交集主体对象），在通用 HotPath
 	// 内为 inert（ContentID 空 → RecordNegative 被守卫跳过）；真实降权 / 冷却由
 	// content-service behavior_service 经 IntersectionFeedbackSink → IntersectionService
@@ -221,6 +256,8 @@ var ReferralSourceMultiplier = map[string]float64{
 	// 用户在「我的交集 / 我的影响力」中心主动点击交集对象：强关系探索意图，
 	// 高于 organic_feed / author_profile，与 friend_share 同级。
 	"my_intersections": 1.5,
+	// 创作者从发布结果页查看自己的作品只参与来源归因，不学习为消费兴趣。
+	"publish_result": 0.0,
 }
 
 // DepthLevelCoefficient maps engagementDepth level (0-4) to tag weight coefficient.
@@ -229,10 +266,35 @@ var DepthLevelCoefficient = [5]float64{0.0, 0.3, 0.7, 1.2, 2.0}
 // HotPath manages session-level recommendation state in Redis.
 type HotPath struct {
 	redis RedisClient
+	guard SubjectClosureGuard
 }
 
-func NewHotPath(redis RedisClient) *HotPath {
-	return &HotPath{redis: redis}
+type HotPathOption func(*HotPath)
+
+func WithSubjectClosureGuard(guard SubjectClosureGuard) HotPathOption {
+	return func(hotPath *HotPath) {
+		hotPath.guard = guard
+	}
+}
+
+func NewHotPath(redis RedisClient, options ...HotPathOption) *HotPath {
+	hotPath := &HotPath{redis: redis}
+	for _, option := range options {
+		if option != nil {
+			option(hotPath)
+		}
+	}
+	return hotPath
+}
+
+func (h *HotPath) isSubjectClosed(
+	ctx context.Context,
+	subjectID string,
+) (bool, error) {
+	if h == nil || h.guard == nil || strings.TrimSpace(subjectID) == "" {
+		return false, nil
+	}
+	return h.guard.IsSubjectClosed(ctx, subjectID)
 }
 
 // sessionKey builds a Redis key suffix with a cluster hash tag on userId.
@@ -267,6 +329,16 @@ func eventDedupKey(userID, clientEventID string) string {
 // ProcessSignal updates session-level state from a behavior signal.
 // Tag weight is computed as: baseWeight × depthCoefficient × referralMultiplier
 func (h *HotPath) ProcessSignal(ctx context.Context, signal BehaviorSignal) error {
+	closed, err := h.isSubjectClosed(ctx, signal.UserID)
+	if err != nil {
+		return err
+	}
+	if closed {
+		return nil
+	}
+	if strings.TrimSpace(strings.ToLower(signal.Action)) == "undo_dislike" {
+		return h.RestoreNegative(ctx, signal.UserID, signal.ContentID)
+	}
 	sk := sessionKey(signal.UserID, signal.EffectiveSessionID())
 
 	switch normalizeFeedbackState(signal) {
@@ -407,6 +479,17 @@ func (h *HotPath) ProcessSignalBatch(ctx context.Context, signals []BehaviorSign
 // Prefers pipeline (single RTT) when the underlying RedisClient implements
 // RedisPipeliner; falls back to 3 parallel goroutines otherwise.
 func (h *HotPath) GetSessionState(ctx context.Context, userID, sessionID string) (*SessionState, error) {
+	closed, err := h.isSubjectClosed(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if closed {
+		return &SessionState{
+			UserID:     userID,
+			SessionID:  sessionID,
+			TagWeights: map[string]float64{},
+		}, nil
+	}
 	sk := sessionKey(userID, sessionID)
 
 	if pipeliner, ok := h.redis.(RedisPipeliner); ok {
@@ -499,6 +582,10 @@ func (h *HotPath) getSessionStateParallel(ctx context.Context, sk, userID, sessi
 
 // IsExposed checks if a content ID was served in the current day bucket.
 func (h *HotPath) IsExposed(ctx context.Context, userID, sessionID, contentID string) (bool, error) {
+	closed, err := h.isSubjectClosed(ctx, userID)
+	if err != nil || closed {
+		return false, err
+	}
 	return h.redis.SIsMember(ctx, servedKeyPrefix+userDayKey(userID, time.Now().UTC()), contentID)
 }
 
@@ -516,6 +603,10 @@ type SessionState struct {
 func (h *HotPath) RecordServed(ctx context.Context, userID string, items []FeedItem, at time.Time) error {
 	if len(items) == 0 || strings.TrimSpace(userID) == "" {
 		return nil
+	}
+	closed, err := h.isSubjectClosed(ctx, userID)
+	if err != nil || closed {
+		return err
 	}
 	ids := make([]string, 0, len(items))
 	for _, item := range items {
@@ -537,6 +628,10 @@ func (h *HotPath) RecordImpressed(ctx context.Context, userID, contentID string,
 	if strings.TrimSpace(userID) == "" || strings.TrimSpace(contentID) == "" {
 		return nil
 	}
+	closed, err := h.isSubjectClosed(ctx, userID)
+	if err != nil || closed {
+		return err
+	}
 	key := impressedKeyPrefix + userDayKey(userID, at)
 	if err := h.redis.SAdd(ctx, key, contentID); err != nil {
 		return err
@@ -548,11 +643,34 @@ func (h *HotPath) RecordNegative(ctx context.Context, userID, contentID string) 
 	if strings.TrimSpace(userID) == "" || strings.TrimSpace(contentID) == "" {
 		return nil
 	}
+	closed, err := h.isSubjectClosed(ctx, userID)
+	if err != nil || closed {
+		return err
+	}
 	key := negativeKeyPrefix + userScopedKey(userID)
 	if err := h.redis.SAdd(ctx, key, contentID); err != nil {
 		return err
 	}
 	return h.redis.Expire(ctx, key, negativeTTL)
+}
+
+func (h *HotPath) RestoreNegative(
+	ctx context.Context,
+	userID string,
+	contentID string,
+) error {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(contentID) == "" {
+		return nil
+	}
+	closed, err := h.isSubjectClosed(ctx, userID)
+	if err != nil || closed {
+		return err
+	}
+	return h.redis.SRem(
+		ctx,
+		negativeKeyPrefix+userScopedKey(userID),
+		contentID,
+	)
 }
 
 // NegativeContentIDs returns the user's accumulated explicit-negative content
@@ -565,10 +683,18 @@ func (h *HotPath) NegativeContentIDs(ctx context.Context, userID string) ([]stri
 	if strings.TrimSpace(userID) == "" {
 		return nil, nil
 	}
+	closed, err := h.isSubjectClosed(ctx, userID)
+	if err != nil || closed {
+		return nil, err
+	}
 	return h.redis.SMembers(ctx, negativeKeyPrefix+userScopedKey(userID))
 }
 
 func (h *HotPath) AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error) {
+	closed, err := h.isSubjectClosed(ctx, signal.UserID)
+	if err != nil || closed {
+		return false, err
+	}
 	clientEventID := strings.TrimSpace(signal.ClientEventID)
 	if clientEventID == "" {
 		return true, nil
@@ -580,14 +706,47 @@ func (h *HotPath) AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool,
 	return h.redis.SetNX(ctx, eventDedupKey(userID, clientEventID), "1", clientEventIDTTL)
 }
 
+// HasAcceptedEvent checks the same durable Redis receipt used by AcceptEvent
+// without creating or extending it.
+func (h *HotPath) HasAcceptedEvent(
+	ctx context.Context,
+	userID, clientEventID string,
+) (bool, error) {
+	clientEventID = strings.TrimSpace(clientEventID)
+	if clientEventID == "" {
+		return false, nil
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = "anonymous"
+	}
+	reader, ok := h.redis.(RedisKeyPresenceReader)
+	if !ok {
+		return false, fmt.Errorf("behavior idempotency receipt reader is unavailable")
+	}
+	return reader.HasKey(ctx, eventDedupKey(userID, clientEventID))
+}
+
 func (h *HotPath) FilterCandidates(ctx context.Context, userID string, candidates []ContentCandidate, at time.Time) ([]ContentCandidate, error) {
 	if len(candidates) == 0 || strings.TrimSpace(userID) == "" {
 		return candidates, nil
 	}
-	filtered := make([]ContentCandidate, 0, len(candidates))
+	closed, err := h.isSubjectClosed(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if closed {
+		return nil, nil
+	}
 	servedDays := dayKeys(userID, at, int(servedTTL/(24*time.Hour)))
 	impressedDays := dayKeys(userID, at, int(impressedTTL/(24*time.Hour)))
 	negativeKey := negativeKeyPrefix + userScopedKey(userID)
+	// N3-2：支持 pipeline 的 client 单次 RTT 批量点查（消除 O(N×(1+served天+impressed天))
+	// 的逐条往返）；不支持时回退逐条路径，语义完全一致。
+	if pipeliner, ok := h.redis.(RedisPipeliner); ok {
+		return h.filterCandidatesPipeline(ctx, pipeliner, candidates, negativeKey, servedDays, impressedDays)
+	}
+	filtered := make([]ContentCandidate, 0, len(candidates))
 	// 重复曝光拦截度量：被 served/impressed 命中即「若不过滤就会再次曝光」的候选。
 	// served/impressed 双轨分开计数，喂 recommendation_feed_duplicate_exposure_total，
 	// 让重复曝光率 SLO（repeat_exposure_rate <= 0.01）可度量而非 objective_only。
@@ -603,6 +762,7 @@ func (h *HotPath) FilterCandidates(ctx context.Context, userID string, candidate
 			return nil, err
 		}
 		if blocked {
+			feedNegativeCandidateSuppressedTotal.Inc()
 			continue
 		}
 		if served, err := h.memberOfAny(ctx, servedKeyPrefix, servedDays, contentID); err != nil {
@@ -614,6 +774,85 @@ func (h *HotPath) FilterCandidates(ctx context.Context, userID string, candidate
 		if impressed, err := h.memberOfAny(ctx, impressedKeyPrefix, impressedDays, contentID); err != nil {
 			return nil, err
 		} else if impressed {
+			dupImpressed++
+			continue
+		}
+		filtered = append(filtered, c)
+	}
+	RecordDuplicateExposureFiltered("served", dupServed)
+	RecordDuplicateExposureFiltered("impressed", dupImpressed)
+	return filtered, nil
+}
+
+// filterCandidatesPipeline 单次 pipeline 批量执行全部成员点查（N3-2，消除
+// O(N×(1+served天+impressed天)) 的逐条 RTT：全部 SISMEMBER 装进一个 pipeline，
+// 网络往返 1 次）。过滤语义与逐条路径逐位一致：negative 优先（计 suppressed）、
+// served 次之、impressed 最后（served/impressed 分开计重复曝光）。
+func (h *HotPath) filterCandidatesPipeline(
+	ctx context.Context,
+	pipeliner RedisPipeliner,
+	candidates []ContentCandidate,
+	negativeKey string,
+	servedDays []string,
+	impressedDays []string,
+) ([]ContentCandidate, error) {
+	opsPerCandidate := 1 + len(servedDays) + len(impressedDays)
+	ops := make([]PipelineOp, 0, len(candidates)*opsPerCandidate)
+	// candidateOpStart[i] 是第 i 个候选的 op 起始下标；空 contentID 候选为 -1。
+	candidateOpStart := make([]int, len(candidates))
+	for i, c := range candidates {
+		contentID := strings.TrimSpace(c.ContentID)
+		if contentID == "" {
+			candidateOpStart[i] = -1
+			continue
+		}
+		candidateOpStart[i] = len(ops)
+		ops = append(ops, PipelineOp{Type: PipelineSIsMember, Key: negativeKey, Member: contentID})
+		for _, keySuffix := range servedDays {
+			ops = append(ops, PipelineOp{Type: PipelineSIsMember, Key: servedKeyPrefix + keySuffix, Member: contentID})
+		}
+		for _, keySuffix := range impressedDays {
+			ops = append(ops, PipelineOp{Type: PipelineSIsMember, Key: impressedKeyPrefix + keySuffix, Member: contentID})
+		}
+	}
+	if len(ops) == 0 {
+		return candidates, nil
+	}
+	if err := pipeliner.PipelineRead(ctx, ops); err != nil {
+		return nil, err
+	}
+
+	filtered := make([]ContentCandidate, 0, len(candidates))
+	dupServed, dupImpressed := 0, 0
+	for i, c := range candidates {
+		start := candidateOpStart[i]
+		if start < 0 {
+			continue
+		}
+		if ops[start].Bool {
+			feedNegativeCandidateSuppressedTotal.Inc()
+			continue
+		}
+		servedHit := false
+		for j := 0; j < len(servedDays); j++ {
+			if ops[start+1+j].Bool {
+				servedHit = true
+				break
+			}
+		}
+		if servedHit {
+			dupServed++
+			continue
+		}
+		impressedHit := false
+		impressedBase := start + 1 + len(servedDays)
+		for j := 0; j < len(impressedDays); j++ {
+			if ops[impressedBase+j].Bool {
+				impressedHit = true
+				break
+			}
+		}
+		if impressedHit {
 			dupImpressed++
 			continue
 		}

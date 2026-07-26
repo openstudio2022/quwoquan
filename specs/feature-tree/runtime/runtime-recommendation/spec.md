@@ -1,69 +1,81 @@
-# L2 特性：runtime-recommendation
+# L2 Business Capability：运行时推荐 (`runtime-recommendation`)
 
-## 功能说明
+> 所属领域：[`runtime`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-`runtime-recommendation` 是推荐运行时基础能力，提供 HotPath、SessionCache、BufferedHotPath、7 阶段 Engine、Rule/Remote/CascadeScorer、MMR/UCB1 重排与可观测。首页 feed 业务编排、频道 IA、流式体验与推荐 SLO 归属 `discovery-content/feed-orchestration-recommendation`，本节点只提供可复用引擎能力。
+## 1. 能力目标
 
-- 双通道架构：Redis 热路径（session 级实时信号）+ 冷路径（离线特征 + ML 模型）。
-- 热路径：session_signals（标签权重漂移）、exposed_set（去重）、negative_set（负反馈过滤）、realtime_interest（实时兴趣向量）。
-- 推荐引擎：7 阶段管线 — Session → Recall → PreRank → Filter → FeatureAssembly → Score → Rerank。
-- 模型层：RuleScorer 基线 / RemoteModelScorer 远程 ML / CascadeScorer 容灾降级。
-- 性能层：SessionCache L1 缓存 + BufferedHotPath 异步写 + 并行读 + Redis Pool 调优。
-- FeedType 支持：discovery / circle / follow / similar。
+提供推荐 HotPath、SessionCache、Engine、Scorer 与 Rerank 的统一运行时，使候选排序、降级和观测使用同一会话与策略边界。
 
-## 当前基线（2026-02-24）
+## 2. 范围与非目标
 
-### 已实现组件清单
+### In Scope
 
-| 文件 | 组件 | 职责 |
-|------|------|------|
-| `hotpath.go` | HotPath | Redis 实时信号读写（SessionReader + SignalProcessor） |
-| `session_cache.go` | SessionCache | L1 进程内缓存 + singleflight（124ns/op） |
-| `hotpath_buffer.go` | BufferedHotPath | 异步写入缓冲（channel + 批量刷写） |
-| `engine.go` | Engine | 7 阶段推荐管线编排 |
-| `scorer.go` | RuleScorer / RemoteModelScorer / CascadeScorer | 模型打分层 |
-| `feature.go` | FeatureProvider / UserFeatureVector | 用户特征抽象 |
-| `prerank.go` | QualityPreRanker | 时效过滤 + 互动密度粗排 |
-| `embedding.go` | RemoteEmbeddingService | HTTP 外部 Embedding 调用 |
-| `experiments.go` | WeightPresets / ResolveWeights | AB 实验权重解析 |
-| `learning.go` | FeedbackRecorder | impression/engagement/scorecard 记录 |
-| `observability.go` | PipelineMetrics | 管线可观测指标 |
-| `redis_client.go` | RedisClientAdapter | Redis 适配 + 连接池调优 |
-| `recommend_feature.go` | FeatureStore | MongoDB → FeatureProvider 适配 |
+- Redis HotPath session 状态、negative/exposed/tag weights/realtime interest。
+- 7 阶段 Engine 管线、多源召回、预排、过滤、特征组装、打分、重排。
+- RuleScorer、RemoteModelScorer、CascadeScorer fallback。
+- MMR/UCB1 探索、多样性、冷启动保底、SessionCache 与 BufferedHotPath。
 
-### 测试覆盖
-| 文件 | 覆盖范围 |
-|------|----------|
-| `engine_test.go` | HotPath 契约 + Engine 端到端 + 模型集成 + CascadeScorer 容灾 + 特征 + PreRanker |
-| `bench_test.go` | GetFeed / SessionCache / MultiSource / ProcessSignal / GetSessionState 基准 |
+### Out of Scope
 
-## 约束
-- 信号上报延迟 < 50ms（热路径）。
-- 已曝光内容不再推荐。
-- 推荐策略参数可通过 experiments 灰度。
+- 首页 feed IA、频道布局、页面 route/surface；归 discovery-content/feed-orchestration-recommendation。
+- 深度排序模型平台轨与双塔 ANN 在线服务。
+
+## 3. Journey / Scenario 贡献
+
+- [`JNY-001 / SCN-004`](../../spec.md#scn-004)
+  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
+  - 本能力处理：推荐运行时基础能力验收，覆盖 HotPath、SessionCache、Engine、Scorer、Rerank、降级与可观测。
+  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
+  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
+
+## 4. Story
+
+
+
+- [`dual-channel-recommendation-engine`](./dual-channel-recommendation-engine/spec.md)：**SessionReader** 接口：统一读路径，HotPath / SessionCache 均实现。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 runtime recommendation 引擎能力 SIT
+
+- HotPath 处理 impression/engagement/dislike 后，SessionState 中 exposed/negative/tagWeights 与实时兴趣可被读取。
+- Engine 7 阶段管线在召回源超时、模型 scorer 失败、候选重复、冷启动等场景下仍返回稳定结果或明确空态。
+- RuleScorer 消费用户特征、交集信号、搜索意图、负反馈惩罚、UCB1 探索和 MMR 多样性。
+- `SessionCache`、`BufferedHotPath` 与 Redis key hash-tag 必须在 pipeline 和 parallel 路径保持同一会话状态语义。
+
+<a id="req-002"></a>
+### REQ-002 CascadeScorer 保证 ML 不可用时降级到 RuleScorer
+
 - CascadeScorer 保证 ML 不可用时降级到 RuleScorer。
-- runtime 不拥有 route/surface/页面 IA，不维护第二套 feed 编排真相源。
-- 深度排序模型平台轨（MMoE/PLE/双塔 ANN/IPS）是长期上限，不进入本轮基线实现。
 
-## 验收标准
-- A1：信号上报 → 偏好反映 → 下一批内容变化。✅ 通过
-- A3：CascadeScorer 容灾降级。✅ 通过。A/B 路由待实现。
-- A7：消费 recommend_impact 事件和 recommend_feature 字段。✅ 通过
-- A8：热路径 + 引擎 + 模型集成 + 性能基准 均有测试。✅ 通过
+## 6. 契约与依赖
 
-## 特性树子节点（L3）
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-- **dual-channel-recommendation-engine**：双通道引擎（HotPath + Engine + 7 阶段管线），已基线完成。引擎通过 HTTP 调用**推荐平台**（L1 recommendation-platform）下的 **rec-model-service**（模型服务）完成 ML 打分；训练由 **rec-model-training** 独立负责，本节点不包含二者。
+## 7. 集成验收
 
-## 下一步优化方向
-- 实现 rec-model-training 与 rec-model-service 全链路（见特性树 **recommendation-platform** 下两 L3：rec-model-training、rec-model-service）
-- Redis Pipeline 替换并行 goroutine（进一步降低 RTT）
-- Bloom Filter 处理超大曝光集合
-- A/B 路由集成（按用户分组选择打分策略）
-- CTR/曝光/留存 metric dashboard
-- 内容 Embedding 生成 pipeline
+<a id="sit-001"></a>
+### SIT-001 runtime recommendation 引擎能力 SIT
 
-## 关联基线
+- GIVEN 执行“runtime recommendation 引擎能力”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“runtime recommendation 引擎能力”对应动作。
+- THEN HotPath 处理 impression/engagement/dislike 后，SessionState 中 exposed/negative/tagWeights 与实时兴趣可被读取。
+- THEN Engine 7 阶段管线在召回源超时、模型 scorer 失败、候选重复、冷启动等场景下仍返回稳定结果或明确空态。
+- THEN RuleScorer 消费用户特征、交集信号、搜索意图、负反馈惩罚、UCB1 探索和 MMR 多样性。
+- THEN pipeline 与 parallel 路径读取相同会话状态，Redis key 落在预期 hash slot，重放不重复更新。
 
-- 业务编排：`specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md`
-- 推荐 SLO：`quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml`
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 runtime recommendation 引擎能力 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：HotPath 处理 impression/engagement/dislike 后，SessionState 中 exposed/negative/tagWeights 与实时兴趣可被读取。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

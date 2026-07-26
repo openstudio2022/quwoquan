@@ -1,0 +1,16 @@
+backend: postgresql
+tables:
+  channel_ingress_receipts:
+    entity: ChannelIngressReceipt
+    role: authoritative
+    primary_key:
+    - id
+    unique_constraints:
+    - - channelType
+      - providerEventId
+    indexes:
+    - name: idx_channel_ingress_received
+      columns:
+      - channelType
+      - receivedAt
+role: append_only

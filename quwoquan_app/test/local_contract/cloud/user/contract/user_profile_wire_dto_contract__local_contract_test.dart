@@ -1,27 +1,22 @@
 import 'package:test/test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/appearance_settings_wire_dto.g.dart';
+import 'package:quwoquan_app/app/models/appearance_settings_models.dart'
+    as appearance;
 import 'package:quwoquan_app/cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/call_settings_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_summary_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_lifecycle_guard_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/privacy_settings_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_quota_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_summary_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_lifecycle_guard_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_item_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_quota_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_user_like_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_normalized_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/recent_search_entry_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_view_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_profile_stats_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/call_settings_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/account/user_account_stats_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
-import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('SubAccountProfileWireDto', () {
@@ -135,7 +130,7 @@ void main() {
       expect(view.subjectType, 'user');
     });
 
-    test('avatarVersion 进入头像 URL 以驱动缓存失效', () {
+    test('avatarVersion 按运行时 endpoint 可用性驱动 URL', () {
       final view = SubAccountProfileViewData.fromSubAccountProfileWire(
         SubAccountProfileWireDto.fromMap(<String, dynamic>{
           'subAccountId': 'u_avatar',
@@ -145,7 +140,7 @@ void main() {
         }),
       );
       expect(view.avatarVersion, 6);
-      expect(view.avatarUrl, contains('?v=6'));
+      _expectVersionedAvatarOrUnavailable(view.avatarUrl, 6);
     });
   });
 
@@ -165,133 +160,56 @@ void main() {
     });
   });
 
-  group('ProfileUserLikeRowWireDto', () {
-    test('基本字段解析', () {
-      final dto = ProfileUserLikeRowWireDto.fromMap(<String, dynamic>{
-        'postId': 'p9',
-        'title': '标题',
-        'coverUrl': 'https://c.test/x.jpg',
-        'likerNickname': '赞过',
-        'likerAvatarUrl': 'https://a.test/y.jpg',
-        'likerAvatarVersion': 6,
-        'likedAt': '2026-01-01T00:00:00Z',
-      });
-      expect(dto.postId, 'p9');
-      expect(dto.likerAvatarVersion, 6);
-      expect(dto.likedAt, isNotNull);
-    });
-
-    test('view data 把 likerAvatarVersion 注入缓存 URL', () {
-      final view = ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
-        ProfileUserLikeRowWireDto.fromMap(<String, dynamic>{
-          'postId': 'p9',
-          'title': '标题',
-          'coverUrl': 'https://c.test/x.jpg',
-          'likerNickname': '赞过',
-          'likerAvatarUrl': 'media/avatar/s/mock/seed/test_liker/v1/avatar.jpg',
-          'likerAvatarVersion': 6,
-        }),
-      );
-      expect(view.likerAvatarVersion, 6);
-      expect(view.likerAvatarUrl, isNotEmpty);
-      expect(view.likerAvatarUrl, contains('v=6'));
-    });
-  });
-
-  group('ProfileInteractionActivityWireDto', () {
-    test('canonical activity actor and target fields', () {
-      final dto = ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
-        'activityId': 'act_1',
-        'actorSubAccountId': 'actor_sub',
-        'actorDisplayName': '小明',
-        'actorAvatarUrl': 'https://av.test/z.jpg',
-        'actorAvatarVersion': 8,
-        'activityType': 'like',
-        'targetSubAccountId': 'tgt_sub',
-        'targetContentId': 'post_99',
-        'targetContentType': 'post',
-        'targetContentSummary': '摘要',
-        'displayAvatarVersion': 8,
-        'createdAt': '2026-02-02T12:00:00Z',
-      });
-      expect(dto.activityId, 'act_1');
-      expect(dto.actorSubAccountId, 'actor_sub');
-      expect(dto.actorDisplayName, '小明');
-      expect(dto.actorAvatarUrl, 'https://av.test/z.jpg');
-      expect(dto.actorAvatarVersion, 8);
-      expect(dto.targetSubAccountId, 'tgt_sub');
-      expect(dto.targetContentId, 'post_99');
-      expect(dto.targetContentSummary, '摘要');
-      expect(dto.displayAvatarVersion, 8);
-      // 默认无评论标识。
-      expect(dto.commentId, '');
-      expect(dto.parentCommentId, '');
-    });
-
-    test('评论标识 commentId / parentCommentId 解析（深链精确定位）', () {
-      final dto = ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
-        'activityId': 'comment_reply_9',
-        'activityType': 'comment',
-        'commentKind': 'reply',
-        'commentId': 'comment_reply_9',
-        'parentCommentId': 'comment_top_1',
-        'actorSubAccountId': 'u_a',
-      });
-      expect(dto.commentKind, 'reply');
-      expect(dto.commentId, 'comment_reply_9');
-      expect(dto.parentCommentId, 'comment_top_1');
-    });
-  });
-
-  group('ProfileInteractionActivityViewData — Wire 映射', () {
-    test('缺 activityId 时生成合成 id', () {
-      final view =
-          ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-            ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
-              'actorSubAccountId': 'u_x',
-              'activityType': 'comment',
-              'actorDisplayName': '某人',
-            }),
-          );
-      expect(view.activityId, 'comment:u_x');
-    });
-
+  group('ProfileInteractionActivityViewData — typed slice 映射', () {
     test('评论标识透传到 ViewData 供深链消费', () {
-      final view =
-          ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-            ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
-              'activityId': 'comment_reply_9',
-              'activityType': 'comment',
-              'commentKind': 'reply',
-              'commentId': 'comment_reply_9',
-              'parentCommentId': 'comment_top_1',
-              'actorSubAccountId': 'u_a',
-            }),
-          );
+      final view = ProfileInteractionActivityViewData.fromContentActivity(
+        ContentProfileInteractionActivity(
+          activityId: 'comment_reply_9',
+          activityType: 'comment',
+          direction: 'received',
+          commentKind: 'reply',
+          commentId: 'comment_reply_9',
+          parentCommentId: 'comment_top_1',
+          actorSubAccountId: 'u_a',
+          actorDisplayName: '某人',
+          targetSubAccountId: 'owner',
+          targetContentId: 'post_99',
+          targetContentType: 'article',
+          displaySubAccountId: 'u_a',
+          displayName: '某人',
+          primaryText: '回复了你',
+          createdAt: DateTime.utc(2026, 2, 2),
+          occurredAt: DateTime.utc(2026, 2, 2),
+        ),
+      );
       expect(view.commentId, 'comment_reply_9');
       expect(view.parentCommentId, 'comment_top_1');
     });
 
-    test('头像版本驱动 actor/display 缓存 URL，display 缺省时复用 actor 版本', () {
-      final view =
-          ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-            ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
-              'activityId': 'activity_1',
-              'activityType': 'like',
-              'actorSubAccountId': 'u_a',
-              'actorDisplayName': '某人',
-              'actorAvatarUrl':
-                  'media/avatar/s/mock/seed/test_actor/v1/avatar.jpg',
-              'actorAvatarVersion': 7,
-              'displayName': '某人',
-            }),
-          );
+    test('actor/display 版本同源并按 endpoint 可用性解析', () {
+      final view = ProfileInteractionActivityViewData.fromContentActivity(
+        ContentProfileInteractionActivity(
+          activityId: 'activity_1',
+          activityType: 'like',
+          direction: 'received',
+          actorSubAccountId: 'u_a',
+          actorDisplayName: '某人',
+          actorAvatarUrl: 'media/avatar/s/mock/seed/test_actor/v1/avatar.jpg',
+          actorAvatarVersion: 7,
+          targetSubAccountId: 'owner',
+          targetContentId: 'post_99',
+          targetContentType: 'image',
+          displaySubAccountId: 'u_a',
+          displayName: '某人',
+          primaryText: '点赞了你的记录',
+          createdAt: DateTime.utc(2026, 2, 2),
+          occurredAt: DateTime.utc(2026, 2, 2),
+        ),
+      );
       expect(view.actorAvatarVersion, 7);
-      expect(view.actorAvatarUrl, isNotEmpty);
-      expect(view.actorAvatarUrl, contains('v=7'));
+      _expectVersionedAvatarOrUnavailable(view.actorAvatarUrl, 7);
       expect(view.displayAvatarVersion, 7);
-      expect(view.displayAvatarUrl, isNotEmpty);
-      expect(view.displayAvatarUrl, contains('v=7'));
+      _expectVersionedAvatarOrUnavailable(view.displayAvatarUrl, 7);
     });
   });
 
@@ -341,7 +259,7 @@ void main() {
       expect(view.subjectType, 'user');
     });
 
-    test('avatarVersion 驱动管理行头像缓存 URL', () {
+    test('管理行保留 avatarVersion 并按 endpoint 可用性解析', () {
       final view = PersonaManagementItemViewData.fromPersonaManagementItemWire(
         PersonaManagementItemWireDto.fromMap(<String, dynamic>{
           'subAccountId': 'per_1',
@@ -351,8 +269,7 @@ void main() {
         }),
       );
       expect(view.avatarVersion, 5);
-      expect(view.avatarUrl, isNotEmpty);
-      expect(view.avatarUrl, contains('v=5'));
+      _expectVersionedAvatarOrUnavailable(view.avatarUrl, 5);
     });
   });
 
@@ -375,7 +292,7 @@ void main() {
         'subAccountId': 'persona_main',
         'ownerUserId': 'user_main',
         'avatarVersion': 9,
-        'personaContextVersion': '3',
+        'contextVersion': 3,
         'personaSnapshotVersion': 2,
         'sourceSurfaceId': 'notification_center',
         'explicitOverride': true,
@@ -383,7 +300,7 @@ void main() {
       expect(dto.subAccountId, 'persona_main');
       expect(dto.ownerUserId, 'user_main');
       expect(dto.avatarVersion, 9);
-      expect(dto.personaContextVersion, '3');
+      expect(dto.contextVersion, 3);
       expect(dto.personaSnapshotVersion, 2);
       expect(dto.sourceSurfaceId, 'notification_center');
       expect(dto.explicitOverride, isTrue);
@@ -395,22 +312,36 @@ void main() {
           'subAccountId': 'persona_photo',
           'ownerUserId': 'user_owner',
           'avatarUrl':
-              'media/avatar/s/archived-avatar/user/persona_photo/v1/profile.png',
+              'media/avatar/s/archived-avatar/user/persona/persona_photo/v1/profile.png',
           'avatarVersion': 5,
-          'personaContextVersion': '5',
+          'contextVersion': 5,
+          'personaSnapshotVersion': 7,
         }),
       );
       expect(view.subAccountId, 'persona_photo');
       expect(view.avatarVersion, 5);
-      expect(view.avatarUrl, contains('?v=5'));
-      expect(view.contextVersion, '5');
+      _expectVersionedAvatarOrUnavailable(view.avatarUrl, 5);
+      expect(view.contextVersion, 5);
+      expect(view.personaSnapshotVersion, 7);
       expect(
         view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
         containsPair('subAccountId', 'persona_photo'),
       );
       expect(
         view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
+        containsPair('contextVersion', 5),
+      );
+      expect(
+        view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
+        containsPair('personaSnapshotVersion', 7),
+      );
+      expect(
+        view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
         containsPair('sourceSurfaceId', 'create_editor'),
+      );
+      expect(
+        view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
+        isNot(contains('personaContextVersion')),
       );
     });
   });
@@ -438,7 +369,7 @@ void main() {
       expect(dto.avatarVersion, 8);
     });
 
-    test('view 使用 avatarVersion 生成稳定头像缓存键', () {
+    test('view 保留 avatarVersion 并按 endpoint 可用性解析', () {
       final view = SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
         SocialRelationSearchItemWireDto.fromMap(<String, dynamic>{
           'subAccountId': 'search_u2',
@@ -447,11 +378,16 @@ void main() {
               'media/avatar/s/archived-avatar/user/search_u2/v1/profile.png',
           'avatarVersion': 3,
           'chatAvailable': true,
+          'relationshipCapability': <String, dynamic>{
+            'relationState': 'mutual',
+            'canOpenConversation': true,
+          },
         }),
-        <String, dynamic>{},
       );
       expect(view.avatarVersion, 3);
-      expect(view.avatarUrl, contains('?v=3'));
+      _expectVersionedAvatarOrUnavailable(view.avatarUrl, 3);
+      expect(view.relationshipCapability.relationState, 'mutual');
+      expect(view.chatAvailable, isTrue);
     });
   });
 
@@ -481,17 +417,32 @@ void main() {
     });
   });
 
-  group('RelationshipNormalizedWireDto', () {
-    test('布尔与状态', () {
-      final dto = RelationshipNormalizedWireDto.fromMap(<String, dynamic>{
-        'relationState': 'following',
-        'isFollowing': true,
-        'isFollowedBy': false,
-        'isMutual': false,
+  group('RelationshipViewWireDto', () {
+    test('relationState 与派生布尔', () {
+      final dto = RelationshipViewWireDto.fromMap(<String, dynamic>{
+        'viewerSubAccountId': 'ps_viewer',
+        'targetSubAccountId': 'ps_target',
+        'relationState': 'mutual',
+        'isBlocked': false,
+        'isBlockedBy': false,
       });
-      final v = RelationshipViewData.fromRelationshipNormalizedWire(dto);
-      expect(v.relationState, 'following');
+      final v = RelationshipViewData.fromRelationshipViewWire(dto);
+      expect(v.relationState, 'mutual');
       expect(v.isFollowing, isTrue);
+      expect(v.isFollowedBy, isTrue);
+      expect(v.isMutual, isTrue);
+      expect(v.isBlocked, isFalse);
+    });
+
+    test('block 位保留且派生布尔跟随 relationState', () {
+      final dto = RelationshipViewWireDto.fromMap(<String, dynamic>{
+        'relationState': 'not_following',
+        'isBlocked': true,
+        'isBlockedBy': false,
+      });
+      final v = RelationshipViewData.fromRelationshipViewWire(dto);
+      expect(v.isFollowing, isFalse);
+      expect(v.isBlocked, isTrue);
     });
   });
 
@@ -511,16 +462,22 @@ void main() {
   });
 
   group('PersonaLifecycleGuardWireDto', () {
-    test('canonical message', () {
+    test('canonical lifecycle guard fields', () {
       final dto = PersonaLifecycleGuardWireDto.fromMap(<String, dynamic>{
         'subAccountId': 's1',
-        'message': '提示',
-        'canDelete': false,
+        'requestedAction': 'retire',
+        'allowed': false,
+        'reason': 'blocked_primary_persona',
+        'requiresSuccessor': false,
       });
       final v = PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
         dto,
       );
-      expect(v.message, '提示');
+      expect(v.subAccountId, 's1');
+      expect(v.requestedAction, 'retire');
+      expect(v.allowed, isFalse);
+      expect(v.reason, 'blocked_primary_persona');
+      expect(v.requiresSuccessor, isFalse);
     });
   });
 
@@ -558,28 +515,37 @@ void main() {
     });
   });
 
-  group('RelationshipCapabilityWireDto', () {
-    test('映射到 RelationshipCapabilityDto', () {
-      final dto = RelationshipCapabilityWireDto.fromMap(<String, dynamic>{
-        'viewerSubAccountId': 'v1',
-        'targetSubAccountId': 't1',
-        'relationState': 'following',
-        'canFollow': false,
-        'canUnfollow': true,
-        'canOpenConversation': true,
-        'canFollowBack': false,
-        'isBlocked': false,
-        'isBlockedBy': false,
-      });
-      final cap = RelationshipCapabilityDto.fromRelationshipCapabilityWire(dto);
-      expect(cap.viewerSubAccountId, 'v1');
-      expect(cap.relationState, 'following');
+  group('RelationshipCapabilityResult', () {
+    test('strict decoder 保留 canonical 能力位', () {
+      final capability =
+          decodeRelationshipCapabilityResult(const <String, Object?>{
+            'viewerSubAccountId': 'v1',
+            'targetSubAccountId': 't1',
+            'relationState': 'following',
+            'canFollow': false,
+            'canUnfollow': true,
+            'canFollowBack': false,
+            'canGreet': true,
+            'canOpenConversation': false,
+            'canCreateDirectConversation': false,
+            'canSendMessage': false,
+            'hasPendingGreeting': false,
+            'hasFormalConversation': false,
+            'canStartVoiceCall': false,
+            'canStartVideoCall': false,
+            'isBlocked': false,
+            'isBlockedBy': false,
+          });
+      expect(capability.viewerSubAccountId, 'v1');
+      expect(capability.targetSubAccountId, 't1');
+      expect(capability.relationState, 'following');
+      expect(capability.canGreet, isTrue);
     });
   });
 
-  group('AppearanceSettingsWireDto', () {
-    test('Wire → Snapshot', () {
-      final w = AppearanceSettingsWireDto.fromMap(<String, dynamic>{
+  group('AppearanceSettingsView', () {
+    test('typed decoder → runtime snapshot', () {
+      final view = decodeAppearanceSettingsView(<String, Object?>{
         'themeMode': 'dark',
         'fontSizePreset': 'lg',
         'source': 'sub_override',
@@ -589,42 +555,71 @@ void main() {
         'version': 3,
         'updatedAt': '2026-01-02T00:00:00Z',
       });
-      final s = AppearanceSettingsSnapshot.fromAppearanceSettingsWire(w);
-      expect(s.themeMode.wireValue, 'dark');
-      expect(s.version, 3);
+      final snapshot = appearance.AppearanceSettingsSnapshot.fromContract(view);
+      expect(snapshot.themeMode.wireValue, 'dark');
+      expect(snapshot.source, appearance.AppearanceSettingsSource.subOverride);
+      expect(snapshot.version, 3);
     });
   });
 
-  group('CallSettingsWireDto', () {
-    test('Wire → CallSettingsDto', () {
-      final w = CallSettingsWireDto.fromMap(<String, dynamic>{
+  group('CallSettingsView', () {
+    test('typed decoder 保留官方铃声与开关', () {
+      final view = decodeCallSettingsView(<String, Object?>{
+        'userId': 'u1',
         'defaultIncomingCallRingtoneId': 'official.blue-wave',
         'allowCallerRingtoneOverride': false,
         'enableCallVibration': true,
         'enableGroupCallRing': false,
+        'version': 2,
+        'updatedAt': '2026-01-02T00:00:00Z',
       });
-      final d = CallSettingsDto.fromCallSettingsWire(w);
-      expect(d.defaultIncomingCallRingtoneId, 'official.blue-wave');
-      expect(d.allowCallerRingtoneOverride, isFalse);
+      expect(
+        view.defaultIncomingCallRingtoneId?.wireValue,
+        'official.blue-wave',
+      );
+      expect(view.allowCallerRingtoneOverride, isFalse);
     });
 
-    test('空 ringtone 字符串回退为 null，兼容存量 NULL 行', () {
-      final w = CallSettingsWireDto.fromMap(<String, dynamic>{
-        'defaultIncomingCallRingtoneId': '',
+    test('canonical null ringtone 解码为 null', () {
+      final view = decodeCallSettingsView(<String, Object?>{
+        'userId': 'u1',
+        'defaultIncomingCallRingtoneId': null,
         'allowCallerRingtoneOverride': true,
+        'enableCallVibration': true,
+        'enableGroupCallRing': true,
+        'version': 1,
+        'updatedAt': '2026-01-02T00:00:00Z',
       });
-      final d = CallSettingsDto.fromCallSettingsWire(w);
-      expect(d.defaultIncomingCallRingtoneId, isNull);
-      expect(d.allowCallerRingtoneOverride, isTrue);
+      expect(view.defaultIncomingCallRingtoneId, isNull);
+      expect(view.allowCallerRingtoneOverride, isTrue);
     });
   });
 
-  group('PrivacySettingsWireDto', () {
-    test('blockedKeywords', () {
-      final w = PrivacySettingsWireDto.fromMap(<String, dynamic>{
+  group('PrivacySettingsView', () {
+    test('typed decoder 保留 blockedKeywords', () {
+      final view = decodePrivacySettingsView(<String, Object?>{
+        'userId': 'u1',
+        'allowStrangerMsg': true,
+        'profileVisibility': 'public',
+        'contentLanguage': null,
+        'feedPreference': null,
+        'assistantEnabled': true,
         'blockedKeywords': <String>['a', 'b'],
+        'version': 1,
+        'updatedAt': '2026-01-02T00:00:00Z',
       });
-      expect(w.blockedKeywords, ['a', 'b']);
+      expect(view.blockedKeywords, ['a', 'b']);
     });
   });
+}
+
+void _expectVersionedAvatarOrUnavailable(String? url, int version) {
+  final resolved = url ?? '';
+  final endpoint = CloudRuntimeConfig.mediaAvatarCdnBaseUrl.trim();
+  if (endpoint.isEmpty) {
+    expect(resolved, isEmpty);
+    return;
+  }
+  expect(resolved, startsWith(endpoint));
+  expect(resolved, contains('v=$version'));
 }

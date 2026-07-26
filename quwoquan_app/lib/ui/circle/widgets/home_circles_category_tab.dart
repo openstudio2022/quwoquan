@@ -91,19 +91,19 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
         childCount: posts.length,
         itemBuilder: (context, index) {
           final entry = posts[index];
-          final title = entry.wireTitle;
-          final body = entry.wireBodyText;
-          final authorName = entry.wireAuthorDisplayName.trim().isEmpty
+          final title = entry.title;
+          final body = entry.bodyText;
+          final authorName = entry.authorDisplayName.isEmpty
               ? UITextConstants.unknownUser
-              : entry.wireAuthorDisplayName.trim();
-          final coverUrl = entry.wireCoverUrl;
-          final avatarUrl = entry.wireAuthorAvatarUrl;
-          final likeCount = entry.wireLikeCount;
-          final isLiked = entry.wireIsLiked;
-          final aspectRatio = entry.wireCoverAspectRatio();
-          final inlineImageUrls = entry.wireShowsVideoBadge
+              : entry.authorDisplayName;
+          final coverUrl = entry.coverUrl;
+          final avatarUrl = entry.authorAvatarUrl;
+          final likeCount = entry.likeCount;
+          final isLiked = entry.isLiked;
+          final aspectRatio = entry.coverAspectRatio;
+          final inlineImageUrls = entry.showsVideoBadge
               ? const <String>[]
-              : entry.wireImageUrls;
+              : entry.imageUrls;
           final usesInlineImages =
               _visualPriorityCategoryIds.contains(
                 categoryId.trim().toLowerCase(),
@@ -117,13 +117,13 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
               title.isNotEmpty && body.isNotEmpty && title != body ? body : '';
 
           return PostPreviewCard(
-            key: ValueKey('home-circle-grid-post-${entry.postIdForKey}'),
+            key: ValueKey('home-circle-grid-post-${entry.postId}'),
             isDark: isDark,
             title: headline,
             supportingText: supportingText,
             coverUrl: coverUrl,
             mediaAspectRatio: aspectRatio,
-            showVideoBadge: entry.wireShowsVideoBadge,
+            showVideoBadge: entry.showsVideoBadge,
             mediaContent: usesInlineImages
                 ? _HomeCircleInlineImageCarousel(
                     imageUrls: inlineImageUrls,

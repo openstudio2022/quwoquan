@@ -1,0 +1,112 @@
+entity: MediaAsset
+domain: CONTENT
+description: 'MediaAsset 对象专属错误码（资产存在性、就绪状态与播放交付语义）。
+
+  共享错误码唯一定义于 content/content/post/errors.yaml；content 域 codegen 与端云 parity
+
+  按固定文件列表合并，code 全域唯一。
+
+  '
+errors:
+- code: CONTENT.USER.media_not_found
+  kind: USER
+  reason: media_not_found
+  http_status: 404
+  recovery_action: surface
+  dart_const: mediaNotFound
+  go_const: ErrMediaNotFound
+  user_message:
+    zh: 媒体资源不存在或已过期
+    en: Media asset not found or expired
+- code: CONTENT.USER.media_not_ready
+  kind: USER
+  reason: media_not_ready
+  http_status: 400
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: mediaNotReady
+  go_const: ErrMediaNotReady
+  user_message:
+    zh: 媒体文件正在处理中，请稍后发布
+    en: Media is still processing, please retry shortly
+- code: CONTENT.USER.media_processing_rejected
+  kind: USER
+  reason: media_processing_rejected
+  http_status: 422
+  recovery_action: surface
+  dart_const: mediaProcessingRejected
+  go_const: ErrMediaProcessingRejected
+  user_message:
+    zh: 媒体文件无法处理，请更换后重新发布
+    en: This media could not be processed. Replace it and publish again
+- code: CONTENT.USER.media_in_use
+  kind: USER
+  reason: media_in_use
+  http_status: 409
+  recovery_action: surface
+  dart_const: mediaInUse
+  go_const: ErrMediaInUse
+  user_message:
+    zh: 媒体已被内容引用，无法放弃
+    en: This media is referenced by content and cannot be discarded
+- code: CONTENT.SYSTEM.media_playback_network_unavailable
+  kind: SYSTEM
+  reason: media_playback_network_unavailable
+  http_status: 503
+  recovery_action: retry
+  dart_const: mediaPlaybackNetworkUnavailable
+  go_const: ErrMediaPlaybackNetworkUnavailable
+  user_message:
+    zh: 网络不太稳定
+    en: The network is unstable.
+- code: CONTENT.SYSTEM.media_playback_temporarily_unavailable
+  kind: SYSTEM
+  reason: media_playback_temporarily_unavailable
+  http_status: 503
+  recovery_action: retry
+  dart_const: mediaPlaybackTemporarilyUnavailable
+  go_const: ErrMediaPlaybackTemporarilyUnavailable
+  user_message:
+    zh: 暂时无法播放
+    en: Playback is temporarily unavailable.
+- code: CONTENT.SYSTEM.media_playback_service_busy
+  kind: SYSTEM
+  reason: media_playback_service_busy
+  http_status: 503
+  recovery_action: retry
+  dart_const: mediaPlaybackServiceBusy
+  go_const: ErrMediaPlaybackServiceBusy
+  user_message:
+    zh: 暂时无法播放
+    en: Playback is temporarily unavailable.
+- code: CONTENT.USER.media_playback_unavailable
+  kind: USER
+  reason: media_playback_unavailable
+  http_status: 404
+  recovery_action: surface
+  dart_const: mediaPlaybackUnavailable
+  go_const: ErrMediaPlaybackUnavailable
+  user_message:
+    zh: 这条视频暂时无法观看，可以先看看别的内容
+    en: This video is temporarily unavailable. Please browse other content.
+- code: CONTENT.SYSTEM.media_playback_unsupported
+  kind: SYSTEM
+  reason: media_playback_unsupported
+  http_status: 422
+  recovery_action: surface
+  dart_const: mediaPlaybackUnsupported
+  go_const: ErrMediaPlaybackUnsupported
+  user_message:
+    zh: 这条视频暂不支持播放，可以先看看别的内容
+    en: This video is not supported. Browse other content.
+- code: CONTENT.SYSTEM.media_seek_failed
+  kind: SYSTEM
+  reason: media_seek_failed
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 0
+  dart_const: mediaSeekFailed
+  go_const: ErrMediaSeekFailed
+  user_message:
+    zh: 暂时无法跳转到这个位置
+    en: Unable to seek to this position right now.

@@ -1,0 +1,65 @@
+events:
+- name: CircleCreated
+  description: 圈子创建
+  producer: circle-service
+  consumers:
+  - recommendation-engine
+  - notification-service
+  - chat-service
+  channel: event_store
+  payload_entity: Circle
+  payload_fields:
+  - _id
+  - name
+  - ownerId
+  - category
+  - tags
+  - rulesText
+  - welcomeMessage
+  - iconUrl
+  - autoSyncChat
+  recommend_impact: circle_index_refresh
+- name: CircleUpdated
+  description: 圈子信息更新
+  producer: circle-service
+  consumers:
+  - recommendation-engine
+  channel: event_store
+  payload_entity: Circle
+  payload_fields:
+  - _id
+  - name
+  - description
+  - rulesText
+  - welcomeMessage
+  - iconUrl
+  - autoSyncChat
+  - tags
+  - category
+- name: CircleArchived
+  description: 圈子归档
+  producer: circle-service
+  consumers:
+  - recommendation-engine
+  - notification-service
+  channel: event_store
+  payload_fields:
+  - _id
+  - status
+- name: CircleConversationLinked
+  description: 兼容字段回写：圈子默认公共群关联的 Conversation
+  producer: chat-service
+  consumers:
+  - circle-service
+  channel: event_store
+  payload_fields:
+  - circleId
+  - conversationId
+- name: CircleSectionsUpdated
+  description: 圈子板块配置更新
+  producer: circle-service
+  consumers: []
+  channel: event_store
+  payload_fields:
+  - circleId
+  - sectionConfig

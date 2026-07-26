@@ -20,13 +20,13 @@ from content.release.model import DeploymentEnvironment  # noqa: E402
 
 
 def _release(root: Path) -> Path:
-    release = root / "data/releases/20260714--travel-homepage-coverage--cn-zhejiang-sichuan--canary-002"
+    release = root / "data/releases/20260714--travel-homepage-coverage--test-release-a--pilot-002"
     write_json(
         payload_file(release, "desired_state.json"),
         {
             "releaseId": release.name,
             "desiredRefs": {
-                "entities": ["地点/景区/普陀山", "地点/自然景观/东钱湖", "地点/景区/海螺沟"]
+                "entities": ["地点/景区/测试实体甲", "地点/自然景观/测试实体乙", "地点/景区/测试实体丙"]
             },
         },
     )
@@ -41,14 +41,21 @@ def _report(release_id: str, *, environment: DeploymentEnvironment) -> dict[str,
         "issues": [],
         "skipped": [],
         "entityRefToHomepageId": {
-            "地点/景区/普陀山": "homepage-putuo",
-            "地点/自然景观/东钱湖": "homepage-dongqian",
-            "地点/景区/海螺沟": "homepage-hailuogou",
+            "地点/景区/测试实体甲": "homepage-test-a",
+            "地点/自然景观/测试实体乙": "homepage-test-b",
+            "地点/景区/测试实体丙": "homepage-test-c",
         },
     }
 
 
-@pytest.mark.parametrize("environment", [DeploymentEnvironment.BETA, DeploymentEnvironment.GAMMA])
+@pytest.mark.parametrize(
+    "environment",
+    [
+        DeploymentEnvironment.ALPHA,
+        DeploymentEnvironment.BETA,
+        DeploymentEnvironment.GAMMA,
+    ],
+)
 def test_homepage_verification_cases__derive_all_imported_homepages__local_contract(
     environment: DeploymentEnvironment,
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -67,12 +74,18 @@ def test_homepage_verification_cases__derive_all_imported_homepages__local_contr
 
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["environment"] == environment.value
+    assert [case["entityRef"] for case in payload["cases"]] == sorted(
+        report_entity_ref
+        for report_entity_ref in _report(release.name, environment=environment)[
+            "entityRefToHomepageId"
+        ]
+    )
     assert [case["homepageId"] for case in payload["cases"]] == [
-        "homepage-putuo",
-        "homepage-hailuogou",
-        "homepage-dongqian",
+        "homepage-test-c",
+        "homepage-test-a",
+        "homepage-test-b",
     ]
-    assert [case["title"] for case in payload["cases"]] == ["普陀山", "海螺沟", "东钱湖"]
+    assert [case["title"] for case in payload["cases"]] == ["测试实体丙", "测试实体甲", "测试实体乙"]
 
 
 def test_homepage_verification_cases__reject_incomplete_importer_mapping__local_contract(
@@ -81,7 +94,7 @@ def test_homepage_verification_cases__reject_incomplete_importer_mapping__local_
     release = _release(tmp_path)
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
     report = _report(release.name, environment=DeploymentEnvironment.GAMMA)
-    del report["entityRefToHomepageId"]["地点/景区/海螺沟"]  # type: ignore[index]
+    del report["entityRefToHomepageId"]["地点/景区/测试实体丙"]  # type: ignore[index]
 
     with pytest.raises(subject.HomepageVerificationCaseError, match="does not exactly close"):
         subject.write_homepage_verification_case_manifest(

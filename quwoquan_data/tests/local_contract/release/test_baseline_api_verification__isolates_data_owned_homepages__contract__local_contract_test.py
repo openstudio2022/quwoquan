@@ -88,3 +88,42 @@ def test_empty_baseline_verifies_offlined_and_preserved_homepages(
         "title": "保留主页",
         "status": 200,
     }
+
+
+def test_empty_baseline_allows_a_clean_environment_without_a_witness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _EmptyPublicApiClient(_PublicApiClient):
+        def get_json(
+            self,
+            path: str,
+            *,
+            query: dict[str, str] | None = None,
+        ) -> PublicApiResponse:
+            if path == "homepages/search":
+                assert query == {"status": "published", "limit": "1"}
+                return PublicApiResponse(status=200, payload={"items": []})
+            return super().get_json(path, query=query)
+
+    import_report = tmp_path / "env/alpha/runs/data-release/baseline-release/import/homepage-import.json"
+    output = tmp_path / "env/alpha/runs/data-release/baseline-release/verify/baseline-api-verification.json"
+    _import_report(import_report)
+    payload = read_json(import_report)
+    payload["env"] = "alpha"
+    write_json(import_report, payload)
+    monkeypatch.setattr(verification, "OUTPUT_ROOT", tmp_path)
+    monkeypatch.setattr(verification, "PublicApiClient", _EmptyPublicApiClient)
+
+    verification.write_baseline_api_verification(
+        environment=DeploymentEnvironment.ALPHA,
+        release_id="baseline-release",
+        run_id="verify",
+        importer_report_path=import_report,
+        output_path=output,
+        api_base_url="https://alpha-api.test",
+        insecure_tls=True,
+        resolve_host="127.0.0.1",
+    )
+
+    assert read_json(output)["preserved"] is None

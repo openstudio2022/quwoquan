@@ -1,21 +1,61 @@
-# L3：metadata-domain-restructure
+# L3 Story：服务本地契约目录 (`metadata-domain-restructure`)
 
-## 功能说明
+> 所属能力：[`content-service-contract-foundation`](../spec.md)
 
-将现有 `contracts/metadata/` 的平铺结构重组为以域服务为根节点的层级结构。
-投影 YAML 迁入对应实体目录，OpenAPI 与 metadata 并置，codegen 工具路径同步更新。
+> Journey / Scenario：[`JNY-003 / SCN-007`](../../../spec.md#scn-007)
 
-## 范围
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- 创建 `contracts/metadata/content/` 域目录，移入 `post/`
-- `_projections/{photo,video,article,moment}_post.yaml` → `content/post/projections/`
-- `openapi/content-service.v1.yaml` → `contracts/metadata/content/openapi.yaml`
-- `_shared/errors/` 子目录（common_codes.yaml + http_mapping.yaml）
-- 更新 codegen 工具默认路径，`make codegen-app` 产物不变
+## 1. 用户价值
 
-## 验收标准
+作为内容创作者或浏览者，
+我希望把业务域契约归入所属服务 contracts，仅保留跨服务共享 schema 在中心 metadata，
+从而完成可恢复的内容创作、发现或互动。
 
-- A1：`contracts/metadata/content/post/projections/` 含4个投影 YAML
-- A2：codegen 工具读取新路径，`make codegen-app` 产物与重组前完全一致（hash 相同）
-- A3：`contracts/metadata/content/openapi.yaml` 存在
-- A4：`make verify-metadata` PASS
+## 2. 范围与非目标
+
+### In Scope
+
+- “服务本地契约目录”的输入、可观察主路径、失败语义以及与父能力的交接。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 服务本地契约目录
+
+- 把业务域契约归入所属服务 contracts，仅保留跨服务共享 schema 在中心 metadata。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 服务本地契约目录
+
+- GIVEN 内容创作者或浏览者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“服务本地契约目录”对应的公开行为。
+- THEN 把业务域契约归入所属服务 contracts，仅保留跨服务共享 schema 在中心 metadata。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`content-service-contract-foundation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 服务本地契约目录 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“服务本地契约目录”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

@@ -3,6 +3,7 @@ import 'package:video_player/video_player.dart';
 VideoPlayerController createLocalFileVideoController(
   String path, {
   required VideoViewType viewType,
+  required Map<String, String> httpHeaders,
 }) {
   // Web has no local file controllers; callers must gate on capabilities.
   throw UnsupportedError(

@@ -1,0 +1,27 @@
+kind: projection
+description: AssistantTurnView 的领域对象契约。
+identity:
+  fields:
+  - turnId
+  version_source: checkpoint
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: runEvents
+  on_delete: retain
+  reference_fields:
+  - conversationId
+  target_object: assistant.AssistantConversation
+local_identity_reasons:
+  domainId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity
+  skillId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity
+  traceId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
+    reference

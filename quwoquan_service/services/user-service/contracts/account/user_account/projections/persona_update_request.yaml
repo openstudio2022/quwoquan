@@ -1,0 +1,60 @@
+read_model: PersonaUpdateRequest
+description: 'PATCH /user/personas/{subAccountId}（UpdatePersona）请求体 wire。
+
+  与 user_profile/operations.yaml UpdatePersona 的 request_fields 一致（SubAccountProfileMutation 子集）。
+
+  '
+source_entities:
+- SubAccountProfileMutation
+consumers:
+- app
+client_projection:
+  dart_class: PersonaUpdateRequestDto
+  base_class: ''
+  output_path: cloud/runtime/generated/user/persona/persona_update_request_dto.g.dart
+  fields:
+  - name: displayName
+    dart_type: String
+    nullable: true
+    source: displayName
+    default: 'null'
+  - name: phone
+    dart_type: String
+    nullable: true
+    source: phone
+    default: 'null'
+  - name: email
+    dart_type: String
+    nullable: true
+    source: email
+    default: 'null'
+  - name: avatarUrl
+    dart_type: String
+    nullable: true
+    source: avatarUrl
+    default: 'null'
+  - name: isolationLevel
+    dart_type: String
+    nullable: true
+    source: isolationLevel
+    default: 'null'
+  - name: purposeHint
+    dart_type: String
+    nullable: true
+    source: purposeHint
+    default: 'null'
+  - name: applyScope
+    dart_type: String
+    nullable: true
+    source: applyScope
+    default: 'null'
+  - name: syncTargetIds
+    dart_type: List<String>
+    nullable: true
+    source: syncTargetIds
+    default: 'null'
+  - name: fieldsMask
+    dart_type: List<String>
+    nullable: true
+    source: fieldsMask
+    default: 'null'

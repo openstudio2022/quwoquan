@@ -22,8 +22,8 @@ import org.json.JSONObject;
  */
 final class StartupNativeTelemetryJournal {
   private static final String PREFERENCES = "FlutterSharedPreferences";
-  private static final String EVENTS_KEY = "startup_telemetry_native_journal_v1";
-  private static final String ATTEMPT_KEY = "startup_telemetry_native_attempt_v1";
+  private static final String EVENTS_KEY = "startup_telemetry_native_journal";
+  private static final String ATTEMPT_KEY = "startup_telemetry_native_attempt";
   private static final int MAX_EVENTS = 32;
 
   private final SharedPreferences preferences;

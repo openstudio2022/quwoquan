@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.output_paths import legal_static_release_dir
+from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
 
 
 class MockPublicPlaneHandler(BaseHTTPRequestHandler):
@@ -104,6 +104,16 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         path, _query = self._split_path()
         if self.mode == "api" and self._handle_auth_post(path):
+            return
+        if self.mode == "api" and path == "/search":
+            self._send_json(
+                {
+                    "requestId": "alpha-search-request",
+                    "rankingVersion": "alpha-mock-v1",
+                    "hits": [],
+                    "mockBoundary": True,
+                }
+            )
             return
         if self.mode == "api" and path == "/user/sync":
             self._send_json(
@@ -356,7 +366,9 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         configured = type(self).legal_static_root.strip()
         if configured:
             return Path(configured).expanduser().resolve()
-        return (legal_static_release_dir(self.runtime_env) / "current" / "public").resolve()
+        return (
+            legal_static_deployment_package_dir(self.runtime_env) / "current" / "public"
+        ).resolve()
 
     def _resolve_legal_static_path(self, path: str) -> Path | None:
         root = self._legal_root()
@@ -707,7 +719,7 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         }
 
     def _match_experiment_path(self, path: str, suffix: str) -> str | None:
-        prefix = "/ops/experiments/"
+        prefix = "/ops/product_ops/experiments/"
         if not path.startswith(prefix) or not path.endswith(suffix):
             return None
         experiment_id = path[len(prefix) : -len(suffix)].strip("/")

@@ -217,17 +217,17 @@ def test_mediawiki_page_images_caption_comes_from_wikitext_placement():
 
 
 def test_mediawiki_caption_normalization_removes_invisible_format_controls():
-    raw = "\u200b\u200e\u2068中国\u2069四川\u2068海螺沟冰川森林公园\u2069"
+    raw = "\u200b\u200e\u2068中国\u2069四川\u2068测试实体丙冰川森林公园\u2069"
 
     normalized = _strip_html(raw)
 
-    assert normalized == "中国四川海螺沟冰川森林公园"
+    assert normalized == "中国四川测试实体丙冰川森林公园"
     assert all(ord(char) not in {0x200B, 0x200E, 0x2068, 0x2069} for char in normalized)
 
 
 def test_mediawiki_page_image_uses_sanitized_commons_caption_when_placement_has_none(monkeypatch):
     key = _file_match_key("File:WuLongGou.jpg")
-    raw_caption = "\u200b\u200e\u2068中国\u2069四川\u2068海螺沟冰川森林公园\u2069"
+    raw_caption = "\u200b\u200e\u2068中国\u2069四川\u2068测试实体丙冰川森林公园\u2069"
     monkeypatch.setattr(
         sys.modules[__name__],
         "_FAKE_WIKITEXT",
@@ -249,7 +249,7 @@ def test_mediawiki_page_image_uses_sanitized_commons_caption_when_placement_has_
     )
     captions = {_file_match_key(image["fileTitle"]): image["caption"] for image in images}
 
-    assert captions[key] == "中国四川海螺沟冰川森林公园"
+    assert captions[key] == "中国四川测试实体丙冰川森林公园"
 
 
 def test_homepage_source_images_are_same_source_only_no_search_pool_urls():
@@ -261,7 +261,7 @@ def test_homepage_source_images_are_same_source_only_no_search_pool_urls():
     """
     import content.source.research.auto_plan_writer as apw
 
-    task = "20260711--travel-homepage-source-images--cn-zhejiang--canary-001"
+    task = "20260711--travel-homepage-source-images--test-region-a--pilot-001"
     entity = "同源隔离景区"
     ExecutionFixtureBuilder(
         task,

@@ -13,6 +13,7 @@ import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart'
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
 
 part 'persisted_assistant_turn_timeline_helpers.dart';
 
@@ -460,16 +461,25 @@ AssistantJourney buildAssistantUiProcessTimelineFromProcessTimeline(
   final references = <AssistantJourneyReference>[];
   final seenReferenceKeys = <String>{};
   void collectReference(RetrievalProcessingReference reference) {
-    final key = reference.url.trim().isNotEmpty
-        ? reference.url.trim()
-        : '${reference.source.trim()}:${reference.title.trim()}';
+    if (!hasUsableCitationDestination(
+      reference.destination,
+      title: reference.title,
+      source: reference.source,
+    )) {
+      return;
+    }
+    final key = citationReferenceKey(
+      reference.destination,
+      source: reference.source,
+      title: reference.title,
+    );
     if (key.trim().isEmpty || !seenReferenceKeys.add(key)) {
       return;
     }
     references.add(
       AssistantJourneyReference(
         title: reference.title.trim(),
-        url: reference.url.trim(),
+        destination: reference.destination,
         source: reference.source.trim(),
       ),
     );
@@ -526,7 +536,7 @@ AssistantJourney buildAssistantUiProcessTimelineFromProcessTimeline(
             .map(
               (reference) => AssistantJourneyReference(
                 title: reference.title.trim(),
-                url: reference.url.trim(),
+                destination: reference.destination,
                 source: reference.source.trim(),
               ),
             )

@@ -26,7 +26,7 @@ os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 REPO_ROOT = DATA_ROOT.parent
-_PYTHON_CACHE_ROOT = REPO_ROOT / ".qwq_output" / "env" / "repo" / "local" / "python-cache" / "pytest"
+_PYTHON_CACHE_ROOT = Path(tempfile.gettempdir()) / "quwoquan-pytest-bytecode"
 sys.pycache_prefix = str(_PYTHON_CACHE_ROOT)
 os.environ["PYTHONPYCACHEPREFIX"] = str(_PYTHON_CACHE_ROOT)
 TESTS_ROOT = DATA_ROOT / "tests"

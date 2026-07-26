@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md#gwt-002
 package publicweb
 
 import (

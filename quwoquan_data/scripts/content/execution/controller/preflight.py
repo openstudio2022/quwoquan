@@ -44,13 +44,12 @@ def _managed_preflight(execution_id: str, spec: dict, args: argparse.Namespace) 
             "recipe/release fanout executions: " + ",".join(sorted(active_content_types))
         )
     else:
-        from content.execution.workspace import load_execution_manifest
         try:
-            manifest_content_type = str(
-                load_execution_manifest(execution_id).get("contentType") or ""
-            )
-        except (FileNotFoundError, TypeError, ValueError) as exc:
-            issues.append(f"canonical execution manifest unavailable: {exc}")
+            from content.execution.identity import parse_execution_id
+
+            manifest_content_type = parse_execution_id(execution_id).content_type.value
+        except ValueError as exc:
+            issues.append(f"canonical execution identity unavailable: {exc}")
         else:
             active_content_type = next(iter(active_content_types), "")
             if active_content_type and active_content_type != manifest_content_type:
@@ -188,6 +187,13 @@ def _managed_preflight(execution_id: str, spec: dict, args: argparse.Namespace) 
             agent_provider,
             getattr(args, "model", None),
         )
+        from core.cursor_model import CursorModelSelection
+
+        managed_model_selection = CursorModelSelection.from_config(
+            managed_model,
+            getattr(args, "model_parameters", None),
+            label="managed_preflight",
+        )
         requires_cursor_startup = (
             agent_provider == "cursor_sdk"
             and bool(managed_model)
@@ -197,7 +203,7 @@ def _managed_preflight(execution_id: str, spec: dict, args: argparse.Namespace) 
                 require_cursor_key=agent_provider == "cursor_sdk",
                 check_network=True,
                 check_cursor_startup=requires_cursor_startup,
-                cursor_startup_model=managed_model or DEFAULT_CURSOR_AGENT_MODEL,
+                cursor_startup_model=managed_model_selection,
                 cursor_startup_runtime=managed_runtime,
                 cursor_startup_timeout_seconds=resolve_cursor_startup_timeout_seconds(
                     getattr(args, "startup_timeout_seconds", None)
@@ -307,6 +313,7 @@ def _write_managed_env_ready_report(ctx: ExecutionContext, args: argparse.Namesp
         "executionId": ctx.execution_id,
         "agentProvider": _normalize_managed_agent_provider(ctx.agent_provider),
         "model": ctx.model,
+        "modelParameters": ctx.model_selection.parameters_document(),
         "recordedAt": store.now_iso(),
         "ready": bool(report.get("ready")),
         "preflight": preflight_report,

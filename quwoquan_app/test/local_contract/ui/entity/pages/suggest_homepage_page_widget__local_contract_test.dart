@@ -2,21 +2,22 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/entity/pages/suggest_homepage_page.dart';
 
 void main() {
+  setUp(AuthGate.resetDebounce);
+
   testWidgets('添加主页页切换车型后展示车型字段', (tester) async {
     final repository = _TrackingHomepageRepository();
 
     await tester.pumpWidget(
-      _buildApp(
-        repository: repository,
-        child: const _SuggestHomepageHarness(),
-      ),
+      _buildApp(repository: repository, child: const _SuggestHomepageHarness()),
     );
     await tester.tap(find.text('打开添加主页'));
     await tester.pumpAndSettle();
@@ -41,10 +42,7 @@ void main() {
     final repository = _TrackingHomepageRepository();
 
     await tester.pumpWidget(
-      _buildApp(
-        repository: repository,
-        child: const _SuggestHomepageHarness(),
-      ),
+      _buildApp(repository: repository, child: const _SuggestHomepageHarness()),
     );
     await tester.tap(find.text('打开添加主页'));
     await tester.pumpAndSettle();
@@ -68,10 +66,7 @@ void main() {
     final repository = _TrackingHomepageRepository();
 
     await tester.pumpWidget(
-      _buildApp(
-        repository: repository,
-        child: const _SuggestHomepageHarness(),
-      ),
+      _buildApp(repository: repository, child: const _SuggestHomepageHarness()),
     );
     await tester.tap(find.text('打开添加主页'));
     await tester.pumpAndSettle();
@@ -97,6 +92,65 @@ void main() {
     expect(repository.lastDraft?.address, isEmpty);
     expect(repository.lastDraft?.categoryTags, <String>['丰田']);
   });
+
+  testWidgets('游客关闭添加主页登录页回首页且不会循环', (tester) async {
+    final router = GoRouter(
+      initialLocation: AppRoutePaths.suggestHomepage(query: '西湖'),
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoutePaths.home,
+          builder: (_, _) => const Text('SUGGEST_SAFE_HOME'),
+        ),
+        GoRoute(
+          path: AppRoutePaths.suggestHomepagePathTemplate,
+          builder: (_, _) => const SuggestHomepagePage(initialQuery: '西湖'),
+        ),
+        GoRoute(
+          path: AppRoutePaths.loginPathTemplate,
+          builder: (context, state) => TextButton(
+            key: const ValueKey<String>('suggest-login-close'),
+            onPressed: () => context.go(
+              state.uri.queryParameters[loginDismissFallbackQueryParam] ??
+                  AppRoutePaths.home,
+            ),
+            child: const Text('CLOSE_LOGIN'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionControllerProvider.overrideWith(_GuestSession.new),
+          homepageFacetSetProvider.overrideWithValue(
+            _TrackingHomepageRepository(),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final loginContext = tester.element(
+      find.byKey(const ValueKey<String>('suggest-login-close')),
+    );
+    expect(
+      GoRouterState.of(
+        loginContext,
+      ).uri.queryParameters[loginGuestDismissPopQueryParam],
+      LoginDismissPolicy.safeFallback.name,
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('suggest-login-close')));
+    await tester.pumpAndSettle();
+    await tester.pump();
+
+    expect(find.text('SUGGEST_SAFE_HOME'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('suggest-login-close')),
+      findsNothing,
+    );
+  });
 }
 
 Widget _buildApp({
@@ -105,7 +159,8 @@ Widget _buildApp({
 }) {
   return ProviderScope(
     overrides: [
-      homepageRepositoryProvider.overrideWithValue(repository),
+      authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+      homepageFacetSetProvider.overrideWithValue(repository),
     ],
     child: MaterialApp(home: child),
   );
@@ -115,7 +170,8 @@ class _SuggestHomepageHarness extends StatefulWidget {
   const _SuggestHomepageHarness();
 
   @override
-  State<_SuggestHomepageHarness> createState() => _SuggestHomepageHarnessState();
+  State<_SuggestHomepageHarness> createState() =>
+      _SuggestHomepageHarnessState();
 }
 
 class _SuggestHomepageHarnessState extends State<_SuggestHomepageHarness> {
@@ -139,8 +195,9 @@ class _SuggestHomepageHarnessState extends State<_SuggestHomepageHarness> {
                   return;
                 }
                 setState(() {
-                  _resultText =
-                      result == true ? 'result:submitted' : 'result:closed';
+                  _resultText = result == true
+                      ? 'result:submitted'
+                      : 'result:closed';
                 });
               },
               child: const Text('打开添加主页'),
@@ -164,4 +221,20 @@ class _TrackingHomepageRepository extends MockHomepageRepository {
     lastDraft = draft;
     return super.suggestHomepageCandidate(draft: draft);
   }
+}
+
+class _AuthenticatedSession extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'entity-test-token',
+    ownerId: 'fixture_user_current',
+    activeSubAccountId: 'fixture_user_current',
+  );
+}
+
+class _GuestSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
 }

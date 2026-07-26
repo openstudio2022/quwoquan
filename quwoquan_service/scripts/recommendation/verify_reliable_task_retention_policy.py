@@ -10,8 +10,8 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-RETENTION = ROOT / "quwoquan_ops/environments/reliable_task_retention_policy.yaml"
-CATALOG = ROOT / "quwoquan_ops/environments/reliable_task_module_catalog.yaml"
+RETENTION = ROOT / "quwoquan_service/runtime/reliabletask/resources/retention_policy.yaml"
+CATALOG = ROOT / "quwoquan_service/runtime/reliabletask/resources/module_catalog.yaml"
 
 
 def fail(message: str) -> None:

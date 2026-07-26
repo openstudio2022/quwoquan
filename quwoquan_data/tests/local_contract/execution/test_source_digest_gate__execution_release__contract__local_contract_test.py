@@ -28,11 +28,11 @@ def test_source_digest_gate__execution_release__contract__local_contract(tmp_pat
     )
     _write(
         tmp_path / "releases/example/payload/release.json",
-        {"sourceDigest": digest},
+        {"sourceDigests": [digest]},
     )
     _write(
-        tmp_path / "releases/example/attestations/aggregate.json",
-        {"sourceDigest": digest},
+        tmp_path / "releases/example/attestations/release.json",
+        {"sourceDigests": [digest]},
     )
 
     assert source_digest_issues(
@@ -49,12 +49,12 @@ def test_source_digest_gate__rejects_release_receipt_drift__contract__local_cont
     changed["digest"] = "sha256:" + "0" * 64
     _write(
         tmp_path / "releases/example/payload/release.json",
-        {"sourceDigest": digest},
+        {"sourceDigests": [digest]},
     )
-    aggregate = tmp_path / "releases/example/attestations/aggregate.json"
-    _write(aggregate, {"sourceDigest": changed})
+    aggregate = tmp_path / "releases/example/attestations/release.json"
+    _write(aggregate, {"sourceDigests": [changed]})
 
     assert source_digest_issues(
         executions_root=tmp_path / "tasks",
         release_root=tmp_path / "releases",
-    ) == [f"{aggregate}: sourceDigest drift from release header"]
+    ) == [f"{aggregate}: sourceDigests drift from release header"]

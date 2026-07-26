@@ -19,6 +19,8 @@ FORBIDDEN = (
     re.compile(r"\bbatchId\b"),
     re.compile(r"\btask_root\b"),
     re.compile(r"\bbatch_root\b"),
+    re.compile(r"\btask\s*:\s*(?:str|Path)\b"),
+    re.compile(r"\bbatch\s*:\s*(?:str|Path)\b"),
     re.compile(r"\bTASKS_ROOT\b"),
     re.compile(r"\bQWQ_BATCH_"),
     re.compile(r"--task\b"),
@@ -33,7 +35,11 @@ FORBIDDEN = (
 
 def execution_identity_purity_issues() -> list[str]:
     issues: list[str] = []
-    paths = list(SCRIPTS_ROOT.rglob("*.py"))
+    paths = [
+        path
+        for path in SCRIPTS_ROOT.rglob("*.py")
+        if "verify" not in path.relative_to(SCRIPTS_ROOT).parts
+    ]
     for root in ACTIVE_TEXT_ROOTS:
         if root.is_dir():
             paths.extend(

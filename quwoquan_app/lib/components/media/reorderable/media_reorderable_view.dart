@@ -6,7 +6,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 
 /// 统一的媒体拖拽重排视图（网格 / 横条两布局共用一套交互真相源）。
 ///
-/// 设计目标（对齐用户「图片拖拽重排」诉求 + `.cursor/rules/13-coding-discipline` R24/R25）：
+/// 设计目标（对齐用户「图片拖拽重排」诉求）：
 /// - 长按起拖 + 兄弟实时让位（[AnimatedPositioned] 前移/后移）+ 松手提交 + haptics；
 /// - 网格（响应式 tile + 末尾「添加」占位）与横条（横向滚动）两种布局只此一处实现，
 ///   三个调用点（创作页网格 / 选择器已选条 / 图片编辑器缩略图条）共用，杜绝多套拖拽分叉；

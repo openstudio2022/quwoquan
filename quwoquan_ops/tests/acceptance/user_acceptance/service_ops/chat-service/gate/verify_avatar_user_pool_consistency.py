@@ -24,45 +24,64 @@ SERVICE_ROOT = ROOT / "quwoquan_service"
 METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata"
 SHARED = METADATA / "_shared" / "test_fixtures"
 MEDIA_ROOT = SHARED / "media"
-USER_POOL_PATH = SHARED / "user_pool.json"
+USER_POOL_PATH = (
+    ROOT
+    / "quwoquan_service/services/user-service/tests/support/contract_fixtures/user_pool.json"
+)
 SOURCE_CATALOG_PATH = SHARED / "source_catalog.json"
 COMPOSITION_RULES_PATH = SHARED / "composition_rules.json"
-USER_SCENARIOS = METADATA / "user" / "test_fixtures" / "scenarios" / "user_scenarios.json"
-CONTENT_SCENARIOS = METADATA / "content" / "test_fixtures" / "scenarios" / "content_scenarios.json"
-CIRCLE_SCENARIOS = METADATA / "social" / "circle" / "test_fixtures" / "scenarios" / "circle_scenarios.json"
-CHAT_SCENARIOS = METADATA / "messages" / "chat" / "test_fixtures" / "scenarios" / "chat_scenarios.json"
+USER_SCENARIOS = ROOT / "quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.json"
+CONTENT_SCENARIOS = ROOT / "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json"
+CIRCLE_SCENARIOS = ROOT / "quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.json"
+CHAT_SCENARIOS = ROOT / "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json"
 MANIFESTS = {
     "alpha": SHARED / "app_alpha_seed_manifest.json",
     "beta": SHARED / "app_beta_seed_manifest.json",
     "gamma": SHARED / "app_gamma_seed_manifest.json",
 }
-GAMMA_CURATED_MEDIA_BUNDLE = ROOT / "quwoquan_ops" / "environments" / "gamma_curated_media_bundle.json"
-MEDIA_DELIVERY_MANIFEST = ROOT / "quwoquan_ops" / "environments" / "media_delivery_manifest.json"
+GAMMA_CURATED_MEDIA_BUNDLE = (
+    ROOT
+    / "quwoquan_service/services/content-service/environments/gamma/resources/artifacts/media/gamma_curated_media_bundle.json"
+)
+MEDIA_DELIVERY_MANIFEST = (
+    ROOT
+    / "quwoquan_service/services/content-service/resources/static/media/media_delivery_manifest.json"
+)
 GROUP_RENDER_PACKAGE = "./tools/render_group_avatar"
 GAMMA_CURATED_EXPECTATIONS = {
     "content": {
-        "fixturePath": "content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
+        "fixturePath": "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.gamma-curated.json",
         "refs": [
             "content_discovery_core",
+            "comment_thread_core",
             "intersection_core",
             "home_showcase_core",
             "profile_share_interaction_core",
         ],
     },
     "circle": {
-        "fixturePath": "social/circle/test_fixtures/scenarios/circle_scenarios.gamma-curated.json",
+        "fixturePath": "quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.gamma-curated.json",
         "refs": ["circle_core", "circle_group_chat_link_core"],
     },
     "chat": {
-        "fixturePath": "messages/chat/test_fixtures/scenarios/chat_scenarios.gamma-curated.json",
+        "fixturePath": "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.gamma-curated.json",
         "refs": ["chat_core", "chat_contacts_core", "chat_group_flow_core"],
     },
     "user": {
-        "fixturePath": "user/test_fixtures/scenarios/user_scenarios.gamma-curated.json",
-        "refs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core"],
+        "fixturePath": "quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.gamma-curated.json",
+        "refs": [
+            "user_profile_core",
+            "persona_core",
+            "profile_feed_core",
+            "relationship_core",
+            "greeting_core",
+            "subject_follow_core",
+            "contact_discovery_core",
+            "following_subject_core",
+        ],
     },
     "entity": {
-        "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.gamma-curated.json",
+        "fixturePath": "quwoquan_service/services/entity-service/tests/support/contract_fixtures/scenarios/entity_scenarios.gamma-curated.json",
         "refs": ["entity_homepage_core", "entity_claim_core", "entity_picker_core"],
     },
 }
@@ -778,6 +797,17 @@ def verify_gamma_curated_coverage(errors: list[str], gamma_docs: dict[str, dict[
     missing_posts = sorted(required_posts - content_posts)
     if missing_posts:
         fail(errors, f"gamma curated content posts missing core coverage: {missing_posts}")
+    image_post_count = sum(
+        1
+        for item in gamma_docs["content"]["seedSets"]["content_discovery_core"].get("posts", [])
+        if str(item.get("contentType") or "").strip() == "image"
+    )
+    if image_post_count < 21:
+        fail(
+            errors,
+            "gamma curated content must retain at least 21 image posts for "
+            f"the limit=20 feed cursor contract, got {image_post_count}",
+        )
 
     user_profiles = {
         str(item.get("userId") or "")
@@ -926,7 +956,7 @@ def main() -> int:
     ):
         verify_no_external_media(errors, document, label)
     gamma_docs = {
-        domain: load_json(METADATA / str(next(
+        domain: load_json(ROOT / str(next(
             item.get("fixturePath")
             for item in manifests["gamma"]["seedRefs"]
             if item.get("domain") == domain
@@ -940,7 +970,7 @@ def main() -> int:
     verify_gamma_curated_coverage(errors, gamma_docs)
     gamma_bundle = load_json(GAMMA_CURATED_MEDIA_BUNDLE)
     gamma_fixture_docs = [
-        load_json(METADATA / str(item.get("fixturePath") or ""))
+        load_json(ROOT / str(item.get("fixturePath") or ""))
         for item in manifests["gamma"]["seedRefs"]
         if str(item.get("fixturePath") or "").strip()
     ]

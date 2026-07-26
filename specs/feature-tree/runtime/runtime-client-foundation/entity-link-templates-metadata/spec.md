@@ -1,86 +1,135 @@
-# L3：实体链接模板元数据（entity-link-templates-metadata）
+# L3 Story：实体链接模板元数据（entity-link-templates-metadata） (`entity-link-templates-metadata`)
 
-## 背景与动机
+> 所属能力：[`runtime-client-foundation`](../spec.md)
 
-端侧存在 **公网 HTTPS、`quwoquan://` 深链、GoRouter 路径** 多处手写拼接，易与 **`app_routes` / `ui_surfaces`** 漂移；与 **metadata-first** 主线不一致。需要将 **链接结构**（scheme、path 段、query 规则、占位符）与 **对内导航锚点**（`route_id`、`param_bindings`）收拢为 **contracts 唯一真相源**，经 **verify → codegen** 生成端侧（及可选云侧）API，**禁止**在业务组件中重复拼域名与路径。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-## 目标用户与目标
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-| 角色 | 目标 |
-|------|------|
-| 终端用户 | 复制/分享的链接与 App 内打开路径 **语义一致**；环境切换时仅 origin 变化、路径形态不变 |
-| 开发者 | 新增/改链接形态 **只改 metadata + codegen**；Router 与对外 URL **同源映射** |
-| 运维 / 增长 | 公网域名通过 **部署或 Remote Config** 配置，**不**改代码、**不**把生产域名写入 Git 内 metadata |
+## 1. 用户价值
 
-## 功能范围（In Scope）
+作为打开实体链接的用户，
+我希望让分享链接、站内跳转和归因参数解析到同一类型化对象与目标页面，
+从而稳定到达目标且保留合法来源上下文。
 
-1. **统一元模型 `link_templates`**（`_shared/link_templates.yaml`）  
-   - 覆盖实体：**post、circle、user、chat、entity_homepage**（与当前 `app_routes` 能力对齐）。  
-   - 每实体：`app_deep_link`（scheme/host/path_template/query_rules）、`web.path_template`、`navigation.route_id` + `param_bindings`。
+## 2. 范围与非目标
 
-2. **权威方与组合规则**  
-   - **Canonical 字符串**：客户端按 **metadata 模板 + 运行时 origin** 拼接即可（无需服务端每次返回 URL）。  
-   - **HTTPS**：`normalizeOrigin(runtime)` + `web.path_template`（占位符替换 + 编码规则由 design 固定）。  
-   - **Scheme**：结构来自 metadata；**scheme 不随环境变化**。
+### In Scope
 
-3. **与通用路由的关系**  
-   - **显式映射**：`navigation.route_id` **必须**引用 `app_routes.yaml` 已有 `id`；`param_bindings` 声明链接参数 → 路由 path 参数。  
-   - 禁止在 Dart 维护第二套「外链 path → 页面」表；Universal Links / App Links 解析应 **回溯到同一 metadata 行**（实现落在后续 slice）。
+- “实体链接模板元数据（entity-link-templates-metadata）”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 5 类实体（post/circle/user/entity_homepage，「我」等同 user）的 web/deeplink 双链与 navigation 映射。
+- 对外引流归因参数 attribution_params 结构。
+- 智能中转落地页 transfer_pages（short_link/universal_landing）结构。
+- 跨 App 口令 share_token 结构。
+- 端侧 codegen 工具改造与调用点替换（/dev 切片）。
 
-4. **与姊妹 L3 的关系**  
-   - **`metadata-driven-client-data-contract`**：本 L3 是其下 **「可复制链接 / 深链」** 专项，共用 metadata-first 纪律。  
-   - **`unified-app-page-access`**：本 L3 的 `route_id` 与 **pageAccess / 路由 codegen** 同源。
+### Out of Scope
 
-## Out of Scope（本 baseline 文档冻结；实现按 plan 切片）
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-- **codegen 工具改造与全量调用点替换**（沉浸式、分享 sheet、助理 Referer 等）：见 `树内计划文档`，在 **`/dev`** 闭环。  
-- **服务端短链、跳转、OG 动态 HTML**：可选后续 story；本 L3 不强制 API 返回 canonical。  
-- **iOS AASA / Android assetlinks 文件内容**：运维交付物；metadata 仅提供 **path pattern** 输入。
+## 3. 行为要求
 
-## 约束
+<a id="req-001"></a>
+### REQ-001 实体链接模板元数据（entity-link-templates-metadata）
 
-- `route_id` 不在 `app_routes.yaml` 中存在的，**禁止**合入（CI/verify 或 codegen 阶段校验）。  
-- metadata **不得**写入生产环境具体域名（仅 `runtime_origin_binding` 声明 **键名** 与来源类型）。  
-- 与仓库 **04-fullstack-metadata-consistency**：新增链接形态 **不**在 UI 硬编码 path 字面量作为第二真相源。
+- 出站链接必须注入受控归因参数，入站路由匹配前必须剥离归因参数且保留归因上下文。
 
-## 数据生命周期 / 权限
+<a id="req-002"></a>
+### REQ-002 对外链接统一携带归因参数且入站被剥离
 
-- 帖子 **private** 等可见性与 **是否允许复制 Web/深链** 仍由现有 **`ContentShareTemplateBuilder` / 分享策略** 等业务规则决定；本 metadata 只提供 **允许复制时的字符串形态**。  
-- Post 链接不携带 scope 或圈子可见性参数；圈内放置由 CirclePostPlacement 的独立入口与权限合同处理。
+- 对外链接必须统一携带受控归因参数；解析目标路由时不得把这些参数当作业务主键。
 
-## 迁移与回滚
+<a id="req-003"></a>
+### REQ-003 中转页与口令回溯到同一实体真相源
 
-- **迁移**：codegen 产出稳定后，删除/收缩 `AppPublicContentLinks` 内手写 path、`ContentShareTemplateBuilder._deeplinkForPermission` 内硬编码字符串。  
-- **回滚**：保留 `link_templates.yaml` 版本字段；回滚代码时 **不删除** metadata，仅恢复调用旧 API。
+- 中转页与口令必须把四类实体目标解析到与直接链接相同的 canonical 实体身份。
 
-## 对外引流扩展（external-acquisition-and-deeplink，本次新增）
+<a id="req-004"></a>
+### REQ-004 链接模板/归因/口令/中转页结构契约
 
-本 L3 在原「实体 → 双链 + 导航锚点」真相源之上，新增对外引流所需的三类统一结构，全部冻结在 `_shared/link_templates.yaml`，禁止 UI / Web / 服务端另起第二套：
+- link_templates.yaml 的 entities/attribution_params/transfer_pages/share_token 结构合法且 route_id 可解析。
 
-1. **归因参数 `attribution_params`**：所有对外可复制/分享链接统一支持 `utm_source / utm_medium / utm_campaign / share_id / inviter / referral`。
-   - 由分享侧运行时按渠道注入到 **web HTTPS 链接与中转页**；scheme 深链通过 `extinfo`/透传字段携带等价归因。
-   - 入站后由 `external-inbound-deeplink-routing` 的 `DeepLinkResolver` **剥离并转交埋点与延迟深链归因**，绝不参与 GoRouter route 匹配。
-   - 与 `product-ops-growth/event-ingestion-and-analytics` 的事件维度、`user/invite_record` 的邀请归因对齐。
+<a id="req-005"></a>
+### REQ-005 显式映射：navigation.route_id 必须引用 app_routes.yaml 已有 id；param_bindings 声明链接参数 → 路由 path 参数
 
-2. **智能中转落地页 `transfer_pages`**：
-   - `short_link`（`s/{token}`）：口令/海报二维码默认落点。
-   - `universal_landing`（`open?target_entity&target_id&token`）：按 UA 分流（微信/浏览器/iOS/Android/PC）唤起 App、下载或 web 预览。
-   - 中转页的 `target_entity`/`target_id` 指向真实实体，解析时**回溯到上方 `entities` 的同一行**，不重复定义对象路径。
+- **显式映射**：`navigation.route_id` **必须**引用 `app_routes.yaml` 已有 `id`；`param_bindings` 声明链接参数 → 路由 path 参数。
+- 禁止在 Dart 维护第二套「外链 path → 页面」表；Universal Links / App Links 解析应 **回溯到同一 metadata 行**（实现落在后续 slice）。
+- `route_id` 不在 `app_routes.yaml` 中存在的，**禁止**合入（CI/verify 或 codegen 阶段校验）。
+- metadata **不得**写入生产环境具体域名（仅 `runtime_origin_binding` 声明 **键名** 与来源类型）。
 
-3. **口令 `share_token`**：用于不支持外链的 UGC 平台（小红书/今日头条评论区等）。复制可识别码到剪贴板，App 在用户授权下读取识别并还原目标（淘口令式）。口令只携带短 token，真实目标与归因由服务端短链表解析，避免明文长链被平台屏蔽。
+## 4. 契约引用
 
-**对象覆盖**：对外引流覆盖 5 类对象——`post`（含 article/photo/video/micro 四形态）、`circle`、`user`、`entity_homepage`；「我」对外等同 `user` 的公开视角，不单独定义实体行。
+- canonical：`quwoquan_service/contracts/metadata/_shared/link_templates.yaml`
+- canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml`
 
-**codegen 边界**：`entities` 现有产物（`AppLinkTemplates`）不受影响；本次新增三段的端侧产物（`AppShareLinks`/`AppShareToken`/`AppTransferPages`）与服务端短链解析在 `/dev` 切片落地，本文件先冻结结构。
+## 5. 验收场景
 
-## L1 / L2 / L3
+<a id="gwt-001"></a>
+### GWT-001 实体链接模板元数据（entity-link-templates-metadata）
 
-| 层级 | 标识 |
-|------|------|
-| L1 | `runtime` |
-| L2 | `runtime-client-foundation` |
-| L3 | `entity-link-templates-metadata` |
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“实体链接模板元数据（entity-link-templates-metadata）”对应的公开行为。
+- THEN 路由打开原目标实体，业务参数不含归因键，归因上下文仍可用于事件记录。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
 
-## 验收摘要
+<a id="gwt-002"></a>
+### GWT-002 对外链接统一携带归因参数且入站被剥离
 
-见同目录 `acceptance.yaml`；商用与测试矩阵见 `design.md`。
+- GIVEN 系统为实体生成出站链接并随后接收该链接。
+- WHEN 路由解析业务目标。
+- THEN 受控归因参数被保留为上下文且从业务主键解析中剥离。
+
+<a id="gwt-003"></a>
+### GWT-003 中转页与口令回溯到同一实体真相源
+
+- GIVEN 用户通过中转页或口令访问任一支持实体。
+- WHEN 系统解析并恢复目标。
+- THEN 解析结果与直接链接使用同一 canonical 实体身份。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 5 类实体双链与导航锚点同源
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：codegen/verify 校验所有 route_id 存在；不存在则阻断合入。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 对外链接统一携带归因参数且入站被剥离
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：归因 query 解析单测覆盖注入与剥离两端。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-003"></a>
+### OPEN-003 中转页与口令回溯到同一实体真相源
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：中转页与口令解析单测覆盖 4 类实体目标。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-004"></a>
+### OPEN-004 链接模板/归因/口令/中转页结构契约
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：link_templates.yaml 的 entities/attribution_params/transfer_pages/share_token 结构合法且 route_id 可解析。
+- 完成判定：link_templates.yaml 的 entities/attribution_params/transfer_pages/share_token 结构合法且 route_id 可解析。

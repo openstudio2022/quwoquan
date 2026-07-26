@@ -29,6 +29,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
     required String postId,
     String? cursor,
     int limit = 20,
+    ContentCommentSort sort = ContentCommentSort.hot,
   }) async {
     _throwIfConfigured();
     queryCalls++;
@@ -43,6 +44,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
           .toList(growable: false),
       cursor: cursor,
       limit: limit,
+      compare: (left, right) => _compareRootComments(left, right, sort),
     );
   }
 
@@ -66,6 +68,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
           .toList(growable: false),
       cursor: cursor,
       limit: limit,
+      compare: _compareReplies,
     );
     return ContentCommentReplyPageSlice(
       items: page.items,
@@ -86,11 +89,13 @@ class TestContentCommentFacet implements ContentCommentFacet {
           .where(
             (item) =>
                 item.authorId == actorId &&
-                item.status == ContentCommentStatus.active,
+                (item.status == ContentCommentStatus.active ||
+                    item.status == ContentCommentStatus.hidden),
           )
           .toList(growable: false),
       cursor: cursor,
       limit: limit,
+      compare: _compareLatest,
     );
     return ContentAuthorCommentPageSlice(
       items: page.items,
@@ -112,6 +117,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
           .toList(growable: false),
       cursor: cursor,
       limit: limit,
+      compare: _compareLatest,
     );
     return ContentReceivedCommentPageSlice(
       items: page.items,
@@ -289,12 +295,13 @@ class TestContentCommentFacet implements ContentCommentFacet {
     List<ContentCommentListItem> values, {
     required String? cursor,
     required int limit,
+    required int Function(
+      ContentCommentListItem left,
+      ContentCommentListItem right,
+    )
+    compare,
   }) {
-    final ordered = List<ContentCommentListItem>.of(values)
-      ..sort((left, right) {
-        if (left.isPinned != right.isPinned) return left.isPinned ? -1 : 1;
-        return right.createdAt.compareTo(left.createdAt);
-      });
+    final ordered = List<ContentCommentListItem>.of(values)..sort(compare);
     final offset = int.tryParse(cursor ?? '') ?? 0;
     final start = offset.clamp(0, ordered.length).toInt();
     final end = (start + limit).clamp(0, ordered.length).toInt();
@@ -303,6 +310,55 @@ class TestContentCommentFacet implements ContentCommentFacet {
       nextCursor: end < ordered.length ? '$end' : null,
       total: ordered.length,
     );
+  }
+
+  static int _compareRootComments(
+    ContentCommentListItem left,
+    ContentCommentListItem right,
+    ContentCommentSort sort,
+  ) {
+    if (left.isPinned != right.isPinned) return left.isPinned ? -1 : 1;
+    if (left.isPinned) {
+      final pinnedOrder = _compareNullableDateDescending(
+        left.pinnedAt,
+        right.pinnedAt,
+      );
+      if (pinnedOrder != 0) return pinnedOrder;
+    }
+    if (sort == ContentCommentSort.hot) {
+      final leftScore =
+          left.likeCount - left.dislikeCount + 2 * left.replyCount;
+      final rightScore =
+          right.likeCount - right.dislikeCount + 2 * right.replyCount;
+      final scoreOrder = rightScore.compareTo(leftScore);
+      if (scoreOrder != 0) return scoreOrder;
+    }
+    return _compareLatest(left, right);
+  }
+
+  static int _compareLatest(
+    ContentCommentListItem left,
+    ContentCommentListItem right,
+  ) {
+    final createdOrder = right.createdAt.compareTo(left.createdAt);
+    if (createdOrder != 0) return createdOrder;
+    return right.id.compareTo(left.id);
+  }
+
+  static int _compareReplies(
+    ContentCommentListItem left,
+    ContentCommentListItem right,
+  ) {
+    final createdOrder = left.createdAt.compareTo(right.createdAt);
+    if (createdOrder != 0) return createdOrder;
+    return left.id.compareTo(right.id);
+  }
+
+  static int _compareNullableDateDescending(DateTime? left, DateTime? right) {
+    if (left == null && right == null) return 0;
+    if (left == null) return 1;
+    if (right == null) return -1;
+    return right.compareTo(left);
   }
 
   ContentCommentListItem? _find(String id) {
@@ -373,6 +429,10 @@ ContentCommentListItem testCommentItem({
   bool canReply = true,
   bool canReport = true,
   bool canPin = false,
+  String? authorIpLocation,
+  bool authorLiked = false,
+  ContentCommentViewerRelation viewerRelation =
+      ContentCommentViewerRelation.none,
 }) {
   final timestamp = createdAt ?? DateTime.utc(2026, 7, 14, 8);
   return ContentCommentListItem(
@@ -410,5 +470,8 @@ ContentCommentListItem testCommentItem({
     canReply: canReply,
     canReport: canReport,
     canPin: canPin,
+    authorIpLocation: authorIpLocation,
+    authorLiked: authorLiked,
+    viewerRelation: viewerRelation,
   );
 }

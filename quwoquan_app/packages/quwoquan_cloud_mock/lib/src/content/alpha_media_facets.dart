@@ -6,11 +6,13 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   final Map<String, _AlphaUpload> _uploads = <String, _AlphaUpload>{};
   final Map<String, ContentMediaAssetSlice> _assets =
       <String, ContentMediaAssetSlice>{};
+  final Set<String> _discardedAssetIds = <String>{};
   int _sequence = 0;
 
   @override
   Future<ContentMediaUploadSessionCommandResult> initUpload(
     InitContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) async {
     final id = 'alpha_media_upload_${++_sequence}';
     final expiresAt = DateTime.utc(2030, 1, 1, 0, 15);
@@ -19,9 +21,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       sessionId: id,
       assetId: null,
       status: ContentMediaUploadStatus.pending,
-      objectKey: 'alpha/uploads/$id',
       uploadUrl: Uri.parse('https://alpha-upload.invalid/$id'),
-      cdnUrl: null,
       expiresAt: expiresAt,
       replayed: false,
     );
@@ -30,12 +30,16 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaUploadSessionCommandResult> completeUpload(
     CompleteContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) async {
     final upload = _uploads[command.sessionId];
     if (upload == null)
       throw StateError('alpha media upload session not found');
     final assetId = 'alpha_media_asset_${command.sessionId}';
     final cdnUrl = Uri.parse('https://alpha-cdn.invalid/$assetId');
+    upload
+      ..assetId = assetId
+      ..status = ContentMediaUploadStatus.completed;
     _assets[assetId] = ContentMediaAssetSlice(
       assetId: assetId,
       version: 1,
@@ -50,9 +54,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       sessionId: command.sessionId,
       assetId: assetId,
       status: ContentMediaUploadStatus.completed,
-      objectKey: 'alpha/media/$assetId',
       uploadUrl: null,
-      cdnUrl: cdnUrl,
       expiresAt: upload.expiresAt,
       replayed: false,
     );
@@ -61,6 +63,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaUploadSessionCommandResult> abortUpload(
     AbortContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) async {
     final upload = _uploads.remove(command.sessionId);
     if (upload == null)
@@ -69,9 +72,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       sessionId: command.sessionId,
       assetId: null,
       status: ContentMediaUploadStatus.aborted,
-      objectKey: 'alpha/uploads/${command.sessionId}',
       uploadUrl: null,
-      cdnUrl: null,
       expiresAt: upload.expiresAt,
       replayed: false,
     );
@@ -86,12 +87,12 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       throw StateError('alpha media upload session not found');
     return ContentMediaUploadSessionSlice(
       sessionId: query.sessionId,
-      version: 1,
-      objectKey: 'alpha/uploads/${query.sessionId}',
+      version: upload.status == ContentMediaUploadStatus.completed ? 2 : 1,
+      assetId: upload.assetId,
       mediaType: upload.command.mediaType,
       contentType: upload.command.contentType,
       fileSize: upload.command.fileSize,
-      status: ContentMediaUploadStatus.pending,
+      status: upload.status,
       createdAt: DateTime.utc(2030),
       updatedAt: DateTime.utc(2030),
       expiresAt: upload.expiresAt,
@@ -105,6 +106,29 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
     final asset = _assets[query.mediaId];
     if (asset == null) throw StateError('alpha media asset not found');
     return asset;
+  }
+
+  @override
+  Future<ContentMediaAssetDiscardResult> discardMediaAsset(
+    DiscardContentMediaAssetCommand command,
+    ContentMediaAssetCommandContext context,
+  ) async {
+    if (_discardedAssetIds.contains(command.mediaId)) {
+      return ContentMediaAssetDiscardResult(
+        mediaId: command.mediaId,
+        status: ContentMediaProcessingStatus.deleted,
+        replayed: true,
+      );
+    }
+    if (_assets.remove(command.mediaId) == null) {
+      throw StateError('alpha media asset not found');
+    }
+    _discardedAssetIds.add(command.mediaId);
+    return ContentMediaAssetDiscardResult(
+      mediaId: command.mediaId,
+      status: ContentMediaProcessingStatus.deleted,
+      replayed: false,
+    );
   }
 
   @override
@@ -129,11 +153,13 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaCoverSelectionResult> selectAutoCover(
     SelectAutoContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
   ) async => _cover(command.mediaId, 'first_frame');
 
   @override
   Future<ContentMediaCoverSelectionResult> selectManualCover(
     SelectManualContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
   ) async => _cover(command.mediaId, 'manual', command.coverAssetId);
 
   ContentMediaCoverSelectionResult _cover(
@@ -154,8 +180,10 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
 }
 
 final class _AlphaUpload {
-  const _AlphaUpload(this.command, this.expiresAt);
+  _AlphaUpload(this.command, this.expiresAt);
 
   final InitContentMediaUploadCommand command;
   final DateTime expiresAt;
+  String? assetId;
+  ContentMediaUploadStatus status = ContentMediaUploadStatus.pending;
 }

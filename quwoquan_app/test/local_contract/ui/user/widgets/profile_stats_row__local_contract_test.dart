@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_stats_row.dart';
 
@@ -50,7 +51,7 @@ void main() {
     expect(find.text(UITextConstants.profileStatFollowers), findsOneWidget);
     expect(find.text(UITextConstants.follow), findsOneWidget);
     expect(find.text(UITextConstants.circleLikes), findsOneWidget);
-    expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
+    expect(find.text(ChatText.contactsTabCircles), findsOneWidget);
   });
 
   testWidgets('点击统计栏分发对应 type', (tester) async {
@@ -71,7 +72,7 @@ void main() {
     await tester.tap(find.text(UITextConstants.profileStatFollowers));
     await tester.tap(find.text(UITextConstants.follow));
     await tester.tap(find.text(UITextConstants.circleLikes));
-    await tester.tap(find.text(UITextConstants.contactsTabCircles));
+    await tester.tap(find.text(ChatText.contactsTabCircles));
     await tester.pump();
 
     expect(tapped, <String>['fans', 'following', 'likes', 'circles']);

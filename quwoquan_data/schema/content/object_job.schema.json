@@ -10,13 +10,31 @@
     "stage",
     "queueBackend",
     "partitionKey",
+    "contentObjectDir",
     "state",
     "attempt",
     "maxAttempts",
+    "maxStartupFailures",
+    "maxWallClockSeconds",
+    "stuckThreshold",
+    "permissions",
+    "failureFingerprints",
+    "mutexKey",
+    "lease",
+    "leaseExpiresEpoch",
+    "deadlineEpoch",
+    "notBeforeEpoch",
+    "sameRunRetryable",
+    "startupFailureCount",
+    "stuckDetected",
+    "lastIssue",
     "resultEnvelopeRequired",
     "resultEnvelopeRef",
     "gateVerdicts",
-    "tokenLedger"
+    "timings",
+    "meta",
+    "createdAt",
+    "updatedAt"
   ],
   "properties": {
     "jobId": {
@@ -25,15 +43,18 @@
     },
     "executionId": {
       "type": "string",
-      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
     "ref": {
       "type": "string",
       "minLength": 1
     },
     "stage": {
-      "type": "string",
-      "minLength": 1
+      "enum": [
+        "download",
+        "author",
+        "publish"
+      ]
     },
     "queueBackend": {
       "enum": [
@@ -43,6 +64,13 @@
     },
     "partitionKey": {
       "type": "string",
+      "minLength": 1
+    },
+    "contentObjectDir": {
+      "type": [
+        "string",
+        "null"
+      ],
       "minLength": 1
     },
     "reliableTaskRef": {
@@ -74,11 +102,33 @@
         "payload": {
           "type": "object",
           "required": [
+            "schema",
+            "jobId",
+            "executionId",
+            "ref",
+            "stage",
+            "partitionKey",
             "entityRef",
             "carrier",
             "sourceRevision",
             "idempotencyKey"
-          ]
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "schema": {"const": "quwoquan.object_job"},
+            "jobId": {"type": "string", "minLength": 1},
+            "executionId": {
+              "type": "string",
+              "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
+            },
+            "ref": {"type": "string", "minLength": 1},
+            "stage": {"enum": ["download", "author", "publish"]},
+            "partitionKey": {"type": "string", "minLength": 1},
+            "entityRef": {"type": "string", "minLength": 1},
+            "carrier": {"enum": ["homepage", "article", "image", "video"]},
+            "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "idempotencyKey": {"type": "string", "minLength": 5}
+          }
         }
       }
     },
@@ -131,6 +181,55 @@
       "type": "integer",
       "minimum": 1
     },
+    "maxStartupFailures": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "maxWallClockSeconds": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "stuckThreshold": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "permissions": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "failureFingerprints": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "mutexKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lease": {
+      "type": ["string", "null"]
+    },
+    "leaseExpiresEpoch": {
+      "type": "number",
+      "minimum": 0
+    },
+    "deadlineEpoch": {
+      "type": "number",
+      "minimum": 0
+    },
+    "notBeforeEpoch": {
+      "type": "number",
+      "minimum": 0
+    },
+    "sameRunRetryable": {
+      "type": "boolean"
+    },
+    "startupFailureCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stuckDetected": {
+      "type": "boolean"
+    },
     "resultEnvelopeRequired": {
       "type": "boolean"
     },
@@ -140,11 +239,28 @@
         "null"
       ]
     },
+    "lastIssue": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
     "gateVerdicts": {
       "type": "array"
     },
-    "tokenLedger": {
+    "timings": {
       "type": "array"
+    },
+    "meta": {
+      "type": "object"
+    },
+    "createdAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "updatedAt": {
+      "type": "string",
+      "minLength": 1
     },
     "schema": {
       "const": "quwoquan.object_job"

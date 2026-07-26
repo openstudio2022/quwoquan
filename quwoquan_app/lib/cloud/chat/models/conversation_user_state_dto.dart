@@ -1,5 +1,5 @@
 /// Typed DTO for the ConversationUserState entity.
-/// Maps to contracts/metadata/messages/conversation/fields.yaml → ConversationUserState.
+/// Maps to quwoquan_service/services/chat-service/contracts/chat/conversation/fields.yaml → ConversationUserState.
 class ConversationUserStateDto {
   final String id;
   final String userId;

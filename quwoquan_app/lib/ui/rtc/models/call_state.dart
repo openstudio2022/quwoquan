@@ -153,13 +153,13 @@ enum EndReason {
 
   static EndReason fromString(String? value) {
     return switch (value) {
-      'completed' => EndReason.completed,
+      'completed' || 'normal' || 'last_leave' => EndReason.completed,
       'cancelled' => EndReason.cancelled,
       'rejected' => EndReason.rejected,
-      'timeout' => EndReason.timeout,
+      'timeout' || 'no_answer' => EndReason.timeout,
       'busy' => EndReason.busy,
       'initiator_hangup' => EndReason.initiatorHangup,
-      'network_error' => EndReason.networkError,
+      'network_error' || 'error' => EndReason.networkError,
       _ => EndReason.unknown,
     };
   }
@@ -196,10 +196,10 @@ class CallSummary {
           '${formatDuration(duration)}';
     }
     return switch (endReason) {
-      EndReason.cancelled || EndReason.initiatorHangup =>
-        UITextConstants.callSummaryCancelled,
-      EndReason.rejected || EndReason.busy =>
-        UITextConstants.callSummaryRejected,
+      EndReason.cancelled ||
+      EndReason.initiatorHangup => UITextConstants.callSummaryCancelled,
+      EndReason.rejected ||
+      EndReason.busy => UITextConstants.callSummaryRejected,
       EndReason.timeout => UITextConstants.callSummaryNoAnswer,
       _ => UITextConstants.callSummaryMissed,
     };
@@ -243,7 +243,7 @@ enum ParticipantStatus {
       this == ParticipantStatus.connected;
 }
 
-/// 信任关系两态（与 contracts/metadata/rtc/call_session/fields.yaml TrustRelation 对齐）。
+/// 信任关系两态（与 quwoquan_service/services/rtc-service/contracts/rtc/call_session/fields.yaml TrustRelation 对齐）。
 /// known=可信（联系人/关注对象/当前会话或群成员）；possiblyUnknown=提示注意隐私。
 enum TrustRelation {
   known,
@@ -257,25 +257,4 @@ enum TrustRelation {
   }
 
   bool get isKnown => this == TrustRelation.known;
-}
-
-/// 参与者连接质量（与 fields.yaml ConnectionQuality 对齐，端侧弱网指示来源之一）。
-enum ConnectionQuality {
-  excellent,
-  good,
-  poor,
-  unavailable;
-
-  static ConnectionQuality? fromString(String? value) {
-    return switch (value) {
-      'excellent' => ConnectionQuality.excellent,
-      'good' => ConnectionQuality.good,
-      'poor' => ConnectionQuality.poor,
-      'unavailable' => ConnectionQuality.unavailable,
-      _ => null,
-    };
-  }
-
-  bool get isWeak =>
-      this == ConnectionQuality.poor || this == ConnectionQuality.unavailable;
 }

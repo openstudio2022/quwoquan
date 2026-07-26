@@ -53,7 +53,8 @@ abstract class DesktopPickerDirectoryMemory {
   Future<void> rememberDirectory(String path);
 }
 
-class PrefsDesktopPickerDirectoryMemory implements DesktopPickerDirectoryMemory {
+class PrefsDesktopPickerDirectoryMemory
+    implements DesktopPickerDirectoryMemory {
   PrefsDesktopPickerDirectoryMemory({
     Future<SharedPreferences> Function()? prefsFactory,
   }) : _prefsFactory = prefsFactory ?? SharedPreferences.getInstance;
@@ -78,9 +79,17 @@ class PrefsDesktopPickerDirectoryMemory implements DesktopPickerDirectoryMemory 
     final prefs = await _prefsFactory();
     await prefs.setString(_key, path);
   }
+
+  Future<void> clearForTerminalAccountClosure() async {
+    final preferences = await _prefsFactory();
+    await preferences.remove(_key);
+    if (preferences.containsKey(_key)) {
+      throw StateError('desktop picker directory cleanup verification failed');
+    }
+  }
 }
 
 final desktopPickerDirectoryMemoryProvider =
     Provider<DesktopPickerDirectoryMemory>(
-  (ref) => PrefsDesktopPickerDirectoryMemory(),
-);
+      (ref) => PrefsDesktopPickerDirectoryMemory(),
+    );

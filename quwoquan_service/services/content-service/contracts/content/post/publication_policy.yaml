@@ -1,0 +1,28 @@
+schema: content_post_publication_policy
+text_limits:
+  title_max_runes: 80
+  micro_body_max_runes: 5000
+  article_markdown_max_runes: 20000
+  summary_max_runes: 240
+  semantic_mentions_max_items: 30
+format_recommendation:
+  article_body_min_runes: 140
+  article_paragraph_min_count: 2
+  article_when_title_present: true
+  article_when_media_present: true
+  user_confirmation_required: true
+rate_limit:
+  persona_window_seconds: 60
+  persona_max_publications: 5
+  dependency_failure: fail_closed
+safety:
+  required: true
+  dependency_failure: fail_closed
+  decisions:
+  - allow
+  - review
+  - reject
+  - unavailable
+  unavailable_action: review
+  reject_error_code: CONTENT.USER.publication_rejected
+  unavailable_error_code: CONTENT.SYSTEM.required_dependency_unavailable

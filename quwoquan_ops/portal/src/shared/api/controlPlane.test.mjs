@@ -2,32 +2,49 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  applyPlatformRelease,
+  ackAlert,
+  beginReportReview,
+  decidePostModerationCase,
+  dismissReport,
+  fetchActiveAlerts,
   fetchEffectiveConfig,
-  fetchOnboardingDomains,
+  fetchGrayRoutingPolicy,
+  fetchHomepageCandidates,
+  fetchHomepageClaimRequests,
+  fetchHomepageStatusReports,
   fetchPlatformConfigInstanceReports,
   fetchPlatformProjectionSummary,
+  fetchPremiumPoolEntries,
   fetchReleases,
-  fetchRunbooks,
-  fetchGateRules,
   fetchPlatformAudits,
   fetchPlatformApprovals,
   fetchPlatformTriageSummary,
   fetchProductEventDrilldown,
   fetchProductEventSummary,
   fetchProductL1L4Metrics,
+  fetchRtcMediaQoeSummary,
   fetchProductTriageSummary,
   fetchProductProjectionSummary,
+  fetchRuntimeLogDrilldown,
+  fetchRuntimeLogSummary,
   fetchRecommendationBehaviorMetrics,
   fetchReports,
-  rollbackPlatformRelease,
+  fetchCurrentPostModerationCase,
+  reviewPostModerationCase,
+  resolveReport,
+  takedownPremiumPoolEntry,
   fetchServiceCatalog,
+  intakeHomepageCandidate,
+  publishHomepageCandidate,
+  reviewHomepageClaimRequest,
+  reviewHomepageStatusReport,
 } from '../../../.test-dist/shared/api/controlPlane.js';
 
 const originalFetch = globalThis.fetch;
 const originalPlatformBaseUrl = process.env.VITE_PLATFORM_OPS_BASE_URL;
 const originalProductBaseUrl = process.env.VITE_PRODUCT_OPS_BASE_URL;
 const originalContentServiceBaseUrl = process.env.VITE_CONTENT_SERVICE_BASE_URL;
+const originalEntityServiceBaseUrl = process.env.VITE_ENTITY_SERVICE_BASE_URL;
 
 function stubFetch(payload) {
   const calls = [];
@@ -62,6 +79,7 @@ function restoreEnvAndFetch() {
   process.env.VITE_PLATFORM_OPS_BASE_URL = originalPlatformBaseUrl;
   process.env.VITE_PRODUCT_OPS_BASE_URL = originalProductBaseUrl;
   process.env.VITE_CONTENT_SERVICE_BASE_URL = originalContentServiceBaseUrl;
+  process.env.VITE_ENTITY_SERVICE_BASE_URL = originalEntityServiceBaseUrl;
 }
 
 test('requests platform service catalog from configured base url', async () => {
@@ -95,48 +113,231 @@ test('requests report queue through generated control-plane metadata', async () 
 
   const items = await fetchReports();
 
-  assert.equal(calls[0], 'http://content.test/content/reports?limit=10');
+  assert.equal(calls[0], 'http://content.test/content/reports?limit=50');
   assert.equal(items[0].id, 'rpt-1');
   assert.equal(items[0].version, 1);
   restoreEnvAndFetch();
 });
 
-test('requests onboarding domains from platform control plane', async () => {
+test('report review and resolve use generated paths with idempotency keys', async () => {
+  process.env.VITE_CONTENT_SERVICE_BASE_URL = 'http://content.test';
+  const calls = stubFetchSequence([
+    { payload: { id: 'rpt-1', version: 2, targetType: 'post', targetId: 'post-1', reason: 'spam', status: 'reviewing', createdAt: '', updatedAt: '' } },
+    { payload: { id: 'rpt-1', version: 3, targetType: 'post', targetId: 'post-1', reason: 'spam', status: 'resolved', createdAt: '', updatedAt: '' } },
+  ]);
+
+  const reviewing = await beginReportReview('rpt-1');
+  const resolved = await resolveReport('rpt-1', 'warn');
+
+  assert.equal(calls[0].url, 'http://content.test/content/reports/rpt-1/review');
+  assert.equal(calls[0].init?.method, 'POST');
+  assert.equal(calls[0].init?.headers['Idempotency-Key'], 'portal-begin-review-rpt-1');
+  assert.equal(reviewing.status, 'reviewing');
+
+  assert.equal(calls[1].url, 'http://content.test/content/reports/rpt-1');
+  assert.equal(calls[1].init?.method, 'PATCH');
+  assert.match(String(calls[1].init?.body), /"resolution":"warn"/);
+  assert.equal(resolved.status, 'resolved');
+  restoreEnvAndFetch();
+});
+
+test('report dismissal and moderation case workflow use generated paths', async () => {
+  process.env.VITE_CONTENT_SERVICE_BASE_URL = 'http://content.test';
+  const caseItem = {
+    id: 'case-1',
+    version: 1,
+    postId: 'post-1',
+    postVersion: 3,
+    contentDigest: 'digest',
+    status: 'pending',
+    createdAt: '',
+    updatedAt: '',
+  };
+  const calls = stubFetchSequence([
+    { payload: caseItem },
+    { payload: { ...caseItem, version: 2, status: 'reviewed' } },
+    { payload: { ...caseItem, version: 3, status: 'rejected' } },
+    { payload: { id: 'rpt-1', status: 'dismissed' } },
+  ]);
+
+  const loaded = await fetchCurrentPostModerationCase('post-1');
+  const reviewed = await reviewPostModerationCase(loaded);
+  const decided = await decidePostModerationCase(
+    reviewed,
+    'rejected',
+    '确认存在违规内容',
+  );
+  const dismissed = await dismissReport('rpt-1');
+
+  assert.equal(
+    calls[0].url,
+    'http://content.test/internal/content/posts/post-1/moderation-case',
+  );
+  assert.equal(
+    calls[1].url,
+    'http://content.test/internal/content/posts/post-1:review-moderation',
+  );
+  assert.match(String(calls[1].init?.body), /"caseId":"case-1"/);
+  assert.equal(
+    calls[2].url,
+    'http://content.test/internal/content/posts/post-1:moderate',
+  );
+  assert.match(String(calls[2].init?.body), /"decisionReason":"确认存在违规内容"/);
+  assert.equal(
+    calls[3].url,
+    'http://content.test/content/reports/rpt-1:dismiss',
+  );
+  assert.equal(decided.status, 'rejected');
+  assert.equal(dismissed.status, 'dismissed');
+  restoreEnvAndFetch();
+});
+
+test('entity homepage governance queues use generated operation paths', async () => {
+  process.env.VITE_ENTITY_SERVICE_BASE_URL = 'http://entity.test';
+  const calls = stubFetchSequence([
+    { payload: { items: [{ homepageId: 'hp-1', canonicalEntityId: 'place-1', title: '西湖', homepageType: 'place', status: 'candidate' }] } },
+    { payload: { items: [{ claimRequestId: 'claim-1', version: 1, homepageId: 'hp-1', requesterPersonaId: 'persona-1', claimTier: 'basic', status: 'pending_review', createdAt: '', updatedAt: '' }] } },
+    { payload: { items: [{ reportId: 'report-1', version: 1, homepageId: 'hp-1', reporterPersonaId: 'persona-2', reason: 'offline', evidenceUrls: [], status: 'pending_review', createdAt: '', updatedAt: '' }] } },
+  ]);
+
+  const [candidates, claims, reports] = await Promise.all([
+    fetchHomepageCandidates({ limit: 20 }),
+    fetchHomepageClaimRequests({ status: 'pending_review', limit: 20 }),
+    fetchHomepageStatusReports({ status: 'pending_review', limit: 20 }),
+  ]);
+
+  assert.equal(calls[0].url, 'http://entity.test/homepages/candidates?limit=20');
+  assert.equal(calls[1].url, 'http://entity.test/homepage-claim-requests?status=pending_review&limit=20');
+  assert.equal(calls[2].url, 'http://entity.test/homepage-status-reports?status=pending_review&limit=20');
+  assert.equal(candidates.items[0].homepageId, 'hp-1');
+  assert.equal(claims.items[0].claimRequestId, 'claim-1');
+  assert.equal(reports.items[0].reportId, 'report-1');
+  restoreEnvAndFetch();
+});
+
+test('entity homepage governance mutations are typed and idempotent', async () => {
+  process.env.VITE_ENTITY_SERVICE_BASE_URL = 'http://entity.test';
+  const claim = {
+    claimRequestId: 'claim-1',
+    version: 1,
+    homepageId: 'hp-1',
+    requesterPersonaId: 'persona-1',
+    claimTier: 'basic',
+    status: 'pending_review',
+    createdAt: '',
+    updatedAt: '',
+  };
+  const report = {
+    reportId: 'report-1',
+    version: 1,
+    homepageId: 'hp-1',
+    reporterPersonaId: 'persona-2',
+    reason: 'offline',
+    evidenceUrls: [],
+    status: 'pending_review',
+    createdAt: '',
+    updatedAt: '',
+  };
+  const calls = stubFetchSequence([
+    { payload: { homepageId: 'hp-1', canonicalEntityId: 'place-1', title: '西湖', homepageType: 'place', status: 'candidate' } },
+    { payload: { homepageId: 'hp-1', canonicalEntityId: 'place-1', title: '西湖', homepageType: 'place', status: 'published' } },
+    { payload: { ...claim, version: 2, status: 'approved' } },
+    { payload: { ...report, version: 2, status: 'confirmed_offline' } },
+  ]);
+
+  await intakeHomepageCandidate({
+    title: '西湖',
+    homepageType: 'place',
+    canonicalEntityId: 'place-1',
+  });
+  await publishHomepageCandidate('hp-1');
+  await reviewHomepageClaimRequest(claim, 'approved', '资质通过');
+  await reviewHomepageStatusReport(report, 'confirmed_offline', '现场证据有效');
+
+  assert.equal(calls[0].url, 'http://entity.test/homepages/candidates');
+  assert.equal(calls[0].init?.headers['Idempotency-Key'], 'portal-homepage-intake-place-1');
+  assert.equal(calls[1].url, 'http://entity.test/homepages/candidates/hp-1:publish');
+  assert.equal(calls[1].init?.headers['Idempotency-Key'], 'portal-homepage-publish-hp-1');
+  assert.equal(calls[2].url, 'http://entity.test/homepages/hp-1/claim-requests/claim-1:review');
+  assert.match(String(calls[2].init?.body), /"reviewNote":"资质通过"/);
+  assert.equal(calls[3].url, 'http://entity.test/homepages/hp-1/status-reports/report-1:review');
+  assert.match(String(calls[3].init?.body), /"status":"confirmed_offline"/);
+  restoreEnvAndFetch();
+});
+
+test('premium pool listing and dual-sign takedown use generated operation paths', async () => {
+  process.env.VITE_PRODUCT_OPS_BASE_URL = 'http://product.test';
+  const calls = stubFetchSequence([
+    { payload: { items: [{ id: 'post-1', contentId: 'post-1', scope: 'global', status: 'active', qualityScore: 0.92, qualityAdmission: 'approved', auditId: 'audit-1', rollbackToken: 'rbk-1', featuredAt: '', expiresAt: '', takedownEjected: false, updatedAt: '' }] } },
+    { payload: { entry: { id: 'post-1' }, approvalCount: 1, approvalState: 'pending_second_principal', pending: true, payloadDigest: 'digest', approverActors: ['ops-1'] } },
+  ]);
+
+  const entries = await fetchPremiumPoolEntries();
+  const pendingResponse = await takedownPremiumPoolEntry('post-1');
+
+  assert.equal(calls[0].url, 'http://product.test/control-plane/product/recommendation/premium-pool');
+  assert.equal(entries[0].contentId, 'post-1');
+  assert.equal(calls[1].url, 'http://product.test/control-plane/product/recommendation/premium-pool/post-1:takedown');
+  assert.equal(calls[1].init?.method, 'POST');
+  assert.equal('pending' in pendingResponse && pendingResponse.pending, true);
+  restoreEnvAndFetch();
+});
+
+test('active alerts listing and ack hit platform alert loop endpoints', async () => {
+  process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
+  const calls = stubFetchSequence([
+    { payload: { items: [{ id: 'fp-1', fingerprint: 'fp-1', alertName: 'HTTPErrorRateHigh', severity: 'critical', labels: {}, annotations: {}, status: 'firing', updatedAt: '' }] } },
+    { payload: { id: 'fp-1', fingerprint: 'fp-1', alertName: 'HTTPErrorRateHigh', severity: 'critical', labels: {}, annotations: {}, status: 'acknowledged', ackedBy: 'oncall-1', updatedAt: '' } },
+  ]);
+
+  const alerts = await fetchActiveAlerts();
+  const acked = await ackAlert('fp-1');
+
+  assert.equal(calls[0].url, 'http://platform.test/control-plane/platform/alerts/active');
+  assert.equal(alerts[0].status, 'firing');
+  assert.equal(calls[1].url, 'http://platform.test/control-plane/platform/alerts/fp-1:ack');
+  assert.equal(calls[1].init?.method, 'POST');
+  assert.equal(acked.status, 'acknowledged');
+  restoreEnvAndFetch();
+});
+
+test('requests stage-scoped gray routing policy from platform control plane', async () => {
   process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
   const calls = stubFetch({
-    items: [
-      {
-        domain: 'content',
-        display_name: 'Content',
-        template_role: 'template_seed',
-        rollout_group: 'wave_0_template',
-        acceptance_status: 'minimum_test_ready',
-        metadata_paths: ['content/post'],
-        service_names: ['content-service'],
-        control_planes: {
-          platform: { enabled: true, object_types: ['service_catalog_entry'], config_prefixes: ['sys.content.'] },
-          product: { enabled: true, object_types: ['moderation_case'], config_prefixes: ['ops.content.'] },
+    policy: {
+      enabled: true,
+      grayUpstream: 'http://gray.internal:29000',
+      grayUpstreamTlsInsecureSkipVerify: false,
+      stageDimensions: {
+        'gray-initial': {
+          appVersions: [],
+          userIds: ['ops-release-canary'],
+          provinces: [],
+          carriers: [],
         },
-        minimum_package: {
-          metadata_files: ['contracts/metadata/content/post/service.yaml'],
-          codegen_targets: ['go_runtime', 'python_runtime', 'ops_portal'],
-          test_evidence: { t1: ['a'], t2: ['b'], t3: [], t4: [] },
+        'carry-on': {
+          appVersions: ['1.1.0'],
+          userIds: ['ops-release-canary'],
+          provinces: [],
+          carriers: [],
         },
-        deployment: {
-          plane_binding_domain: 'content',
-          plane_binding_source: 'quwoquan_ops/environments/process_domain_plane_mapping.yaml',
-          current_binding_source: 'quwoquan_ops/environments/process_domain_mapping.yaml',
+        full: {
+          appVersions: [],
+          userIds: [],
+          provinces: [],
+          carriers: [],
         },
-        replication: { source_template: 'content', next_copy_targets: ['chat'], copy_notes: ['seed'] },
-        blocking_gaps: [],
       },
-    ],
+    },
+    sourcePath: '/runtime/config-root/gray-routing/policy.yaml',
+    rawYaml: 'policy: {}',
   });
 
-  const items = await fetchOnboardingDomains();
+  const response = await fetchGrayRoutingPolicy();
 
-  assert.equal(calls[0], 'http://platform.test/control-plane/platform/onboarding/domains');
-  assert.equal(items[0].domain, 'content');
+  assert.equal(calls[0], 'http://platform.test/control-plane/platform/rollout/routing-policy');
+  assert.deepEqual(response.policy.stageDimensions['gray-initial'].userIds, ['ops-release-canary']);
+  assert.deepEqual(response.policy.stageDimensions.full.appVersions, []);
   restoreEnvAndFetch();
 });
 
@@ -157,6 +358,39 @@ test('requests product projection summary from configured base url', async () =>
   restoreEnvAndFetch();
 });
 
+test('requests RTC media QoE through generated operation metadata', async () => {
+  process.env.VITE_PRODUCT_OPS_BASE_URL = 'http://product.test';
+  const calls = stubFetch({
+    hasSamples: true,
+    windowHours: 24,
+    actualFrom: '2026-07-19T17:00:00Z',
+    actualTo: '2026-07-20T16:30:00Z',
+    effectiveSampleCount: 4,
+    mediaConnectedCount: 3,
+    mediaConnectedRate: 0.75,
+    connectP95Ms: 290,
+    connectionLostCount: 1,
+    connectionLostRate: 1 / 3,
+    reconnectCount: 10,
+    series: [],
+    sourceKind: 'raw_records',
+    freshness: 'near_realtime',
+    generatedThrough: '2026-07-20T16:29:40Z',
+    lagSeconds: 20,
+  });
+
+  const summary = await fetchRtcMediaQoeSummary();
+
+  assert.equal(
+    calls[0],
+    'http://product.test/ops/events/rtc-media-qoe/summary',
+  );
+  assert.equal(summary.sourceKind, 'raw_records');
+  assert.equal(summary.mediaConnectedRate, 0.75);
+  assert.equal(summary.connectP95Ms, 290);
+  restoreEnvAndFetch();
+});
+
 test('requests product event summary from configured base url', async () => {
   process.env.VITE_PRODUCT_OPS_BASE_URL = 'http://product.test';
   const calls = stubFetch({
@@ -165,9 +399,9 @@ test('requests product event summary from configured base url', async () => {
     dimensions: { pageName: { home: 8 } },
   });
 
-  const summary = await fetchProductEventSummary({ eventType: 'page_open', from: '2026-04-01T00:00:00Z', to: '2026-04-02T00:00:00Z' });
+  const summary = await fetchProductEventSummary({ eventType: 'app_anr_outcome', result: 'detected', from: '2026-04-01T00:00:00Z', to: '2026-04-02T00:00:00Z' });
 
-  assert.equal(calls[0], 'http://product.test/ops/events/summary?eventType=page_open&from=2026-04-01T00%3A00%3A00Z&to=2026-04-02T00%3A00%3A00Z');
+  assert.equal(calls[0], 'http://product.test/ops/events/summary?eventType=app_anr_outcome&result=detected&from=2026-04-01T00%3A00%3A00Z&to=2026-04-02T00%3A00%3A00Z');
   assert.equal(summary.totalCount, 12);
   assert.equal(summary.sessionCount, 5);
   restoreEnvAndFetch();
@@ -184,6 +418,36 @@ test('requests product event drilldown from configured base url', async () => {
 
   assert.equal(calls[0], 'http://product.test/ops/events/drilldown?eventType=page_open&from=2026-04-01T00%3A00%3A00Z&to=2026-04-01T00%3A15%3A00Z&limit=5');
   assert.equal(drilldown.items[0].rowKey, 'row-1');
+  restoreEnvAndFetch();
+});
+
+test('requests canonical runtime diagnostics from product ops', async () => {
+  process.env.VITE_PRODUCT_OPS_BASE_URL = 'http://product.test';
+  const calls = stubFetchSequence([
+    {
+      payload: {
+        totalCount: 4,
+        dimensions: { signal: { 'app.exception.flutter': 4 } },
+        source: 'sls_aggregate',
+      },
+    },
+    {
+      payload: {
+        totalCount: 1,
+        items: [{ rowKey: 'runtime-1', signal: 'app.exception.flutter', severity: 'ERROR', message: 'safe' }],
+        source: 'sls_raw',
+      },
+    },
+  ]);
+
+  const query = { signal: 'app.exception.flutter', from: '2026-04-01T00:00:00Z', to: '2026-04-01T01:00:00Z' };
+  const summary = await fetchRuntimeLogSummary(query);
+  const drilldown = await fetchRuntimeLogDrilldown({ ...query, limit: 5 });
+
+  assert.equal(calls[0].url, 'http://product.test/ops/runtime-logs/summary?signal=app.exception.flutter&from=2026-04-01T00%3A00%3A00Z&to=2026-04-01T01%3A00%3A00Z');
+  assert.equal(calls[1].url, 'http://product.test/ops/runtime-logs/drilldown?signal=app.exception.flutter&from=2026-04-01T00%3A00%3A00Z&to=2026-04-01T01%3A00%3A00Z&limit=5');
+  assert.equal(summary.dimensions.signal['app.exception.flutter'], 4);
+  assert.equal(drilldown.items[0].rowKey, 'runtime-1');
   restoreEnvAndFetch();
 });
 
@@ -226,11 +490,11 @@ test('requests platform triage summary from configured base url', async () => {
   process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
   const calls = stubFetch({
     scope: { environment: 'beta', cluster: 'beta-control-a', service: 'content-service' },
-    projectionSummary: { approvalCount: 2, auditCount: 4, runbookCount: 3, releaseServices: ['content-service'] },
+    projectionSummary: { approvalCount: 2, auditCount: 4, activeAlerts: 1, releaseServices: ['content-service'] },
     configDrift: { totalInstances: 2, inSyncInstances: 1, outOfSyncInstances: 1 },
     serviceDrift: [{ service: 'content-service', totalInstances: 2, inSyncInstances: 1, outOfSyncInstances: 1 }],
     outOfSyncInstances: [{ id: 'content-service-beta-control-a-0', environment: 'beta', cluster: 'beta-control-a', service: 'content-service', instanceId: 'content-service-beta-control-a-0', inSync: false }],
-    backlogCandidates: [{ id: 'platform-config-drift-content-service', category: 'config_drift', severity: 'critical', title: '修复配置漂移', nextAction: '打开 /platform/config/drift', drilldownRoute: '/platform/config/drift', runbookRoute: '/platform/runbook', repairEntry: '/platform/rollout', alertId: 'config_release_error_rate', auditRoute: '/audit' }],
+    backlogCandidates: [{ id: 'platform-config-drift-content-service', category: 'config_drift', severity: 'critical', title: '修复配置漂移', nextAction: '打开 /platform/config/drift', drilldownRoute: '/platform/config/drift', repairEntry: '/platform/rollout', alertId: 'config_release_error_rate', auditRoute: '/audit' }],
     runtimeReady: false,
     source: 'control-plane',
   });
@@ -247,18 +511,14 @@ test('requests core platform rollout supporting resources from configured base u
   process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
   const calls = stubFetchSequence([
     { payload: { items: [{ releaseId: 'v2026.02.28.0', service: 'content-service', configPath: '/tmp/config.yaml', grayStages: [5, 25, 50, 100], releaseState: 'rolling_out', stageState: 'ack_pending' }] } },
-    { payload: { items: [{ id: 'config_release_error_rate', rule: 'config_release_error_rate', stage: '25%', status: 'success', summary: 'ok' }] } },
-    { payload: { items: [{ id: 'cfg-rollback-drill', title: '配置发布回滚演练', subtitle: 'desc', status: 'success', runbookRoute: '/platform/runbook', auditRoute: '/audit' }] } },
     { payload: { items: [{ auditId: 'a1', objectType: 'config_release', objectId: 'content-service', action: 'config_release_applied', dangerLevel: 'high', actor: 'platform-admin', environment: 'beta', requestId: 'req-1', traceId: 'trace-1', at: '2026-06-08T00:00:00Z' }] } },
     { payload: { items: [{ objectType: 'config_release', objectId: 'content-service', mode: 'dual', actor: 'platform-admin', decision: 'approved', at: '2026-06-08T00:00:00Z' }] } },
-    { payload: { approvalCount: 1, auditCount: 1, runbookCount: 1, releaseServices: ['content-service'] } },
+    { payload: { approvalCount: 1, auditCount: 1, activeAlerts: 0, releaseServices: ['content-service'] } },
     { payload: { items: [{ id: 'content-service-beta-control-a-0', environment: 'beta', cluster: 'beta-control-a', service: 'content-service', instanceId: 'content-service-beta-control-a-0', inSync: false }], summary: { totalInstances: 1, inSyncInstances: 0, outOfSyncInstances: 1 } } },
   ]);
 
-  const [releases, gates, runbooks, audits, approvals, summary, reports] = await Promise.all([
+  const [releases, audits, approvals, summary, reports] = await Promise.all([
     fetchReleases(),
-    fetchGateRules(),
-    fetchRunbooks(),
     fetchPlatformAudits(),
     fetchPlatformApprovals(),
     fetchPlatformProjectionSummary(),
@@ -267,67 +527,10 @@ test('requests core platform rollout supporting resources from configured base u
 
   assert.equal(calls[0].url, 'http://platform.test/control-plane/platform/releases');
   assert.equal(releases[0].stageState, 'ack_pending');
-  assert.equal(gates[0].id, 'config_release_error_rate');
-  assert.equal(runbooks[0].id, 'cfg-rollback-drill');
   assert.equal(audits[0].action, 'config_release_applied');
   assert.equal(approvals[0].decision, 'approved');
   assert.equal(summary.releaseServices[0], 'content-service');
   assert.equal(reports.summary.outOfSyncInstances, 1);
-  restoreEnvAndFetch();
-});
-
-test('posts platform release workflow mutations to configured base url', async () => {
-  process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
-  const calls = stubFetchSequence([
-    {
-      payload: {
-        releaseId: 'v2026.02.28.0',
-        service: 'content-service',
-        releaseState: 'rolling_out',
-        approvalState: 'approved',
-        stageState: 'ack_pending',
-        workflowRef: 'config_release_workflow_content-service',
-        rollbackToken: 'rbk-content-service-v2026.02.28.0',
-        ackSummary: { totalInstances: 2, inSyncInstances: 1, outOfSyncInstances: 1 },
-      },
-    },
-    {
-      payload: {
-        releaseId: 'v2026.02.28.0',
-        service: 'content-service',
-        releaseState: 'rolled_back',
-        stageState: 'rolled_back',
-        workflowRef: 'config_release_workflow_content-service',
-        rollbackToken: 'rbk-content-service-v2026.02.28.0',
-        ackSummary: { totalInstances: 2, inSyncInstances: 2, outOfSyncInstances: 0 },
-      },
-    },
-  ]);
-
-  const applyPayload = await applyPlatformRelease('v2026.02.28.0', {
-    service: 'content-service',
-    fromImage: '1.0.0',
-    toImage: '1.0.1',
-    fromConfig: 'v2026.02.27.1',
-    toConfig: 'v2026.02.28.0',
-    step: 25,
-  });
-  const rollbackPayload = await rollbackPlatformRelease('v2026.02.28.0', {
-    service: 'content-service',
-    targetConfigVersion: 'v2026.02.27.1',
-    workflowRef: applyPayload.workflowRef,
-    rollbackToken: applyPayload.rollbackToken,
-  });
-
-  assert.equal(calls[0].url, 'http://platform.test/control-plane/platform/releases/v2026.02.28.0:apply');
-  assert.equal(calls[0].init?.method, 'POST');
-  assert.match(String(calls[0].init?.body), /"service":"content-service"/);
-  assert.equal(applyPayload.stageState, 'ack_pending');
-
-  assert.equal(calls[1].url, 'http://platform.test/control-plane/platform/releases/v2026.02.28.0:rollback');
-  assert.equal(calls[1].init?.method, 'POST');
-  assert.match(String(calls[1].init?.body), /"rollbackToken":"rbk-content-service-v2026.02.28.0"/);
-  assert.equal(rollbackPayload.releaseState, 'rolled_back');
   restoreEnvAndFetch();
 });
 
@@ -338,7 +541,7 @@ test('requests l1l4 metrics from product control plane', async () => {
     source: 'live-telemetry',
     freshness: '2026-06-08T01:00:00Z',
     window: '24h',
-    coverage: { totalMetrics: 4, liveMetrics: 4, fallbackMetrics: 0, eventSignals: 18 },
+    coverage: { totalMetrics: 4, liveMetrics: 4, unavailableMetrics: 0, eventSignals: 18 },
     alerts: [
       { id: 'L3HttpRequestP95High', state: 'firing', metric: 'http_request_p95_ms', source: 'telemetry', runbookRoute: '/platform/runbook', repairEntry: '/product/l1-l4/environment', alertId: 'HighP95Latency', auditRoute: '/audit', owner: 'app-observability' },
     ],

@@ -5,7 +5,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/pip_call_overlay.dart';
@@ -35,26 +37,36 @@ class _FakeHttpClient implements HttpClient {
 
   @override
   void addCredentials(
-          Uri url, String realm, HttpClientCredentials credentials) {}
+    Uri url,
+    String realm,
+    HttpClientCredentials credentials,
+  ) {}
 
   @override
   void addProxyCredentials(
-          String host, int port, String realm, HttpClientCredentials credentials) {}
+    String host,
+    int port,
+    String realm,
+    HttpClientCredentials credentials,
+  ) {}
 
   @override
   set authenticate(Future<bool> Function(Uri, String, String?)? f) {}
 
   @override
   set authenticateProxy(
-      Future<bool> Function(String, int, String, String?)? f) {}
+    Future<bool> Function(String, int, String, String?)? f,
+  ) {}
 
   @override
   set badCertificateCallback(
-      bool Function(X509Certificate, String, int)? callback) {}
+    bool Function(X509Certificate, String, int)? callback,
+  ) {}
 
   @override
   set connectionFactory(
-      Future<ConnectionTask<Socket>> Function(Uri, String?, int?)? f) {}
+    Future<ConnectionTask<Socket>> Function(Uri, String?, int?)? f,
+  ) {}
 
   @override
   set findProxy(String Function(Uri)? f) {}
@@ -67,8 +79,11 @@ class _FakeHttpClient implements HttpClient {
 
   @override
   Future<HttpClientRequest> open(
-          String method, String host, int port, String path) =>
-      _fakeRequest();
+    String method,
+    String host,
+    int port,
+    String path,
+  ) => _fakeRequest();
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) => _fakeRequest();
@@ -124,8 +139,7 @@ class _FakeHttpClientRequest extends Fake implements HttpClientRequest {
   HttpHeaders get headers => _FakeHttpHeaders();
 
   @override
-  Future<HttpClientResponse> close() =>
-      Future.value(_FakeHttpClientResponse());
+  Future<HttpClientResponse> close() => Future.value(_FakeHttpClientResponse());
 }
 
 class _FakeHttpHeaders extends Fake implements HttpHeaders {}
@@ -142,8 +156,12 @@ class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
       HttpClientResponseCompressionState.notCompressed;
 
   @override
-  StreamSubscription<List<int>> listen(void Function(List<int>)? onData,
-      {Function? onError, void Function()? onDone, bool? cancelOnError}) {
+  StreamSubscription<List<int>> listen(
+    void Function(List<int>)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
     return Stream<List<int>>.fromIterable([_kTransparentImage]).listen(
       onData,
       onError: onError,
@@ -154,12 +172,72 @@ class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
 }
 
 final Uint8List _kTransparentImage = Uint8List.fromList(<int>[
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
-  0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x62, 0x00, 0x00, 0x00, 0x02,
-  0x00, 0x01, 0xE5, 0x27, 0xDE, 0xFC, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
-  0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0A,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x62,
+  0x00,
+  0x00,
+  0x00,
+  0x02,
+  0x00,
+  0x01,
+  0xE5,
+  0x27,
+  0xDE,
+  0xFC,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
 ]);
 
 class _TestActiveCallNotifier extends ActiveCallNotifier {
@@ -177,7 +255,8 @@ Widget _buildOverlay({
   CallParticipant? activeSpeaker,
   ActiveCallState? initialState,
 }) {
-  final state = initialState ??
+  final state =
+      initialState ??
       const ActiveCallState(
         callId: 'call_001',
         callType: 'video',
@@ -231,14 +310,16 @@ void main() {
     });
 
     testWidgets('非 PiP 模式时不渲染内容', (tester) async {
-      await tester.pumpWidget(_buildOverlay(
-        initialState: const ActiveCallState(
-          callId: 'call_001',
-          callType: 'video',
-          isInCall: true,
-          isPipMode: false,
+      await tester.pumpWidget(
+        _buildOverlay(
+          initialState: const ActiveCallState(
+            callId: 'call_001',
+            callType: 'video',
+            isInCall: true,
+            isPipMode: false,
+          ),
         ),
-      ));
+      );
       await tester.pump();
 
       expect(find.byType(PipCallOverlay), findsOneWidget);
@@ -252,9 +333,9 @@ void main() {
   group('PipCallOverlay — 交互契约', () {
     testWidgets('点击触发 onReturnToCall 回调', (tester) async {
       var returnCalled = false;
-      await tester.pumpWidget(_buildOverlay(
-        onReturnToCall: () => returnCalled = true,
-      ));
+      await tester.pumpWidget(
+        _buildOverlay(onReturnToCall: () => returnCalled = true),
+      );
       await tester.pump();
 
       final gesture = find.byType(GestureDetector);
@@ -274,6 +355,20 @@ void main() {
       final gestureDetectors = find.byType(GestureDetector);
       expect(gestureDetectors, findsWidgets);
     });
+
+    testWidgets('长按确认后触发真实挂断回调', (tester) async {
+      var hangupCount = 0;
+      await tester.pumpWidget(_buildOverlay(onHangup: () => hangupCount += 1));
+      await tester.pump();
+
+      await tester.longPress(find.byType(GestureDetector).first);
+      await tester.pumpAndSettle();
+      expect(find.text(UITextConstants.callHangupConfirmTitle), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.callHangup));
+      await tester.pumpAndSettle();
+      expect(hangupCount, 1);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────
@@ -281,9 +376,9 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('PipCallOverlay — 错误态渲染', () {
     testWidgets('不在通话时不渲染', (tester) async {
-      await tester.pumpWidget(_buildOverlay(
-        initialState: const ActiveCallState(isInCall: false),
-      ));
+      await tester.pumpWidget(
+        _buildOverlay(initialState: const ActiveCallState(isInCall: false)),
+      );
       await tester.pump();
 
       expect(find.byType(PipCallOverlay), findsOneWidget);
@@ -298,19 +393,38 @@ void main() {
     });
 
     testWidgets('activeSpeaker 有头像时显示', (tester) async {
-      await tester.pumpWidget(_buildOverlay(
-        activeSpeaker: const CallParticipant(
-          userId: 'user_001',
-          displayName: 'Alice',
-          avatarUrl: 'https://example.com/avatar.jpg',
-          status: ParticipantStatus.connected,
-          isCameraOn: false,
+      await tester.pumpWidget(
+        _buildOverlay(
+          activeSpeaker: const CallParticipant(
+            userId: 'user_001',
+            displayName: 'Alice',
+            avatarUrl: 'https://example.com/avatar.jpg',
+            status: ParticipantStatus.connected,
+            isCameraOn: false,
+          ),
         ),
-      ));
+      );
       await tester.pump();
 
       expect(find.byType(PipCallOverlay), findsOneWidget);
       expect(find.text('Alice'), findsOneWidget);
+    });
+
+    testWidgets('activeSpeaker 摄像头开启但尚无轨道时回退头像摘要', (tester) async {
+      await tester.pumpWidget(
+        _buildOverlay(
+          activeSpeaker: const CallParticipant(
+            userId: 'user_002',
+            displayName: 'Bob',
+            status: ParticipantStatus.connected,
+            isCameraOn: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Bob'), findsOneWidget);
+      expect(find.byType(AppCircularAvatar), findsOneWidget);
     });
   });
 }

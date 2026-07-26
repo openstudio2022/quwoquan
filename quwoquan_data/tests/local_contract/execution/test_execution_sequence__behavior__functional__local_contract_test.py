@@ -28,7 +28,7 @@ from core.asset_sequence import allocate_execution_sequence, read_latest_executi
 from core.paths import execution_sequence_path  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
-EXECUTION_ID = "20260711--travel-homepage-coverage--cn-sichuan--canary-001"
+EXECUTION_ID = "20260711--travel-homepage-coverage--test-region-b--pilot-001"
 
 
 def test_allocate_execution_sequence_is_monotonic():

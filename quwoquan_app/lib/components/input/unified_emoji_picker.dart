@@ -2,6 +2,7 @@
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/platform/app_font_families.dart';
 
@@ -30,14 +31,14 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
   final List<double> _sectionOffsets = List.filled(_maxSectionCount, 0);
 
   static const List<String> _tabLabels = [
-    UITextConstants.emojiRecent,
-    UITextConstants.emojiCategorySmileys,
-    UITextConstants.emojiCategoryTravel,
-    UITextConstants.emojiCategoryAnimals,
-    UITextConstants.emojiCategoryFood,
-    UITextConstants.emojiCategoryDrink,
-    UITextConstants.emojiCategoryActivity,
-    UITextConstants.emojiCategoryObjects,
+    ChatText.emojiRecent,
+    ChatText.emojiCategorySmileys,
+    ChatText.emojiCategoryTravel,
+    ChatText.emojiCategoryAnimals,
+    ChatText.emojiCategoryFood,
+    ChatText.emojiCategoryDrink,
+    ChatText.emojiCategoryActivity,
+    ChatText.emojiCategoryObjects,
   ];
 
   @override
@@ -81,7 +82,10 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
 
   void _scrollToSection(int index) {
     if (!_scrollController.hasClients) return;
-    final target = _sectionOffsets[index].clamp(0.0, _scrollController.position.maxScrollExtent);
+    final target = _sectionOffsets[index].clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
+    );
     _scrollController.animateTo(
       target,
       duration: const Duration(milliseconds: 250),
@@ -92,16 +96,30 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
 
   void _onEmojiTap(String char) {
     widget.onEmojiSelected(char);
-    ref.read(emojiRepositoryProvider.future).then((repo) => repo.recordEmojiUsed(char));
+    ref
+        .read(emojiRepositoryProvider.future)
+        .then((repo) => repo.recordEmojiUsed(char));
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final fgColor = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary).withValues(alpha: 0.3);
+    final fgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    ).withValues(alpha: 0.3);
     final repoAsync = ref.watch(emojiRepositoryProvider);
     final recentEntries = repoAsync.when(
       data: (r) => r.getRecentEntries(),
@@ -155,7 +173,8 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
                     scrollDirection: Axis.horizontal,
                     padding: EdgeInsets.only(
                       left: SettingsSemanticConstants.emojiTabPaddingHorizontal,
-                      right: SettingsSemanticConstants.emojiTabPaddingHorizontal,
+                      right:
+                          SettingsSemanticConstants.emojiTabPaddingHorizontal,
                     ),
                     itemCount: sectionCount,
                     itemBuilder: (context, i) {
@@ -199,8 +218,10 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final width = constraints.maxWidth - horizontalPadding * 2;
-                final cellSize = (width - (crossCount - 1) * spacing) / crossCount;
-                final titleHeight = SettingsSemanticConstants.emojiSectionTitleHeight;
+                final cellSize =
+                    (width - (crossCount - 1) * spacing) / crossCount;
+                final titleHeight =
+                    SettingsSemanticConstants.emojiSectionTitleHeight;
                 final sectionGap = SettingsSemanticConstants.emojiSectionGap;
 
                 double offset = 0;
@@ -208,10 +229,14 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
                   _sectionOffsets[i] = offset;
                   final count = sectionData[i].length;
                   final rows = (count / crossCount).ceil();
-                  final gridHeight = rows * (cellSize + spacing) - (rows > 0 ? spacing : 0);
+                  final gridHeight =
+                      rows * (cellSize + spacing) - (rows > 0 ? spacing : 0);
                   // 首个分区标题被省略（与 Tab 重复），偏移计算同步不计 titleHeight。
                   final sectionTitleHeight = i > 0 ? titleHeight : 0;
-                  offset += (i > 0 ? sectionGap : 0) + sectionTitleHeight + gridHeight;
+                  offset +=
+                      (i > 0 ? sectionGap : 0) +
+                      sectionTitleHeight +
+                      gridHeight;
                 }
 
                 return ListView.builder(
@@ -250,12 +275,13 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
                         GridView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: crossCount,
-                            childAspectRatio: 1,
-                            crossAxisSpacing: spacing,
-                            mainAxisSpacing: spacing,
-                          ),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: crossCount,
+                                childAspectRatio: 1,
+                                crossAxisSpacing: spacing,
+                                mainAxisSpacing: spacing,
+                              ),
                           itemCount: entries.length,
                           itemBuilder: (context, index) {
                             final entry = entries[index];
@@ -265,7 +291,8 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
                                 child: Text(
                                   entry.char,
                                   style: TextStyle(
-                                    fontSize: SettingsSemanticConstants.emojiIconFontSize,
+                                    fontSize: SettingsSemanticConstants
+                                        .emojiIconFontSize,
                                     color: fgColor,
                                     fontFamily: resolveAppThemeFontFamily(),
                                     fontFamilyFallback:

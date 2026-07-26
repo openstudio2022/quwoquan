@@ -1,6 +1,9 @@
 // ignore_for_file: unnecessary_non_null_assertion
 part of 'home_multi_form_feed.dart';
 
+/// 多列瀑布每段卡数：段尾由 sliver 边界天然两列齐平，段间可插入交集模块。
+const int _kFeedSegmentSize = 10;
+
 class _HomeFeedVideoScrollSignal {
   const _HomeFeedVideoScrollSignal({
     required this.isDragging,

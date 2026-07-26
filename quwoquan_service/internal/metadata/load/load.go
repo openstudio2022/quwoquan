@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -18,29 +17,20 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var aggregateTopLevelKeys = stringSet(
-	"domain", "aggregate_root", "object_kind", "aggregate_owner",
-	"description", "storage_backend", "cache_layer", "cache_ttl_seconds",
-	"capabilities", "taggable", "vector_enabled", "members", "ddd_layer_mapping",
-	"counter_strategy", "join_paths", "livekit_integration", "seq_strategy",
-	"dedup_strategy", "business_rules", "lifecycle",
+var objectTopLevelKeys = stringSet(
+	"kind", "description", "identity", "access", "relationships",
+	"capabilities", "taggable", "vector_enabled", "members",
+	"counter_strategy", "relation_signal", "business_rules", "lifecycle",
+	"local_identity_reasons",
+	// deferred_operations 是文档性声明：登记对象显式推迟的公开命令与恢复前置条件，
+	// 不进入 ContractGraph operation 集合。
+	"deferred_operations",
 )
 
-var entityTopLevelKeys = stringSet(
-	"domain", "entity", "entity_name", "is_aggregate", "aggregate_root",
-	"object_kind", "aggregate_owner", "description", "storage_backend", "cache_layer",
-	"cache_ttl_seconds", "capabilities", "taggable", "vector_enabled",
-	"relation_signal", "ddd_layer_mapping", "service", "ownership", "storage",
-	"business_rules", "lifecycle",
-)
-
-var serviceTopLevelKeys = stringSet(
-	"aggregate", "entity", "response_list_key", "service", "api_routes",
-	"consumers", "contract_test",
-)
-
-var readinessTopLevelKeys = stringSet(
-	"object", "operations", "implementation", "tests", "environments",
+var operationsTopLevelKeys = stringSet(
+	"api_routes", "commercial_defaults", "consumers", "contract_test",
+	"delivery_slo", "description", "incoming_call_slo", "privacy_contract",
+	"response_list_key", "upstreams", "externalDependencies",
 )
 
 // Load 将 metadata 规范化为单一 AST。它只读取业务对象目录，不把控制面域清单计入业务对象。
@@ -62,7 +52,7 @@ func Load(metadataDir string) (*ast.Catalog, error) {
 			}
 			return nil
 		}
-		if entry.Name() != "aggregate.yaml" && entry.Name() != "entity.yaml" {
+		if entry.Name() != "object.yaml" {
 			return nil
 		}
 
@@ -74,32 +64,15 @@ func Load(metadataDir string) (*ast.Catalog, error) {
 		catalog.Objects = append(catalog.Objects, object)
 
 		objectDir := filepath.Dir(path)
-		var objectOperations []ast.Operation
-		servicePath := filepath.Join(objectDir, "service.yaml")
-		if _, statErr := os.Stat(servicePath); statErr == nil {
-			operations, serviceErr := loadService(metadataDir, servicePath, object)
+		operationsPath := filepath.Join(objectDir, "operations.yaml")
+		if _, statErr := os.Stat(operationsPath); statErr == nil {
+			operations, serviceErr := loadService(metadataDir, operationsPath, object)
 			if serviceErr != nil {
 				loadErrors = append(loadErrors, serviceErr)
 			} else {
-				objectOperations = operations
 				catalog.Operations = append(catalog.Operations, operations...)
 			}
 		}
-		readiness, readinessErr := loadReadinessEvidence(
-			metadataDir,
-			objectDir,
-			object,
-			objectOperations,
-		)
-		if readinessErr != nil {
-			loadErrors = append(loadErrors, readinessErr)
-		} else if readiness != nil {
-			catalog.ReadinessEvidence = append(
-				catalog.ReadinessEvidence,
-				*readiness,
-			)
-		}
-
 		projections, _, projectionErr := loadProjections(metadataDir, objectDir, object)
 		if projectionErr != nil {
 			loadErrors = append(loadErrors, projectionErr)
@@ -112,8 +85,7 @@ func Load(metadataDir string) (*ast.Catalog, error) {
 		loadErrors = append(loadErrors, err)
 	}
 	collectSourceDigests(catalog, metadataDir, &loadErrors)
-	loadBusinessObjectMaps(catalog, &loadErrors)
-	mergeBusinessObjectBoundaries(catalog, &loadErrors)
+	deriveBusinessObjectMaps(catalog, &loadErrors)
 	if len(loadErrors) > 0 {
 		return nil, errors.Join(loadErrors...)
 	}
@@ -147,31 +119,24 @@ func loadObject(metadataDir, path string) (ast.Object, error) {
 	if err != nil {
 		return ast.Object{}, err
 	}
-	isAggregateFile := filepath.Base(path) == "aggregate.yaml"
-	allowed := entityTopLevelKeys
-	if isAggregateFile {
-		allowed = aggregateTopLevelKeys
-	}
-	if err := rejectUnknownTopLevel(path, top, allowed); err != nil {
+	if err := rejectUnknownTopLevel(path, top, objectTopLevelKeys); err != nil {
 		return ast.Object{}, err
 	}
 
-	domain := scalarString(top["domain"])
-	name := scalarString(top["aggregate_root"])
-	if !isAggregateFile {
-		name = scalarString(top["entity"])
-		if name == "" {
-			name = scalarString(top["entity_name"])
-		}
+	relative := relativePath(metadataDir, path)
+	segments := strings.Split(relative, "/")
+	if len(segments) != 4 || segments[3] != "object.yaml" {
+		return ast.Object{}, fmt.Errorf(
+			"%s: object metadata path must be <domain>/<context>/<object>/object.yaml",
+			path,
+		)
 	}
-	if domain == "" || name == "" {
-		return ast.Object{}, fmt.Errorf("%s: domain and object name are required", path)
-	}
-
-	objectSegment := strings.ReplaceAll(filepath.Base(filepath.Dir(path)), "-", "_")
+	domain := segments[0]
+	objectSegment := strings.ReplaceAll(segments[2], "-", "_")
+	name := pascalCaseIdentifier(objectSegment)
 	id := domain + "." + objectSegment
 
-	kind, explicit, err := resolveObjectKind(top, isAggregateFile)
+	kind, explicit, err := resolveObjectKind(top)
 	if err != nil {
 		return ast.Object{}, fmt.Errorf("%s: %w", path, err)
 	}
@@ -181,20 +146,47 @@ func loadObject(metadataDir, path string) (ast.Object, error) {
 		Name:           name,
 		Kind:           kind,
 		KindExplicit:   explicit,
-		AggregateOwner: scalarString(top["aggregate_owner"]),
-		StorageBackend: scalarString(top["storage_backend"]),
+		AggregateOwner: "",
 		SourcePath:     relativePath(metadataDir, path),
 	}
-	if mappingNode := top["ddd_layer_mapping"]; mappingNode != nil {
-		object.DDDLayer, err = decodeDDDLayerMapping(mappingNode)
-		if err != nil {
-			return ast.Object{}, fmt.Errorf("%s: ddd_layer_mapping: %w", path, err)
-		}
+	if storageTop, storageErr := loadOptionalTopLevelMapping(filepath.Join(filepath.Dir(path), "storage.yaml")); storageErr != nil {
+		return ast.Object{}, storageErr
+	} else if storageTop != nil {
+		object.StorageBackend = scalarString(storageTop["backend"])
 	}
 	if members := top["members"]; members != nil {
 		object.Members, err = decodeMembers(members)
 		if err != nil {
 			return ast.Object{}, fmt.Errorf("%s: members: %w", path, err)
+		}
+		for index := range object.Members {
+			object.Members[index].AggregateOwner = object.Name
+		}
+	}
+	if deferred := top["deferred_operations"]; deferred != nil {
+		mapping, err := mappingFromNode(deferred)
+		if err != nil {
+			return ast.Object{}, fmt.Errorf("%s: deferred_operations: %w", path, err)
+		}
+		if operations := mapping["operations"]; operations != nil {
+			if operations.Kind != yaml.SequenceNode {
+				return ast.Object{}, fmt.Errorf(
+					"%s: deferred_operations.operations must be a sequence",
+					path,
+				)
+			}
+			for _, item := range operations.Content {
+				if name := strings.TrimSpace(item.Value); name != "" {
+					object.DeferredOperations = append(object.DeferredOperations, name)
+				}
+			}
+		}
+		if strings.TrimSpace(scalarString(mapping["reason"])) == "" ||
+			len(object.DeferredOperations) == 0 {
+			return ast.Object{}, fmt.Errorf(
+				"%s: deferred_operations requires a non-empty reason and operations",
+				path,
+			)
 		}
 	}
 	return object, nil
@@ -215,28 +207,20 @@ func decodeDDDLayerMapping(node *yaml.Node) (ast.DDDLayerMapping, error) {
 	}, nil
 }
 
-func resolveObjectKind(top map[string]*yaml.Node, isAggregateFile bool) (ast.ObjectKind, bool, error) {
-	if raw := scalarString(top["object_kind"]); raw != "" {
+func resolveObjectKind(top map[string]*yaml.Node) (ast.ObjectKind, bool, error) {
+	if raw := scalarString(top["kind"]); raw != "" {
 		kind := ast.ObjectKind(raw)
 		if !validObjectKind(kind) {
 			return "", true, fmt.Errorf("invalid object_kind %q", raw)
 		}
 		return kind, true, nil
 	}
-	if isAggregateFile {
-		return ast.ObjectKindAggregateRoot, false, nil
-	}
-	if scalarBool(top["is_aggregate"]) || scalarBool(top["aggregate_root"]) {
-		return ast.ObjectKindAggregateRoot, false, nil
-	}
-	return ast.ObjectKindOwnedEntity, false, nil
+	return "", false, fmt.Errorf("kind is required")
 }
 
 func validObjectKind(kind ast.ObjectKind) bool {
 	switch kind {
 	case ast.ObjectKindAggregateRoot,
-		ast.ObjectKindOwnedEntity,
-		ast.ObjectKindValueObject,
 		ast.ObjectKindProjection,
 		ast.ObjectKindExternalReference,
 		ast.ObjectKindAppendOnlyFact,
@@ -251,23 +235,23 @@ func decodeMembers(node *yaml.Node) ([]ast.Member, error) {
 	if node.Kind == yaml.ScalarNode && node.Tag == "!!null" {
 		return nil, nil
 	}
-	if node.Kind != yaml.SequenceNode {
-		return nil, fmt.Errorf("must be a sequence")
+	if node.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("must be a mapping keyed by member name")
 	}
-	members := make([]ast.Member, 0, len(node.Content))
-	for _, item := range node.Content {
-		mapping, err := mappingFromNode(item)
+	members := make([]ast.Member, 0, len(node.Content)/2)
+	for index := 0; index < len(node.Content); index += 2 {
+		name := strings.TrimSpace(node.Content[index].Value)
+		mapping, err := mappingFromNode(node.Content[index+1])
 		if err != nil {
 			return nil, err
 		}
 		member := ast.Member{
-			Name:           scalarString(mapping["entity"]),
-			Cardinality:    scalarString(mapping["relation"]),
-			AggregateOwner: scalarString(mapping["aggregate_owner"]),
+			Name:        name,
+			Cardinality: scalarString(mapping["cardinality"]),
 		}
-		if raw := scalarString(mapping["object_kind"]); raw != "" {
+		if raw := scalarString(mapping["kind"]); raw != "" {
 			member.Kind = ast.ObjectKind(raw)
-			if !validObjectKind(member.Kind) {
+			if member.Kind != ast.ObjectKindOwnedEntity && member.Kind != ast.ObjectKindValueObject {
 				return nil, fmt.Errorf("member %q has invalid object_kind %q", member.Name, raw)
 			}
 		}
@@ -287,35 +271,8 @@ func decodeMembers(node *yaml.Node) ([]ast.Member, error) {
 }
 
 type serviceDocument struct {
-	Service struct {
-		Name               string             `yaml:"name"`
-		Domain             string             `yaml:"domain"`
-		CommercialDefaults commercialDocument `yaml:"commercial_defaults"`
-	} `yaml:"service"`
-	APIRoutes []routeDocument `yaml:"api_routes"`
-}
-
-type readinessDocument struct {
-	Object         string   `yaml:"object"`
-	Operations     []string `yaml:"operations"`
-	Implementation struct {
-		DomainBehavior []string `yaml:"domain_behavior"`
-		Store          []string `yaml:"store"`
-		Outbox         []string `yaml:"outbox"`
-		Reader         []string `yaml:"reader"`
-		Transport      []string `yaml:"transport"`
-		AppClient      []string `yaml:"app_client"`
-		Page           []string `yaml:"page"`
-	} `yaml:"implementation"`
-	Tests struct {
-		LocalContract  []string `yaml:"local_contract"`
-		APIIntegration []string `yaml:"api_integration"`
-		UserAcceptance []string `yaml:"user_acceptance"`
-	} `yaml:"tests"`
-	Environments []struct {
-		Name     string `yaml:"name"`
-		Artifact string `yaml:"artifact"`
-	} `yaml:"environments"`
+	CommercialDefaults commercialDocument `yaml:"commercial_defaults"`
+	APIRoutes          []routeDocument    `yaml:"api_routes"`
 }
 
 type commercialDocument struct {
@@ -396,7 +353,7 @@ func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, 
 	if err != nil {
 		return nil, err
 	}
-	if err := rejectUnknownTopLevel(path, top, serviceTopLevelKeys); err != nil {
+	if err := rejectUnknownTopLevel(path, top, operationsTopLevelKeys); err != nil {
 		return nil, err
 	}
 	data, err := os.ReadFile(path)
@@ -407,10 +364,6 @@ func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, 
 	if err := yaml.Unmarshal(data, &document); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if document.Service.Domain != "" && document.Service.Domain != object.Domain {
-		return nil, fmt.Errorf("%s: service domain %q does not match object domain %q", path, document.Service.Domain, object.Domain)
-	}
-
 	operations := make([]ast.Operation, 0, len(document.APIRoutes))
 	for index, route := range document.APIRoutes {
 		localID := strings.TrimSpace(route.Operation)
@@ -426,7 +379,7 @@ func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, 
 			actor = inferActorRequirement(route.Security)
 		}
 		commercial := mergeCommercialBinding(
-			document.Service.CommercialDefaults,
+			document.CommercialDefaults,
 			route.Commercial,
 		)
 		commercialStatus := strings.TrimSpace(commercial.Status)
@@ -529,192 +482,6 @@ func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, 
 		})
 	}
 	return operations, nil
-}
-
-func loadReadinessEvidence(
-	metadataDir string,
-	objectDir string,
-	object ast.Object,
-	operations []ast.Operation,
-) (*ast.ObjectReadinessEvidence, error) {
-	path := filepath.Join(objectDir, "readiness.yaml")
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	} else if err != nil {
-		return nil, err
-	}
-	top, err := loadTopLevelMapping(path)
-	if err != nil {
-		return nil, err
-	}
-	if err := rejectUnknownTopLevel(path, top, readinessTopLevelKeys); err != nil {
-		return nil, err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var document readinessDocument
-	if err := yaml.Unmarshal(data, &document); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if strings.TrimSpace(document.Object) != object.Name {
-		return nil, fmt.Errorf(
-			"%s: object %q does not match canonical object %q",
-			path,
-			document.Object,
-			object.Name,
-		)
-	}
-	operationIDs, err := canonicalReadinessOperationIDs(
-		path,
-		object,
-		document.Operations,
-		operations,
-	)
-	if err != nil {
-		return nil, err
-	}
-	artifactList := func(values []string) ([]ast.EvidenceArtifact, error) {
-		return loadEvidenceArtifacts(metadataDir, path, values)
-	}
-	result := &ast.ObjectReadinessEvidence{
-		ObjectID:     object.ID,
-		OperationIDs: operationIDs,
-		SourcePath:   relativePath(metadataDir, path),
-	}
-	for target, values := range map[*[]ast.EvidenceArtifact][]string{
-		&result.DomainBehavior: document.Implementation.DomainBehavior,
-		&result.Store:          document.Implementation.Store,
-		&result.Outbox:         document.Implementation.Outbox,
-		&result.Reader:         document.Implementation.Reader,
-		&result.Transport:      document.Implementation.Transport,
-		&result.AppClient:      document.Implementation.AppClient,
-		&result.Page:           document.Implementation.Page,
-		&result.LocalContract:  document.Tests.LocalContract,
-		&result.APIIntegration: document.Tests.APIIntegration,
-		&result.UserAcceptance: document.Tests.UserAcceptance,
-	} {
-		artifacts, loadErr := artifactList(values)
-		if loadErr != nil {
-			return nil, loadErr
-		}
-		*target = artifacts
-	}
-	seenEnvironments := map[string]struct{}{}
-	for index, environment := range document.Environments {
-		name := strings.TrimSpace(environment.Name)
-		if name != "alpha" && name != "beta" && name != "gamma" && name != "prod" {
-			return nil, fmt.Errorf(
-				"%s: environments[%d].name %q must be alpha, beta, gamma, or prod",
-				path,
-				index,
-				name,
-			)
-		}
-		if _, exists := seenEnvironments[name]; exists {
-			return nil, fmt.Errorf("%s: duplicate environment %q", path, name)
-		}
-		seenEnvironments[name] = struct{}{}
-		artifacts, loadErr := artifactList([]string{environment.Artifact})
-		if loadErr != nil {
-			return nil, loadErr
-		}
-		result.Environments = append(result.Environments, ast.EnvironmentEvidence{
-			Name:     name,
-			Artifact: artifacts[0],
-		})
-	}
-	return result, nil
-}
-
-func canonicalReadinessOperationIDs(
-	path string,
-	object ast.Object,
-	declared []string,
-	operations []ast.Operation,
-) ([]string, error) {
-	want := make(map[string]struct{}, len(operations))
-	for _, operation := range operations {
-		want[operation.ID] = struct{}{}
-	}
-	got := make(map[string]struct{}, len(declared))
-	result := make([]string, 0, len(declared))
-	for _, value := range declared {
-		operationID := strings.TrimSpace(value)
-		if operationID != "" && !strings.Contains(operationID, ".") {
-			operationID = object.ID + "." + operationID
-		}
-		if _, exists := want[operationID]; !exists {
-			return nil, fmt.Errorf(
-				"%s: readiness operation %q is not owned by %s",
-				path,
-				operationID,
-				object.ID,
-			)
-		}
-		if _, exists := got[operationID]; exists {
-			return nil, fmt.Errorf("%s: duplicate readiness operation %q", path, operationID)
-		}
-		got[operationID] = struct{}{}
-		result = append(result, operationID)
-	}
-	if len(got) != len(want) {
-		var missing []string
-		for operationID := range want {
-			if _, exists := got[operationID]; !exists {
-				missing = append(missing, operationID)
-			}
-		}
-		sort.Strings(missing)
-		return nil, fmt.Errorf(
-			"%s: readiness evidence must cover every object operation; missing %s",
-			path,
-			strings.Join(missing, ", "),
-		)
-	}
-	sort.Strings(result)
-	return result, nil
-}
-
-func loadEvidenceArtifacts(
-	metadataDir string,
-	readinessPath string,
-	values []string,
-) ([]ast.EvidenceArtifact, error) {
-	metadataRoot, err := filepath.Abs(metadataDir)
-	if err != nil {
-		return nil, err
-	}
-	repositoryRoot := filepath.Clean(filepath.Join(metadataRoot, "..", "..", ".."))
-	seen := map[string]struct{}{}
-	result := make([]ast.EvidenceArtifact, 0, len(values))
-	for _, value := range values {
-		relative := filepath.ToSlash(filepath.Clean(strings.TrimSpace(value)))
-		if relative == "" || relative == "." || filepath.IsAbs(relative) || strings.HasPrefix(relative, "../") {
-			return nil, fmt.Errorf("%s: invalid repository-relative evidence path %q", readinessPath, value)
-		}
-		if _, exists := seen[relative]; exists {
-			return nil, fmt.Errorf("%s: duplicate evidence path %q", readinessPath, relative)
-		}
-		seen[relative] = struct{}{}
-		absolute := filepath.Join(repositoryRoot, filepath.FromSlash(relative))
-		withinRoot, relErr := filepath.Rel(repositoryRoot, absolute)
-		if relErr != nil || withinRoot == ".." || strings.HasPrefix(withinRoot, ".."+string(filepath.Separator)) {
-			return nil, fmt.Errorf("%s: evidence path escapes repository: %q", readinessPath, relative)
-		}
-		payload, readErr := os.ReadFile(absolute)
-		if readErr != nil {
-			return nil, fmt.Errorf("%s: evidence %q: %w", readinessPath, relative, readErr)
-		}
-		digest := sha256.Sum256(payload)
-		result = append(result, ast.EvidenceArtifact{
-			Path:   relative,
-			SHA256: hex.EncodeToString(digest[:]),
-		})
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
-	return result, nil
 }
 
 func mergeCommercialBinding(
@@ -847,6 +614,15 @@ func loadTopLevelMapping(path string) (map[string]*yaml.Node, error) {
 	return mappingFromNode(document.Content[0])
 }
 
+func loadOptionalTopLevelMapping(path string) (map[string]*yaml.Node, error) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return loadTopLevelMapping(path)
+}
+
 func mappingFromNode(node *yaml.Node) (map[string]*yaml.Node, error) {
 	if node.Kind != yaml.MappingNode {
 		return nil, fmt.Errorf("expected mapping")
@@ -904,6 +680,23 @@ func relativePath(root, path string) string {
 		return filepath.ToSlash(path)
 	}
 	return filepath.ToSlash(rel)
+}
+
+func pascalCaseIdentifier(value string) string {
+	var result strings.Builder
+	upperNext := true
+	for _, current := range value {
+		if current == '_' || current == '-' {
+			upperNext = true
+			continue
+		}
+		if upperNext && current >= 'a' && current <= 'z' {
+			current -= 'a' - 'A'
+		}
+		result.WriteRune(current)
+		upperNext = false
+	}
+	return result.String()
 }
 
 func addSourceDocument(catalog *ast.Catalog, root, path string, errs *[]error) {

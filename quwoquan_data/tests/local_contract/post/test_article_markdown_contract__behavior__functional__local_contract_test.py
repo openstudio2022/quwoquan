@@ -128,10 +128,10 @@ def test_frontmatter_builder_quotes_titles_with_embedded_quotes():
     assert "markdownDialect: qwq-rich-md" in block
 
 
-def test_document_digest_does_not_abort_on_legacy_malformed_frontmatter():
+def test_document_digest_hashes_canonical_markdown_without_parsing_it():
     markdown = (
         "---\n"
-        'title: "安逸四川 雅安之夜"启幕雅安文旅消费季\n'
+        'title: "安逸四川雅安之夜"\n'
         "template: journal\n"
         "---\n\n"
         "# 碧峰峡\n\n正文。\n"

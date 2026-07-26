@@ -1,9 +1,139 @@
 {
   "baselineEstablished": false,
-  "breakingChanges": [],
-  "changes": [],
+  "breakingChanges": [
+    {
+      "after": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "before": {
+        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
+        "explicit": true,
+        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "canonicalOperationId": "assistant.skill_subscription.CreateSkillSubscription",
+      "field": "commercial",
+      "kind": "changed"
+    },
+    {
+      "after": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "before": {
+        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
+        "explicit": true,
+        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "canonicalOperationId": "assistant.skill_subscription.GetSkillSubscription",
+      "field": "commercial",
+      "kind": "changed"
+    },
+    {
+      "after": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "before": {
+        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
+        "explicit": true,
+        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "canonicalOperationId": "assistant.skill_subscription.ListSkillSubscriptions",
+      "field": "commercial",
+      "kind": "changed"
+    },
+    {
+      "after": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "before": {
+        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
+        "explicit": true,
+        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "canonicalOperationId": "assistant.skill_subscription.UpdateSkillSubscriptionStatus",
+      "field": "commercial",
+      "kind": "changed"
+    }
+  ],
+  "changes": [
+    {
+      "after": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "before": {
+        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
+        "explicit": true,
+        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "canonicalOperationId": "assistant.skill_subscription.CreateSkillSubscription",
+      "field": "commercial",
+      "kind": "changed"
+    },
+    {
+      "after": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "before": {
+        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
+        "explicit": true,
+        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "canonicalOperationId": "assistant.skill_subscription.GetSkillSubscription",
+      "field": "commercial",
+      "kind": "changed"
+    },
+    {
+      "after": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "before": {
+        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
+        "explicit": true,
+        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "canonicalOperationId": "assistant.skill_subscription.ListSkillSubscriptions",
+      "field": "commercial",
+      "kind": "changed"
+    },
+    {
+      "after": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "before": {
+        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
+        "explicit": true,
+        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "canonicalOperationId": "assistant.skill_subscription.UpdateSkillSubscriptionStatus",
+      "field": "commercial",
+      "kind": "changed"
+    }
+  ],
   "decision": "approved",
   "generator": "app-cloud-handoff",
-  "graphSha256": "b086cfcd64427da2246c979dcf5d12398b7acb393489b9c23e33976d384134cc",
-  "previousGraphSha256": "93301024afe357017561effc8299a990939961c7e4830adc786e92fe72e0428c"
+  "graphSha256": "845b506d386a9c53fcb8698cc57e47b340399cbbd1cbcac6563bce7cf07d9ad6",
+  "previousGraphSha256": "58e78f669bae9906c9dda473d22feda2f08a18ce22e82456fbac5438d13f0a61"
 }

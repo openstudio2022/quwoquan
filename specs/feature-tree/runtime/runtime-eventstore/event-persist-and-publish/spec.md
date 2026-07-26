@@ -1,20 +1,72 @@
-# L3 子特性：event-persist-and-publish
+# L3 Story：事件持久化与发布 (`event-persist-and-publish`)
 
-## 功能说明
-- **Event Store 核心能力**：Persist（持久化到 MongoDB）和 Publish（发布到 RocketMQ）。
-- **接口定义**：Persist(event)、Publish(event)、QueryByAggregateID(aggregate_id)。
-- **写路径集成**：Repository.Save() 后经过拦截链，自动触发 EventStore.Persist + Publish。
+> 所属能力：[`runtime-eventstore`](../spec.md)
 
-## 实现要点
-- **Persist**：写入 MongoDB events 集合，字段 aggregate_id、event_type、payload、timestamp、trace_id。
-- **Publish**：序列化事件后发送到 RocketMQ 的 events topic。
-- **拦截链**：Repository 写路径拦截器在 Save 成功后调用 EventStore。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-## 约束
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
+
+## 1. 用户价值
+
+作为开发、测试或运维角色，
+我希望事件必须包含 OTEL traceID，
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- “事件持久化与发布”的输入、可观察主路径、失败语义以及与父能力的交接。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 事件持久化与发布
+
+- 事件必须包含 OTEL traceID。
+
+<a id="req-002"></a>
+### REQ-002 事件 schema 必须与 events.yaml 定义一致
+
 - 事件 schema 必须与 events.yaml 定义一致。
 - 事件必须包含 OTEL traceID。
 
-## 验收标准
-- A1：Persist 和 Publish 端到端正确。
-- A7：事件 schema 与 events.yaml 一致。
-- A8：持久化 + 发布均有契约测试。
+<a id="req-003"></a>
+### REQ-003 事件 schema 必须与 events.yaml 定义一致
+
+- 事件 schema 必须与 events.yaml 定义一致。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 事件持久化与发布
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“事件持久化与发布”对应的公开行为。
+- THEN 事件必须包含 OTEL traceID。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-eventstore`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 事件持久化与发布 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“事件持久化与发布”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

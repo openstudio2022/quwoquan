@@ -4,7 +4,7 @@ import 'package:quwoquan_app/ui/content/article_render/markdown/article_markdown
 
 void main() {
   group('ArticleMarkdownCodec', () {
-    test('uses cover variant for cover and display variant for body figures', () {
+    test('resolves cover and figure from canonical public slice', () {
       final document = ArticleMarkdownCodec.parseDocument(
         '''
 ---
@@ -19,35 +19,17 @@ coverImage: asset://cover
           'assets': <Object?>[
             <String, Object?>{
               'assetId': 'cover',
-              'variants': <String, Object?>{
-                'cover': <String, Object?>{
-                  'objectKey':
-                      'media/image/s/seo/cover_variants/v1/cover-card.webp',
-                },
-                'display': <String, Object?>{
-                  'objectKey':
-                      'media/image/s/seo/cover_variants/v1/cover-display.webp',
-                },
-                'original': <String, Object?>{
-                  'objectKey':
-                      'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
-                  'requiresAccess': true,
-                },
-              },
+              'publicSliceKey':
+                  'media/image/s/seo/cover_variants/v1/cover-display.webp',
             },
           ],
         },
       );
 
-      // 封面用 cover 变体、正文图用 display 变体（object key 经 content_media_url
-      // 解析为可加载 CDN URL，保留变体路径以区分 cover/display）。
-      expect(document.coverImageUrl, contains('cover-card.webp'));
-      expect(document.coverImageUrl, isNot(contains('cover-display')));
+      expect(document.coverImageUrl, contains('cover-display.webp'));
       final figure = document.nodes.where((node) => node.isFigure).single;
       expect(figure.assetId, 'cover');
       expect(figure.imageUrl, contains('cover-display.webp'));
-      expect(figure.imageUrl, isNot(contains('cover-card')));
-      expect(figure.imageUrl, isNot(contains('original')));
     });
 
     test('parses entity labels into structured inline spans', () {
@@ -72,14 +54,8 @@ title: 杭州一日游
       expect(paragraph.spans.first.displayText, '灵隐寺');
 
       final serialized = ArticleMarkdownCodec.serializeDocument(document);
-      expect(
-        serialized,
-        contains('@[灵隐寺](entity:sight:west_lake)'),
-      );
-      expect(
-        serialized,
-        contains('@[河坊街](entity:restaurant:night_market)'),
-      );
+      expect(serialized, contains('@[灵隐寺](entity:sight:west_lake)'));
+      expect(serialized, contains('@[河坊街](entity:restaurant:night_market)'));
     });
 
     test(

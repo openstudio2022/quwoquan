@@ -1,0 +1,76 @@
+description: Persona 的设备级在线状态（Redis Hash，多节点共享）
+fields:
+- name: personaId
+  source: personaId
+  type: string
+  constraints:
+  - PK
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+  reference: true
+- name: accountId
+  source: accountId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+  reference: true
+- name: deviceId
+  source: deviceId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PRIVATE
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+- name: connId
+  source: connId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+  reference: true
+- name: nodeId
+  source: nodeId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+- name: transport
+  source: transport
+  type: enum
+  enum_ref: TransportType
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+- name: lastHeartbeatAt
+  source: lastHeartbeatAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection

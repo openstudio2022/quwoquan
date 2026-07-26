@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "sourceVideoPath",
+    "originalCreatorName",
+    "platform",
+    "sourcePostUrl",
+    "originalAssetUrl",
+    "attributionText",
+    "rightsBasis",
+    "commercialAuthorizationStatus",
+    "publicationAdmission",
+    "audioRightsStatus",
+    "modelReleaseStatus",
+    "propertyReleaseStatus",
+    "takedownPolicy"
+  ],
+  "properties": {
+    "sourceVideoPath": { "type": "string", "minLength": 1 },
+    "originalCreatorName": { "type": "string", "minLength": 1 },
+    "platform": { "type": "string", "minLength": 1 },
+    "sourcePostUrl": { "type": "string", "format": "uri" },
+    "originalAssetUrl": { "type": "string", "format": "uri" },
+    "attributionText": { "type": "string", "minLength": 1 },
+    "rightsBasis": { "type": "string", "minLength": 1 },
+    "commercialAuthorizationStatus": { "type": "string", "minLength": 1 },
+    "publicationAdmission": {
+      "enum": ["commercial_release", "risk_accepted_attribution_only"]
+    },
+    "authorizationProofUrl": {
+      "type": ["string", "null"],
+      "format": "uri"
+    },
+    "termsUrl": {
+      "type": ["string", "null"],
+      "format": "uri"
+    },
+    "riskAcceptanceId": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "audioRightsStatus": {
+      "enum": [
+        "licensed",
+        "original_authorized",
+        "replaced_with_licensed_track",
+        "no_audio"
+      ]
+    },
+    "audioAuthorizationProofUrl": {
+      "type": ["string", "null"],
+      "format": "uri"
+    },
+    "modelReleaseStatus": { "type": "string", "minLength": 1 },
+    "propertyReleaseStatus": { "type": "string", "minLength": 1 },
+    "takedownPolicy": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}

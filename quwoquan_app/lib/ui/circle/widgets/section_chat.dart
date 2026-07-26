@@ -1,11 +1,13 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
-/// 圈子群聊板块：显示群聊入口卡片（含独立 loading/error 状态）
-class SectionChat extends ConsumerStatefulWidget {
+/// 圈子群聊板块：显示群聊入口卡片；会话缺失时显示未开启空态。
+///
+/// 会话 id 由 [CircleStateNotifier.loadCircle] 随圈子详情同步解析，
+/// 本组件为纯展示投影，无独立加载态。
+class SectionChat extends StatelessWidget {
   const SectionChat({
     super.key,
     required this.circleId,
@@ -18,29 +20,8 @@ class SectionChat extends ConsumerStatefulWidget {
   final bool isDark;
 
   @override
-  ConsumerState<SectionChat> createState() => _SectionChatState();
-}
-
-class _SectionChatState extends ConsumerState<SectionChat> {
-  bool _isLoading = false;
-  String? _error;
-
-  Future<void> _retry() async {
-    setState(() {
-      _error = null;
-      _isLoading = false;
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CupertinoActivityIndicator());
-    }
-    if (_error != null) {
-      return _buildErrorCard();
-    }
-    if (widget.conversationId == null) {
+    if (conversationId == null) {
       return _buildEmpty();
     }
     return _buildChatEntry(context);
@@ -48,11 +29,11 @@ class _SectionChatState extends ConsumerState<SectionChat> {
 
   Widget _buildChatEntry(BuildContext context) {
     final fgPrimary = AppColorsFunctional.getColor(
-      widget.isDark,
+      isDark,
       ColorType.foregroundPrimary,
     );
     final fgSecondary = AppColorsFunctional.getColor(
-      widget.isDark,
+      isDark,
       ColorType.foregroundSecondary,
     );
     return CupertinoButton(
@@ -62,7 +43,7 @@ class _SectionChatState extends ConsumerState<SectionChat> {
       ),
       minimumSize: Size.zero,
       onPressed: () =>
-          context.push(AppRoutePaths.chatDetail(id: widget.conversationId!)),
+          context.push(AppRoutePaths.chatDetail(id: conversationId!)),
       child: Row(
         children: [
           Container(
@@ -84,7 +65,7 @@ class _SectionChatState extends ConsumerState<SectionChat> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '圈聊入口',
+                  UITextConstants.circleChatEntryTitle,
                   style: TextStyle(
                     fontSize: AppTypography.lg,
                     fontWeight: AppTypography.semiBold,
@@ -93,7 +74,7 @@ class _SectionChatState extends ConsumerState<SectionChat> {
                 ),
                 SizedBox(height: AppSpacing.xs),
                 Text(
-                  '最近消息与未读会话统一在趣信中查看',
+                  UITextConstants.circleChatEntrySubtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -116,7 +97,7 @@ class _SectionChatState extends ConsumerState<SectionChat> {
 
   Widget _buildEmpty() {
     final fgSecondary = AppColorsFunctional.getColor(
-      widget.isDark,
+      isDark,
       ColorType.foregroundSecondary,
     );
     return Padding(
@@ -129,32 +110,6 @@ class _SectionChatState extends ConsumerState<SectionChat> {
           UITextConstants.circleNoChatEnabled,
           style: TextStyle(fontSize: AppTypography.base, color: fgSecondary),
         ),
-      ),
-    );
-  }
-
-  Widget _buildErrorCard() {
-    return Padding(
-      padding: EdgeInsets.all(AppSpacing.containerMd),
-      child: AppSectionErrorCard(
-        semantic: const UiErrorSemantic(
-          category: UiErrorCategory.sectionLoad,
-          scope: UiErrorScope.section,
-          title: UITextConstants.circleDiscussionLoadFailedTitle,
-          message: UITextConstants.contentLoadSoftFailed,
-          copyKey: 'sectionLoadFailedTitle',
-          primaryAction: UiErrorAction(
-            type: UiErrorActionType.retry,
-            label: UITextConstants.tryAgain,
-          ),
-        ),
-        margin: EdgeInsets.zero,
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry ||
-              action.type == UiErrorActionType.resubmit) {
-            _retry();
-          }
-        },
       ),
     );
   }

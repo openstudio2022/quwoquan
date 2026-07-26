@@ -82,22 +82,39 @@ def verify_sensitive_logs() -> None:
 def main() -> int:
     require(
         "quwoquan_app/lib/cloud/runtime/auth/realtime_connection_credential.dart",
-        "'access_token': _accessToken",
-        "'Authorization': 'Bearer $_accessToken'",
         "resolveWebSocket",
-        "runtimeEnvironment != 'gamma'",
+        "RealtimeApiMetadata.issueConnectionTicketPath",
+        "'Authorization': 'Bearer $token'",
+        "'ticket': ticket",
+        "websocket credential requires a connection ticket",
         "return null;",
     )
-    for relative in (
+    forbid(
+        "quwoquan_app/lib/cloud/runtime/auth/realtime_connection_credential.dart",
+        "'access_token': _accessToken",
+        "runtimeEnvironment != 'gamma'",
+    )
+    require(
         "quwoquan_app/lib/cloud/services/realtime/transport/websocket_transport.dart",
-        "quwoquan_app/lib/cloud/rtc/rtc_signaling_client.dart",
-    ):
-        require(
-            relative,
-            "RealtimeConnectionCredential.resolveWebSocket",
-            "'auth_ack'",
-        )
-        forbid(relative, "'userId':", "'topics':")
+        "RealtimeConnectionCredential.resolveWebSocket",
+        "'auth_ack'",
+    )
+    forbid(
+        "quwoquan_app/lib/cloud/services/realtime/transport/websocket_transport.dart",
+        "'userId':",
+        "'topics':",
+    )
+    require(
+        "quwoquan_app/lib/cloud/rtc/rtc_signal_events.dart",
+        "realtime 单通道",
+        "RtcSignalEventBus",
+        "parseRtcWsPayload",
+    )
+    require(
+        "quwoquan_app/lib/cloud/rtc/incoming_call_coordinator.dart",
+        "rtcSignalEventBusProvider",
+        "不再维护独立信令 WebSocket",
+    )
     require(
         "quwoquan_app/lib/cloud/services/realtime/transport/longpoll_transport.dart",
         "RealtimeConnectionCredential.resolveHttp",
@@ -111,11 +128,22 @@ def main() -> int:
     )
 
     require(
-        "quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart",
+        "quwoquan_app/lib/cloud/services/assistant/assistant_facets.dart",
         "json['granted'] == true && revokedAt.isEmpty",
+    )
+    forbid(
+        "quwoquan_app/lib/cloud/services/assistant/assistant_facets.dart",
+        "json['granted'] == true || revokedAt.isEmpty",
+    )
+    require(
+        "quwoquan_app/lib/cloud/services/assistant/assistant_consent_store.dart",
         "AssistantConsentStore({",
         "required String actorScope",
         "sha256.convert",
+    )
+    forbid(
+        "quwoquan_app/lib/cloud/services/assistant/assistant_consent_store.dart",
+        "assistant_skill_consents_v1')",
     )
     forbid(
         "quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart",
@@ -125,15 +153,15 @@ def main() -> int:
         "upsert(fallback)",
     )
     require_package(
-        "quwoquan_service/services/assistant-service/internal/application",
+        "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/application",
         "assistant consent store is not configured",
-        "return nil, assistantConsentStoreUnavailable()",
-        "return assistant.SkillConsent{}, assistantConsentStoreUnavailable()",
-        "return assistantConsentStoreUnavailable()",
+        "return nil, StoreUnavailable()",
+        "return assistant.SkillConsent{}, StoreUnavailable()",
+        "return StoreUnavailable()",
         "return rterr.NewUnavailable(",
     )
     require(
-        "quwoquan_service/services/assistant-service/internal/application/consent_fail_closed__security__local_contract_test.go",
+        "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_conversation/consent_fail_closed__security__local_contract_test.go",
         "TestAssistantConsentFailsClosedWithoutStore",
         "TestAssistantConsentLifecycleUsesAuthoritativeStore",
     )
@@ -217,29 +245,50 @@ def main() -> int:
     )
     require(
         "quwoquan_app/lib/assistant/observability/logging/app_exception_telemetry_service.dart",
-        "AppTelemetryRecorder",
-        "AppTelemetryPayload.runtimeException",
-        "await reporter.record(",
-        "await reporter.flush()",
+        "RuntimeLogger",
+        "RuntimeLogCatalog.failureCodes['app_uncaught_flutter']!",
+        "RuntimeLogCorrelation(",
+        "await logger.exception(",
+        "await logger.flush()",
     )
     forbid(
         "quwoquan_app/lib/assistant/observability/logging/app_exception_telemetry_service.dart",
+        "AppTelemetryRecorder",
+        "AppTelemetryPayload.runtimeException",
         "ActorQueueStorage",
         "actorPartitionKey",
         ".moveToDlq(",
         "package:hive",
     )
 
-    for relative in (
-        "quwoquan_app/lib/cloud/remote/content/media/content_media_object_uploader.dart",
-        "quwoquan_app/lib/cloud/services/user/profile_media_upload_gateway.dart",
-    ):
-        require(
-            relative,
-            "http.StreamedRequest",
-            "response.stream.drain<void>()",
-        )
-        forbid(relative, "readAsBytes(")
+    content_object_uploader = (
+        "quwoquan_app/lib/cloud/remote/content/media/"
+        "content_media_object_uploader.dart"
+    )
+    require(
+        content_object_uploader,
+        "http.AbortableStreamedRequest",
+        "abortTrigger: abortTrigger",
+        "response.stream.drain<void>()",
+    )
+    forbid(content_object_uploader, "readAsBytes(")
+
+    profile_object_uploader = (
+        "quwoquan_app/lib/cloud/services/user/profile_media_upload_gateway.dart"
+    )
+    require(
+        profile_object_uploader,
+        "ContentMediaUploadCoordinator",
+        "ContentMediaSourceReader",
+        "ContentMediaStreamObjectUpload",
+        "uploadPreparedSource",
+        "ContentMediaAccessPolicy.ownerOnly",
+    )
+    forbid(
+        profile_object_uploader,
+        "readAsBytes(",
+        "package:http/http.dart",
+    )
     require(
         "quwoquan_app/lib/cloud/remote/content/media/local_media_upload_source.dart",
         "prepareLocalFileByteSource",

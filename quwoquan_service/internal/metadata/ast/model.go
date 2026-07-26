@@ -79,6 +79,9 @@ type Object struct {
 	SourcePath     string          `json:"sourcePath"`
 	Members        []Member        `json:"members,omitempty"`
 	DDDLayer       DDDLayerMapping `json:"dddLayerMapping,omitempty"`
+	// DeferredOperations 登记对象显式推迟的公开命令（V1 不实现且不进入
+	// ContractGraph operation 集合），用于豁免 aggregate root 的零入口校验。
+	DeferredOperations []string `json:"deferredOperations,omitempty"`
 }
 
 // DDDLayerMapping is the generated-code and ownership routing contract. The
@@ -211,7 +214,6 @@ type Projection struct {
 // validator 与 generator 禁止再从 SourceDocument.Content 二次解析该语义。
 type BusinessObjectMap struct {
 	Domain          string                       `json:"domain"`
-	DecisionRefs    []string                     `json:"decisionRefs"`
 	BoundedContexts []BoundedContextRegistration `json:"boundedContexts"`
 	SourcePath      string                       `json:"sourcePath"`
 	Objects         []BusinessObjectBoundary     `json:"objects"`

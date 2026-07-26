@@ -5,19 +5,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 class _TestUserProfileRepository extends MockUserProfileRepository {
-  int followCalls = 0;
-  int unfollowCalls = 0;
-
   @override
   Future<SubAccountProfileViewData> getUserProfile(String userId) async {
     return SubAccountProfileViewData(
@@ -53,55 +52,29 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
       postCount: 0,
     );
   }
-
-  @override
-  Future<void> followUser(
-    String targetUserId, {
-    String? ownerUserId,
-    String? subAccountId,
-    String? subAccountContextVersion,
-  }) async {
-    followCalls += 1;
-  }
-
-  @override
-  Future<void> unfollowUser(
-    String targetUserId, {
-    String? ownerUserId,
-    String? subAccountId,
-    String? subAccountContextVersion,
-  }) async {
-    unfollowCalls += 1;
-  }
 }
 
-class _TestRelationshipCapabilityRepository
-    extends MockRelationshipCapabilityRepository {
-  @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
-    return RelationshipCapabilityDto(
-      viewerSubAccountId: 'viewer-1',
-      targetSubAccountId: targetUserId,
-      relationState: 'not_following',
-      canGreet: true,
-      canOpenConversation: false,
-      canStartVoiceCall: false,
-      canStartVideoCall: false,
-      isBlocked: false,
-      isBlockedBy: false,
-    );
-  }
+RelationshipCapabilityRepository _testRelationshipCapabilityRepository() {
+  return relationshipCapabilityRepositoryFrom(
+    const TestRelationshipCapabilityQuery.notFollowing(),
+    reconcilesWithSharedRelationshipState: true,
+  );
 }
 
 /// 统计 getCapability 调用次数：验证 homepage-bundle 提供首屏关系能力后不再串行补拉。
-class _CountingRelationshipCapabilityRepository
-    extends _TestRelationshipCapabilityRepository {
+class _CountingRelationshipCapabilityQuery
+    implements RelationshipCapabilityQuery {
+  _CountingRelationshipCapabilityQuery(this.delegate);
+
+  final RelationshipCapabilityQuery delegate;
   int getCapabilityCalls = 0;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+  Future<RelationshipCapabilityResult> getRelationshipCapability(
+    GetRelationshipCapabilityQuery query,
+  ) async {
     getCapabilityCalls += 1;
-    return super.getCapability(targetUserId);
+    return delegate.getRelationshipCapability(query);
   }
 }
 
@@ -168,9 +141,9 @@ void main() {
     final userRepo = _TestUserProfileRepository();
     final container = ProviderContainer(
       overrides: [
-        userProfileRepositoryProvider.overrideWithValue(userRepo),
+        profileQueryProvider.overrideWith((ref, surface) => userRepo),
         relationshipCapabilityRepositoryProvider.overrideWithValue(
-          _TestRelationshipCapabilityRepository(),
+          _testRelationshipCapabilityRepository(),
         ),
         ...mockContentFacetOverrides(MockContentRepository()),
       ],
@@ -215,7 +188,6 @@ void main() {
       container.read(userRelationshipStateProvider).isFollowing('profile-1'),
       isTrue,
     );
-    expect(userRepo.followCalls, 0);
     expect(
       container.read(clientStateSyncOutboxProvider).entries.single.objectId,
       'profile-1',
@@ -225,11 +197,11 @@ void main() {
   test('shared follow 快照已知时，仅以 optimistic overlay 覆盖展示态', () async {
     final container = ProviderContainer(
       overrides: [
-        userProfileRepositoryProvider.overrideWithValue(
-          _TestUserProfileRepository(),
+        profileQueryProvider.overrideWith(
+          (ref, surface) => _TestUserProfileRepository(),
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(
-          _TestRelationshipCapabilityRepository(),
+          _testRelationshipCapabilityRepository(),
         ),
         ...mockContentFacetOverrides(MockContentRepository()),
       ],
@@ -252,11 +224,11 @@ void main() {
   test('作者主页会跟随共享关系态变化刷新关注展示', () async {
     final container = ProviderContainer(
       overrides: [
-        userProfileRepositoryProvider.overrideWithValue(
-          _TestUserProfileRepository(),
+        profileQueryProvider.overrideWith(
+          (ref, surface) => _TestUserProfileRepository(),
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(
-          _TestRelationshipCapabilityRepository(),
+          _testRelationshipCapabilityRepository(),
         ),
         ...mockContentFacetOverrides(MockContentRepository()),
       ],
@@ -278,11 +250,14 @@ void main() {
   });
 
   test('loadProfile 一次聚合 bundle：提供关系能力后不再串行 getCapability', () async {
-    final capRepo = _CountingRelationshipCapabilityRepository();
+    final capQuery = _CountingRelationshipCapabilityQuery(
+      const TestRelationshipCapabilityQuery.notFollowing(),
+    );
+    final capRepo = relationshipCapabilityRepositoryFrom(capQuery);
     final container = ProviderContainer(
       overrides: [
-        userProfileRepositoryProvider.overrideWithValue(
-          _TestUserProfileRepository(),
+        profileQueryProvider.overrideWith(
+          (ref, surface) => _TestUserProfileRepository(),
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(capRepo),
         ...mockContentFacetOverrides(MockContentRepository()),
@@ -301,7 +276,7 @@ void main() {
     // bundle 自带首屏关系能力，capability 非空。
     expect(s.capability, isNotNull);
     // 首屏不再串行补拉 getCapability（性能闭环：消除额外请求）。
-    expect(capRepo.getCapabilityCalls, 0);
+    expect(capQuery.getCapabilityCalls, 0);
   });
 
   test(
@@ -310,12 +285,12 @@ void main() {
       final contentRepo = _CountingProfileContentRepository();
       final container = ProviderContainer(
         overrides: [
-          userProfileRepositoryProvider.overrideWithValue(
-            _TestUserProfileRepository(),
+          profileQueryProvider.overrideWith(
+            (ref, surface) => _TestUserProfileRepository(),
           ),
           ...mockContentFacetOverrides(contentRepo),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
-            _TestRelationshipCapabilityRepository(),
+            _testRelationshipCapabilityRepository(),
           ),
         ],
       );
@@ -334,11 +309,11 @@ void main() {
   test('loadProfile 失败进入结构化错误态：errorMessage 非空且不静默', () async {
     final container = ProviderContainer(
       overrides: [
-        userProfileRepositoryProvider.overrideWithValue(
-          _FailingUserProfileRepository(),
+        profileQueryProvider.overrideWith(
+          (ref, surface) => _FailingUserProfileRepository(),
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(
-          _TestRelationshipCapabilityRepository(),
+          _testRelationshipCapabilityRepository(),
         ),
         ...mockContentFacetOverrides(MockContentRepository()),
       ],

@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -83,10 +84,7 @@ void main() {
         find.text(UITextConstants.webPcCreateSocialGroupTitle),
         findsOneWidget,
       );
-      expect(
-        find.text(UITextConstants.webPcCreateGroupChatTitle),
-        findsOneWidget,
-      );
+      expect(find.text(ChatText.webPcCreateGroupChatTitle), findsOneWidget);
 
       // 去掉「小趣创作助手」上下文标题（不再出现）。
       expect(find.text('小趣创作助手'), findsNothing);

@@ -1,0 +1,36 @@
+version: 1
+service: assistant-service
+domain: assistant
+capability: account-security-authority
+
+# 账户安全权威校验同步且 fail-closed。指标只使用固定 outcome/check 枚举，
+# 不记录 account、persona、token、请求路径或任何可识别主体信息。
+metrics:
+  authority_checks_total: runtime_auth_account_security_authority_checks_total # labels: outcome
+  authority_check_duration_seconds: runtime_auth_account_security_authority_check_duration_seconds # labels: outcome
+  readiness_status: runtime_health_check_status # labels: check
+  readiness_duration_seconds: runtime_health_check_duration_seconds # labels: check
+
+privacy:
+  permitted_labels: [outcome, check]
+  prohibited_labels: [account_id, persona_id, token, authorization, request_path]
+
+slis:
+  - id: account_security_authority_latency
+    description: 已验签终端用户 JWT 的同步权威读取延迟；分位数来自 histogram，不使用平均值。
+    sli: histogram_quantile(0.95, sum(rate(runtime_auth_account_security_authority_check_duration_seconds_bucket[5m])) by (le))
+    objective:
+      p95_ms: 150
+      timeout_ms: 300
+  - id: account_security_authority_availability
+    description: unavailable 是唯一依赖故障 outcome；发生时请求保持拒绝而不回退缓存。
+    sli: 1 - sum(rate(runtime_auth_account_security_authority_checks_total{outcome="unavailable"}[5m])) / sum(rate(runtime_auth_account_security_authority_checks_total[5m]))
+    objective: 0.999
+  - id: account_security_authority_readiness
+    description: user-service scoped health 调用失败会使 /healthz 返回 503，阻止实例接收流量。
+    sli: runtime_health_check_status{check="account_security_authority"}
+    objective: 1
+
+failure_semantics:
+  authority_unavailable: deny_end_user_request
+  readiness_failure: remove_instance_from_ready_pool

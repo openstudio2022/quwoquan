@@ -10,3 +10,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Kotlin compiler sessions (local IDE/build noise)
+.kotlin/

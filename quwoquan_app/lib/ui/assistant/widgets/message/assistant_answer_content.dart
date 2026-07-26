@@ -1,6 +1,7 @@
 // ASSISTANT_WEAK_TYPE: EXTENSION_MAP — `runArtifacts` / cardPayload 等开放 JSON 与 Markdown 解析。
 
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class AssistantAnswerContent extends StatelessWidget {
@@ -384,7 +386,9 @@ class AssistantAnswerContent extends StatelessWidget {
         href: url,
         fallbackTitle: title,
       );
-      onReferenceTap?.call(citation);
+      if (citation != null) {
+        onReferenceTap?.call(citation);
+      }
     }
 
     try {
@@ -493,7 +497,13 @@ class AssistantAnswerContent extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: children,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'assistant markdown rendering degraded to selectable text',
+        name: 'assistant.answer_content',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return SelectableText(markdownText, style: textStyle);
     }
   }
@@ -502,12 +512,69 @@ class AssistantAnswerContent extends StatelessWidget {
     AssistantTranscriptTimelineRow row,
   ) {
     return switch (row) {
-      AssistantAnswerTranscriptRow r => _resolveReferenceItemsFromAnswerParts(
-        runArtifactsMap: r.runArtifacts,
-        uiReferences: r.uiReferences,
-      ),
+      AssistantAnswerTranscriptRow r => _resolveReferenceItemsFromAnswerRow(r),
       _ => const <_AssistantReferenceItem>[],
     };
+  }
+
+  static List<_AssistantReferenceItem> _resolveReferenceItemsFromAnswerRow(
+    AssistantAnswerTranscriptRow row,
+  ) {
+    final terminalItems = _resolveReferenceItemsFromTerminalSnapshot(row);
+    if (terminalItems.isNotEmpty) {
+      return terminalItems;
+    }
+    return _resolveReferenceItemsFromAnswerParts(
+      runArtifactsMap: row.runArtifacts,
+      uiReferences: row.uiReferences,
+    );
+  }
+
+  static List<_AssistantReferenceItem>
+  _resolveReferenceItemsFromTerminalSnapshot(AssistantAnswerTranscriptRow row) {
+    final snapshot = row.terminalSnapshot;
+    if (snapshot == null) {
+      return const <_AssistantReferenceItem>[];
+    }
+    final items = <_AssistantReferenceItem>[];
+    final seenDestinations = <String>{};
+    for (final process in snapshot.processes) {
+      for (final reference in process.acceptedReferences) {
+        final destination = reference.destination;
+        final destinationKey =
+            '${destination.kind}|${destination.objectTypeRef}|'
+            '${destination.objectId}|${destination.url}';
+        if (!seenDestinations.add(destinationKey)) {
+          continue;
+        }
+        late final AssistantCitation citation;
+        try {
+          citation = AssistantCitation.fromDestination(
+            destination: destination,
+            title: reference.title.trim(),
+            source: reference.source.trim(),
+            snippet: reference.snippet.trim(),
+          );
+        } on FormatException {
+          continue;
+        }
+        final url = citation.externalUrl;
+        final index = items.length + 1;
+        items.add(
+          _AssistantReferenceItem(
+            index: index,
+            title: citation.title.isNotEmpty
+                ? citation.title
+                : (url.isNotEmpty ? url : citation.destination.objectId ?? ''),
+            source: citation.source,
+            snippet: citation.snippet,
+            label: '[$index]',
+            citation: citation,
+          ),
+        );
+      }
+    }
+    return items;
   }
 
   static List<_AssistantReferenceItem> _resolveReferenceItemsFromAnswerParts({
@@ -521,17 +588,21 @@ class AssistantAnswerContent extends StatelessWidget {
     if (bindings.isNotEmpty) {
       for (var index = 0; index < bindings.length; index++) {
         final binding = bindings[index];
-        if (binding.url.trim().isEmpty) continue;
+        final citation = AssistantCitation.tryFromReferenceMap(
+          binding.toJson(),
+        );
+        if (citation == null) continue;
+        final url = citation.externalUrl;
         items.add(
           _AssistantReferenceItem(
             index: index + 1,
             title: binding.title.trim().isNotEmpty
                 ? binding.title.trim()
-                : binding.url,
-            url: binding.url.trim(),
+                : (url.isNotEmpty ? url : binding.label.trim()),
             source: binding.source.trim(),
             snippet: binding.snippet.trim(),
             label: binding.label.trim(),
+            citation: citation,
           ),
         );
       }
@@ -541,18 +612,19 @@ class AssistantAnswerContent extends StatelessWidget {
     }
     for (var index = 0; index < uiReferences.length; index++) {
       final reference = uiReferences[index];
-      final url = (reference['url'] as String?)?.trim() ?? '';
-      if (url.isEmpty) continue;
+      final citation = AssistantCitation.tryFromReferenceMap(reference);
+      if (citation == null) continue;
+      final url = citation.externalUrl;
       items.add(
         _AssistantReferenceItem(
           index: index + 1,
           title: (reference['title'] as String?)?.trim().isNotEmpty == true
               ? (reference['title'] as String).trim()
-              : url,
-          url: url,
+              : (url.isNotEmpty ? url : citation.destination.objectId ?? ''),
           source: (reference['source'] as String?)?.trim() ?? '',
           snippet: (reference['snippet'] as String?)?.trim() ?? '',
           label: '[${index + 1}]',
+          citation: citation,
         ),
       );
     }
@@ -563,12 +635,18 @@ class AssistantAnswerContent extends StatelessWidget {
     if (raw.isEmpty) return null;
     try {
       return parseRunArtifacts(raw);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'assistant run artifacts could not be decoded',
+        name: 'assistant.answer_content',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }
 
-  static AssistantCitation _citationForTap({
+  static AssistantCitation? _citationForTap({
     required List<_AssistantReferenceItem> references,
     required String text,
     required String href,
@@ -583,7 +661,11 @@ class AssistantAnswerContent extends StatelessWidget {
       return matched.toCitation();
     }
     final title = text.trim().isNotEmpty ? text.trim() : fallbackTitle;
-    return AssistantCitation(url: href, title: title);
+    try {
+      return AssistantCitation.external(url: href, title: title);
+    } on FormatException {
+      return null;
+    }
   }
 
   static _AssistantReferenceItem? _matchReference({
@@ -649,17 +731,16 @@ class _AssistantLinkBuilder extends MarkdownElementBuilder {
             : () => onReferenceTap!(matched.toCitation()),
       );
     }
+    final citation = AssistantAnswerContent._citationForTap(
+      references: references,
+      text: text,
+      href: href,
+      fallbackTitle: text,
+    );
     return GestureDetector(
-      onTap: onReferenceTap == null
+      onTap: onReferenceTap == null || citation == null
           ? null
-          : () => onReferenceTap!(
-              AssistantAnswerContent._citationForTap(
-                references: references,
-                text: text,
-                href: href,
-                fallbackTitle: text,
-              ),
-            ),
+          : () => onReferenceTap!(citation),
       child: Text(
         text,
         style: (preferredStyle ?? parentStyle ?? const TextStyle()).copyWith(
@@ -685,7 +766,7 @@ class _AssistantCitationChip extends StatelessWidget {
       context,
     ).withValues(alpha: 0.56);
     return Transform.translate(
-      offset: const Offset(0, -3),
+      offset: const Offset(AppSpacing.zero, -AppSpacing.three),
       child: GestureDetector(
         key: ValueKey<String>('assistant_reference_chip_${reference.index}'),
         onTap: onTap,
@@ -711,38 +792,33 @@ class _AssistantReferenceItem {
   const _AssistantReferenceItem({
     required this.index,
     required this.title,
-    required this.url,
     required this.source,
     required this.snippet,
     required this.label,
+    required this.citation,
   });
 
   final int index;
   final String title;
-  final String url;
   final String source;
   final String snippet;
   final String label;
+  final AssistantCitation citation;
+
+  String get url => citation.externalUrl;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'index': index,
       'title': title,
-      'url': url,
       'source': source,
       'snippet': snippet,
       'label': label,
+      'destination': citation.destination.toJson(),
     };
   }
 
-  AssistantCitation toCitation() {
-    return AssistantCitation(
-      url: url,
-      title: title,
-      source: source,
-      snippet: snippet,
-    );
-  }
+  AssistantCitation toCitation() => citation;
 }
 
 bool _hasVisibleAnswerBlock(AssistantAnswerDisplayBlock block) {
@@ -867,11 +943,11 @@ class _MarkdownSegment {
   String _fallbackTitle() {
     switch (cardType) {
       case 'compare':
-        return '对比卡片';
+        return AssistantText.assistantCardCompare;
       case 'trend':
-        return '趋势卡片';
+        return AssistantText.assistantCardTrend;
       case 'diagram':
-        return '结构图';
+        return AssistantText.assistantCardDiagram;
       default:
         return cardType;
     }
@@ -883,7 +959,13 @@ class _MarkdownSegment {
       if (decoded is Map<String, dynamic>) return decoded;
       if (decoded is Map) return decoded.cast<String, dynamic>();
       return null;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'assistant structured card payload could not be decoded',
+        name: 'assistant.answer_content',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }

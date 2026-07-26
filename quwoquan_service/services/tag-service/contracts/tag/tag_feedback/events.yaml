@@ -1,0 +1,15 @@
+events:
+- name: TagFeedbackRecorded
+  producer: tag-service
+  consumers:
+  - recommendation-engine
+  - platform-ops
+  channel: event_store
+  payload_entity: TagFeedback
+  payload_fields:
+  - id
+  - actorId
+  - actorKind
+  - tagRef
+  - action
+  - recordedAt

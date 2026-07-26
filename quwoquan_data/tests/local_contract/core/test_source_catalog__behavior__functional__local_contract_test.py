@@ -76,7 +76,7 @@ def test_photography_image_work_sources_route_by_license_metadata_first():
 
 
 def test_vertical_inference():
-    assert vertical_from_task_id("旅行/地域/四川省/景区/景区全覆盖") == "travel"
+    assert vertical_from_task_id("旅行/地域/test-region-b/景区/景区全覆盖") == "travel"
     assert vertical_from_task_id("校园/华东/某大学") == "campus"
 
 

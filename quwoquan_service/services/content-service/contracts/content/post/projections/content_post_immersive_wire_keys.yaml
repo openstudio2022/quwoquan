@@ -1,0 +1,15 @@
+dart_class: ContentPostImmersiveWireKeys
+description: 沉浸器与详情并行 raw Map 扩展键名 SSOT
+keys:
+- const_name: tagRefs
+  json_key: tagRefs
+- const_name: visibility
+  json_key: visibility
+- const_name: description
+  json_key: description
+- const_name: content
+  json_key: content
+- const_name: caption
+  json_key: caption
+- const_name: shareCount
+  json_key: shareCount

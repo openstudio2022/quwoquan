@@ -1,23 +1,52 @@
-# L3 Story：online-ab-significance
+# L3 Story：在线 A/B 显著性 (`online-ab-significance`)
 
-## 功能说明
+> 所属能力：[`evaluation-and-flywheel`](../spec.md)
 
-在线 AB 显著性规格定义 champion/challenger 对比、稳定分桶、最小样本量、SRM、指标窗口、显著性判定与保护指标报告，防止策略凭主观感觉上线。
+> Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
 
-## 范围
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- AB 分桶标签：channel、user_segment、recall_path、scorer_variant、exposure_pool、activity_segment、experiment_bucket。
-- 北极星与护栏指标：有效消费、次留、完成率、CTR、负反馈率、重复曝光率、空 feed、fallback。
-- 最小样本量、SRM、显著性、relative lift、promotionAllowed 和 rollbackCandidates。
-- 保护指标：负反馈、重复曝光、未知归因、行为丢弃、p95 延迟、旅行误混入和场景消费率。
+## 1. 用户价值
 
-## 非目标
+作为消费推荐的用户或策略运营者，
+我希望以稳定分桶、样本量和显著性阈值评估线上策略，样本不足时保持 hold，
+从而获得可解释且受治理的推荐结果。
 
-- 本轮不实现 AB 框架或流量切分。
-- 不以单次 local 测试替代真实线上实验结论。
+## 2. 范围与非目标
 
-## 验收标准
+### In Scope
 
-- A1：AB 分桶稳定且可复现。
-- A2：实验有效性进入 `ab_experiment_validity`。
-- A3：实验报告包含显著性、样本量、分群、护栏指标、晋级和回滚结论。
+- “在线 A/B 显著性”的输入、可观察主路径、失败语义以及与父能力的交接。
+- champion/challenger、分桶标签、样本量、SRM、显著性、relative lift、晋级/回滚结论和护栏指标。
+- 本 Story 不包含 AB 框架或线上流量切分实现。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 在线 A/B 显著性
+
+- 以稳定分桶、样本量和显著性阈值评估线上策略，样本不足时保持 hold。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/content-service/observability/slo/recommendation_slo.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 在线 A/B 显著性
+
+- GIVEN 消费推荐的用户或策略运营者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“在线 A/B 显著性”对应的公开行为。
+- THEN 以稳定分桶、样本量和显著性阈值评估线上策略，样本不足时保持 hold。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`evaluation-and-flywheel`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

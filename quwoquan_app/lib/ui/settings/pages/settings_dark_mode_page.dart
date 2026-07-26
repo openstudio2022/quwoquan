@@ -1,9 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:quwoquan_app/app/models/appearance_settings_models.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
-import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -37,6 +38,23 @@ class SettingsDarkModePage extends ConsumerWidget {
               bottom: AppSpacing.xl,
             ),
             children: <Widget>[
+              if (appearanceState.lastError != null) ...<Widget>[
+                SettingsInsetGroupedSection(
+                  isDark: isDark,
+                  child: SettingsInsetNavigationRow(
+                    isDark: isDark,
+                    label: UITextConstants.settingsSyncFailed,
+                    trailingText: UITextConstants.settingsRetrySync,
+                    isDestructive: true,
+                    onTap: () => ref
+                        .read(appearanceSettingsControllerProvider.notifier)
+                        .syncPending(),
+                  ),
+                ),
+                SizedBox(
+                  height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+                ),
+              ],
               SettingsInsetGroupedSection(
                 isDark: isDark,
                 density: SettingsInsetSectionDensity.compact,
@@ -95,6 +113,43 @@ class SettingsDarkModePage extends ConsumerWidget {
                   ],
                 ),
               ),
+              SizedBox(
+                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+              ),
+              SettingsInsetGroupedSection(
+                isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
+                header: UITextConstants.settingsFontSizeSection,
+                child: Column(
+                  children: <Widget>[
+                    for (
+                      var index = 0;
+                      index < AppearanceFontSizePreset.values.length;
+                      index++
+                    ) ...<Widget>[
+                      SettingsInsetChoiceRow(
+                        key: ValueKey<AppearanceFontSizePreset>(
+                          AppearanceFontSizePreset.values[index],
+                        ),
+                        isDark: isDark,
+                        label: _fontSizeLabel(
+                          AppearanceFontSizePreset.values[index],
+                        ),
+                        isSelected:
+                            snapshot.fontSizePreset ==
+                            AppearanceFontSizePreset.values[index],
+                        onTap: () => _updateFontSize(
+                          ref,
+                          snapshot,
+                          AppearanceFontSizePreset.values[index],
+                        ),
+                      ),
+                      if (index + 1 < AppearanceFontSizePreset.values.length)
+                        SettingsInsetFormSectionDivider(isDark: isDark),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -116,6 +171,44 @@ class SettingsDarkModePage extends ConsumerWidget {
           themeMode: themeMode,
           fontSizePreset: snapshot.fontSizePreset,
           applyScope: AppearanceApplyScope.allAccounts,
+        );
+    _trackAppearanceAction(ref, 'settings_theme_mode_changed');
+  }
+
+  static Future<void> _updateFontSize(
+    WidgetRef ref,
+    AppearanceSettingsSnapshot snapshot,
+    AppearanceFontSizePreset preset,
+  ) async {
+    if (snapshot.fontSizePreset == preset) return;
+    await ref
+        .read(appearanceSettingsControllerProvider.notifier)
+        .updateSettings(
+          themeMode: snapshot.themeMode,
+          fontSizePreset: preset,
+          applyScope: AppearanceApplyScope.allAccounts,
+        );
+    _trackAppearanceAction(ref, 'settings_font_size_changed');
+  }
+
+  static String _fontSizeLabel(AppearanceFontSizePreset preset) =>
+      switch (preset) {
+        AppearanceFontSizePreset.xs => UITextConstants.settingsFontSizeXs,
+        AppearanceFontSizePreset.sm => UITextConstants.settingsFontSizeSm,
+        AppearanceFontSizePreset.md => UITextConstants.settingsFontSizeMd,
+        AppearanceFontSizePreset.lg => UITextConstants.settingsFontSizeLg,
+        AppearanceFontSizePreset.xl => UITextConstants.settingsFontSizeXl,
+      };
+
+  static void _trackAppearanceAction(WidgetRef ref, String action) {
+    ref
+        .read(analyticsProvider)
+        .trackEvent(
+          AnalyticsEvent(
+            eventType: 'settings',
+            eventName: action,
+            properties: <String, Object?>{'action': action},
+          ),
         );
   }
 }

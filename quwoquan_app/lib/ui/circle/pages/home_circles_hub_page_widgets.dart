@@ -110,6 +110,29 @@ class _CirclesGlobalHeader extends StatelessWidget {
             ],
           ),
           SizedBox(height: AppSpacing.intraGroupXs),
+          CupertinoSlidingSegmentedControl<_HomeCirclesModuleTab>(
+            groupValue: activeModuleTab,
+            children: <_HomeCirclesModuleTab, Widget>{
+              _HomeCirclesModuleTab.recommended: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerSm,
+                ),
+                child: Text(UITextConstants.circleScenarioRecommended),
+              ),
+              _HomeCirclesModuleTab.mine: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerSm,
+                ),
+                child: Text(UITextConstants.circleScenarioMine),
+              ),
+            },
+            onValueChanged: (value) {
+              if (value != null) {
+                onModuleTabChanged(value);
+              }
+            },
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
           SizedBox(
             height: _circleRailHeight(context),
             child: ListView.separated(
@@ -132,8 +155,12 @@ class _CirclesGlobalHeader extends StatelessWidget {
                   circle: circle,
                   width: circleCardWidth,
                   isDark: isDark,
-                  onTap: () =>
-                      context.push(AppRoutePaths.circleDetail(id: circle.id)),
+                  onTap: () => context.push(
+                    AppRoutePaths.circleDetail(id: circle.id),
+                    extra: const CircleDetailPageRouteExtra(
+                      referralSource: ReferralSource.organicFeed,
+                    ),
+                  ),
                 );
               },
             ),
@@ -552,7 +579,7 @@ class _CirclesHubTopBar extends StatelessWidget {
                   ),
                   SizedBox(width: AppSpacing.intraGroupSm),
                   GlobalAssistantEntryButton(
-                    semanticLabel: UITextConstants.assistantEntryXiaoqu,
+                    semanticLabel: AssistantText.assistantEntryXiaoqu,
                     onTap: onAssistantTap,
                   ),
                 ],

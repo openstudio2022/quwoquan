@@ -1,77 +1,70 @@
-# Runtime Test Pyramid
+# L2 Business Capability：三层测试模型 (`runtime-test-pyramid`)
 
-## Summary
+> 所属领域：[`runtime`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-`runtime-test-pyramid` 是全仓三层测试治理的能力真相源，负责把：
+## 1. 能力目标
 
-- `gamma-local + prod gray-initial` 的 Journey / Page `user_acceptance`
-- `beta/gamma` 的 `api_integration`
-- `alpha/local` 的 `local_contract`
+以 local_contract、api_integration、user_acceptance 形成唯一测试分层和环境证据模型。
 
-串成单一、自洽、可门禁的迁移与执行模型。
+## 2. 范围与非目标
 
-## In Scope
+### In Scope
 
-- 三层测试层与四环境语义的统一命名和阻断规则
-- Journey / Page 顶层 case 模型
-- canonical 目录、bridge、`tests.recorded` 与 `artifacts/tests/**/report.json` 口径
-- `verify-test-specs` / `verify-test-directory-layout` / `verify-test-no-fake` / `verify-test-coverage-map`
-- `make gate` / `make gate-full` / `test-local-contract` / `test-api-integration` / `test-user-acceptance`
+- 三层测试命名、case ID、环境语义和执行入口
+- Journey/Page 到 local contract 与 api integration 的反向关联
+- 物理目录扫描和运行报告计算
 
-## Out Of Scope
+### Out of Scope
 
-- 具体某个业务 Story 的产品行为细节
-- 替代各域已有的 service / app / data 专项验证脚本
-- 生产灰度的审批、放量或回滚流程本身
+- 单个业务 Story 的具体产品行为
+- 远端环境和凭证供给
+- prod 审批与放量决策
 
-## Core Rules
+## 3. Journey / Scenario 贡献
 
-### 1. 三层 only
+- 横切工程能力：不直接拥有 AppRoot Scenario；调用本能力的业务领域仍承担对应 Journey 的产品责任。
+  - 本能力处理：以 local_contract、api_integration、user_acceptance 形成唯一测试分层和环境证据模型。
+  - 本能力输出：可供业务领域组合的公开结果与明确失败终态。
 
-测试工程层只允许：
+## 4. Story
 
-- `local_contract`
-- `api_integration`
-- `user_acceptance`
 
-不再新增 `T1-T4`、`L1-L4`、`contract-test` 等第二口径目录或 case id。
 
-### 2. 顶层真相源
+- [`three-layer-evidence`](./three-layer-evidence/spec.md)：已支持验收至少有一个职责匹配且可执行的直接 `spec_ref`；被 OPEN 声明的未完成验收不得计为通过。
 
-- Journey case：`user_acceptance.<journey_id>.<scenario_id>.<case>`
-- Page case：`user_acceptance.page.<surface_id>.<state_or_action>`
-- 页面清单来自 metadata `ui_surfaces.yaml` / `app_routes.yaml`
-- `specs/gates/user_acceptance_page_inventory.yaml` 是页面 owner、route-only 归属、source test 与反向绑定的真相源
+## 5. 能力要求
 
-### 3. 反向绑定
+<a id="req-001"></a>
+### REQ-001 三层测试模型与门禁单轨收口
 
-任何已实现的 Journey / Page `user_acceptance` case，都必须至少绑定：
+- 节点 spec 只登记稳定 UAT/DOM/SIT/GWT；测试或可执行治理门以 `spec_ref` 直接引用验收锚点。
+- 已关闭验收至少有一个真实、职责匹配且可运行的 `spec_ref`；未闭合验收由同节点 OPEN 明确完成判定。
+- App、Service、Data、Ops 的 canonical 三层目录是唯一测试入口。
+- 运行报告从测试代码、执行结果、环境和制品摘要实时生成，不提交覆盖清单或证据索引。
 
-- 1 个 `local_contract`
-- 1 个 `api_integration`
+<a id="req-002"></a>
+### REQ-002 禁止新增 T1-T4、L1-L4、contract-test 等第二套分层名称
 
-否则不得标记为 `implemented` / `completed`。
+- 禁止新增 `T1-T4`、`L1-L4`、`contract-test` 等第二套分层名称
+- `spec_ref` 与验收锚点必须双向有效，禁止集中映射表或不存在的逻辑 case 冒充测试
+- 缺少远端环境、凭证或当前报告时必须 `GATE_BLOCK`，不得以静态声明代替
 
-### 4. 目录与 bridge
+## 6. 契约与依赖
 
-- 执行入口只认 canonical 三层目录
-- legacy 测试源文件可暂留原处，但必须有 canonical bridge，且 `tests.recorded` 不得再直接引用 legacy 路径
-- bridge 覆盖与目录状态以 `specs/gates/test_directory_inventory.yaml` 为唯一清单
-- 允许继续存在的 legacy 源测试与 bench-only / skip grandfathering 例外以 `specs/gates/test_legacy_source_allowlist.yaml` 为唯一清单；新增测试不得再走 legacy + bridge 路线
-- canonical 根成为唯一执行/证据真相源，并不自动表示 legacy 测试文件已从磁盘物理迁走
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-### 5. 门禁
+## 7. 集成验收
 
-- `make gate`：schema + directory + no-fake + coverage-map + local_contract
-- `make gate-full`：`make gate` + `api_integration` + `gamma_local user_acceptance`
-- 发布前远端只认 `prod gray-initial` 的只读/幂等 `api_integration` 与 Journey/Page `user_acceptance`
-- `verify-test-no-fake` 必须同时扫描 canonical bridge、legacy 源文件与 `artifacts/tests/**/report.json`，防止 wrapper 伪绿或 legacy source 伪绿
+<a id="sit-001"></a>
+### SIT-001 三层测试模型与门禁单轨收口
 
-## Exit Evidence
-
-本能力关闭时必须能证明：
-
-- metadata surface/page matrix 完整覆盖
-- `tests.recorded` 只引用 canonical 三层测试或 `artifacts/tests/**/report.json`
-- App / Service / Data / Ops canonical 根全部落地，并成为唯一执行入口
-- `R-TST01` / `R-TST02` 已在 backlog 回写关闭与验证证据
+- GIVEN 执行“三层测试模型与门禁单轨收口”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“三层测试模型与门禁单轨收口”对应动作。
+- THEN 节点 spec 不包含测试文件、命令、通过率或历史证据，测试代码以 `spec_ref` 直接关联稳定验收锚点。
+- THEN 每个已关闭验收都有真实测试或可执行治理门反向引用；OPEN 中的未完成验收不会被误报为通过。
+- THEN App、Service、Data、Ops 的 canonical 三层目录是唯一测试入口。
+- THEN 动态报告能从当前代码与运行结果定位实际测试、环境和制品摘要，不读取 tracked inventory。

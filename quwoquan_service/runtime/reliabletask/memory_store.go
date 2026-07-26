@@ -2,6 +2,7 @@ package reliabletask
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"sync"
@@ -114,12 +115,42 @@ func (s *MemoryStore) DispatchDueTasksForShard(ctx context.Context, now time.Tim
 	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.dispatchDueTasksLocked(now, limit, func(record TaskOutboxRecord) bool {
+		return shardID < 0 || record.ShardID == shardID
+	})
+}
+
+// DispatchDataContentExecution mirrors the production Mongo execution scope.
+func (s *MemoryStore) DispatchDataContentExecution(
+	ctx context.Context,
+	executionID string,
+	now time.Time,
+	limit int,
+) ([]ReliableAsyncTask, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dispatchDueTasksLocked(now, limit, func(record TaskOutboxRecord) bool {
+		return record.TaskType == DataContentTaskType &&
+			record.Payload["executionId"] == executionID
+	})
+}
+
+func (s *MemoryStore) dispatchDueTasksLocked(
+	now time.Time,
+	limit int,
+	include func(TaskOutboxRecord) bool,
+) ([]ReliableAsyncTask, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 	outboxes := make([]TaskOutboxRecord, 0, len(s.outboxes))
 	for _, record := range s.outboxes {
-		if shardID >= 0 && record.ShardID != shardID {
+		if !include(record) {
 			continue
 		}
 		if (record.Status == TaskOutboxStatusPending || record.Status == TaskOutboxStatusFailed) && !record.StartAt.After(now) {
@@ -227,6 +258,171 @@ func (s *MemoryStore) ClaimReadyTaskByID(ctx context.Context, taskID string, wor
 	return &task, nil
 }
 
+func (s *MemoryStore) ListReadyTasks(
+	ctx context.Context,
+	taskTypes []string,
+	limit int,
+	now time.Time,
+) ([]ReliableAsyncTask, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.listReadyTasksLocked(taskTypes, limit, now, func(ReliableAsyncTask) bool { return true }), nil
+}
+
+// ListReadyDataContentExecution mirrors the production Mongo execution scope.
+func (s *MemoryStore) ListReadyDataContentExecution(
+	ctx context.Context,
+	executionID string,
+	limit int,
+	now time.Time,
+) ([]ReliableAsyncTask, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.listReadyTasksLocked(
+		[]string{DataContentTaskType},
+		limit,
+		now,
+		func(task ReliableAsyncTask) bool {
+			return task.Payload["executionId"] == executionID
+		},
+	), nil
+}
+
+// PurgeDataContentExecution mirrors the production exact execution cleanup.
+func (s *MemoryStore) PurgeDataContentExecution(
+	ctx context.Context,
+	executionID string,
+) (DataContentExecutionPurgeResult, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return DataContentExecutionPurgeResult{}, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := DataContentExecutionPurgeResult{}
+	for taskID, task := range s.tasks {
+		if task.TaskType != DataContentTaskType || task.Payload["executionId"] != executionID {
+			continue
+		}
+		delete(s.tasks, taskID)
+		delete(s.taskByDedupe, task.DedupeKey)
+		result.TaskIDs = append(result.TaskIDs, taskID)
+		result.TasksDeleted++
+	}
+	for outboxID, outbox := range s.outboxes {
+		if outbox.TaskType != DataContentTaskType || outbox.Payload["executionId"] != executionID {
+			continue
+		}
+		delete(s.outboxes, outboxID)
+		delete(s.outboxByDedupe, outbox.DedupeKey)
+		if outbox.IdempotencyKey != "" {
+			delete(s.outboxByIdempotency, outbox.IdempotencyKey)
+		}
+		result.OutboxesDeleted++
+	}
+	return result, nil
+}
+
+func (s *MemoryStore) listReadyTasksLocked(
+	taskTypes []string,
+	limit int,
+	now time.Time,
+	include func(ReliableAsyncTask) bool,
+) []ReliableAsyncTask {
+	if limit <= 0 {
+		limit = 100
+	}
+	tasks := make([]ReliableAsyncTask, 0, limit)
+	for _, task := range s.tasks {
+		if len(taskTypes) > 0 && !contains(task.TaskType, taskTypes) {
+			continue
+		}
+		if !include(task) {
+			continue
+		}
+		leaseExpired := !task.LeaseUntil.IsZero() && !task.LeaseUntil.After(now)
+		eligible := task.Status == TaskStatusReady ||
+			task.Status == TaskStatusRetryWait ||
+			(task.Status == TaskStatusProcessing && leaseExpired)
+		if !eligible || task.NextAttemptAt.After(now) {
+			continue
+		}
+		task.Payload = CloneStringMap(task.Payload)
+		tasks = append(tasks, task)
+	}
+	sort.Slice(tasks, func(i, j int) bool {
+		if tasks[i].NextAttemptAt.Equal(tasks[j].NextAttemptAt) {
+			return tasks[i].TaskID < tasks[j].TaskID
+		}
+		return tasks[i].NextAttemptAt.Before(tasks[j].NextAttemptAt)
+	})
+	if len(tasks) > limit {
+		tasks = tasks[:limit]
+	}
+	return tasks
+}
+
+func (s *MemoryStore) RenewTaskLease(
+	ctx context.Context,
+	taskID string,
+	leaseToken string,
+	leaseTTL time.Duration,
+	now time.Time,
+) (time.Time, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[strings.TrimSpace(taskID)]
+	if !ok {
+		return time.Time{}, ErrTaskNotFound
+	}
+	now = now.UTC()
+	if task.Status != TaskStatusProcessing ||
+		task.LeaseToken != strings.TrimSpace(leaseToken) ||
+		!task.LeaseUntil.After(now) {
+		return time.Time{}, ErrLeaseMismatch
+	}
+	if leaseTTL <= 0 {
+		leaseTTL = 30 * time.Second
+	}
+	task.LeaseUntil = now.Add(leaseTTL).UTC()
+	task.UpdatedAt = now
+	s.tasks[task.TaskID] = task
+	return task.LeaseUntil, nil
+}
+
+func (s *MemoryStore) RecordTaskResult(
+	ctx context.Context,
+	taskID string,
+	leaseToken string,
+	result map[string]string,
+	now time.Time,
+) error {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[strings.TrimSpace(taskID)]
+	if !ok {
+		return ErrTaskNotFound
+	}
+	if task.Status != TaskStatusProcessing ||
+		task.LeaseToken != strings.TrimSpace(leaseToken) ||
+		!task.LeaseUntil.After(now.UTC()) {
+		return ErrLeaseMismatch
+	}
+	task.Result = CloneStringMap(result)
+	task.UpdatedAt = now.UTC()
+	s.tasks[task.TaskID] = task
+	return nil
+}
+
 func (s *MemoryStore) CompleteTask(ctx context.Context, taskID string, leaseToken string) error {
 	_ = ctx
 	s.mu.Lock()
@@ -235,7 +431,9 @@ func (s *MemoryStore) CompleteTask(ctx context.Context, taskID string, leaseToke
 	if !ok {
 		return ErrTaskNotFound
 	}
-	if task.LeaseToken != leaseToken {
+	if task.Status != TaskStatusProcessing ||
+		task.LeaseToken != leaseToken ||
+		!task.LeaseUntil.After(time.Now().UTC()) {
 		return ErrLeaseMismatch
 	}
 	task.Status = TaskStatusSucceeded
@@ -254,7 +452,9 @@ func (s *MemoryStore) FailTask(ctx context.Context, taskID string, leaseToken st
 	if !ok {
 		return ErrTaskNotFound
 	}
-	if task.LeaseToken != leaseToken {
+	if task.Status != TaskStatusProcessing ||
+		task.LeaseToken != leaseToken ||
+		!task.LeaseUntil.After(now.UTC()) {
 		return ErrLeaseMismatch
 	}
 	task.Attempts++
@@ -522,6 +722,30 @@ func (s *MemoryStore) ListDeadTasks(ctx context.Context, taskTypes []string, lim
 		}
 	}
 	return out, nil
+}
+
+// FindLatestTaskOutboxByAggregateID 与 Mongo store 行为对齐：返回聚合的
+// 最新任务 outbox 记录，供外部交互请求状态查询派生归一化状态。
+func (s *MemoryStore) FindLatestTaskOutboxByAggregateID(
+	ctx context.Context,
+	aggregateID string,
+) (TaskOutboxRecord, bool, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	aggregateID = strings.TrimSpace(aggregateID)
+	var latest TaskOutboxRecord
+	found := false
+	for _, record := range s.outboxes {
+		if record.AggregateID != aggregateID {
+			continue
+		}
+		if !found || record.UpdatedAt.After(latest.UpdatedAt) {
+			latest = record
+			found = true
+		}
+	}
+	return latest, found, nil
 }
 
 func (s *MemoryStore) RecoverDeadTask(ctx context.Context, taskID string, now time.Time) error {

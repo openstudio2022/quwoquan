@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/share_interaction_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 @immutable
 class ShareInteractionBucketKey {
@@ -130,19 +132,24 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
     );
     try {
       final page = await ref
-          .read(userProfileRepositoryProvider)
-          .listProfileShareInteractions(
-            key.subAccountId,
-            direction: key.direction.wireValue,
-            limit: pageSize,
+          .read(profileInteractionQueryFacetProvider)
+          .listActivities(
+            ContentProfileInteractionPageQuery(
+              subAccountId: key.subAccountId,
+              type: ContentProfileInteractionType.share,
+              limit: pageSize,
+            ),
+            direction: key.direction == ShareInteractionDirection.received
+                ? ContentProfileInteractionDirection.received
+                : ContentProfileInteractionDirection.sent,
           );
+      final items = page.items
+          .map(ProfileInteractionActivityViewData.fromContentActivity)
+          .map((item) => ShareInteractionItem.fromActivity(item, key.direction))
+          .toList(growable: false);
       if (!ref.mounted || requestGeneration != _generation) return;
       state = state.copyWith(
-        items: page.items
-            .map(
-              (item) => ShareInteractionItem.fromActivity(item, key.direction),
-            )
-            .toList(growable: false),
+        items: items,
         nextCursor: page.nextCursor,
         clearCursor: page.nextCursor == null,
         isInitialLoading: false,
@@ -167,16 +174,22 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
     state = state.copyWith(isLoadingMore: true, clearError: true);
     try {
       final page = await ref
-          .read(userProfileRepositoryProvider)
-          .listProfileShareInteractions(
-            key.subAccountId,
-            direction: key.direction.wireValue,
-            cursor: cursor,
-            limit: pageSize,
+          .read(profileInteractionQueryFacetProvider)
+          .listActivities(
+            ContentProfileInteractionPageQuery(
+              subAccountId: key.subAccountId,
+              type: ContentProfileInteractionType.share,
+              cursor: cursor,
+              limit: pageSize,
+            ),
+            direction: key.direction == ShareInteractionDirection.received
+                ? ContentProfileInteractionDirection.received
+                : ContentProfileInteractionDirection.sent,
           );
       if (!ref.mounted || requestGeneration != _generation) return;
       final existing = state.items.map((item) => item.interactionId).toSet();
       final appended = page.items
+          .map(ProfileInteractionActivityViewData.fromContentActivity)
           .map((item) => ShareInteractionItem.fromActivity(item, key.direction))
           .where((item) => existing.add(item.interactionId))
           .toList(growable: false);
@@ -221,6 +234,12 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
 
   Future<void> _markState(ShareInteractionItem item, String writeState) async {
     if (!_ownsActiveSubAccount) return;
+    final telemetryAction = switch (writeState) {
+      'seen' => 'mark_seen',
+      'read' => 'mark_read',
+      _ => throw ArgumentError.value(writeState, 'writeState'),
+    };
+    final stopwatch = Stopwatch()..start();
     final now = DateTime.now().toUtc();
     final previousItems = state.items;
     state = state.copyWith(
@@ -228,8 +247,10 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
           .map(
             (candidate) => candidate.interactionId == item.interactionId
                 ? candidate.copyWith(
-                    seenAt: now,
-                    readAt: writeState == 'read' ? now : null,
+                    seenAt: candidate.seenAt ?? now,
+                    readAt: writeState == 'read'
+                        ? (candidate.readAt ?? now)
+                        : candidate.readAt,
                   )
                 : candidate,
           )
@@ -238,15 +259,49 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
     );
     try {
       await ref
-          .read(userProfileRepositoryProvider)
-          .markProfileShareInteractionState(
-            key.subAccountId,
-            item.interactionId,
-            state: writeState,
+          .read(profileInteractionReadFactAppendFacetProvider)
+          .appendReadFact(
+            AppendContentProfileInteractionReadFactCommand(
+              subAccountId: key.subAccountId,
+              activityId: item.interactionId,
+              state: writeState == 'read'
+                  ? ContentProfileInteractionReadState.read
+                  : ContentProfileInteractionReadState.seen,
+            ),
+          );
+      stopwatch.stop();
+      if (!ref.mounted) return;
+      await ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'profile_interaction',
+            action: telemetryAction,
+            pageName: 'profile_interaction_tab',
+            targetType: 'profile_interaction_activity',
+            targetKey: item.interactionId,
+            payload: <String, Object?>{
+              'result': 'success',
+              'durationMs': stopwatch.elapsedMilliseconds,
+            },
           );
     } catch (error) {
+      stopwatch.stop();
       if (!ref.mounted) return;
       state = state.copyWith(items: previousItems, error: error);
+      await ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'profile_interaction',
+            action: telemetryAction,
+            pageName: 'profile_interaction_tab',
+            targetType: 'profile_interaction_activity',
+            targetKey: item.interactionId,
+            error: error,
+            payload: <String, Object?>{
+              'result': 'failure',
+              'durationMs': stopwatch.elapsedMilliseconds,
+            },
+          );
     }
   }
 

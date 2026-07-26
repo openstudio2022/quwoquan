@@ -1,26 +1,42 @@
+// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/voice-message/spec.md#gwt-001
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 import '../../../../support/recording_content_media_facet.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    // ChatSendOutbox 持久化队列依赖 Hive；发送失败路径会尝试入队。
+    Hive.init(
+      '${Directory.systemTemp.path}/qwq_voice_send_test_${DateTime.now().microsecondsSinceEpoch}',
+    );
+  });
+
+  tearDown(() async {
+    await Hive.deleteFromDisk();
+  });
+
   group('VoiceSendNotifier', () {
     test('上传完成后只用 MediaAsset identity 发送 audio 消息', () async {
       final uploadManager = _ImmediateUploadManager(
-        cdnUrl: 'https://cdn.example.com/voice.m4a',
         assetId: 'media_001',
       );
       final analytics = _FakeAnalyticsService();
@@ -28,9 +44,22 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
+          contentConfigRepositoryProvider.overrideWithValue(
+            MockContentRepository(),
+          ),
           currentUserIdProvider.overrideWithValue('user_001'),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'user_001',
+              ownerUserId: 'user_001',
+              displayName: '语音发送测试用户',
+              avatarUrl: '',
+            ),
+          ),
           analyticsProvider.overrideWithValue(analytics),
         ],
       );
@@ -72,7 +101,6 @@ void main() {
 
     test('无效录音文件不会上传或发送', () async {
       final uploadManager = _ImmediateUploadManager(
-        cdnUrl: 'https://cdn.example.com/voice.m4a',
         assetId: 'media_001',
       );
       final analytics = _FakeAnalyticsService();
@@ -80,8 +108,21 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
+          contentConfigRepositoryProvider.overrideWithValue(
+            MockContentRepository(),
+          ),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'voice_invalid_user',
+              ownerUserId: 'voice_invalid_user',
+              displayName: '无效录音测试用户',
+              avatarUrl: '',
+            ),
+          ),
           analyticsProvider.overrideWithValue(analytics),
         ],
       );
@@ -101,7 +142,7 @@ void main() {
 
       final state = container.read(voiceSendProvider('conv_001'));
       expect(state.status, VoiceSendStatus.failed);
-      expect(state.error, UITextConstants.chatVoiceRecordUnavailable);
+      expect(state.error, ChatText.chatVoiceRecordUnavailable);
       expect(uploadManager.enqueueCount, 0);
       expect(writer.sendCount, 0);
       expect(
@@ -120,8 +161,21 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
+          contentConfigRepositoryProvider.overrideWithValue(
+            MockContentRepository(),
+          ),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'voice_upload_failure_user',
+              ownerUserId: 'voice_upload_failure_user',
+              displayName: '上传失败测试用户',
+              avatarUrl: '',
+            ),
+          ),
           analyticsProvider.overrideWithValue(analytics),
         ],
       );
@@ -141,7 +195,7 @@ void main() {
 
       final state = container.read(voiceSendProvider('conv_001'));
       expect(state.status, VoiceSendStatus.failed);
-      expect(state.error, UITextConstants.chatVoicePendingRetry);
+      expect(state.error, ChatText.chatVoicePendingRetry);
       expect(writer.sendCount, 0);
       expect(
         analytics.events.map((event) => event.eventName),
@@ -151,7 +205,6 @@ void main() {
 
     test('消息发送失败不会误判为完成', () async {
       final uploadManager = _ImmediateUploadManager(
-        cdnUrl: 'https://cdn.example.com/voice.m4a',
         assetId: 'media_001',
       );
       final analytics = _FakeAnalyticsService();
@@ -159,8 +212,21 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
+          contentConfigRepositoryProvider.overrideWithValue(
+            MockContentRepository(),
+          ),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'voice_send_failure_user',
+              ownerUserId: 'voice_send_failure_user',
+              displayName: '发送失败测试用户',
+              avatarUrl: '',
+            ),
+          ),
           analyticsProvider.overrideWithValue(analytics),
         ],
       );
@@ -180,7 +246,7 @@ void main() {
 
       final state = container.read(voiceSendProvider('conv_001'));
       expect(state.status, VoiceSendStatus.failed);
-      expect(state.error, UITextConstants.chatVoicePendingRetry);
+      expect(state.error, ChatText.chatVoicePendingRetry);
       expect(
         analytics.events.map((event) => event.eventName),
         contains('voice_send_failed'),
@@ -203,15 +269,11 @@ class _FakeAnalyticsService extends AnalyticsService {
 class _ImmediateUploadManager extends MediaUploadManager {
   _ImmediateUploadManager({
     this.status = UploadStatus.completed,
-    this.cdnUrl,
     this.assetId,
     this.error,
   }) : super(
          coordinator: ContentMediaUploadCoordinator(
            media: RecordingContentMediaFacet(),
-           fileStorage: createFileStorageGateway(),
-           uploadObject:
-               (_, _, {required contentType, required expectedSha256}) async {},
          ),
          sourceReader: const LocalContentMediaSourceReader(),
          uploadStream:
@@ -221,11 +283,11 @@ class _ImmediateUploadManager extends MediaUploadManager {
                required contentLength,
                required contentType,
                required expectedSha256,
+               Future<void>? abortTrigger,
              }) async {},
        );
 
   final UploadStatus status;
-  final String? cdnUrl;
   final String? assetId;
   final String? error;
   int enqueueCount = 0;
@@ -235,7 +297,6 @@ class _ImmediateUploadManager extends MediaUploadManager {
     enqueueCount++;
     task
       ..status = status
-      ..cdnUrl = cdnUrl
       ..assetId = assetId
       ..error = error;
     return task;

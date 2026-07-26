@@ -1,0 +1,209 @@
+events:
+- name: CallInitiated
+  source: CallInitiated
+  description: 通话发起（发起方创建 CallSession + 媒体 Room）
+  producer: rtc-service
+  consumers:
+  - realtime-gateway
+  - notification-service
+  channel: event_store
+  client_ws_type: call.initiated
+  payload_entity: CallSession
+  payload_fields:
+  - callId
+  - callType
+  - initiatorId
+  - initiatorRingtoneId
+  - conversationId
+  - circleId
+  - maxParticipants
+  - createdAt
+  realtime_channel: rt:rtc:persona:{participantPersonaId}
+- name: CallRinging
+  source: CallRinging
+  description: 来电振铃（被邀请人收到来电通知）
+  producer: rtc-service
+  consumers:
+  - realtime-gateway
+  - notification-service
+  channel: event_store
+  client_ws_type: call.ringing
+  payload_fields:
+  - eventId
+  - callId
+  - targetPersonaId
+  - callType
+  - callerName
+  - callerAvatarUrl
+  - sourceLabel
+  - trustRelation
+  - expiresAt
+  - deliveryKey
+  required_client_string_fields:
+  - eventId
+  - callId
+  - targetPersonaId
+  - callType
+  - callerName
+  - callerAvatarUrl
+  - sourceLabel
+  - trustRelation
+  - expiresAt
+  - deliveryKey
+  client_payload_defaults:
+    callType: audio
+  durable_stream: events.rtc.call_ringing
+  delivery_identity: sha256(callId + '\x00' + targetPersonaId)
+  telemetry:
+    metric: rtc_call_outbox_relay_total
+    labels:
+    - event_type
+    - transport
+    - outcome
+  realtime_channel: rt:rtc:persona:{targetPersonaId}
+  expiry_policy:
+    one_to_one_seconds: 30
+    group_seconds: 60
+  push_policy:
+    coordinator: notification-service
+    online: realtime_then_presentation_ack
+    presentation_ack_grace_ms: 750
+    offline_ios: voip_push
+    offline_android: fcm_high_priority_full_screen_intent
+    description: notification-service 按设备 PresenceView 单选投递：在线先走 realtime，750ms 内 收到设备级 presentation ACK
+      即结束；未 ACK 或离线才进入 iOS VoIP Push / Android FCM 高优先级队列。Web Push 不属于 M2。
+    payload_contract: realtime 来电帧保留 callerAvatarUrl；移动 provider 外送按 integration PushDeliveryRequest 只含
+      action、endpointRef、deliveryKey、callId、 targetPersonaId、callType、callerName、sourceLabel、trustRelation、
+      expiresAt 与 occurredAt，禁止携带 endpoint token。CallAnswered/CallEnded 对已展示或已提交 ring 的 endpoint 发送同 deliveryKey
+      的 action=cancel； 终端必须结束来电面并压制乱序迟到 ring。
+- name: CallAnswered
+  source: CallAnswered
+  description: 通话接听（参与者进入 connecting 状态）
+  producer: rtc-service
+  consumers:
+  - realtime-gateway
+  - notification-service
+  channel: event_store
+  client_ws_type: call.answered
+  payload_fields:
+  - callId
+  - userId
+  durable_stream: events.rtc.call_answered
+  telemetry:
+    metric: rtc_call_outbox_relay_total
+    labels:
+    - event_type
+    - transport
+    - outcome
+  realtime_channel: rt:rtc:persona:{participantPersonaId}
+- name: CallConnected
+  source: CallConnected
+  description: 媒体建连成功（ICE+DTLS 完成，参与者 connected）
+  producer: rtc-service
+  consumers:
+  - realtime-gateway
+  channel: event_store
+  client_ws_type: call.connected
+  payload_fields:
+  - callId
+  - userId
+  - participantCount
+  realtime_channel: rt:rtc:persona:{participantPersonaId}
+- name: CallEnded
+  source: CallEnded
+  description: 通话结束（所有参与者离开、主动挂断或账号安全终态收回媒体房间）；account_closed/account_suspended
+    仅表达终态原因，不携带被处置账号或 Persona 标识。
+  producer: rtc-service
+  consumers:
+  - realtime-gateway
+  - chat-service
+  - notification-service
+  channel: event_store
+  client_ws_type: call.ended
+  payload_entity: CallSession
+  payload_fields:
+  - callId
+  - callType
+  - initiatorId
+  - conversationId
+  - endReason
+  - durationMs
+  - participantCount
+  - startedAt
+  - endedAt
+  durable_stream: events.rtc.call_ended
+  telemetry:
+    metric: rtc_call_outbox_relay_total
+    labels:
+    - event_type
+    - transport
+    - outcome
+  realtime_channel: rt:rtc:persona:{participantPersonaId}
+  chat_integration:
+    description: chat-service 消费此事件，在关联会话中插入通话记录消息（type=system_call_log）
+- name: ParticipantJoined
+  source: ParticipantJoined
+  description: 参与者加入通话（多人模式）
+  producer: rtc-service
+  consumers:
+  - realtime-gateway
+  channel: event_store
+  client_ws_type: participant.joined
+  payload_fields:
+  - callId
+  - userId
+  - role
+  - participantCount
+  realtime_channel: rt:rtc:persona:{participantPersonaId}
+- name: ParticipantLeft
+  source: ParticipantLeft
+  description: 参与者离开通话
+  producer: rtc-service
+  consumers:
+  - realtime-gateway
+  channel: event_store
+  client_ws_type: participant.left
+  payload_fields:
+  - callId
+  - userId
+  - participantCount
+  realtime_channel: rt:rtc:persona:{participantPersonaId}
+- name: ScreenShareStarted
+  source: ScreenShareStarted
+  description: 屏幕共享开始
+  producer: rtc-service
+  consumers:
+  - realtime-gateway
+  channel: event_store
+  client_ws_type: screen_share.started
+  payload_fields:
+  - callId
+  - userId
+  realtime_channel: rt:rtc:persona:{participantPersonaId}
+- name: ScreenShareStopped
+  source: ScreenShareStopped
+  description: 屏幕共享停止
+  producer: rtc-service
+  consumers:
+  - realtime-gateway
+  channel: event_store
+  client_ws_type: screen_share.stopped
+  payload_fields:
+  - callId
+  - userId
+  realtime_channel: rt:rtc:persona:{participantPersonaId}
+consumption:
+- source_event: UserAccountClosed
+  source_service: user-service
+  channel: events.user.account
+  behavior: durable 幂等终止受影响 Persona 的所有 active CallSession，先撤销 media room access，再通过 CallEnded outbox
+    发布 account_closed 终态事实。
+- source_event: UserSuspended
+  source_service: user-service
+  channel: events.user.account
+  behavior: durable 幂等终止受影响 Persona 的所有 active CallSession，先撤销 media room access，再通过 CallEnded outbox
+    发布 account_suspended 终态事实。
+- source_event: UserRestored
+  source_service: user-service
+  channel: events.user.account
+  behavior: 仅确认消费；不得恢复历史 CallSession、room、media access 或 participant membership。

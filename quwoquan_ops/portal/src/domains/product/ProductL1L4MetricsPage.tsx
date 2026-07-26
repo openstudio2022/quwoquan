@@ -7,16 +7,14 @@ import {
   fetchProductL1L4Metrics,
   type ProductL1L4AlertState,
   fetchProductProjectionSummary,
-  fetchRuntimeClusters,
-  fetchRuntimeInstances,
   fetchRuntimeServices,
+  fetchServiceRouteRED,
   type ConfigInstanceReportItem,
   type ProductL1L4MetricsResponse,
   type ProductMetricItem,
   type ProductProjectionSummary,
-  type RuntimeClusterItem,
-  type RuntimeInstanceItem,
   type RuntimeServiceItem,
+  type ServiceRouteREDResponse,
 } from '../../shared/api/controlPlane.js';
 import { KpiCard } from '../../shared/components/KpiCard.js';
 import { SectionCard } from '../../shared/components/SectionCard.js';
@@ -24,24 +22,18 @@ import { usePortalScope } from '../../shared/layout/PortalContext.js';
 import { PageScaffold } from '../../shared/layout/PageScaffold.js';
 import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
+// 单机 prod-hosted 拓扑没有多集群维度：下钻收敛为 environment + service，
+// 实例一致性由 config ACK 报告承载，不再提供独立 instance 路由。
 const l1l4RouteViews = [
   { id: 'environment', label: '环境总览', route: '/product/l1-l4/environment', defaultLevel: 'all' },
-  { id: 'cluster', label: '集群下钻', route: '/product/l1-l4/cluster', defaultLevel: 'L2' },
   { id: 'service', label: '服务下钻', route: '/product/l1-l4/service', defaultLevel: 'L3' },
-  { id: 'instance', label: '实例下钻', route: '/product/l1-l4/instance', defaultLevel: 'L4' },
 ] as const;
 
 type L1L4RouteViewId = (typeof l1l4RouteViews)[number]['id'];
 
 function resolveL1L4Route(pathname: string): L1L4RouteViewId {
-  if (pathname.endsWith('/cluster')) {
-    return 'cluster';
-  }
   if (pathname.endsWith('/service')) {
     return 'service';
-  }
-  if (pathname.endsWith('/instance')) {
-    return 'instance';
   }
   return 'environment';
 }
@@ -53,13 +45,11 @@ export function ProductL1L4MetricsPage() {
   const [metrics, setMetrics] = useState<ProductMetricItem[]>([]);
   const [metricsPayload, setMetricsPayload] = useState<ProductL1L4MetricsResponse | null>(null);
   const [instanceReports, setInstanceReports] = useState<ConfigInstanceReportItem[]>([]);
-  const [clusters, setClusters] = useState<RuntimeClusterItem[]>([]);
   const [services, setServices] = useState<RuntimeServiceItem[]>([]);
-  const [instances, setInstances] = useState<RuntimeInstanceItem[]>([]);
-  const [selectedCluster, setSelectedCluster] = useState<string>('');
   const [selectedService, setSelectedService] = useState<string>('');
-  const [selectedInstance, setSelectedInstance] = useState<string>('');
   const [activeLevel, setActiveLevel] = useState<'all' | 'L1' | 'L2' | 'L3' | 'L4'>('all');
+  const [routeRED, setRouteRED] = useState<ServiceRouteREDResponse | null>(null);
+  const [routeREDError, setRouteREDError] = useState<RuntimeError | null>(null);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
   const activeRoute = resolveL1L4Route(pathname);
   const activeRouteMeta = l1l4RouteViews.find((item) => item.id === activeRoute) ?? l1l4RouteViews[0];
@@ -68,16 +58,12 @@ export function ProductL1L4MetricsPage() {
     Promise.all([
       fetchProductProjectionSummary(),
       fetchPlatformConfigInstanceReports(),
-      fetchRuntimeClusters(),
       fetchRuntimeServices(),
-      fetchRuntimeInstances(),
     ])
-      .then(([summaryItem, reportPayload, clusterItems, serviceItems, instanceItems]) => {
+      .then(([summaryItem, reportPayload, serviceItems]) => {
         setSummary(summaryItem);
         setInstanceReports(reportPayload.items);
-        setClusters(clusterItems);
         setServices(serviceItems);
-        setInstances(instanceItems);
         setRuntimeError(null);
       })
       .catch((error) => {
@@ -93,9 +79,7 @@ export function ProductL1L4MetricsPage() {
   useEffect(() => {
     fetchProductL1L4Metrics({
       env: environment,
-      cluster: selectedCluster || undefined,
       service: selectedService || undefined,
-      instance: selectedInstance || undefined,
       level: activeLevel === 'all' ? undefined : activeLevel,
     })
       .then((payload: ProductL1L4MetricsResponse) => {
@@ -107,39 +91,32 @@ export function ProductL1L4MetricsPage() {
         setMetricsPayload(null);
         setRuntimeError(coerceRuntimeError(error));
       });
-  }, [activeLevel, environment, selectedCluster, selectedInstance, selectedService]);
+  }, [activeLevel, environment, selectedService]);
+
+  useEffect(() => {
+    if (!selectedService) {
+      setRouteRED(null);
+      setRouteREDError(null);
+      return;
+    }
+    fetchServiceRouteRED(selectedService)
+      .then((payload) => {
+        setRouteRED(payload);
+        setRouteREDError(null);
+      })
+      .catch((error) => {
+        setRouteRED(null);
+        setRouteREDError(coerceRuntimeError(error));
+      });
+  }, [selectedService]);
 
   const cardRegistry = useMemo(
-    () =>
-      summary?.l1l4Cards ?? [
-        { level: 'L1', label: '产品旅程', metric: 'five_tab_journey_completion_rate' },
-        { level: 'L2', label: '业务质量', metric: 'circle_scenario_ctr' },
-        { level: 'L3', label: '系统 RED', metric: 'api_red_duration_p95_ms' },
-        { level: 'L4', label: '基础设施', metric: 'gateway_up' },
-      ],
+    () => summary?.l1l4Cards ?? [],
     [summary?.l1l4Cards],
   );
-  const envClusters = useMemo(
-    () => clusters.filter((item) => item.environment === environment),
-    [clusters, environment],
-  );
   const envServices = useMemo(
-    () =>
-      services.filter(
-        (item) =>
-          item.environment === environment && (!selectedCluster || item.cluster === selectedCluster),
-      ),
-    [environment, selectedCluster, services],
-  );
-  const envInstances = useMemo(
-    () =>
-      instances.filter(
-        (item) =>
-          item.environment === environment &&
-          (!selectedCluster || item.cluster === selectedCluster) &&
-          (!selectedService || item.service === selectedService),
-      ),
-    [environment, instances, selectedCluster, selectedService],
+    () => services.filter((item) => item.environment === environment),
+    [environment, services],
   );
   const metricByLevel = useMemo(() => {
     const map = new Map<string, ProductMetricItem>();
@@ -155,11 +132,9 @@ export function ProductL1L4MetricsPage() {
       instanceReports.filter(
         (item) =>
           item.environment === environment &&
-          (!selectedCluster || item.cluster === selectedCluster) &&
-          (!selectedService || item.service === selectedService) &&
-          (!selectedInstance || item.instanceId === selectedInstance),
+          (!selectedService || item.service === selectedService),
       ),
-    [environment, instanceReports, selectedCluster, selectedInstance, selectedService],
+    [environment, instanceReports, selectedService],
   );
 
   return (
@@ -172,7 +147,7 @@ export function ProductL1L4MetricsPage() {
           <span className="badge badge--success">{cardRegistry.length} 个层级指标</span>
           <span className="badge badge--success">env={environment}</span>
           <span className="badge badge--neutral">view={activeRouteMeta.label}</span>
-          <span className="badge badge--neutral">source={metricsPayload?.source ?? 'snapshot'}</span>
+          <span className="badge badge--neutral">source={metricsPayload?.source ?? 'n/a'}</span>
           <span className="badge badge--neutral">{metrics.length} 条指标</span>
           <RuntimeErrorBadge error={runtimeError} />
         </>
@@ -188,19 +163,8 @@ export function ProductL1L4MetricsPage() {
         </>
       }
     >
-      <SectionCard title="四层选择器" subtitle="L1/L2 先看环境整体，L3/L4 再下钻到集群、服务与实例">
+      <SectionCard title="维度选择器" subtitle="L1/L2 先看环境整体，L3 按服务下钻；实例一致性由 config ACK 报告承载">
         <div className="toolbar-row">
-          <label className="toolbar-field">
-            <span>集群</span>
-            <select value={selectedCluster} onChange={(event) => setSelectedCluster(event.target.value)}>
-              <option value="">全部</option>
-              {envClusters.map((item) => (
-                <option key={item.id} value={item.cluster}>
-                  {item.cluster}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="toolbar-field">
             <span>服务</span>
             <select value={selectedService} onChange={(event) => setSelectedService(event.target.value)}>
@@ -208,17 +172,6 @@ export function ProductL1L4MetricsPage() {
               {envServices.map((item) => (
                 <option key={item.id} value={item.service}>
                   {item.service}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="toolbar-field">
-            <span>实例</span>
-            <select value={selectedInstance} onChange={(event) => setSelectedInstance(event.target.value)}>
-              <option value="">全部</option>
-              {envInstances.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.id}
                 </option>
               ))}
             </select>
@@ -238,7 +191,7 @@ export function ProductL1L4MetricsPage() {
 
       <SectionCard
         title="二级路由"
-        subtitle="环境总览、集群下钻、服务下钻、实例下钻分别有独立 URL，便于分享和回放"
+        subtitle="环境总览与服务下钻分别有独立 URL，便于分享和回放"
         aside={
           <div className="tab-strip">
             {l1l4RouteViews.map((item) => (
@@ -255,7 +208,7 @@ export function ProductL1L4MetricsPage() {
         }
       >
         <div className="inline-note">
-          当前路由只决定视图焦点，不会替代下面的 `cluster` / `service` / `instance` 过滤器。
+          当前路由只决定视图焦点，不会替代上面的 `service` / `层级` 过滤器。
         </div>
       </SectionCard>
 
@@ -299,7 +252,7 @@ export function ProductL1L4MetricsPage() {
         <div className="section-grid section-grid--cards">
           <KpiCard
             label="数据来源"
-            value={metricsPayload?.source ?? 'snapshot'}
+            value={metricsPayload?.source ?? 'n/a'}
             icon={<Activity size={20} color="#2563EB" />}
             trendLabel={`window=${metricsPayload?.window ?? 'n/a'}`}
             trendTone="positive"
@@ -309,8 +262,8 @@ export function ProductL1L4MetricsPage() {
             label="实时覆盖"
             value={`${metricsPayload?.coverage.liveMetrics ?? 0}/${metricsPayload?.coverage.totalMetrics ?? 0}`}
             icon={<ShieldCheck size={20} color="#16A34A" />}
-            trendLabel={`fallback=${metricsPayload?.coverage.fallbackMetrics ?? 0}`}
-            trendTone={(metricsPayload?.coverage.fallbackMetrics ?? 0) > 0 ? 'warning' : 'positive'}
+            trendLabel={`unavailable=${metricsPayload?.coverage.unavailableMetrics ?? 0}`}
+            trendTone={(metricsPayload?.coverage.unavailableMetrics ?? 0) > 0 ? 'warning' : 'positive'}
             description={`eventSignals=${metricsPayload?.coverage.eventSignals ?? 0}`}
           />
           <KpiCard
@@ -327,7 +280,7 @@ export function ProductL1L4MetricsPage() {
             icon={<Sparkles size={20} color="#2563EB" />}
             trendLabel={metrics[0]?.metric ?? '等待指标'}
             trendTone={metrics[0]?.status === 'warning' ? 'warning' : 'positive'}
-            description={metrics[0]?.source ? `source=${metrics[0].source}` : 'snapshot'}
+            description={metrics[0]?.source ? `source=${metrics[0].source}` : 'n/a'}
           />
         </div>
         <div className="stack-list" style={{ marginTop: 12 }}>
@@ -345,7 +298,6 @@ export function ProductL1L4MetricsPage() {
                   {item.state}
                 </span>
                 <span className="badge badge--neutral">{item.value}</span>
-                {item.runbookRoute ? <Link className="button" to={item.runbookRoute}>查看 runbook</Link> : null}
                 {item.repairEntry ? <Link className="button button--primary" to={item.repairEntry}>进入修复入口</Link> : null}
                 {item.auditRoute ? <Link className="button" to={item.auditRoute}>查看审计链</Link> : null}
                 {item.alertId ? <span className="badge badge--neutral">alert={item.alertId}</span> : null}
@@ -385,11 +337,47 @@ export function ProductL1L4MetricsPage() {
                   <td>{item.metric}</td>
                   <td>{item.value}{item.unit}</td>
                   <td>{item.status}</td>
-                  <td>{item.source ?? 'snapshot'}</td>
+                  <td>{item.source ?? 'n/a'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </SectionCard>
+
+        <SectionCard
+          title="每接口 RED 下钻"
+          subtitle="选择服务后按 route 展示 QPS、平均/P99 延迟与成功率（Prometheus service+route 维度，5m 窗口）"
+        >
+          {routeREDError ? <RuntimeErrorBadge error={routeREDError} /> : null}
+          {selectedService && routeRED ? (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>接口（route）</th>
+                  <th>QPS</th>
+                  <th>平均 ms</th>
+                  <th>P99 ms</th>
+                  <th>成功率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {routeRED.items.map((item) => (
+                  <tr key={item.route}>
+                    <td>{item.route}</td>
+                    <td>{item.qps.toFixed(2)}</td>
+                    <td>{item.avgMs.toFixed(1)}</td>
+                    <td>{item.p99Ms.toFixed(1)}</td>
+                    <td>{item.successRatePercent.toFixed(2)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="inline-note">
+              在上方维度选择器选定服务后展示该服务每接口 RED 指标；数据源 window=
+              {routeRED?.window ?? '5m'}。
+            </div>
+          )}
         </SectionCard>
 
         <SectionCard title="实例一致性联动" subtitle="L4 指标与平台配置中心实例报告共用同一批实例对象">

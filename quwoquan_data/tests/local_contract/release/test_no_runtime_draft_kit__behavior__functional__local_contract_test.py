@@ -74,7 +74,7 @@ def test_allows_definition_module_and_tests():
     tmp = Path(tempfile.mkdtemp(prefix="runtime_draft_gate_ok_"))
     _with_file(
         tmp,
-        "quwoquan_data/scripts/content/post/article/draft_io.py",
+        "quwoquan_data/scripts/content/content/post/article/draft_io.py",
         "def write_agent_draft(*args, **kwargs):\n    return None\n",
     )
     _with_file(

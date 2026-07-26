@@ -9,8 +9,8 @@ quwoquan_app/       Flutter App 工程，拥有 App 配置、发布规则、App 
 quwoquan_service/   服务端工程，拥有服务契约、服务配置、服务部署模板和服务观测片段。
 quwoquan_data/      数据工程，拥有可复用的内容家族、模板、提示词、发布真相源和数据发布规则。
 quwoquan_ops/       Ops 横切控制面，拥有 stackctl、gate、CI、环境拓扑、策略、全局可观测和 Ops Portal。
-specs/              当前产品、架构、特性树、验收与 changelog 的唯一规格体系。
-docs/               长期工程说明、Codex 工作流、外部依赖登记和正式风险 backlog；不承载功能规格真相源。
+specs/              当前产品、架构、特性树与验收的唯一规格体系；不维护 changelog、registry 或 backlog。
+docs/               少量长期工程说明；不承载命令协议、功能规格、状态台账或风险清单。
 .github/            CI 工作流入口。
 .qwq_output/        gitignored；唯一运行输出根，不是配置或状态真相源。
 ```
@@ -40,13 +40,13 @@ changes, openspec, app_log, runtime, build, tmp, tools, githooks, social_content
 - 领域私有资产归领域：服务 Dockerfile、部署规则和 release config 位于 `quwoquan_service/services/<service>/`；App 配置与发布规则位于 `quwoquan_app/configs/`、`quwoquan_app/deploy/`；数据发布规则位于 `quwoquan_data/` 的 control plane 与 publish 边界。
 - Ops 只放横切能力：统一调度、环境拓扑、跨域策略、gate、CI/CD、全局可观测、runbook 和 Portal。
 - 根目录不承载工具 workspace：Ops Portal 的 `package.json`、`package-lock.json` 和 `node_modules` 归 `quwoquan_ops/portal/`，根目录不保留 Node workspace。
-- 运行输出按唯一 taxonomy 归位：环境输出为 `.qwq_output/env/<env>/{runs,observability,release,local/<target>/{process,cache}}/`，repo 级输出位于 `.qwq_output/env/repo/`，数据工程输出为 `.qwq_output/data/{tasks,releases,local}/`。部署渲染临时文件与设备信任证书在系统临时目录，容器证书和卷状态由容器运行时命名卷管理；其生成规则和网络配置只在领域 `deploy/configs` 与 `quwoquan_ops/environments/` 中定义。
+- 运行输出按唯一 taxonomy 归位：环境输出为 `.qwq_output/env/<env>/{runs,observability,local/<target>/{process,cache}}/`，repo 级输出位于 `.qwq_output/env/repo/`，数据工程输出为 `.qwq_output/data/{tasks,releases,local}/`。App、Service、Legal-static 与 Portal 的 deploy payload、渲染配置、Caddy、TLS 和 env 文件统一写入 `QWQ_DEPLOY_WORK_ROOT/<target>/`；其生成规则和网络配置只在领域 `deploy/configs` 与 `quwoquan_ops/environments/` 中定义。
 
 ## 常用入口
 
 ```bash
 python3 quwoquan_ops/cli/stackctl.py package --env alpha --kind runtime --include-services
-python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all
+python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile integration
 cd quwoquan_ops/portal && npm test && npm run build
 bash quwoquan_ops/gate/gate_repo.sh
 ```
@@ -58,4 +58,4 @@ bash quwoquan_ops/gate/gate_repo.sh
 - 未经明确批准，不允许创建、提交或推送其他分支。
 - 本地执行 `bash quwoquan_ops/gate/scaffold/install-hooks.sh` 后，`pre-commit` 和 `pre-push` 会阻断非白名单分支；repo gate 也会对本地/远端分支做同样校验。
 
-规格入口见 `specs/README.md`，文档边界见 `docs/README.md`，Codex 执行约束见 `AGENTS.md` 与 `docs/codex_workflow.md`。
+规格入口见 `specs/feature-tree/README.md`，Codex/Cursor 执行约束见 `AGENTS.md` 与 `.cursor/commands/*.md`。

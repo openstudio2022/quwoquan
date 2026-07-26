@@ -9,9 +9,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -21,11 +20,23 @@ import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/recording_content_media_facet.dart';
 import '../../../../support/recording_content_post_publication_writer.dart';
 import '../../../../support/recording_circle_post_placement_writer.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
+
+const _resolvedActivePersona = ActivePersonaContextViewData(
+  subAccountId: 'user_001',
+  ownerUserId: 'user_001',
+  subjectType: 'subAccount',
+  displayName: '测试用户',
+  avatarUrl: '',
+  contextVersion: 1,
+  isPrimary: true,
+);
 
 class _AuthedSessionStore implements AuthSessionStore {
   const _AuthedSessionStore();
@@ -46,8 +57,8 @@ class _AuthedSessionStore implements AuthSessionStore {
   );
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -55,14 +66,11 @@ class _AuthedSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override
@@ -145,12 +153,14 @@ List<Override> _createPublishOverrides(
   ...mockContentFacetOverrides(repository),
   createContentPostPublicationWriterProvider.overrideWithValue(postPublication),
   createContentMediaFacetProvider.overrideWithValue(media),
-  contentMediaObjectUploadProvider.overrideWithValue(
+  contentMediaStreamObjectUploadProvider.overrideWithValue(
     (
       uploadUri,
       bytes, {
+      required contentLength,
       required contentType,
       required expectedSha256,
+      abortTrigger,
     }) async {},
   ),
 ];
@@ -165,12 +175,15 @@ Widget _buildApp(
   final mediaFacet = media ?? RecordingContentMediaFacet();
   return ProviderScope(
     overrides: [
+      activePersonaContextProvider.overrideWith(
+        (_) async => _resolvedActivePersona,
+      ),
       ..._createPublishOverrides(repository, postPublication, mediaFacet),
       if (placements != null)
         createWorkspaceCirclePostPlacementWriterProvider.overrideWithValue(
           placements,
         ),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
     ],
@@ -212,12 +225,15 @@ Widget _buildRouterApp(
 
   return ProviderScope(
     overrides: [
+      activePersonaContextProvider.overrideWith(
+        (_) async => _resolvedActivePersona,
+      ),
       ..._createPublishOverrides(
         repository,
         postPublication,
         RecordingContentMediaFacet(),
       ),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
     ],
@@ -233,6 +249,13 @@ Widget _buildRouterApp(
       ),
     ),
   );
+}
+
+Future<void> _closePublishResult(WidgetTester tester) async {
+  final done = find.byKey(TestKeys.createPublishResultDoneButton);
+  expect(done, findsOneWidget);
+  tester.widget<CupertinoActionSheetAction>(done).onPressed();
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -275,7 +298,10 @@ void main() {
     expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
     expect(find.text('允许小趣使用'), findsNothing);
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    for (var i = 0; i < 20 && postPublication.submitCommands.isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(postPublication.submitCommands, hasLength(1));
     expect(postPublication.lastSubmitPayload?['contentType'], 'micro');
@@ -283,6 +309,12 @@ void main() {
       postPublication.lastSubmitPayload?.containsKey('contentIdentity'),
       isFalse,
     );
+    expect(find.byKey(TestKeys.createPublishResultSheet), findsOneWidget);
+    expect(
+      find.byKey(TestKeys.createPublishResultViewWorkButton),
+      findsOneWidget,
+    );
+    await _closePublishResult(tester);
     expect(find.text('当前内容更适合作为作品发布'), findsNothing);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
@@ -310,7 +342,10 @@ void main() {
     expect(find.text('当前内容更适合作为作品发布'), findsNothing);
     expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    for (var i = 0; i < 20 && postPublication.submitCommands.isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(postPublication.submitCommands, hasLength(1));
     expect(postPublication.lastSubmitPayload?['contentType'], 'article');
@@ -364,6 +399,8 @@ void main() {
       postPublication.lastSubmitPayload?.containsKey('contentIdentity'),
       isFalse,
     );
+    expect(find.byKey(TestKeys.createPublishResultSheet), findsOneWidget);
+    await _closePublishResult(tester);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     expect(find.text('打开创作'), findsOneWidget);
@@ -414,14 +451,14 @@ void main() {
     expect(payload?['contentType'], 'image');
     expect(payload?.containsKey('mediaUrls'), isFalse);
     expect(payload?.containsKey('coverUrl'), isFalse);
-    expect(payload?['mediaItems'], <Map<String, Object?>>[
-      <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_a'},
-      <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_b'},
-    ]);
+    expect(payload?.containsKey('mediaItems'), isFalse);
+    expect(postPublication.submitCommands.single.mediaItems, isEmpty);
     expect(postPublication.submitCommands.single.mediaAssetIds, <String>[
       'image_asset_a',
       'image_asset_b',
     ]);
+    expect(find.byKey(TestKeys.createPublishResultSheet), findsOneWidget);
+    await _closePublishResult(tester);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
   });
@@ -446,13 +483,24 @@ void main() {
     await tester.tap(find.byKey(TestKeys.createPublishButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    for (
+      var i = 0;
+      i < 20 &&
+          (postPublication.submitCommands.isEmpty ||
+              placements.commands.isEmpty);
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(postPublication.submitCommands, hasLength(1));
     expect(postPublication.lastSubmitPayload, isNot(contains('circleIds')));
     expect(placements.commands, hasLength(1));
     expect(placements.commands.single.circleId, 'circle-west-sichuan');
     expect(placements.commands.single.postId, 'post_test_1');
+    expect(find.byKey(TestKeys.createPublishResultSheet), findsOneWidget);
+    await _closePublishResult(tester);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
   });

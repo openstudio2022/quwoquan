@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
@@ -13,7 +14,10 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/services/contact_qr_image_analyzer.dart';
 import 'package:quwoquan_app/ui/user/services/qr_payload_parser.dart';
@@ -84,8 +88,27 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
       raw = await ref
           .read(contactQrImageAnalyzerProvider)
           .analyzeImage(path: path);
-    } catch (_) {
-      raw = '';
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _handling = false);
+      unawaited(_controller?.start());
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.dialog,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry) {
+            await _pickFromGallery();
+          }
+        },
+      );
+      return;
     }
     if (raw.isEmpty) {
       if (mounted) {
@@ -108,7 +131,7 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
     unawaited(_controller?.stop());
     try {
       final ProfileQrResolveWireDto resolved = await ref
-          .read(userProfileRepositoryProvider)
+          .read(profileEditQueryProvider(AppUiSurfaces.addContactScan))
           .resolveProfileQrToken(token: parsed.token, handle: parsed.handle);
       if (!mounted) {
         return;
@@ -116,6 +139,17 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
       if (resolved.subAccountId.trim().isEmpty) {
         throw StateError('empty subAccountId');
       }
+      unawaited(
+        ref
+            .read(journeyEventTrackerProvider)
+            .trackAction(
+              journey: 'contact_discovery',
+              action: 'resolve_profile_qr',
+              pageName: 'ScanContactQrPage',
+              targetType: 'user',
+              targetKey: resolved.subAccountId,
+            ),
+      );
       context.pushReplacement(
         AppRoutePaths.addContactConfirm(
           handle: resolved.userHandle.isNotEmpty
@@ -125,13 +159,25 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
           source: 'scan',
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.scanQrInvalidCode);
-      setState(() => _handling = false);
-      unawaited(_controller?.start());
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.dialog,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _process(raw);
+          }
+        },
+      );
     }
   }
 

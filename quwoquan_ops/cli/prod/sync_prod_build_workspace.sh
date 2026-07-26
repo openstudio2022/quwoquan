@@ -6,7 +6,7 @@ KEY_DIR="${PROD_SSH_KEY_DIR:-$HOME/.ssh/quwoquan-prod}"
 HOST="${PROD_SSH_HOST:-118.31.239.122}"
 ACCOUNT="prod-service-svc"
 DEST_ROOT="/home/${ACCOUNT}/bootstrap/prod-build-workspace"
-SERVICES="rec-model-service,content-service,chat-service,user-service,assistant-service,product-ops-service,tag-service"
+SERVICES="recommendation-service,content-service,chat-service,user-service,assistant-service,product-ops-service,tag-service"
 
 usage() {
   cat <<'EOF'
@@ -49,7 +49,6 @@ services = [item.strip() for item in os.environ["SERVICES"].split(",") if item.s
 qwq = stage / "quwoquan_service"
 (qwq / "contracts" / "metadata").mkdir(parents=True, exist_ok=True)
 (stage / "deploy" / "service").mkdir(parents=True, exist_ok=True)
-(stage / "releases" / "config").mkdir(parents=True, exist_ok=True)
 
 def copy_file(src_rel: str, dst_rel: str | None = None) -> None:
     src = root / src_rel
@@ -94,39 +93,20 @@ for tree in [
 # 部分服务模块 import 父模块下的额外目录时在此登记（当前无）。
 service_extra_trees: dict[str, list[str]] = {}
 
-service_dockerfile_roots = {
-    "rec-model-service": "quwoquan_service/services/rec-model-service/deploy/Dockerfile",
-    "user-service": "quwoquan_service/services/user-service/deploy/Dockerfile",
-}
 for service in services:
     copy_tree(f"quwoquan_service/services/{service}")
     for extra_tree in service_extra_trees.get(service, []):
         copy_path(extra_tree)
-    dockerfile = service_dockerfile_roots.get(service)
-    if dockerfile:
-        copy_file(dockerfile)
-    else:
-        copy_file(f"quwoquan_service/services/{service}/deploy/Dockerfile")
+    copy_file(f"quwoquan_service/services/{service}/build/Dockerfile")
 
-metadata_roots = {
-    "assistant-service": "assistant",
-    "user-service": "user",
-}
-for service, metadata_dir in metadata_roots.items():
-    if service in services:
-        copy_tree(
-            f"quwoquan_service/contracts/metadata/{metadata_dir}",
-            f"quwoquan_service/contracts/metadata/{metadata_dir}",
-        )
-
-if "rec-model-service" in services:
+if "recommendation-service" in services:
     copy_file(
-        "quwoquan_service/services/rec-model-service/scripts/artifact_store.py",
-        "quwoquan_service/services/rec-model-service/scripts/artifact_store.py",
+        "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/artifact_store.py",
+        "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/artifact_store.py",
     )
     copy_file(
-        "quwoquan_service/services/rec-model-service/scripts/model_registry.py",
-        "quwoquan_service/services/rec-model-service/scripts/model_registry.py",
+        "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/model_registry.py",
+        "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/model_registry.py",
     )
     copy_tree(
         "quwoquan_service/services/recommendation-service",

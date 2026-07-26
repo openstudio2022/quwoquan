@@ -7,85 +7,123 @@ extension SearchCoordinatorExecution on SearchCoordinator {
         inspiration: _currentState.inspiration.copyWith(isLoading: true),
       ),
     );
+    var hotQueryPool = const <NetworkSearchSuggestion>[];
+    var discoverCircles = const <SearchInspirationCardView>[];
+    var discoverLocations = const <SearchInspirationCardView>[];
+    await Future.wait<void>(<Future<void>>[
+      _loadHotQuerySuggestions().then((value) => hotQueryPool = value),
+      _loadDiscoverCircles().then((value) => discoverCircles = value),
+      _loadDiscoverLocations().then((value) => discoverLocations = value),
+    ]);
+    if (!_isMounted) {
+      return;
+    }
+    _hotQueryPool = hotQueryPool;
+    _setState(
+      _currentState.copyWith(
+        inspiration: SearchInspirationState(
+          guessKeywords: _guessKeywordsForBatch(0),
+          guessBatchIndex: 0,
+          discoverCircles: discoverCircles,
+          discoverLocations: discoverLocations,
+        ),
+      ),
+    );
+  }
+
+  Future<List<NetworkSearchSuggestion>> _loadHotQuerySuggestions() async {
     try {
-      final circles = await _coordinatorRef
-          .read(circleRepositoryProvider)
-          .listCircles(limit: 9);
-      final homepageRepository = _coordinatorRef.read(
-        homepageRepositoryProvider,
-      );
-      var locations = await homepageRepository.searchHomepages(
-        query: '',
-        homepageType: 'location',
-        limit: 9,
-      );
-      if (locations.isEmpty) {
-        locations = await homepageRepository.searchHomepages(
-          query: '',
-          limit: 9,
-        );
-      }
-      final guessKeywords = _defaultGuessKeywords(batchIndex: 0);
-      final hotLocations = locations
-          .where((item) => item.title.trim().isNotEmpty)
-          .take(6)
+      final slice = await _coordinatorRef
+          .read(searchHotQueryReaderProvider)
+          .listHotQueries(ListHotQueriesQuery(limit: 20));
+      return slice.items
+          .where((item) => item.query.trim().isNotEmpty)
           .map(
-            (item) => SearchInspirationCardView(
-              id: item.id,
-              title: item.title,
-              subtitle:
-                  '${(item.city ?? item.address ?? item.homepageType).trim()} · ${item.ratingCount > 0 ? '${item.ratingCount}条热度' : '热度上升'}',
-              coverUrl: item.coverUrl,
-              query: item.title,
-            ),
+            (item) =>
+                NetworkSearchSuggestion(query: item.query, title: item.query),
           )
           .toList(growable: false);
-      final hotCircles = circles
+    } on Object catch (error) {
+      _recordInspirationFailure('hot_queries', error);
+      return const <NetworkSearchSuggestion>[];
+    }
+  }
+
+  Future<List<SearchInspirationCardView>> _loadDiscoverCircles() async {
+    try {
+      final circles =
+          (await _coordinatorRef
+                  .read(circlesListQueryProvider)
+                  .list(CircleListQuery(limit: 9)))
+              .items;
+      return circles
           .where((item) => item.name.trim().isNotEmpty)
           .take(6)
           .map(
             (item) => SearchInspirationCardView(
-              id: item.id,
+              id: item.circleId,
               title: item.name,
-              subtitle:
-                  '${_positiveCount(item.memberCount, item.weeklyActiveCount)}人 · ${item.description?.trim().isNotEmpty == true ? item.description!.trim() : '热门圈子'}',
+              subtitle: UITextConstants.searchCircleInspirationSubtitle(
+                _positiveCount(item.memberCount, item.weeklyActiveCount),
+                item.description?.trim().isNotEmpty == true
+                    ? item.description!.trim()
+                    : UITextConstants.searchHomeDiscoverCirclesTitle,
+              ),
               coverUrl: item.coverUrl,
               query: item.name,
             ),
           )
           .toList(growable: false);
-
-      if (!_isMounted) {
-        return;
-      }
-      _setState(
-        _currentState.copyWith(
-          inspiration: SearchInspirationState(
-            guessKeywords: guessKeywords,
-            guessBatchIndex: 0,
-            hotCircles: hotCircles.isEmpty ? _defaultHotCircles() : hotCircles,
-            hotLocations: hotLocations.isEmpty
-                ? _defaultHotLocations()
-                : hotLocations,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!_isMounted) {
-        return;
-      }
-      _setState(
-        _currentState.copyWith(
-          inspiration: _currentState.inspiration.copyWith(
-            guessKeywords: _defaultGuessKeywords(batchIndex: 0),
-            guessBatchIndex: 0,
-            hotCircles: _defaultHotCircles(),
-            hotLocations: _defaultHotLocations(),
-            isLoading: false,
-          ),
-        ),
-      );
+    } on Object catch (error) {
+      _recordInspirationFailure('discover_circles', error);
+      return const <SearchInspirationCardView>[];
     }
+  }
+
+  Future<List<SearchInspirationCardView>> _loadDiscoverLocations() async {
+    try {
+      final locations = await _coordinatorRef
+          .read(homepageQueryProvider)
+          .searchHomepages(query: '', limit: 30);
+      return locations
+          .where(
+            (item) =>
+                item.title.trim().isNotEmpty &&
+                SearchCoordinator._locationHomepageTypes.contains(
+                  item.homepageType.trim(),
+                ),
+          )
+          .take(6)
+          .map(
+            (item) => SearchInspirationCardView(
+              id: item.id,
+              title: item.title,
+              subtitle: UITextConstants.searchLocationDiscoverySubtitle(
+                (item.city ?? item.address ?? item.homepageType).trim(),
+                item.ratingCount,
+              ),
+              coverUrl: item.coverUrl,
+              query: item.title,
+            ),
+          )
+          .toList(growable: false);
+    } on Object catch (error) {
+      _recordInspirationFailure('discover_locations', error);
+      return const <SearchInspirationCardView>[];
+    }
+  }
+
+  void _recordInspirationFailure(String source, Object error) {
+    _coordinatorRef
+        .read(pageLifecycleObservabilityProvider)
+        .recordPageState(
+          pageName: 'global_search',
+          route: 'globalSearch',
+          surface: 'globalSearchLanding',
+          phase: 'inspiration_${source}_failed',
+          waitMode: 'background',
+          error: error,
+        );
   }
 
   int _positiveCount(int primary, int secondary) {
@@ -99,104 +137,34 @@ extension SearchCoordinatorExecution on SearchCoordinator {
   }
 
   void refreshGuessKeywords() {
+    if (_hotQueryPool.isEmpty) {
+      return;
+    }
+    final batchCount =
+        (_hotQueryPool.length / SearchCoordinator._guessKeywordBatchSize)
+            .ceil();
     final nextIndex =
-        (_currentState.inspiration.guessBatchIndex + 1) %
-        _guessKeywordBatches.length;
+        (_currentState.inspiration.guessBatchIndex + 1) % batchCount;
     _setState(
       _currentState.copyWith(
         inspiration: _currentState.inspiration.copyWith(
-          guessKeywords: _defaultGuessKeywords(batchIndex: nextIndex),
+          guessKeywords: _guessKeywordsForBatch(nextIndex),
           guessBatchIndex: nextIndex,
         ),
       ),
     );
   }
 
-  List<NetworkSearchSuggestion> _defaultGuessKeywords({
-    required int batchIndex,
-  }) {
-    final seeds =
-        _guessKeywordBatches[batchIndex % _guessKeywordBatches.length];
-    return seeds
-        .map((query) => NetworkSearchSuggestion(query: query, title: query))
-        .toList(growable: false);
-  }
-
-  static const List<List<String>> _guessKeywordBatches = <List<String>>[
-    <String>[
-      '摄影',
-      '厦门大学',
-      '川西自驾',
-      '鼓浪屿',
-      '旅行',
-      '富士X100V',
-      '环岛路',
-      '九寨沟',
-      '武夷山',
-      '大理',
-    ],
-    <String>[
-      '毕业旅行',
-      '环岛骑行',
-      '富士相机',
-      '大理旅行',
-      '露营',
-      '旅行攻略',
-      '城市漫步',
-      '咖啡地图',
-      '日落机位',
-      '周末徒步',
-      '海边拍照',
-      '小众博物馆',
-    ],
-  ];
-
-  List<SearchInspirationCardView> _defaultHotCircles() {
-    const seeds = <SearchInspirationCardView>[
-      SearchInspirationCardView(
-        id: 'circle_light_photo',
-        title: '光影摄影社',
-        subtitle: '128人 · 分享快门背后的故事',
-        query: '光影摄影社',
-      ),
-      SearchInspirationCardView(
-        id: 'circle_travel_notes',
-        title: '旅行手账',
-        subtitle: '1280人 · 热门圈子',
-        query: '旅行手账',
-      ),
-      SearchInspirationCardView(
-        id: 'circle_extreme_photo',
-        title: '极简摄影俱乐部',
-        subtitle: '2340人 · 热门圈子',
-        query: '极简摄影俱乐部',
-      ),
-    ];
-    return seeds;
-  }
-
-  List<SearchInspirationCardView> _defaultHotLocations() {
-    const seeds = <SearchInspirationCardView>[
-      SearchInspirationCardView(
-        id: 'poi_xiamen_university',
-        title: '厦门大学',
-        subtitle: '高校 · 热度上升',
-        query: '厦门大学',
-      ),
-      SearchInspirationCardView(
-        id: 'poi_gulangyu',
-        title: '鼓浪屿',
-        subtitle: '景点 · 热度上升',
-        query: '鼓浪屿',
-      ),
-      SearchInspirationCardView(
-        id: 'poi_west_lake',
-        title: '西湖',
-        subtitle: '景点 · 热度上升',
-        query: '西湖',
-      ),
-    ];
-    return seeds;
+  List<NetworkSearchSuggestion> _guessKeywordsForBatch(int batchIndex) {
+    if (_hotQueryPool.isEmpty) {
+      return const <NetworkSearchSuggestion>[];
+    }
+    final start = batchIndex * SearchCoordinator._guessKeywordBatchSize;
+    final end = math.min(
+      start + SearchCoordinator._guessKeywordBatchSize,
+      _hotQueryPool.length,
+    );
+    return _hotQueryPool.sublist(start, end);
   }
 
   Future<void> useRecentSearch(RecentSearchEntryView entry) async {
@@ -228,6 +196,18 @@ extension SearchCoordinatorExecution on SearchCoordinator {
   }
 
   Future<void> removeRecentSearch(String entryId) async {
+    RecentSearchEntryView? removedEntry;
+    for (final entry in _currentState.recentSearches) {
+      if (entry.entryId == entryId) {
+        removedEntry = entry;
+        break;
+      }
+    }
+    if (removedEntry == null) {
+      return;
+    }
+    final store = _localStore;
+    _recentHistoryMutationRevision += 1;
     final nextEntries = _currentState.recentSearches
         .where((entry) => entry.entryId != entryId)
         .toList(growable: false);
@@ -242,17 +222,35 @@ extension SearchCoordinatorExecution on SearchCoordinator {
             : _currentState.isHistoryExpanded,
       ),
     );
-    await _localStore.save(nextEntries);
-    try {
-      await _coordinatorRef
-          .read(userProfileRepositoryProvider)
-          .deleteRecentSearch(entryId);
-    } catch (_) {
-      // Keep local-first delete even when remote cleanup fails.
+    final historyKey = _historyKeyForEntry(removedEntry);
+    _recentUpsertTokens[historyKey] = ++_recentUpsertSequence;
+    final wasPendingUpsert = _pendingRecentUpsertKeys.remove(historyKey);
+    _pendingRecentDeleteKeys.add(historyKey);
+    await _saveRecentHistory(nextEntries, store: store);
+    if (!_isMounted || !identical(store, _localStore)) {
+      return;
+    }
+    if (wasPendingUpsert) {
+      unawaited(hydrateRecentSearches());
+      return;
+    }
+    final deleted = await _deleteCanonicalRecentSearch(
+      removedEntry,
+      operation: 'remote_delete',
+    );
+    if (deleted) {
+      if (!_isMounted || !identical(store, _localStore)) {
+        return;
+      }
+      _pendingRecentDeleteKeys.remove(historyKey);
+      await _saveRecentHistory(nextEntries, store: store);
     }
   }
 
   Future<void> clearRecentSearches() async {
+    final store = _localStore;
+    _recentHistoryMutationRevision += 1;
+    _recentClearToken += 1;
     _setState(
       _currentState.copyWith(
         recentSearches: const <RecentSearchEntryView>[],
@@ -260,13 +258,29 @@ extension SearchCoordinatorExecution on SearchCoordinator {
         isHistoryExpanded: false,
       ),
     );
-    await _localStore.clear();
+    _pendingRecentClear = true;
+    _pendingRecentUpsertKeys.clear();
+    _pendingRecentDeleteKeys.clear();
+    _recentUpsertTokens.clear();
+    await _saveRecentHistory(const <RecentSearchEntryView>[], store: store);
+    if (!_isMounted || !identical(store, _localStore)) {
+      return;
+    }
     try {
       await _coordinatorRef
-          .read(userProfileRepositoryProvider)
-          .clearRecentSearches();
-    } catch (_) {
-      // Keep local-first clear even when remote cleanup fails.
+          .read(recentSearchCommandWriterProvider)
+          .clearRecentSearches(ClearRecentSearchesCommand());
+      if (!_isMounted || !identical(store, _localStore)) {
+        return;
+      }
+      _pendingRecentClear = false;
+      await _saveRecentHistory(_currentState.recentSearches, store: store);
+      if (_pendingRecentUpsertKeys.isNotEmpty) {
+        unawaited(hydrateRecentSearches());
+      }
+    } on Object catch (error) {
+      // Local-first clear stays; remote cleanup failure is logged, not hidden.
+      _recordRecentHistoryFailure(operation: 'remote_clear', error: error);
     }
   }
 

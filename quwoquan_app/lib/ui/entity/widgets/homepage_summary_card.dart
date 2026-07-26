@@ -4,6 +4,7 @@ import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/object_meta_chip.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_type_labels.dart';
 
 class HomepageSummaryCard extends StatelessWidget {
   const HomepageSummaryCard({
@@ -55,19 +56,22 @@ class HomepageSummaryCard extends StatelessWidget {
               spacing: AppSpacing.intraGroupXs,
               runSpacing: AppSpacing.intraGroupXs,
               children: <Widget>[
-                ObjectMetaChip(label: _homepageTypeLabel(summary.homepageType)),
-                ObjectMetaChip(label: _homepageStatusLabel(summary.status)),
+                ObjectMetaChip(label: homepageTypeLabel(summary.homepageType)),
+                ObjectMetaChip(label: homepageStatusLabel(summary.status)),
                 ObjectMetaChip(
-                  label: ratingValue == null ? '待积累口碑' : '$ratingValue 分',
+                  label: ratingValue == null
+                      ? UITextConstants.homepageRatingPending
+                      : UITextConstants.homepageRatingScore(ratingValue),
                   accent: ratingValue != null,
                 ),
               ],
             ),
             SizedBox(height: AppSpacing.containerSm),
             _HomepageSummaryMetrics(
-              ratingValue: ratingValue ?? '--',
+              ratingValue:
+                  ratingValue ?? UITextConstants.homepageRatingUnavailable,
               ratingCount: summary.ratingCount,
-              status: _homepageStatusLabel(summary.status),
+              status: homepageStatusLabel(summary.status),
             ),
           ],
         ),
@@ -284,15 +288,24 @@ class _HomepageSummaryMetrics extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Expanded(
-            child: _HomepageMetricItem(label: '评分', value: ratingValue),
+            child: _HomepageMetricItem(
+              label: UITextConstants.homepageRatingMetric,
+              value: ratingValue,
+            ),
           ),
           _HomepageMetricDivider(color: dividerColor),
           Expanded(
-            child: _HomepageMetricItem(label: '口碑', value: '$ratingCount'),
+            child: _HomepageMetricItem(
+              label: UITextConstants.homepageReviewMetric,
+              value: '$ratingCount',
+            ),
           ),
           _HomepageMetricDivider(color: dividerColor),
           Expanded(
-            child: _HomepageMetricItem(label: '状态', value: status),
+            child: _HomepageMetricItem(
+              label: UITextConstants.homepageStatusMetric,
+              value: status,
+            ),
           ),
         ],
       ),
@@ -346,40 +359,6 @@ class _HomepageMetricDivider extends StatelessWidget {
       height: AppSpacing.iconButtonMinSizeMd,
       color: color,
     );
-  }
-}
-
-String _homepageTypeLabel(String type) {
-  switch (type.trim()) {
-    case 'hotel':
-      return '酒店';
-    case 'restaurant':
-      return '餐厅';
-    case 'vehicle':
-      return '车型';
-    case 'sight':
-      return '景点';
-    case 'poi':
-      return '地点';
-    case 'author':
-      return '作者';
-    case 'circle':
-      return '圈子';
-    default:
-      return '主页';
-  }
-}
-
-String _homepageStatusLabel(String? status) {
-  switch ((status ?? '').trim()) {
-    case 'candidate':
-      return '待发布';
-    case 'offline':
-      return '已下线';
-    case 'published':
-      return '已发布';
-    default:
-      return '状态待确认';
   }
 }
 

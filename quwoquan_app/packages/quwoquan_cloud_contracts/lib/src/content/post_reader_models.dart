@@ -16,7 +16,9 @@ final class ContentPostProjection {
     this.body,
     this.summary,
     this.coverUrl,
-    Iterable<String> imageUrls = const <String>[],
+    this.articleTemplate,
+    this.articleFontPreset,
+    Iterable<String> mediaUrls = const <String>[],
     this.videoUrl,
     this.thumbnailUrl,
     this.width,
@@ -33,7 +35,7 @@ final class ContentPostProjection {
     this.supplySource,
     Iterable<ContentPostIntersectionReason>? intersectionReasons,
   }) : authorIdentityTags = List<String>.unmodifiable(authorIdentityTags),
-       imageUrls = List<String>.unmodifiable(imageUrls),
+       mediaUrls = List<String>.unmodifiable(mediaUrls),
        intersectionReasons = intersectionReasons == null
            ? null
            : List<ContentPostIntersectionReason>.unmodifiable(
@@ -55,7 +57,9 @@ final class ContentPostProjection {
   final String? body;
   final String? summary;
   final String? coverUrl;
-  final List<String> imageUrls;
+  final String? articleTemplate;
+  final String? articleFontPreset;
+  final List<String> mediaUrls;
   final String? videoUrl;
   final String? thumbnailUrl;
   final int? width;
@@ -189,6 +193,8 @@ final class ContentPostDetailSlice {
         const <ContentPostEntityMention>[],
     this.coverUrl,
     Iterable<String>? tagRefs,
+    this.status = 'published',
+    this.moderationStatus,
     this.visibility,
   }) : mediaItems = List<ContentPostMediaItem>.unmodifiable(mediaItems),
        entityMentions = List<ContentPostEntityMention>.unmodifiable(
@@ -213,6 +219,8 @@ final class ContentPostDetailSlice {
   final List<ContentPostEntityMention> entityMentions;
   final String? coverUrl;
   final List<String>? tagRefs;
+  final String status;
+  final String? moderationStatus;
   final String? visibility;
 }
 

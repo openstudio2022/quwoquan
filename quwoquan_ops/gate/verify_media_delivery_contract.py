@@ -33,7 +33,18 @@ MEDIA_ROOT = (
     / "test_fixtures"
     / "media"
 )
-CURATED_BUNDLE = ROOT / "quwoquan_ops" / "environments" / "gamma_curated_media_bundle.json"
+CURATED_BUNDLE = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "content-service"
+    / "environments"
+    / "gamma"
+    / "resources"
+    / "artifacts"
+    / "media"
+    / "gamma_curated_media_bundle.json"
+)
 # CAS object paths may still appear in seed/creator docs as non-public references.
 # Public fixture media fields are validated separately via FIXTURE_MEDIA_FIELD_FORBIDDEN.
 FORBIDDEN_TOKENS = (
@@ -93,7 +104,6 @@ SCAN_ROOTS = (
     ROOT / "quwoquan_app" / "scripts",
     ROOT / "quwoquan_ops",
     ROOT / "quwoquan_service" / "contracts" / "metadata",
-    ROOT / "quwoquan_service" / "services" / "seed-box",
 )
 SKIP_PATHS = {
     Path(__file__).resolve(),
@@ -107,12 +117,10 @@ SKIP_PATHS = {
     / "alpha_fixture_bundle.g.dart",
     ROOT
     / "quwoquan_app"
-    / "lib"
-    / "cloud"
-    / "services"
+    / "test"
+    / "support"
+    / "cloud_services"
     / "content"
-    / "mock"
-    / "generated"
     / "home_showcase_core_fixture.g.dart",
 }
 METADATA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
@@ -307,18 +315,10 @@ def _validate_dart_media_literals(
 
 
 def _fixture_media_scan_paths() -> list[Path]:
-    paths = sorted(METADATA_ROOT.glob("**/test_fixtures/**/*.json"))
-    paths.append(
-        ROOT
-        / "quwoquan_app"
-        / "lib"
-        / "cloud"
-        / "services"
-        / "content"
-        / "mock"
-        / "content_mock_data.dart"
-    )
-    return paths
+    # Alpha fixture 已物理迁到 metadata → quwoquan_cloud_mock 生成 bundle；
+    # production lib 中的旧 content_mock_data.dart 已退役，不能把已删除文件
+    # 继续当作门禁输入或迫使 Mock 回流生产源码树。
+    return sorted(METADATA_ROOT.glob("**/test_fixtures/**/*.json"))
 
 
 def _validate_fixture_media_fields(issues: list[str]) -> None:
@@ -398,17 +398,7 @@ def _validate_playback_canary_topology(issues: list[str]) -> None:
     if not isinstance(targets, dict):
         issues.append("environment topology 缺少 targets")
         return
-    for target_name in ("alpha-local", "beta-local", "gamma-local"):
-        target = targets.get(target_name)
-        playback_canary = target.get("playbackCanary") if isinstance(target, dict) else None
-        work_id = (
-            str(playback_canary.get("workId") or "").strip()
-            if isinstance(playback_canary, dict)
-            else ""
-        )
-        if not work_id:
-            issues.append(f"{target_name}: 必须配置本地播放 canary workId")
-    for target_name in ("prod-sim", "prod-hosted"):
+    for target_name in ("alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"):
         target = targets.get(target_name)
         playback_canary = target.get("playbackCanary") if isinstance(target, dict) else None
         if not isinstance(playback_canary, dict):
@@ -480,7 +470,10 @@ def _validate_consumer_boundary(issues: list[str]) -> None:
         / "player"
         / "video_player_widget.dart"
     )
+    player_api = player.with_name("video_player_widget_api.dart")
     text = player.read_text(encoding="utf-8")
+    if player_api.is_file():
+        text += "\n" + player_api.read_text(encoding="utf-8")
     if "final String videoUrl;" in text or "videoUrlCandidates" in text:
         issues.append("VideoPlayerWidget 仍接收 raw videoUrl/videoUrlCandidates")
     if "resolveContentVideoUrlCandidates" in text:
@@ -708,16 +701,37 @@ def _validate_local_simulator_tls_preflight(issues: list[str]) -> None:
     patrol_path = (
         ROOT / "quwoquan_ops" / "cli" / "smoke" / "run_environment_patrol_smoke.py"
     )
+    local_tls_path = ROOT / "quwoquan_ops" / "cli" / "lib" / "local_target_tls.py"
+    ios_trust_bundle_path = (
+        ROOT
+        / "quwoquan_app"
+        / "scripts"
+        / "ios"
+        / "prepare_local_https_trust_bundle.sh"
+    )
+    android_build_path = ROOT / "quwoquan_app" / "android" / "app" / "build.gradle.kts"
     alpha_stack = alpha_stack_path.read_text(encoding="utf-8")
     alpha_prepare = alpha_prepare_path.read_text(encoding="utf-8")
     app_instance = app_instance_path.read_text(encoding="utf-8")
     patrol = patrol_path.read_text(encoding="utf-8")
+    local_tls = local_tls_path.read_text(encoding="utf-8")
+    ios_trust_bundle = ios_trust_bundle_path.read_text(encoding="utf-8")
+    android_build = android_build_path.read_text(encoding="utf-8")
 
     for target_name in ("alpha-local", "beta-local", "gamma-local", "prod-sim"):
         if target_name not in patrol:
             issues.append(f"Patrol TLS preflight 缺少本地 target: {target_name}")
     if "best_effort_failed" in patrol:
         issues.append("Patrol TLS preflight 不得将 Simulator CA 安装失败降级为 best_effort")
+    if '"--verbose"' not in patrol:
+        issues.append("Patrol 环境 UAT 必须保留 verbose 原始日志以定位真实构建/运行失败")
+    for token in (
+        "_enrich_ios_simulator_runtime_versions",
+        '"runtimeVersion"',
+        '"simctl", "list", "--json"',
+    ):
+        if token not in patrol:
+            issues.append(f"Patrol iOS 目标必须使用 simctl 精确 runtime 版本: {token}")
     for token in (
         "install_ios_simulator_root_ca",
         "LocalTargetTlsError",
@@ -747,6 +761,23 @@ def _validate_local_simulator_tls_preflight(issues: list[str]) -> None:
     ):
         if token not in app_instance:
             issues.append(f"共享 App launcher 缺少 Simulator CA preflight: {token}")
+    for token in (
+        'Path("object-storage") / "ca.crt"',
+        "resolve_local_target_trust_roots",
+        "materialize_local_target_trust_bundle",
+        '"certPaths"',
+    ):
+        if token not in local_tls:
+            issues.append(f"本地 TLS 单一边界缺少多根证书合同: {token}")
+    if "materialize_local_target_trust_bundle" not in ios_trust_bundle:
+        issues.append("iOS Dart trust bundle 必须同时装配网关与对象存储 CA")
+    for token in (
+        "alphaLocalObjectStorageCaCert",
+        "alphaLocalAppTrustBundle",
+        "materialize-app-trust-bundle",
+    ):
+        if token not in android_build:
+            issues.append(f"Android Dart trust bundle 缺少多根证书合同: {token}")
 
 
 def main() -> int:

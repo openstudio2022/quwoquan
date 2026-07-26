@@ -2,7 +2,7 @@
 """
 推荐策略顾问（大循环 · 只产建议，绝不自动改线上）。
 
-读取 contracts/metadata/recommendation/rec_model/policy.yaml 的 guardrails（唯一
+读取 services/recommendation-service/contracts/recommendation/recommendation_model_release/policy.yaml 的 guardrails（唯一
 真相源：metric / baselinePreset / minRatio / minSamples / window / action），对照
 按 cohort（preset × segment × bucket × policyVersion）观测到的 KPI，产出结构化
 "建议"，并且**至多**把候选策略推进到 product-ops 控制面的 `:simulate`（停在
@@ -54,7 +54,7 @@ except ImportError:  # pragma: no cover - operational dependency
     print("pip install pyyaml", file=sys.stderr)
     sys.exit(2)
 
-REPO_DEFAULT_POLICY = "contracts/metadata/recommendation/rec_model/policy.yaml"
+REPO_DEFAULT_POLICY = "services/content-service/resources/policies/content/post/recommendation_policy.yaml"
 
 # Verdicts the advisor may emit. None of these auto-act; "recommend_review"
 # only marks a candidate as eligible for a human-driven simulate/approve flow.

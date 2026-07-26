@@ -19,7 +19,7 @@ class _WrapEditorHarness extends StatefulWidget {
   final int? autofocusSelectionOffset;
   final void Function(String narrowText, String belowText)? onChanged;
   final void Function(ArticleWrapEditorSegment segment, int offset)?
-      onSelectionChanged;
+  onSelectionChanged;
 
   @override
   State<_WrapEditorHarness> createState() => _WrapEditorHarnessState();
@@ -104,7 +104,10 @@ String _textByKey(WidgetTester tester, String key) {
   if (tester.any(descendant)) {
     return tester.widget<EditableText>(descendant).controller.text;
   }
-  final textDescendant = find.descendant(of: finder, matching: find.byType(Text));
+  final textDescendant = find.descendant(
+    of: finder,
+    matching: find.byType(Text),
+  );
   if (tester.any(textDescendant)) {
     return tester.widget<Text>(textDescendant.first).data ?? '';
   }
@@ -174,7 +177,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final narrowFinder = find.byKey(const ValueKey<String>('wrap_narrow_para_0'));
+    final narrowFinder = find.byKey(
+      const ValueKey<String>('wrap_narrow_para_0'),
+    );
     await tester.tap(narrowFinder);
     await tester.pumpAndSettle();
     await tester.enterText(narrowFinder, '${seed.narrow}新增下文');
@@ -250,14 +255,13 @@ void main() {
 
   testWidgets('窄文为空时点击 sideChild 可获得输入焦点', (tester) async {
     await tester.pumpWidget(
-      const _WrapEditorHarness(
-        initialNarrowText: '',
-        initialBelowText: '',
-      ),
+      const _WrapEditorHarness(initialNarrowText: '', initialBelowText: ''),
     );
     await tester.pumpAndSettle();
 
-    final narrowFinder = find.byKey(const ValueKey<String>('wrap_narrow_para_0'));
+    final narrowFinder = find.byKey(
+      const ValueKey<String>('wrap_narrow_para_0'),
+    );
     await tester.tap(narrowFinder);
     await tester.pumpAndSettle();
 

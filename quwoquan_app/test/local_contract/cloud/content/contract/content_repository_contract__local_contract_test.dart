@@ -1,9 +1,10 @@
 import 'package:test/test.dart';
-import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
   group('Content facets — 常规契约', () {
@@ -27,7 +28,7 @@ void main() {
         'avatarUrl',
         'imageUrls',
       };
-      final rawPosts = ContractFixtureRuntimeLoader.contentSeedSet()?['posts'];
+      final rawPosts = alphaFixtureSeedReader.contentSeedSet()?['posts'];
       expect(rawPosts, isA<List>());
       final source = (rawPosts! as List)
           .whereType<Map>()

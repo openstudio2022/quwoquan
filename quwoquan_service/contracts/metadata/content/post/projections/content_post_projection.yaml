@@ -1,8 +1,0 @@
-read_model: ContentPostProjection
-description: |
-  ListUserPosts 分页结果的单项内容读模型。它是 Post 的只读投影，
-  不允许作为命令输入或权威写模型。
-consumers: [app]
-client_projection:
-  dart_class: ContentPostProjection
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_reader_models.dart

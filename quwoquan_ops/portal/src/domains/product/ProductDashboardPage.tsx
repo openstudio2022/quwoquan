@@ -1,59 +1,75 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import {
-  fetchAppealCases,
-  fetchModerationCases,
+  fetchPageExperience,
+  fetchPremiumPoolEntries,
+  fetchProductEventSummary,
   fetchProductL1L4Metrics,
   fetchProductProjectionSummary,
+  fetchRtcMediaQoeSummary,
   fetchProductTriageSummary,
-  fetchRecoveryCases,
   fetchProductWorkflows,
-  fetchRecommendationPolicies,
-  type AppealCaseItem,
+  fetchReports,
   type ControlPlaneBacklogCandidate,
-  type ModerationCaseItem,
+  type PageExperienceStat,
+  type ProductEventSummary,
+  type PremiumPoolEntryItem,
   type ProductL1L4MetricsResponse,
   type ProductProjectionSummary,
+  type RtcMediaQoeSummary,
   type ProductTriageSummaryResponse,
-  type RecoveryCaseItem,
-  type RecommendationPolicyItem,
+  type ReportItem,
   type WorkflowItem,
 } from '../../shared/api/controlPlane.js';
+import { appPages } from '../../generated/telemetry/appPages.generated.js';
 import { SectionCard } from '../../shared/components/SectionCard.js';
 import { PageScaffold } from '../../shared/layout/PageScaffold.js';
 import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
+function formatRatio(value: number | null | undefined): string {
+  return value == null ? 'n/a' : `${(value * 100).toFixed(1)}%`;
+}
+
+function formatMilliseconds(value: number | null | undefined): string {
+  return value == null ? 'n/a' : `${Math.round(value)}ms`;
+}
+
+interface AppExperienceSummary {
+  startup: ProductEventSummary;
+  anr: ProductEventSummary;
+  jank: ProductEventSummary;
+}
+
 export function ProductDashboardPage() {
   const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
-  const [policies, setPolicies] = useState<RecommendationPolicyItem[]>([]);
-  const [moderationCases, setModerationCases] = useState<ModerationCaseItem[]>([]);
-  const [recoveryCases, setRecoveryCases] = useState<RecoveryCaseItem[]>([]);
-  const [appealCases, setAppealCases] = useState<AppealCaseItem[]>([]);
+  const [premiumEntries, setPremiumEntries] = useState<PremiumPoolEntryItem[]>([]);
+  const [reports, setReports] = useState<ReportItem[]>([]);
   const [summary, setSummary] = useState<ProductProjectionSummary | null>(null);
   const [triage, setTriage] = useState<ProductTriageSummaryResponse | null>(null);
   const [metricsPayload, setMetricsPayload] = useState<ProductL1L4MetricsResponse | null>(null);
+  const [rtcMediaQoe, setRtcMediaQoe] = useState<RtcMediaQoeSummary | null>(null);
+  const [rtcMediaQoeError, setRtcMediaQoeError] = useState<RuntimeError | null>(null);
+  const [pageExperience, setPageExperience] = useState<PageExperienceStat[]>([]);
+  const [pageExperienceError, setPageExperienceError] = useState<RuntimeError | null>(null);
+  const [appExperience, setAppExperience] = useState<AppExperienceSummary | null>(null);
+  const [appExperienceError, setAppExperienceError] = useState<RuntimeError | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetchProductWorkflows(),
-      fetchRecommendationPolicies(),
-      fetchModerationCases(),
-      fetchRecoveryCases(),
-      fetchAppealCases(),
+      fetchPremiumPoolEntries(),
+      fetchReports(50),
       fetchProductProjectionSummary(),
       fetchProductTriageSummary(),
       fetchProductL1L4Metrics(),
     ])
-      .then(([workflowItems, policyItems, moderationItems, recoveryItems, appealItems, summaryItem, triageItem, metricsItem]) => {
+      .then(([workflowItems, premiumItems, reportItems, summaryItem, triageItem, metricsItem]) => {
         setWorkflows(workflowItems);
-        setPolicies(policyItems);
-        setModerationCases(moderationItems);
-        setRecoveryCases(recoveryItems);
-        setAppealCases(appealItems);
+        setPremiumEntries(premiumItems);
+        setReports(reportItems);
         setSummary(summaryItem);
         setTriage(triageItem);
         setMetricsPayload(metricsItem);
@@ -64,12 +80,42 @@ export function ProductDashboardPage() {
         setRemoteReady(false);
         setRuntimeError(coerceRuntimeError(error));
       });
+    fetchPageExperience()
+      .then((payload) => {
+        setPageExperience(payload.items);
+        setPageExperienceError(null);
+      })
+      .catch((error) => {
+        setPageExperience([]);
+        setPageExperienceError(coerceRuntimeError(error));
+      });
+    fetchRtcMediaQoeSummary()
+      .then((payload) => {
+        setRtcMediaQoe(payload);
+        setRtcMediaQoeError(null);
+      })
+      .catch((error) => {
+        setRtcMediaQoe(null);
+        setRtcMediaQoeError(coerceRuntimeError(error));
+      });
+    Promise.all([
+      fetchProductEventSummary({ eventType: 'app_startup' }),
+      fetchProductEventSummary({ eventType: 'app_anr_outcome', result: 'detected' }),
+      fetchProductEventSummary({ eventType: 'app_frame_jank_outcome' }),
+    ])
+      .then(([startup, anr, jank]) => {
+        setAppExperience({ startup, anr, jank });
+        setAppExperienceError(null);
+      })
+      .catch((error) => {
+        setAppExperience(null);
+        setAppExperienceError(coerceRuntimeError(error));
+      });
   }, []);
 
   const queueItems = useMemo(() => {
     return workflows
-      .filter((item) => ['moderation_case', 'recovery_case', 'appeal_case', 'experiment'].includes(item.objectType))
-      .slice(0, 3)
+      .slice(0, 4)
       .map((item) => ({
         title: `${item.objectType} / ${item.objectId}`,
         subtitle: `workflow=${item.workflowId} · state=${item.state}`,
@@ -83,15 +129,73 @@ export function ProductDashboardPage() {
   const highlightBacklog = backlogCandidates[0];
   const topMetric = metricsPayload?.items[0];
 
+  // 页面矩阵热力图：行 = metadata 登记页面全集（含 internal），列 = 真实遥测
+  // 聚合；登记但无数据必须显式标记「无采样」，而不是伪装成数值 0。
+  const pageHeatmapRows = useMemo(() => {
+    const registered = new Set<string>();
+    for (const page of appPages.pages) {
+      registered.add(page.page_name);
+    }
+    for (const page of appPages.internal_pages) {
+      registered.add(page.page_name);
+    }
+    const statByPage = new Map(pageExperience.map((item) => [item.pageName, item]));
+    const maxOpens = Math.max(1, ...pageExperience.map((item) => item.opens));
+    const rows = [...registered].map((pageName) => {
+      const stat = statByPage.get(pageName);
+      return {
+        pageName,
+        registered: true,
+        opens: stat?.opens ?? null,
+        avgReadyMs: stat?.avgReadyMs ?? null,
+        readySamples: stat?.readySamples ?? null,
+        avgStayMs: stat?.avgStayMs ?? null,
+        runtimeErrors: stat?.runtimeErrors ?? null,
+        heat: stat ? stat.opens / maxOpens : null,
+      };
+    });
+    for (const item of pageExperience) {
+      if (!registered.has(item.pageName)) {
+        rows.push({
+          pageName: `${item.pageName}（未登记）`,
+          registered: false,
+          opens: item.opens,
+          avgReadyMs: item.avgReadyMs,
+          readySamples: item.readySamples,
+          avgStayMs: item.avgStayMs,
+          runtimeErrors: item.runtimeErrors,
+          heat: item.opens / maxOpens,
+        });
+      }
+    }
+    rows.sort((left, right) => (right.opens ?? -1) - (left.opens ?? -1));
+    return rows;
+  }, [pageExperience]);
+  const openReports = reports.filter((item) => item.status === 'pending' || item.status === 'reviewing').length;
+  const resolvedReports = reports.filter((item) => item.status === 'resolved' || item.status === 'dismissed').length;
+  const reportCloseRate =
+    reports.length > 0 ? `${((resolvedReports / reports.length) * 100).toFixed(1)}%` : 'n/a';
+  const activePremium = premiumEntries.filter((item) => item.status === 'active' && !item.takedownEjected).length;
+  const appExperienceWindow = appExperience
+    ? `${appExperience.startup.actualFrom} ～ ${appExperience.startup.actualTo}`
+    : '';
+  const appExperienceHasSamples = (appExperience?.startup.sessionCount ?? 0) > 0;
+  const appAnrRate = appExperienceHasSamples && appExperience
+    ? appExperience.anr.sessionCount / appExperience.startup.sessionCount
+    : null;
+  const appJankRate = appExperienceHasSamples && appExperience
+    ? appExperience.jank.sessionCount / appExperience.startup.sessionCount
+    : null;
+
   return (
     <PageScaffold
       title="Product Ops 业务总览"
-      subtitle="聚焦治理处置、增长实验与推荐运营的统一视图，并把实时 L1-L4、triage 与 backlog 直接接入主路径。"
+      subtitle="聚焦举报治理、精选池运营与实时 L1-L4 的统一视图；全部指标来自真实投影，无静态样例。"
       meta={
         <>
           <span className="badge badge--neutral">Product Ops</span>
           <span className={`badge ${topAlert?.state === 'firing' ? 'badge--warning' : 'badge--success'}`}>
-            {topAlert ? `告警=${topAlert.state}` : '告警静默'}
+            {topAlert ? `告警=${topAlert.state}` : metricsPayload ? '暂无告警' : '等待告警数据'}
           </span>
           <span className="badge badge--warning">双签待处理 {summary?.pendingDualReview ?? 0} 个</span>
           <span className="badge badge--neutral">backlog={backlogCandidates.length}</span>
@@ -104,62 +208,158 @@ export function ProductDashboardPage() {
       actions={
         <>
           <Link className="button" to="/product/l1-l4/environment">查看实时 L1-L4</Link>
-          <Link className="button button--primary" to={highlightBacklog?.drilldownRoute ?? '/product/dashboard'}>
-            {highlightBacklog ? '处理首条 backlog' : '创建策略变更'}
+          <Link className="button button--primary" to={highlightBacklog?.drilldownRoute ?? '/product/governance'}>
+            {highlightBacklog ? '处理首条 backlog' : '打开治理工作台'}
           </Link>
         </>
       }
       footer={
         <>
           <Link className="button" to="/product/governance">打开治理工作台</Link>
-          <Link className="button button--primary" to="/product/experiments">发起实验评审</Link>
+          <Link className="button button--primary" to="/product/recommendation">管理精选池</Link>
         </>
       }
     >
       <div className="metric-strip">
         <div className="metric-pill">
-          <div className="metric-pill__label">今日治理结案率</div>
-          <div className="metric-pill__value">
-            {moderationCases.length > 0 ? `${Math.max(0, 100 - (summary?.pendingDualReview ?? 0) * 5)}%` : '0%'}
-          </div>
+          <div className="metric-pill__label">举报结案率</div>
+          <div className="metric-pill__value">{reportCloseRate}</div>
+        </div>
+        <div className="metric-pill">
+          <div className="metric-pill__label">待处理举报</div>
+          <div className="metric-pill__value">{openReports}</div>
+        </div>
+        <div className="metric-pill">
+          <div className="metric-pill__label">精选池 active</div>
+          <div className="metric-pill__value">{activePremium}</div>
         </div>
         <div className="metric-pill">
           <div className="metric-pill__label">实时指标来源</div>
-          <div className="metric-pill__value">{metricsPayload?.source ?? 'snapshot'}</div>
+          <div className="metric-pill__value">{metricsPayload?.source ?? 'n/a'}</div>
         </div>
         <div className="metric-pill">
           <div className="metric-pill__label">最新 triage 事件量</div>
-          <div className="metric-pill__value">
-            {triage?.eventSummary.totalCount ?? 0}
-          </div>
+          <div className="metric-pill__value">{triage?.eventSummary.totalCount ?? 0}</div>
         </div>
       </div>
 
+      <SectionCard
+        title="RTC 媒体 QoE（最近 24 小时）"
+        subtitle="直接读取 rtc_media_qoe 权威原始事实；abandoned 不进入有效分母，空分母保持 n/a，不合成成功率。"
+      >
+        {rtcMediaQoeError ? <RuntimeErrorBadge error={rtcMediaQoeError} /> : null}
+        <div className="badge-row">
+          <span className="badge badge--neutral">
+            source={rtcMediaQoe?.sourceKind ?? '等待回读'}
+          </span>
+          <span
+            className={`badge ${
+              rtcMediaQoe?.freshness === 'near_realtime'
+                ? 'badge--success'
+                : 'badge--warning'
+            }`}
+          >
+            freshness={rtcMediaQoe?.freshness ?? 'unknown'}
+          </span>
+          <span className="badge badge--neutral">
+            waterline={rtcMediaQoe?.generatedThrough ?? 'n/a'}
+          </span>
+          <span className="badge badge--neutral">
+            lag={rtcMediaQoe?.lagSeconds == null ? 'n/a' : `${rtcMediaQoe.lagSeconds}s`}
+          </span>
+        </div>
+        <div className="metric-strip">
+          <div className="metric-pill">
+            <div className="metric-pill__label">有效样本</div>
+            <div className="metric-pill__value">
+              {rtcMediaQoe?.hasSamples ? rtcMediaQoe.effectiveSampleCount : 'n/a'}
+            </div>
+          </div>
+          <div className="metric-pill">
+            <div className="metric-pill__label">媒体接通率</div>
+            <div className="metric-pill__value">
+              {formatRatio(rtcMediaQoe?.mediaConnectedRate)}
+            </div>
+          </div>
+          <div className="metric-pill">
+            <div className="metric-pill__label">建连 P95</div>
+            <div className="metric-pill__value">
+              {formatMilliseconds(rtcMediaQoe?.connectP95Ms)}
+            </div>
+          </div>
+          <div className="metric-pill">
+            <div className="metric-pill__label">异常断连率</div>
+            <div className="metric-pill__value">
+              {formatRatio(rtcMediaQoe?.connectionLostRate)}
+            </div>
+          </div>
+          <div className="metric-pill">
+            <div className="metric-pill__label">重连次数</div>
+            <div className="metric-pill__value">
+              {rtcMediaQoe?.hasSamples ? rtcMediaQoe.reconnectCount : 'n/a'}
+            </div>
+          </div>
+        </div>
+        <div className="stack-list">
+          {(rtcMediaQoe?.series ?? []).slice(-6).map((point) => (
+            <div className="policy-item" key={point.bucketStart}>
+              <div>
+                <p className="item-title">
+                  {point.bucketStart}{point.partial ? '（当前部分桶）' : ''}
+                </p>
+                <p className="item-subtitle">
+                  samples={point.effectiveSampleCount} · connected=
+                  {formatRatio(point.mediaConnectedRate)} · p95=
+                  {formatMilliseconds(point.connectP95Ms)} · lost=
+                  {formatRatio(point.connectionLostRate)}
+                </p>
+              </div>
+              <span className={`badge ${point.hasSamples ? 'badge--neutral' : 'badge--warning'}`}>
+                {point.hasSamples ? `${point.reconnectCount} reconnects` : 'no samples'}
+              </span>
+            </div>
+          ))}
+          {!rtcMediaQoeError && rtcMediaQoe == null ? (
+            <div className="policy-item">
+              <div>
+                <p className="item-title">正在读取 RTC QoE</p>
+                <p className="item-subtitle">等待 product-ops 权威查询响应。</p>
+              </div>
+              <span className="badge badge--neutral">loading</span>
+            </div>
+          ) : null}
+        </div>
+      </SectionCard>
+
       <div className="section-grid section-grid--two">
-        <SectionCard title="治理与实验总量" subtitle="突出 case 流量、处理量和实验运行密度">
-          <div style={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
-              <BarChart
-                data={[
-                  {
-                    day: 'now',
-                    created: moderationCases.length + recoveryCases.length + appealCases.length,
-                    resolved: workflows.filter((item) => ['active', 'closed', 'completed', 'recovered', 'approved'].includes(item.state)).length,
-                  },
-                ]}
-              >
-                <CartesianGrid stroke="rgba(17, 24, 39, 0.08)" />
-                <XAxis dataKey="day" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
-                <Tooltip />
-                <Bar dataKey="created" fill="#2563EB" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="resolved" fill="#16A34A" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+        <SectionCard title="治理队列快照" subtitle="来自 content-service 真实举报聚合，处置入口在治理工作台">
+          <div className="stack-list">
+            {reports.slice(0, 4).map((item) => (
+              <div className="case-item" key={item.id}>
+                <div>
+                  <p className="item-title">
+                    {item.targetType} / {item.targetId}
+                  </p>
+                  <p className="item-subtitle">reason={item.reason} · updatedAt={item.updatedAt}</p>
+                </div>
+                <span className={`badge badge--${item.status === 'pending' ? 'danger' : item.status === 'reviewing' ? 'warning' : 'success'}`}>
+                  {item.status}
+                </span>
+              </div>
+            ))}
+            {reports.length === 0 ? (
+              <div className="case-item">
+                <div>
+                  <p className="item-title">暂无举报</p>
+                  <p className="item-subtitle">App 用户上报后会实时进入治理队列。</p>
+                </div>
+                <span className="badge badge--success">clear</span>
+              </div>
+            ) : null}
           </div>
         </SectionCard>
 
-        <SectionCard title="治理待办" subtitle="以统一工作台视角收拢内容治理、申诉与恢复">
+        <SectionCard title="控制面工作流" subtitle="精选池入池 / 双签下架等危险动作的 workflow 留痕">
           <div className="stack-list">
             {queueItems.map((item) => (
               <div className="case-item" key={item.title}>
@@ -170,6 +370,15 @@ export function ProductDashboardPage() {
                 <span className={`badge badge--${item.status}`}>{item.status}</span>
               </div>
             ))}
+            {queueItems.length === 0 ? (
+              <div className="case-item">
+                <div>
+                  <p className="item-title">暂无工作流</p>
+                  <p className="item-subtitle">精选池与其他受控动作执行后会在此留痕。</p>
+                </div>
+                <span className="badge badge--neutral">idle</span>
+              </div>
+            ) : null}
           </div>
         </SectionCard>
       </div>
@@ -194,16 +403,13 @@ export function ProductDashboardPage() {
                   {item.drilldownRoute ? (
                     <Link className="button" to={item.drilldownRoute}>进入 drilldown</Link>
                   ) : null}
-                {item.runbookRoute ? (
-                  <Link className="button" to={item.runbookRoute}>查看 runbook</Link>
-                ) : null}
-                {item.repairEntry ? (
-                  <Link className="button button--primary" to={item.repairEntry}>进入修复入口</Link>
-                ) : null}
-                {item.auditRoute ? (
-                  <Link className="button" to={item.auditRoute}>查看审计链</Link>
-                ) : null}
-                {item.alertId ? <span className="badge badge--neutral">alert={item.alertId}</span> : null}
+                  {item.repairEntry ? (
+                    <Link className="button button--primary" to={item.repairEntry}>进入修复入口</Link>
+                  ) : null}
+                  {item.auditRoute ? (
+                    <Link className="button" to={item.auditRoute}>查看审计链</Link>
+                  ) : null}
+                  {item.alertId ? <span className="badge badge--neutral">alert={item.alertId}</span> : null}
                 </div>
               </div>
             ))}
@@ -225,7 +431,7 @@ export function ProductDashboardPage() {
               <div>
                 <p className="item-title">实时元数据</p>
                 <p className="item-subtitle">
-                  source={metricsPayload?.source ?? 'snapshot'} · freshness={metricsPayload?.freshness ?? 'n/a'} · window={metricsPayload?.window ?? 'n/a'}
+                  source={metricsPayload?.source ?? 'n/a'} · freshness={metricsPayload?.freshness ?? 'n/a'} · window={metricsPayload?.window ?? 'n/a'}
                 </p>
                 <p className="item-subtitle">
                   coverage={metricsPayload?.coverage.liveMetrics ?? 0}/{metricsPayload?.coverage.totalMetrics ?? 0} live
@@ -263,31 +469,120 @@ export function ProductDashboardPage() {
         </SectionCard>
       </div>
 
-      <SectionCard title="推荐运营策略池" subtitle="覆盖召回、粗排、精排 / 重排的受控干预空间">
+      <SectionCard title="全局精选池" subtitle="入池 / 回滚 / 双签下架经事件广播给 feed 投影；操作入口在推荐运营页">
         <div className="stack-list">
-          {policies.map((policy) => (
-            <div className="policy-item" key={policy.id}>
+          {premiumEntries.slice(0, 5).map((entry) => (
+            <div className="policy-item" key={entry.id}>
               <div>
-                <p className="item-title">{policy.name}</p>
+                <p className="item-title">{entry.contentId}</p>
                 <p className="item-subtitle">
-                  policy={policy.policyVersion} · status={policy.status}
+                  score={entry.qualityScore} · featuredAt={entry.featuredAt} · expiresAt={entry.expiresAt}
                 </p>
               </div>
-              <span className={`badge badge--${policy.status === 'active' ? 'success' : policy.status === 'simulated' ? 'warning' : 'neutral'}`}>
-                {policy.status}
-              </span>
+              <span className={`badge badge--${entry.status === 'active' ? 'success' : 'neutral'}`}>{entry.status}</span>
             </div>
           ))}
-          {policies.length === 0 ? (
+          {premiumEntries.length === 0 ? (
             <div className="policy-item">
               <div>
-                <p className="item-title">等待推荐策略接入</p>
-                <p className="item-subtitle">产品控制面可达后将展示推荐策略池。</p>
+                <p className="item-title">精选池为空</p>
+                <p className="item-subtitle">经推荐运营页入池后条目会在此展示。</p>
               </div>
-              <span className="badge badge--warning">offline</span>
+              <span className="badge badge--neutral">0</span>
             </div>
           ) : null}
         </div>
+      </SectionCard>
+
+      <SectionCard
+        title="页面矩阵热力图（最近 24h）"
+        subtitle="行 = metadata 登记页面全集；列 = 真实遥测聚合（打开 / 逐页 TTI / 停留 / 运行错误）。登记但无数据的页面明确显示无采样。"
+      >
+        {pageExperienceError ? <RuntimeErrorBadge error={pageExperienceError} /> : null}
+        <table className="table">
+          <thead>
+            <tr>
+              <th>页面（pageName）</th>
+              <th>打开次数</th>
+              <th>TTI 均值 ms</th>
+              <th>停留均值 ms</th>
+              <th>运行错误</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageHeatmapRows.slice(0, 40).map((row) => (
+              <tr key={row.pageName}>
+                <td>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: 10,
+                      height: 10,
+                      borderRadius: 2,
+                      marginRight: 8,
+                      background: row.heat == null
+                        ? '#E5E7EB'
+                        : `rgba(37, 99, 235, ${Math.max(0.15, row.heat)})`,
+                    }}
+                  />
+                  {row.pageName}
+                </td>
+                <td>{row.opens ?? '无采样'}</td>
+                <td>{(row.readySamples ?? 0) > 0 && row.avgReadyMs != null ? row.avgReadyMs.toFixed(0) : '无采样'}</td>
+                <td>{row.avgStayMs != null ? row.avgStayMs.toFixed(0) : '无采样'}</td>
+                <td>{row.runtimeErrors ?? '无采样'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="inline-note">
+          共 {pageHeatmapRows.length} 个登记页面（展示打开次数前 40）；ANR / 卡顿明细在平台可观测页按
+          signal=app.performance.anr / app.performance.frame 检索。
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="应用体验黄金指标"
+        subtitle="ANR 与卡顿率按 SLS/Postgres 权威事件中的 sessionId 去重，再以启动 session 为分母；没有启动分母时明确显示无采样。"
+      >
+        {appExperienceError ? <RuntimeErrorBadge error={appExperienceError} /> : null}
+        {appExperience ? (
+          <>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>指标</th>
+                  <th>结果</th>
+                  <th>分子 session</th>
+                  <th>启动分母 session</th>
+                  <th>来源</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>ANR 会话率</td>
+                  <td>{appExperienceHasSamples ? formatRatio(appAnrRate) : '无采样'}</td>
+                  <td>{appExperience.anr.sessionCount}</td>
+                  <td>{appExperience.startup.sessionCount}</td>
+                  <td>{appExperience.anr.sourceKind}</td>
+                </tr>
+                <tr>
+                  <td>卡顿会话率</td>
+                  <td>{appExperienceHasSamples ? formatRatio(appJankRate) : '无采样'}</td>
+                  <td>{appExperience.jank.sessionCount}</td>
+                  <td>{appExperience.startup.sessionCount}</td>
+                  <td>{appExperience.jank.sourceKind}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="inline-note">
+              window={appExperienceWindow} · startup freshness={appExperience.startup.freshness} ·
+              anr freshness={appExperience.anr.freshness} · jank freshness={appExperience.jank.freshness}
+            </div>
+          </>
+        ) : (
+          <div className="inline-note">等待产品遥测体验摘要；控制面不可用时不会显示合成成功态。</div>
+        )}
       </SectionCard>
 
       <SectionCard title="主路径联动" subtitle="Dashboard 与 L1-L4 页面共享同一份实时指标和 triage 数据源">
@@ -296,7 +591,7 @@ export function ProductDashboardPage() {
             <div>
               <p className="item-title">当前主指标</p>
               <p className="item-subtitle">
-                {topMetric ? `${topMetric.level} / ${topMetric.metric} / source=${topMetric.source ?? 'snapshot'}` : '等待实时指标'}
+                {topMetric ? `${topMetric.level} / ${topMetric.metric} / source=${topMetric.source ?? 'n/a'}` : '等待实时指标'}
               </p>
             </div>
             <Link className="button" to="/product/l1-l4/environment">打开 L1-L4 详情</Link>

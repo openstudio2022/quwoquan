@@ -37,6 +37,8 @@ void main() {
         CircleGroupQuery(circleId: 'circle_alpha', groupId: created.groupId),
       );
 
+      expect(updated.version, 2);
+      expect(updated.status, CircleGroupStatus.active);
       expect(stored.name, 'Alpha 兴趣群 2');
       expect(archived.status, CircleGroupStatus.archived);
       expect(stored.version, 3);

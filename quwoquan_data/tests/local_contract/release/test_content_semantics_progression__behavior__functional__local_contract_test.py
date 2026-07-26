@@ -35,7 +35,7 @@ def test_single_entity_story_does_not_require_route_transitions(tmp_path, monkey
     monkeypatch.setattr(semantics, "_load_brief_facts", lambda *_args: [])
     issues = semantics.verify_semantics(
         _post(tmp_path, ref="single_entity_ref", route_entities=["墨石公园"]),
-        execution_id="20260711--travel-semantics--cn-sichuan--canary-001",
+        execution_id="20260711--travel-semantics--test-region-b--pilot-001",
     )
     assert not any("narrativeContinuity" in issue for issue in issues), issues
 
@@ -44,6 +44,6 @@ def test_multi_entity_story_reports_topic_id_for_missing_transitions(tmp_path, m
     monkeypatch.setattr(semantics, "_load_brief_facts", lambda *_args: [])
     issues = semantics.verify_semantics(
         _post(tmp_path, ref="multi_entity_ref", route_entities=["甲景区", "乙景区"]),
-        execution_id="20260711--travel-semantics--cn-sichuan--canary-001",
+        execution_id="20260711--travel-semantics--test-region-b--pilot-001",
     )
     assert "multi_entity_ref: narrativeContinuity lacks progression transitions" in issues

@@ -20,7 +20,7 @@ func emitEntityHomepageMutationWiresFile(outPath string, services map[string]*se
 func renderEntityHomepageMutationWires(services map[string]*serviceFile) (string, error) {
 	var b strings.Builder
 	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
-	b.WriteString("// Source: contracts/metadata/entity/{homepage,homepage_claim_request,homepage_status_report}/service.yaml (writable_fields per operation).\n")
+	b.WriteString("// Source: services/entity-service/contracts/{homepage,homepage_claim_request,homepage_status_report}/operations.yaml (writable_fields per operation).\n")
 	b.WriteString("// Regenerate: make codegen-app\n\n")
 
 	b.WriteString(`Map<String, dynamic> _entityHomepageMutationPutOpt(Map<String, dynamic> m, String k, Object? v) {
@@ -165,7 +165,13 @@ func writeEntityHomepageMutationWiresFromMetadata(metadataDir, appDir string) er
 		"homepage_claim_request",
 		"homepage_status_report",
 	} {
-		svcPath := filepath.Join(metadataDir, "entity", objectName, "service.yaml")
+		svcPath := filepath.Join(
+			metadataDir,
+			"entity",
+			"entity_homepage",
+			objectName,
+			"operations.yaml",
+		)
 		svc, err := readService(svcPath)
 		if err != nil {
 			return fmt.Errorf(

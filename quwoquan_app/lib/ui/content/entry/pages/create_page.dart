@@ -8,8 +8,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:video_player/video_player.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show ReferralSource, ReferralSourceExt;
+import 'package:quwoquan_app/core/platform/ios_video_editing_bridge.dart';
 import 'package:quwoquan_app/core/platform/startup_deferred_plugins.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
@@ -22,8 +27,10 @@ import 'package:quwoquan_app/components/media/picker/desktop/desktop_picker_serv
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/core/constants/create_page_text_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/media/local_video_file_readiness.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -41,14 +48,18 @@ import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helper
 import 'package:quwoquan_app/ui/content/entry/services/create_page_provider_bridge.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_circle_services.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_editor.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/create_publish_result_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_publish_confirm_sheet.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 part 'create_page_state.dart';
 part 'create_page_state_helpers.dart';
+part 'create_page_state_chrome_helpers.dart';
+part 'create_page_state_draft_helpers.dart';
 part 'create_page_state_media_helpers.dart';
+part 'create_page_state_surface_helpers.dart';
 
-final RouteObserver<ModalRoute<dynamic>> createDraftRouteObserver =
-    RouteObserver<ModalRoute<dynamic>>();
+final RouteObserver<ModalRoute<Object?>> createDraftRouteObserver =
+    RouteObserver<ModalRoute<Object?>>();
 
 typedef CreateMediaPickerLauncher =
     Future<CreateMediaPickerResult?> Function(

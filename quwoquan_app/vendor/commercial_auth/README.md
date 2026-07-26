@@ -12,4 +12,4 @@
 QQ Android JAR SHA-256：
 `9d57fe61ff9026d34ac84bc63dc719f61da6aa40533a299cc6f73d4ce9df7af8`
 
-二进制升级必须同时更新本文件、`docs/external_service_registry.yaml`、本地契约测试和四环境包纯度门禁。
+二进制升级必须同时更新本文件、所属对象的外部 capability 契约、本地契约测试和四环境包纯度门禁。

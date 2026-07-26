@@ -23,7 +23,10 @@ APP_ARTIFACTS_ROOT = Path(
     )
 )
 APP = ROOT / "quwoquan_app"
-USER_POOL = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "user_pool.json"
+USER_POOL = (
+    ROOT
+    / "quwoquan_service/services/user-service/tests/support/contract_fixtures/user_pool.json"
+)
 ALPHA_MANIFEST = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "app_alpha_seed_manifest.json"
 
 
@@ -66,6 +69,8 @@ def beta_gateway_smoke(port: int) -> dict[str, object]:
             "127.0.0.1",
             "--listen-port",
             str(port),
+            "--entity-upstream-port",
+            "0",
         ],
         cwd=ROOT,
         stdout=subprocess.PIPE,
@@ -88,7 +93,7 @@ def beta_gateway_smoke(port: int) -> dict[str, object]:
             "/users/fixture_user_current/works",
             "/users/fixture_user_current/circles",
             "/homepages/search",
-            "/integration/locations/pois",
+            "/integration/external_integration/locations/pois",
             "/app-messages",
             "/rtc/calls",
         ]
@@ -148,6 +153,8 @@ def main() -> int:
             [
                 "flutter",
                 "test",
+                "--dart-define=APP_RUNTIME_ENV=alpha",
+                "--dart-define=APP_DATA_SOURCE=mock",
                 "--dart-define=CONTRACT_FIXTURE_PROFILE=full",
                 "test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart",
             ],

@@ -12,7 +12,7 @@ PRUNE=0
 usage() {
   cat <<EOF
 Usage:
-  scripts/list_app_instances.sh [options]
+  quwoquan_app/scripts/device/list_app_instances.sh [options]
 
 Options:
   --env <alpha|beta|gamma>   Filter by env.

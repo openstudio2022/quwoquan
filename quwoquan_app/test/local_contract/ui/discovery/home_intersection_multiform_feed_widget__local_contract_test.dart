@@ -33,6 +33,8 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../support/cloud_services/content/mock_content_repository.dart';
 
 TextSpan _spanByText(RichText richText, String text) {
   TextSpan? result;
@@ -301,7 +303,8 @@ VideoPostDto _videoPost({required int width, required int height}) {
     authorIdentityTags: const <String>['影像'],
     authorVerified: false,
     body: '视频画面下方的配文',
-    videoUrl: 'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+    videoUrl:
+        'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
     thumbnailUrl:
         'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
     coverUrl:
@@ -394,6 +397,7 @@ Widget _buildFeed(
   return ProviderScope(
     key: ValueKey<String>('feed-scope-${post.id}'),
     overrides: [
+      ...mockContentFacetOverrides(MockContentRepository()),
       discoveryFeedMapProvider.overrideWith(
         () => _SinglePostFeedMapNotifier(post),
       ),
@@ -423,6 +427,7 @@ Widget _buildFeed(
 
 Widget _buildRealProviderFeed() {
   return ProviderScope(
+    overrides: [...mockContentFacetOverrides(MockContentRepository())],
     child: CupertinoApp(
       home: ScreenUtilInit(
         designSize: const Size(390, 844),
@@ -533,9 +538,7 @@ void main() {
     );
   });
 
-  testWidgets('推荐卡片把头像、图片、视频统一投影为注入媒体端点', (
-    tester,
-  ) async {
+  testWidgets('推荐卡片把头像、图片、视频统一投影为注入媒体端点', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -556,12 +559,9 @@ void main() {
     expect(avatarImages, hasLength(1));
     final avatarCandidates =
         avatarImages.single.imageUrlCandidates ?? const <String>[];
-    expect(
-      avatarCandidates,
-      <String>[
-        'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
-      ],
-    );
+    expect(avatarCandidates, <String>[
+      'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+    ]);
 
     final contentImages = tester
         .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
@@ -652,12 +652,9 @@ void main() {
         .where((widget) => widget.cdnPreset == CdnImagePreset.avatar)
         .toList(growable: false);
     expect(avatarImages, isNotEmpty);
-    expect(
-      avatarImages.first.imageUrlCandidates,
-      <String>[
-        'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
-      ],
-    );
+    expect(avatarImages.first.imageUrlCandidates, <String>[
+      'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+    ]);
   });
 
   testWidgets('任务B·分层强度：推测型交集证据行弱于事实型', (tester) async {
@@ -1432,7 +1429,8 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
+    // impressed 只允许由真实视口可见比例 ≥50% 且连续停留 ≥1s 产生。
+    await tester.pump(const Duration(milliseconds: 1250));
 
     final impressions = behaviorRepo.recorded
         .where(
@@ -1536,6 +1534,7 @@ Widget _routedFeed(
   return ProviderScope(
     key: ValueKey<String>('routed-feed-scope-${post.id}'),
     overrides: [
+      ...mockContentFacetOverrides(MockContentRepository()),
       discoveryFeedMapProvider.overrideWith(
         () => _SinglePostFeedMapNotifier(post),
       ),
@@ -1620,7 +1619,10 @@ Widget _buildFeedScope({
   bool disableAnimations = false,
 }) {
   return ProviderScope(
-    overrides: [discoveryFeedMapProvider.overrideWith(notifier)],
+    overrides: [
+      ...mockContentFacetOverrides(MockContentRepository()),
+      discoveryFeedMapProvider.overrideWith(notifier),
+    ],
     child: CupertinoApp(
       home: ScreenUtilInit(
         designSize: const Size(390, 844),

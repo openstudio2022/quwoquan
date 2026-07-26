@@ -1,0 +1,152 @@
+description: owner 可见、可撤销恢复的结构化助手偏好事实
+fields:
+- name: preferenceId
+  source: preferenceId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: userId
+  source: userId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: redact
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: scope
+  source: scope
+  type: enum
+  enum_ref: AssistantPreferenceScope
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: read_write
+  ops_exposure: read
+  role: authoritative_state
+- name: conversationId
+  source: conversationId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: redact
+  api_exposure: read_write
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: kind
+  source: kind
+  type: enum
+  enum_ref: AssistantPreferenceKind
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: read_write
+  ops_exposure: read
+  role: authoritative_state
+- name: value
+  source: value
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: redact
+  api_exposure: read_write
+  ops_exposure: read
+  description: 由 kind 对应 allowlist 校验的结构化 wire value，禁止自由文本记忆
+  role: authoritative_state
+- name: sourceType
+  source: sourceType
+  type: enum
+  enum_ref: AssistantPreferenceSourceType
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read_write
+  ops_exposure: read
+  role: authoritative_state
+- name: status
+  source: status
+  type: enum
+  enum_ref: AssistantPreferenceStatus
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: revokedAt
+  source: revokedAt
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: redact
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: revocationDeadline
+  source: revocationDeadline
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: redact
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: createdAt
+  source: createdAt
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: updatedAt
+  source: updatedAt
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: version
+  source: version
+  type: int
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+types:
+  AssistantPreferenceFactListView:
+    description: owner 的偏好事实列表
+    fields:
+    - name: items
+      source: items
+      type: '[]AssistantPreferenceFact'
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: read

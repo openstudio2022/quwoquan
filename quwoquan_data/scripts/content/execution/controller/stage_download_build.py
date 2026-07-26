@@ -6,6 +6,43 @@ from content.execution.support import AUTO, Any, DataIssueCode, DataIssueLane, D
 
 _SERIAL_DOWNLOAD_WORKER_COUNT = 1
 
+_MEDIA_RECOVERY_BY_CODE = {
+    DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE: DataRecoveryAction.REWIND_DOWNLOAD,
+    DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE: DataRecoveryAction.REWIND_DOWNLOAD,
+    DataIssueCode.MEDIA_CAPTION_INVALID: DataRecoveryAction.REWIND_COMPOSE,
+    DataIssueCode.MEDIA_COVER_CONFLICT: DataRecoveryAction.REWIND_COMPOSE,
+}
+
+
+def _typed_media_validation_issues(
+    media_report: Mapping[str, Any],
+) -> tuple[DataIssue, ...]:
+    return tuple(
+        DataIssue(
+            code=issue.code,
+            stage=DataIssueStage.BUILD_VALIDATE,
+            message=issue.message,
+            ref=issue.ref,
+            lane=issue.lane,
+            recovery=_MEDIA_RECOVERY_BY_CODE.get(issue.code, DataRecoveryAction.STOP),
+            attributes=issue.attributes,
+        )
+        for issue in (
+            DataIssue.from_dict(row)
+            for row in (media_report.get("issues") or [])
+            if isinstance(row, Mapping)
+        )
+    )
+
+
+def _media_validation_fallback(issues: tuple[DataIssue, ...]) -> ExecutionStage:
+    codes = {issue.code for issue in issues}
+    if DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE in codes:
+        return ExecutionStage.DOWNLOAD_PLAN
+    if DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE in codes:
+        return ExecutionStage.DOWNLOAD_FETCH
+    return ExecutionStage.BUILD_HOMEPAGE
+
 def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
     from content.execution.agent.auto_research import _download_auto_research_lanes, _entity_ids_grouped_by_type, _refresh_stale_source_plans_for_fetch
     from content.execution.recovery.download_freshness import _content_plan_source_shortfall_entity_ids, _download_content_capacity_preflight, _download_fetch_stale_entity_ids, _resolve_download_content_capacity_shortfall
@@ -183,7 +220,7 @@ def _run_build_prepare(ctx: ExecutionContext) -> StageResult:
             ExecutionStage.BUILD_PREPARE,
             AUTO,
             StageStatus.DONE,
-            "entityHomepagesPerTarget=0；图片作品-only 批次跳过主页输入准备",
+            "entityHomepagesPerTarget=0；非主页载体跳过主页输入准备",
         )
     active_spec = homepage_runtime_spec(ctx.execution_id, _active_spec(ctx))
     _prune_inactive_entity_homepage_artifacts(ctx, reason="build_prepare active target sync")
@@ -210,7 +247,7 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
             ExecutionStage.BUILD_VALIDATE,
             AUTO,
             StageStatus.DONE,
-            "entityHomepagesPerTarget=0；图片作品-only 批次跳过主页采纳门",
+            "entityHomepagesPerTarget=0；非主页载体跳过主页采纳门",
         )
     runtime_spec = homepage_runtime_spec(ctx.execution_id, _active_spec(ctx))
     issues = validate_entity_pages(ctx.execution_id, runtime_spec)
@@ -230,26 +267,18 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
         )
     media_report = homepage_media_completeness_report(ctx.execution_id)
     if not bool(media_report.get("passed")):
-        media_issues = [
-            "{code} {ref}: {message}".format(
-                code=str(row.get("code") or "DATA.MEDIA.DOWNLOAD_INCOMPLETE"),
-                ref=str(row.get("ref") or ""),
-                message=str(row.get("message") or "homepage media closure failed"),
-            )
-            for row in (media_report.get("issues") or [])
-            if isinstance(row, Mapping)
-        ]
+        typed_issues = _typed_media_validation_issues(media_report)
+        media_issues = issue_messages(typed_issues)
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,
             AUTO,
             StageStatus.FAILED,
             "主页图片完整性门未过:\n  - " + "\n  - ".join(media_issues[:10]),
-            fallback_stage=ExecutionStage.DOWNLOAD_FETCH,
-            issue_records=stage_issues(
+            fallback_stage=_media_validation_fallback(typed_issues),
+            issue_records=typed_issues or stage_issues(
                 ExecutionStage.BUILD_VALIDATE,
-                media_issues or ["homepage media completeness report did not pass"],
-                code=DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE,
-                recovery=DataRecoveryAction.REWIND_DOWNLOAD,
+                ["homepage media completeness report did not pass"],
+                code=DataIssueCode.CONTRACT_INVALID,
             ),
         )
     review_issues = _run_homepage_independent_reviews(ctx, runtime_spec)
@@ -276,12 +305,14 @@ def _run_homepage_independent_reviews(
     """Run one read-only Cursor reviewer per finalized homepage when evidence is pending."""
     from content.execution.agent.agent_runner import _redact_managed_secret
     from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated
+    from content.execution.agent.outcome import AgentRunOutcome
     from content.execution.controller.homepage_authoring import _homepage_independent_review_issues
     from governance.coverage.entity_extract import entity_ref
     from core.prompt_render import render as render_prompt
     from content.source.source_unit import resolve_entity_object_dir
     from content.homepage.homepage_review import (
         apply_independent_homepage_review,
+        homepage_asset_file_evidence,
         homepage_media_review_dispositions,
     )
 
@@ -314,8 +345,8 @@ def _run_homepage_independent_reviews(
             return False
         return True
 
-    def _payload_from_outcome(outcome: Mapping[str, Any], *, object_ref: str) -> dict[str, Any] | None:
-        text = str(outcome.get("result") or "").strip()
+    def _payload_from_outcome(outcome: AgentRunOutcome, *, object_ref: str) -> dict[str, Any] | None:
+        text = outcome.result_text.strip()
         candidates = [text]
         fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.S)
         if fenced:
@@ -356,8 +387,22 @@ def _run_homepage_independent_reviews(
         output_path.unlink(missing_ok=True)
         object_ref = entity_ref(domain, etype, name)
         manifest = read_json(obj / "manifest.json")
+        from governance.coverage.license import rights_enforcement_mode
+
+        vertical = str(manifest.get("vertical") or ctx.spec.vertical).strip()
+        rights_mode = rights_enforcement_mode(vertical)
         media_policy = json.dumps(
-            {"assets": homepage_media_review_dispositions(manifest)},
+            {
+                "vertical": vertical,
+                "rightsEnforcementMode": rights_mode.value,
+                "rightsDecisionRule": (
+                    "record rights audit gaps as findings; do not add them to issues"
+                    if rights_mode.value == "audit_only"
+                    else "missing rights proof is a blocking issue"
+                ),
+                "assets": homepage_media_review_dispositions(manifest),
+                "assetFileEvidence": homepage_asset_file_evidence(obj, manifest),
+            },
             ensure_ascii=False,
             sort_keys=True,
         )
@@ -378,6 +423,7 @@ def _run_homepage_independent_reviews(
             runtime=ctx.runtime,
             max_workers=_SERIAL_DOWNLOAD_WORKER_COUNT,
             model=review_model,
+            model_parameters=model_pair.reviewer.parameters,
             agent_provider=ctx.agent_provider,
             release_only=ctx.release_only,
         )
@@ -397,18 +443,16 @@ def _run_homepage_independent_reviews(
         # shortcut used by non-attested helper stages.
         outcome = _default_managed_agent_runner_isolated(review_ctx, prompt)
         payload: dict[str, Any] | None = read_json(output_path) if _complete() else None
-        if payload is None and str(outcome.get("status") or "") == "finished":
+        if payload is None and outcome.succeeded:
             payload = _payload_from_outcome(outcome, object_ref=object_ref)
             if payload is not None:
                 write_json(output_path, payload)
-        if str(outcome.get("status") or "") != "finished" or payload is None:
-            outcome_status = str(outcome.get("status") or "error")
-            error_text = _redact_managed_secret(
-                str(outcome.get("error") or "invalid reviewer output")
-            )
+        if not outcome.succeeded or payload is None:
+            outcome_status = outcome.status.value
+            error_text = _redact_managed_secret(outcome.message or "invalid reviewer output")
             issue_code = (
                 DataIssueCode.AGENT_REVIEW_INVALID
-                if outcome_status == "finished"
+                if outcome.succeeded
                 else DataIssueCode.AGENT_REVIEW_UNAVAILABLE
             )
             review_issue = data_issue(
@@ -426,7 +470,7 @@ def _run_homepage_independent_reviews(
                     "model": review_model,
                     "modelFamily": review_model_family,
                     "outcomeStatus": outcome_status,
-                    "errorCode": str(outcome.get("errorCode") or ""),
+                    "errorCode": outcome.error_code,
                 },
             )
             failure_root = (
@@ -447,13 +491,13 @@ def _run_homepage_independent_reviews(
                     "modelFamily": review_model_family,
                     "status": outcome_status,
                     "issue": review_issue.as_dict(),
-                    "runId": str(outcome.get("runId") or ""),
-                    "agentId": str(outcome.get("agentId") or ""),
-                    "requestId": str(outcome.get("requestId") or ""),
-                    "durationMs": outcome.get("durationMs"),
-                    "errorCode": str(outcome.get("errorCode") or ""),
+                    "runId": outcome.run_id,
+                    "agentId": outcome.agent_id,
+                    "requestId": outcome.request_id,
+                    "durationMs": outcome.duration_ms,
+                    "errorCode": outcome.error_code,
                     "error": error_text,
-                    "result": _redact_managed_secret(str(outcome.get("result") or ""))[:4000],
+                    "result": _redact_managed_secret(outcome.result_text)[:4000],
                     "recordedAt": store.now_iso(),
                 },
             )
@@ -466,7 +510,7 @@ def _run_homepage_independent_reviews(
             provider="cursor_sdk",
             model=review_model,
             model_family=review_model_family,
-            run_id=str(outcome.get("runId") or ""),
+            run_id=outcome.run_id,
             result_payload=payload,
         )
         issues.extend(f"{name}: {item}" for item in bound)

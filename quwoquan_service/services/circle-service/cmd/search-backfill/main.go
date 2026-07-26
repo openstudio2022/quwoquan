@@ -28,8 +28,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
-	"quwoquan_service/services/circle-service/internal/infrastructure/searchindex"
+	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
+	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/searchindex"
 )
 
 func main() {

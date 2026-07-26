@@ -2,9 +2,9 @@
 """校验 prod-hosted 四平面访问隔离映射的单一真相源一致性（去 root · 取消远端 gamma）。
 
 真相源：
-  - quwoquan_ops/environments/prod_plane_access_isolation.yaml      （访问隔离层：平面->账号->凭据->路径->stage->workload）
-  - quwoquan_ops/environments/environment_topology_manifest.yaml    （运行时平面：prod.subnets edge/media/service/data）
-  - quwoquan_ops/environments/workload_topology_inventory.yaml      （workload 归属：planes application/edge-media）
+  - quwoquan_ops/environments/prod/access-isolation.yaml            （访问隔离层：平面->账号->凭据->路径->stage->workload）
+  - quwoquan_ops/environments/prod/runtime.yaml                      （prod 网络与目标事实）
+  - 服务和 external 的 prod deploy 入口                             （prod workload 与 plane 归属）
 
 校验项（保证单一解释、最小权限、与四环境一致）：
   1. schema / target=prod-hosted / rolloutStages=[gray-initial,carry-on,full]。
@@ -13,7 +13,7 @@
   4. 凭据：每平面 sshKeySecret 唯一且命名 PROD_<PLANE>_SSH_KEY；relay=PROD_OPS_SSH_KEY；禁止复用单一全权 secret。
   5. 读写平面：composeProjectRoot 非空 + governedWorkloads 非空；data 平面 read-only-audit、composeProjectRoot=null、
      governedWorkloads 空、appliesToStages 空。
-  6. governedWorkloads ⊆ workload_topology_inventory 的业务或外部 workload，且每个 workload 的 inventory plane == 本平面 workloadDeployPlane。
+  6. governedWorkloads ⊆ environment topology 的 prod workload，且 plane == 本平面 workloadDeployPlane。
   7. 退役断言：仓库不得在访问隔离层重新引入 PROD_KUBECONFIG 单一全权凭据或 gamma-hosted 远端目标。
 """
 from __future__ import annotations
@@ -29,9 +29,12 @@ except ImportError:  # pragma: no cover
     sys.exit(2)
 
 ROOT = Path(__file__).resolve().parents[2]
-ACCESS = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
-TOPOLOGY = ROOT / "quwoquan_ops/environments/environment_topology_manifest.yaml"
-INVENTORY = ROOT / "quwoquan_ops/environments/workload_topology_inventory.yaml"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
+
+ACCESS = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 CONTROL_PLANE = (
     ROOT / "quwoquan_service/contracts/metadata/_control_plane/platform/control_plane.yaml"
 )
@@ -48,14 +51,13 @@ def load_yaml(path: Path):
 
 
 def main() -> int:
-    for path in (ACCESS, TOPOLOGY, INVENTORY):
+    for path in (ACCESS,):
         if not path.exists():
             print(f"FAIL: 缺少 {path}", file=sys.stderr)
             return 1
 
     access = load_yaml(ACCESS)
-    topology = load_yaml(TOPOLOGY)
-    inventory = load_yaml(INVENTORY)
+    topology = load_environment_topology()
 
     # 1. 顶层契约
     if access.get("schema") != "prod-plane-access-isolation":
@@ -86,14 +88,11 @@ def main() -> int:
     if len(plane_names) != len(set(plane_names)):
         errors.append("planes 存在重复 plane 名")
 
-    # workload 归属表：name -> inventory plane。访问隔离既要约束业务服务，也要
-    # 约束 SFU/TURN 这类已接入 prod root 的外部基础能力；两者在 inventory 中
-    # 分栏是为了避免把 capability 当业务 domain，而不是为了从访问控制中遗漏它们。
-    inventory_workloads = [
-        *(inventory.get("workloads") or []),
-        *(inventory.get("external_workloads") or []),
-    ]
-    inv_plane_of = {w["name"]: w.get("plane") for w in inventory_workloads}
+    topology_workloads = prod_env.get("workloads") or []
+    topology_plane_of = {
+        str(workload.get("id")): str(workload.get("plane"))
+        for workload in topology_workloads
+    }
 
     seen_accounts: dict[str, str] = {}
     seen_secrets: dict[str, str] = {}
@@ -145,14 +144,14 @@ def main() -> int:
             if applies != EXPECTED_STAGES:
                 errors.append(f"{plane}: 读写平面 appliesToStages 必须为 {EXPECTED_STAGES}")
 
-        # 6. governedWorkloads ⊆ inventory，且 inventory plane == workloadDeployPlane
+        # 6. governedWorkloads only reference the sole prod topology.
         for w in governed:
-            if w not in inv_plane_of:
-                errors.append(f"{plane}: governedWorkload '{w}' 不在 workload_topology_inventory")
+            if w not in topology_plane_of:
+                errors.append(f"{plane}: governedWorkload '{w}' 不在 prod environment topology")
                 continue
-            if deploy_plane and inv_plane_of[w] != deploy_plane:
+            if deploy_plane and topology_plane_of[w] != deploy_plane:
                 errors.append(
-                    f"{plane}: workload '{w}' 的 inventory plane={inv_plane_of[w]} "
+                    f"{plane}: workload '{w}' 的 topology plane={topology_plane_of[w]} "
                     f"与 workloadDeployPlane={deploy_plane} 不一致"
                 )
 
@@ -167,6 +166,42 @@ def main() -> int:
                 )
             if ".." in Path(media_state_ref).parts:
                 errors.append("service: mediaStateRef 禁止路径穿越")
+            rootless_services = set(
+                p.get("rootlessGovernedComposeServices") or []
+            )
+            bindings = p.get("rootlessProjectionBindings") or []
+            binding_services = [
+                str(binding.get("composeService") or "")
+                for binding in bindings
+            ]
+            if set(binding_services) != rootless_services:
+                errors.append(
+                    "service: rootlessProjectionBindings 必须与 "
+                    "rootlessGovernedComposeServices 一一对应"
+                )
+            if len(binding_services) != len(set(binding_services)):
+                errors.append(
+                    "service: rootlessProjectionBindings 存在重复 composeService"
+                )
+            for binding in bindings:
+                compose_service = str(
+                    binding.get("composeService") or ""
+                )
+                owner_workload = str(
+                    binding.get("ownerWorkload") or ""
+                )
+                runtime_role = str(binding.get("runtimeRole") or "")
+                if owner_workload not in governed:
+                    errors.append(
+                        f"service: {compose_service} ownerWorkload "
+                        f"{owner_workload!r} 不在 governedWorkloads"
+                    )
+                    continue
+                if compose_service != owner_workload and not runtime_role:
+                    errors.append(
+                        f"service: {compose_service} 是 {owner_workload} "
+                        "的运行投影别名，必须声明 runtimeRole"
+                    )
 
     # 7. 退役断言：访问隔离层不得重新引入单一全权 kube 凭据或远端 gamma
     raw = ACCESS.read_text(encoding="utf-8")
@@ -194,7 +229,7 @@ def main() -> int:
         if proj is None:
             errors.append("control_plane.yaml 缺少 prod_plane_access_isolation 投影对象")
         else:
-            if proj.get("object_kind") != "snapshot":
+            if proj.get("view_kind") != "snapshot":
                 errors.append("prod_plane_access_isolation 投影必须为只读 snapshot")
             for op in proj.get("operations") or []:
                 if op.get("method") != "GET":
@@ -211,7 +246,7 @@ def main() -> int:
             print(f"  - {e}", file=sys.stderr)
         return 1
     print(
-        f"PASS: prod 四平面访问隔离映射（{len(planes)} planes，账号/凭据/路径/stage/workload 单一解释、与拓扑+inventory 一致）"
+        f"PASS: prod 四平面访问隔离映射（{len(planes)} planes，账号/凭据/路径/stage/workload 单一解释、与唯一环境拓扑一致）"
     )
     return 0
 

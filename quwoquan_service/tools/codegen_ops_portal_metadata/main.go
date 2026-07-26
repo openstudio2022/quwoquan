@@ -82,7 +82,7 @@ type controlDashboard struct {
 }
 
 type controlPlaneType struct {
-	ObjectKind        string             `yaml:"object_kind,omitempty" json:"object_kind,omitempty"`
+	ViewKind          string             `yaml:"view_kind,omitempty" json:"view_kind,omitempty"`
 	ObjectType        string             `yaml:"object_type" json:"object_type"`
 	Label             string             `yaml:"label" json:"label"`
 	SourceEntity      string             `yaml:"source_entity" json:"source_entity"`
@@ -141,7 +141,7 @@ type auditEvent struct {
 	RequiredFields []string `yaml:"required_fields" json:"required_fields"`
 }
 
-type configSchemaFile struct {
+type configFile struct {
 	Version int          `yaml:"version,omitempty" json:"version,omitempty"`
 	Configs []configItem `yaml:"configs" json:"configs"`
 }
@@ -156,6 +156,7 @@ type configItem struct {
 	Rollout    string      `yaml:"rollout" json:"rollout"`
 	RiskLevel  string      `yaml:"risk_level" json:"risk_level"`
 	UIEditable bool        `yaml:"ui_editable" json:"ui_editable"`
+	Sensitive  bool        `yaml:"sensitive" json:"sensitive"`
 }
 
 var compileContractSource = contractcodegen.NewSource
@@ -183,17 +184,6 @@ func main() {
 		"export * from './portalShell.generated.js';",
 		"export * from './portalMenu.generated.js';",
 	}
-	if source.Has(filepath.Join(controlPlaneRoot, "domain_onboarding_schema.yaml")) {
-		schema := readYAML[map[string]any](source, filepath.Join(controlPlaneRoot, "domain_onboarding_schema.yaml"))
-		writeTSModule(filepath.Join(outDir, "domainOnboardingSchema.generated.ts"), "domainOnboardingSchema", schema)
-		indexExports = append(indexExports, "export * from './domainOnboardingSchema.generated.js';")
-	}
-	if len(source.Paths(filepath.Join(controlPlaneRoot, "domains"), ".yaml")) > 0 {
-		domains := readOnboardingDomains(source, filepath.Join(controlPlaneRoot, "domains"))
-		writeTSModule(filepath.Join(outDir, "domainOnboardingDomains.generated.ts"), "domainOnboardingDomains", domains)
-		indexExports = append(indexExports, "export * from './domainOnboardingDomains.generated.js';")
-	}
-
 	for _, domain := range []string{"product", "platform"} {
 		baseDir := filepath.Join(controlPlaneRoot, domain)
 		if len(source.Paths(baseDir, ".yaml")) == 0 {
@@ -218,9 +208,13 @@ func main() {
 			indexExports = append(indexExports, fmt.Sprintf("export * from './%sAudit.generated.js';", domain))
 		}
 
-		if source.Has(filepath.Join(baseDir, "config_schema.yaml")) {
-			data := readYAML[configSchemaFile](source, filepath.Join(baseDir, "config_schema.yaml"))
-			writeTSModule(filepath.Join(outDir, fmt.Sprintf("%sConfig.generated.ts", domain)), domain+"ConfigSchema", data)
+		configPath := filepath.Join(baseDir, "config.yaml")
+		if domain == "platform" {
+			configPath = filepath.Join("platform", "config.yaml")
+		}
+		if source.Has(configPath) {
+			data := readYAML[configFile](source, configPath)
+			writeTSModule(filepath.Join(outDir, fmt.Sprintf("%sConfig.generated.ts", domain)), domain+"Config", data)
 			indexExports = append(indexExports, fmt.Sprintf("export * from './%sConfig.generated.js';", domain))
 		}
 	}
@@ -228,10 +222,10 @@ func main() {
 	sort.Strings(indexExports)
 	writeFile(filepath.Join(outDir, "index.ts"), strings.Join(indexExports, "\n")+"\n")
 
-	if source.Has("ops/event_record/event_catalog.yaml") && source.Has("_shared/app_pages.yaml") {
+	if source.Has("ops/product_ops/event_record/event_catalog.yaml") && source.Has("_shared/app_pages.yaml") {
 		telemetryOutDir := filepath.Join(portalDir, "src", "generated", "telemetry")
 		must(os.MkdirAll(telemetryOutDir, 0o755))
-		eventCatalog := readYAML[map[string]any](source, "ops/event_record/event_catalog.yaml")
+		eventCatalog := readYAML[map[string]any](source, "ops/product_ops/event_record/event_catalog.yaml")
 		appPages := readYAML[map[string]any](source, "_shared/app_pages.yaml")
 		writeTSModule(filepath.Join(telemetryOutDir, "eventCatalog.generated.ts"), "eventCatalog", eventCatalog)
 		writeTSModule(filepath.Join(telemetryOutDir, "appPages.generated.ts"), "appPages", appPages)
@@ -251,23 +245,6 @@ func readResolvedControlPlane(source *contractcodegen.Source, path string) map[s
 func readYAML[T any](source *contractcodegen.Source, path string) T {
 	var out T
 	must(source.Decode(path, &out))
-	return out
-}
-
-func readOnboardingDomains(
-	source *contractcodegen.Source,
-	dir string,
-) map[string]any {
-	out := map[string]any{}
-	for _, path := range source.Paths(dir, ".yaml") {
-		data := readYAML[map[string]any](source, path)
-		domain := fmt.Sprint(data["domain"])
-		if strings.TrimSpace(domain) == "" {
-			name := filepath.Base(path)
-			domain = strings.TrimSuffix(name, filepath.Ext(name))
-		}
-		out[domain] = data
-	}
 	return out
 }
 

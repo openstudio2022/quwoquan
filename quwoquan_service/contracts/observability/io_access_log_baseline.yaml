@@ -1,6 +1,6 @@
 name: io_access_log_baseline
-schema: 2
-description: Short access log schema; run/service context comes from path, collector labels or manifest.
+catalog: observability.slim
+description: Canonical access runtime log; resource and correlation are encoded in each record.
 enums:
   origin:
     - app.http
@@ -19,53 +19,35 @@ enums:
     - timeout
     - retry
 required_fields:
-  - ts
-  - level
+  - schema
+  - occurredAt
+  - observedAt
+  - logKind
+  - severity
+  - signal
+  - message
+  - resource
+  - method
   - route
   - status
-  - durMs
-  - msg
+  - durationMs
 optional_fields:
-  - method
-  - req
-  - trace
-  - err
-collector_context:
-  app_labels:
-    - platform
-    - appVersion
-    - sessionHash
-  service_labels:
-    - service
-    - instanceId
-  run_manifest:
-    - env
-    - runId
-    - releaseId
+  - recordId
+  - correlation
+  - errorCode
+  - attributes
+resource_fields:
+  required: [sourceType, service]
+  optional: [environment, component, appVersion, service.version]
 forbidden_fields:
-  - schema
-  - signal
-  - logKind
-  - env
-  - sourceType
-  - service
-  - component
-  - instanceId
-  - runId
+  - schemaVersion
+  - eventVersion
+  - contractVersion
   - releaseId
   - dataReleaseId
   - sessionId
-  - timestamp
-  - severity
-  - message
-  - requestId
-  - traceId
-  - spanId
   - headers
   - logType
-  - phase
-  - parentTraceId
-  - causationId
   - statusCode
 error_code_format: "MODULE.KIND.REASON"
 notes:

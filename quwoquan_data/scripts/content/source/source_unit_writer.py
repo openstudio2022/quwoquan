@@ -1,4 +1,4 @@
-"""来源单元 + 对象证据链统一读写（真相源：specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md）。
+"""来源单元 + 对象证据链统一读写（真相源：object-homepage-coverage-scaling/design.md）。
 
 替代「对象级散落 images/ + 实体目录承载来源」的旧布局。每个来源是一个自包含、
 稳定 ID、带类目与相关性说明的单元；实体/作品对象只保存 `1.download/source_refs.json`
@@ -29,6 +29,7 @@ from typing import Any, Mapping, Sequence
 from core.io import read_json, write_json
 from content.execution.runtime_contract import stage_execution_context
 from core import ops_governance as og
+from core.image_decode import probe_image_bytes
 from core.image_variants import build_local_variants, image_dimensions
 from core.paths import (
     STAGE_DOWNLOAD,
@@ -46,6 +47,27 @@ SOURCE_UNIT_ASSET_INDEX = "assets/index.json"
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 _UNIT_RE = re.compile(r"^(\d{2})\.(.+)$")
 OBJECT_SOURCE_REFS = "1.download/source_refs.json"
+
+
+def _is_representative_visual(
+    execution_id: str,
+    image: Mapping[str, Any],
+) -> bool:
+    if bool(image.get("isMapLike")):
+        return False
+    if str(image.get("placementType") or "") == "locatorMap":
+        return False
+    from content.execution.identity import parse_execution_id
+    from governance.content_supply_policy import load_content_supply_policy
+
+    vertical = parse_execution_id(execution_id).vertical
+    indicator = load_content_supply_policy(vertical).media_subject.prohibited_indicator(
+        image.get("caption"),
+        image.get("relevance"),
+        image.get("visualSubject"),
+        image.get("sourceUrl"),
+    )
+    return not indicator
 
 
 from content.source.source_unit import (
@@ -177,7 +199,12 @@ def write_source_unit(
     assets_dir = unit / "assets"
     # RC3：内联图占位 → 真实 sourceAssetId 的绑定表（仅就地同源下载成功的内联图入表）。
     placeholder_to_asset: dict[str, str] = {}
+    from content.execution.identity import parse_execution_id
+    from content.source.contracts import MediaProvenance
+
+    vertical = parse_execution_id(execution_id).vertical
     for k, img in enumerate(images or [], start=1):
+        provenance = MediaProvenance.from_mapping(img, vertical=vertical)
         ext = str(img.get("ext") or _ext_from_name(img.get("fileName") or img.get("url") or "") or ".jpg")
         slug = slugify(img.get("slug") or img.get("role") or source_id)
         base_name = f"{k:03d}_{slug}"
@@ -196,14 +223,17 @@ def write_source_unit(
             body = dest.read_bytes()
         else:
             continue
+        probe = probe_image_bytes(body or b"")
+        if not probe.succeeded:
+            raise ValueError(
+                f"source asset rejected by image decode boundary: {probe.failure.value}"
+            )
         sha = "sha256:" + hashlib.sha256(dest.read_bytes()).hexdigest()
         # 像素尺寸（清晰度门 + 变体源尺寸）。
         width = img.get("width")
         height = img.get("height")
         if (not width or not height) and body is not None:
-            dims = image_dimensions(body)
-            if dims:
-                width, height = dims
+            width, height = probe.width, probe.height
         variants_meta: list[dict[str, Any]] = []
         if build_variants:
             # 多变体格式化：按 IMAGE_VARIANT_PROFILES 物理压 webp（仅缩小），落同名 .variants/ 子目录。
@@ -238,6 +268,7 @@ def write_source_unit(
             "creator": str(img.get("creator") or img.get("credit") or ""),
             "collectionPageUrl": str(img.get("collectionPageUrl") or img.get("sourceUrl") or ""),
             "authorizationProof": str(img.get("authorizationProof") or ""),
+            **provenance.audit_fields(),
             "caption": str(img.get("caption") or ""),
             "relevance": str(img.get("relevance") or relevance or ""),
             "variants": variants_meta,
@@ -257,10 +288,10 @@ def write_source_unit(
             "pageRevisionId": int(img.get("pageRevisionId") or 0),
             "pageContentSha256": str(img.get("pageContentSha256") or ""),
             "renderedImageCount": int(img.get("renderedImageCount") or 0),
-            # 代表性实景图：非地图/定位图即可进入封面与配图选择池。
-            "isRepresentativeVisual": (
-                not bool(img.get("isMapLike"))
-                and str(img.get("placementType") or "") != "locatorMap"
+            # 代表性实景图同时受地图和垂类媒体主体规则约束。
+            "isRepresentativeVisual": _is_representative_visual(
+                execution_id,
+                img,
             ),
             # 视觉主体描述 = 原图注（仅原图注，无则空，禁止伪造）。
             "visualSubject": str(img.get("caption") or ""),
@@ -359,6 +390,11 @@ def write_source_unit(
         manifest["requestedTitle"] = requested_title
     if resolved_title:
         manifest["resolvedTitle"] = resolved_title
+    qualified_authority_title = str(
+        source_payload.get("qualifiedAuthorityTitle") or ""
+    ).strip()
+    if qualified_authority_title:
+        manifest["qualifiedAuthorityTitle"] = qualified_authority_title
     if isinstance(redirect_chain, list):
         manifest["redirectChain"] = [str(item) for item in redirect_chain if str(item).strip()]
     if layout is not None:

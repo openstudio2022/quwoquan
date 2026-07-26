@@ -20,7 +20,7 @@ void main() {
       expect(report, isA<Map<String, dynamic>>());
       final payload = report as Map<String, dynamic>;
       expect(payload['platform'], 'web');
-      expect(payload['motionSpecVersion'], 'petal_bloom_v2');
+      expect(payload['motionSpec'], 'petal_bloom');
       expect(payload['motionSpecCurrent'], isTrue);
       expect(payload['passed'], isTrue);
       expect(payload['runs'], greaterThanOrEqualTo(20));
@@ -45,7 +45,7 @@ void main() {
         expect(sample['overlayRemovedMs'] as num, lessThanOrEqualTo(6000));
         expect(sample['replayCount'] as num, lessThanOrEqualTo(2));
         expect(sample['exitReason'], isNotEmpty);
-        expect(sample['motionSpecVersion'], 'petal_bloom_v2');
+        expect(sample['motionSpec'], 'petal_bloom');
       }
     },
     skip: _reportPath.isEmpty

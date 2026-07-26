@@ -2,12 +2,15 @@
 
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show ReferralSource;
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_list_view_data.dart';
 import 'package:quwoquan_app/ui/circle/services/circle_stats_row_wire.dart';
@@ -98,10 +101,40 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     );
   }
 
+  // R20 页面曝光/停留：对象子页以 circleId 为主体走行为通道。
+  late final DateTime _pageEnteredAt;
+  ContentBehaviorTracker? _behaviorTracker;
+
   @override
   void initState() {
     super.initState();
+    _pageEnteredAt = DateTime.now();
     unawaited(_loadFromRepository());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _behaviorTracker = ref.read(contentBehaviorTrackerProvider);
+      _behaviorTracker!.trackImpression(
+        widget.circleId,
+        contentType: 'circle_stats_page',
+        tags: <String>[_type],
+        referralSource: ReferralSource.circlePost,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _behaviorTracker?.trackDwell(
+      widget.circleId,
+      durationSeconds:
+          DateTime.now().difference(_pageEnteredAt).inMilliseconds / 1000.0,
+      contentType: 'circle_stats_page',
+      tags: <String>[_type],
+      referralSource: ReferralSource.circlePost,
+    );
+    super.dispose();
   }
 
   Future<void> _loadFromRepository() async {
@@ -315,15 +348,11 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
               onPressed: () {},
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: AppSpacing.lg,
-                    backgroundImage: avatar.isNotEmpty
-                        ? NetworkImage(avatar)
-                        : null,
-                    onBackgroundImageError: (_, __) {},
-                    child: avatar.isEmpty
-                        ? Icon(CupertinoIcons.person, color: fgSecondary)
-                        : null,
+                  AppCircularAvatar(
+                    imageUrl: avatar,
+                    size: AppSpacing.lg * 2,
+                    backgroundColor: AppColors.iosFill(context),
+                    fallback: Icon(CupertinoIcons.person, color: fgSecondary),
                   ),
                   SizedBox(width: AppSpacing.largeBorderRadius),
                   Expanded(
@@ -530,15 +559,11 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: AppSpacing.lg,
-                    backgroundImage: userAvatar.isNotEmpty
-                        ? NetworkImage(userAvatar)
-                        : null,
-                    onBackgroundImageError: (_, __) {},
-                    child: userAvatar.isEmpty
-                        ? Icon(CupertinoIcons.person, color: fgSecondary)
-                        : null,
+                  AppCircularAvatar(
+                    imageUrl: userAvatar,
+                    size: AppSpacing.lg * 2,
+                    backgroundColor: AppColors.iosFill(context),
+                    fallback: Icon(CupertinoIcons.person, color: fgSecondary),
                   ),
                   SizedBox(width: AppSpacing.largeBorderRadius),
                   Expanded(

@@ -10,7 +10,7 @@
 //
 //	go run ./services/user-service/cmd/seed \
 //	  --pg-dsn 'postgres://quwoquan:quwoquan@localhost:19400/quwoquan?sslmode=disable' \
-//	  --fixture user/test_fixtures/scenarios/user_scenarios.gamma-curated.json \
+//	  --fixture quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.gamma-curated.json \
 //	  --refs user_profile_core
 package main
 
@@ -25,7 +25,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/runtime/contractfixture"
-	model "quwoquan_service/services/user-service/internal/domain/user/model"
+	model "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 )
 
 type userFixturePack struct {
@@ -151,13 +151,13 @@ func main() {
 	)
 	fixtureRel := flag.String(
 		"fixture",
-		"user/test_fixtures/scenarios/user_scenarios.gamma-curated.json",
+		"quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.gamma-curated.json",
 		"metadata-relative user fixture path",
 	)
 	refsCSV := flag.String("refs", "user_profile_core", "comma-separated seed set refs")
 	flag.Parse()
 
-	pack, err := contractfixture.LoadMetadataJSON[userFixturePack](*fixtureRel)
+	pack, err := contractfixture.LoadRepositoryJSON[userFixturePack](*fixtureRel)
 	if err != nil {
 		log.Fatalf("load user fixture %s: %v", *fixtureRel, err)
 	}

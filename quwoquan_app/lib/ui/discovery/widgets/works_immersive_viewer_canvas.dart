@@ -96,16 +96,26 @@ class _WorksPrimaryTopBar extends StatelessWidget {
 /// 点击视频区域切换播放/暂停。
 class _WorksVideoCanvas extends StatefulWidget {
   const _WorksVideoCanvas({
+    super.key,
     required this.post,
     required this.items,
+    required this.initialEpisodeIndex,
+    required this.isVisible,
     required this.onEpisodeChanged,
     required this.onActiveSessionChanged,
   });
 
   final PostBaseDto post;
   final List<_WorksVideoDeliveryItem> items;
-  final ValueChanged<int> onEpisodeChanged;
-  final void Function(int episodeIndex, VideoPlaybackSession? session)
+  final int initialEpisodeIndex;
+  final bool isVisible;
+  final void Function(int episodeIndex, String episodeIdentity)
+  onEpisodeChanged;
+  final void Function(
+    int episodeIndex,
+    String episodeIdentity,
+    VideoPlaybackSession? session,
+  )
   onActiveSessionChanged;
 
   @override
@@ -114,31 +124,163 @@ class _WorksVideoCanvas extends StatefulWidget {
 
 class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   late final PageController _episodeController;
-  int _currentEpisodeIndex = 0;
+  late int _currentEpisodeIndex;
   bool _episodePlaybackSettled = true;
   Timer? _episodeSettleTimer;
-  final Map<int, VideoPlaybackSession> _sessionsByIndex =
-      <int, VideoPlaybackSession>{};
+  final Map<String, VideoPlaybackSession> _sessionsByIdentity =
+      <String, VideoPlaybackSession>{};
 
   @override
   void initState() {
     super.initState();
-    _episodeController = PageController();
+    _currentEpisodeIndex = _safeEpisodeIndex(widget.initialEpisodeIndex);
+    _episodeController = PageController(initialPage: _currentEpisodeIndex);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onEpisodeChanged(0);
+      final identity = _currentEpisodeIdentity;
+      if (mounted && widget.isVisible && identity != null) {
+        widget.onEpisodeChanged(_currentEpisodeIndex, identity);
+        widget.onActiveSessionChanged(
+          _currentEpisodeIndex,
+          identity,
+          _sessionsByIdentity[identity],
+        );
+      }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant _WorksVideoCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final episodeReconciled = _reconcileEpisodes(oldWidget);
+    if (episodeReconciled && widget.isVisible && oldWidget.isVisible) {
+      final identity = _currentEpisodeIdentity;
+      if (identity != null) {
+        widget.onEpisodeChanged(_currentEpisodeIndex, identity);
+        widget.onActiveSessionChanged(
+          _currentEpisodeIndex,
+          identity,
+          _sessionsByIdentity[identity],
+        );
+      }
+    }
+    if (oldWidget.isVisible == widget.isVisible) {
+      if (widget.isVisible && !episodeReconciled) {
+        final identity = _currentEpisodeIdentity;
+        if (identity != null) {
+          // 父级 viewport epoch 失效后可能保留同一个视频 child；即使分集与
+          // 可见性未变，也要把同源 session 重新绑定到新的父级回调。
+          widget.onEpisodeChanged(_currentEpisodeIndex, identity);
+          widget.onActiveSessionChanged(
+            _currentEpisodeIndex,
+            identity,
+            _sessionsByIdentity[identity],
+          );
+        }
+      }
+      return;
+    }
+    if (widget.isVisible) {
+      final identity = _currentEpisodeIdentity;
+      if (identity == null) {
+        return;
+      }
+      widget.onEpisodeChanged(_currentEpisodeIndex, identity);
+      widget.onActiveSessionChanged(
+        _currentEpisodeIndex,
+        identity,
+        _sessionsByIdentity[identity],
+      );
+      return;
+    }
+    final identity = _currentEpisodeIdentity;
+    if (identity != null) {
+      widget.onActiveSessionChanged(_currentEpisodeIndex, identity, null);
+    }
   }
 
   @override
   void dispose() {
     _episodeSettleTimer?.cancel();
-    for (final session in _sessionsByIndex.values) {
+    final identity = _currentEpisodeIdentity;
+    if (identity != null) {
+      widget.onActiveSessionChanged(_currentEpisodeIndex, identity, null);
+    }
+    for (final session in _sessionsByIdentity.values) {
       session.dispose();
     }
-    _sessionsByIndex.clear();
-    widget.onActiveSessionChanged(_currentEpisodeIndex, null);
+    _sessionsByIdentity.clear();
     _episodeController.dispose();
     super.dispose();
+  }
+
+  int _safeEpisodeIndex(int index) {
+    if (widget.items.isEmpty) {
+      return 0;
+    }
+    return index.clamp(0, widget.items.length - 1);
+  }
+
+  String? get _currentEpisodeIdentity {
+    if (_currentEpisodeIndex < 0 ||
+        _currentEpisodeIndex >= widget.items.length) {
+      return null;
+    }
+    return widget.items[_currentEpisodeIndex].identity;
+  }
+
+  bool _reconcileEpisodes(_WorksVideoCanvas oldWidget) {
+    final validIdentities = widget.items.map((item) => item.identity).toSet();
+    final removedIdentities = _sessionsByIdentity.keys
+        .where((identity) => !validIdentities.contains(identity))
+        .toList(growable: false);
+    final removedSessions = <VideoPlaybackSession>[];
+    for (final identity in removedIdentities) {
+      final session = _sessionsByIdentity.remove(identity);
+      if (session != null) {
+        removedSessions.add(session);
+      }
+    }
+    if (removedSessions.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // 旧 VideoPlayerWidget 必须先完成 detach；在父 didUpdateWidget 中同步
+        // dispose session 会让仍挂载的子节点命中 disposed ChangeNotifier。
+        for (final session in removedSessions) {
+          session.dispose();
+        }
+      });
+    }
+    if (widget.items.isEmpty) {
+      final changed = _currentEpisodeIndex != 0;
+      _currentEpisodeIndex = 0;
+      return changed;
+    }
+    final previousIdentity =
+        _currentEpisodeIndex >= 0 &&
+            _currentEpisodeIndex < oldWidget.items.length
+        ? oldWidget.items[_currentEpisodeIndex].identity
+        : null;
+    final preservedIndex = previousIdentity == null
+        ? -1
+        : widget.items.indexWhere((item) => item.identity == previousIdentity);
+    final nextIndex = preservedIndex >= 0
+        ? preservedIndex
+        : _safeEpisodeIndex(widget.initialEpisodeIndex);
+    final nextIdentity = widget.items[nextIndex].identity;
+    final identityChanged = previousIdentity != nextIdentity;
+    if (nextIndex == _currentEpisodeIndex && !identityChanged) {
+      return false;
+    }
+    final indexChanged = nextIndex != _currentEpisodeIndex;
+    _currentEpisodeIndex = nextIndex;
+    if (indexChanged) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_episodeController.hasClients) {
+          return;
+        }
+        _episodeController.jumpToPage(_currentEpisodeIndex);
+      });
+    }
+    return true;
   }
 
   bool _handleEpisodeScrollNotification(ScrollNotification notification) {
@@ -164,19 +306,23 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
     });
   }
 
-  VideoPlaybackSession _sessionFor(int index) {
-    return _sessionsByIndex.putIfAbsent(index, VideoPlaybackSession.new);
+  VideoPlaybackSession _sessionFor(String identity) {
+    return _sessionsByIdentity.putIfAbsent(identity, VideoPlaybackSession.new);
   }
 
-  void _registerSession(int index, VideoPlaybackSession session) {
-    _sessionsByIndex[index] = session;
-    if (index == _currentEpisodeIndex) {
-      widget.onActiveSessionChanged(index, session);
+  void _registerSession(
+    int index,
+    String identity,
+    VideoPlaybackSession session,
+  ) {
+    _sessionsByIdentity[identity] = session;
+    if (widget.isVisible && index == _currentEpisodeIndex) {
+      widget.onActiveSessionChanged(index, identity, session);
     }
   }
 
-  void _togglePlayback(int index) {
-    unawaited(_sessionFor(index).toggle());
+  void _togglePlayback(String identity) {
+    unawaited(_sessionFor(identity).toggle());
   }
 
   @override
@@ -196,44 +342,71 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
             allowImplicitScrolling: false,
             itemCount: items.length,
             onPageChanged: (index) {
+              final identity = items[index].identity;
               setState(() {
                 _currentEpisodeIndex = index;
                 _episodePlaybackSettled = false;
               });
               _scheduleEpisodePlaybackSettle();
-              widget.onEpisodeChanged(index);
-              widget.onActiveSessionChanged(index, _sessionsByIndex[index]);
+              if (widget.isVisible) {
+                widget.onEpisodeChanged(index, identity);
+                widget.onActiveSessionChanged(
+                  index,
+                  identity,
+                  _sessionsByIdentity[identity],
+                );
+              }
             },
             itemBuilder: (context, index) {
               final item = items[index];
+              final identity = item.identity;
               final isCurrent = index == _currentEpisodeIndex;
-              final keepAlive = isCurrent;
-              final session = _sessionFor(index);
-              return _KeepAliveStage(
+              final keepAlive = widget.isVisible && isCurrent;
+              final session = _sessionFor(identity);
+              return KeyedSubtree(
                 key: ValueKey<String>(
                   'works-video-stage-${widget.post.id}-$index',
                 ),
-                keepAlive: keepAlive,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    VideoPlayerWidget(
-                      key: ValueKey<String>(
-                        'works-video-${widget.post.id}-$index',
+                child: _KeepAliveStage(
+                  key: ValueKey<String>(
+                    'works-video-stage-identity-${widget.post.id}-$identity',
+                  ),
+                  keepAlive: keepAlive,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      KeyedSubtree(
+                        key: ValueKey<String>(
+                          'works-video-${widget.post.id}-$index',
+                        ),
+                        child: VideoPlayerWidget(
+                          key: ValueKey<String>(
+                            'works-video-identity-${widget.post.id}-$identity',
+                          ),
+                          deliveryReference: item.deliveryReference,
+                          thumbnailReference: item.coverReference,
+                          initialize: widget.isVisible && isCurrent,
+                          autoPlay:
+                              widget.isVisible &&
+                              isCurrent &&
+                              _episodePlaybackSettled,
+                          showControls: false,
+                          verifiedDuration: item.verifiedDuration,
+                          onTap: widget.isVisible
+                              ? () => _togglePlayback(identity)
+                              : null,
+                          playbackSession: session,
+                          onPlaybackSessionCreated: (registeredSession) =>
+                              _registerSession(
+                                index,
+                                identity,
+                                registeredSession,
+                              ),
+                        ),
                       ),
-                      deliveryReference: item.deliveryReference,
-                      thumbnailReference: item.coverReference,
-                      initialize: isCurrent,
-                      autoPlay: isCurrent && _episodePlaybackSettled,
-                      showControls: false,
-                      verifiedDuration: item.verifiedDuration,
-                      onTap: () => _togglePlayback(index),
-                      playbackSession: session,
-                      onPlaybackSessionCreated: (registeredSession) =>
-                          _registerSession(index, registeredSession),
-                    ),
-                    _WorksPausedPlaybackOverlay(session: session),
-                  ],
+                      _WorksPausedPlaybackOverlay(session: session),
+                    ],
+                  ),
                 ),
               );
             },
@@ -282,23 +455,9 @@ class _WorksPausedPlaybackOverlay extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             opacity: show ? 1 : 0,
             child: Center(
-              child: Container(
-                key: const ValueKey<String>('works-video-paused-play-overlay'),
-                width: AppSpacing.videoPlayOverlaySize,
-                height: AppSpacing.videoPlayOverlaySize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.black.withValues(alpha: 0.20),
-                  border: Border.all(
-                    color: AppColors.white.withValues(alpha: 0.38),
-                    width: AppSpacing.hairline,
-                  ),
-                ),
-                child: Icon(
-                  CupertinoIcons.play_fill,
-                  color: AppColors.white.withValues(alpha: 0.94),
-                  size: AppSpacing.videoPlayOverlayIconSize,
-                ),
+              child: const KeyedSubtree(
+                key: ValueKey<String>('works-video-paused-play-overlay'),
+                child: VideoPlaybackCenterPlayGlyph(),
               ),
             ),
           );
@@ -599,9 +758,13 @@ class _WorksVideoDeliveryItem {
     required this.deliveryReference,
     this.coverReference,
     this.verifiedDuration,
+    this.previewTrackDescriptor,
   });
 
   final MediaDeliveryReference deliveryReference;
   final MediaDeliveryReference? coverReference;
   final Duration? verifiedDuration;
+  final VideoPreviewTrackDescriptor? previewTrackDescriptor;
+
+  String get identity => deliveryReference.cacheIdentity;
 }

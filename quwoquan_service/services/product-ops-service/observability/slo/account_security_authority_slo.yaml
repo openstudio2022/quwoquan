@@ -1,0 +1,36 @@
+version: 1
+service: product-ops-service
+domain: ops
+capability: account-security-authority
+
+# 同步账户安全校验只以固定 outcome/check 枚举聚合；绝不将 account、persona、
+# token、authorization 或请求路径写入指标或日志标签。
+metrics:
+  authority_checks_total: runtime_auth_account_security_authority_checks_total # labels: outcome
+  authority_check_duration_seconds: runtime_auth_account_security_authority_check_duration_seconds # labels: outcome
+  readiness_status: runtime_health_check_status # labels: check
+  readiness_duration_seconds: runtime_health_check_duration_seconds # labels: check
+
+privacy:
+  permitted_labels: [outcome, check]
+  prohibited_labels: [account_id, persona_id, token, authorization, request_path]
+
+slis:
+  - id: account_security_authority_latency
+    description: 已验签终端用户 JWT 的同步权威读取延迟。
+    sli: histogram_quantile(0.95, sum(rate(runtime_auth_account_security_authority_check_duration_seconds_bucket[5m])) by (le))
+    objective:
+      p95_ms: 150
+      timeout_ms: 300
+  - id: account_security_authority_availability
+    description: authority 不可用时必须拒绝终端用户请求，禁止缓存回退。
+    sli: 1 - sum(rate(runtime_auth_account_security_authority_checks_total{outcome="unavailable"}[5m])) / sum(rate(runtime_auth_account_security_authority_checks_total[5m]))
+    objective: 0.999
+  - id: account_security_authority_readiness
+    description: scoped authority health 失败会使 /healthz 返回 503。
+    sli: runtime_health_check_status{check="account-security-authority"}
+    objective: 1
+
+failure_semantics:
+  authority_unavailable: deny_end_user_request
+  readiness_failure: remove_instance_from_ready_pool

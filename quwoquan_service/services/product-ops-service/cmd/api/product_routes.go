@@ -1,12 +1,20 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
+	"quwoquan_service/generated/operationsecurity"
 	"quwoquan_service/runtime/health"
 	rtmetrics "quwoquan_service/runtime/metrics"
+	appreleasehttp "quwoquan_service/services/product-ops-service/internal/product_ops/app_release/adapters/inbound/http"
+	recoveryfailurehttp "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/adapters/inbound/http"
+	experimentassignmenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/adapters/inbound/http"
+	visithttp "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/adapters/inbound/http"
 )
+
+const getRtcMediaQoeSummaryOperationID = "ops.event_record.GetRtcMediaQoeSummary"
 
 func newServerMux(service *productService, healthChecker *health.Checker) *http.ServeMux {
 	mux := http.NewServeMux()
@@ -15,26 +23,40 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 	mux.HandleFunc("/ops/experiments/", func(w http.ResponseWriter, r *http.Request) {
 		service.experimentHTTP.ServeHTTP(w, r)
 	})
-	mux.HandleFunc("/ops/visits", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleRecordVisit(w, r)
+	experimentassignmenthttp.Register(mux, service.experimentHTTP)
+	visithttp.Register(mux, visithttp.Handlers{
+		Record: service.handleRecordVisit, Stats: service.handleGetVisitStats,
+		NotFound: writeRuntimeNotFound,
 	})
-	mux.HandleFunc("/ops/visits/stats", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleGetVisitStats(w, r)
-	})
+	appreleasehttp.NewHandler(service.appRelease).Register(mux)
+	recoveryfailurehttp.NewHandler(service.recoveryFailures, writeRuntimeError).Register(mux)
 	mux.HandleFunc("/ops/events", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleReportEventBatch(w, r)
+	})
+	mux.HandleFunc("/ops/runtime-logs", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleReportRuntimeLogBatch(w, r)
+	})
+	mux.HandleFunc("/ops/runtime-logs/summary", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleGetRuntimeLogSummary(w, r)
+	})
+	mux.HandleFunc("/ops/runtime-logs/drilldown", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleGetRuntimeLogDrilldown(w, r)
 	})
 	mux.HandleFunc("/ops/startup-events", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -43,12 +65,29 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 		}
 		service.handleReportStartupEventBatch(w, r)
 	})
+	mux.HandleFunc("/ops/internal/runtime-logs:ingest", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleInternalRuntimeLogIngest(w, r)
+	})
 	mux.HandleFunc("/ops/events/summary", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleGetEventSummary(w, r)
+	})
+	rtcMediaQoeMethod, rtcMediaQoePath := mustOpsOperationRoute(
+		getRtcMediaQoeSummaryOperationID,
+	)
+	mux.HandleFunc(rtcMediaQoePath, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != rtcMediaQoeMethod {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleGetRtcMediaQoeSummary(w, r)
 	})
 	mux.HandleFunc("/ops/events/drilldown", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -62,76 +101,6 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 	})
 	mux.HandleFunc("/control-plane/product/experiments/", func(w http.ResponseWriter, r *http.Request) {
 		service.experimentHTTP.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/product/moderation/cases", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListModerationCases(w, r)
-	})
-	mux.HandleFunc("/control-plane/product/moderation/cases/", func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet:
-			service.handleGetModerationCase(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":startReview"):
-			service.handleStartModerationReview(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":applyAction"):
-			service.handleApplyEnforcementAction(w, r)
-		default:
-			writeRuntimeNotFound(w, r)
-		}
-	})
-	mux.HandleFunc("/control-plane/product/recovery/cases", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListRecoveryCases(w, r)
-	})
-	mux.HandleFunc("/control-plane/product/recovery/cases/", func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet:
-			service.handleGetRecoveryCase(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":submitDecision"):
-			service.handleSubmitRecoveryDecision(w, r)
-		default:
-			writeRuntimeNotFound(w, r)
-		}
-	})
-	mux.HandleFunc("/control-plane/product/appeal/cases", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListAppealCases(w, r)
-	})
-	mux.HandleFunc("/control-plane/product/appeal/cases/", func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet:
-			service.handleGetAppealCase(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":submitDecision"):
-			service.handleSubmitAppealDecision(w, r)
-		default:
-			writeRuntimeNotFound(w, r)
-		}
-	})
-	mux.HandleFunc("/control-plane/product/recommendation/policies", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListRecommendationPolicies(w, r)
-	})
-	mux.HandleFunc("/control-plane/product/recommendation/policies/", func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":simulate"):
-			service.handleSimulateRecommendationPolicy(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":activate"):
-			service.handleActivateRecommendationPolicy(w, r)
-		default:
-			writeRuntimeNotFound(w, r)
-		}
 	})
 	mux.HandleFunc("/control-plane/product/recommendation/premium-pool", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -207,5 +176,35 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 		}
 		writeJSON(w, http.StatusOK, payload)
 	})
+	mux.HandleFunc("/control-plane/product/metrics/red-routes", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleGetServiceRouteRED(w, r)
+	})
+	mux.HandleFunc("/control-plane/product/growth/overview", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleGetGrowthOverview(w, r)
+	})
+	mux.HandleFunc("/control-plane/product/experience/pages", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleGetPageExperience(w, r)
+	})
 	return mux
+}
+
+func mustOpsOperationRoute(canonicalOperationID string) (method string, path string) {
+	for _, descriptor := range operationsecurity.ForDomain("ops") {
+		if descriptor.CanonicalOperationID == canonicalOperationID {
+			return descriptor.Method, descriptor.PathTemplate
+		}
+	}
+	panic(fmt.Sprintf("missing generated operation descriptor: %s", canonicalOperationID))
 }

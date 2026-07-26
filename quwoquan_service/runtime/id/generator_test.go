@@ -11,6 +11,7 @@ func TestGenerateAndValidateDefaultPrefixes(t *testing.T) {
 	prefixes := []Prefix{
 		PrefixAssistantConversation,
 		PrefixAssistantTurn,
+		PrefixAssistantPreferenceFact,
 		PrefixSkillSubscription,
 		PrefixDeviceContext,
 		PrefixToolUse,

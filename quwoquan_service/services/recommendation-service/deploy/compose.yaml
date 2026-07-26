@@ -1,0 +1,48 @@
+# 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
+services:
+  recommendation-service:
+    # 服务名、镜像名和 prod K8s Service 统一为 recommendation-service。
+    image: "${QWQ_COMPOSE_RECOMMENDATION_SERVICE_IMAGE:-localhost/quwoquan_service_recommendation-service:latest}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/recommendation-service/build/Dockerfile
+      args:
+        PYTHON_BASE_IMAGE: "${QWQ_COMPOSE_PYTHON_BASE_IMAGE:-python:3.11}"
+        PIP_INDEX_URL: "${QWQ_COMPOSE_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+        PIP_TRUSTED_HOST: "${QWQ_COMPOSE_PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}"
+    environment:
+      SERVICE_NAME: recommendation-service
+      APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
+      CONFIG_ROOT: /etc/qwq-config
+      MONGODB_URI: "${QWQ_COMPOSE_MONGODB_URI:-mongodb://mongodb:27017/?directConnection=true}"
+      MONGODB_DATABASE: quwoquan_content
+      CONFIG_VERSION: "${QWQ_COMPOSE_RECOMMENDATION_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_RECOMMENDATION_SERVICE_CONFIG_VERSION is required}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      PYTHONUNBUFFERED: "1"
+      MODEL_CACHE_DIR: /app/cache
+      REC_MODEL_UVICORN_WORKERS: "${QWQ_COMPOSE_REC_MODEL_WORKERS:-2}"
+      REC_MODEL_SCORE_CACHE_TTL_MS: "${QWQ_COMPOSE_REC_MODEL_SCORE_CACHE_TTL_MS:-500}"
+      REC_MODEL_SCORE_CACHE_MAX_ENTRIES: "${QWQ_COMPOSE_REC_MODEL_SCORE_CACHE_MAX_ENTRIES:-4096}"
+      REC_MODEL_MICROBATCH_WINDOW_MS: "${QWQ_COMPOSE_REC_MODEL_MICROBATCH_WINDOW_MS:-2}"
+      REC_MODEL_FEATURE_BUDGET_MS: "${QWQ_COMPOSE_REC_MODEL_FEATURE_BUDGET_MS:-20}"
+      REC_MODEL_MODEL_BUDGET_MS: "${QWQ_COMPOSE_REC_MODEL_MODEL_BUDGET_MS:-80}"
+      REC_MODEL_RETRY_BUDGET_MS: "${QWQ_COMPOSE_REC_MODEL_RETRY_BUDGET_MS:-15}"
+      REC_MODEL_GUARDRAIL_MODE: suggest_only
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+    ports:
+      - "${QWQ_COMPOSE_REC_MODEL_PORT:-19240}:8000"
+    volumes:
+      - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - recommendation-model-cache:/app/cache
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
+      retries: 5
+
+volumes:
+  recommendation-model-cache:

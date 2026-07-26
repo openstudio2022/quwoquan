@@ -1,51 +1,20 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
-import 'package:quwoquan_app/cloud/rtc/rtc_signaling_client.dart';
-import 'package:quwoquan_app/cloud/rtc/rtc_signaling_wire.dart';
-import 'package:quwoquan_app/cloud/rtc/rtc_signaling_wire_frame.dart';
+import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
 
 void main() {
-  group('decodeRtcSignalingJsonMessage', () {
-    test('String 帧解析为 Map', () {
-      final m = decodeRtcSignalingJsonMessage(
-        RtcSignalingWireFrame.fromChannelData(
-          '{"type":"call.ringing","callId":"c1","payload":{}}',
-        ),
-      );
-      expect(m, isNotNull);
-      expect(m!['type'], equals('call.ringing'));
+  group('isRtcSignalWireType', () {
+    test('rtc 通话 wire 命名空间被识别并分发给事件总线', () {
+      expect(isRtcSignalWireType('call.ringing'), isTrue);
+      expect(isRtcSignalWireType('call.ended'), isTrue);
+      expect(isRtcSignalWireType('participant.joined'), isTrue);
+      expect(isRtcSignalWireType('screen_share.started'), isTrue);
     });
 
-    test('UTF-8 bytes 帧解析为 Map', () {
-      final bytes = utf8.encode('{"type":"pong"}');
-      final m = decodeRtcSignalingJsonMessage(
-        RtcSignalingWireFrame.fromChannelData(bytes),
-      );
-      expect(m, isNotNull);
-      expect(m!['type'], equals('pong'));
-    });
-
-    test('非 JSON / 非 Map 返回 null', () {
-      expect(
-        decodeRtcSignalingJsonMessage(
-          RtcSignalingWireFrame.fromChannelData(42),
-        ),
-        isNull,
-      );
-      expect(
-        decodeRtcSignalingJsonMessage(
-          RtcSignalingWireFrame.fromChannelData('"just a string"'),
-        ),
-        isNull,
-      );
-      expect(
-        decodeRtcSignalingJsonMessage(
-          RtcSignalingWireFrame.fromChannelData('{broken'),
-        ),
-        isNull,
-      );
+    test('chat 与推荐事件不属于 rtc 命名空间', () {
+      expect(isRtcSignalWireType('MessageSent'), isFalse);
+      expect(isRtcSignalWireType('ConversationRosterUpdated'), isFalse);
+      expect(isRtcSignalWireType('feed.patch'), isFalse);
     });
   });
 
@@ -99,6 +68,21 @@ void main() {
         'callId': 'c',
       });
       expect(e2.payload, isA<RtcWsUnknownPayload>());
+    });
+  });
+
+  group('RtcSignalEventBus', () {
+    test('emit 后按 payload 类型过滤的流收到事件', () async {
+      final bus = RtcSignalEventBus();
+      addTearDown(bus.dispose);
+
+      final ringing = bus.incomingCalls.first;
+      bus.emit(<String, dynamic>{
+        'type': 'call.ringing',
+        'callId': 'c-bus',
+        'payload': <String, dynamic>{'callType': 'audio'},
+      });
+      expect((await ringing).callId, equals('c-bus'));
     });
   });
 }

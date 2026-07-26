@@ -7,7 +7,7 @@
 //
 //	go run ./services/circle-service/cmd/seed \
 //	  --mongo-uri mongodb://localhost:19410 --database quwoquan_circle \
-//	  --fixture social/circle/test_fixtures/scenarios/circle_scenarios.gamma-curated.json \
+//	  --fixture quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.gamma-curated.json \
 //	  --refs circle_core,circle_group_chat_link_core
 package main
 
@@ -24,10 +24,10 @@ import (
 
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	"quwoquan_service/runtime/contractfixture"
-	filemodel "quwoquan_service/services/circle-service/internal/domain/circle/circle_file/model"
-	groupmodel "quwoquan_service/services/circle-service/internal/domain/circle/circle_group/model"
-	membershipmodel "quwoquan_service/services/circle-service/internal/domain/circle/circle_membership/model"
-	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
+	model "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
+	seedfixture "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/seedfixture"
+	groupmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_group/domain/model"
+	membershipmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/domain/model"
 )
 
 type circleFixturePack struct {
@@ -94,22 +94,7 @@ type circleFixtureMember struct {
 	Contribution int64  `json:"contribution"`
 }
 
-type circleFixtureFile struct {
-	ID                string `json:"id"`
-	Version           int64  `json:"version"`
-	CircleID          string `json:"circleId"`
-	GroupID           string `json:"groupId"`
-	ParentFolderID    string `json:"parentFolderId"`
-	Name              string `json:"name"`
-	FileType          string `json:"fileType"`
-	AssetID           string `json:"assetId"`
-	MimeType          string `json:"mimeType"`
-	SizeBytes         int64  `json:"sizeBytes"`
-	UploaderPersonaID string `json:"uploaderPersonaId"`
-	Status            string `json:"status"`
-	CreatedAt         string `json:"createdAt"`
-	UpdatedAt         string `json:"updatedAt"`
-}
+type circleFixtureFile = seedfixture.CircleFile
 
 type contentFixturePack struct {
 	SeedSets map[string]contentFixtureSeedSet `json:"seedSets"`
@@ -119,20 +104,7 @@ type contentFixtureSeedSet struct {
 	Posts []contentFixturePost `json:"posts"`
 }
 
-type contentFixturePost struct {
-	ID          string   `json:"id"`
-	PostID      string   `json:"postId"`
-	Title       string   `json:"title"`
-	Summary     string   `json:"summary"`
-	ContentType string   `json:"contentType"`
-	CoverURL    string   `json:"coverUrl"`
-	CircleID    string   `json:"circleId"`
-	CircleIDs   []string `json:"circleIds"`
-	LikeCount   int64    `json:"likeCount"`
-	CreatedAt   string   `json:"createdAt"`
-	UpdatedAt   string   `json:"updatedAt"`
-	PublishedAt string   `json:"publishedAt"`
-}
+type contentFixturePost = seedfixture.ContentPost
 
 func parseFixtureTime(value string) time.Time {
 	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
@@ -173,9 +145,9 @@ func circleFromFixture(fc circleFixtureCircle) *model.Circle {
 		AutoSyncChat:             fc.AutoSyncChat,
 		SectionConfig: []model.CircleSectionConfig{
 			{SectionType: model.CircleSectionTypeWorks, Visible: true, Order: 0},
-			{SectionType: model.CircleSectionTypeChat, Visible: true, Order: 1},
-			{SectionType: model.CircleSectionTypeStorage, Visible: true, Order: 2},
-			{SectionType: model.CircleSectionTypeInteraction, Visible: true, Order: 3},
+			{SectionType: model.CircleSectionTypeMembers, Visible: true, Order: 1},
+			{SectionType: model.CircleSectionTypeChat, Visible: true, Order: 2},
+			{SectionType: model.CircleSectionTypeStorage, Visible: true, Order: 3},
 		},
 		StorageQuotaBytes: 1024 * 1024 * 1024,
 		DomainID:          fc.DomainID,
@@ -222,25 +194,6 @@ func circleGroupFromFixture(fg circleFixtureGroup) *groupmodel.CircleGroup {
 		Status:               groupmodel.CircleGroupStatus(fg.Status),
 		CreatedAt:            parseFixtureTime(fg.CreatedAt),
 		UpdatedAt:            parseFixtureTime(fg.UpdatedAt),
-	}
-}
-
-func circleFileFromFixture(ff circleFixtureFile) *filemodel.CircleFile {
-	return &filemodel.CircleFile{
-		ID:                ff.ID,
-		Version:           ff.Version,
-		CircleID:          ff.CircleID,
-		GroupID:           ff.GroupID,
-		ParentFolderID:    ff.ParentFolderID,
-		Name:              ff.Name,
-		FileType:          filemodel.CircleFileType(ff.FileType),
-		AssetID:           ff.AssetID,
-		MimeType:          ff.MimeType,
-		SizeBytes:         ff.SizeBytes,
-		UploaderPersonaID: ff.UploaderPersonaID,
-		Status:            filemodel.CircleFileStatus(ff.Status),
-		CreatedAt:         parseFixtureTime(ff.CreatedAt),
-		UpdatedAt:         parseFixtureTime(ff.UpdatedAt),
 	}
 }
 
@@ -298,23 +251,23 @@ func main() {
 	database := flag.String("database", "quwoquan_circle", "circle MongoDB database name")
 	fixtureRel := flag.String(
 		"fixture",
-		"social/circle/test_fixtures/scenarios/circle_scenarios.gamma-curated.json",
+		"quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.gamma-curated.json",
 		"metadata-relative circle fixture path",
 	)
 	refsCSV := flag.String("refs", "circle_core,circle_group_chat_link_core", "comma-separated seed refs")
 	contentFixtureRel := flag.String(
 		"content-fixture",
-		"content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
+		"quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.gamma-curated.json",
 		"metadata-relative content fixture path for circle feed posts",
 	)
 	contentRefsCSV := flag.String("content-refs", "content_discovery_core", "comma-separated content seed refs")
 	flag.Parse()
 
-	pack, err := contractfixture.LoadMetadataJSON[circleFixturePack](*fixtureRel)
+	pack, err := contractfixture.LoadRepositoryJSON[circleFixturePack](*fixtureRel)
 	if err != nil {
 		log.Fatalf("load circle fixture %s: %v", *fixtureRel, err)
 	}
-	contentPack, err := contractfixture.LoadMetadataJSON[contentFixturePack](*contentFixtureRel)
+	contentPack, err := contractfixture.LoadRepositoryJSON[contentFixturePack](*contentFixtureRel)
 	if err != nil {
 		log.Fatalf("load content fixture %s: %v", *contentFixtureRel, err)
 	}
@@ -325,7 +278,14 @@ func main() {
 	db := client.Database(*database)
 
 	// Reset previously seeded fixture rows so reseeding stays deterministic.
-	for _, coll := range []string{"circles", "circle_memberships", "circle_groups", "circle_files", "posts"} {
+	for _, coll := range []string{
+		"circles",
+		"circle_memberships",
+		"circle_groups",
+		"circle_files",
+		"circle_post_placements",
+		"posts",
+	} {
 		if _, err := db.Collection(coll).DeleteMany(ctx, bson.M{
 			"$or": []bson.M{
 				{"_id": bson.M{"$regex": "^fixture_"}},
@@ -379,7 +339,7 @@ func main() {
 		}
 		for _, files := range seedSet.Files {
 			for _, ff := range files {
-				f := circleFileFromFixture(ff)
+				f := seedfixture.CircleFileFromFixture(ff)
 				upsert("circle_files", f.ID, f)
 				inserted++
 			}
@@ -411,6 +371,17 @@ func main() {
 			}
 			upsert("posts", postID, doc)
 			inserted++
+			for _, circleID := range circleIDs {
+				if _, ok := seededCircleIDs[circleID]; !ok {
+					continue
+				}
+				placementID, placement := seedfixture.CirclePlacementDocFromFixture(
+					post,
+					circleID,
+				)
+				upsert("circle_post_placements", placementID, placement)
+				inserted++
+			}
 		}
 	}
 

@@ -1,6 +1,7 @@
 schema: quwoquan.travel_license_policy
 vertical: travel
 defaultAction: block
+enforcementMode: audit_only
 discoveryPlatformRoles:
   - platform: Pinterest
     defaultDiscoveryRole: publish_candidate

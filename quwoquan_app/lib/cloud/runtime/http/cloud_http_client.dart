@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Callback for API latency instrumentation.
@@ -492,11 +493,7 @@ class CloudHttpClient {
           .toList(growable: false);
     }
     final object = CloudResponseDecoder.asObject(decoded, context: context);
-    return CloudResponseDecoder.mapList(
-      object,
-      listKey,
-      context: context,
-    );
+    return CloudResponseDecoder.mapList(object, listKey, context: context);
   }
 
   /// [postJson] 后立即 [CloudResponseDecoder.asObject]。
@@ -620,7 +617,21 @@ class CloudHttpClient {
     if (!shouldAttemptRefresh) {
       return false;
     }
-    if (response.statusCode != 401) {
+    // account_suspended、stale authEpoch 和 account_deleted 都可能由任意
+    // 资源服务先返回。仅对终态账号关闭的 canonical 410 触发一次 refresh：
+    // AuthSessionController 会清除本地可换发凭证，而客户端始终保留原始响应，
+    // 不将普通业务 410 误判为认证失效。
+    final isTerminalAccountClosure =
+        response.statusCode == 410 &&
+        CloudErrorMapper.fromStatusCode(
+              response.statusCode,
+              body: response.body,
+              requestPath: requestPath,
+            ).code ==
+            UserErrorCode.accountDeleted.code;
+    if (response.statusCode != 401 &&
+        response.statusCode != 403 &&
+        !isTerminalAccountClosure) {
       return false;
     }
     if (requestPath.endsWith('/auth/token/refresh')) {

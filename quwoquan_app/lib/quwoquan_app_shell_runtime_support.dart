@@ -26,50 +26,11 @@ void logQuwoquanAppException({
   required String exceptionText,
   required String stackText,
 }) {
-  final traceStore = AppTraceContextStore.instance;
-  final context = AppLogContext(
-    sessionId: traceStore.sessionId,
-    pageVisitId: traceStore.newPageVisitId(),
-  );
-  unawaited(
-    AppLogService.instance.writeEvent(
-      logType: AppLogType.error,
-      level: AppLogLevel.error,
-      context: context,
-      payload: <String, Object?>{
-        'kind': 'app_exception',
-        'source': source,
-        'exception': exceptionText,
-        'stack': stackText,
-      },
-      hasError: true,
-    ),
-  );
   unawaited(
     AppExceptionTelemetryService.instance.recordGlobalException(
       source: source,
       exceptionText: exceptionText,
       stackText: stackText,
-    ),
-  );
-  unawaited(
-    AppLogService.instance.writeEvent(
-      logType: AppLogType.pageAccess,
-      level: AppLogLevel.error,
-      context: context,
-      payload: <String, Object?>{
-        'event': 'exception',
-        'route': 'app',
-        'pageName': 'app',
-        'source': source,
-        'exception': exceptionText,
-      },
-      summaryPayload: <String, Object?>{
-        'event': 'exception',
-        'route': 'app',
-        'source': source,
-      },
-      hasError: true,
     ),
   );
 }

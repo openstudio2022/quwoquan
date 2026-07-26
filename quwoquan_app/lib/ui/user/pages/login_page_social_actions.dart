@@ -127,28 +127,37 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
     };
   }
 
-  Future<AuthLoginResultDto> _socialLoginByMethod(
+  Future<AuthSessionGrant> _socialLoginByMethod(
     String method,
     String authCode,
     String deviceId,
     String platform,
   ) {
-    final repo = ref.read(authRepositoryProvider);
+    final writer = ref.read(accountSessionLoginCommandWriterProvider);
     return switch (method) {
-      'wechat' => repo.loginWechat(
-        wechatCode: authCode,
-        deviceId: deviceId,
-        platform: platform,
+      'wechat' => writer.loginWithWechat(
+        LoginWithWechatCommand(
+          wechatCode: authCode,
+          deviceId: deviceId,
+          platform: platform,
+          appVersion: CloudRequestHeaders.appVersion,
+        ),
       ),
-      'alipay' => repo.loginAlipay(
-        alipayAuthCode: authCode,
-        deviceId: deviceId,
-        platform: platform,
+      'alipay' => writer.loginWithAlipay(
+        LoginWithAlipayCommand(
+          alipayAuthCode: authCode,
+          deviceId: deviceId,
+          platform: platform,
+          appVersion: CloudRequestHeaders.appVersion,
+        ),
       ),
-      'qq' => repo.loginQq(
-        qqAuthCode: authCode,
-        deviceId: deviceId,
-        platform: platform,
+      'qq' => writer.loginWithQq(
+        LoginWithQqCommand(
+          qqAuthCode: authCode,
+          deviceId: deviceId,
+          platform: platform,
+          appVersion: CloudRequestHeaders.appVersion,
+        ),
       ),
       _ => throw ArgumentError.value(method, 'method', 'not a social provider'),
     };
@@ -211,9 +220,14 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
       final bridge = ref.read(nativeAuthBridgeProvider);
       final authorizationPayload = method == 'alipay'
           ? (await ref
-                    .read(socialAuthorizationRepositoryProvider)
-                    .createAlipayAuthorizationRequest())
-                .payload
+                    .read(authenticationChallengeCommandWriterProvider)
+                    .createAlipayAuthorizationRequest(
+                      CreateAlipayAuthorizationRequestCommand(
+                        platform: CloudRequestHeaders.platform(),
+                        appVersion: CloudRequestHeaders.appVersion,
+                      ),
+                    ))
+                .authorizationPayload
           : '';
       final ticket = await bridge.signIn(
         _nativeAuthProviderFor(method),
@@ -236,7 +250,7 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
       }
       await ref
           .read(authSessionControllerProvider.notifier)
-          .applyRememberedLoginResult(
+          .applyRememberedLoginGrant(
             result,
             rememberedLoginMethod: _rememberedMethodFor(method),
             rememberedLoginMaskedIdentifier: ticket.maskedAccount,

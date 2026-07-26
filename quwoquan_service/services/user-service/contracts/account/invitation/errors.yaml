@@ -1,0 +1,42 @@
+errors:
+- code: USER.INVITATION.expired
+  kind: INVITATION
+  reason: expired
+  http_status: 410
+  recovery_action: surface
+  dart_const: invitationExpired
+  go_const: ErrInvitationExpired
+  user_message:
+    zh: 邀请已过期
+    en: This invitation has expired
+- code: USER.INVITATION.not_found
+  kind: INVITATION
+  reason: not_found
+  http_status: 404
+  recovery_action: surface
+  dart_const: invitationNotFound
+  go_const: ErrInvitationNotFound
+  user_message:
+    zh: 邀请不存在或已失效
+    en: Invitation not found or no longer valid
+- code: USER.INVITATION.daily_limit_exceeded
+  kind: INVITATION
+  reason: daily_limit_exceeded
+  http_status: 429
+  recovery_action: retry
+  recovery_after_seconds: 86400
+  dart_const: invitationDailyLimitExceeded
+  go_const: ErrInvitationDailyLimitExceeded
+  user_message:
+    zh: 今日邀请次数已达上限
+    en: Daily invitation limit reached
+- code: USER.INVITATION.invalid_transition
+  kind: INVITATION
+  reason: invalid_transition
+  http_status: 409
+  recovery_action: surface
+  dart_const: invitationInvalidTransition
+  go_const: ErrInvitationInvalidTransition
+  user_message:
+    zh: 邀请状态已变化，请刷新后重试
+    en: Invitation state has changed, please refresh and retry

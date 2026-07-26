@@ -19,18 +19,22 @@ import 'package:quwoquan_app/ui/content/services/single_post_media_viewer.dart';
 ///
 /// 修复先前断点：旧路由在缺 extra 时丢弃 `workId` 回退到发现页推荐流，直达用户
 /// 看到无关内容；水合失败也仅静默埋点。此页改为「按 id 直拉 + 显式错误态」，
-/// 让删除态/不存在等场景走结构化错误（10-runtime-error-cutover）。
+/// 让删除态/不存在等场景走结构化运行时错误。
 class WorkBrowserEntryPage extends ConsumerStatefulWidget {
   const WorkBrowserEntryPage({
     super.key,
     required this.workId,
     this.source = 'workBrowser',
+    this.referralSource = ReferralSource.deepLink,
+    this.feedRequestId,
     this.sourceAppearanceMode = UiErrorAppearanceMode.inherit,
     this.commentContext = const MediaViewerCommentContext(),
   });
 
   final String workId;
   final String source;
+  final ReferralSource referralSource;
+  final String? feedRequestId;
   final UiErrorAppearanceMode sourceAppearanceMode;
   final MediaViewerCommentContext commentContext;
 
@@ -71,14 +75,15 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
         return;
       }
       applyConfirmedInteractionPost(ref, detail.post);
-      final feedRequestId = ref
-          .read(feedSessionProvider.notifier)
-          .newFeedRequestId();
+      final inheritedFeedRequestId = (widget.feedRequestId ?? '').trim();
+      final feedRequestId = inheritedFeedRequestId.isNotEmpty
+          ? inheritedFeedRequestId
+          : ref.read(feedSessionProvider.notifier).newFeedRequestId();
       final extra = buildSinglePostMediaViewerExtra(
         ref,
         detail: detail,
         source: widget.source,
-        referralSource: ReferralSource.deepLink,
+        referralSource: widget.referralSource,
         feedRequestId: feedRequestId,
         commentContext: widget.commentContext,
       );

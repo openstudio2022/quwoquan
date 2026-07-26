@@ -29,6 +29,13 @@ REPO_ROOT = _find_repo_root()
 SCENARIO = "chat.group_avatar.sync_display_e2e"
 REPORT_SCHEMA = "chat-avatar-e2e-probe-report"
 CONTRACT_PLACEHOLDER_TOKENS = ("契", "contract", "default-contract")
+CANONICAL_ENVIRONMENTS = {"alpha", "beta", "gamma", "prod"}
+ENVIRONMENT_TARGETS = {
+    "alpha": "alpha-local",
+    "beta": "beta-local",
+    "gamma": "gamma-local",
+    "prod": "prod-hosted",
+}
 
 
 def utc_now() -> str:
@@ -43,20 +50,20 @@ def parse_args() -> argparse.Namespace:
         "--base-url",
         default=os.environ.get("CHAT_AVATAR_GATEWAY_BASE_URL")
         or os.environ.get("GAMMA_BASE_URL")
-        or os.environ.get("LOCAL_GAMMA_GATEWAY_BASE_URL")
+        or os.environ.get("PROD_GATEWAY_BASE_URL")
         or "http://127.0.0.1:18080",
     )
     parser.add_argument(
         "--media-base-url",
         default=os.environ.get("CHAT_AVATAR_MEDIA_BASE_URL")
         or os.environ.get("MEDIA_AVATAR_CDN_BASE_URL")
-        or os.environ.get("LOCAL_GAMMA_MEDIA_BASE_URL")
+        or os.environ.get("PROD_MEDIA_BASE_URL")
         or "",
     )
     parser.add_argument(
         "--test-auth-token",
         default=os.environ.get("GAMMA_TEST_AUTH_TOKEN")
-        or os.environ.get("LOCAL_GAMMA_TEST_AUTH_TOKEN")
+        or os.environ.get("PROD_TEST_AUTH_TOKEN")
         or os.environ.get("TEST_AUTH_TOKEN")
         or "",
     )
@@ -81,11 +88,7 @@ def parse_args() -> argparse.Namespace:
 def runtime_kind(env_name: str, explicit: str) -> str:
     if explicit:
         return explicit
-    if env_name == "local-gamma":
-        return "local-gamma-mirror"
-    if env_name == "gamma":
-        return "cloud-gamma"
-    return "local-stack"
+    return ENVIRONMENT_TARGETS[env_name]
 
 
 def default_members(args: argparse.Namespace) -> list[str]:
@@ -158,10 +161,13 @@ def report_template(args: argparse.Namespace, members: list[str]) -> dict[str, A
 
 
 def normalize_env(raw: str) -> str:
-    env_name = raw.strip()
-    if env_name in {"cloud-gamma", "cloud-gamma-pre", "cloud-gamma-prod-smoke"}:
-        return "gamma"
-    return env_name or "beta"
+    env_name = raw.strip() or "beta"
+    if env_name not in CANONICAL_ENVIRONMENTS:
+        raise SystemExit(
+            f"unsupported environment {env_name!r}; expected one of "
+            f"{sorted(CANONICAL_ENVIRONMENTS)}"
+        )
+    return env_name
 
 
 def add_step(report: dict[str, Any], name: str, status: str, **extra: Any) -> None:
@@ -184,7 +190,6 @@ def request_json(
     headers = {
         "Accept": "application/json",
         "X-Client-User-Id": user_id,
-        "X-Test-Local-Gamma": "true",
     }
     if args.test_auth_token:
         headers["Authorization"] = "Bearer " + args.test_auth_token
@@ -219,7 +224,7 @@ def request_json(
 
 
 def request_ok(args: argparse.Namespace, url: str, timeout: int = 8) -> bool:
-    headers = {"X-Test-Local-Gamma": "true"}
+    headers: dict[str, str] = {}
     if args.test_auth_token:
         headers["Authorization"] = "Bearer " + args.test_auth_token
         headers["X-Test-Auth-Token"] = args.test_auth_token
@@ -439,7 +444,11 @@ def send_sender_avatar_message(args: argparse.Namespace, report: dict[str, Any],
 def collect_mongo_evidence(args: argparse.Namespace, report: dict[str, Any], conversation_id: str) -> None:
     if not (args.mongo_uri or args.compose_mongo):
         return
-    database = args.mongo_database or ("quwoquan_chat" if normalize_env(args.env) in {"gamma", "local-gamma"} else "quwoquan_chat_local")
+    database = args.mongo_database or (
+        "quwoquan_chat"
+        if normalize_env(args.env) == "gamma"
+        else "quwoquan_chat_local"
+    )
     js = f"""
 const convId = {json.dumps(conversation_id)};
 const result = {{}};

@@ -17,7 +17,7 @@ storage:
 
 generation:
   trigger: PostCreated event
-  pipeline: content text → Embedding API → store
+  pipeline: content text → content.embedding.EmbeddingGateway → store
   model: text-embedding-3-small
   input_fields: [title, body, tags, locationName]
 

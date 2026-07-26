@@ -1,0 +1,78 @@
+{
+  "replayCaseId": "replay_tool_search_min",
+  "title": "Search tool observation before final answer",
+  "request": {
+    "conversationId": "acv_replay_tool",
+    "turnId": "atn_replay_tool",
+    "userId": "u_replay",
+    "inputText": "Summarize the latest AI chip news.",
+    "clientContext": {
+      "surfaceId": "assistant.personal"
+    }
+  },
+  "fakeModelScript": [
+    {
+      "stage": "reasoning",
+      "text": "Need fresh search evidence before answering.",
+      "structuredDelta": {
+        "nextAction": "call_tool",
+        "toolName": "mock_search"
+      },
+      "finishReason": "tool_use"
+    },
+    {
+      "stage": "evidence_processing",
+      "text": "Reviewed the returned search evidence.",
+      "structuredDelta": {
+        "retrievalProcessing": {
+          "processingSummary": "Reviewed the returned search evidence.",
+          "acceptedReferences": []
+        },
+        "evidenceSufficient": true
+      },
+      "finishReason": "stop"
+    },
+    {
+      "stage": "final",
+      "text": "Recent AI chip news focuses on accelerator supply, export rules, and inference cost.",
+      "finishReason": "stop"
+    }
+  ],
+  "fakeToolScript": [
+    {
+      "toolName": "mock_search",
+      "input": {
+        "query": "latest AI chip news"
+      },
+      "result": {
+        "kind": "tool_result",
+        "summary": "Found accelerator supply, export rules, and inference cost updates."
+      }
+    }
+  ],
+  "expectedStreamEvents": [
+    {
+      "eventType": "run_started"
+    },
+    {
+      "eventType": "process_replace"
+    },
+    {
+      "eventType": "completed"
+    }
+  ],
+  "expectedRunResponse": {
+    "conversationId": "acv_replay_tool",
+    "turnId": "atn_replay_tool",
+    "status": "completed",
+    "finalText": "Recent AI chip news focuses on accelerator supply, export rules, and inference cost.",
+    "summary": "Answered with search evidence.",
+    "observability": {
+      "traceId": "trace_replay_tool",
+      "modelProvider": "fake",
+      "skillId": "news_briefing",
+      "domainId": "news"
+    },
+    "completedAt": "2026-04-29T00:01:03Z"
+  }
+}

@@ -5,15 +5,17 @@ verify_error_recovery_alignment.py
 recovery 对齐门禁（云侧）。
 
 对使用 AppError 工厂风格（runtime/errors.NewAppError(...).WithRecovery(...)）生成的
-错误码域，断言：errors.yaml 中每个声明了 recovery_action 的错误，其生成的
-internal/generated/errors.go 必含同一 code 对应的 .WithRecovery("<action>", <afterSeconds>)。
+对象，断言：errors.yaml 中每个声明了 recovery_action 的错误，其对象级
+generated/<context>/<object>/errors.go 必含同一 code 对应的
+.WithRecovery("<action>", <afterSeconds>)。
 
 目的：锁定 recovery_action / recovery_after_seconds 从 errors.yaml -> 生成 Go ->
 随 ErrorResponse 下发的链路不被回退（如有人误删 codegen 的 goErrorRecoveryCall、
 手改生成产物、或某服务未重新 codegen）。客户端消费 recovery 由
 quwoquan_service/contracts/runtime_errors/packages/dart/quwoquan_runtime_errors 的 codec/policy 测试单独锁定。
 
-content 域已纳入强约束；客户端可见域不得再登记 sentinel-only 豁免。
+检查对象直接由服务 contracts/generated 目录反向映射，不维护第二份域、对象或
+输出路径注册表。客户端可见对象不得再登记 sentinel-only 豁免。
 
 Usage:
   python3 quwoquan_service/scripts/verify/verify_error_recovery_alignment.py
@@ -23,39 +25,27 @@ Exit 0 on success, 1 on misalignment.
 import os
 import re
 import sys
+from pathlib import Path
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
-# AppError 工厂风格域：errors.yaml(可多个) -> 生成的 Go errors.go。
-FACTORY_DOMAINS = {
-    "content": {
-        "yaml": ["quwoquan_service/contracts/metadata/content/post/errors.yaml"],
-        "go": "quwoquan_service/services/content-service/internal/generated/errors.go",
-    },
-    "chat": {
-        "yaml": ["quwoquan_service/contracts/metadata/messages/conversation/errors.yaml"],
-        "go": "quwoquan_service/services/chat-service/internal/generated/errors.go",
-    },
-    "integration_location": {
-        "yaml": ["quwoquan_service/contracts/metadata/integration/location/errors.yaml"],
-        "go": "quwoquan_service/services/integration-service/internal/generated/errors.go",
-    },
-    "rtc": {
-        "yaml": ["quwoquan_service/contracts/metadata/rtc/call_session/errors.yaml"],
-        "go": "quwoquan_service/services/rtc-service/internal/generated/errors.go",
-    },
-    "user": {
-        "yaml": [
-            "quwoquan_service/contracts/metadata/user/user_profile/errors.yaml",
-            "quwoquan_service/contracts/metadata/user/contact_discovery/errors.yaml",
-            "quwoquan_service/contracts/metadata/user/greeting_request/errors.yaml",
-            "quwoquan_service/contracts/metadata/user/invite_record/errors.yaml",
-        ],
-        "go": "quwoquan_service/services/user-service/internal/generated/errors.go",
-    },
-}
+def discover_factory_objects() -> dict[str, dict[str, list[str]]]:
+    """Derive object-level errors.yaml -> errors.go pairs from physical paths."""
+    repo_root = Path(REPO_ROOT)
+    services_root = repo_root / "quwoquan_service/services"
+    objects: dict[str, dict[str, list[str]]] = {}
+    for go_path in sorted(services_root.glob("*/generated/*/*/errors.go")):
+        service_root = go_path.parents[3]
+        context, object_name = go_path.parts[-3:-1]
+        yaml_path = service_root / "contracts" / context / object_name / "errors.yaml"
+        owner = f"{service_root.name}:{context}/{object_name}"
+        objects[owner] = {
+            "yaml": [yaml_path.relative_to(repo_root).as_posix()],
+            "go": [go_path.relative_to(repo_root).as_posix()],
+        }
+    return objects
 
 # 解析 errors.yaml 的逐条 error：code / recovery_action / recovery_after_seconds。
 # errors.yaml 为缩进块，逐 error 项以 "- code:" 起。简单状态机解析。
@@ -118,29 +108,37 @@ def parse_yaml_recoveries(rel_paths: list[str]) -> tuple[dict[str, tuple[str, in
     return required, missing
 
 
-def parse_go_recoveries(rel_path: str) -> tuple[dict[str, tuple[str, int]], bool]:
-    path = os.path.join(REPO_ROOT, rel_path)
-    if not os.path.isfile(path):
-        return {}, False
-    with open(path, encoding="utf-8") as handle:
-        content = handle.read()
+def parse_go_recoveries(rel_paths: list[str]) -> tuple[dict[str, tuple[str, int]], list[str]]:
     present: dict[str, tuple[str, int]] = {}
-    for code, action, secs in FACTORY_BLOCK_RE.findall(content):
-        present[code] = (action, int(secs))
-    return present, True
+    missing: list[str] = []
+    for rel_path in rel_paths:
+        path = os.path.join(REPO_ROOT, rel_path)
+        if not os.path.isfile(path):
+            missing.append(rel_path)
+            continue
+        with open(path, encoding="utf-8") as handle:
+            content = handle.read()
+        for code, action, secs in FACTORY_BLOCK_RE.findall(content):
+            present[code] = (action, int(secs))
+    return present, missing
 
 
 def main() -> int:
     failed = False
-    for domain, cfg in sorted(FACTORY_DOMAINS.items()):
+    factory_objects = discover_factory_objects()
+    if not factory_objects:
+        print("verify_error_recovery_alignment: 未发现对象级 errors.go", file=sys.stderr)
+        return 1
+    for domain, cfg in sorted(factory_objects.items()):
         required, missing_yaml = parse_yaml_recoveries(cfg["yaml"])
         if missing_yaml:
             print(f"[{domain}] errors.yaml 缺失: {', '.join(missing_yaml)}")
             failed = True
             continue
-        present, go_exists = parse_go_recoveries(cfg["go"])
-        if not go_exists:
-            print(f"[{domain}] 生成 Go errors.go 缺失: {cfg['go']}（请运行 make codegen-app）")
+        go_paths = cfg["go"] if isinstance(cfg["go"], list) else [cfg["go"]]
+        present, missing_go = parse_go_recoveries(go_paths)
+        if missing_go:
+            print(f"[{domain}] 生成 Go errors.go 缺失: {', '.join(missing_go)}（请运行 make codegen-app）")
             failed = True
             continue
         for code, expected in sorted(required.items()):
@@ -163,7 +161,7 @@ def main() -> int:
         return 1
     print(
         "verify_error_recovery_alignment: recovery 对齐 OK"
-        f"（factory 域 {len(FACTORY_DOMAINS)} 个强约束；无 sentinel 客户端可见域豁免）"
+        f"（factory 对象 {len(factory_objects)} 个强约束；无 sentinel 客户端可见对象豁免）"
     )
     return 0
 

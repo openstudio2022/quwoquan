@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -27,12 +29,55 @@ FORBIDDEN_SOURCE_TRUTH_DIRS = frozenset(
         "reference",
     }
 )
-OPAQUE_DISPOSABLE_CACHE_DIRS = frozenset({"cache", "node_modules", "site-packages"})
+OPAQUE_DISPOSABLE_CACHE_DIRS = frozenset(
+    {
+        "cache",
+        "dist",
+        "node_modules",
+        "python-test-deps",
+        "site-packages",
+        "toolchains",
+    }
+)
+FORBIDDEN_LOCAL_TARGETS = frozenset({"python-envs", "python-test-deps", "toolchains"})
+FORBIDDEN_OUTPUT_FILE_NAME = re.compile(
+    r"(?i)(?:(?:^|\.)env(?:\.|$)|(?:^|[._-])(?:config|configuration|secret|credential|certificate|tls|pki)(?:[._-]|$)|caddyfile$|(?:\.pem|\.key|\.crt|\.p12|\.pfx)$)"
+)
+SECRET_ASSIGNMENT = re.compile(
+    r"(?i)\b(?:api[_-]?key|secret|password|token|private[_-]?key|credential)s?\b"
+    r"\s*[:=]\s*(\S+)"
+)
+SAFE_SECRET_REFERENCES = frozenset(
+    {
+        "runtime_secret:",
+        "<redacted>",
+        "redacted",
+        "missing",
+        "not_set",
+        "none",
+        "null",
+    }
+)
+MAX_INSPECTED_OUTPUT_FILE_BYTES = 1_000_000
+INSPECTED_OUTPUT_TEXT_SUFFIXES = frozenset(
+    {".conf", ".env", ".ini", ".json", ".log", ".toml", ".txt", ".yaml", ".yml"}
+)
 EXPECTED_OUTPUT_CONSUMPTION = {
     "same_execution_stage",
-    "derived_release_deployment",
     "verification_evidence",
 }
+PROCESS_STATE_RECORD_KEYS = frozenset(
+    {
+        "name",
+        "pid",
+        "pgid",
+        "wrapper_pid",
+        "owner_id",
+        "log",
+        "cwd",
+        "started_at",
+    }
+)
 
 
 def _rel(path: Path) -> str:
@@ -106,8 +151,6 @@ def output_layout_issues(root: Path | None = None) -> list[str]:
                 issues.append(f"{_rel(entry)}: env only permits alpha/beta/gamma/prod/repo")
                 continue
             allowed = {"runs", "observability", "local"}
-            if entry.name != "repo":
-                allowed.add("release")
             for child in sorted(entry.iterdir()):
                 if not child.is_dir() or child.name not in allowed:
                     issues.append(f"{_rel(child)}: invalid {entry.name} output category")
@@ -116,6 +159,12 @@ def output_layout_issues(root: Path | None = None) -> list[str]:
                 for target in sorted(local.iterdir()):
                     if not target.is_dir():
                         issues.append(f"{_rel(target)}: local target must be a directory")
+                        continue
+                    if target.name in FORBIDDEN_LOCAL_TARGETS:
+                        issues.append(
+                            f"{_rel(target)}: interpreter caches belong in the external tool cache, "
+                            "never under disposable output"
+                        )
                         continue
                     for child in sorted(target.iterdir()):
                         if not child.is_dir() or child.name not in {"process", "cache"}:
@@ -132,12 +181,49 @@ def output_layout_issues(root: Path | None = None) -> list[str]:
     return issues
 
 
+def _is_runtime_process_state_record(candidate: Path, output_root: Path) -> bool:
+    """Accept only the supervisor's fixed-schema, non-secret process records."""
+    try:
+        relative = candidate.relative_to(output_root)
+    except ValueError:
+        return False
+    if (
+        len(relative.parts) != 7
+        or relative.parts[0] != "env"
+        or relative.parts[1] not in {"alpha", "beta", "gamma", "prod", "repo"}
+        or relative.parts[2] != "local"
+        or relative.parts[4:6] != ("process", "processes")
+        or candidate.suffix != ".env"
+    ):
+        return False
+
+    try:
+        pairs = [
+            line.split("=", maxsplit=1)
+            for line in candidate.read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+    except (OSError, ValueError):
+        return False
+    if any(len(pair) != 2 for pair in pairs):
+        return False
+    records = {key: value for key, value in pairs}
+    if len(records) != len(pairs):
+        return False
+    if set(records) != PROCESS_STATE_RECORD_KEYS:
+        return False
+    return (
+        records["name"] == candidate.stem
+        and all(records[key].isdigit() for key in ("pid", "pgid", "wrapper_pid", "started_at"))
+    )
+
+
 def output_source_truth_issues(root: Path) -> list[str]:
-    """Reject reusable configuration roots hidden under a valid output shape."""
+    """Reject reusable configuration, certificate and unredacted secret material."""
     issues: list[str] = []
     if not root.is_dir():
         return issues
-    for current, dirnames, _filenames in os.walk(root):
+    for current, dirnames, filenames in os.walk(root):
         current_path = Path(current)
         retained: list[str] = []
         for name in dirnames:
@@ -151,6 +237,39 @@ def output_source_truth_issues(root: Path) -> list[str]:
                 continue
             retained.append(name)
         dirnames[:] = retained
+        for filename in filenames:
+            candidate = current_path / filename
+            if FORBIDDEN_OUTPUT_FILE_NAME.search(filename) and not _is_runtime_process_state_record(
+                candidate,
+                root,
+            ):
+                issues.append(
+                    f"{_rel(candidate)}: deployment configuration, TLS or secret material "
+                    "is forbidden under disposable output"
+                )
+            if candidate.suffix.lower() not in INSPECTED_OUTPUT_TEXT_SUFFIXES:
+                continue
+            try:
+                if candidate.stat().st_size > MAX_INSPECTED_OUTPUT_FILE_BYTES:
+                    continue
+                lines = candidate.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                continue
+            for line_number, line in enumerate(lines, start=1):
+                match = SECRET_ASSIGNMENT.search(line)
+                if match is None:
+                    continue
+                value = match.group(1).strip().strip("\"'")
+                normalized = value.lower()
+                if (
+                    any(normalized.startswith(prefix) for prefix in SAFE_SECRET_REFERENCES)
+                    or normalized.startswith("$")
+                ):
+                    continue
+                issues.append(
+                    f"{_rel(candidate)}:{line_number}: unredacted secret assignment is forbidden "
+                    "under disposable output"
+                )
     return issues
 
 

@@ -1,52 +1,99 @@
-# L2 特性：security-privacy-audit
+# L2 Business Capability：安全隐私审计 (`security-privacy-audit`)
 
-## 功能说明
+> 所属领域：[`platform-ops-governance`](../spec.md)
+>
+> 设计归属：[L1 DEC-001](../design.md#dec-001)
 
-面向首发上架与持续运营的安全与隐私合规收口能力。覆盖发布前必须就绪、并在运营期持续审计的关键合规面：
+## 1. 能力目标
 
-- 法律文本：隐私政策、用户协议、权限用途说明、第三方 SDK 共享清单，均由 `legal-static` 独立静态包发布，有可达 URL 与版本号（与登录页 `agreementVersion/privacyVersion` 对齐）。当前免费社区版本为 `2026-07`，历史 `2026-06` 保持不可变。
-- 权限最小化：仅申请主旅程必需权限；每项权限有明确用途说明（双端商店审核要求）。
-- 第三方 SDK 清单：列出 SDK 名称、用途、收集的数据类别、共享对象（含 iOS PrivacyInfo.xcprivacy / Android 数据安全表单口径）。
-- 数据主体权利：账号注销、数据导出、撤回同意的可达入口。
-- 备案：ICP 备案、算法备案（推荐为算法驱动，需备案）。
-- 治理闭环：内容/用户举报与拉黑可真实提交并处置（内容级与用户级均接 Remote）。
+统一发布前与运营期的权限、隐私、审计和供应链检查
+
+## 2. 范围与非目标
+
+### In Scope
+
+- 由本目录 Story 组合交付“security-privacy-audit”的独立业务结果。
+
+### Out of Scope
+
+- 其他 L2 的事实所有权、metadata schema 与实现施工步骤。
+
+## 3. Journey / Scenario 贡献
+
+- 横切工程能力：不直接拥有 AppRoot Scenario；调用本能力的业务领域仍承担对应 Journey 的产品责任。
+  - 本能力处理：统一发布前与运营期的权限、隐私、审计和供应链检查。
+  - 本能力输出：可供业务领域组合的公开结果与明确失败终态。
+
+## 4. Story
+
+
+
+- [`compliance-reporting`](./compliance-reporting/spec.md)：从法律版本、权限用途、SDK 清单和危险动作审计事实生成可复核报告。
+- [`data-classification-policy`](./data-classification-policy/spec.md)：在 canonical contract 中声明数据类别、保留、加密与访问边界，未知敏感度默认拒绝发布。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 security privacy audit 能力 SIT
+
+- 本能力必须组合直属 Story 与公开契约，交付“统一发布前与运营期的权限、隐私、审计和供应链检查”所定义的业务结果；失败终态必须可区分且不得伪造成功。
+- 法律正文通过 legal-static 独立包发布，不依赖 App 包、service 包、内容发布包或数据工程内容包。
+- stable URL 与 manifest currentVersion 一致，版本 URL 不可变，prod 发布前先完成 gamma legal-static 探测。
+- alpha / flutter run mock public plane 可直接访问 `/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list`，不得返回 `api mock route is not ready`。
+- 协议 URL 不可达或返回非成功状态时，App 展示原生错误态、提供重试和返回，不暴露 raw HTTP/WebView 错误页，且不阻断登录协议勾选与验证码登录流程。
+
+<a id="req-002"></a>
+### REQ-002 法律文本、权限用途说明和第三方 SDK 共享清单由 `legal-static` 不可变版本包发布
+
+- 法律文本、权限用途说明和第三方 SDK 共享清单由 `legal-static` 不可变版本包发布；可达 URL 和版本号必须与登录页 `agreementVersion/privacyVersion` 对齐。
 - 审计留痕：危险动作 / 双签动作 / 放量动作经统一审计事件可检索（对齐 ops-portal 审计）。
-
-## 约束
-
 - 法律文本与版本是上架硬阻断项；`/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list` 任一 URL 不可达即 No-Go。
-- 协议正文不得放入其他业务领域服务代码，不随 App、内容页或数据工程内容包一起打包；唯一源目录为 `quwoquan_service/services/legal-static/`，发布包为 `.qwq_output/env/<env>/release/legal-static/<version>/`。
+- 协议正文不得放入其他业务领域服务代码，不随 App、内容页或数据工程内容包一起打包；唯一源目录为 `quwoquan_service/static/legal/`，发布包为 `QWQ_DEPLOY_WORK_ROOT/<target>/packages/legal-static/<version>/`。
 - alpha / `flutter run` 的 mock gateway 必须同样挂载 `legal-static` 的 `/legal/*` 静态目录，禁止回退到 mock 404 HTML 或业务 API mock 路由。
 - 隐私相关文案与同意版本以 `auth_legal_config.dart` + 登录契约为准，不得在业务代码硬编码第二套版本。
 - 协议页 URL 不可达、HTTP 非成功或 WebView 资源失败时，App 必须展示原生错误态与重试/返回动作；该错误不阻断用户返回登录页、勾选协议与继续验证码登录。
 - 权限用途、SDK 数据类别必须与端侧实际行为一致，禁止低报或漏报。
-- 错误码 / 用户文案走 metadata→codegen，不在审计/治理代码硬编码（R06）。
-- 生产包默认 Remote、无 Mock/Remote 切换入口、无 test_fixtures（与 `08-mock-data-isolation` 发行态一致）。
-
-## 验收标准（A1~A8 重点组）
-
-- A1 法律文本：隐私政策 / 用户协议 / 权限说明 / SDK 清单由 `stackctl package --env <env> --kind legal-static` 独立打包，URL 全部 200 可达，版本与登录契约一致，prod 前完成 gamma 探测。
-- A2 权限最小化：申请权限集 = 主旅程必需集；每项有用途说明。
-- A3 第三方 SDK：清单完整，iOS PrivacyInfo.xcprivacy 与 Android 数据安全表单口径一致。
-- A4 数据主体权利：账号注销 / 数据导出 / 撤回同意入口可达且生效。
-- A5 备案：ICP + 算法备案确认有效。
-- A6 治理闭环：内容级与用户级举报 / 拉黑可真实提交并进入处置队列（用户级已接 Remote）。
-- A7 审计留痕：危险/双签/放量动作可在审计视图检索，保留 actor / env / 时间。
-- A8 发行纯净：生产包无 Mock 切换入口、无 test_fixtures、默认 Remote。
-
-## 登录与账号商用 Go/No-Go 口径
-
-当前状态：`No-Go`，除非下列阻断项均形成端云实现与 local_contract-user_acceptance 证据，否则不得进入商用发布：
-
-- 账号注销 / 恢复申诉 / 锁定态：必须具备 App 可达入口、后端状态机、冷静期或立即注销策略、撤销路径、客服 handoff 与结构化错误。
+- 账号注销 / 恢复申诉 / 锁定态：必须具备 App 可达入口、后端状态机、客服 handoff
 - 数据主体权利：数据导出、撤回同意、隐私设置留痕必须可达且可审计；设置页可以展示阻断说明，但 release 包不得只保留“待接入”空壳。
-- 法律文本与同意记录：登录页携带的 `agreementVersion/privacyVersion` 必须落 consent record，并能按 owner 查询；法律 URL 与版本必须通过 `legal-static` 发布包校验和发布前探测。
-- 账号安全审计：凭证绑定/解绑、最后一个凭证保护、多设备退出、异常登录、账号注销/恢复、拉黑/举报等危险动作必须产生统一审计事件。
-- 发行纯净：prod 包默认 Remote，无 Mock 切换入口，无 test fixtures、seed/reset 或调试开关泄漏。
 
-最小证据包：
+## 6. 契约与依赖
 
-- local_contract：`make verify-app-auth-policy`、`stackctl verify --env gamma --kind legal-static`、错误码/法律版本/权限清单静态校验。
-- local_contract：`quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart`、登录门/会话恢复 Widget 与 Provider 测试。
-- api_integration：user-service `auth_contract_test.go` / `credential_contract_test.go` / `persona_contract_test.go` 以及 App RemoteRepository contract。
-- user_acceptance：Patrol 或真机证据覆盖首次登录、OTP/一键登录、退出登录、会话过期重登、账号注销/撤销、数据导出/撤回同意。
+- 上游能力：[`platform-ops-governance`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 security privacy audit 能力 SIT
+
+- GIVEN 执行“security privacy audit 能力”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“security privacy audit 能力”对应动作。
+- THEN 直属 Story 共同交付“统一发布前与运营期的权限、隐私、审计和供应链检查”，失败终态可区分且不产生伪成功事实。
+- THEN 法律正文通过 legal-static 独立包发布，不依赖 App 包、service 包、内容发布包或数据工程内容包。
+- THEN stable URL 与 manifest currentVersion 一致，版本 URL 不可变，prod 发布前先完成 gamma legal-static 探测。
+- THEN alpha / flutter run mock public plane 可直接访问 `/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list`，不得返回 `api mock route is not ready`。
+- THEN 协议 URL 不可达或返回非成功状态时，App 展示原生错误态、提供重试和返回，不暴露 raw HTTP/WebView 错误页，且不阻断登录协议勾选与验证码登录流程。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 security privacy audit 能力 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：统一发布前与运营期的权限、隐私、审计和供应链检查。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 上架合规正文、签名与商店材料
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`track`
+- 影响或价值：未获法务确认的正文、备案、正式签名、全尺寸图标、商店截图与审核说明会直接阻断 iOS/Android 上架。
+- 完成判定：法律正文和 SDK/权限清单经法务确认并由 legal-static 发布
+- 正式 AAB/IPA 签名与商店材料完整
+- 测试账号可走通 AppRoot UAT。
+- 依赖：法务、设计、运营、渠道账号与签名 secrets。

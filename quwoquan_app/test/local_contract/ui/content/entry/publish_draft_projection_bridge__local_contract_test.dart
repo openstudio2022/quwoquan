@@ -272,7 +272,7 @@ void main() {
       },
     );
 
-    test('article asset manifest requests server-side variant generation', () {
+    test('article asset manifest carries identity and presentation only', () {
       final document = ArticleDocumentData(
         nodes: const <ArticleDocumentNode>[
           ArticleDocumentNode(
@@ -295,13 +295,9 @@ void main() {
       final cover = assets.cast<Map<Object?, Object?>>().firstWhere(
         (asset) => asset['assetId'] == 'cover',
       );
-      final variantGeneration =
-          cover['variantGeneration'] as Map<Object?, Object?>;
-
-      expect(variantGeneration['required'], isTrue);
-      expect(variantGeneration['source'], 'server');
-      expect(variantGeneration['profiles'], contains('display'));
-      expect(variantGeneration['profiles'], contains('original'));
+      expect(cover['role'], 'cover');
+      expect(cover.keys, unorderedEquals(<Object?>['assetId', 'kind', 'role']));
+      expect('${manifest['assets']}', isNot(contains('/tmp/')));
     });
 
     test('article markdown is serialized directly from document nodes', () {
@@ -336,13 +332,6 @@ void main() {
         title: '旧标题不应覆盖 nodes',
         body: '旧正文不应覆盖 nodes',
         articleDocument: document,
-        articleBlocks: const <CreateTextBlock>[
-          CreateTextBlock(
-            id: 'block_1',
-            type: CreateTextBlockType.paragraph,
-            text: 'blocks 不应进入 Markdown',
-          ),
-        ],
       );
 
       final markdown = buildArticleMarkdownForPayload(state);
@@ -354,7 +343,8 @@ void main() {
         contains(':::figure id="fig1" layout="wrapLeft" caption="节点图注"'),
       );
       expect(markdown, contains('节点正文第一段。'));
-      expect(markdown, isNot(contains('blocks 不应进入 Markdown')));
+      expect(markdown, isNot(contains('旧标题不应覆盖 nodes')));
+      expect(markdown, isNot(contains('旧正文不应覆盖 nodes')));
     });
 
     test(

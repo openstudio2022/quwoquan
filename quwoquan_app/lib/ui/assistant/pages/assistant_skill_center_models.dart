@@ -7,24 +7,24 @@ class AssistantSkillCenterItem {
   final SkillSubscriptionWire? subscription;
 
   String get skillId => catalog.skillId;
-  bool get enabled => subscription != null && subscription!.status == 'active';
-  bool get paused => subscription != null && subscription!.status == 'paused';
-  String get statusLabel {
-    final status = subscription?.status ?? '';
-    if (status == 'active') return '已订阅';
-    if (status == 'paused') return '已暂停';
-    return catalog.requiresConsent ? '需授权' : '可订阅';
-  }
+  bool get hasSubscription => subscription != null;
+  bool get enabled => subscription?.status == SkillSubscriptionStatus.active;
 }
 
 final assistantSkillCenterProvider =
     FutureProvider<List<AssistantSkillCenterItem>>((ref) async {
-      final repo = ref.watch(assistantRepositoryProvider);
-      final catalog = await repo.listSkillCatalog(limit: 64);
-      final subscriptions = await repo.listSkillSubscriptions(limit: 64);
+      final personalData = ref.watch(assistantPersonalDataFacetProvider);
+      final subscriptionFacet = ref.watch(
+        assistantSkillSubscriptionFacetProvider,
+      );
+      final catalog = await personalData.listSkillCatalog(limit: 64);
+      final subscriptions = await subscriptionFacet.listSkillSubscriptions(
+        limit: 64,
+      );
       final activeSubscriptions = <String, SkillSubscriptionWire>{
         for (final item in subscriptions)
-          if (item.status != 'archived') item.skillId: item,
+          if (item.status != SkillSubscriptionStatus.archived)
+            item.skillId: item,
       };
       return catalog
           .map(
@@ -34,4 +34,13 @@ final assistantSkillCenterProvider =
             ),
           )
           .toList(growable: false);
+    });
+
+/// 最近云端会话（R-ASSIST-001 收口）：唯一数据源是
+/// ListAssistantConversations 查询面，本地不再维护会话副本。
+final assistantRecentSessionsProvider =
+    FutureProvider.autoDispose<List<AssistantConversationWire>>((ref) async {
+      final facet = ref.watch(assistantConversationRunFacetProvider);
+      final page = await facet.listAssistantConversations();
+      return page.items;
     });

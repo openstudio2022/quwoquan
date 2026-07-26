@@ -179,15 +179,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get welcomeMainSlogan => '遇见同趣，绽放热爱';
 
   @override
-  String get welcomeButtonLabel => '开启发现之旅';
-
-  @override
-  String get assistantWhisperSignature => '小趣';
-
-  @override
-  String get assistantWhisperLine => '专注你的热爱，剩下的交给我';
-
-  @override
   String get commentPlaceholder => '添加评论...';
 
   @override
@@ -778,19 +769,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get assistantSkillCenterTitle => '技能中心';
 
   @override
-  String get assistantSkillCenterDefaultAllSubscribedTitle => '默认全订阅已开启';
-
-  @override
-  String get assistantSkillCenterDefaultAllSubscribedDesc =>
-      '开箱即用全部助理能力；执行时仍受风险策略与场景闸门约束。';
-
-  @override
-  String get assistantSkillCenterRestoreDefaultAll => '恢复默认全订阅';
-
-  @override
-  String get assistantSkillCenterSimpleMode => '极简模式';
-
-  @override
   String get assistantSkillCenterPackagesTitle => '能力包';
 
   @override
@@ -814,57 +792,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get assistantSkillCenterRiskPolicyTitle => '风险策略';
-
-  @override
-  String get assistantSkillCenterLowRiskAuto => '低风险自动执行';
-
-  @override
-  String get assistantSkillCenterLowRiskDesc => '检索、总结、问答默认执行';
-
-  @override
-  String get assistantSkillCenterMediumRiskConfirm => '中风险轻确认';
-
-  @override
-  String get assistantSkillCenterMediumRiskDesc => '创建提醒、生成待办需确认';
-
-  @override
-  String get assistantSkillCenterHighRiskDoubleConfirm => '高风险二次确认';
-
-  @override
-  String get assistantSkillCenterHighRiskDesc => '交易、外部提交等必须二次确认';
-
-  @override
-  String get assistantSkillCenterHighRiskRequired => '高风险动作必须保留二次确认';
-
-  @override
-  String get assistantSkillCenterSceneGateTitle => '场景闸门';
-
-  @override
-  String get assistantSkillCenterSceneDiscovery => '发现页';
-
-  @override
-  String get assistantSkillCenterSceneDiscoveryDesc => '浏览时仅轻提示，不主动打断';
-
-  @override
-  String get assistantSkillCenterSceneCircle => '圈子';
-
-  @override
-  String get assistantSkillCenterSceneCircleDesc => '圈内讨论建议按需触发';
-
-  @override
-  String get assistantSkillCenterSceneChat => '趣聊';
-
-  @override
-  String get assistantSkillCenterSceneChatDesc => '默认受邀参与（@小趣或手动点击）';
-
-  @override
-  String get assistantSkillCenterSceneSystem => '系统外场景';
-
-  @override
-  String get assistantSkillCenterSceneSystemDesc => '剪贴板、图片、外链等跨场景能力';
-
-  @override
   String get assistantSkillCenterRecentSessionsTitle => '最近会话';
 
   @override
@@ -873,6 +800,21 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String assistantSkillCenterMessagesCount(int count) {
     return '$count 条消息';
+  }
+
+  @override
+  String assistantSkillCenterSubscribedCount(int count) {
+    return '已订阅 $count 项';
+  }
+
+  @override
+  String assistantTaskDueAt(String dueAt) {
+    return '计划时间：$dueAt';
+  }
+
+  @override
+  String assistantMemoryUpdatedAt(String date) {
+    return '更新于 $date';
   }
 
   @override

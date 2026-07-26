@@ -24,9 +24,12 @@ abstract final class PageNames {
   static const String assistantPersonal = 'assistant_personal';
   static const String assistantReferenceWebviewModal = 'assistant_reference_webview_modal';
   static const String assistantSkills = 'assistant_skills';
+  static const String blockedKeywords = 'blocked_keywords';
+  static const String blockedUsers = 'blocked_users';
   static const String chat = 'chat';
   static const String chatAddMembers = 'chat_add_members';
   static const String chatAdmins = 'chat_admins';
+  static const String chatAnnouncement = 'chat_announcement';
   static const String chatDetail = 'chat_detail';
   static const String chatInputExpandedDraft = 'chat_input_expanded_draft';
   static const String chatManage = 'chat_manage';
@@ -38,6 +41,7 @@ abstract final class PageNames {
   static const String circleEditSettings = 'circle_edit_settings';
   static const String circleMediaCamera = 'circle_media_camera';
   static const String circleMediaGallery = 'circle_media_gallery';
+  static const String circleMembershipApproval = 'circle_membership_approval';
   static const String circleStats = 'circle_stats';
   static const String commentMediaCamera = 'comment_media_camera';
   static const String commentMediaGallery = 'comment_media_gallery';
@@ -58,6 +62,7 @@ abstract final class PageNames {
   static const String createVideoEditor = 'create_video_editor';
   static const String globalSearch = 'global_search';
   static const String globalSearchNetwork = 'global_search_network';
+  static const String greetingInbox = 'greeting_inbox';
   static const String home = 'home';
   static const String homepageClaim = 'homepage_claim';
   static const String homepageDetail = 'homepage_detail';
@@ -66,6 +71,7 @@ abstract final class PageNames {
   static const String homepagePicker = 'homepage_picker';
   static const String homepageStatusReport = 'homepage_status_report';
   static const String interestMatch = 'interest_match';
+  static const String interestOnboarding = 'interest_onboarding';
   static const String legalPermissions = 'legal_permissions';
   static const String legalPrivacyPolicy = 'legal_privacy_policy';
   static const String legalThirdPartySdkList = 'legal_third_party_sdk_list';
@@ -76,10 +82,10 @@ abstract final class PageNames {
   static const String myFootprint = 'my_footprint';
   static const String myIntersections = 'my_intersections';
   static const String myQrCode = 'my_qr_code';
+  static const String myReports = 'my_reports';
   static const String objectIntersections = 'object_intersections';
   static const String profile = 'profile';
   static const String profileCareerInterests = 'profile_career_interests';
-  static const String profileComments = 'profile_comments';
   static const String profileEdit = 'profile_edit';
   static const String profileMediaCamera = 'profile_media_camera';
   static const String profileMediaGallery = 'profile_media_gallery';
@@ -93,8 +99,12 @@ abstract final class PageNames {
   static const String rtcVoice = 'rtc_voice';
   static const String settings = 'settings';
   static const String settingsAbout = 'settings_about';
+  static const String settingsAccountSecurity = 'settings_account_security';
+  static const String settingsCalls = 'settings_calls';
   static const String settingsDarkMode = 'settings_dark_mode';
+  static const String settingsNotifications = 'settings_notifications';
   static const String settingsPermissions = 'settings_permissions';
+  static const String settingsPrivacy = 'settings_privacy';
   static const String startGroupChat = 'start_group_chat';
   static const String suggestHomepage = 'suggest_homepage';
   static const String userProfile = 'user_profile';
@@ -105,15 +115,21 @@ abstract final class PageNames {
 abstract final class AppPages {
   static const List<AppPageDefinition> routes = <AppPageDefinition>[
     AppPageDefinition(pageName: 'legal_third_party_sdk_list', routeId: 'legalThirdPartySdkList', pathTemplate: '/legal/third-party-sdk-list', collectPageAccess: true),
+    AppPageDefinition(pageName: 'settings_account_security', routeId: 'settingsAccountSecurity', pathTemplate: '/settings/account-security', collectPageAccess: true),
+    AppPageDefinition(pageName: 'blocked_keywords', routeId: 'blockedKeywords', pathTemplate: '/settings/blocked-keywords', collectPageAccess: true),
     AppPageDefinition(pageName: 'profile_career_interests', routeId: 'profileCareerInterests', pathTemplate: '/profile/career-interests', collectPageAccess: true),
+    AppPageDefinition(pageName: 'blocked_users', routeId: 'blockedUsers', pathTemplate: '/settings/blocked-users', collectPageAccess: true),
+    AppPageDefinition(pageName: 'settings_notifications', routeId: 'settingsNotifications', pathTemplate: '/settings/notifications', collectPageAccess: true),
     AppPageDefinition(pageName: 'my_intersections', routeId: 'myIntersections', pathTemplate: '/profile/intersections', collectPageAccess: true),
     AppPageDefinition(pageName: 'rtc_pick_participants', routeId: 'rtcPickParticipants', pathTemplate: '/rtc/pick-participants', collectPageAccess: true),
     AppPageDefinition(pageName: 'assistant_management', routeId: 'assistantManagement', pathTemplate: '/assistant/management', collectPageAccess: true),
     AppPageDefinition(pageName: 'legal_privacy_policy', routeId: 'legalPrivacyPolicy', pathTemplate: '/legal/privacy-policy', collectPageAccess: true),
     AppPageDefinition(pageName: 'legal_user_agreement', routeId: 'legalUserAgreement', pathTemplate: '/legal/user-agreement', collectPageAccess: true),
     AppPageDefinition(pageName: 'object_intersections', routeId: 'objectIntersections', pathTemplate: '/object/intersections', collectPageAccess: true),
+    AppPageDefinition(pageName: 'interest_onboarding', routeId: 'interestOnboarding', pathTemplate: '/onboarding/interests', collectPageAccess: true),
     AppPageDefinition(pageName: 'settings_permissions', routeId: 'settingsPermissions', pathTemplate: '/settings/permissions', collectPageAccess: true),
     AppPageDefinition(pageName: 'add_contact_confirm', routeId: 'addContactConfirm', pathTemplate: '/add-contact/confirm', collectPageAccess: true),
+    AppPageDefinition(pageName: 'my_reports', routeId: 'myReports', pathTemplate: '/settings/my-reports', collectPageAccess: true),
     AppPageDefinition(pageName: 'add_contact_search', routeId: 'addContactSearch', pathTemplate: '/add-contact/search', collectPageAccess: true),
     AppPageDefinition(pageName: 'assistant_personal', routeId: 'assistantPersonal', pathTemplate: '/assistant/personal', collectPageAccess: true),
     AppPageDefinition(pageName: 'settings_dark_mode', routeId: 'settingsDarkMode', pathTemplate: '/settings/dark-mode', collectPageAccess: true),
@@ -126,11 +142,13 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'assistant_skills', routeId: 'assistantSkills', pathTemplate: '/assistant/skills', collectPageAccess: true),
     AppPageDefinition(pageName: 'start_group_chat', routeId: 'startGroupChat', pathTemplate: '/chat/start-group', collectPageAccess: true),
     AppPageDefinition(pageName: 'homepage_picker', routeId: 'homepagePicker', pathTemplate: '/homepages/picker', collectPageAccess: true),
-    AppPageDefinition(pageName: 'profile_comments', routeId: 'profileComments', pathTemplate: '/profile/comments', collectPageAccess: true),
     AppPageDefinition(pageName: 'profile_personas', routeId: 'profilePersonas', pathTemplate: '/profile/personas', collectPageAccess: true),
+    AppPageDefinition(pageName: 'settings_privacy', routeId: 'settingsPrivacy', pathTemplate: '/settings/privacy', collectPageAccess: true),
+    AppPageDefinition(pageName: 'greeting_inbox', routeId: 'greetingInbox', pathTemplate: '/chat/greetings', collectPageAccess: true),
     AppPageDefinition(pageName: 'interest_match', routeId: 'interestMatch', pathTemplate: '/interest-match', collectPageAccess: true),
     AppPageDefinition(pageName: 'global_search_network', routeId: 'globalSearchNetworkResults', pathTemplate: '/search/network', collectPageAccess: true),
     AppPageDefinition(pageName: 'settings_about', routeId: 'settingsAbout', pathTemplate: '/settings/about', collectPageAccess: true),
+    AppPageDefinition(pageName: 'settings_calls', routeId: 'settingsCalls', pathTemplate: '/settings/calls', collectPageAccess: true),
     AppPageDefinition(pageName: 'local_drafts', routeId: 'localDrafts', pathTemplate: '/create/drafts', collectPageAccess: true),
     AppPageDefinition(pageName: 'profile_stats', routeId: 'profileStats', pathTemplate: '/profile/stats', collectPageAccess: true),
     AppPageDefinition(pageName: 'create_entry', routeId: 'createEntry', pathTemplate: '/create-entry', collectPageAccess: true),
@@ -151,6 +169,7 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'homepage_status_report', routeId: 'homepageStatusReport', pathTemplate: '/homepages/{id}/status-report', collectPageAccess: true),
     AppPageDefinition(pageName: 'homepage_introduction', routeId: 'homepageIntroduction', pathTemplate: '/homepages/{id}/introduction', collectPageAccess: true),
     AppPageDefinition(pageName: 'chat_member_search', routeId: 'chatMemberSearch', pathTemplate: '/chat/{id}/member-search', collectPageAccess: true),
+    AppPageDefinition(pageName: 'chat_announcement', routeId: 'chatAnnouncement', pathTemplate: '/chat/{id}/announcement', collectPageAccess: true),
     AppPageDefinition(pageName: 'work_browser', routeId: 'workBrowser', pathTemplate: '/works/browser/{workId}', collectPageAccess: true),
     AppPageDefinition(pageName: 'chat_add_members', routeId: 'chatAddMembers', pathTemplate: '/chat/{id}/add-members', collectPageAccess: true),
     AppPageDefinition(pageName: 'homepage_maintenance', routeId: 'homepageMaintenance', pathTemplate: '/homepages/{id}/manage', collectPageAccess: true),
@@ -183,6 +202,7 @@ abstract final class AppPages {
     'page_internal_create_publish_circle_select': 'create_publish_circle_select',
     'page_internal_create_homepage_search': 'create_homepage_search',
     'page_internal_circle_edit_settings': 'circle_edit_settings',
+    'page_internal_circle_membership_approval': 'circle_membership_approval',
     'page_internal_circle_media_camera': 'circle_media_camera',
     'page_internal_circle_media_gallery': 'circle_media_gallery',
     'page_internal_profile_media_camera': 'profile_media_camera',

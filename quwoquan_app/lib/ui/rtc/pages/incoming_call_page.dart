@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,13 +15,11 @@ import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_permission_guard.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_stage_chrome.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/call_stage_banner.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/caller_avatar_pulse.dart';
 
 class IncomingCallPage extends ConsumerStatefulWidget {
-  const IncomingCallPage({
-    super.key,
-    required this.callId,
-  });
+  const IncomingCallPage({super.key, required this.callId});
 
   final String callId;
 
@@ -32,6 +32,14 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
   void initState() {
     super.initState();
     HapticFeedback.heavyImpact();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        ref
+            .read(callSessionProvider.notifier)
+            .refreshIncomingCall(widget.callId),
+      );
+    });
   }
 
   /// 接听前权限预检：麦克风为硬门槛；视频缺摄像头降级为仅语音继续。
@@ -72,10 +80,14 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
       _onCallStatusChanged(next);
     });
 
-    final initiatorId = session.session?.initiatorId ?? '';
+    final presentation = session.incomingPresentation;
+    final initiatorId =
+        presentation?.callerId ?? session.session?.initiatorId ?? '';
+    final callerName = presentation?.displayName.trim().isNotEmpty == true
+        ? presentation!.displayName.trim()
+        : initiatorId;
     final isVideo = session.callType.isVideo;
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final onGradientFg = CallStageChrome.primaryOnGradient(isDark);
 
     return AppScaffold(
@@ -93,7 +105,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
             children: [
               SizedBox(height: AppSpacing.xl * 2),
               Text(
-                '$initiatorId ${isVideo ? UITextConstants.callIncomingVideo : UITextConstants.callIncomingVoice}',
+                '$callerName ${isVideo ? UITextConstants.callIncomingVideo : UITextConstants.callIncomingVoice}',
                 style: TextStyle(
                   color: onGradientFg.withValues(alpha: 0.8),
                   fontSize: AppTypography.md,
@@ -103,7 +115,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
               ),
               SizedBox(height: AppSpacing.sm),
               Text(
-                initiatorId,
+                callerName,
                 style: TextStyle(
                   color: onGradientFg,
                   fontSize: AppTypography.xxl,
@@ -114,7 +126,14 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
               ),
               const Spacer(),
               CallerAvatarPulse(
-                displayName: initiatorId,
+                displayName: callerName,
+                avatarUrl: presentation?.avatarUrl,
+              ),
+              SizedBox(height: AppSpacing.md),
+              CallStageBanner(
+                onRetry: () => ref
+                    .read(callSessionProvider.notifier)
+                    .refreshIncomingCall(widget.callId),
               ),
               const Spacer(),
               _buildActionButtons(session),
@@ -177,13 +196,10 @@ class _CallActionButton extends StatelessWidget {
           Container(
             width: AppSpacing.iconButtonMinSizeMd,
             height: AppSpacing.iconButtonMinSizeMd,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             child: Icon(
               icon,
-              color: AppColors.welcomeForeground,
+              color: AppColors.callStageForeground,
               size: AppSpacing.xl,
             ),
           ),
@@ -191,7 +207,7 @@ class _CallActionButton extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: AppColors.welcomeForeground,
+              color: AppColors.callStageForeground,
               fontSize: AppTypography.sm,
               fontWeight: AppTypography.normal,
             ),

@@ -7,13 +7,14 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class StartupWelcomeObservabilityContractTest(unittest.TestCase):
-    def test_event_payload_versions_the_petal_bloom_motion_spec(self) -> None:
+    def test_event_payload_uses_a_versionless_petal_bloom_motion_spec(self) -> None:
         timeline = (
             REPO_ROOT
             / "quwoquan_app/lib/ui/welcome/welcome_motion_timeline.dart"
         ).read_text(encoding="utf-8")
-        self.assertIn("'motionSpecVersion': motionSpecVersion", timeline)
-        self.assertIn("'petal_bloom_v2'", timeline)
+        self.assertIn("'motionSpec': motionSpec", timeline)
+        self.assertIn("'petal_bloom'", timeline)
+        self.assertNotIn("motionSpecVersion", timeline)
 
     def test_dashboard_uses_only_real_low_cardinality_startup_metrics(self) -> None:
         dashboards_root = (

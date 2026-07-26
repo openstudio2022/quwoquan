@@ -13,10 +13,21 @@ PostBaseDto contentPostDtoFromReadModelMap(Map<String, dynamic> source) {
 /// `FeedItemDto.toMap()` deliberately retains typed [DateTime] values. HTTP
 /// fixtures and detail payloads require the canonical wire serializer so their
 /// timestamps remain RFC3339 strings.
+///
+/// Video rows must go through [VideoPostDto.fromReadModelMap] so media-canary
+/// fields (`mediaAssetId` / preview track) survive fixture → App projection.
 Map<String, dynamic> contentPostWireFromReadModelMap(
   Map<String, dynamic> source,
 ) {
-  final wire = FeedItemDto.fromReadModelMap(source).toDiscoveryWireMap();
+  final contentType = (source['contentType'] ?? '').toString().trim();
+  final Map<String, dynamic> wire;
+  if (contentType == 'video') {
+    wire = Map<String, dynamic>.from(
+      VideoPostDto.fromReadModelMap(source).toMap(),
+    );
+  } else {
+    wire = FeedItemDto.fromReadModelMap(source).toDiscoveryWireMap();
+  }
   for (final field in const ['createdAt', 'updatedAt', 'publishedAt']) {
     final sourceValue = source[field];
     if (sourceValue is String && sourceValue.trim().isNotEmpty) {

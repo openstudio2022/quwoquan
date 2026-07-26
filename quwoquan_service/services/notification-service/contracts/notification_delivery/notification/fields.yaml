@@ -1,0 +1,202 @@
+fields:
+- name: _id
+  source: _id
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  classification: PII
+  log_policy: hash
+  api_exposure: read
+  ops_exposure: read
+  description: app message stable ID，HTTP 响应字段为 messageId。
+  role: authoritative_state
+- name: idempotencyKey
+  source: idempotencyKey
+  type: string
+  constraints:
+  - NOT_NULL
+  - UNIQUE
+  classification: SECRET
+  log_policy: drop
+  api_exposure: drop
+  ops_exposure: drop
+  role: authoritative_state
+- name: userId
+  source: userId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: hash
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: messageType
+  source: messageType
+  type: enum
+  enum_ref: NotificationType
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: source
+  source: source
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: sourceId
+  source: sourceId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: hash
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: destination
+  source: destination
+  type: object
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: title
+  source: title
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: drop
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: summary
+  source: summary
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: drop
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: target
+  source: target
+  type: object
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: provenance
+  source: provenance
+  type: object
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  description: Assistant 等 producer 提交的个性化归因；只用于审计与行为回流，不向 App 暴露。
+  role: authoritative_state
+- name: read
+  source: read
+  type: bool
+  constraints:
+  - NOT_NULL
+  - DEFAULT_FALSE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: createdAt
+  source: createdAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: deliveredAt
+  source: deliveredAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: ackedAt
+  source: ackedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: readAt
+  source: readAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+types:
+  NotificationAccountClosureDeadLetterRecoveryRequest:
+    description: operator 释放 Notification 注销清理 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
+    fields:
+    - name: sourceStreamId
+      source: sourceStreamId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: write
+  NotificationAccountClosureDeadLetterRecoveryAccepted:
+    description: Notification 注销清理 source PEL 已受理重新消费。
+    fields:
+    - name: sourceStreamId
+      source: sourceStreamId
+      type: string
+      constraints:
+      - PK
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: recoveryAccepted
+      source: recoveryAccepted
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read

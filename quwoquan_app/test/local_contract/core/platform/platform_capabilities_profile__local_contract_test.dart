@@ -73,8 +73,19 @@ void main() {
     }
 
     // Difference boundaries: assert only the cross-platform divergence.
-    test('mobile shows native video editing; web/ohos degrade', () {
-      expect(shouldShowVideoEditingEntry(CapabilityProfile.mobile), isTrue);
+    test('只有已有原生实现的 iOS 显示视频编辑，Android/Web/OHOS 降级', () {
+      expect(
+        shouldShowVideoEditingEntry(
+          platformCapabilitiesFor(AppPlatform.ios),
+        ),
+        isTrue,
+      );
+      expect(
+        shouldShowVideoEditingEntry(
+          platformCapabilitiesFor(AppPlatform.android),
+        ),
+        isFalse,
+      );
       expect(shouldShowVideoEditingEntry(CapabilityProfile.web), isFalse);
       expect(shouldShowVideoEditingEntry(CapabilityProfile.ohos), isFalse);
     });

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -53,28 +52,25 @@ class LocalCircleGroupSnapshotStore {
 
   Future<bool> ensureSeeded({
     required LocalSearchNamespace namespace,
-    required CircleRepository circleRepository,
+    required CircleQueryReader circleQuery,
     required CircleGroupQueryReader circleGroupQuery,
     int circleLimit = 12,
     int groupsPerCircle = 20,
+    bool forceRefresh = false,
   }) async {
     _beginOperation();
     try {
-      if (await hasAnySnapshot(namespace)) {
+      if (!forceRefresh && await hasAnySnapshot(namespace)) {
         return true;
       }
       final existing = _seedFutures[namespace.key];
       if (existing != null) {
-        try {
-          await existing;
-          return true;
-        } catch (_) {
-          return false;
-        }
+        await existing;
+        return true;
       }
       final future = _seedFromRemote(
         namespace: namespace,
-        circleRepository: circleRepository,
+        circleQuery: circleQuery,
         circleGroupQuery: circleGroupQuery,
         circleLimit: circleLimit,
         groupsPerCircle: groupsPerCircle,
@@ -83,8 +79,6 @@ class LocalCircleGroupSnapshotStore {
       try {
         await future;
         return true;
-      } catch (_) {
-        return false;
       } finally {
         _seedFutures.remove(namespace.key);
       }
@@ -116,37 +110,74 @@ class LocalCircleGroupSnapshotStore {
     final batch = database.batch();
     final now = DateTime.now().toIso8601String();
     for (final group in groups) {
-      if (group.groupId.trim().isEmpty ||
-          group.circleId.trim().isEmpty ||
-          group.name.trim().isEmpty ||
-          group.groupType.trim().isEmpty ||
-          group.visibility.trim().isEmpty) {
-        throw const FormatException('CircleGroup snapshot identity is invalid');
-      }
-      final searchableText = _searchableText(<Object?>[
-        group.name,
-        group.description,
-        group.circleName,
-        group.groupType,
-        group.visibility,
-      ]);
-      batch.insert('circle_group_snapshots', <String, Object?>{
-        'namespace_key': namespace.key,
-        'circle_id': group.circleId,
-        'group_id': group.groupId,
-        'name': group.name,
-        'description': group.description,
-        'circle_name': group.circleName,
-        'group_type': group.groupType,
-        'visibility': group.visibility,
-        'conversation_id': group.conversationId,
-        'member_count': group.memberCount,
-        'searchable_text': searchableText,
-        'payload_json': jsonEncode(group.toStorageMap()),
-        'updated_at': group.updatedAt.isNotEmpty ? group.updatedAt : now,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.insert(
+        'circle_group_snapshots',
+        _snapshotRow(namespace: namespace, group: group, now: now),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
     await batch.commit(noResult: true);
+  }
+
+  Future<void> _replaceGroups({
+    required LocalSearchNamespace namespace,
+    required Iterable<LocalCircleGroupSnapshotRecord> groups,
+  }) async {
+    final database = await _database;
+    final snapshots = groups.toList(growable: false);
+    final now = DateTime.now().toIso8601String();
+    await database.transaction((transaction) async {
+      await transaction.delete(
+        'circle_group_snapshots',
+        where: 'namespace_key = ?',
+        whereArgs: <Object?>[namespace.key],
+      );
+      final batch = transaction.batch();
+      for (final group in snapshots) {
+        batch.insert(
+          'circle_group_snapshots',
+          _snapshotRow(namespace: namespace, group: group, now: now),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
+  Map<String, Object?> _snapshotRow({
+    required LocalSearchNamespace namespace,
+    required LocalCircleGroupSnapshotRecord group,
+    required String now,
+  }) {
+    if (group.groupId.trim().isEmpty ||
+        group.circleId.trim().isEmpty ||
+        group.name.trim().isEmpty ||
+        group.groupType.trim().isEmpty ||
+        group.visibility.trim().isEmpty) {
+      throw const FormatException('CircleGroup snapshot identity is invalid');
+    }
+    final searchableText = _searchableText(<Object?>[
+      group.name,
+      group.description,
+      group.circleName,
+      group.groupType,
+      group.visibility,
+    ]);
+    return <String, Object?>{
+      'namespace_key': namespace.key,
+      'circle_id': group.circleId,
+      'group_id': group.groupId,
+      'name': group.name,
+      'description': group.description,
+      'circle_name': group.circleName,
+      'group_type': group.groupType,
+      'visibility': group.visibility,
+      'conversation_id': group.conversationId,
+      'member_count': group.memberCount,
+      'searchable_text': searchableText,
+      'payload_json': jsonEncode(group.toStorageMap()),
+      'updated_at': group.updatedAt.isNotEmpty ? group.updatedAt : now,
+    };
   }
 
   Future<List<LocalCircleGroupSnapshotRecord>> searchGroups({
@@ -196,38 +227,49 @@ class LocalCircleGroupSnapshotStore {
     );
   }
 
+  /// 不可逆账号终态专用：等待现有 seed 完成后清除全部本地圈子群投影。
+  Future<void> clearAllNamespaces() async {
+    await waitUntilIdle();
+    final database = await _database;
+    await database.delete('circle_group_snapshots');
+    final rows = await database.rawQuery(
+      'SELECT COUNT(*) AS count FROM circle_group_snapshots',
+    );
+    if (((rows.first['count'] as num?)?.toInt() ?? 0) != 0) {
+      throw StateError('local circle snapshot cleanup left residual rows');
+    }
+  }
+
   Future<void> _seedFromRemote({
     required LocalSearchNamespace namespace,
-    required CircleRepository circleRepository,
+    required CircleQueryReader circleQuery,
     required CircleGroupQueryReader circleGroupQuery,
     required int circleLimit,
     required int groupsPerCircle,
   }) async {
-    final circles = await circleRepository.listCircles(limit: circleLimit);
+    final circles = (await circleQuery.list(
+      CircleListQuery(limit: circleLimit),
+    )).items;
     final snapshots = <LocalCircleGroupSnapshotRecord>[];
     for (final circle in circles) {
-      final circleId = _string(circle.id);
+      final circleId = _string(circle.circleId);
       if (circleId.isEmpty) {
         continue;
       }
       final circleName = _string(circle.name);
-      try {
-        final groups = await circleGroupQuery.list(
-          CircleGroupListQuery(circleId: circleId, limit: groupsPerCircle),
+      final groups = await circleGroupQuery.list(
+        CircleGroupListQuery(circleId: circleId, limit: groupsPerCircle),
+      );
+      for (final group in groups.items) {
+        snapshots.add(
+          LocalCircleGroupSnapshotRecord.fromGroupSlice(
+            group,
+            circleName: circleName,
+          ),
         );
-        for (final group in groups.items) {
-          snapshots.add(
-            LocalCircleGroupSnapshotRecord.fromGroupSlice(
-              group,
-              circleName: circleName,
-            ),
-          );
-        }
-      } catch (_) {
-        /* best-effort: 单个圈子的分组拉取失败时跳过该圈，其余圈子的快照照常落库 */
       }
     }
-    await upsertGroups(namespace: namespace, groups: snapshots);
+    await _replaceGroups(namespace: namespace, groups: snapshots);
   }
 
   Map<String, Object?> _decodePayload(Object? rawJson) {
@@ -235,15 +277,13 @@ class LocalCircleGroupSnapshotStore {
     if (text.isEmpty) {
       return const <String, dynamic>{};
     }
-    try {
-      final decoded = jsonDecode(text);
-      if (decoded is Map) {
-        return decoded.cast<String, Object?>();
-      }
-    } catch (_) {
-      /* best-effort: 持久化 payload 损坏时回退到空 Map，由上层用默认记录兜底 */
+    final decoded = jsonDecode(text);
+    if (decoded is! Map) {
+      throw const FormatException(
+        'CircleGroup snapshot payload must be a JSON object',
+      );
     }
-    return const <String, Object?>{};
+    return decoded.cast<String, Object?>();
   }
 
   Future<Database> get _database async {

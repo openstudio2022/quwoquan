@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/cloud/circle/generated/circle_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
@@ -103,23 +106,33 @@ class CircleStateNotifier extends Notifier<CircleState> {
   }
 
   Future<void> loadCircle() async {
+    if (!ref.mounted) return;
     state = CircleState(circleId: _circleId).copyWith(isLoading: true);
     try {
-      final repo = ref.read(circleRepositoryProvider);
-      final detail = await repo.getCircle(_circleId);
-      final statsWire = await repo.getCircleStats(_circleId);
-      final dto = detail.circle;
+      final circleQuery = ref.read(circleDetailQueryProvider);
+      final detail = await circleQuery.get(
+        CircleDetailQuery(circleId: _circleId),
+      );
+      if (!ref.mounted) return;
+      final stats = await circleQuery.stats(
+        CircleStatsQuery(circleId: _circleId),
+      );
+      if (!ref.mounted) return;
+      final dto = ref.read(circleProjectionMapperProvider).toDto(detail);
       CircleMembershipSlice? membership;
       if (ref.read(resolvedOwnerUserIdProvider).trim().isNotEmpty) {
         await ref.read(activePersonaContextProvider.future);
+        if (!ref.mounted) return;
         try {
           membership = await ref
               .read(circleDetailMembershipQueryProvider)
               .getMyMembership(MyCircleMembershipQuery(circleId: _circleId));
+          if (!ref.mounted) return;
         } on CloudException catch (error) {
           if (error.code != CircleErrorCode.membershipNotFound.code) rethrow;
         }
       }
+      if (!ref.mounted) return;
       CircleGroupSlice? defaultGroup;
       final defaultGroupId = dto.defaultPublicGroupId?.trim() ?? '';
       if (defaultGroupId.isNotEmpty && membership != null) {
@@ -128,6 +141,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
             .get(
               CircleGroupQuery(circleId: _circleId, groupId: defaultGroupId),
             );
+        if (!ref.mounted) return;
       }
       state = state.copyWith(
         circleData: dto,
@@ -140,14 +154,12 @@ class CircleStateNotifier extends Notifier<CircleState> {
             : membership.state.name,
         membershipVersion: membership?.version,
         clearMembershipVersion: membership == null,
-        circleStats: CircleStatsViewData.fromStatsWire(
-          statsWire,
-          circleFallback: dto,
-        ),
+        circleStats: CircleStatsViewData.fromSlice(stats),
         isLoading: false,
         clearLoadError: true,
       );
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, loadError: e);
     }
   }
@@ -195,6 +207,10 @@ class CircleStateNotifier extends Notifier<CircleState> {
         membershipVersion: result.version,
         clearLoadError: true,
       );
+      if (result.state == CircleMembershipState.active &&
+          !result.idempotentReplay) {
+        _appendBehaviorFact(CircleBehaviorEventType.joinCircle);
+      }
     } catch (error) {
       state = state.copyWith(
         joinStatus: previousStatus,
@@ -225,6 +241,9 @@ class CircleStateNotifier extends Notifier<CircleState> {
         membershipVersion: result.version,
         clearLoadError: true,
       );
+      if (!result.idempotentReplay) {
+        _appendBehaviorFact(CircleBehaviorEventType.leaveCircle);
+      }
     } catch (error) {
       state = state.copyWith(
         joinStatus: previousStatus,
@@ -236,23 +255,49 @@ class CircleStateNotifier extends Notifier<CircleState> {
     }
   }
 
-  Future<bool> updateCircleDetails(CircleUpdateWireDto wire) async {
+  /// 行为事实是推荐 HotPath 的 fire-and-forget 信号：
+  /// 失败不回滚交互，经全局异常遥测观测通道兜底。
+  void _appendBehaviorFact(CircleBehaviorEventType eventType) {
+    if (ref.read(resolvedOwnerUserIdProvider).trim().isEmpty) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(circleDetailBehaviorFactWriterProvider)
+          .append(
+            AppendCircleBehaviorFactCommand(
+              circleId: _circleId,
+              eventType: eventType,
+            ),
+          )
+          .catchError((Object error, StackTrace stackTrace) {
+            unawaited(
+              AppExceptionTelemetryService.instance.recordGlobalException(
+                source: 'circle.behavior.${eventType.wireValue}',
+                exceptionText: error.toString(),
+                stackText: stackTrace.toString(),
+              ),
+            );
+          }),
+    );
+  }
+
+  /// 更新走命名迁移命令；回执只含 circleId/version/status，
+  /// 展示态经 loadCircle 从服务端详情读回（单一真相源，不做本地 map 合并）。
+  Future<bool> updateCircleDetails(
+    UpdateCircleCommand command,
+    UpdateCircleSectionsCommand sectionsCommand,
+  ) async {
     try {
-      final repo = ref.read(circleRepositoryProvider);
-      final patch = wire.toMap();
-      final updated = await repo.updateCircle(_circleId, wire);
-      final merged = <String, dynamic>{
-        ...?state.circleData?.toMap(),
-        ...updated.toMap(),
-        ...patch,
-      };
-      state = state.copyWith(
-        circleData: CircleDto.fromMap(merged),
-        role: _circleRoleFromRaw(merged['role']),
-        joinStatus: (merged['joinStatus'] ?? state.joinStatus).toString(),
-        clearLoadError: true,
-      );
-      return true;
+      await ref.read(activePersonaContextProvider.future);
+      await ref
+          .read(circleDetailCircleLifecycleCommandWriterProvider)
+          .updateCircle(command);
+      await ref
+          .read(circleDetailCircleConfigurationCommandWriterProvider)
+          .updateCircleSections(sectionsCommand);
+      await loadCircle();
+      return state.loadError == null;
     } catch (e) {
       state = state.copyWith(loadError: e);
       return false;

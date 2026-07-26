@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+
 import 'dart:async';
 import 'dart:io';
 
@@ -7,8 +9,8 @@ import 'package:quwoquan_app/application/content/media/content_media_upload_coor
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
 import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
-import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 import '../../../support/recording_content_media_facet.dart';
 
@@ -25,14 +27,8 @@ void main() {
       Uri? uploadedUri;
       List<int>? uploadedBytes;
       String? uploadedContentType;
-      final fileStorage = createFileStorageGateway();
       final manager = MediaUploadManager(
-        coordinator: ContentMediaUploadCoordinator(
-          media: media,
-          fileStorage: fileStorage,
-          uploadObject:
-              (_, _, {required contentType, required expectedSha256}) async {},
-        ),
+        coordinator: ContentMediaUploadCoordinator(media: media),
         sourceReader: const LocalContentMediaSourceReader(),
         uploadStream:
             (
@@ -41,6 +37,7 @@ void main() {
               required contentLength,
               required contentType,
               required expectedSha256,
+              Future<void>? abortTrigger,
             }) async {
               uploadedUri = uri;
               uploadedContentType = contentType;
@@ -84,7 +81,6 @@ void main() {
       expect(uploadedBytes, bytes);
       expect(uploadedContentType, 'video/mp4');
       expect(result.assetId, 'video_asset_1');
-      expect(result.cdnUrl, 'https://cdn.quwoquan.test/video_asset_1.mp4');
     });
 
     test('数据面失败会中止权威 session 且不伪造成功', () async {
@@ -94,14 +90,8 @@ void main() {
       File(filePath).writeAsBytesSync(<int>[1, 2, 3, 4]);
 
       final media = RecordingContentMediaFacet();
-      final fileStorage = createFileStorageGateway();
       final manager = MediaUploadManager(
-        coordinator: ContentMediaUploadCoordinator(
-          media: media,
-          fileStorage: fileStorage,
-          uploadObject:
-              (_, _, {required contentType, required expectedSha256}) async {},
-        ),
+        coordinator: ContentMediaUploadCoordinator(media: media),
         sourceReader: const LocalContentMediaSourceReader(),
         uploadStream:
             (
@@ -110,6 +100,7 @@ void main() {
               required contentLength,
               required contentType,
               required expectedSha256,
+              Future<void>? abortTrigger,
             }) async {
               throw StateError('object storage rejected upload');
             },
@@ -138,7 +129,41 @@ void main() {
       expect(media.completedSessions, isEmpty);
       expect(media.abortedSessions, <String>['session_1']);
       expect(result.status, UploadStatus.failed);
-      expect(result.error, 'upload_failed');
+      expect(result.error, RuntimeFailureCodes.cloudSystemUnavailable);
+    });
+
+    test('账号 closed 后 disposed manager 清空队列并拒绝旧实例继续上传', () async {
+      final manager = MediaUploadManager(
+        coordinator: ContentMediaUploadCoordinator(
+          media: RecordingContentMediaFacet(),
+        ),
+        sourceReader: const LocalContentMediaSourceReader(),
+        uploadStream:
+            (
+              _,
+              _, {
+              required contentLength,
+              required contentType,
+              required expectedSha256,
+              Future<void>? abortTrigger,
+            }) async {},
+      );
+
+      manager.dispose();
+
+      await expectLater(
+        manager.enqueue(
+          UploadTask(
+            localPath: '/tmp/closed.jpg',
+            category: MediaCategory.chatImage,
+            contentType: 'image/jpeg',
+            fileSize: 4,
+          ),
+        ),
+        throwsStateError,
+      );
+      expect(manager.pendingCount, 0);
+      expect(manager.activeCount, 0);
     });
   });
 }

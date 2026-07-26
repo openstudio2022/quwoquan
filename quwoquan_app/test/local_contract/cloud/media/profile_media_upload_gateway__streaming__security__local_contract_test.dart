@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_media_upload_gateway.dart';
 
 import '../../../support/recording_content_media_facet.dart';
@@ -17,18 +17,32 @@ void main() {
       addTearDown(() => tempDir.deleteSync(recursive: true));
       final file = File('${tempDir.path}/avatar.jpg')
         ..writeAsBytesSync(<int>[1, 2, 3, 4]);
-      http.Request? uploadRequest;
-      final rawClient = MockClient((request) async {
-        uploadRequest = request;
-        expect(request.method, 'PUT');
-        expect(request.headers.containsKey('Authorization'), isFalse);
-        expect(request.bodyBytes, <int>[1, 2, 3, 4]);
-        return http.Response('', 200);
-      });
       final media = RecordingContentMediaFacet();
       final gateway = ContentProfileMediaUploadGateway(
-        media,
-        rawClient: rawClient,
+        ContentMediaUploadCoordinator(media: media),
+        const LocalContentMediaSourceReader(),
+        (
+          uploadUri,
+          bytes, {
+          required contentLength,
+          required contentType,
+          required expectedSha256,
+          abortTrigger,
+        }) async {
+          expect(uploadUri.scheme, 'https');
+          expect(contentLength, 4);
+          expect(contentType, 'image/jpeg');
+          expect(
+            expectedSha256,
+            '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a',
+          );
+          expect(await bytes.expand((chunk) => chunk).toList(), <int>[
+            1,
+            2,
+            3,
+            4,
+          ]);
+        },
       );
 
       final result = await gateway.uploadImage(
@@ -36,7 +50,6 @@ void main() {
         target: ProfileMediaTarget.avatar,
       );
 
-      expect(uploadRequest, isNotNull);
       expect(result.assetId, isNotEmpty);
       expect(media.initCommands.single.fileSize, 4);
       expect(
@@ -55,8 +68,21 @@ void main() {
         ..writeAsBytesSync(<int>[1, 2, 3, 4]);
       final media = RecordingContentMediaFacet();
       final gateway = ContentProfileMediaUploadGateway(
-        media,
-        rawClient: MockClient((_) async => http.Response('', 403)),
+        ContentMediaUploadCoordinator(media: media),
+        const LocalContentMediaSourceReader(),
+        (
+          _,
+          _, {
+          required contentLength,
+          required contentType,
+          required expectedSha256,
+          abortTrigger,
+        }) async {
+          throw const ContentMediaObjectUploadException(
+            retryable: false,
+            statusCode: 403,
+          );
+        },
       );
 
       await expectLater(
@@ -64,7 +90,7 @@ void main() {
           localPath: file.path,
           target: ProfileMediaTarget.avatar,
         ),
-        throwsA(isA<HttpException>()),
+        throwsA(isA<ContentMediaObjectUploadException>()),
       );
 
       expect(media.abortedSessions, <String>['session_1']);

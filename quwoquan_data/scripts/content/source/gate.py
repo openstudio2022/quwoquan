@@ -17,9 +17,10 @@ from core.image_asset_strategy import (
     image_strategy_requires_publishable_images,
 )
 from content.execution.workspace import execution_command_root, execution_root
-from governance.coverage.cold_start_supply import load_cold_start_supply_policy
+from governance.content_supply_policy import load_content_supply_policy
 from core.control_types import ContentType
 from content.execution.identity import parse_execution_id
+from governance.coverage.license import rights_proof_required
 
 PRIMARY_SOURCE_MINIMUM = 1
 
@@ -42,6 +43,7 @@ def download_requirements(execution_id: str) -> DownloadRequirements:
     """Derive download gates from the admitted single-carrier execution spec."""
     from content.execution import store
 
+    identity = parse_execution_id(execution_id)
     spec = store.load_spec_model(execution_id)
     content_type = spec.content.carriers[0]
     quota = spec.content.quotas.for_type(content_type)
@@ -68,7 +70,7 @@ def download_requirements(execution_id: str) -> DownloadRequirements:
         else 0
     )
     min_video_frames = (
-        load_cold_start_supply_policy().video_delivery.minimum_segment_count
+        load_content_supply_policy(identity.vertical).video_delivery.minimum_source_frames
         if content_type is ContentType.VIDEO
         else 0
     )
@@ -163,8 +165,15 @@ def _homepage_base_ready(
 
         # source_dir 即 source unit 目录：传 unit_dir 让 homepage_source_judge
         # 消费已写回的 source.judge.json（灰区无 verdict 时 fail-closed）。
+        qualified_authority_title = str(
+            meta.get("qualifiedAuthorityTitle") or ""
+        ).strip()
         verdict = homepage_base_draft_readiness(
-            meta, text, entity_name=entity, unit_dir=source_dir
+            meta,
+            text,
+            entity_name=entity,
+            aliases=(qualified_authority_title,) if qualified_authority_title else (),
+            unit_dir=source_dir,
         )
     except Exception:  # noqa: BLE001
         return False
@@ -253,6 +262,9 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
     只检查对象树 `entities/**/1.download/source_refs.json` 指向的 canonical source units。
     """
     issues: list[DataIssue] = []
+    require_rights_proof = rights_proof_required(
+        parse_execution_id(execution_id).vertical
+    )
     requirements = download_requirements(execution_id)
     active_lanes = active_download_lanes(execution_id)
     text_lanes_required = _text_lanes_required(execution_id)
@@ -354,10 +366,26 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                     digest = str(asset.get("sha256") or asset.get("sourceAssetId") or "")
                     if digest:
                         image_hashes.add(digest)
-                    missing = [
-                        field for field in ("license", "credit", "sourceUrl", "termsUrl", "usageScope")
-                        if not str(asset.get(field) or "").strip()
-                    ]
+                    missing = (
+                        [
+                            field
+                            for field in (
+                                "license",
+                                "credit",
+                                "sourceUrl",
+                                "termsUrl",
+                                "usageScope",
+                            )
+                            if not str(asset.get(field) or "").strip()
+                        ]
+                        if require_rights_proof
+                        else (
+                            []
+                            if str(asset.get("rightsAuditStatus") or "").strip()
+                            in {"verified", "unverified"}
+                            else ["rightsAuditStatus"]
+                        )
+                    )
                     if missing:
                         image_rights_issues.append(
                             f"{sd.name}/{asset.get('fileName') or '?'} missing image rights {missing}"

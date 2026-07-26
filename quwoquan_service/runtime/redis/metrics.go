@@ -142,6 +142,13 @@ func (c *instrumentedClient) GetBytes(ctx context.Context, key string) ([]byte, 
 	return v, err
 }
 
+func (c *instrumentedClient) GetDel(ctx context.Context, key string) (string, error) {
+	t := time.Now()
+	v, err := c.inner.GetDel(ctx, key)
+	c.record(t, err)
+	return v, err
+}
+
 func (c *instrumentedClient) Set(ctx context.Context, key, value string, ttl time.Duration) error {
 	t := time.Now()
 	err := c.inner.Set(ctx, key, value, ttl)
@@ -334,6 +341,17 @@ func (c *instrumentedClient) XAutoClaim(
 	messages, next, err := c.inner.XAutoClaim(ctx, stream, group, consumer, minIdle, start, count)
 	c.record(t, err)
 	return messages, next, err
+}
+
+func (c *instrumentedClient) XPendingCount(
+	ctx context.Context,
+	stream string,
+	group string,
+) (int64, error) {
+	t := time.Now()
+	count, err := c.inner.XPendingCount(ctx, stream, group)
+	c.record(t, err)
+	return count, err
 }
 
 func (c *instrumentedClient) Pipeline(ctx context.Context) Pipeliner {

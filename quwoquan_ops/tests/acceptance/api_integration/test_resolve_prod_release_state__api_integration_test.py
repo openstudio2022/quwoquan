@@ -33,8 +33,9 @@ class ResolveProdReleaseStateTest(unittest.TestCase):
             account="prod-service-svc",
             ssh_key_secret="PROD_SERVICE_SSH_KEY",
             instance_suffix="prod",
+            services=("content-service",),
         )
-        payload = {"container": "quwoquan-service-prod_seed-box_1", "from_image": "img-v1", "from_config": "cfg-v1"}
+        payload = {"container": "quwoquan-service-prod_content-service_1", "from_image": "img-v1", "from_config": "cfg-v1"}
         completed = subprocess.CompletedProcess(
             args=["ssh"],
             returncode=0,

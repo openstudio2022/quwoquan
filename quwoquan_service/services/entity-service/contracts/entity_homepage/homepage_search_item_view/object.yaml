@@ -1,0 +1,23 @@
+kind: projection
+description: HomepageSearchItemView 的领域对象契约。
+identity:
+  fields:
+  - homepageId
+  version_source: checkpoint
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: homepageEvents
+  on_delete: tombstone
+  reference_fields:
+  - homepageId
+  target_object: entity.Homepage
+local_identity_reasons:
+  canonicalEntityId: external data-catalog entity key resolved only through the EntityHomepage external
+    projection port

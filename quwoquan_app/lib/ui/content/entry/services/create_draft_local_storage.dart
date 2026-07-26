@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
@@ -26,6 +27,32 @@ class CreateDraftLocalStorage {
   static const String currentDraftIdKey = 'create_current_draft_id';
   static const String _v2Prefix = 'create_drafts_v2';
 
+  /// 损坏 payload 的侧位保留前缀：解码失败不静默清零，原始字节移入
+  /// `create_drafts_corrupt:<原 key>` 供诊断与人工恢复。
+  static const String corruptSidelinePrefix = 'create_drafts_corrupt';
+
+  /// 本进程内观测到的草稿损坏次数（结构化日志伴随每次递增）。
+  static int corruptPayloadCount = 0;
+
+  static String corruptSidelineKey(String originalKey) =>
+      '$corruptSidelinePrefix:$originalKey';
+
+  static Future<void> _sidelineCorruptPayload(
+    SharedPreferences prefs,
+    String originalKey,
+    String rawPayload,
+    Object error,
+  ) async {
+    corruptPayloadCount += 1;
+    developer.log(
+      'create draft payload corrupted; sidelined for recovery '
+      '(key=$originalKey, corruptCount=$corruptPayloadCount)',
+      name: 'CreateDraftLocalStorage',
+      error: error,
+    );
+    await prefs.setString(corruptSidelineKey(originalKey), rawPayload);
+  }
+
   static String scopeKeyForUser(String? currentUserId) {
     final trimmed = currentUserId?.trim() ?? '';
     if (trimmed.isEmpty) {
@@ -51,7 +78,8 @@ class CreateDraftLocalStorage {
       try {
         final decoded = jsonDecode(raw);
         drafts = decodeCreateDraftsList(decoded);
-      } catch (_) {
+      } catch (error) {
+        await _sidelineCorruptPayload(prefs, draftsKey, raw, error);
         drafts = const <CreateDraft>[];
       }
     }
@@ -78,10 +106,18 @@ class CreateDraftLocalStorage {
     }
     final drafts = <CreateDraft>[];
     for (final id in ids) {
-      final draft = _decodeDraftPayload(
-        prefs.getString(scopedDraftPayloadKey(scopeKey, id)),
-      );
+      final payloadKey = scopedDraftPayloadKey(scopeKey, id);
+      final rawPayload = prefs.getString(payloadKey);
+      final draft = _decodeDraftPayload(rawPayload);
       if (draft == null) {
+        if (rawPayload != null && rawPayload.isNotEmpty) {
+          await _sidelineCorruptPayload(
+            prefs,
+            payloadKey,
+            rawPayload,
+            StateError('create draft payload failed to decode'),
+          );
+        }
         continue;
       }
       drafts.add(draft);
@@ -229,7 +265,10 @@ class CreateDraftLocalStorage {
     var drafts = const <CreateDraft>[];
     try {
       drafts = decodeCreateDraftsList(jsonDecode(raw));
-    } catch (_) {
+    } catch (error) {
+      // 迁移路径的损坏 payload 必须侧位保留后才允许删除旧 key，
+      // 否则解码 bug 会造成用户草稿不可逆丢失。
+      await _sidelineCorruptPayload(prefs, draftsKey, raw, error);
       drafts = const <CreateDraft>[];
     }
     await persistScopedDrafts(
@@ -239,6 +278,41 @@ class CreateDraftLocalStorage {
     );
     await _requirePersisted(prefs.remove(draftsKey), draftsKey);
     await _requirePersisted(prefs.remove(currentDraftIdKey), currentDraftIdKey);
+  }
+
+  static Future<void> clearForTerminalAccountClosure(
+    String currentActorId,
+  ) async {
+    final preferences = await SharedPreferences.getInstance();
+    final scopeKey = scopeKeyForUser(currentActorId);
+    final scopedPrefix = '$_v2Prefix:$scopeKey:';
+    final corruptScopedPrefix = '$corruptSidelinePrefix:$scopedPrefix';
+    final keys = preferences
+        .getKeys()
+        .where(
+          (key) =>
+              key == draftsKey ||
+              key == currentDraftIdKey ||
+              key == corruptSidelineKey(draftsKey) ||
+              key == corruptSidelineKey(currentDraftIdKey) ||
+              key.startsWith(scopedPrefix) ||
+              key.startsWith(corruptScopedPrefix),
+        )
+        .toList(growable: false);
+    for (final key in keys) {
+      await _requirePersisted(preferences.remove(key), key);
+    }
+    if (preferences.getKeys().any(
+      (key) =>
+          key == draftsKey ||
+          key == currentDraftIdKey ||
+          key == corruptSidelineKey(draftsKey) ||
+          key == corruptSidelineKey(currentDraftIdKey) ||
+          key.startsWith(scopedPrefix) ||
+          key.startsWith(corruptScopedPrefix),
+    )) {
+      throw StateError('create draft cleanup verification failed');
+    }
   }
 
   static List<String> _decodeIdList(String? raw) {
@@ -254,7 +328,15 @@ class CreateDraftLocalStorage {
           .map((entry) => entry.toString().trim())
           .where((entry) => entry.isNotEmpty)
           .toList(growable: false);
-    } catch (_) {
+    } catch (error) {
+      // index 损坏不丢数据：调用方会按 payload key 前缀扫描重建 id 列表。
+      corruptPayloadCount += 1;
+      developer.log(
+        'create draft index corrupted; ids will be rebuilt from payload keys '
+        '(corruptCount=$corruptPayloadCount)',
+        name: 'CreateDraftLocalStorage',
+        error: error,
+      );
       return <String>[];
     }
   }
@@ -269,7 +351,13 @@ class CreateDraftLocalStorage {
         return null;
       }
       return CreateDraft.fromStorageMap(Map<String, dynamic>.from(decoded));
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'create draft payload decode failed; corrupt entry ignored',
+        name: 'CreateDraftLocalStorage',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }

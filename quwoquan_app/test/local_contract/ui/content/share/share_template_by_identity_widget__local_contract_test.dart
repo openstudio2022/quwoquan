@@ -8,12 +8,17 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/share/content_circle_share_picker_route.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
@@ -86,13 +91,13 @@ void main() {
     );
     expect(find.text(UITextConstants.shareTemplateMomentTitle), findsOneWidget);
     expect(find.text(UITextConstants.copyLink), findsOneWidget);
-    expect(find.text(UITextConstants.shareActionSavePoster), findsOneWidget);
-    expect(find.text(UITextConstants.shareInternalTitle), findsOneWidget);
+    expect(find.text(ChatText.shareActionSavePoster), findsOneWidget);
+    expect(find.text(ChatText.shareInternalTitle), findsOneWidget);
     expect(find.text(UITextConstants.shareTargetCircle), findsOneWidget);
-    expect(find.text(UITextConstants.shareTargetGroup), findsOneWidget);
-    expect(find.text(UITextConstants.shareTargetMessage), findsOneWidget);
-    expect(find.text(UITextConstants.shareExternalTitle), findsOneWidget);
-    expect(find.text(UITextConstants.shareActionMore), findsOneWidget);
+    expect(find.text(ChatText.shareTargetGroup), findsOneWidget);
+    expect(find.text(ChatText.shareTargetMessage), findsOneWidget);
+    expect(find.text(ChatText.shareExternalTitle), findsOneWidget);
+    expect(find.text(ChatText.shareActionMore), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('content-share-close-button')),
       findsOneWidget,
@@ -103,6 +108,7 @@ void main() {
   testWidgets('点击分享动作会委托给 handler 并触发完成回调', (tester) async {
     final handler = _FakeShareActionHandler();
     final completed = <String>[];
+    final telemetry = _CapturingTelemetryRecorder();
     final template = ContentShareTemplateBuilder.build(
       surfaceView: ContentSurfaceViewMapper.fromDto(
         MicroPostDto(
@@ -134,6 +140,9 @@ void main() {
           body: ContentShareSheet(
             template: template,
             actionHandler: handler,
+            journeyEventTracker: JourneyEventTracker(
+              telemetryReporter: telemetry,
+            ),
             onActionCompleted: (result) async {
               completed.add(result.actionId);
             },
@@ -147,6 +156,11 @@ void main() {
 
     expect(handler.executed, equals(<String>['copy_link']));
     expect(completed, equals(<String>['copy_link']));
+    expect(telemetry.payloads, hasLength(1));
+    expect(telemetry.payloads.single.extensions['journey'], 'content_share');
+    expect(telemetry.payloads.single.extensions['action'], 'copy_link');
+    expect(telemetry.payloads.single.extensions['result'], 'success');
+    expect(telemetry.payloads.single.extensions['durationMs'], isA<int>());
   });
 
   testWidgets('最近聊天加载失败只降级对应分区并保留全部分享入口', (tester) async {
@@ -173,9 +187,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.text(UITextConstants.shareTargetCircle), findsOneWidget);
-    expect(find.text(UITextConstants.shareTargetGroup), findsOneWidget);
-    expect(find.text(UITextConstants.shareTargetMessage), findsOneWidget);
-    expect(find.text(UITextConstants.shareExternalTitle), findsOneWidget);
+    expect(find.text(ChatText.shareTargetGroup), findsOneWidget);
+    expect(find.text(ChatText.shareTargetMessage), findsOneWidget);
+    expect(find.text(ChatText.shareExternalTitle), findsOneWidget);
 
     await tester.tap(find.text(UITextConstants.tryAgain));
     await tester.pump();
@@ -345,10 +359,7 @@ void main() {
     );
 
     expect(template.isBlocked, isTrue);
-    expect(
-      find.text(UITextConstants.sharePrivateBlocked),
-      findsAtLeastNWidgets(1),
-    );
+    expect(find.text(ChatText.sharePrivateBlocked), findsAtLeastNWidgets(1));
     expect(find.text(UITextConstants.copyLink), findsNothing);
   });
 
@@ -392,7 +403,7 @@ void main() {
       findsAtLeastNWidgets(1),
     );
     expect(find.text(UITextConstants.copyLink), findsOneWidget);
-    expect(find.text(UITextConstants.shareActionSavePoster), findsOneWidget);
+    expect(find.text(ChatText.shareActionSavePoster), findsOneWidget);
   });
 
   testWidgets('内容分享面板的群聊入口只展示群会话', (tester) async {
@@ -400,7 +411,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(chat),
+          chatRepositoryCompositionProvider.overrideWithValue(chat),
           authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
         ],
         child: MaterialApp(
@@ -419,14 +430,14 @@ void main() {
 
     await tester.tap(find.text('open-connected-share'));
     await tester.pumpAndSettle();
-    expect(find.text(UITextConstants.shareInternalTitle), findsOneWidget);
+    expect(find.text(ChatText.shareInternalTitle), findsOneWidget);
     expect(find.text('最近私信'), findsOneWidget);
     expect(find.text('最近群聊'), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.shareTargetGroup));
+    await tester.tap(find.text(ChatText.shareTargetGroup));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.shareSelectGroupTitle), findsOneWidget);
+    expect(find.text(ChatText.shareSelectGroupTitle), findsOneWidget);
     expect(find.text('最近群聊'), findsOneWidget);
     expect(find.text('最近私信'), findsNothing);
   });
@@ -438,7 +449,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(chat),
+          chatRepositoryCompositionProvider.overrideWithValue(chat),
           forwardExternalShareServiceProvider.overrideWithValue(external),
         ],
         child: MaterialApp(
@@ -458,11 +469,9 @@ void main() {
 
     await tester.tap(find.text('open-wechat-share'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.text(UITextConstants.forwardActionWechatFriend),
-    );
+    await tester.ensureVisible(find.text(ChatText.forwardActionWechatFriend));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.forwardActionWechatFriend));
+    await tester.tap(find.text(ChatText.forwardActionWechatFriend));
     await tester.pump();
 
     expect(external.targets, <ForwardExternalShareTarget>[
@@ -482,7 +491,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(chat),
+          chatRepositoryCompositionProvider.overrideWithValue(chat),
           forwardExternalShareServiceProvider.overrideWithValue(external),
         ],
         child: MaterialApp(
@@ -502,10 +511,8 @@ void main() {
 
     await tester.tap(find.text('open-completed-share'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.text(UITextConstants.forwardActionWechatFriend),
-    );
-    await tester.tap(find.text(UITextConstants.forwardActionWechatFriend));
+    await tester.ensureVisible(find.text(ChatText.forwardActionWechatFriend));
+    await tester.tap(find.text(ChatText.forwardActionWechatFriend));
     await tester.pump();
 
     expect(outboundShares.lastCommand?.postId, 'share_wechat_completed');
@@ -526,7 +533,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(chat),
+          chatRepositoryCompositionProvider.overrideWithValue(chat),
           forwardExternalShareServiceProvider.overrideWithValue(external),
         ],
         child: MaterialApp(
@@ -545,11 +552,9 @@ void main() {
 
     await tester.tap(find.text('open-failing-share'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.text(UITextConstants.forwardActionWechatFriend),
-    );
+    await tester.ensureVisible(find.text(ChatText.forwardActionWechatFriend));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.forwardActionWechatFriend));
+    await tester.tap(find.text(ChatText.forwardActionWechatFriend));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
@@ -583,7 +588,7 @@ void main() {
               ownerUserId: 'owner_share',
               displayName: '分享测试分身',
               avatarUrl: '',
-              personaContextVersion: 'ctx_share',
+              contextVersion: 1,
             ),
           ),
         ],
@@ -621,6 +626,30 @@ void main() {
     expect(placementWriter.lastCommand?.circleId, 'circle_share_target');
     await tester.pump(const Duration(seconds: 4));
   });
+}
+
+final class _CapturingTelemetryRecorder implements AppTelemetryRecorder {
+  final List<AppTelemetryPayload> payloads = <AppTelemetryPayload>[];
+
+  @override
+  Future<void> clearPendingForLogout() async {}
+
+  @override
+  Future<AppTelemetryFlushResult> flush() async =>
+      AppTelemetryFlushResult.empty;
+
+  @override
+  void onNetworkAvailable() {}
+
+  @override
+  Future<AppTelemetryRecordResult> record(
+    AppTelemetryPayload payload, {
+    String? pageName,
+    DateTime? occurredAt,
+  }) async {
+    payloads.add(payload);
+    return AppTelemetryRecordResult.accepted;
+  }
 }
 
 ContentShareTemplate _publicTemplate(String postId) {
@@ -789,6 +818,36 @@ class _RecordingCirclePostPlacementWriter
       idempotentReplay: false,
     );
   }
+
+  @override
+  Future<CirclePostPlacementCommandResult> removePost(
+    RemoveCirclePostCommand command,
+  ) async => const CirclePostPlacementCommandResult(
+    placementId: 'placement-share-target',
+    version: 1,
+    state: 'removed',
+    idempotentReplay: false,
+  );
+
+  @override
+  Future<CirclePostPlacementCommandResult> setPinned(
+    PinCirclePostCommand command,
+  ) async => const CirclePostPlacementCommandResult(
+    placementId: 'placement-share-target',
+    version: 1,
+    state: 'active',
+    idempotentReplay: false,
+  );
+
+  @override
+  Future<CirclePostPlacementCommandResult> setFeatured(
+    FeatureCirclePostCommand command,
+  ) async => const CirclePostPlacementCommandResult(
+    placementId: 'placement-share-target',
+    version: 1,
+    state: 'active',
+    idempotentReplay: false,
+  );
 }
 
 class _RecordingOutboundShareWriter
