@@ -37,6 +37,9 @@ class AppRoutePaths {
   static const String interestMatch = '/interest-match';
   static const String interestMatchSegment = 'interest-match';
 
+  static const String interestOnboarding = '/onboarding/interests';
+  static const String interestOnboardingSegment = 'interests';
+
   static const String chat = '/chat';
   static const String chatSegment = 'chat';
 

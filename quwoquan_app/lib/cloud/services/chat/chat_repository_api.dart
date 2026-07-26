@@ -145,7 +145,7 @@ abstract class ChatMemberRepository {
   Future<List<ChatConversationMemberDto>> searchMembers({
     required String conversationId,
     required String query,
-    int limit = 50,
+    int limit = CloudApiDefaults.chatMemberSearchLimit,
   });
 
   Future<void> addMembers({
@@ -206,7 +206,7 @@ enum ChatSelectableGroupSource {
 
 /// Chat「从群聊/圈子中选择联系人」二级流程（图四来源列表 / 图五群成员多选）。
 ///
-/// 与 contracts/metadata/messages/conversation/service.yaml 的
+/// 与 quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml 的
 /// `ListSelectableGroupConversations` / `ListSelectableGroupContactMembers`
 /// 一一对应。互关好友判定与计数在云侧完成，端侧不再逐群多次拉成员求交集。
 ///
@@ -256,7 +256,7 @@ abstract class ChatGroupAdminRepository {
 }
 
 /// Chat 域 Repository：会话、消息、成员、联系人等业务对象入口。
-/// 接口与 contracts/metadata/messages/conversation/service.yaml 17 个 API 一一对应。
+/// 接口与 quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml 17 个 API 一一对应。
 ///
 /// 由 5 个 ≤10 方法子接口组合（R02）。既有消费方继续依赖 `ChatRepository`
 /// 不变；新消费方可只依赖所需子接口。

@@ -1,170 +1,257 @@
-# L3 Story：text-post-commercial-publication
+# L3 Story：TEXT 内容商用发布 (`text-post-commercial-publication`)
 
-## 节点定位
+> 所属能力：[`publish-comment-reaction`](../spec.md)
+>
+> Journey / Scenario：[`JNY-003 / SCN-008`](../../../spec.md#scn-008)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- `L1_domain_service`: `discovery-content`
-- `L2_business_capability`: `publish-comment-reaction`
-- `L3_story`: `text-post-commercial-publication`
-- AppRoot Journey: `content-creation-to-publication`
-- Scenario: `text-post-create-publish-return`
+## 1. 用户价值
 
-## 用户目标
+作为内容创作者或浏览者，我希望写文字从编辑、显式形态确认、发布前安全准入、可靠提交到结果回流与运营观测的商用闭环，从而完成可恢复的内容创作、发现或互动。
 
-用户从全局创作入口选择「写文字」后，可以先写再决定发布为短文字或文章；草稿不会丢失，
-发布失败有明确恢复动作，发布成功立即看到结果和分发去向。任何没有获得机器 allow 或人工
-approve 的内容都不会进入公开读模型。
+## 2. 范围与非目标
 
-## 业务对象与边界
+### In Scope
 
-| 对象 | 责任 | 边界 |
-|---|---|---|
-| `LocalPostDraft` | 端侧自动保存、恢复、放弃 | 仅当前设备和当前 Persona，不是远端 Post |
-| `PostPublicationIntent` | 冻结一次提交的 payload、媒体顺序与幂等键 | 同一草稿只有一个不可变 intent |
-| `Post` | 已提交的不可变内容 revision；只有 approved+published 可公开消费 | 远端允许 `pending_review → published|rejected → deleted`，机器 allow 可直接 published |
-| `PostPublicationReceipt` | 提交已被接受的稳定回执 | `state` 只允许 `pending_review` 或 `published`；仅 `published` 允许端侧清理草稿 |
-| `MediaAsset` | 文章插图和封面的已验证远端素材 | 发布命令不得携带本地路径 |
-| `CirclePostPlacement` | Post 与 Circle 的分发关系 | 独立聚合；Post 不保存 circleIds |
-| `PostModerationCase` | 对 pending_review revision 的发布前人工审核，以及已发布 revision 的举报复核 | 绑定 `postId + version + contentDigest`，不承载草稿正文 |
+- micro/article 统一文字编辑器与显式发布形态确认。
+- LocalPostDraft、PostPublicationIntent、Post receipt 和 CirclePostPlacement 的可靠协作。
+- 发布前长度、频控和内容安全 fail-closed 准入。
+- 发布结果回流、发布任务恢复、tag 事实、审核运营和发布漏斗。
 
-## 领域裁决
+### Out of Scope
 
-### 1. 单轨 Post 生命周期
+- 发布后正文编辑。
+- 跨设备云草稿。
+- AI 代写与模板市场。
 
-`SubmitPostPublication --allow--> published --DeletePost--> deleted`
+## 3. 行为要求
 
-- `draft` 只属于 `LocalPostDraft`。
-- `review` 或安全依赖 `unavailable` 只能创建不可公开的 `pending_review` Post，并通过
-  `PostSubmittedForReview` 打开人工 Case。
-- Case approved 后进入 published；rejected 后进入 rejected。pending/rejected 只允许作者读取。
-- `archived` 没有业务命令和页面，不进入 `PostStatus`。
-- `PostModerationCase` 状态闭集为
-  `pending → reviewed → approved|rejected`，任意非 superseded 状态可在 revision 失效后进入
-  `superseded`。
+<a id="req-001"></a>
+### REQ-001 写文字入口正文优先且短文字与文章由用户显式确认
 
-### 2. 强制发布前安全准入
+- micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
 
-`SubmitPostPublication` 在媒体绑定和 payload 规范化后、事务提交前依次执行：
+<a id="req-002"></a>
+### REQ-002 文字长度合同和发布频控端云同源
 
-1. 长度与结构校验。
-2. Persona 级发布频控。
-3. `PublicationSafetyGate` 内容安全判定。
+- App 与真实 content API 必须对相同输入边界返回同一 canonical 错误语义。
 
-安全门返回：
+<a id="req-003"></a>
+### REQ-003 发布前安全门 fail-closed 且未获批准时不公开 Post
 
-- `allow`：继续原子创建 Post + receipt + outbox。
+- 准入的四种结论、人工批准/拒绝与并发重放必须收敛到唯一发布状态。
+
+<a id="req-004"></a>
+### REQ-004 发布意图可恢复可管理且鉴权失败不空转
+
+- 重启后必须恢复待发布状态；错误分类决定可重试或放弃，二者不得同时可用。
+
+<a id="req-005"></a>
+### REQ-005 发布成功立即回流真实 Post 并刷新消费投影
+
+- 写短文字和写文章两条完整 UAT 均从底栏加号走到回读页。
+
+<a id="req-006"></a>
+### REQ-006 标签和实体只以可证实 semantic mention 进入交集投影
+
+- picker、payload、服务端投影和回读均有合同证据。
+
+<a id="req-007"></a>
+### REQ-007 创作发布漏斗进入产品遥测单轨并可运营
+
+- App reporter、product-ops ingestion、dashboard 和 alert 必须由同一版本的直接契约证据串联。
+
+<a id="req-008"></a>
+### REQ-008 举报审核可运营且决定与 Post revision 一致
+
+- Portal、content API、通知消费与公开读路径有端到端证据。
+
+<a id="req-009"></a>
+### REQ-009 安全检查未放行时只能创建不可公开的 `pending_review` Post
+
+- 安全检查返回 `review` 或依赖 `unavailable` 时，只能创建不可公开的 `pending_review` Post。
 - `review`：创建 pending_review Post + receipt + review outbox；公开读模型不得消费。
-- `reject`：返回 metadata 定义的结构化拒绝错误，保留本地草稿，不创建 Post。
 - `unavailable`：按 fail-closed 策略进入 pending_review 与人工 Case，不得 fallback 为 published。
-
-生产 composition 缺安全门或频控端口必须 fail-fast；alpha/test 使用确定性 typed adapter，
-不得在生产失败后 fallback 为 allow。
-
-### 3. 文本形态由用户确认
-
-编辑器可依据标题、段落、字数和插图建议 `micro` 或 `article`，但发布确认页必须显示：
-
-- `短文字`：正文为主，进入 feed 文字卡。
-- `文章`：Markdown + 资源清单 +渲染画像，进入作品浏览器。
-
-建议只设置默认选中项；用户可修改。最终 `contentType` 必须来自确认结果，而不是提交时再次
-静默推导。
-
-## 功能规格
-
-### F1 入口与登录续接
-
-- 游客可先看到创作动作面板。
-- 点击「写文字」才触发 `createPost` 登录门。
-- 关闭登录回安全首页且不循环；登录成功进入原文字编辑器。
-
-### F2 编辑与标题渐进披露
-
-- 首屏标题为「写文字」，不提前暴露「长文编辑」。
-- 默认焦点进入正文。
-- 标题默认是「添加标题（可选）」入口，点击或恢复有标题草稿时才展开输入框。
-- 正文、标题、插图、标签、实体 mention 使用同一 `CreateEditorState`，不新建第二编辑器。
-
-### F3 单一长度合同
-
-长度按 Unicode rune 计数，端云使用同一常量：
-
-- 标题：`80`
-- micro 正文：`5000`
-- article Markdown：`20000`
-- 摘要：`240`
-- semantic mentions：`30`
-
-端侧在输入时显示剩余量并阻止继续输入；云侧对绕过端侧的请求返回
-`CONTENT.USER.content_too_long`。
-
-### F4 标签与交集事实
-
 - 标签选择使用 tag 域 typed `TagCatalogQuery`，不得使用本地常量或自由字符串。
-- 选择结果写入 `semanticMentions(kind=tag,status=published)`，`tagRefs` 只由服务端投影。
 - 无标签也可发布；不得把推荐相似度伪装为共同标签事实。
-
-### F5 发布任务与恢复
-
-- 队列公开 typed 状态：`submitting / retry_wait / blocked / accepted`。
-- 用户可查看 retry_wait/blocked 的错误原因、重试或放弃。
 - `unauthorized` 不进入无限网络重试，必须走登录续接。
 - `rate_limited` 使用服务端 recovery-after 调度；不可恢复校验错误进入 blocked。
-- receipt.state=`pending_review` 时保留草稿快照和任务；只有状态查询变为 published 才清理草稿。
-
-### F6 发布结果回流
-
-- micro 发布成功打开内容详情。
-- article 发布成功打开作品浏览器对应文章。
 - 发布结果页/目标页必须显示「已发布」与实际 circle/entity/tag/location 去向摘要。
 - 同时 invalidate feed 与当前 Persona 作品列表；不能要求用户手动下拉才看到新内容。
-
-### F7 可观测
-
-创作漏斗使用 ops telemetry catalog 的强类型 `content_publication` 事件，不再写入推荐行为
-`/content/behaviors`：
-
-`editor_ready → draft_saved|draft_restored → submit_started → queued|blocked|published`
-
-必带 `contentType / stage / result / objectState / surfaceId`；可选
-`durationMs / failReasonCode / correlationHash`。正文、标题、原始 intent id 和用户标识不得上报。
-
-黄金指标：
-
-1. 有效发布率：published / submit_started。
-2. 开始创作到内容可见 P95。
-3. retry_wait 后恢复成功率。
-
-### F8 发布后治理
-
 - 已发布正文不可编辑；删除走 `DeletePost` 和墓碑。
-- 举报打开当前 revision 的 `PostModerationCase`。
-- Portal 必须能读取 pending/reviewed case 并执行 review/approve/reject。
-- rejected 后 feed/detail 不再公开，作者在站内通知和自己的内容状态中看到原因与申诉入口。
 
-## 非功能
+## 4. 契约引用
 
-| 指标 | 商用门槛 |
-|---|---|
-| 编辑器 warm 可交互 | P95 ≤ 1.2s |
-| 草稿自动保存成功率 | ≥ 99.9% |
-| `SubmitPostPublication` | P95 ≤ 800ms，可用性 ≥ 99.9% |
-| 发布开始到内容可见 | P95 ≤ 2s（无媒体转码） |
-| 重复 intent 创建 Post 数 | 恒为 1 |
-| 未获 allow/approve 的公开 Post 数 | 恒为 0 |
-| 发布事件采集完整率 | ≥ 99.9% |
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/operations.yaml`
+- canonical：`quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_publication_contracts.dart`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/errors.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/object.yaml`
+- canonical：`quwoquan_app/lib/ui/content/entry/providers/post_publication_intent_queue_provider.dart`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/work_browser_item.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml`
+- canonical：`quwoquan_service/services/tag-service/contracts/tag/tag_node_view/operations.yaml`
+- canonical：`quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/event_catalog.yaml`
+- canonical：`quwoquan_ops/observability/monitoring/alerts/content_contract/post.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/trust_safety/post_moderation_case/operations.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/trust_safety/post_moderation_case/fields.yaml`
 
-## 灰度与回滚
+## 5. 验收场景
 
-- 不保留旧 CreatePost/Bind/Publish 三段流程或静默分型双轨。
-- 阈值和安全策略来自受控配置；关闭外部安全 provider 时必须 fail-closed 到本地确定性规则，
-  不能绕过安全门。
-- 发布回流 UI 可回滚到详情直达，但不得回滚为只 Toast 后关闭。
-- 任何回滚不得破坏已持久化 LocalPostDraft、intent 或 receipt 的可读性。
+<a id="gwt-001"></a>
+### GWT-001 写文字入口正文优先且短文字与文章由用户显式确认
 
-## Out of Scope
+- GIVEN 用户已登录并从全局创作面板点击写文字。
+- WHEN 用户分别输入轻量正文和包含标题、多段落或插图的重内容并进入发布确认。
+- THEN 顶栏显示写文字而非长文编辑，默认焦点进入正文。
+- THEN 标题以添加标题可选入口渐进展开。
+- THEN 系统可建议短文字或文章，但确认页显示并允许用户修改最终形态。
+- THEN 最终 typed command 的 contentType 与用户确认一致，提交阶段不得再次静默推导。
 
-- 发布后正文在线编辑。
-- 跨设备云草稿。
-- AI 代写、AI 封面生成或模板市场。
-- 把推荐相似度当作标签、关系或交集事实。
+<a id="gwt-002"></a>
+### GWT-002 文字长度合同和发布频控端云同源
 
+- GIVEN 标题、micro 正文、article Markdown、摘要与 mention 已声明唯一长度上限。
+- WHEN 用户在边界值和超边界值提交，或同一 Persona 在频控窗口内连续发布。
+- THEN 边界值可发布，超界请求返回 CONTENT.USER.content_too_long。
+- THEN 频控命中返回 CONTENT.USER.rate_limited 和 recovery-after。
+- THEN App 展示剩余量并按恢复时间调度，不无限立即重试。
+
+<a id="gwt-003"></a>
+### GWT-003 发布前安全门 fail-closed 且未获批准时不公开 Post
+
+- GIVEN content-service 已装配 PublicationSafetyGate。
+- WHEN 安全门分别返回 allow、review、reject 和 unavailable。
+- THEN allow 原子创建一个 published Post、receipt 和 outbox。
+- THEN review 创建不可公开 pending_review Post、receipt 和 review outbox。
+- THEN reject 返回结构化拒绝，草稿保留且 Post/receipt/outbox 数均为零。
+- THEN unavailable 按 fail-closed 策略创建 pending_review 并进入人工 Case，公开 Post 数为零。
+- THEN production composition 缺端口时启动失败。
+
+<a id="gwt-004"></a>
+### GWT-004 发布意图可恢复可管理且鉴权失败不空转
+
+- GIVEN 用户已产生 submitting、retry_wait 或 blocked 发布意图。
+- WHEN 网络恢复、登录失效、服务限流、永久校验失败或用户主动放弃。
+- THEN 发布任务页展示状态、错误与重试或放弃动作。
+- THEN unauthorized 进入登录续接而非网络重试。
+- THEN rate_limited 尊重 recovery-after。
+- THEN 仅 published receipt 清理草稿；放弃后后台不得复活 intent。
+
+<a id="gwt-005"></a>
+### GWT-005 发布成功立即回流真实 Post 并刷新消费投影
+
+- GIVEN micro 或 article 发布返回 published receipt。
+- WHEN App 处理成功结果。
+- THEN micro 打开内容详情，article 打开作品浏览器文章。
+- THEN 目标页展示已发布和真实圈子、实体、标签、位置去向。
+- THEN feed 与当前 Persona 作品列表失效并回读同一 Post。
+- THEN 不出现仅 Toast 后关闭或要求手动下拉的断点。
+
+<a id="gwt-006"></a>
+### GWT-006 标签和实体只以可证实 semantic mention 进入交集投影
+
+- GIVEN 用户可从 typed tag/entity picker 选择目标，也可不选择。
+- WHEN 用户发布包含标签、实体或两者都无的文字内容。
+- THEN 选择项写入 semanticMentions，服务端只投影合法 published mention。
+- THEN 非法、pending 或 rejected mention 不进入 tagRefs/entityRefs。
+- THEN 推荐相似度和自由字符串不得伪装成事实标签。
+
+<a id="gwt-007"></a>
+### GWT-007 创作发布漏斗进入产品遥测单轨并可运营
+
+- GIVEN 写文字页面已进入、保存草稿并提交发布。
+- WHEN 发布成功、排队、阻断或失败。
+- THEN App 只提交强类型 content_publication 事件，不调用推荐行为 ReportBehaviors。
+- THEN 事件包含 contentType、stage、result、objectState、surfaceId，且不含正文或原始 intentId。
+- THEN Dashboard 可计算三项黄金指标，发布可用性和 P95 告警均有规则。
+
+<a id="gwt-008"></a>
+### GWT-008 举报审核可运营且决定与 Post revision 一致
+
+- GIVEN 已发布 Post 被举报并打开当前 revision 的 PostModerationCase。
+- WHEN operator 在 Portal 领取、复核并批准或拒绝。
+- THEN pending、reviewed、approved、rejected、superseded 状态迁移符合闭集。
+- THEN 旧 revision 决定不能覆盖新 revision。
+- THEN rejected Post 从公开读模型下架，作者收到站内信并可查看原因。
+- THEN Portal 不使用 mock/seed 数据。
+
+## 6. 依赖
+
+- 前置要求：[`publish-comment-reaction`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 写文字入口正文优先且短文字与文章由用户显式确认
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 文字长度合同和发布频控端云同源
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：App local_contract 与真实 content API 对同一边界和错误码给出一致结果。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 发布前安全门 fail-closed 且未获批准时不公开 Post
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：四种结论、人工批准/拒绝与并发重放均有 local_contract 和 api_integration 证据。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 发布意图可恢复可管理且鉴权失败不空转
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：重启恢复、错误分类、重试与放弃状态机均有 local_contract。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-005"></a>
+### OPEN-005 发布成功立即回流真实 Post 并刷新消费投影
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：写短文字和写文章两条完整 UAT 均从底栏加号走到回读页。
+- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-006"></a>
+### OPEN-006 标签和实体只以可证实 semantic mention 进入交集投影
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：picker、payload、服务端投影和回读均有合同证据。
+- 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-007"></a>
+### OPEN-007 创作发布漏斗进入产品遥测单轨并可运营
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺少 App reporter、product-ops ingestion、dashboard 和 alert 的同源端到端证据。
+- 完成判定：`GWT-007` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-008"></a>
+### OPEN-008 举报审核可运营且决定与 Post revision 一致
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Portal、content API、通知消费与公开读路径有端到端证据。
+- 完成判定：`GWT-008` 对应行为满足且真实测试 `spec_ref` 有效

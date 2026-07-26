@@ -1,7 +1,7 @@
 import '../operation_request_payload.dart';
 
 /// Circle 聚合生命周期与配置命令的 pure contracts。
-/// 真相源：contracts/metadata/social/circle/{service,fields}.yaml。
+/// 真相源：quwoquan_service/services/circle-service/contracts/circle_management/circle/{service,fields}.yaml。
 /// 命名状态迁移由服务端内部 version CAS 保护，命令不携带调用方版本字段。
 
 enum CircleLifecycleStatus { active, archived, deleted }

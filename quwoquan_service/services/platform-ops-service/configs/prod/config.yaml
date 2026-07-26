@@ -1,8 +1,0 @@
-# prod overrides (container/k8s)
-# Recommend injecting APP_ENV=prod, CONFIG_VERSION, IMAGE_VERSION, CONFIG_ROOT via env.
-service:
-  http:
-    addr: ":18087"
-
-postgres:
-  dsn: "${POSTGRES_DSN}"

@@ -485,6 +485,11 @@ LoginReasonCopy loginReasonCopyForPromptReason(AuthPromptReason reason) {
       subtitle: UITextConstants.loginAccountSuspended,
       source: LoginReasonCopySource.localSession,
     ),
+    AuthPromptReason.accountClosed => const LoginReasonCopy(
+      title: UITextConstants.loginTitleActionRequired,
+      subtitle: UITextConstants.loginAccountDeleted,
+      source: LoginReasonCopySource.localSession,
+    ),
     AuthPromptReason.actionRequired => const LoginReasonCopy(
       title: UITextConstants.loginTitleActionRequired,
       subtitle: UITextConstants.loginSubtitleActionRequired,

@@ -1,0 +1,121 @@
+kind: aggregate_root
+description: '会话聚合。直聊/群聊/圈子聊/加密四种会话类型。
+
+  助手（小趣）不再是独立会话类型，而是作为特殊成员（memberType=assistant）
+
+  可被邀请到任意会话中，帮助处理聊天中的信息（总结、翻译、问答等）。
+
+  成员通过独立 ConversationMember collection 支撑大群，
+
+  用户级设置拆分为独立 ConversationUserState collection（消除写放大），
+
+  Message seq、幂等回执与 outbox 由 Message Store 在同一 MongoDB transaction 中提交。
+
+  Conversation 只保留可由 Message 事件重建的摘要投影。
+
+  '
+identity:
+  fields:
+  - id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: circleGroup
+  on_delete: detach
+  reference_fields:
+  - circleGroupId
+  target_object: circle.CircleGroup
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: circle
+  on_delete: detach
+  reference_fields:
+  - circleId
+  target_object: circle.Circle
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: creatorPersona
+  on_delete: retain
+  reference_fields:
+  - creatorId
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: announcementUpdaterPersona
+  on_delete: retain
+  reference_fields:
+  - announcementUpdatedBy
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: homepage
+  on_delete: detach
+  reference_fields:
+  - entityId
+  target_object: entity.Homepage
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: groupAvatarAsset
+  on_delete: detach
+  reference_fields:
+  - groupAvatarAssetId
+  target_object: content.MediaAsset
+- access: named_reader
+  cardinality: N:N
+  consistency: eventual
+  kind: reference
+  name: initialMembers
+  on_delete: retain
+  reference_fields:
+  - initialMemberIds
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: lastMessage
+  on_delete: detach
+  reference_fields:
+  - lastMessageId
+  target_object: chat.Message
+local_identity_reasons:
+  originRequestId: immutable correlation or idempotency key scoped to this fact or command; it is not
+    a business-object reference
+capabilities:
+- queryable
+- searchable
+taggable: true
+vector_enabled: false
+business_rules:
+- type、creatorId 与 origin binding 创建后不可变
+- Conversation 只管理会话身份、标题、策略和生命周期
+- circleGroupId 非空时必须一对一绑定 active CircleGroup；绑定只可由 CircleGroupCreated 的 durable event provisioner 写入，普通
+  HTTP 创建命令不得提交 circleId 或 circleGroupId
+- CircleGroupMembership 的 active、left、removed、role_changed 与 CircleGroupArchived 仅由 durable projector
+  写入对应 Conversation 成员、用户态与终态；圈群成员治理不接受 Chat HTTP 旁路
+- 成员、用户状态与 Message 分别由其聚合维护
+- maxSeq 只由 MessageCommitted 事件单调推进，不由客户端提交
+- dissolved 为终态且通过 outbox 通知成员与投影收敛
+lifecycle:
+  states:
+  - active
+  - dissolved
+  optimistic_concurrency: version
+  idempotency: command_receipt

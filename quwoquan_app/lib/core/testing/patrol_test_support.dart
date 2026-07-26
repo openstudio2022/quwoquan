@@ -6,14 +6,15 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
-import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app_bootstrap.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/local_dev_https_trust.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
     show accountSessionLoginCommandWriterProvider;
@@ -40,14 +41,20 @@ const String _patrolT4AuthToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const String _patrolT4RefreshToken = String.fromEnvironment(
   'TEST_REFRESH_TOKEN',
 );
+const String _patrolRuntimeInstallId = String.fromEnvironment(
+  'QWQ_PATROL_INSTALL_ID',
+  defaultValue: 'patrol-local-remote-acceptance',
+);
 
-bool _patrolAppStarted = false;
+Future<void>? _patrolAppLaunch;
 Completer<void>? _runtimeAnonymousSessionReady;
 String _runtimeAnonymousSessionFailure = '';
 Future<void>? _runtimeAnonymousSessionLogin;
 
 bool get _usesRuntimeAnonymousSession =>
-    _patrolSessionMode == 'local_gamma_anonymous';
+    _patrolSessionMode == 'beta_local_anonymous_runtime' ||
+    _patrolSessionMode == 'gamma_local_anonymous_runtime' ||
+    _patrolSessionMode == 'prod_sim_anonymous_runtime';
 
 bool get _usesAnonymousPublicVideoSession =>
     _patrolSessionMode == 'beta_local_anonymous_public_video' ||
@@ -56,31 +63,36 @@ bool get _usesAnonymousPublicVideoSession =>
 Completer<void> _runtimeAnonymousSessionGate() =>
     _runtimeAnonymousSessionReady ??= Completer<void>();
 
-Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
-  if (!_patrolAppStarted) {
-    _patrolAppStarted = true;
-    await runQuwoquanApp(
-      providerScopeOverrides: [
-        welcomeCompletedProvider.overrideWith(
-          _PatrolWelcomeCompletedNotifier.new,
-        ),
-        authSessionControllerProvider.overrideWith(
-          _PatrolAuthSessionController.new,
-        ),
-      ],
-    );
-  }
-  // gamma 远端冷启动会带来持续中的初始化任务，直接等待全局 settle
+/// Starts the real App exactly once from the generated Patrol target.
+///
+/// Environment-specific test wiring is supplied by the caller so production
+/// libraries never retain an Alpha fixture or Mock composition callback.
+Future<void> launchPatrolAppOnce(
+  PatrolIntegrationTester $, {
+  List<Override> providerScopeOverrides = const <Override>[],
+}) async {
+  _patrolAppLaunch ??= runQuwoquanApp(
+    autoCompleteStartupWelcomeForTest: true,
+    providerScopeOverrides: [
+      ...providerScopeOverrides,
+      authSessionControllerProvider.overrideWith(
+        _PatrolAuthSessionController.new,
+      ),
+    ],
+  );
+  await _patrolAppLaunch!;
+  // 本地 Remote 冷启动会带来持续中的初始化任务，直接等待全局 settle
   // 容易把 Patrol user_acceptance 卡死在启动阶段。这里仅给首帧和首轮路由足够时间，
   // 后续由具体用例等待目标元素出现。
   await $.pump();
   await $.pump(const Duration(milliseconds: 300));
+  await _awaitPatrolBootstrap($);
   if (_usesRuntimeAnonymousSession) {
     await _startRuntimeAnonymousSessionFromMountedApp();
     await _runtimeAnonymousSessionGate().future.timeout(
-      const Duration(seconds: 15),
+      const Duration(seconds: 30),
       onTimeout: () => throw StateError(
-        'Patrol local Gamma anonymous session did not become ready'
+        'Patrol local Remote anonymous session did not become ready'
         '${_runtimeAnonymousSessionFailure.isEmpty ? '' : ': $_runtimeAnonymousSessionFailure'}',
       ),
     );
@@ -88,11 +100,36 @@ Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
   await $.pump(const Duration(seconds: 1));
 }
 
+Future<void> _awaitPatrolBootstrap(PatrolIntegrationTester $) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 12));
+  while (DateTime.now().isBefore(deadline)) {
+    if (_tryReadPatrolRouter() != null) {
+      return;
+    }
+    if (find.text(UITextConstants.startupRecoveryTitle).evaluate().isNotEmpty) {
+      throw StateError(
+        _patrolBootstrapFailureDescription(recoveryVisible: true),
+      );
+    }
+    await $.pump(const Duration(milliseconds: 250));
+  }
+  throw StateError(_patrolBootstrapFailureDescription());
+}
+
+String _patrolBootstrapFailureDescription({bool recoveryVisible = false}) {
+  final routerError = appRouterLibraryLastLoadError;
+  return 'Patrol bootstrap did not mount a Navigator '
+      '(recoveryVisible=$recoveryVisible, '
+      'routerLibraryLoaded=$isAppRouterLibraryLoaded, '
+      'routerLoadAttempt=$appRouterLibraryLoadAttempt, '
+      'routerLoadError=${routerError?.runtimeType})';
+}
+
 Future<void> _startRuntimeAnonymousSessionFromMountedApp() async {
   final navigators = find.byType(Navigator).evaluate();
   if (navigators.isEmpty) {
     throw StateError(
-      'Patrol local Gamma anonymous session requires a mounted Navigator',
+      'Patrol local Remote anonymous session requires a mounted Navigator',
     );
   }
   final container = ProviderScope.containerOf(navigators.first);
@@ -102,13 +139,13 @@ Future<void> _startRuntimeAnonymousSessionFromMountedApp() async {
   await LocalDevHttpsTrust.installForCurrentRuntime();
   container.read(startupAuthRestoreGateProvider.notifier).open();
   container.read(authSessionControllerProvider);
-  _runtimeAnonymousSessionLogin ??= _authenticateLocalGammaAnonymously(
+  _runtimeAnonymousSessionLogin ??= _authenticateLocalRuntimeAnonymously(
     container,
   );
   unawaited(_runtimeAnonymousSessionLogin!);
 }
 
-Future<void> _authenticateLocalGammaAnonymously(
+Future<void> _authenticateLocalRuntimeAnonymously(
   ProviderContainer container,
 ) async {
   final gate = _runtimeAnonymousSessionGate();
@@ -117,8 +154,8 @@ Future<void> _authenticateLocalGammaAnonymously(
         .read(accountSessionLoginCommandWriterProvider)
         .loginAnonymous(
           LoginAnonymousCommand(
-            installId: 'patrol-local-gamma-two-province',
-            deviceFingerprintHash: 'patrol-local-gamma-two-province',
+            installId: _patrolRuntimeInstallId,
+            deviceFingerprintHash: _patrolRuntimeInstallId,
             platform: CloudRequestHeaders.platform(),
             appVersion: 'local-e2e',
           ),
@@ -143,7 +180,7 @@ Future<void> _authenticateLocalGammaAnonymously(
       // 会使 Patrol 只报 APP.SYSTEM.unknown_error，无法判断是 TLS、网关还是鉴权。
       gate.completeError(
         StateError(
-          'Patrol local Gamma anonymous session failed: '
+          'Patrol local Remote anonymous session failed: '
           '$_runtimeAnonymousSessionFailure, '
           'localHttpsTrustInstalled=${LocalDevHttpsTrust.isInstalled}',
         ),
@@ -171,27 +208,35 @@ Future<GoRouter> _waitForPatrolRouter(
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (DateTime.now().isBefore(deadline)) {
-    for (final element in find.byType(Navigator).evaluate()) {
-      try {
-        return GoRouter.of(element);
-      } catch (_) {
-        try {
-          return ProviderScope.containerOf(
-            element,
-          ).read(deferredAppRouterProvider);
-        } catch (_) {
-          continue;
-        }
-      }
+    final router = _tryReadPatrolRouter();
+    if (router != null) {
+      return router;
+    }
+    if (find.text(UITextConstants.startupRecoveryTitle).evaluate().isNotEmpty) {
+      throw StateError(
+        _patrolBootstrapFailureDescription(recoveryVisible: true),
+      );
     }
     await $.pump(const Duration(milliseconds: 500));
   }
-  throw StateError('GoRouter did not become available within $timeout');
+  throw StateError(_patrolBootstrapFailureDescription());
 }
 
-final class _PatrolWelcomeCompletedNotifier extends WelcomeCompletedNotifier {
-  @override
-  bool build() => true;
+GoRouter? _tryReadPatrolRouter() {
+  for (final element in find.byType(Navigator).evaluate()) {
+    try {
+      return GoRouter.of(element);
+    } catch (_) {
+      try {
+        return ProviderScope.containerOf(
+          element,
+        ).read(deferredAppRouterProvider);
+      } catch (_) {
+        continue;
+      }
+    }
+  }
+  return null;
 }
 
 AuthSessionState buildPatrolAcceptanceSession({

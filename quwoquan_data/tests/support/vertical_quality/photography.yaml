@@ -1,0 +1,11 @@
+schema: quwoquan.vertical_quality_samples
+vertical: photography
+samples:
+  - id: photography.sample.test-topic-a
+    entityRef: /tag/Topic/test-topic-a
+    requiredEvidenceCategories: [open_license, photography_platform, stock_authorized]
+    requiredChecks: [license_proof, credit, model_release, aesthetic_quality, duplicate_scan]
+  - id: photography.sample.test-topic-b
+    entityRef: /tag/Topic/test-topic-b
+    requiredEvidenceCategories: [open_license, museum_archive, stock_authorized]
+    requiredChecks: [license_proof, credit, location_traceability, duplicate_scan]

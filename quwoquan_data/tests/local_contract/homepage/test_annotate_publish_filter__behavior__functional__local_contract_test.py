@@ -42,7 +42,7 @@ from content.review.publish_filter import apply_publish_filter  # noqa: E402
 from content.review.annotation.service import AnnotationDecision, apply_annotation  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
-EXECUTION_ID = "20260711--travel-article-annotation-filter--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260711--travel-article-annotation-filter--test-region-a--pilot-001"
 REF = "topic_x"
 
 

@@ -1,48 +1,92 @@
-# L3 Story：交集算法闭环（Feature / Ranking / Explain / Event）
+# L3 Story：交集算法闭环（Feature / Ranking / Explain / Event） (`intersection-algorithm-closure`)
 
-## 节点定位
+> 所属能力：[`intersection-unified-experience`](../spec.md)
 
-- `L1_domain_service`: `object-homepage-network`
-- `L2_business_capability`: `intersection-unified-experience`
-- `L3_story`: `intersection-algorithm-closure`
+> Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
 
-## 功能说明
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-把 §19 算法闭环落成可实施规格：Event 回流 → Feature 宽表 → ranking-signal-fusion 注入 → Explain primaryText 产出。与 `feed-orchestration-recommendation` 共享排序真相源，禁止第二套 ranker。
+## 1. 用户价值
 
-真相源：[intersection-definition-and-application.md](../../../../product/intersection-definition-and-application.md) §19。
+作为浏览对象主页的用户，
+我希望看到由真实关系与行为事实生成、可解释且可行动的交集原因，
+从而理解自己与对象的联系并选择可信下一步。
 
-## 范围
+## 2. 范围与非目标
 
-### Event
+### In Scope
 
-- content `behaviors.yaml`：impression/click 补 `intersectionSourceRef`；新增 `intersection_expand`。
-- 转化 follow/join 补 sourceRef 归因。
+- “交集算法闭环（Feature / Ranking / Explain / Event）”的输入、可观察主路径、失败语义以及与父能力的交接。
+- behaviors intersectionSourceRef + intersection_expand。
+- recommend_feature socialFeatures.intersection。
+- feature_registry intersection 特征。
+- ranking-signal-fusion 交集信号对齐。
+- Explain primaryText 产出归属。
 
-### Feature
+### Out of Scope
 
-- `recommend_feature.yaml` → `socialFeatures.intersection.*`
-- `services/rec-model-service/scripts/feature_registry.yaml` 同步字段
-- rec-model-service `transformer.py` 消费 intersection 特征（实现会话）
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-### Ranking
+## 3. 行为要求
 
-- `personalized-ranking--ranking-signal-fusion`：登记 intersection fact/affinity 信号权重
-- `feed_intersection_mixer` 70/20/10 附着层与排序层职责分离
+<a id="req-001"></a>
+### REQ-001 交集算法闭环（Feature / Ranking / Explain / Event）
 
-### Explain
+- ranking-signal-fusion spec 登记 intersection fact/affinity 权重入口。
+
+<a id="req-002"></a>
+### REQ-002 交集事实与亲和度权重入口
+
+- ranking-signal-fusion spec 登记 intersection fact/affinity 权重入口。
+- 无独立 intersection-only ranker 文档或 service.yaml。
+
+<a id="req-003"></a>
+### REQ-003 imaryText 由 Explain 管线产出，禁止 displayText/label hydrate 回退
+
+- primaryText 由 Explain 管线产出，禁止 displayText/label hydrate 回退。
+- 至少三个 §5.4 标准 kind 必须生成可读的主谓宾交集句，并保留可追踪事实来源。
+
+<a id="req-004"></a>
+### REQ-004 旅行 travel_photography 垂类三元组实例化 + 去桥接 codegen + hydration/打动真算 GWT（林墨 WS-ACC，§22.10/§23.4）
+
+- Dart 验收必须直接覆盖 6 种 `objectKind`、7 种 lifecycle、落点、实名代表人与 span 单通道不变量。
+- Go 测试必须直接覆盖 vertical、lifecycle 与 travel-impact 真算；端云门禁必须证明不存在桥接 registry。
+
+<a id="req-005"></a>
+### REQ-005 IntersectionService Explain 管线产出 primaryText（禁止 hydrate 回退 displayText）
 
 - `IntersectionService` Explain 管线产出 primaryText（禁止 hydrate 回退 displayText）
-- kind → 主谓宾模板注册表（与 §5.4 / §17.1 对齐）
 
-## Out of Scope
+## 4. 契约引用
 
-- Graph 多跳传播影响（P2）
-- 独立 Transformer 精排模型训练（可迭代，但 feature_registry 须先就位）
+- canonical：`recommendation/recommendation/recommendation_model_release/projections/recommend_feature.yaml`
+- canonical：`recommendation/recommendation/recommendation_model_release/projections/intersection_reason.yaml`
+- canonical：`recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml`
+- canonical：`recommendation/recommendation/recommendation_model_release/impact_help_type_registry.yaml`
 
-## 验收标准概要
+## 5. 验收场景
 
-- A1：feature_registry 含 ≥4 个 intersection 特征字段
-- A2：ranking-signal-fusion spec 引用 intersection 信号，无第二 ranker 文档
-- A3：contract 测试断言 primaryText 来自 Explain 管线，非 displayText 回退
-- A4：行为事件 payload 含 intersectionSourceRef
+<a id="gwt-001"></a>
+### GWT-001 交集算法闭环（Feature / Ranking / Explain / Event）
+
+- GIVEN 浏览对象主页的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“交集算法闭环（Feature / Ranking / Explain / Event）”对应的公开行为。
+- THEN ranking-signal-fusion spec 登记 intersection fact/affinity 权重入口。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`intersection-unified-experience`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 交集算法闭环（Feature / Ranking / Explain / Event） 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“交集算法闭环（Feature / Ranking / Explain / Event）”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

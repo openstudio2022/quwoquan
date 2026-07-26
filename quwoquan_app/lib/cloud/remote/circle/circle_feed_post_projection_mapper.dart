@@ -43,7 +43,7 @@ final class CircleFeedPostProjectionMapper {
       authorVerified: source.authorVerified,
       body: source.body,
       coverUrl: source.coverUrl ?? '',
-      imageUrls: source.imageUrls,
+      imageUrls: source.mediaUrls,
       width: source.width,
       height: source.height,
       likeCount: source.likeCount,
@@ -61,6 +61,10 @@ final class CircleFeedPostProjectionMapper {
 
   VideoPostDto _video(ContentPostProjection source) {
     final cover = source.coverUrl ?? source.thumbnailUrl ?? '';
+    final explicitVideoUrl = source.videoUrl?.trim() ?? '';
+    final videoUrl = explicitVideoUrl.isNotEmpty
+        ? explicitVideoUrl
+        : (source.mediaUrls.isEmpty ? '' : source.mediaUrls.first);
     return VideoPostDto(
       id: source.postId,
       type: source.contentType,
@@ -74,7 +78,7 @@ final class CircleFeedPostProjectionMapper {
       authorIdentityTags: source.authorIdentityTags,
       authorVerified: source.authorVerified,
       body: source.body,
-      videoUrl: source.videoUrl ?? '',
+      videoUrl: videoUrl,
       thumbnailUrl: source.thumbnailUrl ?? '',
       coverUrl: cover,
       width: source.width,
@@ -126,6 +130,7 @@ final class CircleFeedPostProjectionMapper {
   }
 
   MicroPostDto _micro(ContentPostProjection source) {
+    final videoUrl = source.videoUrl?.trim() ?? '';
     return MicroPostDto(
       id: source.postId,
       type: source.contentType,
@@ -139,8 +144,8 @@ final class CircleFeedPostProjectionMapper {
       authorIdentityTags: source.authorIdentityTags,
       authorVerified: source.authorVerified,
       body: source.body ?? '',
-      imageUrls: source.imageUrls,
-      videoUrl: source.videoUrl,
+      imageUrls: videoUrl.isEmpty ? source.mediaUrls : const <String>[],
+      videoUrl: videoUrl.isEmpty ? null : videoUrl,
       durationMs: source.durationMs,
       likeCount: source.likeCount,
       commentCount: source.commentCount,

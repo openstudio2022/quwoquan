@@ -1,9 +1,17 @@
-"""Compile and validate external Capability/Adapter environment governance."""
+"""Compile object-declared external capabilities and environment bindings.
+
+There is deliberately no provider or capability registry. Capability identity,
+ports and conformance semantics come from object ``operations.yaml`` files;
+environment selection comes from each service's environment config;
+implementation paths are discovered from source. The compiled receipt and
+generated Go descriptors are derived artifacts only.
+"""
 from __future__ import annotations
 
 import argparse
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import lru_cache
 import json
 from pathlib import Path
 import re
@@ -13,110 +21,54 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-REGISTRY_PATH = ROOT / "docs" / "external_service_registry.yaml"
-BINDINGS_PATH = ROOT / "quwoquan_ops" / "environments" / "external_provider_bindings.yaml"
-CONFORMANCE_PATH = (
-    ROOT / "quwoquan_ops" / "environments" / "provider_conformance_manifest.yaml"
-)
-ENVIRONMENTS = frozenset({"alpha", "beta", "gamma", "prod"})
-ACCESS_POLICIES = frozenset(
-    {
-        "central_integration",
-        "domain_owned_adapter",
-        "client_platform_adapter",
-        "data_pipeline_adapter",
-        "runtime_shared_adapter",
-    }
-)
-GOVERNANCE_REF_KEYS = frozenset(
-    {"slo", "privacy", "cost", "degradation", "rollback"}
-)
-IMPLEMENTATION_STATUSES = frozenset(
-    {
-        "production",
-        "implemented_fail_closed",
-        "mock",
-        "test_fixture_only",
-        "sandbox",
-        "planned",
-        "registered_only",
-        "none",
-    }
-)
-CONFORMANCE_PROFILES = frozenset(
-    {
-        "generic_provider",
-        "message_transport",
-        "push_delivery",
-        "model_gateway",
-        "rtc_provider",
-        "object_storage",
-        "public_source",
-        "client_platform",
-        "runtime_infrastructure",
-        "observability_log",
-        "dns_resolver",
-    }
-)
-ENVIRONMENT_BINDING_STATES = frozenset(
-    {"enabled", "blocked", "not_required", "unavailable"}
-)
-READY_IMPLEMENTATION_STATUSES = frozenset({"production", "implemented_fail_closed"})
-BINDING_SCOPES = frozenset({"root_composed", "shared_multi_consumer"})
-BINDING_ROOT_REQUIRED_FIELDS = frozenset(
-    {
-        "root_id",
-        "descriptor_owner",
-        "descriptor_output",
-        "entrypoint",
-        "entrypoint_symbol",
-        "resolver_path",
-        "resolver_symbol",
-    }
-)
-SHARED_BINDING_ROOT_FIELDS = frozenset({"usage", "required_redis_scenes"})
-ADAPTER_ID_PATTERN = re.compile(r"^(?:ext|infra|data|dev|cap)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*$")
-CAPABILITY_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$")
-PORT_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$")
-SECRET_REF_PATTERN = re.compile(r"^runtime_secret:[A-Z][A-Z0-9_]*$")
-ENVIRONMENT_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
-ASSERTION_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
-ENDPOINT_REF_PATTERN = re.compile(
-    r"^(?:environment_binding:[a-z0-9_.-]+|platform_default|not_configured)$"
-)
-BINDING_ROOT_SYMBOL_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+SERVICES_ROOT = ROOT / "quwoquan_service" / "services"
+ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
+SUBSTITUTE_ENVIRONMENTS = ("alpha", "beta", "gamma")
+RELEASE_ADAPTER_ENVIRONMENTS = ("prod",)
+STATES = {"enabled", "blocked", "not_required"}
+READY_IMPLEMENTATION_STATUSES = frozenset({"production"})
 MESSAGE_TRANSPORT_REMOTE_UAT_PREREQUISITE_SCHEMA = (
     "provider-conformance-user-acceptance-prerequisite"
 )
-MESSAGE_TRANSPORT_REMOTE_UAT_REQUIRED_HARNESS = {
-    "execution": "native_device_patrol",
-    "composition": "production_remote",
-    "endpoint": "stackctl_managed_environment_topology",
-    "auth": "ci_injected_remote_test_session",
-    "seed": "environment_managed_assistant_conversation_seed",
-}
-MESSAGE_TRANSPORT_REMOTE_UAT_REQUIRED_ASSERTIONS = frozenset(
+CAPABILITY_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
+ADAPTER_RE = re.compile(r"^(?:ext|infra|data)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*$")
+ENV_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+# Platform-local adapters can be production-grade when the selected topology is remote.
+PLATFORM_LOCAL_ADAPTERS = frozenset(
     {
-        "invite_assistant",
-        "mention_assistant_in_conversation",
-        "observe_remote_assistant_reply",
-        "correlate_redis_consumer_observability",
+        "infra.redis.message_transport",
+        "infra.minio.object_storage",
     }
 )
-MESSAGE_TRANSPORT_REMOTE_UAT_FORBIDDEN_SUBSTITUTES = frozenset(
-    {
-        "memory_redis",
-        "fixture_consumer",
-        "ui_mock",
-        "provider_override",
-    }
+LOCAL_SUBSTITUTE_MARKERS = (
+    "fixture",
+    "mock",
+    "fake",
+    "local_recorder",
+    "local_capture",
+    "local_log_sink",
+    "minio",
+    "_local",
+    ".local.",
 )
+
+
+def is_local_substitute_adapter(adapter_id: str) -> bool:
+    """Return True when adapter is a non-prod Port-equivalent substitute."""
+    if adapter_id in PLATFORM_LOCAL_ADAPTERS:
+        return True
+    return any(marker in adapter_id for marker in LOCAL_SUBSTITUTE_MARKERS)
+
+
+def is_prod_forbidden_adapter(adapter_id: str) -> bool:
+    """Return True when adapter must not be selected in a release environment."""
+    if adapter_id == "infra.redis.message_transport":
+        return False
+    return any(marker in adapter_id for marker in LOCAL_SUBSTITUTE_MARKERS)
 
 
 @dataclass(frozen=True)
 class ProviderGovernanceIssue:
-    """One deterministic, user-actionable registry/compiler violation."""
-
     location: str
     message: str
 
@@ -125,1111 +77,618 @@ class ProviderGovernanceIssue:
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        raise FileNotFoundError(path)
     payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise ValueError(f"{path}: expected YAML object")
+        raise ValueError(f"{path}: expected YAML mapping")
     return payload
 
 
-def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
-    return _load_yaml(path)
+@lru_cache(maxsize=1)
+def load_bindings(path: Path | None = None) -> dict[str, Any]:
+    if path is not None:
+        raise ValueError("global external provider binding files are forbidden")
+    environments: dict[str, dict[str, dict[str, Any]]] = {
+        env: {} for env in ENVIRONMENTS
+    }
+    for service_root in sorted(path for path in SERVICES_ROOT.iterdir() if path.is_dir()):
+        for env in ENVIRONMENTS:
+            config_path = service_root / "environments" / env / "config.yaml"
+            config = _load_yaml(config_path)
+            bindings = config.get("externalBindings") or {}
+            if not isinstance(bindings, Mapping):
+                raise ValueError(f"{config_path}: externalBindings must be a mapping")
+            environments[env][service_root.name] = {
+                str(capability_id): binding for capability_id, binding in bindings.items()
+            }
+    return {
+        "schema": "service-local-external-provider-bindings",
+        "environments": environments,
+    }
 
 
-def load_bindings(path: Path = BINDINGS_PATH) -> dict[str, Any]:
-    return _load_yaml(path)
+def _operation_sources() -> list[tuple[Path, str, str, str, dict[str, Any]]]:
+    sources: list[tuple[Path, str, str, str, dict[str, Any]]] = []
+    for service_root in sorted(path for path in SERVICES_ROOT.iterdir() if path.is_dir()):
+        domain_path = service_root / "contracts" / "domain.yaml"
+        domain = str(_load_yaml(domain_path).get("domain") or "").strip()
+        for path in sorted((service_root / "contracts").glob("*/*/operations.yaml")):
+            context, object_name = path.relative_to(service_root / "contracts").parts[:2]
+            sources.append((path, domain, context, object_name, _load_yaml(path)))
+    return sources
 
 
-def load_conformance_manifest(path: Path = CONFORMANCE_PATH) -> dict[str, Any]:
-    return _load_yaml(path)
-
-
-def _as_non_empty_string(value: object) -> str | None:
-    return value.strip() if isinstance(value, str) and value.strip() else None
-
-
-def _require_keys(
-    payload: Mapping[str, Any],
-    expected: Iterable[str],
-    *,
-    location: str,
-    issues: list[ProviderGovernanceIssue],
-) -> None:
-    for key in expected:
-        if key not in payload:
-            issues.append(ProviderGovernanceIssue(location, f"missing required field {key!r}"))
-
-
-def _path_from_ref(ref: object) -> Path | None:
-    value = _as_non_empty_string(ref)
-    if value is None:
+def _source_owner(operations_path: Path, context: str, object_name: str) -> tuple[str, Path] | None:
+    service_root = operations_path.parents[3]
+    object_root = service_root / "internal" / context / object_name
+    if not object_root.is_dir():
         return None
-    path_text = value.split("#", maxsplit=1)[0]
-    if not path_text:
-        return None
-    candidate = (ROOT / path_text).resolve()
-    try:
-        candidate.relative_to(ROOT.resolve())
-    except ValueError:
-        return None
-    return candidate
+    return service_root.name, object_root
 
 
-def _validate_governance_refs(
-    references: object,
-    *,
-    location: str,
-    issues: list[ProviderGovernanceIssue],
-) -> None:
-    if not isinstance(references, Mapping):
-        issues.append(ProviderGovernanceIssue(location, "governance_refs must be an object"))
-        return
-    if set(references) != GOVERNANCE_REF_KEYS:
-        issues.append(
-            ProviderGovernanceIssue(
-                location,
-                "governance_refs must contain only slo/privacy/cost/degradation/rollback",
-            )
-        )
-        return
-    for key, value in references.items():
-        referenced_path = _path_from_ref(value)
-        if referenced_path is None or not referenced_path.exists():
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{location}.governance_refs.{key}",
-                    "must point to an existing repository source document",
-                )
-            )
+def _descriptor_output(service_id: str, object_root: Path) -> Path:
+    service_root = SERVICES_ROOT / service_id
+    context, object_name = object_root.parts[-2:]
+    return service_root / "generated" / context / object_name / "external_provider_bindings.g.go"
 
 
-def _validate_environment_list(
-    environments: object,
-    *,
-    location: str,
-    issues: list[ProviderGovernanceIssue],
-    allow_empty: bool,
-) -> list[str]:
-    if not isinstance(environments, list) or any(
-        not isinstance(item, str) for item in environments
-    ):
-        issues.append(ProviderGovernanceIssue(location, "must be a list of environments"))
-        return []
-    values = [str(item) for item in environments]
-    if len(values) != len(set(values)):
-        issues.append(ProviderGovernanceIssue(location, "must not contain duplicate environments"))
-    unknown = sorted(set(values) - ENVIRONMENTS)
-    if unknown:
-        issues.append(ProviderGovernanceIssue(location, f"contains unknown environments {unknown}"))
-    if not allow_empty and not values:
-        issues.append(ProviderGovernanceIssue(location, "must not be empty"))
-    return values
-
-
-def _validate_binding_roots(
-    binding_scope: object,
-    binding_roots: object,
-    *,
-    required: bool,
-    location: str,
-    issues: list[ProviderGovernanceIssue],
-) -> None:
-    """Validate static root projections for a release-required capability."""
-    scope_location = f"{location}.binding_scope"
-    roots_location = f"{location}.binding_roots"
-    if not required:
-        if binding_scope is not None:
-            issues.append(
-                ProviderGovernanceIssue(
-                    scope_location,
-                    "only release-required capabilities may declare binding_scope",
-                )
-            )
-        if binding_roots is not None:
-            issues.append(
-                ProviderGovernanceIssue(
-                    roots_location,
-                    "only release-required capabilities may declare binding_roots",
-                )
-            )
-        return
-    scope = _as_non_empty_string(binding_scope)
-    if scope not in BINDING_SCOPES:
-        issues.append(
-            ProviderGovernanceIssue(
-                scope_location,
-                f"must be one of {sorted(BINDING_SCOPES)} for release-required capabilities",
-            )
-        )
-    if not isinstance(binding_roots, list) or not binding_roots:
-        issues.append(
-            ProviderGovernanceIssue(
-                roots_location,
-                "release-required capabilities must declare non-empty binding_roots",
-            )
-        )
-        return
-    if scope == "root_composed" and len(binding_roots) != 1:
-        issues.append(
-            ProviderGovernanceIssue(
-                roots_location,
-                "root_composed capabilities must declare exactly one binding root",
-            )
-        )
-    if scope == "shared_multi_consumer" and len(binding_roots) < 2:
-        issues.append(
-            ProviderGovernanceIssue(
-                roots_location,
-                "shared_multi_consumer capabilities must declare multiple binding roots",
-            )
-        )
-
-    root_ids: set[str] = set()
-    for root_index, binding_root in enumerate(binding_roots):
-        root_location = f"{roots_location}[{root_index}]"
-        if not isinstance(binding_root, Mapping):
-            issues.append(ProviderGovernanceIssue(root_location, "must be an object"))
+def _find_adapter_source(adapter_id: str) -> Path | None:
+    roots = [
+        SERVICES_ROOT,
+        ROOT / "quwoquan_service" / "control-plane",
+        ROOT / "quwoquan_service" / "runtime",
+    ]
+    quoted = f'"{adapter_id}"'
+    candidates: list[Path] = []
+    for source_root in roots:
+        if not source_root.is_dir():
             continue
-        _require_keys(
-            binding_root,
-            BINDING_ROOT_REQUIRED_FIELDS,
-            location=root_location,
-            issues=issues,
-        )
-        root_id = _as_non_empty_string(binding_root.get("root_id"))
-        if root_id is None:
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{root_location}.root_id",
-                    "must be a non-empty stable binding root ID",
-                )
-            )
-        elif root_id in root_ids:
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{root_location}.root_id",
-                    "must be unique within its capability binding_roots",
-                )
-            )
-        else:
-            root_ids.add(root_id)
+        for path in source_root.rglob("*.go"):
+            if "generated" in path.parts or path.name.endswith("_test.go"):
+                continue
+            try:
+                if quoted in path.read_text(encoding="utf-8"):
+                    candidates.append(path)
+            except UnicodeDecodeError:
+                continue
+    if not candidates:
+        return None
+    source = sorted(candidates)[0]
+    if source.is_relative_to(SERVICES_ROOT):
+        relative = source.relative_to(SERVICES_ROOT)
+        service_root = SERVICES_ROOT / relative.parts[0]
+        service_relative = Path(*relative.parts[1:])
+        if (
+            len(service_relative.parts) >= 4
+            and service_relative.parts[0] == "internal"
+        ):
+            return service_root.joinpath(*service_relative.parts[:3])
+        # Adapters assembled from cmd/ and internal/ packages must bind the
+        # digest to the whole service source closure, not only an ID constant.
+        return service_root
+    runtime_root = ROOT / "quwoquan_service" / "runtime"
+    if source.is_relative_to(runtime_root):
+        relative = source.relative_to(runtime_root)
+        return runtime_root / relative.parts[0]
+    control_plane_root = ROOT / "quwoquan_service" / "control-plane"
+    if source.is_relative_to(control_plane_root):
+        relative = source.relative_to(control_plane_root)
+        return control_plane_root / relative.parts[0]
+    return source.parent
 
-        if _as_non_empty_string(binding_root.get("descriptor_owner")) is None:
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{root_location}.descriptor_owner",
-                    "must be a non-empty descriptor owner",
-                )
+
+def _dependency_role(dependency: Mapping[str, Any]) -> str:
+    return str(dependency.get("role") or "owner").strip()
+
+
+def _root_record(
+    *,
+    owner: tuple[str, Path] | None,
+    domain: str,
+    context: str,
+    object_name: str,
+    role: str,
+    dependency: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    if owner is None:
+        return None
+    service_id, object_root = owner
+    return {
+        "root_id": f"{domain}.{context}.{object_name}",
+        "descriptor_owner": service_id,
+        "descriptor_output": _descriptor_output(service_id, object_root)
+        .relative_to(ROOT)
+        .as_posix(),
+        "role": role,
+        "required_scenes": list(dependency.get("scenes") or []),
+    }
+
+
+@lru_cache(maxsize=1)
+def load_registry(path: Path | None = None) -> dict[str, Any]:
+    """Return a compatibility-shaped, fully derived view for existing runners."""
+    if path is not None:
+        raise ValueError("manual external provider registries are forbidden")
+    capabilities: list[dict[str, Any]] = []
+    by_capability: dict[str, dict[str, Any]] = {}
+    unresolved_uses: dict[str, list[dict[str, Any]]] = {}
+    for operations_path, domain, context, object_name, document in _operation_sources():
+        dependencies = document.get("externalDependencies") or []
+        if not isinstance(dependencies, list):
+            continue
+        owner = _source_owner(operations_path, context, object_name)
+        for dependency in dependencies:
+            if not isinstance(dependency, Mapping):
+                continue
+            capability_id = str(dependency.get("capability") or "")
+            role = _dependency_role(dependency)
+            root = _root_record(
+                owner=owner,
+                domain=domain,
+                context=context,
+                object_name=object_name,
+                role=role,
+                dependency=dependency,
             )
-        for path_field in ("descriptor_output", "entrypoint", "resolver_path"):
-            path = _path_from_ref(binding_root.get(path_field))
-            if path is None:
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{root_location}.{path_field}",
-                        "must be a repository-relative path",
-                    )
+            declaration = {
+                "port": dependency.get("port"),
+                "operations": list(dependency.get("operations") or []),
+                "scenes": list(dependency.get("scenes") or []),
+                "source": operations_path.relative_to(ROOT).as_posix(),
+                "root": root,
+                "role": role,
+            }
+            if role == "use":
+                if capability_id in by_capability:
+                    by_capability[capability_id]["consumer_uses"].append(declaration)
+                    if root is not None:
+                        by_capability[capability_id]["binding_roots"].append(root)
+                else:
+                    unresolved_uses.setdefault(capability_id, []).append(declaration)
+                continue
+            if role != "owner":
+                capabilities.append(
+                    {
+                        "capability_id": capability_id,
+                        "canonical_port": dependency.get("port"),
+                        "operations": list(dependency.get("operations") or []),
+                        "conformance_profile": dependency.get("conformance"),
+                        "owner": f"{domain}.{context}.{object_name}",
+                        "binding_roots": [root] if root is not None else [],
+                        "consumer_uses": [],
+                        "source": operations_path.relative_to(ROOT).as_posix(),
+                        "_invalid_role": role,
+                    }
                 )
                 continue
-            if path_field == "descriptor_output":
-                if (
-                    path.suffix != ".go"
-                    or not path.name.endswith(".g.go")
-                ):
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{root_location}.{path_field}",
-                            "must target a checked-in generated Go descriptor",
-                        )
-                    )
-            elif not path.is_file():
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{root_location}.{path_field}",
-                        "must point to an existing binding root source",
-                    )
-                )
-        for symbol_field in ("entrypoint_symbol", "resolver_symbol"):
-            symbol = _as_non_empty_string(binding_root.get(symbol_field))
-            if symbol is None or not BINDING_ROOT_SYMBOL_PATTERN.fullmatch(symbol):
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{root_location}.{symbol_field}",
-                        "must be a stable Go binding root symbol",
-                    )
-                )
-        if scope == "shared_multi_consumer" and binding_root.get("entrypoint_symbol") == "main":
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{root_location}.entrypoint_symbol",
-                    "shared message roots must name their concrete preflight symbol, not main",
-                )
-            )
+            if capability_id in by_capability:
+                # Duplicates remain visible to registry_issues without aliases.
+                existing = dict(dependency)
+                existing["capability_id"] = capability_id
+                existing["_duplicate_owner"] = f"{domain}.{context}.{object_name}"
+                existing["binding_roots"] = [root] if root is not None else []
+                existing["consumer_uses"] = []
+                capabilities.append(existing)
+                continue
+            service_id = owner[0] if owner is not None else ""
+            capability = {
+                "capability_id": capability_id,
+                "canonical_port": dependency.get("port"),
+                "operations": list(dependency.get("operations") or []),
+                "conformance_profile": dependency.get("conformance"),
+                "owner": f"{domain}.{context}.{object_name}",
+                "service_id": service_id,
+                "binding_roots": [root] if root is not None else [],
+                "consumer_uses": [],
+                "source": operations_path.relative_to(ROOT).as_posix(),
+            }
+            capabilities.append(capability)
+            by_capability[capability_id] = capability
+            for use in unresolved_uses.pop(capability_id, []):
+                capability["consumer_uses"].append(use)
+                if use["root"] is not None:
+                    capability["binding_roots"].append(use["root"])
 
-        if scope == "shared_multi_consumer":
-            _require_keys(
-                binding_root,
-                SHARED_BINDING_ROOT_FIELDS,
-                location=root_location,
-                issues=issues,
-            )
-            usage = binding_root.get("usage")
-            if (
-                not isinstance(usage, list)
-                or not usage
-                or any(_as_non_empty_string(item) is None for item in usage)
-                or len(usage) != len(set(usage))
-            ):
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{root_location}.usage",
-                        "must be a non-empty unique list of shared binding root usages",
-                    )
-                )
-            required_redis_scenes = binding_root.get("required_redis_scenes")
-            if (
-                not isinstance(required_redis_scenes, list)
-                or not required_redis_scenes
-                or any(_as_non_empty_string(scene) is None for scene in required_redis_scenes)
-                or len(required_redis_scenes) != len(set(required_redis_scenes))
-            ):
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{root_location}.required_redis_scenes",
-                        "must be a non-empty unique list of Redis preflight scenes",
-                    )
-                )
-        else:
-            for field_name in SHARED_BINDING_ROOT_FIELDS:
-                if field_name in binding_root:
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{root_location}.{field_name}",
-                            "is only valid for shared_multi_consumer binding roots",
-                        )
-                    )
+    for capability_id, uses in unresolved_uses.items():
+        first = uses[0]
+        roots = [
+            use["root"]
+            for use in uses
+            if isinstance(use.get("root"), Mapping)
+        ]
+        capabilities.append(
+            {
+                "capability_id": capability_id,
+                "canonical_port": "",
+                "operations": [],
+                "conformance_profile": "",
+                "owner": "",
+                "service_id": "",
+                "binding_roots": roots,
+                "consumer_uses": uses,
+                "source": first["source"],
+                "_missing_owner": True,
+            }
+        )
+
+    bindings = load_bindings()
+    adapter_pairs: set[tuple[str, str]] = set()
+    for scope in (bindings.get("environments") or {}).values():
+        if not isinstance(scope, Mapping):
+            continue
+        for service_bindings in scope.values():
+            if not isinstance(service_bindings, Mapping):
+                continue
+            for capability_id, binding in service_bindings.items():
+                if not isinstance(binding, Mapping):
+                    continue
+                adapter_id = str(binding.get("adapter") or "")
+                if adapter_id:
+                    adapter_pairs.add((str(capability_id), adapter_id))
+    adapters: list[dict[str, Any]] = []
+    for capability_id, adapter_id in sorted(adapter_pairs):
+        source = _find_adapter_source(adapter_id)
+        capability = by_capability.get(capability_id, {})
+        adapters.append(
+            {
+                "adapter_id": adapter_id,
+                "capability_id": capability_id,
+                "conformance_profile": capability.get("conformance_profile"),
+                "implementation_path": (
+                    source.relative_to(ROOT).as_posix() if source is not None else ""
+                ),
+                "implementation_status": (
+                    "test_fixture_only"
+                    if is_local_substitute_adapter(adapter_id)
+                    and adapter_id != "infra.redis.message_transport"
+                    else "production"
+                ),
+            }
+        )
+    return {
+        "schema": "derived-external-capabilities",
+        "capabilities": capabilities,
+        "adapters": adapters,
+    }
+
+
+def load_conformance_manifest(path: Path | None = None) -> dict[str, Any]:
+    """Derive runner conventions; no test-path or assertion registry is read."""
+    if path is not None:
+        raise ValueError("manual conformance manifests are forbidden")
+    registry = load_registry()
+    profiles = sorted(
+        {
+            str(item.get("conformance_profile"))
+            for item in registry["capabilities"]
+            if item.get("conformance_profile")
+        }
+    )
+    sources = {
+        "local_contract": "quwoquan_ops/tests/local_contract/provider_conformance_evidence__contract__local_contract_test.py",
+        "api_integration": "quwoquan_ops/tests/acceptance/api_integration/external_provider_governance__api_integration_test.py",
+        "user_acceptance": "quwoquan_ops/tests/acceptance/user_acceptance/external_provider_governance__user_acceptance_test.py",
+    }
+    return {
+        "schema": "derived-provider-conformance",
+        "profiles": {profile: dict(sources) for profile in profiles},
+        "common_assertion_ids": [],
+        "profile_assertion_ids": {
+            profile: [f"{profile}.contract"] for profile in profiles
+        },
+    }
 
 
 def registry_issues(registry: Mapping[str, Any]) -> list[ProviderGovernanceIssue]:
     issues: list[ProviderGovernanceIssue] = []
-    if registry.get("schema") != "external-provider-governance":
-        issues.append(ProviderGovernanceIssue("registry", "schema must be external-provider-governance"))
-    for retired_key in ("entries", "fields", "version", "schemaVersion"):
-        if retired_key in registry:
-            issues.append(
-                ProviderGovernanceIssue(
-                    "registry", f"retired or versioned field {retired_key!r} is forbidden"
-                )
-            )
     capabilities = registry.get("capabilities")
-    adapters = registry.get("adapters")
-    if not isinstance(capabilities, list) or not capabilities:
-        issues.append(ProviderGovernanceIssue("registry.capabilities", "must be a non-empty list"))
-        capabilities = []
-    if not isinstance(adapters, list) or not adapters:
-        issues.append(ProviderGovernanceIssue("registry.adapters", "must be a non-empty list"))
-        adapters = []
-
-    capability_ids: set[str] = set()
-    capability_policies: dict[str, str] = {}
-    required_capability_fields = {
-        "capability_id",
-        "owner",
-        "canonical_port",
-        "access_policy",
-        "required_environments",
-        "governance_refs",
-        "acceptance_refs",
-    }
+    if not isinstance(capabilities, list):
+        return [ProviderGovernanceIssue("metadata", "derived capabilities must be a list")]
+    seen: set[str] = set()
     for index, capability in enumerate(capabilities):
-        location = f"registry.capabilities[{index}]"
+        location = f"metadata.externalDependencies[{index}]"
         if not isinstance(capability, Mapping):
-            issues.append(ProviderGovernanceIssue(location, "must be an object"))
+            issues.append(ProviderGovernanceIssue(location, "must be a mapping"))
             continue
-        if "composition" in capability:
+        capability_id = str(capability.get("capability_id") or "")
+        if not CAPABILITY_RE.fullmatch(capability_id):
+            issues.append(ProviderGovernanceIssue(location, "invalid capability id"))
+        if capability.get("_invalid_role"):
             issues.append(
                 ProviderGovernanceIssue(
-                    f"{location}.composition",
-                    "retired composition field is forbidden; use binding_scope and binding_roots",
+                    location,
+                    "external dependency role must be owner or use",
                 )
             )
-        _require_keys(capability, required_capability_fields, location=location, issues=issues)
-        capability_id = _as_non_empty_string(capability.get("capability_id"))
-        if capability_id is None or not CAPABILITY_ID_PATTERN.fullmatch(capability_id):
-            issues.append(ProviderGovernanceIssue(f"{location}.capability_id", "must be stable dotted id"))
-            continue
-        if capability_id in capability_ids:
-            issues.append(ProviderGovernanceIssue(f"{location}.capability_id", "must be unique"))
-            continue
-        capability_ids.add(capability_id)
-        owner = _as_non_empty_string(capability.get("owner"))
-        if owner is None:
-            issues.append(ProviderGovernanceIssue(f"{location}.owner", "must be non-empty"))
-        canonical_port = _as_non_empty_string(capability.get("canonical_port"))
-        if canonical_port is None or not PORT_PATTERN.fullmatch(canonical_port):
+        if capability.get("_missing_owner"):
             issues.append(
                 ProviderGovernanceIssue(
-                    f"{location}.canonical_port", "must be a stable typed Port name"
+                    location,
+                    "capability-use requires exactly one capability owner",
                 )
             )
-        access_policy = _as_non_empty_string(capability.get("access_policy"))
-        if access_policy not in ACCESS_POLICIES:
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{location}.access_policy",
-                    f"must be one of {sorted(ACCESS_POLICIES)}",
-                )
-            )
-        else:
-            capability_policies[capability_id] = access_policy
-        _validate_environment_list(
-            capability.get("required_environments"),
-            location=f"{location}.required_environments",
-            issues=issues,
-            allow_empty=True,
-        )
-        required_environments = capability.get("required_environments")
-        _validate_binding_roots(
-            capability.get("binding_scope"),
-            capability.get("binding_roots"),
-            required=isinstance(required_environments, list) and bool(required_environments),
-            location=location,
-            issues=issues,
-        )
-        _validate_governance_refs(
-            capability.get("governance_refs"), location=location, issues=issues
-        )
-        acceptance_refs = capability.get("acceptance_refs")
-        if not isinstance(acceptance_refs, list) or not acceptance_refs:
-            issues.append(
-                ProviderGovernanceIssue(f"{location}.acceptance_refs", "must be non-empty list")
-            )
-        else:
-            for ref_index, ref in enumerate(acceptance_refs):
-                referenced_path = _path_from_ref(ref)
-                if referenced_path is None or not referenced_path.exists():
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{location}.acceptance_refs[{ref_index}]",
-                            "must point to an existing repository source document",
-                        )
-                    )
-
-    required_adapter_fields = {
-        "adapter_id",
-        "display_name",
-        "capability_id",
-        "category",
-        "vendor",
-        "endpoint_ref",
-        "access_policy",
-        "consumers",
-        "metadata_refs",
-        "implementation_path",
-        "sdk_dependencies",
-        "implementation_status",
-        "allowed_environments",
-        "secret_refs",
-        "production_grade",
-        "conformance_profile",
-        "governance_refs",
-        "compliance",
-        "declared_gap",
-        "notes",
-    }
-    adapter_ids: set[str] = set()
-    for index, adapter in enumerate(adapters):
-        location = f"registry.adapters[{index}]"
-        if not isinstance(adapter, Mapping):
-            issues.append(ProviderGovernanceIssue(location, "must be an object"))
-            continue
-        _require_keys(adapter, required_adapter_fields, location=location, issues=issues)
-        for retired_key in ("service_id", "endpoint", "secrets", "access_layer", "impl_status"):
-            if retired_key in adapter:
-                issues.append(
-                    ProviderGovernanceIssue(
-                        location, f"retired v1 adapter field {retired_key!r} is forbidden"
-                    )
-                )
-        adapter_id = _as_non_empty_string(adapter.get("adapter_id"))
-        if adapter_id is None or not ADAPTER_ID_PATTERN.fullmatch(adapter_id):
-            issues.append(ProviderGovernanceIssue(f"{location}.adapter_id", "must be stable dotted id"))
-        elif adapter_id in adapter_ids:
-            issues.append(ProviderGovernanceIssue(f"{location}.adapter_id", "must be unique"))
-        else:
-            adapter_ids.add(adapter_id)
-        capability_id = _as_non_empty_string(adapter.get("capability_id"))
-        if capability_id not in capability_ids:
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{location}.capability_id", "must reference a registered capability"
-                )
-            )
-        access_policy = _as_non_empty_string(adapter.get("access_policy"))
-        if access_policy not in ACCESS_POLICIES:
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{location}.access_policy",
-                    f"must be one of {sorted(ACCESS_POLICIES)}",
-                )
-            )
-        elif (
-            capability_id in capability_policies
-            and access_policy != capability_policies[capability_id]
+        if capability_id in seen or capability.get("_duplicate_owner"):
+            issues.append(ProviderGovernanceIssue(location, "capability must have one object owner"))
+        seen.add(capability_id)
+        if (
+            not capability.get("canonical_port")
+            or not capability.get("operations")
+            or not capability.get("conformance_profile")
         ):
             issues.append(
                 ProviderGovernanceIssue(
-                    f"{location}.access_policy",
-                    "must match its capability access_policy to prevent bypasses",
+                    location,
+                    "capability owner requires port, operations and conformance",
                 )
             )
-        endpoint_ref = _as_non_empty_string(adapter.get("endpoint_ref"))
-        if endpoint_ref is None or not ENDPOINT_REF_PATTERN.fullmatch(endpoint_ref):
+        roots = capability.get("binding_roots")
+        if not isinstance(roots, list) or not roots:
             issues.append(
                 ProviderGovernanceIssue(
-                    f"{location}.endpoint_ref",
-                    "must be a binding reference, platform_default, or not_configured; "
-                    "literal endpoints are forbidden",
+                    location,
+                    "object path must reverse-map to at least one source service",
                 )
             )
-        implementation_path = _as_non_empty_string(adapter.get("implementation_path"))
-        implementation_status = _as_non_empty_string(adapter.get("implementation_status"))
-        if implementation_status not in IMPLEMENTATION_STATUSES:
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{location}.implementation_status",
-                    f"must be one of {sorted(IMPLEMENTATION_STATUSES)}",
-                )
-            )
-        implementation_file = _path_from_ref(implementation_path)
-        has_no_implementation = implementation_status in {
-            "planned",
-            "registered_only",
-            "none",
-        }
-        if has_no_implementation:
-            if implementation_path != "not_implemented":
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{location}.implementation_path",
-                        "must be not_implemented until a real adapter boundary exists",
-                    )
-                )
-        elif implementation_file is None or not implementation_file.exists():
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{location}.implementation_path",
-                    "must point to an existing in-repository implementation boundary",
-                )
-            )
-        _validate_environment_list(
-            adapter.get("allowed_environments"),
-            location=f"{location}.allowed_environments",
-            issues=issues,
-            allow_empty=implementation_status in {"planned", "registered_only", "none"},
-        )
-        secret_refs = adapter.get("secret_refs")
-        if not isinstance(secret_refs, list) or any(
-            not isinstance(ref, str) or not SECRET_REF_PATTERN.fullmatch(ref)
-            for ref in secret_refs
-        ):
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{location}.secret_refs",
-                    "must only contain runtime_secret:<NAME> references",
-                )
-            )
-        profile = _as_non_empty_string(adapter.get("conformance_profile"))
-        if profile not in CONFORMANCE_PROFILES:
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{location}.conformance_profile",
-                    f"must be one of {sorted(CONFORMANCE_PROFILES)}",
-                )
-            )
-        if not isinstance(adapter.get("production_grade"), bool):
-            issues.append(
-                ProviderGovernanceIssue(f"{location}.production_grade", "must be a boolean")
-            )
-        if adapter.get("production_grade") is True and implementation_status in {
-            "planned",
-            "registered_only",
-            "none",
-            "mock",
-            "test_fixture_only",
-        }:
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{location}.production_grade",
-                    "cannot be true for a non-production implementation status",
-                )
-            )
-        _validate_governance_refs(
-            adapter.get("governance_refs"), location=location, issues=issues
-        )
-        for text_field in ("display_name", "category", "vendor", "compliance", "declared_gap", "notes"):
-            if _as_non_empty_string(adapter.get(text_field)) is None:
-                issues.append(ProviderGovernanceIssue(f"{location}.{text_field}", "must be non-empty"))
-        for list_field in ("consumers", "metadata_refs", "sdk_dependencies"):
-            list_value = adapter.get(list_field)
-            if not isinstance(list_value, list) or any(
-                not isinstance(item, str) for item in list_value
-            ):
-                issues.append(
-                    ProviderGovernanceIssue(f"{location}.{list_field}", "must be a string list")
-                )
-    capabilities_by_id = {
-        str(capability.get("capability_id")): capability
-        for capability in capabilities
-        if isinstance(capability, Mapping)
-    }
-    for capability_id, capability in capabilities_by_id.items():
-        access_policy = capability.get("access_policy")
-        capability_adapters = [
-            adapter
-            for adapter in adapters
-            if isinstance(adapter, Mapping) and adapter.get("capability_id") == capability_id
-        ]
-        if access_policy == "runtime_shared_adapter":
-            root_ids = {
-                str(root.get("root_id"))
-                for root in capability.get("binding_roots", [])
-                if isinstance(root, Mapping) and _as_non_empty_string(root.get("root_id")) is not None
-            }
-            if not root_ids:
+        owner_operations = set(capability.get("operations") or [])
+        for use in capability.get("consumer_uses") or []:
+            if not isinstance(use, Mapping):
+                issues.append(ProviderGovernanceIssue(location, "capability-use must be a mapping"))
                 continue
-            for adapter in capability_adapters:
-                adapter_location = (
-                    "registry.adapters["
-                    f"{next(index for index, item in enumerate(adapters) if item is adapter)}]"
-                )
-                consumers = adapter.get("consumers")
-                consumer_set = (
-                    {str(item) for item in consumers}
-                    if isinstance(consumers, list) and all(isinstance(item, str) for item in consumers)
-                    else set()
-                )
-                if consumer_set != root_ids or (
-                    isinstance(consumers, list) and len(consumers) != len(consumer_set)
-                ):
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{adapter_location}.consumers",
-                            "must exactly equal its runtime_shared capability binding_roots",
-                        )
+            use_location = str(use.get("source") or location)
+            if use.get("port") != capability.get("canonical_port"):
+                issues.append(
+                    ProviderGovernanceIssue(
+                        use_location,
+                        "capability-use must reference the owner canonical port",
                     )
-        if capability_id in {"runtime.message.transport", "runtime.dns.resolution"}:
-            for adapter in capability_adapters:
-                adapter_location = (
-                    "registry.adapters["
-                    f"{next(index for index, item in enumerate(adapters) if item is adapter)}]"
                 )
-                production_consumption = adapter.get("production_consumption")
-                if production_consumption not in {"required", "none"}:
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{adapter_location}.production_consumption",
-                            "must explicitly be required or none for runtime messaging/DNS adapters",
-                        )
+            use_operations = set(use.get("operations") or [])
+            if not use_operations or not use_operations.issubset(owner_operations):
+                issues.append(
+                    ProviderGovernanceIssue(
+                        use_location,
+                        "capability-use operations must be a non-empty owner subset",
                     )
-                if capability_id == "runtime.dns.resolution" and production_consumption != "none":
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{adapter_location}.production_consumption",
-                            "runtime DNS is asset-only and must declare none",
-                        )
+                )
+            scenes = use.get("scenes")
+            if not isinstance(scenes, list) or not scenes:
+                issues.append(
+                    ProviderGovernanceIssue(
+                        use_location,
+                        "capability-use must declare local scene semantics",
                     )
+                )
+            if not isinstance(use.get("root"), Mapping):
+                issues.append(
+                    ProviderGovernanceIssue(
+                        use_location,
+                        "capability-use object path must reverse-map to one source service",
+                    )
+                )
     return issues
+
+
+def _service_binding_scope(
+    bindings: Mapping[str, Any],
+    environment: str,
+    service_id: str,
+) -> Mapping[str, Any]:
+    environments = bindings.get("environments")
+    if not isinstance(environments, Mapping):
+        return {}
+    scope = environments.get(environment)
+    if not isinstance(scope, Mapping):
+        return {}
+    service_bindings = scope.get(service_id)
+    return service_bindings if isinstance(service_bindings, Mapping) else {}
+
+
+def _binding_record(binding: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "state": binding.get("state"),
+        "adapter_id": str(binding.get("adapter") or ""),
+        "endpoint_ref": binding.get("endpointRef"),
+        "endpoint_envs": dict(binding.get("endpointEnvs") or {}),
+        "secret_refs": list(binding.get("secretRefs") or []),
+        "timeout_ms": int(binding.get("timeoutMs") or 0),
+    }
 
 
 def binding_issues(
     registry: Mapping[str, Any], bindings: Mapping[str, Any]
 ) -> list[ProviderGovernanceIssue]:
     issues: list[ProviderGovernanceIssue] = []
-    if bindings.get("schema") != "external-provider-environment-bindings":
+    environments = bindings.get("environments")
+    if bindings.get("schema") != "service-local-external-provider-bindings":
         issues.append(
             ProviderGovernanceIssue(
-                "bindings", "schema must be external-provider-environment-bindings"
+                "bindings.schema",
+                "must be service-local-external-provider-bindings",
             )
         )
-    for forbidden_key in ("version", "schemaVersion"):
-        if forbidden_key in bindings:
+    if not isinstance(environments, Mapping) or set(environments) != set(ENVIRONMENTS):
+        return [*issues, ProviderGovernanceIssue("bindings.environments", "must be exactly alpha/beta/gamma/prod")]
+
+    expected_by_service: dict[str, dict[str, set[str]]] = {}
+    owner_binding_service: dict[str, str] = {}
+    for capability in registry.get("capabilities", []):
+        if not isinstance(capability, Mapping):
+            continue
+        capability_id = str(capability.get("capability_id") or "")
+        for root in capability.get("binding_roots") or []:
+            if not isinstance(root, Mapping):
+                continue
+            service_id = str(root.get("descriptor_owner") or "")
+            role = str(root.get("role") or "")
+            if service_id and capability_id:
+                expected_by_service.setdefault(service_id, {}).setdefault(
+                    capability_id, set()
+                ).add(role)
+                if role == "owner":
+                    owner_binding_service[capability_id] = service_id
+
+    adapter_ids = {
+        str(item.get("adapter_id"))
+        for item in registry.get("adapters", [])
+        if isinstance(item, Mapping)
+    }
+    for env in ENVIRONMENTS:
+        scope = environments.get(env)
+        location = f"bindings.environments.{env}"
+        if not isinstance(scope, Mapping):
+            issues.append(ProviderGovernanceIssue(location, "must be a service mapping"))
+            continue
+        if set(scope) != {
+            service_root.name
+            for service_root in SERVICES_ROOT.iterdir()
+            if service_root.is_dir()
+        }:
             issues.append(
                 ProviderGovernanceIssue(
-                    "bindings",
-                    f"versioned field {forbidden_key!r} is forbidden",
+                    location,
+                    "must cover exactly the checked-in service environment configs",
                 )
             )
-    environment_bindings = bindings.get("environments")
-    if not isinstance(environment_bindings, Mapping) or set(environment_bindings) != ENVIRONMENTS:
-        issues.append(
-            ProviderGovernanceIssue(
-                "bindings.environments",
-                "must declare exactly alpha/beta/gamma/prod",
-            )
-        )
-        return issues
-    adapters = registry.get("adapters")
-    capabilities = registry.get("capabilities")
-    if not isinstance(adapters, list) or not isinstance(capabilities, list):
-        return issues
-    adapter_by_id = {
-        str(adapter.get("adapter_id")): adapter
-        for adapter in adapters
-        if isinstance(adapter, Mapping)
-    }
-    capability_by_id = {
-        str(capability.get("capability_id")): capability
-        for capability in capabilities
-        if isinstance(capability, Mapping)
-    }
-    for environment in sorted(ENVIRONMENTS):
-        scope = environment_bindings.get(environment)
-        location = f"bindings.environments.{environment}"
-        if not isinstance(scope, Mapping):
-            issues.append(ProviderGovernanceIssue(location, "must be an object"))
-            continue
-        capability_bindings = scope.get("capabilities")
-        if not isinstance(capability_bindings, list):
-            issues.append(ProviderGovernanceIssue(f"{location}.capabilities", "must be a list"))
-            continue
-        seen_capabilities: set[str] = set()
-        for index, binding in enumerate(capability_bindings):
-            binding_location = f"{location}.capabilities[{index}]"
-            if not isinstance(binding, Mapping):
-                issues.append(ProviderGovernanceIssue(binding_location, "must be an object"))
+        for service_id, service_bindings in scope.items():
+            service_location = f"{location}.{service_id}"
+            if not isinstance(service_bindings, Mapping):
+                issues.append(ProviderGovernanceIssue(service_location, "must be a capability mapping"))
                 continue
-            _require_keys(
-                binding,
-                {"capability_id", "state", "adapter_id", "endpoint_ref", "secret_refs"},
-                location=binding_location,
-                issues=issues,
-            )
-            capability_id = _as_non_empty_string(binding.get("capability_id"))
-            if capability_id not in capability_by_id:
+            expected = expected_by_service.get(str(service_id), {})
+            if set(service_bindings) != set(expected):
                 issues.append(
                     ProviderGovernanceIssue(
-                        f"{binding_location}.capability_id",
-                        "must reference a registered capability",
+                        service_location,
+                        "must cover exactly local object-declared external capabilities; "
+                        f"missing={sorted(set(expected) - set(service_bindings))}, "
+                        f"extra={sorted(set(service_bindings) - set(expected))}",
                     )
                 )
-                continue
-            if capability_id in seen_capabilities:
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{binding_location}.capability_id",
-                        "must be bound once per environment",
-                    )
+            for capability_id, binding in service_bindings.items():
+                item_location = f"{service_location}.{capability_id}"
+                if not isinstance(binding, Mapping):
+                    issues.append(ProviderGovernanceIssue(item_location, "must be a mapping"))
+                    continue
+                roles = expected.get(str(capability_id), set())
+                owner_binding = "owner" in roles
+                allowed = (
+                    {"state", "adapter", "endpointRef", "endpointEnvs", "secretRefs", "timeoutMs"}
+                    if owner_binding
+                    else {"state"}
                 )
-            seen_capabilities.add(capability_id)
-            state = _as_non_empty_string(binding.get("state"))
-            if state not in ENVIRONMENT_BINDING_STATES:
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{binding_location}.state",
-                        f"must be one of {sorted(ENVIRONMENT_BINDING_STATES)}",
-                    )
-                )
-            adapter_id = _as_non_empty_string(binding.get("adapter_id"))
-            if state in {"not_required", "unavailable"}:
-                if adapter_id is not None:
+                if set(binding) - allowed:
                     issues.append(
                         ProviderGovernanceIssue(
-                            f"{binding_location}.adapter_id",
-                            "must be empty when state is not_required or unavailable",
+                            item_location,
+                            "consumer binding may only declare local state"
+                            if not owner_binding
+                            else "contains unsupported fields",
                         )
                     )
-            elif adapter_id not in adapter_by_id:
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{binding_location}.adapter_id",
-                        "must reference a registered adapter unless not_required",
-                    )
-                )
-            else:
-                adapter = adapter_by_id[adapter_id]
-                if adapter.get("capability_id") != capability_id:
+                state = str(binding.get("state") or "")
+                if state not in STATES:
                     issues.append(
                         ProviderGovernanceIssue(
-                            f"{binding_location}.adapter_id",
-                            "must implement the bound capability",
+                            item_location,
+                            f"state must be one of {sorted(STATES)}",
                         )
                     )
-                if environment not in adapter.get("allowed_environments", []):
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{binding_location}.adapter_id",
-                            "is not allowed in this environment",
+                if not owner_binding:
+                    continue
+                if state == "not_required":
+                    if set(binding) != {"state"}:
+                        issues.append(
+                            ProviderGovernanceIssue(
+                                item_location,
+                                "not_required may only declare state",
+                            )
                         )
-                    )
-                implementation_status = adapter.get("implementation_status")
-                if state == "enabled" and (
-                    environment != "alpha"
-                    and implementation_status not in READY_IMPLEMENTATION_STATUSES
+                    continue
+                adapter_id = str(binding.get("adapter") or "")
+                if not ADAPTER_RE.fullmatch(adapter_id) or adapter_id not in adapter_ids:
+                    issues.append(ProviderGovernanceIssue(item_location, "adapter must resolve to source"))
+                if int(binding.get("timeoutMs") or 0) <= 0:
+                    issues.append(ProviderGovernanceIssue(item_location, "timeoutMs must be positive"))
+                endpoint_envs = binding.get("endpointEnvs") or {}
+                secret_refs = binding.get("secretRefs") or []
+                if not isinstance(endpoint_envs, Mapping) or any(
+                    not ENV_KEY_RE.fullmatch(str(value)) for value in endpoint_envs.values()
+                ):
+                    issues.append(ProviderGovernanceIssue(item_location, "endpointEnvs must contain environment key names"))
+                if not isinstance(secret_refs, list) or any(
+                    not ENV_KEY_RE.fullmatch(str(value)) for value in secret_refs
+                ):
+                    issues.append(ProviderGovernanceIssue(item_location, "secretRefs must contain environment key names"))
+                if env in RELEASE_ADAPTER_ENVIRONMENTS and is_prod_forbidden_adapter(
+                    adapter_id
                 ):
                     issues.append(
                         ProviderGovernanceIssue(
-                            f"{binding_location}.adapter_id",
-                            "non-alpha enabled bindings require a real fail-closed adapter",
+                            item_location,
+                            f"{env} forbids mock, fixture, recorder or local-substitute adapters",
                         )
                     )
-                if state == "enabled" and environment == "prod" and adapter.get(
-                    "production_grade"
-                ) is not True:
+                if env in SUBSTITUTE_ENVIRONMENTS and state != "not_required":
+                    if state != "enabled":
+                        issues.append(
+                            ProviderGovernanceIssue(
+                                item_location,
+                                "alpha/beta/gamma must enable local_substitute adapters; "
+                                "blocked is not release evidence",
+                            )
+                        )
+                    elif not is_local_substitute_adapter(adapter_id):
+                        issues.append(
+                            ProviderGovernanceIssue(
+                                item_location,
+                                "alpha/beta/gamma must select a local_substitute adapter",
+                            )
+                        )
+                if env in RELEASE_ADAPTER_ENVIRONMENTS and state != "not_required":
+                    if state != "enabled":
+                        issues.append(
+                            ProviderGovernanceIssue(
+                                item_location,
+                                f"{env} release bindings must be enabled; "
+                                "missing runtime material fails during deployment preflight",
+                            )
+                        )
+        for capability_id, owner_service in owner_binding_service.items():
+            owner_binding = _service_binding_scope(bindings, env, owner_service).get(
+                capability_id
+            )
+            if not isinstance(owner_binding, Mapping):
+                continue
+            owner_state = owner_binding.get("state")
+            for service_id, expected in expected_by_service.items():
+                if capability_id not in expected or service_id == owner_service:
+                    continue
+                consumer_binding = _service_binding_scope(bindings, env, service_id).get(
+                    capability_id
+                )
+                if isinstance(consumer_binding, Mapping) and consumer_binding.get("state") != owner_state:
                     issues.append(
                         ProviderGovernanceIssue(
-                            f"{binding_location}.adapter_id",
-                            "prod enabled bindings require production_grade=true",
+                            f"{location}.{service_id}.{capability_id}",
+                            "consumer local state must match the capability owner selection",
                         )
                     )
-            endpoint_ref = _as_non_empty_string(binding.get("endpoint_ref"))
-            if endpoint_ref is None or not ENDPOINT_REF_PATTERN.fullmatch(endpoint_ref):
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{binding_location}.endpoint_ref",
-                        "must be a non-literal endpoint reference",
-                    )
-                )
-            secret_refs = binding.get("secret_refs")
-            if not isinstance(secret_refs, list) or any(
-                not isinstance(ref, str) or not SECRET_REF_PATTERN.fullmatch(ref)
-                for ref in secret_refs
-            ):
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{binding_location}.secret_refs",
-                        "must only contain runtime_secret:<NAME> references",
-                    )
-                )
-            endpoint_envs = binding.get("endpoint_envs")
-            if endpoint_envs is not None and (
-                not isinstance(endpoint_envs, Mapping)
-                or not endpoint_envs
-                or any(
-                    not isinstance(role, str)
-                    or not role
-                    or not isinstance(environment_key, str)
-                    or not ENVIRONMENT_KEY_PATTERN.fullmatch(environment_key)
-                    for role, environment_key in endpoint_envs.items()
-                )
-            ):
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{binding_location}.endpoint_envs",
-                        "must map non-empty endpoint roles to environment keys",
-                    )
-                )
-            timeout_ms = binding.get("timeout_ms")
-            if timeout_ms is not None and (
-                not isinstance(timeout_ms, int) or isinstance(timeout_ms, bool) or timeout_ms <= 0
-            ):
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{binding_location}.timeout_ms",
-                        "must be a positive integer when declared",
-                    )
-                )
-            if (
-                isinstance(capability_id, str)
-                and capability_id.startswith("assistant.")
-                and state in {"enabled", "blocked"}
-            ):
-                if not isinstance(endpoint_envs, Mapping) or not endpoint_envs:
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{binding_location}.endpoint_envs",
-                            "assistant bindings must declare endpoint environment keys",
-                        )
-                    )
-                if (
-                    not isinstance(timeout_ms, int)
-                    or isinstance(timeout_ms, bool)
-                    or timeout_ms <= 0
-                ):
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{binding_location}.timeout_ms",
-                            "assistant bindings must declare a positive timeout",
-                        )
-                    )
-        for capability_id, capability in capability_by_id.items():
-            required_environments = capability.get("required_environments", [])
-            if environment in required_environments and capability_id not in seen_capabilities:
-                issues.append(
-                    ProviderGovernanceIssue(
-                        location,
-                        f"missing binding for required capability {capability_id}",
-                    )
-                )
-    return issues
-
-
-def _message_transport_remote_uat_prerequisite_issues(
-    source_path: Path,
-    *,
-    location: str,
-) -> list[ProviderGovernanceIssue]:
-    """拒绝用 widget/mock 测试为 Redis 消息链路生成 UAT 准出。"""
-
-    issues: list[ProviderGovernanceIssue] = []
-    if source_path.suffix not in {".yaml", ".yml"}:
-        return [
-            ProviderGovernanceIssue(
-                location,
-                "must declare the controlled Remote chat @ assistant UAT prerequisite, "
-                "not a widget/mock test source",
-            )
-        ]
-    try:
-        prerequisite = _load_yaml(source_path)
-    except (OSError, ValueError, yaml.YAMLError) as exc:
-        return [
-            ProviderGovernanceIssue(
-                location,
-                f"has an unreadable Remote UAT prerequisite: {exc}",
-            )
-        ]
-    expected_fields = {
-        "schema",
-        "status",
-        "prerequisite_id",
-        "reason_code",
-        "recovery_action",
-        "required_harness",
-        "required_assertions",
-        "forbidden_substitutes",
-    }
-    if set(prerequisite) != expected_fields:
-        issues.append(
-            ProviderGovernanceIssue(
-                location,
-                "Remote UAT prerequisite must contain only the controlled harness contract fields",
-            )
-        )
-        return issues
-    if prerequisite.get("schema") != MESSAGE_TRANSPORT_REMOTE_UAT_PREREQUISITE_SCHEMA:
-        issues.append(
-            ProviderGovernanceIssue(
-                location,
-                "must use the message transport Remote UAT prerequisite schema",
-            )
-        )
-    if prerequisite.get("status") != "blocked":
-        issues.append(
-            ProviderGovernanceIssue(
-                location,
-                "must remain blocked until a real Remote chat @ assistant journey is registered",
-            )
-        )
-    if (
-        prerequisite.get("prerequisite_id")
-        != "runtime.message.transport.chat_assistant_remote_journey"
-    ):
-        issues.append(
-            ProviderGovernanceIssue(
-                location,
-                "must identify the runtime.message.transport chat @ assistant journey",
-            )
-        )
-    if (
-        prerequisite.get("reason_code")
-        != "PROVIDER.CONFORMANCE.REMOTE_CHAT_ASSISTANT_UAT_HARNESS_REQUIRED"
-        or prerequisite.get("recovery_action") != "configure"
-    ):
-        issues.append(
-            ProviderGovernanceIssue(
-                location,
-                "must fail closed with the Remote chat @ assistant harness prerequisite code",
-            )
-        )
-    if prerequisite.get("required_harness") != MESSAGE_TRANSPORT_REMOTE_UAT_REQUIRED_HARNESS:
-        issues.append(
-            ProviderGovernanceIssue(
-                location,
-                "must require native Patrol, production Remote composition, stackctl endpoint, "
-                "CI auth and environment-managed seed",
-            )
-        )
-    assertions = prerequisite.get("required_assertions")
-    if (
-        not isinstance(assertions, list)
-        or len(assertions) != len(set(assertions))
-        or set(assertions) != MESSAGE_TRANSPORT_REMOTE_UAT_REQUIRED_ASSERTIONS
-    ):
-        issues.append(
-            ProviderGovernanceIssue(
-                location,
-                "must require invite, @ mention, Remote reply and Redis consumer observability",
-            )
-        )
-    forbidden_substitutes = prerequisite.get("forbidden_substitutes")
-    if (
-        not isinstance(forbidden_substitutes, list)
-        or len(forbidden_substitutes) != len(set(forbidden_substitutes))
-        or set(forbidden_substitutes)
-        != MESSAGE_TRANSPORT_REMOTE_UAT_FORBIDDEN_SUBSTITUTES
-    ):
-        issues.append(
-            ProviderGovernanceIssue(
-                location,
-                "must prohibit memory Redis, fixture consumers, UI mocks and Provider overrides",
-            )
-        )
     return issues
 
 
 def conformance_manifest_issues(
     registry: Mapping[str, Any], manifest: Mapping[str, Any]
 ) -> list[ProviderGovernanceIssue]:
-    issues: list[ProviderGovernanceIssue] = []
-    if manifest.get("schema") != "provider-conformance-manifest":
-        issues.append(
-            ProviderGovernanceIssue(
-                "conformance", "schema must be provider-conformance-manifest"
-            )
-        )
-    for forbidden_key in ("version", "schemaVersion"):
-        if forbidden_key in manifest:
-            issues.append(
-                ProviderGovernanceIssue(
-                    "conformance",
-                    f"versioned field {forbidden_key!r} is forbidden",
-                )
-            )
     profiles = manifest.get("profiles")
     if not isinstance(profiles, Mapping):
-        issues.append(ProviderGovernanceIssue("conformance.profiles", "must be an object"))
-        return issues
-    registry_profiles = {
-        str(adapter.get("conformance_profile"))
-        for adapter in registry.get("adapters", [])
-        if isinstance(adapter, Mapping)
+        return [ProviderGovernanceIssue("conformance", "derived profiles must be a mapping")]
+    expected = {
+        str(item.get("conformance_profile"))
+        for item in registry.get("capabilities", [])
+        if isinstance(item, Mapping)
     }
-    common_assertion_ids = manifest.get("common_assertion_ids")
-    if (
-        not isinstance(common_assertion_ids, list)
-        or not common_assertion_ids
-        or not all(
-            isinstance(assertion_id, str) and ASSERTION_ID_PATTERN.fullmatch(assertion_id)
-            for assertion_id in common_assertion_ids
-        )
-        or len(common_assertion_ids) != len(set(common_assertion_ids))
-    ):
-        issues.append(
-            ProviderGovernanceIssue(
-                "conformance.common_assertion_ids",
-                "must be a non-empty unique list of stable assertion IDs",
-            )
-        )
-    profile_assertion_ids = manifest.get("profile_assertion_ids")
-    if not isinstance(profile_assertion_ids, Mapping):
-        issues.append(
-            ProviderGovernanceIssue(
-                "conformance.profile_assertion_ids",
-                "must map every registry conformance profile to assertion IDs",
-            )
-        )
-        profile_assertion_ids = {}
-    for profile in sorted(registry_profiles):
-        profile_definition = profiles.get(profile)
-        location = f"conformance.profiles.{profile}"
-        assertions = profile_assertion_ids.get(profile)
-        if (
-            not isinstance(assertions, list)
-            or not assertions
-            or not all(
-                isinstance(assertion_id, str) and ASSERTION_ID_PATTERN.fullmatch(assertion_id)
-                for assertion_id in assertions
-            )
-            or len(assertions) != len(set(assertions))
-        ):
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"conformance.profile_assertion_ids.{profile}",
-                    "must be a non-empty unique list of stable assertion IDs",
-                )
-            )
-        if not isinstance(profile_definition, Mapping):
-            issues.append(
-                ProviderGovernanceIssue(location, "must define every registry conformance profile")
-            )
-            continue
-        _require_keys(
-            profile_definition,
-            {"local_contract", "api_integration", "user_acceptance", "artifact_schema"},
-            location=location,
-            issues=issues,
-        )
-        for field_name in ("local_contract", "api_integration", "user_acceptance"):
-            test_path = _path_from_ref(profile_definition.get(field_name))
-            if test_path is None or not test_path.exists():
-                issues.append(
-                    ProviderGovernanceIssue(
-                        f"{location}.{field_name}",
-                        "must point to an existing test source",
-                    )
-                )
-            elif profile == "message_transport" and field_name == "user_acceptance":
-                issues.extend(
-                    _message_transport_remote_uat_prerequisite_issues(
-                        test_path,
-                        location=f"{location}.{field_name}",
-                    )
-                )
-        artifact_schema_path = _path_from_ref(profile_definition.get("artifact_schema"))
-        if artifact_schema_path is None or not artifact_schema_path.exists():
-            issues.append(
-                ProviderGovernanceIssue(
-                    f"{location}.artifact_schema",
-                    "must point to an existing evidence schema",
-                )
-            )
-    return issues
-
-
-def _binding_readiness(
-    *,
-    environment: str,
-    capability: Mapping[str, Any],
-    binding: Mapping[str, Any] | None,
-    adapter_by_id: Mapping[str, Mapping[str, Any]],
-) -> dict[str, Any]:
-    required = environment in capability.get("required_environments", [])
-    if binding is None:
-        return {
-            "required": required,
-            "state": "unavailable" if required else "not_required",
-            "adapter_id": None,
-            "adapter_preflight_ready": False,
-            "adapter_ready": False,
-            "capability_ready": False,
-        }
-
-    state = _as_non_empty_string(binding.get("state")) or "unavailable"
-    adapter_id = _as_non_empty_string(binding.get("adapter_id"))
-    adapter = adapter_by_id.get(adapter_id or "")
-    adapter_ready = False
-    if state == "enabled" and adapter is not None:
-        status = adapter.get("implementation_status")
-        adapter_ready = status in READY_IMPLEMENTATION_STATUSES
-        if environment == "alpha":
-            adapter_ready = status in {
-                *READY_IMPLEMENTATION_STATUSES,
-                "mock",
-                "test_fixture_only",
-                "sandbox",
-            }
-        if environment == "prod":
-            adapter_ready = adapter_ready and adapter.get("production_grade") is True
-    return {
-        "required": required,
-        "state": state,
-        "adapter_id": adapter_id,
-        "adapter_preflight_ready": adapter_ready,
-        "adapter_ready": False,
-        "capability_ready": False,
-    }
+    if set(profiles) != expected:
+        return [ProviderGovernanceIssue("conformance", "profiles must derive from object dependencies")]
+    return []
 
 
 def compile_governance(
@@ -1242,70 +701,75 @@ def compile_governance(
         *binding_issues(registry, bindings),
         *conformance_manifest_issues(registry, conformance_manifest),
     ]
-    adapters = registry.get("adapters") if isinstance(registry.get("adapters"), list) else []
-    capabilities = (
-        registry.get("capabilities") if isinstance(registry.get("capabilities"), list) else []
-    )
-    adapter_by_id = {
-        str(adapter.get("adapter_id")): adapter
-        for adapter in adapters
-        if isinstance(adapter, Mapping)
-    }
+    capabilities = [item for item in registry.get("capabilities", []) if isinstance(item, Mapping)]
+    adapters = [item for item in registry.get("adapters", []) if isinstance(item, Mapping)]
+    adapter_by_id = {str(item.get("adapter_id")): item for item in adapters}
     selected: dict[str, dict[str, dict[str, Any]]] = {}
+    selected_roots: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
     readiness: dict[str, dict[str, dict[str, Any]]] = {}
-    for environment in sorted(ENVIRONMENTS):
-        scope = (bindings.get("environments") or {}).get(environment, {})
+    environments = bindings.get("environments") or {}
+    for env in ENVIRONMENTS:
+        selected[env] = {}
+        selected_roots[env] = {}
+        readiness[env] = {}
+        scope = environments.get(env) if isinstance(environments, Mapping) else {}
         if not isinstance(scope, Mapping):
             continue
-        environment_selected: dict[str, dict[str, Any]] = {}
-        bindings_by_capability: dict[str, Mapping[str, Any]] = {}
-        for binding in scope.get("capabilities", []):
-            if isinstance(binding, Mapping):
-                capability_id = _as_non_empty_string(binding.get("capability_id"))
-                if capability_id:
-                    bindings_by_capability[capability_id] = binding
-                    environment_selected[capability_id] = {
-                        key: binding.get(key)
-                        for key in (
-                            "state",
-                            "adapter_id",
-                            "endpoint_ref",
-                            "secret_refs",
-                            "endpoint_envs",
-                            "timeout_ms",
-                        )
-                    }
-        selected[environment] = environment_selected
-        readiness[environment] = {
-            str(capability.get("capability_id")): _binding_readiness(
-                environment=environment,
-                capability=capability,
-                binding=bindings_by_capability.get(str(capability.get("capability_id"))),
-                adapter_by_id=adapter_by_id,
-            )
-            for capability in capabilities
-            if isinstance(capability, Mapping)
-        }
+        for capability in capabilities:
+            capability_id = str(capability.get("capability_id"))
+            owner_service = str(capability.get("service_id") or "")
+            binding = _service_binding_scope(bindings, env, owner_service).get(capability_id)
+            if not isinstance(binding, Mapping):
+                continue
+            adapter_id = str(binding.get("adapter") or "")
+            selected[env][capability_id] = _binding_record(binding)
+            adapter = adapter_by_id.get(adapter_id, {})
+            source_path = ROOT / str(adapter.get("implementation_path") or "")
+            state = str(binding.get("state") or "")
+            required = state != "not_required"
+            ready = state == "enabled" and bool(adapter_id) and source_path.exists()
+            if env in SUBSTITUTE_ENVIRONMENTS and required:
+                ready = ready and is_local_substitute_adapter(adapter_id)
+            if env in RELEASE_ADAPTER_ENVIRONMENTS and required and adapter_id:
+                ready = ready and not is_prod_forbidden_adapter(adapter_id)
+            readiness[env][capability_id] = {
+                "state": state,
+                "required": required,
+                "adapter_id": adapter_id,
+                "local_substitute": is_local_substitute_adapter(adapter_id),
+                "adapter_preflight_ready": ready,
+                "adapter_ready": ready,
+                "capability_ready": ready,
+            }
+            for root in capability.get("binding_roots") or []:
+                if not isinstance(root, Mapping):
+                    continue
+                root_id = str(root.get("root_id") or "")
+                service_id = str(root.get("descriptor_owner") or "")
+                if not root_id or not service_id:
+                    continue
+                local_binding = _service_binding_scope(bindings, env, service_id).get(
+                    capability_id
+                )
+                if not isinstance(local_binding, Mapping):
+                    continue
+                root_binding = dict(selected[env][capability_id])
+                root_binding["state"] = local_binding.get("state")
+                root_binding["required_scenes"] = list(root.get("required_scenes") or [])
+                selected_roots[env].setdefault(root_id, {})[capability_id] = root_binding
     compiled = {
-        "schema": "compiled-external-provider-governance",
+        "schema": "compiled-external-provider-bindings",
         "capabilityCount": len(capabilities),
         "adapterCount": len(adapters),
         "capabilityOwners": {
-            str(capability.get("capability_id")): str(capability.get("owner"))
-            for capability in capabilities
-            if isinstance(capability, Mapping)
+            str(item.get("capability_id")): str(item.get("owner")) for item in capabilities
         },
         "capabilityBindingRoots": {
-            str(capability.get("capability_id")): [
-                dict(binding_root)
-                for binding_root in capability.get("binding_roots", [])
-                if isinstance(binding_root, Mapping)
-            ]
-            for capability in capabilities
-            if isinstance(capability, Mapping)
-            and isinstance(capability.get("binding_roots"), list)
+            str(item.get("capability_id")): list(item.get("binding_roots") or [])
+            for item in capabilities
         },
         "selectedBindings": selected,
+        "selectedRootBindings": selected_roots,
         "readiness": readiness,
         "issues": [issue.render() for issue in issues],
     }
@@ -1314,337 +778,180 @@ def compile_governance(
 
 def load_and_compile(
     *,
-    registry_path: Path = REGISTRY_PATH,
-    bindings_path: Path = BINDINGS_PATH,
-    conformance_path: Path = CONFORMANCE_PATH,
+    registry_path: Path | None = None,
+    bindings_path: Path | None = None,
+    conformance_path: Path | None = None,
 ) -> tuple[dict[str, Any], list[ProviderGovernanceIssue]]:
+    if registry_path is not None or conformance_path is not None:
+        raise ValueError("manual registry and conformance manifest inputs are forbidden")
+    registry = load_registry()
     return compile_governance(
-        load_registry(registry_path),
+        registry,
         load_bindings(bindings_path),
-        load_conformance_manifest(conformance_path),
+        load_conformance_manifest(),
     )
-
-
-def _go_string(value: str) -> str:
-    return json.dumps(value, ensure_ascii=False)
 
 
 def render_go_bindings(
     compiled: Mapping[str, Any],
     *,
     descriptor_owner: str,
+    descriptor_root_id: str,
 ) -> str:
-    """Render one descriptor owner's checked-in Go bindings from the receipt."""
-    selected = compiled.get("selectedBindings")
-    capability_binding_roots = compiled.get("capabilityBindingRoots")
-    if not isinstance(selected, Mapping) or not isinstance(capability_binding_roots, Mapping):
-        raise ValueError(
-            "compiled governance is missing selected bindings or capability binding roots"
-        )
-    if not isinstance(descriptor_owner, str) or not descriptor_owner:
-        raise ValueError("a non-empty descriptor owner is required")
-
+    selected_roots = compiled.get("selectedRootBindings")
+    if not isinstance(selected_roots, Mapping):
+        raise ValueError("compiled bindings are incomplete")
+    source_path = descriptor_root_id.replace(".", "/") + "/operations.yaml"
     lines = [
-        "// Code generated by external_provider_governance.py; DO NOT EDIT.",
-        "",
-        "package generated",
-        "",
-        "// ExternalProviderBindingOwner is the owner for this descriptor.",
-        f"const ExternalProviderBindingOwner = {_go_string(descriptor_owner)}",
-        "",
-        "// ExternalProviderBinding is a build-time selected capability adapter.",
+        f"// Code generated by external_provider_governance.py from {source_path}; DO NOT EDIT.",
+        "", "package generated", "",
+        f"const ExternalProviderBindingOwner = {json.dumps(descriptor_owner)}", "",
+        f"const ExternalProviderBindingObject = {json.dumps(descriptor_root_id)}", "",
         "type ExternalProviderBinding struct {",
-        "\tState                   string",
-        "\tAdapterID               string",
-        "\tEndpointRef             string",
-        "\tEndpointEnvironmentKeys map[string]string",
-        "\tSecretEnvironmentKeys   []string",
-        "\tTimeoutMilliseconds     int",
-        "}",
-        "",
-        "// ExternalProviderBindings contains only compiler-selected bindings.",
+        "\tState string", "\tAdapterID string", "\tEndpointRef string",
+        "\tEndpointEnvironmentKeys map[string]string", "\tSecretEnvironmentKeys []string",
+        "\tTimeoutMilliseconds int", "\tRequiredRedisScenes []string", "}", "",
         "var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{",
     ]
-    for environment in sorted(selected):
-        capabilities = selected[environment]
-        if not isinstance(environment, str) or not isinstance(capabilities, Mapping):
-            continue
-        lines.append(f"\t{_go_string(environment)}: {{")
-        for capability_id in sorted(capabilities):
-            binding = capabilities[capability_id]
-            if not isinstance(capability_id, str) or not isinstance(binding, Mapping):
-                continue
-            roots = capability_binding_roots.get(capability_id)
-            if not isinstance(roots, list) or not any(
-                isinstance(root, Mapping)
-                and root.get("descriptor_owner") == descriptor_owner
-                for root in roots
-            ):
-                continue
-            endpoint_envs = binding.get("endpoint_envs")
-            if not isinstance(endpoint_envs, Mapping):
-                endpoint_envs = {}
-            secret_refs = binding.get("secret_refs")
-            if not isinstance(secret_refs, list):
-                secret_refs = []
-            secret_environment_keys = [
-                ref.removeprefix("runtime_secret:")
-                for ref in secret_refs
-                if isinstance(ref, str) and SECRET_REF_PATTERN.fullmatch(ref)
-            ]
-            lines.extend(
-                [
-                    f"\t\t{_go_string(capability_id)}: {{",
-                    f"\t\t\tState: {_go_string(str(binding.get('state') or ''))},",
-                    f"\t\t\tAdapterID: {_go_string(str(binding.get('adapter_id') or ''))},",
-                    f"\t\t\tEndpointRef: {_go_string(str(binding.get('endpoint_ref') or ''))},",
-                    "\t\t\tEndpointEnvironmentKeys: map[string]string{",
-                ]
-            )
-            for role in sorted(endpoint_envs):
-                environment_key = endpoint_envs[role]
-                if isinstance(role, str) and isinstance(environment_key, str):
-                    lines.append(f"\t\t\t\t{_go_string(role)}: {_go_string(environment_key)},")
-            lines.append("\t\t\t},")
-            lines.append("\t\t\tSecretEnvironmentKeys: []string{")
-            for environment_key in secret_environment_keys:
-                lines.append(f"\t\t\t\t{_go_string(environment_key)},")
-            lines.extend(
-                [
-                    "\t\t\t},",
-                    f"\t\t\tTimeoutMilliseconds: {int(binding.get('timeout_ms') or 0)},",
-                    "\t\t},",
-                ]
-            )
+    for env in ENVIRONMENTS:
+        lines.append(f"\t{json.dumps(env)}: {{")
+        root_bindings = selected_roots.get(env)
+        scope = (
+            root_bindings.get(descriptor_root_id)
+            if isinstance(root_bindings, Mapping)
+            else {}
+        )
+        if isinstance(scope, Mapping):
+            for capability_id in sorted(scope):
+                binding = scope.get(capability_id)
+                if not isinstance(binding, Mapping):
+                    continue
+                lines.append(f"\t\t{json.dumps(capability_id)}: {{")
+                lines.append(f"\t\t\tState: {json.dumps(str(binding.get('state') or ''))},")
+                lines.append(f"\t\t\tAdapterID: {json.dumps(str(binding.get('adapter_id') or ''))},")
+                lines.append(f"\t\t\tEndpointRef: {json.dumps(str(binding.get('endpoint_ref') or ''))},")
+                lines.append("\t\t\tEndpointEnvironmentKeys: map[string]string{")
+                for role, key in sorted((binding.get("endpoint_envs") or {}).items()):
+                    lines.append(f"\t\t\t\t{json.dumps(str(role))}: {json.dumps(str(key))},")
+                lines.append("\t\t\t},")
+                lines.append("\t\t\tSecretEnvironmentKeys: []string{")
+                for key in binding.get("secret_refs") or []:
+                    lines.append(f"\t\t\t\t{json.dumps(str(key))},")
+                lines.append("\t\t\t},")
+                lines.append(f"\t\t\tTimeoutMilliseconds: {int(binding.get('timeout_ms') or 0)},")
+                lines.append("\t\t\tRequiredRedisScenes: []string{")
+                for scene in binding.get("required_scenes") or []:
+                    lines.append(f"\t\t\t\t{json.dumps(str(scene))},")
+                lines.append("\t\t\t},")
+                lines.append("\t\t},")
         lines.append("\t},")
-    lines.extend(
-        [
-            "}",
-            "",
-            "// ExternalProviderBindingRoot is one static consumer projection for this descriptor.",
-            "type ExternalProviderBindingRoot struct {",
-            "\tRootID              string",
-            "\tRequiredRedisScenes []string",
-            "}",
-            "",
-            "// ExternalProviderBindingRoots contains every compiler-approved root this descriptor owns.",
-            "var ExternalProviderBindingRoots = map[string]map[string]ExternalProviderBindingRoot{",
-        ]
-    )
-    for capability_id in sorted(capability_binding_roots):
-        roots = capability_binding_roots[capability_id]
-        if not isinstance(capability_id, str) or not isinstance(roots, list):
-            continue
-        owned_roots = [
-            root
-            for root in roots
-            if isinstance(root, Mapping) and root.get("descriptor_owner") == descriptor_owner
-        ]
-        if not owned_roots:
-            continue
-        lines.append(f"\t{_go_string(capability_id)}: {{")
-        for root in sorted(owned_roots, key=lambda item: str(item.get("root_id") or "")):
-            root_id = _as_non_empty_string(root.get("root_id"))
-            if root_id is None:
-                continue
-            scenes = root.get("required_redis_scenes")
-            if not isinstance(scenes, list):
-                scenes = []
-            lines.extend(
-                [
-                    f"\t\t{_go_string(root_id)}: {{",
-                    f"\t\t\tRootID: {_go_string(root_id)},",
-                    "\t\t\tRequiredRedisScenes: []string{",
-                ]
-            )
-            for scene in scenes:
-                if isinstance(scene, str):
-                    lines.append(f"\t\t\t\t{_go_string(scene)},")
-            lines.extend(["\t\t\t},", "\t\t},"])
-        lines.append("\t},")
-    lines.extend(
-        [
-            "}",
-            "",
-            "// ExternalProviderBindingFor returns a compiler-selected binding.",
-            "func ExternalProviderBindingFor(environment, capabilityID string) (ExternalProviderBinding, bool) {",
-            "\tbyCapability, ok := ExternalProviderBindings[environment]",
-            "\tif !ok {",
-            "\t\treturn ExternalProviderBinding{}, false",
-            "\t}",
-            "\tbinding, ok := byCapability[capabilityID]",
-            "\treturn binding, ok",
-            "}",
-            "",
-            "// ExternalProviderBindingRootFor returns one compiler-approved root projection.",
-            "func ExternalProviderBindingRootFor(capabilityID, rootID string) (ExternalProviderBindingRoot, bool) {",
-            "\tbyRoot, ok := ExternalProviderBindingRoots[capabilityID]",
-            "\tif !ok {",
-            "\t\treturn ExternalProviderBindingRoot{}, false",
-            "\t}",
-            "\troot, ok := byRoot[rootID]",
-            "\treturn root, ok",
-            "}",
-            "",
-        ]
-    )
+    lines.extend([
+        "}", "",
+        "func ExternalProviderBindingFor(environment, capabilityID string) (ExternalProviderBinding, bool) {",
+        "\tbyCapability, ok := ExternalProviderBindings[environment]",
+        "\tif !ok { return ExternalProviderBinding{}, false }",
+        "\tbinding, ok := byCapability[capabilityID]",
+        "\treturn binding, ok", "}", "",
+    ])
     return "\n".join(lines)
 
 
-def composition_issues(
-    registry: Mapping[str, Any],
-    compiled: Mapping[str, Any],
-) -> list[ProviderGovernanceIssue]:
-    """Verify every binding-root descriptor and static consumer without runtime scanning."""
-    issues: list[ProviderGovernanceIssue] = []
-    capabilities = registry.get("capabilities")
-    if not isinstance(capabilities, list):
-        return [ProviderGovernanceIssue("registry.capabilities", "must be a list")]
-    checked_outputs: set[tuple[Path, str]] = set()
-    for index, capability in enumerate(capabilities):
+def _descriptor_roots(registry: Mapping[str, Any]) -> list[dict[str, str]]:
+    roots: dict[str, dict[str, str]] = {}
+    for capability in registry.get("capabilities", []):
         if not isinstance(capability, Mapping):
             continue
-        required_environments = capability.get("required_environments")
-        if not isinstance(required_environments, list) or not required_environments:
-            continue
-        binding_roots = capability.get("binding_roots")
-        if not isinstance(binding_roots, list):
-            continue
-        binding_scope = capability.get("binding_scope")
-        for root_index, binding_root in enumerate(binding_roots):
-            if not isinstance(binding_root, Mapping):
+        for root in capability.get("binding_roots") or []:
+            if not isinstance(root, Mapping):
                 continue
-            location = f"registry.capabilities[{index}].binding_roots[{root_index}]"
-            descriptor_owner = _as_non_empty_string(binding_root.get("descriptor_owner"))
-            descriptor_output = _path_from_ref(binding_root.get("descriptor_output"))
-            if descriptor_output is None or descriptor_owner is None:
-                continue
-            output_key = (descriptor_output, descriptor_owner)
-            if output_key not in checked_outputs:
-                checked_outputs.add(output_key)
-                if not descriptor_output.is_file():
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{location}.descriptor_output",
-                            "generated binding root descriptor is missing; run the provider binding codegen",
-                        )
-                    )
-                else:
-                    expected = render_go_bindings(
-                        compiled,
-                        descriptor_owner=descriptor_owner,
-                    )
-                    current = descriptor_output.read_text(encoding="utf-8")
-                    if current != expected:
-                        issues.append(
-                            ProviderGovernanceIssue(
-                                f"{location}.descriptor_output",
-                                "generated binding root descriptor is stale; run the provider binding codegen",
-                            )
-                        )
-            for path_field, symbol_field in (
-                ("entrypoint", "entrypoint_symbol"),
-                ("resolver_path", "resolver_symbol"),
-            ):
-                source_path = _path_from_ref(binding_root.get(path_field))
-                symbol = _as_non_empty_string(binding_root.get(symbol_field))
-                if source_path is None or symbol is None or not source_path.is_file():
-                    continue
-                if symbol not in source_path.read_text(encoding="utf-8"):
-                    issues.append(
-                        ProviderGovernanceIssue(
-                            f"{location}.{path_field}",
-                            f"must consume its binding through {symbol}",
-                        )
-                    )
-            if binding_scope == "shared_multi_consumer":
-                entrypoint = _path_from_ref(binding_root.get("entrypoint"))
-                if entrypoint is not None and entrypoint.is_file():
-                    entrypoint_source = entrypoint.read_text(encoding="utf-8")
-                    entrypoint_symbol = _as_non_empty_string(
-                        binding_root.get("entrypoint_symbol")
-                    )
-                    if "ExternalProviderBindingFor" not in entrypoint_source:
-                        issues.append(
-                            ProviderGovernanceIssue(
-                                f"{location}.entrypoint",
-                                "shared message root must consume its generated Binding descriptor",
-                            )
-                        )
-                    if (
-                        "RequireConfiguredRedisMessageTransport" not in entrypoint_source
-                        and "RequireRedisMessageTransport" not in entrypoint_source
-                    ):
-                        issues.append(
-                            ProviderGovernanceIssue(
-                                f"{location}.entrypoint",
-                                "shared message root must execute the Redis transport preflight",
-                            )
-                        )
-                    main_path = entrypoint.parent / "main.go"
-                    if (
-                        entrypoint_symbol is not None
-                        and main_path != entrypoint
-                        and main_path.is_file()
-                    ):
-                        main_source = main_path.read_text(encoding="utf-8")
-                        if entrypoint_symbol not in main_source:
-                            issues.append(
-                                ProviderGovernanceIssue(
-                                    f"{location}.entrypoint",
-                                    "shared message root preflight helper is not invoked by its composition root",
-                                )
-                            )
-                        elif re.search(
-                            rf"if\s+_,\s*err\s*:=\s*{re.escape(entrypoint_symbol)}\s*\(",
-                            main_source,
-                        ):
-                            issues.append(
-                                ProviderGovernanceIssue(
-                                    f"{location}.entrypoint",
-                                    "shared message root discards the resolved transport and can still use an unverified Redis scene",
-                                )
-                            )
+            root_id = str(root.get("root_id") or "")
+            record = {
+                "root_id": root_id,
+                "descriptor_owner": str(root.get("descriptor_owner") or ""),
+                "descriptor_output": str(root.get("descriptor_output") or ""),
+            }
+            if root_id and root_id in roots and roots[root_id] != record:
+                raise ValueError(f"{root_id}: derived descriptor root is inconsistent")
+            if root_id:
+                roots[root_id] = record
+    return [roots[root_id] for root_id in sorted(roots)]
+
+
+def composition_issues(
+    registry: Mapping[str, Any], compiled: Mapping[str, Any]
+) -> list[ProviderGovernanceIssue]:
+    issues: list[ProviderGovernanceIssue] = []
+    for root in _descriptor_roots(registry):
+        owner = root["descriptor_owner"]
+        root_id = root["root_id"]
+        output = root["descriptor_output"]
+        if not owner or not output:
+            continue
+        output_path = ROOT / output
+        if not output_path.is_file():
+            issues.append(ProviderGovernanceIssue(output, "generated binding descriptor is missing"))
+            continue
+        expected = render_go_bindings(
+            compiled,
+            descriptor_owner=owner,
+            descriptor_root_id=root_id,
+        )
+        if output_path.read_text(encoding="utf-8") != expected:
+            issues.append(ProviderGovernanceIssue(output, "generated binding descriptor is stale"))
+    return issues
+
+
+def write_go_bindings(
+    registry: Mapping[str, Any],
+    compiled: Mapping[str, Any],
+    *,
+    check: bool,
+) -> list[ProviderGovernanceIssue]:
+    issues: list[ProviderGovernanceIssue] = []
+    for root in _descriptor_roots(registry):
+        output = root["descriptor_output"]
+        output_path = ROOT / output
+        rendered = render_go_bindings(
+            compiled,
+            descriptor_owner=root["descriptor_owner"],
+            descriptor_root_id=root["root_id"],
+        )
+        current = output_path.read_text(encoding="utf-8") if output_path.is_file() else None
+        if check:
+            if current != rendered:
+                issues.append(
+                    ProviderGovernanceIssue(output, "generated binding descriptor is stale")
+                )
+            continue
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered, encoding="utf-8")
     return issues
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--go-output",
-        type=Path,
-        help="write compiled bindings as a checked-in Go descriptor",
-    )
-    parser.add_argument(
-        "--descriptor-owner",
-        help="render only bindings for this descriptor owner",
-    )
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="fail when --go-output is absent or differs from compiler output",
-    )
+    parser.add_argument("--go-bindings", action="store_true")
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
-    compiled, issues = load_and_compile()
-    if args.go_output:
-        if not args.descriptor_owner:
-            parser.error("--descriptor-owner is required when --go-output is provided")
-        rendered = render_go_bindings(
-            compiled,
-            descriptor_owner=args.descriptor_owner,
+    registry = load_registry()
+    compiled, issues = compile_governance(
+        registry,
+        load_bindings(),
+        load_conformance_manifest(),
+    )
+    if args.check and not args.go_bindings:
+        parser.error("--check requires --go-bindings")
+    if args.go_bindings:
+        issues = [*issues, *write_go_bindings(registry, compiled, check=args.check)]
+    if args.quiet:
+        print(
+            "external-provider-governance: "
+            f"capabilities={compiled['capabilityCount']} "
+            f"adapters={compiled['adapterCount']} issues={len(issues)}"
         )
-        try:
-            current = args.go_output.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            current = None
-        if args.check:
-            if current != rendered:
-                print(f"generated provider bindings are stale: {args.go_output}")
-                return 1
-        else:
-            args.go_output.parent.mkdir(parents=True, exist_ok=True)
-            args.go_output.write_text(rendered, encoding="utf-8")
-    print(json.dumps(compiled, ensure_ascii=False, indent=2, sort_keys=True))
+    else:
+        print(json.dumps(compiled, ensure_ascii=False, indent=2, sort_keys=True))
     return 1 if issues else 0
 
 

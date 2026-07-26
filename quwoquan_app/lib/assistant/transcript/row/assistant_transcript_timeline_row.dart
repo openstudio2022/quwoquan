@@ -4,6 +4,7 @@ import 'package:quwoquan_app/assistant/transcript/identity/transcript_line_id.da
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/assistant/transcript/user_utterance/utterance_send_state.dart';
 import 'package:quwoquan_app/assistant/transcript/user_utterance/user_utterance.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
 /// 受 Codec 管理的非持久化键（其余进入 [extra] 以保证 round-trip）。
 const Set<String> kTranscriptEnvelopeKeys = {
@@ -66,10 +67,11 @@ final class UserTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
     this.isRead = true,
     UtteranceSendState? sendState,
     this.extra = const <String, dynamic>{},
-  }) : sendState = sendState ??
-            (status == 'sending'
-                ? UtteranceSendState.sending
-                : UtteranceSendState.sent);
+  }) : sendState =
+           sendState ??
+           (status == 'sending'
+               ? UtteranceSendState.sending
+               : UtteranceSendState.sent);
 
   @override
   final TranscriptLineId id;
@@ -87,13 +89,14 @@ final class UserTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
   final Map<String, dynamic> extra;
 
   UserUtterance get utterance => UserUtterance(
-        text: content,
-        subAccountId: senderSubAccountId,
-        sendState: sendState,
-      );
+    text: content,
+    subAccountId: senderSubAccountId,
+    sendState: sendState,
+  );
 }
 
-final class AssistantAnswerTranscriptRow extends AssistantTranscriptTimelineRow {
+final class AssistantAnswerTranscriptRow
+    extends AssistantTranscriptTimelineRow {
   AssistantAnswerTranscriptRow({
     required this.id,
     required this.conversationId,
@@ -107,6 +110,7 @@ final class AssistantAnswerTranscriptRow extends AssistantTranscriptTimelineRow 
     this.streaming = false,
     this.streamFinalAnswer = '',
     this.anchor = const AssistantAnswerAnchor(),
+    this.terminalSnapshot,
     PersistedAssistantTimelinePayload? persisted,
     this.dialogueState = const <String, dynamic>{},
     this.uiReferences = const <Map<String, dynamic>>[],
@@ -129,7 +133,9 @@ final class AssistantAnswerTranscriptRow extends AssistantTranscriptTimelineRow 
   final bool streaming;
   final String streamFinalAnswer;
   final AssistantAnswerAnchor anchor;
+  final AssistantRunTerminalSnapshotView? terminalSnapshot;
   final PersistedAssistantTimelinePayload persisted;
+
   /// 开放 JSON；稳定键请用 [AssistantDialogueRuntimeReadView]。
   final Map<String, dynamic> dialogueState;
   final List<Map<String, dynamic>> uiReferences;
@@ -151,6 +157,7 @@ final class AssistantAnswerTranscriptRow extends AssistantTranscriptTimelineRow 
     bool? streaming,
     String? streamFinalAnswer,
     AssistantAnswerAnchor? anchor,
+    AssistantRunTerminalSnapshotView? terminalSnapshot,
     PersistedAssistantTimelinePayload? persisted,
     Map<String, dynamic>? dialogueState,
     List<Map<String, dynamic>>? uiReferences,
@@ -172,6 +179,7 @@ final class AssistantAnswerTranscriptRow extends AssistantTranscriptTimelineRow 
       streaming: streaming ?? this.streaming,
       streamFinalAnswer: streamFinalAnswer ?? this.streamFinalAnswer,
       anchor: anchor ?? this.anchor,
+      terminalSnapshot: terminalSnapshot ?? this.terminalSnapshot,
       persisted: persisted ?? this.persisted,
       dialogueState: dialogueState ?? this.dialogueState,
       uiReferences: uiReferences ?? this.uiReferences,

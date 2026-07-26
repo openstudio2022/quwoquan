@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/context.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "role",
+    "access"
+  ],
+  "properties": {
+    "role": {
+      "enum": [
+        "core",
+        "supporting",
+        "generic"
+      ]
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commands",
+        "queries",
+        "child_objects",
+        "cross_context"
+      ],
+      "properties": {
+        "commands": {
+          "const": "aggregate_facade_only"
+        },
+        "queries": {
+          "const": "named_reader_slice_only"
+        },
+        "child_objects": {
+          "const": "aggregate_root_only"
+        },
+        "cross_context": {
+          "const": "public_contract_only"
+        }
+      }
+    }
+  }
+}

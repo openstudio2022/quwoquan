@@ -1,0 +1,68 @@
+kind: aggregate_root
+description: '已完成并通过 CAS digest 定址的媒体资产聚合。资产独立拥有上传人、对象存储 key、
+
+  digest、处理状态和访问策略；Post 与 Comment 仅保存有序 mediaAssetId 引用。
+
+  '
+identity:
+  fields:
+  - id
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: owner
+  on_delete: restrict
+  reference_fields:
+  - ownerId
+  target_object: user.Persona
+- access: event
+  cardinality: '1:1'
+  consistency: eventual
+  kind: event_source
+  name: uploadSession
+  on_delete: retain
+  reference_fields:
+  - sourceSessionId
+  target_object: content.MediaUploadSession
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: manualCover
+  on_delete: restrict
+  reference_fields:
+  - manualCoverAssetId
+  target_object: content.MediaAsset
+capabilities:
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- sourceSessionId 只能绑定一个完成且摘要一致的 MediaUploadSession
+- objectKey 与 sha256 创建后不可变，重复完成按摘要幂等返回同一资产
+- processing -> ready|rejected 只能由受信处理结果命令推进
+- 图片 ready 必须具备方向归一后的宽高、真实交付 MIME、私有归一化对象 key、稳定公共 slice key、主色、LQIP、渲染内容画像与 derivative policy version
+- 图片多规格不复制第二套业务对象；thumbnail/display/cover/full 统一由 image_variant_policy 驱动 CDN 派生
+- ImageDescriptorRevision 是 MediaAsset 的有界 owned value；activeImageDescriptorRevision 始终指向完整已验证 revision
+- 重处理候选必须完成私有 baseline 校验与 public slice readback 后，才可通过当前 MediaAsset version CAS 激活
+- 回滚仅能选择已记录的历史 revision；被替换 revision 只登记 cleanup candidate，实际对象删除必须先通过 Post 引用审计与保留期
+- accessPolicy 变更必须校验 owner persona，并以服务端内部 version CAS 提交
+- owner 只能放弃未被非删除 Post、活跃 Comment 引用且未被其他非删除 MediaAsset 作为手动封面的资产；删除与 Post/Comment/manual cover 新引用通过同一逻辑引用 fence 串行化
+- 放弃命令必须把 deleted 聚合、幂等回执与作为物理清理工作源的 outbox 原子提交；对象删除失败由同序 media-processing cursor 重放，不得遗失或伪装成功
+- deleted 资产不再被新 Post、Comment 或 Message 引用
+lifecycle:
+  states:
+  - processing
+  - ready
+  - rejected
+  - deleted
+  optimistic_concurrency: version
+  idempotency: command_key

@@ -4,6 +4,7 @@ const String _clientInteractionStateBoxName = 'client_interaction_state';
 const String _userRelationshipStateStorageKey = 'user_relationship_state_v1';
 const String _postInteractionStateStorageKey = 'post_interaction_state_v1';
 const String _clientStateSyncOutboxStorageKey = 'client_state_sync_outbox_v1';
+int _clientInteractionStateEpoch = 0;
 
 Future<Box<String>> _ensureClientInteractionStateBox() async {
   if (!Hive.isBoxOpen(_clientInteractionStateBoxName)) {
@@ -18,8 +19,12 @@ Future<Box<String>> _ensureClientInteractionStateBox() async {
 }
 
 Future<Map<String, dynamic>?> _readPersistedInteractionMap(String key) async {
+  final epoch = _clientInteractionStateEpoch;
   try {
     final box = await _ensureClientInteractionStateBox();
+    if (epoch != _clientInteractionStateEpoch) {
+      return null;
+    }
     final raw = box.get(key);
     if (raw == null || raw.isEmpty) {
       return null;
@@ -41,11 +46,25 @@ Future<void> _writePersistedInteractionMap(
   String key,
   Map<String, dynamic> value,
 ) async {
+  final epoch = _clientInteractionStateEpoch;
   try {
     final box = await _ensureClientInteractionStateBox();
+    if (epoch != _clientInteractionStateEpoch) {
+      return;
+    }
     await box.put(key, jsonEncode(value));
   } catch (_) {
     /* best-effort: 本地交互状态持久化失败仅丢失离线缓存，云端同步仍为真相源 */
+  }
+}
+
+/// 云侧账号 closed 后清除关系、内容交互投影及其待同步 outbox。
+Future<void> clearClientInteractionStateForTerminalAccountClosure() async {
+  _clientInteractionStateEpoch += 1;
+  final box = await _ensureClientInteractionStateBox();
+  await box.clear();
+  if (box.isNotEmpty) {
+    throw StateError('client interaction state cleanup verification failed');
   }
 }
 

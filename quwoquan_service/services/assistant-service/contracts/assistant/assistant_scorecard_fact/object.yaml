@@ -1,0 +1,53 @@
+kind: append_only_fact
+description: AssistantRun 的离线或在线评估分数不可变事实，仅经 typed append sink 写入。
+identity:
+  fields:
+  - scoreId
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: none
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: run
+  on_delete: retain
+  reference_fields:
+  - runId
+  target_object: assistant.AssistantRun
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: interactionEvent
+  on_delete: retain
+  reference_fields:
+  - eventId
+  target_object: assistant.AssistantInteractionEvent
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: accountActor
+  on_delete: retain
+  reference_fields:
+  - userId
+  target_object: user.UserAccount
+local_identity_reasons:
+  domainId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity
+  metricId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity
+capabilities:
+- append_only
+- deduplicated_append
+business_rules:
+- scoreId、runId、metricId 与 scoreSource 创建后不可变
+- scoreValue 必须符合 metric registry 的范围和版本
+- 同一 scoreId 只追加一次，事实不提供 update 或 delete
+lifecycle:
+  states:
+  - recorded

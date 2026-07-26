@@ -2,7 +2,7 @@ import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/domain_error_code.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_impact_summary.g.dart';

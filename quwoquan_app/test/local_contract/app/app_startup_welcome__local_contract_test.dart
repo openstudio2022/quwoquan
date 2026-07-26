@@ -120,6 +120,40 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
+  testWidgets('Patrol bootstrap 在首帧后走同一 router handoff', (tester) async {
+    suppressExpectedErrors();
+    AppStartupRuntime.instance.resetForTesting();
+    resetAppRouterLibraryLoaderForTesting();
+    addTearDown(() {
+      AppStartupRuntime.instance.resetForTesting();
+      resetAppRouterLibraryLoaderForTesting();
+    });
+
+    await tester.pumpWidget(
+      wrapRoot(
+        ProviderScope(
+          overrides: startupOverrides(authStore: _BlockingAuthSessionStore()),
+          child: const QuWoQuanAppRoot(autoCompleteStartupWelcomeForTest: true),
+        ),
+      ),
+    );
+
+    for (var index = 0; index < 20; index++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      if (find.byType(MainAppShell).evaluate().isNotEmpty) {
+        break;
+      }
+    }
+
+    expect(find.byType(MainAppShell), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+    expect(find.byType(WelcomeScreen), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
   testWidgets('原生时钟晚于 Dart 启动时立即收紧 Root 绝对 deadline', (tester) async {
     suppressExpectedErrors();
     final routerNeverCompletes = Completer<void>();
@@ -410,7 +444,7 @@ void main() {
     expect(store.savedRefreshAccessToken, 'fresh-access');
     expect(store.savedRefreshToken, 'fresh-refresh');
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('静默 refresh 判定为 token 失效时，清理会话进入重登态', (tester) async {

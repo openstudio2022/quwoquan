@@ -10,7 +10,7 @@ from content.source.research import qunar_sources as qunar_sources_mod  # noqa: 
 
 
 def test_prepare_source_plan_includes_registry_guidance_for_travel():
-    task = "20260711--travel-article-source-guidance--cn-sichuan--canary-001"
+    task = "20260711--travel-article-source-guidance--test-region-b--pilot-001"
     entity = {"entityId": "九寨沟", "canonicalName": "九寨沟", "entityType": "景区"}
     prepare_source_plan(task, [entity])
     plan = (
@@ -285,8 +285,8 @@ def test_qunar_travelogue_sources_caps_search_budget_and_single_page():
         network_io_mod.curl_json = _fake_curl_json
         qunar_sources_mod.time.sleep = lambda *_args, **_kwargs: None
         sources = _qunar_travelogue_sources(
-            "洪泽湖湿地景区",
-            entity_aliases=_known_entity_aliases("洪泽湖湿地景区"),
+            "测试实体甲",
+            entity_aliases=["test entity alias"],
             limit=4,
         )
     finally:
@@ -296,7 +296,7 @@ def test_qunar_travelogue_sources_caps_search_budget_and_single_page():
     unique_queries = list(dict.fromkeys(query for query, _page in calls))
     assert sources == []
     assert len(unique_queries) <= 8
-    assert "洪泽湖" in unique_queries
+    assert "test entity alias" in unique_queries
     assert {page for _query, page in calls} == {"1"}
 
 def test_qunar_travelogue_sources_fetch_second_page_after_anchor_hits():
@@ -358,22 +358,10 @@ def test_qunar_travelogue_sources_fetch_second_page_after_anchor_hits():
     ]
     assert ("锦里", "2") in calls
 
-def test_known_entity_aliases_registry_covers_operational_article_search_names():
-    assert "沈阳世博园" in _known_entity_aliases("沈阳市沈阳植物园")
-    assert "长春世界雕塑园" in _known_entity_aliases("世界雕塑公园景区")
-    assert "趵突泉" in _known_entity_aliases("天下第一泉景区")
-    assert "淹城春秋乐园" in _known_entity_aliases("春秋淹城旅游区")
-    assert "洪泽湖" in _known_entity_aliases("洪泽湖湿地景区")
-    assert "湄洲岛" in _known_entity_aliases("湄洲岛妈祖文化旅游区")
-
-def test_known_article_sources_skip_non_fetchable_registry_sites():
-    sources = _known_article_sources("南京市夫子庙－秦淮风光带")
-    source_ids = {source["source_id"] for source in sources}
-    urls = {source["url"] for source in sources}
-    assert "article_registry_fuzimiao_qinhuai_route" in source_ids
-    assert "http://www.njfzm.net/brc/53.htm" in urls
-    assert any(source["platform"] == "景区官网" for source in sources)
-    assert not any("you.ctrip.com" in url for url in urls)
+def test_source_registry_has_no_entity_specific_source_or_alias_fallbacks():
+    assert _known_entity_aliases("测试实体甲") == []
+    assert _known_article_sources("测试实体甲") == []
+    assert _known_official_website("测试实体甲") == ""
 
 def test_homepage_seed_source_four_encyclopedia_closed_set():
     assert _homepage_can_seed_base_draft({
@@ -409,7 +397,7 @@ def test_homepage_seed_source_four_encyclopedia_closed_set():
         "url": "https://www.news.cn/example",
     })
 
-def test_qunar_travelogue_sources_match_registry_alias_route_names():
+def test_qunar_travelogue_sources_match_runtime_alias_route_names():
     original_curl_json = network_io_mod.curl_json
     original_sleep = qunar_sources_mod.time.sleep
     queries: list[str] = []
@@ -418,7 +406,7 @@ def test_qunar_travelogue_sources_match_registry_alias_route_names():
         _ = timeout
         query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("q", [""])[0]
         queries.append(query)
-        if query != "沈阳世博园":
+        if query != "test entity alias":
             return {"ret": True, "data": {"bookList": [], "more": False}}
         return {
             "ret": True,
@@ -426,10 +414,10 @@ def test_qunar_travelogue_sources_match_registry_alias_route_names():
                 "bookList": [
                     {
                         "id": "7442970",
-                        "title": "沈阳10.12-10.14游记",
-                        "travelRoute": ["张学良旧居", "沈阳世博园", "中街"],
-                        "cityName": "沈阳",
-                        "userName": "旅行者",
+                        "title": "test entity alias travel note",
+                        "travelRoute": ["test entity alias", "other stop"],
+                        "cityName": "test city",
+                        "userName": "test author",
                         "viewCount": 1200,
                     }
                 ],
@@ -441,19 +429,19 @@ def test_qunar_travelogue_sources_match_registry_alias_route_names():
         network_io_mod.curl_json = _fake_curl_json
         qunar_sources_mod.time.sleep = lambda *_args, **_kwargs: None
         sources = _qunar_travelogue_sources(
-            "沈阳市沈阳植物园",
-            entity_aliases=_known_entity_aliases("沈阳市沈阳植物园"),
+            "测试实体甲",
+            entity_aliases=["test entity alias"],
             limit=4,
         )
     finally:
         network_io_mod.curl_json = original_curl_json
         qunar_sources_mod.time.sleep = original_sleep
 
-    assert "沈阳世博园" in queries
+    assert "test entity alias" in queries
     assert len(sources) == 1
     assert sources[0]["url"] == "https://touch.travel.qunar.com/youji/7442970"
 
-def test_qunar_travelogue_sources_use_composite_scenic_aliases():
+def test_qunar_travelogue_sources_use_explicit_composite_aliases():
     original_curl_json = network_io_mod.curl_json
     original_sleep = qunar_sources_mod.time.sleep
     queries: list[str] = []
@@ -462,7 +450,7 @@ def test_qunar_travelogue_sources_use_composite_scenic_aliases():
         _ = timeout
         query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("q", [""])[0]
         queries.append(query)
-        if query != "淹城春秋乐园":
+        if query != "test entity composite alias":
             return {"ret": True, "data": {"bookList": [], "more": False}}
         return {
             "ret": True,
@@ -470,10 +458,10 @@ def test_qunar_travelogue_sources_use_composite_scenic_aliases():
                 "bookList": [
                     {
                         "id": "7674519",
-                        "title": "三天两晚淹城春秋乐园穿越之旅",
-                        "travelRoute": ["淹城春秋乐园", "淹城遗址公园", "春秋王宫"],
-                        "cityName": "常州",
-                        "userName": "旅行者",
+                        "title": "test entity composite alias journey",
+                        "travelRoute": ["test entity composite alias", "other stop"],
+                        "cityName": "test city",
+                        "userName": "test author",
                         "viewCount": 1200,
                     }
                 ],
@@ -485,19 +473,19 @@ def test_qunar_travelogue_sources_use_composite_scenic_aliases():
         network_io_mod.curl_json = _fake_curl_json
         qunar_sources_mod.time.sleep = lambda *_args, **_kwargs: None
         sources = _qunar_travelogue_sources(
-            "春秋淹城旅游区",
-            entity_aliases=_known_entity_aliases("春秋淹城旅游区"),
+            "测试实体甲",
+            entity_aliases=["test entity composite alias"],
             limit=4,
         )
     finally:
         network_io_mod.curl_json = original_curl_json
         qunar_sources_mod.time.sleep = original_sleep
 
-    assert "淹城春秋乐园" in queries
+    assert "test entity composite alias" in queries
     assert len(sources) == 1
     assert sources[0]["url"] == "https://touch.travel.qunar.com/youji/7674519"
 
-def test_qunar_travelogue_sources_search_late_registry_aliases():
+def test_qunar_travelogue_sources_search_explicit_aliases():
     original_curl_json = network_io_mod.curl_json
     original_sleep = qunar_sources_mod.time.sleep
     queries: list[str] = []
@@ -506,7 +494,7 @@ def test_qunar_travelogue_sources_search_late_registry_aliases():
         _ = timeout
         query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("q", [""])[0]
         queries.append(query)
-        if query != "洪泽湖":
+        if query != "test entity search alias":
             return {"ret": True, "data": {"bookList": [], "more": False}}
         return {
             "ret": True,
@@ -514,10 +502,10 @@ def test_qunar_travelogue_sources_search_late_registry_aliases():
                 "bookList": [
                     {
                         "id": "7900533",
-                        "title": "国庆带娃游淮安",
-                        "travelRoute": ["里运河", "洪泽湖", "河下古镇"],
-                        "cityName": "淮安",
-                        "userName": "旅行者",
+                        "title": "test entity search alias journey",
+                        "travelRoute": ["test entity search alias", "other stop"],
+                        "cityName": "test city",
+                        "userName": "test author",
                         "viewCount": 1200,
                     }
                 ],
@@ -529,15 +517,15 @@ def test_qunar_travelogue_sources_search_late_registry_aliases():
         network_io_mod.curl_json = _fake_curl_json
         qunar_sources_mod.time.sleep = lambda *_args, **_kwargs: None
         sources = _qunar_travelogue_sources(
-            "洪泽湖湿地景区",
-            entity_aliases=_known_entity_aliases("洪泽湖湿地景区"),
+            "测试实体甲",
+            entity_aliases=["test entity search alias"],
             limit=4,
         )
     finally:
         network_io_mod.curl_json = original_curl_json
         qunar_sources_mod.time.sleep = original_sleep
 
-    assert "洪泽湖" in queries
+    assert "test entity search alias" in queries
     assert len(sources) == 1
     assert sources[0]["url"] == "https://touch.travel.qunar.com/youji/7900533"
 
@@ -750,29 +738,16 @@ def test_safe_collection_id_uses_hash_suffix_to_avoid_long_prefix_collision():
     assert len(cid_a.rsplit(":", 1)[-1]) == 10
     assert len(cid_b.rsplit(":", 1)[-1]) == 10
 
-def test_known_official_site_registry_covers_previous_missing_official_sources():
-    assert _known_official_website("故宫博物院") == "https://www.dpm.org.cn/Home.html"
-    assert _travel_registry_url_fetchable("https://www.dpm.org.cn/Home.html")
-    palace = _source(
+def test_provider_policy_controls_fetchability_without_entity_url_special_cases():
+    assert _travel_registry_url_fetchable("https://zh.wikipedia.org/wiki/Test_entity")
+    assert not _travel_registry_url_fetchable("https://blocked.example.invalid/测试实体甲")
+    official = _source(
         source_id="home_official",
-        platform="景区官网",
-        url="https://www.dpm.org.cn/Home.html",
+        platform="official site",
+        url="https://example.com/about",
         category="official",
-        discovery_provider="travel_source_registry",
+        discovery_provider="provider_policy",
         match_confidence=0.94,
         source_role="primary",
     )
-    assert not _homepage_can_seed_base_draft(palace)
-    assert _known_official_website("秦始皇帝陵博物院景区") == "https://www.bmy.com.cn/index.html"
-    assert _travel_registry_url_fetchable("https://www.bmy.com.cn/index.html")
-    assert _known_official_website("黄果树瀑布景区") == "https://www.hgscn.com/"
-    assert _travel_registry_url_fetchable("https://www.hgscn.com/")
-    assert _known_official_website("布达拉宫景区") == "https://www.potalapalace.cn/"
-    assert _travel_registry_url_fetchable("https://www.potalapalace.cn/")
-    assert _known_official_website("毕棚沟") == "http://www.bipenggou.net/"
-    assert _known_official_website("碧峰峡") == "http://www.bifengxia.com/info?crid=74&lan=cn&ckey=jqgk_dfbfx"
-    assert _known_official_website("蜀南竹海") == "https://www.snzh.cn/"
-    assert _known_official_website("海螺沟") == "https://www.hailuogou.com/"
-    assert _known_official_website("青城山") == "https://www.djy517.com/"
-    assert _known_official_website("南京市夫子庙－秦淮风光带") == "http://www.njfzm.net/brc/40.htm"
-    assert _known_official_website("乐山大佛") == ""
+    assert not _homepage_can_seed_base_draft(official)

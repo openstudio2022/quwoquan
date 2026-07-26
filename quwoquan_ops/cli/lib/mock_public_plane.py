@@ -719,7 +719,7 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         }
 
     def _match_experiment_path(self, path: str, suffix: str) -> str | None:
-        prefix = "/ops/experiments/"
+        prefix = "/ops/product_ops/experiments/"
         if not path.startswith(prefix) or not path.endswith(suffix):
             return None
         experiment_id = path[len(prefix) : -len(suffix)].strip("/")

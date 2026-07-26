@@ -172,6 +172,13 @@ def audit_object_transaction(
     expected_canonical_merkle: str,
 ) -> dict[str, Any]:
     transaction_id = _safe_id(transaction_id, label="transactionId")
+    # Canonical publish is derived state. A fresh checkout or an intentional
+    # empty-baseline reset therefore has no physical directory yet; initialize
+    # the empty root before taking the Merkle snapshot and staging the atomic
+    # transaction. Static inputs remain in the version-controlled control plane.
+    if publish_root.exists() and not publish_root.is_dir():
+        raise ObjectTransactionError(f"canonical publish root is not a directory: {publish_root}")
+    publish_root.mkdir(parents=True, exist_ok=True)
     before = tree_integrity_stats(publish_root)
     if before["merkleRoot"] != expected_canonical_merkle:
         raise ObjectTransactionError(

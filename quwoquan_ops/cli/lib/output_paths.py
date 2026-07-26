@@ -9,6 +9,7 @@ manifests.
 from __future__ import annotations
 
 import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,6 +34,109 @@ def safe_segment(value: str, *, fallback: str = "run") -> str:
 
 def output_root() -> Path:
     return Path(os.environ.get("QWQ_OUTPUT_ROOT") or DEFAULT_OUTPUT_ROOT)
+
+
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def _deployment_segment(value: str, *, label: str, fallback: str = "") -> str:
+    text = str(value or "").strip() or fallback
+    candidate = Path(text)
+    if (
+        not text
+        or text in {".", ".."}
+        or "/" in text
+        or "\\" in text
+        or candidate.is_absolute()
+        or len(candidate.parts) != 1
+    ):
+        raise ValueError(f"deployment {label} must be one safe path segment: {value!r}")
+    return text
+
+
+def _require_external_deployment_base(base: Path) -> None:
+    repository_root = ROOT.resolve()
+    repository_output_root = output_root().expanduser().resolve()
+    if _is_within(base, repository_root):
+        raise ValueError(
+            "QWQ_DEPLOY_WORK_ROOT must be outside the repository source tree"
+        )
+    if _is_within(base, repository_output_root) or _is_within(
+        repository_output_root,
+        base,
+    ):
+        raise ValueError(
+            "QWQ_DEPLOY_WORK_ROOT must be outside QWQ_OUTPUT_ROOT and must not overlap it; "
+            ".qwq_output cannot contain deployment configuration or payloads"
+        )
+
+
+def _require_target_scoped_path(path: Path, *, target_root: Path) -> Path:
+    candidate = target_root
+    try:
+        relative_parts = path.relative_to(target_root).parts
+    except ValueError as exc:
+        raise ValueError(
+            f"deployment path escapes target-scoped workspace {target_root}: {path}"
+        ) from exc
+    for part in relative_parts:
+        candidate /= part
+        if candidate.is_symlink():
+            raise ValueError(
+                "deployment path cannot traverse a symbolic link: "
+                f"{candidate}"
+            )
+    resolved = path.resolve()
+    if not _is_within(resolved, target_root):
+        raise ValueError(
+            f"deployment path escapes target-scoped workspace {target_root}: {path}"
+        )
+    return resolved
+
+
+def deployment_target_path(target: str, *segments: str) -> Path:
+    """Return a real path below exactly one validated deployment target."""
+    target_root = deployment_work_root(target)
+    normalized_segments = tuple(
+        _deployment_segment(segment, label="path segment")
+        for segment in segments
+    )
+    candidate = target_root.joinpath(*normalized_segments)
+    return _require_target_scoped_path(candidate, target_root=target_root)
+
+
+def resolve_deployment_target_path(
+    configured_path: str | Path | None,
+    *,
+    target: str,
+    segments: tuple[str, ...],
+) -> Path:
+    """Accept only the canonical resolver-derived path for a deployment output."""
+    expected = deployment_target_path(target, *segments)
+    if configured_path is None or not str(configured_path).strip():
+        return expected
+    configured = Path(configured_path).expanduser().resolve()
+    if configured != expected:
+        raise ValueError(
+            "deployment output must resolve to its target-scoped workspace: "
+            f"expected {expected}, got {configured}"
+        )
+    return expected
+
+
+def remove_deployment_tree(target: str, *segments: str) -> Path:
+    """Remove only a resolver-derived non-symlink deployment directory."""
+    if not segments:
+        raise ValueError("refusing to remove a deployment target root")
+    path = deployment_target_path(target, *segments)
+    if path.exists():
+        shutil.rmtree(path)
+    return path
 
 
 def env_for_target(target: str) -> str:
@@ -94,7 +198,8 @@ def target_cache_dir(target: str) -> Path:
 
 
 def deployment_work_root(target: str) -> Path:
-    """Return the external deployment workspace for configuration and payloads."""
+    """Return the real, external workspace for exactly one deployment target."""
+    target_segment = _deployment_segment(target, label="target", fallback="local")
     configured = os.environ.get("QWQ_DEPLOY_WORK_ROOT", "").strip()
     base = (
         Path(configured).expanduser()
@@ -102,16 +207,14 @@ def deployment_work_root(target: str) -> Path:
         else DEFAULT_DEPLOY_WORK_ROOT
     )
     resolved_base = base.resolve()
-    try:
-        resolved_base.relative_to(output_root().expanduser().resolve())
-    except ValueError:
-        pass
-    else:
+    _require_external_deployment_base(resolved_base)
+    target_root = (resolved_base / target_segment).resolve()
+    if not _is_within(target_root, resolved_base):
         raise ValueError(
-            "QWQ_DEPLOY_WORK_ROOT must be outside QWQ_OUTPUT_ROOT; "
-            ".qwq_output cannot contain deployment configuration or payloads"
+            "deployment target cannot escape QWQ_DEPLOY_WORK_ROOT via a symbolic link"
         )
-    return base / safe_segment(target, fallback="local")
+    _require_external_deployment_base(target_root)
+    return target_root
 
 
 def deployment_target_for_env(env_name: str, *, target: str = "") -> str:
@@ -124,18 +227,27 @@ def deployment_target_for_env(env_name: str, *, target: str = "") -> str:
         raise ValueError(
             f"deployment target {requested!r} does not belong to environment {env!r}"
         )
-    return safe_segment(requested, fallback=DEFAULT_DEPLOY_TARGET_BY_ENV[env])
+    return _deployment_segment(
+        requested,
+        label="target",
+        fallback=DEFAULT_DEPLOY_TARGET_BY_ENV[env],
+    )
 
 
 def deployment_package_root(env_name: str, *, target: str = "") -> Path:
     """Return the external deployment-payload root for one environment target."""
-    return deployment_work_root(
-        deployment_target_for_env(env_name, target=target)
-    ) / "packages"
+    return deployment_target_path(
+        deployment_target_for_env(env_name, target=target),
+        "packages",
+    )
 
 
 def app_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
-    return deployment_package_root(env_name, target=target) / "app"
+    return deployment_target_path(
+        deployment_target_for_env(env_name, target=target),
+        "packages",
+        "app",
+    )
 
 
 def service_deployment_package_dir(
@@ -144,15 +256,20 @@ def service_deployment_package_dir(
     *,
     target: str = "",
 ) -> Path:
-    return (
-        deployment_package_root(env_name, target=target)
-        / "service"
-        / safe_segment(service, fallback="service")
+    return deployment_target_path(
+        deployment_target_for_env(env_name, target=target),
+        "packages",
+        "services",
+        _deployment_segment(service, label="service", fallback="service"),
     )
 
 
 def legal_static_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
-    return deployment_package_root(env_name, target=target) / "legal-static"
+    return deployment_target_path(
+        deployment_target_for_env(env_name, target=target),
+        "packages",
+        "legal-static",
+    )
 
 
 def runtime_shared_deployment_package_dir(
@@ -160,16 +277,37 @@ def runtime_shared_deployment_package_dir(
     *,
     target: str = "",
 ) -> Path:
-    return deployment_package_root(env_name, target=target) / "runtime-shared"
+    return deployment_target_path(
+        deployment_target_for_env(env_name, target=target),
+        "packages",
+        "runtime-shared",
+    )
 
 
 def portal_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
-    return deployment_package_root(env_name, target=target) / "ops-portal"
+    return deployment_target_path(
+        deployment_target_for_env(env_name, target=target),
+        "packages",
+        "ops-portal",
+    )
+
+
+def deployment_render_dir(
+    env_name: str,
+    *,
+    target: str = "",
+    name: str = "",
+) -> Path:
+    target_name = deployment_target_for_env(env_name, target=target)
+    segments = ("rendered",)
+    if name:
+        segments += (_deployment_segment(name, label="render name"),)
+    return deployment_target_path(target_name, *segments)
 
 
 def certificate_export_dir(target: str) -> Path:
     """Temporary host copy of a container-managed CA for device trust injection."""
-    return deployment_work_root(target) / "certificates"
+    return deployment_target_path(target, "certificates")
 
 
 def repo_root() -> Path:

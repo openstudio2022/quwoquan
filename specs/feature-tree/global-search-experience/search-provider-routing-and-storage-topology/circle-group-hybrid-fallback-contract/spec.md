@@ -1,33 +1,56 @@
-# L3 Scenario: circle-group-hybrid-fallback-contract
+# L3 Story：Circle 讨论本地回退契约 (`circle-group-hybrid-fallback-contract`)
 
-## 节点定位
+> 所属能力：[`search-provider-routing-and-storage-topology`](../spec.md)
 
-- `L1_domain_service`: `global-search-experience`
-- `L2_business_capability`: `search-provider-routing-and-storage-topology`
-- `L3_story`: `circle-group-hybrid-fallback-contract`
+> Journey / Scenario：[`JNY-005 / SCN-011`](../../../spec.md#scn-011)
 
-## 背景与动机
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-`circle.group` 是唯一明确冻结为“云优先、本地兜底”的对象。如果不单独成约束，后续会在页面、provider 或服务端各写一版 fallback 语义。
+## 1. 用户价值
 
-## 功能范围
+作为搜索圈子或讨论的用户，
+我希望在云侧搜索不可用时获得明确标记的本地回退结果，
+从而继续找到可用对象且不会把降级结果误认为完整云结果。
 
-- 冻结 `circle.group` 的 remote-primary / local-fallback 规则。
-- 冻结 fallback 触发条件与结果标记。
-- 冻结 fallback 的结果来源是端侧本地全量结果。
+## 2. 范围与非目标
 
-## Out of Scope
+### In Scope
 
-- remote + local 融合重排。
-- 本地索引生命周期的细节治理。
+- Circle 讨论本地回退的输入、可观察主路径、失败语义以及与父能力的交接。
 
-## 约束
+### Out of Scope
 
-- 云侧失败、超时、熔断或 0 结果时触发 fallback。
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 Circle 讨论本地回退契约
+
+- fallback 必须返回 typed `resolvedFrom=local_fallback`。
+
+<a id="req-002"></a>
+### REQ-002 fallback 必须返回 typed resolvedFrom=local_fallback
+
 - fallback 必须返回 typed `resolvedFrom=local_fallback`。
 - 页面不得直接决定 fallback。
 
-## 验收重点
+## 4. 契约引用
 
-1. `circle.group` fallback 是否有唯一 contract。
-2. fallback 是否以 typed 结果返回，而不是文案约定。
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 Circle 讨论本地回退契约
+
+- GIVEN 执行搜索的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行 Circle 讨论本地回退对应的公开行为。
+- THEN fallback 必须返回 typed `resolvedFrom=local_fallback`。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`search-provider-routing-and-storage-topology`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

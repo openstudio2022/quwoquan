@@ -104,7 +104,7 @@ class RtcMediaQoeObservabilityContractTest(unittest.TestCase):
         alert_drill = yaml.safe_load(
             (
                 ROOT
-                / "quwoquan_ops/tests/fixtures/rtc_media_alerts.promtest.yaml"
+                / "quwoquan_ops/tests/support/fixtures/rtc_media_alerts.promtest.yaml"
             ).read_text(encoding="utf-8")
         )
         scenarios = {item["name"]: item for item in alert_drill["tests"]}

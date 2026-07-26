@@ -12,6 +12,15 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
+  test('anonymous bootstrap allows a cold mobile TLS handshake', () {
+    final contract =
+        appCloudOperationContracts[AppCloudOperationIds
+            .userAccountSessionLoginAnonymous]!;
+
+    expect(contract.timeoutMilliseconds, 10000);
+    expect(contract.maxAttempts, 2);
+  });
+
   test(
     'anonymous bootstrap uses a public client without a bearer session',
     () async {

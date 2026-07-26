@@ -4,7 +4,7 @@ import 'package:crypto/crypto.dart';
 
 /// 通讯录手机号规范化 + 哈希（端云唯一真相源的端侧镜像）。
 ///
-/// 必须与服务端 `services/user-service/internal/domain/user/phonematch` 逐字符等价：
+/// 必须与服务端 `services/user-service/internal/user/account/user_account/domain/user/phonematch` 逐字符等价：
 /// 同一个真实手机号在端云派生出相同 hash，匹配只在哈希域完成，手机号原文不出库、不上行。
 /// `salt` 是应用级命名常量（随客户端分发，非密钥），仅与服务端常量同步升级版本后缀。
 /// 一致性由两端共享测试向量锁定（见 contact_hash_service__local_contract_test.dart 与

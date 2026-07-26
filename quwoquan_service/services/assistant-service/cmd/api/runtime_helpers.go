@@ -12,8 +12,8 @@ import (
 
 	rtgov "quwoquan_service/runtime/governance"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/runtimeconfig"
-	"quwoquan_service/services/assistant-service/internal/runtimewiring"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimewiring"
 )
 
 func providerTimeout(ms int) time.Duration {

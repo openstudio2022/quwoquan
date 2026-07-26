@@ -10,11 +10,10 @@
   "gates": {
     "02.service_pipeline": {
       "budgetSeconds": 180,
-      "criticalPath": "prepare_release + max(build_go, build_seed_box, build_recommendation_service) + validate_deploy",
+      "criticalPath": "prepare_release + max(build_go, build_recommendation_service) + validate_deploy",
       "phaseBudgetsSeconds": {
         "prepare_release": 30,
         "build_go": 120,
-        "build_seed_box": 120,
         "build_recommendation_service": 120,
         "validate_deploy": 30
       }

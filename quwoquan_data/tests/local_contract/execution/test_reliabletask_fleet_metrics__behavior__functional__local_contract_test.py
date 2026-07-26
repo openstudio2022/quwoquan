@@ -21,16 +21,17 @@ from core.io import write_json  # noqa: E402
 
 
 def _report(*, passed: bool = True) -> dict[str, object]:
+    total = 10
     return {
         "schema": "quwoquan.reliabletask_fleet_report",
         "passed": passed,
         "backend": "mongodb+redis",
-        "total": 10,
-        "succeeded": 10,
+        "total": total,
+        "succeeded": total,
         "stageCompletedCount": 0,
-        "publishTaskCount": 10,
-        "objectTransactionResultCount": 10,
-        "commercialAcceptedCount": 10 if passed else 9,
+        "publishTaskCount": total,
+        "objectTransactionResultCount": total,
+        "commercialAcceptedCount": total if passed else total - 1,
         "controlPlaneTaskThroughputPerHour": 500.0,
         "acceptedContentThroughputPerHour": 480.0 if passed else 432.0,
         "acceptedContentThroughputStatus": (
@@ -43,6 +44,10 @@ def _report(*, passed: bool = True) -> dict[str, object]:
         "duplicatePublishCount": 0,
         "missingObjectCount": 0,
         "idempotencyKey": "executionId+entity+carrier+sourceRevision+stage",
+        "taskOutcomes": [
+            {"jobId": f"job-{index}", "status": "succeeded", "attempts": 1}
+            for index in range(total)
+        ],
         "completedAt": "2026-07-20T05:00:00Z",
     }
 

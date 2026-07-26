@@ -323,12 +323,14 @@ void main() {
           'assets': <Map<String, dynamic>>[
             {
               'assetId': 'cover',
-              'objectKey': 'media/image/s/test/article/manifest/v1/cover.jpg',
+              'publicSliceKey':
+                  'media/image/s/test/article/manifest/v1/cover.jpg',
               'role': 'cover',
             },
             {
               'assetId': 'fig1',
-              'objectKey': 'media/image/s/test/article/manifest/v1/fig1.jpg',
+              'publicSliceKey':
+                  'media/image/s/test/article/manifest/v1/fig1.jpg',
               'role': 'figure',
             },
           ],
@@ -398,7 +400,8 @@ void main() {
           'assets': <Map<String, dynamic>>[
             {
               'assetId': 'hero',
-              'objectKey': 'media/image/s/test/article/document/v1/doc.jpg',
+              'publicSliceKey':
+                  'media/image/s/test/article/document/v1/doc.jpg',
             },
           ],
         }
@@ -460,7 +463,7 @@ void main() {
                   'data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg',
               'kind': 'image',
               'scope': 'cold_start',
-              'objectKey':
+              'publicSliceKey':
                   'media/image/s/archived-image/post/chuanxi-v2-emeishan-weekend/v1/cover.jpg',
               'caption': '封面',
             },
@@ -469,7 +472,7 @@ void main() {
                   'data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg_2',
               'kind': 'image',
               'scope': 'cold_start',
-              'objectKey':
+              'publicSliceKey':
                   'media/image/s/archived-image/post/chuanxi-v2-emeishan-weekend/v1/detail-2.jpg',
               'caption': '配图2',
             },

@@ -10,7 +10,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -30,39 +29,13 @@ import (
 	runtimeconfig "quwoquan_service/runtime/config"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
+	"quwoquan_service/services/content-service/internal/content/post/application/importer"
 )
-
-const fleetRequestSchema = "quwoquan.data_content_fleet_request"
 
 // pythonWorkerModule is an internal adapter, not a public qwq-data command.
 // The worker process imports its callable explicitly so the Python module has
 // no second executable entrypoint alongside scripts/cli.py.
 const pythonWorkerModule = "from content.execution.reliabletask_worker import run_process_worker; run_process_worker()"
-
-type fleetRequest struct {
-	Schema            string                        `json:"schema"`
-	ExecutionID       string                        `json:"executionId"`
-	RequireCommercial bool                          `json:"requireCommercial"`
-	RecoverDeadTasks  *bool                         `json:"recoverDeadTasks"`
-	Jobs              []reliabletask.DataContentJob `json:"jobs"`
-}
-
-type workerConfig struct {
-	mongoURI        string
-	mongoDatabase   string
-	redisAddr       string
-	redisPassword   string
-	python          string
-	dataScriptsRoot string
-	workDir         string
-	publishRoot     string
-	evidenceRoot    string
-	workers         int
-	timeout         time.Duration
-	leaseTTL        time.Duration
-	pendingMinIdle  time.Duration
-	maxAttempts     int
-}
 
 func main() {
 	if err := run(); err != nil {
@@ -82,15 +55,34 @@ func run() error {
 		"",
 		"reliabletask fleet report 输出路径（必填）",
 	)
+	discardExecutionID := flag.String(
+		"discard-execution",
+		"",
+		"删除一个已停止 Data execution 的远端 ReliableTask 状态",
+	)
+	confirmDiscard := flag.Bool(
+		"confirm-discard",
+		false,
+		"确认删除 --discard-execution 指定的远端状态",
+	)
 	flag.Parse()
+	if strings.TrimSpace(*discardExecutionID) != "" {
+		if strings.TrimSpace(*requestPath) != "" || strings.TrimSpace(*reportPath) != "" {
+			return errors.New("--discard-execution cannot be combined with --request or --report")
+		}
+		if !*confirmDiscard {
+			return errors.New("--discard-execution requires --confirm-discard")
+		}
+		return discardExecution(strings.TrimSpace(*discardExecutionID))
+	}
 	if strings.TrimSpace(*requestPath) == "" || strings.TrimSpace(*reportPath) == "" {
 		return errors.New("--request and --report are required")
 	}
-	request, err := readFleetRequest(*requestPath)
+	request, err := importer.ReadFleetRequest(*requestPath)
 	if err != nil {
 		return err
 	}
-	cfg, err := loadWorkerConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	cfg, err := importer.LoadFleetConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
 		return err
 	}
@@ -100,15 +92,15 @@ func run() error {
 		syscall.SIGTERM,
 	)
 	defer stop()
-	ctx, cancel := context.WithTimeout(parent, cfg.timeout)
+	ctx, cancel := context.WithTimeout(parent, cfg.BatchTimeout)
 	defer cancel()
 
-	client, err := mongo.Connect(options.Client().ApplyURI(cfg.mongoURI))
+	client, err := mongo.Connect(options.Client().ApplyURI(cfg.MongoURI))
 	if err != nil {
 		return fmt.Errorf("connect reliabletask Mongo: %w", err)
 	}
 	defer client.Disconnect(context.Background())
-	database := client.Database(cfg.mongoDatabase)
+	database := client.Database(cfg.MongoDatabase)
 	store := reliabletaskmongo.New(database)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure reliabletask indexes: %w", err)
@@ -117,15 +109,15 @@ func run() error {
 		Scenes: map[string]rtredis.SceneConfig{
 			"reliabletask": {
 				Mode:     "standalone",
-				Addr:     cfg.redisAddr,
-				Password: cfg.redisPassword,
+				Addr:     cfg.RedisAddr,
+				Password: cfg.RedisPassword,
 			},
 		},
 		DefaultScene: "reliabletask",
 	})
 	defer router.Close()
 	executionHash := sha256.Sum256([]byte(request.ExecutionID))
-	streamSuffix := hex.EncodeToString(executionHash[:6])
+	streamSuffix := hex.EncodeToString(executionHash[:])
 	ready, err := reliabletask.NewRedisReadyIndex(
 		reliabletask.RedisReadyIndexConfig{
 			Client: router.Scene("reliabletask"),
@@ -142,16 +134,17 @@ func run() error {
 	}
 	fleet := reliabletask.DataContentFleet{
 		Store:          store,
+		ExecutionID:    request.ExecutionID,
 		Ready:          ready,
 		WorkerID:       "data-content-worker",
-		LeaseTTL:       cfg.leaseTTL,
-		PendingMinIdle: cfg.pendingMinIdle,
+		LeaseTTL:       cfg.LeaseTTL,
+		PendingMinIdle: cfg.PendingMinIdle,
 		Retry: reliabletask.RetryPolicy{
-			MaxAttempts: cfg.maxAttempts,
+			MaxAttempts: cfg.MaxAttempts,
 		},
 		ResultVerifier: reliabletask.DataContentFilesystemEvidenceVerifier{
-			PublishRoot:  cfg.publishRoot,
-			EvidenceRoot: cfg.evidenceRoot,
+			PublishRoot:  cfg.PublishRoot,
+			EvidenceRoot: cfg.EvidenceRoot,
 		},
 	}
 	startedAt := time.Now().UTC()
@@ -173,16 +166,16 @@ func run() error {
 	}
 	executor := reliabletask.DataContentProcessExecutor{
 		Command: []string{
-			cfg.python,
+			cfg.Python,
 			"-c",
 			pythonWorkerModule,
 		},
-		WorkDir: cfg.workDir,
+		WorkDir: cfg.WorkDir,
 		Environment: dataWorkerEnvironment(
 			os.Environ(),
-			cfg.evidenceRoot,
-			cfg.publishRoot,
-			cfg.dataScriptsRoot,
+			cfg.EvidenceRoot,
+			cfg.PublishRoot,
+			cfg.DataScriptsRoot,
 		),
 	}
 	tasks, runErr := runWorkers(
@@ -191,16 +184,18 @@ func run() error {
 		request,
 		fleet,
 		executor,
-		cfg.workers,
+		cfg.Workers,
+		request.ObjectTimeout(),
 	)
 	completedAt := time.Now().UTC()
+	outboxFilter, filterErr := importer.DataContentOutboxFilter(request)
+	if filterErr != nil {
+		return filterErr
+	}
 	outboxCount, countErr := database.Collection("reliable_task_outbox").
 		CountDocuments(
 			context.Background(),
-			bson.M{
-				"taskType":            reliabletask.DataContentTaskType,
-				"payload.executionId": request.ExecutionID,
-			},
+			outboxFilter,
 		)
 	if countErr != nil {
 		return fmt.Errorf("count data content outboxes: %w", countErr)
@@ -239,160 +234,72 @@ func run() error {
 	return nil
 }
 
-func readFleetRequest(path string) (fleetRequest, error) {
-	handle, err := os.Open(filepath.Clean(path))
+func discardExecution(executionID string) error {
+	cfg, err := importer.LoadFleetStoreConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
-		return fleetRequest{}, fmt.Errorf("open fleet request: %w", err)
+		return err
 	}
-	defer handle.Close()
-	decoder := json.NewDecoder(handle)
-	decoder.DisallowUnknownFields()
-	var request fleetRequest
-	if err := decoder.Decode(&request); err != nil {
-		return fleetRequest{}, fmt.Errorf("decode fleet request: %w", err)
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); err == nil {
-		return fleetRequest{}, errors.New("fleet request contains multiple JSON values")
-	} else if !errors.Is(err, io.EOF) {
-		return fleetRequest{}, fmt.Errorf("decode fleet request trailing data: %w", err)
-	}
-	if request.Schema != fleetRequestSchema {
-		return fleetRequest{}, fmt.Errorf("fleet request schema=%q", request.Schema)
-	}
-	request.ExecutionID = strings.TrimSpace(request.ExecutionID)
-	if request.ExecutionID == "" || request.RecoverDeadTasks == nil || len(request.Jobs) == 0 {
-		return fleetRequest{}, errors.New(
-			"fleet request requires executionId, recoverDeadTasks and at least one job",
-		)
-	}
-	jobIDs := make(map[string]struct{}, len(request.Jobs))
-	for index := range request.Jobs {
-		job := &request.Jobs[index]
-		if strings.TrimSpace(job.ExecutionID) != request.ExecutionID {
-			return fleetRequest{}, fmt.Errorf(
-				"fleet job %q execution binding mismatch",
-				job.JobID,
-			)
-		}
-		if job.Stage != "author" && job.Stage != "publish" {
-			return fleetRequest{}, fmt.Errorf(
-				"fleet job %q stage=%q is not executable",
-				job.JobID,
-				job.Stage,
-			)
-		}
-		if _, exists := jobIDs[job.JobID]; exists {
-			return fleetRequest{}, fmt.Errorf(
-				"fleet request duplicate jobId=%q",
-				job.JobID,
-			)
-		}
-		jobIDs[job.JobID] = struct{}{}
-		if _, err := job.ValidateIdentity(); err != nil {
-			return fleetRequest{}, err
-		}
-	}
-	return request, nil
-}
-
-func loadWorkerConfig(
-	provider runtimeconfig.RuntimeConfigProvider,
-) (workerConfig, error) {
-	required := func(key string) (string, error) {
-		value, ok := provider.GetString(key)
-		if !ok {
-			return "", fmt.Errorf("runtime config %s is required", key)
-		}
-		return value, nil
-	}
-	mongoURI, err := required("QWQ_DATA_FLEET_MONGO_URI")
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	client, err := mongo.Connect(options.Client().ApplyURI(cfg.MongoURI))
 	if err != nil {
-		return workerConfig{}, err
+		return fmt.Errorf("connect reliabletask Mongo for execution discard: %w", err)
 	}
-	redisAddr, err := required("QWQ_DATA_FLEET_REDIS_ADDR")
+	defer client.Disconnect(context.Background())
+	store := reliabletaskmongo.New(client.Database(cfg.MongoDatabase))
+	if err := store.EnsureIndexes(ctx); err != nil {
+		return fmt.Errorf("ensure reliabletask indexes for execution discard: %w", err)
+	}
+	router := platformredis.MustNewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"reliabletask": {
+				Mode:     "standalone",
+				Addr:     cfg.RedisAddr,
+				Password: cfg.RedisPassword,
+			},
+		},
+		DefaultScene: "reliabletask",
+	})
+	defer router.Close()
+	executionHash := sha256.Sum256([]byte(executionID))
+	streamSuffix := hex.EncodeToString(executionHash[:])
+	ready, err := reliabletask.NewRedisReadyIndex(reliabletask.RedisReadyIndexConfig{
+		Client: router.Scene("reliabletask"),
+		Stream: "reliabletask:data:content:" + streamSuffix,
+		Group:  "data.content_supply." + streamSuffix,
+		Queue:  reliabletask.DataContentQueue,
+	})
 	if err != nil {
-		return workerConfig{}, err
+		return fmt.Errorf("create reliabletask discard ready index: %w", err)
 	}
-	python, err := required("QWQ_DATA_FLEET_PYTHON")
+	result, err := store.PurgeDataContentExecution(ctx, executionID)
 	if err != nil {
-		return workerConfig{}, err
+		return fmt.Errorf("purge Data execution remote records: %w", err)
 	}
-	dataScriptsRoot, err := required("QWQ_DATA_FLEET_SCRIPTS_ROOT")
-	if err != nil {
-		return workerConfig{}, err
+	if err := ready.Purge(ctx, result.TaskIDs); err != nil {
+		return fmt.Errorf("purge Data execution Redis stream: %w", err)
 	}
-	workDir, err := required("QWQ_DATA_FLEET_WORK_DIR")
-	if err != nil {
-		return workerConfig{}, err
-	}
-	publishRoot, err := required("QWQ_DATA_FLEET_PUBLISH_ROOT")
-	if err != nil {
-		return workerConfig{}, err
-	}
-	evidenceRoot, err := required("QWQ_DATA_FLEET_EVIDENCE_ROOT")
-	if err != nil {
-		return workerConfig{}, err
-	}
-	cfg := workerConfig{
-		mongoURI:        mongoURI,
-		mongoDatabase:   "quwoquan_reliabletask_data",
-		redisAddr:       redisAddr,
-		python:          python,
-		dataScriptsRoot: dataScriptsRoot,
-		workDir:         workDir,
-		publishRoot:     publishRoot,
-		evidenceRoot:    evidenceRoot,
-		workers:         1,
-		timeout:         24 * time.Hour,
-		leaseTTL:        30 * time.Minute,
-		pendingMinIdle:  time.Second,
-		maxAttempts:     3,
-	}
-	if value, ok := provider.GetString("QWQ_DATA_FLEET_MONGO_DATABASE"); ok {
-		cfg.mongoDatabase = value
-	}
-	if value, ok := provider.GetString("QWQ_DATA_FLEET_REDIS_PASSWORD"); ok {
-		cfg.redisPassword = value
-	}
-	if value, ok := provider.GetInt("QWQ_DATA_FLEET_WORKERS"); ok {
-		cfg.workers = value
-	}
-	if value, ok := provider.GetDurationMs("QWQ_DATA_FLEET_TIMEOUT_MS"); ok {
-		cfg.timeout = value
-	}
-	if value, ok := provider.GetDurationMs("QWQ_DATA_FLEET_LEASE_TTL_MS"); ok {
-		cfg.leaseTTL = value
-	}
-	if value, ok := provider.GetDurationMs(
-		"QWQ_DATA_FLEET_PENDING_MIN_IDLE_MS",
-	); ok {
-		cfg.pendingMinIdle = value
-	}
-	if value, ok := provider.GetInt("QWQ_DATA_FLEET_MAX_ATTEMPTS"); ok {
-		cfg.maxAttempts = value
-	}
-	if cfg.workers < 1 || cfg.workers > 4096 {
-		return workerConfig{}, errors.New(
-			"QWQ_DATA_FLEET_WORKERS must be between 1 and 4096",
-		)
-	}
-	if cfg.maxAttempts < 1 {
-		return workerConfig{}, errors.New(
-			"QWQ_DATA_FLEET_MAX_ATTEMPTS must be positive",
-		)
-	}
-	return cfg, nil
+	fmt.Printf(
+		"discarded executionId=%s tasks=%d outboxes=%d\n",
+		executionID,
+		result.TasksDeleted,
+		result.OutboxesDeleted,
+	)
+	return nil
 }
 
 func runWorkers(
 	ctx context.Context,
 	database *mongo.Database,
-	request fleetRequest,
+	request importer.FleetRequest,
 	fleet reliabletask.DataContentFleet,
 	executor reliabletask.DataContentExecutor,
 	workers int,
+	objectTimeout time.Duration,
 ) ([]reliabletask.ReliableAsyncTask, error) {
+	if objectTimeout <= 0 {
+		return nil, errors.New("data content object timeout must be positive")
+	}
 	workerCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	errorsCh := make(chan error, workers)
@@ -407,10 +314,15 @@ func runWorkers(
 				workerIndex,
 			)
 			for workerCtx.Err() == nil {
-				processed, err := localFleet.ProcessOneContent(
+				objectCtx, cancelObject := context.WithTimeout(
 					workerCtx,
+					objectTimeout,
+				)
+				processed, err := localFleet.ProcessOneContent(
+					objectCtx,
 					executor,
 				)
+				cancelObject()
 				if err != nil {
 					select {
 					case errorsCh <- err:
@@ -439,7 +351,7 @@ func runWorkers(
 		if err != nil {
 			return nil, err
 		}
-		tasks, err := requestedExecutionTasks(executionTasks, request)
+		tasks, err := importer.SelectExecutionTasks(executionTasks, request)
 		if err != nil {
 			return nil, err
 		}
@@ -496,55 +408,6 @@ func loadExecutionTasks(
 		return tasks[i].Payload["jobId"] < tasks[j].Payload["jobId"]
 	})
 	return tasks, nil
-}
-
-// requestedExecutionTasks 只观察本次 fleet request 明确声明的任务。
-// 同一 execution 允许 author 与 publish 分阶段独立运行；不能因已完成的
-// author 任务被一并读出而让 publish worker 永久等待。
-func requestedExecutionTasks(
-	executionTasks []reliabletask.ReliableAsyncTask,
-	request fleetRequest,
-) ([]reliabletask.ReliableAsyncTask, error) {
-	byJobID := make(map[string][]reliabletask.ReliableAsyncTask, len(executionTasks))
-	for _, task := range executionTasks {
-		jobID := strings.TrimSpace(task.Payload["jobId"])
-		if jobID != "" {
-			byJobID[jobID] = append(byJobID[jobID], task)
-		}
-	}
-	selected := make([]reliabletask.ReliableAsyncTask, 0, len(request.Jobs))
-	for _, job := range request.Jobs {
-		jobID := strings.TrimSpace(job.JobID)
-		matches := byJobID[jobID]
-		if len(matches) > 1 {
-			return nil, fmt.Errorf(
-				"data content request job %q has %d remote tasks; refusing ambiguous result projection",
-				jobID,
-				len(matches),
-			)
-		}
-		if len(matches) == 0 {
-			continue
-		}
-		task := matches[0]
-		expectedKey, err := job.ValidateIdentity()
-		if err != nil {
-			return nil, err
-		}
-		if task.IdempotencyKey != expectedKey ||
-			task.DedupeKey != expectedKey ||
-			task.PartitionKey != job.PartitionKey ||
-			task.Payload["idempotencyKey"] != expectedKey ||
-			task.Payload["executionId"] != request.ExecutionID ||
-			task.Payload["jobId"] != jobID {
-			return nil, fmt.Errorf(
-				"data content request job %q remote identity does not match the frozen request",
-				jobID,
-			)
-		}
-		selected = append(selected, task)
-	}
-	return selected, nil
 }
 
 func dataWorkerEnvironment(

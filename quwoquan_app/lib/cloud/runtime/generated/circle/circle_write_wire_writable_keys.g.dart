@@ -29,7 +29,7 @@ abstract final class CircleWriteWireWritableKeys {
     'welcomeMessage',
   };
 
-  /// service.yaml 中 `createCircleServiceFieldOrder` 声明顺序（与对应 Set 成员一致，用于序列化/校验对照）。
+  /// operations.yaml 中 `createCircleServiceFieldOrder` 声明顺序（与对应 Set 成员一致，用于序列化/校验对照）。
   static const List<String> createCircleServiceFieldOrder = [
     'name',
     'description',

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"quwoquan_service/services/product-ops-service/internal/application"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 )
 
 var (
@@ -39,7 +39,7 @@ func registerTelemetryMetrics() {
 		}, []string{"result"})
 		telemetryLogstoreDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "ops_telemetry_logstore_operation_duration_seconds",
-			Help:    "SLS telemetry write, confirmation and query duration.",
+			Help:    "Product telemetry log-sink write, confirmation and query duration.",
 			Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.8, 1.2, 2, 5},
 		}, []string{"operation", "result"})
 		appExperienceEventTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -159,7 +159,40 @@ type instrumentedEventLogStore struct {
 }
 
 func instrumentEventLogStore(inner application.EventLogStore) application.EventLogStore {
-	return instrumentedEventLogStore{inner: inner}
+	instrumented := instrumentedEventLogStore{inner: inner}
+	repairer, ok := inner.(application.IncompleteEventBatchRepairer)
+	if !ok {
+		return instrumented
+	}
+	return instrumentedRepairableEventLogStore{
+		instrumentedEventLogStore: instrumented,
+		repairer:                  repairer,
+	}
+}
+
+type instrumentedRepairableEventLogStore struct {
+	instrumentedEventLogStore
+	repairer application.IncompleteEventBatchRepairer
+}
+
+func (s instrumentedRepairableEventLogStore) RepairEventBatch(
+	ctx context.Context,
+	key string,
+	records []application.EventRecord,
+) (err error) {
+	startedAt := time.Now()
+	defer func() { s.observe("repair_event_batch", startedAt, err) }()
+	return s.repairer.RepairEventBatch(ctx, key, records)
+}
+
+func (s instrumentedRepairableEventLogStore) RepairStartupDiagnosticBatch(
+	ctx context.Context,
+	key string,
+	records []application.StartupDiagnosticRecord,
+) (err error) {
+	startedAt := time.Now()
+	defer func() { s.observe("repair_startup_diagnostic", startedAt, err) }()
+	return s.repairer.RepairStartupDiagnosticBatch(ctx, key, records)
 }
 
 type instrumentedRtcMediaQoeSummaryReader struct {
@@ -239,4 +272,6 @@ func (s instrumentedEventLogStore) GetPageExperienceStats(ctx context.Context, q
 }
 
 var _ application.EventLogStore = instrumentedEventLogStore{}
+var _ application.EventLogStore = instrumentedRepairableEventLogStore{}
+var _ application.IncompleteEventBatchRepairer = instrumentedRepairableEventLogStore{}
 var _ application.RtcMediaQoeSummaryReader = instrumentedRtcMediaQoeSummaryReader{}

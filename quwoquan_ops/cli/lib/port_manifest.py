@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
-from .common import ROOT, load_json_yaml
+from .common import ROOT
 
 
 DEFAULT_PATH = ROOT / "quwoquan_ops" / "environments" / "local_env_port_manifest.yaml"
@@ -12,7 +13,27 @@ REQUIRED_PLANES = ("edge", "media", "service", "dataDebug")
 
 
 def load_port_manifest(path: Path | None = None) -> dict[str, Any]:
-    loaded = load_json_yaml(path or DEFAULT_PATH)
+    manifest_path = path or DEFAULT_PATH
+
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        loaded_object: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in loaded_object:
+                raise RuntimeError(
+                    f"local env port manifest contains duplicate key: {key}"
+                )
+            loaded_object[key] = value
+        return loaded_object
+
+    try:
+        loaded = json.loads(
+            manifest_path.read_text(encoding="utf-8"),
+            object_pairs_hook=reject_duplicate_keys,
+        )
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"local env port manifest must use strict JSON syntax: {manifest_path}"
+        ) from exc
     if not isinstance(loaded, dict):
         raise RuntimeError("local env port manifest must be a mapping")
     return loaded

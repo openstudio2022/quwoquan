@@ -7,7 +7,7 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	usergenerated "quwoquan_service/services/user-service/internal/generated"
+	bindingdescriptor "quwoquan_service/services/user-service/generated/account/user_account"
 )
 
 // newUserMessageTransport resolves the compiler-selected runtime binding before
@@ -18,40 +18,28 @@ func newUserMessageTransport(
 	router *rtredis.Router,
 	cfg config,
 ) (runtimemessaging.MessageTransport, error) {
-	binding, bindingFound := usergenerated.ExternalProviderBindingFor(
-		environment,
-		runtimemessaging.RuntimeMessageTransportCapability,
-	)
-	root, rootFound := usergenerated.ExternalProviderBindingRootFor(
-		runtimemessaging.RuntimeMessageTransportCapability,
-		"user-service-api",
-	)
-	if !rootFound {
-		return nil, fmt.Errorf(
-			"generated message transport root user-service-api is missing",
-		)
-	}
+	const rootID = "user-service-api"
 	sceneModes := map[string]string{
 		"general":  cfg.Redis.General.Mode,
 		"realtime": cfg.Redis.Realtime.Mode,
 	}
-	// Keep the preflight scene modes aligned with buildRedisRouter: realtime
-	// inherits general when the service config does not override it.
 	if strings.TrimSpace(sceneModes["realtime"]) == "" {
 		sceneModes["realtime"] = sceneModes["general"]
 	}
+	binding, found := bindingdescriptor.ExternalProviderBindingFor(
+		environment,
+		runtimemessaging.RuntimeMessageTransportCapability,
+	)
 	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
 		ctx,
 		environment,
-		bindingFound,
+		found,
 		runtimemessaging.MessageTransportBinding{
-			State:               binding.State,
-			AdapterID:           binding.AdapterID,
+			State: binding.State, AdapterID: binding.AdapterID,
 			TimeoutMilliseconds: binding.TimeoutMilliseconds,
 		},
 		runtimemessaging.MessageTransportRoot{
-			RootID:              root.RootID,
-			RequiredRedisScenes: root.RequiredRedisScenes,
+			RootID: rootID, RequiredRedisScenes: binding.RequiredRedisScenes,
 		},
 		router,
 		sceneModes,
@@ -61,22 +49,13 @@ func newUserMessageTransport(
 	}
 	realtime, ok := resolved.Scene("realtime")
 	if !ok {
-		return nil, fmt.Errorf(
-			"message transport root %s is missing realtime scene",
-			root.RootID,
-		)
+		return nil, fmt.Errorf("message transport root %s is missing realtime scene", rootID)
 	}
 	durable, ok := resolved.Scene("general")
 	if !ok {
-		return nil, fmt.Errorf(
-			"message transport root %s is missing general scene",
-			root.RootID,
-		)
+		return nil, fmt.Errorf("message transport root %s is missing general scene", rootID)
 	}
 	return runtimemessaging.NewRedisMessageTransportForRoot(
-		root.RootID,
-		binding.AdapterID,
-		realtime,
-		durable,
+		rootID, binding.AdapterID, realtime, durable,
 	)
 }

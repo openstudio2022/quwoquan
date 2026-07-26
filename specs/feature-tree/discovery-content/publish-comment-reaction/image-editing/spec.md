@@ -1,56 +1,118 @@
-# L3 特性：image-editing
+# L3 Story：图片编辑 (`image-editing`)
 
-## 功能说明
+> 所属能力：[`publish-comment-reaction`](../spec.md)
+>
+> Journey / Scenario：[`JNY-003 / SCN-008`](../../../spec.md#scn-008)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- 图片编辑器是图片作品创作链路（选择器/相机 → 编辑 → 创作页发布）中的编辑环节，目标是让创作者在发布前把照片快速修到可发布品质。
-- 对标 Snapseed 3.0 / 醒图的基础盘：所有对用户可见的工具入口必须是真实像素级实现，禁止占位面板或「确认后无效果」的空壳工具。
-- 编辑为纯端侧本地能力：编辑动作不触发云调用；编辑结果以本地文件路径回填宿主，发布时经 `MediaUploadSession → MediaAsset` 通用链路上传（归属 post-create-update）。
+## 1. 用户价值
 
-## 工具矩阵（2026-07-20 商用化收敛冻结）
+作为内容创作者或浏览者，我希望图片编辑器商用化：工具全真实现（占位清零）、曲线/白平衡/马赛克/文字补齐、全局撤销与放弃保护、像素引擎同源与页面观测，从而完成可恢复的内容创作、发现或互动。
 
-一级工具（底部栏，6 项，全部真实实现）：
+## 2. 范围与非目标
 
-| 工具 | 实现语义 |
-|---|---|
-| 滤镜 | 预设分类/强度/推荐/最近使用；`ColorFilter.matrix` 预览与导出同源 |
-| 裁剪 | 比例（original/free/1:1/2:3/3:2/3:4/4:3/9:16/16:9）+ 拖拽框 + 重置 |
-| 旋转 | 90° 步进 + 精细角度 + 水平/垂直翻转，范围框内导出 |
-| 专业工具 | 二级工具箱（见下） |
-| 文字 | 图上文字图层：输入、纯色/描边/底纹样式、8 色板、拖动/双指缩放旋转、双击重编、删除；导出经 `applyTextItems` 合成 |
-| 马赛克 | 涂抹实绘：像素化/模糊两种效果、笔刷大小、笔画撤销；预览 painter 与导出 `applyMosaicStrokes` 共用 `buildMosaicStrokePath` 几何 |
+### In Scope
 
-专业工具箱（6 项，全部真实实现）：
+- 一级工具（滤镜/裁剪/旋转/专业工具/文字/马赛克）与专业工具箱（整体/局部/HSL/黑白色阶/曲线/白平衡）全部真实像素级实现。
+- 确认即烘焙 + 文件快照全局撤销/重做/历史回退；back 放弃确认与顶栏完成提交。
+- ImageEditorExportEngine 预览导出同源、解码降采样上限。
+- page.media.image_editor 四事件埋点与 image_editor_tool_used 工具分布。
 
-| 工具 | 实现语义 |
-|---|---|
-| 调整图片 | 15 项整体调节（光感/亮度/曝光/对比度/饱和度/自然饱和度/纹理/锐化/结构/高光/阴影/色温/色调/颗粒/褪色） |
-| 局部 | 最多 10 锚点局部调节（拖拽/半径/放大镜/复制/删除/会话撤销） |
-| HSL | 8 通道 × 色相/饱和度/明度 + 取色器 + 会话撤销/对比 |
-| 黑白色阶 | 白场/黑场 + 会话撤销/对比 |
-| 曲线 | RGB/R/G/B 四通道控制点曲线（每通道最多 8 点）、亮度直方图背景、Fritsch–Carlson 单调三次插值生成 256 LUT；预览 CPU LUT 降采样实时、导出全尺寸同一 LUT |
-| 白平衡 | 色温/色调矩阵 + 灰世界自动白平衡（AWB） |
+### Out of Scope
 
-已按商用诚信原则移除的入口（无实现不上架）：相框、透视、修复（消除笔）、色调对比度、魅力光晕、工具箱重复锐化、美颜残留标签。消除笔/透视/涂鸦/贴纸列入 M3 规划（见 acceptance out_of_scope）。
+- 消除笔/透视校正/涂鸦/贴纸/美颜（M3 规划）。
+- FilterCatalogRelease 云目录与 MediaAsset 图片 variants（独立 M2 Story）。
+- EditRecipe/FilterUsageFact/FilterUsageStatsView 上云与圈子交集（独立 M3 Story）。
+- 媒体上传/发布链路（归属 post-create-update）。
 
-## 编辑会话与撤销语义
+## 3. 行为要求
 
-- **确认即烘焙**：每个工具确认时立即把效果烘焙为新的本地临时文件（与醒图/Snapseed 的按工具提交模型一致），一步一文件快照。
-- **全局撤销/重做**：`ImageEditorStepStack` 文件快照栈；每步记录 `imageIndex/beforePath/afterPath`，undo 恢复 before、redo 恢复 after、新步骤清空重做栈；历史面板提供「回退到此步之前」（时间倒序批量撤销），不存在「删除单步不重算」的欺骗语义。
-- **放弃保护**：顶栏 back 在有已提交修改时弹放弃确认（destructive action sheet），确认后返回 null（宿主不更新）；无修改直接退出。顶栏「完成」为显式提交出口，多图另有「下一步」进入创作页。
-- 会话级（面板内）撤销/对比：HSL/黑白/局部保留既有会话栈与长按对比原图。
+<a id="req-001"></a>
+### REQ-001 工具入口零占位，所见工具即真实效果
 
-## 像素引擎与性能
+- 全仓无占位符号；工具确认路径全部经 ImageEditorExportEngine 烘焙
 
+<a id="req-002"></a>
+### REQ-002 曲线为真实多通道 LUT 编辑器
+
+- 曲线引擎必须保持控制点有序并支持恒等、单调、S 曲线与提亮，确认后效果写入导出像素。
+
+<a id="req-003"></a>
+### REQ-003 马赛克与文字为图上实绘图层
+
+- 模型 wire roundtrip 必须保留笔刷、路径与颜色；命中路径后像素合成结果必须与预览一致。
+
+<a id="req-004"></a>
+### REQ-004 全局撤销/重做与放弃保护
+
+- 步骤栈必须支持撤销、重做、放弃与完成；不可用工具必须禁用且不得创建空步骤。
+
+<a id="req-005"></a>
+### REQ-005 所有可见编辑工具必须产生真实像素结果
+
+- 所有对用户可见的编辑工具必须产生真实像素结果，禁止占位面板或确认后无效果的空壳工具。
 - 唯一像素真相源 `ImageEditorExportEngine`：解码（`decodeConstrained`，长边上限 4096 防 OOM；预览降采样 1440）、裁剪、旋转/翻转、矩阵应用、局部径向锚点、曲线 LUT、马赛克化与笔画合成、文字合成、PNG/JPEG 编码。预览与导出共用同一几何/参数，禁止第二坐标链或把局部调整退化为全图平均矩阵。
-- 曲线预览：降采样底图 rgba 缓存 + LUT CPU 重算（计算中合并连续拖动）；直方图从降采样图按步长采样。
-- 导出性能预算：12MP 图片单工具烘焙 P95 ≤ 3s；编辑器峰值内存 ≤ 300MB。
 
-## 观测
+## 4. 契约引用
 
-- 页面四事件（`page_lifecycle_state`，pageName=`media.image_editor`，surface=`imageEditor`）：enter（带图片数）、exit（带停留时长与步骤数）、submit（带步骤数）、failure（带 copyKey/错误码）。
-- 工具使用分布：`image_editor_tool_used`（tool/subType/source），随步骤提交上报，供滤镜/工具运营分析与推荐回流。
+- canonical：`quwoquan_app/lib/components/media/image/editor/image_editor_page.dart`
+- canonical：`quwoquan_app/lib/components/media/image/editor/shared/image_editor_export_engine.dart`
+- canonical：`quwoquan_app/lib/components/media/image/editor/panels/curves/image_editor_curve_models.dart`
+- canonical：`quwoquan_app/lib/components/media/image/editor/panels/curves/image_editor_curve_panel.dart`
+- canonical：`quwoquan_app/lib/components/media/image/editor/panels/mosaic/image_editor_mosaic_models.dart`
+- canonical：`quwoquan_app/lib/components/media/image/editor/panels/text/image_editor_text_models.dart`
+- canonical：`quwoquan_app/lib/components/media/image/editor/shared/image_editor_step_stack.dart`
+- canonical：`quwoquan_app/lib/components/media/image/editor/top_bar/image_editor_top_bar.dart`
 
-## 后续里程碑（不在本 story 当前范围）
+## 5. 验收场景
 
-- M2（独立 Story）：`FilterCatalogRelease` 云目录（收敛 `assets/filters/filter_presets.json` 第二真相源）；MediaAsset 图片处理管线（压缩/typed variants/CDN）与 `CONTENT_MEDIA_GAMMA_UAT` 收口。
-- M3（独立 Story）：`EditRecipe`/`FilterUsageFact`/`FilterUsageStatsView` 配方沉淀与圈子热度交集（「圈内 N 人使用过该配方」的可证实事实 + 一键套用回流）；消除笔/透视/涂鸦/贴纸。
+<a id="gwt-001"></a>
+### GWT-001 工具入口零占位，所见工具即真实效果
+
+- GIVEN 用户从图片选择器/相机/创作页进入图片编辑器
+- WHEN 用户遍历底部工具栏与专业工具箱的全部入口并逐一确认
+- THEN 底部工具栏为滤镜/裁剪/旋转/专业工具/文字/马赛克 6 项；不存在相框入口。
+- THEN 专业工具箱为调整图片/局部/HSL/黑白色阶/曲线/白平衡 6 项；不存在透视/修复/色调对比度/魅力光晕占位项。
+- THEN 任何面板不出现「操作模版或内容」「即将支持」类占位文案。
+- THEN 每个工具确认后当前图片文件被真实烘焙（文件路径变更且像素变化）。
+
+<a id="gwt-002"></a>
+### GWT-002 曲线为真实多通道 LUT 编辑器
+
+- GIVEN 用户进入专业工具箱曲线面板
+- WHEN 用户切换 RGB/R/G/B 通道、添加/拖动控制点并确认
+- THEN 面板展示直方图背景、对角基线与通道曲线；控制点可增删拖动（每通道最多 8 点，端点仅纵向）。
+- THEN LUT 由 Fritsch–Carlson 单调插值生成，无过冲；预览与导出使用同一 LUT。
+- THEN 确认后图片按曲线烘焙并入撤销栈；取消不产生任何变更。
+
+<a id="gwt-003"></a>
+### GWT-003 马赛克与文字为图上实绘图层
+
+- GIVEN 用户进入马赛克或文字工具
+- WHEN 马赛克涂抹并确认；文字添加/拖缩旋/样式颜色切换并确认
+- THEN 马赛克涂抹路径实时显示对应马赛克效果
+- AND 笔画可单步撤销
+- AND 确认后全尺寸合成。
+- THEN 文字项以图层渲染，选中态可编辑样式（纯色/描边/底纹）与 8 色板颜色，双击重新编辑内容。
+- THEN 预览与导出共用同一归一化几何（buildMosaicStrokePath / buildTextPainter）。
+
+<a id="gwt-004"></a>
+### GWT-004 全局撤销/重做与放弃保护
+
+- GIVEN 用户完成了至少一步工具确认
+- WHEN 用户点击顶栏撤销/重做/记录，或点击 back
+- THEN 撤销恢复上一步文件快照
+- AND 重做恢复
+- AND 新步骤清空重做栈
+- AND 历史面板可回退到任一步之前。
+- THEN back 弹出破坏性放弃确认
+- AND 确认后宿主收到 null 不更新
+- AND 无修改时直接退出。
+- THEN 顶栏「完成」提交编辑结果并上报 submit 埋点。
+
+## 6. 依赖
+
+- 前置要求：[`publish-comment-reaction`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

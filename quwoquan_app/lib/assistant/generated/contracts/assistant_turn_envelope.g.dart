@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
 class AssistantTurnStreamStateWire {
   const AssistantTurnStreamStateWire({
@@ -36,6 +36,50 @@ class AssistantTurnStreamStateWireFields {
   static const String resumeToken = 'resumeToken';
 }
 
+class AssistantTurnInputWire {
+  const AssistantTurnInputWire({
+    this.text = "",
+  });
+
+  final String text;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'text': text,
+      };
+
+  factory AssistantTurnInputWire.fromJson(Map<String, dynamic> json) {
+    return AssistantTurnInputWire(
+      text: (json['text'] as String?)?.trim() ?? "",
+    );
+  }
+}
+
+class AssistantTurnInputWireFields {
+  static const String text = 'text';
+}
+
+class AssistantTurnTriggerWire {
+  const AssistantTurnTriggerWire({
+    this.type = "user_message",
+  });
+
+  final String type;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'type': type,
+      };
+
+  factory AssistantTurnTriggerWire.fromJson(Map<String, dynamic> json) {
+    return AssistantTurnTriggerWire(
+      type: (json['type'] as String?)?.trim() ?? "user_message",
+    );
+  }
+}
+
+class AssistantTurnTriggerWireFields {
+  static const String type = 'type';
+}
+
 class AssistantTurnEnvelopeWire {
   const AssistantTurnEnvelopeWire({
     required this.turnId,
@@ -44,10 +88,10 @@ class AssistantTurnEnvelopeWire {
     this.status = "created",
     this.skillId = "",
     this.domainId = "",
-    this.input = const <String, dynamic>{},
-    this.trigger = const <String, dynamic>{},
+    this.input = const AssistantTurnInputWire(),
+    this.trigger = const AssistantTurnTriggerWire(),
     this.streamState = const AssistantTurnStreamStateWire(),
-    this.failure,
+    this.terminalSnapshot,
     this.traceId = "",
     required this.createdAt,
     this.completedAt = "",
@@ -59,10 +103,10 @@ class AssistantTurnEnvelopeWire {
   final String status;
   final String skillId;
   final String domainId;
-  final Map<String, dynamic> input;
-  final Map<String, dynamic> trigger;
+  final AssistantTurnInputWire input;
+  final AssistantTurnTriggerWire trigger;
   final AssistantTurnStreamStateWire streamState;
-  final RuntimeFailureWire? failure;
+  final AssistantRunTerminalSnapshotView? terminalSnapshot;
   final String traceId;
   final String createdAt;
   final String completedAt;
@@ -74,10 +118,10 @@ class AssistantTurnEnvelopeWire {
         'status': status,
         'skillId': skillId,
         'domainId': domainId,
-        'input': input,
-        'trigger': trigger,
+        'input': input.toJson(),
+        'trigger': trigger.toJson(),
         'streamState': streamState.toJson(),
-        'failure': failure?.toJson(),
+        'terminalSnapshot': terminalSnapshot?.toJson(),
         'traceId': traceId,
         'createdAt': createdAt,
         'completedAt': completedAt,
@@ -91,10 +135,10 @@ class AssistantTurnEnvelopeWire {
       status: (json['status'] as String?)?.trim() ?? "created",
       skillId: (json['skillId'] as String?)?.trim() ?? "",
       domainId: (json['domainId'] as String?)?.trim() ?? "",
-      input: (json['input'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
-      trigger: (json['trigger'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      input: json['input'] is Map ? AssistantTurnInputWire.fromJson((json['input'] as Map).cast<String, dynamic>()) : const AssistantTurnInputWire(),
+      trigger: json['trigger'] is Map ? AssistantTurnTriggerWire.fromJson((json['trigger'] as Map).cast<String, dynamic>()) : const AssistantTurnTriggerWire(),
       streamState: json['streamState'] is Map ? AssistantTurnStreamStateWire.fromJson((json['streamState'] as Map).cast<String, dynamic>()) : const AssistantTurnStreamStateWire(),
-      failure: json['failure'] is Map ? RuntimeFailureWire.fromJson((json['failure'] as Map).cast<String, dynamic>()) : null,
+      terminalSnapshot: json['terminalSnapshot'] is Map ? AssistantRunTerminalSnapshotView.fromJson((json['terminalSnapshot'] as Map).cast<String, dynamic>()) : null,
       traceId: (json['traceId'] as String?)?.trim() ?? "",
       createdAt: (json['createdAt'] as String?)?.trim() ?? "",
       completedAt: (json['completedAt'] as String?)?.trim() ?? "",
@@ -113,7 +157,7 @@ class AssistantTurnEnvelopeWireFields {
   static const String input = 'input';
   static const String trigger = 'trigger';
   static const String streamState = 'streamState';
-  static const String failure = 'failure';
+  static const String terminalSnapshot = 'terminalSnapshot';
   static const String traceId = 'traceId';
   static const String createdAt = 'createdAt';
   static const String completedAt = 'completedAt';

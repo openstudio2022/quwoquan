@@ -11,24 +11,22 @@ import (
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 	"quwoquan_service/internal/metadata/graph"
 	"quwoquan_service/internal/metadata/validate"
-
-	"gopkg.in/yaml.v3"
 )
 
 func main() {
 	var metadataDir string
-	var manifestPath string
+	var serviceDir string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
-	flag.StringVar(&manifestPath, "manifest", "", "service codegen manifest YAML path")
+	flag.StringVar(&serviceDir, "service-dir", "", "service root containing contracts and generated directories")
 	flag.Parse()
 
-	if manifestPath == "" {
-		exitErr(fmt.Errorf("--manifest is required"))
+	if serviceDir == "" {
+		exitErr(fmt.Errorf("--service-dir is required"))
 	}
 
-	manifest, err := loadManifest(manifestPath)
+	manifest, err := deriveGenerationPlan(serviceDir)
 	if err != nil {
-		exitErr(fmt.Errorf("load manifest: %w", err))
+		exitErr(fmt.Errorf("derive generation plan: %w", err))
 	}
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
@@ -67,6 +65,7 @@ func main() {
 			fields:       fields,
 			migrationSeq: migrationSeq,
 		}
+		ctx.normalizeRootFields()
 
 		// Phase 1: Generate domain models
 		fmt.Printf("--- models: %s ---\n", src.Metadata)
@@ -116,32 +115,30 @@ func main() {
 		}
 	}
 
-	if err := generateMigrator(manifest); err != nil {
-		exitErr(fmt.Errorf("gen migrator: %w", err))
-	}
-
 	fmt.Printf("codegen_storage: generated storage layer for %s\n", manifest.Service)
 }
 
 // --- Manifest ---
 
 type Manifest struct {
-	Service    string   `yaml:"service"`
-	OutputDir  string   `yaml:"output_dir"`
-	ModulePath string   `yaml:"module_path"`
-	Sources    []Source `yaml:"sources"`
+	Service    string
+	OutputDir  string
+	ModulePath string
+	Sources    []Source
 }
 
 type Source struct {
-	Metadata            string                       `yaml:"metadata"`
-	DomainPkg           string                       `yaml:"domain_pkg"`
-	DomainPath          string                       `yaml:"domain_path"`
-	EventsOnly          bool                         `yaml:"events_only"`
-	Tables              []string                     `yaml:"tables"`
-	MigrationSkipTables []string                     `yaml:"migration_skip_tables"`
-	NameOverrides       map[string]string            `yaml:"name_overrides"`
-	TypeOverrides       map[string]map[string]string `yaml:"type_overrides"`
-	CacheOverrides      map[string]CacheOverride     `yaml:"cache_overrides"`
+	Metadata            string
+	ObjectPath          string
+	RootEntity          string
+	DomainPkg           string
+	DomainPath          string
+	EventsOnly          bool
+	Tables              []string
+	MigrationSkipTables []string
+	NameOverrides       map[string]string
+	TypeOverrides       map[string]map[string]string
+	CacheOverrides      map[string]CacheOverride
 }
 
 func (s Source) domainPath() string {
@@ -152,17 +149,17 @@ func (s Source) domainPath() string {
 }
 
 func (s Source) modelImport(modulePath string) string {
-	return modulePath + "/domain/" + filepath.ToSlash(s.domainPath()) + "/model"
+	return modulePath + "/contract/" + filepath.ToSlash(s.domainPath())
 }
 
 func (s Source) infrastructurePath(kind string) string {
-	return filepath.Join("infrastructure", s.domainPath(), kind)
+	return filepath.Join("persistence", s.domainPath(), kind)
 }
 
 type CacheOverride struct {
-	Entity string `yaml:"entity"`
-	Name   string `yaml:"name"`
-	Skip   bool   `yaml:"skip"`
+	Entity string
+	Name   string
+	Skip   bool
 }
 
 func (s Source) resolveStoreName(entity string) string {
@@ -179,30 +176,6 @@ func (s Source) skipsMigration(tableName string) bool {
 		}
 	}
 	return false
-}
-
-func loadManifest(path string) (*Manifest, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var m Manifest
-	if err := yaml.Unmarshal(data, &m); err != nil {
-		return nil, err
-	}
-	for _, source := range m.Sources {
-		domainPath := filepath.Clean(source.domainPath())
-		if source.DomainPkg == "" || domainPath == "." || filepath.IsAbs(domainPath) ||
-			domainPath == ".." || strings.HasPrefix(domainPath, ".."+string(filepath.Separator)) {
-			return nil, fmt.Errorf(
-				"invalid source domain ownership: metadata=%s domain_pkg=%q domain_path=%q",
-				source.Metadata,
-				source.DomainPkg,
-				source.DomainPath,
-			)
-		}
-	}
-	return &m, nil
 }
 
 // --- Storage YAML ---
@@ -293,7 +266,9 @@ type FieldsYAML struct {
 	Version   int                        `yaml:"version"`
 	Aggregate string                     `yaml:"aggregate"`
 	Entity    string                     `yaml:"entity"`
+	Fields    []FieldDef                 `yaml:"fields"`
 	Entities  map[string]EntityFieldsDef `yaml:"entities"`
+	Types     map[string]EntityFieldsDef `yaml:"types"`
 }
 
 type EntityFieldsDef struct {
@@ -321,15 +296,14 @@ func loadFieldsYAML(contractGraph *graph.ContractGraph, path string) (*FieldsYAM
 	if err := contractGraph.DecodeDocumentYAML(path, &f); err != nil {
 		return nil, err
 	}
-	if f.Entities == nil && f.Entity != "" {
-		var flat struct {
-			Fields []FieldDef `yaml:"fields"`
-		}
-		if err := contractGraph.DecodeDocumentYAML(path, &flat); err == nil && len(flat.Fields) > 0 {
-			f.Entities = map[string]EntityFieldsDef{
-				f.Entity: {Fields: flat.Fields},
-			}
-		}
+	if f.Entities == nil {
+		f.Entities = make(map[string]EntityFieldsDef)
+	}
+	for name, definition := range f.Types {
+		f.Entities[name] = definition
+	}
+	if f.Entity != "" && len(f.Fields) > 0 {
+		f.Entities[f.Entity] = EntityFieldsDef{Fields: f.Fields}
 	}
 	return &f, nil
 }
@@ -362,9 +336,23 @@ type genContext struct {
 	migrationSeq int
 }
 
-func (c *genContext) outputDir() string  { return c.manifest.OutputDir }
-func (c *genContext) modulePath() string { return c.manifest.ModulePath }
-func (c *genContext) domainPkg() string  { return c.source.DomainPkg }
+func (c *genContext) normalizeRootFields() {
+	if c.source.RootEntity == "" || len(c.fields.Fields) == 0 {
+		return
+	}
+	c.fields.Entities[c.source.RootEntity] = EntityFieldsDef{Fields: c.fields.Fields}
+}
+
+func (c *genContext) outputDir() string {
+	return filepath.Join(c.manifest.OutputDir, c.source.ObjectPath)
+}
+func (c *genContext) migrationDir() string {
+	return filepath.Join(filepath.Dir(c.manifest.OutputDir), "resources", "migrations", c.source.ObjectPath)
+}
+func (c *genContext) modulePath() string {
+	return strings.TrimSuffix(c.manifest.ModulePath, "/") + "/" + filepath.ToSlash(c.source.ObjectPath)
+}
+func (c *genContext) domainPkg() string { return c.source.DomainPkg }
 
 func exitErr(err error) {
 	fmt.Fprintf(os.Stderr, "codegen_storage: %v\n", err)

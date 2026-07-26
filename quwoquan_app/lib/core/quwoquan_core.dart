@@ -64,6 +64,7 @@ export 'errors/ui_error_semantics.dart';
 export 'package:quwoquan_app/core/errors/runtime_error_display.dart'
     show runtimeErrorDisplayMessage, runtimeErrorSemantic;
 export 'services/assistant_chat_store.dart';
+export 'services/search_recent_history_store.dart';
 
 // Utils
 export 'utils/chat_time_formatter.dart';

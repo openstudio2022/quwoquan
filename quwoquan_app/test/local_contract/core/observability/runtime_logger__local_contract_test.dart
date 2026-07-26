@@ -301,19 +301,22 @@ RuntimeLogRecord _event(
   RuntimeLogResource resource,
   String id, {
   RuntimeLogSeverity severity = RuntimeLogSeverity.info,
-}) => RuntimeLogRecord(
-  recordId: id,
-  occurredAt: DateTime.utc(2026, 7, 19),
-  observedAt: DateTime.utc(2026, 7, 19),
-  kind: RuntimeLogKind.event,
-  severity: severity,
-  signal: 'app.performance.frame',
-  message: 'event',
-  resource: resource,
-  correlation: const RuntimeLogCorrelation(),
-  event: 'boot',
-  result: 'ok',
-);
+}) {
+  final timestamp = DateTime.now().toUtc();
+  return RuntimeLogRecord(
+    recordId: id,
+    occurredAt: timestamp,
+    observedAt: timestamp,
+    kind: RuntimeLogKind.event,
+    severity: severity,
+    signal: 'app.performance.frame',
+    message: 'event',
+    resource: resource,
+    correlation: const RuntimeLogCorrelation(),
+    event: 'boot',
+    result: 'ok',
+  );
+}
 
 RuntimeLogRecord _eventAt(
   RuntimeLogResource resource,

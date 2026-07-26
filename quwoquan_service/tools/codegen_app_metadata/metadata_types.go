@@ -41,9 +41,11 @@ type entityDef struct {
 
 type fieldsFile struct {
 	Entities map[string]entityDef `yaml:"entities"`
+	Fields   []fieldDef           `yaml:"fields"`
+	Types    map[string]entityDef `yaml:"types"`
 }
 
-// ── post/service.yaml ─────────────────────────────────────────────────────────
+// ── post/operations.yaml ─────────────────────────────────────────────────────────
 
 type routeSecurity struct {
 	AuthMode        string   `yaml:"auth_mode"`
@@ -95,7 +97,7 @@ type serviceFile struct {
 	APIRoutes []routeDef  `yaml:"api_routes"`
 }
 
-// integration/location/service.yaml 专用，含 response_list_key
+// integration/external_integration/location/operations.yaml 专用，含 response_list_key
 type integrationLocationServiceFile struct {
 	ResponseListKey string     `yaml:"response_list_key"`
 	APIRoutes       []routeDef `yaml:"api_routes"`
@@ -353,6 +355,7 @@ type uiConfigFile struct {
 	DiscoveryRails                 []discoveryRailDef                 `yaml:"discovery_rails"`
 	CreationIdentityFilters        []identityFilterDef                `yaml:"creation_identity_filters"`
 	WorkFormatFilters              []workFormatFilterDef              `yaml:"work_format_filters"`
+	OnboardingInterestCatalog      onboardingInterestCatalogDef       `yaml:"onboarding_interest_catalog"`
 	HeaderLayout                   profileHeaderLayoutDef             `yaml:"header_layout"`
 	ScrollMotion                   profileScrollMotionDef             `yaml:"scroll_motion"`
 	CareerInterestCatalog          careerInterestCatalogDef           `yaml:"career_interest_catalog"`
@@ -388,6 +391,23 @@ type careerInterestCategoryDef struct {
 	Order    int    `yaml:"order"`
 }
 
+type onboardingInterestCatalogDef struct {
+	Version           string                           `yaml:"version"`
+	TaxonomyReleaseID string                           `yaml:"taxonomy_release_id"`
+	MinSelectionCount int                              `yaml:"min_selection_count"`
+	MaxSelectionCount int                              `yaml:"max_selection_count"`
+	Dimensions        []onboardingInterestDimensionDef `yaml:"dimensions"`
+}
+
+type onboardingInterestDimensionDef struct {
+	ID            string `yaml:"id"`
+	TagRef        string `yaml:"tag_ref"`
+	DisplayLabel  string `yaml:"display_label"`
+	MinSelections int    `yaml:"min_selections"`
+	MaxSelections int    `yaml:"max_selections"`
+	Order         int    `yaml:"order"`
+}
+
 // ── _shared/request_context.yaml ──────────────────────────────────────────────
 
 type requestContextFile struct {
@@ -420,7 +440,7 @@ type uiSurfacesFile struct {
 	Surfaces []uiSurfaceDef `yaml:"surfaces"`
 }
 
-// ── _shared/app_pages.yaml + ops/event_record/event_catalog.yaml ────────────
+// ── _shared/app_pages.yaml + ops/product_ops/event_record/event_catalog.yaml ────────────
 
 type appPageDef struct {
 	PageName          string `yaml:"page_name"`

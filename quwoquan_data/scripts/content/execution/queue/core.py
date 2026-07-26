@@ -44,12 +44,6 @@ DEFAULT_TOOL_PERMISSIONS: tuple[str, ...] = (
     "write_draft",          # 写 4.draft 草稿与 self-check
     "run_review_gate",      # 跑单 ref review 门
 )
-# Token budget is part of the single runtime policy. Queue creation must never
-# silently turn a configured limit into an unbounded execution.
-DEFAULT_TOKEN_BUDGET = _RUNTIME_POLICY.default_object_token_budget
-# Cost accounting is recorded when supplied by the provider. Its ceiling is
-# owned by the same runtime policy as token budgets.
-DEFAULT_COST_BUDGET_USD = _RUNTIME_POLICY.default_object_cost_budget_usd
 
 OBJECT_JOB_SCHEMA = pc.OBJECT_JOB_SCHEMA
 QUEUE_BACKEND_LOCAL = QueueBackend.LOCAL_FILE

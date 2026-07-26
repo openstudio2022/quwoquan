@@ -38,6 +38,24 @@ class ApiPathUnversionedContractTest(unittest.TestCase):
         self.assertFalse(mod.line_is_excluded(line))
         self.assertIsNotNone(mod.VERSIONED_API.search(line))
 
+    def test_external_provider_versioned_paths_are_excluded(self) -> None:
+        mod = _load_module()
+        self.assertTrue(
+            mod.line_is_excluded('CompletionURL: server.URL + "/v1/chat/completions",')
+        )
+        self.assertTrue(
+            mod.line_is_excluded('endpoint := apiBaseURL + "/v1/projects/" + projectID')
+        )
+
+    def test_negative_route_guard_is_excluded(self) -> None:
+        mod = _load_module()
+        self.assertTrue(
+            mod.line_is_excluded(
+                '{method: http.MethodPost, path: "/v1/search", '
+                "wantStatus: http.StatusNotFound},"
+            )
+        )
+
     def test_generated_routes_have_no_version_segment(self) -> None:
         routes_root = ROOT / "quwoquan_service/services"
         hits: list[str] = []
@@ -51,7 +69,7 @@ class ApiPathUnversionedContractTest(unittest.TestCase):
     def test_content_feed_unversioned_route_exists(self) -> None:
         path = (
             ROOT
-            / "quwoquan_service/services/content-service/internal/adapters/http/generated_routes.go"
+            / "quwoquan_service/services/content-service/generated/content/post/transport/routes.g.go"
         )
         text = path.read_text(encoding="utf-8")
         self.assertIn('pathTemplate: "/content/feed"', text)

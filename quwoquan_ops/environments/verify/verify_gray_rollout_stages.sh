@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
-YAML="$ROOT/quwoquan_ops/environments/gray_rollout_stages.yaml"
+YAML="$ROOT/quwoquan_ops/environments/prod/rollout/stages.yaml"
 
 if [[ ! -f "$YAML" ]]; then
   echo "FAIL: gray_rollout_stages.yaml not found: $YAML" >&2

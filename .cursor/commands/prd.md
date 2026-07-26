@@ -1,29 +1,21 @@
 # /prd
 
-目标：冻结规格与验收，不做实现。
+目标：更新当前有效规格与验收，不做实现。
 
-准入：`/explore` 已明确一棵树归属，目标用户、范围、Out of Scope、风险清晰。
+准入：`/explore` 已明确目标父链、用户价值、范围和关键依赖。
 
 执行：
-- 读取 `docs/agent_context_contract.md`，补齐 `Spec Entry`。
-- 冻结目标、用户价值、范围、Out of Scope、权限/异常、生命周期、SLO/KPI、灰度/回滚和观测。
-- 将验收意图映射到 `UAT / SIT / GWT / contract` 与 `local_contract / api_integration / user_acceptance`。
-- 声明受影响的 `quality_facets`：异常恢复、性能、安全隐私、可观测、可靠性/可用性、数据一致性；不适用项必须说明原因。
-- 只更新规格/验收/registry/CR，不写实现。
 
-产出：
-- 对应层级 `spec.md`。
-- 对应 `acceptance.yaml`，包含 UAT/SIT/GWT/contract、三层测试、`quality_facets`、`test_object`、SLO/观测/安全引用。
-- 如影响跨领域体验，更新 `journey_scenario_registry.yaml`。
-- 关联或新建 `specs/changelog/CR-*.yaml`。
+1. 按 `specs/feature-tree/README.md` 更新对应 `spec.md`。
+2. AppRoot 写 Journey/Scenario/UAT；L1 写领域边界/REQ/DOM/工程归属；L2 写能力范围/REQ/SIT；L3 写独立价值/REQ/GWT。
+3. 跨域 Journey 只在 AppRoot 写完整叙事，参与节点写自身职责和反向链接。
+4. 未完成能力、阻断、风险或未来规划写到最低可关闭节点 `OPEN-###`；完成项直接成为当前 REQ，不保留完成状态。
+5. 字段、path、operation、surface、route、error、event、metric 只引用 metadata ID。
+6. 验收只保留改变产品契约的代表场景；测试排列组合、路径、命令和结果留在测试代码/运行输出。
+7. 运行 `make verify-feature-tree` 与 `make feature-tree-change-report`。
 
-出口：
-- 规格可被 `/design` 或 `/baseline` 消费。
-- 验收项可测试，非功能质量维度有证据路径，且不把未决问题伪装成已冻结。
-- 说明仍需设计或 metadata 扩展的缺口。
+产出只有目标父链的 `spec.md`，以及确有设计变化时的上层设计输入；不创建 acceptance、registry、index、changelog、任务台账或成熟度矩阵。
 
-阻断：缺权限、生命周期、SLO/KPI、灰度回滚、metadata 真相源时返回 `GATE_BLOCK`。
+权限、生命周期、异常恢复、SLO、灰度回滚或 canonical metadata 未明确时返回 `GATE_BLOCK`。
 
-自然语言等价触发：用户说“冻结需求”“写 PRD”“明确规格/范围/验收”时，也按 `/prd` 语义执行。
-
-协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。
+自然语言等价触发：“写 PRD”“冻结需求”“明确规格/范围/验收”。

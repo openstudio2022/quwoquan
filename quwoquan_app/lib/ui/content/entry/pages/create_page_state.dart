@@ -667,7 +667,20 @@ class _CreatePageState extends ConsumerState<CreatePage>
   Future<PublishSettings?> _showPublishConfirmationSheet(
     CreateEditorState state,
   ) async {
-    final joinedCircles = await _loadJoinedCircles();
+    var joinedCircles = const <CreateCircleOption>[];
+    var circleLoadUnavailable = false;
+    try {
+      joinedCircles = await _loadJoinedCircles();
+    } catch (error, stackTrace) {
+      circleLoadUnavailable = true;
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.create.publish_circle_options',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
     if (!mounted) {
       return null;
     }
@@ -688,6 +701,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
           locationCoordinator: ref.read(createLocationCoordinatorProvider),
           joinedCircles: joinedCircles,
           recommendedCircles: const [],
+          circleLoadUnavailable: circleLoadUnavailable,
         ),
       ),
     );

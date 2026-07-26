@@ -6,6 +6,8 @@ import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_d
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
 enum AssistantJourneyBlockKind {
   narrative,
@@ -17,12 +19,12 @@ enum AssistantJourneyBlockKind {
 class AssistantJourneyReferenceViewModel {
   const AssistantJourneyReferenceViewModel({
     required this.title,
-    required this.url,
+    required this.destination,
     this.source = '',
   });
 
   final String title;
-  final String url;
+  final CitationDestination destination;
   final String source;
 }
 
@@ -210,7 +212,7 @@ AssistantJourneyViewModel buildAssistantJourneyViewModel({
   final referenceCount = <String>{
     for (final block in blocks)
       for (final reference in block.references)
-        if (reference.url.trim().isNotEmpty) reference.url.trim(),
+        citationReferenceKey(reference.destination),
   }.length;
   return AssistantJourneyViewModel(
     journey: journey,
@@ -327,17 +329,8 @@ List<AssistantJourneyBlockViewModel> _buildBlocks({
           fallbackRetrievalProcessing: retrievalProcessing,
         );
         final refs = frame.references
-            .map(
-              (reference) => AssistantJourneyReferenceViewModel(
-                title: reference.title.trim(),
-                url: reference.url.trim(),
-                source: reference.source.trim(),
-              ),
-            )
-            .where(
-              (reference) =>
-                  reference.title.isNotEmpty || reference.url.isNotEmpty,
-            )
+            .map(_referenceViewModel)
+            .whereType<AssistantJourneyReferenceViewModel>()
             .toList(growable: false);
         if (frame.stepId == ProcessStepId.retrievalProcessing &&
             refs.isNotEmpty) {
@@ -528,16 +521,8 @@ AssistantJourneyBlockViewModel? _buildJourneyBlockFromDisplayStateBlock({
 }) {
   final stepId = block.stepId;
   final references = block.references
-      .map(
-        (reference) => AssistantJourneyReferenceViewModel(
-          title: reference.title.trim(),
-          url: reference.url.trim(),
-          source: reference.source.trim(),
-        ),
-      )
-      .where(
-        (reference) => reference.title.isNotEmpty || reference.url.isNotEmpty,
-      )
+      .map(_referenceViewModel)
+      .whereType<AssistantJourneyReferenceViewModel>()
       .toList(growable: false);
   if (_isReferenceStatsProcessBlock(block)) {
     final explicitLabel = _sanitizeProcessText(
@@ -692,7 +677,8 @@ int _referenceCountForStep(
   return <String>{
     for (final block in blocks)
       for (final reference in block.references)
-        if (reference.url.trim().isNotEmpty) reference.url.trim(),
+        if (CitationDestinationResolver.resolve(reference.destination) != null)
+          citationReferenceKey(reference.destination),
   }.length;
 }
 
@@ -713,8 +699,7 @@ bool _hasVisibleProcessBlockForUi(AssistantProcessDisplayBlock block) {
       ) ||
       block.references.any(
         (reference) =>
-            reference.title.trim().isNotEmpty ||
-            reference.url.trim().isNotEmpty,
+            CitationDestinationResolver.resolve(reference.destination) != null,
       );
 }
 
@@ -805,10 +790,11 @@ RetrievalProcessingSnapshot _mergeRetrievalSnapshots({
   final mergedRefs = <String, RetrievalProcessingReference>{};
   void absorb(Iterable<RetrievalProcessingReference> refs) {
     for (final reference in refs) {
-      final key = reference.url.trim().isNotEmpty
-          ? reference.url.trim()
-          : '${reference.source.trim()}:${reference.title.trim()}';
-      if (key.trim().isEmpty || mergedRefs.containsKey(key)) {
+      if (CitationDestinationResolver.resolve(reference.destination) == null) {
+        continue;
+      }
+      final key = citationReferenceKey(reference.destination);
+      if (mergedRefs.containsKey(key)) {
         continue;
       }
       mergedRefs[key] = reference;
@@ -837,6 +823,19 @@ RetrievalProcessingSnapshot _mergeRetrievalSnapshots({
         ? primary.expansionReason
         : fallback.expansionReason,
     acceptedReferences: mergedRefs.values.toList(growable: false),
+  );
+}
+
+AssistantJourneyReferenceViewModel? _referenceViewModel(
+  RetrievalProcessingReference reference,
+) {
+  if (CitationDestinationResolver.resolve(reference.destination) == null) {
+    return null;
+  }
+  return AssistantJourneyReferenceViewModel(
+    title: reference.title.trim(),
+    destination: reference.destination,
+    source: reference.source.trim(),
   );
 }
 
@@ -899,7 +898,11 @@ String _referenceLabelForFrame(
   );
   if (searchedCount <= 0 && acceptedCount <= 0) {
     final refCount = frame.references
-        .where((r) => r.title.trim().isNotEmpty || r.url.trim().isNotEmpty)
+        .where(
+          (reference) =>
+              CitationDestinationResolver.resolve(reference.destination) !=
+              null,
+        )
         .length;
     if (refCount > 0) {
       acceptedCount = refCount;
@@ -977,5 +980,7 @@ String _stripRetrievalProcessingSummaryFromCopy(String text, String summary) {
 bool _isLowSignalRetrievalProcessSummary(String text) {
   final normalized = text.trim();
   if (normalized.isEmpty) return false;
-  return normalized == AssistantText.assistantProcessCompletedSummary;
+  return normalized == AssistantText.assistantProcessCompletedSummary ||
+      normalized == '处理完成' ||
+      normalized == '已完成资料筛选并进入成答';
 }

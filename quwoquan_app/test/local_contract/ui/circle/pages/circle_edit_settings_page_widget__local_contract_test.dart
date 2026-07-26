@@ -47,7 +47,7 @@ Widget _app({
           ownerUserId: 'user_001',
           displayName: '圈子编辑测试用户',
           avatarUrl: '',
-          personaContextVersion: 'fixture-circle-edit',
+          contextVersion: 1,
         ),
       ),
     if (mediaPicker != null)

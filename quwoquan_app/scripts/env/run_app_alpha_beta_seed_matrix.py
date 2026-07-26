@@ -23,7 +23,10 @@ APP_ARTIFACTS_ROOT = Path(
     )
 )
 APP = ROOT / "quwoquan_app"
-USER_POOL = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "user_pool.json"
+USER_POOL = (
+    ROOT
+    / "quwoquan_service/services/user-service/tests/support/contract_fixtures/user_pool.json"
+)
 ALPHA_MANIFEST = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "app_alpha_seed_manifest.json"
 
 
@@ -90,7 +93,7 @@ def beta_gateway_smoke(port: int) -> dict[str, object]:
             "/users/fixture_user_current/works",
             "/users/fixture_user_current/circles",
             "/homepages/search",
-            "/integration/locations/pois",
+            "/integration/external_integration/locations/pois",
             "/app-messages",
             "/rtc/calls",
         ]

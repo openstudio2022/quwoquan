@@ -1,6 +1,6 @@
 """全国地点主清单共享库（discovery_seed/2，裁决 8：目录即行政层级）。
 
-主清单唯一真相源是 `verticals/travel/coverage/中国/{省}/{市州}.yaml` 目录树本身，
+主清单唯一真相源是 `reference/travel/entities/china/{省}/{市州}.yaml` 目录树本身，
 无总控 index；本模块是所有消费方（verify 门 / decompose 阶段 A / coverage probe /
 统计报表）共用的 walk・加载・回写・地理覆盖门逻辑，禁止各消费方再自写第二套
 目录遍历或状态推导。
@@ -25,7 +25,7 @@ import yaml
 from governance.coverage.entity_type_taxonomy import CONTRACT_TAGS_ROOT
 from core.paths import _REPO_DATA_ROOT
 
-COVERAGE_MASTER_ROOT = _REPO_DATA_ROOT / "verticals" / "travel" / "coverage" / "中国"
+COVERAGE_MASTER_ROOT = _REPO_DATA_ROOT / "reference" / "travel" / "entities" / "china"
 MASTER_LIST_SCHEMA_PATH = _REPO_DATA_ROOT / "schema" / "governance" / "master_list.schema.json"
 ADMIN_REGION_PREFIX = "Topic/地理/行政区"
 

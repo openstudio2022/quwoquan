@@ -85,6 +85,10 @@ extension AppDelegate: PKPushRegistryDelegate, CallkitIncomingAppDelegate {
       case "queueActivePushEndpointRemovals":
         incomingCallPushCoordinator.queueActiveEndpointRemoval()
         result(nil)
+      case "purgePushEndpointStateForTerminalAccountClosure":
+              result(
+                incomingCallPushCoordinator.purgeForTerminalAccountClosure()
+              )
       default:
         result(FlutterMethodNotImplemented)
       }

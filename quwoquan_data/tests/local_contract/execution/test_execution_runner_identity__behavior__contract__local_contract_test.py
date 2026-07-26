@@ -13,14 +13,19 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
 from content.execution import runner
 
 
-EXECUTION_ID = "20260714--travel-homepage-coverage--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260714--travel-homepage-coverage--test-region-a--pilot-001"
 RECIPE = {
     "execution": {
         "runtime": "local",
-        "model": "composer",
-        "modelFamily": "composer",
-        "reviewModel": "gpt-5.5",
-        "reviewModelFamily": "gpt",
+        "model": "grok-4.5",
+        "modelFamily": "grok",
+        "modelParameters": [
+            {"id": "effort", "value": "high"},
+            {"id": "fast", "value": "false"},
+        ],
+        "reviewModel": "composer-2.5",
+        "reviewModelFamily": "composer",
+        "reviewModelParameters": [],
     }
 }
 

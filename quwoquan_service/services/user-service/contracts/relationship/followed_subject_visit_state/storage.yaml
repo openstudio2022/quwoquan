@@ -1,0 +1,16 @@
+backend: mongodb
+collections:
+  followed_subject_visit_states:
+    entity: FollowedSubjectVisitState
+    indexes:
+    - name: idx_viewer_subject_unique
+      keys:
+        personaId: 1
+        subjectType: 1
+        subjectId: 1
+      unique: true
+    - name: idx_viewer_updated
+      keys:
+        personaId: 1
+        updatedAt: -1
+role: authoritative

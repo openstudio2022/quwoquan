@@ -1,8 +1,8 @@
-/// L1a+ 端云集成契约测试：Remote Repository URL 路径与 metadata service.yaml 对齐
+/// L1a+ 端云集成契约测试：Remote Repository URL 路径与 metadata operations.yaml 对齐
 ///
 /// 通过注入 mock HTTP client 捕获实际请求的 URL，验证：
 /// 1. HTTP 方法正确（GET/POST/PATCH/DELETE）
-/// 2. URL 路径与 service.yaml 定义一致
+/// 2. URL 路径与 operations.yaml 定义一致
 /// 3. CloudRequestHeaders 正确注入
 library;
 
@@ -437,7 +437,7 @@ void _expectSurfaceOperationHeaders(
 }
 
 void main() {
-  group('CircleQueryReader Remote — service.yaml 路径对齐', () {
+  group('CircleQueryReader Remote — operations.yaml 路径对齐', () {
     late List<_CapturedRequest> log;
     late RemoteCircleQueryReader repo;
     late RemoteCircleLifecycleFacet lifecycle;
@@ -621,7 +621,7 @@ void main() {
     });
   });
 
-  group('Content facets Remote — service.yaml 路径对齐', () {
+  group('Content facets Remote — operations.yaml 路径对齐', () {
     late List<_CapturedRequest> log;
     late RemoteContentRepository repo;
     late RemoteContentPostReactionFacet reactions;
@@ -896,7 +896,7 @@ void main() {
         log.last.headers,
         clientPageId: SearchRequestPageIds.searchQuery,
         surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
-        operationId: AppCloudOperationIds.searchQuerySearchQuery,
+        operationId: AppCloudOperationIds.searchSearchQuerySearchQuery,
       );
     });
 
@@ -1012,87 +1012,69 @@ void main() {
       );
     });
 
-    test('received activities → GET canonical received path', () async {
-      await adapter.listActivities(
-        ContentProfileInteractionPageQuery(
-          subAccountId: 'persona-1',
-          type: ContentProfileInteractionType.share,
-          limit: 9,
+    test('received activities 在环境证据缺失时 fail-closed', () async {
+      await expectLater(
+        adapter.listActivities(
+          ContentProfileInteractionPageQuery(
+            subAccountId: 'persona-1',
+            type: ContentProfileInteractionType.share,
+            limit: 9,
+          ),
+          direction: ContentProfileInteractionDirection.received,
         ),
-        direction: ContentProfileInteractionDirection.received,
-      );
-      expect(log.last.method, 'GET');
-      expect(
-        log.last.path,
-        ContentApiMetadata.listProfileInteractionActivitiesReceivedPath(
-          subAccountId: 'persona-1',
+        throwsA(
+          isA<CloudException>().having(
+            (error) => error.message,
+            'message',
+            contains('not commercially enabled'),
+          ),
         ),
       );
-      expect(log.last.query, <String, String>{'type': 'share', 'limit': '9'});
-      _expectSurfaceOperationHeaders(
-        log.last.headers,
-        clientPageId:
-            ContentRequestPageIds.listProfileInteractionActivitiesReceived,
-        surfaceId: AppUiSurfaces.profileHome.id,
-        operationId: AppCloudOperationIds
-            .contentProfileInteractionActivityViewListProfileInteractionActivitiesReceived,
-      );
+      expect(log, isEmpty);
     });
 
-    test('sent activities → GET canonical sent path', () async {
-      await adapter.listActivities(
-        ContentProfileInteractionPageQuery(
-          subAccountId: 'persona-1',
-          type: ContentProfileInteractionType.comment,
+    test('sent activities 在环境证据缺失时 fail-closed', () async {
+      await expectLater(
+        adapter.listActivities(
+          ContentProfileInteractionPageQuery(
+            subAccountId: 'persona-1',
+            type: ContentProfileInteractionType.comment,
+          ),
+          direction: ContentProfileInteractionDirection.sent,
         ),
-        direction: ContentProfileInteractionDirection.sent,
-      );
-      expect(log.last.method, 'GET');
-      expect(
-        log.last.path,
-        ContentApiMetadata.listProfileInteractionActivitiesSentPath(
-          subAccountId: 'persona-1',
+        throwsA(
+          isA<CloudException>().having(
+            (error) => error.message,
+            'message',
+            contains('not commercially enabled'),
+          ),
         ),
       );
-      expect(log.last.query['type'], 'comment');
-      _expectSurfaceOperationHeaders(
-        log.last.headers,
-        clientPageId:
-            ContentRequestPageIds.listProfileInteractionActivitiesSent,
-        surfaceId: AppUiSurfaces.profileHome.id,
-        operationId: AppCloudOperationIds
-            .contentProfileInteractionActivityViewListProfileInteractionActivitiesSent,
-      );
+      expect(log, isEmpty);
     });
 
-    test('append read fact → POST canonical state path', () async {
-      await adapter.appendReadFact(
-        AppendContentProfileInteractionReadFactCommand(
-          subAccountId: 'persona-1',
-          activityId: 'activity-1',
-          state: ContentProfileInteractionReadState.read,
+    test('append read fact 在环境证据缺失时 fail-closed', () async {
+      await expectLater(
+        adapter.appendReadFact(
+          AppendContentProfileInteractionReadFactCommand(
+            subAccountId: 'persona-1',
+            activityId: 'activity-1',
+            state: ContentProfileInteractionReadState.read,
+          ),
+        ),
+        throwsA(
+          isA<CloudException>().having(
+            (error) => error.message,
+            'message',
+            contains('not commercially enabled'),
+          ),
         ),
       );
-      expect(log.last.method, 'POST');
-      expect(
-        log.last.path,
-        ContentApiMetadata.updateProfileInteractionStatePath(
-          subAccountId: 'persona-1',
-          interactionId: 'activity-1',
-        ),
-      );
-      expect(log.last.body['state'], 'read');
-      _expectSurfaceOperationHeaders(
-        log.last.headers,
-        clientPageId: ContentRequestPageIds.updateProfileInteractionState,
-        surfaceId: AppUiSurfaces.profileHome.id,
-        operationId: AppCloudOperationIds
-            .contentProfileInteractionReadFactUpdateProfileInteractionState,
-      );
+      expect(log, isEmpty);
     });
   });
 
-  group('PersonaQuery Remote — service.yaml 路径对齐', () {
+  group('PersonaQuery Remote — operations.yaml 路径对齐', () {
     late List<_CapturedRequest> log;
     late RemotePersonaQuery repo;
     late RemotePersonaCommandWriter personaWriter;
@@ -1148,25 +1130,31 @@ void main() {
       );
     });
 
-    test('listPersonas → GET /user/personas', () async {
+    test('listPersonas → GET /user/persona/personas', () async {
       await repo.listPersonas();
       expect(log.last.method, 'GET');
       expect(log.last.path, UserApiMetadata.listPersonasPath);
     });
 
-    test('getPersonaManagementSummary → GET /user/personas/summary', () async {
-      await repo.getPersonaManagementSummary();
-      expect(log.last.method, 'GET');
-      expect(log.last.path, UserApiMetadata.getPersonaManagementSummaryPath);
-    });
+    test(
+      'getPersonaManagementSummary → GET /user/persona/personas/summary',
+      () async {
+        await repo.getPersonaManagementSummary();
+        expect(log.last.method, 'GET');
+        expect(log.last.path, UserApiMetadata.getPersonaManagementSummaryPath);
+      },
+    );
 
-    test('getActivePersonaContext → GET /user/personas/active', () async {
-      await repo.getActivePersonaContext();
-      expect(log.last.method, 'GET');
-      expect(log.last.path, UserApiMetadata.getActivePersonaContextPath);
-    });
+    test(
+      'getActivePersonaContext → GET /user/persona/personas/active',
+      () async {
+        await repo.getActivePersonaContext();
+        expect(log.last.method, 'GET');
+        expect(log.last.path, UserApiMetadata.getActivePersonaContextPath);
+      },
+    );
 
-    test('createPersona → POST /user/personas', () async {
+    test('createPersona → POST /user/persona/personas', () async {
       final result = await personaWriter.createPersona(
         CreatePersonaCommand(displayName: '摄影分身'),
       );
@@ -1176,7 +1164,7 @@ void main() {
       expect(log.last.body['displayName'], '摄影分身');
     });
 
-    test('updatePersona → PATCH /user/personas/{id}', () async {
+    test('updatePersona → PATCH /user/persona/personas/{id}', () async {
       final result = await personaWriter.updatePersona(
         UpdatePersonaCommand(subAccountId: 'persona_1', displayName: '新分身名'),
       );
@@ -1188,17 +1176,20 @@ void main() {
       );
     });
 
-    test('activatePersona → POST /user/personas/{id}/activate', () async {
-      final result = await personaWriter.activatePersona(
-        ActivatePersonaCommand(subAccountId: 'persona_1'),
-      );
-      expect(result.subAccountId, 'persona_1');
-      expect(log.last.method, 'POST');
-      expect(
-        log.last.path,
-        UserApiMetadata.activatePersonaPath(subAccountId: 'persona_1'),
-      );
-    });
+    test(
+      'activatePersona → POST /user/persona/personas/{id}/activate',
+      () async {
+        final result = await personaWriter.activatePersona(
+          ActivatePersonaCommand(subAccountId: 'persona_1'),
+        );
+        expect(result.subAccountId, 'persona_1');
+        expect(log.last.method, 'POST');
+        expect(
+          log.last.path,
+          UserApiMetadata.activatePersonaPath(subAccountId: 'persona_1'),
+        );
+      },
+    );
 
     test('Persona 移除单轨为 retire，不生成硬删除命令', () {
       final personaCommands = appCloudOperationContracts.values.where(
@@ -1220,7 +1211,7 @@ void main() {
     });
 
     test(
-      'applyPersonaProfileSync → POST /user/personas/{id}/profile-sync',
+      'applyPersonaProfileSync → POST /user/persona/personas/{id}/profile-sync',
       () async {
         final result = await personaWriter.applyPersonaProfileSync(
           ApplyPersonaProfileSyncCommand(
@@ -1241,7 +1232,7 @@ void main() {
     );
 
     test(
-      'getPersonaLifecycleGuard → GET /user/personas/{id}/lifecycle-guard',
+      'getPersonaLifecycleGuard → GET /user/persona/personas/{id}/lifecycle-guard',
       () async {
         await repo.getPersonaLifecycleGuard('persona_1');
         expect(log.last.method, 'GET');
@@ -1254,7 +1245,7 @@ void main() {
       },
     );
 
-    test('retirePersona → POST /user/personas/{id}/retire', () async {
+    test('retirePersona → POST /user/persona/personas/{id}/retire', () async {
       final result = await personaWriter.retirePersona(
         RetirePersonaCommand(subAccountId: 'persona_1'),
       );
@@ -1269,7 +1260,7 @@ void main() {
     });
   });
 
-  group('UserSettingsQuery Remote — service.yaml 路径对齐', () {
+  group('UserSettingsQuery Remote — operations.yaml 路径对齐', () {
     late List<_CapturedRequest> log;
     late RemoteUserSettingsQueryReader settingsQuery;
 
@@ -1335,7 +1326,7 @@ void main() {
     });
   });
 
-  group('ProfileQuery Remote — service.yaml 路径对齐', () {
+  group('ProfileQuery Remote — operations.yaml 路径对齐', () {
     late List<_CapturedRequest> log;
     late RemoteProfileQuery query;
 
@@ -1389,12 +1380,12 @@ void main() {
         log.last.headers,
         clientPageId: UserRequestPageIds.getSubAccountProfile,
         surfaceId: AppUiSurfaces.userProfile.id,
-        operationId: AppCloudOperationIds.userUserProfileGetSubAccountProfile,
+        operationId: AppCloudOperationIds.userUserAccountGetSubAccountProfile,
       );
     });
   });
 
-  group('HomepageFacetSet Remote — service.yaml 路径对齐', () {
+  group('HomepageFacetSet Remote — operations.yaml 路径对齐', () {
     late List<_CapturedRequest> log;
     late HomepageFacetProjectionAdapter repo;
 
@@ -1531,60 +1522,67 @@ void main() {
       adapter = RemoteLocationQueryAdapter(
         client: client,
         invocationContext: (clientPageId) => CloudOperationInvocationContext(
-          surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
-          routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
+          surfaceId: AppUiSurfaces.createWorkspace.id,
+          routeId: AppUiSurfaces.createWorkspace.routeId,
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(),
         ),
       );
     });
 
-    test('getNearbyLocations → GET /integration/location/nearby', () async {
-      await adapter.getNearbyLocations(
-        const NearbyLocationQueryParams(
-          latitude: 30.2431,
-          longitude: 120.1500,
-          radiusMeters: 2000,
-          limit: 8,
-        ),
-      );
-      expect(log.last.method, 'GET');
-      expect(log.last.path, IntegrationApiMetadata.getNearbyLocationsPath);
-      expect(log.last.query['lat'], '30.2431');
-      expect(log.last.query['lng'], '120.15');
-      expect(log.last.query['radiusMeters'], '2000');
-      expect(log.last.query['limit'], '8');
-      _expectSurfaceOperationHeaders(
-        log.last.headers,
-        clientPageId: IntegrationRequestPageIds.getNearbyLocations,
-        surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
-        operationId: AppCloudOperationIds.integrationLocationGetNearbyLocations,
-      );
-    });
+    test(
+      'getNearbyLocations → GET /integration/external_integration/location/nearby',
+      () async {
+        await adapter.getNearbyLocations(
+          const NearbyLocationQueryParams(
+            latitude: 30.2431,
+            longitude: 120.1500,
+            radiusMeters: 2000,
+            limit: 8,
+          ),
+        );
+        expect(log.last.method, 'GET');
+        expect(log.last.path, IntegrationApiMetadata.getNearbyLocationsPath);
+        expect(log.last.query['lat'], '30.2431');
+        expect(log.last.query['lng'], '120.15');
+        expect(log.last.query['radiusMeters'], '2000');
+        expect(log.last.query['limit'], '8');
+        _expectSurfaceOperationHeaders(
+          log.last.headers,
+          clientPageId: IntegrationRequestPageIds.getNearbyLocations,
+          surfaceId: AppUiSurfaces.createWorkspace.id,
+          operationId:
+              AppCloudOperationIds.integrationLocationGetNearbyLocations,
+        );
+      },
+    );
 
-    test('searchLocations → GET /integration/location/search', () async {
-      await adapter.searchLocations(
-        const LocationSearchQueryParams(
-          query: '西湖',
-          cityCode: '330100',
-          latitude: 30.2431,
-          longitude: 120.1500,
-          limit: 12,
-        ),
-      );
-      expect(log.last.method, 'GET');
-      expect(log.last.path, IntegrationApiMetadata.searchLocationsPath);
-      expect(log.last.query['q'], '西湖');
-      expect(log.last.query['cityCode'], '330100');
-      expect(log.last.query['lat'], '30.2431');
-      expect(log.last.query['lng'], '120.15');
-      expect(log.last.query['limit'], '12');
-      _expectSurfaceOperationHeaders(
-        log.last.headers,
-        clientPageId: IntegrationRequestPageIds.searchLocations,
-        surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
-        operationId: AppCloudOperationIds.integrationLocationSearchLocations,
-      );
-    });
+    test(
+      'searchLocations → GET /integration/external_integration/location/search',
+      () async {
+        await adapter.searchLocations(
+          const LocationSearchQueryParams(
+            query: '西湖',
+            cityCode: '330100',
+            latitude: 30.2431,
+            longitude: 120.1500,
+            limit: 12,
+          ),
+        );
+        expect(log.last.method, 'GET');
+        expect(log.last.path, IntegrationApiMetadata.searchLocationsPath);
+        expect(log.last.query['q'], '西湖');
+        expect(log.last.query['cityCode'], '330100');
+        expect(log.last.query['lat'], '30.2431');
+        expect(log.last.query['lng'], '120.15');
+        expect(log.last.query['limit'], '12');
+        _expectSurfaceOperationHeaders(
+          log.last.headers,
+          clientPageId: IntegrationRequestPageIds.searchLocations,
+          surfaceId: AppUiSurfaces.createWorkspace.id,
+          operationId: AppCloudOperationIds.integrationLocationSearchLocations,
+        );
+      },
+    );
   });
 }

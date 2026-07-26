@@ -1,0 +1,48 @@
+kind: append_only_fact
+description: '删除保留期内用于传播删除与重建的只追加事实。隐私删除先脱敏 Post 与关联对象；
+
+  事实仅允许 append/dedupe，保留期结束后由 MongoDB TTL 自动清理。
+
+  '
+identity:
+  fields:
+  - _id
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: none
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: post
+  on_delete: retain
+  reference_fields:
+  - postId
+  target_object: content.Post
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: author
+  on_delete: retain
+  reference_fields:
+  - authorId
+  target_object: user.Persona
+capabilities:
+- append_only
+- idempotent_append
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- 墓碑只在 DeletePost 命令的同一事务内追加，_id 复用 postId 作为唯一 dedupe key
+- 事实不可变更、不可删除；重复删除同一 Post 不产生第二条墓碑
+- 已删除内容读取按墓碑返回 CONTENT.USER.content_deleted（HTTP 410 Gone）
+- expireAt 由 MongoDB TTL 索引自动清理，保留期结束后读取回落 post_not_found（404）
+lifecycle:
+  states:
+  - recorded
+  immutable: true

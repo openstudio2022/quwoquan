@@ -2,7 +2,7 @@
 """校验 user_profile read-model projection 的头像 URL 都显式携带版本字段。
 
 范围：
-  - quwoquan_service/contracts/metadata/user/user_profile/projections/*.yaml
+  - quwoquan_service/services/user-service/contracts/account/user_account/projections/*.yaml
   - 跳过 *_request.yaml（请求 DTO，不属于 read-model）
 
 规则：
@@ -32,10 +32,11 @@ ROOT = Path(__file__).resolve().parents[3]
 PROJECTIONS_DIR = (
     ROOT
     / "quwoquan_service"
+    / "services"
+    / "user-service"
     / "contracts"
-    / "metadata"
-    / "user"
-    / "user_profile"
+    / "account"
+    / "user_account"
     / "projections"
 )
 

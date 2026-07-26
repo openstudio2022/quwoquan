@@ -19,6 +19,10 @@ tmp/
 # Build artifacts
 .dart_tool/
 build/
+!quwoquan_service/services/*/build/
+!quwoquan_service/services/*/build/Dockerfile
+!quwoquan_service/control-plane/*/build/
+!quwoquan_service/control-plane/*/build/Dockerfile
 dist/
 .test-dist/
 .gradle/

@@ -158,12 +158,9 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       fileSizeBytes: result.fileSize,
       waveformSamples: result.waveform.length,
     );
-    final cdnUrl = update.cdnUrl?.trim() ?? '';
     final assetId = update.assetId?.trim() ?? '';
-    if (cdnUrl.isEmpty || assetId.isEmpty) {
-      _trackUploadFailed(
-        cdnUrl.isEmpty ? 'empty_cdn_url' : 'empty_media_asset_id',
-      );
+    if (assetId.isEmpty) {
+      _trackUploadFailed('empty_media_asset_id');
       state = state.copyWith(
         status: VoiceSendStatus.failed,
         error: ChatText.chatVoicePendingRetry,
@@ -172,7 +169,9 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
     }
 
     final mediaPayload = ChatMessageMediaViewData(
-      deliveryUrl: cdnUrl,
+      // 仅用于本条乐观气泡；Message 命令只发送 assetId，服务端在 ready
+      // 校验后投影 canonical delivery URL。
+      deliveryUrl: update.localPath,
       assetId: assetId,
       mediaType: 'audio',
       contentType: 'audio/mp4',

@@ -116,13 +116,13 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
   }
 
   void _onWatchdogTick() {
-    recordWatchdogHeartbeat(_now());
+    unawaited(recordWatchdogHeartbeat(_now()));
   }
 
   /// ANR 检测的同一心跳入口（Flutter 定时器与 local_contract 共用）：
   /// 事件循环被阻塞时定时器无法按期执行，恢复后测得的真实 gap 超过
   /// period+threshold 即上报一次主 isolate 停顿事实。
-  void recordWatchdogHeartbeat(DateTime tickAt) {
+  Future<void> recordWatchdogHeartbeat(DateTime tickAt) async {
     if (!_watchdogEligible) {
       return;
     }
@@ -132,29 +132,25 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
     final gap = tickAt.difference(previous);
     final stall = gap - anrWatchdogPeriod;
     if (stall < anrStallThreshold) return;
-    unawaited(
-      _logger.event(
-        signal: 'app.performance.anr',
-        event: 'main_isolate_stall',
-        result: 'stalled',
-        message: 'main isolate event loop stalled beyond ANR threshold',
-        severity: RuntimeLogSeverity.error,
-        correlation: _correlation(operationId: 'app.runtime.anr_watchdog'),
-        attributes: <String, String>{
-          'source': 'anr_watchdog',
-          'stallMs': '${stall.inMilliseconds}',
-          'anrThresholdMs': '${anrStallThreshold.inMilliseconds}',
-        },
-        occurredAt: tickAt,
-      ),
+    await _logger.event(
+      signal: 'app.performance.anr',
+      event: 'main_isolate_stall',
+      result: 'stalled',
+      message: 'main isolate event loop stalled beyond ANR threshold',
+      severity: RuntimeLogSeverity.error,
+      correlation: _correlation(operationId: 'app.runtime.anr_watchdog'),
+      attributes: <String, String>{
+        'source': 'anr_watchdog',
+        'stallMs': '${stall.inMilliseconds}',
+        'anrThresholdMs': '${anrStallThreshold.inMilliseconds}',
+      },
+      occurredAt: tickAt,
     );
-    unawaited(
-      _pageExperienceTracker.recordAnrOutcome(
-        detectionSource: 'dart_event_loop_watchdog',
-        result: 'detected',
-        durationMs: stall.inMilliseconds,
-        occurredAt: tickAt,
-      ),
+    await _pageExperienceTracker.recordAnrOutcome(
+      detectionSource: 'dart_event_loop_watchdog',
+      result: 'detected',
+      durationMs: stall.inMilliseconds,
+      occurredAt: tickAt,
     );
   }
 

@@ -138,6 +138,21 @@ func TestRequireConfiguredRedisMessageTransportOnlyPermitsMemoryFixtureInAlpha(t
 	); err == nil {
 		t.Fatal("gamma memory Redis unexpectedly passed message transport preflight")
 	}
+	if _, err := RequireConfiguredRedisMessageTransport(
+		context.Background(),
+		"gamma",
+		true,
+		MessageTransportBinding{
+			State:               "enabled",
+			AdapterID:           RedisMessageTransportFixture,
+			TimeoutMilliseconds: 100,
+		},
+		root,
+		router,
+		map[string]string{"general": "standalone"},
+	); err == nil {
+		t.Fatal("gamma fixture binding unexpectedly passed message transport preflight")
+	}
 }
 
 func TestRedisMessageTransportSeparatesEphemeralAndDurableDelivery(t *testing.T) {

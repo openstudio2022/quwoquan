@@ -9,7 +9,6 @@ BETA_MANUAL_STACK_NAME="${BETA_MANUAL_STACK_NAME:-beta_manual}"
 BETA_MANUAL_LOG_DIR="${BETA_MANUAL_LOG_DIR:-}"
 BETA_MANUAL_STATE_DIR="${BETA_MANUAL_STATE_DIR:-${BETA_MANUAL_LOG_DIR}/state}"
 BETA_MANUAL_STOP_TIMEOUT_SECONDS="${BETA_MANUAL_STOP_TIMEOUT_SECONDS:-15}"
-BETA_MANUAL_KILL_EXISTING="${BETA_MANUAL_KILL_EXISTING:-0}"
 BETA_MANUAL_OWNER_ID="${BETA_MANUAL_OWNER_ID:-}"
 BETA_MANUAL_RUNTIME_LOG_PROCESS="${BETA_MANUAL_RUNTIME_LOG_PROCESS:-}"
 
@@ -44,7 +43,7 @@ beta_manual_record_metadata() {
   local key="$1"
   local value="$2"
   mkdir -p "$BETA_MANUAL_STATE_DIR"
-  printf "%s=%s\n" "$key" "$(beta_manual_quote "$value")" >>"$BETA_MANUAL_STATE_DIR/stack.env"
+  printf "%s=%s\n" "$key" "$(beta_manual_quote "$value")" >>"$BETA_MANUAL_STATE_DIR/stack.state"
 }
 
 beta_manual_port_pids() {
@@ -71,9 +70,12 @@ beta_manual_start_process() {
   mkdir -p "$(dirname "$log_file")" "$BETA_MANUAL_STATE_DIR/processes"
   local process_file
   process_file="$(beta_manual_process_file "$name")"
+  local diagnostic_log="$BETA_MANUAL_STATE_DIR/stdout/${name}.log"
+  mkdir -p "$(dirname "$diagnostic_log")"
+  chmod 700 "$(dirname "$diagnostic_log")"
   rm -f "$process_file"
 
-  python3 - "$process_file" "$log_file" "$cwd" "$BETA_MANUAL_RUNTIME_LOG_PROCESS" "$name" "$@" <<'PY' &
+  python3 - "$process_file" "$log_file" "$diagnostic_log" "$cwd" "$BETA_MANUAL_RUNTIME_LOG_PROCESS" "$name" "$@" <<'PY' &
 import os
 import shlex
 import signal
@@ -84,10 +86,11 @@ from pathlib import Path
 
 process_file = Path(sys.argv[1])
 log_file = Path(sys.argv[2])
-cwd = sys.argv[3]
-log_wrapper = sys.argv[4]
-event = sys.argv[5]
-argv = sys.argv[6:]
+diagnostic_log = Path(sys.argv[3])
+cwd = sys.argv[4]
+log_wrapper = sys.argv[5]
+event = sys.argv[6]
+argv = sys.argv[7:]
 
 log_file.parent.mkdir(parents=True, exist_ok=True)
 process_file.parent.mkdir(parents=True, exist_ok=True)
@@ -112,6 +115,7 @@ def write_record() -> None:
                 f"wrapper_pid={os.getpid()}",
                 f"owner_id={shlex.quote(os.environ.get('BETA_MANUAL_OWNER_ID', ''))}",
                 f"log={shlex.quote(str(log_file))}",
+                f"diagnostic_log={shlex.quote(str(diagnostic_log))}",
                 f"cwd={shlex.quote(cwd)}",
                 f"started_at={int(time.time())}",
                 "",
@@ -148,7 +152,18 @@ signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGHUP, handle_signal)
 
 child = subprocess.Popen(
-    [sys.executable, log_wrapper, "--log-file", str(log_file), "--event", event, "--", *argv],
+    [
+        sys.executable,
+        log_wrapper,
+        "--log-file",
+        str(log_file),
+        "--diagnostic-log",
+        str(diagnostic_log),
+        "--event",
+        event,
+        "--",
+        *argv,
+    ],
     cwd=cwd,
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
@@ -214,9 +229,9 @@ beta_manual_stop_stack() {
   for name in flutter-run gateway entity-service assistant-service chat-service notification-service media-static media-origin media-edge; do
     beta_manual_stop_process_file "$(beta_manual_process_file "$name")" "$owner_filter"
   done
-  if [[ -z "$owner_filter" && -f "$BETA_MANUAL_STATE_DIR/stack.env" ]]; then
+  if [[ -z "$owner_filter" && -f "$BETA_MANUAL_STATE_DIR/stack.state" ]]; then
     # shellcheck disable=SC1090
-    source "$BETA_MANUAL_STATE_DIR/stack.env"
+    source "$BETA_MANUAL_STATE_DIR/stack.state"
     if [[ -n "${controller_pid:-}" && "$controller_pid" != "$$" ]] && kill -0 "$controller_pid" 2>/dev/null; then
       kill -TERM "$controller_pid" 2>/dev/null || true
     fi
@@ -262,26 +277,8 @@ beta_manual_ensure_port_available() {
     [[ -z "$pids" ]] && return 0
   fi
 
-  if [[ "$BETA_MANUAL_KILL_EXISTING" == "1" ]]; then
-    echo "[$BETA_MANUAL_LABEL] kill existing listener(s) on :$port: $pids"
-    kill $pids 2>/dev/null || true
-    sleep 1
-    pids="$(beta_manual_port_pids "$port")"
-    if [[ -n "$pids" ]]; then
-      echo "[$BETA_MANUAL_LABEL] force kill existing listener(s) on :$port: $pids"
-      kill -KILL $pids 2>/dev/null || true
-      sleep 1
-    fi
-    pids="$(beta_manual_port_pids "$port")"
-    if [[ -n "$pids" ]]; then
-      echo "Port :$port is still in use by pid(s): $pids after --kill-existing." >&2
-      exit 2
-    fi
-    return 0
-  fi
-
   echo "Port :$port is already in use by pid(s): $pids" >&2
-  echo "Run the stop script first, use --restart for a managed stack, or rerun with --kill-existing." >&2
+  echo "The listener is not owned by this stack and will not be stopped automatically." >&2
   echo "Blocked label: $label" >&2
   exit 2
 }

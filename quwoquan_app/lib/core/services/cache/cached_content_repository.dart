@@ -161,8 +161,14 @@ class CachedContentRepository
   }
 
   @override
-  Future<void> deletePost({required String postId}) async {
-    await _writeDelegate.deletePost(postId: postId);
+  Future<void> deletePost({
+    required String postId,
+    required String idempotencyKey,
+  }) async {
+    await _writeDelegate.deletePost(
+      postId: postId,
+      idempotencyKey: idempotencyKey,
+    );
     _postCache.removePost(postId);
     _querySnapshotStore.invalidatePost(postId);
     await _querySnapshotStore.flushPersistence();

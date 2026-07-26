@@ -88,3 +88,49 @@ func TestRedisReadyIndexReclaimPendingNoopWhenUnsupported(t *testing.T) {
 		t.Fatalf("messages = %#v, want empty", messages)
 	}
 }
+
+func TestRedisReadyIndexMergesRepeatedReadyDispatchUntilAcknowledged(t *testing.T) {
+	client := rtredis.NewMemoryClient()
+	index, err := NewRedisReadyIndex(RedisReadyIndexConfig{
+		Client: client,
+		Stream: "reliabletask:test:ready:dedupe",
+		Group:  "test-worker",
+		Queue:  "test",
+	})
+	if err != nil {
+		t.Fatalf("new ready index: %v", err)
+	}
+	task := ReliableAsyncTask{
+		TaskID:         "task-dedupe-1",
+		OutboxID:       "outbox-dedupe-1",
+		TaskType:       "data.content_object.execute",
+		DedupeKey:      "execution|entity|homepage|revision|author",
+		IdempotencyKey: "execution|entity|homepage|revision|author",
+	}
+	if err := index.EnqueueReadyOrMerge(context.Background(), task); err != nil {
+		t.Fatalf("initial enqueue: %v", err)
+	}
+	if err := index.EnqueueReadyOrMerge(context.Background(), task); err != nil {
+		t.Fatalf("repeated enqueue: %v", err)
+	}
+	messages, err := index.Claim(context.Background(), "worker-a", 10, time.Millisecond)
+	if err != nil {
+		t.Fatalf("claim merged task: %v", err)
+	}
+	if len(messages) != 1 || messages[0].TaskID != task.TaskID {
+		t.Fatalf("merged messages=%#v", messages)
+	}
+	if err := index.Ack(context.Background(), messages[0]); err != nil {
+		t.Fatalf("ack merged task: %v", err)
+	}
+	if err := index.EnqueueReadyOrMerge(context.Background(), task); err != nil {
+		t.Fatalf("enqueue after ack: %v", err)
+	}
+	messages, err = index.Claim(context.Background(), "worker-a", 10, time.Millisecond)
+	if err != nil {
+		t.Fatalf("claim after ack: %v", err)
+	}
+	if len(messages) != 1 || messages[0].TaskID != task.TaskID {
+		t.Fatalf("messages after ack=%#v", messages)
+	}
+}

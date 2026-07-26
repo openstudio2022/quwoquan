@@ -9,7 +9,7 @@ from core.image_safety import assess_image_publish_prefilter
 from core.io import read_json
 from core.article_package import sha256_file
 from content.post.video.source_video import SourcedVideoEvidence
-from governance.coverage.cold_start_supply import load_cold_start_supply_policy
+from governance.content_supply_policy import load_content_supply_policy
 
 
 Claim = Callable[[str, str], None]
@@ -133,6 +133,7 @@ def _validate_sourced_video(
 def validate_video_plan_item(
     *,
     root: Path,
+    vertical: str,
     item: Mapping[str, Any],
     ref: str,
     claim_asset: Claim,
@@ -154,8 +155,10 @@ def validate_video_plan_item(
         ]
     asset_refs = item.get("assetRefs")
     source_frames = item.get("sourceFrames")
+    # content_plan 只绑定清权源帧；分镜段数（minimum_segment_count）由 authoring
+    # 从源帧派生，不得在规划门槛上抬高为 segment 数。
     minimum_frames = (
-        load_cold_start_supply_policy().video_delivery.minimum_segment_count
+        load_content_supply_policy(vertical).video_delivery.minimum_source_frames
     )
     if not isinstance(asset_refs, list) or len(asset_refs) < minimum_frames:
         issues.append(

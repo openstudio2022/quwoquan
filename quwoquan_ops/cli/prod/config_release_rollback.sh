@@ -8,11 +8,11 @@ QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 usage() {
   cat <<'EOF'
 Usage:
-  quwoquan_ops/cli/prod/config_release_rollback.sh --service <svc> --to-config-version <vX.Y.Z>
+  quwoquan_ops/cli/prod/config_release_rollback.sh --service <svc> --to-config-version <sha256:digest>
 
 Behavior:
-  - Idempotently updates quwoquan_service/services/<service>/deploy/deployment.yaml env CONFIG_VERSION.
-  - Validates target version file exists in quwoquan_service/services/<service>/configs/releases/<version>.yaml.
+  - Records an idempotent rollback request in the external runtime state directory.
+  - Never edits service deployment or configuration truth sources.
 EOF
 }
 
@@ -34,15 +34,8 @@ if [[ -z "$SERVICE" || -z "$TARGET_VERSION" ]]; then
   exit 2
 fi
 
-target_file="$ROOT/quwoquan_service/services/$SERVICE/configs/releases/$TARGET_VERSION.yaml"
-if [[ ! -f "$target_file" ]]; then
-  echo "FAIL: target config version does not exist: $target_file" >&2
-  exit 1
-fi
-
-deploy_file="$ROOT/quwoquan_service/services/$SERVICE/deploy/deployment.yaml"
-if [[ ! -f "$deploy_file" ]]; then
-  echo "FAIL: deployment manifest not found under quwoquan_service/services/<service>/deploy for service=$SERVICE" >&2
+if [[ ! "$TARGET_VERSION" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "FAIL: --to-config-version must be a sha256 digest" >&2
   exit 1
 fi
 
@@ -57,20 +50,8 @@ if ! mkdir "$lock_dir" 2>/dev/null; then
 fi
 trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
 
-ruby -e '
-  file = ARGV[0]
-  target = ARGV[1]
-  content = File.read(file)
-  unless content.match?(/name:\s*CONFIG_VERSION\b/)
-    abort("FAIL: CONFIG_VERSION env not found in #{file}")
-  end
-  updated = content.gsub(/(name:\s*CONFIG_VERSION\s*\n\s*value:\s*)([^\n]+)/, "\\1#{target}")
-  if updated == content
-    puts "OK: rollback idempotent (already #{target})"
-  else
-    File.write(file, updated)
-    puts "OK: updated CONFIG_VERSION in #{file} -> #{target}"
-  end
-' "$deploy_file" "$TARGET_VERSION"
-
-echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") rollback service=$SERVICE target_config=$TARGET_VERSION deploy_file=$deploy_file" >>"$audit_file"
+request_file="$state_dir/$SERVICE.rollback.request"
+printf 'service=%s\ntarget_config=%s\nrequested_at=%s\n' \
+  "$SERVICE" "$TARGET_VERSION" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >"$request_file"
+echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") rollback-request service=$SERVICE target_config=$TARGET_VERSION" >>"$audit_file"
+echo "OK: rollback request recorded: $request_file"

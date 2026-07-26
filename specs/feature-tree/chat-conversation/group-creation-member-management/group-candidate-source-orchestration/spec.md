@@ -1,44 +1,69 @@
-# L3 规格：group-candidate-source-orchestration — 建群候选来源编排
+# L3 Story：group-candidate-source-orchestration — 建群候选来源编排 (`group-candidate-source-orchestration`)
 
-> **层级**：L3_story（隶属 L2 `group-creation-member-management`）
-> **状态**：specified
+> 所属能力：[`group-creation-member-management`](../spec.md)
+>
+> Journey / Scenario：[`JNY-007 / SCN-013`](../../../spec.md#scn-013)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 0. 一句话定义
+## 1. 用户价值
 
-建群与加人流程的候选来源（互关联系人、既有群聊内互关成员、圈子内互关成员）由云侧统一编排：互关判定、可选人数与去重在服务端完成，端侧只消费 typed 候选行，禁止逐群多次拉成员在端上求交集。
+作为发起或接收消息的用户，我希望建群/加人候选来源（互关联系人、既有群、圈子）由云侧统一编排，端侧只消费 typed 候选行，从而稳定完成会话、消息或通话协作。
 
-## 1. 业务对象与真相源
+## 2. 范围与非目标
 
-| 数据 | 唯一真相源 | operation |
-|---|---|---|
-| 互关联系人候选 | user 关系能力 + chat 候选投影 | `ListGroupCandidates` |
-| 含互关成员的群列表（图四） | `messages/conversation` + membership | `ListSelectableGroupConversations` |
-| 指定群内互关成员（图五） | membership + user 关系能力 | `ListSelectableGroupContactMembers` |
+### In Scope
 
-规则：
+- ListGroupCandidates / ListSelectableGroupConversations / ListSelectableGroupContactMembers 契约
+- 互关过滤、已在群锁定、friendMemberCount 云侧计算
 
-- 三个候选源均为具名 Reader/typed Slice（`ChatContactRowDto` / `SelectableGroupConversationRowDto`），端侧不拼装。
-- `friendMemberCount == 0` 的群由云侧过滤，不下发。
-- 候选跨来源按 `userId` 去重由发起页 ViewModel 承担；互关/拉黑校验最终由 `CreateConversation` / `AddMembers` 服务端强制（见 member-add-remove-policy）。
+### Out of Scope
+
+- 入群申请、邀请链接与扫码进群不在当前发布范围；候选 Reader 不返回相关入口或占位字段。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 候选来源互关过滤与已在群锁定
+
+- Mock 与 Remote 候选行为一致且有端云证据。
+
+<a id="req-002"></a>
+### REQ-002 已在群成员在加人模式（chatAddMembers）下由候选源锁定不可再选
+
 - 已在群成员在加人模式（`chatAddMembers`）下由候选源锁定不可再选。
 - 图四与图五必须消费服务端 keyset 分页的 `items + nextCursor`。`source` 与 `query` 过滤必须先于分页；端侧只可追加同一 `CursorPage` 的后续页，不得以首屏结果作本地全集再过滤。
 
-## 2. 页面承载
+## 4. 契约引用
 
-- `start_group_chat_page`（建群/加人复用）：候选主列表 + 来源入口。
-- `start_group_chat_group_picker_sheet`（图四）：可选群列表。
-- `start_group_chat_member_sheet`（图五）：群内互关成员多选。
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#ListGroupCandidates`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#ListSelectableGroupConversations`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#ListSelectableGroupContactMembers`
 
-## 3. 验收重点
+## 5. 验收场景
 
-### local_contract
+<a id="gwt-001"></a>
+### GWT-001 候选来源互关过滤与已在群锁定
 
-- Mock 与 Remote 候选行为 parity：互关过滤、已在群锁定、`friendMemberCount` 一致。
+- GIVEN 当前用户存在互关联系人、非互关联系人与已加入群聊。
+- WHEN 打开建群向导或加人模式请求候选来源。
+- THEN 候选只含互关联系人
+- AND 加人模式下已在群成员被锁定
+- AND 可选群列表只含 friendMemberCount>0 的群。
 
-### api_integration
+## 6. 依赖
 
-- `ListGroupCandidates` / `ListSelectableGroupConversations` / `ListSelectableGroupContactMembers` 契约（互关过滤、成员排除、query 过滤、跨页无漏项/无重复）。
+- 前置要求：[`group-creation-member-management`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
 
-### user_acceptance
+## 7. 开放事项
 
-- 建群向导从三类来源选人并成功建群的旅程。
+<a id="open-001"></a>
+### OPEN-001 候选来源互关过滤与已在群锁定
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Mock 与 Remote 候选行为一致且有端云证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效

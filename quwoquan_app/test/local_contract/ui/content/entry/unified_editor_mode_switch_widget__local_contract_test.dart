@@ -223,5 +223,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('视频编辑'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
   });
 }

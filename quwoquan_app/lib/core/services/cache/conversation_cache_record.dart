@@ -127,7 +127,7 @@ class ConversationCacheRecord {
     );
   }
 
-  factory ConversationCacheRecord.fromCacheMap(Map<String, dynamic> map) {
+  factory ConversationCacheRecord.fromCacheMap(Map<String, Object?> map) {
     return ConversationCacheRecord(
       id: _requiredCacheString(map, 'conversationId'),
       type: _string(map['type']),
@@ -187,7 +187,10 @@ class ConversationCacheRecord {
     );
   }
 
-  ConversationSearchItemView toConversationSearchItemView() {
+  ConversationSearchItemView toConversationSearchItemView({
+    String? highlightText,
+    String? matchedField,
+  }) {
     return ConversationSearchItemView(
       conversationId: id,
       type: type.isEmpty ? 'direct' : type,
@@ -200,6 +203,8 @@ class ConversationCacheRecord {
       memberCount: memberCount,
       circleId: circleId.isEmpty ? null : circleId,
       circleGroupId: circleGroupId,
+      highlightText: highlightText,
+      matchedField: matchedField,
     );
   }
 
@@ -234,8 +239,8 @@ class ConversationCacheRecord {
     );
   }
 
-  Map<String, dynamic> toCacheMap() {
-    return <String, dynamic>{
+  Map<String, Object?> toCacheMap() {
+    return <String, Object?>{
       'conversationId': id,
       if (type.isNotEmpty) 'type': type,
       if (title.isNotEmpty) 'title': title,
@@ -388,7 +393,7 @@ DateTime? _parseDateTime(String? value) {
   return DateTime.tryParse(normalized);
 }
 
-String _requiredCacheString(Map<String, dynamic> map, String key) {
+String _requiredCacheString(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! String || value.trim().isEmpty) {
     throw FormatException('ConversationCacheRecord.$key is required');

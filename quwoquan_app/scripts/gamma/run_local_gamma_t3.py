@@ -27,6 +27,10 @@ from quwoquan_ops.cli.lib.local_environment_auth import (  # noqa: E402
     open_local_acceptance_session,
 )
 from quwoquan_ops.cli.lib.output_paths import env_run_dir  # noqa: E402
+from quwoquan_ops.cli.lib.compose_layout import (  # noqa: E402
+    compose_file_args,
+    gamma_compose_files,
+)
 
 MANIFEST = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
 METADATA_ROOT = ROOT / "quwoquan_service/contracts/metadata"
@@ -37,6 +41,7 @@ GAMMA_RUN_ROOT = Path(
     or env_run_dir("gamma", "local-gamma-t3", target="gamma-local")
 )
 COMPOSE_FILE = ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+COMPOSE_FILES = gamma_compose_files(ROOT)
 COMPOSE_PROJECT = os.environ.get("LOCAL_GAMMA_COMPOSE_PROJECT") or os.environ.get(
     "COMPOSE_PROJECT_NAME", "quwoquan_service"
 )
@@ -267,7 +272,7 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def gamma_domain_fixture_spec(domain: str) -> Tuple[str, List[str]]:
-    """Return the (metadata-relative fixturePath, refs) for a seed domain."""
+    """Return the (repository-relative fixturePath, refs) for a seed domain."""
     manifest = load_manifest()
     item = next(
         (item for item in manifest.get("seedRefs", []) if item.get("domain") == domain),
@@ -284,7 +289,7 @@ def gamma_domain_fixture_spec(domain: str) -> Tuple[str, List[str]]:
 
 def gamma_content_fixture_spec() -> Tuple[Path, List[str]]:
     fixture_rel, refs = gamma_domain_fixture_spec("content")
-    return METADATA_ROOT / fixture_rel, refs
+    return ROOT / fixture_rel, refs
 
 
 def mongo_published_port() -> str:
@@ -297,8 +302,7 @@ def compose_command(*args: str) -> List[str]:
         "compose",
         "-p",
         COMPOSE_PROJECT,
-        "-f",
-        str(COMPOSE_FILE),
+        *compose_file_args(COMPOSE_FILES),
         *args,
     ]
 
@@ -488,10 +492,72 @@ def seed_entity(base_url: str) -> Dict[str, Any]:
         return {"status": "failed", "error": str(exc)}
 
 
+def fixture_author_impact_evidence_to_doc(raw: Dict[str, Any]) -> Dict[str, Any]:
+    string_fields = (
+        "authorId",
+        "impactId",
+        "sourceEventId",
+        "actorId",
+        "contentId",
+        "contentType",
+        "helpType",
+        "action",
+        "intersectionDimension",
+        "tagRef",
+        "source",
+        "occurredAt",
+        "createdAt",
+    )
+    doc = {field: str(raw.get(field) or "").strip() for field in string_fields}
+    required = (
+        "authorId",
+        "impactId",
+        "sourceEventId",
+        "contentId",
+        "contentType",
+        "helpType",
+        "action",
+        "intersectionDimension",
+        "source",
+        "occurredAt",
+        "createdAt",
+    )
+    missing = [field for field in required if not doc[field]]
+    if missing:
+        raise ValueError(
+            "authorImpactEvidence is missing required fields: "
+            + ", ".join(missing)
+        )
+    if not doc["sourceEventId"].startswith("fixture_content_author_impact_"):
+        raise ValueError(
+            "authorImpactEvidence.sourceEventId must use the "
+            "fixture_content_author_impact_ reset scope"
+        )
+    expected_impact_id = hashlib.sha1(
+        "|".join(
+            (
+                doc["authorId"],
+                doc["helpType"],
+                doc["action"],
+                doc["intersectionDimension"],
+                doc["tagRef"],
+                doc["source"],
+            )
+        ).encode("utf-8")
+    ).hexdigest()[:20]
+    if doc["impactId"] != expected_impact_id:
+        raise ValueError(
+            "authorImpactEvidence.impactId does not match the canonical "
+            f"aggregation key: {doc['sourceEventId']}"
+        )
+    return doc
+
+
 def seed_content() -> Dict[str, Any]:
     fixture_path, refs = gamma_content_fixture_spec()
     fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
     docs_by_id: Dict[str, Dict[str, Any]] = {}
+    evidence_by_source_event: Dict[str, Dict[str, Any]] = {}
     for ref in refs:
         seed_set = fixture.get("seedSets", {}).get(ref)
         if not isinstance(seed_set, dict):
@@ -499,17 +565,30 @@ def seed_content() -> Dict[str, Any]:
         for post in seed_set.get("posts", []) or []:
             doc = fixture_post_to_doc(post)
             docs_by_id[str(doc["_id"])] = doc
+        for raw_evidence in seed_set.get("authorImpactEvidence", []) or []:
+            if not isinstance(raw_evidence, dict):
+                raise ValueError(
+                    f"seed set {ref} contains non-object authorImpactEvidence"
+                )
+            evidence = fixture_author_impact_evidence_to_doc(raw_evidence)
+            evidence_by_source_event[evidence["sourceEventId"]] = evidence
     docs = list(docs_by_id.values())
+    evidence_docs = list(evidence_by_source_event.values())
     js_path = GAMMA_RUN_ROOT / "seed-content.js"
     js_path.parent.mkdir(parents=True, exist_ok=True)
     js_path.write_text(
         """
 const docs = %s;
+const evidenceDocs = %s;
 const dateFields = ["createdAt", "updatedAt", "publishedAt", "lastActiveAt"];
 for (const doc of docs) {
   for (const key of dateFields) {
     if (doc[key]) doc[key] = new Date(doc[key]);
   }
+}
+for (const evidence of evidenceDocs) {
+  evidence.occurredAt = new Date(evidence.occurredAt);
+  evidence.createdAt = new Date(evidence.createdAt);
 }
 const dbh = db.getSiblingDB("quwoquan_content");
 const ids = docs.map((doc) => doc._id);
@@ -561,8 +640,18 @@ try {
   const deletedFeed = ids.length > 0
     ? dbh.rm_discovery_feed.deleteMany({postId: {$in: ids}})
     : {deletedCount: 0};
+  const deletedEvidence = dbh.rm_author_impact_evidence.deleteMany({
+    sourceEventId: /^fixture_content_author_impact_/,
+  });
   if (docs.length > 0) dbh.posts.insertMany(docs, {ordered: true});
   if (feedDocs.length > 0) dbh.rm_discovery_feed.insertMany(feedDocs, {ordered: true});
+  for (const evidence of evidenceDocs) {
+    dbh.rm_author_impact_evidence.replaceOne(
+      {sourceEventId: evidence.sourceEventId},
+      evidence,
+      {upsert: true},
+    );
+  }
   const storedCount = ids.length > 0
     ? dbh.posts.countDocuments({_id: {$in: ids}})
     : 0;
@@ -575,6 +664,19 @@ try {
   if (storedFeedCount !== feedDocs.length) {
     throw new Error(`feed seed verification failed: stored ${storedFeedCount}/${feedDocs.length}`);
   }
+  const evidenceSourceEventIds = evidenceDocs.map(
+    (evidence) => evidence.sourceEventId,
+  );
+  const storedEvidenceCount = evidenceSourceEventIds.length > 0
+    ? dbh.rm_author_impact_evidence.countDocuments({
+        sourceEventId: {$in: evidenceSourceEventIds},
+      })
+    : 0;
+  if (storedEvidenceCount !== evidenceDocs.length) {
+    throw new Error(
+      `author-impact evidence seed verification failed: stored ${storedEvidenceCount}/${evidenceDocs.length}`,
+    );
+  }
   printjson({
     insertedCount: docs.length,
     deletedCount: deleted.deletedCount || 0,
@@ -582,13 +684,19 @@ try {
     feedInsertedCount: feedDocs.length,
     feedDeletedCount: deletedFeed.deletedCount || 0,
     storedFeedCount,
+    authorImpactEvidenceInsertedCount: evidenceDocs.length,
+    authorImpactEvidenceDeletedCount: deletedEvidence.deletedCount || 0,
+    storedEvidenceCount,
   });
 } catch (error) {
   print(error && error.stack ? error.stack : String(error));
   quit(1);
 }
 """
-        % json.dumps(docs, ensure_ascii=False),
+        % (
+            json.dumps(docs, ensure_ascii=False),
+            json.dumps(evidence_docs, ensure_ascii=False),
+        ),
         encoding="utf-8",
     )
     cmd = compose_command(
@@ -610,6 +718,9 @@ try {
     return {
         "status": "passed" if result.returncode == 0 else "failed",
         "insertedCount": len(docs) if result.returncode == 0 else 0,
+        "authorImpactEvidenceCount": (
+            len(evidence_docs) if result.returncode == 0 else 0
+        ),
         "output": result.stdout[-2000:],
     }
 
@@ -621,7 +732,7 @@ def seed_content_social_graph(viewer_id: str) -> Dict[str, Any]:
     report_path = GAMMA_RUN_ROOT / "content_social_graph_seed_report.json"
     cmd = [
         "python3",
-        "quwoquan_service/services/seed-box/scripts/apply_content_social_graph_seed.py",
+        "quwoquan_service/services/content-service/cmd/jobs/seed-social-graph/main.py",
         "--container",
         "quwoquan_service-mongodb-1",
         "--db",
@@ -660,7 +771,7 @@ def seed_content_object_cards(viewer_id: str) -> Dict[str, Any]:
     report_path = GAMMA_RUN_ROOT / "content_object_cards_seed_report.json"
     cmd = [
         "python3",
-        "quwoquan_service/services/seed-box/scripts/apply_content_object_cards_seed.py",
+        "quwoquan_service/services/content-service/cmd/jobs/seed-object-cards/main.py",
         "--container",
         "quwoquan_service-mongodb-1",
         "--db",
@@ -696,7 +807,7 @@ def seed_content_moment_channel() -> Dict[str, Any]:
     report_path = GAMMA_RUN_ROOT / "content_moment_channel_seed_report.json"
     cmd = [
         "python3",
-        "quwoquan_service/services/seed-box/scripts/apply_content_moment_channel_seed.py",
+        "quwoquan_service/services/content-service/cmd/jobs/seed-moment-channel/main.py",
         "--container",
         "quwoquan_service-mongodb-1",
         "--redis-container",
@@ -737,7 +848,7 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
     """
     try:
         status, body = http_request(
-            base_url.rstrip() + "/content/posts/fixture_photo_001/comments",
+            base_url.rstrip() + "/content/content/posts/fixture_photo_001/comments",
             method="POST",
             body={"content": "主评论示例"},
             timeout=8,
@@ -752,7 +863,7 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
                 "error": "CreateComment did not return parent comment id",
             }
         reply_status, reply_body = http_request(
-            base_url.rstrip() + "/content/posts/fixture_photo_001/comments",
+            base_url.rstrip() + "/content/content/posts/fixture_photo_001/comments",
             method="POST",
             body={"content": "回复示例", "replyToCommentId": parent_id},
             timeout=8,
@@ -767,14 +878,14 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
                 "error": "CreateComment did not return reply comment id",
             }
         reaction_status, _ = http_request(
-            base_url.rstrip() + f"/content/comments/{parent_id}/reaction",
+            base_url.rstrip() + f"/content/content/comments/{parent_id}/reaction",
             method="POST",
             body={"reaction": "like"},
             timeout=8,
             headers={"Idempotency-Key": gamma_probe_idempotency_key("comment-reaction")},
         )
         bind_status, bind_body = http_request(
-            base_url.rstrip() + f"/content/comments/{parent_id}/media:bind",
+            base_url.rstrip() + f"/content/content/comments/{parent_id}/media:bind",
             method="POST",
             body={"attachmentMediaIds": []},
             timeout=8,
@@ -1649,7 +1760,10 @@ def main() -> int:
         )
         report["status"] = (
             "passed"
-            if report["seed"].get("status") == "passed" and not user_seed_failed
+            if (
+                report["seed"].get("status") == "passed"
+                and not user_seed_failed
+            )
             else "failed"
         )
     else:

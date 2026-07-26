@@ -17,7 +17,6 @@ library;
 
 import 'package:integration_test/integration_test.dart';
 import 'package:patrol/patrol.dart';
-import 'package:quwoquan_app/main.dart' as app;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -30,8 +29,4 @@ void main() {
   patrolTearDown(() async {
     // 全局 tearDown hook（每个 patrolTest 后触发）
   });
-
-  // 启动真实 App（含 Riverpod ProviderScope、GoRouter、ScreenUtil 等完整初始化）
-  // 目标环境通过 APP_RUNTIME_ENV/API_CONTRACT_ENV 注入。
-  app.main();
 }

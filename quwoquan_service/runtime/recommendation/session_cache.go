@@ -148,6 +148,16 @@ func (sc *SessionCache) AcceptEvent(ctx context.Context, signal BehaviorSignal) 
 	return true, nil
 }
 
+func (sc *SessionCache) HasAcceptedEvent(
+	ctx context.Context,
+	userID, clientEventID string,
+) (bool, error) {
+	if reader, ok := sc.inner.(FeedbackReplayReader); ok {
+		return reader.HasAcceptedEvent(ctx, userID, clientEventID)
+	}
+	return false, nil
+}
+
 func (sc *SessionCache) FilterCandidates(ctx context.Context, userID string, candidates []ContentCandidate, at time.Time) ([]ContentCandidate, error) {
 	if f, ok := sc.inner.(ExposureFilter); ok {
 		return f.FilterCandidates(ctx, userID, candidates, at)

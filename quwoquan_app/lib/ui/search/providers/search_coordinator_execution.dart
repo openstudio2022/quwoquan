@@ -124,9 +124,6 @@ extension SearchCoordinatorExecution on SearchCoordinator {
           waitMode: 'background',
           error: error,
         );
-    if (kDebugMode) {
-      debugPrint('search inspiration $source degraded to empty: $error');
-    }
   }
 
   int _positiveCount(int primary, int secondary) {
@@ -199,6 +196,18 @@ extension SearchCoordinatorExecution on SearchCoordinator {
   }
 
   Future<void> removeRecentSearch(String entryId) async {
+    RecentSearchEntryView? removedEntry;
+    for (final entry in _currentState.recentSearches) {
+      if (entry.entryId == entryId) {
+        removedEntry = entry;
+        break;
+      }
+    }
+    if (removedEntry == null) {
+      return;
+    }
+    final store = _localStore;
+    _recentHistoryMutationRevision += 1;
     final nextEntries = _currentState.recentSearches
         .where((entry) => entry.entryId != entryId)
         .toList(growable: false);
@@ -213,20 +222,35 @@ extension SearchCoordinatorExecution on SearchCoordinator {
             : _currentState.isHistoryExpanded,
       ),
     );
-    await _localStore.save(nextEntries);
-    try {
-      await _coordinatorRef
-          .read(recentSearchCommandWriterProvider)
-          .deleteRecentSearch(DeleteRecentSearchCommand(entryId: entryId));
-    } on Object catch (error) {
-      // Local-first delete stays; remote cleanup failure is logged, not hidden.
-      if (kDebugMode) {
-        debugPrint('recent search remote delete degraded: $error');
+    final historyKey = _historyKeyForEntry(removedEntry);
+    _recentUpsertTokens[historyKey] = ++_recentUpsertSequence;
+    final wasPendingUpsert = _pendingRecentUpsertKeys.remove(historyKey);
+    _pendingRecentDeleteKeys.add(historyKey);
+    await _saveRecentHistory(nextEntries, store: store);
+    if (!_isMounted || !identical(store, _localStore)) {
+      return;
+    }
+    if (wasPendingUpsert) {
+      unawaited(hydrateRecentSearches());
+      return;
+    }
+    final deleted = await _deleteCanonicalRecentSearch(
+      removedEntry,
+      operation: 'remote_delete',
+    );
+    if (deleted) {
+      if (!_isMounted || !identical(store, _localStore)) {
+        return;
       }
+      _pendingRecentDeleteKeys.remove(historyKey);
+      await _saveRecentHistory(nextEntries, store: store);
     }
   }
 
   Future<void> clearRecentSearches() async {
+    final store = _localStore;
+    _recentHistoryMutationRevision += 1;
+    _recentClearToken += 1;
     _setState(
       _currentState.copyWith(
         recentSearches: const <RecentSearchEntryView>[],
@@ -234,16 +258,29 @@ extension SearchCoordinatorExecution on SearchCoordinator {
         isHistoryExpanded: false,
       ),
     );
-    await _localStore.clear();
+    _pendingRecentClear = true;
+    _pendingRecentUpsertKeys.clear();
+    _pendingRecentDeleteKeys.clear();
+    _recentUpsertTokens.clear();
+    await _saveRecentHistory(const <RecentSearchEntryView>[], store: store);
+    if (!_isMounted || !identical(store, _localStore)) {
+      return;
+    }
     try {
       await _coordinatorRef
           .read(recentSearchCommandWriterProvider)
           .clearRecentSearches(ClearRecentSearchesCommand());
+      if (!_isMounted || !identical(store, _localStore)) {
+        return;
+      }
+      _pendingRecentClear = false;
+      await _saveRecentHistory(_currentState.recentSearches, store: store);
+      if (_pendingRecentUpsertKeys.isNotEmpty) {
+        unawaited(hydrateRecentSearches());
+      }
     } on Object catch (error) {
       // Local-first clear stays; remote cleanup failure is logged, not hidden.
-      if (kDebugMode) {
-        debugPrint('recent search remote clear degraded: $error');
-      }
+      _recordRecentHistoryFailure(operation: 'remote_clear', error: error);
     }
   }
 

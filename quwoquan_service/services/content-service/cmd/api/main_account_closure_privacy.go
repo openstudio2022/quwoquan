@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"quwoquan_service/services/content-service/internal/infrastructure/accountclosure"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/accountclosure"
 )
 
 const accountClosureSubjectHMACEnv = "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET"

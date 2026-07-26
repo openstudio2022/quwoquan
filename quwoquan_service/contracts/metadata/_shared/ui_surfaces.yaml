@@ -417,6 +417,8 @@ surfaces:
       - ListPersonaCircles
       - ListProfileInteractionActivitiesReceived
       - ListProfileInteractionActivitiesSent
+      - GetAuthorImpact
+      - ListAuthorImpactEvidence
 
   - id: profileCareerInterests
     owner: user
@@ -430,6 +432,16 @@ surfaces:
       - ListTagChildren
       - ValidateTagRefs
       - ReportTagFeedback
+
+  - id: interestOnboarding
+    owner: content
+    route_id: interestOnboarding
+    path_template: /onboarding/interests
+    description: 游客首启兴趣先验采集；选择在登录后经确认型行为提交，跳过回安全首页
+    operation_ids:
+      - ListTagChildren
+      - ValidateTagRefs
+      - ReportBehaviors
 
   - id: addContact
     owner: user
@@ -523,6 +535,7 @@ surfaces:
       - InitMediaUpload
       - CompleteMediaUpload
       - AbortMediaUpload
+      - DiscardMediaAsset
       - CreateOutboundShare
       - PlacePostInCircle
       - ListPersonaCircles
@@ -568,6 +581,8 @@ surfaces:
       - ListCommentsForPostAuthor
       - DeleteComment
       - ReactToComment
+      - GetAuthorImpact
+      - ListAuthorImpactEvidence
 
   - id: interestMatch
     owner: interest_match
@@ -592,28 +607,28 @@ surfaces:
       - ResolveOneTapLoginHint
 
   - id: legalUserAgreement
-    owner: legal
+    owner: user
     route_id: legalUserAgreement
     path_template: /legal/user-agreement
     description: 用户协议静态正文
     operation_ids: []
 
   - id: legalPrivacyPolicy
-    owner: legal
+    owner: user
     route_id: legalPrivacyPolicy
     path_template: /legal/privacy-policy
     description: 隐私政策静态正文
     operation_ids: []
 
   - id: legalPermissions
-    owner: legal
+    owner: user
     route_id: legalPermissions
     path_template: /legal/permissions
     description: 权限说明静态正文
     operation_ids: []
 
   - id: legalThirdPartySdkList
-    owner: legal
+    owner: user
     route_id: legalThirdPartySdkList
     path_template: /legal/third-party-sdk-list
     description: 第三方 SDK 清单静态正文
@@ -877,7 +892,9 @@ surfaces:
     route_id: myIntersections
     path_template: /profile/intersections
     description: 我的交集与影响力收件箱
-    operation_ids: []
+    operation_ids:
+      - GetAuthorImpact
+      - ListAuthorImpactEvidence
 
   - id: objectIntersections
     owner: recommendation

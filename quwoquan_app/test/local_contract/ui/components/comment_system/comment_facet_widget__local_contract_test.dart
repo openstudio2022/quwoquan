@@ -1,5 +1,3 @@
-import 'dart:ui' show SemanticsFlag;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -279,7 +277,10 @@ void main() {
         .first;
     expect(tester.getSize(hot).height, greaterThanOrEqualTo(44));
     expect(tester.getSize(latest).height, greaterThanOrEqualTo(44));
-    expect(tester.getSemantics(hot).hasFlag(SemanticsFlag.isSelected), isTrue);
+    expect(
+      tester.getSemantics(hot).flagsCollection.isSelected.toBoolOrNull(),
+      isTrue,
+    );
     expect(
       find.bySemanticsLabel(UITextConstants.commentMoreActions),
       findsOneWidget,

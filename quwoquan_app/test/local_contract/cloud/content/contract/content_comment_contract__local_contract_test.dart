@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-004
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-010
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

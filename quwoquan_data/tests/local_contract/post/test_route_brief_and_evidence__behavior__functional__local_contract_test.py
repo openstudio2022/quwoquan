@@ -98,7 +98,7 @@ def test_extract_source_evidence_recognizes_scenic_appreciation_as_like():
 def test_extract_source_evidence_recognizes_travelogue_emotion_phrases():
     evidence = extract_source_evidence(
         "吃上了心心念念的雅鱼，真的很幸运。那一口太美味了，是这趟路上一大幸福。过桥时全程腿抖，确实害怕。",
-        entity_name="海螺沟",
+        entity_name="测试实体丙",
     )
 
     likes = [entry["sentence"] for entry in evidence["emotionEvidence"] if entry.get("kind") == "like"]
@@ -168,7 +168,7 @@ def test_gate_route_evidence_still_gates_narrative_carriers():
 
 
 def test_route_review_generates_real_review_green():
-    execution_id = "20260711--travel-article-route--cn-sichuan--canary-001"
+    execution_id = "20260711--travel-article-route--test-region-b--pilot-001"
     build_execution_fixture(execution_id)
     ensure_execution_layout(execution_id)
     ensure_execution_command_layout(execution_id, "source")
@@ -293,7 +293,7 @@ retained: true
 
 
 def test_agent_draft_time_facts_are_stable_and_monotonic():
-    execution_id = "20260711--travel-article-route-time--cn-sichuan--canary-002"
+    execution_id = "20260711--travel-article-route-time--test-region-b--pilot-002"
     build_execution_fixture(execution_id)
     ensure_execution_layout(execution_id)
     ensure_execution_command_layout(execution_id, "source")
@@ -385,7 +385,7 @@ retained: true
 
 
 def test_route_skip_does_not_prepare_writing_pack():
-    execution_id = "20260711--travel-article-route-skip--cn-sichuan--canary-003"
+    execution_id = "20260711--travel-article-route-skip--test-region-b--pilot-003"
     build_execution_fixture(execution_id)
     ensure_execution_layout(execution_id)
     ensure_execution_command_layout(execution_id, "source")
@@ -457,7 +457,7 @@ manual_source_plan_note: 探针页，正文抓取失败。
 
 
 def test_route_review_blocks_intra_doc_repetition_padding():
-    execution_id = "20260711--travel-article-route-repeat--cn-sichuan--canary-004"
+    execution_id = "20260711--travel-article-route-repeat--test-region-b--pilot-004"
     build_execution_fixture(execution_id)
     ensure_execution_layout(execution_id)
     ensure_execution_command_layout(execution_id, "source")

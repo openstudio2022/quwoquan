@@ -15,11 +15,12 @@ import (
 )
 
 var metadataSchemaByFilename = map[string]string{
-	"aggregate.yaml":           "aggregate.schema.json",
-	"business_object_map.yaml": "business_object_map.schema.json",
-	"entity.yaml":              "entity.schema.json",
-	"readiness.yaml":           "readiness.schema.json",
-	"service.yaml":             "service.schema.json",
+	"context.yaml":    "context.schema.json",
+	"object.yaml":     "object.schema.json",
+	"fields.yaml":     "fields.schema.json",
+	"operations.yaml": "operations.schema.json",
+	"storage.yaml":    "storage.schema.json",
+	"events.yaml":     "events.schema.json",
 }
 
 // MetadataSchemas 使用仓库内唯一 JSON Schema 校验商用 metadata 文档。
@@ -49,6 +50,14 @@ func MetadataSchemas(metadataDir string) ([]Issue, error) {
 		schemaName, ok := metadataSchemaByFilename[entry.Name()]
 		if !ok {
 			return nil
+		}
+		// Object packet files are schemas only inside an actual object root. A
+		// same-named helper/type document elsewhere must not become a second
+		// implicit object registration.
+		if entry.Name() != "context.yaml" && entry.Name() != "object.yaml" {
+			if _, statErr := os.Stat(filepath.Join(filepath.Dir(path), "object.yaml")); statErr != nil {
+				return nil
+			}
 		}
 		instance, decodeErr := decodeYAMLAsJSON(path)
 		if decodeErr != nil {

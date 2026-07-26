@@ -4,18 +4,18 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_asset.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_section.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_timeline_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_related_group_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_source.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction_asset.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction_section.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction_timeline_item.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_related_group_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_source.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
-import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
+import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_type_labels.dart';
@@ -74,7 +74,7 @@ class _HomepageIntroductionPageState
     _scrollController.removeListener(_trackDepth);
     _trackJourney(
       'exit',
-      payload: <String, dynamic>{
+      payload: <String, Object?>{
         ..._basePayload(),
         'durationMs': DateTime.now().difference(_enteredAt).inMilliseconds,
         'maxDepth': _maxDepth,
@@ -239,8 +239,8 @@ class _HomepageIntroductionPageState
     }
   }
 
-  Map<String, dynamic> _basePayload() {
-    return <String, dynamic>{
+  Map<String, Object?> _basePayload() {
+    return <String, Object?>{
       'homepageId': widget.homepageId,
       'referralSource': widget.referralSource.value,
     };
@@ -249,7 +249,7 @@ class _HomepageIntroductionPageState
   void _trackJourney(
     String action, {
     String targetKey = '',
-    Map<String, dynamic> payload = const <String, dynamic>{},
+    Map<String, Object?> payload = const <String, Object?>{},
   }) {
     unawaited(
       _journeyTracker.trackAction(

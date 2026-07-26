@@ -1,0 +1,44 @@
+backend: mongodb
+collections:
+  conversation_memberships:
+    entity: ConversationMember
+    role: authoritative
+    indexes:
+    - name: uq_conversation_memberships_identity
+      keys:
+        conversationId: 1
+        userId: 1
+      unique: true
+    - name: idx_conversation_memberships_role_joined
+      keys:
+        conversationId: 1
+        role: 1
+        joinedAt: 1
+    - name: idx_conversation_memberships_display_name
+      keys:
+        conversationId: 1
+        displayName: 1
+        userId: 1
+  conversation_memberships_command_receipts:
+    entity: ConversationMember
+    role: authoritative
+    description: 与 aggregate state 和 outbox 在同一 mongodb transaction 提交的幂等回执。
+  conversation_memberships_outbox:
+    entity: ConversationMember
+    role: append_only
+    description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
+  circle_group_membership_projection_states:
+    entity: ConversationMember
+    role: projection
+    description: CircleGroupMembership 到 Chat 名册的 source-version 水位；与 Chat member/UserState/outbox 在同一事务提交，防止重放或乱序事件复活终态成员。
+    indexes:
+    - name: uq_circle_group_membership_projection_identity
+      keys:
+        circleGroupId: 1
+        userId: 1
+      unique: true
+    - name: idx_circle_group_membership_projection_conversation
+      keys:
+        conversationId: 1
+        sourceVersion: -1
+role: authoritative

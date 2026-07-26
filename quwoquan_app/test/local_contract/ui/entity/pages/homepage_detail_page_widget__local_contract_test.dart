@@ -8,8 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_section.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction_section.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_context.g.dart';
@@ -57,15 +57,22 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           homepageQueryProvider.overrideWithValue(MockHomepageRepository()),
           homepageCommandWriterProvider.overrideWithValue(
             MockHomepageRepository(),
           ),
           // 「我的交集」卡需要当前用户（你×对象）；游客无「你」即收起（G2）。
           currentUserIdProvider.overrideWithValue('viewer_demo'),
-          intersectionRepositoryProvider.overrideWithValue(
-            _HomepageAlphaIntersectionRepository(),
-          ),
         ],
         child: const MaterialApp(
           home: HomepageDetailPage(homepageId: 'homepage_sight_west_lake'),
@@ -133,11 +140,18 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          _homepageFacetOverride(MockHomepageRepository()),
-          currentUserIdProvider.overrideWithValue('viewer_demo'),
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
           intersectionRepositoryProvider.overrideWithValue(
             _HomepageAlphaIntersectionRepository(),
           ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
+          _homepageFacetOverride(MockHomepageRepository()),
+          currentUserIdProvider.overrideWithValue('viewer_demo'),
         ],
         child: const MaterialApp(
           home: HomepageDetailPage(
@@ -191,11 +205,18 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          _homepageFacetOverride(MockHomepageRepository()),
-          currentUserIdProvider.overrideWithValue('viewer_demo'),
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
           intersectionRepositoryProvider.overrideWithValue(
             _HomepageAlphaIntersectionRepository(),
           ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
+          _homepageFacetOverride(MockHomepageRepository()),
+          currentUserIdProvider.overrideWithValue('viewer_demo'),
         ],
         child: const MaterialApp(
           home: HomepageDetailPage(
@@ -238,7 +259,19 @@ void main() {
   testWidgets('选择模式显示 attach 按钮', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [_homepageFacetOverride(MockHomepageRepository())],
+        overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
+          _homepageFacetOverride(MockHomepageRepository()),
+        ],
         child: const MaterialApp(
           home: HomepageDetailPage(
             homepageId: 'homepage_sight_west_lake',
@@ -255,7 +288,19 @@ void main() {
   testWidgets('alpha/mock 下支持 canonicalEntityId 直达实体主页', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [_homepageFacetOverride(MockHomepageRepository())],
+        overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
+          _homepageFacetOverride(MockHomepageRepository()),
+        ],
         child: const MaterialApp(
           home: HomepageDetailPage(homepageId: 'entity:sight:emeishan'),
         ),
@@ -270,7 +315,19 @@ void main() {
   testWidgets('我的交集中的新东方实体出点可直达实体主页', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [_homepageFacetOverride(MockHomepageRepository())],
+        overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
+          _homepageFacetOverride(MockHomepageRepository()),
+        ],
         child: const MaterialApp(
           home: HomepageDetailPage(
             homepageId: 'fixture_homepage_school_neworiental',
@@ -287,7 +344,19 @@ void main() {
   testWidgets('canonical 新东方实体出点可直达实体主页', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [_homepageFacetOverride(MockHomepageRepository())],
+        overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
+          _homepageFacetOverride(MockHomepageRepository()),
+        ],
         child: const MaterialApp(
           home: HomepageDetailPage(homepageId: 'entity:school:neworiental'),
         ),
@@ -302,7 +371,19 @@ void main() {
   testWidgets('首页推荐取景地实体出点可直达实体主页', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [_homepageFacetOverride(MockHomepageRepository())],
+        overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
+          _homepageFacetOverride(MockHomepageRepository()),
+        ],
         child: const MaterialApp(
           home: HomepageDetailPage(
             homepageId: 'entity:photo_spot:hengshu_studio',
@@ -337,7 +418,19 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [_homepageFacetOverride(MockHomepageRepository())],
+        overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
+          _homepageFacetOverride(MockHomepageRepository()),
+        ],
         child: MaterialApp.router(routerConfig: router),
       ),
     );
@@ -364,7 +457,21 @@ void main() {
     Future<void> pumpFailure(UiErrorAppearanceMode mode) async {
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [_homepageFacetOverride(MockHomepageRepository())],
+          overrides: [
+            authSessionControllerProvider.overrideWith(
+              _GuestHomepageSession.new,
+            ),
+            behaviorRepositoryProvider.overrideWithValue(
+              MockBehaviorRepository(),
+            ),
+            intersectionRepositoryProvider.overrideWithValue(
+              _HomepageAlphaIntersectionRepository(),
+            ),
+            contentRuntimeConfigProvider.overrideWithValue(
+              buildProductionContentRuntimeConfigDefaults(),
+            ),
+            _homepageFacetOverride(MockHomepageRepository()),
+          ],
           child: MaterialApp(
             theme: ThemeData(
               brightness: mode == UiErrorAppearanceMode.light
@@ -395,6 +502,16 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           _homepageFacetOverride(repository),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             _RecordingHomepageIntroductionRepository(),
@@ -434,6 +551,16 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           _homepageFacetOverride(repository),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             _RecordingHomepageIntroductionRepository(),
@@ -470,6 +597,16 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           _homepageFacetOverride(repository),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             _RecordingHomepageIntroductionRepository(),
@@ -519,6 +656,16 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageAlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           _homepageFacetOverride(MockHomepageRepository()),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             _RecordingHomepageIntroductionRepository(),
@@ -556,6 +703,12 @@ void main() {
 }
 
 class _NoNetworkHttpOverrides extends HttpOverrides {}
+
+final class _GuestHomepageSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
+}
 
 class _HomepageAlphaIntersectionRepository extends AlphaIntersectionRepository {
   @override

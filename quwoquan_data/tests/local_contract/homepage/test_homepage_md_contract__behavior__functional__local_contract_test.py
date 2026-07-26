@@ -35,12 +35,15 @@ from content.homepage.homepage_release import (  # noqa: E402
 from content.homepage.homepage_release import (  # noqa: E402
     final_provenance_source_paths,
 )
-from content.homepage.homepage_validation import homepage_structure_issues  # noqa: E402
+from content.homepage.homepage_validation import (  # noqa: E402
+    _asset_closure_issues,
+    homepage_structure_issues,
+)
 
 
 _BODY = """# 黄龙风景名胜区
 
-黄龙位于四川省阿坝州松潘县，以彩池、雪山、峡谷、森林四绝著称。
+黄龙位于test-region-b阿坝州松潘县，以彩池、雪山、峡谷、森林四绝著称。
 
 ## 地质地貌
 
@@ -190,6 +193,18 @@ def test_structure_gate_flags_missing_frontmatter_cover_and_bad_roles():
     assert "非法值 gallery" in text, issues
 
 
+def test_structure_gate_allows_media_absent_homepage_without_cover():
+    page = "# 黄龙\n\n这是一篇没有可发布图片的实体主页。\n"
+    with tempfile.TemporaryDirectory() as td:
+        obj = _write_entity(Path(td), page)
+        manifest = {"vertical": "travel", "assets": []}
+        issues = [
+            *_asset_closure_issues(obj, manifest, "黄龙"),
+            *homepage_structure_issues(obj, manifest, "黄龙"),
+        ]
+    assert issues == [], issues
+
+
 def test_caption_gate_allows_empty_related_caption():
     assets = [
         {"assetId": "a", "role": "related", "caption": "", "fileName": "x.jpg"},
@@ -250,10 +265,10 @@ def test_placement_map_like_blocks_locator_map_from_homepage_assets():
 
 def test_final_provenance_uses_only_admitted_source_refs():
     admitted = [
-        "sources/东钱湖__wikipedia__99643c13/source.md",
-        "sources/东钱湖__wikipedia__99643c13/assets/001.jpg",
+        "sources/测试实体乙__wikipedia__99643c13/source.md",
+        "sources/测试实体乙__wikipedia__99643c13/assets/001.jpg",
     ]
-    candidate = "sources/东钱湖__baidu_baike__4f100f71/source.md"
+    candidate = "sources/测试实体乙__baidu_baike__4f100f71/source.md"
 
     projected = final_provenance_source_paths([*admitted, admitted[0], ""])
 

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import List
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SUITES_PATH = REPO_ROOT / "quwoquan_ops" / "environments" / "gamma_validation_suites.json"
+SUITES_PATH = REPO_ROOT / "quwoquan_ops" / "environments" / "gamma" / "validation_suites.json"
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 

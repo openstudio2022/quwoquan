@@ -3,6 +3,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
+# Pin disposable-output root for the whole hook. A polluted shell export can
+# otherwise redirect make/stackctl into pytest isolation dirs and fail later
+# gates with incomplete report.json artifacts.
+export QWQ_OUTPUT_ROOT="$ROOT/.qwq_output"
+export PYTHONDONTWRITEBYTECODE=1
 
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
 

@@ -68,7 +68,7 @@ void main() {
 
   test('已达标目标文件不得进入 R03 allowlist', () {
     final allowlist = _readRepoFile(
-      'specs/gates/file_line_budget_allowlist.yaml',
+      'quwoquan_ops/policies/gates/file_line_budget_allowlist.yaml',
     );
 
     for (final path in appFiles) {

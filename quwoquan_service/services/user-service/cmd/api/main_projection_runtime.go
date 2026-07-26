@@ -2,38 +2,12 @@ package main
 
 import (
 	"context"
-	"log"
-	"os"
-	"strings"
 
-	"go.mongodb.org/mongo-driver/v2/mongo"
-
-	rtmongo "quwoquan_service/internal/platform/mongodb"
-	"quwoquan_service/services/user-service/internal/adapters/mq"
-	followingapp "quwoquan_service/services/user-service/internal/application/relationship/following_subject"
-	relmodel "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/model"
-	sfmodel "quwoquan_service/services/user-service/internal/domain/relationship/subject_follow/model"
+	"quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/mq"
+	followingapp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/application"
+	relmodel "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/model"
+	sfmodel "quwoquan_service/services/user-service/internal/relationship/subject_follow/domain/model"
 )
-
-// resolveObjectTagIndexCollection 解析 tag 域共享派生读模型 object_tag_index 的
-// 写入目标。优先 TAG_MONGO_URI/TAG_MONGO_DATABASE（与 tag-service 读侧同源）；
-// 未配置时回退本服务 Mongo 并 WARN（存量环境渐进收敛，避免静默漂移）。
-func resolveObjectTagIndexCollection(ctx context.Context, fallback *mongo.Database) *mongo.Collection {
-	tagURI := strings.TrimSpace(os.Getenv("TAG_MONGO_URI"))
-	tagDatabase := strings.TrimSpace(os.Getenv("TAG_MONGO_DATABASE"))
-	if tagDatabase == "" {
-		tagDatabase = "quwoquan_tag"
-	}
-	if tagURI != "" {
-		client := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: tagURI}, "user-service-tagindex")
-		return client.Database(tagDatabase).Collection("object_tag_index")
-	}
-	if fallback == nil {
-		return nil
-	}
-	log.Printf("user-service WARN: TAG_MONGO_URI unset; object_tag_index projector falls back to the service database (tag-service readers may not see these writes)")
-	return fallback.Collection("object_tag_index")
-}
 
 // subjectFollowFanout 把已提交的 SubjectFollow 事实先追加到 Redis Stream，
 // 再 upsert following_subjects 投影；任一失败都不推进 outbox checkpoint，

@@ -1,0 +1,71 @@
+# 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
+services:
+  user-service:
+    image: "${QWQ_COMPOSE_USER_SERVICE_IMAGE:-localhost/quwoquan_service_user-service:latest}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/user-service/build/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${QWQ_COMPOSE_GO_BASE_IMAGE:?QWQ_COMPOSE_GO_BASE_IMAGE is required}"
+        ALPINE_BASE_IMAGE: "${QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}"
+        GO_BUILD_FLAGS: "${QWQ_COMPOSE_USER_GO_BUILD_FLAGS:--p=1 -tags=nonprod}"
+    environment:
+      SERVICE_NAME: user-service
+      APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${QWQ_COMPOSE_USER_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_USER_SERVICE_CONFIG_VERSION is required}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      USER_SERVICE_ADDR: ":18081"
+      OTP_CODE_REF_ACTIVE_KEY_VERSION: "${OTP_CODE_REF_ACTIVE_KEY_VERSION:?OTP_CODE_REF_ACTIVE_KEY_VERSION is required}"
+      OTP_CODE_REF_KEYS_JSON: "${OTP_CODE_REF_KEYS_JSON:?OTP_CODE_REF_KEYS_JSON is required}"
+      QWQ_PUSH_TOKEN_ENCRYPTION_KEY: "${QWQ_PUSH_TOKEN_ENCRYPTION_KEY:?QWQ_PUSH_TOKEN_ENCRYPTION_KEY is required}"
+      POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: quwoquan_user
+      REDIS_ADDR: redis:6379
+      CHAT_SERVICE_BASE_URL: http://chat-service:18081
+      TAG_SERVICE_BASE_URL: http://tag-service:18092
+      # local-gamma 使用本地验收身份；外部 OAuth/号码认证不伪造凭据，
+      # 对应端点按 user-service 合同返回结构化 unavailable。
+      USER_AUTH_EXTERNAL_PROVIDER_MODE: anonymous_only
+      # gamma/beta local_substitute：启动仍要求 fixture endpoint/secret 物质化，
+      # 由 stackctl prepare_local_provider_credentials 注入；协议 fixture 适配器
+      # 不会外呼真实运营商。
+      IDENTITY_ONE_TAP_FIXTURE_ENDPOINT: "${IDENTITY_ONE_TAP_FIXTURE_ENDPOINT:-}"
+      IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_ID: "${IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_ID:-}"
+      IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET: "${IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET:-}"
+      IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL: "${IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL:-}"
+      IDENTITY_SOCIAL_FIXTURE_WECHAT_USER_INFO_URL: "${IDENTITY_SOCIAL_FIXTURE_WECHAT_USER_INFO_URL:-}"
+      IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL: "${IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL:-}"
+      IDENTITY_SOCIAL_FIXTURE_ALIPAY_USER_INFO_URL: "${IDENTITY_SOCIAL_FIXTURE_ALIPAY_USER_INFO_URL:-}"
+      IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL: "${IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL:-}"
+      IDENTITY_SOCIAL_FIXTURE_WECHAT_APP_ID: "${IDENTITY_SOCIAL_FIXTURE_WECHAT_APP_ID:-}"
+      IDENTITY_SOCIAL_FIXTURE_WECHAT_APP_SECRET: "${IDENTITY_SOCIAL_FIXTURE_WECHAT_APP_SECRET:-}"
+      IDENTITY_SOCIAL_FIXTURE_ALIPAY_APP_ID: "${IDENTITY_SOCIAL_FIXTURE_ALIPAY_APP_ID:-}"
+      IDENTITY_SOCIAL_FIXTURE_ALIPAY_APP_PRIVATE_KEY_PEM: "${IDENTITY_SOCIAL_FIXTURE_ALIPAY_APP_PRIVATE_KEY_PEM:-}"
+      IDENTITY_SOCIAL_FIXTURE_ALIPAY_PLATFORM_PUBLIC_KEY_PEM: "${IDENTITY_SOCIAL_FIXTURE_ALIPAY_PLATFORM_PUBLIC_KEY_PEM:-}"
+      IDENTITY_SOCIAL_FIXTURE_ALIPAY_MERCHANT_PID: "${IDENTITY_SOCIAL_FIXTURE_ALIPAY_MERCHANT_PID:-}"
+      IDENTITY_SOCIAL_FIXTURE_QQ_APP_ID: "${IDENTITY_SOCIAL_FIXTURE_QQ_APP_ID:-}"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "${QWQ_COMPOSE_USER_PORT:-19210}:18081"
+    volumes:
+      - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
+      retries: 10

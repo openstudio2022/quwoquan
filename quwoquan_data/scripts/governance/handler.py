@@ -38,10 +38,10 @@ def handle_governance(args: argparse.Namespace) -> None:
 
         handle_coverage_command(args)
         return
-    if cmd == "media-canary":
-        from governance.media_canary import (
-            prepare_media_canary_assets,
-            validate_media_canary_assets,
+    if cmd == "media-probe":
+        from governance.media_probe import (
+            prepare_media_probe_assets,
+            validate_media_probe_assets,
         )
 
         output_root = Path(args.output_root).expanduser().resolve()
@@ -50,26 +50,26 @@ def handle_governance(args: argparse.Namespace) -> None:
             for value in str(args.asset_ids or "").split(",")
             if value.strip()
         }
-        if args.media_canary_command == "prepare":
-            result = prepare_media_canary_assets(
+        if args.media_probe_command == "prepare":
+            result = prepare_media_probe_assets(
                 output_root=output_root,
                 asset_ids=asset_ids or None,
             )
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
-        if args.media_canary_command == "validate":
-            issues = validate_media_canary_assets(
+        if args.media_probe_command == "validate":
+            issues = validate_media_probe_assets(
                 output_root=output_root,
                 asset_ids=asset_ids or None,
             )
             if issues:
-                print("[governance media-canary] FAIL")
+                print("[governance media-probe] FAIL")
                 for issue in issues:
                     print(f"  - {issue}")
                 raise SystemExit(1)
-            print("[governance media-canary] OK")
+            print("[governance media-probe] OK")
             return
-        raise SystemExit("[governance media-canary] subcommand required")
+        raise SystemExit("[governance media-probe] subcommand required")
     if cmd == "review-candidates":
         argv: list[str] = []
         if getattr(args, "root", None):
@@ -98,16 +98,16 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     register_taxonomy_parser(sub)
     register_coverage_parser(sub)
 
-    media_canary = sub.add_parser(
-        "media-canary",
-        help="生成或校验受控视频播放 canary、probe 与 storyboard",
+    media_probe = sub.add_parser(
+        "media-probe",
+        help="生成或校验受控视频播放 probe 与 storyboard",
     )
-    media_canary_sub = media_canary.add_subparsers(
-        dest="media_canary_command",
+    media_probe_sub = media_probe.add_subparsers(
+        dest="media_probe_command",
         required=True,
     )
     for command in ("prepare", "validate"):
-        action = media_canary_sub.add_parser(command)
+        action = media_probe_sub.add_parser(command)
         action.add_argument("--output-root", required=True)
         action.add_argument(
             "--asset-ids",

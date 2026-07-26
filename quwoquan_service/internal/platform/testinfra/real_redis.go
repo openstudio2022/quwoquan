@@ -271,6 +271,19 @@ func (r *RealRedis) Get(ctx context.Context, database int, key string) (string, 
 	return client.Get(ctx, key).Result()
 }
 
+func (r *RealRedis) TTL(
+	ctx context.Context,
+	database int,
+	key string,
+) (time.Duration, error) {
+	client, err := r.client(database)
+	if err != nil {
+		return 0, err
+	}
+	defer client.Close()
+	return client.TTL(ctx, key).Result()
+}
+
 func (r *RealRedis) Exists(ctx context.Context, database int, key string) (bool, error) {
 	client, err := r.client(database)
 	if err != nil {

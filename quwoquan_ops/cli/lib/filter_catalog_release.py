@@ -36,6 +36,7 @@ def execute_filter_catalog_command(
     rollback_release_id: str,
     token_env: str,
     prod_gray_activation: bool,
+    diagnostic_log_path: Path | None = None,
 ) -> FilterCatalogCommandExecution:
     """以 target 绑定的身份调用唯一 Data CLI，不泄漏 bearer token。"""
     if action not in {
@@ -99,6 +100,16 @@ def execute_filter_catalog_command(
         stderr=subprocess.PIPE,
         check=False,
     )
+    if diagnostic_log_path is not None:
+        if result.returncode == 0:
+            diagnostic_log_path.unlink(missing_ok=True)
+        else:
+            _write_diagnostic_log(
+                diagnostic_log_path,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                secrets=(process_env.get(normalized_token_env, ""),),
+            )
     return FilterCatalogCommandExecution(
         argv=tuple(argv),
         return_code=result.returncode,
@@ -117,3 +128,27 @@ def _token_env_name(value: str) -> str:
     ):
         raise ValueError("FilterCatalogRelease token environment variable name is invalid")
     return name
+
+
+def _write_diagnostic_log(
+    path: Path,
+    *,
+    stdout: str,
+    stderr: str,
+    secrets: tuple[str, ...],
+) -> None:
+    rendered = "\n".join(
+        part.rstrip("\n")
+        for part in (
+            "[stdout]\n" + stdout,
+            "[stderr]\n" + stderr,
+        )
+        if part
+    ).rstrip() + "\n"
+    for secret in secrets:
+        if secret:
+            rendered = rendered.replace(secret, "***")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    path.write_text(rendered, encoding="utf-8")
+    os.chmod(path, 0o600)

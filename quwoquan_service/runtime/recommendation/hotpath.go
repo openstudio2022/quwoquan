@@ -86,6 +86,19 @@ type FeedbackIngestor interface {
 	AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error)
 }
 
+// FeedbackReplayReader performs the read-only half of behavior idempotency.
+// Command handlers use it before contacting mutable dependencies so an already
+// committed client event keeps its successful outcome during dependency outages.
+type FeedbackReplayReader interface {
+	HasAcceptedEvent(ctx context.Context, userID, clientEventID string) (bool, error)
+}
+
+// RedisKeyPresenceReader lets idempotency readers distinguish an absent key
+// from a Redis failure without coupling recommendation to a concrete adapter.
+type RedisKeyPresenceReader interface {
+	HasKey(ctx context.Context, key string) (bool, error)
+}
+
 type SubjectClosureGuard interface {
 	IsSubjectClosed(ctx context.Context, subjectID string) (bool, error)
 }
@@ -691,6 +704,27 @@ func (h *HotPath) AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool,
 		userID = "anonymous"
 	}
 	return h.redis.SetNX(ctx, eventDedupKey(userID, clientEventID), "1", clientEventIDTTL)
+}
+
+// HasAcceptedEvent checks the same durable Redis receipt used by AcceptEvent
+// without creating or extending it.
+func (h *HotPath) HasAcceptedEvent(
+	ctx context.Context,
+	userID, clientEventID string,
+) (bool, error) {
+	clientEventID = strings.TrimSpace(clientEventID)
+	if clientEventID == "" {
+		return false, nil
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = "anonymous"
+	}
+	reader, ok := h.redis.(RedisKeyPresenceReader)
+	if !ok {
+		return false, fmt.Errorf("behavior idempotency receipt reader is unavailable")
+	}
+	return reader.HasKey(ctx, eventDedupKey(userID, clientEventID))
 }
 
 func (h *HotPath) FilterCandidates(ctx context.Context, userID string, candidates []ContentCandidate, at time.Time) ([]ContentCandidate, error) {

@@ -1,0 +1,41 @@
+entity: PostModerationCase
+domain: CONTENT
+description: 'PostModerationCase 对象专属错误码（审核裁决与版本一致性）。
+
+  共享错误码唯一定义于 content/content/post/errors.yaml；content 域 codegen 与端云 parity
+
+  按固定文件列表合并，code 全域唯一。
+
+  '
+errors:
+- code: CONTENT.USER.moderation_case_not_found
+  kind: USER
+  reason: moderation_case_not_found
+  http_status: 404
+  recovery_action: refresh
+  dart_const: moderationCaseNotFound
+  go_const: ErrModerationCaseNotFound
+  user_message:
+    zh: 未找到当前内容的审核记录
+    en: No current moderation case was found
+- code: CONTENT.USER.moderation_approval_required
+  kind: USER
+  reason: moderation_approval_required
+  http_status: 409
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: moderationApprovalRequired
+  go_const: ErrModerationApprovalRequired
+  user_message:
+    zh: 内容尚未通过当前版本审核
+    en: The current content version is not approved
+- code: CONTENT.USER.moderation_decision_stale
+  kind: USER
+  reason: moderation_decision_stale
+  http_status: 409
+  recovery_action: refresh
+  dart_const: moderationDecisionStale
+  go_const: ErrModerationDecisionStale
+  user_message:
+    zh: 内容已编辑，请基于最新版本重新审核
+    en: Content changed; review the latest version

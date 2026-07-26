@@ -49,7 +49,7 @@ func renderPostReadSurfaceIdDart(yamlBytes []byte) (string, error) {
 	}
 	var b strings.Builder
 	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
-	b.WriteString("// Source: contracts/metadata/content/post/projections/read_presentation_surfaces.yaml\n")
+	b.WriteString("// Source: services/content-service/contracts/content/post/projections/read_presentation_surfaces.yaml\n")
 	b.WriteString("// Regenerate: make codegen-app\n\n")
 	b.WriteString("/// 帖子只读投影所挂靠的 UI 表面（与 post-projection-pipeline-inventory / gap 清单一致）。\n")
 	fmt.Fprintf(&b, "enum %s {\n", enumName)
@@ -102,7 +102,7 @@ func writeWireKeysGeneratedFile(appDir, postProjectionsDir, yamlName, outName st
 	if err != nil {
 		return err
 	}
-	sourceRel := filepath.ToSlash(filepath.Join("contracts/metadata/content/post/projections", yamlName))
+	sourceRel := filepath.ToSlash(filepath.Join("services/content-service/contracts/content/post/projections", yamlName))
 	out, err := renderWireKeysClassDart(keysBytes, sourceRel)
 	if err != nil {
 		return err
@@ -173,7 +173,7 @@ func renderPostReadPresentationDtoDart(yamlBytes []byte) (string, error) {
 	}
 	var b strings.Builder
 	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
-	b.WriteString("// Source: contracts/metadata/content/post/projections/post_read_presentation.yaml\n")
+	b.WriteString("// Source: services/content-service/contracts/content/post/projections/post_read_presentation.yaml\n")
 	b.WriteString("// Regenerate: make codegen-app\n\n")
 	b.WriteString("import 'package:quwoquan_app/cloud/runtime/generated/content/article_detail_wire_keys.g.dart';\n")
 	b.WriteString("import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';\n\n")

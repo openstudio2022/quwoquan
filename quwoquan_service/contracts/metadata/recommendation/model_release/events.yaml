@@ -1,6 +1,0 @@
-aggregate: RecommendationModelRelease
-
-# 生命周期事件随生命周期命令一并 V1 deferred（见 aggregate.yaml#deferred_operations）：
-# 模型晋升/回滚由 model_registry_cli 写 rec_model_registry，推理侧按 production 标记
-# 热加载，无事件消费者实现。恢复公开命令时再声明事件与 outbox。
-events: []

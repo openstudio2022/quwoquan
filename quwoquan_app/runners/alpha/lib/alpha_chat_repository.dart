@@ -183,11 +183,11 @@ class MockChatRepository implements ChatRepository {
   Future<List<ChatConversationMemberDto>> searchMembers({
     required String conversationId,
     required String query,
-    int limit = 50,
+    int limit = CloudApiDefaults.chatMemberSearchLimit,
   }) async => _engine
       .listMembers(
         conversationId: conversationId,
-        limit: limit.clamp(1, 50),
+        limit: limit.clamp(1, CloudApiDefaults.chatMemberSearchLimit),
         query: query,
         sort: 'display_name_asc',
       )

@@ -1,7 +1,7 @@
 """证据驱动篇目规划包（content_plan_packet）校验。
 
 真相源：tasks/{executionId}/_shared/content_plan_packet.json
-见 geo-content-trinity/execution.md §1.2.1
+见 object-homepage-coverage-scaling/design.md。
 """
 from __future__ import annotations
 

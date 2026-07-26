@@ -35,10 +35,6 @@ def handle_verify(args: argparse.Namespace) -> None:
     if cmd == "promote-golden":
         handle_promote_golden(args)
         return
-    if cmd == "data-role-gate":
-        from verify.verify_data_role_gate_inventory import main as role_gate_main
-
-        raise SystemExit(role_gate_main())
     if cmd == "single-contract-source":
         from verify.verify_single_contract_source import main as single_contract_source_main
 
@@ -61,11 +57,25 @@ def handle_verify(args: argparse.Namespace) -> None:
         argv = ["--execution-id", str(args.execution_id)]
         if bool(getattr(args, "require_reviewed", False)):
             argv.append("--require-reviewed")
+        argv.extend(
+            [
+                "--min-pass-rate",
+                str(float(args.min_pass_rate)),
+                "--mode",
+                str(args.mode),
+            ]
+        )
+        if bool(args.fail_on_no_go):
+            argv.append("--fail-on-no-go")
         raise SystemExit(execution_readiness_main(argv))
-    if cmd == "data-input-ownership":
-        from verify.verify_data_input_ownership import main as data_input_ownership_main
+    if cmd == "runtime-input-ownership":
+        from verify.verify_runtime_input_ownership import main as runtime_input_ownership_main
 
-        raise SystemExit(data_input_ownership_main())
+        raise SystemExit(runtime_input_ownership_main())
+    if cmd == "reusable-data-contract":
+        from verify.verify_reusable_data_contract import main as reusable_data_contract_main
+
+        raise SystemExit(reusable_data_contract_main())
     if cmd == "publish-purity":
         from verify.verify_publish_purity import main as publish_purity_main
 
@@ -104,16 +114,18 @@ def handle_verify(args: argparse.Namespace) -> None:
         from verify.verify_cursor_credential_contract import main as credential_contract_main
 
         raise SystemExit(credential_contract_main())
-    if cmd == "two-province-coverage-release":
-        from verify.verify_two_province_coverage_release import main as province_release_main
-
-        raise SystemExit(
-            province_release_main(["--release", str(args.two_province_release)])
-        )
     if cmd == "homepage-media-completeness":
         from verify.verify_homepage_media_completeness import main as homepage_media_main
 
         raise SystemExit(homepage_media_main(["--execution", str(args.execution)]))
+    if cmd == "homepage-draft":
+        from verify.verify_homepage_draft import main as homepage_draft_main
+
+        raise SystemExit(
+            homepage_draft_main(
+                ["--execution", str(args.execution), "--entity", str(args.entity)]
+            )
+        )
     if cmd == "active-runtime-preflight":
         from verify.verify_no_active_data_runtime import main as active_runtime_preflight_main
 
@@ -202,15 +214,15 @@ def handle_all() -> None:
     """Run the repository-owned static Data gate through the one public CLI.
 
     Environment import/API/UAT proofs are intentionally not hidden here: they
-    remain explicit `ship` and `verify two-province-coverage-release` commands
+    remain explicit `ship` and `verify release-lifecycle` commands
     because they require a concrete release and a live environment.
     """
     from verify import verify_cli_first
     from verify import verify_content_execution_layout
     from verify import verify_cursor_credential_contract
-    from verify import verify_data_input_ownership
+    from verify import verify_runtime_input_ownership
+    from verify import verify_reusable_data_contract
     from verify import verify_data_layout
-    from verify import verify_data_role_gate_inventory
     from verify import verify_execution_identity_purity
     from verify import verify_no_active_data_runtime
     from verify import verify_output_root_isolation
@@ -243,7 +255,8 @@ def handle_all() -> None:
         ("source-digest", lambda: verify_source_digest.main([])),
         ("execution-identity-purity", verify_execution_identity_purity.main),
         ("content-execution-layout", verify_content_execution_layout.main),
-        ("data-input-ownership", verify_data_input_ownership.main),
+        ("reusable-data-contract", verify_reusable_data_contract.main),
+        ("runtime-input-ownership", verify_runtime_input_ownership.main),
         ("cursor-credential-contract", verify_cursor_credential_contract.main),
         ("output-root-isolation", verify_output_root_isolation.main),
         ("coverage-static-identity", verify_coverage_static_identity.main),
@@ -253,7 +266,6 @@ def handle_all() -> None:
         ("publish-closure", verify_publish_closure.main),
         ("single-contract-source", verify_single_contract_source.main),
         ("works-classification", verify_works_classification.main),
-        ("data-role-gate", verify_data_role_gate_inventory.main),
     )
     failed: list[str] = []
     for name, run in gates:
@@ -414,7 +426,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pp.add_argument("--expect-gates", help="逗号分隔的期望触发门")
     pp.add_argument("--confirm", action="store_true", help="人工确认（必须显式传入才入集）")
 
-    sub.add_parser("data-role-gate", help="校验数据工程七角色准出清单与文档/门禁接线")
     sub.add_parser("single-contract-source", help="校验内容供给生产契约只有一个无版本真源")
     sub.add_parser("works-classification", help="校验作品 vs 随记判定 schema/config/registry 一致性 + 判定 smoke")
     sub.add_parser("output-root-isolation", help="仓外输出根隔离门：repo allowlist/阶段树/批次轴/摘要索引")
@@ -422,7 +433,15 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     per = sub.add_parser("execution-readiness", help="校验单个 execution 工作包的准出证据")
     per.add_argument("--execution-id", required=True)
     per.add_argument("--require-reviewed", action="store_true")
-    sub.add_parser("data-input-ownership", help="校验 recipe/prompt/template/schema 不含运行实例值")
+    per.add_argument("--min-pass-rate", type=float, default=1.0)
+    per.add_argument(
+        "--mode",
+        choices=("calibration", "commercial"),
+        default="commercial",
+    )
+    per.add_argument("--fail-on-no-go", action="store_true")
+    sub.add_parser("reusable-data-contract", help="校验静态数据资产只表达可复用能力")
+    sub.add_parser("runtime-input-ownership", help="校验区域、数量和目标集只归运行工作包 0.plan")
     sub.add_parser("publish-purity", help="校验 publish 只含 approved 最终对象")
     sub.add_parser("publish-closure", help="校验 canonical publish 无孤立 creator/media 或悬空引用")
     sub.add_parser("script-architecture", help="校验脚本目录职责、模块尺寸与 core 依赖方向")
@@ -433,10 +452,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     release_lifecycle = sub.add_parser("release-lifecycle", help="校验 immutable release 的闭环证据")
     release_lifecycle.add_argument("--release", dest="lifecycle_release", required=True)
     sub.add_parser("cursor-credential-contract", help="校验只使用仓外受限 key file 且无旧 alias/secret")
-    ptp = sub.add_parser("two-province-coverage-release", help="校验浙川实体主页全覆盖 release 闭环")
-    ptp.add_argument("--release", dest="two_province_release", required=True)
     phm = sub.add_parser("homepage-media-completeness", help="校验实体主页图片枚举、下载与角色闭环")
     phm.add_argument("--execution", required=True)
+    phd = sub.add_parser("homepage-draft", help="校验单个 Agent 主页草稿的结构与底稿贴合度")
+    phd.add_argument("--execution", required=True)
+    phd.add_argument("--entity", required=True)
     sub.add_parser("active-runtime-preflight", help="校验 data execution 工作区已静默，无活跃 execute/workflow 进程")
     sub.add_parser("data-layout", help="校验数据工程源码目录归一化与退休路径")
     sub.add_parser("coverage-static-identity", help="全国地点静态覆盖身份门：目录/schema/类型/行政区/coverageKey 全局唯一")

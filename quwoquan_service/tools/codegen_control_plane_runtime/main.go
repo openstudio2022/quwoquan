@@ -40,7 +40,7 @@ func main() {
 
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&goOutDir, "go-out-dir", "generated/control_plane", "Go output directory")
-	flag.StringVar(&pythonOutDir, "python-out-dir", "services/rec-model-service/generated/control_plane", "Python output directory")
+	flag.StringVar(&pythonOutDir, "python-out-dir", "services/recommendation-service/internal/recommendation/recommendation_model_release/generated/python/control_plane", "Python output directory")
 	flag.Parse()
 
 	source, err := compileContractSource(metadataDir, validate.ProfileBaseline)
@@ -82,34 +82,23 @@ func collectArtifacts(source *contractcodegen.Source) []artifact {
 			data:      readYAMLAny(source, filepath.Join(controlRoot, "portal_menu.yaml")),
 		},
 	}
-	if source.Has(filepath.Join(controlRoot, "domain_onboarding_schema.yaml")) {
-		items = append(items, artifact{
-			fileName:  "domain_onboarding_schema",
-			constName: "DomainOnboardingSchema",
-			data:      readYAMLAny(source, filepath.Join(controlRoot, "domain_onboarding_schema.yaml")),
-		})
-	}
-	if len(source.Paths(filepath.Join(controlRoot, "domains"), ".yaml")) > 0 {
-		items = append(items, artifact{
-			fileName:  "domain_onboarding_domains",
-			constName: "DomainOnboardingDomains",
-			data:      readOnboardingDomains(source, filepath.Join(controlRoot, "domains")),
-		})
-	}
-
 	for _, domain := range []string{"platform", "product"} {
 		baseDir := filepath.Join(controlRoot, domain)
 		if len(source.Paths(baseDir, ".yaml")) == 0 {
 			continue
 		}
 
+		configPath := filepath.Join(baseDir, "config.yaml")
+		if domain == "platform" {
+			configPath = filepath.Join("platform", "config.yaml")
+		}
 		for _, def := range []struct {
 			fileName  string
 			constName string
 			path      string
 		}{
 			{fileName: domain + "_control_plane", constName: toPascalCase(domain) + "ControlPlane", path: filepath.Join(baseDir, "control_plane.yaml")},
-			{fileName: domain + "_config_schema", constName: toPascalCase(domain) + "ConfigSchema", path: filepath.Join(baseDir, "config_schema.yaml")},
+			{fileName: domain + "_config", constName: toPascalCase(domain) + "Config", path: configPath},
 			{fileName: domain + "_workflow", constName: toPascalCase(domain) + "Workflow", path: filepath.Join(baseDir, "workflow.yaml")},
 			{fileName: domain + "_audit_schema", constName: toPascalCase(domain) + "AuditSchema", path: filepath.Join(baseDir, "audit_schema.yaml")},
 		} {
@@ -137,24 +126,6 @@ func collectArtifacts(source *contractcodegen.Source) []artifact {
 		return items[i].fileName < items[j].fileName
 	})
 	return items
-}
-
-func readOnboardingDomains(source *contractcodegen.Source, dir string) any {
-	out := map[string]any{}
-	for _, path := range source.Paths(dir, ".yaml") {
-		data := readYAMLAny(source, path)
-		doc, ok := data.(map[string]any)
-		if !ok {
-			continue
-		}
-		domain := fmt.Sprint(doc["domain"])
-		if strings.TrimSpace(domain) == "" {
-			name := filepath.Base(path)
-			domain = strings.TrimSuffix(name, filepath.Ext(name))
-		}
-		out[domain] = doc
-	}
-	return out
 }
 
 func readYAMLAny(source *contractcodegen.Source, path string) any {

@@ -1,6 +1,6 @@
 package main
 
-import "quwoquan_service/services/assistant-service/internal/runtimeconfig"
+import "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig"
 
 type redisPoolCfg = runtimeconfig.RedisPoolConfig
 type redisSceneCfg = runtimeconfig.RedisSceneConfig

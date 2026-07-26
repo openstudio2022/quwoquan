@@ -20,7 +20,7 @@ func TestCommercialValidationRejectsGenericObjectMigrationGap(t *testing.T) {
 			Method:       "POST",
 			Kind:         ast.OperationKindCommand,
 			KindExplicit: true,
-			SourcePath:   "content/post/service.yaml",
+			SourcePath:   "content/content/post/operations.yaml",
 			Commercial: ast.CommercialBinding{
 				Status:      "blocked",
 				Explicit:    true,

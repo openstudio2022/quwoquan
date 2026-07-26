@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/cloud/user/generated/prefab_user_metadata.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_identity.dart';
 
 /// 测试专用对象级身份 Facet 组合，仅用于 Provider override。
 ///
@@ -11,8 +11,10 @@ class TestAuthFacets
         AuthenticationChallengeCommandWriter,
         AppCredentialBindingCommandWriter,
         CredentialBindingQuery {
-  static const ownerId = PrefabUserMetadata.currentUserId;
-  static const subAccountId = PrefabUserMetadata.currentSubAccountId;
+  static final String ownerId =
+      AlphaFixtureUserResolver.currentUserVariantUserId;
+  static final String subAccountId =
+      AlphaFixtureUserResolver.currentUserVariantSubAccountId;
 
   @override
   Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
@@ -161,7 +163,7 @@ class TestAuthFacets
       accessToken: 'test_access_token',
       refreshToken: 'test_refresh_token',
       ownerId: ownerId,
-      activeSub: const ActivePersonaEnvelope(subAccountId: subAccountId),
+      activeSub: ActivePersonaEnvelope(subAccountId: subAccountId),
       subAccountCount: 1,
       accountState: identityOrigin == 'anonymous_device'
           ? 'anonymous'

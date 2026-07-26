@@ -1,0 +1,61 @@
+description: 「我的交集」已读水位命令；与交集读投影（GetMyIntersectionSummary/ListMyIntersections） 同进程同存储，Mongo 水位为真相源、Redis
+  为加速缓存。
+commercial_defaults:
+  status: blocked
+  block_reason: canonical operation awaits object-centered commercial migration
+  gap_id: CONTENT_INTERSECTION_VISIT_STATE_COMMERCIAL_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+api_routes:
+- method: POST
+  path: /content/intersections/visit
+  operation: MarkIntersectionsVisited
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: IntersectionVisitCommandFacet
+    method: markVisited
+    aggregate_owner: IntersectionVisitState
+    mutation_target: IntersectionVisitState
+    invariant_target: IntersectionVisitState
+  request_entity: MarkIntersectionsVisitedRequest
+  response_entity: MarkIntersectionsVisitedAck
+  response_body_kind: ack
+  authorization:
+    principal: persona
+    ownership_policy: own_intersections
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: optional
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.invalid_argument
+  - CONTENT.SYSTEM.storage_write_failed
+  privacy:
+    request_classification: PII
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_intersection_visit_mark
+    trace: true
+    attributes:
+    - dimension
+    - outcome
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  description: 推进交集已读水位并清零未读红点；dimension 为空推进全部维度。水位 $max 单调合并使任意重放自然收敛，Idempotency-Key 可选（携带时作观测关联，不改变语义）。
+consumers:
+- name: app
+  capabilities:
+  - mark_intersections_visited

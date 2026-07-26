@@ -1,0 +1,19 @@
+name: AssistantDeliveryPolicyView
+source:
+  object: UserSettings
+description: assistant-service 主动投递前读取的最小策略切片；不暴露其他账号设置。
+fields:
+- name: userId
+  type: string
+- name: assistantEnabled
+  type: bool
+- name: quietHoursStart
+  type: time
+  nullable: true
+- name: quietHoursEnd
+  type: time
+  nullable: true
+- name: version
+  type: int64
+- name: updatedAt
+  type: timestamp

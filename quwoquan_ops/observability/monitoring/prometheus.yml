@@ -17,25 +17,27 @@ alerting:
             - alertmanager:9093
 
 scrape_configs:
-  # prod-hosted service plane（rootless compose，与 prod_plane_access_isolation.yaml
-  # rootlessGovernedComposeServices 一致）。seed-box 目标保留给聚合进程形态主机。
+  # prod-hosted service plane，与 prod/access-isolation.yaml 的服务所有权一致。
   - job_name: quwoquan-service-plane
     metrics_path: /metrics
     static_configs:
       - targets:
-          - seed-box:18080
+          - recommendation-service:8000
           - content-service:18080
           - chat-service:18081
-          - user-service:18082
+          - circle-service:18082
+          - user-service:18081
           - assistant-service:18087
           - product-ops-service:18086
           - platform-ops-service:18088
           - tag-service:18092
           - entity-service:18084
+          - integration-service:18086
+          - notification-service:18087
         labels:
           plane: service
 
-  # 独立部署的业务进程（process_domain_mapping prod 段）。
+  # edge/media 入口同样来自各服务及 external 的自治部署入口。
   - job_name: quwoquan-standalone-processes
     metrics_path: /metrics
     static_configs:

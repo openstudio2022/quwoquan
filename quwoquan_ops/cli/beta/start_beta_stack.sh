@@ -4,6 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
 QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
+DEPLOY_TARGET_ROOT="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_work_root
+
+print(deployment_work_root("beta-local"))
+PY
+)"
+QWQ_DEPLOY_WORK_ROOT="$(dirname "$DEPLOY_TARGET_ROOT")"
+export QWQ_DEPLOY_WORK_ROOT
 ACTION="${1:-up}"
 if [[ "$ACTION" == "-h" || "$ACTION" == "--help" || "$ACTION" == "help" ]]; then
   cat <<'EOF'
@@ -18,7 +26,12 @@ fi
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
   --env beta --target beta-local --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
 export QWQ_OUTPUT_ROOT QWQ_DEPLOY_WORK_ROOT QWQ_OBSERVABILITY_RUN_ROOT QWQ_RUN_ROOT
-RUNTIME_CONFIG_DIR="${QWQ_DEPLOY_WORK_ROOT}/beta-local/rendered"
+RUNTIME_CONFIG_DIR="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
+
+print(deployment_render_dir("beta", target="beta-local"))
+PY
+)"
 STATE_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process"
 LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
 ENV_FILE="${RUNTIME_CONFIG_DIR}/beta.env"
@@ -45,6 +58,7 @@ OPS_POSTGRES_DSN="${OPS_POSTGRES_DSN:-postgres://quwoquan:quwoquan@127.0.0.1:${B
 CDN_DOMAIN="${CDN_DOMAIN:-cdn.beta.local}"
 DEVICE_ID="${DEVICE_ID:-}"
 START_APP="${START_APP:-1}"
+SKIP_BUILD=0
 AUTO_OPEN_OPS="${AUTO_OPEN_OPS:-1}"
 PRODUCT_TELEMETRY_AVAILABLE="${QWQ_PRODUCT_TELEMETRY_AVAILABLE:-1}"
 WORKLOAD="${QWQ_WORKLOAD:-full}"
@@ -69,6 +83,7 @@ Usage:
 Options for "up":
   --device-id <id>         指定 Flutter 设备 id；也可通过 DEVICE_ID 传入。
   --skip-app               仅启动云侧 + Ops，不启动 Flutter 端。
+  --skip-build             复用已构建镜像，禁止 Compose 隐式重建。
   --with-app               显式开启 Flutter 端启动（默认开启）。
   --no-open-ops            不自动打开 Ops Portal 页面。
   --seed-verify <mode>     透传给 start_app_beta_manual.sh。
@@ -98,6 +113,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-app)
       START_APP=0
+      shift
+      ;;
+    --skip-build)
+      SKIP_BUILD=1
       shift
       ;;
     --with-app)
@@ -211,8 +230,20 @@ wrapper = sys.argv[3]
 log_path = sys.argv[4]
 event = sys.argv[5]
 argv = sys.argv[6:]
+diagnostic_log = pid_path.parent / "stdout" / f"{event}.log"
 proc = subprocess.Popen(
-    [sys.executable, wrapper, "--log-file", log_path, "--event", event, "--", *argv],
+    [
+        sys.executable,
+        wrapper,
+        "--log-file",
+        log_path,
+        "--diagnostic-log",
+        str(diagnostic_log),
+        "--event",
+        event,
+        "--",
+        *argv,
+    ],
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
     stdin=subprocess.DEVNULL,
@@ -341,6 +372,9 @@ build_app_beta_command() {
   if [[ "$START_APP" != "1" ]]; then
     APP_BETA_CMD+=(--skip-app)
   fi
+  if [[ "$SKIP_BUILD" == "1" ]]; then
+    APP_BETA_CMD+=(--skip-build)
+  fi
   if [[ "$WORKLOAD" == "content-release" ]]; then
     APP_BETA_CMD+=(--content-release)
   fi
@@ -408,7 +442,7 @@ case "$ACTION" in
       exit 1
     }
     if [[ "$WORKLOAD" == "full" ]]; then
-      start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/platform-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+      start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/control-plane/platform-ops' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
       wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60
       start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' MONGODB_URI='mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true' MONGODB_DATABASE='quwoquan_product_ops' REDIS_GENERAL_ADDR='127.0.0.1:${BETA_REDIS_PORT}' REDIS_REC_ADDR='127.0.0.1:${BETA_REDIS_PORT}' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' AUTH_DEVICE_TICKET_SECRET='$AUTH_DEVICE_TICKET_SECRET' AUTH_DEVICE_TICKET_ISSUER='$AUTH_DEVICE_TICKET_ISSUER' AUTH_DEVICE_TICKET_AUDIENCE='$AUTH_DEVICE_TICKET_AUDIENCE' AUTH_DEVICE_TICKET_TOKEN_VERSION='$AUTH_DEVICE_TICKET_TOKEN_VERSION' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
       wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz" 60

@@ -16,8 +16,12 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
-TOPOLOGY_MANIFEST = ROOT / "quwoquan_ops/environments/environment_topology_manifest.yaml"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
+
+ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 
 
 @dataclass(frozen=True)
@@ -194,7 +198,7 @@ def main() -> int:
     try:
         access = _resolve_service_plane(
             _load_yaml(ACCESS_MANIFEST),
-            _load_yaml(TOPOLOGY_MANIFEST),
+            load_environment_topology(),
             args.instance_suffix,
         )
         payload = _run_remote_probe(access)

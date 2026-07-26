@@ -16,7 +16,7 @@ SYNC_METRICS = ROOT / "quwoquan_service/runtime/sync/metrics.go"
 CHAT_MAIN = ROOT / "quwoquan_service/services/chat-service/cmd/api/main.go"
 CHAT_COMMERCIAL_METRICS = (
     ROOT
-    / "quwoquan_service/services/chat-service/internal/application/commercial_metrics.go"
+    / "quwoquan_service/services/chat-service/internal/chat/conversation/application/commercial_metrics.go"
 )
 PROMETHEUS_CONFIG = ROOT / "quwoquan_ops/observability/monitoring/prometheus.yml"
 PRODUCT_TELEMETRY = (

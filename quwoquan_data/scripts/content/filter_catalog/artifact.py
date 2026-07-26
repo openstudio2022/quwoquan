@@ -19,7 +19,6 @@ from content.filter_catalog.codec import (
 from content.filter_catalog.contract import (
     ADJUSTMENT_FIELD_NAMES,
     CatalogContractError,
-    build_release_from_legacy,
     canonical_digest_for_payload,
     normalize_release,
 )
@@ -32,7 +31,7 @@ BINDING_REF = CATALOG_ROOT_REF / "bootstrap_binding.json"
 DIGEST_VECTOR_REF = CATALOG_ROOT_REF / "digest_test_vector.json"
 APP_BOOTSTRAP_REF = Path("quwoquan_app/assets/filters/filter_presets.json")
 METADATA_OBJECT_REF = Path(
-    "quwoquan_service/contracts/metadata/content/filter_catalog_release"
+    "quwoquan_service/services/content-service/contracts/media/filter_catalog_release"
 )
 SEED_ROOT_REF = Path("quwoquan_service/contracts/metadata/_shared/test_fixtures")
 SEED_MANIFEST_REFS = {
@@ -77,33 +76,6 @@ class CatalogLayout:
 
     def environment_path(self, environment: str) -> Path:
         return self.repo_root / self.environment_ref(environment)
-
-
-def initialize_from_legacy(
-    *,
-    repo_root: Path,
-    legacy_source: Path,
-    release_id: str,
-    source_owner: str,
-) -> dict[str, object]:
-    """一次性把旧 App 资产提升为不可变 canonical release。"""
-    layout = CatalogLayout(repo_root=repo_root, release_id=release_id)
-    if layout.release_path.exists():
-        raise CatalogContractError(
-            f"canonical release 已存在且不可覆盖：{layout.release_ref}"
-        )
-    _assert_metadata_contract(repo_root)
-    source = load_json_decimal(legacy_source.read_text(encoding="utf-8"))
-    release = build_release_from_legacy(
-        source,
-        release_id=release_id,
-        source_owner=source_owner,
-    )
-    _write_json_atomic(layout.release_path, release)
-    return materialize_release(
-        repo_root=repo_root,
-        release_id=release_id,
-    )
 
 
 def materialize_release(
@@ -417,9 +389,9 @@ def _assert_metadata_contract(repo_root: Path) -> None:
     fields_path = repo_root / METADATA_OBJECT_REF / "fields.yaml"
     fields_document = yaml.safe_load(fields_path.read_text(encoding="utf-8"))
     try:
-        adjustment_fields = fields_document["entities"][
-            "FilterAdjustmentValues"
-        ]["fields"]
+        adjustment_fields = fields_document["members"]["FilterAdjustmentValues"][
+            "fields"
+        ]
         metadata_names = tuple(item["name"] for item in adjustment_fields)
     except (KeyError, TypeError) as exc:
         raise CatalogContractError(
@@ -434,11 +406,11 @@ def _assert_metadata_contract(repo_root: Path) -> None:
 
 
 def _metadata_operations(repo_root: Path) -> dict[str, str]:
-    service_path = repo_root / METADATA_OBJECT_REF / "service.yaml"
-    service_document = yaml.safe_load(service_path.read_text(encoding="utf-8"))
-    routes = service_document.get("api_routes")
+    operations_path = repo_root / METADATA_OBJECT_REF / "operations.yaml"
+    operations_document = yaml.safe_load(operations_path.read_text(encoding="utf-8"))
+    routes = operations_document.get("api_routes")
     if not isinstance(routes, list):
-        raise CatalogContractError("metadata service.yaml api_routes 非法")
+        raise CatalogContractError("metadata operations.yaml api_routes 非法")
     operation_names = {
         route.get("operation")
         for route in routes

@@ -297,8 +297,7 @@ class _AssistantManagementPageState
             final active = preferences
                 .where(
                   (preference) =>
-                      preference.status ==
-                      AssistantPreferenceStatus.active.wireName,
+                      preference.status == AssistantPreferenceStatus.active,
                 )
                 .toList(growable: false);
             if (active.isEmpty && !_hasRevocationUndo) {
@@ -342,7 +341,7 @@ class _AssistantManagementPageState
   bool get _hasRevocationUndo {
     final preference = _revokedPreferenceForUndo;
     if (preference == null ||
-        preference.status != AssistantPreferenceStatus.revoked.wireName) {
+        preference.status != AssistantPreferenceStatus.revoked) {
       return false;
     }
     final deadline = DateTime.tryParse(
@@ -470,7 +469,7 @@ class _AssistantManagementPageState
   }
 
   String _preferenceDetail(AssistantPreferenceFact preference) {
-    final scope = preference.scope == AssistantPreferenceScope.session.wireName
+    final scope = preference.scope == AssistantPreferenceScope.session
         ? AssistantText.assistantPreferenceSessionScope
         : AssistantText.assistantPreferenceLongTermScope;
     final updatedAt = _formattedPreferenceUpdatedAt(preference.updatedAt);

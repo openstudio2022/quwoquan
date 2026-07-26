@@ -1,0 +1,91 @@
+events:
+- name: ConversationCreated
+  description: 会话创建
+  producer: chat-service
+  consumers:
+  - notification-service
+  channel: transactional_outbox
+  payload_entity: Conversation
+  payload_fields:
+  - conversationId
+  - type
+  - creatorId
+  - circleId
+  - circleGroupId
+  - maxGroupSize
+  - receiptEnabled
+  - createdAt
+- name: CircleGroupConversationProvisioned
+  description: 'chat-service 已为 CircleGroup 成功持久化唯一 Conversation 的绑定事实。
+
+    circle-service consumer 必须以 eventId 幂等回写 CircleGroup.conversationId；未持久化
+
+    或投递失败时不得确认 source event，禁止用同步 RPC 或客户端字段替代此链路。
+
+    '
+  producer: chat-service
+  consumers:
+  - circle-group-conversation-binding-projector
+  channel: transactional_outbox
+  payload_entity: Conversation
+  payload_fields:
+  - conversationId
+  - circleId
+  - circleGroupId
+  - creatorId
+  - createdAt
+- name: ConversationRosterUpdated
+  description: '会话成员或群资料变更后的合并刷新信号。客户端以
+
+    membersRosterRevision 和 updatedAt 定点拉取会话与成员，而不消费逐成员事件。
+
+    '
+  producer: chat-service
+  consumers:
+  - realtime-gateway
+  - projection-workers
+  channel: transactional_outbox
+  payload_fields:
+  - conversationId
+  - membersRosterRevision
+  - updatedAt
+  - aspects
+  realtime_channel: rt:user:{recipientId}
+  realtime_fanout: conversation_members
+- name: ConversationAvatarUpdated
+  description: '群头像预合成结果更新。
+
+    用于统一 sync patch `conversation.avatar.updated` 的上游事件输入。
+
+    '
+  producer: chat-service
+  consumers:
+  - realtime-gateway
+  - notification-service
+  channel: transactional_outbox
+  payload_fields:
+  - conversationId
+  - groupAvatarAssetId
+  - groupAvatarVersion
+  - groupAvatarSourceHash
+  - updatedAt
+  realtime_channel: rt:user:{recipientId}
+  realtime_fanout: conversation_members
+- name: ConversationDissolved
+  description: '群聊解散终态事件（与 aggregate lifecycle `dissolved` 同名单轨）。
+
+    成员端收到后收敛会话入口；投影据此下线群相关行。
+
+    '
+  producer: chat-service
+  consumers:
+  - realtime-gateway
+  - projection-workers
+  channel: transactional_outbox
+  payload_fields:
+  - conversationId
+  - status
+  - dissolvedBy
+  - dissolvedAt
+  realtime_channel: rt:user:{recipientId}
+  realtime_fanout: conversation_members

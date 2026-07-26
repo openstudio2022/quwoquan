@@ -8,14 +8,10 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-CATALOG = ROOT / "specs/gates/app_remote_config_catalog.yaml"
+CATALOG = ROOT / "quwoquan_service/contracts/metadata/_shared/app_remote_config_catalog.yaml"
 SPEC = (
     ROOT
     / "specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md"
-)
-ACCEPTANCE = (
-    ROOT
-    / "specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/acceptance.yaml"
 )
 
 RISK_LEVELS = {"low", "medium", "high", "critical"}
@@ -58,11 +54,15 @@ DIRECT_APP_CONFIG_CALL = re.compile(r"\.\s*getAppConfig\s*\(")
 
 def main() -> int:
     errors: list[str] = []
-    for path in (CATALOG, SPEC, ACCEPTANCE):
+    for path in (CATALOG, SPEC):
         if not path.is_file():
             errors.append(f"missing required file: {path.relative_to(ROOT)}")
     if errors:
         return report(errors)
+
+    spec_text = SPEC.read_text(encoding="utf-8")
+    if "REQ-" not in spec_text or "GWT-" not in spec_text:
+        errors.append("app-remote-config spec must contain REQ and GWT anchors")
 
     try:
         data = yaml.safe_load(CATALOG.read_text(encoding="utf-8"))
@@ -147,7 +147,7 @@ def main() -> int:
 
 def check_app_config_call_sites() -> list[str]:
     allowed = {
-        "quwoquan_app/lib/core/providers/app_providers.dart",
+        "quwoquan_app/lib/core/providers/app_providers_content_runtime.dart",
         "quwoquan_app/lib/cloud/services/content/content_repository_remote.dart",
         "quwoquan_app/lib/cloud/services/content/content_repository_mock.dart",
         "quwoquan_app/lib/core/services/cache/cached_content_repository.dart",

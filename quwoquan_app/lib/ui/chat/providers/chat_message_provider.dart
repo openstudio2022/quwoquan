@@ -166,7 +166,9 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
       mentions: mentions ?? const <String>[],
       senderDisplayNameSnapshot: senderName ?? activeContext.displayName,
       senderAvatarUrlSnapshot: senderAvatar ?? activeContext.avatarUrl,
-      personaContextVersion: _positiveVersion(activeContext.contextVersion),
+      personaContextVersion: activeContext.contextVersion > 0
+          ? activeContext.contextVersion
+          : null,
     );
     state = state.copyWith(messages: _sorted([...state.messages, optimistic]));
     final sendStartedAt = DateTime.now();
@@ -266,11 +268,6 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         ),
       );
     }
-  }
-
-  int? _positiveVersion(String raw) {
-    final parsed = int.tryParse(raw.trim());
-    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   /// 撤回消息。

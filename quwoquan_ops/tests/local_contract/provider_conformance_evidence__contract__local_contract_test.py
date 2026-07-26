@@ -1,771 +1,480 @@
+# spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-003
 from __future__ import annotations
 
-from copy import deepcopy
-from datetime import datetime, timedelta, timezone
-import hashlib
 import json
 import os
-import sys
-import tempfile
 from pathlib import Path
+import tempfile
+import unittest
+from unittest import mock
 
-
-ROOT = Path(__file__).resolve().parents[3]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
+from quwoquan_ops.ci.provider_conformance import b10_prod_remote_uat
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 from quwoquan_ops.cli.lib import provider_conformance
 
 
-os.environ.setdefault(
-    "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY",
-    "provider-conformance-local-contract-key",
+ROOT = Path(__file__).resolve().parents[3]
+SCHEMA_PATH = (
+    ROOT
+    / "quwoquan_ops"
+    / "environments"
+    / "provider_conformance_evidence.schema.json"
 )
 
 
-CAPABILITY_ID = "identity.sms.otp"
-ALPHA_ADAPTER_ID = "ext.sms.mock"
-PRODUCTION_ADAPTER_ID = "ext.sms.aliyun"
-
-
-def _digest(seed: str) -> str:
-    return f"sha256:{seed * 64}"[:71]
-
-
-def _assertion_ids(profile: str) -> list[str]:
-    manifest = governance.load_conformance_manifest()
-    return [
-        *manifest["common_assertion_ids"],
-        *manifest["profile_assertion_ids"][profile],
-    ]
-
-
-def _binding_roots(capability_id: str = CAPABILITY_ID) -> list[str]:
-    capability = next(
-        item
-        for item in governance.load_registry()["capabilities"]
-        if item["capability_id"] == capability_id
-    )
-    return [root["root_id"] for root in capability["binding_roots"]]
-
-
-def _release_readiness() -> dict[str, str]:
-    return {
-        "switchCompatibilityReceiptRef": "receipt:gamma:switch-compatible",
-        "callbackDrainReceiptRef": "receipt:gamma:callback-drained",
-        "lastGoodReceiptRef": "receipt:gamma:last-good",
-        "rollbackReceiptRef": "receipt:gamma:rollback-verified",
-        "prodBindingPreflightReceiptRef": "receipt:prod:binding-preflight",
-    }
-
-
-def _compiled_with_mixed_sms_bindings() -> tuple[dict[str, object], dict[str, object]]:
-    registry = deepcopy(governance.load_registry())
-    bindings = deepcopy(governance.load_bindings())
-    bindings["environments"]["alpha"]["capabilities"].append(
-        {
-            "capability_id": CAPABILITY_ID,
-            "state": "enabled",
-            "adapter_id": ALPHA_ADAPTER_ID,
-            "endpoint_ref": "not_configured",
-            "secret_refs": [],
-        }
-    )
-    for environment in ("beta", "gamma", "prod"):
-        binding = next(
-            binding
-            for binding in bindings["environments"][environment]["capabilities"]
-            if binding["capability_id"] == CAPABILITY_ID
+class ProviderConformanceEvidenceContractTest(unittest.TestCase):
+    def test_schema_is_evidence_only_and_fail_closed(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(
+            schema["properties"]["environment"]["enum"],
+            ["alpha", "beta", "gamma", "prod"],
         )
-        binding["state"] = "enabled"
-    compiled, issues = governance.compile_governance(
-        registry,
-        bindings,
-        governance.load_conformance_manifest(),
-    )
-    assert not any(issue.location.startswith("bindings.") for issue in issues)
-    return registry, compiled
-
-
-def _evidence(
-    *,
-    root: Path,
-    environment: str,
-    layer: str,
-    adapter_id: str,
-    assertion_count: int | None = None,
-    config_digest: str | None = None,
-    image_digest: str | None = None,
-) -> dict[str, object]:
-    artifact = root / (
-        f"env/{environment}/runs/provider/"
-        f"provider-conformance-{CAPABILITY_ID.replace('.', '-')}-{layer}.report.json"
-    )
-    artifact.parent.mkdir(parents=True, exist_ok=True)
-    assertion_ids = _assertion_ids("message_transport")
-    executed_at = datetime.now(timezone.utc).isoformat()
-    evidence = {
-        "schema": "provider-conformance-evidence",
-        "version": 1,
-        "adapterId": adapter_id,
-        "capabilityId": CAPABILITY_ID,
-        "bindingRoots": _binding_roots(),
-        "environment": environment,
-        "testLayer": layer,
-        "executionProfile": provider_conformance.CELL_PROFILES[(environment, layer)],
-        "status": "passed",
-        "executedAt": executed_at,
-        "artifactRef": (
-            f".qwq_output/env/{environment}/runs/provider/"
-            f"provider-conformance-{CAPABILITY_ID.replace('.', '-')}-{layer}.report.json"
-        ),
-        "artifactDigest": "",
-        "artifactAttestation": "",
-        "commit": "a" * 40,
-        "imageDigest": image_digest or _digest("a"),
-        "configDigest": config_digest or _digest("b"),
-        "contractGraphDigest": _digest("c"),
-        "adapterDigest": _digest("d"),
-        "assertionCount": len(assertion_ids) if assertion_count is None else assertion_count,
-        "assertionIds": assertion_ids,
-        "networkBoundary": {
-            "local_contract": "offline_harness",
-            "api_integration": "remote_protocol",
-            "user_acceptance": "user_journey",
-        }[layer],
-        "dataDigest": _digest("e"),
-        "cleanupReceipt": f"cleanup-{environment}-{layer}",
-        "acceptanceRefs": [
-            "specs/feature-tree/runtime/runtime-external-integration/acceptance.yaml#SIT3_provider_conformance_3x3"
-        ],
-        "observabilityRefs": {
-            "logs": [f"log://{environment}/{layer}"],
-            "traces": [f"trace://{environment}/{layer}"],
-            "metrics": [f"metric://{environment}/{layer}"],
-        },
-    }
-    if environment == "gamma" and layer == "user_acceptance":
-        evidence["releaseReadiness"] = _release_readiness()
-    test_source = governance.load_conformance_manifest()["profiles"]["message_transport"][
-        layer
-    ]
-    report = {
-        "schema": provider_conformance.EXECUTION_REPORT_SCHEMA,
-        "version": provider_conformance.EXECUTION_REPORT_VERSION,
-        "adapterId": adapter_id,
-        "capabilityId": CAPABILITY_ID,
-        "bindingRoots": evidence["bindingRoots"],
-        "environment": environment,
-        "testLayer": layer,
-        "executionProfile": evidence["executionProfile"],
-        "status": evidence["status"],
-        "executedAt": executed_at,
-        "commit": evidence["commit"],
-        "imageDigest": evidence["imageDigest"],
-        "configDigest": evidence["configDigest"],
-        "contractGraphDigest": evidence["contractGraphDigest"],
-        "adapterDigest": evidence["adapterDigest"],
-        "assertionIds": assertion_ids,
-        "networkBoundary": evidence["networkBoundary"],
-        "dataDigest": evidence["dataDigest"],
-        "testSource": test_source,
-        "testCommand": "fixture provider conformance command",
-        "exitCode": 0,
-    }
-    artifact_bytes = json.dumps(
-        report,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    artifact.write_bytes(artifact_bytes)
-    evidence["artifactDigest"] = f"sha256:{hashlib.sha256(artifact_bytes).hexdigest()}"
-    evidence["artifactAttestation"] = provider_conformance.sign_execution_report(
-        artifact_bytes
-    )
-    return evidence
-
-
-def _rewrite_report_for_evidence(*, root: Path, evidence: dict[str, object]) -> None:
-    artifact = root / Path(*Path(str(evidence["artifactRef"])).parts[1:])
-    report = json.loads(artifact.read_text(encoding="utf-8"))
-    for field in (
-        "adapterId",
-        "capabilityId",
-        "bindingRoots",
-        "environment",
-        "testLayer",
-        "executionProfile",
-        "status",
-        "executedAt",
-        "commit",
-        "imageDigest",
-        "configDigest",
-        "contractGraphDigest",
-        "adapterDigest",
-        "assertionIds",
-        "networkBoundary",
-        "dataDigest",
-    ):
-        report[field] = evidence[field]
-    artifact_bytes = json.dumps(
-        report,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    artifact.write_bytes(artifact_bytes)
-    evidence["artifactDigest"] = f"sha256:{hashlib.sha256(artifact_bytes).hexdigest()}"
-    evidence["artifactAttestation"] = provider_conformance.sign_execution_report(
-        artifact_bytes
-    )
-
-
-def _matrix_evidence(
-    *,
-    root: Path,
-    config_digests: dict[str, str] | None = None,
-) -> list[dict[str, object]]:
-    adapter_by_environment = {
-        "alpha": ALPHA_ADAPTER_ID,
-        "beta": PRODUCTION_ADAPTER_ID,
-        "gamma": PRODUCTION_ADAPTER_ID,
-    }
-    return [
-        _evidence(
-            root=root,
-            environment=environment,
-            layer=layer,
-            adapter_id=adapter_by_environment[environment],
-            config_digest=(config_digests or {}).get(environment),
+        self.assertEqual(
+            schema["properties"]["testLayer"]["enum"],
+            ["local_contract", "api_integration", "user_acceptance"],
         )
-        for environment in provider_conformance.ENVIRONMENTS
-        for layer in provider_conformance.LAYERS
-    ]
+        self.assertEqual(schema["properties"]["version"]["const"], 4)
+        for required in (
+            "adapterId",
+            "capabilityId",
+            "artifactRef",
+            "artifactDigest",
+            "artifactAttestation",
+            "testArtifactRef",
+            "testArtifactDigest",
+            "testSource",
+            "testSourceDigest",
+            "testCommand",
+            "testTarget",
+            "typedPort",
+            "contractRef",
+            "commit",
+            "imageDigest",
+            "configDigest",
+            "contractGraphDigest",
+            "assertionCount",
+            "assertionIds",
+            "observabilityRefs",
+        ):
+            self.assertIn(required, schema["required"])
 
+    def test_adapter_digest_covers_directory_paths_and_contents(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source_root = Path(temporary)
+            first = source_root / "adapter.go"
+            first.write_text("package adapter\n", encoding="utf-8")
+            initial = provider_conformance.implementation_digest(source_root)
 
-def test_conformance_evidence_rejects_zero_assertion_pass() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-            assertion_count=0,
-        )
-        issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
+            first.write_text("package adapter\nconst Version = 2\n", encoding="utf-8")
+            content_changed = provider_conformance.implementation_digest(source_root)
+            first.rename(source_root / "renamed_adapter.go")
+            path_changed = provider_conformance.implementation_digest(source_root)
 
-    assert any("assertionCount must be greater than zero" in issue for issue in issues)
+        self.assertIsNotNone(initial)
+        self.assertNotEqual(initial, content_changed)
+        self.assertNotEqual(content_changed, path_changed)
 
-
-def test_conformance_evidence_rejects_empty_or_unlinked_execution_artifact() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-        )
-        artifact = root / Path(*Path(str(evidence["artifactRef"])).parts[1:])
-        artifact.write_text("{}\n", encoding="utf-8")
-        issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-
-    assert any("execution report missing fields" in issue for issue in issues)
-
-
-def test_conformance_evidence_requires_adapter_profile_test_source() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-        )
-        artifact = root / Path(*Path(str(evidence["artifactRef"])).parts[1:])
-        report = json.loads(artifact.read_text(encoding="utf-8"))
-        report["testSource"] = "unrelated/test.py"
-        artifact_bytes = json.dumps(
-            report,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-        artifact.write_bytes(artifact_bytes)
-        evidence["artifactDigest"] = (
-            f"sha256:{hashlib.sha256(artifact_bytes).hexdigest()}"
-        )
-        issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-
-    assert any("testSource does not match" in issue for issue in issues)
-
-
-def test_conformance_evidence_requires_execution_report_digest_match() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-        )
-        evidence["artifactDigest"] = _digest("f")
-        issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-
-    assert any("artifactDigest does not match" in issue for issue in issues)
-
-
-def test_conformance_evidence_rejects_untrusted_execution_attestation() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-        )
-        evidence["artifactAttestation"] = f"hmac-sha256:{'0' * 64}"
-        issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-
-    assert any("artifactAttestation is not trusted" in issue for issue in issues)
-
-
-def test_execution_attestation_covers_binding_roots() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-        )
-        artifact = root / Path(*Path(str(evidence["artifactRef"])).parts[1:])
-        report = json.loads(artifact.read_text(encoding="utf-8"))
-        report["bindingRoots"] = ["attestation-tampered-root"]
-        artifact_bytes = json.dumps(
-            report,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-        artifact.write_bytes(artifact_bytes)
-        evidence["artifactDigest"] = (
-            f"sha256:{hashlib.sha256(artifact_bytes).hexdigest()}"
-        )
-        issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-
-    assert any("artifactAttestation is not trusted" in issue for issue in issues)
-
-
-def test_conformance_evidence_rejects_fabricated_or_omitted_binding_roots() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-        )
-        evidence["bindingRoots"] = []
-        _rewrite_report_for_evidence(root=root, evidence=evidence)
-        omitted_issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-        evidence["bindingRoots"] = ["fabricated-root"]
-        _rewrite_report_for_evidence(root=root, evidence=evidence)
-        fabricated_issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-
-    assert any("bindingRoots must be a non-empty" in issue for issue in omitted_issues)
-    assert any(
-        "bindingRoots must strictly match registry/compiled capability roots" in issue
-        for issue in fabricated_issues
-    )
-
-
-def test_shared_message_transport_evidence_requires_all_compiled_roots() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id="infra.redis.message_transport_fixture",
-        )
-        capability_id = provider_conformance.MESSAGE_TRANSPORT_CAPABILITY_ID
-        message_transport_roots = [
-            root["root_id"]
-            for root in provider_conformance.compiled_capability_binding_roots(
-                compiled,
-                capability_id=capability_id,
-            )
-        ]
-        assert len(message_transport_roots) > 1
-        evidence["adapterId"] = "infra.redis.message_transport_fixture"
-        evidence["capabilityId"] = capability_id
-        evidence["bindingRoots"] = message_transport_roots[:-1]
-        evidence["observabilityRefs"]["metrics"].extend(
-            provider_conformance.required_metric_refs(capability_id)
-        )
-        _rewrite_report_for_evidence(root=root, evidence=evidence)
-        omitted_issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-        evidence["bindingRoots"] = list(reversed(message_transport_roots))
-        _rewrite_report_for_evidence(root=root, evidence=evidence)
-        reordered_issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-
-    assert any(
-        "bindingRoots must strictly match registry/compiled capability roots" in issue
-        for issue in omitted_issues
-    )
-    assert any(
-        "bindingRoots must strictly match registry/compiled capability roots" in issue
-        for issue in reordered_issues
-    )
-
-
-def test_conformance_evidence_rejects_registry_compiled_root_drift() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-        )
-        compiled["capabilityBindingRoots"][CAPABILITY_ID].append(
-            {
-                **compiled["capabilityBindingRoots"][CAPABILITY_ID][0],
-                "root_id": "compiler-only-root",
-            }
-        )
-        issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-
-    assert any(
-        "registry and compiled capability binding roots diverge" in issue
-        for issue in issues
-    )
-
-
-def test_conformance_evidence_fails_closed_without_ci_attestation_key() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-        )
-        signing_key = os.environ.pop("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY")
-        try:
-            issues = provider_conformance.validate_evidence(
-                [evidence],
-                registry=registry,
-                root=root,
-                compiled=compiled,
-            )
-        finally:
-            os.environ["QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY"] = signing_key
-
-    assert any("ATTESTATION_KEY is required" in issue for issue in issues)
-
-
-def test_mixed_selected_adapters_make_capability_ready_without_illegal_alpha_production_evidence() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _matrix_evidence(root=root)
-        assert provider_conformance.validate_evidence(
-            evidence,
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        ) == []
-        readiness = provider_conformance.derive_readiness(
-            compiled=compiled,
-            evidence=evidence,
-        )
-
-    assert readiness["gamma"][CAPABILITY_ID]["adapter_ready"] is True
-    assert readiness["gamma"][CAPABILITY_ID]["capability_ready"] is True
-    assert readiness["prod"][CAPABILITY_ID]["adapter_ready"] is True
-    assert readiness["prod"][CAPABILITY_ID]["capability_ready"] is True
-
-
-def test_environment_specific_config_digests_are_valid_when_each_cell_is_current() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        _, compiled = _compiled_with_mixed_sms_bindings()
-        config_digests = {
-            "alpha": _digest("a"),
-            "beta": _digest("b"),
-            "gamma": _digest("c"),
-        }
-        evidence = _matrix_evidence(root=root, config_digests=config_digests)
-        readiness = provider_conformance.derive_readiness(
-            compiled=compiled,
-            evidence=evidence,
-        )
-
-    assert readiness["gamma"][CAPABILITY_ID]["capability_ready"] is True
-
-
-def test_expired_or_release_digest_drift_evidence_prevents_readiness_promotion() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        stale = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-        )
-        stale["executedAt"] = (
-            datetime.now(timezone.utc) - provider_conformance.MAX_EVIDENCE_AGE
-            - timedelta(seconds=1)
-        ).isoformat()
-        stale_issues = provider_conformance.validate_evidence(
-            [stale],
-            registry=registry,
-            root=root,
-            current_commit="a" * 40,
-            compiled=compiled,
-        )
-        evidence = _matrix_evidence(root=root)
-        gamma_release = next(
-            item
-            for item in evidence
-            if item["environment"] == "gamma" and item["testLayer"] == "user_acceptance"
-        )
-        gamma_release["imageDigest"] = _digest("f")
-        readiness = provider_conformance.derive_readiness(
-            compiled=compiled,
-            evidence=evidence,
-        )
-
-    assert any("exceeds the 24-hour readiness window" in issue for issue in stale_issues)
-    assert readiness["gamma"][CAPABILITY_ID]["capability_ready"] is False
-
-
-def test_illegal_alpha_adapter_is_rejected_even_when_its_evidence_looks_valid() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=PRODUCTION_ADAPTER_ID,
-        )
-        issues = provider_conformance.validate_evidence(
-            [evidence],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-
-    assert any("does not match the environment-selected Binding adapter" in issue for issue in issues)
-    assert any("is not allowed in this environment" in issue for issue in issues)
-
-
-def test_zero_evidence_fails_the_prod_readiness_gate() -> None:
-    _, compiled = _compiled_with_mixed_sms_bindings()
-    readiness = provider_conformance.derive_readiness(compiled=compiled, evidence=[])
-    issues = provider_conformance.readiness_issues(
-        {
+    def test_empty_evidence_cannot_satisfy_release_readiness(self) -> None:
+        report = {
+            "schema": "provider-conformance-readiness",
+            "version": 1,
             "evidenceCount": 0,
-            "readiness": readiness,
-        },
-        environment="prod",
-    )
+            "readiness": {},
+            "issues": [],
+        }
+        for environment in ("gamma", "prod"):
+            issues = provider_conformance.readiness_issues(
+                report, environment=environment
+            )
+            self.assertTrue(any("zero Provider Conformance evidence" in issue for issue in issues))
 
-    assert readiness["prod"][CAPABILITY_ID]["capability_ready"] is False
-    assert any("zero Provider Conformance evidence artifacts" in issue for issue in issues)
+    def test_only_prod_remote_receipts_require_release_readiness(self) -> None:
+        self.assertEqual(
+            provider_conformance.execution_profile_for("prod", "user_acceptance"),
+            "release",
+        )
+        self.assertIsNone(
+            provider_conformance.execution_profile_for("prod", "api_integration")
+        )
+        self.assertEqual(
+            provider_conformance.execution_profile_for("gamma", "user_acceptance"),
+            "release",
+        )
+        self.assertFalse(
+            provider_conformance.requires_release_readiness(
+                "gamma",
+                "user_acceptance",
+            )
+        )
+        self.assertTrue(
+            provider_conformance.requires_release_readiness(
+                "prod",
+                "user_acceptance",
+            )
+        )
+        self.assertFalse(
+            provider_conformance.requires_release_readiness(
+                "beta",
+                "user_acceptance",
+            )
+        )
 
+    def test_release_assertions_do_not_change_nine_cell_base_semantics(self) -> None:
+        base = {
+            "assertionIds": sorted(provider_conformance.PUBLIC_ASSERTION_IDS),
+        }
+        release = {
+            "assertionIds": sorted(
+                provider_conformance.PUBLIC_ASSERTION_IDS
+                | provider_conformance.RELEASE_ASSERTION_IDS
+            ),
+        }
+        self.assertEqual(
+            provider_conformance._assertion_semantics(base),
+            provider_conformance._assertion_semantics(release),
+        )
 
-def test_release_make_gate_requires_provider_readiness() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    release_target = makefile.split("gate-release:", maxsplit=1)[1].split(
-        "\n\n", maxsplit=1
-    )[0]
+    def test_b10_prod_remote_sources_are_discovered(self) -> None:
+        sources, issues = provider_conformance.discover_test_sources()
+        self.assertEqual(issues, [])
+        self.assertEqual(
+            sources[
+                ("rtc.room.transport", "infra.livekit_sfu", "user_acceptance")
+            ]["target"],
+            "b10-remote-rtc.room.transport",
+        )
+        self.assertEqual(
+            sources[
+                ("integration.push.delivery", "ext.push.dispatch", "user_acceptance")
+            ]["target"],
+            "b10-remote-integration.push.delivery",
+        )
+        self.assertEqual(
+            sources[
+                (
+                    "runtime.message.transport",
+                    "infra.redis.message_transport",
+                    "user_acceptance",
+                )
+            ]["target"],
+            "b10-remote-runtime.message.transport",
+        )
 
-    assert (
-        'quwoquan_ops/gate/verify_provider_conformance_evidence.py --require-ready "$(ENV)"'
-        in release_target
-    )
-
-
-def test_prod_requires_its_selected_binding_preflight_without_prod_smoke_evidence() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        _, compiled = _compiled_with_mixed_sms_bindings()
-        compiled["readiness"]["prod"][CAPABILITY_ID]["adapter_preflight_ready"] = False
-        readiness = provider_conformance.derive_readiness(
+    def test_source_coverage_gaps_are_preserved_in_release_readiness(self) -> None:
+        compiled, compile_issues = governance.load_and_compile()
+        self.assertEqual(compile_issues, [])
+        sources, discovery_issues = provider_conformance.discover_test_sources()
+        self.assertEqual(discovery_issues, [])
+        coverage = provider_conformance.source_coverage_issues(
             compiled=compiled,
-            evidence=_matrix_evidence(root=root),
+            sources=sources,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            report, issues = provider_conformance.load_validate_and_derive(
+                root=Path(temporary),
+            )
+        self.assertEqual(issues, [])
+        self.assertEqual(report["sourceCoverageIssues"], coverage)
+        readiness = provider_conformance.readiness_issues(
+            report,
+            environment="gamma",
+        )
+        for issue in coverage:
+            self.assertIn(issue, readiness)
+
+    def test_b10_remote_readback_emits_only_test_owned_case_results(self) -> None:
+        assertion_ids = [
+            "provider.success",
+            "provider.validation",
+            "provider.auth",
+            "provider.network_dns",
+            "provider.timeout",
+            "provider.throttle",
+            "provider.retry",
+            "provider.idempotency",
+            "provider.callback_ordering",
+            "provider.redaction",
+            "provider.observability",
+            "provider.rtc_transport",
+            "provider.adapter_health",
+            "provider.adapter_switch",
+            "provider.adapter_rollback",
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            result_path = Path(temporary) / "case-results.json"
+            ios_hash = b10_prod_remote_uat._device_hash("ios-device")
+            android_hash = b10_prod_remote_uat._device_hash("android-device")
+            refs = {
+                "logs": ["log:b10-uat"],
+                "traces": ["trace:b10-uat"],
+                "metrics": ["metric:b10-uat"],
+            }
+            readback = {
+                "schema": b10_prod_remote_uat.READBACK_SCHEMA,
+                "version": b10_prod_remote_uat.READBACK_VERSION,
+                "status": "passed",
+                "capabilityId": "rtc.room.transport",
+                "adapterId": "infra.livekit_sfu",
+                "imageDigest": "sha256:" + "a" * 64,
+                "configDigest": "sha256:" + "b" * 64,
+                "deviceEvidence": [
+                    {
+                        "platform": "ios",
+                        "deviceHash": ios_hash,
+                        "appVersion": "1.0",
+                        "caseDirection": "ios_to_android",
+                    },
+                    {
+                        "platform": "android",
+                        "deviceHash": android_hash,
+                        "appVersion": "1.0",
+                        "caseDirection": "android_to_ios",
+                    },
+                ],
+                "providerReceipts": [
+                    {"providerKind": "livekit", "receiptRef": "receipt:livekit-ok"}
+                ],
+                "pushReadback": {
+                    "ios": "pushkit_callkit",
+                    "android": "fcm_full_screen_or_heads_up",
+                },
+                "callReadback": {
+                    "terminalState": "ended",
+                    "participantCount": 2,
+                    "mediaConnected": True,
+                    "screenShareCompleted": True,
+                    "pipHangup": True,
+                    "cancelRaceResolved": True,
+                },
+                "realtimeReadback": {"receiptRef": "receipt:realtime-ok"},
+                "chatProjection": {"systemCallLogCount": 1},
+                "qoeReadback": {
+                    "effectiveSampleCount": 50,
+                    "alertReceiptRef": "receipt:alert-ok",
+                    "rollbackReceiptRef": "receipt:rollback-ok",
+                },
+                "assertions": [
+                    {
+                        "assertionId": assertion_id,
+                        "status": "passed",
+                        "logRef": "log:b10-uat",
+                        "traceRef": "trace:b10-uat",
+                        "metricRefs": ["metric:b10-uat"],
+                    }
+                    for assertion_id in assertion_ids
+                ],
+                "dataDigest": "sha256:" + "c" * 64,
+                "cleanupReceipt": "receipt:cleanup-ok",
+                "observabilityRefs": refs,
+                "releaseReadiness": {
+                    "bindingPreflightReceiptRef": "receipt:preflight-ok",
+                    "adapterHealthReceiptRef": "receipt:health-ok",
+                    "switchCompatibilityReceiptRef": "receipt:switch-ok",
+                    "callbackDrainReceiptRef": "receipt:drain-ok",
+                    "lastGoodReceiptRef": "receipt:last-good",
+                    "rollbackReceiptRef": "receipt:rollback-ok",
+                },
+            }
+
+            def write_native_readback(
+                _command: list[str], *, env: dict[str, str], **_kwargs: object
+            ) -> mock.Mock:
+                Path(env["QWQ_B10_REMOTE_UAT_READBACK_PATH"]).write_text(
+                    json.dumps(readback),
+                    encoding="utf-8",
+                )
+                return mock.Mock(returncode=0)
+
+            environment = {
+                "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH": str(result_path),
+                "QWQ_PROVIDER_CONFORMANCE_ENVIRONMENT": "prod",
+                "QWQ_PROVIDER_CONFORMANCE_ASSERTION_IDS": json.dumps(assertion_ids),
+                "QWQ_PROVIDER_CONFORMANCE_CONFIG_DIGEST": "sha256:" + "b" * 64,
+                "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST": "sha256:" + "a" * 64,
+                "QWQ_PROVIDER_CONFORMANCE_TYPED_PORT": "MediaTransportPort",
+                "QWQ_PROVIDER_CONFORMANCE_CONTRACT_REF": "quwoquan_service/services/rtc-service/contracts/rtc/call_session/operations.yaml",
+                "QWQ_B10_IOS_DEVICE_ID": "ios-device",
+                "QWQ_B10_ANDROID_DEVICE_ID": "android-device",
+                "QWQ_B10_REMOTE_UAT_COMMAND_JSON": '["native-device-patrol"]',
+            }
+            with (
+                mock.patch.dict(os.environ, environment, clear=True),
+                mock.patch.object(
+                    b10_prod_remote_uat.subprocess,
+                    "run",
+                    side_effect=write_native_readback,
+                ),
+            ):
+                self.assertEqual(
+                    b10_prod_remote_uat.run(
+                        "rtc.room.transport",
+                        "infra.livekit_sfu",
+                    ),
+                    0,
+                )
+            case_result = json.loads(result_path.read_text(encoding="utf-8"))
+            self.assertEqual(case_result["status"], "passed")
+            self.assertEqual(case_result["assertionIds"], assertion_ids)
+            self.assertEqual(case_result["cleanupReceipt"], "receipt:cleanup-ok")
+            sources, issues = provider_conformance.discover_test_sources()
+            self.assertEqual(issues, [])
+            loaded, case_issues = provider_conformance.load_case_results(
+                result_path,
+                source=sources[
+                    (
+                        "rtc.room.transport",
+                        "infra.livekit_sfu",
+                        "user_acceptance",
+                    )
+                ],
+                environment="prod",
+                config_digest="sha256:" + "b" * 64,
+            )
+            self.assertEqual(case_issues, [])
+            self.assertIsNotNone(loaded)
+            case_result.pop("releaseReadiness")
+            result_path.write_text(json.dumps(case_result), encoding="utf-8")
+            _, case_issues = provider_conformance.load_case_results(
+                result_path,
+                source=sources[
+                    (
+                        "rtc.room.transport",
+                        "infra.livekit_sfu",
+                        "user_acceptance",
+                    )
+                ],
+                environment="prod",
+                config_digest="sha256:" + "b" * 64,
+            )
+            self.assertTrue(any("missing fields" in issue for issue in case_issues))
+
+    def test_release_readiness_reports_missing_executable_source_coverage(self) -> None:
+        compiled, compile_issues = governance.load_and_compile()
+        self.assertEqual(compile_issues, [])
+
+        issues = provider_conformance.source_coverage_issues(
+            compiled=compiled,
+            sources={},
         )
 
-    assert readiness["gamma"][CAPABILITY_ID]["capability_ready"] is True
-    assert readiness["prod"][CAPABILITY_ID]["capability_ready"] is False
-
-
-def test_missing_rollback_receipt_blocks_gamma_and_prod_readiness() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _matrix_evidence(root=root)
-        gamma_release = next(
-            item
-            for item in evidence
-            if item["environment"] == "gamma" and item["testLayer"] == "user_acceptance"
+        capability_ids = {
+            capability["capability_id"]
+            for capability in governance.load_registry()["capabilities"]
+        }
+        self.assertEqual(len(issues), len(capability_ids))
+        for capability_id in capability_ids:
+            self.assertTrue(
+                any(issue.startswith(f"source_coverage.{capability_id}:") for issue in issues),
+                capability_id,
+            )
+        self.assertTrue(
+            any(
+                "infra.livekit_sfu/user_acceptance" in issue
+                for issue in issues
+            ),
+            "prod Remote RTC evidence source is mandatory",
         )
-        del gamma_release["releaseReadiness"]["rollbackReceiptRef"]
+
+    def test_missing_fields_are_rejected_before_readiness(self) -> None:
+        compiled, compile_issues = governance.load_and_compile()
+        self.assertEqual(compile_issues, [])
         issues = provider_conformance.validate_evidence(
-            evidence,
-            registry=registry,
-            root=root,
+            [{"schema": "provider-conformance-evidence"}],
+            registry=governance.load_registry(),
             compiled=compiled,
         )
-        readiness = provider_conformance.derive_readiness(
-            compiled=compiled,
-            evidence=evidence,
+        self.assertTrue(any("missing required fields" in issue for issue in issues))
+
+    def test_attestation_is_bound_to_execution_report_bytes(self) -> None:
+        raw = b'{"case_results":[],"exit_code":0}'
+        signature = provider_conformance.sign_execution_report(
+            raw, key="local-contract-attestation-key"
+        )
+        self.assertRegex(signature, r"^hmac-sha256:[a-f0-9]{64}$")
+        self.assertNotEqual(
+            signature,
+            provider_conformance.sign_execution_report(
+                raw + b" ", key="local-contract-attestation-key"
+            ),
         )
 
-    assert any("requires complete non-sensitive releaseReadiness" in issue for issue in issues)
-    assert readiness["gamma"][CAPABILITY_ID]["capability_ready"] is False
-    assert readiness["prod"][CAPABILITY_ID]["capability_ready"] is False
+    def test_evidence_loader_reads_only_disposable_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output_root = Path(temporary) / ".qwq_output"
+            evidence, issues = provider_conformance.load_evidence(output_root)
+        self.assertEqual(evidence, [])
+        self.assertEqual(issues, [])
 
-
-def test_release_receipts_reject_endpoint_or_secret_material() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _matrix_evidence(root=root)
-        gamma_release = next(
-            item
-            for item in evidence
-            if item["environment"] == "gamma" and item["testLayer"] == "user_acceptance"
+    def test_attestation_key_is_not_defined_by_repository_config(self) -> None:
+        self.assertNotIn(
+            "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY",
+            governance.load_bindings(),
         )
-        gamma_release["releaseReadiness"][
-            "prodBindingPreflightReceiptRef"
-        ] = "receipt:prod:secret-value"
-        issues = provider_conformance.validate_evidence(
-            evidence,
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
+        value = os.environ.get("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY")
+        if value is not None:
+            self.assertTrue(value)
 
-    assert any("requires complete non-sensitive releaseReadiness" in issue for issue in issues)
+    def test_remote_source_rejects_static_gate_block_assertion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source_root = root / "quwoquan_ops" / "tests" / "acceptance" / "api_integration"
+            source_root.mkdir(parents=True)
+            source = source_root / "remote_provider_test.py"
+            source.write_text(
+                "\n".join(
+                    (
+                        "# spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-003",
+                        '# provider_conformance: {"adapterId":"ext.llm.protocol_fixture","capabilityId":"assistant.model.generation","testLayer":"api_integration","typedPort":"ModelCompletionPort","contractRef":"quwoquan_service/services/assistant-service/contracts/assistant/assistant_conversation/operations.yaml","assertionIds":["provider.success","provider.validation","provider.auth","provider.network_dns","provider.timeout","provider.throttle","provider.retry","provider.idempotency","provider.callback_ordering","provider.redaction","provider.observability","provider.model_generation"],"command":["python3","remote_provider_test.py"],"target":"real-provider","networkBoundary":"remote_protocol"}',
+                        "result_path = 'QWQ_PROVIDER_CONFORMANCE_RESULT_PATH'",
+                        "assert False, 'GATE_BLOCK'",
+                    )
+                ),
+                encoding="utf-8",
+            )
+            roots = {
+                **provider_conformance.TEST_LAYER_ROOTS,
+                "api_integration": source_root,
+            }
+            with (
+                mock.patch.object(provider_conformance, "ROOT", root),
+                mock.patch.object(provider_conformance, "TEST_LAYER_ROOTS", roots),
+                self.assertRaisesRegex(ValueError, "static should-block/GATE_BLOCK"),
+            ):
+                provider_conformance.load_test_source(source)
 
-
-def test_layer_boundary_and_duplicate_artifact_are_rejected() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / ".qwq_output"
-        registry, compiled = _compiled_with_mixed_sms_bindings()
-        evidence = _evidence(
-            root=root,
-            environment="alpha",
-            layer="local_contract",
-            adapter_id=ALPHA_ADAPTER_ID,
-        )
-        evidence["networkBoundary"] = "remote_protocol"
-        duplicate = dict(evidence)
-        duplicate["testLayer"] = "api_integration"
-        duplicate["executionProfile"] = "smoke"
-        issues = provider_conformance.validate_evidence(
-            [evidence, duplicate],
-            registry=registry,
-            root=root,
-            compiled=compiled,
-        )
-
-    assert any("local_contract must use offline_harness" in issue for issue in issues)
-    assert any("artifactRef must identify one conformance cell only" in issue for issue in issues)
+    def test_source_rejects_runtime_selected_executor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source_root = root / "quwoquan_ops" / "tests" / "local_contract"
+            source_root.mkdir(parents=True)
+            source = source_root / "delegated_provider_conformance.py"
+            source.write_text(
+                "\n".join(
+                    (
+                        "# spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-003",
+                        '# provider_conformance: {"adapterId":"ext.llm.protocol_fixture","capabilityId":"assistant.model.generation","testLayer":"local_contract","typedPort":"ModelCompletionPort","contractRef":"quwoquan_service/services/assistant-service/contracts/assistant/assistant_conversation/operations.yaml","assertionIds":["provider.success","provider.validation","provider.auth","provider.network_dns","provider.timeout","provider.throttle","provider.retry","provider.idempotency","provider.callback_ordering","provider.redaction","provider.observability","provider.model_generation"],"command":["python3","delegated_provider_conformance.py"],"target":"delegated-provider","networkBoundary":"offline_harness"}',
+                        "import os",
+                        "result_path = os.environ['QWQ_PROVIDER_CONFORMANCE_RESULT_PATH']",
+                        "command = os.environ['QWQ_PROVIDER_CONFORMANCE_EXECUTOR_COMMAND_JSON']",
+                    )
+                ),
+                encoding="utf-8",
+            )
+            roots = {
+                **provider_conformance.TEST_LAYER_ROOTS,
+                "local_contract": source_root,
+            }
+            with (
+                mock.patch.object(provider_conformance, "ROOT", root),
+                mock.patch.object(provider_conformance, "TEST_LAYER_ROOTS", roots),
+                self.assertRaisesRegex(
+                    ValueError,
+                    "runtime-selected executor",
+                ),
+            ):
+                provider_conformance.load_test_source(source)
 
 
 if __name__ == "__main__":
-    test_conformance_evidence_rejects_zero_assertion_pass()
-    test_conformance_evidence_rejects_empty_or_unlinked_execution_artifact()
-    test_conformance_evidence_requires_adapter_profile_test_source()
-    test_conformance_evidence_requires_execution_report_digest_match()
-    test_conformance_evidence_rejects_untrusted_execution_attestation()
-    test_execution_attestation_covers_binding_roots()
-    test_conformance_evidence_rejects_fabricated_or_omitted_binding_roots()
-    test_shared_message_transport_evidence_requires_all_compiled_roots()
-    test_conformance_evidence_rejects_registry_compiled_root_drift()
-    test_conformance_evidence_fails_closed_without_ci_attestation_key()
-    test_mixed_selected_adapters_make_capability_ready_without_illegal_alpha_production_evidence()
-    test_environment_specific_config_digests_are_valid_when_each_cell_is_current()
-    test_expired_or_release_digest_drift_evidence_prevents_readiness_promotion()
-    test_illegal_alpha_adapter_is_rejected_even_when_its_evidence_looks_valid()
-    test_zero_evidence_fails_the_prod_readiness_gate()
-    test_release_make_gate_requires_provider_readiness()
-    test_prod_requires_its_selected_binding_preflight_without_prod_smoke_evidence()
-    test_missing_rollback_receipt_blocks_gamma_and_prod_readiness()
-    test_release_receipts_reject_endpoint_or_secret_material()
-    test_layer_boundary_and_duplicate_artifact_are_rejected()
+    unittest.main()

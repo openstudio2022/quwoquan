@@ -24,20 +24,14 @@ if [[ ! -f "$cfg" ]]; then
   echo "FAIL: app runtime config not found: $cfg" >&2
   exit 1
 fi
-topology_manifest="quwoquan_ops/environments/environment_topology_manifest.yaml"
-if [[ ! -f "$topology_manifest" ]]; then
-  echo "FAIL: environment topology manifest not found: $topology_manifest" >&2
-  exit 1
-fi
-
-cdn_domain="$(python3 - "$topology_manifest" "$env_name" <<'PY'
-import json
+cdn_domain="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$env_name" <<'PY'
 import sys
-from pathlib import Path
 from urllib.parse import urlparse
 
-manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-env_name = sys.argv[2]
+from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
+
+manifest = load_environment_topology()
+env_name = sys.argv[1]
 public_bases = ((manifest.get("environments") or {}).get(env_name) or {}).get("publicBases") or {}
 media_image = str(public_bases.get("mediaImage") or "")
 host = urlparse(media_image).hostname or media_image
@@ -69,11 +63,54 @@ PY
 )"
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
+environment_runtime="$out_dir/environment_runtime.yaml"
+target_name="${QWQ_DEPLOY_TARGET:-}"
+if [[ -z "$target_name" ]]; then
+  target_name="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$env_name" <<'PY'
+import sys
+
+from quwoquan_ops.cli.lib.output_paths import deployment_target_for_env
+
+print(deployment_target_for_env(sys.argv[1]))
+PY
+)"
+fi
+PYTHONDONTWRITEBYTECODE=1 python3 - "$env_name" "$target_name" "$environment_runtime" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+environment, target_name, output = sys.argv[1:4]
+source = Path(f"quwoquan_ops/environments/{environment}/runtime.yaml")
+runtime = json.loads(source.read_text(encoding="utf-8"))
+targets = runtime.get("targets") or {}
+target = targets.get(target_name)
+if not isinstance(target, dict) or target.get("env") != environment:
+    raise SystemExit(
+        f"runtime target {target_name!r} does not belong to environment {environment!r}"
+    )
+
+# 发布包只携带当前 target 的生效事实。多 target 定义和禁止 token
+# 是源码侧验证策略，不是应用运行时输入；将它们打包会把 prod-sim
+# 的本地 host 泄漏到 prod-hosted，并让纯度门禁命中规则本身。
+projected = {
+    key: value
+    for key, value in runtime.items()
+    if key not in {"targets", "forbiddenHostTokens"}
+}
+projected["dataReleaseTarget"] = target_name
+projected["publicBases"] = target.get("publicBases") or runtime.get("publicBases") or {}
+projected["target"] = {"name": target_name, **target}
+Path(output).write_text(
+    json.dumps(projected, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
+
 cp "quwoquan_app/configs/default/app_runtime.yaml" "$out_dir/default_app_runtime.yaml"
 cp "$cfg" "$out_dir/app_runtime.yaml"
-cp "$topology_manifest" "$out_dir/environment_topology_manifest.yaml"
 
-python3 - "$env_name" "$cfg" "$topology_manifest" "$out_dir/report.json" <<'PY'
+python3 - "$env_name" "$cfg" "$environment_runtime" "$out_dir/report.json" <<'PY'
 import json
 import hashlib
 import subprocess
@@ -81,10 +118,11 @@ import re
 import sys
 from pathlib import Path
 
-env_name, cfg_path, topology_path, report_path = sys.argv[1:5]
+env_name, cfg_path, runtime_path, report_path = sys.argv[1:5]
 text = Path(cfg_path).read_text(encoding="utf-8")
-topology = json.loads(Path(topology_path).read_text(encoding="utf-8"))
-env_topology = ((topology.get("environments") or {}).get(env_name) or {})
+env_topology = json.loads(Path(runtime_path).read_text(encoding="utf-8"))
+if env_topology.get("schema") != "environment-runtime" or env_topology.get("environment") != env_name:
+    raise SystemExit(f"environment runtime identity mismatch: {runtime_path}")
 public_bases = env_topology.get("publicBases") or {}
 artifact_policy = ((env_topology.get("artifactPolicy") or {}).get("app") or {})
 
@@ -190,7 +228,7 @@ report = {
     "uploadBaseUrl": upload_base,
     "currentUserId": current_user_id,
     "seedManifest": seed_manifest,
-    "topologySchemaVersion": topology.get("schema"),
+    "runtimeSchemaVersion": env_topology.get("schema"),
     "artifactPolicy": artifact_policy,
     "publicBases": expected_urls,
     "provenance": {
@@ -198,7 +236,7 @@ report = {
         "files": {
             "defaultAppRuntime": digest(Path(report_path).parent / "default_app_runtime.yaml"),
             "appRuntime": digest(Path(report_path).parent / "app_runtime.yaml"),
-            "topologyManifest": digest(Path(topology_path)),
+            "environmentRuntime": digest(Path(runtime_path)),
         },
     },
 }

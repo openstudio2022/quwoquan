@@ -1,0 +1,20 @@
+kind: append_only_fact
+description: ExternalInteractionDeadLetterFact 的领域对象契约。
+identity:
+  fields:
+  - deadLetterId
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: request
+  on_delete: retain
+  reference_fields:
+  - requestId
+  target_object: integration.ExternalInteraction

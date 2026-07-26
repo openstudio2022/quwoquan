@@ -1,0 +1,70 @@
+kind: aggregate_root
+description: '由 targetKind + targetId + actorDimension + actorId 唯一确定的内容互动关系聚合。
+
+  targetKind 是 post/comment 封闭集合；persona 与 device 是不相交的身份维度。
+
+  Post 只允许 none/like，Comment 允许 none/like/dislike。所有计数均由事件或权威
+
+  成员关系派生，目标对象不保存用户关系集合，也不充当互动关系真相。
+
+  '
+identity:
+  fields:
+  - id
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: target
+  on_delete: tombstone
+  reference_fields:
+  - targetKind
+  - targetId
+  target_objects:
+  - content.Post
+  - content.Comment
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: actor
+  on_delete: retain
+  reference_fields:
+  - actorDimension
+  - actorId
+  target_objects:
+  - user.Persona
+  - user.DeviceRegistration
+capabilities:
+- queryable
+- idempotent_commands
+- event_sourced_outbox
+taggable: false
+vector_enabled: false
+business_rules:
+- identity 固定为 targetKind + targetId + actorDimension + actorId
+- targetKind 仅允许 post 或 comment，actorDimension 仅允许 persona 或 device
+- Post 仅允许 none/like，Comment 允许 none/like/dislike
+- 同一 identity 的重复命令按 idempotency receipt 返回，不重复产生副作用
+- reaction 变化只发布事件，目标聚合不保存关系或计数真相
+lifecycle:
+  states:
+  - none
+  - like
+  - dislike
+  optimistic_concurrency: version
+  idempotency: command_receipt
+  identity:
+    fields:
+    - targetKind
+    - targetId
+    - actorDimension
+    - actorId
+    uniqueness: target_actor_dimension

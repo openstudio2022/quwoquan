@@ -1,5 +1,5 @@
 /// Typed DTO for the Conversation entity.
-/// Maps to contracts/metadata/messages/conversation/fields.yaml → Conversation.
+/// Maps to quwoquan_service/services/chat-service/contracts/chat/conversation/fields.yaml → Conversation.
 class ConversationDto {
   final String id;
   final String type;

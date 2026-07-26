@@ -8,12 +8,6 @@
 ## CLI
 
 ```bash
-# 仅首次把旧 App asset 提升为 immutable canonical release
-python3 -B quwoquan_data/scripts/cli.py filter-catalog initialize \
-  --legacy-source quwoquan_app/assets/filters/filter_presets.json \
-  --release-id <releaseId> \
-  --source-owner qwq_data
-
 # 从已有 canonical release 重生全部派生物
 python3 -B quwoquan_data/scripts/cli.py filter-catalog materialize \
   --release-id <releaseId>
@@ -22,7 +16,6 @@ python3 -B quwoquan_data/scripts/cli.py filter-catalog materialize \
 python3 -B quwoquan_data/scripts/cli.py filter-catalog validate
 ```
 
-`initialize` 不覆盖已存在 release；新目录必须使用新 `releaseId`。
 `materialize` 会更新唯一 bootstrap binding、App replica、alpha/beta/gamma
 seed 引用和 prod release import 输入。prod 不使用 test fixture 或 `seedRefs`，
 其 manifest 只声明 Stage 与人工灰度 Activate 输入。

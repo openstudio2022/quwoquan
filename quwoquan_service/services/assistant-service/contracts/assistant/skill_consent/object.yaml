@@ -1,0 +1,45 @@
+kind: aggregate_root
+description: 'Skill 授权同意独立聚合。拥有 grant/revoke/version/audit 生命周期，
+
+  不作为 AssistantRun 的 owned member。
+
+  PostgreSQL 存储，授权决策必须准确一致。
+
+  '
+identity:
+  fields:
+  - id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: accountOwner
+  on_delete: cascade
+  reference_fields:
+  - userId
+  target_object: user.UserAccount
+local_identity_reasons:
+  skillId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity
+capabilities:
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- consent identity 固定为 personaId + skillId + scope
+- grant 必须记录版本化条款、actor 与审计时间
+- revoke 立即阻断后续 run，但不删除历史审计
+- AssistantRun 只能读取当前 consent Slice，不能直接修改 consent
+lifecycle:
+  states:
+  - granted
+  - revoked
+  - expired
+  optimistic_concurrency: version
+  idempotency: command_receipt

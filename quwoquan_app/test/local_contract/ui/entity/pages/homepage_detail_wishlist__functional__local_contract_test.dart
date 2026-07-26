@@ -8,6 +8,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
+import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
@@ -51,6 +52,15 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            AlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           authSessionControllerProvider.overrideWith(
             _AuthenticatedHomepageSession.new,
           ),
@@ -133,6 +143,15 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            AlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           authSessionControllerProvider.overrideWith(
             _AuthenticatedHomepageSession.new,
           ),
@@ -168,6 +187,15 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            AlphaIntersectionRepository(),
+          ),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           authSessionControllerProvider.overrideWith(
             _AuthenticatedHomepageSession.new,
           ),

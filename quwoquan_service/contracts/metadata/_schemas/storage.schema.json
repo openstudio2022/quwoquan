@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/storage.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "backend",
+    "role"
+  ],
+  "properties": {
+    "backend": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role": {
+      "enum": [
+        "authoritative",
+        "append_only",
+        "projection",
+        "external",
+        "runtime"
+      ]
+    },
+    "codegen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "root_entity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "package": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "domain_path": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*$"
+        },
+        "events_only": {
+          "type": "boolean"
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "migration_skip_tables": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "name_overrides": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "type_overrides": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "cache_overrides": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "entity": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "skip": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

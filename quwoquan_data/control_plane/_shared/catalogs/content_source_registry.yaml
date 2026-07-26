@@ -248,7 +248,7 @@ siteCrawlProfilePolicy:
   sourceRoot: sources/{vertical}/{sourceId}
   defaultTimeWindowDays: 730
   scaleQueueBackend: reliabletask
-  crawlerTruthSource: vertical source_registry.yaml
+  crawlerTruthSource: vertical providers.yaml
   promptFacts:
     - 网站维度供给线只负责发现、抓取、抽取、评分和映射候选，不直接发布内容。
     - fetchable=false 或 crawlAllowed=false 的站点不得进入批量抓取，只能作为 discovery/reference。
@@ -257,7 +257,7 @@ siteCrawlProfilePolicy:
     - 发布主线只接受 content_plan_packet 之后的标准对象，不直接消费 site crawl 产物。
     - 站点主线 execution 声明 supplyMode=site_primary 并记录 sourceKey=siteId；搜索引擎汇聚只作小流量数据补全，必须使用独立 search_supplement execution，禁止与站点主线共用 executionId 或 readiness 口径。
     - 平台发现图不能自动变发布图；逐资产缺 license、credit、sourceUrl、termsUrl、usageScope 即不可发布。
-    - 日产 10 万级必须提供站点漏斗、TokenLedger、release/import、搜索可见和推荐反馈证据。
+    - 日产 10 万级必须提供站点漏斗、release/import、搜索可见和推荐反馈证据。
 
 common:
   entity:
@@ -433,7 +433,7 @@ common:
       fetchMode: attribution_manifest
       rightsPolicy: attribution_no_watermark
       rateLimit: conservative
-      promptFacts: [视觉发现和单源图片作品候选, 不因平台名直接排除检索, 发布必须逐图补齐 pinUrl/originalAssetUrl/sourceAuthor/repostAttribution/watermarkScan/ocrScan/modelReleaseStatus/collectedAt]
+      promptFacts: [视觉发现和单源图片作品候选, 不因平台名直接排除检索, 逐图记录 pinUrl/originalAssetUrl/sourceAuthor/repostAttribution/watermarkScan/ocrScan/modelReleaseStatus/collectedAt，是否阻断由垂类权利策略决定]
     - sourceId: five_hundred_px
       platform: 500px
       sourceClass: photography_community

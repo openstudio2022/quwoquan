@@ -1,8 +1,8 @@
-"""P4 图库合规契约：图虫受限如实标注 + Pinterest 归因发布 + 授权完整性硬门 + 非中文译简体门。
+"""P4 图库合规契约：来源分类、垂类权利策略与非中文译简体门。
 
 - P4a 图库分级：registry rightsPolicy 为唯一真相源；图虫=逐图创作者授权、Pinterest=归因无水印发布，
   受限来源如实标注 restricted + bypassAttempted=false；Pinterest 必须逐图归因与扫描证据完整；Commons/Openverse 可发布。
-- P4b 授权完整性硬门：集合/页级授权必须传播到每张图；缺逐图 authorizationProof 一律不进发布面。
+- P4b 垂类权利策略：travel 冷启动记录审计状态但不按许可过滤；enforce 垂类保持授权硬门。
 - P4c 非中文图片元数据门：英文/拉丁主导 caption / 标题须先译简体中文，否则阻断发布。
 
 可直接运行：python3 quwoquan_data/tests/local_contract/core/test_image_provider_compliance__behavior__functional__local_contract_test.py
@@ -85,7 +85,7 @@ def test_p4a_compliance_summary_is_auditable_and_honest():
     assert "wikimedia_commons" in summary["alternativePath"]["providers"]
 
 
-# ---------------------------------------------------------------- P4b 授权完整性硬门
+# ---------------------------------------------------------------- P4b 授权审计与垂类执行策略
 
 def _tuchong_collection() -> dict:
     return {
@@ -110,26 +110,37 @@ def _tuchong_collection() -> dict:
 
 
 def test_p4b_full_per_image_authorization_passes_gate():
-    verdict = _collection_gate(_tuchong_collection(), entity_id="九寨沟")
+    verdict = _collection_gate(
+        _tuchong_collection(), entity_id="九寨沟", vertical="travel"
+    )
     assert verdict["passed"], verdict["issues"]
 
 
-def test_p4b_missing_per_image_authorization_blocks_publish():
-    # 缺逐图 authorizationProof：页/集合级授权未传播到每张图 → 不进发布面。
+def test_p4b_travel_missing_authorization_is_audited_without_blocking():
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0].pop("authorizationProof")
-    verdict = _collection_gate(bad, entity_id="九寨沟")
-    assert verdict["passed"] is False
-    assert any("authorizationProof" in issue for issue in verdict["issues"]), verdict["issues"]
+    verdict = _collection_gate(bad, entity_id="九寨沟", vertical="travel")
+    assert verdict["passed"] is True, verdict["issues"]
+    assert verdict["rightsAuditStatus"] == "unverified"
+    assert any("authorizationProof" in issue for issue in verdict["rightsAuditIssues"])
 
 
-def test_p4b_unsupported_license_blocks_publish():
-    # NC/ND 非自由许可不进发布面（与图库平台名无关，按逐资产权利判定）。
+def test_p4b_travel_unsupported_license_is_audited_without_blocking():
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0]["license"] = "CC BY-NC 4.0"
     bad["images"][0]["termsUrl"] = "https://creativecommons.org/licenses/by-nc/4.0/"
-    verdict = _collection_gate(bad, entity_id="九寨沟")
+    verdict = _collection_gate(bad, entity_id="九寨沟", vertical="travel")
+    assert verdict["passed"] is True, verdict["issues"]
+    assert verdict["rightsAuditStatus"] == "unverified"
+    assert verdict["rightsAuditIssues"]
+
+
+def test_p4b_enforced_vertical_still_blocks_incomplete_rights():
+    bad = copy.deepcopy(_tuchong_collection())
+    bad["images"][0].pop("authorizationProof")
+    verdict = _collection_gate(bad, entity_id="九寨沟", vertical="photography")
     assert verdict["passed"] is False
+    assert any("authorizationProof" in issue for issue in verdict["issues"])
 
 
 # ---------------------------------------------------------------- P4c 非中文译简体门

@@ -8,6 +8,8 @@ export 'src/chat/contact_contracts.dart';
 export 'src/chat/message_home_contracts.dart';
 export 'src/chat/message_contracts.dart';
 export 'src/content/post_queries.dart';
+export 'src/content/author_impact_contracts.dart';
+export 'src/content/content_behavior_contracts.dart';
 export 'src/content/post_publication_contracts.dart';
 export 'src/content/comment_contracts.dart';
 export 'src/content/comment_facets.dart';

@@ -16,9 +16,9 @@ type sharedControlPlaneDefinition struct {
 		ID                       string `yaml:"id"`
 		RequiresDistinctApprover bool   `yaml:"requires_distinct_approvers"`
 	} `yaml:"approval_modes"`
-	ObjectKinds []struct {
+	ViewKinds []struct {
 		ID string `yaml:"id"`
-	} `yaml:"object_kinds"`
+	} `yaml:"view_kinds"`
 	DashboardSchema struct {
 		RequiredFields []string `yaml:"required_fields"`
 		WidgetExamples []string `yaml:"widget_examples"`
@@ -114,61 +114,4 @@ type controlPlaneAuditSchema struct {
 		DangerLevel    string   `yaml:"danger_level"`
 		RequiredFields []string `yaml:"required_fields"`
 	} `yaml:"events"`
-}
-
-type domainOnboardingSchema struct {
-	Schema struct {
-		AcceptanceStatuses       []string `yaml:"acceptance_statuses"`
-		TemplateRoles            []string `yaml:"template_roles"`
-		RolloutGroups            []string `yaml:"rollout_groups"`
-		RequiredSections         []string `yaml:"required_sections"`
-		RequiredControlPlaneKeys []string `yaml:"required_control_plane_keys"`
-		RequiredTestLayers       []string `yaml:"required_test_layers"`
-		RequiredCodegenTargets   []string `yaml:"required_codegen_targets"`
-		StatusRules              map[string]struct {
-			MinTestLayers              []string `yaml:"min_test_layers"`
-			RequireAllCodegenTargets   bool     `yaml:"require_all_codegen_targets"`
-			RequirePlaneBinding        bool     `yaml:"require_plane_binding"`
-			RequireBlockingGapsCleared bool     `yaml:"require_blocking_gaps_cleared"`
-		} `yaml:"status_rules"`
-	} `yaml:"schema"`
-	MinimumPackage struct {
-		TemplateDomain          string   `yaml:"template_domain"`
-		FirstWaveReplicaDomains []string `yaml:"first_wave_replica_domains"`
-		RequiredDeploySources   struct {
-			Current    string `yaml:"current"`
-			PlaneAware string `yaml:"plane_aware"`
-		} `yaml:"required_deploy_sources"`
-	} `yaml:"minimum_package"`
-}
-
-type domainOnboardingFile struct {
-	Domain           string   `yaml:"domain"`
-	DisplayName      string   `yaml:"display_name"`
-	TemplateRole     string   `yaml:"template_role"`
-	RolloutGroup     string   `yaml:"rollout_group"`
-	AcceptanceStatus string   `yaml:"acceptance_status"`
-	MetadataPaths    []string `yaml:"metadata_paths"`
-	ServiceNames     []string `yaml:"service_names"`
-	ControlPlanes    map[string]struct {
-		Enabled        bool     `yaml:"enabled"`
-		ObjectTypes    []string `yaml:"object_types"`
-		ConfigPrefixes []string `yaml:"config_prefixes"`
-	} `yaml:"control_planes"`
-	MinimumPackage struct {
-		MetadataFiles  []string            `yaml:"metadata_files"`
-		CodegenTargets []string            `yaml:"codegen_targets"`
-		TestEvidence   map[string][]string `yaml:"test_evidence"`
-	} `yaml:"minimum_package"`
-	Deployment struct {
-		PlaneBindingDomain   string `yaml:"plane_binding_domain"`
-		PlaneBindingSource   string `yaml:"plane_binding_source"`
-		CurrentBindingSource string `yaml:"current_binding_source"`
-	} `yaml:"deployment"`
-	Replication struct {
-		SourceTemplate  string   `yaml:"source_template"`
-		NextCopyTargets []string `yaml:"next_copy_targets"`
-		CopyNotes       []string `yaml:"copy_notes"`
-	} `yaml:"replication"`
-	BlockingGaps []string `yaml:"blocking_gaps"`
 }

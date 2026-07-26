@@ -8,7 +8,7 @@ class AssistantSkillCenterItem {
 
   String get skillId => catalog.skillId;
   bool get hasSubscription => subscription != null;
-  bool get enabled => subscription != null && subscription!.status == 'active';
+  bool get enabled => subscription?.status == SkillSubscriptionStatus.active;
 }
 
 final assistantSkillCenterProvider =
@@ -23,7 +23,8 @@ final assistantSkillCenterProvider =
       );
       final activeSubscriptions = <String, SkillSubscriptionWire>{
         for (final item in subscriptions)
-          if (item.status != 'archived') item.skillId: item,
+          if (item.status != SkillSubscriptionStatus.archived)
+            item.skillId: item,
       };
       return catalog
           .map(

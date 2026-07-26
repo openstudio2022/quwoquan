@@ -46,7 +46,7 @@
         "timeoutMilliseconds": 1500
       },
       "requestBodyKind": "",
-      "requestEntity": "",
+      "requestEntity": "AssistantCreateConversationRequest",
       "responseBody": "",
       "responseBodyKind": "",
       "responseEntity": "AssistantConversation",
@@ -55,7 +55,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant_conversation/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_conversation/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -124,7 +124,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "assistant/assistant_conversation/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_conversation/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -192,7 +192,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant_conversation/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_conversation/operations.yaml",
       "surfaceIds": [
         "assistantHistory",
         "assistantSkills",
@@ -262,7 +262,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "assistant/assistant_interaction_event/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_interaction_event/operations.yaml",
       "surfaceIds": [
         "assistantFeedback",
         "personalAssistantDialog"
@@ -332,7 +332,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant_preference_fact/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_preference_fact/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -405,7 +405,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant_preference_fact/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_preference_fact/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -475,7 +475,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant_preference_fact/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_preference_fact/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -546,7 +546,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant_preference_fact/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_preference_fact/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -618,7 +618,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -686,7 +686,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -752,7 +752,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "assistantHalfSheet",
         "personalAssistantDialog"
@@ -819,7 +819,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "assistantSettings",
         "personalAssistantDialog"
@@ -886,7 +886,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "assistantHalfSheet",
         "personalAssistantDialog"
@@ -953,7 +953,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "assistantSettings",
         "personalAssistantDialog"
@@ -1023,7 +1023,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "assistantHistory",
         "personalAssistantDialog"
@@ -1090,7 +1090,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "assistantSettings",
         "personalAssistantDialog"
@@ -1158,7 +1158,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "assistantHalfSheet",
         "personalAssistantDialog"
@@ -1228,7 +1228,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 8000
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "globalSearchNetworkResults"
       ],
@@ -1292,7 +1292,7 @@
         "timeoutMilliseconds": 5000
       },
       "requestBodyKind": "",
-      "requestEntity": "",
+      "requestEntity": "AssistantStartRunRequest",
       "responseBody": "",
       "responseBodyKind": "",
       "responseEntity": "AssistantTurnEnvelope",
@@ -1301,7 +1301,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -1372,7 +1372,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 2000
       },
-      "sourcePath": "assistant/assistant_run/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -1441,7 +1441,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "assistant/assistant_scorecard_fact/service.yaml",
+      "sourcePath": "assistant/assistant/assistant_scorecard_fact/operations.yaml",
       "surfaceIds": [
         "assistantFeedback",
         "personalAssistantDialog"
@@ -1511,7 +1511,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/skill_consent/service.yaml",
+      "sourcePath": "assistant/assistant/skill_consent/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -1581,7 +1581,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "assistant/skill_consent/service.yaml",
+      "sourcePath": "assistant/assistant/skill_consent/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -1651,7 +1651,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/skill_consent/service.yaml",
+      "sourcePath": "assistant/assistant/skill_consent/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -1675,19 +1675,18 @@
       "canonicalOperationId": "assistant.skill_subscription.CreateSkillSubscription",
       "clientContract": null,
       "commercial": {
-        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
         "explicit": true,
-        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.subscription_invalid_argument",
         "ASSISTANT.USER.subscription_idempotency_conflict",
+        "ASSISTANT.USER.subscription_destination_forbidden",
         "ASSISTANT.USER.unauthorized",
-        "ASSISTANT.SYSTEM.subscription_storage_unavailable"
+        "ASSISTANT.SYSTEM.subscription_storage_unavailable",
+        "ASSISTANT.SYSTEM.subscription_destination_validation_unavailable"
       ],
       "facadeMethod": "createSubscription",
       "facet": "SkillSubscriptionCommandFacade",
@@ -1723,7 +1722,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/skill_subscription/service.yaml",
+      "sourcePath": "assistant/assistant/skill_subscription/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -1745,11 +1744,8 @@
       "canonicalOperationId": "assistant.skill_subscription.GetSkillSubscription",
       "clientContract": null,
       "commercial": {
-        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
         "explicit": true,
-        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "assistant",
@@ -1792,7 +1788,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "assistant/skill_subscription/service.yaml",
+      "sourcePath": "assistant/assistant/skill_subscription/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -1813,11 +1809,8 @@
       "canonicalOperationId": "assistant.skill_subscription.ListSkillSubscriptions",
       "clientContract": null,
       "commercial": {
-        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
         "explicit": true,
-        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "assistant",
@@ -1859,7 +1852,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/skill_subscription/service.yaml",
+      "sourcePath": "assistant/assistant/skill_subscription/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -1880,11 +1873,8 @@
       "canonicalOperationId": "assistant.skill_subscription.UpdateSkillSubscriptionStatus",
       "clientContract": null,
       "commercial": {
-        "blockReason": "Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配",
         "explicit": true,
-        "gapId": "ASSISTANT_SKILL_SUBSCRIPTION_WIRING",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "assistant",
@@ -1930,7 +1920,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/skill_subscription/service.yaml",
+      "sourcePath": "assistant/assistant/skill_subscription/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -2001,7 +1991,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatList"
       ],
@@ -2078,7 +2068,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "startGroupChat"
       ],
@@ -2150,7 +2140,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatManage"
       ],
@@ -2220,7 +2210,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatAdmins",
         "chatDetail",
@@ -2295,7 +2285,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatAnnouncement"
       ],
@@ -2360,13 +2350,13 @@
       "requestEntity": "",
       "responseBody": "ChatMessageReceipt",
       "responseBodyKind": "page",
-      "responseEntity": "MessageReceipt",
+      "responseEntity": "ChatMessageReceipt",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatDetail"
       ],
@@ -2435,7 +2425,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatList"
       ],
@@ -2504,7 +2494,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatAddMembers",
         "chatList"
@@ -2574,7 +2564,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatList"
       ],
@@ -2644,7 +2634,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatList",
         "startGroupChat"
@@ -2714,7 +2704,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "startGroupChat"
       ],
@@ -2783,7 +2773,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatList"
       ],
@@ -2851,7 +2841,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatList"
       ],
@@ -2921,7 +2911,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "startGroupChat"
       ],
@@ -2991,7 +2981,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "startGroupChat"
       ],
@@ -3065,7 +3055,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatAnnouncement",
         "chatSettings"
@@ -3139,7 +3129,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatSettings"
       ],
@@ -3212,7 +3202,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation/service.yaml",
+      "sourcePath": "chat/chat/conversation/operations.yaml",
       "surfaceIds": [
         "chatManage"
       ],
@@ -3288,7 +3278,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation_membership/service.yaml",
+      "sourcePath": "chat/chat/conversation_membership/operations.yaml",
       "surfaceIds": [
         "chatAddMembers"
       ],
@@ -3359,7 +3349,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation_membership/service.yaml",
+      "sourcePath": "chat/chat/conversation_membership/operations.yaml",
       "surfaceIds": [
         "chatDetail"
       ],
@@ -3432,7 +3422,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation_membership/service.yaml",
+      "sourcePath": "chat/chat/conversation_membership/operations.yaml",
       "surfaceIds": [
         "chatSettings"
       ],
@@ -3496,13 +3486,13 @@
       "requestEntity": "",
       "responseBody": "ConversationMemberListRow",
       "responseBodyKind": "page",
-      "responseEntity": "ConversationMember",
+      "responseEntity": "ConversationMemberListRow",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation_membership/service.yaml",
+      "sourcePath": "chat/chat/conversation_membership/operations.yaml",
       "surfaceIds": [
         "chatAddMembers",
         "chatAdmins",
@@ -3579,7 +3569,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation_membership/service.yaml",
+      "sourcePath": "chat/chat/conversation_membership/operations.yaml",
       "surfaceIds": [
         "chatDetail"
       ],
@@ -3652,7 +3642,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation_membership/service.yaml",
+      "sourcePath": "chat/chat/conversation_membership/operations.yaml",
       "surfaceIds": [
         "chatSettings"
       ],
@@ -3724,7 +3714,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation_membership/service.yaml",
+      "sourcePath": "chat/chat/conversation_membership/operations.yaml",
       "surfaceIds": [
         "chatTransferOwnership"
       ],
@@ -3796,7 +3786,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/conversation_membership/service.yaml",
+      "sourcePath": "chat/chat/conversation_membership/operations.yaml",
       "surfaceIds": [
         "chatAdmins"
       ],
@@ -3868,7 +3858,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation_user_state/service.yaml",
+      "sourcePath": "chat/chat/conversation_user_state/operations.yaml",
       "surfaceIds": [
         "chatDetail"
       ],
@@ -3938,7 +3928,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/conversation_user_state/service.yaml",
+      "sourcePath": "chat/chat/conversation_user_state/operations.yaml",
       "surfaceIds": [
         "chatSettings"
       ],
@@ -4008,7 +3998,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/message/service.yaml",
+      "sourcePath": "chat/chat/message/operations.yaml",
       "surfaceIds": [
         "chatDetail"
       ],
@@ -4081,7 +4071,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/message/service.yaml",
+      "sourcePath": "chat/chat/message/operations.yaml",
       "surfaceIds": [
         "chatDetail"
       ],
@@ -4157,7 +4147,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "messages/message/service.yaml",
+      "sourcePath": "chat/chat/message/operations.yaml",
       "surfaceIds": [
         "chatDetail"
       ],
@@ -4227,7 +4217,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "messages/message/service.yaml",
+      "sourcePath": "chat/chat/message/operations.yaml",
       "surfaceIds": [
         "chatDetail"
       ],
@@ -4299,7 +4289,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 700
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -4368,7 +4358,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 700
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circlesList"
       ],
@@ -4437,7 +4427,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -4506,7 +4496,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 600
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circleDetail",
         "circlesList"
@@ -4576,7 +4566,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -4644,7 +4634,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 350
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -4712,7 +4702,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circlesList"
       ],
@@ -4783,7 +4773,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circlesList"
       ],
@@ -4851,7 +4841,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circlesList",
         "globalSearchSuggestions"
@@ -4925,7 +4915,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 700
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -4998,7 +4988,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 700
       },
-      "sourcePath": "social/circle/service.yaml",
+      "sourcePath": "circle/circle_management/circle/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5067,7 +5057,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "social/circle_behavior_fact/service.yaml",
+      "sourcePath": "circle/circle_management/circle_behavior_fact/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5142,7 +5132,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 900
       },
-      "sourcePath": "social/circle_file/service.yaml",
+      "sourcePath": "circle/circle_management/circle_file/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5216,7 +5206,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 700
       },
-      "sourcePath": "social/circle_file/service.yaml",
+      "sourcePath": "circle/circle_management/circle_file/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5286,7 +5276,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 350
       },
-      "sourcePath": "social/circle_file/service.yaml",
+      "sourcePath": "circle/circle_management/circle_file/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5355,7 +5345,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 400
       },
-      "sourcePath": "social/circle_file/service.yaml",
+      "sourcePath": "circle/circle_management/circle_file/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5431,7 +5421,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 700
       },
-      "sourcePath": "social/circle_file/service.yaml",
+      "sourcePath": "circle/circle_management/circle_file/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5504,7 +5494,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 700
       },
-      "sourcePath": "social/circle_group/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5577,7 +5567,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 700
       },
-      "sourcePath": "social/circle_group/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5648,7 +5638,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 350
       },
-      "sourcePath": "social/circle_group/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5717,7 +5707,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "social/circle_group/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group/operations.yaml",
       "surfaceIds": [
         "circleDetail",
         "globalSearchSuggestions"
@@ -5787,7 +5777,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "social/circle_group/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group/operations.yaml",
       "surfaceIds": [
         "circleDetail",
         "globalSearchSuggestions"
@@ -5864,7 +5854,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 700
       },
-      "sourcePath": "social/circle_group/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -5938,7 +5928,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 650
       },
-      "sourcePath": "social/circle_group_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -6013,7 +6003,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 650
       },
-      "sourcePath": "social/circle_group_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -6082,7 +6072,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 350
       },
-      "sourcePath": "social/circle_group_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -6155,7 +6145,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 650
       },
-      "sourcePath": "social/circle_group_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -6226,7 +6216,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "social/circle_group_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail",
         "circleStats"
@@ -6301,7 +6291,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 650
       },
-      "sourcePath": "social/circle_group_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -6374,7 +6364,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 650
       },
-      "sourcePath": "social/circle_group_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -6448,7 +6438,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 650
       },
-      "sourcePath": "social/circle_group_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_group_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail",
         "circleStats"
@@ -6523,7 +6513,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 650
       },
-      "sourcePath": "social/circle_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_membership/operations.yaml",
       "surfaceIds": [
         "circleStats"
       ],
@@ -6592,7 +6582,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 350
       },
-      "sourcePath": "social/circle_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -6664,7 +6654,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 600
       },
-      "sourcePath": "social/circle_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -6737,7 +6727,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 600
       },
-      "sourcePath": "social/circle_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -6806,7 +6796,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "social/circle_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_membership/operations.yaml",
       "surfaceIds": [
         "circleDetail",
         "circleStats"
@@ -6876,7 +6866,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "social/circle_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_membership/operations.yaml",
       "surfaceIds": [
         "circleStats"
       ],
@@ -6944,7 +6934,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "social/circle_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_membership/operations.yaml",
       "surfaceIds": [
         "circlesList",
         "createWorkspace",
@@ -7021,7 +7011,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 650
       },
-      "sourcePath": "social/circle_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_membership/operations.yaml",
       "surfaceIds": [
         "circleStats"
       ],
@@ -7094,7 +7084,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 600
       },
-      "sourcePath": "social/circle_membership/service.yaml",
+      "sourcePath": "circle/circle_management/circle_membership/operations.yaml",
       "surfaceIds": [
         "circleStats"
       ],
@@ -7166,7 +7156,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 600
       },
-      "sourcePath": "social/circle_post_placement/service.yaml",
+      "sourcePath": "circle/circle_management/circle_post_placement/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -7237,7 +7227,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 600
       },
-      "sourcePath": "social/circle_post_placement/service.yaml",
+      "sourcePath": "circle/circle_management/circle_post_placement/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -7308,7 +7298,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 600
       },
-      "sourcePath": "social/circle_post_placement/service.yaml",
+      "sourcePath": "circle/circle_management/circle_post_placement/operations.yaml",
       "surfaceIds": [
         "createWorkspace",
         "homeFeed"
@@ -7381,7 +7371,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 600
       },
-      "sourcePath": "social/circle_post_placement/service.yaml",
+      "sourcePath": "circle/circle_management/circle_post_placement/operations.yaml",
       "surfaceIds": [
         "circleDetail"
       ],
@@ -7417,6 +7407,7 @@
         "CONTENT.USER.comment_not_found",
         "CONTENT.USER.comment_forbidden_delete",
         "CONTENT.USER.comment_attachment_limit_exceeded",
+        "CONTENT.USER.comment_attachment_not_ready",
         "CONTENT.USER.version_conflict",
         "CONTENT.USER.idempotency_conflict",
         "CONTENT.SYSTEM.storage_write_failed"
@@ -7455,7 +7446,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/comment/service.yaml",
+      "sourcePath": "content/content/comment/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "workBrowser"
@@ -7493,6 +7484,7 @@
         "CONTENT.USER.comment_parent_invalid",
         "CONTENT.USER.comment_too_long",
         "CONTENT.USER.comment_attachment_limit_exceeded",
+        "CONTENT.USER.comment_attachment_not_ready",
         "CONTENT.USER.comment_rate_limited",
         "CONTENT.USER.idempotency_conflict",
         "CONTENT.USER.version_conflict",
@@ -7532,7 +7524,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/comment/service.yaml",
+      "sourcePath": "content/content/comment/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "workBrowser"
@@ -7607,7 +7599,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/comment/service.yaml",
+      "sourcePath": "content/content/comment/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "profileHome",
@@ -7678,7 +7670,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 400
       },
-      "sourcePath": "content/comment/service.yaml",
+      "sourcePath": "content/content/comment/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "workBrowser"
@@ -7749,7 +7741,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 400
       },
-      "sourcePath": "content/comment/service.yaml",
+      "sourcePath": "content/content/comment/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "workBrowser"
@@ -7820,7 +7812,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 400
       },
-      "sourcePath": "content/comment/service.yaml",
+      "sourcePath": "content/content/comment/operations.yaml",
       "surfaceIds": [
         "profileHome"
       ],
@@ -7888,7 +7880,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 400
       },
-      "sourcePath": "content/comment/service.yaml",
+      "sourcePath": "content/content/comment/operations.yaml",
       "surfaceIds": [
         "profileHome"
       ],
@@ -7961,7 +7953,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/comment/service.yaml",
+      "sourcePath": "content/content/comment/operations.yaml",
       "surfaceIds": [
         "workBrowser"
       ],
@@ -8035,7 +8027,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/comment/service.yaml",
+      "sourcePath": "content/content/comment/operations.yaml",
       "surfaceIds": [
         "workBrowser"
       ],
@@ -8104,7 +8096,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "content/content_reaction/service.yaml",
+      "sourcePath": "content/content/content_reaction/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "workBrowser"
@@ -8177,7 +8169,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/content_reaction/service.yaml",
+      "sourcePath": "content/content/content_reaction/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "workBrowser"
@@ -8251,7 +8243,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/content_reaction/service.yaml",
+      "sourcePath": "content/content/content_reaction/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "profileHome",
@@ -8324,7 +8316,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/content_reaction/service.yaml",
+      "sourcePath": "content/content/content_reaction/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "workBrowser"
@@ -8394,7 +8386,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "content/filter_catalog_release/service.yaml",
+      "sourcePath": "content/media/filter_catalog_release/operations.yaml",
       "surfaceIds": [
         "imageEditor"
       ],
@@ -8404,6 +8396,79 @@
           "release_id_hash"
         ],
         "metric": "content_filter_catalog_get",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "MediaAsset",
+      "authMode": "required",
+      "canonicalOperationId": "content.media_asset.DiscardMediaAsset",
+      "clientContract": {
+        "dartImport": "../content/media_contracts.dart",
+        "requestEncoder": "encodeDiscardContentMediaAssetCommand",
+        "requestType": "DiscardContentMediaAssetCommand",
+        "responseDecoder": "decodeContentMediaAssetDiscardResult",
+        "responseType": "ContentMediaAssetDiscardResult"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.media_not_found",
+        "CONTENT.USER.media_in_use",
+        "CONTENT.USER.idempotency_conflict",
+        "CONTENT.USER.version_conflict",
+        "CONTENT.SYSTEM.storage_write_failed"
+      ],
+      "facadeMethod": "discardMediaAsset",
+      "facet": "MediaAssetCommandFacet",
+      "invariantTarget": "MediaAsset",
+      "kind": "command",
+      "localOperationId": "DiscardMediaAsset",
+      "method": "DELETE",
+      "mutationTarget": "MediaAsset",
+      "objectId": "content.media_asset",
+      "ownershipPolicy": "asset_owner",
+      "pathTemplate": "/content/media/{mediaId}",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 3,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 8000
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "content/media/media_asset/operations.yaml",
+      "surfaceIds": [
+        "homeFeed"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome",
+          "media_type"
+        ],
+        "metric": "content_media_asset_discard",
         "trace": true
       }
     },
@@ -8466,7 +8531,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 400
       },
-      "sourcePath": "content/media_asset/service.yaml",
+      "sourcePath": "content/media/media_asset/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "workBrowser"
@@ -8500,8 +8565,12 @@
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
         "CONTENT.USER.media_not_found",
+        "CONTENT.USER.media_not_ready",
+        "CONTENT.USER.media_processing_rejected",
         "CONTENT.USER.idempotency_conflict",
+        "CONTENT.USER.version_conflict",
         "CONTENT.SYSTEM.storage_write_failed"
       ],
       "facadeMethod": "selectAutoVideoCover",
@@ -8538,7 +8607,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/media_asset/service.yaml",
+      "sourcePath": "content/media/media_asset/operations.yaml",
       "surfaceIds": [
         "createWorkspace"
       ],
@@ -8572,7 +8641,10 @@
         "CONTENT.USER.unauthorized",
         "CONTENT.USER.invalid_argument",
         "CONTENT.USER.media_not_found",
+        "CONTENT.USER.media_not_ready",
+        "CONTENT.USER.media_processing_rejected",
         "CONTENT.USER.idempotency_conflict",
+        "CONTENT.USER.version_conflict",
         "CONTENT.SYSTEM.storage_write_failed"
       ],
       "facadeMethod": "selectManualVideoCover",
@@ -8609,7 +8681,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/media_asset/service.yaml",
+      "sourcePath": "content/media/media_asset/operations.yaml",
       "surfaceIds": [
         "createWorkspace"
       ],
@@ -8681,7 +8753,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/media_original_access_fact/service.yaml",
+      "sourcePath": "content/media/media_original_access_fact/operations.yaml",
       "surfaceIds": [
         "circleDetail",
         "workBrowser"
@@ -8756,7 +8828,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/media_upload_session/service.yaml",
+      "sourcePath": "content/media/media_upload_session/operations.yaml",
       "surfaceIds": [
         "chatDetail",
         "circleDetail",
@@ -8795,6 +8867,7 @@
         "CONTENT.USER.unauthorized",
         "CONTENT.USER.media_not_found",
         "CONTENT.USER.invalid_argument",
+        "CONTENT.USER.media_upload_session_expired",
         "CONTENT.USER.idempotency_conflict",
         "CONTENT.USER.version_conflict",
         "CONTENT.SYSTEM.storage_write_failed"
@@ -8833,7 +8906,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1200
       },
-      "sourcePath": "content/media_upload_session/service.yaml",
+      "sourcePath": "content/media/media_upload_session/operations.yaml",
       "surfaceIds": [
         "chatDetail",
         "circleDetail",
@@ -8908,7 +8981,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 400
       },
-      "sourcePath": "content/media_upload_session/service.yaml",
+      "sourcePath": "content/media/media_upload_session/operations.yaml",
       "surfaceIds": [
         "createWorkspace"
       ],
@@ -8980,7 +9053,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/media_upload_session/service.yaml",
+      "sourcePath": "content/media/media_upload_session/operations.yaml",
       "surfaceIds": [
         "chatDetail",
         "circleDetail",
@@ -9058,7 +9131,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/outbound_share_fact/service.yaml",
+      "sourcePath": "content/content/outbound_share_fact/operations.yaml",
       "surfaceIds": [
         "createWorkspace",
         "homeFeed",
@@ -9072,6 +9145,78 @@
           "outcome"
         ],
         "metric": "content_outbound_share_append",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "content.post.GetAuthorImpact",
+      "clientContract": {
+        "dartImport": "../content/author_impact_contracts.dart",
+        "requestEncoder": "encodeGetAuthorImpactQuery",
+        "requestType": "GetAuthorImpactQuery",
+        "responseDecoder": "decodeAuthorImpactSummaryProjection",
+        "responseType": "AuthorImpactSummaryProjection"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.SYSTEM.storage_read_failed",
+        "CONTENT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "getAuthorImpact",
+      "facet": "AuthorImpactQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetAuthorImpact",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "content.post",
+      "ownershipPolicy": "public_author_impact",
+      "pathTemplate": "/content/sub-accounts/{subAccountId}/author-impact",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "PII"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "AuthorImpactSummary",
+      "responseBodyKind": "object",
+      "responseEntity": "AuthorImpactSummary",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "content/content/post/operations.yaml",
+      "surfaceIds": [
+        "myIntersections",
+        "profileHome",
+        "userProfile"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "content_author_impact_get",
         "trace": true
       }
     },
@@ -9133,7 +9278,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "content/post/service.yaml",
+      "sourcePath": "content/content/post/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -9204,7 +9349,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/post/service.yaml",
+      "sourcePath": "content/content/post/operations.yaml",
       "surfaceIds": [
         "myFootprint"
       ],
@@ -9275,7 +9420,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/post/service.yaml",
+      "sourcePath": "content/content/post/operations.yaml",
       "surfaceIds": [
         "workBrowser"
       ],
@@ -9285,6 +9430,78 @@
           "content_type"
         ],
         "metric": "content_post_get",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "content.post.ListAuthorImpactEvidence",
+      "clientContract": {
+        "dartImport": "../content/author_impact_contracts.dart",
+        "requestEncoder": "encodeListAuthorImpactEvidenceQuery",
+        "requestType": "ListAuthorImpactEvidenceQuery",
+        "responseDecoder": "decodeAuthorImpactEvidencePageProjection",
+        "responseType": "AuthorImpactEvidencePageProjection"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.SYSTEM.storage_read_failed",
+        "CONTENT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "listAuthorImpactEvidence",
+      "facet": "AuthorImpactQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListAuthorImpactEvidence",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "content.post",
+      "ownershipPolicy": "public_author_impact",
+      "pathTemplate": "/content/sub-accounts/{subAccountId}/author-impact/evidence",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "PII"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "AuthorImpactEvidencePage",
+      "responseBodyKind": "object",
+      "responseEntity": "AuthorImpactEvidencePage",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "content/content/post/operations.yaml",
+      "surfaceIds": [
+        "myIntersections",
+        "profileHome",
+        "userProfile"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "content_author_impact_evidence_list",
         "trace": true
       }
     },
@@ -9345,7 +9562,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/post/service.yaml",
+      "sourcePath": "content/content/post/operations.yaml",
       "surfaceIds": [
         "userProfile"
       ],
@@ -9356,6 +9573,80 @@
           "type"
         ],
         "metric": "content_author_posts_list",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona_or_device",
+      "aggregateOwner": "Post",
+      "authMode": "required",
+      "canonicalOperationId": "content.post.ReportBehaviors",
+      "clientContract": {
+        "dartImport": "../content/content_behavior_contracts.dart",
+        "requestEncoder": "encodeReportContentBehaviorsCommand",
+        "requestType": "ReportContentBehaviorsCommand",
+        "responseDecoder": "decodeEmptyContentBehaviorsResponse",
+        "responseType": "void"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.USER.idempotency_conflict",
+        "CONTENT.SYSTEM.required_dependency_unavailable",
+        "CONTENT.SYSTEM.storage_write_failed",
+        "CONTENT.MIDDLEWARE.upstream_timeout"
+      ],
+      "facadeMethod": "reportBehaviors",
+      "facet": "ContentBehaviorCommandFacet",
+      "invariantTarget": "Post",
+      "kind": "command",
+      "localOperationId": "ReportBehaviors",
+      "method": "POST",
+      "mutationTarget": "Post",
+      "objectId": "content.post",
+      "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
+      "pathTemplate": "/content/behaviors",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "content/content/post/operations.yaml",
+      "surfaceIds": [
+        "interestOnboarding"
+      ],
+      "telemetry": {
+        "attributes": [
+          "actor_dimension",
+          "event_count",
+          "outcome"
+        ],
+        "metric": "content_behavior_batch_report",
         "trace": true
       }
     },
@@ -9427,7 +9718,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/post/service.yaml",
+      "sourcePath": "content/content/post/operations.yaml",
       "surfaceIds": [
         "createWorkspace"
       ],
@@ -9503,7 +9794,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/profile_interaction_activity_view/service.yaml",
+      "sourcePath": "content/content/profile_interaction_activity_view/operations.yaml",
       "surfaceIds": [
         "profileHome",
         "userProfile"
@@ -9579,7 +9870,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/profile_interaction_activity_view/service.yaml",
+      "sourcePath": "content/content/profile_interaction_activity_view/operations.yaml",
       "surfaceIds": [
         "profileHome",
         "userProfile"
@@ -9656,7 +9947,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "content/profile_interaction_read_fact/service.yaml",
+      "sourcePath": "content/content/profile_interaction_read_fact/operations.yaml",
       "surfaceIds": [
         "profileHome"
       ],
@@ -9727,7 +10018,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "content/report/service.yaml",
+      "sourcePath": "content/trust_safety/report/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "userProfile",
@@ -9799,7 +10090,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 400
       },
-      "sourcePath": "content/report/service.yaml",
+      "sourcePath": "content/trust_safety/report/operations.yaml",
       "surfaceIds": [
         "myReports"
       ],
@@ -9868,7 +10159,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "entity/homepage/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -9938,7 +10229,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "entity/homepage/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage/operations.yaml",
       "surfaceIds": [
         "homepageClaim",
         "homepageDetail",
@@ -10011,7 +10302,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "entity/homepage/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage/operations.yaml",
       "surfaceIds": [
         "homepageIntroduction"
       ],
@@ -10081,7 +10372,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "entity/homepage/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -10151,7 +10442,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "entity/homepage/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -10221,7 +10512,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "entity/homepage/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -10291,7 +10582,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "entity/homepage/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -10360,7 +10651,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "entity/homepage/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage/operations.yaml",
       "surfaceIds": [
         "homepagePicker"
       ],
@@ -10431,7 +10722,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "entity/homepage/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage/operations.yaml",
       "surfaceIds": [
         "homepagePicker",
         "suggestHomepage"
@@ -10505,7 +10796,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "entity/homepage/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage/operations.yaml",
       "surfaceIds": [
         "homepageMaintenance"
       ],
@@ -10579,7 +10870,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "entity/homepage_claim_request/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage_claim_request/operations.yaml",
       "surfaceIds": [
         "homepageClaim"
       ],
@@ -10653,7 +10944,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "entity/homepage_review/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage_review/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -10725,7 +11016,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "entity/homepage_review/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage_review/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -10794,7 +11085,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "entity/homepage_review/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage_review/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -10864,7 +11155,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "entity/homepage_review/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage_review/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -10937,7 +11228,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "entity/homepage_review/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage_review/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -11008,7 +11299,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "entity/homepage_status_report/service.yaml",
+      "sourcePath": "entity/entity_homepage/homepage_status_report/operations.yaml",
       "surfaceIds": [
         "homepageStatusReport"
       ],
@@ -11081,7 +11372,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 1200
       },
-      "sourcePath": "integration/location/service.yaml",
+      "sourcePath": "integration/external_integration/location/operations.yaml",
       "surfaceIds": [
         "createWorkspace"
       ],
@@ -11153,7 +11444,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 1200
       },
-      "sourcePath": "integration/location/service.yaml",
+      "sourcePath": "integration/external_integration/location/operations.yaml",
       "surfaceIds": [
         "createWorkspace"
       ],
@@ -11224,7 +11515,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "notification/notification/service.yaml",
+      "sourcePath": "notification/notification_delivery/notification/operations.yaml",
       "surfaceIds": [
         "chatList",
         "personalAssistantDialog"
@@ -11296,7 +11587,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "notification/notification/service.yaml",
+      "sourcePath": "notification/notification_delivery/notification/operations.yaml",
       "surfaceIds": [
         "chatList",
         "personalAssistantDialog"
@@ -11366,7 +11657,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "notification/notification/service.yaml",
+      "sourcePath": "notification/notification_delivery/notification/operations.yaml",
       "surfaceIds": [
         "chatList",
         "personalAssistantDialog"
@@ -11437,7 +11728,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "notification/notification/service.yaml",
+      "sourcePath": "notification/notification_delivery/notification/operations.yaml",
       "surfaceIds": [
         "chatList",
         "personalAssistantDialog"
@@ -11510,7 +11801,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "notification/notification/service.yaml",
+      "sourcePath": "notification/notification_delivery/notification/operations.yaml",
       "surfaceIds": [
         "chatList",
         "personalAssistantDialog"
@@ -11582,7 +11873,7 @@
         "availabilityPercent": 99.95,
         "latencyP95Milliseconds": 100
       },
-      "sourcePath": "notification/notification_delivery_job/service.yaml",
+      "sourcePath": "notification/notification_delivery/notification_delivery_job/operations.yaml",
       "surfaceIds": [
         "rtcIncoming"
       ],
@@ -11617,12 +11908,14 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.cannot_answer",
         "RTC.USER.call_ended",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
         "RTC.SYSTEM.media_transport_unavailable",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "answerCall",
@@ -11659,7 +11952,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcIncoming"
       ],
@@ -11694,10 +11987,12 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.invalid_call_action",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "cancelCall",
@@ -11734,7 +12029,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcOutgoing"
       ],
@@ -11769,7 +12064,9 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "getCall",
@@ -11806,7 +12103,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcIncoming",
         "rtcOutgoing",
@@ -11843,10 +12140,12 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.invalid_call_action",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "hangupCall",
@@ -11883,7 +12182,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcVideo",
         "rtcVoice"
@@ -11919,12 +12218,14 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.unauthorized",
+        "RTC.USER.account_security_denied",
         "RTC.USER.already_in_call",
         "RTC.USER.not_mutual",
         "RTC.USER.blocked",
         "RTC.USER.idempotency_conflict",
         "RTC.USER.rate_limited",
         "RTC.SYSTEM.media_transport_unavailable",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "initiateCall",
@@ -11961,7 +12262,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "chatDetail",
         "rtcPickParticipants"
@@ -11997,12 +12298,14 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.call_full",
         "RTC.USER.call_ended",
         "RTC.USER.blocked",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "inviteToCall",
@@ -12039,7 +12342,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcPickParticipants"
       ],
@@ -12074,12 +12377,14 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.call_full",
         "RTC.USER.call_ended",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
         "RTC.SYSTEM.media_transport_unavailable",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "joinCall",
@@ -12116,7 +12421,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcVideo",
         "rtcVoice"
@@ -12152,10 +12457,12 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.invalid_call_action",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "leaveCall",
@@ -12192,7 +12499,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcVideo",
         "rtcVoice"
@@ -12227,6 +12534,8 @@
       "concurrency": {},
       "domain": "rtc",
       "errorCodes": [
+        "RTC.USER.account_security_denied",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "listCalls",
@@ -12263,7 +12572,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "chatList"
       ],
@@ -12297,10 +12606,12 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.invalid_call_action",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "rejectCall",
@@ -12337,7 +12648,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcIncoming"
       ],
@@ -12372,10 +12683,12 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.invalid_call_action",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "reportMediaConnected",
@@ -12412,7 +12725,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcVideo",
         "rtcVoice"
@@ -12448,11 +12761,13 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.screen_share_conflict",
         "RTC.USER.invalid_call_action",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "startScreenShare",
@@ -12489,7 +12804,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcVideo",
         "rtcVoice"
@@ -12525,10 +12840,12 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.invalid_call_action",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "stopScreenShare",
@@ -12565,7 +12882,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcVideo",
         "rtcVoice"
@@ -12601,10 +12918,12 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.invalid_call_action",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "toggleCamera",
@@ -12641,7 +12960,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcVideo",
         "rtcVoice"
@@ -12677,10 +12996,12 @@
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
+        "RTC.USER.account_security_denied",
         "RTC.USER.not_participant",
         "RTC.USER.invalid_call_action",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
+        "RTC.SYSTEM.account_security_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "toggleMute",
@@ -12717,7 +13038,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 300
       },
-      "sourcePath": "rtc/call_session/service.yaml",
+      "sourcePath": "rtc/rtc/call_session/operations.yaml",
       "surfaceIds": [
         "rtcVideo",
         "rtcVoice"
@@ -12734,79 +13055,10 @@
       }
     },
     {
-      "actorRequirement": "none",
-      "aggregateOwner": "",
-      "authMode": "optional",
-      "canonicalOperationId": "search.query.ListHotQueries",
-      "clientContract": {
-        "dartImport": "../search/hot_query_contracts.dart",
-        "requestEncoder": "encodeListHotQueriesQuery",
-        "requestType": "ListHotQueriesQuery",
-        "responseDecoder": "decodeHotQuerySlice",
-        "responseType": "HotQuerySlice"
-      },
-      "commercial": {
-        "explicit": true,
-        "status": "ready"
-      },
-      "concurrency": {},
-      "domain": "search",
-      "errorCodes": [
-        "SEARCH.USER.invalid_argument",
-        "SEARCH.MIDDLEWARE.unavailable"
-      ],
-      "facadeMethod": "listHotQueries",
-      "facet": "SearchHotQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "ListHotQueries",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "search.query",
-      "ownershipPolicy": "public_search_discovery",
-      "pathTemplate": "/search/hot-queries",
-      "permissions": [],
-      "principal": "public",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "PUBLIC",
-        "responseClassification": "PUBLIC"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBodyKind": "",
-      "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "HotQueryView",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.5,
-        "latencyP95Milliseconds": 500
-      },
-      "sourcePath": "search/query/service.yaml",
-      "surfaceIds": [
-        "globalSearchLanding"
-      ],
-      "telemetry": {
-        "attributes": [
-          "outcome",
-          "result_count"
-        ],
-        "metric": "search_hot_queries",
-        "trace": true
-      }
-    },
-    {
       "actorRequirement": "persona_or_device",
       "aggregateOwner": "",
       "authMode": "optional",
-      "canonicalOperationId": "search.query.ReportSearchFeedback",
+      "canonicalOperationId": "search.feedback_fact.ReportSearchFeedback",
       "clientContract": {
         "dartImport": "../search/search_feedback_contracts.dart",
         "requestEncoder": "encodeReportSearchFeedbackCommand",
@@ -12827,12 +13079,12 @@
       ],
       "facadeMethod": "reportFeedback",
       "facet": "SearchFeedbackCommandFacade",
-      "invariantTarget": "SearchQuery",
+      "invariantTarget": "FeedbackFact",
       "kind": "command",
       "localOperationId": "ReportSearchFeedback",
       "method": "POST",
-      "mutationTarget": "SearchQuery",
-      "objectId": "search.query",
+      "mutationTarget": "FeedbackFact",
+      "objectId": "search.feedback_fact",
       "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
       "pathTemplate": "/search/feedback",
       "permissions": [],
@@ -12850,7 +13102,7 @@
         "timeoutMilliseconds": 1500
       },
       "requestBodyKind": "",
-      "requestEntity": "SearchFeedbackEvent",
+      "requestEntity": "FeedbackFact",
       "responseBody": "",
       "responseBodyKind": "",
       "responseEntity": "",
@@ -12859,7 +13111,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "search/query/service.yaml",
+      "sourcePath": "search/search/feedback_fact/operations.yaml",
       "surfaceIds": [
         "globalSearchNetworkResults"
       ],
@@ -12870,76 +13122,6 @@
           "outcome"
         ],
         "metric": "search_feedback_report",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "none",
-      "aggregateOwner": "",
-      "authMode": "optional",
-      "canonicalOperationId": "search.query.SearchQuery",
-      "clientContract": {
-        "dartImport": "../search/search_query_contracts.dart",
-        "requestEncoder": "encodeCanonicalSearchQuery",
-        "requestType": "CanonicalSearchQuery",
-        "responseDecoder": "decodeCanonicalSearchResult",
-        "responseType": "CanonicalSearchResult"
-      },
-      "commercial": {
-        "explicit": true,
-        "status": "ready"
-      },
-      "concurrency": {},
-      "domain": "search",
-      "errorCodes": [
-        "SEARCH.USER.invalid_argument",
-        "SEARCH.MIDDLEWARE.unavailable"
-      ],
-      "facadeMethod": "search",
-      "facet": "SearchFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "SearchQuery",
-      "method": "POST",
-      "mutationTarget": "",
-      "objectId": "search.query",
-      "ownershipPolicy": "public_search_discovery",
-      "pathTemplate": "/search",
-      "permissions": [],
-      "principal": "public",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "SENSITIVE",
-        "responseClassification": "PUBLIC"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "optional",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 6000
-      },
-      "requestBodyKind": "",
-      "requestEntity": "SearchQuery",
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "SearchResponseView",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.5,
-        "latencyP95Milliseconds": 1500
-      },
-      "sourcePath": "search/query/service.yaml",
-      "surfaceIds": [
-        "globalSearchNetworkResults"
-      ],
-      "telemetry": {
-        "attributes": [
-          "mode",
-          "target_count",
-          "outcome"
-        ],
-        "metric": "search_query",
         "trace": true
       }
     },
@@ -13000,7 +13182,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "search/recent_search_state/service.yaml",
+      "sourcePath": "search/search/recent_search_state/operations.yaml",
       "surfaceIds": [
         "globalSearchLanding"
       ],
@@ -13072,7 +13254,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "search/recent_search_state/service.yaml",
+      "sourcePath": "search/search/recent_search_state/operations.yaml",
       "surfaceIds": [
         "globalSearchLanding"
       ],
@@ -13140,7 +13322,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "search/recent_search_state/service.yaml",
+      "sourcePath": "search/search/recent_search_state/operations.yaml",
       "surfaceIds": [
         "globalSearchLanding"
       ],
@@ -13211,7 +13393,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "search/recent_search_state/service.yaml",
+      "sourcePath": "search/search/recent_search_state/operations.yaml",
       "surfaceIds": [
         "globalSearchLanding",
         "globalSearchNetworkResults",
@@ -13231,35 +13413,34 @@
       "actorRequirement": "none",
       "aggregateOwner": "",
       "authMode": "optional",
-      "canonicalOperationId": "tag.tag.ListTagChildren",
+      "canonicalOperationId": "search.search_query.ListHotQueries",
       "clientContract": {
-        "dartImport": "../tag/tag_catalog_contracts.dart",
-        "requestEncoder": "encodeListTagChildrenQuery",
-        "requestType": "ListTagChildrenQuery",
-        "responseDecoder": "decodeTagChildrenSlice",
-        "responseType": "TagChildrenSlice"
+        "dartImport": "../search/hot_query_contracts.dart",
+        "requestEncoder": "encodeListHotQueriesQuery",
+        "requestType": "ListHotQueriesQuery",
+        "responseDecoder": "decodeHotQuerySlice",
+        "responseType": "HotQuerySlice"
       },
       "commercial": {
         "explicit": true,
         "status": "ready"
       },
       "concurrency": {},
-      "domain": "tag",
+      "domain": "search",
       "errorCodes": [
-        "TAG.USER.invalid_argument",
-        "TAG.USER.tag_not_found",
-        "TAG.SYSTEM.storage_read_failed"
+        "SEARCH.USER.invalid_argument",
+        "SEARCH.MIDDLEWARE.unavailable"
       ],
-      "facadeMethod": "listChildren",
-      "facet": "TagCatalogQueryFacade",
+      "facadeMethod": "listHotQueries",
+      "facet": "SearchHotQueryFacade",
       "invariantTarget": "",
       "kind": "query",
-      "localOperationId": "ListTagChildren",
+      "localOperationId": "ListHotQueries",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "tag.tag",
-      "ownershipPolicy": "public_taxonomy_read",
-      "pathTemplate": "/tag/children",
+      "objectId": "search.search_query",
+      "ownershipPolicy": "public_search_discovery",
+      "pathTemplate": "/search/hot-queries",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -13278,21 +13459,22 @@
       "requestEntity": "",
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "TagChildView",
+      "responseEntity": "HotQueryView",
       "scopes": [],
       "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 300
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 500
       },
-      "sourcePath": "tag/service.yaml",
+      "sourcePath": "search/search/search_query/operations.yaml",
       "surfaceIds": [
-        "profileCareerInterests"
+        "globalSearchLanding"
       ],
       "telemetry": {
         "attributes": [
-          "outcome"
+          "outcome",
+          "result_count"
         ],
-        "metric": "tag_children_list",
+        "metric": "search_hot_queries",
         "trace": true
       }
     },
@@ -13300,108 +13482,39 @@
       "actorRequirement": "none",
       "aggregateOwner": "",
       "authMode": "optional",
-      "canonicalOperationId": "tag.tag.ResolveTag",
+      "canonicalOperationId": "search.search_query.SearchQuery",
       "clientContract": {
-        "dartImport": "../tag/tag_catalog_contracts.dart",
-        "requestEncoder": "encodeResolveTagQuery",
-        "requestType": "ResolveTagQuery",
-        "responseDecoder": "decodeTagResolve",
-        "responseType": "TagResolve"
+        "dartImport": "../search/search_query_contracts.dart",
+        "requestEncoder": "encodeCanonicalSearchQuery",
+        "requestType": "CanonicalSearchQuery",
+        "responseDecoder": "decodeCanonicalSearchResult",
+        "responseType": "CanonicalSearchResult"
       },
       "commercial": {
         "explicit": true,
         "status": "ready"
       },
       "concurrency": {},
-      "domain": "tag",
+      "domain": "search",
       "errorCodes": [
-        "TAG.USER.invalid_argument",
-        "TAG.USER.tag_not_found",
-        "TAG.SYSTEM.storage_read_failed"
+        "SEARCH.USER.invalid_argument",
+        "SEARCH.MIDDLEWARE.unavailable"
       ],
-      "facadeMethod": "resolve",
-      "facet": "TagCatalogQueryFacade",
+      "facadeMethod": "search",
+      "facet": "SearchFacade",
       "invariantTarget": "",
       "kind": "query",
-      "localOperationId": "ResolveTag",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "tag.tag",
-      "ownershipPolicy": "public_taxonomy_read",
-      "pathTemplate": "/tag/resolve",
-      "permissions": [],
-      "principal": "public",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "PUBLIC",
-        "responseClassification": "PUBLIC"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBodyKind": "",
-      "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "TagResolveView",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 300
-      },
-      "sourcePath": "tag/service.yaml",
-      "surfaceIds": [
-        "profileCareerInterests"
-      ],
-      "telemetry": {
-        "attributes": [
-          "outcome"
-        ],
-        "metric": "tag_resolve",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "none",
-      "aggregateOwner": "",
-      "authMode": "optional",
-      "canonicalOperationId": "tag.tag.ValidateTagRefs",
-      "clientContract": {
-        "dartImport": "../tag/tag_catalog_contracts.dart",
-        "requestEncoder": "encodeValidateTagRefsQuery",
-        "requestType": "ValidateTagRefsQuery",
-        "responseDecoder": "decodeTagValidationResult",
-        "responseType": "TagValidationResult"
-      },
-      "commercial": {
-        "explicit": true,
-        "status": "ready"
-      },
-      "concurrency": {},
-      "domain": "tag",
-      "errorCodes": [
-        "TAG.USER.invalid_argument",
-        "TAG.SYSTEM.storage_read_failed"
-      ],
-      "facadeMethod": "validateRefs",
-      "facet": "TagCatalogQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "ValidateTagRefs",
+      "localOperationId": "SearchQuery",
       "method": "POST",
       "mutationTarget": "",
-      "objectId": "tag.tag",
-      "ownershipPolicy": "public_taxonomy_read",
-      "pathTemplate": "/tag/validate",
+      "objectId": "search.search_query",
+      "ownershipPolicy": "public_search_discovery",
+      "pathTemplate": "/search",
       "permissions": [],
       "principal": "public",
       "privacy": {
         "logPolicy": "metadata_only",
-        "requestClassification": "PUBLIC",
+        "requestClassification": "SENSITIVE",
         "responseClassification": "PUBLIC"
       },
       "reliability": {
@@ -13409,27 +13522,29 @@
         "idempotency": "optional",
         "maxAttempts": 2,
         "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
+        "timeoutMilliseconds": 6000
       },
       "requestBodyKind": "",
-      "requestEntity": "TagValidateRequest",
+      "requestEntity": "SearchQuery",
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "TagValidationResultView",
+      "responseEntity": "SearchResponseView",
       "scopes": [],
       "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 500
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "tag/service.yaml",
+      "sourcePath": "search/search/search_query/operations.yaml",
       "surfaceIds": [
-        "profileCareerInterests"
+        "globalSearchNetworkResults"
       ],
       "telemetry": {
         "attributes": [
+          "mode",
+          "target_count",
           "outcome"
         ],
-        "metric": "tag_validate_refs",
+        "metric": "search_query",
         "trace": true
       }
     },
@@ -13492,7 +13607,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "tag/tag_feedback/service.yaml",
+      "sourcePath": "tag/tag/tag_feedback/operations.yaml",
       "surfaceIds": [
         "profileCareerInterests"
       ],
@@ -13503,6 +13618,214 @@
           "replayed"
         ],
         "metric": "tag_feedback_append",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "tag.tag_node_view.ListTagChildren",
+      "clientContract": {
+        "dartImport": "../tag/tag_catalog_contracts.dart",
+        "requestEncoder": "encodeListTagChildrenQuery",
+        "requestType": "ListTagChildrenQuery",
+        "responseDecoder": "decodeTagChildrenSlice",
+        "responseType": "TagChildrenSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "tag",
+      "errorCodes": [
+        "TAG.USER.invalid_argument",
+        "TAG.USER.tag_not_found",
+        "TAG.SYSTEM.storage_read_failed"
+      ],
+      "facadeMethod": "listChildren",
+      "facet": "TagCatalogQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListTagChildren",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "tag.tag_node_view",
+      "ownershipPolicy": "public_taxonomy_read",
+      "pathTemplate": "/tag/children",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "TagChildrenSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "tag/tag/tag_node_view/operations.yaml",
+      "surfaceIds": [
+        "interestOnboarding",
+        "profileCareerInterests"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "tag_children_list",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "tag.tag_node_view.ResolveTag",
+      "clientContract": {
+        "dartImport": "../tag/tag_catalog_contracts.dart",
+        "requestEncoder": "encodeResolveTagQuery",
+        "requestType": "ResolveTagQuery",
+        "responseDecoder": "decodeTagResolve",
+        "responseType": "TagResolve"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "tag",
+      "errorCodes": [
+        "TAG.USER.invalid_argument",
+        "TAG.USER.tag_not_found",
+        "TAG.SYSTEM.storage_read_failed"
+      ],
+      "facadeMethod": "resolve",
+      "facet": "TagCatalogQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ResolveTag",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "tag.tag_node_view",
+      "ownershipPolicy": "public_taxonomy_read",
+      "pathTemplate": "/tag/resolve",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "TagResolveView",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "tag/tag/tag_node_view/operations.yaml",
+      "surfaceIds": [
+        "profileCareerInterests"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "tag_resolve",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "tag.tag_node_view.ValidateTagRefs",
+      "clientContract": {
+        "dartImport": "../tag/tag_catalog_contracts.dart",
+        "requestEncoder": "encodeValidateTagRefsQuery",
+        "requestType": "ValidateTagRefsQuery",
+        "responseDecoder": "decodeTagValidationResult",
+        "responseType": "TagValidationResult"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "tag",
+      "errorCodes": [
+        "TAG.USER.invalid_argument",
+        "TAG.SYSTEM.storage_read_failed"
+      ],
+      "facadeMethod": "validateRefs",
+      "facet": "TagCatalogQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ValidateTagRefs",
+      "method": "POST",
+      "mutationTarget": "",
+      "objectId": "tag.tag_node_view",
+      "ownershipPolicy": "public_taxonomy_read",
+      "pathTemplate": "/tag/validate",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "optional",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBodyKind": "",
+      "requestEntity": "TagValidateRequest",
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "TagValidationResultView",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "tag/tag/tag_node_view/operations.yaml",
+      "surfaceIds": [
+        "interestOnboarding",
+        "profileCareerInterests"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "tag_validate_refs",
         "trace": true
       }
     },
@@ -13550,7 +13873,7 @@
         "idempotency": "optional",
         "maxAttempts": 2,
         "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
+        "timeoutMilliseconds": 10000
       },
       "requestBodyKind": "",
       "requestEntity": "",
@@ -13560,9 +13883,9 @@
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 800
+        "latencyP95Milliseconds": 2000
       },
-      "sourcePath": "user/account_session/service.yaml",
+      "sourcePath": "user/account/account_session/operations.yaml",
       "surfaceIds": [
         "appShell"
       ],
@@ -13642,7 +13965,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/account_session/service.yaml",
+      "sourcePath": "user/account/account_session/operations.yaml",
       "surfaceIds": [
         "login"
       ],
@@ -13723,7 +14046,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/account_session/service.yaml",
+      "sourcePath": "user/account/account_session/operations.yaml",
       "surfaceIds": [
         "login"
       ],
@@ -13802,7 +14125,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/account_session/service.yaml",
+      "sourcePath": "user/account/account_session/operations.yaml",
       "surfaceIds": [
         "login"
       ],
@@ -13882,7 +14205,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/account_session/service.yaml",
+      "sourcePath": "user/account/account_session/operations.yaml",
       "surfaceIds": [
         "login"
       ],
@@ -13962,7 +14285,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/account_session/service.yaml",
+      "sourcePath": "user/account/account_session/operations.yaml",
       "surfaceIds": [
         "login"
       ],
@@ -14034,7 +14357,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/account_session/service.yaml",
+      "sourcePath": "user/account/account_session/operations.yaml",
       "surfaceIds": [
         "settingsAccountSecurity",
         "settingsHome"
@@ -14106,7 +14429,7 @@
         "availabilityPercent": 99.95,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/account_session/service.yaml",
+      "sourcePath": "user/account/account_session/operations.yaml",
       "surfaceIds": [
         "appShell"
       ],
@@ -14180,7 +14503,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1200
       },
-      "sourcePath": "user/authentication_challenge/service.yaml",
+      "sourcePath": "user/account/authentication_challenge/operations.yaml",
       "surfaceIds": [
         "login"
       ],
@@ -14259,7 +14582,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1200
       },
-      "sourcePath": "user/authentication_challenge/service.yaml",
+      "sourcePath": "user/account/authentication_challenge/operations.yaml",
       "surfaceIds": [
         "login"
       ],
@@ -14333,7 +14656,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1200
       },
-      "sourcePath": "user/authentication_challenge/service.yaml",
+      "sourcePath": "user/account/authentication_challenge/operations.yaml",
       "surfaceIds": [
         "login"
       ],
@@ -14353,7 +14676,7 @@
       "actorRequirement": "account",
       "aggregateOwner": "ContactDiscoveryRecord",
       "authMode": "required",
-      "canonicalOperationId": "user.contact_discovery.DismissContactDiscovery",
+      "canonicalOperationId": "user.contact_discovery_record.DismissContactDiscovery",
       "clientContract": {
         "dartImport": "../user/contact_discovery_contracts.dart",
         "requestEncoder": "encodeDismissContactDiscoveryCommand",
@@ -14379,7 +14702,7 @@
       "localOperationId": "DismissContactDiscovery",
       "method": "DELETE",
       "mutationTarget": "ContactDiscoveryRecord",
-      "objectId": "user.contact_discovery",
+      "objectId": "user.contact_discovery_record",
       "ownershipPolicy": "current_account_owner",
       "pathTemplate": "/owner/contact-discovery/{id}",
       "permissions": [],
@@ -14406,7 +14729,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/contact_discovery/service.yaml",
+      "sourcePath": "user/relationship/contact_discovery_record/operations.yaml",
       "surfaceIds": [
         "addContactPhone"
       ],
@@ -14424,7 +14747,7 @@
       "actorRequirement": "account",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "user.contact_discovery.GetLatestContactDiscovery",
+      "canonicalOperationId": "user.contact_discovery_record.GetLatestContactDiscovery",
       "clientContract": {
         "dartImport": "../user/contact_discovery_contracts.dart",
         "requestEncoder": "encodeGetLatestContactDiscoveryQuery",
@@ -14450,7 +14773,7 @@
       "localOperationId": "GetLatestContactDiscovery",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.contact_discovery",
+      "objectId": "user.contact_discovery_record",
       "ownershipPolicy": "current_account_owner",
       "pathTemplate": "/owner/contact-discovery/latest",
       "permissions": [],
@@ -14477,7 +14800,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/contact_discovery/service.yaml",
+      "sourcePath": "user/relationship/contact_discovery_record/operations.yaml",
       "surfaceIds": [
         "addContactPhone"
       ],
@@ -14495,7 +14818,7 @@
       "actorRequirement": "account",
       "aggregateOwner": "ContactDiscoveryRecord",
       "authMode": "required",
-      "canonicalOperationId": "user.contact_discovery.InitiateContactDiscovery",
+      "canonicalOperationId": "user.contact_discovery_record.InitiateContactDiscovery",
       "clientContract": {
         "dartImport": "../user/contact_discovery_contracts.dart",
         "requestEncoder": "encodeInitiateContactDiscoveryCommand",
@@ -14523,7 +14846,7 @@
       "localOperationId": "InitiateContactDiscovery",
       "method": "POST",
       "mutationTarget": "ContactDiscoveryRecord",
-      "objectId": "user.contact_discovery",
+      "objectId": "user.contact_discovery_record",
       "ownershipPolicy": "current_account_owner",
       "pathTemplate": "/owner/contact-discovery",
       "permissions": [],
@@ -14550,7 +14873,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/contact_discovery/service.yaml",
+      "sourcePath": "user/relationship/contact_discovery_record/operations.yaml",
       "surfaceIds": [
         "addContactPhone"
       ],
@@ -14625,7 +14948,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/credential_binding/service.yaml",
+      "sourcePath": "user/account/credential_binding/operations.yaml",
       "surfaceIds": [
         "settingsAccountSecurity",
         "settingsHome"
@@ -14701,7 +15024,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/credential_binding/service.yaml",
+      "sourcePath": "user/account/credential_binding/operations.yaml",
       "surfaceIds": [
         "settingsAccountSecurity",
         "settingsHome"
@@ -14771,7 +15094,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/credential_binding/service.yaml",
+      "sourcePath": "user/account/credential_binding/operations.yaml",
       "surfaceIds": [
         "settingsAccountSecurity",
         "settingsHome"
@@ -14844,7 +15167,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/credential_binding/service.yaml",
+      "sourcePath": "user/account/credential_binding/operations.yaml",
       "surfaceIds": [
         "settingsAccountSecurity",
         "settingsHome"
@@ -14918,7 +15241,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 600
       },
-      "sourcePath": "user/device_registration/service.yaml",
+      "sourcePath": "user/account/device_registration/operations.yaml",
       "surfaceIds": [
         "appShell"
       ],
@@ -14995,7 +15318,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/device_registration/service.yaml",
+      "sourcePath": "user/account/device_registration/operations.yaml",
       "surfaceIds": [
         "appShell"
       ],
@@ -15067,7 +15390,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/followed_subject_visit_state/service.yaml",
+      "sourcePath": "user/relationship/followed_subject_visit_state/operations.yaml",
       "surfaceIds": [
         "homeFeed"
       ],
@@ -15139,7 +15462,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/following_subject/service.yaml",
+      "sourcePath": "user/profile_projection/following_subject/operations.yaml",
       "surfaceIds": [
         "homeFeed"
       ],
@@ -15212,7 +15535,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/greeting_request/service.yaml",
+      "sourcePath": "user/relationship/greeting_request/operations.yaml",
       "surfaceIds": [
         "greetingInbox"
       ],
@@ -15285,7 +15608,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/greeting_request/service.yaml",
+      "sourcePath": "user/relationship/greeting_request/operations.yaml",
       "surfaceIds": [
         "greetingInbox"
       ],
@@ -15356,7 +15679,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/greeting_request/service.yaml",
+      "sourcePath": "user/relationship/greeting_request/operations.yaml",
       "surfaceIds": [
         "greetingInbox"
       ],
@@ -15427,7 +15750,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/greeting_request/service.yaml",
+      "sourcePath": "user/relationship/greeting_request/operations.yaml",
       "surfaceIds": [
         "greetingInbox"
       ],
@@ -15500,7 +15823,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/greeting_request/service.yaml",
+      "sourcePath": "user/relationship/greeting_request/operations.yaml",
       "surfaceIds": [
         "greetingInbox"
       ],
@@ -15577,7 +15900,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/greeting_request/service.yaml",
+      "sourcePath": "user/relationship/greeting_request/operations.yaml",
       "surfaceIds": [
         "userProfile"
       ],
@@ -15650,7 +15973,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/persona/service.yaml",
+      "sourcePath": "user/persona_management/persona/operations.yaml",
       "surfaceIds": [
         "profilePersonas"
       ],
@@ -15721,7 +16044,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/persona/service.yaml",
+      "sourcePath": "user/persona_management/persona/operations.yaml",
       "surfaceIds": [
         "profilePersonas"
       ],
@@ -15792,7 +16115,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/persona/service.yaml",
+      "sourcePath": "user/persona_management/persona/operations.yaml",
       "surfaceIds": [
         "profilePersonas"
       ],
@@ -15866,7 +16189,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/persona/service.yaml",
+      "sourcePath": "user/persona_management/persona/operations.yaml",
       "surfaceIds": [
         "profilePersonas"
       ],
@@ -15939,7 +16262,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/persona/service.yaml",
+      "sourcePath": "user/persona_management/persona/operations.yaml",
       "surfaceIds": [
         "profilePersonas"
       ],
@@ -15977,6 +16300,9 @@
         "USER.PROFILE.invalid_media_asset",
         "USER.PROFILE.invalid_region",
         "USER.PROFILE.invalid_tag_ref",
+        "USER.PROFILE.taxonomy_release_conflict",
+        "USER.PROFILE.version_conflict",
+        "USER.PROFILE.idempotency_conflict",
         "USER.SYSTEM.internal_error"
       ],
       "facadeMethod": "updateUserProfile",
@@ -16013,7 +16339,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/persona/service.yaml",
+      "sourcePath": "user/persona_management/persona/operations.yaml",
       "surfaceIds": [
         "profileCareerInterests",
         "profileEdit"
@@ -16086,7 +16412,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/persona_relationship/service.yaml",
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
       "surfaceIds": [
         "blockedUsers"
       ],
@@ -16161,7 +16487,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/persona_relationship/service.yaml",
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
       "surfaceIds": [
         "addContactConfirm",
         "addContactPhone",
@@ -16239,7 +16565,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/persona_relationship/service.yaml",
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
       "surfaceIds": [
         "addContactConfirm",
         "addContactPhone",
@@ -16312,7 +16638,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/persona_relationship/service.yaml",
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
       "surfaceIds": [
         "blockedUsers"
       ],
@@ -16383,7 +16709,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/persona_relationship/service.yaml",
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
       "surfaceIds": [
         "profileStats"
       ],
@@ -16454,7 +16780,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/persona_relationship/service.yaml",
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "profileHome",
@@ -16529,7 +16855,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/persona_relationship/service.yaml",
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
       "surfaceIds": [
         "blockedUsers"
       ],
@@ -16602,7 +16928,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/persona_relationship/service.yaml",
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
       "surfaceIds": [
         "homeFeed",
         "profileStats",
@@ -16680,7 +17006,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/profile_update_proposal/service.yaml",
+      "sourcePath": "user/persona_management/profile_update_proposal/operations.yaml",
       "surfaceIds": [
         "profileEdit"
       ],
@@ -16755,7 +17081,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/profile_update_proposal/service.yaml",
+      "sourcePath": "user/persona_management/profile_update_proposal/operations.yaml",
       "surfaceIds": [
         "profileEdit"
       ],
@@ -16830,7 +17156,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/profile_update_proposal/service.yaml",
+      "sourcePath": "user/persona_management/profile_update_proposal/operations.yaml",
       "surfaceIds": [
         "personalAssistantDialog"
       ],
@@ -16905,7 +17231,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/profile_update_proposal/service.yaml",
+      "sourcePath": "user/persona_management/profile_update_proposal/operations.yaml",
       "surfaceIds": [
         "profileEdit"
       ],
@@ -16979,7 +17305,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/profile_update_proposal/service.yaml",
+      "sourcePath": "user/persona_management/profile_update_proposal/operations.yaml",
       "surfaceIds": [
         "profileEdit"
       ],
@@ -17053,7 +17379,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/profile_update_proposal/service.yaml",
+      "sourcePath": "user/persona_management/profile_update_proposal/operations.yaml",
       "surfaceIds": [
         "profileEdit"
       ],
@@ -17126,7 +17452,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/subject_follow/service.yaml",
+      "sourcePath": "user/relationship/subject_follow/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -17200,7 +17526,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/subject_follow/service.yaml",
+      "sourcePath": "user/relationship/subject_follow/operations.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
@@ -17220,7 +17546,7 @@
       "actorRequirement": "account",
       "aggregateOwner": "UserAccount",
       "authMode": "required",
-      "canonicalOperationId": "user.user_profile.CloseAccount",
+      "canonicalOperationId": "user.user_account.CloseAccount",
       "clientContract": {
         "dartImport": "../user/user_account_contracts.dart",
         "requestEncoder": "encodeCloseAccountCommand",
@@ -17246,7 +17572,7 @@
       "localOperationId": "CloseAccount",
       "method": "POST",
       "mutationTarget": "UserAccount",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "current_account_owner",
       "pathTemplate": "/owner/account/close",
       "permissions": [],
@@ -17273,7 +17599,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "settingsAccountSecurity"
       ],
@@ -17290,7 +17616,7 @@
       "actorRequirement": "account",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "user.user_profile.GetActivePersonaContext",
+      "canonicalOperationId": "user.user_account.GetActivePersonaContext",
       "clientContract": {
         "dartImport": "../user/persona_management_query_contracts.dart",
         "requestEncoder": "encodeGetActivePersonaContextQuery",
@@ -17315,7 +17641,7 @@
       "localOperationId": "GetActivePersonaContext",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "current_account_owner",
       "pathTemplate": "/user/personas/active",
       "permissions": [],
@@ -17342,7 +17668,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "appShell"
       ],
@@ -17359,7 +17685,7 @@
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "user.user_profile.GetMeProfile",
+      "canonicalOperationId": "user.user_account.GetMeProfile",
       "clientContract": {
         "dartImport": "../user/public_profile_query_contracts.dart",
         "requestEncoder": "encodeGetMeProfileQuery",
@@ -17385,7 +17711,7 @@
       "localOperationId": "GetMeProfile",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "active_persona_profile",
       "pathTemplate": "/me",
       "permissions": [],
@@ -17412,7 +17738,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "profileEdit",
         "profileHome"
@@ -17429,7 +17755,7 @@
       "actorRequirement": "account",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "user.user_profile.GetPersonaLifecycleGuard",
+      "canonicalOperationId": "user.user_account.GetPersonaLifecycleGuard",
       "clientContract": {
         "dartImport": "../user/persona_management_query_contracts.dart",
         "requestEncoder": "encodeGetPersonaLifecycleGuardQuery",
@@ -17455,7 +17781,7 @@
       "localOperationId": "GetPersonaLifecycleGuard",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "current_account_owner",
       "pathTemplate": "/user/personas/{subAccountId}/lifecycle-guard",
       "permissions": [],
@@ -17482,7 +17808,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "profilePersonas"
       ],
@@ -17499,7 +17825,7 @@
       "actorRequirement": "account",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "user.user_profile.GetPersonaManagementSummary",
+      "canonicalOperationId": "user.user_account.GetPersonaManagementSummary",
       "clientContract": {
         "dartImport": "../user/persona_management_query_contracts.dart",
         "requestEncoder": "encodeGetPersonaManagementSummaryQuery",
@@ -17524,7 +17850,7 @@
       "localOperationId": "GetPersonaManagementSummary",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "current_account_owner",
       "pathTemplate": "/user/personas/summary",
       "permissions": [],
@@ -17551,7 +17877,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "profilePersonas"
       ],
@@ -17568,7 +17894,7 @@
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "user.user_profile.GetProfileEditSnapshot",
+      "canonicalOperationId": "user.user_account.GetProfileEditSnapshot",
       "clientContract": {
         "dartImport": "../user/profile_edit_query_contracts.dart",
         "requestEncoder": "encodeGetProfileEditSnapshotQuery",
@@ -17593,7 +17919,7 @@
       "localOperationId": "GetProfileEditSnapshot",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "current_account_owner",
       "pathTemplate": "/user/profile/edit-snapshot",
       "permissions": [],
@@ -17620,7 +17946,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "profileCareerInterests",
         "profileEdit"
@@ -17638,7 +17964,7 @@
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "user.user_profile.GetProfileQrCard",
+      "canonicalOperationId": "user.user_account.GetProfileQrCard",
       "clientContract": {
         "dartImport": "../user/public_profile_query_contracts.dart",
         "requestEncoder": "encodeGetProfileQrCardQuery",
@@ -17663,7 +17989,7 @@
       "localOperationId": "GetProfileQrCard",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "current_account_owner",
       "pathTemplate": "/user/profile/qr-card",
       "permissions": [],
@@ -17690,7 +18016,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "addContact",
         "addContactScan",
@@ -17710,7 +18036,7 @@
       "actorRequirement": "none",
       "aggregateOwner": "",
       "authMode": "optional",
-      "canonicalOperationId": "user.user_profile.GetSubAccountProfile",
+      "canonicalOperationId": "user.user_account.GetSubAccountProfile",
       "clientContract": {
         "dartImport": "../user/public_profile_query_contracts.dart",
         "requestEncoder": "encodeGetSubAccountProfileQuery",
@@ -17735,7 +18061,7 @@
       "localOperationId": "GetSubAccountProfile",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "public_profile_visibility",
       "pathTemplate": "/user/{subAccountId}",
       "permissions": [],
@@ -17762,7 +18088,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "addContactConfirm",
         "addContactPhone",
@@ -17781,7 +18107,7 @@
       "actorRequirement": "none",
       "aggregateOwner": "",
       "authMode": "optional",
-      "canonicalOperationId": "user.user_profile.GetUserHomepageBundle",
+      "canonicalOperationId": "user.user_account.GetUserHomepageBundle",
       "clientContract": {
         "dartImport": "../user/user_homepage_query_contracts.dart",
         "requestEncoder": "encodeGetUserHomepageBundleQuery",
@@ -17806,7 +18132,7 @@
       "localOperationId": "GetUserHomepageBundle",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "public_profile_visibility",
       "pathTemplate": "/user/sub-accounts/{subAccountId}/homepage-bundle",
       "permissions": [],
@@ -17833,7 +18159,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "profileHome",
         "profileStats",
@@ -17852,7 +18178,7 @@
       "actorRequirement": "account",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "user.user_profile.ListPersonas",
+      "canonicalOperationId": "user.user_account.ListPersonas",
       "clientContract": {
         "dartImport": "../user/persona_management_query_contracts.dart",
         "requestEncoder": "encodeListPersonasQuery",
@@ -17877,7 +18203,7 @@
       "localOperationId": "ListPersonas",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "current_account_owner",
       "pathTemplate": "/user/personas",
       "permissions": [],
@@ -17904,7 +18230,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "profilePersonas"
       ],
@@ -17921,7 +18247,7 @@
       "actorRequirement": "none",
       "aggregateOwner": "",
       "authMode": "optional",
-      "canonicalOperationId": "user.user_profile.ResolveProfileQrToken",
+      "canonicalOperationId": "user.user_account.ResolveProfileQrToken",
       "clientContract": {
         "dartImport": "../user/public_profile_query_contracts.dart",
         "requestEncoder": "encodeResolveProfileQrTokenQuery",
@@ -17947,7 +18273,7 @@
       "localOperationId": "ResolveProfileQrToken",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "public_qr_resolve",
       "pathTemplate": "/public/profile/qr/resolve",
       "permissions": [],
@@ -17974,7 +18300,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "addContactScan"
       ],
@@ -17991,7 +18317,7 @@
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "user.user_profile.SearchSocialRelations",
+      "canonicalOperationId": "user.user_account.SearchSocialRelations",
       "clientContract": {
         "dartImport": "../user/public_profile_query_contracts.dart",
         "requestEncoder": "encodeSearchSocialRelationsQuery",
@@ -18017,7 +18343,7 @@
       "localOperationId": "SearchSocialRelations",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "user.user_profile",
+      "objectId": "user.user_account",
       "ownershipPolicy": "active_persona_search",
       "pathTemplate": "/user/search/social-relations",
       "permissions": [],
@@ -18044,7 +18370,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/user_profile/service.yaml",
+      "sourcePath": "user/account/user_account/operations.yaml",
       "surfaceIds": [
         "addContactSearch",
         "globalSearchSuggestions",
@@ -18115,7 +18441,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_settings/service.yaml",
+      "sourcePath": "user/account/user_settings/operations.yaml",
       "surfaceIds": [
         "settingsDarkMode"
       ],
@@ -18184,7 +18510,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_settings/service.yaml",
+      "sourcePath": "user/account/user_settings/operations.yaml",
       "surfaceIds": [
         "settingsCalls",
         "settingsHome"
@@ -18254,7 +18580,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_settings/service.yaml",
+      "sourcePath": "user/account/user_settings/operations.yaml",
       "surfaceIds": [
         "settingsHome",
         "settingsNotifications"
@@ -18324,7 +18650,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "user/user_settings/service.yaml",
+      "sourcePath": "user/account/user_settings/operations.yaml",
       "surfaceIds": [
         "blockedKeywords",
         "settingsHome",
@@ -18398,7 +18724,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/user_settings/service.yaml",
+      "sourcePath": "user/account/user_settings/operations.yaml",
       "surfaceIds": [
         "settingsDarkMode"
       ],
@@ -18470,7 +18796,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/user_settings/service.yaml",
+      "sourcePath": "user/account/user_settings/operations.yaml",
       "surfaceIds": [
         "settingsCalls",
         "settingsHome"
@@ -18542,7 +18868,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/user_settings/service.yaml",
+      "sourcePath": "user/account/user_settings/operations.yaml",
       "surfaceIds": [
         "settingsHome",
         "settingsNotifications"
@@ -18614,7 +18940,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "user/user_settings/service.yaml",
+      "sourcePath": "user/account/user_settings/operations.yaml",
       "surfaceIds": [
         "blockedKeywords",
         "settingsHome",
@@ -18632,13 +18958,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "06e7718b0aa259699a195ababca79dd6ee720bdf3b5e67b130d32212e2b636b4"
+    "sha256": "87aded4f70e119df9c2eea35c92b38f033a6ce258f739c01f8e9cd6a7d8cc2b0"
   },
   "contractGraph": {
-    "compilerHash": "sha256:b599e70b9b89104f50dfbe15cad1b8616e6222994ac5a3c7099391f877b9c315",
+    "compilerHash": "sha256:e62c2129a8940fd8d5e68e1899761ddc9cd787c0a038d5f687ba0cfc6a0b24be",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "5c3bcccc328f531db204714e15e51ab1b2da2115c55622f1ee616cf1c0f2a903",
-    "sourceDigestSetSha256": "798515a76814cc7c9aa88bdf6bd734d7119e0cc6226a276c07847fc1f945152b"
+    "sha256": "845b506d386a9c53fcb8698cc57e47b340399cbbd1cbcac6563bce7cf07d9ad6",
+    "sourceDigestSetSha256": "0287a0f1a4c61425cd6994d75ccb28144a3646c787b9e08a424f11b4dc4d4533"
   },
   "generator": "app-cloud-handoff"
 }

@@ -49,6 +49,7 @@ scene_routing:
         - "events.search."
         - "events.chat."
         - "page_ctx:"
+        - "assistant:"
         - "content_analysis:"
         - "content:publication-rate:"
         - "comment_summary:"
@@ -205,8 +206,20 @@ key_patterns:
   - pattern: "page_ctx:{userId}"
     redis_scene: general
     ttl_seconds: 300
-    type: hash
-    description: 助手当前页面上下文（多模态理解输入）
+    type: string
+    description: 助手当前页面最小强类型 context snapshot JSON（仅对象引用、结构化动作与当前页授权）
+
+  - pattern: "assistant:subscription:lease:{subscriptionId}:{deliveryId}"
+    redis_scene: general
+    ttl_seconds: 300
+    type: string
+    description: 主动订阅首次调度及失败补偿共用 deliveryId 的跨实例租约；只有 SetNX 成功的实例可进入外部副作用。
+
+  - pattern: "assistant:subscription:delivery_slot:{subscriptionId}:{utcDate}:{slot}"
+    redis_scene: general
+    ttl_seconds: 172800
+    type: string
+    description: 主动订阅 UTC 自然日投递配额槽；成功后保留，失败时按持有值校验释放，原子限制 maxPerDay。
 
   - pattern: "ix:watermark:{<userId>}"
     redis_scene: general
@@ -289,7 +302,7 @@ key_patterns:
   # （counter:comment:{commentId}:like|dislike）已删除：均为只写不读写放大，
   # 且 per-comment 计数器读穿回填存在 stale-backfill 竞态。评论排序读路径直接
   # 走 Mongo 复合索引 keyset 分页，赞踩计数由 comment_reactions 集合权威派生。
-  # 详见 contracts/metadata/content/post/storage.yaml 与 R-CMT01 回写。
+  # 详见 services/content-service/contracts/content/post/storage.yaml 与 R-CMT01 回写。
 
   - pattern: "reaction:{userId}:{postId}"
     redis_scene: general
@@ -308,9 +321,21 @@ key_patterns:
     ttl_seconds: 86400
     type: stream
     description: |
-      搜索 → 推荐在线特征流。search-service 在查询响应后 best-effort XADD，
-      content-service 消费组 content-service 投影到 rm_recommend_feature.userFeatures.search*。
-      消费失败进入 events.search.recommendation_signals.dlq；主搜索路径不被阻塞。
+      搜索 → 推荐短期特征流。query 信号只带归一化词，click 信号只带真实点击对象；
+      content-service 消费组投影到具备物理 TTL 的 rm_search_intent。
+      确定性坏消息进入脱敏 DLQ 并 ACK，暂态投影失败保留 PEL 重试。
+
+  - pattern: "events.search.recommendation_signals.dlq"
+    redis_scene: general
+    ttl_seconds: 86400
+    type: stream
+    description: 搜索推荐坏消息的脱敏隔离流，只保存 sourceStreamId、signalDigest、稳定错误码和隔离时间。
+
+  - pattern: "events.search.recommendation_signals.dedup:{signalDigest}"
+    redis_scene: general
+    ttl_seconds: 86400
+    type: string
+    description: content-service 按 signalId SHA-256 建立的消费幂等键。
 
   - pattern: "events.chat.assistant_mentions"
     redis_scene: general

@@ -11,9 +11,22 @@
           "properties": {
             "provider": { "const": "cursor_sdk" },
             "model": { "type": "string", "minLength": 1 },
+            "modelParameters": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "required": ["id", "value"],
+                "additionalProperties": false,
+                "properties": {
+                  "id": { "type": "string", "minLength": 1 },
+                  "value": { "type": "string", "minLength": 1 }
+                }
+              }
+            },
             "runtime": { "enum": ["local", "cloud"] }
           },
-          "required": ["provider", "model", "runtime"],
+          "required": ["provider", "model", "modelParameters", "runtime"],
           "additionalProperties": false
         },
         "workers": {
@@ -34,15 +47,13 @@
             "startupTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "preflightNetworkTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "agentTimeoutSeconds": { "type": "integer", "minimum": 1 },
-            "defaultObjectTokenBudget": { "type": "integer", "minimum": 1 },
-            "defaultObjectCostBudgetUsd": { "type": "number", "minimum": 0 },
-            "maxBatchCostUsd": { "type": "number", "exclusiveMinimum": 0 },
-            "maxDailyCostUsd": { "type": "number", "exclusiveMinimum": 0 },
             "authRetryLimit": { "type": "integer", "minimum": 1 },
             "authRetryDelaySeconds": { "type": "integer", "minimum": 1 },
             "noProgressRoundLimit": { "type": "integer", "minimum": 1 },
             "researchWaveSize": { "type": "integer", "minimum": 1 },
             "researchMaxWavesPerRun": { "type": "integer", "minimum": 0 },
+            "sourcePlanRecoveryPasses": { "type": "integer", "minimum": 0 },
+            "sourcePlanRecoveryWorkers": { "type": "integer", "minimum": 1 },
             "coldStartMaxWorkers": { "type": "integer", "minimum": 1 },
             "workerStaggerSeconds": { "type": "number", "exclusiveMinimum": 0 },
             "managedFutureGraceSeconds": { "type": "integer", "minimum": 1 },
@@ -71,7 +82,6 @@
             "processTerminationTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "agentFuturePollTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "apiRequestTimeoutSeconds": { "type": "integer", "minimum": 1 },
-            "entityReloadTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "directFetchTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "sourceFetchTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "sourceFetchMaxRetries": { "type": "integer", "minimum": 1 },
@@ -102,10 +112,9 @@
           },
           "required": [
             "startupTimeoutSeconds", "preflightNetworkTimeoutSeconds",
-            "agentTimeoutSeconds", "defaultObjectTokenBudget", "defaultObjectCostBudgetUsd",
-            "maxBatchCostUsd", "maxDailyCostUsd", "authRetryLimit",
+            "agentTimeoutSeconds", "authRetryLimit",
             "authRetryDelaySeconds", "noProgressRoundLimit",
-            "researchWaveSize", "researchMaxWavesPerRun",
+            "researchWaveSize", "researchMaxWavesPerRun", "sourcePlanRecoveryPasses", "sourcePlanRecoveryWorkers",
             "coldStartMaxWorkers", "workerStaggerSeconds",
             "managedFutureGraceSeconds", "schedulerStaleSeconds",
             "controllerLeaseStaleSeconds", "assignmentDeadlineSeconds",
@@ -120,7 +129,7 @@
             "researchWaveBudgetSeconds", "networkBreakerThreshold",
             "localProcessProbeTimeoutSeconds", "processTerminationTimeoutSeconds",
             "agentFuturePollTimeoutSeconds", "apiRequestTimeoutSeconds",
-            "entityReloadTimeoutSeconds", "directFetchTimeoutSeconds",
+            "directFetchTimeoutSeconds",
             "sourceFetchTimeoutSeconds", "sourceFetchMaxRetries", "ocrTimeoutSeconds",
             "videoProbeTimeoutSeconds", "videoTranscodeTimeoutSeconds",
             "mediawikiFallbackRetries", "mediawikiWikitextMaxRetries", "queueLeaseTtlSeconds",

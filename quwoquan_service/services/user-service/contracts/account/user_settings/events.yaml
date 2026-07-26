@@ -1,0 +1,9 @@
+events:
+- name: UserSettingsChanged
+  producer: user-service
+  consumers:
+  - settings-audit
+  channel: transactional_outbox
+  payload_entity: UserSetting
+  payload_fields:
+  - userId

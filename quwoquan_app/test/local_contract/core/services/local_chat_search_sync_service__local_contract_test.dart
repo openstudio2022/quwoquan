@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation/spec.md#gwt-001
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -40,7 +41,7 @@ void main() {
         subjectType: 'owner',
         displayName: '主账号',
         avatarUrl: '',
-        personaContextVersion: 'v1',
+        contextVersion: 1,
       );
       await store.ensureReady();
     });
@@ -71,7 +72,7 @@ void main() {
         subjectType: 'sub_account',
         displayName: '子账号',
         avatarUrl: '',
-        personaContextVersion: 'v2',
+        contextVersion: 2,
       );
 
       expect(await service.sync(), isTrue);
@@ -84,7 +85,7 @@ void main() {
           subjectType: 'owner',
           displayName: '主账号',
           avatarUrl: '',
-          personaContextVersion: 'v1',
+          contextVersion: 1,
         ),
       );
       final subNamespace = LocalSearchNamespace.fromActivePersonaContext(

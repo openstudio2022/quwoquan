@@ -1,0 +1,191 @@
+# feature_registry: shared with recommendation-service inference.
+# Align field names and types with ModelScoreRequest / CandidateInput.
+version: 5
+scenarios:
+  content_feed:
+    user_features:
+      - name: tagAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.tagInteraction
+        description: "tag -> affinity score, decayed"
+      - name: authorAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.authorInteraction
+        description: "authorId -> affinity score"
+      - name: engagementRate
+        type: float
+        source: rm_recommend_feature.userFeatures.engagementRate
+      - name: totalLikes
+        type: int
+        source: rm_recommend_feature.userFeatures.totalLikes
+      - name: totalShares
+        type: int
+        source: rm_recommend_feature.userFeatures.totalShares
+      - name: totalEvents
+        type: int
+        source: rm_recommend_feature.userFeatures.totalEvents
+      - name: topicAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.topicAffinities
+        description: "Topic dimension tag -> weighted affinity"
+      - name: audienceAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.audienceAffinities
+        description: "Audience dimension tag -> weighted affinity"
+      - name: formatAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.formatAffinities
+        description: "Format dimension tag -> weighted affinity"
+      - name: entityAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.entityAffinities
+        description: "Entity dimension tag -> weighted affinity"
+      - name: entityInstanceAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.entityInstanceAffinities
+        description: "Specific entity instance -> weighted affinity (e.g. places, brands)"
+      - name: avgEngagementDepth
+        type: float
+        derived: "engagementDepthSum / engagementDepthCount; 0 when count is zero"
+        description: "由宽表的原子累计 depth sum/count 在 FeatureStore 读时派生；禁止持久化单次 relay 覆盖的平均值"
+      - name: sharedFolloweesCount
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.sharedFolloweesCount
+        description: "Fact intersection: mutual followee count with object"
+      - name: sharedCircleCount
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.sharedCircleCount
+        description: "Fact intersection: shared circle count"
+      - name: coCommentedCount
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.coCommentedCount
+        description: "Fact intersection: co-comment count"
+      - name: affinityIntersectionScore
+        type: float
+        source: rm_recommend_feature.socialFeatures.intersection.affinityIntersectionScore
+        description: "Affinity channel score; must not override fact signals in fusion"
+      - name: coVisitedEntityCount
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.coVisitedEntityCount
+        description: "Fact intersection: co-visited entity (object) count with the candidate's object"
+      - name: followeeInObjectActive
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.followeeInObjectActive
+        description: "Fact intersection: number of followees active inside this object"
+      - name: followeeViewingActive
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.followeeViewingActive
+        description: "Fact intersection: number of followees recently viewing this object"
+      - name: intersectionSourceRefTop
+        type: categorical
+        source: rm_recommend_feature.socialFeatures.intersection.intersectionSourceRefTop
+        description: "Strongest fact intersection kind (§5.4 standard name) between viewer and object"
+        nullable: true
+      - name: depthDistribution
+        type: map_int
+        source: rm_recommend_feature.userFeatures.depthDistribution
+        description: "L0-L4 -> count histogram of engagement depth levels"
+      - name: circleTagAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.circleTagAffinities
+        description: "Tags propagated from user's circles (0.3x decay)"
+      - name: socialInterestScore
+        type: float
+        source: rm_recommend_feature.userFeatures.socialInterestScore
+        description: "Combined social interest density"
+      - name: typeENER
+        type: map_float
+        derived: "typeEngagements / typeImpressions"
+        description: "由宽表原子累计的曝光/互动计数在 FeatureStore 读时派生的内容类型 ENER"
+        nullable: true
+    item_features:
+      - name: contentId
+        type: string
+      - name: contentType
+        type: categorical
+      - name: authorId
+        type: string
+      - name: tagRefs
+        type: list_string
+      - name: entityRefs
+        type: list_string
+      - name: ageHours
+        type: float
+        derived: "hours_since(publishedAt)"
+      - name: viewCount
+        type: int
+      - name: likeCount
+        type: int
+      - name: commentCount
+        type: int
+      - name: shareCount
+        type: int
+      # N3-3 退役（训练-在线偏斜收口）：bodyLength/hasCover/aspectRatio 的在线
+      # 召回投影不携带（serving 恒 0），双侧同步移除；S1 召回投影补齐后再登记。
+      - name: tagCount
+        type: int
+        derived: "len(tags)"
+      - name: qualityScore
+        type: float
+        source: rm_discovery_feed.qualityScore
+      - name: contentVertical
+        type: categorical
+        source: rm_discovery_feed.contentVertical
+      - name: supplySource
+        type: categorical
+        source: rm_discovery_feed.supplySource
+      - name: intersectionFactStrength
+        type: float
+        source: rm_discovery_feed.intersectionFactStrength
+        description: "Candidate-level fact intersection strength; must outrank affinity in ranking fusion."
+      - name: intersectionFreshness
+        type: float
+        source: rm_discovery_feed.intersectionFreshness
+      - name: affinityIntersectionScore
+        type: float
+        source: rm_discovery_feed.affinityIntersectionScore
+        description: "Advisory affinity channel; requires intersectionConfidenceLabel before online use."
+      - name: intersectionSourceRefTop
+        type: categorical
+        source: rm_discovery_feed.intersectionSourceRefTop
+        nullable: true
+      - name: intersectionConfidenceLabel
+        type: categorical
+        source: rm_discovery_feed.intersectionConfidenceLabel
+        nullable: true
+      - name: intersectionClass
+        type: categorical
+        source: rm_discovery_feed.intersectionClass
+        nullable: true
+      - name: publishHour
+        type: int
+        derived: "publishedAt.hour"
+      - name: recallPath
+        type: categorical
+    context_features:
+      - name: requestHour
+        type: int
+      - name: requestDayOfWeek
+        type: int
+    labels:
+      - name: click
+        type: binary
+        description: "user clicked on the item"
+      - name: dwell_s
+        type: float
+        description: "seconds spent viewing the item"
+      - name: like
+        type: binary
+      - name: share
+        type: binary
+      - name: comment
+        type: binary
+      - name: follow
+        type: binary
+        description: "user followed the author after viewing"
+      - name: dislike
+        type: binary
+      - name: engaged
+        type: binary
+        derived: "click OR dwell_s>10 OR like OR share OR comment OR follow"
+        description: "composite positive signal for primary ranking objective"

@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/services/cache/cache_read_result.dart';
 import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/object_cache_store.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
@@ -365,6 +366,7 @@ void main() {
         userProfileCache: UserProfileCacheService(),
         conversationCache: conversationCache,
         clearTemporaryImages: () async {},
+        clearAccountScopedPersistence: () async {},
       );
       postCache.putDetail(_detailPayload('post_1'));
       queryStore.put(
@@ -378,6 +380,55 @@ void main() {
       expect(result.protectedObjects, conversationCache.activeDiskCount);
       expect(service.estimateUsage().postObjects, 1);
       expect(service.estimateUsage().querySnapshots, 0);
+    });
+
+    test('账号 closed 终态清除全部内存命名空间并执行持久层清理', () async {
+      SharedPreferences.setMockInitialValues(const <String, Object>{});
+      final postCache = PostObjectCacheService();
+      final queryStore = ContentQuerySnapshotStore();
+      final userCache = UserProfileCacheService(persistToPreferences: true);
+      final conversationCache = ConversationCacheService()
+        ..activateNamespace('owner-a::persona-a')
+        ..put(const ConversationCacheRecord(id: 'conversation-a'))
+        ..activateNamespace('owner-a::persona-b')
+        ..put(const ConversationCacheRecord(id: 'conversation-b'));
+      var imageClearCalls = 0;
+      var persistenceClearCalls = 0;
+      final service = CacheManagementService(
+        postCache: postCache,
+        querySnapshotStore: queryStore,
+        userProfileCache: userCache,
+        conversationCache: conversationCache,
+        clearAllRebuildableImages: () async {
+          imageClearCalls += 1;
+        },
+        clearAccountScopedPersistence: () async {
+          persistenceClearCalls += 1;
+        },
+      );
+      postCache.putDetail(_detailPayload('post-terminal'));
+      queryStore.put(
+        key: 'surface=terminal&cursor=',
+        items: <PostBaseDto>[_postDto('post-terminal')],
+      );
+      userCache.put('user-terminal', <String, dynamic>{
+        'userId': 'user-terminal',
+      });
+
+      await service.clearForTerminalAccountClosure();
+
+      expect(imageClearCalls, 1);
+      expect(persistenceClearCalls, 1);
+      expect(service.estimateUsage().totalTrackedObjects, 0);
+      expect(conversationCache.totalEntryCount, 0);
+      expect(userCache.memoryCount, 0);
+      expect(userCache.diskCount, 0);
+      expect(
+        (await SharedPreferences.getInstance()).containsKey(
+          'qwq.user_profile_cache.v1',
+        ),
+        isFalse,
+      );
     });
   });
 }

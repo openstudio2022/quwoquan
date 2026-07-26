@@ -1,0 +1,53 @@
+kind: aggregate_root
+description: 规范化 persona pair 的关系聚合，同时维护两个有界方向的 follow/block 状态。
+identity:
+  fields:
+  - pairId
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: aggregate_root
+  cardinality: 1:N
+  consistency: strong
+  kind: owned
+  name: directions
+  on_delete: cascade
+  reference_fields: []
+  target_object: user.RelationshipDirection
+- access: named_reader
+  cardinality: '1:1'
+  consistency: eventual
+  kind: reference
+  name: personas
+  on_delete: restrict
+  reference_fields:
+  - lowerPersonaId
+  - upperPersonaId
+  target_object: user.Persona
+capabilities:
+- queryable
+- idempotent_commands
+- transactional_outbox
+business_rules:
+- lowerPersonaId 必须小于 upperPersonaId，且 source/target 只能来自该 pair
+- directions 最多两个，每个方向唯一
+- 任一方向 block 必须在同一事务清除双方 following
+- unblock 只清除 blocked，不恢复历史 following
+- 所有写入在 canonical pair 行锁内串行提交，并以 version 单调递增和 idempotency receipt 保证可重放
+- follower/following 是 outbox 驱动的派生读模型；命令事务禁止同步全表 COUNT，投影按 eventId 幂等并按 aggregate version 顺序消费
+lifecycle:
+  states:
+  - active
+  - tombstoned
+  write_serialization: canonical_pair_row_lock
+  versioning: monotonic
+  idempotency: command_receipt
+members:
+  RelationshipDirection:
+    kind: owned_entity
+    cardinality: 1:N
+    max_cardinality: 2

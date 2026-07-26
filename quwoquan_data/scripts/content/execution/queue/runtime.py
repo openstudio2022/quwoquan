@@ -39,7 +39,7 @@ from content.execution.queue.core import (
     stable_job_id,
 )
 from content.execution.queue.completion import author_completion_issues
-from content.execution.queue.model import QueueJob, QueueLease, QueueUsage
+from content.execution.queue.model import QueueJob, QueueLease
 from content.execution.queue.jobs import enqueue_ref_job
 from content.execution.queue.recovery import (
     issues_fingerprint,
@@ -360,6 +360,37 @@ def record_reliabletask_completion(
         return completed
 
 
+def record_reliabletask_failure(
+    execution_id: str,
+    job_id: str,
+    *,
+    attempts: int,
+    issue: DataIssue,
+) -> QueueJob:
+    """Project a terminal service-fleet failure into the execution queue."""
+    if attempts < 1:
+        raise ValueError("ReliableTask terminal failure requires positive attempts")
+    with _queue_lock(execution_id):
+        job = _read_job(execution_id, job_id)
+        if job.backend.value != "reliabletask":
+            raise ValueError(
+                f"external ReliableTask failure requires reliabletask backend: {job_id}"
+            )
+        if job.state is STATE_SUCCEEDED:
+            raise ValueError(
+                f"ReliableTask terminal failure conflicts with completed job: {job_id}"
+            )
+        observed = replace(job, attempt=attempts, lease=QueueLease())
+        failed = _apply_failure(
+            observed,
+            issue,
+            fingerprint=issue.code.value,
+        )
+        _record_failure(failed, issue)
+        _write_job(failed)
+        return failed
+
+
 def reconcile_completed_refs(
     execution_id: str,
     refs: Iterable[str],
@@ -484,62 +515,6 @@ def fail_job(
     return failed
 
 
-def record_usage(
-    execution_id: str,
-    job_id: str,
-    lease: str,
-    *,
-    tokens: int = 0,
-    cost_usd: float = 0.0,
-) -> QueueJob:
-    """Record usage through typed budgets and stop only on typed budget overflow."""
-    job = _load_owned(execution_id, job_id, lease)
-    usage = QueueUsage(tokens=job.usage.tokens + int(tokens), cost_usd=job.usage.cost_usd + float(cost_usd))
-    metadata = job.metadata_document()
-    ledger = [
-        *job.token_ledger_document(),
-        pc.build_token_ledger_entry(
-            execution_id=job.execution_id,
-            job_id=job.job_id,
-            run_id=job.agent_run_id or lease or job.job_id,
-            creator_profile_id=job.creator_profile_id or "unknown",
-            content_type=(job.content_type or job.carrier or job.stage).value,
-            budget_tokens=job.token_budget,
-            used_tokens=usage.tokens,
-            cost_usd=usage.cost_usd,
-            cost_budget_usd=job.cost_budget_usd,
-            provider=str(metadata.get("agentProvider") or ""),
-            model=str(metadata.get("model") or ""),
-            content_object_ref=job.ref,
-        ),
-    ]
-    updated = replace(
-        job,
-        usage=usage,
-        token_ledger_json=json.dumps(ledger, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
-        updated_at=store.now_iso(),
-    )
-    over_token = updated.token_budget > 0 and usage.tokens > updated.token_budget
-    over_cost = updated.cost_budget_usd > 0 and usage.cost_usd > updated.cost_budget_usd
-    if not (over_token or over_cost):
-        _write_job(updated)
-        return updated
-    issue = updated.issue(
-        QueueFailureKind.BUDGET,
-        message="queue budget exceeded",
-        recovery=DataRecoveryAction.STOP,
-    )
-    exhausted = replace(updated, attempt=updated.max_attempts)
-    failed = _apply_failure(exhausted, issue, same_run_retryable=False)
-    _emit_notification(
-        execution_id,
-        {"event": "budget_exceeded", "ref": failed.ref, "jobId": failed.job_id, "usage": usage.to_document()},
-    )
-    _record_failure(failed, issue)
-    _write_job(failed)
-    return failed
-
-
 def reap_jobs(execution_id: str) -> dict[str, list[str]]:
     """Recover expired leases or fail wall-clock timeouts using typed transitions."""
     now = _clock_now()
@@ -580,7 +555,7 @@ __all__ = [
     "issues_fingerprint",
     "reap_jobs",
     "reconcile_completed_refs",
-    "record_usage",
+    "record_reliabletask_failure",
     "renew_lease",
     "revive_dead_startup_jobs",
 ]

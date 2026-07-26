@@ -1,51 +1,111 @@
-# L3 特性：video-commercial-scale-closure
+# L3 Story：视频商用规模闭环 (`video-commercial-scale-closure`)
 
-## 概述
+> 所属能力：[`runtime-data-engineering`](../spec.md)
+>
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-面向浙江、四川旅行对象的真实源视频商业放量 Story。抖音、TikTok、微博、头条和
-旅游垂类站默认只作 discovery/reference；只有无需绕过登录、DRM 或反爬、可直接下载、
-无水印、原创者可识别且 source post/original asset 可追溯的单资产，才可按用户确认的
-风险归因策略进入候选。
+## 1. 用户价值
 
-## 归属
+作为开发、测试或运维角色，我希望通用真实源视频归因、媒体包与环境消费者闭环验收，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-- L1_domain_service: `runtime`
-- L2_business_capability: `runtime-data-engineering`
-- L3_story: `video-commercial-scale-closure`
+## 2. 范围与非目标
 
-## In Scope
+### In Scope
 
-- 真实源视频下载、探测、无水印/OCR、音轨权利、转码、poster、字幕、checksum 与 provenance。
-- metadata-first `SourceAttribution` 从 Data manifest 到 Service read model、App DTO、
-  Feed/分享/沉浸式播放器的同源展示。
-- 原创者与平台虚拟发布作者分离；来源链接不冒充 authorization proof。
-- `risk_accepted_attribution_only`、`commercialAuthorizationStatus=not_verified`、
-  投诉/下架、权利撤回、纠错与审计。
-- Canary（真实源视频 3 条）、H200、H1000、H10K 的完整发布与 Gamma 消费证据。
+- source admission、asset rights、attribution、takedown 与审计
+- download、transcode、poster、subtitle、checksum、provenance
+- request 驱动的 release、playback、rollback/replay 与 capacity receipt
 
-## Out of Scope
+### Out of Scope
 
-- 把 `rights_cleared_image_sequence` 计入 sourced-video 里程碑。
-- 去水印、绕过登录/DRM/反爬或把可下载解释为取得商业授权。
-- 100,000/日实际生产。
+- 静态区域、目标对象、数量或阶段清单
+- 绕过访问控制、去水印或将下载能力冒充商业授权
 
-## 核心合同
+## 3. 行为要求
 
-1. 用户确认的风险策略不改变版权事实：无商业授权时必须明确 `not_verified`，不得标成
-   licensed、authorized 或 commercially-cleared。
-2. 原创音乐权利不明时剥离并替换已授权音轨；watermark/audio/model/property-release
-   均为对象级 admission。
-3. `SourceAttribution` 是 metadata 唯一真相源，Data、Service、App 与观测不得复制字段表。
-4. H10K 必须每省 5,000、共 10,000 条真实 sourced-video accepted/canonical/Gamma
-   可查询对象在 24 小时内完成；图片序列视频数量始终为 0。
-5. H10K 前必须有对象存储/VOD、Range/CDN、Android/iOS 真机、SLS QoE、
-   gray-initial/carry-on/full 非 dry-run 与 rollback 证据。
-6. 缺权利、归因、真实媒体、权威成本或下游消费任一证据都保持 NO_GO。
+<a id="req-001"></a>
+### REQ-001 sourced video preserves rights and attribution facts
 
-## 真相源
+- 不满足 admission 的候选以 typed issue 阻断。
 
-- `quwoquan_data/verticals/travel/sources/source_registry.yaml`
-- `quwoquan_data/verticals/travel/rights/license_policy.yaml`
-- `quwoquan_service/contracts/metadata/content/post/projections/video_post.yaml`
-- `quwoquan_service/contracts/metadata/content/post/projections/content_post_detail_wire.yaml`
-- `docs/outstanding_risks_backlog.md`
+<a id="req-002"></a>
+### REQ-002 media package and attribution reach consumers unchanged
+
+- 数据、服务、App 不维护第二套 attribution 字段。
+
+<a id="req-003"></a>
+### REQ-003 video release and capacity conclusions use immutable receipts
+
+- 容量与预算结论只读取真实 receipt，未执行不冒充完成。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_data/verticals/<vertical>/providers.yaml`
+- canonical：`quwoquan_data/schema/source`
+- canonical：`quwoquan_data/scripts/content/post/video`
+- canonical：`quwoquan_service/services/content-service/contracts`
+- canonical：`quwoquan_data/scripts/content/release`
+- canonical：`quwoquan_ops/environments`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 sourced video preserves rights and attribution facts
+
+- GIVEN provider policy 把平台能力和 publication admission 明确区分。
+- WHEN 一个视频候选请求进入发布。
+- THEN 原创者、source post、原始资产、rights、风险与 takedown 事实都在对象级证据中保留。
+- THEN 无商业授权不能被标成 licensed 或 commercially-cleared。
+
+<a id="gwt-002"></a>
+### GWT-002 media package and attribution reach consumers unchanged
+
+- GIVEN 视频已通过 source admission。
+- WHEN materialize/package、canonical promotion 与 importer 执行。
+- THEN H.264、poster、字幕、checksum、provenance 与 attribution 通过 metadata 同源进入服务和 App。
+- THEN 播放、错误恢复、投诉和下架链路都能关联同一媒体对象。
+
+<a id="gwt-003"></a>
+### GWT-003 video release and capacity conclusions use immutable receipts
+
+- GIVEN execution request、runtime policy、source digest 和对象存储能力已冻结。
+- WHEN execution 形成 release 并通过对应 environment profile。
+- THEN import、API、播放、rollback/replay、成本与 QoE 证据绑定同一 release digest。
+- THEN 缺 commercial profile 依赖时返回 GATE_BLOCK，不影响 baseline 或 integration 数据面验证。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-data-engineering`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 sourced video preserves rights and attribution facts
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：不满足 admission 的候选以 typed issue 阻断。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 media package and attribution reach consumers unchanged
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：数据、服务、App 不维护第二套 attribution 字段。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 video release and capacity conclusions use immutable receipts
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：容量与预算结论只读取真实 receipt，未执行不冒充完成。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效

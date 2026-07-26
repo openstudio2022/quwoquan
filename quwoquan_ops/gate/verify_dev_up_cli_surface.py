@@ -120,11 +120,14 @@ def main() -> int:
     legal_document_page = (
         ROOT / "quwoquan_app/lib/ui/user/pages/legal_document_page.dart"
     ).read_text(encoding="utf-8")
+    legal_document_remote = (
+        ROOT / "quwoquan_app/lib/cloud/remote/user/legal_document_remote.dart"
+    ).read_text(encoding="utf-8")
     mock_public_plane = (
         ROOT / "quwoquan_ops/cli/lib/mock_public_plane.py"
     ).read_text(encoding="utf-8")
     local_gamma_caddyfile = (
-        ROOT / "quwoquan_ops/environments/local-gamma/Caddyfile"
+        ROOT / "quwoquan_ops/environments/gamma/local/Caddyfile"
     ).read_text(encoding="utf-8")
     prod_plane_renderer = (
         ROOT / "quwoquan_ops/cli/prod/render_prod_plane_stack.py"
@@ -134,6 +137,10 @@ def main() -> int:
     ).read_text(encoding="utf-8")
     gamma_compose = (
         ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+    ).read_text(encoding="utf-8")
+    gamma_notification_compose = (
+        ROOT
+        / "quwoquan_service/services/notification-service/deploy/compose.yaml"
     ).read_text(encoding="utf-8")
     prod_sim = (
         ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh"
@@ -361,7 +368,7 @@ def main() -> int:
         issues.append("iOS alpha prepare script must skip macOS login keychain trust to avoid repeated password prompts")
     if "legal_static_deployment_package_dir(self.runtime_env)" not in mock_public_plane:
         issues.append("alpha mock public plane must resolve legal-static deployment packages through output_paths")
-    if "utf8.decode(response.bodyBytes)" not in legal_document_page:
+    if "utf8.decode(response.bodyBytes)" not in legal_document_remote:
         issues.append("legal document page must decode response bytes as UTF-8")
     if "loadHtmlString(html, baseUrl: uri.toString())" not in legal_document_page:
         issues.append("legal document page must render the explicitly decoded HTML string")
@@ -418,7 +425,7 @@ def main() -> int:
         issues.append("prod renderer must route auth and owner APIs to user-service on both gateway surfaces")
     if 'LOCAL_GAMMA_DEPLOY_RENDER_ROOT="${QWQ_DEPLOY_WORK_ROOT}/gamma-local/rendered"' not in gamma_script:
         issues.append("gamma rendered deployment config must use the system deployment work root")
-    if 'LOCAL_GAMMA_CADDYFILE="$ROOT/quwoquan_ops/environments/local-gamma/Caddyfile"' not in gamma_script:
+    if 'LOCAL_GAMMA_CADDYFILE="$ROOT/quwoquan_ops/environments/gamma/local/Caddyfile"' not in gamma_script:
         issues.append("gamma launcher must mount the single Ops-owned Caddyfile source")
     if "prepare_caddyfile" in gamma_script or "MEDIA_ORIGIN_BASE_URL" in gamma_script:
         issues.append("gamma launcher must not generate a second Caddyfile or launch a media origin")
@@ -432,8 +439,8 @@ def main() -> int:
             "gamma launcher must resolve the Notification image explicitly",
         ),
         (
-            'copy_service_package_config notification-service notification-service',
-            "gamma launcher must consume the Notification environment package",
+            'notification-service \\\n',
+            "gamma launcher must include Notification in the autonomous package scan",
         ),
         (
             'local notification_port="${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}"',
@@ -446,10 +453,10 @@ def main() -> int:
     ):
         if marker not in gamma_script:
             issues.append(message)
-    if "  notification-service:\n" not in gamma_compose:
-        issues.append("gamma compose must declare Notification as a first-class service")
-    if 'LOCAL_GAMMA_NOTIFICATION_PORT:-19320}:18087' not in gamma_compose:
-        issues.append("gamma compose must publish the canonical Notification port")
+    if "  notification-service:\n" not in gamma_notification_compose:
+        issues.append("Notification autonomous compose fragment is missing")
+    if 'QWQ_COMPOSE_NOTIFICATION_PORT:-19320}:18087' not in gamma_notification_compose:
+        issues.append("Notification compose fragment must publish the canonical port")
     if 'LOCAL_GAMMA_CADDY_DATA_VOLUME="${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}"' not in gamma_script:
         issues.append("gamma Caddy certificate state must use its named deployment volume")
     if '/data/caddy/pki/authorities/local/root.crt' not in gamma_script:

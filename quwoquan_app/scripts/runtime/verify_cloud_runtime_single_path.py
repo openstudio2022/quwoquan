@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "quwoquan_app"
-POLICY_PATH = ROOT / "specs/gates/cloud_runtime_single_path_policy.json"
+POLICY_PATH = ROOT / "quwoquan_ops/policies/gates/cloud_runtime_single_path_policy.json"
 CLOUD_ROOT = APP / "lib/cloud"
 GENERATED_ROOT = CLOUD_ROOT / "runtime/generated"
 CONTRACTS_ROOT = APP / "packages/quwoquan_cloud_contracts/lib"

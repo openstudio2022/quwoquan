@@ -1,0 +1,66 @@
+# 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
+services:
+  tag-service-migrate-taxonomy-snapshots:
+    image: "${QWQ_COMPOSE_TAG_SERVICE_IMAGE:-localhost/quwoquan_service_tag-service:latest}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/tag-service/build/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${QWQ_COMPOSE_GO_BASE_IMAGE:?QWQ_COMPOSE_GO_BASE_IMAGE is required}"
+        ALPINE_BASE_IMAGE: "${QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}"
+        GO_BUILD_FLAGS: "${QWQ_COMPOSE_GO_BUILD_FLAGS:--p=1}"
+    command: ["tag-service-migrate-taxonomy-snapshots"]
+    environment:
+      SERVICE_NAME: tag-service
+      APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION is required}"
+      TAG_MONGO_URI: mongodb://mongodb:27017
+      TAG_MONGO_DATABASE: quwoquan_tag
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+    volumes:
+      - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+
+  tag-service:
+    image: "${QWQ_COMPOSE_TAG_SERVICE_IMAGE:-localhost/quwoquan_service_tag-service:latest}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/tag-service/build/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${QWQ_COMPOSE_GO_BASE_IMAGE:?QWQ_COMPOSE_GO_BASE_IMAGE is required}"
+        ALPINE_BASE_IMAGE: "${QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}"
+        GO_BUILD_FLAGS: "${QWQ_COMPOSE_GO_BUILD_FLAGS:--p=1}"
+    environment:
+      SERVICE_NAME: tag-service
+      APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION is required}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      TAG_SERVICE_ADDR: ":18092"
+      TAG_MONGO_URI: mongodb://mongodb:27017
+      TAG_MONGO_DATABASE: quwoquan_tag
+      TAG_REDIS_GENERAL_ADDR: redis:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      tag-service-migrate-taxonomy-snapshots:
+        condition: service_completed_successfully
+    volumes:
+      - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+    ports:
+      - "${QWQ_COMPOSE_TAG_PORT:-19270}:18092"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18092/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
+      retries: 10
+
+  # 专用 ES/OpenSearch 读模型的本地替身：prod/gamma 用托管/专用集群，local-gamma 用单节点容器
+  # 承载同一检索读模型（与 postgres/mongo/redis 同属本地数据面替身）。单节点、安全关闭。

@@ -72,7 +72,7 @@ def text_control_literal_issues(text: str, *, label: str) -> list[str]:
         for token in RETIRED_WORKFLOW_TOKENS:
             if token in line:
                 issues.append(
-                    f"{label}:{lineno}: retired mutable-target/partial-delivery contract {token}"
+                    f"{label}:{lineno}: retired single-track contract token {token}"
                 )
     return issues
 

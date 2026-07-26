@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""N2-2 门禁：gamma-local 推荐 policy overlay 不得成为第二真相源。
+"""N2-2 门禁：gamma 选择的推荐 policy 资源不得成为第二真相源。
 
-gamma-local.policy.yaml 允许与 metadata policy.yaml 的差异只有：
+gamma releaseRef 所选 policy 允许与公共 service policy 的差异只有：
   1. objectCards.enabled（环境灰度开关）
   2. policyVersion（环境后缀）
   3. 文件头注释
 
 其余任何键（权重/实验/曝光治理/召回融合/运营干预）漂移一律 BLOCK：
-业务演进必须先改 metadata，再同步 overlay。
+业务演进必须先改公共 service resource，再生成明确版本的候选资源。
 """
 
 from __future__ import annotations
@@ -22,8 +22,16 @@ except ImportError:
     sys.exit(2)
 
 ROOT = Path(__file__).resolve().parents[2]
-METADATA_POLICY = ROOT / "quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml"
-GAMMA_OVERLAY = ROOT / "quwoquan_ops/environments/policies/recommendation/gamma-local.policy.yaml"
+METADATA_POLICY = (
+    ROOT
+    / "quwoquan_service/services/content-service/resources/policies/content/post"
+    / "recommendation_policy.yaml"
+)
+GAMMA_OVERLAY = (
+    ROOT
+    / "quwoquan_service/services/content-service/resources/policies/content/post"
+    / "recommendation_policy_object_cards_v1.yaml"
+)
 
 ALLOWED_DIFF_PATHS = {
     ("objectCards", "enabled"),

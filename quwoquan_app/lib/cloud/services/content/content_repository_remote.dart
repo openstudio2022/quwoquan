@@ -232,11 +232,26 @@ class RemoteContentRepository
   }
 
   @override
-  Future<void> deletePost({required String postId}) async {
-    final uri = _uri(ContentApiMetadata.deletePostPath(postId: postId));
+  Future<void> deletePost({
+    required String postId,
+    required String idempotencyKey,
+  }) async {
+    final normalizedPostId = postId.trim();
+    final normalizedIdempotencyKey = idempotencyKey.trim();
+    if (normalizedPostId.isEmpty || normalizedIdempotencyKey.isEmpty) {
+      throw ArgumentError(
+        'DeletePost requires postId and caller-owned idempotencyKey',
+      );
+    }
+    final uri = _uri(
+      ContentApiMetadata.deletePostPath(postId: normalizedPostId),
+    );
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.deletePost),
+      headers: <String, String>{
+        ...CloudRequestHeaders.forPage(ContentRequestPageIds.deletePost),
+        'Idempotency-Key': normalizedIdempotencyKey,
+      },
     );
   }
 

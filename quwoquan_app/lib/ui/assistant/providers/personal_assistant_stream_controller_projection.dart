@@ -38,62 +38,72 @@ PersonalAssistantProcessSummary _projectProcessSummary(
   AssistantRunStreamEvent event, {
   required int elapsedMs,
 }) {
-  if (event.type == AssistantRunStreamEventType.processReplace) {
-    return const PersonalAssistantProcessSummary().copyWith(
+  var base = current;
+  late final List<AssistantRunVisibleProcess> processes;
+  if (event.type == AssistantRunStreamEventType.processReplace ||
+      event.processes.isNotEmpty) {
+    processes = List<AssistantRunVisibleProcess>.of(event.processes)
+      ..sort((left, right) => left.order.compareTo(right.order));
+    base = const PersonalAssistantProcessSummary().copyWith(
       elapsedMs: elapsedMs,
-      processes: List<AssistantRunVisibleProcess>.unmodifiable(event.processes),
+      processes: List<AssistantRunVisibleProcess>.unmodifiable(processes),
     );
+  } else {
+    final incoming = event.process;
+    if (incoming == null) {
+      return current.copyWith(elapsedMs: elapsedMs);
+    }
+    final byId = <String, AssistantRunVisibleProcess>{
+      for (final process in current.processes) process.processId: process,
+    };
+    final existing = byId[incoming.processId];
+    final incomingSummary = _visibleProcessSummary(incoming);
+    byId[incoming.processId] = existing == null
+        ? incoming
+        : existing.copyWith(
+            status: incoming.status,
+            summary: incomingSummary.isEmpty
+                ? existing.summary
+                : incomingSummary,
+            searchedDocumentCount: incoming.searchedDocumentCount > 0
+                ? incoming.searchedDocumentCount
+                : existing.searchedDocumentCount,
+            processedDocumentCount: incoming.processedDocumentCount > 0
+                ? incoming.processedDocumentCount
+                : existing.processedDocumentCount,
+            acceptedDocumentCount: incoming.acceptedDocumentCount > 0
+                ? incoming.acceptedDocumentCount
+                : existing.acceptedDocumentCount,
+            acceptedReferences: incoming.acceptedReferences.isEmpty
+                ? existing.acceptedReferences
+                : incoming.acceptedReferences,
+          );
+    processes = byId.values.toList()
+      ..sort((left, right) => left.order.compareTo(right.order));
   }
-  final incoming = event.process;
-  if (incoming == null) {
-    return current.copyWith(elapsedMs: elapsedMs);
-  }
-  final byId = <String, AssistantRunVisibleProcess>{
-    for (final process in current.processes) process.processId: process,
-  };
-  final existing = byId[incoming.processId];
-  byId[incoming.processId] = existing == null
-      ? incoming
-      : existing.copyWith(
-          status: incoming.status,
-          summary: incoming.summary.isEmpty ? existing.summary : incoming.summary,
-          searchedDocumentCount: incoming.searchedDocumentCount > 0
-              ? incoming.searchedDocumentCount
-              : existing.searchedDocumentCount,
-          processedDocumentCount: incoming.processedDocumentCount > 0
-              ? incoming.processedDocumentCount
-              : existing.processedDocumentCount,
-          acceptedDocumentCount: incoming.acceptedDocumentCount > 0
-              ? incoming.acceptedDocumentCount
-              : existing.acceptedDocumentCount,
-          acceptedReferences: incoming.acceptedReferences.isEmpty
-              ? existing.acceptedReferences
-              : incoming.acceptedReferences,
-        );
-  final processes = byId.values.toList()
-    ..sort((left, right) => left.order.compareTo(right.order));
-  var processedCount = current.processedCount;
-  var searchCount = current.searchCount;
-  var acceptedCount = current.acceptedCount;
-  var understandingSummary = current.understandingSummary;
-  var retrievalDesignNarrative = current.retrievalDesignNarrative;
-  var processingSummary = current.processingSummary;
-  var expansionReason = current.expansionReason;
-  var finalAnswerSummary = current.finalAnswerSummary;
-  var finalAnswerReady = current.finalAnswerReady;
-  var selectedKeyPoints = current.selectedKeyPoints;
-  var acceptedReferences = current.acceptedReferences;
+  var processedCount = base.processedCount;
+  var searchCount = base.searchCount;
+  var acceptedCount = base.acceptedCount;
+  var understandingSummary = base.understandingSummary;
+  var retrievalDesignNarrative = base.retrievalDesignNarrative;
+  var processingSummary = base.processingSummary;
+  var expansionReason = base.expansionReason;
+  var finalAnswerSummary = base.finalAnswerSummary;
+  var finalAnswerReady = base.finalAnswerReady;
+  var selectedKeyPoints = base.selectedKeyPoints;
+  var acceptedReferences = base.acceptedReferences;
   final lines = <String>[];
   for (final process in processes) {
     final line = _processLineForProcess(process);
+    final processSummary = _visibleProcessSummary(process);
     if (line.isNotEmpty && !lines.contains(line)) {
       lines.add(line);
     }
     switch (process.stage) {
       case 'planning':
-        if (process.summary.isNotEmpty) {
-          understandingSummary = process.summary;
-          retrievalDesignNarrative = process.summary;
+        if (processSummary.isNotEmpty) {
+          understandingSummary = processSummary;
+          retrievalDesignNarrative = processSummary;
         }
         break;
       case 'evidence_review':
@@ -106,15 +116,15 @@ PersonalAssistantProcessSummary _projectProcessSummary(
         acceptedCount = process.acceptedDocumentCount > 0
             ? process.acceptedDocumentCount
             : acceptedCount;
-        if (process.summary.isNotEmpty) {
-          processingSummary = process.summary;
+        if (processSummary.isNotEmpty) {
+          processingSummary = processSummary;
         }
         if (process.acceptedReferences.isNotEmpty) {
           acceptedReferences = process.acceptedReferences
               .map(
                 (reference) => RetrievalProcessingReference(
                   title: reference.title,
-                  url: reference.url,
+                  destination: reference.destination,
                   source: reference.source,
                   snippet: reference.snippet,
                 ),
@@ -124,12 +134,11 @@ PersonalAssistantProcessSummary _projectProcessSummary(
         break;
       case 'answer_generation':
         finalAnswerSummary = AssistantText.assistantProcessFinalAnswerNarrative;
-        finalAnswerReady =
-            finalAnswerReady || process.status == 'completed';
+        finalAnswerReady = finalAnswerReady || process.status == 'completed';
         break;
     }
   }
-  return current.copyWith(
+  return base.copyWith(
     processedCount: processedCount,
     searchCount: searchCount,
     acceptedCount: acceptedCount,
@@ -161,15 +170,19 @@ String _processLineForProcess(AssistantRunVisibleProcess process) {
   if (stage.isEmpty) {
     return '';
   }
-  if (process.summary.isEmpty) {
+  final summary = _visibleProcessSummary(process);
+  if (summary.isEmpty) {
     return stage;
   }
-  return '$stage：${process.summary}';
+  return '$stage：$summary';
 }
 
+String _visibleProcessSummary(AssistantRunVisibleProcess process) =>
+    process.summary.trim();
+
 String _openedTurnAnswer(AssistantTurnEnvelopeWire turn) {
-  final text = turn.input['text']?.toString().trim();
-  if (text != null && text.isNotEmpty) {
+  final text = turn.input.text.trim();
+  if (text.isNotEmpty) {
     return AssistantText.assistantProactiveReminderOpened(text);
   }
   return AssistantText.assistantProactiveReminderOpenedDefault;
@@ -465,7 +478,7 @@ List<AssistantJourneyReference> _journeyReferences(
       .map(
         (reference) => AssistantJourneyReference(
           title: reference.title,
-          url: reference.url,
+          destination: reference.destination,
           source: reference.source,
         ),
       )

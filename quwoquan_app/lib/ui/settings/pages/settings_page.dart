@@ -383,7 +383,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             AnalyticsEvent(
               eventType: 'settings',
               eventName: eventName,
-              properties: <String, dynamic>{
+              properties: <String, Object?>{
                 'pageName': 'settings',
                 'routeId': surface.routeId,
                 'surfaceId': surface.id,

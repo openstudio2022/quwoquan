@@ -12,8 +12,8 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/product-ops-service/internal/application"
-	productopsgenerated "quwoquan_service/services/product-ops-service/internal/generated"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
+	productopsgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
 )
 
 const (

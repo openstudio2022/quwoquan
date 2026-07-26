@@ -151,10 +151,12 @@ extension SearchCoordinatorSuggestionBuilders on SearchCoordinator {
   }
 
   Future<void> _rememberQuery({required String query}) async {
+    final store = _localStore;
     final trimmedQuery = query.trim();
     if (trimmedQuery.isEmpty) {
       return;
     }
+    _recentHistoryMutationRevision += 1;
     final selectionFacet = _currentState.selection.toFacet();
     final historyScope = _scopeForSelection(_currentState.selection);
     final now = DateTime.now();
@@ -173,7 +175,18 @@ extension SearchCoordinatorSuggestionBuilders on SearchCoordinator {
       localEntry,
     ], _currentState.recentSearches);
     _setState(_currentState.copyWith(recentSearches: merged));
-    await _localStore.save(merged);
+    final historyKey = _historyKeyForEntry(localEntry);
+    _pendingRecentDeleteKeys.remove(historyKey);
+    _pendingRecentUpsertKeys.add(historyKey);
+    final upsertToken = ++_recentUpsertSequence;
+    _recentUpsertTokens[historyKey] = upsertToken;
+    await _saveRecentHistory(merged, store: store);
+    if (!_isMounted || !identical(store, _localStore)) {
+      return;
+    }
+    if (_pendingRecentClear) {
+      return;
+    }
     try {
       final remoteContractEntry = await _coordinatorRef
           .read(recentSearchCommandWriterProvider)
@@ -191,19 +204,39 @@ extension SearchCoordinatorSuggestionBuilders on SearchCoordinator {
         facet: remoteContractEntry.facet,
         updatedAt: remoteContractEntry.updatedAt ?? now,
       );
-      final nextEntries = _mergeHistory(<RecentSearchEntryView>[
-        remoteEntry,
-      ], merged);
-      if (!_isMounted) {
+      if (!_isMounted || !identical(store, _localStore)) {
         return;
       }
+      final currentIntentContainsEntry = _currentState.recentSearches.any(
+        (entry) => _historyKeyForEntry(entry) == historyKey,
+      );
+      if (_recentUpsertTokens[historyKey] != upsertToken ||
+          _pendingRecentDeleteKeys.contains(historyKey) ||
+          !currentIntentContainsEntry) {
+        if (!currentIntentContainsEntry) {
+          _pendingRecentDeleteKeys.add(historyKey);
+          final deleted = await _deleteCanonicalRecentSearch(
+            remoteEntry,
+            operation: 'remote_delete_after_obsolete_upsert',
+          );
+          if (deleted) {
+            _pendingRecentDeleteKeys.remove(historyKey);
+          }
+          await _saveRecentHistory(_currentState.recentSearches, store: store);
+        }
+        return;
+      }
+      final nextEntries = _replaceHistoryEntryWithCanonical(
+        _currentState.recentSearches,
+        remoteEntry,
+      );
+      _recentUpsertTokens.remove(historyKey);
+      _pendingRecentUpsertKeys.remove(historyKey);
       _setState(_currentState.copyWith(recentSearches: nextEntries));
-      await _localStore.save(nextEntries);
+      await _saveRecentHistory(nextEntries, store: store);
     } on Object catch (error) {
       // Local-first history stays available while remote sync degrades.
-      if (kDebugMode) {
-        debugPrint('recent search remote upsert degraded: $error');
-      }
+      _recordRecentHistoryFailure(operation: 'remote_upsert', error: error);
     }
   }
 
@@ -221,6 +254,21 @@ extension SearchCoordinatorSuggestionBuilders on SearchCoordinator {
     }
     final values = merged.values.toList(growable: false);
     values.sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
-    return values.take(15).toList(growable: false);
+    return values
+        .take(SearchCoordinator._recentSearchMaxEntries)
+        .toList(growable: false);
+  }
+
+  List<RecentSearchEntryView> _replaceHistoryEntryWithCanonical(
+    List<RecentSearchEntryView> entries,
+    RecentSearchEntryView canonicalEntry,
+  ) {
+    final canonicalKey = _historyKeyForEntry(canonicalEntry);
+    return _mergeHistory(
+      <RecentSearchEntryView>[canonicalEntry],
+      entries
+          .where((entry) => _historyKeyForEntry(entry) != canonicalKey)
+          .toList(growable: false),
+    );
   }
 }

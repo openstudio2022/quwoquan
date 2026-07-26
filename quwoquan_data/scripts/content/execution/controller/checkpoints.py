@@ -391,7 +391,7 @@ def _checkpoint_build_homepage(ctx: ExecutionContext) -> StageResult:
             ExecutionStage.BUILD_HOMEPAGE,
             CHECKPOINT,
             StageStatus.DONE,
-            "entityHomepagesPerTarget=0；图片作品-only 批次无需主页 Agent 创作",
+            "entityHomepagesPerTarget=0；非主页载体无需主页 Agent 创作",
         )
     ok, issues = _homepages_done(ctx)
     if ok:

@@ -343,9 +343,6 @@ def _download_research_lane_issues(
                     "sourceCollectionId",
                     "creator",
                     "collectionPageUrl",
-                    "license",
-                    "termsUrl",
-                    "authorizationProof",
                 )
                 if not str(image.get(field) or "").strip()
             ]
@@ -353,6 +350,14 @@ def _download_research_lane_issues(
                 add(
                     DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
                     f"image {image.get('url') or '?'} missing collection rights {missing_fields}"
+                )
+            for issue in validate_image_rights(
+                image,
+                vertical=ctx.spec.vertical,
+            ):
+                add(
+                    DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
+                    f"image {image.get('url') or '?'}: {issue}",
                 )
             if str(image.get("generationModel") or "").strip() and not allow_generated_images:
                 add(

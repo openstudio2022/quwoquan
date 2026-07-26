@@ -8,17 +8,19 @@ import yaml
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from core import paths as core_paths
 from core.paths import WORKSPACE_ROOT_BY_COMMAND, normalize_execution_workspace_command
 from core.io import read_json, write_json
 from core.source_digest import SourceDigest, SourceDigestError, current_source_digest
+from content.source.contracts import QualifiedHomepageSource
 
 from .identity import SelectionPolicy, parse_execution_id, validate_execution_id
 
 
 MANIFEST_FILENAME = "execution_manifest.json"
+REQUEST_REF = "0.plan/request.json"
 TARGET_SET_REF = "0.plan/target_set.json"
 WORK_PACKAGE_DIRECTORIES = (
     "0.plan",
@@ -28,6 +30,51 @@ WORK_PACKAGE_DIRECTORIES = (
     "_shared",
     "evidence",
 )
+_TRANSACTION_OBJECT_MARKERS = ("--entity-", "--post-")
+
+
+def transaction_workspace_root() -> Path:
+    return core_paths.DATA_LOCAL_ROOT / "workspace" / "object-transactions"
+
+
+def orphaned_transaction_workspaces() -> tuple[Path, ...]:
+    """Return transaction evidence whose execution work package no longer exists."""
+    root = transaction_workspace_root()
+    if not root.is_dir():
+        return ()
+    orphaned: list[Path] = []
+    for candidate in sorted(path for path in root.iterdir() if path.is_dir()):
+        execution_id = ""
+        for marker in _TRANSACTION_OBJECT_MARKERS:
+            if marker in candidate.name:
+                execution_id = candidate.name.rsplit(marker, 1)[0]
+                break
+        if not execution_id:
+            continue
+        try:
+            validate_execution_id(execution_id)
+        except ValueError:
+            continue
+        if not (core_paths.DATA_EXECUTIONS_ROOT / execution_id).is_dir():
+            orphaned.append(candidate)
+    return tuple(orphaned)
+
+
+def require_clean_transaction_workspace(execution_id: str) -> None:
+    """Reject a new execution ID that is shadowed by deleted output evidence."""
+    normalized = validate_execution_id(execution_id)
+    prefix = f"{normalized}--"
+    stale = [
+        path for path in orphaned_transaction_workspaces()
+        if path.name.startswith(prefix)
+    ]
+    if stale:
+        raise ValueError(
+            "execution output reset is incomplete; remove stale transaction workspace: "
+            + ", ".join(path.as_posix() for path in stale)
+        )
+
+
 def execution_root(execution_id: str) -> Path:
     """Resolve the only execution work-package root through ``core.paths``."""
     return core_paths.execution_root(validate_execution_id(execution_id))
@@ -39,6 +86,10 @@ def execution_manifest_path(execution_id: str) -> Path:
 
 def execution_target_set_path(execution_id: str) -> Path:
     return execution_root(execution_id) / TARGET_SET_REF
+
+
+def execution_request_path(execution_id: str) -> Path:
+    return execution_root(execution_id) / REQUEST_REF
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +119,34 @@ class ExecutionWorkspace:
 
     def command_packet_path(self, stage: str) -> Path:
         return self.shared_dir / "command_packets" / f"{stage}.json"
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenTarget:
+    """A target admitted from the immutable execution target set."""
+
+    name: str
+    entity_type: str
+    qualified_homepage_source: QualifiedHomepageSource | None = None
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, Any]) -> "FrozenTarget":
+        name = str(payload.get("name") or "").strip()
+        entity_type = str(payload.get("entityType") or "").strip().strip("/")
+        if not name or len(entity_type.split("/")) != 2:
+            raise ValueError(f"invalid frozen target: {dict(payload)!r}")
+        raw_source = payload.get("qualifiedHomepageSource")
+        if raw_source is not None and not isinstance(raw_source, Mapping):
+            raise TypeError("frozen target qualifiedHomepageSource must be an object")
+        return cls(
+            name=name,
+            entity_type=entity_type,
+            qualified_homepage_source=(
+                QualifiedHomepageSource.from_mapping(raw_source)
+                if isinstance(raw_source, Mapping)
+                else None
+            ),
+        )
 
 
 def execution_command_root(execution_id: str, command: str) -> Path:
@@ -221,7 +300,25 @@ def load_frozen_target_set(execution_id: str) -> dict[str, Any]:
     return payload
 
 
-def frozen_target_set_sha256(execution_id: str) -> str:
+def frozen_target_by_name(execution_id: str, name: str) -> FrozenTarget | None:
+    """Resolve one target from the only immutable target-set source."""
+    expected_name = str(name or "").strip()
+    if not expected_name:
+        return None
+    payload = load_frozen_target_set(execution_id)
+    targets = payload.get("targets")
+    if not isinstance(targets, list):
+        raise ValueError(f"frozen target set targets must be an array: {execution_id}")
+    for raw_target in targets:
+        if not isinstance(raw_target, Mapping):
+            raise ValueError(f"frozen target set contains a non-object target: {execution_id}")
+        target = FrozenTarget.from_mapping(raw_target)
+        if target.name == expected_name:
+            return target
+    return None
+
+
+def frozen_target_set_digest(execution_id: str) -> str:
     return _canonical_payload_sha256(load_frozen_target_set(execution_id))
 
 
@@ -229,10 +326,10 @@ def create_execution_manifest(
     *,
     execution_id: str,
     recipe_ref: str,
-    resolved_params: dict[str, Any],
+    request: dict[str, Any],
     selection_policy: SelectionPolicy,
     target_set_ref: str,
-    target_set_sha256: str,
+    target_set_digest: str,
     retry_of: str | None = None,
 ) -> dict[str, Any]:
     """Create exactly one immutable execution manifest and work-package tree.
@@ -250,9 +347,9 @@ def create_execution_manifest(
         raise TypeError("selection_policy must be SelectionPolicy")
     if target_set_ref != TARGET_SET_REF:
         raise ValueError(f"targetSetRef must be {TARGET_SET_REF}")
-    actual_target_set_sha256 = frozen_target_set_sha256(identity.execution_id)
-    if target_set_sha256 != actual_target_set_sha256:
-        raise ValueError("targetSetSha256 does not match the frozen target set")
+    actual_target_set_digest = frozen_target_set_digest(identity.execution_id)
+    if target_set_digest != actual_target_set_digest:
+        raise ValueError("targetSetDigest does not match the frozen target set")
     normalized_retry_of = validate_execution_id(retry_of) if retry_of else None
     if normalized_retry_of:
         retry_identity = parse_execution_id(normalized_retry_of)
@@ -261,7 +358,7 @@ def create_execution_manifest(
             "content_type",
             "intent",
             "scope",
-            "milestone",
+            "phase",
         )
         if normalized_retry_of == identity.execution_id or any(
             getattr(retry_identity, field) != getattr(identity, field) for field in comparable
@@ -276,63 +373,50 @@ def create_execution_manifest(
     execution_binding = recipe_payload.get("execution")
     if not isinstance(execution_binding, dict):
         raise ValueError(f"recipe execution binding is missing: {recipe_file}")
-    from content.release.canonical.rollout_contract import ROLLOUT_PATH
-    from core.cursor_pricing import load_cursor_pricing
-
     model_binding = {
         "provider": str(execution_binding.get("agentProvider") or "cursor_sdk"),
         "authorModel": str(execution_binding.get("model") or ""),
         "authorModelFamily": str(execution_binding.get("modelFamily") or ""),
+        "authorModelParameters": list(
+            execution_binding.get("modelParameters") or []
+        ),
         "reviewerModel": str(execution_binding.get("reviewModel") or ""),
         "reviewerModelFamily": str(
             execution_binding.get("reviewModelFamily") or ""
         ),
+        "reviewerModelParameters": list(
+            execution_binding.get("reviewModelParameters") or []
+        ),
     }
-    if not all(model_binding.values()):
+    required_model_values = (
+        model_binding["provider"],
+        model_binding["authorModel"],
+        model_binding["authorModelFamily"],
+        model_binding["reviewerModel"],
+        model_binding["reviewerModelFamily"],
+    )
+    if not all(required_model_values):
         raise ValueError(f"recipe model binding is incomplete: {recipe_file}")
     candidate = {
         "executionId": identity.execution_id,
-        "vertical": identity.vertical,
-        "contentType": identity.content_type,
-        "intent": identity.intent,
-        "scope": identity.scope,
-        "milestone": identity.milestone,
-        "sequence": identity.sequence,
-        "recipe": {"ref": recipe_ref, "sha256": _file_sha256(recipe_file)},
+        "familyRef": {"ref": recipe_ref, "sha256": _file_sha256(recipe_file)},
         "sourceDigest": current_source_digest().to_document(),
         "modelBinding": model_binding,
-        "pricingRevision": load_cursor_pricing().revision,
-        "rolloutContract": {
-            "path": ROLLOUT_PATH.relative_to(core_paths.REPO_ROOT).as_posix(),
-            "sha256": _file_sha256(ROLLOUT_PATH),
-        },
-        "resolvedParams": resolved_params,
-        "selectionPolicy": selection_policy.value,
+        "requestRef": REQUEST_REF,
         "targetSetRef": target_set_ref,
-        "targetSetSha256": target_set_sha256,
+        "targetSetDigest": target_set_digest,
         "retryOf": normalized_retry_of,
-        "createdAt": _utc_now(),
-        "repoRoot": str(core_paths.REPO_ROOT),
     }
     if manifest_path.is_file():
         existing = load_execution_manifest(identity.execution_id)
         immutable_keys = (
             "executionId",
-            "vertical",
-            "contentType",
-            "intent",
-            "scope",
-            "milestone",
-            "sequence",
-            "recipe",
+            "familyRef",
             "sourceDigest",
             "modelBinding",
-            "pricingRevision",
-            "rolloutContract",
-            "resolvedParams",
-            "selectionPolicy",
+            "requestRef",
             "targetSetRef",
-            "targetSetSha256",
+            "targetSetDigest",
             "retryOf",
         )
         drift = [key for key in immutable_keys if existing.get(key) != candidate.get(key)]
@@ -344,6 +428,13 @@ def create_execution_manifest(
         return existing
 
     ensure_execution_work_package_layout(identity.execution_id)
+    request_path = execution_request_path(identity.execution_id)
+    if request_path.is_file():
+        existing_request = read_json(request_path)
+        if existing_request != request:
+            raise ValueError("execution request is immutable; create a new sequence")
+    else:
+        write_json(request_path, request)
     from core.schema import assert_valid
 
     assert_valid(candidate, "execution", "content_execution_manifest", label=f"execution_manifest:{identity.execution_id}")
@@ -371,7 +462,7 @@ def load_execution_manifest(execution_id: str) -> dict[str, Any]:
         raise ValueError(
             "execution manifest sourceDigest drift; create a new sequence with retryOf"
         )
-    if manifest.get("targetSetSha256") != frozen_target_set_sha256(execution_id):
+    if manifest.get("targetSetDigest") != frozen_target_set_digest(execution_id):
         raise ValueError(f"execution manifest target set digest mismatch: {manifest_path}")
     return manifest
 
@@ -379,10 +470,10 @@ def load_execution_manifest(execution_id: str) -> dict[str, Any]:
 def execution_manifest_recipe_ref(execution_id: str) -> str:
     """Return the sole recipe reference from the immutable manifest."""
     manifest = load_execution_manifest(execution_id)
-    recipe = manifest.get("recipe")
-    if not isinstance(recipe, dict):
-        raise ValueError("execution manifest recipe must be an object")
-    recipe_ref = str(recipe.get("ref") or "").strip()
+    family_ref = manifest.get("familyRef")
+    if not isinstance(family_ref, dict):
+        raise ValueError("execution manifest familyRef must be an object")
+    recipe_ref = str(family_ref.get("ref") or "").strip()
     if not recipe_ref:
         raise ValueError("execution manifest recipe.ref is required")
     return recipe_ref

@@ -1,9 +1,14 @@
-# 本地 Cursor SDK 唯一运行策略。规模与目标属于 rollout contract，不进入本文件。
+# 本地 Cursor SDK 唯一运行策略。任务范围和目标数由 execution request 冻结，不进入本文件。
 profileId: cursor_local_calibrated
 policy:
   cursor:
     provider: cursor_sdk
-    model: composer-2.5
+    model: grok-4.5
+    modelParameters:
+      - id: effort
+        value: high
+      - id: fast
+        value: "false"
     runtime: local
   workers:
     author: 3
@@ -15,16 +20,13 @@ policy:
     startupTimeoutSeconds: 240
     preflightNetworkTimeoutSeconds: 5
     agentTimeoutSeconds: 1200
-    defaultObjectTokenBudget: 12000
-    # 仅覆盖 N=30 校准；H200/H1000/H10K 必须先以新审批 revision 提高批次上限。
-    defaultObjectCostBudgetUsd: 5.0
-    maxBatchCostUsd: 150.0
-    maxDailyCostUsd: 150.0
     authRetryLimit: 12
     authRetryDelaySeconds: 300
     noProgressRoundLimit: 6
     researchWaveSize: 8
     researchMaxWavesPerRun: 0
+    sourcePlanRecoveryPasses: 1
+    sourcePlanRecoveryWorkers: 2
     coldStartMaxWorkers: 3
     workerStaggerSeconds: 8.0
     managedFutureGraceSeconds: 15
@@ -53,7 +55,6 @@ policy:
     processTerminationTimeoutSeconds: 5
     agentFuturePollTimeoutSeconds: 10
     apiRequestTimeoutSeconds: 30
-    entityReloadTimeoutSeconds: 30
     directFetchTimeoutSeconds: 15
     sourceFetchTimeoutSeconds: 20
     sourceFetchMaxRetries: 4

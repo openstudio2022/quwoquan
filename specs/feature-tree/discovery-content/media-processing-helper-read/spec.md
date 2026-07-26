@@ -1,50 +1,94 @@
-# L2 业务能力：媒体处理与辅助读取
+# L2 Business Capability：媒体处理与辅助阅读 (`media-processing-helper-read`)
 
-## 用户价值
+> 所属领域：[`discovery-content`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-用户上传图片或视频后，系统必须把私有原始字节可靠推进为经过受信验证、可发布的
-`MediaAsset`；图片交付归一化基线，视频交付可播放、可预览基线，并让处理中、成功和
-不可恢复失败都具有确定终态；不得依赖 fixture、原始上传 fallback 或人工伪造 `ready`。
+## 1. 能力目标
 
-## 范围
+图片/视频从上传完成事实到 ready/rejected 终态、归一化公开切片与可预览读取的商用闭环。
 
-- `MediaUploadSession completed → MediaAsset processing → ready/rejected` 状态闭环。
-- 消费 `content.media_asset.created` 耐久 outbox，按 checkpoint 至少一次处理。
-- 图片真实解码、像素/尺寸守卫、方向归一与 JPEG/PNG 交付基线生成。
-- `image-delivery-variants` 以 MediaAsset owned descriptor 绑定唯一 ImageVariantPolicy；
-  thumbnail/display/cover/full 由 CDN profile 派生，原图访问按 Post 可见性授权。
-- ffprobe 探测、H.264/AAC progressive fast-start MP4 归一、封面和预览轨道生成。
-- 基础设施故障不推进 checkpoint；内容损坏进入 `rejected` 并记录稳定原因。
-- 带有效 cursor 的损坏 outbox 元数据或无法恢复的资产快照先持久化到
-  `media_processing_dead_letters`，再推进 checkpoint；原始 payload 不得进入死信记录。
-- `GetMediaAsset`、交付引用和预览轨道读取只暴露权威处理结果。
-- Worker 健康、全链路耗时、失败率、连续满批和 poison event 可观测。
+## 2. 范围与非目标
 
-## 不在本能力内
+### In Scope
 
-- Post 发布事务、审核和作者结果回流归 `publish-comment-reaction`。
-- 播放器 QoE 归 `runtime/runtime-media`。
-- HLS/DASH ABR 不属于首发交付契约；metadata 不登记未实现的 adaptive profile/flag，
-  首发唯一播放主线是已验证的 progressive fast-start MP4。
+- MediaAsset 状态机、outbox worker、checkpoint、FFmpeg/FFprobe、对象存储派生物、健康与指标。
+- 真实 MinIO + MongoDB + FFmpeg 的数据一致性证据。
 
-## 架构约束
+### Out of Scope
 
-- Worker 集成在 `content-service`，但作为独立功能模块，仅依赖
-  `OutboxSource / AssetSnapshotLoader / CheckpointStore / MediaProcessor /
-  ResultRecorder / PoisonEventRecorder` 窄端口。
-- 页面绑定和媒体状态以 metadata、MediaAsset 聚合与 generated contract 为唯一真相源。
+- 文章摘要生成由 helper-read-summary 独立 Story 验收。
+- HLS/DASH ABR 在 feature flag 关闭时不属于首发交付。
+
+## 3. Journey / Scenario 贡献
+
+- [`JNY-004 / SCN-002`](../../spec.md#scn-002)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：图片/视频从上传完成事实到 ready/rejected 终态、归一化公开切片与可预览读取的商用闭环，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-004 / SCN-003`](../../spec.md#scn-003)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：图片/视频从上传完成事实到 ready/rejected 终态、归一化公开切片与可预览读取的商用闭环，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+
+## 4. Story
+
+
+
+- [`helper-read-summary`](./helper-read-summary/spec.md)：定义“辅助读取摘要”的可观察主路径、失败语义及父能力交接。
+- [`image-delivery-variants`](./image-delivery-variants/spec.md)：损坏、超限、descriptor 缺字段或 CDN baseline 不可读全部进入 rejected 或保持 processing 重试，不能发布。
+- [`media-failure-recovery`](./media-failure-recovery/spec.md)：checkpoint 保存失败后重放同一事实只产生一个有效 ready 结果。
+- [`media-status-pipeline`](./media-status-pipeline/spec.md)：带音轨与无音轨输入均产生 H.264/AAC progressive fast-start MP4。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 图片/视频媒体处理、恢复与读取能力 SIT
+
+- completed 上传产生耐久事实，worker 以 checkpoint 至少一次消费并把资产推进到 ready 或 rejected。
+- 图片只有在真实解码、像素/尺寸守卫和归一化成功后才 ready，公开 slice 从 normalized object 物化，不复制原始上传字节。
+- 图片 ready descriptor 必须绑定 processingVersion 与 derivativePolicyVersion；thumbnail/display/cover/full 由同一 ImageVariantPolicy 的 CDN profile 派生，不创建第二个 MediaAsset 或手写 App/Data profile。
+- 原图授权同时验证 Post 可见性和 asset policy；非可见访问为 403、超限为 429，且不泄露 原图 URL 或图片内容。
+- 带音轨视频完成 H.264/AAC 归一，无音轨视频注入 AAC 静音轨；二者均满足 fast-start 与关键帧约束。
+- 非媒体字节稳定进入 rejected，不生成可发布 slice。
+- checkpoint 保存失败可重放，重复事实不重复处理已终态资产。
+- ready descriptor 的 processingVersion 与可变 aggregate version 分离；视频封面或访问策略 后续变更后，原有 versioned public slice 仍可恢复、读取和校验。
+
+<a id="req-002"></a>
+### REQ-002 处理结果回写必须幂等；重放不得重复改变终态
+
 - 处理结果回写必须幂等；重放不得重复改变终态。
-- `processingVersion` 是 descriptor/public slice 生成时冻结的版本锚点，与可继续推进的
-  MediaAsset aggregate version 分离；后续修改封面或访问策略不得按最新 aggregate
-  version 重解释或使既有已验证 slice 失效。
 - FFmpeg、对象存储或 checkpoint 不可用时 fail-fast/重试，禁止伪造成功或回退原视频。
 
-## 商用验收
+## 6. 契约与依赖
 
-- 真实 MinIO + MongoDB + FFmpeg 下，`upload_policy` 允许且内容真实匹配的图片、
-  带音轨和无音轨视频均可达 `ready`，损坏、伪装或超限字节可达 `rejected`。
-- ready 描述符满足 codec/container/audio/fast-start/keyframe/slice/preview manifest
-  全部约束，并可被 Post 发布绑定读取。
-- 进程重启、checkpoint 保存失败和重复事实不会丢事件或重复处理终态资产。
-- 损坏事实不会永久阻塞后续资产；死信持久化失败时 checkpoint 保持不动，避免静默跳过。
-- local_contract 与 api_integration 证据路径真实存在且被 acceptance 反向绑定。
+- 上游能力：[`discovery-content`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 图片/视频媒体处理、恢复与读取能力 SIT
+
+- GIVEN 执行“图片/视频媒体处理、恢复与读取能力”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“图片/视频媒体处理、恢复与读取能力”对应动作。
+- THEN completed 上传产生耐久事实，worker 以 checkpoint 至少一次消费并把资产推进到 ready 或 rejected。
+- THEN 图片只有在真实解码、像素/尺寸守卫和归一化成功后才 ready，公开 slice 从 normalized object 物化，不复制原始上传字节。
+- THEN 图片 ready descriptor 必须绑定 processingVersion 与 derivativePolicyVersion；thumbnail/display/cover/full 由同一 ImageVariantPolicy 的 CDN profile 派生，不创建第二个 MediaAsset 或手写 App/Data profile。
+- THEN 原图授权同时验证 Post 可见性和 asset policy；非可见访问为 403、超限为 429，且不泄露 原图 URL 或图片内容。
+- THEN 带音轨视频完成 H.264/AAC 归一，无音轨视频注入 AAC 静音轨；二者均满足 fast-start 与关键帧约束。
+- THEN 非媒体字节稳定进入 rejected，不生成可发布 slice。
+- THEN checkpoint 保存失败可重放，重复事实不重复处理已终态资产。
+- THEN ready descriptor 的 processingVersion 与可变 aggregate version 分离；视频封面或访问策略 后续变更后，原有 versioned public slice 仍可恢复、读取和校验。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 图片/视频媒体处理、恢复与读取能力 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：completed 上传产生耐久事实，worker 以 checkpoint 至少一次消费并把资产推进到 ready 或 rejected。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

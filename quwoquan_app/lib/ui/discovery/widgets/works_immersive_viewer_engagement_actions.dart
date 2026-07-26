@@ -209,7 +209,10 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       try {
         await ref
             .read(contentWriteRepositoryProvider)
-            .deletePost(postId: post.id);
+            .deletePost(
+              postId: post.id,
+              idempotencyKey: contentPostDeleteIdempotencyKey(post.id),
+            );
         ref.read(discoveryFeedMapProvider.notifier).removePostLocally(post.id);
         if (context.mounted) {
           AppToast.show(context, UITextConstants.contentDeleteSuccess);

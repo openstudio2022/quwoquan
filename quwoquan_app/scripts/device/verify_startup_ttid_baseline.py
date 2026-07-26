@@ -14,10 +14,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_DIR = ROOT / "quwoquan_app"
-DEFAULT_RATCHET = ROOT / "specs/gates/startup_ttid_ratchet_baseline.json"
-REQUIRED_ACCEPTANCE = (
+DEFAULT_RATCHET = ROOT / "quwoquan_ops/policies/gates/startup_ttid_ratchet_baseline.json"
+REQUIRED_SPEC = (
     ROOT
-    / "specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/acceptance.yaml"
+    / "specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md"
 )
 REQUIRED_TESTS = (
     APP_DIR / "test/local_contract/app/startup_ttid__local_contract_test.dart",
@@ -116,8 +116,8 @@ def main() -> int:
             print(f"  - {item}", file=sys.stderr)
         return 1
 
-    if not REQUIRED_ACCEPTANCE.is_file():
-        print(f"FAIL: missing acceptance: {REQUIRED_ACCEPTANCE}", file=sys.stderr)
+    if not REQUIRED_SPEC.is_file() or "GWT-" not in REQUIRED_SPEC.read_text(encoding="utf-8"):
+        print(f"FAIL: missing startup spec/GWT: {REQUIRED_SPEC}", file=sys.stderr)
         return 1
 
     if args.write_ratchet and baseline_path is None:

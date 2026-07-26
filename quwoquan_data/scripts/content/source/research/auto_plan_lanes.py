@@ -14,7 +14,7 @@ from content.source.research.plan_state import (
 )
 from content.source.research.source_quality import (
     _collection_gate,
-    _collection_publishable_image_urls,
+    _collection_admissible_image_urls,
     _evidence_reason,
 )
 
@@ -287,7 +287,7 @@ def write_image_lane(
             )
         else:
             unique_publishable_images = len(
-                _collection_publishable_image_urls(
+                _collection_admissible_image_urls(
                     collections,
                     entity_id=entity_id,
                     entity_aliases=entity_aliases,

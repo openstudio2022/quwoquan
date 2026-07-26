@@ -1,0 +1,69 @@
+kind: aggregate_root
+description: 单一 Persona 在 CircleGroup 中的申请、审批、角色和退出状态聚合。
+identity:
+  fields:
+  - _id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: strong
+  kind: reference
+  name: group
+  on_delete: tombstone
+  reference_fields:
+  - groupId
+  target_object: circle.CircleGroup
+- access: named_reader
+  cardinality: N:1
+  consistency: strong
+  kind: reference
+  name: circle
+  on_delete: tombstone
+  reference_fields:
+  - circleId
+  target_object: circle.Circle
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: member_persona
+  on_delete: tombstone
+  reference_fields:
+  - personaId
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: decision_persona
+  on_delete: detach
+  reference_fields:
+  - decidedByPersonaId
+  target_object: user.Persona
+capabilities:
+- commandable
+- queryable
+- idempotent_commands
+- event_consumer
+business_rules:
+- identity 固定为 groupId + personaId，同一身份只有一个可重入生命周期
+- persona 必须先具有同一 Circle 的 active membership
+- pending 申请只能被目标群 owner 或 manager 且非申请人审批一次
+- open joinPolicy 申请直接 active，apply_only 必须 pending 后审批
+- owner 不得自行 leave 或被 remove，manager 不得授予 owner
+- CircleGroupCreated 只为 createdByPersonaId 幂等建立 owner active membership
+- active 后才通过 outbox 同步 Chat ConversationMembership，聚合不直写 Chat
+lifecycle:
+  states:
+  - pending
+  - active
+  - rejected
+  - left
+  - removed
+  optimistic_concurrency: version
+  idempotency: command_receipt

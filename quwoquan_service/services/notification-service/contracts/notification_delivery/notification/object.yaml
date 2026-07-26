@@ -1,0 +1,46 @@
+kind: aggregate_root
+description: 'Notification/AppMessage 独立生命周期聚合，拥有创建、投递、确认与已读
+
+  状态。承载社交互动、内容、圈子、系统和助手通知。
+
+  '
+identity:
+  fields:
+  - _id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: accountOwner
+  on_delete: cascade
+  reference_fields:
+  - userId
+  target_object: user.UserAccount
+local_identity_reasons:
+  sourceId: producer-scoped provenance key; the Notification target carries the typed business destination
+capabilities:
+- commandable
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- recipient、messageType、source 与 payload digest 创建后不可变
+- 同一 idempotencyKey 只创建一个 Notification
+- ack 与 read 只能由 recipient 推进且时间戳单调
+- 外部渠道投递由 NotificationDeliveryJob 和 Integration 负责
+- Notification 状态与 outbox 必须在同一 Mongo transaction 提交
+- 互动通知只由业务事件经 durable stream 投影生成，幂等键 notify:{eventType}:{eventId}
+lifecycle:
+  states:
+  - created
+  - delivered
+  - acknowledged
+  - read
+  optimistic_concurrency: version
+  idempotency: command_receipt

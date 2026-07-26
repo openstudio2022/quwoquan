@@ -300,7 +300,7 @@ def source_line_is_boilerplate(line: str) -> bool:
         return True
     if re.fullmatch(r"[\d./:+\-—~～()（） ]+", compact):
         return True
-    if compact.startswith(("IP属地", "第", "共")) and any(ch.isdigit() for ch in compact):
+    if re.fullmatch(r"(?:IP属地)?第\s*\d+\s*页|共\s*\d+\s*页", compact):
         return True
     return False
 
@@ -335,7 +335,10 @@ def clean_source_markdown(text: str, *, raw_format: str = "") -> str:
             dropping = False
             drop_level = 0
             if name:
-                kept.append(line.strip() if markdown_heading else name)
+                # Keep the section as Markdown rather than flattening it into
+                # prose.  MediaWiki rendered text and the wikitext structure
+                # then retain the same paragraph boundary for fidelity checks.
+                kept.append(line.strip() if markdown_heading else f"## {name}")
             continue
         if dropping:
             continue

@@ -24,20 +24,40 @@ from quwoquan_ops.cli.lib.local_target_tls import (
 )
 
 
-BUNDLE_PATH = ROOT / "quwoquan_ops" / "environments" / "gamma_curated_media_bundle.json"
+BUNDLE_PATH = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "content-service"
+    / "environments"
+    / "gamma"
+    / "resources"
+    / "artifacts"
+    / "media"
+    / "gamma_curated_media_bundle.json"
+)
 MEDIA_DELIVERY_MANIFEST_PATH = (
-    ROOT / "quwoquan_ops" / "environments" / "media_delivery_manifest.json"
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "content-service"
+    / "resources"
+    / "static"
+    / "media"
+    / "media_delivery_manifest.json"
 )
 FIXTURE_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
-APP_CHAT_MOCK_DATA_PATH = (
+SERVICE_FIXTURE_ROOT = ROOT / "quwoquan_service" / "services"
+CHAT_SCENARIO_FIXTURE_PATH = (
     ROOT
-    / "quwoquan_app"
-    / "lib"
-    / "cloud"
+    / "quwoquan_service"
     / "services"
-    / "chat"
-    / "mock"
-    / "chat_mock_data.dart"
+    / "chat-service"
+    / "tests"
+    / "support"
+    / "contract_fixtures"
+    / "scenarios"
+    / "chat_scenarios.json"
 )
 APP_PROTOTYPE_MOCK_DATA_PATH = (
     ROOT / "quwoquan_app" / "lib" / "core" / "mock" / "prototype_mock_data.dart"
@@ -68,7 +88,6 @@ MEDIA_PREFIXES = (
     "media/video/",
     "media/background/",
 )
-GROUP_AVATAR_CALL_RE = re.compile(r"groupAvatarFor\('([^']+)'\)")
 TRACKED_TEXT_SUFFIXES = frozenset(
     {
         ".dart",
@@ -129,11 +148,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--media-base-url", default="")
     parser.add_argument("--video-base-url", default="")
     parser.add_argument("--cacert", default="")
-    parser.add_argument(
-        "--include-app-mock-group-avatars",
-        choices=("auto", "true", "false"),
-        default="auto",
-    )
     parser.add_argument(
         "--files-only",
         action="store_true",
@@ -226,6 +240,15 @@ def _collect_media_refs_from_json(path: Path) -> set[str]:
 
 def _fixture_json_paths() -> list[Path]:
     paths = sorted(FIXTURE_ROOT.glob("**/test_fixtures/**/*.json"))
+    paths.extend(
+        sorted(
+            SERVICE_FIXTURE_ROOT.glob(
+                "*/tests/support/contract_fixtures/**/*.json"
+            )
+        )
+    )
+    if CHAT_SCENARIO_FIXTURE_PATH.is_file():
+        paths.append(CHAT_SCENARIO_FIXTURE_PATH)
     if BUNDLE_PATH.is_file():
         paths.append(BUNDLE_PATH)
     if MEDIA_DELIVERY_MANIFEST_PATH.is_file():
@@ -248,21 +271,6 @@ def _collect_all_seeded_media_refs() -> tuple[set[str], dict[str, set[str]]]:
     return refs, origins
 
 
-def _collect_app_mock_group_avatar_refs() -> set[str]:
-    text = APP_CHAT_MOCK_DATA_PATH.read_text(encoding="utf-8")
-    conversation_ids = {
-        match.group(1)
-        for match in GROUP_AVATAR_CALL_RE.finditer(text)
-        if "$" not in match.group(1)
-    }
-    if "groupAvatarFor('conv_grid_$n')" in text:
-        conversation_ids.update(f"conv_grid_{index}" for index in range(1, 17))
-    return {
-        f"media/avatar/s/archived-avatar/conversation/{conversation_id}/v1/mock.png"
-        for conversation_id in conversation_ids
-    }
-
-
 def _collect_dart_media_avatar_literals(path: Path) -> set[str]:
     if not path.is_file():
         return set()
@@ -275,10 +283,8 @@ def _collect_dart_media_avatar_literals(path: Path) -> set[str]:
     return refs
 
 
-def _collect_app_chat_and_prototype_avatar_refs() -> set[str]:
-    refs = _collect_dart_media_avatar_literals(APP_CHAT_MOCK_DATA_PATH)
-    refs.update(_collect_dart_media_avatar_literals(APP_PROTOTYPE_MOCK_DATA_PATH))
-    return refs
+def _collect_app_prototype_avatar_refs() -> set[str]:
+    return _collect_dart_media_avatar_literals(APP_PROTOTYPE_MOCK_DATA_PATH)
 
 
 def _collect_tracked_media_literal_refs() -> set[str]:
@@ -309,8 +315,7 @@ def _collect_tracked_media_literal_refs() -> set[str]:
 def _collect_authoritative_media_refs() -> set[str]:
     fixture_refs, _ = _collect_all_seeded_media_refs()
     refs = set(fixture_refs)
-    refs.update(_collect_app_mock_group_avatar_refs())
-    refs.update(_collect_app_chat_and_prototype_avatar_refs())
+    refs.update(_collect_app_prototype_avatar_refs())
     refs.update(OPERATIONAL_REQUIRED_MEDIA_REFS)
     return refs
 
@@ -434,14 +439,6 @@ def _probe_seeded_media_objects(
         }
 
 
-def _include_app_mock_group_avatars(env_name: str, mode: str) -> bool:
-    if mode == "true":
-        return True
-    if mode == "false":
-        return False
-    return env_name == "alpha"
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -452,14 +449,18 @@ def main(argv: list[str] | None = None) -> int:
         issues.append(f"media bundle missing: {BUNDLE_PATH}")
     if not FIXTURE_ROOT.is_dir():
         issues.append(f"fixture root missing: {FIXTURE_ROOT}")
-    if not APP_CHAT_MOCK_DATA_PATH.is_file():
-        issues.append(f"app chat mock data missing: {APP_CHAT_MOCK_DATA_PATH}")
+    if not CHAT_SCENARIO_FIXTURE_PATH.is_file():
+        issues.append(f"chat scenario fixture missing: {CHAT_SCENARIO_FIXTURE_PATH}")
     if not MEDIA_ROOT.is_dir():
         issues.append(f"shared media root missing: {MEDIA_ROOT}")
     legacy_unreferenced_paths: list[Path] = []
     global_media_refs: set[str] = set()
     authoritative_media_refs: set[str] = set()
-    if MEDIA_ROOT.is_dir() and FIXTURE_ROOT.is_dir() and APP_CHAT_MOCK_DATA_PATH.is_file():
+    if (
+        MEDIA_ROOT.is_dir()
+        and FIXTURE_ROOT.is_dir()
+        and CHAT_SCENARIO_FIXTURE_PATH.is_file()
+    ):
         authoritative_media_refs = _collect_authoritative_media_refs()
         global_media_refs = _collect_global_media_refs()
         legacy_unreferenced_paths = _legacy_unreferenced_media_paths(global_media_refs)
@@ -530,25 +531,12 @@ def main(argv: list[str] | None = None) -> int:
     for object_key, origins in fixture_origins.items():
         object_origins.setdefault(object_key, set()).update(origins)
 
-    app_mock_group_refs: set[str] = set()
-    app_chat_prototype_refs: set[str] = set()
-    if _include_app_mock_group_avatars(env_name, str(args.include_app_mock_group_avatars)):
-        app_mock_group_refs = _collect_app_mock_group_avatar_refs()
-        object_keys.update(app_mock_group_refs)
-        for object_key in app_mock_group_refs:
-            object_origins.setdefault(object_key, set()).add(
-                APP_CHAT_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
-            )
-        app_chat_prototype_refs = _collect_app_chat_and_prototype_avatar_refs()
-        object_keys.update(app_chat_prototype_refs)
-        for object_key in app_chat_prototype_refs:
-            object_origins.setdefault(object_key, set()).add(
-                APP_CHAT_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
-            )
-            if APP_PROTOTYPE_MOCK_DATA_PATH.is_file():
-                object_origins.setdefault(object_key, set()).add(
-                    APP_PROTOTYPE_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
-                )
+    app_prototype_refs = _collect_app_prototype_avatar_refs()
+    object_keys.update(app_prototype_refs)
+    for object_key in app_prototype_refs:
+        object_origins.setdefault(object_key, set()).add(
+            APP_PROTOTYPE_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
+        )
 
     probe_keys: list[str] = []
     for object_key in sorted(object_keys):
@@ -598,8 +586,9 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "[verify_alpha_media_fixture_surface] OK "
         f"env={env_name} target={target_name} checked={checked} "
-        f"fixtureRefs={len(fixture_refs)} appMockGroupRefs={len(app_mock_group_refs)} "
-        f"appChatPrototypeAvatarRefs={len(app_chat_prototype_refs)} "
+        f"fixtureRefs={len(fixture_refs)} "
+        f"chatScenarioRefs={len(_collect_media_refs_from_json(CHAT_SCENARIO_FIXTURE_PATH))} "
+        f"appPrototypeAvatarRefs={len(app_prototype_refs)} "
         f"videoRange={video_checked} avatarBase={base_urls['avatar']} "
         f"imageBase={base_urls['image']} videoBase={base_urls['video']}"
     )

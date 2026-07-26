@@ -12,7 +12,7 @@ enum ImagePickSource { camera, photoLibrary }
 /// 领域无关的单张图片选择能力：相机拍摄或相册选择后返回本地文件路径。
 ///
 /// profile 资料编辑、circle 圈子编辑等「换头像 / 换封面」统一复用，
-/// 避免各域复制一份 picker（单一真相源，见 13-coding-discipline R25）。
+/// 避免各域复制 picker 并产生不同选择语义。
 /// `cameraRouteName` / `galleryRouteName` 由调用方传入，用于 page-access 追踪
 /// 区分来源（与 [page_access_internal_routes] 常量保持一致）。
 abstract class ImagePickGateway {

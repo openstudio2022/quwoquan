@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// RecentSearchState typed 契约：wire shape 与 metadata
-/// search/recent_search_state/service.yaml 的 request_fields 严格一致。
+/// search/search/recent_search_state/operations.yaml 的 request_fields 严格一致。
 void main() {
   group('UpsertRecentSearchCommand', () {
     test('wire 只含 query/scope/facet，不含 entryId/updatedAt/版本字段', () {
@@ -145,7 +145,18 @@ void main() {
         decodeSearchFeedbackAck(<String, Object?>{'accepted': true}).accepted,
         isTrue,
       );
-      expect(decodeSearchFeedbackAck(<String, Object?>{}).accepted, isFalse);
+      expect(
+        decodeSearchFeedbackAck(<String, Object?>{'accepted': false}).accepted,
+        isFalse,
+      );
+      expect(
+        () => decodeSearchFeedbackAck(<String, Object?>{}),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => decodeSearchFeedbackAck(<String, Object?>{'accepted': 'yes'}),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 

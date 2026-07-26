@@ -14,7 +14,7 @@ void main() {
     test('缺少 media endpoint 时预合成头像引用 fail-closed', () {
       const raw =
           'media/avatar/s/archived-avatar/group/fixture_conv_group/composite.png';
-      final resolved = resolveSelectableGroupAvatar(raw);
+      final resolved = resolveSelectableGroupAvatar(raw, avatarCdnBaseUrl: '');
       expect(resolved, isEmpty);
     });
 
@@ -28,6 +28,7 @@ void main() {
       final groups = (await loadStartGroupSourcePage(
         repo,
         source: StartGroupSource.group,
+        avatarCdnBaseUrl: '',
       )).groups;
       expect(groups, isNotEmpty);
 
@@ -42,6 +43,7 @@ void main() {
       expect(
         resolveSelectableGroupAvatar(
           'media/avatar/s/archived-avatar/group/fixture_conv_group/composite.png',
+          avatarCdnBaseUrl: '',
         ),
         canonicalGroup.avatarUrl,
       );

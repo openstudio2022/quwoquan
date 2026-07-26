@@ -1,0 +1,94 @@
+kind: aggregate_root
+description: '群组入口对应的 circle 聚合。兴趣圈子与组织主页共用同一聚合根，
+
+  仅维护社区主档与治理策略。CircleGroup、Membership、Activity、
+
+  File 与 Placement 均按独立生命周期治理，不作为无界聚合成员。
+
+  MongoDB 存储，支撑详情模板分流与高并发读取。
+
+  '
+identity:
+  fields:
+  - _id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: aggregate_root
+  cardinality: 1:N
+  consistency: strong
+  kind: owned
+  name: sectionConfig
+  on_delete: cascade
+  reference_fields: []
+  target_object: circle.CircleSectionConfig
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: conversation
+  on_delete: detach
+  reference_fields:
+  - conversationId
+  target_object: chat.Conversation
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: defaultPublicGroup
+  on_delete: detach
+  reference_fields:
+  - defaultPublicGroupId
+  target_object: circle.CircleGroup
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: homepage
+  on_delete: detach
+  reference_fields:
+  - linkedHomepageId
+  target_object: entity.Homepage
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: ownerPersona
+  on_delete: retain
+  reference_fields:
+  - ownerId
+  target_object: user.Persona
+local_identity_reasons:
+  domainId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity
+capabilities:
+- queryable
+- searchable
+- aggregatable
+taggable: true
+vector_enabled: false
+business_rules:
+- ownerId 与 kind 创建后不可变，owner 变更必须通过独立治理流程
+- sectionConfig 最多 16 个且 sectionType 唯一、order 连续
+- rulesText 最多 2000 字符，welcomeMessage 最多 500 字符；均由圈主或管理员经 Circle 更新命令维护
+- archived 为终态，不接受成员、群组、文件或 placement 新命令
+- Circle 只维护主档和治理策略，不保存成员、群组、文件或 Post 集合
+- defaultPublicGroupId 只引用 CircleGroup，不直接维护 Chat Conversation
+- Update/Archive/UpdateSections 为命名状态迁移；服务端加载当前 version 内部 CAS，公开请求不接收调用方版本字段
+- Update/UpdateSections 仅圈主或管理员，Archive 仅圈主；命令与 receipt、outbox 事实同一 Mongo 事务原子提交
+- 目标状态已满足的命名意图持久化 no-op receipt，不递增 version、不产生伪 outbox 事件
+lifecycle:
+  states:
+  - active
+  - archived
+  optimistic_concurrency: version
+  idempotency: command_receipt
+members:
+  CircleSectionConfig:
+    kind: owned_entity
+    cardinality: 1:N
+    max_cardinality: 16
+    description: Circle 详情分区的有界顺序配置，只能经 Circle 行为修改。

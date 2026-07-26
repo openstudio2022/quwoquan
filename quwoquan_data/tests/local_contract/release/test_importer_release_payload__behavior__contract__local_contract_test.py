@@ -47,11 +47,13 @@ def test_importers_read_release_payload_without_publish_root(
         mongo_uri="mongodb://gamma",
         media_base_url="https://gamma-image.quwoquan-env.test",
         dry_run=True,
+        creator_receipt=run / "creator-import.json",
     )
     importers.run_homepage_importer(
         release=release,
         env="gamma",
         run=run,
+        run_id="apply-a",
         mongo_uri="mongodb://gamma",
         media_base_url="https://gamma-image.quwoquan-env.test",
         dry_run=True,
@@ -59,6 +61,8 @@ def test_importers_read_release_payload_without_publish_root(
     )
 
     assert len(commands) == 2
+    assert "--creator-receipt" in commands[0]
+    assert commands[1][commands[1].index("--run-id") + 1] == "apply-a"
     for command in commands:
         assert "--publish-root" not in command
         release_index = command.index("--release-root")

@@ -35,11 +35,11 @@ def _require(text: str, fragment: str, source: str) -> None:
 
 def _assert_control_plane_frozen() -> None:
     experiment_path = (
-        "quwoquan_service/contracts/metadata/ops/experiment/service.yaml"
+        "quwoquan_service/services/product-ops-service/contracts/product_ops/experiment/operations.yaml"
     )
     assignment_path = (
-        "quwoquan_service/contracts/metadata/ops/"
-        "experiment_assignment_fact/service.yaml"
+        "quwoquan_service/services/product-ops-service/contracts/"
+        "product_ops/experiment_assignment_fact/operations.yaml"
     )
     experiment = _read(experiment_path)
     assignment = _read(assignment_path)
@@ -81,11 +81,11 @@ def _assert_canonical_runtime_track() -> None:
     rec_engine_path = "quwoquan_service/runtime/recommendation/engine.go"
     search_path = (
         "quwoquan_service/services/search-service/"
-        "internal/application/experiments.go"
+        "internal/search/search_query/application/experiments.go"
     )
     search_signal_path = (
         "quwoquan_service/services/search-service/"
-        "internal/infrastructure/searchsignals/stream_publisher.go"
+        "internal/search/search_query/infrastructure/searchsignals/stream_publisher.go"
     )
 
     runtime = _read(runtime_path)
@@ -105,8 +105,8 @@ def _assert_canonical_runtime_track() -> None:
         "GetExperimentAssignment",
         "AssignExperimentVariant",
         "ExperimentAssignmentFact",
-        "/ops/experiments/",
-        "product_ops/experiment",
+        "/ops/product_ops/experiments/",
+        "product_ops/product_ops/experiment",
     )
     roots = (
         ROOT / "quwoquan_service/runtime/recommendation",

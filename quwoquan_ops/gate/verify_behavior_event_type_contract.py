@@ -11,7 +11,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 TYPES_PATH = ROOT / "quwoquan_service/contracts/metadata/_shared/types.yaml"
-BEHAVIORS_PATH = ROOT / "quwoquan_service/contracts/metadata/content/post/behaviors.yaml"
+BEHAVIORS_PATH = ROOT / "quwoquan_service/services/content-service/contracts/content/post/behaviors.yaml"
 DART_PATH = (
     ROOT
     / "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/circle/"
@@ -19,8 +19,8 @@ DART_PATH = (
 )
 GO_PATH = (
     ROOT
-    / "quwoquan_service/services/circle-service/internal/domain/circle/"
-    "circle_behavior_fact/model/circle_behavior_fact.go"
+    / "quwoquan_service/services/circle-service/internal/circle_management/"
+    "circle_behavior_fact/domain/model/circle_behavior_fact.go"
 )
 
 

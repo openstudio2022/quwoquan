@@ -1,0 +1,39 @@
+kind: aggregate_root
+description: '用户对页面/内容/圈子/用户的访问计数状态：以 userId+targetType+targetKey 为身份的
+
+  单文档，visitCount 单调递增、lastSeenAt/timestamp 随访问推进，TTL 随最近访问刷新。
+
+  服务端从已验证主体派生访问 actor；重试经 Idempotency-Key 去重后不得重复累加。
+
+  统计读取经具名 Reader（GetVisitStats），不暴露事实流。
+
+  '
+identity:
+  fields:
+  - userId
+  - targetType
+  - targetKey
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships: []
+local_identity_reasons:
+  sessionId: runtime session correlation key injected by OperationInvocationContext, not an aggregate
+    reference
+capabilities:
+- commandable
+- queryable
+- aggregatable
+taggable: false
+vector_enabled: false
+business_rules:
+- userId + targetType + targetKey 唯一（一目标一文档）
+- visitCount 只增不减；lastSeenAt/timestamp 只随真实访问推进
+- 相同 Idempotency-Key 的重放不得重复累加计数
+lifecycle:
+  states:
+  - active
+  optimistic_concurrency: none
+  idempotency: idempotency_key_dedup

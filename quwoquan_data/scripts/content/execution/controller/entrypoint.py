@@ -52,7 +52,14 @@ def run_controlled_execution(request: ControllerRequest) -> None:
     managed = request.managed
     policy = active_runtime_policy()
     agent_provider = policy.cursor_provider.value
-    managed_model = policy.cursor_model
+    from content.execution.model_contract import execution_model_pair_for_execution
+
+    author_model = execution_model_pair_for_execution(execution_id).author
+    if author_model.selection != policy.cursor_model_selection:
+        raise RuntimeError(
+            "recipe author model selection must match the active runtime policy"
+        )
+    managed_model = author_model.model_id
     preflight_args = argparse.Namespace(
         agent_provider=agent_provider,
         until=None,
@@ -60,6 +67,7 @@ def run_controlled_execution(request: ControllerRequest) -> None:
         agent_runner=request.agent_runner,
         force_clean_workspace_agent_state=request.force_clean_workspace_agent_state,
         model=managed_model,
+        model_parameters=author_model.selection.parameters_document(),
         startup_timeout_seconds=policy.startup_timeout_seconds,
         baseline_packet=str(request.baseline_packet) if request.baseline_packet else None,
     )
@@ -104,6 +112,7 @@ def run_controlled_execution(request: ControllerRequest) -> None:
         runtime=policy.cursor_runtime,
         max_workers=min(policy.author_workers, policy.cursor_bridge_instances),
         model=managed_model,
+        model_parameters=author_model.parameters,
         agent_provider=AgentProvider(agent_provider),
         release_only=request.release_only,
         agent_runner=request.agent_runner,

@@ -55,5 +55,6 @@ podman compose -f quwoquan_ops/observability/monitoring/docker-compose.prod.yml 
   `app-product-telemetry-content-publication-funnel-hourly` 与
   `app-product-telemetry-video-preview-track-load-hourly`。`correlationHash` 仅用于
   SLS raw 明细关联，禁止加入 Prometheus 标签或聚合维度。
-- beta/gamma/prod 的 SLS 读回需要已注入对应凭据和部署审批；缺少真实 series 时保持
-  `unavailable`，不得把本地 Prometheus 或 Mock 结果当作环境准出证据。
+- beta/gamma 只读回统一材料器装配的 `runtime.log.sink` 本地替身；Prod（含 gray）
+  的真实 SLS 读回需要外部注入凭据和部署审批。缺少当前环境声明的 series 时保持
+  `unavailable`，不得把本地 Prometheus、替身结果或 Mock 冒充 Prod 准出证据。

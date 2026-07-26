@@ -19,6 +19,7 @@ from core.control_types import (
     StageKind,
     StageStatus,
 )
+from core.cursor_model import CursorModelParameter, CursorModelSelection
 from core.data_issue import (
     DataIssue,
     DataIssueCode,
@@ -166,14 +167,14 @@ class ExecutionContext:
     runtime: RuntimeEnvironment = RuntimeEnvironment.LOCAL
     max_workers: int = _RUNTIME_POLICY.author_workers
     model: str = DEFAULT_CURSOR_AGENT_MODEL
+    model_parameters: tuple[CursorModelParameter, ...] = (
+        _RUNTIME_POLICY.cursor_model_parameters
+    )
     agent_provider: AgentProvider = AgentProvider.CURSOR_SDK
     release_only: bool = False
     agent_runner: Callable[[str], "AgentRunOutcome"] | None = None
     force_clean_workspace_agent_state: bool = False
     controller_run_id: str | None = None
-    agent_usage_scope: str = "execution_stage"
-    agent_content_object_ref: str = ""
-    agent_execution_stage: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -183,6 +184,11 @@ class ExecutionContext:
         )
         object.__setattr__(self, "entity_ids", tuple(self.entity_ids))
         object.__setattr__(self, "completed", tuple(self.completed))
+        object.__setattr__(self, "model_parameters", tuple(self.model_parameters))
+        CursorModelSelection(
+            model_id=self.model,
+            parameters=self.model_parameters,
+        )
         if not isinstance(self.spec, ExecutionSpec):
             if not isinstance(self.spec, Mapping):
                 raise TypeError("ExecutionContext.spec must be a mapping")
@@ -201,19 +207,16 @@ class ExecutionContext:
             )
         if self.until is not None and not isinstance(self.until, ExecutionStage):
             object.__setattr__(self, "until", ExecutionStage(str(self.until)))
-        if self.agent_usage_scope not in {"execution_stage", "content_object"}:
-            raise ValueError("agent_usage_scope must be execution_stage or content_object")
-        if (
-            self.agent_usage_scope == "content_object"
-            and not self.agent_content_object_ref.strip()
-        ):
-            raise ValueError(
-                "content_object agent usage requires agent_content_object_ref"
-            )
-
     @property
     def workspace(self) -> ExecutionWorkspace:
         return ExecutionWorkspace(self.execution_id)
+
+    @property
+    def model_selection(self) -> CursorModelSelection:
+        return CursorModelSelection(
+            model_id=self.model,
+            parameters=self.model_parameters,
+        )
 
 
 def _managed_local_cursor_worker_cap(

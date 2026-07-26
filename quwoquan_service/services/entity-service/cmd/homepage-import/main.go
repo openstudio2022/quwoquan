@@ -26,9 +26,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	"quwoquan_service/services/entity-service/internal/application"
-	"quwoquan_service/services/entity-service/internal/homepageimport"
-	homepagepersistence "quwoquan_service/services/entity-service/internal/infrastructure/homepage/persistence"
+	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
+	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport"
+	homepagepersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence"
 )
 
 type releaseDesiredState struct {
@@ -45,6 +45,7 @@ func main() {
 	entityDB := flag.String("entity-db", "quwoquan_entity", "entity database name")
 	mediaBase := flag.String("media-base-url", "", "media origin/CDN base url for CAS objectKey mapping")
 	env := flag.String("env", "", "environment label (for logging/report)")
+	runID := flag.String("run-id", "", "environment import run identity (required)")
 	reportPath := flag.String("report", "", "write import report json to this path")
 	metricsTextfile := flag.String("metrics-textfile", "", "write node_exporter textfile metrics to this path (optional)")
 	mode := flag.String("mode", string(application.HomepageImportModeUpsert), "reconciliation mode: upsert|sync")
@@ -53,6 +54,9 @@ func main() {
 
 	if *releaseRoot == "" {
 		log.Fatalf("[homepage-import] --release-root is required; full-tree import and sample bundle fallback are forbidden")
+	}
+	if *runID == "" {
+		log.Fatalf("[homepage-import] --run-id is required")
 	}
 	raw, err := os.ReadFile(filepath.Join(*releaseRoot, "payload", "desired_state.json"))
 	if err != nil {
@@ -128,6 +132,7 @@ func main() {
 			Mode:            importMode,
 			SourceOwner:     "qwq_data",
 			SourceReleaseID: desired.ReleaseID,
+			RunID:           *runID,
 			Inputs:          inputs,
 		})
 		if err != nil {

@@ -12,6 +12,10 @@ import UIKit
 /// 仅持久化已脱敏的原生未捕获异常类别，供下次 Dart 启动产出一条标准诊断事实。
 /// 原生异常消息与堆栈绝不能写入 UserDefaults 或运行时日志管道。
 private let nativeCrashMarkerKindKey = "qwq.runtime.previous_native_crash_kind"
+private let startupHealthBuildKey = "qwq.runtime.startup_health_build"
+private let startupHealthSafeShellKey = "qwq.runtime.startup_health_safe_shell"
+private let startupHealthFatalBuildKey = "qwq.runtime.startup_health_fatal_build"
+private let startupHealthFatalAtKey = "qwq.runtime.startup_health_fatal_at"
 private var previousNativeCrashHandler: (@convention(c) (NSException) -> Void)?
 
 private func persistNativeCrashMarker(_ exception: NSException) {
@@ -27,6 +31,9 @@ private func persistNativeCrashMarker(_ exception: NSException) {
     kind.isEmpty ? "UnknownNativeError" : kind,
     forKey: nativeCrashMarkerKindKey
   )
+  if !UserDefaults.standard.bool(forKey: startupHealthSafeShellKey) {
+    NativeCrashMarkerStore.markFatalStartup()
+  }
   // 仅尽力持久化，平台仍必须完全掌控终止流程。
   CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
   previousNativeCrashHandler?(exception)
@@ -50,6 +57,57 @@ private enum NativeCrashMarkerStore {
     }
     UserDefaults.standard.removeObject(forKey: nativeCrashMarkerKindKey)
     return ["kind": kind]
+  }
+
+  static var currentBuild: String {
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+  }
+
+  static func shouldRecoverCurrentBuild() -> Bool {
+    let fatalBuild = UserDefaults.standard.string(forKey: startupHealthFatalBuildKey) ?? ""
+    guard !fatalBuild.isEmpty else { return false }
+    guard fatalBuild == currentBuild else {
+      UserDefaults.standard.removeObject(forKey: startupHealthFatalBuildKey)
+      UserDefaults.standard.removeObject(forKey: startupHealthFatalAtKey)
+      return false
+    }
+    return true
+  }
+
+  static func markStarting() {
+    UserDefaults.standard.set(currentBuild, forKey: startupHealthBuildKey)
+    UserDefaults.standard.set(false, forKey: startupHealthSafeShellKey)
+  }
+
+  static func markFatalStartup() {
+    UserDefaults.standard.set(currentBuild, forKey: startupHealthFatalBuildKey)
+    UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: startupHealthFatalAtKey)
+    CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
+  }
+
+  static func markSafeShell() {
+    UserDefaults.standard.set(currentBuild, forKey: startupHealthBuildKey)
+    UserDefaults.standard.set(true, forKey: startupHealthSafeShellKey)
+    UserDefaults.standard.removeObject(forKey: startupHealthFatalBuildKey)
+    UserDefaults.standard.removeObject(forKey: startupHealthFatalAtKey)
+  }
+}
+
+private final class RecoveryActionButton: UIButton {
+  var recoveryAction: (() -> Void)?
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    addTarget(self, action: #selector(invokeRecoveryAction), for: .touchUpInside)
+  }
+
+  required init?(coder: NSCoder) {
+    super.init(coder: coder)
+    addTarget(self, action: #selector(invokeRecoveryAction), for: .touchUpInside)
+  }
+
+  @objc private func invokeRecoveryAction() {
+    recoveryAction?()
   }
 }
 
@@ -249,13 +307,14 @@ private final class StartupNativeTelemetryJournal {
   private var flutterFirstFrameWatchdog: DispatchWorkItem?
   private var nativeRecoveryTerminalReconciliation: DispatchWorkItem?
   private var deferredPluginRegistry: FlutterPluginRegistry?
-  private var retryFlutterEngine: FlutterEngine?
   private var generatedPluginsRegistered = false
   private var flutterFirstFrameConfirmed = false
   private var startupSafeTerminalConfirmed = false
   private var appInForeground = false
   private var nativeRecoveryShown = false
   private var nativeRecoveryDeadlineReached = false
+  private var confirmedPreviousBuildFatal = false
+  private var recoveryExternalOpenInFlight = false
   private var dartStartupAttemptStarted = false
   private var currentDartAttemptId = ""
   private var currentLaunchMode = "unknown"
@@ -269,6 +328,8 @@ private final class StartupNativeTelemetryJournal {
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     NativeCrashMarkerStore.install()
+    confirmedPreviousBuildFatal = NativeCrashMarkerStore.shouldRecoverCurrentBuild()
+    NativeCrashMarkerStore.markStarting()
     if #available(iOS 14.0, *) {
       NativeHangMetricStore.shared.install()
     }
@@ -288,7 +349,14 @@ private final class StartupNativeTelemetryJournal {
     currentDartAttemptStartedUptime = processStartUptime
     // 预算从进程最早可得的 monotonic 时钟开始，不能在 becomeActive 时重新给完整 6 秒。
     foregroundStartedUptime = processStartUptime
-    armFlutterFirstFrameWatchdog()
+    if confirmedPreviousBuildFatal {
+      startupSafeTerminalConfirmed = true
+      DispatchQueue.main.async { [weak self] in
+        self?.showNativeStartupRecovery()
+      }
+    } else {
+      armFlutterFirstFrameWatchdog()
+    }
     return launched
   }
 
@@ -434,6 +502,48 @@ private final class StartupNativeTelemetryJournal {
       result(FlutterMethodNotImplemented)
     }
 
+    let appRecoveryChannel = FlutterMethodChannel(
+      name: "quwoquan/app_recovery",
+      binaryMessenger: binaryMessenger
+    )
+    appRecoveryChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(false)
+        return
+      }
+      switch call.method {
+      case "getRecoveryContext":
+        let appVersion = Bundle.main.object(
+          forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? ""
+        let buildNumber = Bundle.main.object(
+          forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String ?? ""
+        result([
+          "platform": "ios",
+          "appVersion": appVersion,
+          "buildNumber": buildNumber,
+        ])
+      case "openTrustedExternalUrl":
+        guard let arguments = call.arguments as? [String: Any],
+              let rawURL = arguments["url"] as? String,
+              let url = URL(string: rawURL),
+              self.isTrustedRecoveryURL(url)
+        else {
+          result(false)
+          return
+        }
+        UIApplication.shared.open(url, options: [:]) { opened in
+          result(opened)
+        }
+      case "recordFatalStartup":
+        NativeCrashMarkerStore.markFatalStartup()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     let deferredPluginsChannel = FlutterMethodChannel(
       name: "quwoquan/startup/deferred_plugins",
       binaryMessenger: binaryMessenger
@@ -468,6 +578,21 @@ private final class StartupNativeTelemetryJournal {
       }
     }
     return technologies.contains(CTRadioAccessTechnologyLTE) ? "g4" : "unknown"
+  }
+
+  private func isTrustedRecoveryURL(_ url: URL?) -> Bool {
+    guard let url,
+          url.scheme?.lowercased() == "https",
+          url.user == nil,
+          let host = url.host?.lowercased()
+    else {
+      return false
+    }
+    return host == "apps.apple.com"
+      || host == "quwoquan.com"
+      || host.hasSuffix(".quwoquan.com")
+      || host == "quwoquan-env.test"
+      || host.hasSuffix(".quwoquan-env.test")
   }
 
   private func registerStartupTimingsChannel(
@@ -768,6 +893,9 @@ private final class StartupNativeTelemetryJournal {
     let firstNativeSafeTerminal = !startupSafeTerminalConfirmed
     if firstNativeSafeTerminal {
       startupSafeTerminalConfirmed = true
+      if !confirmedPreviousBuildFatal {
+        NativeCrashMarkerStore.markSafeShell()
+      }
       cancelFlutterFirstFrameWatchdog()
       cancelNativeRecoveryTerminalReconciliation()
       dismissNativeStartupRecoveryForSafeTerminalRace()
@@ -912,7 +1040,6 @@ private final class StartupNativeTelemetryJournal {
         elapsedMs: elapsedMs,
         firstFrameMissing: !self.flutterFirstFrameConfirmed
       )
-      self.showNativeStartupRecovery(elapsedMs: elapsedMs, recordDeadline: false)
     }
   }
 
@@ -921,7 +1048,6 @@ private final class StartupNativeTelemetryJournal {
     firstFrameMissing: Bool
   ) {
     let outcome = firstFrameMissing ? "native_first_frame_timeout" : "startup_deadline"
-    let failureCode = firstFrameMissing ? "OPS.SYSTEM.startup_native_first_frame_timeout" : "OPS.SYSTEM.startup_initialization_failed"
     let timeoutLog = firstFrameMissing
       ? "ios_native_first_frame_timeout"
       : "ios_startup_safe_terminal_timeout"
@@ -932,18 +1058,10 @@ private final class StartupNativeTelemetryJournal {
       startupTelemetryJournal.currentAttemptId
     )
     startupTelemetryJournal.record(
-      phase: "recovery",
+      phase: "performance",
       elapsedMs: elapsedMs,
       outcome: outcome,
-      recoverySurface: "native_recovery",
-      failureCode: failureCode,
       failureSource: "native_watchdog"
-    )
-    // native recovery 先可见；120ms 内收到 safe_terminal 视为同帧竞态，
-    // 不能与 Flutter terminal 同时落为同一 attempt 的两个终态。
-    scheduleNativeRecoveryTerminal(
-      elapsedMs: elapsedMs,
-      firstFrameMissing: firstFrameMissing
     )
   }
 
@@ -966,93 +1084,307 @@ private final class StartupNativeTelemetryJournal {
   }
 
   private func showNativeStartupRecovery() {
-    let elapsedMs = Int((ProcessInfo.processInfo.systemUptime - processStartUptime) * 1000)
-    showNativeStartupRecovery(elapsedMs: elapsedMs, recordDeadline: true)
-  }
-
-  private func showNativeStartupRecovery(elapsedMs: Int, recordDeadline: Bool) {
-    guard !startupSafeTerminalConfirmed, !nativeRecoveryShown, let window else { return }
+    guard (!startupSafeTerminalConfirmed || confirmedPreviousBuildFatal),
+          !nativeRecoveryShown,
+          let window
+    else { return }
     nativeRecoveryShown = true
-    if recordDeadline {
-      nativeRecoveryDeadlineReached = true
-      recordNativeStartupDeadline(
-        elapsedMs: elapsedMs,
-        firstFrameMissing: !flutterFirstFrameConfirmed
-      )
-    }
 
     let recovery = UIView(frame: window.bounds)
-    recovery.backgroundColor = StartupTransitionBackground.color
+    let backgroundColor = UIColor(
+      red: 247 / 255,
+      green: 247 / 255,
+      blue: 252 / 255,
+      alpha: 1
+    )
+    recovery.backgroundColor = backgroundColor
     recovery.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    window.backgroundColor = backgroundColor
 
     let title = UILabel()
-    title.text = "应用启动遇到问题"
-    title.textColor = .white
-    title.font = .systemFont(ofSize: 22, weight: .semibold)
+    title.text = "应用暂时无法启动"
+    title.textColor = UIColor(
+      red: 17 / 255,
+      green: 19 / 255,
+      blue: 24 / 255,
+      alpha: 1
+    )
+    title.font = .systemFont(ofSize: 28, weight: .semibold)
     title.textAlignment = .center
     title.translatesAutoresizingMaskIntoConstraints = false
 
     let message = UILabel()
-    message.text = "暂未显示应用界面，请重试或重新打开应用。"
-    message.textColor = .white
-    message.font = .systemFont(ofSize: 15)
+    message.text = "正在检查可用版本"
+    message.textColor = UIColor(
+      red: 107 / 255,
+      green: 112 / 255,
+      blue: 124 / 255,
+      alpha: 1
+    )
+    message.font = .systemFont(ofSize: 17, weight: .regular)
     message.numberOfLines = 0
     message.textAlignment = .center
     message.translatesAutoresizingMaskIntoConstraints = false
 
-    let retry = UIButton(type: .system)
-    retry.setTitle("重试", for: .normal)
-    retry.setTitleColor(StartupTransitionBackground.color, for: .normal)
-    retry.backgroundColor = .white
-    retry.layer.cornerRadius = 10
-    retry.addTarget(self, action: #selector(retryFlutterStartup), for: .touchUpInside)
-    retry.translatesAutoresizingMaskIntoConstraints = false
+    let primary = RecoveryActionButton(type: .system)
+    configureRecoveryButton(primary, title: "正在检查…", filled: true, enabled: false)
 
-    recovery.addSubview(title)
-    recovery.addSubview(message)
-    recovery.addSubview(retry)
+    let web = RecoveryActionButton(type: .system)
+    configureRecoveryButton(web, title: "使用网页版", filled: false, enabled: true)
+    web.recoveryAction = { [weak self] in
+      self?.openRecoveryTarget(
+        self?.publicWebURLString ?? "",
+        fallback: "",
+        failureMessage: "网页暂时无法打开，请稍后再试"
+      )
+    }
+
+    let stack = UIStackView(arrangedSubviews: [title, message, primary, web])
+    stack.axis = .vertical
+    stack.alignment = .fill
+    stack.distribution = .fill
+    stack.setCustomSpacing(16, after: title)
+    stack.setCustomSpacing(28, after: message)
+    stack.setCustomSpacing(12, after: primary)
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    recovery.addSubview(stack)
     NSLayoutConstraint.activate([
-      title.centerXAnchor.constraint(equalTo: recovery.centerXAnchor),
-      title.centerYAnchor.constraint(equalTo: recovery.centerYAnchor, constant: -50),
-      message.leadingAnchor.constraint(equalTo: recovery.leadingAnchor, constant: 32),
-      message.trailingAnchor.constraint(equalTo: recovery.trailingAnchor, constant: -32),
-      message.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 16),
-      retry.centerXAnchor.constraint(equalTo: recovery.centerXAnchor),
-      retry.topAnchor.constraint(equalTo: message.bottomAnchor, constant: 28),
-      retry.widthAnchor.constraint(equalToConstant: 108),
-      retry.heightAnchor.constraint(equalToConstant: 44),
+      stack.centerXAnchor.constraint(equalTo: recovery.centerXAnchor),
+      NSLayoutConstraint(
+        item: stack,
+        attribute: .centerY,
+        relatedBy: .equal,
+        toItem: recovery,
+        attribute: .bottom,
+        multiplier: 0.55,
+        constant: 0
+      ),
+      stack.widthAnchor.constraint(lessThanOrEqualToConstant: 280),
+      stack.leadingAnchor.constraint(greaterThanOrEqualTo: recovery.leadingAnchor, constant: 24),
+      stack.trailingAnchor.constraint(lessThanOrEqualTo: recovery.trailingAnchor, constant: -24),
+      title.heightAnchor.constraint(equalToConstant: 44),
+      message.heightAnchor.constraint(equalToConstant: 52),
+      primary.heightAnchor.constraint(equalToConstant: 48),
+      web.heightAnchor.constraint(equalToConstant: 48),
     ])
     window.addSubview(recovery)
     startupRecoveryView = recovery
+    checkNativeRecoveryVersion(
+      titleLabel: title,
+      messageLabel: message,
+      primaryButton: primary,
+      webButton: web
+    )
   }
 
-  @objc private func retryFlutterStartup() {
-    startupRecoveryView?.removeFromSuperview()
-    startupRecoveryView = nil
-    nativeRecoveryShown = false
-    nativeRecoveryDeadlineReached = false
-    cancelNativeRecoveryTerminalReconciliation()
-    startupTelemetryJournal.beginAttempt()
-    startupTelemetryJournal.record(phase: "native_pre_flutter", elapsedMs: 0, outcome: "retry")
-    flutterFirstFrameConfirmed = false
-    startupSafeTerminalConfirmed = false
-    firstFrameForegroundRemaining = Self.flutterFirstFrameDeadline
-    foregroundStartedUptime = ProcessInfo.processInfo.systemUptime
-    generatedPluginsRegistered = false
-    let engine = FlutterEngine(name: "qwq_startup_retry_\(UUID().uuidString)")
-    guard engine.run() else {
-      showNativeStartupRecovery()
+  private func configureRecoveryButton(
+    _ button: RecoveryActionButton,
+    title: String,
+    filled: Bool,
+    enabled: Bool
+  ) {
+    button.setTitle(title, for: .normal)
+    button.titleLabel?.font = .systemFont(ofSize: 17, weight: .medium)
+    button.isEnabled = enabled
+    button.layer.cornerRadius = 24
+    button.layer.borderWidth = filled ? 0 : 1
+    button.layer.borderColor = UIColor(
+      red: 8 / 255,
+      green: 123 / 255,
+      blue: 1,
+      alpha: 1
+    ).cgColor
+    if filled {
+      button.backgroundColor = enabled
+        ? UIColor(red: 8 / 255, green: 123 / 255, blue: 1, alpha: 1)
+        : UIColor(red: 233 / 255, green: 237 / 255, blue: 245 / 255, alpha: 1)
+      button.setTitleColor(
+        enabled ? .white : UIColor(red: 107 / 255, green: 112 / 255, blue: 124 / 255, alpha: 1),
+        for: .normal
+      )
+    } else {
+      button.backgroundColor = .clear
+      button.setTitleColor(UIColor(red: 8 / 255, green: 123 / 255, blue: 1, alpha: 1), for: .normal)
+    }
+  }
+
+  private var recoveryBaseURLString: String {
+    let configured = Bundle.main.object(forInfoDictionaryKey: "QWQRecoveryBaseURL") as? String
+    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return isTrustedRecoveryURL(URL(string: value)) ? value : "https://api.quwoquan.com"
+  }
+
+  private var publicWebURLString: String {
+    let configured = Bundle.main.object(forInfoDictionaryKey: "QWQPublicWebURL") as? String
+    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return isTrustedRecoveryURL(URL(string: value)) ? value : "https://quwoquan.com"
+  }
+
+  private func checkNativeRecoveryVersion(
+    titleLabel: UILabel,
+    messageLabel: UILabel,
+    primaryButton: RecoveryActionButton,
+    webButton: RecoveryActionButton
+  ) {
+    guard var components = URLComponents(string: recoveryBaseURLString) else {
+      applyNativeVersionUnavailable(
+        titleLabel: titleLabel,
+        messageLabel: messageLabel,
+        primaryButton: primaryButton,
+        webButton: webButton
+      )
       return
     }
-    retryFlutterEngine = engine
-    deferredPluginRegistry = engine
-    registerStartupTimingsChannel(binaryMessenger: engine.binaryMessenger)
-    registerMethodChannels(binaryMessenger: engine.binaryMessenger, includeStartupTimings: false)
-    let controller = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
-    window?.rootViewController = controller
-    window?.makeKeyAndVisible()
-    observeNativeFlutterFirstFrame(controller)
-    armFlutterFirstFrameWatchdog()
+    components.path = "/ops/app-recovery/version"
+    let appVersion = Bundle.main.object(
+      forInfoDictionaryKey: "CFBundleShortVersionString"
+    ) as? String ?? ""
+    let buildNumber = NativeCrashMarkerStore.currentBuild
+    components.queryItems = [
+      URLQueryItem(name: "platform", value: "ios"),
+      URLQueryItem(name: "appVersion", value: appVersion),
+      URLQueryItem(name: "buildNumber", value: buildNumber),
+    ]
+    guard let url = components.url else { return }
+    var request = URLRequest(url: url)
+    request.cachePolicy = .reloadIgnoringLocalCacheData
+    request.timeoutInterval = 1.5
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = 1.5
+    URLSession(configuration: configuration).dataTask(with: request) { [weak self] data, response, _ in
+      guard let self,
+            let http = response as? HTTPURLResponse,
+            (200..<300).contains(http.statusCode),
+            let data,
+            data.count <= 65_536,
+            let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            payload.count == 4,
+            let latestBuildRaw = payload["latestBuild"] as? String,
+            let latestBuild = Int(latestBuildRaw),
+            let updateRaw = payload["updateUrl"] as? String,
+            let recoveryRaw = payload["recoveryUrl"] as? String,
+            self.isTrustedRecoveryURL(URL(string: updateRaw)),
+            self.isTrustedRecoveryURL(URL(string: recoveryRaw))
+      else {
+        DispatchQueue.main.async { [weak self] in
+          self?.applyNativeVersionUnavailable(
+            titleLabel: titleLabel,
+            messageLabel: messageLabel,
+            primaryButton: primaryButton,
+            webButton: webButton
+          )
+        }
+        return
+      }
+      DispatchQueue.main.async { [weak self] in
+        guard let self else { return }
+        if latestBuild > (Int(buildNumber) ?? 0) {
+          titleLabel.text = "当前版本需要更新"
+          messageLabel.text = "更新后即可正常启动"
+          self.configureRecoveryButton(primaryButton, title: "前往更新", filled: true, enabled: true)
+          primaryButton.recoveryAction = { [weak self] in
+            self?.openRecoveryTarget(
+              updateRaw,
+              fallback: recoveryRaw,
+              failureMessage: "暂时无法打开更新页面，请稍后再试"
+            )
+          }
+          webButton.isHidden = false
+        } else {
+          titleLabel.text = "当前已是最新版本"
+          messageLabel.text = "请使用网页版继续"
+          self.configureRecoveryButton(primaryButton, title: "使用网页版", filled: true, enabled: true)
+          primaryButton.recoveryAction = { [weak self] in
+            self?.openRecoveryTarget(
+              self?.publicWebURLString ?? "",
+              fallback: recoveryRaw,
+              failureMessage: "网页暂时无法打开，请稍后再试"
+            )
+          }
+          webButton.isHidden = true
+        }
+      }
+    }.resume()
+  }
+
+  private func applyNativeVersionUnavailable(
+    titleLabel: UILabel,
+    messageLabel: UILabel,
+    primaryButton: RecoveryActionButton,
+    webButton: RecoveryActionButton
+  ) {
+    titleLabel.text = "应用暂时无法启动"
+    messageLabel.text = "请使用网页版继续"
+    configureRecoveryButton(primaryButton, title: "使用网页版", filled: true, enabled: true)
+    primaryButton.recoveryAction = { [weak self] in
+      self?.openRecoveryTarget(
+        self?.publicWebURLString ?? "",
+        fallback: "",
+        failureMessage: "网页暂时无法打开，请稍后再试"
+      )
+    }
+    webButton.isHidden = true
+  }
+
+  private func openRecoveryTarget(
+    _ target: String,
+    fallback: String,
+    failureMessage: String
+  ) {
+    guard !recoveryExternalOpenInFlight else { return }
+    recoveryExternalOpenInFlight = true
+    openTrustedRecoveryURL(target) { [weak self] opened in
+      guard let self else { return }
+      if opened {
+        self.recoveryExternalOpenInFlight = false
+        return
+      }
+      self.openTrustedRecoveryURL(fallback) { [weak self] fallbackOpened in
+        guard let self else { return }
+        self.recoveryExternalOpenInFlight = false
+        if !fallbackOpened {
+          self.showRecoveryToast(failureMessage)
+        }
+      }
+    }
+  }
+
+  private func openTrustedRecoveryURL(
+    _ rawURL: String,
+    completion: @escaping (Bool) -> Void
+  ) {
+    guard let url = URL(string: rawURL), isTrustedRecoveryURL(url) else {
+      completion(false)
+      return
+    }
+    UIApplication.shared.open(url, options: [:], completionHandler: completion)
+  }
+
+  private func showRecoveryToast(_ message: String) {
+    guard let recovery = startupRecoveryView else { return }
+    let toast = UILabel()
+    toast.text = message
+    toast.textAlignment = .center
+    toast.numberOfLines = 0
+    toast.textColor = .white
+    toast.backgroundColor = UIColor.black.withAlphaComponent(0.78)
+    toast.font = .systemFont(ofSize: 14)
+    toast.layer.cornerRadius = 8
+    toast.clipsToBounds = true
+    toast.translatesAutoresizingMaskIntoConstraints = false
+    recovery.addSubview(toast)
+    NSLayoutConstraint.activate([
+      toast.centerXAnchor.constraint(equalTo: recovery.centerXAnchor),
+      toast.bottomAnchor.constraint(equalTo: recovery.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+      toast.widthAnchor.constraint(lessThanOrEqualToConstant: 300),
+      toast.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+    ])
+    UIView.animate(withDuration: 0.2, delay: 2, options: []) {
+      toast.alpha = 0
+    } completion: { _ in
+      toast.removeFromSuperview()
+    }
   }
 
   override func application(

@@ -1,149 +1,313 @@
-# L3 子特性：works-immersive-viewer（Work Browser V1.0）
+# L3 Story：作品沉浸式浏览器 (`works-immersive-viewer`)
 
-## 设计立场
+> 所属能力：[`dual-rail-discovery-redesign`](../spec.md)
 
-用户在 Work Browser 中浏览的是「视频书作品」，媒体类型只是作品的呈现形式。用户感知必须是「在浏览一组沉浸式视频书作品」，而不是「在图片、视频、文章之间切换」。不同媒体类型之间切换不得有「换了一个浏览器」的感觉。端侧可继续保留 `featured` 作为内部 route/filter ID，但所有用户可见一级入口和加载文案必须使用「视频书」口径。
+> Journey / Scenario：[`JNY-003 / SCN-007`](../../../spec.md#scn-007)
 
-视觉与信息层级（不可妥协）：
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-```
-内容 > 标题 > 作者 > 交集 > 互动
-```
+## 1. 用户价值
 
-任何作者、交集或互动元素不得比内容更显眼；内容必须是用户进入页面看到的第一元素。
+作为浏览作品的用户，
+我希望从所有作品入口进入同一沉浸式浏览器，并让翻页、互动和返回状态保持一致，
+从而连续消费内容且不会因入口不同获得分叉体验。
 
-## 统一页面结构
+## 2. 范围与非目标
 
-```
-┌─────────────────────────┐
-│ 顶部系统层：返回 ←        更多 ⋯ │
-│                                 │
-│        作品内容（最大化）        │
-│                                 │
-│      [媒体内部导航状态信息]      │
-│  标题                           │
-│  配文                           │
-│  [视频：交集句 / 短暂时长 / 时间轴]│
-├─────────────────────────┤
-│ 头像 作者名 ✓ [关注]   赞 转 评 │
-│ [图片/文章：具象化交集句]        │
-└─────────────────────────┘
-```
+### In Scope
 
-## 核心交互模型（不可协商）
+- “作品沉浸式浏览器”的输入、可观察主路径、失败语义以及与父能力的交接。
+- workBrowser 统一深链入口。
+- 顶部系统层只保留返回/更多。
+- 更多菜单媒体筛选（全部作品/图片/视频/文章）
+- 图片书物理翻页、视频集胶囊、文章页尾页码。
+- 底部工具栏作者/关注/赞转评 + 具象化交集句。
 
-- 垂直滑动 = 切换作品（一级导航）。
-- 水平滑动 = 浏览作品内部内容（二级导航）：图片集物理翻书、视频集换集、文章翻页。
-- 边缘 15px 保护区不响应水平拖拽（iOS 系统返回手势保护）。
-- 垂直 PageView 与水平子 PageView 手势竞争按角度判定：< 45° 偏水平交给子 Widget，>= 45° 触发垂直换作品。
+### Out of Scope
 
-## 文章基线与图片适配边界（不可协商）
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-- `components/pageflip/**` 与 `ui/content/article_reader/pageflip/**` 是已经验收的文章翻页基线。本 Story 不抽取新 DeckHost、painter、partition 或通用纹理类型，也不得为了图片适配改写文章既有 `Stack`、BACK replacement、诊断或同步 `completeAnimation` 时序。
-- 图片通过 `MediaPageFlipBook` 复用同一 `StPageFlipController` scene、`StPageFlipRenderFrame`、手势 `fold(localPosition)`、release policy、动画帧取样和正背面角度规则；媒体适配层只负责图片材质、缓存与加载事务，不新增 pageflip 几何。
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 作品沉浸式浏览器
+
+- metadata/codegen/router/UI/test 中无旧三入口残留。
+
+<a id="req-002"></a>
+### REQ-002 旧内容深链入口收敛到 workBrowser
+
+- metadata/codegen/router/UI/test 中无旧三入口残留。
+
+<a id="req-003"></a>
+### REQ-003 三类媒体内部导航状态信息与图片书体验
+
+- 图片、视频与文章必须保持各自的页码、播放或阅读位置，并在返回列表后恢复原上下文。
+- 单指水平手势按方向锁定前翻或后翻，纵向意图交给父级浏览；同一手势不得同时驱动两个导航轴。
+- commit 收尾时长必须在 `320ms..520ms`，cancel 收尾时长必须在 `220ms..360ms`；落页前保持动态翻页层，最终帧与页码原子切换。
+- 任意帧只允许一个 moving leaf、一条 seam/fold 与一条 free edge；图片书与文章复用同一 pageflip 几何语义。
+- 媒体加载或失败状态在拖动与落页首帧期间保持冻结，随后淡入最新状态；Reduce Motion 下不显示翻页动态层，重试触达区至少 44pt。
+
+<a id="req-004"></a>
+### REQ-004 媒体筛选进入更多菜单
+
+- 筛选项只出现在“更多”菜单并立即作用于当前浏览器；不得出现与浏览无关的 `onSave` 入口。
+
+<a id="req-005"></a>
+### REQ-005 具象化交集句作为推荐解释层
+
+- 默认态每个媒体只显示一份交集句；视频交集位于总时长与时间轴上方，点击后进入对应详情，目标失效时提供可恢复降级。
+
+<a id="req-006"></a>
+### REQ-006 WorkBrowserItem 端云契约一致
+
+- `WorkBrowserItem` 的字段与枚举必须来自 metadata/codegen，App 不得维护第二套解析模型。
+
+<a id="req-007"></a>
+### REQ-007 文章深色纸张主题与阅读设置
+
+- 文章默认使用深色纸张主题；阅读设置可实时切换受支持主题，纯白纸不得作为默认。
+
+<a id="req-008"></a>
+### REQ-008 文章实体标签跳转实体主页
+
+- Markdown 实体标签必须解析为可交互 span；点击后进入 `/homepages/{id}`，无效目标不触发错误导航。
+
+<a id="req-009"></a>
+### REQ-009 图片适配不得改变文章翻页引擎边界
+
+- `components/pageflip/**` 与 `ui/content/article_reader/pageflip/**` 是文章翻页唯一实现边界。本 Story 不抽取新 DeckHost、painter、partition 或通用纹理类型，也不得为了图片适配改写文章 `Stack`、BACK replacement、诊断或同步 `completeAnimation` 时序。
 - 文章既有 BACK 允许由当前静态页、上一页正面 replacement、当前页 bottom clip 与上一页 moving sheet 合成；这些是同一物理翻页的材质区域，不得被复制成额外 moving sheet。文章和图片在任意帧都只能出现一个 moving leaf、一条 seam/fold 与一条 free edge。
 - 图片 moving sheet 每帧只绘制一张完整页面 front 或 back 材质。禁止两个纹理子页重叠、对子纹理使用 `FractionallySizedBox` 压缩、重复完整纹理起点，或以黑色/舞台底色填补本应由背面材质覆盖的区域。
 - release 完成时，媒体适配层必须与文章一样强制应用 animation plan 最后一帧，再同步 `completeAnimation` 和 page index；动态 bottom 与目标静态页须同源。图片加载状态继续冻结到落平后的首个静态帧，随后才应用排队状态。
-
-## 顶部系统层
-
-- 只允许「返回」与「更多」。
 - 禁止：精品字样、媒体类型标识（图片/视频/文章）、页码（如 1/6）、常驻筛选 Tab。
 - 图片/视频/文章默认均为深色沉浸背景 + 白色图标；文章不得因进入阅读而切换为独立白底阅读器。
-
-## 媒体筛选（更多菜单）
-
-- 筛选入口在右上「更多」菜单内：`全部作品 / 图片 / 视频 / 文章`。
 - 媒体类型是筛选条件，不是一级导航；禁止顶部长期显示媒体筛选。
 - 浏览器对外语义统一为 `all / image / video / article`，不暴露 `note` 命名。
-
-## 图片作品
-
-- 全屏沉浸图片书展示，层级：图片书页 → 点状页态 → 标题 → 配文 → 工具栏。
 - 左右滑动使用与文章同源的 `components/pageflip` 几何能力，经 `components/media/shared/pageflip/MediaPageFlipBook` 承载；媒体宿主按全屏横向位移判定 next/prev，并把手势转换为 pageflip 输入，禁止回退为 rubber-band `PageView` 主体验。
 - 图片书展示层位于 `components/media/image/book/`，只接收图片 URL 列表、页码回调和边界 overflow 回调；禁止依赖 discovery/content DTO、Riverpod provider、GoRouter 或 `ui/**`。
-- 图片材质必须先 rasterize 成固定书页逻辑尺寸：横图、竖图、极端比例图只改变同一个 `coverSourceRect`，不改变翻页几何；每个已解码页面输出 front/back 双面 surface，back 为镜像、暗淡、带纸张背面 wash 的纹理。`pending/failed` 不生成图片或失败图标纹理，active 翻页统一使用无图标、无文字、无 spinner 的中性纸面。
-- 图片书三面绑定固定：前翻为 `recto=current.front / verso=current.back / bottom=next.front`，后翻为 `recto=prev.front / verso=prev.back / bottom=current.front`；前翻移动的是当前页纸张，禁止把 `next.back` 贴到 moving sheet。
-- 图片不得维护媒体专用几何、face-frame 分区或 moving-sheet painter；`MediaPageFlipBook` 只消费既有 `StPageFlipRenderFrame` 的 area、anchor、angle 与 shadow。active moving sheet 保持唯一 `Positioned + Transform + ClipPath`，内部每帧只选择一张完整 `RawImage` front/back 材质，不得对子纹理二次布局、压缩或重复采样。
-- 手势方向锁定时冻结 current、moving sheet、bottom 三面材质；事务中的异步 ready/failure 只进入待应用状态。目标页未 ready 时允许翻到中性纸面，commit/cancel 完全落平后才应用新状态；成功图片以 `160ms easeOut` 淡入，Reduce Motion 下最长 `120ms`，不得在动态折页或落页首帧瞬间换图。
-- 静态页与翻页纹理消费同一已解码 `ui.Image` 和同一 `coverSourceRect`。加载超过 `300ms` 才可显示低对比 loading overlay；终态失败只在落平后的静态页显示无图标的失败说明与重试，所有 loading/failure overlay 均不得进入翻页纹理。图片与视频失败态共用文字 `重试`、44pt 最小触达区、半透明圆角按钮与 live region；不可恢复视频不得展示无效重试。底部可读性渐变和 hairline 由图片书固定 overlay 统一绘制，不烘焙到单页材质。
-- 点状指示器（`● ● ○ ● ●`）位于图片内容下方、标题上方；最多 6 个点，超出时以首尾淡化表达「还有更多」；必须明确表达当前位置。
-- 单图作品不显示指示器。
 
-## 视频作品
+<a id="req-010"></a>
+### REQ-010 深色纸张主题默认与垂类适配
 
-- 全屏沉浸播放；P0 控制层只允许：播放状态、时间轴、当前时间、总时长（自绘极简控制行）；
-  P1-A 可在同一控制层追加受控 storyboard 预览帧，P1-B 可切换到 canonical HLS/CMAF，
-  两项增强都不得建立第三套播放器 chrome。
-- 禁止平台默认控制层（Chewie/Material 控件）、端侧远端临时抽帧、截图列表和独立缩略图轨道。
-- 时间轴在播放、暂停和拖动状态始终可见，视觉轨紧贴底部互动工具栏上沿，左右与 caption rail
-  对齐；控制层只包含轨道与轨道上方的短暂总时长 overlay，禁止左侧播放/暂停按钮。总时长仅在
-  首次进入或切集完成后最多显示 5 秒，不为它单独占据一行；标题、正文与交集说明组成的文本区
-  始终位于总时长/时间轴之上。文本区与总时长发生实际几何碰撞时只隐藏视觉时长，轨道和无障碍
-  current/total 语义保留。
-- 暂停时轨道/当前位置提高到 `4dp/8dp`、控件 pinned，中央只显示无背景、无边框、三个角圆润
-  的放大播放三角；拖动时提高到 `6dp/12dp`，P0 上方以更大等宽数字显示“目标时间 / 有效总时长”；
-  P1-A 才显示由服务端
-  `previewTrack` 提供的预览帧。缺轨、能力不支持或预览失败时只降级为时间浮标，不能影响
-  P0 播放、seek 或显示播放失败 CTA。
-- 视频控制只能向 `VideoPlaybackSession` 发命令；页面、时间轴、分集浏览器不得直接持有或操作
-  `VideoPlayerController`。用户手动暂停优先于可见度、前后台和自动恢复。
-- 视频集状态显示为 `视频集 · 1/4 ↔` 胶囊，位于 caption header、标题上方，不得插入时间轴与
-  底部互动工具栏之间；禁止用点状指示器表达视频集；单视频不显示该胶囊。
-- 视频集由契约 `mediaItems` 表达，禁止端侧按同作者从队列临时拼集合。
+- 默认纸张主题必须按内容垂类映射，并允许用户在受支持主题间切换。
 
-## 文章作品
+<a id="req-011"></a>
+### REQ-011 翻书动画纸张材质同源
 
-- 深色纸张杂志阅读体验，保持图片/视频/文章连续浏览的沉浸一致性；模拟高质量纸张材质，不是网页文章。
-- 默认纸张按内容垂类自动适配：摄影=深色纸、旅行=暖黑纸、历史=深棕纸、科技=冷灰纸、自然=墨绿纸；无垂类时回退深色纸。
-- 更多菜单内提供「阅读设置」，支持 `系统适配 / 深色纸 / 冷灰纸 / 暖黑纸 / 墨绿纸 / 深棕纸`，用户选择实时生效。
-- 页码只显示 `1 / 6`，作为页面内容尾部元素（正文之后、作者工具栏之前），chevron `‹ ›` 可点切页。
-- 禁止：章节指示器、页码嵌入正文或标题、顶部页码。
-- 翻页机制保持文章既有 pageflip 宿主与降级 pager（受 pageflip 军规保护，不造第二套翻页几何）；正面、背面、底页、阴影必须共用同一纸张 palette。本 Story 对文章宿主和 `components/pageflip/**` 维持基线零差异。
-- 文章阅读宿主继续留在 `ui/content/article_reader/pageflip/`，负责文章分页 texture capture、diagnostics 与文章 page surface；图片书不得依赖 `ArticleReaderFlipHost`。
+- 翻页正反面必须消费同一 `paperTexture` 来源，避免落页前后材质跳变。
 
-## 底部工具栏（三类媒体统一深色锚点，含白底文章）
+<a id="req-012"></a>
+### REQ-012 Markdown 实体标签进入实体主页
 
-- 结构：头像 + 作者名 + 认证角标 + 关注胶囊；右侧 赞/转/评（图标在上、计数在下）。
-- 图片/文章的交集具象化句位于工具栏上方的 full-width 行；视频的交集句属于标题/正文同一文本栈，固定在短暂总时长与时间轴上方。两种位置均消费云侧 `IntersectionReason.primaryText/primarySpans`；名字、对象、圈子与数字片段按云侧 target 可点击，整行 fallback 打开交集详情。
-- 禁止：收藏入口、页面/作品导航、媒体切换、交集详情常驻。
-- 底部工具栏共享媒体 rail：作者组左锚 rail 左缘，动作组右锚 rail 右缘，iPad 不得收窄居中。
-- 作者名最多 12 个 Unicode 字符；作者名槽按断点固定 compact 4 字、regular 5 字、expanded/iPad 6 字。
-- 关注按钮常驻（状态只由关注关系驱动，无延迟显隐动画改变 rail 对齐）。
+- Markdown 实体标签必须生成可访问链接，并导航到对应实体主页。
 
-## 交集（推荐解释层，不是内容）
+## 4. 契约引用
 
-- 默认态只显示一处具象化交集句：视频位于标题/正文文本栈末尾且高于总时长/时间轴，图片/文章位于工具栏上方；禁止回退到 `N 个交集 >` 摘要作为主表达，也禁止视频在工具栏附近重复渲染第二份交集句。
-- 点击可导航片段进入对应主页/详情列表；整句 fallback 弹出「为什么推荐给你」详情 sheet（✓ 列表）；详情只在用户点击后出现。
-- 禁止：交集卡片、标签或浮层覆盖内容；caption 内交集 chip；端侧本地拼装交集文案（文案全部由云侧投影产出）。
+- canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml#workBrowser`
+- canonical：`quwoquan_service/contracts/metadata/_shared/link_templates.yaml#entities.post.navigation`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/work_browser_item.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml#work_format_filters`
+- canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_model_release/projections/intersection_reason.yaml`
+- canonical：`quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml#article_dark_paper_themes`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml#entityRefs`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/content_post_detail_wire.yaml`
+- canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml#homepageDetail`
+- canonical：`quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart`
 
-## 数据契约
+## 5. 验收场景
 
-- 浏览器消费强类型 `WorkBrowserItemDto`（云侧 `work_browser_item` 投影），不再从 raw Map 拼标题、视频集、交集。
-- `workType` 语义为 `image / video / article`（micro 文本动态按内容降级展示）。
-- 作者快照含认证角标字段，端侧不得本地推断。
-- 路由：`workBrowser` 是内容消费唯一深链入口；无 extra 时按 `workId` 拉取作品定位队列；评论回流 query 参数由路由消费。
+<a id="gwt-001"></a>
+### GWT-001 作品沉浸式浏览器
 
-## 子节点
+- GIVEN 内容创作者或浏览者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“作品沉浸式浏览器”对应的公开行为。
+- THEN metadata/codegen/router/UI/test 中无旧三入口残留。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
 
-| L4 节点 | 职责 |
-|---------|------|
-| works-tab-filter | 更多菜单媒体筛选（全部作品/图片/视频/文章），筛选传递 filter 至 feed 重载 |
-| photo-gallery-swipe | 多图物理翻书 + 内容下方点状页态（≤6 点） |
-| video-series-swipe | 全屏视频自动播放 + 极简控制行 + `视频集 · n/m ↔` 胶囊 |
-| article-magazine-cover | 深色纸张杂志排版 + 水平翻页 + 页尾 `‹ 1/6 ›` + 实体标签跳转 |
-| works-glass-drawer | 评论 Drawer（保持现状，不在 V1.0 改造范围） |
-| works-annotation-dot | 长按光点（P1 UI，保持现状） |
+<a id="gwt-002"></a>
+### GWT-002 旧内容深链入口收敛到 workBrowser
 
-## 验收标准概要
+- GIVEN 用户通过任一旧内容深链入口访问作品。
+- WHEN 路由解析该入口。
+- THEN 请求收敛到 workBrowser，且 metadata、codegen、router 与 UI 不保留旧入口。
 
-- A1：垂直 PageView 强制分页，每次滑动精确切换一个完整作品，滑到底触发 `appendNextPage`。
-- A2：顶部只有返回与更多；不出现媒体类型标识、页码、常驻筛选 Tab。
-- A3：更多菜单提供 `全部作品/图片/视频/文章` 四个筛选项；文章作品额外提供阅读设置；无收藏入口。
-- A4：图片作品使用公共图片书翻页体验且点状页态位于内容下方、标题上方，最多 6 点；视频作品显示 `视频集 · n/m ↔` 且无点状指示器；文章作品页码 `n / m` 位于正文后、作者栏前。
-- A5：默认只显示云侧具象化交集句；可点击片段进入对应对象/列表，整句 fallback 弹出详情 sheet；内容层无交集 chip/卡片。
-- A6：iPad 下 3 字作者名仍占 6 字槽，关注按钮位于槽后且常驻。
-- A7：metadata、codegen、GoRouter、测试桩中不存在 `articleDetail` / `mediaViewer` / `videoViewer` 深链入口；post link navigation 指向 `workBrowser(workId)`。
-- A8：三类媒体切换无「换浏览器」感：顶部系统层与底部工具栏结构、位置、交互完全一致。
-- A9：文章默认不使用白纸；深色纸/冷灰纸/暖黑纸/墨绿纸/深棕纸亮度层级接近，垂类默认与阅读设置实时切换可被测试证明。
-- A10：QWQ Rich Markdown 实体标签渲染为可点击行内标签，点击后通过 metadata 路由进入 `homepageDetail`。
+<a id="gwt-003"></a>
+### GWT-003 三类媒体内部导航状态信息与图片书体验
+
+- GIVEN 用户在图片、视频或文章作品中连续浏览。
+- WHEN 用户横向翻页、切换媒体或返回列表。
+- THEN 各媒体恢复自身位置，图片书在前翻与后翻期间保持单一 moving leaf 和正确 face binding。
+
+<a id="gwt-004"></a>
+### GWT-004 媒体筛选进入更多菜单
+
+- GIVEN 用户正在浏览作品。
+- WHEN 用户从更多菜单选择媒体筛选。
+- THEN 筛选立即作用于当前浏览器，且页面不展示无关的 onSave 入口。
+
+<a id="gwt-005"></a>
+### GWT-005 具象化交集句作为推荐解释层
+
+- GIVEN 作品具有可展示的交集解释。
+- WHEN 用户查看或点击不同媒体类型的作品。
+- THEN 每个媒体只显示规定位置的一条交集句，并在目标不可用时提供可恢复降级。
+
+<a id="gwt-006"></a>
+### GWT-006 WorkBrowserItem 端云契约一致
+
+- GIVEN 服务端返回 WorkBrowserItem。
+- WHEN App 解析并展示该投影。
+- THEN 字段和枚举仅来自 metadata 生成的契约，且校验与 codegen 一致通过。
+
+<a id="gwt-007"></a>
+### GWT-007 文章深色纸张主题与阅读设置
+
+- GIVEN 用户打开文章作品。
+- WHEN 用户查看默认主题或切换受支持的阅读设置。
+- THEN 默认使用深色纸张主题，切换实时生效且纯白纸不作为默认。
+
+<a id="gwt-008"></a>
+### GWT-008 文章实体标签跳转实体主页
+
+- GIVEN 文章 Markdown 包含有效或失效的实体标签。
+- WHEN 用户点击解析后的实体标签。
+- THEN 有效标签进入对应实体主页，失效标签不触发错误导航。
+
+<a id="gwt-009"></a>
+### GWT-009 深色纸张主题默认与垂类适配
+
+- GIVEN 不同内容垂类的文章进入浏览器。
+- WHEN 解析默认纸张主题。
+- THEN 主题按垂类映射并保留受支持的用户切换。
+
+<a id="gwt-010"></a>
+### GWT-010 翻书动画纸张材质同源
+
+- GIVEN 用户拖动或提交图片书与文章的翻页动画。
+- WHEN moving sheet 展示正反面并落页。
+- THEN 正反面消费同一 paperTexture 来源，且落页前后不发生材质跳变。
+
+<a id="gwt-011"></a>
+### GWT-011 Markdown 实体标签进入实体主页
+
+- GIVEN Markdown 被解析为可访问的实体链接。
+- WHEN 用户激活该链接。
+- THEN 浏览器导航到对应实体主页，并保持无效目标的安全降级。
+
+## 6. 依赖
+
+- 前置要求：[`dual-rail-discovery-redesign`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 统一作品导航与顶部系统层
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：widget 测试断言顶部无 works-format-tab-strip、无 works-top-progress-label。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 旧内容深链入口收敛到 workBrowser
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：metadata/codegen/router/UI/test 中无旧三入口残留。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-003"></a>
+### OPEN-003 三类媒体内部导航状态信息与图片书体验
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：local_contract 覆盖 `MediaPageFlipBook` 全屏左滑 0→1、右滑 1→0、前翻/后翻 held dynamic layer 三面 face binding、斜向拖拽 rotation 与同尺寸，且 `ImageBookCanvas` 会同步当前图片页码并在第一页中心左滑立即进入跟手层。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-004"></a>
+### OPEN-004 媒体筛选进入更多菜单
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：widget 测试断言筛选项与筛选行为，且 onSave 入口不存在。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-005"></a>
+### OPEN-005 具象化交集句作为推荐解释层
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：widget 测试断言默认态交集句按媒体类型只在规定位置显示一份，视频交集高于总时长/时间轴，点击后详情/导航降级正常。
+- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-006"></a>
+### OPEN-006 WorkBrowserItem 端云契约一致
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：verify-metadata 与 codegen hash 校验通过。
+- 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-007"></a>
+### OPEN-007 文章深色纸张主题与阅读设置
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：widget 测试断言默认主题映射、阅读设置选项、实时切换和白纸不作为默认。
+- 完成判定：`GWT-007` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-008"></a>
+### OPEN-008 文章实体标签跳转实体主页
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：codec 测试覆盖实体标签解析为 span。
+- 完成判定：`GWT-008` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-009"></a>
+### OPEN-009 深色纸张主题默认与垂类适配
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：widget 测试断言默认纸张与垂类映射。
+- 完成判定：`GWT-009` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-010"></a>
+### OPEN-010 翻书动画纸张材质同源
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：pageflip 视觉/contract 测试断言 paperTexture 被正反面消费。
+- 完成判定：`GWT-010` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-011"></a>
+### OPEN-011 Markdown 实体标签进入实体主页
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：codec 与 widget/navigation 测试通过。
+- 完成判定：`GWT-011` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-012"></a>
+### OPEN-012 作品沉浸式浏览器 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“作品沉浸式浏览器”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

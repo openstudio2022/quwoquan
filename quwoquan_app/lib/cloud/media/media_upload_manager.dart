@@ -19,7 +19,6 @@ class UploadTask {
   final int fileSize;
 
   UploadStatus status;
-  String? cdnUrl;
   String? assetId;
   String? error;
   int retryCount;
@@ -61,6 +60,9 @@ class MediaUploadManager {
 
   /// Enqueues an upload task, validates policy, and starts processing.
   Future<UploadTask> enqueue(UploadTask task) async {
+    if (_disposed) {
+      throw StateError('media upload manager is disposed');
+    }
     final policyError = validateUpload(
       category: task.category,
       fileSize: task.fileSize,
@@ -80,6 +82,9 @@ class MediaUploadManager {
   }
 
   void _processQueue() {
+    if (_disposed) {
+      return;
+    }
     while (_active.length < _maxConcurrent && _queue.isNotEmpty) {
       final task = _queue.removeFirst();
       _active.add(task);
@@ -88,6 +93,9 @@ class MediaUploadManager {
   }
 
   Future<void> _executeUpload(UploadTask task) async {
+    if (_disposed) {
+      return;
+    }
     task.status = UploadStatus.uploading;
     _controller.add(task);
 
@@ -102,12 +110,17 @@ class MediaUploadManager {
         contentType: task.contentType,
         uploadStream: uploadStream,
       );
+      if (_disposed) {
+        return;
+      }
       task
         ..status = UploadStatus.completed
-        ..cdnUrl = asset.cdnUrl?.toString()
         ..assetId = asset.assetId;
       _controller.add(task);
     } catch (error, stackTrace) {
+      if (_disposed) {
+        return;
+      }
       developer.log(
         'Media upload task failed',
         name: 'MediaUploadManager',
@@ -136,6 +149,9 @@ class MediaUploadManager {
 
   /// Starts listening for network changes to retry failed uploads.
   void startOfflineMonitor() {
+    if (_disposed) {
+      return;
+    }
     _connectivitySub ??= Connectivity().onConnectivityChanged.listen((results) {
       final hasConnection = results.any((r) => r != ConnectivityResult.none);
       if (hasConnection) {
@@ -145,6 +161,9 @@ class MediaUploadManager {
   }
 
   void _retryFailedTasks() {
+    if (_disposed) {
+      return;
+    }
     final failed = _failedRetryable.toList(growable: false);
     _failedRetryable.clear();
     for (final task in failed) {
@@ -158,12 +177,19 @@ class MediaUploadManager {
   }
 
   void dispose() {
+    if (_disposed) {
+      return;
+    }
     _disposed = true;
     for (final timer in _retryTimers) {
       timer.cancel();
     }
     _retryTimers.clear();
+    _queue.clear();
+    _failedRetryable.clear();
+    _active.clear();
     unawaited(_connectivitySub?.cancel());
+    _connectivitySub = null;
     unawaited(_controller.close());
   }
 

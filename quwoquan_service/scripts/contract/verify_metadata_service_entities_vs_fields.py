@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Ensure contracts/metadata/**/service.yaml request_entity / response_entity names
-are defined in the owning bundle's fields.yaml or projections/*.yaml.
+Ensure contracts/metadata/**/operations.yaml response_entity names resolve to
+an object fields type, shared schema, or projection read model.
 """
 from __future__ import annotations
 
@@ -24,10 +24,35 @@ def entity_names_from_fields_yaml(data: dict) -> set[str]:
     ents = data.get("entities")
     if isinstance(ents, dict):
         out.update(str(k) for k in ents.keys())
+    types = data.get("types")
+    if isinstance(types, dict):
+        out.update(str(k) for k in types.keys())
     single = data.get("entity")
     if isinstance(single, str) and single.strip():
         out.add(single.strip())
     return out
+
+
+def object_name_from_directory(bundle_dir: Path) -> str:
+    return "".join(part[:1].upper() + part[1:] for part in bundle_dir.name.split("_") if part)
+
+
+def shared_schema_entity_names() -> set[str]:
+    names: set[str] = set()
+    for schema_path in sorted(ASSISTANT_METADATA.glob("*/schema.yaml")):
+        raw = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            continue
+        contract = raw.get("contract")
+        if isinstance(contract, str) and contract.strip():
+            names.add(
+                "".join(
+                    part[:1].upper() + part[1:]
+                    for part in contract.strip().split("_")
+                    if part
+                )
+            )
+    return names
 
 
 def entity_names_from_projections(bundle_dir: Path) -> set[str]:
@@ -45,17 +70,16 @@ def entity_names_from_projections(bundle_dir: Path) -> set[str]:
     return out
 
 
-def referenced_entities_from_service_yaml(data: dict) -> set[str]:
+def referenced_entities_from_operations_yaml(data: dict) -> set[str]:
     out: set[str] = set()
     routes = data.get("api_routes")
     if isinstance(routes, list):
         for r in routes:
             if not isinstance(r, dict):
                 continue
-            for key in ("request_entity", "response_entity"):
-                v = r.get(key)
-                if isinstance(v, str) and v.strip():
-                    out.add(v.strip())
+            v = r.get("response_entity")
+            if isinstance(v, str) and v.strip():
+                out.add(v.strip())
     return out
 
 
@@ -64,29 +88,32 @@ def main() -> int:
     if not ASSISTANT_METADATA.is_dir():
         print(f"FAIL: missing {ASSISTANT_METADATA}", file=sys.stderr)
         return 1
-    for svc_path in sorted(ASSISTANT_METADATA.rglob("service.yaml")):
-        parent = svc_path.parent
+    shared_entities = shared_schema_entity_names()
+    for operations_path in sorted(ASSISTANT_METADATA.rglob("operations.yaml")):
+        parent = operations_path.parent
         fields_path = parent / "fields.yaml"
         if not fields_path.is_file():
             continue
-        svc_raw = yaml.safe_load(svc_path.read_text(encoding="utf-8"))
+        operations_raw = yaml.safe_load(operations_path.read_text(encoding="utf-8"))
         fld_raw = yaml.safe_load(fields_path.read_text(encoding="utf-8"))
-        if not isinstance(svc_raw, dict) or not isinstance(fld_raw, dict):
+        if not isinstance(operations_raw, dict) or not isinstance(fld_raw, dict):
             continue
-        # Only check service bundles that declare api_routes with entity refs
-        need = referenced_entities_from_service_yaml(svc_raw)
+        # Only check object bundles that declare api_routes with entity refs.
+        need = referenced_entities_from_operations_yaml(operations_raw)
         if not need:
             continue
         have = entity_names_from_fields_yaml(fld_raw)
+        have.add(object_name_from_directory(parent))
+        have.update(shared_entities)
         have.update(entity_names_from_projections(parent))
         missing = sorted(need - have)
         if missing:
-            rel = svc_path.relative_to(ROOT)
+            rel = operations_path.relative_to(ROOT)
             failures.append(f"{rel}: entities missing in fields.yaml: {', '.join(missing)}")
 
     if failures:
         print(
-            "verify_metadata_service_entities_vs_fields: FAIL\n  "
+            "verify_metadata_operation_entities_vs_fields: FAIL\n  "
             + "\n  ".join(failures),
             file=sys.stderr,
         )

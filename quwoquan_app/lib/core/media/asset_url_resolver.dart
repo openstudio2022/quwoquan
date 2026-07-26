@@ -13,7 +13,7 @@ class MediaAssetVariant {
   const MediaAssetVariant({
     required this.profile,
     required this.url,
-    required this.objectKey,
+    required this.publicSliceKey,
     required this.requiresAccess,
     this.sourceSha256 = '',
     this.mimeType = '',
@@ -25,7 +25,7 @@ class MediaAssetVariant {
 
   final String profile;
   final String url;
-  final String objectKey;
+  final String publicSliceKey;
   final bool requiresAccess;
   final String sourceSha256;
   final String mimeType;
@@ -146,7 +146,7 @@ class AssetUrlResolver {
   String resolveAssetRowUrl(Map<String, Object?> row) {
     return _firstResolvedContentMediaUrl(<Object?>[
       row['cdnUrl'],
-      row['objectKey'],
+      row['publicSliceKey'],
     ]);
   }
 
@@ -180,12 +180,12 @@ class AssetUrlResolver {
           ? ''
           : _firstResolvedContentMediaUrl(<Object?>[
               variant['cdnUrl'],
-              variant['objectKey'],
+              variant['publicSliceKey'],
             ]);
       out[profile] = MediaAssetVariant(
         profile: profile,
         url: url,
-        objectKey: (variant['objectKey'] ?? '').toString().trim(),
+        publicSliceKey: (variant['publicSliceKey'] ?? '').toString().trim(),
         requiresAccess: requiresAccess,
         sourceSha256: (variant['sourceSha256'] ?? '').toString().trim(),
         mimeType: (variant['mimeType'] ?? '').toString().trim(),

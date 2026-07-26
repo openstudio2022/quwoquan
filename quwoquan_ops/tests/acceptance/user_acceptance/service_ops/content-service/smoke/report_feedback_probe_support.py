@@ -69,6 +69,60 @@ def reporter_session(
     return _hosted_session(hosted_token_env, "reporter")
 
 
+def media_viewer_session(
+    *,
+    environment: str,
+    base_url: str,
+    resolve_host: str,
+    target_name: str,
+    subject: str,
+) -> LocalAcceptanceSession:
+    """创建与发布者隔离的本地 viewer，用真实 Post 可见性验证原图授权。"""
+
+    local_target = LOCAL_TARGETS.get(environment)
+    if environment == "prod" and target_name == _LOCAL_CANARY_TARGETS["prod"]:
+        local_target = _LOCAL_CANARY_TARGETS["prod"]
+    if local_target is None:
+        raise ProbeFailure(
+            "unsafe_mode",
+            "media viewer session is only available to local lifecycle targets",
+        )
+    return open_local_acceptance_session(
+        base_url,
+        environment=environment,
+        target_name=local_target,
+        subject=subject,
+        resolve_host=resolve_host,
+    )
+
+
+def moderation_operator_session(
+    *,
+    environment: str,
+    base_url: str,
+    resolve_host: str,
+    target_name: str,
+) -> LocalAcceptanceSession:
+    """签发仅能审核 Post 的本地 operator，用于走完真实人工审核状态机。"""
+
+    local_target = LOCAL_TARGETS.get(environment)
+    if environment == "prod" and target_name == _LOCAL_CANARY_TARGETS["prod"]:
+        local_target = _LOCAL_CANARY_TARGETS["prod"]
+    if local_target is None:
+        raise ProbeFailure(
+            "unsafe_mode",
+            "moderation operator session is only available to local lifecycle targets",
+        )
+    return open_local_acceptance_session(
+        base_url,
+        environment=environment,
+        target_name=local_target,
+        profile="content-moderation-operator",
+        subject="fixture_content_moderation_operator",
+        resolve_host=resolve_host,
+    )
+
+
 def operator_session(
     *,
     environment: str,
@@ -122,6 +176,16 @@ def _temporary_host_resolution(url: str, resolve_host: str):
         socket.getaddrinfo = original_getaddrinfo
 
 
+def _open_direct(request: urllib.request.Request, *, timeout: int):
+    """直连受控环境，避免开发机代理绕过本地 target host 解析。"""
+
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        urllib.request.HTTPSHandler(context=ssl._create_unverified_context()),
+    )
+    return opener.open(request, timeout=timeout)
+
+
 class ProbeClient:
     def __init__(
         self,
@@ -140,6 +204,7 @@ class ProbeClient:
         *,
         operation_id: str,
         expected_statuses: frozenset[int] = frozenset({200}),
+        allow_non_json_statuses: frozenset[int] = frozenset(),
         body: dict[str, Any] | None = None,
         idempotency_key: str = "",
     ) -> tuple[int, dict[str, Any] | None]:
@@ -167,11 +232,7 @@ class ProbeClient:
         raw = b""
         try:
             with _temporary_host_resolution(url, self.resolve_host):
-                with urllib.request.urlopen(
-                    request,
-                    timeout=15,
-                    context=ssl._create_unverified_context(),
-                ) as response:
+                with _open_direct(request, timeout=15) as response:
                     status = int(response.status)
                     raw = response.read()
         except urllib.error.HTTPError as exc:
@@ -193,6 +254,8 @@ class ProbeClient:
         try:
             decoded = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            if status in allow_non_json_statuses:
+                return status, None
             raise ProbeFailure(
                 "contract_mismatch",
                 f"{method} {path} returned non-JSON content",
@@ -232,11 +295,7 @@ def put_presigned_object(
     )
     try:
         with _temporary_host_resolution(upload_url, resolve_host):
-            with urllib.request.urlopen(
-                request,
-                timeout=30,
-                context=ssl._create_unverified_context(),
-            ) as response:
+            with _open_direct(request, timeout=30) as response:
                 if int(response.status) not in {200, 201, 204}:
                     raise ProbeFailure(
                         "object_upload_failed",

@@ -65,23 +65,25 @@ void main() {
   });
 
   test('anr watchdog reports only real event-loop stalls', () async {
-    final buffer = InMemoryRuntimeLogBuffer();
+    final base = DateTime.utc(2026, 7, 19, 10);
+    final buffer = InMemoryRuntimeLogBuffer(now: () => base);
     final diagnostics = AppRuntimeDiagnostics(
       logger(buffer),
       anrWatchdogPeriod: const Duration(seconds: 2),
       anrStallThreshold: const Duration(seconds: 5),
     );
 
-    final base = DateTime.utc(2026, 7, 19, 10);
     // 正常心跳（gap == period）不得产生 ANR 事实。
-    diagnostics.recordWatchdogHeartbeat(base);
-    diagnostics.recordWatchdogHeartbeat(base.add(const Duration(seconds: 2)));
-    await _settle();
+    await diagnostics.recordWatchdogHeartbeat(base);
+    await diagnostics.recordWatchdogHeartbeat(
+      base.add(const Duration(seconds: 2)),
+    );
     expect(await buffer.pending(), isEmpty);
 
     // 事件循环停顿：期望 2s 的 tick 在 9s 后才执行（stall = 7s ≥ 5s 阈值）。
-    diagnostics.recordWatchdogHeartbeat(base.add(const Duration(seconds: 11)));
-    await _settle();
+    await diagnostics.recordWatchdogHeartbeat(
+      base.add(const Duration(seconds: 11)),
+    );
 
     final record = (await buffer.pending()).single;
     expect(record.signal, 'app.performance.anr');
@@ -101,13 +103,14 @@ void main() {
       anrStallThreshold: const Duration(seconds: 5),
     );
 
-    diagnostics.recordWatchdogHeartbeat(now);
+    await diagnostics.recordWatchdogHeartbeat(now);
     diagnostics.didChangeAppLifecycleState(AppLifecycleState.paused);
     now = now.add(const Duration(minutes: 30));
-    diagnostics.recordWatchdogHeartbeat(now);
+    await diagnostics.recordWatchdogHeartbeat(now);
     diagnostics.didChangeAppLifecycleState(AppLifecycleState.resumed);
-    diagnostics.recordWatchdogHeartbeat(now.add(const Duration(seconds: 2)));
-    await _settle();
+    await diagnostics.recordWatchdogHeartbeat(
+      now.add(const Duration(seconds: 2)),
+    );
 
     expect(await buffer.pending(), isEmpty);
   });
@@ -182,12 +185,15 @@ void main() {
   test(
     'previous native ANR is projected once to runtime and product tracks',
     () async {
-      final buffer = InMemoryRuntimeLogBuffer();
+      // buffer TTL 按 occurredAt 计算；必须把 buffer/logger 时钟与 marker 钉在同一天，
+      // 避免相对真实 DateTime.now() 超过 deliveryTtlHours 后 pending 立刻空读。
+      final clock = DateTime.utc(2026, 7, 19, 12);
+      final buffer = InMemoryRuntimeLogBuffer(now: () => clock);
       final recorder = _CapturingTelemetryRecorder();
       final pageContext = AppPageContextStore.instance..setPageName('home');
       final experience = AppPageExperienceTracker(pageContextStore: pageContext)
         ..attachReporter(recorder);
-      final occurredAt = DateTime.utc(2026, 7, 20, 8);
+      final occurredAt = DateTime.utc(2026, 7, 19, 8);
       final marker = NativeAnrMarker(
         source: 'android_application_exit_info',
         occurredAt: occurredAt,
@@ -223,7 +229,8 @@ void main() {
   test(
     'previous native ANR remains pending until product outbox accepts it',
     () async {
-      final buffer = InMemoryRuntimeLogBuffer();
+      final clock = DateTime.utc(2026, 7, 19, 12);
+      final buffer = InMemoryRuntimeLogBuffer(now: () => clock);
       final recorder = _CapturingTelemetryRecorder(
         result: AppTelemetryRecordResult.rejected,
       );
@@ -233,7 +240,7 @@ void main() {
       final bridge = _FixedNativeAnrMarkerBridge(
         NativeAnrMarker(
           source: 'ios_metric_kit',
-          occurredAt: DateTime.utc(2026, 7, 20, 8),
+          occurredAt: DateTime.utc(2026, 7, 19, 8),
         ),
       );
       final diagnostics = AppRuntimeDiagnostics(

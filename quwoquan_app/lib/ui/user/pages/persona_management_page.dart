@@ -126,7 +126,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
         journey: 'persona_management',
         action: 'exit',
         pageName: 'PersonaManagementPage',
-        payload: <String, dynamic>{
+        payload: <String, Object?>{
           'durationMs': DateTime.now().difference(_enteredAt).inMilliseconds,
         },
       ),

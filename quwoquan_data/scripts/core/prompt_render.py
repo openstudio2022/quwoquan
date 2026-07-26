@@ -41,6 +41,7 @@ _PROMPT_FAMILY = {
     "entity_homepage": "homepage",
     "homepage_independent_review": "homepage",
     "homepage_source_judge": "homepage",
+    "post_independent_review": "_shared",
     "source_plan_homepage": "homepage",
     "review_repair": "_shared",
 }
@@ -86,6 +87,11 @@ def prompt_family(name: str) -> str:
         return _PROMPT_FAMILY[name]
     except KeyError as exc:
         raise PromptTemplateError(f"prompt family is not declared: {name}") from exc
+
+
+def declared_prompt_names() -> tuple[str, ...]:
+    """Return the complete prompt contract surface in deterministic order."""
+    return tuple(sorted(_PROMPT_FAMILY))
 
 
 def _expand_partials(text: str, *, _seen: tuple[str, ...] = ()) -> str:

@@ -6,7 +6,11 @@ import json
 
 from content.source.fetch_text import SUPPORTED_TEXT_EXTRACTORS
 from governance.coverage.benchmark import evaluate_benchmark, render_benchmark, write_benchmark_report
-from governance.coverage.coverage import evaluate_registry, list_verticals, render_report
+from governance.coverage.vertical_inventory import (
+    evaluate_vertical_inventory,
+    list_verticals,
+    render_inventory_report,
+)
 from governance.coverage.governance import verify_vertical_script_governance
 from governance.coverage.maturity import evaluate_maturity, render_maturity
 from governance.coverage.quality import verify_vertical_quality
@@ -16,9 +20,9 @@ from core.runtime_policy import active_runtime_policy
 
 def handle_coverage_inventory(args: argparse.Namespace) -> None:
     verticals = [args.vertical] if args.vertical else list_verticals()
-    reports = [evaluate_registry(v) for v in verticals]
+    reports = [evaluate_vertical_inventory(v) for v in verticals]
     for report in reports:
-        print(render_report(report))
+        print(render_inventory_report(report))
     if args.json:
         print(json.dumps({"reports": reports}, ensure_ascii=False, indent=2))
     if args.strict and any(r["status"] != "passed" for r in reports):
@@ -39,7 +43,7 @@ def handle_master_list_stats(args: argparse.Namespace) -> None:
 def handle_coverage_discover(args: argparse.Namespace) -> None:
     from pathlib import Path
 
-    from governance.coverage.coverage_discovery import discover_candidates
+    from governance.coverage.discovery import discover_candidates
     from governance.coverage.coverage_matrix import (
         CoverageMatrixGuardrails,
         completed_discovery_shards,
@@ -326,7 +330,7 @@ def handle_source_registry(args: argparse.Namespace) -> None:
 
 
 def handle_maturity(args: argparse.Namespace) -> None:
-    reports = [evaluate_registry(v) for v in list_verticals()]
+    reports = [evaluate_vertical_inventory(v) for v in list_verticals()]
     coverage_status = "passed" if reports and all(r["status"] == "passed" for r in reports) else "gap"
     report = evaluate_maturity(
         coverage_status=coverage_status,
@@ -343,7 +347,9 @@ def handle_maturity(args: argparse.Namespace) -> None:
 
 def handle_benchmark(args: argparse.Namespace) -> None:
     targets = [int(x.strip()) for x in (args.targets or "").split(",") if x.strip()]
-    report = evaluate_benchmark(targets or None)
+    if not targets:
+        raise SystemExit("[governance benchmark] GATE_BLOCK --targets is required")
+    report = evaluate_benchmark(targets)
     print(render_benchmark(report))
     if args.report:
         out = write_benchmark_report(report, name=args.report)
@@ -464,7 +470,7 @@ def register_coverage_parser(subparsers: argparse._SubParsersAction) -> None:
     pcs.add_argument(
         "--exhaust-input",
         action="store_true",
-        help="处理完全部唯一候选后再按区县×类型轮询冻结（H10K 必须）",
+        help="处理完全部唯一候选后再按区县×类型轮询冻结",
     )
     pcs.add_argument("--resume", action="store_true")
     pcs.set_defaults(handler=handle_coverage_source_ready)
@@ -486,8 +492,8 @@ def register_coverage_parser(subparsers: argparse._SubParsersAction) -> None:
     pm.add_argument("--json", action="store_true")
     pm.set_defaults(handler=handle_maturity)
 
-    pb = sub.add_parser("benchmark", help="输出 1k/10k/100k 日产成熟度评估报告")
-    pb.add_argument("--targets", help="逗号分隔日产目标，默认 1000,10000,100000")
+    pb = sub.add_parser("benchmark", help="输出显式请求的日产成熟度评估报告")
+    pb.add_argument("--targets", required=True, help="逗号分隔的运行期日产目标")
     pb.add_argument("--report", help="写入 runtime/benchmarks/<name>.json")
     pb.add_argument("--strict", action="store_true")
     pb.add_argument("--json", action="store_true")

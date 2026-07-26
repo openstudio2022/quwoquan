@@ -1,5 +1,5 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND.
-// Source: quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.lite.json
+// Source: quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.lite.json
 // Seed set: home_showcase_core.posts
 
 const String kHomeShowcaseCorePostsSha256 = '601737cc4a4a93f3b9d76b7cc71037c7affe6c5af4a141b15b0dc56ff47c05ab';

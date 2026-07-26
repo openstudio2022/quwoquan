@@ -11,12 +11,11 @@
 /// `lib/core/providers/app_providers_client_sync.dart`（Remote-only）。
 library;
 
-import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
-import 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 
@@ -29,18 +28,32 @@ export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_a
         AssistantPreferenceFactListView,
         AssistantEntryPersonalizationChipView,
         AssistantEntryPersonalizationView,
+        AssistantContextSnapshot,
         AssistantCreationSuggestRequest,
         AssistantCreationSuggestResponse,
+        AssistantCreateConversationRequest,
+        AssistantConsentMatrix,
+        AssistantObjectGroundingView,
         AssistantReportPageContextRequestWire,
+        AssistantRunTerminalFailureView,
+        AssistantRunTerminalSnapshotView,
+        AssistantRunVisibleProcessView,
+        AssistantRunVisibleReferenceView,
+        AssistantSelectedPolicyRefView,
+        AssistantRunTextInput,
+        AssistantRunTrigger,
         AssistantScorecardReportBatchAck,
         AssistantSearchCitationView,
         AssistantSearchResultView,
+        AssistantStartRunRequest,
         AssistantSearchXiaoquRequestWire,
         AssistantSuggestedHomepageView,
         AssistantSkillCatalogItemView,
         AssistantTurnListView,
         AssistantTurnSummaryView,
+        AssistantUserActionGroundingView,
         AssistantUserTaskView,
+        CitationDestination,
         InteractionEvent,
         PageContextAck,
         SuggestedAction,
@@ -51,7 +64,10 @@ export 'package:quwoquan_app/assistant/generated/contracts/assistant_conversatio
 export 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart'
     show AssistantStreamEventWire;
 export 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart'
-    show AssistantTurnEnvelopeWire;
+    show
+        AssistantTurnEnvelopeWire,
+        AssistantTurnInputWire,
+        AssistantTurnTriggerWire;
 export 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart'
     show
         SkillSubscriptionDestinationWire,
@@ -60,7 +76,7 @@ export 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.
         SkillSubscriptionWire;
 export 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart'
     show ToolUseWire;
-export 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g.dart'
+export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
     show
         AssistantPreferenceKind,
         AssistantPreferenceKindX,
@@ -69,7 +85,16 @@ export 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g
         AssistantPreferenceSourceType,
         AssistantPreferenceSourceTypeX,
         AssistantPreferenceStatus,
-        AssistantPreferenceStatusX;
+        AssistantPreferenceStatusX,
+        AssistantStreamEventType,
+        AssistantStreamEventTypeX,
+        FeedbackType,
+        FeedbackTypeX,
+        SkillSubscriptionStatus,
+        SkillSubscriptionStatusX,
+        parseAssistantStreamEventTypeStrict,
+        parseFeedbackTypeStrict,
+        parseSkillSubscriptionStatusStrict;
 
 const String kPersonalContentAccessSkillId = 'personal_content_access';
 
@@ -118,55 +143,36 @@ class AssistantSkillConsent {
   };
 }
 
-Map<String, dynamic> assistantContextSnapshotFromOpenContext(
+AssistantContextSnapshot assistantContextSnapshotFromOpenContext(
   AssistantOpenContext context, {
-  String? operationId,
+  String? userAction,
 }) {
-  final now = DateTime.now().toUtc().toIso8601String();
+  final now = DateTime.now().toUtc();
   final pageType = assistantPageTypeForSource(context.source);
   final objectType = context.objectType?.trim() ?? '';
   final objectId = context.entityId?.trim() ?? '';
-  return <String, dynamic>{
-    'snapshotVersion': 'assistant_context_v1',
-    'capturedAt': now,
-    'routeId': AppUiSurfaces.personalAssistantDialog.routeId,
-    'surfaceId': AppUiSurfaces.personalAssistantDialog.id,
-    if (operationId != null && operationId.trim().isNotEmpty)
-      'operationId': operationId.trim(),
-    'pageType': pageType,
-    'sourceSurfaceId': context.source.name,
-    'experienceLevel': context.experienceLevel.name,
-    'visitTarget': context.visitTarget.targetKey,
-    if (objectType.isNotEmpty && objectId.isNotEmpty)
-      'pageObjects': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'objectTypeRef': objectType,
-          'objectId': objectId,
-          if ((context.hints['title'] ?? '').toString().trim().isNotEmpty)
-            'title': context.hints['title'].toString().trim(),
-          if ((context.hints['snippet'] ?? '').toString().trim().isNotEmpty)
-            'snippet': context.hints['snippet'].toString().trim(),
-        },
-      ],
-    if (context.intersectionEvidenceRefs.isNotEmpty)
-      'intersectionEvidenceRefs': context.intersectionEvidenceRefs
-          .map((ref) => ref.toJson())
-          .toList(growable: false),
-    if ((context.tab ?? '').trim().isNotEmpty)
-      'matchedSegments': <String>[context.tab!.trim()],
-    if ((context.dimension ?? '').trim().isNotEmpty)
-      'matchedInterestTags': <String>[context.dimension!.trim()],
-    'consentMatrix': const <String, dynamic>{
-      'canReadCurrentPage': true,
-      'canReadConversation': false,
-      'canUseProfile': true,
-      'canUseRelationshipGraph': true,
-      'canUseTags': true,
-      'canDeliverProactively': false,
-      'consentSource': 'app_open_context',
-      'consentVersion': 'assistant_context_v1',
-    },
-  };
+  final normalizedAction = userAction?.trim() ?? '';
+  return AssistantContextSnapshot(
+    capturedAt: now,
+    pageType: pageType,
+    pageObjects: <AssistantObjectGroundingView>[
+      if (objectType.isNotEmpty && objectId.isNotEmpty)
+        AssistantObjectGroundingView(
+          objectTypeRef: objectType,
+          objectId: objectId,
+        ),
+    ],
+    userActions: <AssistantUserActionGroundingView>[
+      if (normalizedAction.isNotEmpty)
+        AssistantUserActionGroundingView(
+          action: normalizedAction,
+          objectTypeRef: objectType.isEmpty ? null : objectType,
+          objectId: objectId.isEmpty ? null : objectId,
+          occurredAt: now,
+        ),
+    ],
+    consentMatrix: const AssistantConsentMatrix(canReadCurrentPage: true),
+  );
 }
 
 /// ListAssistantConversations 响应切片（items + 不透明 keyset nextCursor）。
@@ -202,8 +208,11 @@ class AssistantConversationListPage {
 
 /// 私助会话与 run 生命周期（含 SSE 事件流、历史查询面与取消）。
 abstract class AssistantConversationRunFacet {
+  /// [clientRequestId] 与 HTTP `Idempotency-Key` 必须是同一稳定 intent；
+  /// 网络重试必须复用它，禁止由 Remote 或服务端随机补齐。
   Future<AssistantConversationWire> createAssistantConversation({
     String summary = '',
+    required String clientRequestId,
   });
 
   /// GET /assistant/conversations：owner 会话列表（updatedAt desc keyset 分页）。
@@ -228,6 +237,7 @@ abstract class AssistantConversationRunFacet {
   Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
+    required String clientRequestId,
     String turnType = 'user',
     String skillId = '',
     String domainId = '',
@@ -300,7 +310,6 @@ abstract class AssistantPersonalizationFacet {
   Future<PageContextAck> reportPageContext({
     required AssistantOpenContext context,
     String? userAction,
-    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
   });
 
   Future<AssistantEntryPersonalizationView> getEntryPersonalization({
@@ -356,7 +365,7 @@ abstract class AssistantXiaoquSearchFacet {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
+    AssistantContextSnapshot? contextSnapshot,
   });
 }
 

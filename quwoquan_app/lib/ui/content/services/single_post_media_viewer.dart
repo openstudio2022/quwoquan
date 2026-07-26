@@ -12,7 +12,7 @@ import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart'
 /// 由「单帖详情」构造沉浸式浏览器路由参数。
 ///
 /// 直达 / 深链 / 通知统一走这里，避免各入口各自拼装 [MediaViewerExtra]
-/// （13-coding-discipline R25）。归因 [source] / [referralSource] / [feedRequestId]
+/// 归因 [source] / [referralSource] / [feedRequestId]
 /// 由调用方按入口语义传入，保持推荐归因链完整（R21）。
 MediaViewerExtra buildSinglePostMediaViewerExtra(
   WidgetRef ref, {

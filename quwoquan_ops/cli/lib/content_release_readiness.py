@@ -15,7 +15,16 @@ from .common import ROOT, load_json_yaml
 from .environment_topology import ENVIRONMENTS, get_target, load_environment_topology
 
 
-POLICY_PATH = ROOT / "quwoquan_ops" / "environments" / "content_release_readiness.yaml"
+POLICY_PATH = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "content-service"
+    / "resources"
+    / "policies"
+    / "content"
+    / "release_readiness.yaml"
+)
 POLICY_SCHEMA = "content-release-readiness"
 
 

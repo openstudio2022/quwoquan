@@ -12,18 +12,61 @@ extension _ProfileShellBuilders on _ProfileShellState {
 
   /// 打动摘要模块（他人主页 / 我的主页双视角）。
   ///
-  /// async 三态：loading / error 不占位；data 由 [AuthorImpactCard] 决定
-  /// （other 无事实收起，mine 空态展示鼓励发布文案）。
+  /// async 三态：加载时保留稳定反馈；失败时必须呈现可恢复状态，不能伪装成
+  /// 「暂无打动事实」。data 由 [AuthorImpactCard] 决定（other 无事实收起，
+  /// mine 空态展示鼓励发布文案）。
   Widget _buildAuthorImpactCard(bool isDark) {
-    final impact = ref.watch(authorImpactProvider(widget.userId));
+    final isMine = widget.mode == ProfileMode.mine;
+    final request = (
+      subAccountId: widget.userId,
+      surface: isMine ? AppUiSurfaces.profileHome : AppUiSurfaces.userProfile,
+    );
+    final impact = ref.watch(authorImpactProvider(request));
     return impact.when(
-      data: (summary) => AuthorImpactCard(
-        summary: summary,
-        isDark: isDark,
-        isMine: widget.mode == ProfileMode.mine,
+      data: (summary) =>
+          AuthorImpactCard(summary: summary, isDark: isDark, isMine: isMine),
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.containerLg),
+        child: Center(child: CupertinoActivityIndicator()),
       ),
-      loading: () => const SizedBox.shrink(),
-      error: (_, _) => const SizedBox.shrink(),
+      error: (error, _) {
+        final resolved = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
+        return AppSectionErrorState(
+          semantic: UiErrorSemantic(
+            category: resolved.category,
+            scope: resolved.scope,
+            title: isMine
+                ? UITextConstants.profileImpactUnavailableTitle
+                : UITextConstants.profileImpactUnavailableTitleOther,
+            message: resolved.message,
+            secondaryMessage: resolved.secondaryMessage,
+            primaryAction:
+                resolved.primaryAction ??
+                const UiErrorAction(
+                  type: UiErrorActionType.retry,
+                  label: UITextConstants.tryAgain,
+                ),
+            secondaryAction: resolved.secondaryAction,
+            dismissible: resolved.dismissible,
+            sourceCode: resolved.sourceCode,
+            failureKind: resolved.failureKind,
+            recoveryAction: resolved.recoveryAction,
+            presentation: resolved.presentation,
+            tone: resolved.tone,
+          ),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              ref.invalidate(authorImpactProvider(request));
+            }
+          },
+        );
+      },
     );
   }
 

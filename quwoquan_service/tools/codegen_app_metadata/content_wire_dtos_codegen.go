@@ -2,7 +2,7 @@ package main
 
 func renderCreateReportRequestWireDart() string {
 	return `// GENERATED FILE — DO NOT EDIT BY HAND.
-// Source: contracts/metadata/content/report/fields.yaml (CreateReport API body keys)
+// Source: services/content-service/contracts/trust_safety/report/fields.yaml (CreateReport API body keys)
 // aligned with ContentApiMetadata.createReportPath payload.
 // Regenerate: make codegen-app
 

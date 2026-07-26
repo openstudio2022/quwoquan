@@ -19,9 +19,11 @@ from content.source.source_unit import iter_source_units
 from core.image_safety import assess_image_publish_prefilter
 from core.article_package import sha256_file
 from core.io import read_json
-from governance.coverage.cold_start_supply import load_cold_start_supply_policy
+from governance.content_supply_policy import load_content_supply_policy
 from core.paths import execution_root
+from content.execution.identity import parse_execution_id
 from content.post.video.source_video import SourcedVideoEvidence
+from governance.coverage.license import rights_proof_required
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +37,8 @@ class VideoFrameCandidate:
     sha256: str
     caption: str
     source_collection_id: str
+    rights_audit_status: str
+    rights_audit_issues: tuple[str, ...]
 
     def as_brief_value(self) -> dict[str, str]:
         return {
@@ -47,6 +51,8 @@ class VideoFrameCandidate:
             "sha256": self.sha256,
             "caption": self.caption,
             "sourceCollectionId": self.source_collection_id,
+            "rightsAuditStatus": self.rights_audit_status,
+            "rightsAuditIssues": list(self.rights_audit_issues),
         }
 
 
@@ -73,6 +79,7 @@ def _source_frames(
     candidates: list[VideoFrameCandidate] = []
     rejects: dict[str, int] = {}
     seen_sha: set[str] = set()
+    require_rights_proof = rights_proof_required(ctx.spec.vertical)
 
     def reject(reason: str) -> None:
         rejects[reason] = rejects.get(reason, 0) + 1
@@ -106,14 +113,29 @@ def _source_frames(
                 "fileName": file_name,
                 "sourceAssetId": source_asset_id,
                 "sourceUrl": str(row.get("sourceUrl") or "").strip(),
-                "creator": str(row.get("creator") or row.get("credit") or "").strip(),
-                "license": str(row.get("license") or "").strip(),
-                "authorizationProof": str(row.get("authorizationProof") or "").strip(),
                 "sourceCollectionId": str(row.get("sourceCollectionId") or "").strip(),
                 "sha256": str(row.get("sha256") or "").strip(),
             }
             if any(not value for value in required.values()):
+                reject("frame_source_evidence_incomplete")
+                continue
+            creator = str(row.get("creator") or row.get("credit") or "").strip()
+            license_name = str(row.get("license") or "").strip()
+            authorization_proof = str(row.get("authorizationProof") or "").strip()
+            rights_audit_status = str(row.get("rightsAuditStatus") or "").strip()
+            rights_audit_issues = tuple(
+                str(issue) for issue in (row.get("rightsAuditIssues") or [])
+            )
+            if require_rights_proof and not (
+                creator and license_name and authorization_proof
+            ):
                 reject("rights_evidence_incomplete")
+                continue
+            if not require_rights_proof and rights_audit_status not in {
+                "verified",
+                "unverified",
+            }:
+                reject("rights_audit_status_missing")
                 continue
             if not asset_path.is_file():
                 reject("asset_file_missing")
@@ -132,11 +154,13 @@ def _source_frames(
                     source_ref=source_ref,
                     rights_ref=f"{rights_index_ref}#{source_asset_id}",
                     source_url=required["sourceUrl"],
-                    creator=required["creator"],
-                    license=required["license"],
+                    creator=creator,
+                    license=license_name,
                     sha256=required["sha256"],
                     caption=str(row.get("caption") or row.get("relevance") or "").strip(),
                     source_collection_id=required["sourceCollectionId"],
+                    rights_audit_status=rights_audit_status,
+                    rights_audit_issues=rights_audit_issues,
                 )
             )
     candidates.sort(key=lambda item: (item.source_collection_id, item.asset_ref))
@@ -207,7 +231,9 @@ def build_video_plan_for_target(
     object_dir: Path,
     videos_per_target: int,
 ) -> VideoPlanOutcome:
-    policy = load_cold_start_supply_policy().video_delivery
+    policy = load_content_supply_policy(
+        parse_execution_id(ctx.execution_id).vertical
+    ).video_delivery
     sourced_videos, sourced_rejects = _sourced_videos(ctx, object_dir)
     if len(sourced_videos) >= videos_per_target:
         items: list[dict[str, Any]] = []
@@ -282,7 +308,7 @@ def build_video_plan_for_target(
             },
         )
     frames, rejects = _source_frames(ctx, object_dir)
-    frames_per_work = policy.minimum_segment_count
+    frames_per_work = policy.minimum_source_frames
     required_frames = videos_per_target * frames_per_work
     if len(frames) < required_frames:
         issue = data_issue(

@@ -214,7 +214,6 @@ type Projection struct {
 // validator 与 generator 禁止再从 SourceDocument.Content 二次解析该语义。
 type BusinessObjectMap struct {
 	Domain          string                       `json:"domain"`
-	DecisionRefs    []string                     `json:"decisionRefs"`
 	BoundedContexts []BoundedContextRegistration `json:"boundedContexts"`
 	SourcePath      string                       `json:"sourcePath"`
 	Objects         []BusinessObjectBoundary     `json:"objects"`

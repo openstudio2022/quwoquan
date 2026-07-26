@@ -76,9 +76,9 @@ def _source_availability_summary(report: dict[str, Any], entity_ids: list[str]) 
             if item.lane.value
         }
         lanes.update(lane for lane, _message in issue_rows if lane)
-        # Standalone image works are a soft scoring dimension. A homepage
-        # blocker is always fatal, including a homepage whose text source is
-        # ready but whose required cover media is not publishable.
+        # Standalone image works are a soft scoring dimension. Homepage
+        # readiness is determined by its admitted encyclopedia base draft;
+        # media availability remains a separately auditable result.
         fatal_blockers = [item for item in blockers if item.lane.value != "image"]
         fatal_issues = [message for lane, message in issue_rows if lane != "image"]
         soft_blockers = [item for item in blockers if item.lane.value == "image"]
@@ -144,8 +144,6 @@ def _write_auto_report_artifacts(execution_id: str, report: dict[str, Any]) -> N
     shared_dir = execution_root(execution_id) / "_shared"
     shared_dir.mkdir(parents=True, exist_ok=True)
     write_json(shared_dir / _AUTO_DISCOVERY_REPORT, report)
-    availability = report.get("sourceAvailability") if isinstance(report.get("sourceAvailability"), dict) else {}
-    write_json(shared_dir / "source_unavailable_targets.json", availability)
 
 def _merge_auto_reports(base: dict[str, Any], incoming: dict[str, Any]) -> None:
     for key in (
@@ -154,6 +152,7 @@ def _merge_auto_reports(base: dict[str, Any], incoming: dict[str, Any]) -> None:
         "candidates",
         "imageCollections",
         "homepageMediaCollections",
+        "homepageMediaAdvisories",
         "sourceUnavailable",
         "rescueEvents",
     ):

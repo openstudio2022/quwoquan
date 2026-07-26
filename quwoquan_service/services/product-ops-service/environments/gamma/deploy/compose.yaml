@@ -1,0 +1,7 @@
+services:
+  product-ops-service:
+    environment:
+      PRODUCT_OPS_ELASTICSEARCH_ENDPOINT: "${PRODUCT_OPS_ELASTICSEARCH_ENDPOINT:-http://elasticsearch:9200}"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy

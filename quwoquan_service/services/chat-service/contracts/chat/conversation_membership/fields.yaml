@@ -1,0 +1,145 @@
+description: 会话成员（独立 collection，支撑 1,000 人群）
+fields:
+- name: _id
+  source: _id
+  type: ObjectId
+  constraints:
+  - PK
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: conversationId
+  source: conversationId
+  type: ObjectId
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: userId
+  source: userId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: displayName
+  source: displayName
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 群内显示名（可覆盖用户昵称）
+  role: authoritative_state
+- name: avatarUrl
+  source: avatarUrl
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: avatarAssetId
+  source: avatarAssetId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: avatarVersion
+  source: avatarVersion
+  type: int64
+  constraints:
+  - NOT_NULL
+  - DEFAULT_0
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: groupAvatarVersion
+  source: groupAvatarVersion
+  type: int64
+  constraints:
+  - NOT_NULL
+  - DEFAULT_0
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 群头像版本号；用于端侧缓存失效与 patch 幂等
+  role: authoritative_state
+- name: memberType
+  source: memberType
+  type: enum
+  enum_ref: MemberType
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: user（真人用户）/ assistant（小趣助手，可被邀请到任何会话中协助处理信息）
+  role: authoritative_state
+- name: role
+  source: role
+  type: enum
+  enum_ref: MemberRole
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: owner/admin/member（assistant 成员固定为 member）
+  role: authoritative_state
+- name: assistantSkillId
+  source: assistantSkillId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 仅 memberType=assistant 时有效，绑定的 Skill ID（不同会话可邀请不同能力的助手）
+  role: authoritative_state
+- name: invitedBy
+  source: invitedBy
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 邀请人 userId
+  role: authoritative_state
+- name: joinedAt
+  source: joinedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state

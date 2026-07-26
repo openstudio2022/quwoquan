@@ -1,0 +1,33 @@
+schema: content_media_upload_policy
+streaming_required: true
+media_types:
+  image:
+    max_file_size_bytes: 52428800
+    allowed_content_types:
+    - image/jpeg
+    - image/png
+    - image/gif
+    - image/webp
+    - image/heic
+  video:
+    max_file_size_bytes: 52428800
+    allowed_content_types:
+    - video/mp4
+    - video/quicktime
+    - video/x-m4v
+    - video/webm
+  audio:
+    max_file_size_bytes: 10485760
+    allowed_content_types:
+    - audio/aac
+    - audio/mp4
+    - audio/x-m4a
+    - audio/mpeg
+    - audio/wav
+  file:
+    max_file_size_bytes: 104857600
+    allowed_content_types:
+    - '*/*'
+errors:
+  file_too_large: CONTENT.USER.media_file_too_large
+  unsupported_type: CONTENT.USER.media_type_unsupported

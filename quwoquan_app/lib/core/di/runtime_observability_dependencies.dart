@@ -41,7 +41,6 @@ final runtimeLoggerProvider = Provider<RuntimeLogger>((ref) {
 
 final runtimeDiagnosticsProvider = Provider<AppRuntimeDiagnostics>((ref) {
   final diagnostics = AppRuntimeDiagnostics(ref.watch(runtimeLoggerProvider));
-  diagnostics.install();
   ref.onDispose(diagnostics.dispose);
   return diagnostics;
 });

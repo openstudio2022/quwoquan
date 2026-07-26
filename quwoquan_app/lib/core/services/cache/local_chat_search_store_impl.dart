@@ -212,11 +212,10 @@ class LocalChatSearchStore implements LocalChatSearchReader {
             'lastMessagePreview': _string(row['last_message_preview']),
           });
           final record = _conversationRecordFromPayload(payload);
-          return ConversationSearchItemView.fromMap(<String, dynamic>{
-            ...record.toCacheMap(),
-            'matchedField': matchedField,
-            'highlightText': _highlightText(payload, matchedField),
-          });
+          return record.toConversationSearchItemView(
+            matchedField: matchedField,
+            highlightText: _highlightText(payload, matchedField),
+          );
         })
         .where((item) {
           if (item.conversationId.isEmpty) {
@@ -545,6 +544,36 @@ class LocalChatSearchStore implements LocalChatSearchReader {
     await batch.commit(noResult: true);
   }
 
+  /// 不可逆账号终态专用：清除本机全部账号/Persona 的聊天搜索投影。
+  Future<void> clearAllNamespaces() async {
+    final database = await _database;
+    const tables = <String>[
+      'chat_contacts',
+      'chat_contacts_fts',
+      'chat_conversations',
+      'chat_conversations_fts',
+      'chat_messages',
+      'chat_messages_fts',
+      'chat_sync_state',
+      'search_namespaces',
+    ];
+    await database.transaction((transaction) async {
+      final batch = transaction.batch();
+      for (final table in tables) {
+        batch.delete(table);
+      }
+      await batch.commit(noResult: true);
+    });
+    for (final table in tables) {
+      final rows = await database.rawQuery(
+        'SELECT COUNT(*) AS count FROM $table',
+      );
+      if (((rows.first['count'] as num?)?.toInt() ?? 0) != 0) {
+        throw StateError('local chat search cleanup left rows in $table');
+      }
+    }
+  }
+
   Future<int> _countRows(
     Database database,
     String table,
@@ -575,19 +604,15 @@ class LocalChatSearchStore implements LocalChatSearchReader {
     final seen = <String>{};
     final ftsQuery = _buildFtsQuery(normalizedQuery);
     if (ftsQuery != null) {
-      try {
-        final ftsRows = await database.rawQuery(
-          'SELECT $idColumn FROM $ftsTable WHERE namespace_key = ? AND $ftsTable MATCH ? LIMIT ?',
-          <Object?>[namespace.key, ftsQuery, limit],
-        );
-        for (final row in ftsRows) {
-          final id = _string(row[idColumn]);
-          if (id.isNotEmpty && seen.add(id)) {
-            ids.add(id);
-          }
+      final ftsRows = await database.rawQuery(
+        'SELECT $idColumn FROM $ftsTable WHERE namespace_key = ? AND $ftsTable MATCH ? LIMIT ?',
+        <Object?>[namespace.key, ftsQuery, limit],
+      );
+      for (final row in ftsRows) {
+        final id = _string(row[idColumn]);
+        if (id.isNotEmpty && seen.add(id)) {
+          ids.add(id);
         }
-      } catch (_) {
-        /* best-effort: FTS MATCH 查询失败（如表未建/语法不兼容）时降级为后续 LIKE 查询 */
       }
     }
     final likeRows = await database.rawQuery(
@@ -659,24 +684,31 @@ class LocalChatSearchStore implements LocalChatSearchReader {
     );
   }
 
-  Map<String, dynamic> _decodePayload(Object? rawJson) {
+  Map<String, Object?> _decodePayload(Object? rawJson) {
     final text = _string(rawJson);
     if (text.isEmpty) {
-      return const <String, dynamic>{};
+      throw const FormatException('local chat search payload is empty');
     }
-    try {
-      final decoded = jsonDecode(text);
-      if (decoded is Map) {
-        return decoded.cast<String, dynamic>();
+    final Object? decoded = jsonDecode(text);
+    if (decoded is! Map) {
+      throw const FormatException(
+        'local chat search payload must be an object',
+      );
+    }
+    final payload = <String, Object?>{};
+    for (final entry in decoded.entries) {
+      if (entry.key is! String) {
+        throw const FormatException(
+          'local chat search payload keys must be strings',
+        );
       }
-    } catch (_) {
-      /* best-effort: 持久化 payload 损坏时回退到空 Map，由上层用默认记录兜底 */
+      payload[entry.key as String] = entry.value;
     }
-    return const <String, dynamic>{};
+    return payload;
   }
 
   ConversationCacheRecord _conversationRecordFromPayload(
-    Map<String, dynamic> payload,
+    Map<String, Object?> payload,
   ) {
     return ConversationCacheRecord.fromCacheMap(payload);
   }
@@ -757,7 +789,7 @@ class LocalChatSearchStore implements LocalChatSearchReader {
     _ffiInitialized = true;
   }
 
-  String _highlightText(Map<String, dynamic> payload, String? matchedField) {
+  String _highlightText(Map<String, Object?> payload, String? matchedField) {
     switch (matchedField) {
       case 'displayName':
         return _string(payload['displayName']);

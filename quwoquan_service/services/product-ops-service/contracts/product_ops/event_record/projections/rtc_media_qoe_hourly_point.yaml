@@ -1,0 +1,40 @@
+read_model: RtcMediaQoeHourlyPoint
+description: '一个 UTC 小时桶内的 RTC 媒体 QoE 指标。当前小时是部分桶；缺少分母时对应
+
+  rate/P95 为 null，禁止合成 0% 或 0ms。
+
+  '
+storage_backend: aliyun_sls
+projection_mode: authoritative_query
+source_entities:
+- EventRecord
+consumers:
+- product-ops-service
+- ops-portal
+fields:
+- name: bucketStart
+  type: timestamp
+- name: partial
+  type: bool
+- name: hasSamples
+  type: bool
+- name: effectiveSampleCount
+  type: int64
+- name: mediaConnectedCount
+  type: int64
+- name: mediaConnectedRate
+  type: float64
+  nullable: true
+- name: connectP95Ms
+  type: float64
+  nullable: true
+- name: connectionLostCount
+  type: int64
+- name: connectionLostRate
+  type: float64
+  nullable: true
+- name: reconnectCount
+  type: int64
+- name: generatedThrough
+  type: timestamp
+  nullable: true

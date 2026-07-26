@@ -1,75 +1,142 @@
-# L3 特性：统一分享面板与渠道编排（share-channel-panel）
+# L3 Story：统一分享面板与渠道编排（share-channel-panel） (`share-channel-panel`)
 
-> 归属：product-ops-growth / outbound-share-distribution / share-channel-panel
+> 所属能力：[`outbound-share-distribution`](../spec.md)
 
-## 一、功能定位
+> Journey / Scenario：[`JNY-010 / SCN-023`](../../../spec.md#scn-023)
 
-把 5 类对象（内容四形态、实体、用户、圈子、「我」）的分享入口统一到**一个分享面板**，编排站内分发、站外渠道、登录门与可见性分级。复用既有 `ContentShareSheet`/`ForwardShareSheet` 能力，用一个内容分享编排层消除并行面板。
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 二、渠道清单
+## 1. 用户价值
 
-### 站内分发
+作为分享内容的用户，
+我希望在需要登录时完成登录后只续接一次原分享动作，并进入所选渠道，
+从而不会因登录弹窗重复或丢失分享目标。
 
-| 目标 | 行为 | 真相源 | 失败恢复 |
-|------|------|--------|----------|
-| 圈子 | 将已发布 Post 放置到用户有权管理的圈子 | `circle.circle_post_placement.PlacePostInCircle` | 保留选择页并结构化重试 |
-| 群聊 | 向已有 group conversation 发送 card message | chat conversation contract | 保留目标与附言重试 |
-| 私信 | 选择联系人，必要时创建 direct conversation 后发送 card message | chat conversation contract | 保留目标与附言重试 |
+## 2. 范围与非目标
 
-### 站外分发
+### In Scope
 
-| 渠道 | 行为 | 依赖能力位 | 降级 |
-|------|------|------------|------|
-| 微信好友（会话） | OpenSDK 会话卡 | `wechatShareAndLaunch` | 缺失→海报/系统分享 |
-| 微信朋友圈 | OpenSDK 朋友圈卡 | `wechatShareAndLaunch` | 缺失→海报/系统分享 |
-| 保存海报 | 自绘 PNG（二维码+口令） | 本地渲染 | 始终可用 |
-| 系统分享 | `SharePlus` 系统面板 | 系统 | 始终可用 |
-| 复制链接 | 复制 HTTPS landing/中转页 | 无 | 始终可用 |
-| 复制口令 | 复制 `share_token` | 无 | 始终可用 |
-| 二维码 | 展示对象二维码（短链） | 无 | 始终可用 |
+- “统一分享面板与渠道编排（share-channel-panel）”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 卡片视觉设计（object-share-cards）。
+- 归因落库与口令解析（share-attribution-and-token）。
+- 入站回流（runtime/external-inbound-deeplink-routing）。
 
-- 站外默认链接为 HTTPS landing/中转页（与 `public-content-web-entry` 一致），App scheme 仅作打开目标。
-- 渠道顺序与可用性由 `appDataSourceModeProvider` 透明、能力位驱动，UI 不裸用 `Platform.is*`（rule 14）。
-- Post 面板优先展示“分享到趣我圈”，然后展示“分享到其他平台”；两区共用同一预览种子和归因回调。
+### Out of Scope
 
-实施状态边界（2026-07-14）：Android 当前 NativeBridge 通过微信包名和目标 Activity 发起 `ACTION_SEND`，可用于能力探测与显式系统降级，但**不等价于 OpenSDK 卡片投递成功**。在应用签名、微信安装态、OpenSDK 配置和真机结果形成证据前，微信好友/朋友圈保持 `partial`，不得宣称商用闭环。
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-## 三、登录门与无死循环（对齐 rule 15）
+## 3. 行为要求
 
-- 需账号态的分享动作（如携带个人归因/我的主页分享）走 `runWhenLoggedIn(... AuthGateReason.shareRecord ...)`。
-- 关闭登录页回到安全态（面板关闭或对象详情），**不重复弹登录**；登录成功续接原渠道动作（`AuthContinuation`）。
-- 纯公开对象的「复制链接/保存海报/系统分享」对游客可用，降低分享门槛。
+<a id="req-001"></a>
+### REQ-001 统一分享面板与渠道编排（share-channel-panel）
 
-## 四、可见性分级
+- 用户关闭登录后不得再次循环弹窗；登录成功后必须续接原分享渠道。
 
-- `public`：全部渠道可用。
+<a id="req-002"></a>
+### REQ-002 分享登录门关闭后不死循环且成功续接
+
+- 用户关闭登录后不得再次循环弹窗；登录成功后必须续接原分享渠道。
+
+<a id="req-003"></a>
+### REQ-003 可见性分级控制渠道可用性
+
+- `public` 内容可使用允许的站外渠道，`private` 内容必须置灰站外渠道，未知可见性必须拒绝分享。
+
+<a id="req-004"></a>
+### REQ-004 App、内容与聊天分享保持同一渠道结果
+
+- App 发起的内容或聊天分享必须由同一渠道编排执行，并返回可观察的成功、取消或失败终态。
+
+<a id="req-005"></a>
+### REQ-005 private：渠道置灰并提示「该内容不可对外分享」
+
 - `private`：渠道置灰并提示「该内容不可对外分享」。
 - 未知或已退役 visibility：严格拒绝，不得按 public 或受控预览处理。
 
-## 五、交互与状态
+## 4. 契约引用
 
-```mermaid
-stateDiagram-v2
-  [*] --> Open
-  Open --> ChannelTap
-  ChannelTap --> AuthGate: 需登录
-  AuthGate --> ChannelExec: 登录成功续接
-  AuthGate --> Safe: 关闭(不死循环)
-  ChannelTap --> ChannelExec: 公开/无需登录
-  ChannelExec --> WeChat: 能力位ok
-  ChannelExec --> Fallback: 能力位缺失
-  WeChat --> [*]
-  Fallback --> [*]
-```
+- canonical：`specs/feature-tree/product-ops-growth/outbound-share-distribution/share-channel-panel/spec.md`
+- canonical：`quwoquan_service/contracts/metadata/_shared/link_templates.yaml`
+- canonical：`quwoquan_app/lib/core/auth/auth_continuation.dart`
+- canonical：`specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/circle_post_placement/operations.yaml`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
 
-## 六、约束
+## 5. 验收场景
 
-- 复用既有内容分享组件抽象为跨对象面板；不复制 mock 列表进 UI（rule R15/R16）。
-- 文案/图标走 `UITextConstants`/设计 token（rule R27）；错误结构化（rule R17/R18）。
-- 埋点：面板曝光、渠道点击 `shareIntent`、渠道执行 `shareClick`（详细落库归因在 share-attribution-and-token）。
-- 生产纯净：release 默认 Remote，无 mock 切换入口（rule R29）。
-- 圈子入口只依赖 CirclePostPlacement typed Command Facade；Content 不保留 ShareRecord/PostDistribution transport 或第二生命周期。
+<a id="gwt-001"></a>
+### GWT-001 统一分享面板与渠道编排（share-channel-panel）
 
-## 七、验收摘要
+- GIVEN 产品运营或增长角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“统一分享面板与渠道编排（share-channel-panel）”对应的公开行为。
+- THEN 关闭登录后返回安全页面且不再弹窗；登录成功后进入最初选择的分享渠道。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
 
-见同目录 `acceptance.yaml`。
+<a id="gwt-002"></a>
+### GWT-002 分享登录门关闭后不死循环且成功续接
+
+- GIVEN 游客从分享面板选择需要登录的渠道。
+- WHEN 用户关闭登录入口或完成登录。
+- THEN 关闭后回到安全状态且不再触发登录门，成功后只续接一次原渠道动作。
+
+<a id="gwt-003"></a>
+### GWT-003 可见性分级控制渠道可用性
+
+- GIVEN 分享对象的可见性为 public、private 或未知值。
+- WHEN 面板计算可用渠道。
+- THEN public 显示允许渠道，private 置灰站外渠道，未知值拒绝分享。
+
+<a id="gwt-004"></a>
+### GWT-004 Post 站内分发使用 CirclePostPlacement 与聊天卡片的真实契约
+
+- GIVEN 用户选择将 Post 分发到圈子或聊天。
+- WHEN 面板提交站内分发动作。
+- THEN 分发使用 CirclePostPlacement 与聊天卡片的 canonical 契约，并产生可回读的成功、取消或失败终态。
+
+## 6. 依赖
+
+- 前置要求：[`outbound-share-distribution`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 5 类对象统一面板两段式渠道编排
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：5 类对象面板渲染与渠道执行测试通过；Post 站内三类目标均有真实动作。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 分享登录门关闭后不死循环且成功续接
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：关闭再 pump 不再弹登录；登录成功进入目标渠道执行的测试通过。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-003"></a>
+### OPEN-003 可见性分级控制渠道可用性
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：public/private/未知值渠道可用性测试通过。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-004"></a>
+### OPEN-004 Post 站内分发使用 CirclePostPlacement 与聊天卡片的真实契约
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：App local_contract、内容/聊天 api_integration 与真机分发旅程形成对应证据。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。

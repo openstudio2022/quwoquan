@@ -1,6 +1,11 @@
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
-import 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g.dart'
-    show AssistantStreamEventType, parseAssistantStreamEventType;
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
+    show
+        AssistantStreamEventType,
+        AssistantStreamEventTypeX,
+        parseAssistantStreamEventType;
+import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
 /// AssistantRun 用户可见 SSE 事件的唯一端侧投影。
 ///
@@ -23,34 +28,52 @@ extension AssistantRunStreamEventTypeWire on AssistantRunStreamEventType {
 
 class AssistantRunVisibleReference {
   const AssistantRunVisibleReference({
+    required this.destination,
     this.title = '',
-    this.url = '',
     this.source = '',
     this.snippet = '',
   });
 
+  final CitationDestination destination;
   final String title;
-  final String url;
   final String source;
   final String snippet;
+
+  factory AssistantRunVisibleReference.fromTerminalView(
+    AssistantRunVisibleReferenceView view,
+  ) {
+    return AssistantRunVisibleReference(
+      destination: view.destination,
+      title: view.title.trim(),
+      source: view.source.trim(),
+      snippet: view.snippet.trim(),
+    );
+  }
 
   static AssistantRunVisibleReference? fromWire(Object? raw) {
     final object = _wireObject(raw);
     if (object == null) {
       return null;
     }
-    final reference = AssistantRunVisibleReference(
+    final rawDestination = object['destination'];
+    if (rawDestination is! Map) {
+      return null;
+    }
+    late final CitationDestination destination;
+    try {
+      destination = citationDestinationFromWireObject(rawDestination);
+    } on FormatException {
+      return null;
+    }
+    if (CitationDestinationResolver.resolve(destination) == null) {
+      return null;
+    }
+    return AssistantRunVisibleReference(
+      destination: destination,
       title: _wireString(object['title']),
-      url: _wireString(object['url']),
       source: _wireString(object['source']),
       snippet: _wireString(object['snippet']),
     );
-    if (reference.title.isEmpty &&
-        reference.url.isEmpty &&
-        reference.source.isEmpty) {
-      return null;
-    }
-    return reference;
   }
 }
 
@@ -64,7 +87,6 @@ class AssistantRunVisibleProcess {
     this.summary = '',
     this.skillId = '',
     this.domainId = '',
-    this.toolName = '',
     this.searchedDocumentCount = 0,
     this.processedDocumentCount = 0,
     this.acceptedDocumentCount = 0,
@@ -79,11 +101,36 @@ class AssistantRunVisibleProcess {
   final String summary;
   final String skillId;
   final String domainId;
-  final String toolName;
   final int searchedDocumentCount;
   final int processedDocumentCount;
   final int acceptedDocumentCount;
   final List<AssistantRunVisibleReference> acceptedReferences;
+
+  factory AssistantRunVisibleProcess.fromTerminalView(
+    AssistantRunVisibleProcessView view,
+  ) {
+    return AssistantRunVisibleProcess(
+      processId: view.processId,
+      scope: view.scope,
+      stage: view.stage,
+      status: view.status,
+      order: view.order,
+      summary: view.summary.trim(),
+      skillId: view.skillId.trim(),
+      domainId: view.domainId.trim(),
+      searchedDocumentCount: view.searchedDocumentCount,
+      processedDocumentCount: view.processedDocumentCount,
+      acceptedDocumentCount: view.acceptedDocumentCount,
+      acceptedReferences: view.acceptedReferences
+          .map(AssistantRunVisibleReference.fromTerminalView)
+          .where(
+            (reference) =>
+                CitationDestinationResolver.resolve(reference.destination) !=
+                null,
+          )
+          .toList(growable: false),
+    );
+  }
 
   AssistantRunVisibleProcess copyWith({
     String? status,
@@ -102,7 +149,6 @@ class AssistantRunVisibleProcess {
       summary: summary ?? this.summary,
       skillId: skillId,
       domainId: domainId,
-      toolName: toolName,
       searchedDocumentCount:
           searchedDocumentCount ?? this.searchedDocumentCount,
       processedDocumentCount:
@@ -122,17 +168,13 @@ class AssistantRunVisibleProcess {
     final scope = _wireString(object['scope']);
     final stage = _wireString(object['stage']);
     final status = _wireString(object['status']);
-    if (processId.isEmpty ||
-        scope.isEmpty ||
-        stage.isEmpty ||
-        status.isEmpty) {
+    if (processId.isEmpty || scope.isEmpty || stage.isEmpty || status.isEmpty) {
       return null;
     }
-    final references = _wireList(
-      object['acceptedReferences'],
-    ).map(AssistantRunVisibleReference.fromWire).whereType<AssistantRunVisibleReference>().toList(
-      growable: false,
-    );
+    final references = _wireList(object['acceptedReferences'])
+        .map(AssistantRunVisibleReference.fromWire)
+        .whereType<AssistantRunVisibleReference>()
+        .toList(growable: false);
     return AssistantRunVisibleProcess(
       processId: processId,
       scope: scope,
@@ -142,7 +184,6 @@ class AssistantRunVisibleProcess {
       summary: _wireString(object['summary']),
       skillId: _wireString(object['skillId']),
       domainId: _wireString(object['domainId']),
-      toolName: _wireString(object['toolName']),
       searchedDocumentCount: _wireInt(object['searchedDocumentCount']),
       processedDocumentCount: _wireInt(object['processedDocumentCount']),
       acceptedDocumentCount: _wireInt(object['acceptedDocumentCount']),
@@ -184,7 +225,7 @@ class AssistantRunStreamEvent {
         .toList(growable: false);
     return AssistantRunStreamEvent._(
       wire: wire,
-      type: parseAssistantRunStreamEventType(wire.eventType),
+      type: parseAssistantRunStreamEventType(wire.eventType.wireName),
       restarted: payload['restarted'] == true,
       processes: processes,
       process: AssistantRunVisibleProcess.fromWire(payload['process']),
@@ -220,4 +261,3 @@ List<Object?> _wireList(Object? raw) {
 String _wireString(Object? raw) => raw is String ? raw.trim() : '';
 
 int _wireInt(Object? raw) => raw is num ? raw.toInt() : 0;
-

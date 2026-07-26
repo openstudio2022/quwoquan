@@ -34,7 +34,7 @@ const _resolvedActivePersona = ActivePersonaContextViewData(
   subjectType: 'subAccount',
   displayName: '测试用户',
   avatarUrl: '',
-  personaContextVersion: '1',
+  contextVersion: 1,
   isPrimary: true,
 );
 
@@ -251,6 +251,13 @@ Widget _buildRouterApp(
   );
 }
 
+Future<void> _closePublishResult(WidgetTester tester) async {
+  final done = find.byKey(TestKeys.createPublishResultDoneButton);
+  expect(done, findsOneWidget);
+  tester.widget<CupertinoActionSheetAction>(done).onPressed();
+  await tester.pumpAndSettle();
+}
+
 void main() {
   late FlutterExceptionHandler? originalOnError;
 
@@ -291,7 +298,10 @@ void main() {
     expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
     expect(find.text('允许小趣使用'), findsNothing);
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    for (var i = 0; i < 20 && postPublication.submitCommands.isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(postPublication.submitCommands, hasLength(1));
     expect(postPublication.lastSubmitPayload?['contentType'], 'micro');
@@ -304,8 +314,7 @@ void main() {
       find.byKey(TestKeys.createPublishResultViewWorkButton),
       findsOneWidget,
     );
-    await tester.tap(find.byKey(TestKeys.createPublishResultDoneButton));
-    await tester.pumpAndSettle();
+    await _closePublishResult(tester);
     expect(find.text('当前内容更适合作为作品发布'), findsNothing);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
@@ -333,7 +342,10 @@ void main() {
     expect(find.text('当前内容更适合作为作品发布'), findsNothing);
     expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    for (var i = 0; i < 20 && postPublication.submitCommands.isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(postPublication.submitCommands, hasLength(1));
     expect(postPublication.lastSubmitPayload?['contentType'], 'article');
@@ -388,8 +400,7 @@ void main() {
       isFalse,
     );
     expect(find.byKey(TestKeys.createPublishResultSheet), findsOneWidget);
-    await tester.tap(find.byKey(TestKeys.createPublishResultDoneButton));
-    await tester.pumpAndSettle();
+    await _closePublishResult(tester);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     expect(find.text('打开创作'), findsOneWidget);
@@ -440,17 +451,14 @@ void main() {
     expect(payload?['contentType'], 'image');
     expect(payload?.containsKey('mediaUrls'), isFalse);
     expect(payload?.containsKey('coverUrl'), isFalse);
-    expect(payload?['mediaItems'], <Map<String, Object?>>[
-      <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_a'},
-      <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_b'},
-    ]);
+    expect(payload?.containsKey('mediaItems'), isFalse);
+    expect(postPublication.submitCommands.single.mediaItems, isEmpty);
     expect(postPublication.submitCommands.single.mediaAssetIds, <String>[
       'image_asset_a',
       'image_asset_b',
     ]);
     expect(find.byKey(TestKeys.createPublishResultSheet), findsOneWidget);
-    await tester.tap(find.byKey(TestKeys.createPublishResultDoneButton));
-    await tester.pumpAndSettle();
+    await _closePublishResult(tester);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
   });
@@ -475,7 +483,16 @@ void main() {
     await tester.tap(find.byKey(TestKeys.createPublishButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    for (
+      var i = 0;
+      i < 20 &&
+          (postPublication.submitCommands.isEmpty ||
+              placements.commands.isEmpty);
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(postPublication.submitCommands, hasLength(1));
     expect(postPublication.lastSubmitPayload, isNot(contains('circleIds')));
@@ -483,8 +500,7 @@ void main() {
     expect(placements.commands.single.circleId, 'circle-west-sichuan');
     expect(placements.commands.single.postId, 'post_test_1');
     expect(find.byKey(TestKeys.createPublishResultSheet), findsOneWidget);
-    await tester.tap(find.byKey(TestKeys.createPublishResultDoneButton));
-    await tester.pumpAndSettle();
+    await _closePublishResult(tester);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
   });

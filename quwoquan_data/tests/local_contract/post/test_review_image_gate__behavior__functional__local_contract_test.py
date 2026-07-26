@@ -178,8 +178,9 @@ def test_carrier_consistency_image_tracks_pack_assets():
         ':::',
     ])
     gate = _check_carrier_consistency(
-        {
-            "carrier": "image",
+            {
+                "carrier": "image",
+                "vertical": "travel",
             "articleMarkdown": article,
             "assets": [
                 {"assetId": "a1", "sourceCollectionId": "collection-a"},
@@ -242,6 +243,7 @@ def test_image_fidelity_blocks_multi_creator_and_missing_provenance():
     gate = _check_image_fidelity(
         {
             "carrier": "image",
+            "vertical": "travel",
             "title": "九寨沟夏末倒影",
             "caption": "湖面倒影与彩林一起出现。",
             "storySpine": {"primaryEntity": "九寨沟", "sourceCollectionId": "pin-001", "beats": ["九寨沟倒影", "彩林"]},
@@ -253,6 +255,7 @@ def test_image_fidelity_blocks_multi_creator_and_missing_provenance():
                     "license": "attribution_no_watermark",
                     "authorizationProof": "https://img.example.com/1.jpg",
                     "creator": "作者甲",
+                    "rightsAuditStatus": "verified",
                     "title": "九寨沟倒影",
                 },
                 {
@@ -262,12 +265,14 @@ def test_image_fidelity_blocks_multi_creator_and_missing_provenance():
                     "license": "attribution_no_watermark",
                     "authorizationProof": "https://img.example.com/2.jpg",
                     "creator": "作者乙",
+                    "rightsAuditStatus": "verified",
                     "title": "九寨沟彩林",
                 },
                 {
                     "assetId": "a3",
                     "sourceCollectionId": "pin-001",
                     "license": "attribution_no_watermark",
+                    "rightsAuditStatus": "unverified",
                     "title": "缺少出处字段",
                 },
             ],
@@ -282,6 +287,7 @@ def test_image_fidelity_blocks_rewrite_drift_and_routes_to_compose_brief():
     gate = _check_image_fidelity(
         {
             "carrier": "image",
+            "vertical": "travel",
             "title": "城市咖啡馆夜谈",
             "caption": "深夜创业者的都市神经漫游与电车轰鸣。",
             "storySpine": {"primaryEntity": "九寨沟", "sourceCollectionId": "pin-002", "beats": ["九寨沟瀑布", "原始森林"]},
@@ -293,6 +299,7 @@ def test_image_fidelity_blocks_rewrite_drift_and_routes_to_compose_brief():
                     "license": "attribution_no_watermark",
                     "authorizationProof": "https://img.example.com/21.jpg",
                     "creator": "作者甲",
+                    "rightsAuditStatus": "verified",
                     "title": "九寨沟瀑布",
                     "caption": "原始森林与瀑布",
                 }

@@ -8,8 +8,8 @@ import 'package:quwoquan_app/app/navigation/native_back_navigation.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
+import 'package:quwoquan_app/app/recovery/recovery_surface.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_motion_timeline.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
@@ -17,10 +17,9 @@ import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource, ReferralSourceExt;
-import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
+import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/ui/discovery/pages/unified_media_viewer_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/work_browser_entry_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
@@ -56,6 +55,7 @@ import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/location_place_landing_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:quwoquan_app/ui/interest_match/pages/interest_match_page.dart';
+import 'package:quwoquan_app/ui/discovery/pages/interest_onboarding_page.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_claim_page.dart';
@@ -93,7 +93,6 @@ import 'package:quwoquan_app/ui/rtc/pages/video_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
-import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 part 'app_router_create_entry_route.dart';
 part 'app_router_contact_routes.dart';
@@ -164,10 +163,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
       return null;
     },
-    errorPageBuilder: (context, state) => appRoutePage<void>(
-      state: state,
-      child: _RouterRecoveryPage(onRetry: () => context.go(AppRoutePaths.home)),
-    ),
+    errorPageBuilder: (context, state) =>
+        appRoutePage<void>(state: state, child: const _RouterRecoveryPage()),
     routes: [
       GoRoute(
         path: AppRoutePaths.welcome,
@@ -200,6 +197,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       ..._legalDocumentRoutes(),
+      GoRoute(
+        path: AppRoutePaths.interestOnboarding,
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: const InterestOnboardingPage(),
+        ),
+      ),
       ShellRoute(
         builder: (context, state, child) {
           return AppNativeBackScope(
@@ -625,7 +629,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final entryExtra = state.extra is WorkBrowserEntryRouteExtra
               ? state.extra! as WorkBrowserEntryRouteExtra
               : null;
-
           if (extra != null &&
               (extra.dtoPosts.isNotEmpty || extra.posts.isNotEmpty)) {
             return appRoutePage<void>(
@@ -635,7 +638,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             );
           }
-
           // 直达 / 深链 / 评论跳原文：只有 :workId、无预置列表。按 id 直拉该帖
           // 组装单帖 viewer，避免丢弃 workId 回退到发现页推荐流（先前断点）。
           final workId = Uri.decodeComponent(

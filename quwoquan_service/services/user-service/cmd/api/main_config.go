@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+	configrelease "quwoquan_service/runtime/configrelease"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
-	"quwoquan_service/services/user-service/internal/infrastructure/searchindex"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/searchindex"
 )
 
 type redisSceneCfg struct {
@@ -103,33 +103,12 @@ func getenvOrDefault(key, fallback string) string {
 
 func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
 	cfg := config{}
-	if strings.TrimSpace(configRoot) != "" {
-		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
-		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
-			return config{}, fmt.Errorf("read default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, envFile); err != nil {
-			return config{}, fmt.Errorf("read env config: %w", err)
-		}
-		if configVersion != "" {
-			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
-			if err := mergeConfigFile(&cfg, versionFile); err != nil {
-				return config{}, fmt.Errorf("read version config: %w", err)
-			}
-		}
-		return cfg, nil
+	path, err := configrelease.File(configRoot, serviceName, appEnv)
+	if err != nil {
+		return config{}, err
 	}
-	if err := mergeConfigFile(&cfg, "configs/default/config.yaml"); err != nil {
-		return config{}, fmt.Errorf("read local default config: %w", err)
-	}
-	if err := mergeConfigFile(&cfg, "configs/"+appEnv+"/config.yaml"); err != nil {
-		return config{}, fmt.Errorf("read local env config: %w", err)
-	}
-	if configVersion != "" {
-		if err := mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml")); err != nil {
-			return config{}, fmt.Errorf("read local version config: %w", err)
-		}
+	if err := mergeConfigFile(&cfg, path); err != nil {
+		return config{}, fmt.Errorf("read generated runtime config: %w", err)
 	}
 	return cfg, nil
 }
@@ -151,6 +130,9 @@ func applyEnvOverrides(cfg *config) {
 	}
 	if v := os.Getenv("REDIS_ADDR"); v != "" {
 		cfg.Redis.General.Addr = v
+	}
+	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
+		cfg.Redis.General.Password = v
 	}
 	if v := os.Getenv("REDIS_REALTIME_ADDR"); v != "" {
 		cfg.Redis.Realtime.Addr = v

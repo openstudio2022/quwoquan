@@ -20,15 +20,15 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from core.article_package import compute_document_sha256, sha256_file, sha256_text
+from core.control_types import ContentGenerator
 from governance.creators.assignment import creator_from_payload
 from core.io import read_json, write_json
 from core.paths import STAGE_COMPOSE, STAGE_DRAFT, execution_root
 from content.execution.model_contract import execution_model_pair_for_execution
 
-GENERATOR_AGENT = "agent"
-GENERATOR_TEMPLATE = "template"
-GENERATOR_PENDING = "pending"
-GENERATOR_IMAGE_EVIDENCE = "image_evidence_pack"
+GENERATOR_AGENT = ContentGenerator.AGENT.value
+GENERATOR_PENDING = ContentGenerator.PENDING.value
+GENERATOR_IMAGE_EVIDENCE = ContentGenerator.IMAGE_EVIDENCE_PACK.value
 
 PLACEHOLDER_MARKER = "<!-- QWQ_AWAITING_AGENT_DRAFT -->"
 DRAFT_ARTICLE_FILE = "draft.article.md"
@@ -291,6 +291,26 @@ def read_draft_meta(execution_id: str, ref: str) -> dict[str, Any] | None:
     return read_json(path) if path.exists() else None
 
 
+def write_annotated_agent_draft(
+    execution_id: str,
+    ref: str,
+    article_markdown: str,
+    *,
+    annotated_entity_refs: Sequence[str],
+) -> None:
+    """Persist deterministic entity grounding without invalidating draft provenance."""
+
+    meta = read_draft_meta(execution_id, ref) or {}
+    if str(meta.get("generator") or "") != GENERATOR_AGENT:
+        raise ValueError(f"{ref}: entity annotation requires an authored agent draft")
+    article = draft_article_path(execution_id, ref)
+    article.write_text(article_markdown, encoding="utf-8")
+    meta["annotatedEntityRefs"] = sorted(set(annotated_entity_refs))
+    meta["draftSha256"] = compute_document_sha256(article_markdown)
+    meta["updatedAt"] = _now_iso()
+    write_json(draft_meta_path(execution_id, ref), meta)
+
+
 def repair_creative_meta(execution_id: str, ref: str) -> dict[str, Any] | None:
     """Complete missing creativePlan/selfCritique on an authored agent draft.
 
@@ -419,11 +439,19 @@ def write_agent_draft(
         from core.creative_brief import default_self_critique
 
         self_critique = default_self_critique(reader_promise)
+    from content.execution.runtime_contract import stage_execution_context
+
     write_json(
         draft_meta_path(execution_id, ref),
         {
+            "schema": "quwoquan_data.draft_meta",
+            "stage": "4.draft",
+            **stage_execution_context(execution_id),
+            "objectRef": ref,
             "ref": ref,
             "generator": GENERATOR_AGENT,
+            "status": "completed",
+            "provider": "cursor_sdk",
             "model": model,
             "sessionTrace": session_trace,
             "agentRunId": agent_run_id or existing_meta.get("agentRunId"),
@@ -441,6 +469,7 @@ def write_agent_draft(
             "writingPackSha256": facts.get("writingPackSha256"),
             "sourceBundleSha256": facts.get("sourceBundleSha256"),
             "draftSha256": facts.get("draftSha256"),
+            "selfCheck": {"status": "passed", "issues": []},
             "createdAt": created_at or now_iso,
             "updatedAt": now_iso,
         },

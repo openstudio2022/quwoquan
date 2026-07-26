@@ -1,7 +1,9 @@
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 
@@ -31,12 +33,12 @@ void main() {
     final revoked = await repository.revokeAssistantPreference(
       preferenceId: created.preferenceId,
     );
-    expect(revoked.status, AssistantPreferenceStatus.revoked.wireName);
+    expect(revoked.status, AssistantPreferenceStatus.revoked);
 
     final restored = await repository.restoreAssistantPreference(
       preferenceId: created.preferenceId,
     );
-    expect(restored.status, AssistantPreferenceStatus.active.wireName);
+    expect(restored.status, AssistantPreferenceStatus.active);
 
     expect(transport.requests, hasLength(4));
     expect(transport.requests[0].method, 'POST');
@@ -58,9 +60,32 @@ void main() {
       '/assistant/preferences/apf_preference/restore',
     );
   });
+
+  test('Remote 偏好 Facet 保留 canonical preference_not_found', () async {
+    final repository = RemoteAssistantRepository(
+      httpClient: CloudHttpClient(client: _PreferenceClient(statusCode: 404)),
+      consentActorScope: 'assistant-preference-test',
+    );
+
+    await expectLater(
+      repository.revokeAssistantPreference(preferenceId: 'apf_missing'),
+      throwsA(
+        isA<CloudException>()
+            .having((error) => error.statusCode, 'statusCode', 404)
+            .having(
+              (error) => error.code,
+              'code',
+              'ASSISTANT.USER.preference_not_found',
+            ),
+      ),
+    );
+  });
 }
 
 final class _PreferenceClient extends http.BaseClient {
+  _PreferenceClient({this.statusCode = 200});
+
+  final int statusCode;
   final List<http.BaseRequest> requests = <http.BaseRequest>[];
   final List<String> requestBodies = <String>[];
 
@@ -73,14 +98,16 @@ final class _PreferenceClient extends http.BaseClient {
       requestBodies.add('');
     }
     final revoked = request.url.path.endsWith('/revoke');
-    final payload = request.method == 'GET'
+    final payload = statusCode == 404
+        ? const <String, Object?>{'code': 'ASSISTANT.USER.preference_not_found'}
+        : request.method == 'GET'
         ? <String, Object?>{
             'items': <Object?>[_fact(status: 'active')],
           }
         : _fact(status: revoked ? 'revoked' : 'active');
     return http.StreamedResponse(
       Stream<List<int>>.value(utf8.encode(jsonEncode(payload))),
-      200,
+      statusCode,
       request: request,
       headers: const <String, String>{'content-type': 'application/json'},
     );

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 from governance.coverage.entity_extract import require_domain_etype
 from core.data_issue import DataIssue
-from core.control_types import ExecutionStateStatus
+from core.control_types import ExecutionStateStatus, TargetSelector
 from core.image_asset_strategy import COMMERCIAL_SCALE_TARGET_THRESHOLD
 from core.execution_branch import stamp_execution_branch
 from core.io import read_json, write_json
@@ -22,6 +22,11 @@ from content.execution import validate_execution_id
 from content.execution.identity import SelectionPolicy
 from content.execution.contracts import ExecutionStateTransition
 from content.execution.selection_materialization import write_selected_task
+from content.execution.source_selection import (
+    TargetSourceQualifier,
+    qualify_source_ready_targets,
+)
+from content.source.contracts import QualifiedHomepageSource
 DEFAULT_ARTICLE_ANGLES = ["planning_consultation", "decision_experience", "route_transport", "seasonal_timing"]
 
 
@@ -32,8 +37,6 @@ class SelectionRequest:
     execution_id: str
     discovery_path: Path
     limit: int
-    mandatory: tuple[str, ...]
-    excluded: frozenset[str]
     region: str
     category: str
     name: str
@@ -46,7 +49,9 @@ class SelectionRequest:
     video_works_per_target: int
     created_by: str = "execute"
     selection_policy: SelectionPolicy = SelectionPolicy.FROZEN
-    force: bool = False
+    target_selector: TargetSelector = TargetSelector.ALL
+    source_qualifier: TargetSourceQualifier | None = None
+    target_names: tuple[str, ...] = ()
 
 
 def execution_failure_items(state: ExecutionStateTransition) -> list[dict[str, Any]]:
@@ -113,7 +118,7 @@ def _load_partitions(path: Path) -> list[dict[str, Any]]:
     if path.is_dir():
         return _master_list_partitions(path)
     if path.suffix in {".yaml", ".yml"}:
-        # 市州级主清单单文件（如 coverage/中国/浙江省/舟山市.yaml）：批次可精确圈定一个市州。
+        # 市州级主清单单文件允许执行请求精确圈定一个市州。
         partitions = _master_list_file_partitions(path)
         if not partitions:
             raise ValueError(f"{path}: 主清单文件未发现任何区县分组（districts/leaves）")
@@ -139,11 +144,32 @@ def _apply_master_list_fields(row: dict[str, Any], leaf: Mapping[str, Any]) -> d
         if values:
             row[list_field] = values
     return row
-def _partition_targets(partitions: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+
+
+def _coverage_target_from_selection(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Project the one runtime qualification binding into the frozen spec."""
+
+    target = _apply_master_list_fields(
+        {"entityType": row["entityType"], "name": row["name"]},
+        row,
+    )
+    raw_source = row.get("qualifiedHomepageSource")
+    if raw_source is not None:
+        if not isinstance(raw_source, Mapping):
+            raise TypeError("qualifiedHomepageSource must be an object")
+        target["qualifiedHomepageSource"] = QualifiedHomepageSource.from_mapping(
+            raw_source
+        ).to_dict()
+    return target
+def _partition_targets(
+    partitions: Iterable[Mapping[str, Any]],
+    *,
+    target_selector: TargetSelector,
+) -> dict[str, dict[str, Any]]:
     by_name: dict[str, dict[str, Any]] = {}
     for part in partitions:
         region = str(part.get("key") or "").strip()
-        for leaf in _ordered_partition_leaves(part):
+        for leaf in _ordered_partition_leaves(part, target_selector=target_selector):
             source_name = str(leaf.get("name") or "").strip()
             name = _leaf_selection_name(leaf)
             etype = str(leaf.get("entityType") or "地点/景区").strip()
@@ -168,8 +194,19 @@ def _leaf_selection_priority(leaf: Mapping[str, Any]) -> float | None:
         return float(leaf.get("selectionPriority"))
     except (TypeError, ValueError):
         return None
-def _ordered_partition_leaves(part: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+def _ordered_partition_leaves(
+    part: Mapping[str, Any],
+    *,
+    target_selector: TargetSelector,
+) -> list[Mapping[str, Any]]:
     leaves = [leaf for leaf in (part.get("leaves") or []) if isinstance(leaf, Mapping)]
+    if target_selector is TargetSelector.ALL:
+        return leaves
+    if target_selector not in {
+        TargetSelector.PRIORITY,
+        TargetSelector.SOURCE_READY_PRIORITY,
+    }:
+        raise ValueError(f"unsupported target selector: {target_selector}")
     if not any(_leaf_selection_priority(leaf) is not None for leaf in leaves):
         return leaves
     return sorted(
@@ -186,63 +223,80 @@ def select_targets(
     *,
     discovery_path: Path,
     limit: int,
-    mandatory: list[str],
-    excluded: set[str],
+    target_selector: TargetSelector,
+    source_qualifier: TargetSourceQualifier | None = None,
+    target_names: tuple[str, ...] = (),
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    if not isinstance(target_selector, TargetSelector):
+        raise TypeError("target_selector must be TargetSelector")
     partitions = _load_partitions(discovery_path)
-    by_name = _partition_targets(partitions)
-    missing_mandatory = [name for name in mandatory if name not in by_name]
-    if missing_mandatory:
-        raise ValueError(f"mandatory targets missing from discovery: {missing_mandatory}")
-    blocked_mandatory = [name for name in mandatory if name in excluded]
-    if blocked_mandatory:
-        raise ValueError(
-            "mandatory targets are marked ineligible and cannot be auto-replaced: "
-            + ", ".join(blocked_mandatory)
-        )
+    by_name = _partition_targets(partitions, target_selector=target_selector)
     selected: list[dict[str, str]] = []
     seen: set[str] = set()
+
+    if target_selector is TargetSelector.SOURCE_READY_PRIORITY and source_qualifier is None:
+        raise ValueError("source-ready-priority requires source_qualifier")
+    if target_names and target_selector is not TargetSelector.SOURCE_READY_PRIORITY:
+        raise ValueError("explicit targets require source-ready-priority")
+
     def add(name: str) -> None:
-        if name in seen or name in excluded or len(selected) >= limit:
+        if name in seen or len(selected) >= limit:
             return
         row = by_name.get(name)
         if not row:
             return
         selected.append(row)
         seen.add(name)
-    for name in mandatory:
-        add(name)
+
+    candidate_rows: list[dict[str, Any]] = []
+    candidate_names: set[str] = set()
     depth = 0
-    while len(selected) < limit:
+    while True:
         scanned_any = False
         for part in partitions:
-            leaves = _ordered_partition_leaves(part)
+            leaves = _ordered_partition_leaves(part, target_selector=target_selector)
             if depth >= len(leaves):
                 continue
             scanned_any = True
             name = _leaf_selection_name(leaves[depth])
-            add(name)
-            if len(selected) >= limit:
-                break
+            row = by_name.get(name)
+            if row is not None and name not in candidate_names:
+                candidate_rows.append(row)
+                candidate_names.add(name)
         if not scanned_any:
             break
         depth += 1
-    if len(selected) != limit:
-        raise ValueError(
-            f"selected {len(selected)} targets, expected {limit}; "
-            f"excluded={len(excluded)} may leave too few candidates"
+
+    if target_selector is TargetSelector.SOURCE_READY_PRIORITY:
+        assert source_qualifier is not None
+        selected, source_qualification, requested_target_names = qualify_source_ready_targets(
+            candidate_rows,
+            discovery_ref=str(discovery_path),
+            limit=limit,
+            source_qualifier=source_qualifier,
+            target_names=target_names,
         )
+    else:
+        for row in candidate_rows:
+            add(str(row["name"]))
+            if len(selected) >= limit:
+                break
+    if len(selected) != limit:
+        raise ValueError(f"selected {len(selected)} targets, expected {limit}")
     report = {
         "schema": "quwoquan_data.target_selection",
-        "strategy": "mandatory targets plus deterministic round-robin regional coverage",
+        "strategy": "deterministic round-robin regional coverage",
+        "targetSelector": target_selector.value,
         "discoveryPath": str(discovery_path),
         "limit": limit,
         "selectedCount": len(selected),
         "selectionShortfall": max(0, limit - len(selected)),
-        "mandatory": mandatory,
-        "excluded": sorted(excluded),
         "targets": selected,
     }
+    if target_selector is TargetSelector.SOURCE_READY_PRIORITY:
+        report["sourceQualification"] = source_qualification
+        if requested_target_names:
+            report["requestedTargetNames"] = list(requested_target_names)
     return selected, report
 def _validated_quota(value: int, *, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -257,7 +311,7 @@ def build_execution_spec(
     title: str,
     region: str,
     category: str,
-    targets: list[dict[str, str]],
+    targets: list[dict[str, Any]],
     created_by: str,
     entity_articles_per_target: int,
     entity_homepages_per_target: int,
@@ -355,12 +409,7 @@ def build_execution_spec(
             "entityTypes": selected_entity_types,
             # 主清单契约字段（geoTagRef/geoTagRefs/typeTagRefs/aliases）随目标透传，
             # 物化链路（build/homepage.py）据此写 _entity.json 并统一打标（WP3）。
-            "coverageTargets": [
-                _apply_master_list_fields(
-                    {"entityType": row["entityType"], "name": row["name"]}, row
-                )
-                for row in targets
-            ],
+            "coverageTargets": [_coverage_target_from_selection(row) for row in targets],
         },
         content={
             "modalityContract": "separated_research",
@@ -443,15 +492,16 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         raise TypeError("SelectionRequest.selection_policy must be SelectionPolicy")
     if request.selection_policy is not SelectionPolicy.FROZEN:
         raise ValueError("content executions require frozen target selection")
+    if not isinstance(request.target_selector, TargetSelector):
+        raise TypeError("SelectionRequest.target_selector must be TargetSelector")
     discovery = request.discovery_path
-    excluded = set(request.excluded)
-    mandatory = list(request.mandatory)
     requested_limit = max(1, int(request.limit))
     targets, report = select_targets(
         discovery_path=discovery,
         limit=requested_limit,
-        mandatory=mandatory,
-        excluded=excluded,
+        target_selector=request.target_selector,
+        source_qualifier=request.source_qualifier,
+        target_names=request.target_names,
     )
     spec = build_execution_spec(
         execution_id=execution_id,
@@ -481,5 +531,5 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         ("\n".join(target_refs) + "\n").encode("utf-8")
     ).hexdigest()
     report["quotas"] = (spec.get("content") or {}).get("quotas") or {}
-    write_selected_task(spec, report, force=request.force)
+    write_selected_task(spec, report)
     return spec, report

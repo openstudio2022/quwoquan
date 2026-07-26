@@ -23,7 +23,7 @@ import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
+import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 part 'profile_stats_page_widgets.dart';
@@ -473,7 +473,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         'append_succeeded',
         targetType: 'tab',
         targetKey: tab.routeValue,
-        payload: <String, dynamic>{
+        payload: <String, Object?>{
           'tab': tab.routeValue,
           'surfaceId': 'profile_stats',
           'itemCountAfter': merged.length,
@@ -503,7 +503,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         'append_failed',
         targetType: 'tab',
         targetKey: tab.routeValue,
-        payload: <String, dynamic>{
+        payload: <String, Object?>{
           'tab': tab.routeValue,
           'surfaceId': 'profile_stats',
           'error': runtimeErrorSemantic(
@@ -606,7 +606,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         'tab_switch',
         targetType: 'tab',
         targetKey: nextTab.routeValue,
-        payload: <String, dynamic>{
+        payload: <String, Object?>{
           'tab': nextTab.routeValue,
           'surfaceId': 'profile_stats',
         },
@@ -624,7 +624,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       'exposure',
       targetType: 'profile_stats',
       targetKey: _userId,
-      payload: <String, dynamic>{
+      payload: <String, Object?>{
         'tab': _activeTab.routeValue,
         'surfaceId': 'profile_stats',
         'isOwner': bundle.viewerContext.isOwner,
@@ -642,7 +642,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       'privacy_intercept_exposure',
       targetType: 'profile_stats',
       targetKey: _userId,
-      payload: <String, dynamic>{
+      payload: <String, Object?>{
         'tab': _activeTab.routeValue,
         'surfaceId': 'profile_stats',
         'relationToTarget': bundle.viewerContext.relationToTarget,
@@ -663,7 +663,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         'search_clear',
         targetType: 'tab',
         targetKey: tab.routeValue,
-        payload: <String, dynamic>{
+        payload: <String, Object?>{
           'tab': tab.routeValue,
           'surfaceId': 'profile_stats',
         },
@@ -675,7 +675,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         'search_submit',
         targetType: 'tab',
         targetKey: tab.routeValue,
-        payload: <String, dynamic>{
+        payload: <String, Object?>{
           'tab': tab.routeValue,
           'surfaceId': 'profile_stats',
           'queryLength': query.length,
@@ -690,7 +690,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     String targetKey = '',
     String entityType = 'user_profile',
     String entityId = '',
-    Map<String, dynamic> payload = const <String, dynamic>{},
+    Map<String, Object?> payload = const <String, Object?>{},
   }) {
     unawaited(
       _journeyTracker.trackAction(
@@ -779,7 +779,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       'follow_click',
       targetType: 'profile',
       targetKey: row.subAccountId,
-      payload: <String, dynamic>{
+      payload: <String, Object?>{
         'tab': _activeTab.routeValue,
         'surfaceId': 'profile_stats',
         'relationState': capability.relationState,
@@ -841,7 +841,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         'unfollow_confirm',
         targetType: 'profile',
         targetKey: row.subAccountId,
-        payload: <String, dynamic>{
+        payload: <String, Object?>{
           'tab': _activeTab.routeValue,
           'surfaceId': 'profile_stats',
         },
@@ -892,7 +892,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         'message_open',
         targetType: 'profile',
         targetKey: row.subAccountId,
-        payload: <String, dynamic>{
+        payload: <String, Object?>{
           'tab': _activeTab.routeValue,
           'surfaceId': 'profile_stats',
         },
@@ -917,7 +917,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       'row_click',
       targetType: 'profile',
       targetKey: row.subAccountId,
-      payload: <String, dynamic>{
+      payload: <String, Object?>{
         'tab': _activeTab.routeValue,
         'surfaceId': 'profile_stats',
       },
@@ -939,7 +939,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       targetKey: circle.id,
       entityType: 'circle',
       entityId: circle.id,
-      payload: <String, dynamic>{
+      payload: <String, Object?>{
         'tab': _activeTab.routeValue,
         'surfaceId': 'profile_stats',
       },

@@ -293,7 +293,7 @@ void main() {
 
 Map<String, dynamic> _loadIntersectionCoreSeed() {
   const relative =
-      'quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json';
+      'quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json';
   final candidates = <String>[
     '../$relative',
     relative,

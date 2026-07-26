@@ -9,7 +9,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
@@ -73,7 +73,7 @@ void main() {
       // 池真相源：home_feed_core.featuredFeedPostIds（与云侧 rm_premium_pool
       // 物化集合、alpha runner adapter 同判定）；数据工程直供兜底。
       final rawPool =
-          ContractFixtureRuntimeLoader.contentSeedSet(
+          alphaFixtureSeedReader.contentSeedSet(
                 'home_feed_core',
               )?['featuredFeedPostIds']
               as List?;
@@ -104,11 +104,7 @@ void main() {
         final matches =
             vertical == 'travel_photography' ||
             (vertical.isEmpty && keywords.any(haystack.contains));
-        expect(
-          matches,
-          isTrue,
-          reason: 'travel 频道不得混入非旅行内容：${item.id}',
-        );
+        expect(matches, isTrue, reason: 'travel 频道不得混入非旅行内容：${item.id}');
       }
     });
   });

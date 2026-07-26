@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Iterable, Mapping
+from urllib.parse import quote
 
 from core.control_types import (
     ContentType,
@@ -20,6 +21,10 @@ from content.execution.workspace import (
     ensure_execution_work_package_layout,
     write_frozen_target_set,
 )
+from content.source.contracts import (
+    HomepageAuthorityProvider,
+    QualifiedHomepageSource,
+)
 
 
 _RECIPE_BY_CONTENT_TYPE = {
@@ -28,7 +33,7 @@ _RECIPE_BY_CONTENT_TYPE = {
     ContentType.IMAGE: "content/travel/image/image",
     ContentType.VIDEO: "content/travel/video/video",
 }
-_DEFAULT_TARGET = {"name": "测试实体", "entityType": "地点/景区"}
+_DEFAULT_TARGET = {"name": "测试实体甲", "entityType": "地点/景区"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,10 +46,30 @@ class ExecutionFixtureBuilder:
     )
     retry_of: str | None = None
 
+    def _normalized_targets(self) -> list[dict[str, object]]:
+        identity = parse_execution_id(self.execution_id)
+        targets = [dict(item) for item in self.targets]
+        if identity.content_type is not ContentType.HOMEPAGE:
+            return targets
+        for target in targets:
+            raw_source = target.get("qualifiedHomepageSource")
+            if isinstance(raw_source, Mapping):
+                target["qualifiedHomepageSource"] = QualifiedHomepageSource.from_mapping(
+                    raw_source
+                ).to_dict()
+                continue
+            name = str(target.get("name") or "").strip()
+            target["qualifiedHomepageSource"] = QualifiedHomepageSource(
+                provider=HomepageAuthorityProvider.WIKIPEDIA,
+                title=name,
+                url=f"https://zh.wikipedia.org/wiki/{quote(name)}",
+            ).to_dict()
+        return targets
+
     def build(self) -> dict[str, object]:
         identity = parse_execution_id(self.execution_id)
         recipe_ref = _RECIPE_BY_CONTENT_TYPE[identity.content_type]
-        normalized = [dict(item) for item in self.targets]
+        normalized = self._normalized_targets()
         ensure_execution_work_package_layout(identity.execution_id)
         _path, digest = write_frozen_target_set(
             identity.execution_id,
@@ -55,10 +80,18 @@ class ExecutionFixtureBuilder:
         return create_execution_manifest(
             execution_id=identity.execution_id,
             recipe_ref=recipe_ref,
-            resolved_params={},
+            request={
+                "familyRef": recipe_ref,
+                "regionRef": identity.scope,
+                "selector": "all",
+                "count": len(normalized),
+                "topic": None,
+                "sourceProviders": [],
+                "homepageExecutionId": None,
+            },
             selection_policy=SelectionPolicy.FROZEN,
             target_set_ref=TARGET_SET_REF,
-            target_set_sha256=digest,
+            target_set_digest=digest,
             retry_of=self.retry_of,
         )
 
@@ -79,7 +112,7 @@ class ExecutionFixtureBuilder:
             ContentType.VIDEO: "videoWorksPerTarget",
         }[identity.content_type]
         quotas[quota_key] = 1
-        targets = [dict(item) for item in self.targets]
+        targets = self._normalized_targets()
         entity_types = tuple(
             dict.fromkeys(str(item["entityType"]) for item in targets)
         )

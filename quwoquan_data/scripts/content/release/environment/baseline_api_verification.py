@@ -95,18 +95,25 @@ def write_baseline_api_verification(
             query={"status": "published", "limit": "1"},
         )
         items = search.payload.get("items")
-        if search.status != HTTPStatus.OK or not isinstance(items, list) or not items:
-            raise BaselineApiVerificationError("baseline did not preserve a published non-data homepage witness")
-        witness = items[0]
-        if not isinstance(witness, Mapping):
-            raise BaselineApiVerificationError("preserved homepage witness is not an object")
-        witness_id = str(witness.get("homepageId") or "").strip()
-        witness_title = str(witness.get("title") or "").strip()
-        if not witness_id or not witness_title or witness_id in offlined_ids:
-            raise BaselineApiVerificationError("preserved homepage witness identity is invalid")
-        detail = client.get_json(f"homepages/{quote(witness_id, safe='')}")
-        if detail.status != HTTPStatus.OK or str(detail.payload.get("homepageId") or "").strip() != witness_id:
-            raise BaselineApiVerificationError("preserved homepage witness is not readable through detail API")
+        if search.status != HTTPStatus.OK or not isinstance(items, list):
+            raise BaselineApiVerificationError("baseline homepage search did not return a valid collection")
+        preserved: dict[str, Any] | None = None
+        if items:
+            witness = items[0]
+            if not isinstance(witness, Mapping):
+                raise BaselineApiVerificationError("preserved homepage witness is not an object")
+            witness_id = str(witness.get("homepageId") or "").strip()
+            witness_title = str(witness.get("title") or "").strip()
+            if not witness_id or not witness_title or witness_id in offlined_ids:
+                raise BaselineApiVerificationError("preserved homepage witness identity is invalid")
+            detail = client.get_json(f"homepages/{quote(witness_id, safe='')}")
+            if detail.status != HTTPStatus.OK or str(detail.payload.get("homepageId") or "").strip() != witness_id:
+                raise BaselineApiVerificationError("preserved homepage witness is not readable through detail API")
+            preserved = {
+                "homepageId": witness_id,
+                "title": witness_title,
+                "status": detail.status,
+            }
     except PublicApiClientError as exc:
         raise BaselineApiVerificationError(str(exc)) from exc
     payload = {
@@ -119,11 +126,7 @@ def write_baseline_api_verification(
         "verifiedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "passed": True,
         "offlined": [item.as_payload() for item in offlined],
-        "preserved": {
-            "homepageId": witness_id,
-            "title": witness_title,
-            "status": detail.status,
-        },
+        "preserved": preserved,
         "issues": [],
     }
     if resolve_host.strip():

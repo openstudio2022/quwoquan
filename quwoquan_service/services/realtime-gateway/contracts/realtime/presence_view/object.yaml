@@ -1,0 +1,41 @@
+kind: projection
+description: PresenceView 的领域对象契约。
+identity:
+  fields:
+  - personaId
+  - deviceId
+  version_source: checkpoint
+access:
+  commands: none
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- name: account
+  target_object: user.UserAccount
+  reference_fields:
+  - accountId
+  kind: reference
+  cardinality: N:1
+  consistency: runtime
+  access: named_reader
+  on_delete: detach
+- name: persona
+  target_object: user.Persona
+  reference_fields:
+  - personaId
+  kind: reference
+  cardinality: N:1
+  consistency: runtime
+  access: named_reader
+  on_delete: detach
+- name: connectionSession
+  target_object: realtime.Connection
+  reference_fields:
+  - connId
+  kind: projection_source
+  cardinality: N:1
+  consistency: runtime
+  access: event
+  on_delete: detach
+local_identity_reasons:
+  nodeId: ephemeral realtime topology node key with no authoritative business-object lifecycle

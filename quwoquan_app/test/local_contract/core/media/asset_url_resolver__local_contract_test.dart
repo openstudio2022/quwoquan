@@ -3,7 +3,7 @@ import 'package:quwoquan_app/core/media/asset_url_resolver.dart';
 
 void main() {
   group('AssetUrlResolver', () {
-    test('resolves canonical public slice objectKey through CDN base', () {
+    test('resolves canonical publicSliceKey through CDN base', () {
       const resolver = AssetUrlResolver(
         imageCdnBaseUrl: 'https://img.example.com',
         gatewayBaseUrl: 'https://api.example.com',
@@ -13,7 +13,7 @@ void main() {
         'assets': <Object?>[
           <String, Object?>{
             'assetId': 'cover',
-            'objectKey': 'media/image/s/article/post-1/v1/cover.jpg',
+            'publicSliceKey': 'media/image/s/article/post-1/v1/cover.jpg',
           },
         ],
       });
@@ -24,7 +24,7 @@ void main() {
       );
     });
 
-    test('prefers cdnUrl over objectKey when both are present', () {
+    test('prefers cdnUrl over publicSliceKey when both are present', () {
       const resolver = AssetUrlResolver(
         imageCdnBaseUrl: 'https://cdn.example.com',
       );
@@ -35,7 +35,8 @@ void main() {
             'assetId': 'detail',
             'cdnUrl':
                 'https://cdn.example.com/media/image/s/article/post-1/v1/detail.png',
-            'objectKey': 'media/image/s/article/post-1/v1/detail-fallback.png',
+            'publicSliceKey':
+                'media/image/s/article/post-1/v1/detail-fallback.png',
           },
         ],
       });
@@ -66,7 +67,8 @@ void main() {
                 'profile': 'thumbnail',
                 'cdnUrl':
                     'https://cdn.example.com/media/image/s/article/post-1/v1/cover-thumb.webp',
-                'objectKey': 'media/image/s/article/post-1/v1/cover-thumb.webp',
+                'publicSliceKey':
+                    'media/image/s/article/post-1/v1/cover-thumb.webp',
                 'sourceSha256':
                     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'width': 320,
@@ -75,7 +77,7 @@ void main() {
                 'profile': 'display',
                 'cdnUrl':
                     'https://cdn.example.com/media/image/s/article/post-1/v1/cover-display.webp',
-                'objectKey':
+                'publicSliceKey':
                     'media/image/s/article/post-1/v1/cover-display.webp',
                 'sourceSha256':
                     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -85,15 +87,14 @@ void main() {
                 'profile': 'full',
                 'cdnUrl':
                     'https://cdn.example.com/media/image/s/article/post-1/v1/cover-full.webp',
-                'objectKey': 'media/image/s/article/post-1/v1/cover-full.webp',
+                'publicSliceKey':
+                    'media/image/s/article/post-1/v1/cover-full.webp',
                 'sourceSha256':
                     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'width': 2048,
               },
               'original': <String, Object?>{
                 'profile': 'original',
-                'objectKey':
-                    'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
                 'sourceSha256':
                     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'requiresAccess': true,

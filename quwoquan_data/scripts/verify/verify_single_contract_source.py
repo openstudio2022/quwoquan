@@ -29,12 +29,11 @@ FORBIDDEN_PATTERNS = [
     re.compile(r"object_job_v\d+", re.IGNORECASE),
     re.compile(r"AgentResultEnvelopeV\d+"),
     re.compile(r"GateVerdictV\d+"),
-    re.compile(r"TokenLedgerV\d+"),
     re.compile(r"ObjectJobV\d+"),
     re.compile(r"separated_v\d+", re.IGNORECASE),
     re.compile(
         r"quwoquan\.(?:content_supply\.task|content_supply\.prep_report|content_supply\.delta_plan|"
-        r"object_job|agent_result_envelope|gate_verdict|token_ledger|download_repair)/\d+"
+        r"object_job|agent_result_envelope|gate_verdict|download_repair)/\d+"
     ),
     re.compile(r"quwoquan_data\.batch_manifest/\d+"),
     re.compile(r"quwoquan\.batch\.manifest/\d+"),

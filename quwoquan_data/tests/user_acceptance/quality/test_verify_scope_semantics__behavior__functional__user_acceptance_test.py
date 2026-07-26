@@ -30,7 +30,7 @@ from core.io import write_json  # noqa: E402
 from core.paths import RELEASE_ROOT, execution_root, ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
 from verify import post_verify  # noqa: E402
 
-EXECUTION_ID = "20260711--travel-homepage-scope-semantics--cn-sichuan--canary-001"
+EXECUTION_ID = "20260711--travel-homepage-scope-semantics--test-region-b--pilot-001"
 
 
 def _seed_runtime_execution_with_defect() -> Path:

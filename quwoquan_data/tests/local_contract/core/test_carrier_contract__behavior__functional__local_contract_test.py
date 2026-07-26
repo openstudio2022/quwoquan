@@ -44,7 +44,7 @@ def test_common_layer_stages_cover_end_to_end():
 
 
 def test_carrier_final_artifacts_match_layout_spec():
-    """载体成品产物与 geo-content-trinity/execution 口径一致。"""
+    """载体成品产物与 object-homepage-coverage-scaling 口径一致。"""
     assert CARRIER_LANES["homepage"].final_artifacts == ("page.md", "_entity.json", "manifest.json")
     assert "draft.article.md" in CARRIER_LANES["article"].draft_artifacts
     assert "writing_pack" in CARRIER_LANES["article"].draft_artifacts

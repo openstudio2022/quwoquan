@@ -1,9 +1,9 @@
 // ignore_for_file: prefer_single_quotes
 import 'dart:convert';
 
-import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'home_showcase_core_fixture.g.dart';
 
 /// 内容域 mock 数据（canonical 字段，与 FeedItemDto schema 严格对齐）。
@@ -58,9 +58,7 @@ class ContentMockData {
   /// （content_scenarios[.lite|.gamma-curated].json），四环境同源 archived 媒体。
   /// MockRepository 与发现区 wire 查找均消费本 getter，端侧不再维护第二套样本列表。
   static List<FeedItemDto> get seededShowcaseFeedItems {
-    final seed = ContractFixtureRuntimeLoader.contentSeedSet(
-      'home_showcase_core',
-    );
+    final seed = alphaFixtureSeedReader.contentSeedSet('home_showcase_core');
     final hostSeed = _feedItemsFromSeed(seed);
     if (hostSeed.isNotEmpty) {
       return hostSeed;
@@ -566,12 +564,9 @@ class ContentMockData {
             'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
         'authorBackgroundUrl':
             'media/video/s/media-canary-seek-125s/v1/cover.webp',
-        'coverUrl':
-            'media/video/s/media-canary-seek-125s/v1/cover.webp',
-        'thumbnailUrl':
-            'media/video/s/media-canary-seek-125s/v1/cover.webp',
-        'videoUrl':
-            'media/video/s/media-canary-seek-125s/v1/source.mp4',
+        'coverUrl': 'media/video/s/media-canary-seek-125s/v1/cover.webp',
+        'thumbnailUrl': 'media/video/s/media-canary-seek-125s/v1/cover.webp',
+        'videoUrl': 'media/video/s/media-canary-seek-125s/v1/source.mp4',
         'body': '东京凌晨两点的街道，有一种难以言喻的孤独美。#治愈系 #东京之夜 #氛围感',
         'width': 540,
         'height': 960,

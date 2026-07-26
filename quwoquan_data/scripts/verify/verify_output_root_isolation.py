@@ -23,6 +23,7 @@ _TRACKED_FORBIDDEN = (
     "artifacts",
 )
 _RETIRED_ROOTS = (
+    "quwoquan_data/.qwq_output",
     "quwoquan_data/runtime",
     "quwoquan_data/release",
     "quwoquan_data/control_plane/tasks",

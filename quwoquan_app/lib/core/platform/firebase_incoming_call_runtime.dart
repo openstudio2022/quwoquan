@@ -92,6 +92,15 @@ final _firebaseProcessDedupe = BoundedIncomingCallDedupe(
   capacity: _firebaseDeliveryDedupeLimit,
 );
 
+Future<void> clearFirebaseIncomingCallStateForTerminalAccountClosure() async {
+  _firebaseProcessDedupe.clear();
+  final preferences = await SharedPreferences.getInstance();
+  await preferences.remove(_firebaseDeliveryDedupeKey);
+  if (preferences.containsKey(_firebaseDeliveryDedupeKey)) {
+    throw StateError('firebase incoming call cleanup verification failed');
+  }
+}
+
 Future<bool> _claimFirebaseDelivery(IncomingCallEnvelope envelope) async {
   try {
     final preferences = await SharedPreferences.getInstance();

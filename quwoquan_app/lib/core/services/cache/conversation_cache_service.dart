@@ -186,9 +186,27 @@ class ConversationCacheService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 不可逆账号终态专用：清空本进程内所有账号与 Persona 命名空间。
+  void clearAllNamespaces() {
+    final hadEntries = _buckets.values.any(
+      (bucket) => bucket.memory.isNotEmpty || bucket.disk.isNotEmpty,
+    );
+    _buckets.clear();
+    _activeNamespaceKey = _defaultNamespaceKey;
+    _bucketFor(_defaultNamespaceKey);
+    if (hadEntries) {
+      notifyListeners();
+    }
+  }
+
   int get activeDiskCount => _activeBucket.disk.length;
 
   int get activeMemoryCount => _activeBucket.memory.length;
+
+  int get totalEntryCount => _buckets.values.fold<int>(
+    0,
+    (count, bucket) => count + bucket.memory.length + bucket.disk.length,
+  );
 
   _NamespaceBucket get _activeBucket => _bucketFor(_activeNamespaceKey);
 

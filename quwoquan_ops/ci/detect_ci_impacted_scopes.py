@@ -35,6 +35,8 @@ TOPOLOGY_PREFIXES = (
     "quwoquan_ops/environments/",
 )
 METADATA_PREFIX = "quwoquan_service/contracts/metadata/"
+SERVICE_CONTRACT_PREFIX = "quwoquan_service/services/"
+SERVICE_CONTRACT_SEGMENT = "/contracts/"
 ROOT_LEVEL_ALL_SCOPE_FILES = {
     "Makefile",
 }
@@ -51,7 +53,7 @@ DOC_ONLY_SUFFIXES = {
     ".gif",
     ".svg",
 }
-ACCEPTANCE_SCOPE_RULES: tuple[tuple[str, dict[str, bool]], ...] = (
+FEATURE_SPEC_SCOPE_RULES: tuple[tuple[str, dict[str, bool]], ...] = (
     (
         "specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/",
         {"service": False, "app": True, "portal": False, "topology": False},
@@ -106,16 +108,16 @@ def git_changed_files(base_sha: str, head_sha: str) -> list[str]:
 
 def is_doc_only(path: str) -> bool:
     pure = Path(path)
-    if path.startswith("specs/feature-tree/") and pure.name == "acceptance.yaml":
+    if path.startswith("specs/feature-tree/") and pure.name in {"spec.md", "design.md"}:
         return False
     return pure.suffix.lower() in DOC_ONLY_SUFFIXES and path.startswith(DOC_ONLY_PREFIXES)
 
 
-def classify_acceptance_path(path: str) -> dict[str, bool] | None:
+def classify_feature_spec_path(path: str) -> dict[str, bool] | None:
     pure = Path(path)
-    if pure.name != "acceptance.yaml":
+    if not path.startswith("specs/feature-tree/") or pure.name not in {"spec.md", "design.md"}:
         return None
-    for prefix, scope_flags in ACCEPTANCE_SCOPE_RULES:
+    for prefix, scope_flags in FEATURE_SPEC_SCOPE_RULES:
         if path.startswith(prefix):
             return scope_flags
     return {"service": True, "app": True, "portal": True, "topology": False}
@@ -137,9 +139,9 @@ def classify(paths: list[str]) -> dict[str, bool]:
             if path.startswith(DATA_DOCUMENT_PREFIXES):
                 impacted["data"] = True
             continue
-        acceptance_scope = classify_acceptance_path(path)
-        if acceptance_scope is not None:
-            for key, value in acceptance_scope.items():
+        feature_scope = classify_feature_spec_path(path)
+        if feature_scope is not None:
+            for key, value in feature_scope.items():
                 impacted[key] = impacted[key] or value
             if path.startswith("specs/feature-tree/discovery-content/"):
                 impacted["data"] = True
@@ -158,6 +160,11 @@ def classify(paths: list[str]) -> dict[str, bool]:
             impacted["topology"] = True
             continue
         if path.startswith(METADATA_PREFIX):
+            impacted["service"] = True
+            impacted["app"] = True
+            impacted["portal"] = True
+            continue
+        if path.startswith(SERVICE_CONTRACT_PREFIX) and SERVICE_CONTRACT_SEGMENT in path:
             impacted["service"] = True
             impacted["app"] = True
             impacted["portal"] = True

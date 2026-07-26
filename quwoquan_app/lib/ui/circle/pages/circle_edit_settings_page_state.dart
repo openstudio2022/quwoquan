@@ -150,11 +150,7 @@ class _CircleEditSettingsPageState
       autoSyncChat: true,
       sectionConfig: const [
         CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
-        CircleSectionConfigDto(
-          sectionType: 'members',
-          visible: true,
-          order: 1,
-        ),
+        CircleSectionConfigDto(sectionType: 'members', visible: true, order: 1),
         CircleSectionConfigDto(sectionType: 'chat', visible: true, order: 2),
         CircleSectionConfigDto(sectionType: 'storage', visible: true, order: 3),
       ],
@@ -337,9 +333,7 @@ class _CircleEditSettingsPageState
         if (success) {
           await ref
               .read(circleDetailCircleConfigurationCommandWriterProvider)
-              .updateCircleSections(
-                payload.toSectionsCommand(createdCircleId),
-              );
+              .updateCircleSections(payload.toSectionsCommand(createdCircleId));
           ref.read(circleDirectoryRefreshProvider.notifier).bump();
         }
       } catch (error) {
@@ -974,28 +968,6 @@ class _CircleEditSettingsPageState
         fontSize: AppTypography.sm,
         fontWeight: AppTypography.semiBold,
         color: color,
-      ),
-    );
-  }
-
-  Widget _buildSegmentedControl<T extends Object>({
-    required T groupValue,
-    required Map<T, Widget> children,
-    required ValueChanged<T?> onValueChanged,
-    required Color cardBg,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.xs),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-      ),
-      child: CupertinoSlidingSegmentedControl<T>(
-        groupValue: groupValue,
-        backgroundColor: cardBg,
-        thumbColor: AppColors.primaryColor.withValues(alpha: 0.12),
-        children: children,
-        onValueChanged: onValueChanged,
       ),
     );
   }

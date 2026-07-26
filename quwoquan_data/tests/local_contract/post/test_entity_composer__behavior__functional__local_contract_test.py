@@ -32,6 +32,7 @@ import cv2  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.io import read_json, write_json  # noqa: E402
+from core.article_package import compute_document_sha256  # noqa: E402
 from core.control_types import ContentType, PostStage  # noqa: E402
 from core.data_issue import (  # noqa: E402
     DataIssueCode,
@@ -49,7 +50,12 @@ from core.paths import (  # noqa: E402
 from content.post.article.evidence_bundle import public_byline_label  # noqa: E402
 from content.post.object_index import read_brief_object, write_brief_object  # noqa: E402
 from content.post.article.base_draft import save_base_draft_ledger  # noqa: E402
-from content.post.article.draft_io import read_writing_pack, write_agent_draft  # noqa: E402
+from content.post.article.draft_io import (  # noqa: E402
+    read_draft_article,
+    read_draft_meta,
+    read_writing_pack,
+    write_agent_draft,
+)
 from verify.post_verify import verify_scope  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from content.execution.stage_reports import stage_result_path, write_repair_report  # noqa: E402
@@ -106,7 +112,7 @@ def _compose_entity_agent_draft(execution_id: str, ref: str, brief: dict):
     )
     return quality, pack
 
-EXECUTION_ID = "20260711--travel-article-composer--cn-sichuan--canary-001"
+EXECUTION_ID = "20260711--travel-article-composer--test-region-b--pilot-001"
 REF = "三星堆博物馆_体验"
 ENTITY = "三星堆博物馆"
 
@@ -139,6 +145,7 @@ SOURCE_TEXT = (
     "entity: 三星堆博物馆\n"
     "retained: true\n"
     "---\n\n"
+    + "景区官方电话：010-12345678。\n\n"
     + "\n\n".join(_BASE_PARAS)
     + "\n"
 )
@@ -276,7 +283,8 @@ def test_entity_placeholder_blocks_then_agent_draft_green():
     brief["baseSourceRef"] = base_ref
     # prepare：写作契约 + 占位草稿；占位阶段出处门必须拦截。
     quality = analyze_route_ref(EXECUTION_ID, REF, brief)
-    build_entity_writing_pack(EXECUTION_ID, REF, brief, quality)
+    pack = build_entity_writing_pack(EXECUTION_ID, REF, brief, quality)
+    assert pack["allowedContactNumbers"] == ["01012345678"]
     assert read_writing_pack(EXECUTION_ID, REF) is not None
     placeholder = review_entity_draft(EXECUTION_ID, REF, brief, quality)
     assert placeholder["decision"] == "revision_needed"
@@ -292,6 +300,31 @@ def test_entity_placeholder_blocks_then_agent_draft_green():
     assert review["checks"]["generatorProvenance"]["passed"]
     assert review["checks"]["factTraceability"]["passed"], review["checks"]["factTraceability"]["issues"]
     assert review["generator"] == "agent"
+
+
+def test_entity_annotation_refreshes_draft_provenance():
+    base_ref = _seed_sources()
+    brief = _entity_brief()
+    brief["baseSourceRef"] = base_ref
+    write_brief_object(EXECUTION_ID, REF, brief, content_type="article")
+    _compose_entity_agent_draft(EXECUTION_ID, REF, brief)
+
+    handle_post(
+        PostStageRequest(
+            execution_id=EXECUTION_ID,
+            content_type=ContentType.ARTICLE,
+            stage=PostStage.ANNOTATE_ENTITIES,
+            refs=(REF,),
+        )
+    )
+
+    article = read_draft_article(EXECUTION_ID, REF)
+    meta = read_draft_meta(EXECUTION_ID, REF)
+    assert article is not None
+    assert meta is not None
+    assert f"[{ENTITY}](/entity/地点/博物馆/{ENTITY})" in article
+    assert meta["annotatedEntityRefs"] == [f"/entity/地点/博物馆/{ENTITY}"]
+    assert meta["draftSha256"] == compute_document_sha256(article)
 
 
 def test_entity_review_approval_clears_stale_repair_report():
@@ -338,6 +371,7 @@ def test_entity_e2e_materialize_verify_green():
 
     mani = _json.loads((Path(str(posts[0])) / "manifest.json").read_text(encoding="utf-8"))
     assert mani["entityRefs"] == [f"/entity/地点/博物馆/{ENTITY}"], mani["entityRefs"]
+    assert mani["allowedContactNumbers"] == ["01012345678"]
     assert _parse_entity_ref(mani["entityRefs"][0]) == ("地点", "博物馆", ENTITY)
     published_mentions = [
         m for m in mani.get("semanticMentions", [])

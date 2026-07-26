@@ -1,0 +1,154 @@
+description: 凭证绑定（phone/carrier_phone/federated_slot_a/federated_slot_b/federated_slot_c/apple/passkey
+  并行，每种类型各最多 1 个绑定到同一 OwnerAccount；不同类型可同时绑定）
+fields:
+- name: id
+  source: id
+  type: string
+  constraints:
+  - PK
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: ownerId
+  source: ownerId
+  type: string
+  constraints:
+  - FK_user_profiles_CASCADE
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: 归属的主控账号 ID
+  role: authoritative_state
+  reference: true
+- name: credentialType
+  source: credentialType
+  type: enum
+  enum_ref: CredentialType
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 凭证类型：phone / carrier_phone / federated_slot_a / federated_slot_b / federated_slot_c / apple
+    / passkey
+  role: authoritative_state
+- name: credentialKey
+  source: credentialKey
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: SECRET
+  log_policy: drop
+  api_exposure: drop
+  ops_exposure: drop
+  description: 凭证唯一标识（手机号哈希/已验证联邦主体/Apple SubjectID/passkey credentialId）
+  role: authoritative_state
+- name: displayLabel
+  source: displayLabel
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PII
+  log_policy: mask
+  api_exposure: read
+  ops_exposure: mask
+  description: 用户可见的凭证标签（手机号脱敏显示，如 138****8888）
+  role: authoritative_state
+- name: isActive
+  source: isActive
+  type: bool
+  constraints:
+  - NOT_NULL
+  - DEFAULT_TRUE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: boundAt
+  source: boundAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: lastUsedAt
+  source: lastUsedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: version
+  source: version
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_1
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: CredentialBinding 聚合内部 CAS 版本
+  role: authoritative_state
+types:
+  CredentialBindingCommandResult:
+    description: 凭证绑定/解绑命令的稳定提交回执。
+    fields:
+    - name: credentialType
+      source: credentialType
+      type: enum
+      enum_ref: CredentialType
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: isActive
+      source: isActive
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: version
+      source: version
+      type: int64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: idempotentReplay
+      source: idempotentReplay
+      type: boolean
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: displayLabel
+      source: displayLabel
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PII
+      log_policy: mask
+      api_exposure: read
+      ops_exposure: mask

@@ -8,7 +8,7 @@ import (
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
 // applyRecommendationCandidateGates 只对 main 已显式选择的候选源应用固定门禁。
@@ -40,7 +40,7 @@ func startRecommendationPolicyHotReload(
 ) {
 	policyPath := os.Getenv("QWQ_REC_POLICY_PATH")
 	if policyPath == "" {
-		policyPath = "contracts/metadata/recommendation/rec_model/policy.yaml"
+		policyPath = "services/content-service/resources/policies/content/post/recommendation_policy.yaml"
 	}
 	if _, statErr := os.Stat(policyPath); statErr == nil {
 		go rtrecpolicy.StartSyncLoop(ctx, policyStore, logger, rtrecpolicy.SyncConfig{

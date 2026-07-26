@@ -1,43 +1,76 @@
-# L3 Story：group-home-chat-info-contract
+# L3 Story：群聊首页会话信息契约 (`group-home-chat-info-contract`)
 
-## 最小价值点
+> 所属能力：[`commercial-message-system`](../spec.md)
 
-让群聊天页和聊天信息页共同消费同一个 `GroupHome` 真相源，保证群名称、来源、成员数、公告和能力入口一致。
+> Journey / Scenario：[`JNY-003 / SCN-008`](../../../spec.md#scn-008)
 
-## 归属
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-- 领域服务：`chat-conversation`
-- 业务能力：`commercial-message-system`
-- 关联 Journey / Scenario：群聊天与聊天信息页一致性
+## 1. 用户价值
 
-## 行为范围
+作为参与群聊的用户，
+我希望在群聊天页与聊天信息页看到同一群名称、头像、成员和治理状态，
+从而从任一入口理解并管理同一个群。
+
+## 2. 范围与非目标
 
 ### In Scope
 
-- 群聊天页直接进入会话而非先落群主页。
-- 群聊天页顶部与聊天信息页共用 `GroupHome` 数据。
-- 云端预合成群头像 `avatarUrl` 的单一来源。
+- “群聊首页会话信息契约”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 群治理底层实现细节。
 
 ### Out of Scope
 
-- 联系首页聚合。
-- 群治理权限模型的底层实现。
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-## 行为规则
+## 3. 行为要求
 
-- Given：用户已加入一个带 `GroupHome` 事实源的群。
-- When：用户从消息首页进入群聊天并查看聊天信息页。
-- Then：两个页面读取同一 `GroupHome` 事实源，展示一致的群基础信息和能力入口。
+<a id="req-001"></a>
+### REQ-001 群聊首页会话信息契约
 
-## 接口契约
+- 群聊天页和聊天信息页都能从同一 GroupHome metadata / DTO 来源取数。
 
-- API path / operation：`GetGroupHome` 与群会话相关 metadata operation。
-- DTO / projection：`GroupHome`。
-- error code：消息域与 runtime error metadata。
-- surface / route：群聊天页和聊天信息页 route / surface metadata。
+<a id="req-002"></a>
+### REQ-002 GroupHome 事实源作为聊天与信息页唯一契约来源
 
-## 验收关注点
+- 群聊天页和聊天信息页都能从同一 GroupHome metadata / DTO 来源取数。
 
-- done_when：群聊天页与聊天信息页展示的一致性由同一事实源保障。
-- edge cases：群头像 fallback、成员数变更、公告为空。
-- test evidence：`T2_module_interaction`、`T3_service_contract`、`T4_device_journey`。
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 群聊首页会话信息契约
+
+- GIVEN 发起或接收消息的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“群聊首页会话信息契约”对应的公开行为。
+- THEN 群聊天页和聊天信息页都能从同一 GroupHome metadata / DTO 来源取数。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`commercial-message-system`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 群聊天页与聊天信息页读取同一 GroupHome 真相源
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：群聊天页和聊天信息页的主渲染都绑定到同一 GroupHome 契约。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 GroupHome 事实源作为聊天与信息页唯一契约来源
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：群聊天页和聊天信息页都能从同一 GroupHome metadata / DTO 来源取数。
+- 完成判定：群聊天页和聊天信息页都能从同一 GroupHome metadata / DTO 来源取数。

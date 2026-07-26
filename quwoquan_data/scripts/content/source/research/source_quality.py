@@ -3,21 +3,20 @@ from __future__ import annotations
 
 import math
 import re
-import urllib.parse
 from typing import Any, Mapping
 
 from core.source_catalog import known_category_ids, platform_category
 from core.qunar_template import QUNAR_PAGE_SEARCH_RESULT, qunar_page_type
-from governance.coverage.license import validate_image_rights
+from governance.coverage.license import (
+    audit_image_rights,
+    rights_proof_required,
+    validate_image_rights,
+)
 
 from core.image_rules import image_caption_quality_issue
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
-from content.source.research.text_match import (
-    _normalized_title,
-    _text_mentions_entity,
-)
+from content.source.research.text_match import _text_mentions_entity
 from content.source.research.homepage_source_policy import _homepage_candidate_has_fetch_evidence
-from content.source.research.source_registry import _known_image_reject_terms
 
 _ARTICLE_BASE_CATEGORIES = {
     "travelogue",
@@ -63,30 +62,6 @@ def _image_pixel_issue(spec: Mapping[str, Any]) -> str:
         )
     return ""
 
-def _image_conflicts_with_entity(image: Mapping[str, Any], entity_id: str) -> bool:
-    reject_terms = _known_image_reject_terms(entity_id)
-    if not reject_terms:
-        return False
-    fields = (
-        "caption",
-        "title",
-        "relevance",
-        "sourceUrl",
-        "collectionPageUrl",
-        "authorizationProof",
-        "url",
-    )
-    text = " ".join(str(image.get(field) or "") for field in fields)
-    text = urllib.parse.unquote(text)
-    text = re.sub(r"[_/\\\-]+", " ", text).casefold()
-    compact = _normalized_title(text).casefold()
-    for term in reject_terms:
-        raw = urllib.parse.unquote(str(term or "")).casefold()
-        normalized = _normalized_title(raw).casefold()
-        if (raw and raw in text) or (normalized and normalized in compact):
-            return True
-    return False
-
 def _image_mentions_entity(
     image: dict[str, Any],
     entity_id: str,
@@ -95,8 +70,6 @@ def _image_mentions_entity(
 ) -> bool:
     if not entity_id:
         return True
-    if _image_conflicts_with_entity(image, entity_id):
-        return False
     for field in (
         "caption",
         "title",
@@ -151,6 +124,7 @@ def _candidate_gate(
     *,
     entity_id: str,
     lane: str,
+    vertical: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Gate one source candidate before it can enter a lane source content.execution.planning.
@@ -210,40 +184,38 @@ def _candidate_gate(
             )
     image_warnings: list[str] = []
     valid_images: list[dict[str, Any]] = []
-    image_issues_block_source = lane == "image"
+    enforce_rights = rights_proof_required(vertical)
     for index, image in enumerate(source.get("imageUrls") or [], start=1):
-        image_issues: list[str] = []
+        content_issues: list[str] = []
         if not isinstance(image, dict):
-            image_issues.append(f"image[{index}] must be object")
-            if image_issues_block_source:
-                issues.extend(image_issues)
+            content_issues.append(f"image[{index}] must be object")
+            if lane == "image":
+                issues.extend(content_issues)
             else:
-                image_warnings.extend(image_issues)
+                image_warnings.extend(content_issues)
             continue
-        missing = [
-            field
-            for field in ("url", "license", "termsUrl", "authorizationProof")
-            if not str(image.get(field) or "").strip()
-        ]
-        if missing:
-            image_issues.append(f"image[{index}] missing rights fields {missing}")
-        elif not _license_allows_app_publish(
-            str(image.get("license") or ""),
-            str(image.get("termsUrl") or ""),
-        ):
-            image_issues.append(f"image[{index}]: imageRights unsupported license {image.get('license')}")
+        if not str(image.get("url") or "").strip():
+            content_issues.append(f"image[{index}] url missing")
         if entity_id and not _image_mentions_entity(
             image,
             entity_id,
             entity_aliases=entity_aliases,
         ):
-            image_issues.append(f"image[{index}] metadata does not strongly mention entity")
-        if image_issues:
-            if image_issues_block_source:
-                issues.extend(image_issues)
+            content_issues.append(f"image[{index}] metadata does not strongly mention entity")
+        rights_issues = [
+            f"image[{index}]: {issue}"
+            for issue in audit_image_rights(image, vertical=vertical)
+        ]
+        if lane == "image":
+            issues.extend(content_issues)
+            if enforce_rights:
+                issues.extend(rights_issues)
             else:
-                image_warnings.extend(image_issues)
+                image_warnings.extend(rights_issues)
         else:
+            image_warnings.extend(content_issues)
+            image_warnings.extend(rights_issues)
+        if not content_issues and (not enforce_rights or not rights_issues):
             valid_images.append(image)
     if lane != "image" and "imageUrls" in source:
         if valid_images:
@@ -320,12 +292,12 @@ def _collection_image_spec(collection: Mapping[str, Any], image: Mapping[str, An
         spec["creator"] = spec["credit"]
     return spec
 
-def _collection_publishable_image_urls(
+def _collection_admissible_image_urls(
     collections: list[dict[str, Any]],
     *,
     entity_id: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
-    vertical: str = "travel",
+    vertical: str,
 ) -> set[str]:
     urls: set[str] = set()
     for collection in collections:
@@ -348,7 +320,7 @@ def _collection_publishable_image_urls(
                 continue
             if validate_image_rights(spec, vertical=vertical):
                 continue
-            if not _license_allows_app_publish(
+            if rights_proof_required(vertical) and not _license_allows_app_publish(
                 str(spec.get("license") or ""),
                 str(spec.get("termsUrl") or ""),
             ):
@@ -364,9 +336,10 @@ def _collection_gate(
     entity_id: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
     allow_verified_collection_id_match: bool = False,
-    vertical: str = "travel",
+    vertical: str,
 ) -> dict[str, Any]:
     issues: list[str] = []
+    rights_audit_issues: list[str] = []
     collection_id = str(collection.get("sourceCollectionId") or "").strip()
     if not collection_id:
         issues.append("sourceCollectionId missing")
@@ -377,7 +350,7 @@ def _collection_gate(
     )
     images = collection.get("images") if isinstance(collection.get("images"), list) else []
     if not images:
-        issues.append("no rights-compatible images in collection")
+        issues.append("no images in collection")
     creators: set[str] = set()
     for index, image in enumerate(images, start=1):
         if not isinstance(image, dict):
@@ -387,25 +360,25 @@ def _collection_gate(
         creator = str(spec.get("creator") or spec.get("credit") or "").strip()
         if creator:
             creators.add(creator)
-        missing = [
+        missing_source_fields = [
             field
-            for field in (
-                "url",
-                "sourceCollectionId",
-                "creator",
-                "collectionPageUrl",
-                "license",
-                "termsUrl",
-                "authorizationProof",
-            )
+            for field in ("url", "sourceCollectionId")
             if not str(spec.get(field) or "").strip()
         ]
-        if missing:
-            issues.append(f"image[{index}] missing collection rights {missing}")
-        rights_issues = validate_image_rights(spec, vertical=vertical)
-        if rights_issues:
-            issues.extend(f"image[{index}]: {issue}" for issue in rights_issues)
-        elif not _license_allows_app_publish(
+        if missing_source_fields:
+            issues.append(
+                f"image[{index}] missing collection source fields {missing_source_fields}"
+            )
+        audit_issues = audit_image_rights(spec, vertical=vertical)
+        rights_audit_issues.extend(
+            f"image[{index}]: {issue}" for issue in audit_issues
+        )
+        blocking_rights_issues = validate_image_rights(spec, vertical=vertical)
+        if blocking_rights_issues:
+            issues.extend(
+                f"image[{index}]: {issue}" for issue in blocking_rights_issues
+            )
+        elif rights_proof_required(vertical) and not _license_allows_app_publish(
             str(spec.get("license") or ""),
             str(spec.get("termsUrl") or ""),
         ):
@@ -420,6 +393,21 @@ def _collection_gate(
         )
         if caption_issue:
             issues.append(f"image[{index}]: {caption_issue}")
+        from governance.content_supply_policy import load_content_supply_policy
+
+        prohibited_indicator = load_content_supply_policy(
+            vertical
+        ).media_subject.prohibited_indicator(
+            spec.get("caption"),
+            spec.get("relevance"),
+            spec.get("title"),
+            spec.get("sourceUrl"),
+        )
+        if prohibited_indicator:
+            issues.append(
+                f"image[{index}] visual subject is not representative of the travel place "
+                f"(indicator={prohibited_indicator})"
+            )
         if (
             entity_id
             and not verified_collection_entity_match
@@ -432,7 +420,12 @@ def _collection_gate(
             issues.append(f"image[{index}] relevance does not strongly mention entity")
     if len(creators) > 1:
         issues.append("image work collection cannot mix multiple creators")
-    return {"passed": not issues, "issues": issues}
+    return {
+        "passed": not issues,
+        "issues": issues,
+        "rightsAuditStatus": "verified" if not rights_audit_issues else "unverified",
+        "rightsAuditIssues": rights_audit_issues,
+    }
 
 def _article_base_candidate_limit(required_article_bases: int) -> int:
     """Fetch quota plus enough buffer for text/image/rights/dedupe attrition.

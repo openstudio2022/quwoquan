@@ -29,7 +29,7 @@ import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_entity_bridge_strip.dart';
-import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
+import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
@@ -407,7 +407,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     return bottom > 0 && top < MediaQuery.sizeOf(context).height;
   }
 
-  List<CircleDto> _moduleCirclesFor(_HomeCirclesModuleTab _, String __) {
+  List<CircleDto> _moduleCirclesFor(_HomeCirclesModuleTab _, String _) {
     // scope/category/sort 已由聚合读模型冻结；客户端只截断首屏 rail，不重排或重过滤。
     return _hubCircleDtos
         .take(_maxHomeCircleRailItems - 1)
@@ -449,7 +449,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
 
   List<CircleHubFeedPostEntry> _filteredLevelOnePosts(
     _HomeCirclesModuleTab _,
-    String __, {
+    String _, {
     String? subCategoryId,
   }) => _circleFeedItems;
 

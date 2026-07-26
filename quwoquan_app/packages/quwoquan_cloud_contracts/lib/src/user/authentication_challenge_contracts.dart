@@ -1,7 +1,7 @@
 import '../operation_request_payload.dart';
 
 /// AuthenticationChallenge 聚合命令的 pure contracts。
-/// 真相源：contracts/metadata/user/authentication_challenge/{service,fields}.yaml。
+/// 真相源：quwoquan_service/services/user-service/contracts/account/authentication_challenge/{service,fields}.yaml。
 /// OTP challenge 一次性消费；重复消费返回 USER.AUTH.challenge_consumed。
 
 final class SendOtpCommand {

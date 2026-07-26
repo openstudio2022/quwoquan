@@ -1,0 +1,23 @@
+events:
+- name: TagTaxonomyReleaseImported
+  producer: tag-service
+  consumers: []
+  channel: fact_collection
+  payload_entity: TagTaxonomyRelease
+  payload_fields:
+  - releaseId
+  - canonicalDigest
+  - nodeCount
+  - status
+  - importedAt
+- name: TagTaxonomyReleaseActivated
+  producer: tag-service
+  consumers: []
+  channel: fact_collection
+  payload_entity: TagTaxonomyRelease
+  payload_fields:
+  - releaseId
+  - canonicalDigest
+  - nodeCount
+  - status
+  - activatedAt

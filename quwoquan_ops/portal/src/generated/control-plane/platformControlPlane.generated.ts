@@ -15,7 +15,6 @@ export const platformControlPlane = {
     {
       "deployment_profile": "audit_heavy",
       "label": "服务目录项",
-      "object_kind": "snapshot",
       "object_type": "service_catalog_entry",
       "operations": [
         {
@@ -29,12 +28,12 @@ export const platformControlPlane = {
       ],
       "risk_level": "low",
       "source_entity": "EntityRegistry",
+      "view_kind": "snapshot",
       "view_model": "ServiceCatalogEntry"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "Plane 绑定",
-      "object_kind": "snapshot",
       "object_type": "plane_binding",
       "operations": [
         {
@@ -48,12 +47,12 @@ export const platformControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "DeploymentMapping",
+      "view_kind": "snapshot",
       "view_model": "PlaneBinding"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "生产平面访问隔离投影",
-      "object_kind": "snapshot",
       "object_type": "prod_plane_access_isolation",
       "operations": [
         {
@@ -67,26 +66,8 @@ export const platformControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "ProdPlaneAccessIsolation",
+      "view_kind": "snapshot",
       "view_model": "ProdPlaneAccessIsolationSnapshot"
-    },
-    {
-      "deployment_profile": "audit_heavy",
-      "label": "领域接入状态",
-      "object_kind": "snapshot",
-      "object_type": "onboarding_domain",
-      "operations": [
-        {
-          "method": "GET",
-          "operation": "ListOnboardingDomains",
-          "path": "/control-plane/platform/onboarding/domains",
-          "scopes": [
-            "ops.platform.catalog.read"
-          ]
-        }
-      ],
-      "risk_level": "low",
-      "source_entity": "DomainOnboarding",
-      "view_model": "DomainOnboardingStatus"
     },
     {
       "analytics_views": [
@@ -101,11 +82,10 @@ export const platformControlPlane = {
       ],
       "deployment_profile": "latency_sensitive",
       "label": "配置只读快照（IaC）",
-      "object_kind": "snapshot",
       "object_type": "service_config",
       "operations": [
         {
-          "contract_operation_id": "ops.config_layer.ListServiceConfigs",
+          "contract_operation_id": "ops.config_snapshot.ListServiceConfigs",
           "method": "GET",
           "operation": "ListServiceConfigs",
           "path": "/control-plane/platform/configs",
@@ -114,7 +94,7 @@ export const platformControlPlane = {
           ]
         },
         {
-          "contract_operation_id": "ops.config_layer.ResolveEffectiveConfig",
+          "contract_operation_id": "ops.config_snapshot.ResolveEffectiveConfig",
           "method": "GET",
           "operation": "ResolveEffectiveConfig",
           "path": "/control-plane/platform/configs/resolve",
@@ -123,7 +103,7 @@ export const platformControlPlane = {
           ]
         },
         {
-          "contract_operation_id": "ops.config_layer.GetConfigSnapshot",
+          "contract_operation_id": "ops.config_snapshot.GetConfigSnapshot",
           "method": "GET",
           "operation": "GetConfigSnapshot",
           "path": "/control-plane/platform/configs/snapshot",
@@ -132,7 +112,7 @@ export const platformControlPlane = {
           ]
         },
         {
-          "contract_operation_id": "ops.config_layer.ListConfigDomains",
+          "contract_operation_id": "ops.config_snapshot.ListConfigDomains",
           "method": "GET",
           "operation": "ListConfigDomains",
           "path": "/control-plane/platform/configs/domains",
@@ -143,12 +123,12 @@ export const platformControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "ConfigSnapshot",
+      "view_kind": "snapshot",
       "view_model": "ConfigSnapshotView"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "实例配置报告",
-      "object_kind": "snapshot",
       "object_type": "config_instance_report",
       "operations": [
         {
@@ -170,6 +150,7 @@ export const platformControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "ConfigInstanceReport",
+      "view_kind": "snapshot",
       "view_model": "ConfigInstanceReport"
     },
     {
@@ -186,7 +167,6 @@ export const platformControlPlane = {
       ],
       "deployment_profile": "batch_heavy",
       "label": "配置发布单",
-      "object_kind": "release",
       "object_type": "config_release",
       "operations": [
         {
@@ -208,12 +188,12 @@ export const platformControlPlane = {
       ],
       "risk_level": "critical",
       "source_entity": "ConfigRelease",
+      "view_kind": "release",
       "view_model": "ConfigRelease"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "环境拓扑",
-      "object_kind": "snapshot",
       "object_type": "environment_topology",
       "operations": [
         {
@@ -227,12 +207,12 @@ export const platformControlPlane = {
       ],
       "risk_level": "medium",
       "source_entity": "RuntimeTopology",
+      "view_kind": "snapshot",
       "view_model": "EnvironmentTopology"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "运行时集群",
-      "object_kind": "snapshot",
       "object_type": "runtime_cluster",
       "operations": [
         {
@@ -246,12 +226,12 @@ export const platformControlPlane = {
       ],
       "risk_level": "medium",
       "source_entity": "RuntimeCluster",
+      "view_kind": "snapshot",
       "view_model": "RuntimeCluster"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "运行时服务",
-      "object_kind": "snapshot",
       "object_type": "runtime_service",
       "operations": [
         {
@@ -265,12 +245,12 @@ export const platformControlPlane = {
       ],
       "risk_level": "medium",
       "source_entity": "RuntimeService",
+      "view_kind": "snapshot",
       "view_model": "RuntimeService"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "运行时实例",
-      "object_kind": "snapshot",
       "object_type": "runtime_instance",
       "operations": [
         {
@@ -284,12 +264,12 @@ export const platformControlPlane = {
       ],
       "risk_level": "medium",
       "source_entity": "RuntimeInstance",
+      "view_kind": "snapshot",
       "view_model": "RuntimeInstance"
     },
     {
       "deployment_profile": "latency_sensitive",
       "label": "活动告警",
-      "object_kind": "workflow_case",
       "object_type": "active_alert",
       "operations": [
         {
@@ -323,12 +303,12 @@ export const platformControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "AlertTemplate",
+      "view_kind": "workflow_case",
       "view_model": "ActiveAlert"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "平台控制面审计与处置投影",
-      "object_kind": "audit",
       "object_type": "platform_control_plane_journal",
       "operations": [
         {
@@ -366,6 +346,7 @@ export const platformControlPlane = {
       ],
       "risk_level": "medium",
       "source_entity": "ControlPlaneJournal",
+      "view_kind": "audit",
       "view_model": "PlatformControlPlaneJournal"
     }
   ],

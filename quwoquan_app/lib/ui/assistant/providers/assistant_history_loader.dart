@@ -82,7 +82,8 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
           ),
         );
       }
-      final answer = (turn.answerText ?? '').trim();
+      final terminalSnapshot = turn.terminalSnapshot;
+      final answer = (terminalSnapshot?.answerText ?? '').trim();
       if (answer.isNotEmpty) {
         transcript.add(
           AssistantAnswerTranscriptRow(
@@ -97,6 +98,41 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
               sourceQuery: question,
               domainId: turn.domainId ?? 'assistant',
             ),
+            terminalSnapshot: terminalSnapshot,
+          ),
+        );
+      } else if (turn.status == 'failed' && terminalSnapshot?.failure != null) {
+        transcript.add(
+          AssistantAnswerTranscriptRow(
+            id: 'history_assistant_${turn.turnId}',
+            conversationId: AppConceptConstants.assistantConversationId,
+            content: AssistantText.assistantUnavailable,
+            senderId: AppConceptConstants.assistantSenderId,
+            senderName: AppConceptConstants.assistantLabel,
+            timestamp: turn.completedAt ?? turn.createdAt,
+            anchor: AssistantAnswerAnchor(
+              runId: turn.turnId,
+              sourceQuery: question,
+              domainId: turn.domainId ?? 'assistant',
+            ),
+            terminalSnapshot: terminalSnapshot,
+          ),
+        );
+      } else if (turn.status == 'cancelled') {
+        transcript.add(
+          AssistantAnswerTranscriptRow(
+            id: 'history_assistant_${turn.turnId}',
+            conversationId: AppConceptConstants.assistantConversationId,
+            content: AssistantText.assistantTaskStatusCancelled,
+            senderId: AppConceptConstants.assistantSenderId,
+            senderName: AppConceptConstants.assistantLabel,
+            timestamp: turn.completedAt ?? turn.createdAt,
+            anchor: AssistantAnswerAnchor(
+              runId: turn.turnId,
+              sourceQuery: question,
+              domainId: turn.domainId ?? 'assistant',
+            ),
+            terminalSnapshot: terminalSnapshot,
           ),
         );
       }

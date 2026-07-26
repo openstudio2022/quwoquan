@@ -1,27 +1,60 @@
-# L3 Story：exposure-observability-capacity
+# L3 Story：曝光可观测性容量 (`exposure-observability-capacity`)
 
-## 功能说明
+> 所属能力：[`exposure-governance`](../spec.md)
 
-曝光治理必须可观测、可容量估算、可告警和可回滚。该 Story 冻结重复曝光率、覆盖率、曝光基尼、复活率、各池 CTR、写放大和容量策略。
+> Journey / Scenario：[`JNY-003 / SCN-007`](../../../spec.md#scn-007)
 
-## 范围
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- 曝光健康 SLI：repeat exposure、coverage、gini、resurfaced exposure、dynamic budget share、frequency cap、near-dup。
-- 状态写入量 SLI：served/visible/impressed/dwell/interaction/negative 各自写入量与过滤命中率。
-- 容量与抗冲击 SLI：Redis 单请求 payload bytes、SMembers fallback 使用率、HotPath buffer drop（`rec_hotpath_dropped_total`）、行为入口 ingest QPS 与 `ingest_dropped_total`。
-- 容量策略：中小规模使用 day bucket；海量阶段可切 Rolling Bloom/Cuckoo、Count-Min Sketch 或精确 Sorted Set；过滤路径不依赖长窗口全量 `SMembers`。
-- 告警：重复曝光、空 feed、模型 fallback、曝光集中、违规下架剔除延迟、缓冲/ingest 丢弃。
-- 回滚层：关闭动态预算、关闭复活源、关闭协同召回、回退 hot/new。
+## 1. 用户价值
 
-## 非目标
+作为内容创作者或浏览者，
+我希望告警阈值与 SLO objective 对齐；无 emitter 的告警必须标注 emitter 前置，不假装已修复，
+从而完成可恢复的内容创作、发现或互动。
 
-- P0 不实现 P1/P2 的曝光基尼、覆盖率、生命周期复活、策略下架剔除延迟等高级 emitter；这些告警继续标注为预置。
-- 不以 local-gamma 模拟性能替代真集群容量结论。
+## 2. 范围与非目标
 
-## 验收标准
+### In Scope
 
-- A1：所有 SLI 名称以 `recommendation_slo.yaml` 为真相源。
-- A2：告警阈值与 SLO objective 对齐；无 emitter 的告警必须标注 emitter 前置，不假装已修复。
-- A3：容量方案按规模分层，不提前引入复杂结构；过滤路径不依赖长窗口全量 `SMembers`，有 payload/alloc 上限报告。
-- A4：每个成熟能力都有关闭或降级路径。
-- A5：状态写入量、ingest QPS、buffer/ingest drop 可观测（`rec_hotpath_dropped_total`、`ingest_dropped_total`）。
+- “曝光可观测性容量”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 曝光健康 SLI 和告警阈值。
+- 容量策略分层。
+- 回滚层与降级路径。
+- P0 不实现曝光基尼、覆盖率、生命周期复活、策略下架剔除延迟等 P1/P2 高级 emitter。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 曝光可观测性容量
+
+- “曝光可观测性容量”必须通过父能力公开契约交付可观察结果；失败时返回 canonical failure，不写入成功事实。
+
+<a id="req-002"></a>
+### REQ-002 告警阈值与 SLO objective 对齐；无 emitter 的告警必须标注 emitter 前置，不假装已修复
+
+- 告警阈值与 SLO objective 对齐；无 emitter 的告警必须标注 emitter 前置，不假装已修复。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/content-service/observability/slo/recommendation_slo.yaml`
+- canonical：`quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 曝光可观测性容量
+
+- GIVEN 内容创作者或浏览者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“曝光可观测性容量”对应的公开行为。
+- THEN 通过父能力公开契约交付“曝光可观测性容量”的可观察结果。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`exposure-governance`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

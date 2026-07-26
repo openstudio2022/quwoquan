@@ -254,9 +254,9 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
               card: widget.payload.toMessageCardCommand(message: note),
               senderDisplayNameSnapshot: activeContext.displayName,
               senderAvatarUrlSnapshot: activeContext.avatarUrl,
-              personaContextVersion: _positiveVersion(
-                activeContext.contextVersion,
-              ),
+              personaContextVersion: activeContext.contextVersion > 0
+                  ? activeContext.contextVersion
+                  : null,
               clientMsgId: _clientMsgId,
             ),
           );
@@ -286,11 +286,6 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
         },
       );
     }
-  }
-
-  int? _positiveVersion(String raw) {
-    final parsed = int.tryParse(raw.trim());
-    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   Future<String> _resolveConversationId(ChatConversationRepository repo) async {

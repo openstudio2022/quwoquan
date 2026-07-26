@@ -13,6 +13,7 @@ import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
 class AssistantTurnAnswerProcessing {
   const AssistantTurnAnswerProcessing({
@@ -194,7 +195,7 @@ class AssistantTurnEvidenceItem {
   const AssistantTurnEvidenceItem({
     this.text = "",
     this.claim = "",
-    this.url = "",
+    required this.destination,
     this.title = "",
     this.source = "",
     this.snippet = "",
@@ -203,7 +204,7 @@ class AssistantTurnEvidenceItem {
 
   final String text;
   final String claim;
-  final String url;
+  final CitationDestination destination;
   final String title;
   final String source;
   final String snippet;
@@ -212,7 +213,7 @@ class AssistantTurnEvidenceItem {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'text': text,
         'claim': claim,
-        'url': url,
+        'destination': destination.toJson(),
         'title': title,
         'source': source,
         'snippet': snippet,
@@ -223,19 +224,20 @@ class AssistantTurnEvidenceItem {
     return AssistantTurnEvidenceItem(
       text: (json['text'] as String?)?.trim() ?? "",
       claim: (json['claim'] as String?)?.trim() ?? "",
-      url: (json['url'] as String?)?.trim() ?? "",
+      destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
       title: (json['title'] as String?)?.trim() ?? "",
       source: (json['source'] as String?)?.trim() ?? "",
       snippet: (json['snippet'] as String?)?.trim() ?? "",
       evidenceId: (json['evidenceId'] as String?)?.trim() ?? "",
     );
   }
+
 }
 
 class AssistantTurnEvidenceItemFields {
   static const String text = 'text';
   static const String claim = 'claim';
-  static const String url = 'url';
+  static const String destination = 'destination';
   static const String title = 'title';
   static const String source = 'source';
   static const String snippet = 'snippet';

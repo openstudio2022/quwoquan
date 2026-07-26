@@ -31,7 +31,7 @@ def _cases(root: Path, release_id: str, *, environment: DeploymentEnvironment) -
             "runId": "apply-001",
             "importerReportRef": f"env/{environment.value}/runs/data-release/{release_id}/apply-001/homepage-import.json",
             "generatedAt": "2026-07-14T00:00:00Z",
-            "cases": [{"entityRef": "地点/景区/普陀山", "homepageId": "homepage-putuo", "title": "普陀山"}],
+            "cases": [{"entityRef": "地点/景区/测试实体甲", "homepageId": "homepage-putuo", "title": "测试实体甲"}],
         },
     )
     return path
@@ -42,13 +42,13 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path == "/homepages/homepage-putuo":
             payload = {
                 "homepageId": "homepage-putuo",
-                "title": "普陀山",
+                "title": "测试实体甲",
                 "coverUrl": "https://media.test/putuo.jpg",
             }
         elif self.path == "/homepages/homepage-putuo/introduction":
             payload = {
                 "homepageId": "homepage-putuo",
-                "displayName": "普陀山",
+                "displayName": "测试实体甲",
                 "coverUrl": "https://media.test/putuo.jpg",
                 "sections": [{"kind": "overview", "title": "概况"}],
             }
@@ -67,12 +67,19 @@ class _Handler(BaseHTTPRequestHandler):
         return
 
 
-@pytest.mark.parametrize("environment", [DeploymentEnvironment.BETA, DeploymentEnvironment.GAMMA])
+@pytest.mark.parametrize(
+    "environment",
+    [
+        DeploymentEnvironment.ALPHA,
+        DeploymentEnvironment.BETA,
+        DeploymentEnvironment.GAMMA,
+    ],
+)
 def test_homepage_api_verification__reads_dynamic_cases__local_contract(
     environment: DeploymentEnvironment,
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    release_id = "20260714--travel-homepage-coverage--cn-zhejiang-sichuan--canary-002"
+    release_id = "20260714--travel-homepage-coverage--test-release-a--pilot-002"
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
     cases = _cases(tmp_path, release_id, environment=environment)
     server = HTTPServer(("127.0.0.1", 0), _Handler)
@@ -101,7 +108,7 @@ def test_homepage_api_verification__reads_dynamic_cases__local_contract(
 def test_homepage_api_verification__rejects_title_drift__local_contract(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    release_id = "20260714--travel-homepage-coverage--cn-zhejiang-sichuan--canary-002"
+    release_id = "20260714--travel-homepage-coverage--test-release-a--pilot-002"
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
     cases = _cases(tmp_path, release_id, environment=DeploymentEnvironment.GAMMA)
     server = HTTPServer(("127.0.0.1", 0), _Handler)
@@ -130,7 +137,7 @@ def test_homepage_api_verification__rejects_title_drift__local_contract(
 def test_homepage_api_verification__uses_explicit_local_resolution__local_contract(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    release_id = "20260714--travel-homepage-coverage--cn-zhejiang-sichuan--canary-002"
+    release_id = "20260714--travel-homepage-coverage--test-release-a--pilot-002"
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
     cases = _cases(tmp_path, release_id, environment=DeploymentEnvironment.GAMMA)
     server = HTTPServer(("127.0.0.1", 0), _Handler)
@@ -158,7 +165,7 @@ def test_homepage_api_verification__uses_explicit_local_resolution__local_contra
 def test_homepage_api_verification__rejects_non_ip_resolution__local_contract(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    release_id = "20260714--travel-homepage-coverage--cn-zhejiang-sichuan--canary-002"
+    release_id = "20260714--travel-homepage-coverage--test-release-a--pilot-002"
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
     cases = _cases(tmp_path, release_id, environment=DeploymentEnvironment.GAMMA)
 

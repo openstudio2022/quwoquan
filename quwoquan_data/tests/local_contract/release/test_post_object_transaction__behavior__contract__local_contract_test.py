@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 
 from PIL import Image
@@ -19,7 +20,7 @@ from core.source_digest import current_source_digest
 from core.tree_integrity import tree_integrity_stats
 
 
-EXECUTION_ID = "20260718--travel-image-cold-start--cn-zhejiang--m3-901"
+EXECUTION_ID = "20260718--travel-image-cold-start--test-region-a--scale-901"
 POST_REF = "image/西湖/光影"
 CREATOR_REF = "qwq_creator_landscape_photographer_001"
 
@@ -54,6 +55,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
             "assets": [
                 {
                     "sourceAssetId": "west-lake-cover",
+                    "fileName": "cover.jpg",
                     "url": "https://upload.wikimedia.org/wikipedia/commons/example.jpg",
                     "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
                     "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
@@ -71,6 +73,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
         post / "manifest.json",
         {
             "schema": "quwoquan_data.post_manifest",
+            "vertical": "travel",
             "topicId": "西湖__image_1",
             "contentType": "image",
             "carrier": "image",
@@ -85,11 +88,14 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
                     "assetId": "west-lake-cover",
                     "fileName": "assets/cover.jpg",
                     "sourceAssetId": "west-lake-cover",
+                    "sourceAssetRef": "sources/commons/assets/cover.jpg",
                     "caption": "西湖光影",
                     "creator": "Fixture Photographer",
                     "license": "CC BY 4.0",
                     "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
                     "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                    "rightsAuditStatus": "verified",
+                    "rightsAuditIssues": [],
                     "sha256": digest,
                 }
             ],
@@ -139,6 +145,11 @@ def test_post_transaction_atomically_projects_creator_and_post(tmp_path: Path) -
 
     assert (publish / "posts" / POST_REF / "manifest.json").is_file()
     assert (publish / "creators" / CREATOR_REF / "_creator.json").is_file()
+    published_manifest = json.loads(
+        (publish / "posts" / POST_REF / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert datetime.fromisoformat(published_manifest["publishedAt"]).tzinfo is not None
+    assert published_manifest["sourceTaskId"] == EXECUTION_ID
     assert validate_canonical_publish(publish)["status"] == "passed"
 
 
@@ -165,10 +176,98 @@ def test_text_only_post_transaction_does_not_require_media_asset(tmp_path: Path)
     assert asset_refs == {"assets": []}
 
 
+def test_travel_audit_only_asset_records_unverified_rights_without_blocking(
+    tmp_path: Path,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    asset = manifest["assets"][0]
+    asset["creator"] = ""
+    asset["license"] = ""
+    asset["termsUrl"] = ""
+    asset["authorizationProof"] = ""
+    asset["rightsAuditStatus"] = "unverified"
+    asset["rightsAuditIssues"] = [
+        "imageRights: missing required field license",
+        "imageRights: missing required field credit",
+    ]
+    _write_json(manifest_path, manifest)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_asset = source_index["assets"][0]
+    source_asset["authorizationProof"] = ""
+    source_asset["termsUrl"] = ""
+    source_asset["creator"] = ""
+    source_asset["license"] = ""
+    source_asset["rightsAuditStatus"] = "unverified"
+    source_asset["rightsAuditIssues"] = list(asset["rightsAuditIssues"])
+    _write_json(source_index_path, source_index)
+
+    package_payload = build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+
+    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
+    row = rights["assets"][0]
+    assert row["rightsAuditStatus"] == "unverified"
+    assert row["sourceUseMode"] == "rights_audit_only"
+    assert row["authorizationProof"] == ""
+    assert row["author"] == ""
+    assert package_payload["schema"] == "quwoquan_data.object_transaction_package"
+
+
+def test_travel_audit_only_asset_uses_manifest_collection_page_as_audit_source(
+    tmp_path: Path,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["sourceUrls"] = ["https://content.example.test/article/landscape"]
+    asset = manifest["assets"][0]
+    asset.pop("sourceAssetId", None)
+    asset["collectionPageUrl"] = "https://travel.example.test/article/landscape"
+    asset["creator"] = ""
+    asset["license"] = ""
+    asset["termsUrl"] = ""
+    asset["authorizationProof"] = ""
+    asset["rightsAuditStatus"] = "unverified"
+    asset["rightsAuditIssues"] = ["imageRights: source terms not yet verified"]
+    _write_json(manifest_path, manifest)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_asset = source_index["assets"][0]
+    source_asset.update(
+        {
+            "authorizationProof": "",
+            "termsUrl": "",
+            "creator": "",
+            "license": "",
+            "rightsAuditStatus": "unverified",
+            "rightsAuditIssues": ["imageRights: source terms not yet verified"],
+        }
+    )
+    _write_json(source_index_path, source_index)
+
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+
+    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
+    assert rights["assets"][0]["source"] == "https://travel.example.test/article/landscape"
+    assert rights["assets"][0]["rightsAuditStatus"] == "unverified"
+
+
 def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
     tmp_path: Path,
 ) -> None:
-    execution_id = "20260718--travel-video-cold-start--cn-zhejiang--m3-902"
+    execution_id = "20260718--travel-video-cold-start--test-region-a--scale-902"
     post_ref = "video/西湖/光影短片"
     execution = tmp_path / "tasks" / execution_id
     post = execution / "posts" / post_ref
@@ -216,7 +315,8 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
     _write_json(
         post / "manifest.json",
         {
-            "schema": "quwoquan_data.post_manifest",
+                "schema": "quwoquan_data.post_manifest",
+                "vertical": "travel",
             "topicId": "西湖__video_1",
             "contentType": "video",
             "carrier": "video",
@@ -239,7 +339,9 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
                     "sha256": "sha256:" + hashlib.sha256(video.read_bytes()).hexdigest(),
                     "mimeType": "video/mp4",
                     "width": 1080,
-                    "height": 1920,
+                        "height": 1920,
+                        "rightsAuditStatus": "verified",
+                        "rightsAuditIssues": [],
                 },
                 {
                     "assetId": poster_id,
@@ -248,7 +350,9 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
                     "role": "cover",
                     "sourceAssetRefs": [frame_ref],
                     "sha256": "sha256:" + hashlib.sha256(poster.read_bytes()).hexdigest(),
-                    "mimeType": "image/webp",
+                        "mimeType": "image/webp",
+                        "rightsAuditStatus": "verified",
+                        "rightsAuditIssues": [],
                 },
             ],
         },

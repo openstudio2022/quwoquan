@@ -1,0 +1,125 @@
+commercial_defaults:
+  status: blocked
+  block_reason: Product Ops Experiment 尚未绑定推荐/搜索线上 runtime policy；为消除双分桶真相源，控制面在真实 durable binding 完成前冻结
+  gap_id: OPS_EXPERIMENT_RUNTIME_BINDING_FROZEN
+  target_story: bucketing-strategy-engine
+externalDependencies:
+- role: use
+  capability: runtime.message.transport
+  port: MessageTransportPort
+  operations: [appendDurable]
+  scenes: [general]
+api_routes:
+- method: GET
+  path: /control-plane/product/experiments
+  operation: ListExperiments
+  actor: account
+  security:
+    auth_mode: required
+  response_entity: ExperimentCatalogSlice
+  authorization:
+    principal: operator
+    scopes:
+    - ops.experiment.read
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - OPS.USER.unauthorized
+  - OPS.USER.forbidden
+  - OPS.SYSTEM.storage_read_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: redacted
+  telemetry:
+    metric: ops_experiment_list
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 800
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 目录统计不代表推荐/搜索线上实际分桶；runtime policy 与实际曝光/查询事实是当前唯一商用轨
+    gap_id: OPS_EXPERIMENT_RUNTIME_BINDING_FROZEN
+    target_story: bucketing-strategy-engine
+  application:
+    kind: query
+    facet: ExperimentQueryFacade
+    method: listExperiments
+    reader: ExperimentCatalogReader
+    slice: ExperimentCatalogSlice
+  description: 读取实验聚合目录和当前策略版本统计。
+- method: POST
+  path: /control-plane/product/experiments/{experimentId}:rollout
+  operation: UpdateExperimentRollout
+  actor: account
+  security:
+    auth_mode: required
+  headers:
+  - If-Match
+  - Idempotency-Key
+  concurrency:
+    version_precondition: if_match
+  request_entity: UpdateExperimentRolloutRequest
+  request_body_kind: object
+  response_entity: UpdateExperimentRolloutResult
+  authorization:
+    principal: operator
+    scopes:
+    - ops.experiment.write
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 2000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - OPS.USER.unauthorized
+  - OPS.USER.forbidden
+  - OPS.USER.invalid_argument
+  - OPS.USER.experiment_not_found
+  - OPS.USER.version_conflict
+  - OPS.USER.idempotency_conflict
+  - OPS.SYSTEM.storage_read_failed
+  - OPS.SYSTEM.storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: redacted
+  telemetry:
+    metric: ops_experiment_rollout
+    trace: true
+    attributes:
+    - operation
+    - experiment_id
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 未接入线上 runtime policy 的 rollout 禁止对外开放，避免运营变更产生无消费者的伪控制面
+    gap_id: OPS_EXPERIMENT_RUNTIME_BINDING_FROZEN
+    target_story: bucketing-strategy-engine
+  application:
+    kind: command
+    facet: ExperimentCommandFacade
+    method: updateRollout
+    aggregate_owner: Experiment
+    mutation_target: Experiment
+    invariant_target: Experiment
+  description: 通过 Experiment 聚合根更新流量、变体和启停状态。
+consumers:
+- name: platform-ops
+  capabilities:
+  - list_experiments
+  - update_experiment_rollout

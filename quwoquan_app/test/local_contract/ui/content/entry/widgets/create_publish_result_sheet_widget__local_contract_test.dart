@@ -61,6 +61,61 @@ void main() {
     expect(find.byKey(TestKeys.createPublishResultDoneButton), findsOneWidget);
   });
 
+  testWidgets('后台发布受理后结果面原位更新真实状态和作品入口', (tester) async {
+    final presentation = ValueNotifier<CreatePublishResultPresentation>(
+      const CreatePublishResultPresentation(
+        state: CreatePublishResultState.queued,
+      ),
+    );
+    await tester.pumpWidget(
+      _ResultSheetTestApp(
+        onOpen: (context) async {
+          await showCreatePublishResultSheet(
+            context,
+            state: CreatePublishResultState.queued,
+            presentationListenable: presentation,
+          );
+        },
+      ),
+    );
+
+    await tester.tap(find.text('打开结果页'));
+    await tester.pumpAndSettle();
+    expect(find.text(UITextConstants.publishResultQueuedTitle), findsOneWidget);
+
+    presentation.value = const CreatePublishResultPresentation(
+      state: CreatePublishResultState.pendingReview,
+      postId: 'post-background-accepted',
+    );
+    await tester.pump();
+    expect(
+      find.text(UITextConstants.publishResultPendingReviewTitle),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(TestKeys.createPublishResultViewWorkButton),
+      findsNothing,
+    );
+
+    presentation.value = const CreatePublishResultPresentation(
+      state: CreatePublishResultState.published,
+      postId: 'post-background-accepted',
+    );
+    await tester.pump();
+    expect(
+      find.text(UITextConstants.publishResultSuccessTitle),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(TestKeys.createPublishResultViewWorkButton),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(TestKeys.createPublishResultDoneButton));
+    await tester.pumpAndSettle();
+    presentation.dispose();
+  });
+
   testWidgets('待审核回执明确显示审核状态且只能进入发布任务', (tester) async {
     CreatePublishResultAction? selectedAction;
     await tester.pumpWidget(

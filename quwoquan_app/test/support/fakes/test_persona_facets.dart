@@ -374,7 +374,7 @@ final class TestPersonaFacets
       displayName: item.displayName,
       avatarUrl: item.avatarUrl,
       avatarVersion: 1,
-      personaContextVersion: 'ctx-$_version',
+      contextVersion: _version,
       isPrimary: item.isPrimary,
     );
   }

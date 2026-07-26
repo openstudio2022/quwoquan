@@ -9,12 +9,10 @@ from core.control_types import ContentType, QueueBackend, QueueJobStage
 from governance.creators.assignment import creator_assignment_issues
 from content.execution import store
 from content.execution.queue.core import (
-    DEFAULT_COST_BUDGET_USD,
     DEFAULT_MAX_ATTEMPTS,
     DEFAULT_MAX_STARTUP_FAILURES,
     DEFAULT_MAX_WALL_CLOCK_SECONDS,
     DEFAULT_STUCK_THRESHOLD,
-    DEFAULT_TOKEN_BUDGET,
     DEFAULT_TOOL_PERMISSIONS,
     QUEUE_BACKEND_RELIABLETASK,
     _backend_name,
@@ -78,8 +76,6 @@ def _definition(
     max_wall_clock_seconds: int,
     stuck_threshold: int,
     permissions: Iterable[str] | None,
-    token_budget: int,
-    cost_budget_usd: float,
     meta: Mapping[str, Any] | None,
     queue_backend: str | QueueBackend | None,
 ) -> dict[str, object]:
@@ -123,8 +119,6 @@ def _definition(
         "maxWallClockSeconds": int(max_wall_clock_seconds),
         "stuckThreshold": int(stuck_threshold),
         "permissions": tuple(permissions) if permissions is not None else DEFAULT_TOOL_PERMISSIONS,
-        "tokenBudget": int(token_budget),
-        "costBudgetUsd": float(cost_budget_usd),
         "contentObjectDir": (
             str(metadata["contentObjectDir"]).strip().strip("/")
             if metadata.get("contentObjectDir") is not None
@@ -184,8 +178,6 @@ def enqueue_ref_job(
     max_wall_clock_seconds: int = DEFAULT_MAX_WALL_CLOCK_SECONDS,
     stuck_threshold: int = DEFAULT_STUCK_THRESHOLD,
     permissions: Iterable[str] | None = None,
-    token_budget: int = DEFAULT_TOKEN_BUDGET,
-    cost_budget_usd: float = DEFAULT_COST_BUDGET_USD,
     meta: Mapping[str, Any] | None = None,
     queue_backend: str | QueueBackend | None = None,
 ) -> QueueJob:
@@ -209,8 +201,6 @@ def enqueue_ref_job(
         max_wall_clock_seconds=max_wall_clock_seconds,
         stuck_threshold=stuck_threshold,
         permissions=permissions,
-        token_budget=token_budget,
-        cost_budget_usd=cost_budget_usd,
         meta=meta,
         queue_backend=queue_backend,
     )
@@ -228,8 +218,6 @@ def enqueue_ref_job(
         max_wall_clock_seconds=int(definition["maxWallClockSeconds"]),
         stuck_threshold=int(definition["stuckThreshold"]),
         permissions=definition["permissions"],  # type: ignore[arg-type]
-        token_budget=int(definition["tokenBudget"]),
-        cost_budget_usd=float(definition["costBudgetUsd"]),
         result_envelope_required=(
             definition["backend"] is QUEUE_BACKEND_RELIABLETASK
             or bool(definition["metadata"].get("resultEnvelopeRequired"))  # type: ignore[union-attr]
@@ -308,8 +296,6 @@ def refresh_job_definition(
     max_wall_clock_seconds: int = DEFAULT_MAX_WALL_CLOCK_SECONDS,
     stuck_threshold: int = DEFAULT_STUCK_THRESHOLD,
     permissions: Iterable[str] | None = None,
-    token_budget: int = DEFAULT_TOKEN_BUDGET,
-    cost_budget_usd: float = DEFAULT_COST_BUDGET_USD,
     meta: Mapping[str, Any] | None = None,
     queue_backend: str | QueueBackend | None = None,
 ) -> QueueJob | None:
@@ -330,8 +316,6 @@ def refresh_job_definition(
         max_wall_clock_seconds=max_wall_clock_seconds,
         stuck_threshold=stuck_threshold,
         permissions=permissions,
-        token_budget=token_budget,
-        cost_budget_usd=cost_budget_usd,
         meta=meta,
         queue_backend=queue_backend if queue_backend is not None else previous.backend,
     )
@@ -347,8 +331,6 @@ def refresh_job_definition(
         max_wall_clock_seconds=int(definition["maxWallClockSeconds"]),
         stuck_threshold=int(definition["stuckThreshold"]),
         permissions=definition["permissions"],  # type: ignore[arg-type]
-        token_budget=int(definition["tokenBudget"]),
-        cost_budget_usd=float(definition["costBudgetUsd"]),
         result_envelope_required=(
             backend is QUEUE_BACKEND_RELIABLETASK
             or bool(definition["metadata"].get("resultEnvelopeRequired"))  # type: ignore[union-attr]
@@ -370,8 +352,6 @@ def refresh_job_definition(
                 max_wall_clock_seconds=int(definition["maxWallClockSeconds"]),
                 stuck_threshold=int(definition["stuckThreshold"]),
                 permissions=definition["permissions"],  # type: ignore[arg-type]
-                token_budget=int(definition["tokenBudget"]),
-                cost_budget_usd=float(definition["costBudgetUsd"]),
                 result_envelope_required=True,
                 reliable_task_ref=_reliable_task_reference(execution_id=execution_id, job_id=job_id, ref=ref, stage=queue_stage, definition=definition),
                 metadata=definition["metadata"],  # type: ignore[arg-type]
@@ -407,8 +387,6 @@ def refresh_job_definition(
             max_wall_clock_seconds=int(definition["maxWallClockSeconds"]),
             stuck_threshold=int(definition["stuckThreshold"]),
             permissions=definition["permissions"],  # type: ignore[arg-type]
-            token_budget=int(definition["tokenBudget"]),
-            cost_budget_usd=float(definition["costBudgetUsd"]),
             result_envelope_required=backend is QUEUE_BACKEND_RELIABLETASK,
             reliable_task_ref=None,
             metadata=definition["metadata"],  # type: ignore[arg-type]

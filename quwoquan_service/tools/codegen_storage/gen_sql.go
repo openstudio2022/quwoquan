@@ -8,7 +8,10 @@ import (
 )
 
 func generateMigrationSQL(ctx *genContext, tableName string, table TableDef) error {
-	dir := filepath.Join(ctx.outputDir(), "infrastructure", "migration")
+	dir := strings.TrimSpace(ctx.migrationDir())
+	if dir == "" {
+		return fmt.Errorf("migration_dir is required for generated SQL")
+	}
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}

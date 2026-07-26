@@ -1,7 +1,7 @@
 /// R-ID02 端云契约测试：交集 operation 的框架级 response_body 声明
 /// 与 Remote 仓库实际解码类型对齐（防「声明了没人消费」的死字段）。
 ///
-/// 单一真相源 = contracts/metadata/content/post/service.yaml 的 response_body /
+/// 单一真相源 = quwoquan_service/services/content-service/contracts/content/post/operations.yaml 的 response_body /
 /// response_body_kind，经 codegen 落到 ContentApiMetadata.operationToResponseModel /
 /// operationToResponseKind；本测试断言这两张映射与四个交集 operation 的真实解码行为一致。
 library;

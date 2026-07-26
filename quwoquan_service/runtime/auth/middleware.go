@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/operation"
@@ -50,7 +51,27 @@ type MiddlewareConfig struct {
 	AccessTokenVerifier  *Verifier
 	DeviceTicketVerifier *Verifier
 	OperatorOIDCVerifier *OIDCVerifier
+	// AccountSecurityAuthority is intentionally optional only for transports
+	// that do not accept end-user access JWTs (for example user-service's
+	// direct PostgreSQL authority gate). Every resource-service composition
+	// that accepts end-user access JWTs must supply it and fail startup if it
+	// cannot be constructed.
+	AccountSecurityAuthority AccountSecurityAuthority
+	// AccountSecurityExemption is constrained to an already-confirmed closed
+	// state and exists only for a canonical idempotent terminal command (the
+	// UserAccount close replay). It must never be used for active, suspended,
+	// stale, unavailable, service, operator, or device principals.
+	AccountSecurityExemption AccountSecurityExemption
 }
+
+// AccountSecurityExemption allows a caller to retain one explicit terminal
+// operation's replay semantics after the authority has confirmed closed. It
+// receives no token material and cannot turn an authority failure into allow.
+type AccountSecurityExemption func(
+	request *http.Request,
+	principal Principal,
+	snapshot AccountSecuritySnapshot,
+) bool
 
 // Middleware 永远先清除客户端身份头，再从唯一 credential 重建可信 Principal。
 // 无 credential 的请求继续交给 operation guard 判断 public/optional；只要客户端
@@ -108,6 +129,18 @@ func Middleware(config MiddlewareConfig) func(http.Handler) http.Handler {
 				return
 			}
 			principal := principalFromClaims(*claims)
+			r = r.WithContext(
+				withAccountSecurityAuthorityCorrelation(r.Context(), r.Header),
+			)
+			if denied := enforceAccountSecurityAuthority(
+				r,
+				principal,
+				config.AccountSecurityAuthority,
+				config.AccountSecurityExemption,
+			); denied != "" {
+				writeAccountSecurityCredentialError(w, r, denied)
+				return
+			}
 			applyTrustedIdentityHeaders(r.Header, principal.Actor)
 			ctx := WithPrincipal(r.Context(), principal)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -175,6 +208,115 @@ func writeCredentialError(w http.ResponseWriter, r *http.Request, cause error) {
 		),
 		rterr.HTTPWriteOptionsFromRequest(r),
 	)
+}
+
+type accountSecurityDenyReason string
+
+const (
+	accountSecurityDeniedDeleted     accountSecurityDenyReason = "deleted"
+	accountSecurityDeniedSuspended   accountSecurityDenyReason = "suspended"
+	accountSecurityDeniedTokenStale  accountSecurityDenyReason = "token_stale"
+	accountSecurityDeniedUnavailable accountSecurityDenyReason = "unavailable"
+)
+
+func enforceAccountSecurityAuthority(
+	request *http.Request,
+	principal Principal,
+	authority AccountSecurityAuthority,
+	exemption AccountSecurityExemption,
+) accountSecurityDenyReason {
+	if authority == nil || !requiresAccountSecurityAuthority(principal) {
+		return ""
+	}
+	startedAt := time.Now()
+	snapshot, err := authority.ReadAccountSecurity(
+		request.Context(),
+		principal.Actor.AccountID,
+	)
+	if errors.Is(err, ErrAccountSecurityNotFound) {
+		recordAccountSecurityAuthorityCheck("denied_deleted", startedAt)
+		return accountSecurityDeniedDeleted
+	}
+	if err != nil {
+		recordAccountSecurityAuthorityCheck("unavailable", startedAt)
+		return accountSecurityDeniedUnavailable
+	}
+	switch strings.TrimSpace(snapshot.AccountState) {
+	case "closed":
+		if exemption != nil && exemption(request, principal, snapshot) {
+			recordAccountSecurityAuthorityCheck("allowed_terminal_replay", startedAt)
+			return ""
+		}
+		recordAccountSecurityAuthorityCheck("denied_deleted", startedAt)
+		return accountSecurityDeniedDeleted
+	case "suspended":
+		recordAccountSecurityAuthorityCheck("denied_suspended", startedAt)
+		return accountSecurityDeniedSuspended
+	case "active", "anonymous":
+		if principal.AuthEpoch <= 0 || principal.AuthEpoch != snapshot.AuthEpoch {
+			recordAccountSecurityAuthorityCheck("denied_token_stale", startedAt)
+			return accountSecurityDeniedTokenStale
+		}
+		recordAccountSecurityAuthorityCheck("allowed", startedAt)
+		return ""
+	default:
+		recordAccountSecurityAuthorityCheck("unavailable", startedAt)
+		return accountSecurityDeniedUnavailable
+	}
+}
+
+func requiresAccountSecurityAuthority(principal Principal) bool {
+	if principal.TokenType != TokenTypeAccess ||
+		strings.TrimSpace(principal.Actor.AccountID) == "" {
+		return false
+	}
+	for _, role := range principal.Roles {
+		switch strings.TrimSpace(role) {
+		case "service", "operator", "admin":
+			return false
+		}
+	}
+	return true
+}
+
+func writeAccountSecurityCredentialError(
+	w http.ResponseWriter,
+	r *http.Request,
+	reason accountSecurityDenyReason,
+) {
+	var appError *rterr.AppError
+	authKind := rterr.Kind("AUTH")
+	switch reason {
+	case accountSecurityDeniedDeleted:
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleUser, authKind, "account_deleted"),
+			"账号已注销或进入删除流程，请更换手机号登录",
+			"account security authority denied the credential",
+		).WithMetadata("deleted", http.StatusGone).
+			WithRecoveryDirective("escalate", "inlineCard", 0)
+	case accountSecurityDeniedSuspended:
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleUser, authKind, "account_suspended"),
+			"账号已被限制登录，请更换手机号或联系支持",
+			"account security authority denied the credential",
+		).WithMetadata("suspended", http.StatusForbidden).
+			WithRecoveryDirective("escalate", "inlineCard", 0)
+	case accountSecurityDeniedTokenStale:
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleUser, authKind, "token_stale"),
+			"登录凭据已失效，请重新登录",
+			"account security authority rejected a stale credential",
+		).WithMetadata("token_stale", http.StatusUnauthorized).
+			WithRecoveryDirective("surface", "inlineCard", 0)
+	default:
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleUser, authKind, "account_security_unavailable"),
+			"账号安全校验暂不可用，请稍后重试",
+			"account security authority is unavailable",
+		).WithMetadata("account_security_unavailable", http.StatusServiceUnavailable).
+			WithRecoveryDirective("retry", "inlineCard", 3)
+	}
+	rterr.WriteHTTPError(w, appError, rterr.HTTPWriteOptionsFromRequest(r))
 }
 
 func bearerToken(r *http.Request) (string, bool) {

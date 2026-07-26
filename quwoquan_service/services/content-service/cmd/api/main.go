@@ -7,6 +7,9 @@ import (
 	"os"
 	"os/signal"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
+	rterr "quwoquan_service/runtime/errors"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	runtimelearning "quwoquan_service/runtime/learning"
@@ -15,38 +18,34 @@ import (
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
-	httpadapter "quwoquan_service/services/content-service/internal/adapters/http"
-	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
-	commentapp "quwoquan_service/services/content-service/internal/application/comment"
-	filtercatalogapp "quwoquan_service/services/content-service/internal/application/content/filter_catalog_release"
-	outboundshareapp "quwoquan_service/services/content-service/internal/application/content/outbound_share_fact/command"
-	profileinteractionapp "quwoquan_service/services/content-service/internal/application/content/profile_interaction"
-	feedapp "quwoquan_service/services/content-service/internal/application/feed"
-	importerapp "quwoquan_service/services/content-service/internal/application/importer"
-	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
-	moderationapp "quwoquan_service/services/content-service/internal/application/moderation"
-	"quwoquan_service/services/content-service/internal/application/ports"
-	postapp "quwoquan_service/services/content-service/internal/application/post"
-	reactionapp "quwoquan_service/services/content-service/internal/application/reaction"
-	reportapp "quwoquan_service/services/content-service/internal/application/report"
-	"quwoquan_service/services/content-service/internal/infrastructure/accountclosure"
-	filtercatalogcache "quwoquan_service/services/content-service/internal/infrastructure/content/filter_catalog_release/cache"
-	filtercatalogmetrics "quwoquan_service/services/content-service/internal/infrastructure/content/filter_catalog_release/observability"
-	filtercatalogpersistence "quwoquan_service/services/content-service/internal/infrastructure/content/filter_catalog_release/persistence"
-	mediainfra "quwoquan_service/services/content-service/internal/infrastructure/content/media"
-	outboundshareinfra "quwoquan_service/services/content-service/internal/infrastructure/content/outbound_share_fact/persistence"
-	postgovernance "quwoquan_service/services/content-service/internal/infrastructure/content/post/governance"
-	profileinteractioninfra "quwoquan_service/services/content-service/internal/infrastructure/content/profile_interaction/persistence"
-	embeddinginfra "quwoquan_service/services/content-service/internal/infrastructure/embedding"
-	"quwoquan_service/services/content-service/internal/infrastructure/feedmetrics"
-	"quwoquan_service/services/content-service/internal/infrastructure/intersectionmetrics"
-	learninginfra "quwoquan_service/services/content-service/internal/infrastructure/learning"
-	"quwoquan_service/services/content-service/internal/infrastructure/messaging"
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
-	"quwoquan_service/services/content-service/internal/infrastructure/placeindex"
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
-	"quwoquan_service/services/content-service/internal/infrastructure/reportmetrics"
-	"quwoquan_service/services/content-service/internal/infrastructure/searchindex"
+	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
+	outboundshareinfra "quwoquan_service/services/content-service/internal/content/outbound_share_fact/infrastructure/persistence"
+	postapp "quwoquan_service/services/content-service/internal/content/post/application"
+	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
+	importerapp "quwoquan_service/services/content-service/internal/content/post/application/importer"
+	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
+	"quwoquan_service/services/content-service/internal/content/post/application/ports"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/accountclosure"
+	accountsecurity "quwoquan_service/services/content-service/internal/content/post/infrastructure/accountsecurity"
+	profileinteractioninfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/profile_interaction/persistence"
+	postgovernance "quwoquan_service/services/content-service/internal/content/post/infrastructure/governance"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/intersectionmetrics"
+	learninginfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/learning"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/placeindex"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
+	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
+	profileinteractionreadapp "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/application"
+	filtercatalogapp "quwoquan_service/services/content-service/internal/media/filter_catalog_release/application"
+	filtercatalogcache "quwoquan_service/services/content-service/internal/media/filter_catalog_release/infrastructure/cache"
+	filtercatalogmetrics "quwoquan_service/services/content-service/internal/media/filter_catalog_release/infrastructure/observability"
+	filtercatalogpersistence "quwoquan_service/services/content-service/internal/media/filter_catalog_release/infrastructure/persistence"
+	uploadsessionpersistence "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/persistence"
+	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 	"syscall"
 	"time"
 
@@ -69,6 +68,26 @@ func main() {
 	}
 	if err := preflightConfig(cfg, appEnv); err != nil {
 		log.Fatalf("content-service config preflight failed: %v", err)
+	}
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("content-service access token config invalid: %v", err)
+	}
+	accountSecurityAuthority, err := accountsecurity.NewAuthority(
+		accessTokenConfig,
+		accountsecurity.Config{
+			BaseURL:   cfg.AccountSecurityAuthority.BaseURL,
+			TimeoutMS: cfg.AccountSecurityAuthority.TimeoutMS,
+		},
+	)
+	if err != nil {
+		log.Fatalf("content-service account security authority config invalid: %v", err)
+	}
+	onboardingTaxonomy, err := buildOnboardingInterestTaxonomyValidator(cfg)
+	if err != nil {
+		log.Fatalf("content-service onboarding taxonomy validation config failed: %v", err)
 	}
 	accountClosureSubjectDigestor, err := resolveAccountClosureSubjectDigestor(
 		appEnv,
@@ -100,7 +119,7 @@ func main() {
 	if err := router.PingAll(ctx); err != nil {
 		log.Printf("WARN: content-service redis ping: %v", err)
 	}
-	resolvedMessageTransport, err := requireContentMessageTransport(
+	messageTransport, err := requireContentMessageTransport(
 		ctx,
 		appEnv,
 		router,
@@ -111,27 +130,6 @@ func main() {
 	)
 	if err != nil {
 		log.Fatalf("content-service message transport preflight failed: %v", err)
-	}
-	realtimeTransport, ok := resolvedMessageTransport.Scene("realtime")
-	if !ok {
-		log.Fatal("content-service message transport missing realtime scene")
-	}
-	durableTransport, ok := resolvedMessageTransport.Scene("general")
-	if !ok {
-		log.Fatal("content-service message transport missing general scene")
-	}
-	messageAdapterID := runtimemessaging.RedisMessageTransportAdapter
-	if appEnv == "alpha" {
-		messageAdapterID = runtimemessaging.RedisMessageTransportFixture
-	}
-	messageTransport, err := runtimemessaging.NewRedisMessageTransportForRoot(
-		"content-service-api",
-		messageAdapterID,
-		realtimeTransport,
-		durableTransport,
-	)
-	if err != nil {
-		log.Fatalf("content-service message transport construction failed: %v", err)
 	}
 	subjectClosureGuard := newDeferredSubjectClosureGuard()
 	hotPath := rtrec.NewHotPath(
@@ -163,6 +161,7 @@ func main() {
 	var closeReportStore func()
 	var postServiceOpts []postapp.PostServiceOption
 	var mediaStore *persistence.MongoMediaStore
+	var mediaUploadSessionStore *uploadsessionpersistence.MongoStore
 	var mongoCandidateSources []rtrec.CandidateSource
 	var bulkImportService *importerapp.BulkImportService
 	var behaviorEventStore ports.BehaviorEventStore
@@ -175,6 +174,9 @@ func main() {
 	var entityCardProvider feedapp.ObjectCardProvider
 	var authoritativeSignalSink *recinfra.AuthoritativeSignalSink
 	var viewerBlockReader *recinfra.PersonaBlockReader
+	var accountClosureStore *accountclosure.MongoStore
+	var accountClosureSearch *accountclosure.SearchIndexerDeleter
+	var accountClosureCache *accountclosure.RedisPersonalDataCacheCleaner
 	var recDB *mongo.Database
 	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
@@ -193,6 +195,10 @@ func main() {
 	)
 
 	healthChecker := rthealth.NewChecker()
+	healthChecker.Register(
+		"account-security-authority",
+		accountSecurityAuthority.CheckAccountSecurityAuthority,
+	)
 	healthChecker.Register("redis", func(hctx context.Context) error {
 		return router.PingAll(hctx)
 	})
@@ -265,7 +271,7 @@ func main() {
 		)
 		profileInteractionFacades = profileinteractionapp.BindFacades(
 			profileinteractionapp.NewActivityQueryService(profileActivityStore),
-			profileinteractionapp.NewReadFactService(
+			profileinteractionreadapp.NewReadFactService(
 				profileActivityStore,
 				profileReadFactStore,
 			),
@@ -315,9 +321,16 @@ func main() {
 			"content_post_profile_interaction_target",
 			healthChecker, logger,
 		)
-		mediaStore = persistence.NewMongoMediaStore(db.Collection("media_upload_sessions"))
+		mediaStore = persistence.NewMongoMediaStore(db)
 		if err := mediaStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service MediaUploadSession/MediaAsset indexes init failed: %v", err)
+			log.Fatalf("content-service media runtime indexes init failed: %v", err)
+		}
+		mediaUploadSessionStore = uploadsessionpersistence.NewMongoStore(
+			db.Collection("media_upload_sessions"),
+			mediaStore,
+		)
+		if err := mediaUploadSessionStore.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service MediaUploadSession indexes init failed: %v", err)
 		}
 		commentDataAdapter = persistence.NewMongoCommentDataAdapter(db)
 		if err := commentDataAdapter.EnsureIndexes(ctx); err != nil {
@@ -523,7 +536,7 @@ func main() {
 		// rm_recommend_feature.segments. Load failure degrades membership only.
 		segmentsPath := os.Getenv("QWQ_SEGMENTS_PATH")
 		if segmentsPath == "" {
-			segmentsPath = "contracts/metadata/recommendation/rec_model/segments.yaml"
+			segmentsPath = "services/content-service/resources/policies/content/post/recommendation_segments.yaml"
 		}
 		segDefs, segErr := recinfra.LoadSegments(segmentsPath)
 		if segErr != nil {
@@ -590,7 +603,7 @@ func main() {
 			placeProjector = placeindex.NewProjector(searchBuilt.Indexer, store, placeStore, placeindex.WithLogger(logger))
 			log.Printf("content-service search index projector enabled (es endpoints=%d index=%s, place objects on)", len(cfg.ES.Endpoints), searchBuilt.Client.IndexName())
 		}
-		accountClosureStore, err := accountclosure.NewMongoStore(
+		accountClosureStore, err = accountclosure.NewMongoStore(
 			db,
 			accountClosureSubjectDigestor,
 		)
@@ -600,14 +613,14 @@ func main() {
 		if err := accountClosureStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service UserAccountClosed indexes init failed: %v", err)
 		}
-		accountClosureSearch, err := accountclosure.NewSearchIndexerDeleter(
+		accountClosureSearch, err = accountclosure.NewSearchIndexerDeleter(
 			searchBuilt.Indexer,
 			cfg.ES.Enabled,
 		)
 		if err != nil {
 			log.Fatalf("content-service UserAccountClosed search assembly failed: %v", err)
 		}
-		accountClosureCache, err := accountclosure.NewRedisPersonalDataCacheCleaner(
+		accountClosureCache, err = accountclosure.NewRedisPersonalDataCacheCleaner(
 			router,
 			accountClosureSubjectDigestor,
 		)
@@ -624,32 +637,6 @@ func main() {
 		if err := subjectClosureGuard.Bind(guard); err != nil {
 			log.Fatalf("content-service subject-closure guard binding failed: %v", err)
 		}
-		accountClosureProcessor, err := accountclosure.NewProcessor(
-			accountClosureStore,
-			accountClosureCache,
-			accountClosureSearch,
-		)
-		if err != nil {
-			log.Fatalf("content-service UserAccountClosed processor assembly failed: %v", err)
-		}
-		accountClosureConsumer, err := accountclosure.NewConsumer(
-			router.Scene("general"),
-			accountClosureProcessor,
-			accountClosureStore,
-			"content-service-"+instanceID,
-			logger,
-			accountclosure.DefaultConsumerConfig(),
-		)
-		if err != nil {
-			log.Fatalf("content-service UserAccountClosed consumer assembly failed: %v", err)
-		}
-		if err := accountClosureConsumer.EnsureGroup(ctx); err != nil {
-			log.Fatalf("content-service UserAccountClosed consumer group init failed: %v", err)
-		}
-		go accountClosureConsumer.Run(ctx)
-		healthChecker.Register("user-account-closed-consumer", func(context.Context) error {
-			return accountClosureConsumer.Healthy(15 * time.Second)
-		})
 		// Each derived read model and the external event bus owns an independent
 		// durable checkpoint. A late sink outage therefore cannot replay sinks
 		// that already converged, and a failed sink never gets acknowledged by a
@@ -722,13 +709,9 @@ func main() {
 		// cfg.Embedding.Enabled 开启；向量召回读通道另由 VectorRecallEnabled 控制
 		// （S0 flag-off，S1 内容池阈值达标后开启，开启不需要重构）。
 		if cfg.Embedding.Enabled {
-			embeddingBinding, err := resolveContentEmbeddingBinding(appEnv)
+			embedder, err := resolveContentEmbeddingGateway(appEnv)
 			if err != nil {
 				log.Fatalf("content-service embedding binding invalid: %v", err)
-			}
-			embedder, err := embeddinginfra.NewOpenAICompatibleGateway(embeddingBinding)
-			if err != nil {
-				log.Fatalf("content-service embedding gateway assembly failed: %v", err)
 			}
 			embeddingProjector := recinfra.NewEmbeddingProjector(
 				db, embedder, router.Scene("rec"), logger,
@@ -738,11 +721,11 @@ func main() {
 					&projectorAdapter{embedding: embeddingProjector},
 				)),
 				"content-embedding-projection", "post_outbox_embedding", healthChecker, logger)
-			log.Printf("content-service embedding write pipeline enabled adapter=ext.embed.openai_compatible budget=%d/day", recinfra.EmbeddingDailyBudgetDefault)
+			log.Printf("content-service embedding write pipeline enabled adapter=binding budget=%d/day", recinfra.EmbeddingDailyBudgetDefault)
 			if cfg.Embedding.VectorRecallEnabled {
 				vectorSource := recinfra.NewVectorRecallWithEmbedding(db, embedder)
 				mongoCandidateSources = append(mongoCandidateSources, vectorSource)
-				log.Printf("content-service vector recall enabled adapter=ext.embed.openai_compatible")
+				log.Printf("content-service vector recall enabled adapter=binding")
 			} else {
 				log.Printf("content-service vector recall flag-off (S0); write pipeline keeps materializing embeddings")
 			}
@@ -883,6 +866,7 @@ func main() {
 		logger,
 		healthChecker,
 		mediaStore,
+		mediaUploadSessionStore,
 		commentDataAdapter,
 		reactionStore,
 		recDB,
@@ -890,10 +874,35 @@ func main() {
 		viewerBlockReader,
 	)
 	defer closeMediaRuntime()
-	mediaService := mediaRuntime.mediaService
-	mediaImageReprocessService := mediaRuntime.mediaImageReprocessService
-	mediaObjectGateway := mediaRuntime.mediaObjectGateway
 	commentServiceCore = mediaRuntime.commentServiceCore
+
+	accountClosureProcessor, err := accountclosure.NewProcessor(
+		accountClosureStore,
+		accountClosureCache,
+		accountClosureSearch,
+		mediaRuntime.mediaObjectGateway,
+	)
+	if err != nil {
+		log.Fatalf("content-service UserAccountClosed processor assembly failed: %v", err)
+	}
+	accountClosureConsumer, err := accountclosure.NewConsumer(
+		router.Scene("general"),
+		accountClosureProcessor,
+		accountClosureStore,
+		"content-service-"+instanceID,
+		logger,
+		accountclosure.DefaultConsumerConfig(),
+	)
+	if err != nil {
+		log.Fatalf("content-service UserAccountClosed consumer assembly failed: %v", err)
+	}
+	if err := accountClosureConsumer.EnsureGroup(ctx); err != nil {
+		log.Fatalf("content-service UserAccountClosed consumer group init failed: %v", err)
+	}
+	go accountClosureConsumer.Run(ctx)
+	healthChecker.Register("user-account-closed-consumer", func(context.Context) error {
+		return accountClosureConsumer.Healthy(15 * time.Second)
+	})
 
 	source := recinfra.NewPostProjectionSource(store, store)
 	rawCandidateSources := recommendationCandidateSources(mongoCandidateSources, source)
@@ -910,173 +919,62 @@ func main() {
 	recOpts = append(recOpts, rtrec.WithPolicyStore(policyStore))
 	recOpts = append(recOpts, rtrec.WithExposureGovernance(sessionCache, sessionCache))
 
-	engine := rtrec.NewEngine(sessionCache, candidateSources, recOpts...)
-	feedServiceOpts := []feedapp.FeedServiceOption{
-		feedapp.WithFeedFilterObserver(feedmetrics.Observer{}),
-	}
-	if intersectionService != nil {
-		feedServiceOpts = append(feedServiceOpts, feedapp.WithFeedIntersectionProvider(intersectionService))
-	}
-	if entityCardProvider != nil {
-		// 混合对象卡（B4 插卡模式，S0 实体主页卡）：策略经热加载 policy 读取，
-		// enabled=false 即零成本关闭；召回器只读既有物化集合（fail-open 到无卡）。
-		feedServiceOpts = append(feedServiceOpts, feedapp.WithObjectCardProvider(
-			entityCardProvider,
-			func() rtrecpolicy.ObjectCardConfig { return policyStore.Current().ObjectCards },
-		))
-	}
-	if postQueryReader == nil {
-		log.Fatal("content-service Post query reader is not configured")
-	}
-	if viewerBlockReader == nil {
-		log.Fatal("content-service viewer block reader is not configured")
-	}
-	feedServiceOpts = append(
-		feedServiceOpts,
-		feedapp.WithFeedViewerBlockReader(viewerBlockReader),
-	)
-	feedService := feedapp.NewFeedService(engine, postQueryReader, feedServiceOpts...)
-	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
-		Detail:       postQueryReader,
-		Author:       postQueryReader,
-		Tombstones:   store,
-		ViewerBlocks: viewerBlockReader,
+	handler := buildContentHTTPHandler(contentHTTPHandlerInput{
+		ctx:                       ctx,
+		logger:                    logger,
+		healthChecker:             healthChecker,
+		router:                    router,
+		bufferedWriter:            bufferedWriter,
+		sessionCache:              sessionCache,
+		candidateSources:          candidateSources,
+		recommendationOptions:     recOpts,
+		policyStore:               policyStore,
+		postStore:                 store,
+		postQueryReader:           postQueryReader,
+		viewerBlockReader:         viewerBlockReader,
+		reactionStore:             reactionStore,
+		reactionService:           reactionServiceCore,
+		commentStore:              commentDataAdapter,
+		commentService:            commentServiceCore,
+		reportStore:               reportStore,
+		mediaStore:                mediaStore,
+		mediaRuntime:              mediaRuntime,
+		postServiceOptions:        postServiceOpts,
+		moderationStore:           moderationStore,
+		moderationFacades:         moderationFacades,
+		feedbackRecorder:          recFeedback,
+		onboardingTaxonomy:        onboardingTaxonomy,
+		behaviorEventStore:        behaviorEventStore,
+		wishlistEventStore:        wishlistEventStore,
+		wishlistStateReader:       wishlistStateReader,
+		dailyMetricsStore:         dailyMetricsStore,
+		authorImpactStore:         authorImpactStore,
+		authorImpactEvidenceStore: authorImpactEvidenceStore,
+		intersectionService:       intersectionService,
+		entityCardProvider:        entityCardProvider,
+		bulkImportService:         bulkImportService,
+		outboundShareFacades:      outboundShareFacades,
+		profileInteractionFacades: profileInteractionFacades,
+		filterCatalogFacades:      filterCatalogFacades,
 	})
-	if reactionStore == nil || reactionServiceCore == nil || commentDataAdapter == nil || commentServiceCore == nil {
-		log.Fatal("content-service Comment/ContentReaction object composition is not configured")
-	}
-	reactionService := reactionapp.BindFacades(reactionServiceCore)
-	commentService := commentapp.BindFacades(commentServiceCore)
-	startCommentReportModerationProjection(
-		ctx,
-		reportStore,
-		commentService,
-		healthChecker,
-		logger,
+	handler, err = runtimemessaging.WithDeadLetterRecoveryRoute(
+		handler,
+		runtimemessaging.DeadLetterRecoveryRouteConfig{
+			Path:     "/internal/content/account-closure/dead-letters:recover",
+			Module:   rterr.ModuleContent,
+			Releaser: accountClosureConsumer,
+		},
 	)
-	postDataPorts := postapp.WithMediaAssetBindingReader(
-		postapp.BindDataPorts(store),
-		mediainfra.NewPostBindingReader(mediaStore, mediaObjectGateway),
-	)
-	postServiceCore := postapp.NewPostService(postDataPorts, postServiceOpts...)
-	postService := postapp.BindFacades(postServiceCore)
-	if moderationStore == nil {
-		log.Fatal("content-service PostModerationCase store is not configured")
+	if err != nil {
+		log.Fatalf("content-service account-closure recovery route failed: %v", err)
 	}
-	// 审核决定 → Post lifecycle：独立 moderation outbox checkpoint，
-	// 仅 exact post revision 可执行内部三次 CAS；无公开 If-Match/Saga。
-	startModerationOutboxRelay(
-		ctx,
-		moderationStore,
-		moderationStore,
-		postapp.NewPostModerationDecisionConsumer(postService),
-		"content-moderation-post-lifecycle",
-		"content_moderation_post_lifecycle",
-		healthChecker,
-		logger,
-	)
-	var reportFacades *reportapp.Facades
-	if reportStore != nil {
-		reportServiceCore := reportapp.NewReportService(
-			reportapp.BindDataPorts(reportStore),
-			reportapp.WithLifecycleObserver(reportmetrics.Observer{}),
-		)
-		reportFacades = reportapp.BindFacades(reportServiceCore)
-	}
-	// 低风险实时推荐 patch（阶段七 §G）：复用 realtime redis scene 的 per-user pub/sub
-	// 在安全边界发射 negative_feedback_removal / new_candidate_hint / refresh_suggestion。
-	feedPatchEmitter := rtrec.NewFeedPatchEmitter(
-		router.Scene("realtime"),
-		rtrec.WithFeedPatchLogger(logger),
-	)
-	behaviorOpts := []behaviorapp.BehaviorServiceOption{
-		behaviorapp.WithBehaviorFeedbackRecorder(recFeedback),
-		// N1-3 experiment_bucket 归因：与 engine 的 scoring 分桶同源
-		//（同一 policy 确定性 hash），行为漏斗指标可按分桶切分。
-		behaviorapp.WithExperimentBucketResolver(func(userID string) string {
-			policy := policyStore.Current()
-			return policy.ResolveBucketOr(rtrecpolicy.ExpScoringWeights, userID, nil, policy.DefaultPreset)
-		}),
-		behaviorapp.WithSessionCacheInvalidator(sessionCache.Invalidate),
-		behaviorapp.WithBehaviorEventStore(behaviorEventStore),
-		behaviorapp.WithWishlistEventStore(wishlistEventStore),
-		behaviorapp.WithWishlistStateReader(wishlistStateReader),
-		behaviorapp.WithDailyMetricsStore(dailyMetricsStore),
-		behaviorapp.WithAuthorImpactStore(authorImpactStore),
-		behaviorapp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
-		behaviorapp.WithFeedPatchEmitter(feedPatchEmitter),
-	}
-	// 交集负反馈冷却下沉（F 推荐差异化）：intersection_feedback 事件经 behavior 批处理
-	// 调 IntersectionService.ReportNegativeFeedback 写 rec:ineg。仅在交集服务启用时注入，
-	// 避免 typed-nil interface 陷阱（nil 指针包成非 nil 接口会导致方法调用 panic）。
-	if intersectionService != nil {
-		behaviorOpts = append(behaviorOpts, behaviorapp.WithIntersectionFeedbackSink(intersectionService))
-	}
-	behaviorService := behaviorapp.NewBehaviorService(bufferedWriter, store, behaviorOpts...)
-
-	var handlerOpts []httpadapter.ContentHandlerOption
-	handlerOpts = append(handlerOpts, httpadapter.WithHealthChecker(healthChecker))
-	if outboundShareFacades == nil {
-		log.Fatal("content-service OutboundShareFact object composition is not configured")
-	}
-	handlerOpts = append(handlerOpts, httpadapter.WithOutboundShareService(outboundShareFacades))
-	if profileInteractionFacades == nil {
-		log.Fatal("content-service ProfileInteraction object composition is not configured")
-	}
-	handlerOpts = append(
-		handlerOpts,
-		httpadapter.WithProfileInteractionService(profileInteractionFacades),
-	)
-	if filterCatalogFacades == nil {
-		log.Fatal("content-service FilterCatalogRelease object composition is not configured")
-	}
-	handlerOpts = append(
-		handlerOpts,
-		httpadapter.WithFilterCatalogReleaseService(filterCatalogFacades),
-	)
-	if moderationFacades == nil {
-		log.Fatal("content-service PostModerationCase object composition is not configured")
-	}
-	handlerOpts = append(handlerOpts, httpadapter.WithModerationService(moderationFacades))
-	handlerOpts = append(handlerOpts, httpadapter.WithMediaService(mediaService))
-	if mediaImageReprocessService == nil {
-		log.Fatal("content-service MediaImageReprocessRun object composition is not configured")
-	}
-	handlerOpts = append(
-		handlerOpts,
-		httpadapter.WithMediaImageReprocessService(mediaImageReprocessService),
-	)
-	if bulkImportService != nil {
-		handlerOpts = append(handlerOpts, httpadapter.WithBulkImportService(bulkImportService))
-	}
-
-	// 交集统一体验服务：跨会话冷却窗口（rec:icool ZSET）+ per-dimension 已读水位
-	// （ix:watermark HASH）+ 事实/概率合并排序。
-	if intersectionService != nil {
-		handlerOpts = append(handlerOpts, httpadapter.WithIntersectionService(intersectionService))
-	}
-	if authorImpactStore != nil {
-		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactStore(authorImpactStore))
-	}
-	if authorImpactEvidenceStore != nil {
-		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore))
-	}
-
-	handler := httpadapter.NewContentHandler(
-		feedService,
-		postService,
-		postQueryService,
-		commentService,
-		reactionService,
-		reportFacades,
-		behaviorService,
-		handlerOpts...,
-	).Routes()
 	server := buildContentHTTPServer(
 		addr,
 		instanceID,
 		handler,
 		healthChecker,
+		accessTokenConfig,
+		accountSecurityAuthority,
 		runtimeLogging.ioLogger,
 		runtimeLogging.processLogger,
 		runtimeLogging.exceptionLogger,

@@ -15,6 +15,7 @@ from content.release.model import DeletePolicy, ImportMode
 
 _IMPORT_REPORT_SCHEMAS = {
     "quwoquan.content_import_report": "import_report",
+    "quwoquan.user_creator_import_report": "creator_import_report",
     "quwoquan_service.homepage_import_report": "homepage_import_report",
 }
 
@@ -62,6 +63,7 @@ def run_content_importer(
     dry_run: bool,
     mode: ImportMode = ImportMode.UPSERT,
     delete_policy: DeletePolicy = DeletePolicy.NONE,
+    creator_receipt: Path,
 ) -> None:
     report_path = run / "import.json"
     command = [
@@ -82,6 +84,8 @@ def run_content_importer(
         delete_policy,
         "--report",
         str(report_path),
+        "--creator-receipt",
+        str(creator_receipt),
     ]
     if dry_run:
         command.append("--dry-run")
@@ -95,11 +99,50 @@ def run_content_importer(
     assert_import_report_contract(report_path, expected_release_id=release.name)
 
 
+def run_creator_importer(
+    *,
+    release: Path,
+    env: str,
+    run: Path,
+    mongo_uri: str,
+    postgres_dsn: str,
+    dry_run: bool,
+    mode: ImportMode = ImportMode.UPSERT,
+) -> Path:
+    """Materialize release-owned public creator profiles before content posts."""
+    report_path = run / "creator-import.json"
+    command = [
+        "go",
+        "run",
+        "./services/user-service/cmd/release-import",
+        "--release-root",
+        str(release),
+        "--mongo-uri",
+        mongo_uri,
+        "--postgres-dsn",
+        postgres_dsn,
+        "--env",
+        env,
+        "--mode",
+        mode,
+        "--report",
+        str(report_path),
+    ]
+    if dry_run:
+        command.append("--dry-run")
+    result = subprocess.run(command, cwd=REPO_ROOT / "quwoquan_service", check=False)
+    if result.returncode != 0:
+        raise SystemExit(f"[ship] creator importer failed: exit={result.returncode}")
+    assert_import_report_contract(report_path, expected_release_id=release.name)
+    return report_path
+
+
 def run_homepage_importer(
     *,
     release: Path,
     env: str,
     run: Path,
+    run_id: str,
     mongo_uri: str,
     media_base_url: str,
     dry_run: bool,
@@ -118,6 +161,8 @@ def run_homepage_importer(
         media_base_url,
         "--env",
         env,
+        "--run-id",
+        run_id,
         "--mode",
         mode,
         "--report",
@@ -157,6 +202,7 @@ def run_homepage_importer(
 
 __all__ = [
     "assert_import_report_contract",
+    "run_creator_importer",
     "run_content_importer",
     "run_homepage_importer",
 ]

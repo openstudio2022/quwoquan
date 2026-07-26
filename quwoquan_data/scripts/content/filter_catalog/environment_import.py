@@ -101,11 +101,11 @@ def load_environment_import(
 
 
 def _metadata_operation_paths(repo_root: Path) -> dict[str, str]:
-    service_path = repo_root / artifact.METADATA_OBJECT_REF / "service.yaml"
-    service_document = yaml.safe_load(service_path.read_text(encoding="utf-8"))
-    routes = service_document.get("api_routes")
+    operations_path = repo_root / artifact.METADATA_OBJECT_REF / "operations.yaml"
+    operations_document = yaml.safe_load(operations_path.read_text(encoding="utf-8"))
+    routes = operations_document.get("api_routes")
     if not isinstance(routes, list):
-        raise CatalogContractError("metadata service.yaml api_routes 非法")
+        raise CatalogContractError("metadata operations.yaml api_routes 非法")
     by_operation = {
         route.get("operation"): route
         for route in routes

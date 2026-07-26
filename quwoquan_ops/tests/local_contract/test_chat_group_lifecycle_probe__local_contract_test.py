@@ -101,7 +101,7 @@ class ChatGroupLifecycleProbeLocalContractTest(unittest.TestCase):
 
     def test_release_profiles_register_group_lifecycle_probe(self) -> None:
         registry = json.loads(
-            (ROOT / "quwoquan_ops/environments/gamma_validation_suites.json").read_text(
+            (ROOT / "quwoquan_ops/environments/gamma/validation_suites.json").read_text(
                 encoding="utf-8"
             )
         )

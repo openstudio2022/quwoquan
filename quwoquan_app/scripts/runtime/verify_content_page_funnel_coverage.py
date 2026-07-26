@@ -21,7 +21,7 @@ PAGE_CONTRACT = (
 )
 EVENT_CATALOG = (
     REPO_ROOT
-    / "quwoquan_service/contracts/metadata/ops/event_record/event_catalog.yaml"
+    / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/event_catalog.yaml"
 )
 SLS_CONTRACT = (
     REPO_ROOT

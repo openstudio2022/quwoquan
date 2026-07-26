@@ -1,135 +1,224 @@
-# L2 特性：runtime-external-integration
+# L2 Business Capability：运行时外部集成 (`runtime-external-integration`)
 
-## 0. Spec Entry
+> 所属领域：[`runtime`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-- **AppRoot Journey / Scenario**：所有依赖外部 Provider 的可发布 Journey；首个显式回链为
-  `message-social-connection / message-call-and-offline-delivery`。
-- **L1_domain_service**：`runtime`。`integration-service` 是由 runtime 治理的独立部署进程，
-  不是新的 L1 领域服务。
-- **L2_business_capability**：`runtime-external-integration`。
-- **L3_story**：`integration-service-foundation`、
-  `integration-service-foundation--location-nearby-search-gateway`、
-  `provider-adapter-conformance-suite`、
-  `capability-provider-commercial-readiness-gate`。
-- **验收意图**：L2 使用 SIT；L3 使用 GWT / contract；用户可感知的 Provider 故障、
-  降级与恢复回链 AppRoot UAT。
-- **测试证据**：`local_contract`、`api_integration`、`user_acceptance`。Alpha、Beta、
-  Gamma 是执行环境维度，不是第四测试层。
+## 1. 能力目标
 
-## 1. 目标与用户价值
+以能力专属 typed Port、Provider Adapter、构建期 BindingCompiler、统一 Conformance Suite、3×3 证据和双层 readiness 隔离第三方差异；integration-service 只是 runtime 治理的一种部署形态。
 
-外部 SDK、endpoint、鉴权、错误码、回调 DTO、重试与限流差异不得穿透业务代码。每项
-外部能力采用唯一链路：
+## 2. 范围与非目标
 
-```text
-业务/领域能力 -> 能力专属 typed Port -> Provider Adapter -> 外部服务
-```
+### In Scope
 
-业务只消费稳定请求/响应、`RuntimeFailure + RuntimeRecoveryPolicy`、deadline/cancel、
-幂等键、观测上下文与隐私分类。Provider 不可用时必须产生真实失败、明确降级或阻断发布，
-不得返回 fixture、空集合、固定成功或自动切换 Mock。
+- Capability/Adapter/环境 Binding 单轨注册、显式 composition 与启动 fail-closed
+- Alpha/Beta/Gamma × local_contract/api_integration/user_acceptance 九格证据
+- 统一错误、超时/取消、幂等、隐私、观测、成本、降级、切换与回滚
+- SLS、MQ、DNS、RTC、LLM 首波及其余现存外部依赖的分波迁移
 
-## 2. 范围
+### Out of Scope
 
-### 2.1 In Scope
+- 为无产品需求的未来能力预造万能 Provider
+- 运行时扫描 metadata、动态选厂或以 Mock/Fake 作为 **Prod** fallback
+- 在 Alpha/Beta/Gamma 注入真实厂商凭据，或用任一 local-substitute evidence 冒充 Prod hosted readiness
 
-- 已存在或产品已声明 required 的外部能力：日志/SLS、对象存储/CDN、RTC、模型/Embedding、
-  Push/SMS、OAuth/一键登录、Realtime、搜索、内容安全与 Redis 共享消息传输。共享消息能力
-  必须通过 provider-neutral boundary、全部实际组合根的启动预检和真实 consumer 证据后才可
-  标为 release-required；NATS 与 DNS 仍仅保持资产登记。
-- 能力合同、Adapter 库存、环境 Binding、binding root、readiness、供应链、观测、成本、
-  降级、切换、回滚与商用证据。
-- Alpha/Beta/Gamma × `local_contract/api_integration/user_acceptance` 九格证据。
-- Capability 与具体 Vendor Adapter 两级独立准出。
+## 3. Journey / Scenario 贡献
 
-### 2.2 Out of Scope
+- [`JNY-007 / SCN-016`](../../spec.md#scn-016)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：以能力专属 typed Port、Provider Adapter、构建期 BindingCompiler、统一 Conformance Suite、3×3 证据和双层 readiness 隔离第三方差异，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
 
-- 为尚无产品需求的邮件、支付等能力预造 Port。
-- 把所有 Provider 强制代理到 `integration-service`。
-- 在运行时扫描 metadata、动态注册对象或按字符串反射选厂。
-- 用 Prod smoke 替代 Gamma 证据，或用替代 Provider 的通过状态提升目标厂商 Adapter。
+## 4. Story
 
-## 3. 访问策略
 
-每个 Adapter 必须登记且恰属一种策略：
 
-- `central_integration`：跨业务域复用、需要服务端鉴权/审计的 SaaS，经
-  `integration-service` 对象 Facade 暴露。
-- `domain_owned_adapter`：只服务一个业务对象的外部实现，位于该服务
-  `internal/infrastructure/<context>/<object>/**`。
-- `client_platform_adapter`：设备 SDK/原生能力，经 `quwoquan_app/lib/core/platform/**`
-  防腐接口和 capability profile 装配。
-- `data_pipeline_adapter`：离线公开源或数据加工 Provider，经 `qwq-data` CLI-first
-  工作流接入。
-- `runtime_shared_adapter`：由多个静态组合根共同消费的基础设施能力。每个 root 必须在
-  编译期 receipt 中显式登记，并在启动时对同一环境 Binding 执行 fail-closed preflight；
-  不允许任一 root 自行选择 Adapter。
+- [`capability-provider-commercial-readiness-gate`](./capability-provider-commercial-readiness-gate/spec.md)：替代 Adapter 通过、旧 digest、不同 commit/image/config 或缺目标厂商证据均不能 提升目标 adapter_ready。
+- [`integration-service-foundation`](./integration-service-foundation/spec.md)：对外只暴露标准化接口，禁止端侧直接调用供应商 API。
+- [`provider-adapter-conformance-suite`](./provider-adapter-conformance-suite/spec.md)：success、validation、auth、network/DNS、timeout、throttle、retry、idempotency、 callback ordering、redaction、observability 均被同一 Adapter 执行。
 
-豁免仅表示不经过 `integration-service`；不豁免 typed Port、注册表、错误合同、隐私、
-Conformance Suite、环境 Binding 与商用门禁。
+## 5. 能力要求
 
-## 4. 真相源
+<a id="req-001"></a>
+### REQ-001 能力专属 Port、Adapter 隔离与访问策略
 
-- 请求/响应、operation、错误、隐私与对象边界：
-  `quwoquan_service/contracts/metadata/**`。
-- Provider/SDK/Adapter 库存及 `capability_id -> adapter_id`：
-  `docs/external_service_registry.yaml`。
-- 每环境主备、endpoint/secret 引用与启动策略：
-  `quwoquan_ops/environments/external_provider_bindings.yaml`。
-- Conformance 执行映射：
-  `quwoquan_ops/environments/provider_conformance_manifest.yaml`。
-- 场景语义与完成条件：本能力及 L3 的 `acceptance.yaml`。
-- 可删除运行事实：`.qwq_output` 规范化 evidence；它永远不是配置或环境真相源。
+- 每项外部能力有唯一 canonical typed Port；Vendor SDK/type/endpoint/error/callback DTO 只存在于登记的 Adapter 路径。
+- Adapter 恰属 central_integration、domain_owned_adapter、client_platform_adapter、 data_pipeline_adapter 之一；豁免不绕过注册、合同、测试和商用门禁。
+- application/domain/UI 不直接读取第三方配置、环境变量或 Vendor DTO。
 
-## 5. 环境与测试合同
+<a id="req-002"></a>
+### REQ-002 构建期 Binding、显式装配与逐能力 readiness
 
-- **Alpha**：本地、内存、可控模拟或轻量参考实现；必须执行真实合同、状态机、异常注入与
-  完整旅程，禁止固定成功。
-- **Beta**：远端沙箱、轻量真实服务、自建兼容服务或厂商测试环境；验证 TLS、鉴权、
-  callback、retry、timeout、throttle 与真实协议，禁止纯内存替代远端。
-- **Gamma**：生产级 Adapter 连接隔离 Gamma/沙箱租户；验证真实凭据、真实调用、观测、
-  切换与回滚，禁止 Mock/Fake/InMemory/Noop/fixed-test/deterministic。
-- **Prod**：只有 `prod-hosted`；低风险真实租户验证发生在 `gray_initial`，不得反写成
-  Gamma 或目标 Adapter 的历史证据。
+ - 对象 `operations.yaml` 的 external dependency、服务本地环境 Binding、派生
+   receipt/descriptor、SBOM 与 acceptance 双向一致；不得维护全局 registry、binding
+   file 或 conformance manifest。
+- BindingCompiler 只在构建/门禁阶段运行；运行时不扫描 metadata 或按字符串动态选厂。
+- content embedding、user one-tap/social、integration location/SMS/Push、assistant model、 RTC room 与 runtime SLS 各自产出 root-scoped checked-in Go descriptor，并由对应 composition entrypoint fail-closed 消费。
+- runtime.message.transport 使用唯一 Redis Adapter Binding；其所有实际 producer/ consumer root 共享同一环境选择、各自产出 descriptor 并在 publisher/consumer 构造前 preflight Redis scene。任何 root 直接构造未校验 transport、静默跳过 consumer 或把 Pub/Sub 当作 durable delivery 均为阻断。
+- runtime NATS 与 DNS 显式声明生产消费为 none，仅为资产登记；不得列为 release-required、不得生成 release Binding 或冒充 readiness 证据。
+- Alpha/Beta/Gamma 缺 **local_substitute** Provider、自动生成材料、初始化或健康探针时启动失败。
+- Prod 缺 **真实厂商** Provider、外部注入凭据、初始化或健康探针时启动失败，并拒绝 local substitute Adapter。
+- optional 能力仅结构化 unavailable/degraded，绝不假成功。
+- readiness 只暴露 capability/adapter ID、状态、版本、digest 和 evidence URI，不暴露 endpoint、Secret 或 token。
 
-Beta/Gamma 的 `local_contract` 对真实 Adapter 类运行同一场景的本地协议/故障 harness，
-永不访问外网；真实远端调用只属于 `api_integration`。九格每格必须记录场景、文件、命令、
-Adapter/config/ContractGraph digest、网络边界、数据 digest、断言/skip、观测引用与
-acceptance refs。
+<a id="req-003"></a>
+### REQ-003 Provider 公共/专项 Conformance 与 Alpha/Beta/Gamma 九格证据
 
-## 6. 错误、隐私与可观测
+- 公共 suite 覆盖 success、validation、auth、network/DNS、timeout、throttle、retry、 idempotency、redaction 与 observability；能力专项 profile 覆盖本能力协议语义。
+- Alpha/Beta/Gamma 各自执行 local_contract、api_integration、user_acceptance；环境不是 第四测试目录层。
+- local_contract 对对应环境 Binding 选中的 Adapter 类运行离线协议/故障 harness，永不访问外网；api_integration 连接该环境声明的协议端点：Alpha/Beta/Gamma 为 Port 对等 local substitute，Prod Remote receipt 连接生产厂商租户。
+- runtime.message.transport 的 user_acceptance 只能以 production Remote composition 的 原生设备 chat @ assistant journey 取证，并受 stackctl 解析的 endpoint、CI 注入的 auth 和环境 seed 约束；未登记该 harness 时必须输出 PROVIDER.CONFORMANCE.REMOTE_CHAT_ASSISTANT_UAT_HARNESS_REQUIRED 并 GATE_BLOCK， 不得用 memory Redis、fixture consumer、UI mock 或 Provider override 生成 passed。
+- 每格报告含当前 commit/image/config/ContractGraph/Adapter digest、断言/skip、网络边界、 数据 digest、acceptance refs 与 logs/traces/metrics 引用。
+- NOT_RUN、required skip、零断言、dry-run、旧 digest、缺观测或缺清理回执均阻断。
 
-- 第三方原始错误只在 Adapter 内转换为 metadata 生成的稳定错误和
-  `RuntimeRecoveryPolicy`；context 仅使用 string-only attributes。
+<a id="req-004"></a>
+### REQ-004 Provider 故障、降级、替换与原子回滚
+
+- required Provider 不可用且无 ready 备选时阻断 rollout；optional 能力关闭时返回结构化 指引，禁止切 Mock 或本地合成成功。
+- 切换只发生在两个 ready 的 production-grade Adapter 之间，并验证合同/数据兼容、 用户 Journey 连续、指标口径一致和旧 callback 收口。
+- config+image 成对发布和回滚；last-good 可恢复且回滚后健康、数据与用户结果一致。
+
+<a id="req-005"></a>
+### REQ-005 输出目录、Secret 与 evidence 隔离
+
+- Provider 配置、环境 Binding、schema、policy、endpoint/secret 值、渲染 `.env`、 证书和 TLS 状态均不进入 `.qwq_output`。
+- 输出根 `.qwq_output` 只含可删除重建的 runs/observability/process/cache 分类产物
+- deploy payload、渲染配置、Caddy、TLS 与 env 文件写入 `QWQ_DEPLOY_WORK_ROOT/<target>/`
+- process 不含 config/PKI，evidence 只含 ref/digest 和脱敏状态。
+- 删除 `.qwq_output` 后可仅凭版本控制真相源和显式外部依赖重建。
+
+<a id="req-006"></a>
+### REQ-006 Alpha/Beta/Gamma 对等替代与 Prod hosted 分层对接
+
+- `runtime_shared_adapter` 由多个静态组合根共同消费；每个 composition root 必须引用同一公开 Port 与 Adapter 契约，禁止复制实现。
+- **Alpha / Beta / Gamma** 必须绑定 **local_substitute** Adapter（`protocol_fixture` / `local_recorder` / `local_capture` / `local_log_sink` / `elasticsearch_local` / 平台本地 Redis·MinIO），`state: enabled`，所需材料由 `QWQ_DEPLOY_WORK_ROOT` 下的统一 materializer 或本地基础设施拓扑生成。
+- **Gamma（gamma-local 拓扑）** 同时运行 production Remote composition、完整第一方拓扑、黑盒 API 与真机 Journey；禁止 UI Mock、Provider override、真实第三方租户或真实第三方凭据。领域可选择比 Alpha/Beta 更完整的本地外部引擎替身，但不得改变 canonical Port。
+- **Prod（含 gray）** 只允许真实厂商 Adapter 与生产租户，禁止 fixture/mock/fake/local_* 替代 Adapter；Prod hosted rollout receipt 独立绑定 Prod config/topology，不能由 Gamma receipt 替代。
+- Alpha/Beta/Gamma 的 canonical Port、assertionIds 与 ContractGraph 必须一致，替代实现必须 Port 对等且禁止 UI 假绿。
+- Prod 缺真实凭据时 fail-closed 并 GATE_BLOCK；不得用 Alpha/Beta/Gamma substitute receipt 冒充 Prod hosted readiness。
 - deadline、cancel、幂等、retry/throttle 必须由能力合同约束，调用方不得猜测 Vendor 行为。
-- credential、token、原始 endpoint、PII/SECRET 不得进入日志、trace、metric label、
-  readiness 或 evidence；只允许引用 ID、digest 与脱敏状态。
-- 每项 required 能力必须有可查询的成功率、错误率、P95/P99、throttle、retry、
-  dependency health、成本/配额与切换标识；告警和回滚使用同一 `capability_id/adapter_id`。
-- `runtime.message.transport` 额外以 `binding_root + adapter_id + operation` 维度记录
-  ephemeral publish、durable append/consume/ACK/reclaim、pending lag、DLQ 与 preflight；
-  5 分钟窗口内 durable append/consume P95 不得高于 250ms、成功率不得低于 99.9%，
-  任一 consumer group pending 超过 1,000 或出现非零 DLQ 增量必须停止 rollout 并进入
-  受控恢复。阈值、告警与 last-good rollback receipt 必须由同一 release evidence 引用。
+- credential、token、原始 endpoint 与 PII/SECRET 不得进入日志、trace、metric label 或运行证据正文；自动生成的 secrets 不得写入仓库或 `.qwq_output`。
+- 每项 required 能力必须暴露可查询的成功率、错误率、P95/P99、throttle、retry 与 provider 可用性。
+- optional 能力只能以结构化 unavailable/degraded 关闭并提供用户指引；禁止假成功或静默回退。
+- 切换只允许在两个 ready Adapter 之间进行；必须验证数据与合同兼容、用户旅程连续和回滚可执行。
 
-## 7. Readiness、降级与回滚
+## 6. 契约与依赖
 
-- `adapter_ready=true`：该 Adapter 的公共/专项 Conformance、Beta/Gamma 真实证据、鉴权、
-  读写/回调、错误映射、脱敏、指标告警和巡检全部通过。
-- `capability_ready=true`：至少一个 production-grade Adapter ready，且 Capability 九格、
-  用户旅程、切换与回滚全部通过。
-- Gamma/Prod 缺 required Provider、凭据、初始化或健康探针时启动失败。
-- optional 能力只能以结构化 unavailable/degraded 关闭并提供用户指引；禁止假成功或
-  自动切 Mock。
-- 切换只允许在两个 ready Adapter 之间进行；必须验证数据/合同兼容、用户旅程连续、
-  指标口径一致、旧 callback 收口和 config+image 成对回滚。
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-## 8. 商用阻断
+## 7. 集成验收
 
-任一条件成立即 `GATE_BLOCK`：
+<a id="sit-001"></a>
+### SIT-001 能力专属 Port、Adapter 隔离与访问策略
 
-- 无能力专属 Port，或业务代码直接依赖 Vendor SDK/type/endpoint/error/DTO。
-- required 能力无 Beta 真实远端或 Gamma production-grade Adapter。
-- Conformance Suite 未执行、九格有空白/NOT_RUN/required skip/零断言/旧 digest。
-- 启动缺配置仍报 ready，外部失败返回 fixture/空集合/固定成功，或日志/evidence 泄密。
-- `.qwq_output` 被用作配置、环境 Binding、schema、policy、Secret 或 TLS 真相源。
+- GIVEN 执行“能力专属 Port、Adapter 隔离与访问策略”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“能力专属 Port、Adapter 隔离与访问策略”对应动作。
+- THEN 每项外部能力有唯一 canonical typed Port；Vendor SDK/type/endpoint/error/callback DTO 只存在于登记的 Adapter 路径。
+- THEN Adapter 恰属 central_integration、domain_owned_adapter、client_platform_adapter、 data_pipeline_adapter 之一；豁免不绕过注册、合同、测试和商用门禁。
+- THEN application/domain/UI 不直接读取第三方配置、环境变量或 Vendor DTO。
+
+<a id="sit-002"></a>
+### SIT-002 构建期 Binding、显式装配与逐能力 readiness
+
+- GIVEN 执行“构建期 Binding、显式装配与逐能力 readiness”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“构建期 Binding、显式装配与逐能力 readiness”对应动作。
+ - THEN 对象 `operations.yaml` 的 external dependency、服务本地环境 Binding、派生
+   receipt/descriptor、SBOM 与 acceptance 双向一致；不得维护全局 registry、binding
+   file 或 conformance manifest。
+- THEN BindingCompiler 只在构建/门禁阶段运行；运行时不扫描 metadata 或按字符串动态选厂。
+- THEN content embedding、user one-tap/social、integration location/SMS/Push、assistant model、 RTC room 与 runtime SLS 各自产出 root-scoped checked-in Go descriptor，并由对应 composition entrypoint fail-closed 消费。
+- THEN runtime.message.transport 使用唯一 Redis Adapter Binding；其所有实际 producer/ consumer root 共享同一环境选择、各自产出 descriptor 并在 publisher/consumer 构造前 preflight Redis scene。任何 root 直接构造未校验 transport、静默跳过 consumer 或把 Pub/Sub 当作 durable delivery 均为阻断。
+- THEN runtime NATS 与 DNS 显式声明生产消费为 none，仅为资产登记；不得列为 release-required、不得生成 release Binding 或冒充 readiness 证据。
+- THEN Alpha/Beta/Gamma 缺 local_substitute Provider、自动生成材料、初始化或健康探针时启动失败。
+- THEN Prod 缺真实厂商 Provider、外部注入凭据、初始化或健康探针时启动失败，并拒绝本地替代 endpoint。
+- THEN optional 能力仅结构化 unavailable/degraded，绝不假成功。
+- THEN readiness 只暴露 capability/adapter ID、状态、版本、digest 和 evidence URI，不暴露 endpoint、Secret 或 token。
+
+<a id="sit-003"></a>
+### SIT-003 Provider 公共/专项 Conformance 与 Alpha/Beta/Gamma 九格证据
+
+- GIVEN 执行“Provider 公共/专项 Conformance 与 Alpha/Beta/Gamma 九格证据”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“Provider 公共/专项 Conformance 与 Alpha/Beta/Gamma 九格证据”对应动作。
+- THEN 公共 suite 覆盖 success、validation、auth、network/DNS、timeout、throttle、retry、 idempotency、redaction 与 observability；能力专项 profile 覆盖本能力协议语义。
+- THEN Alpha/Beta/Gamma 各自执行 local_contract、api_integration、user_acceptance；环境不是 第四测试目录层。
+- THEN local_contract 对对应环境 Binding 选中的 Adapter 类运行离线协议/故障 harness，永不访问外网；api_integration 连接该环境声明的协议端点：Alpha/Beta/Gamma 为 Port 对等 local substitute，Prod Remote receipt 连接生产厂商租户。
+- THEN runtime.message.transport 的 user_acceptance 只能以 production Remote composition 的 原生设备 chat @ assistant journey 取证，并受 stackctl 解析的 endpoint、CI 注入的 auth 和环境 seed 约束；未登记该 harness 时必须输出 PROVIDER.CONFORMANCE.REMOTE_CHAT_ASSISTANT_UAT_HARNESS_REQUIRED 并 GATE_BLOCK， 不得用 memory Redis、fixture consumer、UI mock 或 Provider override 生成 passed。
+- THEN 每格报告含当前 commit/image/config/ContractGraph/Adapter digest、断言/skip、网络边界、 数据 digest、acceptance refs 与 logs/traces/metrics 引用。
+- THEN NOT_RUN、required skip、零断言、dry-run、旧 digest、缺观测或缺清理回执均阻断。
+
+<a id="sit-004"></a>
+### SIT-004 Provider 故障、降级、替换与原子回滚
+
+- GIVEN 执行“Provider 故障、降级、替换与原子回滚”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“Provider 故障、降级、替换与原子回滚”对应动作。
+- THEN required Provider 不可用且无 ready 备选时阻断 rollout；optional 能力关闭时返回结构化 指引，禁止切 Mock 或本地合成成功。
+- THEN 切换只发生在两个 ready 的 production-grade Adapter 之间，并验证合同/数据兼容、 用户 Journey 连续、指标口径一致和旧 callback 收口。
+- THEN config+image 成对发布和回滚；last-good 可恢复且回滚后健康、数据与用户结果一致。
+
+<a id="sit-005"></a>
+### SIT-005 输出目录、Secret 与 evidence 隔离
+
+- GIVEN 执行“输出目录、Secret 与 evidence 隔离”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“输出目录、Secret 与 evidence 隔离”对应动作。
+- THEN Provider 配置、环境 Binding、schema、policy、endpoint/secret 值、渲染 `.env`、 证书和 TLS 状态均不进入 `.qwq_output`。
+- THEN 输出根 `.qwq_output` 只含可删除重建的 runs/observability/process/cache 分类产物
+- AND deploy payload、渲染配置、Caddy、TLS 与 env 文件写入 `QWQ_DEPLOY_WORK_ROOT/<target>/`
+- AND process 不含 config/PKI，evidence 只含 ref/digest 和脱敏状态。
+- THEN 删除 `.qwq_output` 后可仅凭版本控制真相源和显式外部依赖重建。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 能力专属 Port、Adapter 隔离与访问策略
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：每项外部能力有唯一 canonical typed Port；Vendor SDK/type/endpoint/error/callback DTO 只存在于登记的 Adapter 路径。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 构建期 Binding、显式装配与逐能力 readiness
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：对象 `operations.yaml` 的 external dependency、服务本地环境 Binding、派生
+  receipt/descriptor、SBOM 与 acceptance 双向一致，且不存在全局 registry、binding
+  file 或 conformance manifest。
+- 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 Provider 公共/专项 Conformance 与 Alpha/Beta/Gamma 九格证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：公共 suite 覆盖 success、validation、auth、network/DNS、timeout、throttle、retry、 idempotency、redaction 与 observability；能力专项 profile 覆盖本能力协议语义。
+- 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 Provider 故障、降级、替换与原子回滚
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：required Provider 不可用且无 ready 备选时阻断 rollout；optional 能力关闭时返回结构化 指引，禁止切 Mock 或本地合成成功。
+- 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-005"></a>
+### OPEN-005 输出目录、Secret 与 evidence 隔离
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：Provider 配置、环境 Binding、schema、policy、endpoint/secret 值、渲染 `.env`、 证书和 TLS 状态均不进入 `.qwq_output`。
+- 完成判定：`SIT-005` 对应行为满足且真实测试 `spec_ref` 有效

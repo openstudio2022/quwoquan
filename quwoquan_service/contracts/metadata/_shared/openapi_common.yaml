@@ -137,13 +137,6 @@ components:
       schema:
         type: string
       description: subAccountID，对外可见主体标识
-    XClientSubAccountContextVersion:
-      name: X-Client-Sub-Account-Context-Version
-      in: header
-      required: false
-      schema:
-        type: string
-      description: subAccount 上下文版本
     XClientPageId:
       name: X-Client-Page-Id
       in: header

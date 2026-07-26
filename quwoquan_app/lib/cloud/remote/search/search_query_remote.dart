@@ -21,7 +21,7 @@ final class RemoteCanonicalSearchQuery implements CanonicalSearchQueryFacet {
     DateTime? deadlineAt,
   }) {
     final base = invocationContext(SearchRequestPageIds.searchQuery);
-    return client.searchQuerySearchQuery(
+    return client.searchSearchQuerySearchQuery(
       query,
       context: CloudOperationInvocationContext(
         surfaceId: base.surfaceId,

@@ -55,6 +55,30 @@ def test_reference_only_strategy_is_not_release_allowed():
     assert validate_image_asset_strategy(spec) == []
 
 
+def test_attribution_audited_strategy_allows_scale_without_license_pool_gate():
+    required_targets = 100
+    spec = {
+        "scope": {
+            "coverageTargets": [
+                {"entityType": "地点/景区", "name": f"测试景区{index}"}
+                for index in range(required_targets)
+            ]
+        },
+        "content": {
+            "quotas": {"imageWorksPerTarget": 1},
+            "research": {
+                "imageAssetStrategy": "attribution_audited_publish",
+                "imageCountPolicy": "hard_quota",
+                "allowAiImages": False,
+            },
+        },
+        "acceptance": {"minEntities": required_targets},
+    }
+
+    assert validate_image_asset_strategy(spec) == []
+    assert image_asset_strategy_scale_issues(spec) == []
+
+
 def test_open_license_scale_requires_prescreened_pool_or_publish_strategy():
     spec = {
         "scope": {

@@ -20,6 +20,7 @@
     "duplicatePublishCount",
     "missingObjectCount",
     "idempotencyKey",
+    "taskOutcomes",
     "completedAt"
   ],
   "additionalProperties": false,
@@ -95,14 +96,6 @@
       "type": "integer",
       "minimum": 0
     },
-    "tokenCount": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "costUsd": {
-      "type": "number",
-      "minimum": 0
-    },
     "storageErrorCount": {
       "type": "integer",
       "minimum": 0
@@ -121,6 +114,22 @@
     },
     "idempotencyKey": {
       "const": "executionId+entity+carrier+sourceRevision+stage"
+    },
+    "taskOutcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["jobId", "status", "attempts"],
+        "additionalProperties": false,
+        "properties": {
+          "jobId": {"type": "string", "minLength": 1},
+          "status": {
+            "enum": ["ready", "processing", "retry_wait", "succeeded", "dead"]
+          },
+          "attempts": {"type": "integer", "minimum": 0},
+          "failureCode": {"type": "string", "minLength": 1}
+        }
+      }
     },
     "completedAt": {
       "type": "string",

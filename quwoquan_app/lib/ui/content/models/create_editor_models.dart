@@ -113,7 +113,7 @@ List<ArticlePageData> buildArticlePagesSnapshotFromDocument(
   );
 }
 
-/// 创作发布草稿聚合（`metadata_driven_ui_gap_inventory`：`ContentPublishDraftComposite`）。
+/// 创作发布草稿聚合；契约归属 metadata-driven-client-data-contract Story。
 typedef ContentPublishDraftComposite = CreateEditorState;
 
 @immutable

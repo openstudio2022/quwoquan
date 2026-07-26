@@ -1,0 +1,13 @@
+overrides:
+  sys.chat-service.mongodb.database: quwoquan_chat_local
+  sys.chat-service.runtime.auth.account_security_authority.timeout_ms: 500
+  sys.chat-service.runtime.media.group_avatar_cdn_base_url: https://beta-avatar.quwoquan-env.test:18100
+  sys.chat-service.runtime.reliable_task.ready_index.group: chat.group_avatar_worker.beta
+  sys.chat-service.runtime.reliable_task.ready_index.stream: reliabletask:chat:avatar:ready:beta
+secretRefs:
+  sys.chat-service.mongodb.uri: MONGO_URI
+externalBindings:
+  runtime.message.transport:
+    state: enabled
+    adapter: infra.redis.message_transport
+    timeoutMs: 5000

@@ -240,7 +240,7 @@ Widget _scopedApp({
           ownerUserId: 'user_001',
           displayName: '圈子测试用户',
           avatarUrl: '',
-          personaContextVersion: 'fixture-circle-shell',
+          contextVersion: 1,
         ),
       ),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),

@@ -37,7 +37,12 @@ FORBIDDEN_TRACKED_SEGMENTS = (
     "/__pycache__/",
     "/.pytest_cache/",
 )
-FORBIDDEN_GENERATED_DIRECTORY_NAMES = {"__pycache__", ".pytest_cache", ".venv"}
+FORBIDDEN_GENERATED_DIRECTORY_NAMES = {
+    ".qwq_output",
+    "__pycache__",
+    ".pytest_cache",
+    ".venv",
+}
 
 
 def _rel(path: Path) -> str:

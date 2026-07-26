@@ -1,0 +1,41 @@
+profileId: media-probe-video-playback
+processorProfile: media_probe_progressive_mp4
+productMaximumDurationMs: 3600000
+keyframeIntervalMs: 2000
+video:
+  codec: h264
+  container: mp4
+  pixelFormat: yuv420p
+  width: 540
+  height: 960
+audio:
+  codec: aac
+  sampleRateHz: 48000
+  bitrate: 32k
+preview:
+  frameIntervalMs: 5000
+  frameWidth: 240
+  frameHeight: 426
+  columns: 5
+assets:
+  - assetId: media-probe-seek-125s
+    assetVersion: 1
+    durationMs: 125000
+    framesPerSecond: 24
+    expectedProcessingStatus: ready
+    storyboard: true
+    publicSlicePrefix: media/video/s/media-probe-seek-125s/v1
+  - assetId: media-probe-hour-boundary-3595s
+    assetVersion: 1
+    durationMs: 3595000
+    framesPerSecond: 2
+    expectedProcessingStatus: ready
+    storyboard: false
+    publicSlicePrefix: media/video/s/media-probe-hour-boundary-3595s/v1
+  - assetId: media-probe-over-limit-3605s
+    assetVersion: 1
+    durationMs: 3605000
+    framesPerSecond: 2
+    expectedProcessingStatus: rejected
+    storyboard: false
+    publicSlicePrefix: media/video/s/media-probe-over-limit-3605s/v1

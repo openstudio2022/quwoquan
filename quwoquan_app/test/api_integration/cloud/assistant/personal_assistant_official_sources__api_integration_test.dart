@@ -45,7 +45,7 @@ void main() {
       }
       final hosts = <String>{};
       for (final reference in state.processSummary.acceptedReferences) {
-        final uri = Uri.tryParse(reference.url);
+        final uri = Uri.tryParse(reference.destination.url ?? '');
         final host = (uri?.host ?? '').toLowerCase();
         expect(
           uri?.scheme,

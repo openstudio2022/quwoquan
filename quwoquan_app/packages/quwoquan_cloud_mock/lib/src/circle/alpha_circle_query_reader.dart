@@ -283,7 +283,6 @@ CircleProjection _circleProjection(Map<Object?, Object?> raw) {
 ContentPostProjection _postProjection(Map<Object?, Object?> raw) {
   final contentType = _textOr(raw['contentType'], 'image');
   final mediaUrls = _stringList(raw['mediaUrls']);
-  final imageUrls = _stringList(raw['imageUrls']);
   return ContentPostProjection(
     postId: _text(raw['postId']),
     contentType: contentType,
@@ -296,10 +295,8 @@ ContentPostProjection _postProjection(Map<Object?, Object?> raw) {
     body: _optionalText(raw['body']),
     summary: _optionalText(raw['summary']),
     coverUrl: _optionalText(raw['coverUrl']),
-    imageUrls: imageUrls.isEmpty ? mediaUrls : imageUrls,
-    videoUrl: contentType == 'video' && mediaUrls.isNotEmpty
-        ? mediaUrls.first
-        : _optionalText(raw['videoUrl']),
+    mediaUrls: mediaUrls,
+    videoUrl: _optionalText(raw['videoUrl']),
     thumbnailUrl: _optionalText(raw['thumbnailUrl']),
     width: _integerOrNull(raw['width']),
     height: _integerOrNull(raw['height']),

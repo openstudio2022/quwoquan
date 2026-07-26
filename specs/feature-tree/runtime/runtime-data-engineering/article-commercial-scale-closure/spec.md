@@ -1,68 +1,118 @@
-# L3 特性：article-commercial-scale-closure
+# L3 Story：文章商用规模闭环 (`article-commercial-scale-closure`)
 
-## 概述
+> 所属能力：[`runtime-data-engineering`](../spec.md)
+>
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-面向浙江、四川旅行垂类的文章商业化放量 Story：把文章来源站点纳入统一
-onboarding 合同与共享 commercial pool，建立唯一 commercial execution branch，
-依次完成 Canary、H200、H1000 与 H10K 真实发布；日产 100,000 只允许依据 H10K
-权威成本、吞吐和下游消费证据外推。
+## 1. 用户价值
 
-## 归属
+作为开发、测试或运维角色，我希望通用文章 provider onboarding、单 execution 生产与基于真实回执的发布容量验收，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-- L1_domain_service: `runtime`
-- L2_business_capability: `runtime-data-engineering`
-- L3_story: `article-commercial-scale-closure`
-
-## 范围
+## 2. 范围与非目标
 
 ### In Scope
 
-- article 商业主线的唯一执行分支：`download -> build -> content_plan -> produce -> publish -> ship/import -> verify`
-- 开放式旅行/摄影文章来源站点统一 onboarding 合同与 shared commercial pool
-- 站点 admission 分层：`commercial_release` / `controlled_trial` / `reference_only` / `blocked`
-- 文章来源与独立开放许可插图的 typed role、逐资产 rights/provenance 与 mixed-layout
-- 真实 `cursor_sdk` managed authoring、authoritative `TokenLedger`、预算 kill switch
-- Canary（浙江 2、四川 1）、H200、H1000、H10K 的独立 article execution 与 immutable release
-- H10K 必须每省 5,000、共 10,000 条 accepted/canonical/Gamma 可查询文章在 24 小时内完成
-- 基于 H10K 实测的 100,000/日 evaluate-only 评估
+- provider policy 与文本、插图的 source/rights 闭包
+- Agent authoring、独立 review、canonical promotion 与 immutable release
+- request 驱动规模下的 import/API/consumer/rollback/replay 证据
 
 ### Out of Scope
 
-- image 与 video lane 的独立生产逻辑
-- creator pool 新一轮扩池与 persona 设计
-- 100,000/日实际生产
-- 每个新增站点都单独跑一套独立 H100/H1000；本 Story 只验 shared commercial pool 总体能力
+- 静态区域、目标对象、数量或阶段清单
+- 未经真实 receipt 支撑的生产容量结论
 
-## 核心原则
+## 3. 行为要求
 
-1. **唯一商业分支**：文章商业化执行只认 `qwq-data task execute` 创建的单
-   execution 主线，不再并行维护第二套 source-planning、produce 或 release 语义。
-2. **开放式扩站但共享验收**：新老站点全部走统一 onboarding 合同，进入 shared pool 后共同承担 H100/H1000 配额；不要求每站各自单独关门。
-3. **文本与插图双角色闭包**：文章文本事实源和插图资产必须分别记录来源、权利与用途；无逐图权利时不得静默退化 `text_only` 或复用平台 UGC 原图。
-4. **模型与成本可复现**：author/reviewer 使用 execution manifest 冻结的具体模型；每次 turn 的权威 usage、真实 billed cost、重试成本和 passed-unit cost 必须增量落账。
-5. **历史旁路必须清理**：退场的 `source_plan`、prior-plan source reuse、双 planning contract、旧 quota/reuse/provider 扩散不得继续干扰 commercial path。
-6. **H10K 实跑，H100K 只外推**：H10K 缺少真实 release/import/API/App UAT/rollback/replay 任一证据都保持 NO_GO；100,000/日不实际生产。
+<a id="req-001"></a>
+### REQ-001 provider onboarding is reusable and source-role complete
 
-## 真相源
+- 缺来源或权利的对象保持 typed GATE_BLOCK，不能进入 canonical publish。
 
-- `specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/spec.md`
-- `specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/acceptance.yaml`
-- `docs/outstanding_risks_backlog.md`
-- `quwoquan_data/verticals/travel/sources/source_registry.yaml`
-- `quwoquan_data/scripts/content/execution/controller/orchestrator.py`
-- `quwoquan_data/scripts/content/execution/controller/content_plan.py`
-- `quwoquan_data/scripts/content/release/canonical/gate.py`
+<a id="req-002"></a>
+### REQ-002 each approved article closes one execution and release lifecycle
 
-## 关键裁定
+- 任何缺失对象、来源、rights 或环境 receipt 均阻断 release。
 
-- article 商业化的主要 blocker 是站点准入、底稿与插图双角色权利闭包、planning contract 与历史旁路清理。
-- shared commercial pool 的成功标准是“通过权利/质量门并能闭环下游可见性”的 released objects，而不是站点名册数量或 trial 漏斗数量。
+<a id="req-003"></a>
+### REQ-003 capacity conclusions use only measured execution receipts
+
+- 容量评估可重算且不被当作生产完成。
+
+<a id="req-004"></a>
+### REQ-004 开放式旅行/摄影文章来源站点统一 onboarding 合同与 shared commercial pool
+
+- 开放式旅行/摄影文章来源站点统一 onboarding 合同与 shared commercial pool
 - homepage 必须通过显式 `homepageExecutionId` 绑定已冻结、已发布的同档主页批次。
-
-## 输出目录口径（数据输出规范）
-
-- Canary/H200/H1000/H10K 每次运行都使用唯一 `.qwq_output/data/tasks/<executionId>/` 工作包；
-  homepage 与 article 使用独立 execution，禁止混用运行身份。
-- readiness/monitoring/audit 只认当前 execution 内的权威证据；approved canonical 只写
-  `quwoquan_data/publish/**`，immutable release 只写 `.qwq_output/data/releases/<releaseId>/`。
 - 搜索补全供给使用独立 execution，不能和主线共享冻结目标、状态或准出口径。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_data/verticals/<vertical>/providers.yaml`
+- canonical：`quwoquan_data/verticals/<vertical>/content_policy.yaml`
+- canonical：`quwoquan_data/scripts/content/source`
+- canonical：`quwoquan_data/scripts/content/execution`
+- canonical：`quwoquan_data/scripts/content/release`
+- canonical：`quwoquan_data/scripts/governance/coverage/benchmark.py`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 provider onboarding is reusable and source-role complete
+
+- GIVEN 垂类 provider policy、content policy 与 family 已由仓内真相源声明。
+- WHEN 任一文章 execution 以 request 选择 provider 和主题。
+- THEN provider admission、文本事实来源和插图 rights/provenance 使用同一合同。
+- THEN 静态 policy 不包含实体 URL、区域、数量或运行结论。
+
+<a id="gwt-002"></a>
+### GWT-002 each approved article closes one execution and release lifecycle
+
+- GIVEN request 已冻结 target set、provider 选择、模型与 source digest。
+- WHEN article 完成 source、compose、draft、review、canonical promotion 和 release aggregate。
+- THEN 文章、关联主页、creator、资产、tag 和 source digest 可闭包追溯。
+- THEN Beta/Gamma integration 证明 full-sync、API、幂等、rollback 与 replay。
+
+<a id="gwt-003"></a>
+### GWT-003 capacity conclusions use only measured execution receipts
+
+- GIVEN 至少一个完成闭包的文章 execution 已产生不可变 receipt。
+- WHEN 运营评估后续规模与预算。
+- THEN 吞吐、成本、first-pass rate、queue lag 与 source capacity 都来自 receipt。
+- THEN 缺失实时证据时结论为 GATE_BLOCK，不能写入静态 policy 或 acceptance 数字。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-data-engineering`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 provider onboarding is reusable and source-role complete
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺来源或权利的对象保持 typed GATE_BLOCK，不能进入 canonical publish。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 each approved article closes one execution and release lifecycle
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：任何缺失对象、来源、rights 或环境 receipt 均阻断 release。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 capacity conclusions use only measured execution receipts
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：容量评估可重算且不被当作生产完成。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效

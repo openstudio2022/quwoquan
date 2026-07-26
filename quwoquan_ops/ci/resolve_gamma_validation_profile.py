@@ -9,7 +9,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REGISTRY_PATH = REPO_ROOT / "quwoquan_ops" / "environments" / "gamma_validation_suites.json"
+REGISTRY_PATH = REPO_ROOT / "quwoquan_ops" / "environments" / "gamma" / "validation_suites.json"
 
 
 def parse_args() -> argparse.Namespace:

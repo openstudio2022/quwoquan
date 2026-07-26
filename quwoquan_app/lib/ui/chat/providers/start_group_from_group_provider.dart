@@ -66,11 +66,11 @@ class StartGroupSourcePageRequest {
 }
 
 /// 选群列表头像与 inbox 同源：只解析云侧预合成 [avatarUrl]，不做端侧合成或 strip。
-String resolveSelectableGroupAvatar(String raw) {
+String resolveSelectableGroupAvatar(String raw, {String? avatarCdnBaseUrl}) {
   if (raw.trim().isEmpty) {
     return '';
   }
-  return resolveAvatarImageUrl(raw);
+  return resolveAvatarImageUrl(raw, avatarCdnBaseUrl: avatarCdnBaseUrl);
 }
 
 /// 图四数据源：按服务端 `source` 分页前过滤消费
@@ -94,6 +94,7 @@ Future<StartGroupSourcePage> loadStartGroupSourcePage(
   required StartGroupSource source,
   String? query,
   String? cursor,
+  String? avatarCdnBaseUrl,
 }) async {
   final page = await repo.listSelectableGroupConversations(
     source: switch (source) {
@@ -114,7 +115,10 @@ Future<StartGroupSourcePage> loadStartGroupSourcePage(
       GroupWithFriendCount(
         conversationId: conversationId,
         title: row.title.isNotEmpty ? row.title : conversationId,
-        avatarUrl: resolveSelectableGroupAvatar(row.avatarUrl),
+        avatarUrl: resolveSelectableGroupAvatar(
+          row.avatarUrl,
+          avatarCdnBaseUrl: avatarCdnBaseUrl,
+        ),
         circleId: row.circleId,
         friendCount: row.friendMemberCount,
       ),

@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
+import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
 import '../../../../support/harness/profile_shell_scroll_utils.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
@@ -32,6 +33,15 @@ Widget _scopedApp() {
     overrides: [
       profileQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
+      ),
+      authorImpactQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      contentRuntimeConfigProvider.overrideWithValue(
+        buildAlphaContentRuntimeConfigDefaults(),
+      ),
+      intersectionRepositoryProvider.overrideWithValue(
+        AlphaIntersectionRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),

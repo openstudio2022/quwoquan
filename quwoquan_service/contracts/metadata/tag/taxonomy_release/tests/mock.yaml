@@ -1,8 +1,0 @@
-entity: TagTaxonomyRelease
-layer: app_side
-
-description: |
-  App 端不消费 taxonomy_release（internal publish plane 专属）；
-  端侧无 mock 场景。App 只经 TagNodeView 只读投影感知激活结果。
-
-dto_scenarios: []

@@ -218,14 +218,14 @@ final class RemoteSearchRepository implements SearchRepository {
     if (reason == null || reason.primaryText.trim().isEmpty) {
       return null;
     }
-    return IntersectionReason.fromMap(<String, dynamic>{
-      'primaryText': reason.primaryText,
-      'intersectionId': reason.intersectionId,
-      'dimension': reason.dimension,
-      'intersectionClass': reason.intersectionClass,
-      'source': reason.sourceRef,
-      'displayBinding': 'host_plain',
-    });
+    return IntersectionReason(
+      primaryText: reason.primaryText,
+      intersectionId: reason.intersectionId,
+      dimension: reason.dimension,
+      intersectionClass: reason.intersectionClass,
+      source: reason.sourceRef,
+      displayBinding: 'host_plain',
+    );
   }
 
   List<RetrieveTarget> _canonicalTargets(SearchRequest request) {

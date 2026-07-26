@@ -66,7 +66,7 @@ List<String> _mediaImageUrlCandidates(String source) {
 /// 领域无关的「本地路径 / 网络 URL」图片渲染组件。
 ///
 /// 圈子、用户资料、实体主页等需要在「本地选图预览」与「远端已上传图」之间
-/// 透明切换的场景统一复用（单一真相源，见 13-coding-discipline R25）。
+/// 透明切换场景统一复用，避免出现第二套图片加载语义。
 class AppMediaImage extends StatelessWidget {
   const AppMediaImage({
     super.key,

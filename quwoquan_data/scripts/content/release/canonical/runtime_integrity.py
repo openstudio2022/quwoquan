@@ -6,7 +6,7 @@ from core.paths import execution_root
 from content.release.canonical.integrity import (
     BASE_DRAFT_LEDGER_SCHEMA, REPORT_SCHEMA, _article_asset_source_issues,
     _asset_alignment_issues, _base_draft_issues, _entity_homepage_issues,
-    _file_sha, _has_rights_proof, _is_image_post, _is_text_only_article,
+    _asset_rights_issues, _file_sha, _is_image_post, _is_text_only_article,
     _is_video_post, _json, _norm_sha, _payload, _review_gate_issues,
     _source_unit_meta,
 )
@@ -73,6 +73,7 @@ def scan_runtime_batch_integrity(
         if allowed_post_rels and post_rel not in allowed_post_rels:
             continue
         manifest = _payload(manifest_path)
+        vertical = str(manifest.get("vertical") or "").strip()
         stats["postCount"] += 1
         is_image = _is_image_post(manifest)
         is_video = _is_video_post(manifest)
@@ -148,8 +149,15 @@ def scan_runtime_batch_integrity(
                 issues.append(f"{post_rel}: {asset_label} sha256 mismatch with asset file")
             if source_ref:
                 meta = _source_unit_meta(root, source_ref)
-                if not _has_rights_proof(asset, meta):
-                    issues.append(f"{post_rel}: {asset_label} missing image authorization proof or license snapshot")
+                issues.extend(
+                    f"{post_rel}: {issue}"
+                    for issue in _asset_rights_issues(
+                        asset_label,
+                        asset,
+                        meta,
+                        vertical=vertical,
+                    )
+                )
             issues.extend(_asset_alignment_issues(post_rel, manifest, asset))
             if not is_image and not is_video:
                 issues.extend(

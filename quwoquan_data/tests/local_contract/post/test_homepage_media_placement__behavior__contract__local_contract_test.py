@@ -7,9 +7,9 @@ def test_dimension_tokens_and_putuoshan_subject_alias_are_normalized() -> None:
     assert is_image_dimension_token("291×291px")
     assert is_image_dimension_token("x300px")
     assert subject_keys_conflict(
-        "普陀山南海观音",
+        "测试实体甲南海观音",
         "南海观音像",
-        entity_name="普陀山",
+        entity_name="测试实体甲",
     )
 
 
@@ -17,7 +17,7 @@ def test_group_members_and_unanchored_images_only_enter_related_gallery() -> Non
     body = """---
 coverImage: asset://cover_arch
 ---
-# 普陀山
+# 测试实体甲
 
 概况正文。
 
@@ -25,22 +25,22 @@ coverImage: asset://cover_arch
 
 地理正文。
 
-:::figure id="legacy_group" layout="fullWidth" caption="图集图"
+:::figure id="gallery_group" layout="fullWidth" caption="图集图"
 asset://gallery_01
 :::
 """
     assets = [
-        {"assetId": "cover_arch", "role": "cover", "caption": "普陀山海岸牌坊"},
+        {"assetId": "cover_arch", "role": "cover", "caption": "测试实体甲海岸牌坊"},
         {
             "assetId": "inline_model",
             "role": "related",
-            "caption": "普陀山全貌模型",
+            "caption": "测试实体甲全貌模型",
             "placementType": "inline",
         },
         {
             "assetId": "gallery_01",
             "role": "related",
-            "caption": "普陀山石刻",
+            "caption": "测试实体甲石刻",
             "placementType": "groupMember",
         },
         {
@@ -87,7 +87,7 @@ asset://gallery_01
 
 
 def test_empty_source_gallery_heading_is_removed_after_related_gallery_is_materialized() -> None:
-    body = """# 普陀山
+    body = """# 测试实体甲
 
 ## 寺院机构
 
@@ -100,11 +100,11 @@ def test_empty_source_gallery_heading_is_removed_after_related_gallery_is_materi
 文化正文。
 """
     assets = [
-        {"assetId": "cover", "role": "cover", "caption": "普陀山海岸牌坊"},
+        {"assetId": "cover", "role": "cover", "caption": "测试实体甲海岸牌坊"},
         {
             "assetId": "gallery",
             "role": "related",
-            "caption": "普陀山石刻",
+            "caption": "测试实体甲石刻",
             "placementType": "groupMember",
         },
     ]

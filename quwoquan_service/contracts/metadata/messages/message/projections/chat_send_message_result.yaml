@@ -1,9 +1,0 @@
-read_model: ChatSendMessageResult
-description: Durable result returned after a Chat message append command commits.
-storage_backend: mongodb
-collection: messages
-source_entities: [Message]
-fields:
-  - {name: messageId, type: string}
-  - {name: seq, type: int64}
-  - {name: sentAt, type: timestamp}

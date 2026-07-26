@@ -1,0 +1,84 @@
+backend: mongodb
+collections:
+  notification_delivery_jobs:
+    entity: NotificationDeliveryJob
+    role: authoritative
+    indexes:
+    - name: uq_notification_delivery_jobs_dedupe
+      keys:
+        dedupeKey: 1
+      unique: true
+    - name: idx_notification_delivery_jobs_pending
+      keys:
+        status: 1
+        nextAttemptAt: 1
+    - name: idx_notification_delivery_jobs_notification
+      keys:
+        notificationId: 1
+        createdAt: -1
+    - name: uq_notification_incoming_call_endpoint
+      keys:
+        deliveryKey: 1
+        destinationRef: 1
+      unique: true
+      partial_filter:
+        deliveryKey:
+          type: string
+        destinationRef:
+          type: string
+    - name: uq_notification_incoming_call_device
+      keys:
+        deliveryKey: 1
+        deviceId: 1
+      unique: true
+      partial_filter:
+        deliveryKey:
+          type: string
+        deviceId:
+          type: string
+    - name: idx_notification_incoming_call_call_status
+      keys:
+        callId: 1
+        status: 1
+        updatedAt: 1
+      sparse: true
+    - name: idx_notification_incoming_call_ack_deadline
+      keys:
+        status: 1
+        ackDeadlineAt: 1
+      sparse: true
+    - name: idx_notification_incoming_call_expiry
+      keys:
+        expiresAt: 1
+        status: 1
+      sparse: true
+    - name: idx_notification_incoming_call_cancel_push
+      keys:
+        status: 1
+        cancellationPushRequired: 1
+        cancellationPushSubmittedAt: 1
+      sparse: true
+    description: 'Incoming Call 使用同一 NotificationDeliveryJob 权威集合；每 target endpoint
+
+      以 deliveryKey+destinationRef 幂等。realtime_dispatched→realtime_presented
+
+      由 device ACK CAS；grace 超时才进入 push_queued。202 只写 sent_unconfirmed。
+
+      已展示或已提交 ring 的 endpoint 进入终态时持久化 cancellationPushRequired，
+
+      以独立幂等外部请求发送同 deliveryKey cancel，禁止只依赖易失 realtime 关闭。
+
+      '
+  notification_delivery_job_recipients:
+    entity: NotificationDeliveryJob
+    role: owned_entity
+    description: Job 聚合拥有的 recipient delivery state；不作为跨上下文 ledger 暴露。
+  notification_delivery_jobs_command_receipts:
+    entity: NotificationDeliveryJob
+    role: authoritative
+    description: 与 aggregate state 和 outbox 在同一 mongodb transaction 提交的幂等回执。
+  notification_delivery_jobs_outbox:
+    entity: NotificationDeliveryJob
+    role: append_only
+    description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
+role: authoritative

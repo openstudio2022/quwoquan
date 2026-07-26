@@ -58,21 +58,28 @@ def _first_page(payload: Mapping[str, Any]) -> Mapping[str, Any] | None:
     return next((page for page in pages.values() if isinstance(page, Mapping)), None)
 
 
-def fetch_mediawiki_page_bundle(host: str, title: str) -> MediaWikiPageBundle | None:
-    """Fetch one typed page bundle, following image continuation explicitly."""
+def fetch_mediawiki_page_bundle(
+    host: str,
+    title: str,
+    *,
+    include_images: bool = True,
+) -> MediaWikiPageBundle | None:
+    """Fetch one typed page bundle, adding image inventory only when required."""
     if not host or not title:
         return None
+    props = "extracts|revisions|images" if include_images else "extracts|revisions"
     params: dict[str, str | int] = {
         "action": "query",
-        "prop": "extracts|revisions|images",
+        "prop": props,
         "explaintext": 1,
         "redirects": 1,
         "titles": title,
         "rvprop": "ids|content",
         "rvslots": "main",
-        "imlimit": "max",
         "format": "json",
     }
+    if include_images:
+        params["imlimit"] = "max"
     responses: list[dict[str, Any]] = []
     image_titles: list[str] = []
     seen_images: set[str] = set()
@@ -90,13 +97,16 @@ def fetch_mediawiki_page_bundle(host: str, title: str) -> MediaWikiPageBundle | 
         if first_payload is None:
             first_payload = payload
             first_page = page
-        for row in page.get("images") or []:
-            if not isinstance(row, Mapping):
-                continue
-            image_title = str(row.get("title") or "").strip()
-            if image_title and image_title not in seen_images:
-                seen_images.add(image_title)
-                image_titles.append(image_title)
+        if include_images:
+            for row in page.get("images") or []:
+                if not isinstance(row, Mapping):
+                    continue
+                image_title = str(row.get("title") or "").strip()
+                if image_title and image_title not in seen_images:
+                    seen_images.add(image_title)
+                    image_titles.append(image_title)
+        if not include_images:
+            break
         continuation = payload.get("continue")
         image_continue = (
             str(continuation.get("imcontinue") or "").strip()
@@ -144,9 +154,13 @@ def fetch_mediawiki_page_bundle(host: str, title: str) -> MediaWikiPageBundle | 
     )
 
 
-def fetch_mediawiki_page_bundle_for_url(url: str) -> MediaWikiPageBundle | None:
+def fetch_mediawiki_page_bundle_for_url(
+    url: str,
+    *,
+    include_images: bool = True,
+) -> MediaWikiPageBundle | None:
     host, title = mediawiki_title_from_url(url)
-    return fetch_mediawiki_page_bundle(host, title)
+    return fetch_mediawiki_page_bundle(host, title, include_images=include_images)
 
 
 __all__ = [

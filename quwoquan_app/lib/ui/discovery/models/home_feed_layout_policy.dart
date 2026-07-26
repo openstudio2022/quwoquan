@@ -5,7 +5,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 /// 首页频道展示策略。
 ///
-/// 真相源来自 `content/post/ui_config.yaml` 生成的 [HomeChannelConfig]。
+/// 真相源来自 `content/content/post/ui_config.yaml` 生成的 [HomeChannelConfig]。
 /// `template` 只作为远程覆盖缺字段时的兼容入口，真实布局由 layout policy 决定。
 class HomeFeedLayoutPolicy {
   const HomeFeedLayoutPolicy({

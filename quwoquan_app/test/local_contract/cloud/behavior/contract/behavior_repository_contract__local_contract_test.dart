@@ -67,6 +67,25 @@ void main() {
       expect(json.containsKey('tags'), isFalse);
     });
 
+    test(
+      'onboarding event binds catalog selection to taxonomy release',
+      () async {
+        await repo.submitOnboardingInterest(
+          clientEventId: 'onboarding:release-bound',
+          catalogVersion: 'v1',
+          taxonomyReleaseId: 'tag-taxonomy-20260723-001',
+          tagRefs: const <String>['Topic/兴趣/旅行'],
+        );
+
+        final event = repo.recorded.single;
+        expect(event.taxonomyReleaseId, 'tag-taxonomy-20260723-001');
+        expect(
+          event.toJson()['taxonomyReleaseId'],
+          'tag-taxonomy-20260723-001',
+        );
+      },
+    );
+
     test('toJson 固化 occurredAt 并生成稳定 clientEventId', () {
       final occurredAt = DateTime.utc(2026, 7, 19, 6, 0, 0);
       final event = BehaviorEvent(
@@ -130,10 +149,12 @@ void main() {
       const expectedWireValues = <String>[
         'impression',
         'click',
+        'intersection_expand',
         'dwell',
         'like',
         'share',
         'dislike',
+        'undo_dislike',
         'hide_author',
         'hide_content_type',
         'report',
@@ -149,6 +170,7 @@ void main() {
         'join_circle',
         'add_contact',
         'assistant_interest',
+        'onboarding_interest',
         'intersection_feedback',
         'wishlist_add',
         'wishlist_remove',
@@ -174,6 +196,7 @@ void main() {
         'push_notification',
         'deep_link',
         'my_intersections',
+        'publish_result',
       });
     });
 

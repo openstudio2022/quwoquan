@@ -176,7 +176,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
               pageName: 'GreetingInboxPage',
               targetType: 'greeting_request',
               targetKey: request.id,
-              payload: <String, dynamic>{
+              payload: <String, Object?>{
                 'result': 'success',
                 'durationMs': DateTime.now()
                     .difference(startedAt)
@@ -197,7 +197,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
               pageName: 'GreetingInboxPage',
               targetType: 'greeting_request',
               targetKey: request.id,
-              payload: <String, dynamic>{
+              payload: <String, Object?>{
                 'result': 'failure',
                 'durationMs': DateTime.now()
                     .difference(startedAt)

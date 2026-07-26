@@ -2,17 +2,17 @@ import 'package:test/test.dart';
 import 'package:quwoquan_app/app/models/appearance_settings_models.dart'
     as appearance;
 import 'package:quwoquan_app/cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_summary_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_lifecycle_guard_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_quota_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_summary_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_lifecycle_guard_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_item_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_quota_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/recent_search_entry_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_view_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_profile_stats_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/account/user_account_stats_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
@@ -312,18 +312,28 @@ void main() {
           'subAccountId': 'persona_photo',
           'ownerUserId': 'user_owner',
           'avatarUrl':
-              'media/avatar/s/archived-avatar/user/persona_photo/v1/profile.png',
+              'media/avatar/s/archived-avatar/user/persona/persona_photo/v1/profile.png',
           'avatarVersion': 5,
           'contextVersion': 5,
+          'personaSnapshotVersion': 7,
         }),
       );
       expect(view.subAccountId, 'persona_photo');
       expect(view.avatarVersion, 5);
       _expectVersionedAvatarOrUnavailable(view.avatarUrl, 5);
-      expect(view.contextVersion, '5');
+      expect(view.contextVersion, 5);
+      expect(view.personaSnapshotVersion, 7);
       expect(
         view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
         containsPair('subAccountId', 'persona_photo'),
+      );
+      expect(
+        view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
+        containsPair('contextVersion', 5),
+      );
+      expect(
+        view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
+        containsPair('personaSnapshotVersion', 7),
       );
       expect(
         view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),

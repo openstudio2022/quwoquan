@@ -1,0 +1,108 @@
+description: 推荐曝光不可变事实（rec_impression 信封投影）。
+fields:
+- name: id
+  source: eventId
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  description: 从 requestId+targetId 确定性派生的 dedupe 身份
+  role: append_only_fact
+- name: requestId
+  source: context.feedRequestId
+  type: string
+  constraints:
+  - NOT_NULL
+  description: feedRequestId，曝光批次的归因键
+  role: append_only_fact
+- name: userId
+  source: userId
+  type: string
+  constraints:
+  - NOT_NULL
+  description: 推荐状态的业务 actor 键；persona 优先、无 persona 时可为匿名/设备 actor
+  role: append_only_fact
+- name: personaId
+  source: personaId
+  type: string
+  constraints:
+  - NULLABLE
+  description: 经过认证的 persona 身份；匿名或设备 actor 时为空
+  role: append_only_fact
+  reference: true
+- name: scenario
+  source: scenario
+  type: string
+  constraints:
+  - NOT_NULL
+  role: append_only_fact
+- name: targetType
+  source: labels.contentType
+  type: string
+  constraints:
+  - NOT_NULL
+  role: append_only_fact
+  reference: true
+- name: targetId
+  source: targetId
+  type: string
+  constraints:
+  - NOT_NULL
+  role: append_only_fact
+  reference: true
+- name: rank
+  source: context.rank
+  type: int
+  constraints:
+  - NOT_NULL
+  description: 服务端重排后的全局一基序位，禁止消费端侧 position
+  role: append_only_fact
+- name: modelBucket
+  source: context.modelBucket
+  type: string
+  constraints:
+  - NOT_NULL
+  description: 本次命中的评分轨道（rule/model，AB 分桶结果）
+  role: append_only_fact
+- name: modelVersion
+  source: context.modelVersion
+  type: string
+  constraints:
+  - NULLABLE
+  description: model 分桶时的 champion/challenger 轨道；rule 分桶为空
+  role: append_only_fact
+- name: modelReleaseId
+  source: context.modelReleaseId
+  type: string
+  constraints:
+  - NULLABLE
+  description: 模型服务实际命中的 registry 发布身份；rule 或模型故障降级时为空
+  role: append_only_fact
+  reference: true
+- name: featureSnapshotAt
+  source: context.featureSnapshotAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  description: 在线评分读取用户与候选特征后的统一快照时刻
+  role: append_only_fact
+- name: userFeatureSnapshot
+  source: context.userFeatureSnapshot
+  type: object
+  constraints:
+  - NOT_NULL
+  description: 本次候选在线评分实际消费的稀疏用户特征；训练只允许消费此不可变快照
+  role: append_only_fact
+- name: itemFeatureSnapshot
+  source: context.itemFeatureSnapshot
+  type: object
+  constraints:
+  - NOT_NULL
+  description: 本次候选在线评分实际消费的候选特征；训练只允许消费此不可变快照
+  role: append_only_fact
+- name: exposedAt
+  source: occurredAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  role: append_only_fact

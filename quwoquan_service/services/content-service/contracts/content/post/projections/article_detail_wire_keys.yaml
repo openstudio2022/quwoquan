@@ -1,0 +1,23 @@
+dart_class: ArticleDetailWireKeys
+description: 文章详情顶层 wire Map 扩展键名 SSOT
+keys:
+- const_name: isOfficial
+  json_key: isOfficial
+- const_name: badge
+  json_key: badge
+- const_name: articleTemplate
+  json_key: articleTemplate
+- const_name: articleFontPreset
+  json_key: articleFontPreset
+- const_name: articleMarkdown
+  json_key: articleMarkdown
+- const_name: markdownDialect
+  json_key: markdownDialect
+- const_name: articleMarkdownDigest
+  json_key: articleMarkdownDigest
+- const_name: articleAssetManifest
+  json_key: articleAssetManifest
+- const_name: articleRenderProfile
+  json_key: articleRenderProfile
+- const_name: coverUrl
+  json_key: coverUrl

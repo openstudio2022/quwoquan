@@ -1,0 +1,13 @@
+commercial_defaults:
+  status: blocked
+  block_reason: canonical operation awaits object-centered commercial migration
+  gap_id: USER_CREATOR_RUNTIME_PROFILE_COMMERCIAL_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+api_routes: []
+consumers:
+- name: user-profile-api
+  capabilities:
+  - read_creator_profile
+- name: user-work-api
+  capabilities:
+  - read_creator_work_refs

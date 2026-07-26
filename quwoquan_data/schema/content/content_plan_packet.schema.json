@@ -78,12 +78,10 @@
                   "minLength": 1
                 },
                 "creator": {
-                  "type": "string",
-                  "minLength": 1
+                  "type": "string"
                 },
                 "license": {
-                  "type": "string",
-                  "minLength": 1
+                  "type": "string"
                 },
                 "sha256": {
                   "type": "string",
@@ -95,6 +93,14 @@
                 "sourceCollectionId": {
                   "type": "string",
                   "minLength": 1
+                },
+                "rightsAuditStatus": {
+                  "type": "string",
+                  "enum": ["verified", "unverified"]
+                },
+                "rightsAuditIssues": {
+                  "type": "array",
+                  "items": { "type": "string" }
                 }
               },
               "required": [
@@ -105,7 +111,8 @@
                 "creator",
                 "license",
                 "sha256",
-                "sourceCollectionId"
+                "sourceCollectionId",
+                "rightsAuditStatus"
               ],
               "additionalProperties": false
             }

@@ -18,7 +18,7 @@ final class RemoteContactDiscoveryFacet
   Future<ContactDiscoveryResult> initiateContactDiscovery(
     InitiateContactDiscoveryCommand command,
   ) {
-    return client.userContactDiscoveryInitiateContactDiscovery(
+    return client.userContactDiscoveryRecordInitiateContactDiscovery(
       command,
       context: invocationContext(UserRequestPageIds.initiateContactDiscovery),
     );
@@ -28,7 +28,7 @@ final class RemoteContactDiscoveryFacet
   Future<ContactDiscoveryResult> getLatestContactDiscovery(
     GetLatestContactDiscoveryQuery query,
   ) {
-    return client.userContactDiscoveryGetLatestContactDiscovery(
+    return client.userContactDiscoveryRecordGetLatestContactDiscovery(
       query,
       context: invocationContext(UserRequestPageIds.getLatestContactDiscovery),
     );
@@ -38,7 +38,7 @@ final class RemoteContactDiscoveryFacet
   Future<ContactDiscoveryDismissResult> dismissContactDiscovery(
     DismissContactDiscoveryCommand command,
   ) {
-    return client.userContactDiscoveryDismissContactDiscovery(
+    return client.userContactDiscoveryRecordDismissContactDiscovery(
       command,
       context: invocationContext(UserRequestPageIds.dismissContactDiscovery),
     );

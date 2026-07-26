@@ -243,7 +243,7 @@ enum ParticipantStatus {
       this == ParticipantStatus.connected;
 }
 
-/// 信任关系两态（与 contracts/metadata/rtc/call_session/fields.yaml TrustRelation 对齐）。
+/// 信任关系两态（与 quwoquan_service/services/rtc-service/contracts/rtc/call_session/fields.yaml TrustRelation 对齐）。
 /// known=可信（联系人/关注对象/当前会话或群成员）；possiblyUnknown=提示注意隐私。
 enum TrustRelation {
   known,

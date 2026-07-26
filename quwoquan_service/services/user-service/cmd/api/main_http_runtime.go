@@ -7,7 +7,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rthealth "quwoquan_service/runtime/health"
 	rtmetrics "quwoquan_service/runtime/metrics"
-	httpadapter "quwoquan_service/services/user-service/internal/adapters/http"
+	httpadapter "quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/http"
 )
 
 // buildUserHTTPMux 只收口 transport handler 绑定；业务 operation 路径继续消费

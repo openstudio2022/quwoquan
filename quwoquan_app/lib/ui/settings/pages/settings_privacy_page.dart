@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/settings/providers/user_settings_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show ProfileVisibility;
@@ -157,7 +156,18 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
 
   Future<void> _update(Future<bool> operation) async {
     if (!await operation && mounted) {
-      AppToast.show(context, UITextConstants.settingsUpdateFailedToast);
+      final error = ref.read(userSettingsSectionsProvider).rawError;
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error ?? StateError('privacy_settings_update_failed'),
+          category: UiErrorCategory.backgroundAction,
+          scope: UiErrorScope.dialog,
+          allowRetry: false,
+          presentation: UiErrorPresentation.actionDialog,
+        ),
+      );
     }
   }
 

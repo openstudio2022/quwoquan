@@ -29,7 +29,7 @@ const _resolvedActivePersona = ActivePersonaContextViewData(
   subjectType: 'subAccount',
   displayName: '测试用户',
   avatarUrl: '',
-  personaContextVersion: '1',
+  contextVersion: 1,
   isPrimary: true,
 );
 

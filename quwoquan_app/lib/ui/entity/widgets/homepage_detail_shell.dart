@@ -33,7 +33,7 @@ import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
-import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
+import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_type_labels.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_review_section.dart';

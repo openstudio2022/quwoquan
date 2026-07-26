@@ -23,7 +23,7 @@ def test_normalized_entity_refs_matches_canonicalized_publish_refs():
     assert issues == [], issues
 
 
-def test_normalized_entity_refs_rejects_runtime_legacy_formats():
+def test_normalized_entity_refs_rejects_noncanonical_formats():
     manifest = {
         "entityRefs": ["/entity/地点/景区/九寨沟"],
         "normalizedEntityRefs": ["sight/homepage_sight_jiuzhaigou"],

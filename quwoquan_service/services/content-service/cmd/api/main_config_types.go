@@ -1,6 +1,6 @@
 package main
 
-import "quwoquan_service/services/content-service/internal/infrastructure/searchindex"
+import "quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
 
 // redisSceneCfg holds configuration for a single Redis deployment (one logical scene).
 type redisSceneCfg struct {
@@ -30,6 +30,10 @@ type config struct {
 			Addr string `yaml:"addr"`
 		} `yaml:"http"`
 	} `yaml:"service"`
+	AccountSecurityAuthority struct {
+		BaseURL   string `yaml:"baseUrl"`
+		TimeoutMS int    `yaml:"timeoutMs"`
+	} `yaml:"accountSecurityAuthority"`
 	Mongo struct {
 		URI        string `yaml:"uri"`
 		Database   string `yaml:"database"`
@@ -67,6 +71,11 @@ type config struct {
 		TimeoutMs int    `yaml:"timeout_ms"`
 		Enabled   bool   `yaml:"enabled"`
 	} `yaml:"rec_model_service"`
+
+	TagService struct {
+		URL       string `yaml:"url"`
+		TimeoutMs int    `yaml:"timeout_ms"`
+	} `yaml:"tag_service"`
 
 	Embedding struct {
 		// Enabled 开启 embedding 写入管线（PostPublished → posts.embedding）。

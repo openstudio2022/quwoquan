@@ -343,7 +343,7 @@ class SeedManifestEntry {
 ContractScenarioPack loadContentScenarioPack() {
   return ContractScenarioPack.fromJson(
     _loadContractFixtureObject(
-      'content/test_fixtures/scenarios/content_scenarios.json',
+      'quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json',
     ),
   );
 }
@@ -351,7 +351,7 @@ ContractScenarioPack loadContentScenarioPack() {
 ContractScenarioPack loadCircleScenarioPack() {
   return ContractScenarioPack.fromJson(
     _loadContractFixtureObject(
-      'social/circle/test_fixtures/scenarios/circle_scenarios.json',
+      'quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.json',
     ),
   );
 }
@@ -359,7 +359,7 @@ ContractScenarioPack loadCircleScenarioPack() {
 ContractScenarioPack loadChatScenarioPack() {
   return ContractScenarioPack.fromJson(
     _loadContractFixtureObject(
-      'messages/chat/test_fixtures/scenarios/chat_scenarios.json',
+      'quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json',
     ),
   );
 }
@@ -433,11 +433,14 @@ Map<String, dynamic> _loadContractFixtureObject(String metadataRelativePath) {
   return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
 }
 
-File? _tryContractFixtureFile(String metadataRelativePath) {
+File? _tryContractFixtureFile(String repositoryOrMetadataPath) {
+  final suffix = repositoryOrMetadataPath.startsWith('quwoquan_service/')
+      ? repositoryOrMetadataPath
+      : 'quwoquan_service/contracts/metadata/$repositoryOrMetadataPath';
   final candidates = <File>[
-    File('../quwoquan_service/contracts/metadata/$metadataRelativePath'),
-    File('quwoquan_service/contracts/metadata/$metadataRelativePath'),
-    File('../../quwoquan_service/contracts/metadata/$metadataRelativePath'),
+    File('../$suffix'),
+    File(suffix),
+    File('../../$suffix'),
   ];
   for (final candidate in candidates) {
     if (candidate.existsSync()) {

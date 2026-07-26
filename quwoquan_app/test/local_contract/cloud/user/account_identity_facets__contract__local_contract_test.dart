@@ -106,6 +106,17 @@ void main() {
         ),
         isTrue,
       );
+      final anonymousLogin = executor.calls
+          .singleWhere(
+            (call) =>
+                call.operation.canonicalOperationId ==
+                AppCloudOperationIds.userAccountSessionLoginAnonymous,
+          )
+          .operation;
+      expect(
+        anonymousLogin.timeoutMilliseconds,
+        greaterThanOrEqualTo(anonymousLogin.latencyP95Milliseconds),
+      );
     },
   );
 
@@ -231,7 +242,7 @@ void main() {
     expect(executor.calls, hasLength(1));
     expect(
       executor.calls.single.operation.canonicalOperationId,
-      AppCloudOperationIds.userUserProfileCloseAccount,
+      AppCloudOperationIds.userUserAccountCloseAccount,
     );
     expect(executor.calls.single.payload.body, <String, Object?>{
       'clientRequestId': 'close-request-1',
@@ -313,7 +324,7 @@ Object? _responseFor(CloudOperationContract operation) {
         'version': 1,
         'idempotentReplay': false,
       },
-    AppCloudOperationIds.userUserProfileCloseAccount => <String, Object?>{
+    AppCloudOperationIds.userUserAccountCloseAccount => <String, Object?>{
       'accountState': 'closed',
       'closedAt': '2026-07-20T12:00:00Z',
       'idempotentReplay': false,

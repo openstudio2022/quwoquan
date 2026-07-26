@@ -1,48 +1,71 @@
-# L3 Story：greeting-request-inbox-and-upgrade
+# L3 Story：打招呼请求收件箱与升级 (`greeting-request-inbox-and-upgrade`)
 
-## 最小价值点
+> 所属能力：[`contact-and-session-governance`](../spec.md)
 
-让非互相关注用户的首次联系进入独立打招呼请求箱，并在接收方回复后幂等升级为正式一对一会话，避免未获回应的陌生请求污染普通消息列表。
+> Journey / Scenario：[`JNY-007 / SCN-012`](../../../spec.md#scn-012)
 
-## 归属
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- 领域服务：`chat-conversation`
-- 业务能力：`contact-and-session-governance`
-- 关联 Journey / Scenario：`message-social-connection / message-direct-and-greeting-upgrade`
+## 1. 用户价值
 
-## 行为范围
+作为希望联系非互关对象的用户，
+我希望发送打招呼请求，让接收方在请求箱查看并以回复幂等升级为正式会话，
+从而在不自动改变关注关系的情况下安全建立对话。
+
+## 2. 范围与非目标
 
 ### In Scope
 
-- 创建、查看、回复、忽略、撤回和过期 `GreetingRequest`。
-- pending 请求与普通会话列表隔离。
-- 回复时创建或复用正式 direct conversation，并写回 `promotedConversationId`。
-- 拉黑、重复 pending、频控和接收偏好的服务端门禁。
+- “打招呼请求收件箱与升级”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 自动创建关注关系。
+- 正式会话消息收发。
+- 外部 push provider。
 
 ### Out of Scope
 
-- 关注关系的自动创建或额外关系等级。
-- 正式会话中的消息收发与回执。
-- 外部 APNs/FCM 推送交付。
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-## 行为规则
+## 3. 行为要求
 
-- Given：双方不是互相关注、任一方向未拉黑且接收方允许陌生打招呼。
-- When：发起方发送一条打招呼请求。
-- Then：请求进入独立收发箱，不创建普通会话。
-- Given：接收方收到 pending 请求。
-- When：接收方回复。
-- Then：服务端创建或复用正式 direct conversation，将请求置为 replied，并写回 `promotedConversationId`；关注状态保持不变。
+<a id="req-001"></a>
+### REQ-001 打招呼请求收件箱与升级
 
-## 接口契约
+- 会话升级、幂等与关注状态不变均有 API 集成证据。
 
-- metadata：`quwoquan_service/contracts/metadata/user/greeting_request/**`
-- 会话升级：`quwoquan_service/contracts/metadata/messages/conversation/service.yaml`
-- 页面：`greetingInbox` surface / `/chat/greetings`
+<a id="req-002"></a>
+### REQ-002 回复请求幂等升级正式会话
+
+- 会话升级、幂等与关注状态不变均有 API 集成证据。
+
+<a id="req-003"></a>
+### REQ-003 请求箱与会话升级使用单轨 metadata 契约
+
+- GreetingRequest 状态、错误、事件和 promotedConversationId 由 metadata/codegen 单轨生成。
+
+<a id="req-004"></a>
+### REQ-004 错误：统一消费 metadata 生成的 GreetingRequest 与 Conversation 错误语义
+
 - 错误：统一消费 metadata 生成的 GreetingRequest 与 Conversation 错误语义。
-
-## 验收关注点
-
 - pending 唯一性、幂等重放、拉黑级联、频控与状态迁移不可绕过。
-- 回复到正式会话可见 p95 不高于 2 秒。
-- 收到侧、发出侧和所有终态均有结构化反馈与可恢复动作。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/user-service/contracts/relationship/greeting_request/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/relationship/greeting_request/errors.yaml`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 打招呼请求收件箱与升级
+
+- GIVEN 发起或接收消息的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“打招呼请求收件箱与升级”对应的公开行为。
+- THEN 会话升级、幂等与关注状态不变均有 API 集成证据。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`contact-and-session-governance`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

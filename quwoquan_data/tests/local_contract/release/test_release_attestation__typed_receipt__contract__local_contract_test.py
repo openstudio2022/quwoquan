@@ -10,7 +10,6 @@ SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from core.control_types import RolloutMilestone  # noqa: E402
 from core.source_digest import current_source_digest  # noqa: E402
 from content.release.canonical.release_attestation import (  # noqa: E402
     ReleaseAttestation,
@@ -21,13 +20,12 @@ from content.release.model import ReleaseKind  # noqa: E402
 
 def _receipt() -> ReleaseAttestation:
     return ReleaseAttestation(
-        release_id="20260718--travel-homepage-coverage--cn-zhejiang-sichuan--canary-001",
+        release_id="20260718--travel-homepage-coverage--test-release-a--001",
         release_kind=ReleaseKind.CONTENT,
         execution_ids=(
-            "20260718--travel-homepage-coverage--cn-zhejiang--canary-001",
-            "20260718--travel-homepage-coverage--cn-sichuan--canary-001",
+            "20260718--travel-homepage-coverage--test-region-a--pilot-001",
+            "20260718--travel-homepage-coverage--test-region-b--pilot-001",
         ),
-        rollout_milestone=RolloutMilestone.CANARY,
         entity_count=3,
         post_count=9,
         creator_count=3,
@@ -49,11 +47,10 @@ def test_release_attestation__allows_post_only_lane_release__contract__local_con
     document = _receipt().to_document()
     document.update(
         {
-            "releaseId": "20260718--travel-article-cold-start--cn-zhejiang--m1-001",
+            "releaseId": "20260718--travel-article-supply--test-release-b--001",
             "executionIds": [
-                "20260718--travel-article-cold-start--cn-zhejiang--m1-001"
+                "20260718--travel-article-supply--test-region-a--scale-001"
             ],
-            "rolloutMilestone": RolloutMilestone.M1.value,
             "entityCount": 0,
             "postCount": 100,
         }
@@ -97,7 +94,6 @@ def test_release_attestation__rejects_content_without_objects__contract__local_c
 def test_release_attestation__rejects_baseline_with_objects__contract__local_contract() -> None:
     document = _receipt().to_document()
     document["releaseKind"] = ReleaseKind.EMPTY_BASELINE.value
-    document["rolloutMilestone"] = RolloutMilestone.BASELINE.value
 
     try:
         ReleaseAttestation.from_document(document)

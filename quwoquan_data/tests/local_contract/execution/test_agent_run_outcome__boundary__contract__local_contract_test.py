@@ -8,6 +8,7 @@ from content.execution.agent.history import (
     ManagedAgentScheduler,
     dedupe_managed_agent_runs,
 )
+from content.execution.agent.agent_runner import _prompt_cursor_agent
 from content.execution.agent.outcome import AgentRunOutcome, ManagedAgentJobOutcome
 from core.control_types import AgentFailureKind, AgentProvider, AgentRunStatus, ExecutionStage
 from core.data_issue import DataIssueCode, DataRecoveryAction
@@ -21,10 +22,63 @@ def test_agent_run_outcome__failure__reliability__local_contract_test() -> None:
     )
 
     assert outcome.status is AgentRunStatus.ERROR
-    issue = outcome.issue(ref="entities/地点/景区/普陀山")
+    issue = outcome.issue(ref="entities/地点/景区/测试实体甲")
     assert issue is not None
     assert issue.code is DataIssueCode.AGENT_TIMEOUT
     assert issue.recovery is DataRecoveryAction.RETRY_AGENT
+
+
+def test_agent_run_outcome__provider_rejection__reliability__local_contract_test() -> None:
+    outcome = AgentRunOutcome.failed(
+        AgentFailureKind.PROVIDER_REJECTED,
+        message="provider account is not ready",
+        started=True,
+        error_code=AgentFailureKind.PROVIDER_REJECTED.value,
+    )
+
+    issue = outcome.issue(ref="entities/地点/景区/测试实体甲")
+    assert issue is not None
+    assert issue.code is DataIssueCode.AGENT_PROVIDER_REJECTED
+    assert issue.recovery is DataRecoveryAction.STOP
+
+
+def test_cursor_prompt__preserves_terminal_status_message__contract__local_contract_test() -> None:
+    class StatusMessage:
+        type = "status"
+        status = "ERROR"
+        message = "provider account is not ready"
+
+    class Event:
+        sdk_message = StatusMessage()
+
+    class Run:
+        def events(self):
+            return iter((Event(),))
+
+        def wait(self):
+            return object()
+
+    class AgentInstance:
+        def send(self, _prompt):
+            return Run()
+
+        def close(self):
+            return None
+
+    class AgentClass:
+        @staticmethod
+        def create(_options, *, client):  # noqa: ARG004
+            return AgentInstance()
+
+    result, message = _prompt_cursor_agent(
+        AgentClass,
+        "prompt",
+        object(),
+        client=object(),
+    )
+
+    assert result is not None
+    assert message == "provider account is not ready"
 
 
 def test_agent_run_outcome__wire_decode__contract__local_contract_test() -> None:
@@ -63,7 +117,7 @@ def test_managed_agent_job_outcome__gate__reliability__local_contract_test() -> 
         outcome=AgentRunOutcome.finished(run_id="run-1"),
         job_index=0,
         lane="homepage",
-        ref="entities/地点/景区/普陀山",
+        ref="entities/地点/景区/测试实体甲",
     )
 
     blocked = completed.with_gate_issues(("page.md remains placeholder",))

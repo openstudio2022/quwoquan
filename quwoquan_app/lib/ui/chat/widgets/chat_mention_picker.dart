@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/input/chat_mention_text_editing_controller.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
@@ -48,7 +49,7 @@ class _ChatMentionPickerState extends State<ChatMentionPicker> {
   List<ChatConversationMemberDto> _members =
       const <ChatConversationMemberDto>[];
   bool _isLoading = true;
-  String? _error;
+  Object? _error;
   int _requestSerial = 0;
 
   @override
@@ -92,7 +93,7 @@ class _ChatMentionPickerState extends State<ChatMentionPicker> {
                   member.memberType != 'assistant' &&
                   member.userId != 'assistant',
             )
-            .take(50)
+            .take(CloudApiDefaults.chatMemberSearchLimit)
             .toList(growable: false);
         _isLoading = false;
       });
@@ -102,7 +103,7 @@ class _ChatMentionPickerState extends State<ChatMentionPicker> {
       }
       setState(() {
         _isLoading = false;
-        _error = runtimeErrorDisplayMessage(error);
+        _error = error;
       });
     }
   }
@@ -190,24 +191,20 @@ class _ChatMentionPickerState extends State<ChatMentionPicker> {
       return const Center(child: CupertinoActivityIndicator());
     }
     if (_error case final error?) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.containerLg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                error.isEmpty ? ChatText.mentionPickerLoadFailed : error,
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: AppSpacing.md),
-              CupertinoButton.filled(
-                onPressed: () => unawaited(_search(_searchController.text)),
-                child: const Text(ChatText.mentionPickerRetry),
-              ),
-            ],
-          ),
+      return AppSectionErrorCard(
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.sectionLoad,
+          scope: UiErrorScope.section,
+          presentation: UiErrorPresentation.sectionSoftCard,
         ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _search(_searchController.text);
+          }
+        },
       );
     }
     if (_members.isEmpty && !_showMentionAll) {

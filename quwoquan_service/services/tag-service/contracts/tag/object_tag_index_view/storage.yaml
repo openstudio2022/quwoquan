@@ -1,0 +1,21 @@
+backend: mongodb
+role: projection
+collections:
+  object_tag_index:
+    entity: ObjectTagIndex
+    indexes:
+    - name: idx_object
+      keys:
+        objectId: 1
+        objectType: 1
+      unique: true
+    - name: idx_object_tagrefs
+      keys:
+        tagRefs: 1
+      sparse: true
+    - name: idx_object_source_version
+      keys:
+        objectType: 1
+        sourceAggregateVersion: 1
+codegen:
+  enabled: true

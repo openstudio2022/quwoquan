@@ -1,5 +1,5 @@
 """
-与 verify_page_matrix_scan_complete / verify_page_abc_governance 共用的磁盘页面路径枚举。
+与 page_object_contract / verify_page_abc_governance 共用的磁盘页面路径枚举。
 
 修改扫描规则时须只改本模块，避免两套脚本漂移。
 """
@@ -12,7 +12,7 @@ EXCLUDE_REL = frozenset({"lib/ui/chat/pages/chat_display_fallbacks.dart"})
 
 
 def matrix_disk_scan_paths(repo_root: Path) -> frozenset[str]:
-    """返回 quwoquan_app 相对路径集合（与 page-horizontal-quality 矩阵扫描基线一致）。"""
+    """返回 quwoquan_app 相对路径集合；目录扫描就是页面集合真相。"""
     app = repo_root / "quwoquan_app"
     lib = app / "lib"
     out: set[str] = set()

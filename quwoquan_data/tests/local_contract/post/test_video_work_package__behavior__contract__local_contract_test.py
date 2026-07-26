@@ -38,9 +38,9 @@ def _source_frame(root: Path, index: int) -> VideoSourceFrame:
     assert cv2.imwrite(str(path), image)
     return VideoSourceFrame(
         path=path,
-        asset_ref=f"sources/west-lake/assets/source-{index}.jpg",
+        asset_ref=f"sources/测试实体甲/assets/source-{index}.jpg",
         source_url=f"https://commons.wikimedia.org/source-{index}",
-        rights_ref=f"sources/west-lake/rights/source-{index}.json",
+        rights_ref=f"sources/测试实体甲/rights/source-{index}.json",
         creator="fixture photographer",
         license="CC BY 4.0",
         basis=VideoSourceBasis.RIGHTS_CLEARED,
@@ -50,15 +50,15 @@ def _source_frame(root: Path, index: int) -> VideoSourceFrame:
 def _request(tmp_path: Path) -> VideoRenderRequest:
     return VideoRenderRequest(
         output_dir=tmp_path / "video-package",
-        execution_id="20260716--travel-video-cold-start--cn-zhejiang--canary-901",
+        execution_id="20260716--travel-video-supply--test-region-a--pilot-901",
         execution_sequence=901,
-        topic_id="西湖__video_1",
-        entity_ref="/entity/地点/景区/西湖",
+        topic_id="测试实体甲__video_1",
+        entity_ref="/entity/地点/景区/测试实体甲",
         tag_refs=("Entity/地点/景区",),
-        title="西湖三段光影",
+        title="测试实体甲三段光影",
         caption="从湖岸、长桥到暮色的三段观察",
         script_lines=("湖岸晨光", "长桥倒影", "暮色收束"),
-        source_frames=tuple(_source_frame(tmp_path, index) for index in range(1, 4)),
+        source_frames=tuple(_source_frame(tmp_path, index) for index in range(1, 3)),
         author_id="creator.fixture.video",
         creator_profile_id="creator.fixture.video",
         agent_run_id="agent-run-video-901",
@@ -75,11 +75,17 @@ def test_video_work_package_renders_h264_poster_subtitles_and_provenance(tmp_pat
     assert (package / "assets/poster.webp").is_file()
     assert (package / "subtitles.vtt").read_text(encoding="utf-8").startswith("WEBVTT\n")
     manifest = read_json(package / "manifest.json")
+    assert manifest["vertical"] == "travel"
     video = manifest["assets"][0]
+    assert all(
+        asset["rightsAuditStatus"] == "verified"
+        and asset["rightsAuditIssues"] == []
+        for asset in manifest["assets"]
+    )
     assert video["codec"] == "h264"
     assert (video["width"], video["height"]) == (1080, 1920)
     assert video["durationMs"] == 6000
-    assert len(read_json(package / "provenance.json")["sources"]) == 3
+    assert len(read_json(package / "provenance.json")["sources"]) == 2
 
 
 def test_video_work_package_detects_evidence_tampering(tmp_path: Path) -> None:
@@ -91,26 +97,38 @@ def test_video_work_package_detects_evidence_tampering(tmp_path: Path) -> None:
     assert "video subtitles are not a valid non-empty WebVTT document" in issues
 
 
+def test_video_work_package_requires_explicit_rights_audit_status(tmp_path: Path) -> None:
+    package = render_video_work_package(_request(tmp_path))
+    manifest_path = package / "manifest.json"
+    manifest = read_json(manifest_path)
+    manifest["assets"][0].pop("rightsAuditStatus")
+    write_json(manifest_path, manifest)
+
+    assert "video asset rightsAuditStatus is invalid" in validate_video_work_package(
+        package
+    )
+
+
 def _sha256(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
-    execution_id = "20260716--travel-video-cold-start--cn-zhejiang--canary-902"
-    ref = "西湖_video"
+    execution_id = "20260716--travel-video-supply--test-region-a--pilot-902"
+    ref = "测试实体甲_video"
     build_execution_fixture(
         execution_id,
-        targets=[{"name": "西湖", "entityType": "地点/景区"}],
+        targets=[{"name": "测试实体甲", "entityType": "地点/景区"}],
     )
     write_execution_runtime_state(execution_id, command="post")
     root = execution_root(execution_id)
-    source_dir = root / "entities/地点/景区/西湖/1.download/sources/西湖__video_fixture"
+    source_dir = root / "entities/地点/景区/测试实体甲/1.download/sources/测试实体甲__video_fixture"
     assets_dir = source_dir / "assets"
     rights_dir = source_dir / "rights"
     assets_dir.mkdir(parents=True, exist_ok=True)
     rights_dir.mkdir(parents=True, exist_ok=True)
     source_path = source_dir / "source.md"
-    source_path.write_text("# 西湖视频来源\n\n三张已清权的景观画面。\n", encoding="utf-8")
+    source_path.write_text("# 测试实体甲视频来源\n\n三张已清权的景观画面。\n", encoding="utf-8")
     source_frames: list[dict[str, str]] = []
     for index in range(1, 4):
         image_path = assets_dir / f"frame-{index}.jpg"
@@ -122,7 +140,7 @@ def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
         write_json(
             rights_path,
             {
-                "sourceUrl": f"https://commons.wikimedia.org/wiki/File:west-lake-{index}.jpg",
+                "sourceUrl": f"https://commons.wikimedia.org/wiki/File:测试实体甲-{index}.jpg",
                 "creator": f"Fixture Creator {index}",
                 "license": "CC BY 4.0",
                 "authorizationProof": "fixture rights proof",
@@ -133,18 +151,18 @@ def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
                 "assetRef": image_path.relative_to(root).as_posix(),
                 "sourceRef": source_path.relative_to(root).as_posix(),
                 "rightsRef": rights_path.relative_to(root).as_posix(),
-                "sourceUrl": f"https://commons.wikimedia.org/wiki/File:west-lake-{index}.jpg",
+                "sourceUrl": f"https://commons.wikimedia.org/wiki/File:测试实体甲-{index}.jpg",
                 "creator": f"Fixture Creator {index}",
                 "license": "CC BY 4.0",
                 "sha256": _sha256(image_path),
-                "caption": f"西湖景观画面 {index}",
-                "sourceCollectionId": "fixture:west-lake-video",
+                "caption": f"测试实体甲景观画面 {index}",
+                "sourceCollectionId": "fixture:测试实体甲-video",
             }
         )
     brief = {
-        "titleHint": "西湖三段光影",
+        "titleHint": "测试实体甲三段光影",
         "carrier": "video",
-        "entityRefs": ["/entity/地点/景区/西湖"],
+        "entityRefs": ["/entity/地点/景区/测试实体甲"],
         "tagRefs": ["Topic/旅行/玩法/摄影旅拍", "Format/内容载体/视频/短视频"],
         "templateId": "travel.entity.short_video",
         "sourceFrames": source_frames,
@@ -170,7 +188,7 @@ def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
     write_json(
         video_script_path(execution_id, ref),
         {
-            "title": "西湖三段光影",
+            "title": "测试实体甲三段光影",
             "caption": "从湖岸、长桥到暮色的三段观察",
             "scriptLines": ["湖岸晨光", "长桥倒影", "暮色收束"],
         },

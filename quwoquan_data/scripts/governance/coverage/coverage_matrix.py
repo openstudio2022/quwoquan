@@ -1,6 +1,6 @@
 """Coverage discovery 行政区矩阵、checkpoint、resume 与饱和证明。
 
-本模块只管理运行契约和证据；网络 adapter 由 ``coverage_discovery`` 提供。任何
+本模块只管理运行契约和证据；网络 adapter 由 ``discovery`` 提供。任何
 资源 limit 都只写入护栏配置，绝不自动等价为 exhausted/saturated。
 """
 from __future__ import annotations

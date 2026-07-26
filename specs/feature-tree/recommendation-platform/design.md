@@ -1,127 +1,52 @@
-# 设计：训练工程与模型服务分离
+# L1 Design：推荐与模型平台 (`recommendation-platform`)
 
-本设计说明为何在推荐平台下将「训练集部署工程」与「模型服务」拆成两个 L3、两种部署物，以及特性树与契约的划分方式。迁移已执行完毕，当前结构以本设计为准。
+> 对应规格：[L1 spec](./spec.md)
 
-**设计原则（遵循 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`）**：对主题做业界最佳实践与标杆对比，给出多备选方案并选最优或可演进到最优；若当前采用轻量方案，则在 design、acceptance 与正式风险 backlog 中声明未来演进和剩余风险。本设计选定「训练 L3 + 推理 L3」分离，模型侧当前为 LightGBM/规则可回退方案。
+## 1. 背景与设计目标
 
----
+- 设计目标：为训练、推理和评估提供统一模型生命周期，使推荐策略能够基于真实反馈安全晋升或回滚，并通过 HTTP 或不可变离线产物与 Go 推荐引擎协作。
 
-## 1. 实际部署形态
+## 2. 领域模型与所有权
 
-### 1.1 两种部署物
+- authoritative ownership：拥有训练数据集引用、模型版本、评估结果、晋升决定和推理服务版本的生命周期与写入决定权。
+- write boundary：只能通过本领域公开 command 修改其拥有事实。
+- 非本域对象：不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
+- 非本域对象：不复制 metadata 中的字段、path、错误码和 wire 语义。
 
-| 部署物 | 形态 | 调度/运行方式 | 对接方 |
-|--------|------|----------------|--------|
-| **训练镜像** | 批处理/任务 | PAI-DLC、火山 ML 工作流、cron 或事件驱动 | 多训练场景（content_feed / circle_discovery / friend_suggestion）；产出写入 ModelRegistry + OSS/TOS |
-| **推理服务** | 常驻在线服务 | K8s/PAI-EAS/自建 7×24 运行 | Go 业务服务（content-service 等）通过 HTTP 调用 POST /score |
+## 3. 上下文边界与协作
 
-- **训练侧**：SampleJoiner → rec_training_samples，DatasetManager → rec_datasets，FeatureTransformer + 训练脚本 → 模型文件 + 元信息，ModelRegistry → rec_model_registry + OSS/TOS。运行方式为**任务/作业**（定时或按需），非常驻 HTTP 服务。
-- **推理侧**：FastAPI 应用，POST /score、GET /health，按 scenario 加载 production 模型并返回 scores，需满足 Go 侧延迟预算（如 30–50ms）。
+- [`JNY-011 / SCN-026`](../spec.md#scn-026) — 在“对象页交集行动深化（同趣围观到破冰升级）”中，基于行为、对象和模型版本生成排序或交集候选，并保留评估与回滚边界。
+- [`JNY-011 / SCN-027`](../spec.md#scn-027) — 在“附近同趣·结伴同行·线下局”中，基于行为、对象和模型版本生成排序或交集候选，并保留评估与回滚边界。
+- [`JNY-011 / SCN-028`](../spec.md#scn-028) — 在“派生称谓与联系人标签驱动连接”中，基于行为、对象和模型版本生成排序或交集候选，并保留评估与回滚边界。
 
-因此存在**两个可独立部署、独立扩缩的单元**：
-1. **训练工程/训练集部署工程**：对接多 scenario、多数据集，产出写入 ModelRegistry，供下游加载。
-2. **模型服务**：装载多 scenario 模型，对接 Go 应用服务，提供统一打分接口。
+## 4. 架构与数据流
 
----
+- [`evaluation-and-flywheel`](./evaluation-and-flywheel/spec.md)：推荐准确性评估、在线 AB 和真实流量训练晋升闭环。
+- [`rec-model-service`](./rec-model-service/spec.md)：**定位**：推荐平台下的模型推理服务，装载不同 scenario 的模型，对接 Go 业务服务（content-service 等）提供统一打分能力。
+- [`rec-model-training`](./rec-model-training/spec.md)：**定位**：推荐平台下的训练工程服务，对接不同模型训练场景（content_feed / circle_discovery / friend_suggestion），产出模型与元信息写入 ModelRegistry + OSS/TOS，供模型服务加载。
+- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
 
-## 2. 业界对标与备选方案对比
+## 5. 关键决策
 
-**业界实践**：主流推荐/ML 平台（如大厂信息流、广告排序）普遍将「训练/离线」与「推理/在线」分离部署：训练为批/任务形态，推理为常驻服务；契约上训练产出写入模型注册与存储，推理侧按需加载。双塔、深度排序等重型模型也沿用同一分离架构，仅模型形态与特征管线升级。
+<a id="dec-001"></a>
+### DEC-001 训练、发布与推理解耦
+- 决策：训练、发布与推理解耦。
+- 理由：为训练、推理和评估提供统一模型生命周期，使推荐策略能够基于真实反馈安全晋升或回滚，并通过 HTTP 或不可变离线产物与 Go 推荐引擎协作。
+- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 关联要求：`REQ-001`
+- 关联能力：[`evaluation-and-flywheel`](./evaluation-and-flywheel/spec.md)、[`rec-model-service`](./rec-model-service/spec.md)、[`rec-model-training`](./rec-model-training/spec.md)
 
-**备选方案**：
+## 6. 质量与运行约束
 
-| 方案 | 描述 | 优点 | 缺点 | 结论 |
-|------|------|------|------|------|
-| A. 单一体 rec-model-engineering-service（训练+推理同 L3） | 一个 L3 下两镜像（训练 job + 推理 service） | 叙事简单、共享代码 | 部署拓扑/SLA/运维边界混在一起，扩缩与故障域不清晰 | 不采用 |
-| B. 训练 L3 + 推理 L3 分离（当前） | rec-model-training 与 rec-model-service 两个 L3，两服务 | 与部署形态一致、职责与 SLA 清晰、可独立扩缩与演进 | 需维护两处契约对齐（feature_registry、ModelRegistry） | **采用** |
-| C. 训练/推理进一步拆多服务（如按 scenario 拆推理） | 每个 scenario 独立推理服务 | 极致隔离 | 运维与契约复杂度高，当前场景数量不必要 | 留作未来可选演进 |
+- 安全与隐私：训练和推理只消费获授权且去除非必要身份信息的特征。
+- 性能与容量：推理超时和容量预算由 recommendation-service 配置与测试共同约束。
+- 可观测性：记录模型版本、请求结果、延迟和失败原因，不记录原始敏感特征。
+- 灰度与回滚：仅在 `prod` rollout stage 按模型版本灰度；回滚到最近一个满足门禁的版本。
 
-**选定 B**：在满足「训练=任务、推理=常驻」的业界共识前提下，采用两 L3 分离，既具备竞争力又便于向双塔/深度模型演进（仅升级训练管线与模型格式，推理契约保持不变）。
+## 7. 失败与恢复
 
----
-
-## 3. 适用场景与约束
-
-- **适用场景**：推荐场景（content_feed、circle_discovery、friend_suggestion 等）下，训练为批/任务、推理为常驻 HTTP 服务；团队规模可维护两服务、契约与 feature_registry 可对齐；当前模型为 LightGBM/规则，推理延迟预算在 30–50ms 量级。
-- **约束与局限性**：训练侧当前无对外 HTTP API（仅作业/脚本触发），提交训练任务、按 scenario 拆推理服务等不在当前范围；多租户/多 region 部署、训练资源弹性调度策略需在部署层另行约定。不适用于非推荐域（如风控、搜索排序）的独立模型服务形态。
-- **已知限制**：两 L3 共享 feature_registry 与 ModelRegistry 契约，变更时需双侧协同；推理侧强依赖 Registry/OSS 可用性。
-
----
-
-## 4. 未来演进
-
-- **目标态**：支持双塔等深度排序模型、TikTok/Facebook 式信息流重度深度学习（序列/多目标/实时特征），训练与推理仍为两 L3，契约保持 POST /score 与 CandidateInput/CandidateScore 稳定。
-- **当前差距**：模型形态为 LightGBM/规则；深度模型的特征管线、训练样本格式、模型注册格式需扩展；未提供「提交训练任务」等训练侧 API。
-- **前置/触发条件**：业务需要更高排序效果、特征与样本管线就绪、训练/推理资源与延迟预算允许更重模型时，先更新对应 L3 spec/acceptance 与正式风险 backlog，再进入实现。
-
----
-
-## 5. 分离理由与取舍（细化）
-
-### 5.1 支持分离的理由
-
-| 维度 | 说明 |
-|------|------|
-| **部署拓扑** | 训练 = 批/任务（短生命周期或按调度）；模型服务 = 长驻进程、高可用与延迟 SLA。扩缩与故障域不同。 |
-| **职责边界** | 训练工程：样本、数据集、特征、训练、注册；模型服务：仅读 Registry/OSS，暴露 /score。 |
-| **SLA 与归属** | 训练关注吞吐、数据正确性、评估通过再打 production；模型服务关注延迟、可用性，与 content-service 等同属在线链路。 |
-| **契约与元数据** | 模型服务对应 rec_model_service（POST /score）；训练可先无对外 HTTP API（仅作业），或后续单独「提交训练任务」API。 |
-| **服务清单** | 拆成 rec-model-training + rec-model-service，与架构图一致，运维与排障边界清晰。 |
-
-### 5.2 保持共享的部分
-
-- **共享**：同一 feature_registry、同一 ModelPredictRequest/Response 契约；训练与推理共用特征注册表与 schema。
-- **实现**：可同代码库、两镜像；特性树中为两个 L3，部署文档中明确「训练 job」与「推理 service」两种部署方式。
-
----
-
-## 6. 特性树与服务规划
-
-### 6.1 L1 下 L3 结构
-
-```
-recommendation-platform (L1)
-├── rec-model-training (L3)   # 训练集部署工程服务
-│   ├── training-pipeline (L4)     # 样本、数据集、特征、训练、注册
-│   │   └── sample-feature-train-registry (L5)
-│   └── training-deployment (L4)   # 训练镜像、PAI/火山任务、调度
-│       └── docker-and-cloud (L5)
-│
-└── rec-model-service (L3)    # 模型服务
-    ├── inference-api (L4)         # POST /score、scenario 路由、模型加载
-    │   └── scenario-router-and-models (L5)
-    ├── go-integration (L4)        # HTTP 契约、CascadeScorer 兜底
-    │   └── http-contract-and-client (L5)
-    └── inference-deployment (L4)  # 推理镜像、PAI-EAS/K8s、与 Go 联调
-        └── docker-and-cloud (L5)
-```
-
-- **rec-model-training**：仅含训练管线与训练部署相关 L4/L5；不含 inference-api、go-integration。
-- **rec-model-service**：仅含推理 API、Go 集成、推理部署相关 L4/L5；不含训练脚本与训练镜像的交付责任。
-- **共享约束**：feature_registry、ModelRegistry 与 rec_model_registry/OSS 由平台层或两节点共同引用；训练产出与推理加载通过 Registry + OSS 解耦。
-
-### 6.2 服务清单与契约
-
-| 服务名 | 职责摘要 | 部署形态 | 对外契约（当前） |
-|--------|----------|----------|------------------|
-| **rec-model-training** | 多场景训练：样本→数据集→训练→注册 | 任务/作业 + 训练镜像 | 可选：无对外 API，或后续 POST /jobs（提交训练任务） |
-| **rec-model-service** | 多场景推理：装载模型、POST /score | 常驻推理服务 | 已有：POST /score、GET /health（contracts/metadata/rec_model_service、OpenAPI） |
-
-- **contracts/metadata/rec_model_service**、**entity_catalog**、**endpoint_catalog**、**OpenAPI rec-model-service.v1.yaml** 以及 Go 侧 **ModelServiceClient** 均归属 **rec-model-service**。
-- 若未来为训练工程增加「提交训练任务」等 API，再为 **rec-model-training** 单独建 metadata/OpenAPI 与 endpoint 条目。
-
-### 6.3 迁移状态（已完成）
-
-- 原 **rec-model-engineering-service** 节点已移除。
-- **training-pipeline** 及其 L5 已迁至 **rec-model-training** 下；**inference-api**、**go-integration** 已迁至 **rec-model-service** 下。
-- **cloud-deployment** 已拆为：**training-deployment** 归 rec-model-training；**inference-deployment** 归 rec-model-service。
-
----
-
-## 7. 小结
-
-| 问题 | 结论 |
-|------|------|
-| 实际部署是否有两个服务形态？ | **是**：训练工程（任务/作业 + 训练镜像）与模型服务（常驻推理服务）。 |
-| 是否在推荐平台下分离？ | **是**：特性树与服务规划均为 rec-model-training 与 rec-model-service 两个 L3/服务。 |
-| 契约与元数据 | 打分契约与 metadata 归属 rec-model-service；训练侧可先无对外 API，后续再为 rec-model-training 增加独立契约。 |
+- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
+- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
+- 恢复动作：按 canonical recovery action 重试、刷新或回滚到上一份已验证配置。
+- 禁止 fallback：不得使用 Mock、旧 wire、双读双写或跨域直写伪造成功。

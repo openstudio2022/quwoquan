@@ -1,4 +1,0 @@
-aggregate: AuthenticationChallenge
-# challenge 生命周期状态（含 locked/expired）全部持久化在 authoritative 表内，
-# 可直接查询审计；当前无任何跨对象消费者，不声明纸面事件。
-events: []

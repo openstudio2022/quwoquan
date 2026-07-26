@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 部署到 prod-hosted（远端唯一托管目标，backend=ssh-hosted，去 root）。
 #
-# 模型（与 quwoquan_ops/environments/prod_plane_access_isolation.yaml 单一真相源一致）：
+# 模型（与 quwoquan_ops/environments/prod/access-isolation.yaml 单一真相源一致）：
 #   - 远端就是与原 gamma 同台的 ECS（SSH + rootless podman compose），非独立 k8s；PROD_KUBECONFIG 已退役。
 #   - 按 edge/media/service/data 四平面隔离：每个读写平面用各自 Linux service 账号 prod-<plane>-svc 自登录，
 #     仅操作本平面 governedWorkloads；data 平面只读审计，不参与 deploy。
@@ -22,9 +22,17 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
+PROD_DEPLOY_TARGET_ROOT="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_work_root
 
-ACCESS_MANIFEST="quwoquan_ops/environments/prod_plane_access_isolation.yaml"
-TOPOLOGY_MANIFEST="quwoquan_ops/environments/environment_topology_manifest.yaml"
+print(deployment_work_root("prod-hosted"))
+PY
+)"
+QWQ_DEPLOY_WORK_ROOT="$(dirname "$PROD_DEPLOY_TARGET_ROOT")"
+export QWQ_DEPLOY_WORK_ROOT
+
+ACCESS_MANIFEST="quwoquan_ops/environments/prod/access-isolation.yaml"
+TOPOLOGY_MANIFEST="quwoquan_ops/environments/prod/runtime.yaml"
 
 DRY_RUN="${DRY_RUN:-true}"
 ROLLOUT_STAGE="${ROLLOUT_STAGE:-gray-initial}"
@@ -62,7 +70,7 @@ if [[ "$DRY_RUN" != "true" && "$PROD_IMAGE_DELIVERY_MODE" != "skip" && ! -s "$RE
   exit 2
 fi
 
-# SSH 目标主机：默认取 topology prod-hosted publicBases.api 的 host，可由 PROD_SSH_HOST 覆盖。
+# SSH 目标主机：默认取 prod/runtime.yaml 的 prod-hosted publicBases.api，可由 PROD_SSH_HOST 覆盖。
 PROD_SSH_HOST="${PROD_SSH_HOST:-$(python3 - "$TOPOLOGY_MANIFEST" <<'PY'
 import sys, yaml
 from urllib.parse import urlparse
@@ -156,9 +164,8 @@ for p in access.get("planes") or []:
     support = [str(item) for item in (p.get("rootlessSupportComposeServices") or []) if str(item).strip()]
     if str(p.get("plane")) == "service" and service_filter:
         alias = {
-            "recommendation-service": "rec-model-service",
+            "recommendation-service": "recommendation-service",
             "service-plane": "__all__",
-            "seed-box": "__all__",
         }
         target = alias.get(service_filter, service_filter)
         if target != "__all__":
@@ -218,7 +225,21 @@ deploy_plane() {
   fi
 
   if [[ "$plane" == "service" || "$plane" == "edge" ]]; then
-    local render_dir="${QWQ_DEPLOY_WORK_ROOT%/}/prod-hosted/rendered/${plane}-${INSTANCE_SUFFIX}"
+    local render_dir
+    render_dir="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$plane" "$INSTANCE_SUFFIX" <<'PY'
+import sys
+
+from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
+
+print(
+    deployment_render_dir(
+        "prod",
+        target="prod-hosted",
+        name=f"{sys.argv[1]}-{sys.argv[2]}",
+    )
+)
+PY
+)"
     if [[ "$DRY_RUN" == "true" ]]; then
       # Dry-run 是源码配置的发布计划预览，不得依赖或生成可删除的发布输出。
       # 真正渲染仍在下方非 dry-run 分支中校验 package/report/release provenance。
@@ -492,20 +513,20 @@ python3 - <<'PY'
 import json
 import urllib.request
 
-with urllib.request.urlopen("http://127.0.0.1:9090/api/v1/targets", timeout=10) as response:
+with urllib.request.urlopen(\"http://127.0.0.1:9090/api/v1/targets\", timeout=10) as response:
     payload = json.load(response)
-if payload.get("status") != "success":
-    raise SystemExit("FAIL: Prometheus targets readback was not successful")
-targets = ((payload.get("data") or {}).get("activeTargets") or [])
+if payload.get(\"status\") != \"success\":
+    raise SystemExit(\"FAIL: Prometheus targets readback was not successful\")
+targets = ((payload.get(\"data\") or {}).get(\"activeTargets\") or [])
 if not targets:
-    raise SystemExit("FAIL: Prometheus has no active targets")
+    raise SystemExit(\"FAIL: Prometheus has no active targets\")
 down = [
-    (item.get("labels") or {}).get("job", "unknown")
+    (item.get(\"labels\") or {}).get(\"job\", \"unknown\")
     for item in targets
-    if item.get("health") != "up"
+    if item.get(\"health\") != \"up\"
 ]
 if down:
-    raise SystemExit("FAIL: Prometheus targets are not up: " + ",".join(sorted(set(down))))
+    raise SystemExit(\"FAIL: Prometheus targets are not up: \" + \",\".join(sorted(set(down))))
 PY
 echo \"[plane service] observability stack ready project=${project}\""
 
@@ -536,7 +557,19 @@ update_stable_gray_router() {
     echo "::error::service plane is required to update the stable gray router" >&2
     return 2
   fi
-  local render_dir="${QWQ_DEPLOY_WORK_ROOT%/}/prod-hosted/rendered/service-router-prod"
+  local render_dir
+  render_dir="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
+
+print(
+    deployment_render_dir(
+        "prod",
+        target="prod-hosted",
+        name="service-router-prod",
+    )
+)
+PY
+)"
   python3 quwoquan_ops/cli/prod/render_prod_plane_stack.py \
     --plane service \
     --instance prod \

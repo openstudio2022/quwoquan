@@ -1,20 +1,74 @@
-# L3 子特性：projector-framework-and-readmodel
+# L3 Story：投影器框架与读模型 (`projector-framework-and-readmodel`)
 
-## 功能说明
-- **Projector 接口**：Handle(ctx, event) error；接收事件，更新 ReadModel。
-- **事件消费框架**：MQ consumer 订阅 events topic；按 event_type 路由到对应 Projector；offset 管理。
-- **ReadModel 设计**：_projections/*.yaml 定义 ReadModel 集合（discovery_feed、circle_feed、chat_inbox、user_profile_view、recommend_feature）。
+> 所属能力：[`runtime-projector`](../spec.md)
 
-## 实现要点
-- **接口**：Projector 接口 + 注册表（event_type → Projector）。
-- **消费框架**：Consumer 拉取消息 → 反序列化 → 路由 → 调用 Projector.Handle → 提交 offset。
-- **幂等**：通过 event_id 或 (aggregate_id, version) 去重，重复消费同一事件不更新。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-## 约束
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
+
+## 1. 用户价值
+
+作为开发、测试或运维角色，
+我希望ReadModel 结构必须与 _projections/*.yaml 一致，
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- “投影器框架与读模型”的输入、可观察主路径、失败语义以及与父能力的交接。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 投影器框架与读模型
+
+- ReadModel 结构必须与 _projections/*.yaml 一致。
+
+<a id="req-002"></a>
+### REQ-002 ReadModel 结构必须与 projections/.yaml 一致
+
 - ReadModel 结构必须与 _projections/*.yaml 一致。
 - Projector 必须幂等。
 
-## 验收标准
-- A1：消费框架可调用任意 Projector；ReadModel 结构正确。
-- A7：ReadModel 与 _projections/*.yaml 一致。
-- A8：框架有单元测试。
+<a id="req-003"></a>
+### REQ-003 ReadModel 结构必须与 projections/.yaml 一致
+
+- ReadModel 结构必须与 _projections/*.yaml 一致。
+- 每个 Projector 必须幂等。
+- 幂等逻辑必须覆盖所有 Projector。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 投影器框架与读模型
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“投影器框架与读模型”对应的公开行为。
+- THEN ReadModel 结构必须与 _projections/*.yaml 一致。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-projector`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 投影器框架与读模型 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“投影器框架与读模型”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

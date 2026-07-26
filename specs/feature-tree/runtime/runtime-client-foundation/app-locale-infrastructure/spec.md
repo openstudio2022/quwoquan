@@ -1,34 +1,61 @@
-# L3 子特性：app-locale-infrastructure
+# L3 Story：App 语言区域基础设施 (`app-locale-infrastructure`)
 
-## 功能说明
+> 所属能力：[`runtime-client-foundation`](../spec.md)
 
-Flutter App 国际化（i18n）基础设施模块，建立 ARB + `flutter gen-l10n` 代码生成体系，覆盖：
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-1. 基础设施搭建（`l10n.yaml`、`lib/l10n/`、`pubspec.yaml generate: true`）
-2. 字符串常量迁移（`UITextConstants` / `AppStrings` → `app_zh.arb`）
-3. `BuildContext` 扩展访问器（`context.l10n`）
-4. `lib/ui/` 下现有硬编码中文字符串清除
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 职责边界
+## 1. 用户价值
 
-- 负责：i18n 基础设施搭建 + `lib/ui/` 范围内硬编码字符串清除
-- 不负责：`lib/ui/`、`lib/components/` 的迁移（列为搁置任务）
-- 不负责：`UITextConstants` 删除（双轨共存，非 widget 上下文继续使用）
-- 不负责：英文翻译内容填充（`app_en.arb` 使用 TODO 占位）
+作为开发、测试或运维角色，
+我希望通过 ARB 与 flutter gen-l10n 生成本地化资源，并在 locale 切换后保持页面文案一致，
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-## 适用范围与约束
+## 2. 范围与非目标
 
-- **适用**：Flutter `StatefulWidget` / `StatelessWidget` 的 `build()` 方法中的用户可见文本
-- **不适用**：`StateNotifier`、`catch` 块、日志字符串（无 `BuildContext`）
-- **前置条件**：`intl: ^0.20.2` 已在 `pubspec.yaml`（✓ 已存在）、`flutter_localizations` SDK 已引入（✓ 已存在）
+### In Scope
 
-## 与父/子节点关系
+- “App 语言区域基础设施”的输入、可观察主路径、失败语义以及与父能力的交接。
 
-- 父节点：`runtime-client-foundation` L2
-- 子节点：`arb-gen-l10n-string-extraction` L4（默认叶子，本次交付）
+### Out of Scope
 
-## 验收标准概要
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-- A1：`flutter gen-l10n` 生成产物可用，`context.l10n` 在 widget 中可访问
-- A7：ARB key 集合与两个常量文件 100% 对齐
-- A8：`flutter analyze` 零报错 + CJK 字面量检查脚本通过
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 App 语言区域基础设施
+
+- 通过 ARB 与 flutter gen-l10n 生成本地化资源，并在 locale 切换后保持页面文案一致。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 App 语言区域基础设施
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“App 语言区域基础设施”对应的公开行为。
+- THEN 通过 ARB 与 flutter gen-l10n 生成本地化资源，并在 locale 切换后保持页面文案一致。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 App 语言区域基础设施 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“App 语言区域基础设施”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

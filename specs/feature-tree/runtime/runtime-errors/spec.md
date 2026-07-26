@@ -1,25 +1,90 @@
-# L2 特性：runtime-errors
+# L2 Business Capability：运行时错误 (`runtime-errors`)
 
-## 功能说明
+> 所属领域：[`runtime`](../spec.md)
+>
+> 设计归属：[L1 DEC-001](../design.md#dec-001)
+
+## 1. 能力目标
+
+提供统一错误码、错误对象、响应封装与 HTTP/RPC 状态映射。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- errors.yaml -> Go AppErrorFrom* -> ErrorResponse -> Flutter CloudException/RuntimeFailure 的端云链路。
+- userMessage control-plane 热配置、fail-safe baseline、override hit/miss 可观测。
+- recovery_action/recovery_after_seconds 静态结构化下发与端侧消费。
+- 客户端可见域错误码全集一致、全域 typed DomainErrorCode 消费与前向兼容。
+- 异常遥测与行为上报失败的结构化可观测和本地队列保留。
+
+### Out of Scope
+
+- recovery 参数热配置。
+- 新 MODULE 白名单 metadata 化。
+- gateway/orchestrator 独立进程落地；本验收只登记后续需要补专属错误域。
+
+## 3. Journey / Scenario 贡献
+
+- [`JNY-001 / SCN-004`](../../spec.md#scn-004)
+  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
+  - 本能力处理：提供统一错误码、错误对象、响应封装与 HTTP/RPC 状态映射。
+  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
+  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
+
+## 4. Story
+
+
+
+- [`error-code-and-response-envelope`](./error-code-and-response-envelope/spec.md)：定义“错误代码与响应信封”的可观察主路径、失败语义及父能力交接。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 runtime errors 端云错误治理闭环 SIT
+
+- 客户端可见域均通过 metadata/codegen 输出结构化错误；content 不再保留 sentinel-only 豁免。
+- Flutter 端所有生成的 *ErrorCode 均被 CloudErrorMapper 或统一 registry 注册消费；未知 code 仍靠 userMessage + recovery 前向兼容。
+- 行为上报、异常遥测与 UI 错误展示不保留自建异常或静默吞失败路径。
+- override hit/miss、runtime error code/module/kind/recovery_action 指标和告警规格可复核。
+
+<a id="req-002"></a>
+### REQ-002 提供统一错误码、错误对象、响应封装与 HTTP/RPC 状态映射
+
 - 提供统一错误码、错误对象、响应封装与 HTTP/RPC 状态映射。
-- 保证用户可见文案与调试信息分离，支持链路追踪字段透传。
-- 提供端云一体化错误治理闭环：`errors.yaml` 是错误码、用户文案、HTTP 状态与 recovery 指令的唯一真相源；Go 服务通过生成的 `AppErrorFrom*` 工厂输出结构化 `ErrorResponse`；Flutter 端通过 `CloudException`、`RuntimeFailure` 与全域 `DomainErrorCode` 消费同一契约。
-- 支持运营态用户提示语热配置：control-plane 下发 `sys.error_message.<MODULE.KIND.reason>.<locale>`，错误出口命中即覆盖 `userMessage`，未命中回退 codegen baseline，改文案不需要云服务重启或端侧发版。
-
-## 约束
-- 错误码格式固定为 `<MODULE>.<KIND>.<REASON>`。
 - 所有服务必须使用 runtime-errors 输出错误响应，禁止手写错误 JSON。
-- 与 `contracts/error_codes.md`、`contracts/openapi/common.yaml` 一致。
 - 客户端可见域禁止保留 sentinel-only 错误生成路径；生成产物必须包含 `AppErrorFrom*`、`userMessage`、`.WithRecovery(...)`。
 - 端侧所有云侧错误必须保留 raw `code`、`userMessage` 与 `recovery` 前向兼容，同时对已生成的 `*ErrorCode` 提供统一 typed 消费入口；禁止只生成枚举而中央 mapper 不注册。
 - telemetry 自身失败必须可观测并保留队列，禁止 `catchError((_) {})` 或无上下文 `catch (_)` 静默吞掉异常上报失败。
 - 指标、告警与回滚必须覆盖错误码激增、override hit/miss 异常、config disk fallback 和 runtime error response 契约漂移。
+- 核心服务统一错误响应结构可用。
 
-## 验收标准
-- A1：核心服务统一错误响应结构可用。
-- A3：`recovery policy` 可用于重试与降级决策。
-- A7：错误码字典、OpenAPI、SDK 实现三方一致。
-- A8：unit/contract/integration/uat 自动化完整。
-- A9：客户端可见域端云错误码全集一致，且 recovery 按 code 精确对齐到生成的 Go 工厂和端侧解析策略。
-- A10：用户提示语 override 支持 zh/en 热更新、命中率/回退率可观测、灰度发布和回滚审计。
-- A11：异常遥测、行为上报与 UI 错误展示都消费结构化 runtime failure，不保留自建异常分支或第二套错误语义。
+## 6. 契约与依赖
+
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 runtime errors 端云错误治理闭环 SIT
+
+- GIVEN 执行“runtime errors 端云错误治理闭环”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“runtime errors 端云错误治理闭环”对应动作。
+- THEN 客户端可见域均通过 metadata/codegen 输出结构化错误；content 不再保留 sentinel-only 豁免。
+- THEN Flutter 端所有生成的 *ErrorCode 均被 CloudErrorMapper 或统一 registry 注册消费；未知 code 仍靠 userMessage + recovery 前向兼容。
+- THEN 行为上报、异常遥测与 UI 错误展示不保留自建异常或静默吞失败路径。
+- THEN override hit/miss、runtime error code/module/kind/recovery_action 指标和告警规格可复核。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 runtime errors 端云错误治理闭环 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：客户端可见域均通过 metadata/codegen 输出结构化错误；content 不再保留 sentinel-only 豁免。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

@@ -13,6 +13,7 @@ import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/conversation/message_bubble_frame.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_transcript_bubble_envelope.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_answer_content.dart';
@@ -342,12 +343,13 @@ class AssistantMessageBubble extends StatelessWidget {
       final imageUrl = envelope.imageUrl;
       contentWidget = ClipRRect(
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        child: Image.network(
-          imageUrl,
+        child: AppCachedNetworkImage(
+          imageUrl: imageUrl,
           width: assistantBubbleImageSize,
           height: assistantBubbleImageSize,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => Container(
+          cdnPreset: CdnImagePreset.inline,
+          errorWidget: Container(
             width: assistantBubbleImageSize,
             height: assistantBubbleImageSize,
             color: bubbleColor,

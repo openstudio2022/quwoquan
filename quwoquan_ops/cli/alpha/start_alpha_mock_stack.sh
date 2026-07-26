@@ -4,12 +4,25 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
 QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
+DEPLOY_TARGET_ROOT="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_work_root
+
+print(deployment_work_root("alpha-local"))
+PY
+)"
+QWQ_DEPLOY_WORK_ROOT="$(dirname "$DEPLOY_TARGET_ROOT")"
+export QWQ_DEPLOY_WORK_ROOT
 ACTION="${1:-up}"
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
   --env alpha --target alpha-local --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
 STATE_DIR="$QWQ_OUTPUT_ROOT/env/alpha/local/alpha-local/process"
 RUNTIME_LOG_DIR="$QWQ_OBSERVABILITY_RUN_ROOT/logs/service"
-PKI_STATE_DIR="$QWQ_DEPLOY_WORK_ROOT/alpha-local/certificates"
+PKI_STATE_DIR="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
+
+print(certificate_export_dir("alpha-local"))
+PY
+)"
 MEDIA_DIR="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
 LEGAL_STATIC_ROOT="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
 from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir

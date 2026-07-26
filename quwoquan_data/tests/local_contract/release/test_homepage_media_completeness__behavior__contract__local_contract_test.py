@@ -5,18 +5,18 @@ from verify import verify_homepage_media_completeness as gate
 
 
 def _write_execution(root: Path, *, capped: bool) -> None:
-    source = root / "sources" / "东钱湖__wikipedia__fixture"
+    source = root / "sources" / "测试实体乙__wikipedia__fixture"
     placements = [
         {
             "fileName": "20240730_Dongqian_Hu.jpg",
-            "caption": "东钱湖",
+            "caption": "测试实体乙",
             "sourceOrder": 0,
             "placementType": "infoboxLead",
         },
         *[
             {
                 "fileName": f"gallery_{index}.jpg",
-                "caption": f"东钱湖图{index}",
+                "caption": f"测试实体乙图{index}",
                 "sourceOrder": index,
                 "placementType": "groupMember",
                 "groupId": "gal-001",
@@ -51,7 +51,7 @@ def _write_execution(root: Path, *, capped: bool) -> None:
             ]
         },
     )
-    entity = root / "entities" / "地点" / "景区" / "东钱湖"
+    entity = root / "entities" / "地点" / "景区" / "测试实体乙"
     write_json(
         entity / "manifest.json",
         {
@@ -60,7 +60,7 @@ def _write_execution(root: Path, *, capped: bool) -> None:
                     "assetId": "dongqian_cover",
                     "fileName": "dongqian_cover.jpg",
                     "role": "cover",
-                    "caption": "东钱湖",
+                    "caption": "测试实体乙",
                     "placementType": "infoboxLead",
                     "sourceAssetRef": f"sources/{source.name}/assets/{placements[0]['fileName']}",
                 },
@@ -69,7 +69,7 @@ def _write_execution(root: Path, *, capped: bool) -> None:
                         "assetId": f"dongqian_related_{index}",
                         "fileName": f"dongqian_related_{index}.jpg",
                         "role": "related",
-                        "caption": f"东钱湖图{index}",
+                        "caption": f"测试实体乙图{index}",
                         "placementType": "groupMember",
                         "sourceAssetRef": f"sources/{source.name}/assets/{placements[index]['fileName']}",
                     }
@@ -80,7 +80,7 @@ def _write_execution(root: Path, *, capped: bool) -> None:
     )
     related_ids = ",".join(f"dongqian_related_{index}" for index in range(1, kept))
     (entity / "page.md").write_text(
-        "---\ncoverImage: asset://dongqian_cover\n---\n# 东钱湖\n\n正文。\n\n"
+        "---\ncoverImage: asset://dongqian_cover\n---\n# 测试实体乙\n\n正文。\n\n"
         f'## 相关图片\n\n:::gallery ids="{related_ids}" layout="grid"\n:::\n',
         encoding="utf-8",
     )
@@ -88,8 +88,8 @@ def _write_execution(root: Path, *, capped: bool) -> None:
         entity / "evidence" / "media_dispositions.json",
         {
             "schema": "quwoquan_data.homepage_media_dispositions",
-            "executionId": "20260713--travel-homepage-coverage--cn-zhejiang--canary-001",
-            "objectRef": "地点/景区/东钱湖",
+            "executionId": "20260713--travel-homepage-coverage--test-region-a--pilot-001",
+            "objectRef": "地点/景区/测试实体乙",
             "assets": [
                 {
                     "sourceAssetRef": f"sources/{source.name}/assets/{placements[0]['fileName']}",
@@ -147,7 +147,7 @@ def test_homepage_media_completeness_rejects_typed_fetch_failure(tmp_path: Path,
         "quotaMode": "complete_source_page",
         "drops": [
             {
-                "slug": "东钱湖/home_wikipedia#5",
+                "slug": "测试实体乙/home_wikipedia#5",
                 "reason": "fetch:rate_limited",
                 "statusCode": 429,
             }
@@ -178,7 +178,7 @@ def test_homepage_media_completeness_requires_an_outcome_for_every_downloaded_im
 ) -> None:
     root = tmp_path / "execution"
     _write_execution(root, capped=False)
-    evidence = root / "entities" / "地点" / "景区" / "东钱湖" / "evidence" / "media_dispositions.json"
+    evidence = root / "entities" / "地点" / "景区" / "测试实体乙" / "evidence" / "media_dispositions.json"
     payload = gate.read_json(evidence)
     payload["assets"].pop()
     write_json(evidence, payload)

@@ -12,7 +12,7 @@ import governance.coverage.entity_extract as entity_extract  # noqa: E402
 from governance.creators.candidates.store import CandidateRepository  # noqa: E402
 
 
-EXECUTION_ID = "20260714--travel-homepage-governance--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260714--travel-homepage-governance--test-region-a--pilot-001"
 
 
 def test_unknown_entity_is_candidate_not_placeholder_homepage(tmp_path: Path, monkeypatch) -> None:

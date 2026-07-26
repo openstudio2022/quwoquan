@@ -8,6 +8,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[3]
 METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata"
@@ -38,6 +40,97 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _resolve_workspace_file(relative: str, *, label: str) -> Path:
+    candidate = (ROOT / relative).resolve()
+    try:
+        candidate.relative_to(ROOT.resolve())
+    except ValueError as exc:
+        raise ValueError(f"{label} must stay inside the workspace: {relative}") from exc
+    if not candidate.is_file():
+        raise ValueError(f"{label} is missing: {relative}")
+    return candidate
+
+
+def _validate_media_canary(
+    manifest: dict[str, object],
+    *,
+    content_source: dict[str, object],
+) -> None:
+    media_canary = manifest.get("mediaCanary")
+    if not isinstance(media_canary, dict):
+        raise ValueError("mediaCanary is required for the alpha fixture bundle")
+    profile_ref = str(media_canary.get("profileRef", "")).strip()
+    profile_path = _resolve_workspace_file(profile_ref, label="mediaCanary.profileRef")
+    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+    if not isinstance(profile, dict):
+        raise ValueError("mediaCanary profile must be a YAML object")
+    if not str(profile.get("profileId", "")).strip():
+        raise ValueError("mediaCanary profileId is required")
+    if not str(profile.get("processorProfile", "")).strip():
+        raise ValueError("mediaCanary processorProfile is required")
+
+    profile_assets = profile.get("assets")
+    if not isinstance(profile_assets, list):
+        raise ValueError("mediaCanary profile assets are required")
+    assets_by_id = {
+        str(asset.get("assetId", "")).strip(): asset
+        for asset in profile_assets
+        if isinstance(asset, dict) and str(asset.get("assetId", "")).strip()
+    }
+    for state_key, expected_status in (
+        ("readyAssetIds", "ready"),
+        ("rejectionAssetIds", "rejected"),
+    ):
+        asset_ids = media_canary.get(state_key)
+        if not isinstance(asset_ids, list) or not asset_ids:
+            raise ValueError(f"mediaCanary.{state_key} is required")
+        for asset_id in asset_ids:
+            descriptor = assets_by_id.get(str(asset_id).strip())
+            if descriptor is None:
+                raise ValueError(
+                    f"mediaCanary asset is absent from profile: {asset_id}"
+                )
+            if str(descriptor.get("expectedProcessingStatus", "")).strip() != expected_status:
+                raise ValueError(
+                    f"mediaCanary asset status mismatch: {asset_id} must be {expected_status}"
+                )
+
+    seed_sets = content_source.get("seedSets")
+    if not isinstance(seed_sets, dict):
+        raise ValueError("content fixture seedSets are required")
+    core = seed_sets.get("content_discovery_core")
+    posts = core.get("posts") if isinstance(core, dict) else None
+    if not isinstance(posts, list):
+        raise ValueError("content fixture discovery posts are required")
+    canary_posts = [
+        post
+        for post in posts
+        if isinstance(post, dict) and post.get("postId") == "v1"
+    ]
+    if len(canary_posts) != 1:
+        raise ValueError("mediaCanary requires exactly one v1 video post")
+    canary = canary_posts[0]
+    asset_id = str(canary.get("mediaAssetId", "")).strip()
+    descriptor = assets_by_id.get(asset_id)
+    if descriptor is None:
+        raise ValueError("v1 mediaAssetId is absent from mediaCanary profile")
+    if canary.get("contentType") != "video":
+        raise ValueError("v1 mediaCanary post must be a video")
+    if canary.get("durationMs") != descriptor.get("durationMs"):
+        raise ValueError("v1 mediaCanary duration does not match its profile")
+    if canary.get("mediaAssetVersion") != descriptor.get("assetVersion"):
+        raise ValueError("v1 mediaCanary asset version does not match its profile")
+    prefix = str(descriptor.get("publicSlicePrefix", "")).strip().rstrip("/")
+    for key in (
+        "videoUrl",
+        "coverUrl",
+        "thumbnailUrl",
+        "previewTrackManifestUrl",
+    ):
+        if not str(canary.get(key, "")).startswith(f"{prefix}/"):
+            raise ValueError(f"v1 mediaCanary {key} must use its public slice")
+
+
 def main() -> int:
     args = parse_args()
     output = args.output.resolve()
@@ -48,6 +141,7 @@ def main() -> int:
 
     assets: list[dict[str, object]] = []
     seen_domains: set[str] = set()
+    content_source: dict[str, object] | None = None
     for seed in manifest.get("seedRefs", []):
         domain = str(seed.get("domain", "")).strip()
         relative = str(seed.get("fixturePath", "")).strip()
@@ -56,10 +150,14 @@ def main() -> int:
             raise ValueError(f"fixture domain 缺失或重复: {domain!r}")
         if not relative or not isinstance(refs, list) or not refs:
             raise ValueError(f"{domain}: fixturePath/refs 不完整")
-        source = (METADATA / relative).resolve()
-        source.relative_to(METADATA.resolve())
+        source = (ROOT / relative).resolve()
+        source.relative_to(ROOT.resolve())
         payload = source.read_bytes()
-        json.loads(payload)
+        source_json = json.loads(payload)
+        if not isinstance(source_json, dict):
+            raise ValueError(f"{domain}: fixture root must be a JSON object")
+        if domain == "content":
+            content_source = source_json
         seen_domains.add(domain)
         assets.append(
             {
@@ -70,6 +168,9 @@ def main() -> int:
                 "refs": [str(item) for item in refs],
             }
         )
+    if content_source is None:
+        raise ValueError("alpha fixture bundle requires the content seed")
+    _validate_media_canary(manifest, content_source=content_source)
 
     release_assets: list[dict[str, object]] = []
     seen_object_ids: set[str] = set()

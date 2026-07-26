@@ -174,7 +174,7 @@ Widget _interactionTabActionsApp(
             ownerUserId: 'profile_owner',
             displayName: '主页测试分身',
             avatarUrl: '',
-            personaContextVersion: '3',
+            contextVersion: 3,
           ),
         ),
     ],
@@ -204,6 +204,9 @@ Widget _scopedApp() {
         AlphaIntersectionRepository(),
       ),
       profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      authorImpactQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(

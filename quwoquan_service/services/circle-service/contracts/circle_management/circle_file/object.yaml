@@ -1,0 +1,73 @@
+kind: aggregate_root
+description: Circle 或 CircleGroup 空间中的目录与 MediaAsset 引用聚合；不拥有上传会话或对象存储键。
+identity:
+  fields:
+  - _id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: command_facade
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: circle
+  on_delete: tombstone
+  reference_fields:
+  - circleId
+  target_object: circle.Circle
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: group
+  on_delete: tombstone
+  reference_fields:
+  - groupId
+  target_object: circle.CircleGroup
+- access: named_reader
+  cardinality: N:1
+  consistency: strong
+  kind: reference
+  name: parent_folder
+  on_delete: restrict
+  reference_fields:
+  - parentFolderId
+  target_object: circle.CircleFile
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: media_asset
+  on_delete: tombstone
+  reference_fields:
+  - assetId
+  target_object: content.MediaAsset
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: uploader
+  on_delete: retain
+  reference_fields:
+  - uploaderPersonaId
+  target_object: user.Persona
+capabilities:
+- commandable
+- queryable
+- idempotent_commands
+business_rules:
+- circleId、groupId、fileType、assetId 与 uploaderPersonaId 创建后不可变
+- file 必须绑定同一 Persona 所有且 processingStatus=ready 的 MediaAsset；folder 禁止绑定 assetId
+- parentFolderId 必须引用同一 circleId/groupId 空间内的 active folder，且父链不得形成环
+- 创建与移动必须经 Circle/CircleGroup membership named Reader 授权，禁止 adapter 直写
+- sizeBytes 与 mimeType 只由 MediaAsset named Reader 写入不可变快照，客户端不得提交
+- deleted 为终态；删除 CircleFile 不删除 MediaAsset，只发布引用移除事件
+lifecycle:
+  states:
+  - active
+  - deleted
+  optimistic_concurrency: version
+  idempotency: command_receipt

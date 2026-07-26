@@ -114,7 +114,7 @@ def test_watermark_prone_original_provenance_is_policy_excluded_when_ocr_is_inco
     reason = I.watermark_prone_source_reason(
         (
             "https://commons.wikimedia.org/wiki/File:Putuo_-_panoramio.jpg",
-            "https://zh.wikipedia.org/wiki/普陀山",
+            "https://zh.wikipedia.org/wiki/测试实体甲",
         )
     )
 
@@ -142,6 +142,48 @@ def test_image_above_assessment_budget_uses_bounded_copy_without_source_rejectio
     assert any(
         reason.startswith("assessment_downscaled:") for reason in v.reasons
     ), v.to_dict()
+
+
+def test_assessment_copy_uses_policy_owned_jpeg_encoding():
+    """Large source assessment must not regress to expensive lossless PNG output."""
+    calls: list[dict[str, object]] = []
+
+    class _TrackedImage:
+        mode = "RGB"
+
+        def thumbnail(self, size, resampling):
+            assert size[0] > 0 and size[1] > 0
+            assert resampling is I.Image.Resampling.LANCZOS
+
+        def save(self, path, **kwargs):
+            calls.append({"path": path, **kwargs})
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    original_open = I.Image.open
+    original_dimensions = I._image_dimensions
+    try:
+        I.Image.open = lambda _: _TrackedImage()
+        I._image_dimensions = lambda _: (100, 100)
+        with I._assessment_image(_clean_image(), width=8000, height=8000) as (path, _):
+            assert path is not None
+            assert path.suffix == ".jpg"
+    finally:
+        I.Image.open = original_open
+        I._image_dimensions = original_dimensions
+
+    assert calls == [
+        {
+            "path": calls[0]["path"],
+            "format": "JPEG",
+            "quality": I.ASSESSMENT_JPEG_QUALITY,
+            "optimize": False,
+        }
+    ]
 
 
 def test_image_above_publish_budget_is_rejected():
@@ -173,7 +215,7 @@ def test_publish_prefilter_uses_publish_budget_and_blocks_unreadable_images():
 
     assert oversized_verdict.status == I.STATUS_SAFE, oversized_verdict.to_dict()
     assert unreadable_verdict.status == I.STATUS_NEEDS_REVIEW, unreadable_verdict.to_dict()
-    assert "image_dimensions_unreadable" in unreadable_verdict.reasons
+    assert "image_decode_unreadable" in unreadable_verdict.reasons
 
 
 def test_face_signal_needs_review():

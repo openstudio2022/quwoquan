@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// L1a 契约测试：LocationPoiDto — 覆盖 integration/location/projections/location_poi.yaml
+/// L1a 契约测试：LocationPoiDto — 覆盖 integration/external_integration/location/projections/location_poi.yaml
 ///
 /// 三维度覆盖：
 ///   常规契约  — 正常输入 → 正确输出（字段解析、fromMap）

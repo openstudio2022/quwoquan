@@ -1,9 +1,0 @@
-entity: ConfigSnapshot
-layer: app_side
-
-description: |
-  ConfigSnapshot 是 platform-ops operator 只读对象：App 端零消费，无 App mock fixture 场景。
-  Portal 只读消费面契约由 generated control-plane 契约与 api_integration 承载；
-  配置真相源是版本化发布包，不存在写入口。
-
-scenarios: []

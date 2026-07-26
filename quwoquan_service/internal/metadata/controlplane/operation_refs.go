@@ -11,7 +11,7 @@ import (
 // HydrateOperationReferences resolves portal-only operation references from the
 // canonical ContractGraph. Control-plane presentation metadata may add risk and
 // approval semantics, but it must not repeat method, path, or authorization
-// scopes owned by service.yaml.
+// scopes owned by object-level operations.yaml.
 func HydrateOperationReferences(document map[string]any, contractGraph *graph.ContractGraph) error {
 	if contractGraph == nil {
 		return fmt.Errorf("control-plane operation references require ContractGraph")

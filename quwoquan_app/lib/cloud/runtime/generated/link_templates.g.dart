@@ -173,7 +173,7 @@ class AppLinkTemplates {
   static String _fillRoutePathTemplate(String template, Map<String, String> params) {
     var out = template;
     params.forEach((key, value) {
-      out = out.replaceAll(':$key', Uri.encodeComponent(value));
+      out = out.replaceAll('{$key}', Uri.encodeComponent(value));
     });
     return out;
   }

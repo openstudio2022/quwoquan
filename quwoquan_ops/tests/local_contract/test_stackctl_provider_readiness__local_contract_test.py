@@ -66,6 +66,43 @@ def _deploy_args(report_dir: Path) -> argparse.Namespace:
 
 
 class StackctlProviderReadinessContractTest(unittest.TestCase):
+    def test_provider_conformance_matrix_derives_all_cells_from_actual_bindings(self) -> None:
+        args = argparse.Namespace(
+            matrix=True,
+            capability_id="assistant.model.generation",
+            adapter_id="",
+            env="",
+            layer="",
+            execute=True,
+            image_digest=f"sha256:{'1' * 64}",
+            data_digest="",
+            adapter_health_receipt_ref="",
+            switch_compatibility_receipt_ref="",
+            callback_drain_receipt_ref="",
+            last_good_receipt_ref="",
+            rollback_receipt_ref="",
+            prod_binding_preflight_receipt_ref="",
+            prod_adapter_health_receipt_ref="",
+        )
+        with mock.patch.object(
+            stackctl.provider_conformance_runner,
+            "main",
+            return_value=0,
+        ) as runner:
+            result = stackctl.command_provider_conformance(args)
+
+        self.assertEqual(result["exitCode"], 0)
+        runner.assert_called_once_with(
+            [
+                "--matrix",
+                "--capability-id",
+                "assistant.model.generation",
+                "--execute",
+                "--image-digest",
+                f"sha256:{'1' * 64}",
+            ]
+        )
+
     def test_release_verify_invokes_provider_readiness_for_gamma_and_prod(self) -> None:
         for environment in ("gamma", "prod"):
             with self.subTest(environment=environment), tempfile.TemporaryDirectory() as temporary:

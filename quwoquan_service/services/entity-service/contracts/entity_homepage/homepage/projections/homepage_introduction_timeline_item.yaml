@@ -1,0 +1,29 @@
+read_model: HomepageIntroductionTimelineItem
+description: '主页完整介绍页时间线条目。timeline 是 introduction section 的一种展示形态，
+
+  不作为新的业务对象。
+
+  '
+source_entities:
+- Homepage
+consumers:
+- app
+client_projection:
+  dart_class: HomepageIntroductionTimelineItem
+  base_class: ''
+  output_path: cloud/runtime/generated/entity/entity_homepage/homepage_introduction_timeline_item.g.dart
+  fields:
+  - name: dateLabel
+    dart_type: String
+    nullable: false
+    source: dateLabel
+    default: ''''''
+  - name: text
+    dart_type: String
+    nullable: false
+    source: text
+    default: ''''''
+  - name: assetUrl
+    dart_type: String
+    nullable: true
+    source: assetUrl

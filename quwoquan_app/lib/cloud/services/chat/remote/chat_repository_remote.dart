@@ -256,13 +256,13 @@ class RemoteChatRepository implements ChatRepository {
   Future<List<ChatConversationMemberDto>> searchMembers({
     required String conversationId,
     required String query,
-    int limit = 50,
+    int limit = CloudApiDefaults.chatMemberSearchLimit,
   }) async {
     final page = await _memberSearchQuery.listMembers(
       ChatListConversationMembersQuery(
         conversationId: conversationId,
         query: query.trim(),
-        limit: limit.clamp(1, 50),
+        limit: limit.clamp(1, CloudApiDefaults.chatMemberSearchLimit),
         sort: 'display_name_asc',
       ),
     );

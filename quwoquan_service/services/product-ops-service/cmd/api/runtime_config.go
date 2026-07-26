@@ -3,14 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+	configrelease "quwoquan_service/runtime/configrelease"
 	"strconv"
 	"strings"
 
 	platformredis "quwoquan_service/internal/platform/redis"
 	runtimeconfig "quwoquan_service/runtime/config"
 	rtredis "quwoquan_service/runtime/redis"
-	opsgenerated "quwoquan_service/services/product-ops-service/internal/generated"
+	eventrecordgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/logsink"
 
 	"gopkg.in/yaml.v3"
 )
@@ -45,6 +46,29 @@ type config struct {
 			Addr string `yaml:"addr"`
 		} `yaml:"http"`
 	} `yaml:"service"`
+	AppRelease struct {
+		PublicOrigin string `yaml:"public_origin"`
+		RecoveryURL  string `yaml:"recovery_url"`
+		IOS          struct {
+			LatestVersion string `yaml:"latest_version"`
+			LatestBuild   string `yaml:"latest_build"`
+			AppStoreURL   string `yaml:"app_store_url"`
+		} `yaml:"ios"`
+		Android struct {
+			LatestVersion               string   `yaml:"latest_version"`
+			LatestBuild                 string   `yaml:"latest_build"`
+			APKURL                      string   `yaml:"apk_url"`
+			APKHostAllowlist            []string `yaml:"apk_host_allowlist"`
+			APKPackageName              string   `yaml:"apk_package_name"`
+			APKSHA256                   string   `yaml:"apk_sha256"`
+			APKSizeBytes                int64    `yaml:"apk_size_bytes"`
+			APKSigningCertificateSHA256 string   `yaml:"apk_signing_certificate_sha256"`
+		} `yaml:"android"`
+	} `yaml:"app_release"`
+	AccountSecurityAuthority struct {
+		BaseURL   string `yaml:"base_url"`
+		TimeoutMS int    `yaml:"timeout_ms"`
+	} `yaml:"account_security_authority"`
 	MongoDB struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
@@ -52,6 +76,14 @@ type config struct {
 	Postgres struct {
 		DSN string `yaml:"dsn"`
 	} `yaml:"postgres"`
+	Elasticsearch struct {
+		Endpoint               string `yaml:"endpoint"`
+		RawIndex               string `yaml:"raw_index"`
+		StartupDiagnosticIndex string `yaml:"startup_diagnostic_index"`
+		RuntimeLogIndex        string `yaml:"runtime_log_index"`
+		AggregateIndex         string `yaml:"aggregate_index"`
+		TimeoutMS              int    `yaml:"timeout_ms"`
+	} `yaml:"elasticsearch"`
 	SLS struct {
 		Region                    string `yaml:"region"`
 		Endpoint                  string `yaml:"endpoint"`
@@ -66,6 +98,8 @@ type config struct {
 		Rec     redisSceneCfg `yaml:"rec"`
 		General redisSceneCfg `yaml:"general"`
 	} `yaml:"redis"`
+	// LogSinkAdapterID is resolved from the generated runtime.log.sink Binding.
+	LogSinkAdapterID string `yaml:"-"`
 }
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
@@ -85,32 +119,12 @@ func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, i
 
 func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
 	cfg := config{}
-	if strings.TrimSpace(configRoot) != "" {
-		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
-		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
-			return config{}, fmt.Errorf("read default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, envFile); err != nil {
-			return config{}, fmt.Errorf("read env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
-			if err := mergeConfigFile(&cfg, versionFile); err != nil {
-				return config{}, fmt.Errorf("read version config: %w", err)
-			}
-		}
-		return cfg, nil
+	path, err := configrelease.File(configRoot, serviceName, appEnv)
+	if err != nil {
+		return config{}, err
 	}
-	localDefault := filepath.Join("configs", "default", "config.yaml")
-	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	if _, err := os.Stat(localDefault); err == nil {
-		if err := mergeConfigFile(&cfg, localDefault); err != nil {
-			return config{}, fmt.Errorf("read local default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, localEnv); err != nil {
-			return config{}, fmt.Errorf("read local env config: %w", err)
-		}
+	if err := mergeConfigFile(&cfg, path); err != nil {
+		return config{}, fmt.Errorf("read generated runtime config: %w", err)
 	}
 	return cfg, nil
 }
@@ -124,6 +138,47 @@ func mergeConfigFile(cfg *config, path string) error {
 }
 
 func applyEnvOverrides(cfg *config) {
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_APP_RELEASE_PUBLIC_ORIGIN")); v != "" {
+		cfg.AppRelease.PublicOrigin = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_APP_RELEASE_RECOVERY_URL")); v != "" {
+		cfg.AppRelease.RecoveryURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_LATEST_VERSION")); v != "" {
+		cfg.AppRelease.IOS.LatestVersion = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_LATEST_BUILD")); v != "" {
+		cfg.AppRelease.IOS.LatestBuild = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_APP_STORE_URL")); v != "" {
+		cfg.AppRelease.IOS.AppStoreURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_LATEST_VERSION")); v != "" {
+		cfg.AppRelease.Android.LatestVersion = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_LATEST_BUILD")); v != "" {
+		cfg.AppRelease.Android.LatestBuild = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_APK_URL")); v != "" {
+		cfg.AppRelease.Android.APKURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_APK_HOST_ALLOWLIST")); v != "" {
+		cfg.AppRelease.Android.APKHostAllowlist = strings.Split(v, ",")
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_APK_PACKAGE_NAME")); v != "" {
+		cfg.AppRelease.Android.APKPackageName = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_APK_SHA256")); v != "" {
+		cfg.AppRelease.Android.APKSHA256 = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_APK_SIZE_BYTES")); v != "" {
+		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+			cfg.AppRelease.Android.APKSizeBytes = parsed
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_APK_SIGNING_CERTIFICATE_SHA256")); v != "" {
+		cfg.AppRelease.Android.APKSigningCertificateSHA256 = v
+	}
 	if v := strings.TrimSpace(os.Getenv("MONGODB_URI")); v != "" {
 		cfg.MongoDB.URI = v
 	}
@@ -135,6 +190,26 @@ func applyEnvOverrides(cfg *config) {
 	}
 	if v := strings.TrimSpace(os.Getenv("POSTGRES_DSN")); v != "" {
 		cfg.Postgres.DSN = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_ENDPOINT")); v != "" {
+		cfg.Elasticsearch.Endpoint = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_RAW_INDEX")); v != "" {
+		cfg.Elasticsearch.RawIndex = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_STARTUP_DIAGNOSTIC_INDEX")); v != "" {
+		cfg.Elasticsearch.StartupDiagnosticIndex = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_RUNTIME_LOG_INDEX")); v != "" {
+		cfg.Elasticsearch.RuntimeLogIndex = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_AGGREGATE_INDEX")); v != "" {
+		cfg.Elasticsearch.AggregateIndex = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_TIMEOUT_MS")); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			cfg.Elasticsearch.TimeoutMS = parsed
+		}
 	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_REGION")); v != "" {
 		cfg.SLS.Region = v
@@ -174,11 +249,20 @@ func applyEnvOverrides(cfg *config) {
 	if v := strings.TrimSpace(os.Getenv("REDIS_REC_ADDR")); v != "" {
 		cfg.Redis.Rec.Addr = v
 	}
+	if v := os.Getenv("PRODUCT_OPS_REDIS_GENERAL_PASSWORD"); v != "" {
+		cfg.Redis.General.Password = v
+	}
+	if v := os.Getenv("PRODUCT_OPS_REDIS_REC_PASSWORD"); v != "" {
+		cfg.Redis.Rec.Password = v
+	}
 	if strings.HasPrefix(strings.TrimSpace(cfg.MongoDB.URI), "${") {
 		cfg.MongoDB.URI = ""
 	}
 	if strings.HasPrefix(strings.TrimSpace(cfg.Postgres.DSN), "${") {
 		cfg.Postgres.DSN = ""
+	}
+	if strings.HasPrefix(strings.TrimSpace(cfg.Elasticsearch.Endpoint), "${") {
+		cfg.Elasticsearch.Endpoint = ""
 	}
 	if strings.HasPrefix(strings.TrimSpace(cfg.SLS.Endpoint), "${") {
 		cfg.SLS.Endpoint = ""
@@ -191,20 +275,28 @@ func applyEnvOverrides(cfg *config) {
 	}
 }
 
-func resolveSLSBinding(
+func resolveLogSinkBinding(
 	cfg config,
 	appEnv string,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 ) (config, error) {
-	if appEnv == "alpha" {
-		return cfg, nil
-	}
 	if configProvider == nil {
 		return config{}, fmt.Errorf("runtime.log.sink binding has no runtime config provider")
 	}
-	descriptor, found := opsgenerated.ExternalProviderBindingFor(appEnv, "runtime.log.sink")
-	if !found || descriptor.State != "enabled" || descriptor.AdapterID != "ext.observability.aliyun_sls" {
-		return config{}, fmt.Errorf("runtime.log.sink binding is unavailable for environment=%s", appEnv)
+	descriptor, found := eventrecordgenerated.ExternalProviderBindingFor(
+		appEnv,
+		"runtime.log.sink",
+	)
+	if !found {
+		return config{}, fmt.Errorf(
+			"runtime.log.sink binding is missing for environment=%s",
+			appEnv,
+		)
+	}
+	cfg.LogSinkAdapterID = descriptor.AdapterID
+	if descriptor.State != "enabled" {
+		// Prod may stay blocked until vendor secrets are injected.
+		return cfg, nil
 	}
 	for _, environmentKey := range descriptor.SecretEnvironmentKeys {
 		if _, ok := configProvider.GetString(environmentKey); !ok {
@@ -215,43 +307,61 @@ func resolveSLSBinding(
 		}
 	}
 	requiredEndpoint := func(role string) (string, error) {
-		environmentKey := strings.TrimSpace(descriptor.EndpointEnvironmentKeys[role])
+		environmentKey, exists := descriptor.EndpointEnvironmentKeys[role]
+		if !exists {
+			return "", fmt.Errorf(
+				"runtime.log.sink endpoint role=%s is not declared",
+				role,
+			)
+		}
 		value, ok := configProvider.GetString(environmentKey)
-		if environmentKey == "" || !ok {
+		if !ok || strings.TrimSpace(value) == "" {
 			return "", fmt.Errorf(
 				"runtime.log.sink endpoint material is unavailable for role=%s",
 				role,
 			)
 		}
-		return value, nil
+		return strings.TrimSpace(value), nil
 	}
-	var err error
-	if cfg.SLS.Region, err = requiredEndpoint("region"); err != nil {
-		return config{}, err
+	switch descriptor.AdapterID {
+	case logsink.PostgresTelemetryLocalAdapterID:
+		if descriptor.TimeoutMilliseconds <= 0 {
+			return config{}, fmt.Errorf("runtime.log.sink binding has an invalid timeout")
+		}
+		return cfg, nil
+	case logsink.ElasticsearchLocalAdapterID:
+		endpoint, err := requiredEndpoint("endpoint")
+		if err != nil {
+			return config{}, err
+		}
+		cfg.Elasticsearch.Endpoint = endpoint
+		cfg.Elasticsearch.TimeoutMS = descriptor.TimeoutMilliseconds
+		if cfg.Elasticsearch.TimeoutMS <= 0 {
+			return config{}, fmt.Errorf("runtime.log.sink binding has an invalid timeout")
+		}
+		return cfg, nil
+	case logsink.AliyunSLSAdapterID:
+		var err error
+		if cfg.SLS.Region, err = requiredEndpoint("region"); err != nil {
+			return config{}, err
+		}
+		if cfg.SLS.Endpoint, err = requiredEndpoint("endpoint"); err != nil {
+			return config{}, err
+		}
+		if cfg.SLS.Project, err = requiredEndpoint("project"); err != nil {
+			return config{}, err
+		}
+		cfg.SLS.TimeoutMS = descriptor.TimeoutMilliseconds
+		if cfg.SLS.TimeoutMS <= 0 {
+			return config{}, fmt.Errorf("runtime.log.sink binding has an invalid timeout")
+		}
+		return cfg, nil
+	default:
+		return config{}, fmt.Errorf(
+			"runtime.log.sink selects unsupported adapter=%s",
+			descriptor.AdapterID,
+		)
 	}
-	if cfg.SLS.Endpoint, err = requiredEndpoint("endpoint"); err != nil {
-		return config{}, err
-	}
-	if cfg.SLS.Project, err = requiredEndpoint("project"); err != nil {
-		return config{}, err
-	}
-	if cfg.SLS.RawLogstore, err = requiredEndpoint("raw_logstore"); err != nil {
-		return config{}, err
-	}
-	if cfg.SLS.StartupDiagnosticLogstore, err = requiredEndpoint("startup_diagnostic_logstore"); err != nil {
-		return config{}, err
-	}
-	if cfg.SLS.RuntimeLogstore, err = requiredEndpoint("runtime_logstore"); err != nil {
-		return config{}, err
-	}
-	if cfg.SLS.AggregateLogstore, err = requiredEndpoint("aggregate_logstore"); err != nil {
-		return config{}, err
-	}
-	cfg.SLS.TimeoutMS = descriptor.TimeoutMilliseconds
-	if cfg.SLS.TimeoutMS <= 0 {
-		return config{}, fmt.Errorf("runtime.log.sink binding has an invalid timeout")
-	}
-	return cfg, nil
 }
 
 func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
@@ -308,7 +418,33 @@ func validateRequiredRuntimeConfig(cfg config, appEnv ...string) error {
 	if len(appEnv) > 0 && strings.TrimSpace(appEnv[0]) != "" {
 		environment = strings.TrimSpace(appEnv[0])
 	}
-	if postgresTelemetrySchema(environment) == "" {
+	switch cfg.LogSinkAdapterID {
+	case logsink.PostgresTelemetryLocalAdapterID:
+		if postgresTelemetrySchema(environment) == "" {
+			return fmt.Errorf(
+				"postgres telemetry adapter is unsupported for environment=%s",
+				environment,
+			)
+		}
+	case logsink.ElasticsearchLocalAdapterID:
+		for name, value := range map[string]string{
+			"endpoint":                 cfg.Elasticsearch.Endpoint,
+			"raw_index":                cfg.Elasticsearch.RawIndex,
+			"startup_diagnostic_index": cfg.Elasticsearch.StartupDiagnosticIndex,
+			"runtime_log_index":        cfg.Elasticsearch.RuntimeLogIndex,
+			"aggregate_index":          cfg.Elasticsearch.AggregateIndex,
+		} {
+			if strings.TrimSpace(value) == "" {
+				return fmt.Errorf("elasticsearch.%s is required", name)
+			}
+		}
+		if cfg.Elasticsearch.TimeoutMS <= 0 ||
+			cfg.Elasticsearch.TimeoutMS > 10000 {
+			return fmt.Errorf(
+				"elasticsearch.timeout_ms must be within 1..10000",
+			)
+		}
+	case logsink.AliyunSLSAdapterID:
 		for name, value := range map[string]string{
 			"region":                      cfg.SLS.Region,
 			"endpoint":                    cfg.SLS.Endpoint,
@@ -325,6 +461,11 @@ func validateRequiredRuntimeConfig(cfg config, appEnv ...string) error {
 		if cfg.SLS.TimeoutMS <= 0 || cfg.SLS.TimeoutMS > 10000 {
 			return fmt.Errorf("sls.timeout_ms must be within 1..10000")
 		}
+	default:
+		return fmt.Errorf(
+			"runtime.log.sink selects unsupported adapter=%s",
+			cfg.LogSinkAdapterID,
+		)
 	}
 	if _, err := buildRedisSceneConfig("rec", cfg.Redis.Rec); err != nil {
 		return err
@@ -335,17 +476,14 @@ func validateRequiredRuntimeConfig(cfg config, appEnv ...string) error {
 	return nil
 }
 
-// postgresTelemetrySchema 返回 integration profile 的固定 schema。后端选择由
-// composition root 根据环境完成，禁止通过 TELEMETRY_BACKEND 在同一 artifact
-// 内动态切换；release/prod 不会命中此分支，继续要求真实 SLS 配置。
+// postgresTelemetrySchema 返回 Alpha/Beta 本地替身的固定 schema。后端选择只由
+// generated runtime.log.sink Binding 驱动，禁止通过 ad-hoc 环境变量动态切换。
 func postgresTelemetrySchema(appEnv string) string {
 	switch strings.ToLower(strings.TrimSpace(appEnv)) {
-	case "integration":
+	case "integration", "alpha":
 		return "telemetry_local_integration"
-	case "beta-integration", "beta_integration":
+	case "beta-integration", "beta_integration", "beta":
 		return "telemetry_local_beta"
-	case "gamma-integration", "gamma_integration":
-		return "telemetry_local_gamma"
 	default:
 		return ""
 	}
@@ -353,8 +491,7 @@ func postgresTelemetrySchema(appEnv string) string {
 
 func operatorOIDCRequired(appEnv string) bool {
 	switch strings.ToLower(strings.TrimSpace(appEnv)) {
-	case "alpha", "integration", "beta-integration", "beta_integration",
-		"gamma-integration", "gamma_integration":
+	case "alpha", "beta", "gamma":
 		return false
 	default:
 		return true

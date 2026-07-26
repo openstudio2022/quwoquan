@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-004
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/media/image/editor/models/image_editor_step.dart';
 import 'package:quwoquan_app/components/media/image/editor/models/image_editor_step_payload.dart';

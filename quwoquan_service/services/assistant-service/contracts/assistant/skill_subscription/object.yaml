@@ -1,0 +1,51 @@
+kind: aggregate_root
+description: Persona 主动式 Skill 的触发器、目的地、状态和调度租约聚合。
+identity:
+  fields:
+  - subscriptionId
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: accountCreator
+  on_delete: retain
+  reference_fields:
+  - createdByUserId
+  target_object: user.UserAccount
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: personaCreator
+  on_delete: retain
+  reference_fields:
+  - createdByPersonaId
+  target_object: user.Persona
+local_identity_reasons:
+  domainId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity
+  skillId: stable catalog or release key; resolved through its typed catalog reader and never used as
+    an aggregate Store identity
+capabilities:
+- commandable
+- queryable
+- idempotent_commands
+business_rules:
+- owner persona、skillId 和 trigger 创建后不可变
+- destination 必须在当前 consent scope 内
+- 只有 active subscription 可获取调度租约
+- 同一 schedule window 只能产生一次触发事件
+- paused 可恢复，archived 为终态
+lifecycle:
+  states:
+  - active
+  - paused
+  - archived
+  optimistic_concurrency: version
+  idempotency: command_receipt

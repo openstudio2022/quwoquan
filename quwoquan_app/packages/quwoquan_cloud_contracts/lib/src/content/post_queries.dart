@@ -1,6 +1,6 @@
 import '../operation_request_payload.dart';
 
-/// Content Post 查询契约，来源于 `content/post/service.yaml`。
+/// Content Post 查询契约，来源于 `content/content/post/operations.yaml`。
 ///
 /// 这里仅描述业务请求和响应；surface、route、actor 与追踪上下文由
 /// [CloudOperationInvocationContext] 传入生成客户端。

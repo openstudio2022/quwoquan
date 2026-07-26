@@ -41,7 +41,7 @@ class CreateDraft {
         editorKind == CreateEditorKind.text && storedMarkdown.trim().isNotEmpty
         ? ArticleMarkdownCodec.parseDocument(
             storedMarkdown,
-            assetManifest: storedAssetManifest,
+            assetManifest: _articleDraftPreviewManifest(storedAssetManifest),
           )
         : createDefaultArticleDocument();
     final normalizedPages = buildArticlePagesSnapshotFromDocument(
@@ -382,9 +382,28 @@ Map<String, Object?> _articleDraftManifestRow(
     'role': role,
     'scope': 'draft',
     'localPath': path,
-    'objectKey': path.startsWith('asset://')
-        ? path.substring('asset://'.length)
-        : path,
-    'sha256': '',
+  };
+}
+
+Map<String, dynamic> _articleDraftPreviewManifest(Map<String, dynamic> stored) {
+  final assets = stored['assets'];
+  if (assets is! List) {
+    return stored;
+  }
+  return <String, dynamic>{
+    ...stored,
+    'assets': assets
+        .whereType<Map>()
+        .map((raw) {
+          final row = Map<String, dynamic>.from(raw);
+          final localPath = (row['localPath'] ?? '').toString().trim();
+          if (localPath.isNotEmpty) {
+            row['publicSliceKey'] = localPath.startsWith('/')
+                ? 'file://$localPath'
+                : localPath;
+          }
+          return row;
+        })
+        .toList(growable: false),
   };
 }

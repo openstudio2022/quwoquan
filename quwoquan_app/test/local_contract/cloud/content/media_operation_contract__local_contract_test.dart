@@ -9,7 +9,6 @@ void main() {
         response: <String, Object?>{
           'sessionId': 'mus-1',
           'status': 'pending',
-          'objectKey': 'uploads/mus-1.jpg',
           'uploadUrl': 'https://upload.example.test/mus-1',
           'expiresAt': '2030-01-02T03:19:05Z',
           'replayed': false,
@@ -86,6 +85,45 @@ void main() {
     expect(result.originalUrl.host, 'cdn.example.test');
   });
 
+  test(
+    'media discard uses typed DELETE operation and deleted-only result',
+    () async {
+      final executor = _MediaRecordingExecutor(
+        response: <String, Object?>{
+          'mediaId': 'mas-1',
+          'status': 'deleted',
+          'replayed': false,
+        },
+      );
+      final client = GeneratedCloudOperationClient(executor);
+
+      final result = await client.contentMediaAssetDiscardMediaAsset(
+        DiscardContentMediaAssetCommand(mediaId: 'mas-1'),
+        context: _context(
+          surfaceId: 'createWorkspace',
+          idempotencyKey: 'media-discard-1',
+        ),
+      );
+
+      expect(
+        executor.operation?.canonicalOperationId,
+        AppCloudOperationIds.contentMediaAssetDiscardMediaAsset,
+      );
+      expect(executor.operation?.method, 'DELETE');
+      expect(executor.pathParameters, <String, String>{'mediaId': 'mas-1'});
+      expect(executor.body, isNull);
+      expect(result.status, ContentMediaProcessingStatus.deleted);
+      expect(
+        () => decodeContentMediaAssetDiscardResult(<String, Object?>{
+          'mediaId': 'mas-1',
+          'status': 'ready',
+          'replayed': false,
+        }),
+        throwsFormatException,
+      );
+    },
+  );
+
   test('media decoder rejects dynamic or malformed business response', () {
     expect(
       () => decodeContentMediaAssetSlice(<String, Object?>{
@@ -136,7 +174,6 @@ void main() {
         'sessionId': 'mus-1',
         'version': 2,
         'assetId': 'mas-1',
-        'objectKey': 'uploads/mus-1',
         'mediaType': 'video',
         'contentType': 'video/mp4',
         'fileSize': 256,

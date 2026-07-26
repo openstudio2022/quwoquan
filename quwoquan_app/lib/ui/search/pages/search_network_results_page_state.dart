@@ -28,7 +28,7 @@ class _SearchNetworkResultsPageState
   List<SearchHit> _locationResults = const <SearchHit>[];
   // 云侧内容命中的排序/封面/理由元信息（按 postId 索引），由 [_contentItemsFromResponse]
   // 解析云侧 SearchHit 时填充；结果页据此消费 rankPosition/coverWidth/coverHeight/rankReasons
-  // （R-001/R-003）。本地/mock 命中无云信号时为空，回退既有端侧渲染。
+  // （R-001/R-003）。响应未携带可选云信号时保持既定端侧展示。
   Map<String, _ContentCloudMeta> _contentCloudMetaById =
       const <String, _ContentCloudMeta>{};
   // relatedTerms 只消费 search-service 响应，空时不在客户端合成业务词。
@@ -41,7 +41,7 @@ class _SearchNetworkResultsPageState
   ContentBehaviorTracker? _behaviorTracker;
   String? _feedRequestIdAtEnter;
   // 搜索反馈归因锚点：云响应 envelope 的 requestId + 条目位次映射。
-  // 本地/mock 扇出无 requestId 时不上报（fail-closed，不合成伪 id）。
+  // 响应无 requestId 时不上报（fail-closed，不合成伪 id）。
   String? _searchRequestId;
   final Set<String> _searchImpressionReported = <String>{};
   Map<String, int> _searchRankByObjectId = const <String, int>{};
@@ -114,11 +114,7 @@ class _SearchNetworkResultsPageState
       contentType: 'search_page',
       referralSource: ReferralSource.search,
       feedRequestId: _feedRequestIdAtEnter,
-      tags: <String>[
-        widget.launchContext.entrySurfaceId,
-        _activeTabId,
-        if (_query.trim().isNotEmpty) _query.trim(),
-      ],
+      channelId: _activeTabId,
     );
   }
 
@@ -325,11 +321,7 @@ class _SearchNetworkResultsPageState
       contentType: 'search_page',
       referralSource: ReferralSource.search,
       feedRequestId: _feedRequestIdAtEnter,
-      tags: <String>[
-        widget.launchContext.entrySurfaceId,
-        _activeTabId,
-        if (_query.trim().isNotEmpty) _query.trim(),
-      ],
+      channelId: _activeTabId,
     );
   }
 

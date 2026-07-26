@@ -106,27 +106,33 @@ class CircleStateNotifier extends Notifier<CircleState> {
   }
 
   Future<void> loadCircle() async {
+    if (!ref.mounted) return;
     state = CircleState(circleId: _circleId).copyWith(isLoading: true);
     try {
       final circleQuery = ref.read(circleDetailQueryProvider);
       final detail = await circleQuery.get(
         CircleDetailQuery(circleId: _circleId),
       );
+      if (!ref.mounted) return;
       final stats = await circleQuery.stats(
         CircleStatsQuery(circleId: _circleId),
       );
+      if (!ref.mounted) return;
       final dto = ref.read(circleProjectionMapperProvider).toDto(detail);
       CircleMembershipSlice? membership;
       if (ref.read(resolvedOwnerUserIdProvider).trim().isNotEmpty) {
         await ref.read(activePersonaContextProvider.future);
+        if (!ref.mounted) return;
         try {
           membership = await ref
               .read(circleDetailMembershipQueryProvider)
               .getMyMembership(MyCircleMembershipQuery(circleId: _circleId));
+          if (!ref.mounted) return;
         } on CloudException catch (error) {
           if (error.code != CircleErrorCode.membershipNotFound.code) rethrow;
         }
       }
+      if (!ref.mounted) return;
       CircleGroupSlice? defaultGroup;
       final defaultGroupId = dto.defaultPublicGroupId?.trim() ?? '';
       if (defaultGroupId.isNotEmpty && membership != null) {
@@ -135,6 +141,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
             .get(
               CircleGroupQuery(circleId: _circleId, groupId: defaultGroupId),
             );
+        if (!ref.mounted) return;
       }
       state = state.copyWith(
         circleData: dto,
@@ -152,6 +159,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
         clearLoadError: true,
       );
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, loadError: e);
     }
   }

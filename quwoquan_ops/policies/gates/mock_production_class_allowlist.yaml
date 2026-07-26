@@ -1,0 +1,10 @@
+version: 1
+governance:
+  owner: runtime-client-foundation
+  reason: production lib 中最后一个历史 Mock 类的只减不增隔离棘轮
+  expires_when: MockBehaviorRepository 从 production lib 移入 alpha/test adapter 后删除本文件
+allowed:
+  - symbol: MockBehaviorRepository
+    owner: runtime-client-foundation
+    reason: behavior command 尚未完成 object-level typed facet 迁移
+    expires_when: behavior command 全部改用 generated typed facet

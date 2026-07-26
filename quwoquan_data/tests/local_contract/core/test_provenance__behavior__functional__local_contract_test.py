@@ -49,7 +49,7 @@ from content.execution.stage_reports import write_stage_result  # noqa: E402
 from content.post.materialize_apply import materialize_posts  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
-TASK = "20260711--travel-article-provenance--cn-sichuan--canary-001"
+TASK = "20260711--travel-article-provenance--test-region-b--pilot-001"
 
 
 def test_source_bundle_hash_accepts_runtime_relative_path_with_batch_prefix():
@@ -57,7 +57,7 @@ def test_source_bundle_hash_accepts_runtime_relative_path_with_batch_prefix():
     with tempfile.TemporaryDirectory(prefix="source_bundle_hash_") as tmp:
         os.chdir(tmp)
         try:
-            execution_dir = Path(".qwq_output/data/tasks/20260711--travel-article-demo--cn-sichuan--canary-001")
+            execution_dir = Path(".qwq_output/data/tasks/20260711--travel-article-demo--test-region-b--pilot-001")
             source = execution_dir / "sources/su_demo/source.md"
             source.parent.mkdir(parents=True, exist_ok=True)
             source.write_text("# 来源\n\n九寨沟底稿。", encoding="utf-8")
@@ -286,7 +286,7 @@ def test_materialize_relativizes_repo_runtime_cited_source_paths():
 
 
 def test_materialize_relativizes_repo_absolute_runtime_paths():
-    task = "20260711--travel-article-repo-path--cn-sichuan--canary-002"
+    task = "20260711--travel-article-repo-path--test-region-b--pilot-002"
     build_execution_fixture(task)
     ensure_execution_layout(task)
     ensure_execution_command_layout(task, "post")

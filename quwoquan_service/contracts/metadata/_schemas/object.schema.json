@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/object.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "description",
+    "identity",
+    "access",
+    "relationships"
+  ],
+  "properties": {
+    "kind": {
+      "enum": [
+        "aggregate_root",
+        "append_only_fact",
+        "projection",
+        "external_reference",
+        "runtime_session"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "members": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "local_identity_reasons": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "taggable": {
+      "type": "boolean"
+    },
+    "vector_enabled": {
+      "type": "boolean"
+    },
+    "relation_signal": {
+      "type": "boolean"
+    },
+    "counter_strategy": {
+      "type": "object"
+    },
+    "join_paths": {
+      "type": "array"
+    },
+    "livekit_integration": {
+      "type": "object"
+    },
+    "seq_strategy": {
+      "type": "object"
+    },
+    "dedup_strategy": {
+      "type": "object"
+    },
+    "business_rules": {
+      "type": [
+        "array",
+        "object"
+      ]
+    },
+    "lifecycle": {
+      "type": "object"
+    },
+    "deferred_operations": {
+      "type": "object"
+    }
+  }
+}

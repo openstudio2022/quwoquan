@@ -8,7 +8,7 @@ import (
 	platformredis "quwoquan_service/internal/platform/redis"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	entitygenerated "quwoquan_service/services/entity-service/internal/generated"
+	bindingdescriptor "quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 )
 
 const entityAPIMessageTransportRoot = "entity-service-api"
@@ -51,56 +51,33 @@ func requireEntityAPIMessageTransport(
 	router *rtredis.Router,
 	sceneModes map[string]string,
 ) (*runtimemessaging.RedisMessageTransport, error) {
-	binding, bindingFound := entitygenerated.ExternalProviderBindingFor(
+	binding, found := bindingdescriptor.ExternalProviderBindingFor(
 		environment,
 		runtimemessaging.RuntimeMessageTransportCapability,
 	)
-	root, rootFound := entitygenerated.ExternalProviderBindingRootFor(
-		runtimemessaging.RuntimeMessageTransportCapability,
-		entityAPIMessageTransportRoot,
-	)
-	if !rootFound {
-		return nil, fmt.Errorf(
-			"generated message transport root %s is missing",
-			entityAPIMessageTransportRoot,
-		)
-	}
 	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
-		ctx,
-		environment,
-		bindingFound,
+		ctx, environment, found,
 		runtimemessaging.MessageTransportBinding{
-			State:               binding.State,
-			AdapterID:           binding.AdapterID,
+			State: binding.State, AdapterID: binding.AdapterID,
 			TimeoutMilliseconds: binding.TimeoutMilliseconds,
 		},
 		runtimemessaging.MessageTransportRoot{
-			RootID:              root.RootID,
-			RequiredRedisScenes: root.RequiredRedisScenes,
+			RootID:              entityAPIMessageTransportRoot,
+			RequiredRedisScenes: binding.RequiredRedisScenes,
 		},
-		router,
-		sceneModes,
+		router, sceneModes,
 	)
 	if err != nil {
 		return nil, err
 	}
-	if len(root.RequiredRedisScenes) != 1 {
-		return nil, fmt.Errorf(
-			"generated message transport root %s must declare exactly one Redis scene",
-			root.RootID,
-		)
+	if len(binding.RequiredRedisScenes) != 1 {
+		return nil, fmt.Errorf("generated message transport root %s must declare exactly one Redis scene", entityAPIMessageTransportRoot)
 	}
-	scene, ok := resolved.Scene(strings.TrimSpace(root.RequiredRedisScenes[0]))
+	scene, ok := resolved.Scene(strings.TrimSpace(binding.RequiredRedisScenes[0]))
 	if !ok {
-		return nil, fmt.Errorf(
-			"preflighted message transport root %s is missing its declared Redis scene",
-			root.RootID,
-		)
+		return nil, fmt.Errorf("preflighted message transport root %s is missing its declared Redis scene", entityAPIMessageTransportRoot)
 	}
 	return runtimemessaging.NewRedisMessageTransportForRoot(
-		root.RootID,
-		binding.AdapterID,
-		scene,
-		scene,
+		entityAPIMessageTransportRoot, binding.AdapterID, scene, scene,
 	)
 }

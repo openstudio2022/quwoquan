@@ -17,9 +17,9 @@ defaults:
     research:
       lanes:
       - homepage
-      imageAssetStrategy: open_license_publish
-      imageCountPolicy: hard_quota
-      minimumPublishableImagesPerTarget: 1
+      # 冷启动阶段逐素材保留来源、匹配和权利审计；许可状态不作为发布过滤条件。
+      imageAssetStrategy: attribution_audited_publish
+      imageCountPolicy: score_bonus
       allowAiImages: false
     quotas:
       entityHomepagesPerTarget: 1

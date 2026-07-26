@@ -95,14 +95,47 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
             return code
         state = load_execution_state(ctx.execution_id)
         stage = str(state.waiting_checkpoint or "")
-        from content.execution.reliabletask_jobs import uses_reliabletask
+        try:
+            from core.control_types import ExecutionStage, ReliableTaskDispatchStatus
 
-        if uses_reliabletask(ctx) and stage in {"build_homepage", "post_author", "publish"}:
-            print(
-                f"[task execute] ReliableTask 外部 worker 等待态：{stage}；"
-                "对象任务完成后以同一 executionId resume"
+            typed_stage = ExecutionStage(stage)
+        except ValueError:
+            typed_stage = None
+        if typed_stage is not None:
+            from content.execution.agent.reliabletask_dispatch import (
+                dispatch_reliabletask_checkpoint,
             )
-            return 10
+
+            dispatch = dispatch_reliabletask_checkpoint(ctx, typed_stage)
+            if dispatch is not None:
+                state = load_execution_state(ctx.execution_id)
+                state.owner = f"managed-{ctx.runtime.value}:reliabletask:{stage}"
+                state.heartbeat_at = store.now_iso()
+                state.failed_issue_records = [
+                    issue.as_dict() for issue in dispatch.issues
+                ]
+                state.failed_objects = [str(issue) for issue in dispatch.issues]
+                state.next_action = (
+                    f"ReliableTask {dispatch.queue_stage.value}: "
+                    f"attempted={dispatch.attempted_count}, "
+                    f"completed={dispatch.completed_count}, "
+                    f"status={dispatch.status.value}"
+                )
+                if dispatch.status is ReliableTaskDispatchStatus.COMPLETED:
+                    state.status = ExecutionStateStatus.RUNNING
+                    save_execution_state(state)
+                    continue
+                state.status = (
+                    ExecutionStateStatus.MANUAL_REQUIRED
+                    if dispatch.status is ReliableTaskDispatchStatus.BLOCKED
+                    else ExecutionStateStatus.WAITING_AGENT
+                )
+                save_execution_state(state)
+                return (
+                    1
+                    if dispatch.status is ReliableTaskDispatchStatus.BLOCKED
+                    else 10
+                )
         if isinstance(state.controller_yield, Mapping):
             if _recover_stale_controller_yield(ctx, state):
                 continue

@@ -1,0 +1,176 @@
+backend: mongodb
+collections:
+  comments:
+    entity: Comment
+    description: Comment 聚合权威集合；只保存单条评论状态与可重算 hotScore 投影分，不保存 Post 或可重建计数。
+    indexes:
+    - name: idx_comments_post_page
+      keys:
+        postId: 1
+        parentCommentId: 1
+        status: 1
+        isPinned: -1
+        pinnedAt: -1
+        createdAt: -1
+        _id: -1
+      description: 一级评论 latest 档 pinned-first keyset page
+    - name: idx_comments_post_hot_page
+      keys:
+        postId: 1
+        parentCommentId: 1
+        status: 1
+        isPinned: -1
+        pinnedAt: -1
+        hotScore: -1
+        createdAt: -1
+        _id: -1
+      description: 一级评论 hot 档 pinned-first keyset page（hotScore 投影分驱动）
+    - name: idx_comments_reply_page
+      keys:
+        postId: 1
+        parentCommentId: 1
+        status: 1
+        createdAt: -1
+        _id: -1
+      description: 二级回复 keyset page
+    - name: idx_comments_parent_summary
+      keys:
+        parentCommentId: 1
+        status: 1
+        createdAt: -1
+        _id: -1
+      description: 一级 Comment 批量回复计数与有界预览
+    - name: idx_comments_author_page
+      keys:
+        authorId: 1
+        status: 1
+        createdAt: -1
+        _id: -1
+      description: 作者私有评论 active/hidden keyset page；hidden 仅作者可见
+    - name: idx_comments_author_rate_window
+      keys:
+        authorId: 1
+        createdAt: -1
+      description: CreateComment 频控滑动窗口 count（不区分 status，防删评绕过频控）
+    - name: idx_comments_post_created_at
+      keys:
+        postId: 1
+        createdAt: 1
+      description: Comment 创建增量半开窗口计数
+    - name: idx_comments_post_deleted_at
+      keys:
+        postId: 1
+        status: 1
+        deletedAt: 1
+      description: Comment 删除增量半开窗口计数
+    - name: idx_comments_post_status
+      keys:
+        postId: 1
+        status: 1
+        _id: 1
+      description: PostDeleted 级联批量 tombstone 扫描
+    - name: idx_comments_attachment_media_status
+      keys:
+        attachmentMediaIds: 1
+        status: 1
+      description: MediaAsset discard 的活跃附件反向引用限制
+    - name: idx_comments_version
+      keys:
+        _id: 1
+        version: 1
+      unique: true
+      description: Comment CAS commit predicate
+  comment_command_receipts:
+    entity: Comment
+    description: Comment command 幂等回执；与 Comment 聚合版本和 comment_outbox 在同一 Mongo transaction 提交。
+    indexes:
+    - name: idx_comment_command_receipts_aggregate
+      keys:
+        aggregateId: 1
+        aggregateVersion: -1
+    - name: idx_comment_command_receipts_expire
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
+  comment_author_rate_limit_locks:
+    entity: Comment
+    description: CreateComment 按 author 串行化的短生命周期事务锁；与 Comment 创建同事务更新，确保多实例并发滑动窗口不超卖。
+    indexes:
+    - name: idx_comment_author_rate_limit_locks_expire
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
+  comment_outbox:
+    entity: Comment
+    description: Comment 领域事实 outbox；同事务写入，供 Post.commentCount 等投影异步重放。
+    indexes:
+    - name: idx_comment_outbox_replay
+      keys:
+        occurredAt: 1
+        _id: 1
+    - name: idx_comment_outbox_aggregate_version
+      keys:
+        aggregateId: 1
+        aggregateVersion: 1
+      unique: true
+  comment_projection_checkpoints:
+    entity: Comment
+    description: 每个 Comment 外部投递或 projection consumer 的独立 durable checkpoint
+    indexes:
+    - name: idx_comment_projection_checkpoint_updated
+      keys:
+        updatedAt: -1
+transaction:
+  scope:
+  - comments
+  - comment_command_receipts
+  - comment_author_rate_limit_locks
+  - comment_outbox
+  isolation: mongo_transaction
+  guarantees:
+  - version_cas
+  - idempotency_digest
+  - aggregate_and_outbox_atomic_commit
+  - concurrent_author_rate_window_serialization
+read_models:
+- name: CommentPage
+  source: comments
+  projection:
+  - id
+  - postId
+  - authorId
+  - content
+  - replyToCommentId
+  - replyToUserId
+  - parentCommentId
+  - attachmentMediaIds
+  - status
+  - isPinned
+  - pinnedAt
+  - authorIpLocation
+  - createdAt
+- name: ReplyPage
+  source: comments
+  projection:
+  - id
+  - postId
+  - authorId
+  - content
+  - replyToCommentId
+  - replyToUserId
+  - parentCommentId
+  - attachmentMediaIds
+  - status
+  - authorIpLocation
+  - createdAt
+- name: AuthorCommentPage
+  source: comments
+  projection:
+  - id
+  - postId
+  - authorId
+  - content
+  - parentCommentId
+  - status
+  - createdAt
+role: authoritative

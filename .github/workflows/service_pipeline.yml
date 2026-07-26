@@ -2,7 +2,7 @@
 # Service Pipeline — quwoquan_service CI/CD
 # =============================================================================
 # 触发条件：main 合入后的 quwoquan_service/**、quwoquan_ops/** 路径变动 / 手动
-# 流程：Go 构建 + Python (rec-model-service) Docker 镜像 → kustomize/prod 部署清单校验
+# 流程：Go 构建 + Python (recommendation-service) Docker 镜像 → kustomize/prod 部署清单校验
 # 当前职责：构建服务镜像并校验发布清单；prod-hosted 发布由 prod rollout workflow 负责。
 #
 # 【必须配置的 GitHub Secrets】（部署时）
@@ -137,58 +137,66 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - service: rec-model-service
+          - service: recommendation-service
             image_name: recommendation-service
             context: .
-            dockerfile: quwoquan_service/services/rec-model-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/recommendation-service/build/Dockerfile
           - service: content-service
             image_name: content-service
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/content-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/content-service/build/Dockerfile
           - service: chat-service
             image_name: chat-service
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/chat-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/chat-service/build/Dockerfile
           - service: user-service
             image_name: user-service
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/user-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/user-service/build/Dockerfile
           - service: assistant-service
             image_name: assistant-service
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/assistant-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/assistant-service/build/Dockerfile
           - service: product-ops-service
             image_name: product-ops-service
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/product-ops-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/product-ops-service/build/Dockerfile
           - service: platform-ops-service
             image_name: platform-ops-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/platform-ops-service/deploy/Dockerfile
+            context: .
+            dockerfile: quwoquan_service/control-plane/platform-ops/build/Dockerfile
           - service: tag-service
             image_name: tag-service
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/tag-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/tag-service/build/Dockerfile
           - service: entity-service
             image_name: entity-service
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/entity-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/entity-service/build/Dockerfile
           - service: integration-service
             image_name: integration-service
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/integration-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/integration-service/build/Dockerfile
           - service: notification-service
             image_name: notification-service
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/notification-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/notification-service/build/Dockerfile
+          - service: circle-service
+            image_name: circle-service
+            context: quwoquan_service
+            dockerfile: quwoquan_service/services/circle-service/build/Dockerfile
+          - service: search-service
+            image_name: search-service
+            context: quwoquan_service
+            dockerfile: quwoquan_service/services/search-service/build/Dockerfile
           - service: realtime-gateway
             image_name: realtime-gateway
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/realtime-gateway/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/realtime-gateway/build/Dockerfile
           - service: rtc-service
             image_name: rtc-service
             context: quwoquan_service
-            dockerfile: quwoquan_service/services/rtc-service/deploy/Dockerfile
+            dockerfile: quwoquan_service/services/rtc-service/build/Dockerfile
     steps:
       - id: start
         name: Start timer
@@ -335,7 +343,7 @@ jobs:
             echo "::error::mainline release artifact is required; local regeneration is forbidden"
             exit 1
           }
-      - name: Unpack generated release snapshots
+      - name: Unpack service package config evidence
         run: |
           python3 - <<'PY'
           import json
@@ -355,44 +363,17 @@ jobs:
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
 
-      - name: Kustomize build 校验
+      - name: 校验 56 个服务环境入口及四环境装配
         run: |
-          kustomize build quwoquan_ops/environments/kustomization/aliyun-prod > /dev/null
-          echo "Kustomize build (aliyun-prod) OK"
-
-      - name: Kustomize build 校验 (chat-service overlays)
-        run: |
-          for env in dev integration prod; do
-            kustomize build quwoquan_service/services/chat-service/deploy/kustomize/overlays/$env > /dev/null
-            echo "chat-service overlay $env OK"
-          done
-
-      - name: Kustomize build 校验 (content-service overlays)
-        run: |
-          for env in dev integration prod; do
-            kustomize build quwoquan_service/services/content-service/deploy/kustomize/overlays/$env > /dev/null
-            echo "content-service overlay $env OK"
-          done
-
-      - name: Kustomize build 校验 (rtc-service overlays)
-        run: |
-          for env in dev integration prod; do
-            kustomize build quwoquan_service/services/rtc-service/deploy/kustomize/overlays/$env > /dev/null
-            echo "rtc-service overlay $env OK"
-          done
-
-      - name: Kustomize build 校验 (livekit-sfu overlays)
-        run: |
-          for env in dev integration prod; do
-            kustomize build quwoquan_service/services/livekit-sfu/deploy/kustomize/overlays/$env > /dev/null
-            echo "livekit-sfu overlay $env OK"
-          done
-
-      - name: Kustomize build 校验 (coturn overlays)
-        run: |
-          for env in dev integration prod; do
-            kustomize build quwoquan_service/services/coturn/deploy/kustomize/overlays/$env > /dev/null
-            echo "coturn overlay $env OK"
+          for env in alpha beta gamma prod; do
+            for service_root in quwoquan_service/services/*; do
+              kustomize build --load-restrictor LoadRestrictionsNone "$service_root/environments/$env/deploy" > /dev/null
+            done
+            for workload in coturn livekit; do
+              kustomize build --load-restrictor LoadRestrictionsNone "quwoquan_ops/external/$workload/environments/$env" > /dev/null
+            done
+            kustomize build --load-restrictor LoadRestrictionsNone "quwoquan_ops/environments/$env" > /dev/null
+            echo "$env autonomous assembly OK"
           done
       - id: finish
         if: always()

@@ -19,9 +19,9 @@ from content.source.handler_fetch import (  # noqa: E402
     _canonicalize_source_url,
     _is_non_open_baike_source,
     _publishable_homepage_source_image_count,
-    _resolved_source_title_matches_entity,
     _source_fetch_failure_issue,
 )
+from content.source.handler_fetch_contract import homepage_base_draft_admission  # noqa: E402
 from content.source.research.homepage_text_quality import homepage_text_quality_issue  # noqa: E402
 from content.source.source_inputs import _normalize_image_specs  # noqa: E402
 
@@ -42,7 +42,7 @@ def test_homepage_gate_rejects_thin_text():
 def test_homepage_gate_rejects_disambiguation_page():
     text = (
         "武侯祠可以指下列建筑：\n\n"
-        "- 成都武侯祠：位于四川省成都市武侯区。\n"
+        "- 成都武侯祠：位于test-region-b成都市武侯区。\n"
         "- 勉县武侯祠：位于陕西省汉中市勉县。\n"
         "- 南阳武侯祠：位于河南省南阳市。\n"
         "- 白帝城武侯祠：位于重庆市奉节县。\n"
@@ -50,9 +50,60 @@ def test_homepage_gate_rejects_disambiguation_page():
     assert homepage_text_quality_issue(text, "武侯祠") == "disambiguation_homepage"
 
 
+def test_homepage_gate_rejects_short_disambiguation_with_link_list():
+    text = (
+        "九龙山可以指：\n\n"
+        "* 九龍山 (天津)\n"
+        "* 九龍山 (嘉兴)\n"
+        "* 九龍山 (香港)\n"
+    )
+
+    assert homepage_text_quality_issue(text, "平湖九龙山旅游度假区", require_fact_ready=False) == (
+        "disambiguation_homepage"
+    )
+
+
+def test_homepage_gate_rejects_flattened_bare_disambiguation_lead():
+    """条目列表被抓取器压平时，消歧义导语本身仍必须拒绝。"""
+    text = (
+        "示例楼可以指：\n\n"
+        "示例楼甲，位于甲地，是当地建筑。 "
+        "示例楼乙，位于乙地，设有展览空间。"
+    )
+
+    assert homepage_text_quality_issue(text, "示例楼（甲地）", require_fact_ready=False) == (
+        "disambiguation_homepage"
+    )
+
+
+def test_homepage_gate_rejects_flattened_disambiguation_entries():
+    text = (
+        "九龍山可以指：\n\n"
+        "九龙山 (天津)，天津市国家森林公园。 "
+        "九龙山 (嘉兴)，浙江省嘉兴市国家森林公园。 "
+        "九龍山 (香港)，香港九龙半岛的一座山。 "
+        "九龍山 (首尔)，韩国首尔附近的一座山峰。"
+    )
+
+    assert homepage_text_quality_issue(text, "平湖九龙山旅游度假区", require_fact_ready=False) == (
+        "disambiguation_homepage"
+    )
+
+
+def test_homepage_gate_rejects_disambiguation_intro_with_many_unrelated_facts():
+    text = (
+        "铁佛寺，可能是指以下事物：\n\n"
+        "鐵佛寺 (湖州)，位于浙江湖州，浙江省文物保护单位。\n"
+        "銅梁鐵佛寺，位于重庆铜梁县，重庆市文物保护单位。\n"
+        "铁佛寺 (临汾)，位于山西临汾，中国全国重点文物保护单位。\n"
+        "高平铁佛寺，位于山西晋城高平，山西省文物保护单位。"
+    )
+    assert homepage_text_quality_issue(text, "湖州铁佛寺") == "disambiguation_homepage"
+
+
 def test_homepage_gate_accepts_fact_rich_text():
     rich = (
-        "黄龙风景名胜区位于四川省阿坝藏族羌族自治州松潘县，海拔1700米至5588米。\n\n"
+        "黄龙风景名胜区位于test-region-b阿坝藏族羌族自治州松潘县，海拔1700米至5588米。\n\n"
         "景区占地700平方公里，1992年被列入世界自然遗产名录。\n\n"
         "黄龙以彩池、雪山、峡谷、森林四绝著称，主要景点包括五彩池、争艳池、迎宾池。\n\n"
         "景区开放时间为8:00-17:00，门票旺季170元，可在官网预约购票。\n\n"
@@ -63,7 +114,7 @@ def test_homepage_gate_accepts_fact_rich_text():
 
 def test_homepage_gate_preserves_structured_line_facts_before_counting():
     text = (
-        "越剧小镇位于浙江省嵊州市，也是女子越剧诞生地。\n"
+        "越剧小镇位于test-region-a嵊州市，也是女子越剧诞生地。\n"
         "小镇包括剧院、工坊、艺术家村落和百亩果园。\n"
         "项目占地百余亩，集现代农业、休闲旅游和文化创意于一体。\n"
         "园区坐落在剡溪之畔，主要文化设施包括越剧艺术学校。"
@@ -74,7 +125,7 @@ def test_homepage_gate_preserves_structured_line_facts_before_counting():
 
 def test_homepage_gate_does_not_treat_travel_station_guidance_as_station_entity():
     text = (
-        "中南百草原位于浙江省湖州市安吉县，占地5600亩，是国家AAAA级旅游景区。\n\n"
+        "中南百草原位于test-region-a湖州市安吉县，占地5600亩，是国家AAAA级旅游景区。\n\n"
         "景区包含植物世界、动物世界和运动世界，核心游览区设有湿地、竹林和草原。\n\n"
         "园区开放时间为8:00至17:00，游客可通过官方渠道预约门票。\n\n"
         "乘高铁至湖州站后可换乘旅游专线，车站有直达安吉的客运班次。\n\n"
@@ -142,14 +193,14 @@ def test_compression_policy_tiers():
 
 
 def test_factual_compress_keeps_short_text_unchanged():
-    text = "都江堰位于四川省成都市。始建于公元前256年。"
+    text = "都江堰位于test-region-b成都市。始建于公元前256年。"
     result = factual_compress_text(text, entity_name="都江堰")
     assert result["policy"] == "none"
     assert result["text"] == text
 
 
 def test_factual_compress_halves_long_text_and_keeps_facts():
-    fact = "都江堰位于四川省成都市，始建于公元前256年，占地约200平方公里。"
+    fact = "都江堰位于test-region-b成都市，始建于公元前256年，占地约200平方公里。"
     filler = "这里的风光真是让人流连忘返，随手一拍就是大片，朋友们都说不虚此行，下次还想再来。"
     paragraphs = []
     for _ in range(20):
@@ -165,7 +216,7 @@ def test_factual_compress_halves_long_text_and_keeps_facts():
 
 
 def test_factual_compress_preserves_figure_placeholder_lines():
-    fact = "青城山位于四川省都江堰市西南，最高峰海拔1260米，是中国道教发祥地之一。"
+    fact = "青城山位于test-region-b都江堰市西南，最高峰海拔1260米，是中国道教发祥地之一。"
     filler = "山间云雾缭绕美不胜收，游人如织好不热闹，来过的人都说还想再来一次。"
     body = "\n\n".join((fact + filler * 3) for _ in range(15))
     text = f"## 简介\n\n:::figure\nasset://source-inline-001\n:::\n\n{body}"
@@ -200,18 +251,36 @@ def test_is_non_open_baike_source_detects_baidu_and_toutiao():
     )
 
 
-def test_resolved_wiki_title_accepts_frozen_alias_candidate():
-    source = {"sourceTitle": "金沙湖 (浙江省)"}
-    assert _resolved_source_title_matches_entity(
-        source,
-        resolved_title="金沙湖 (浙江省)",
-        entity_id="杭州金沙湖",
+def test_homepage_fetch_uses_shared_base_draft_admission(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def shared_readiness(meta, text, **kwargs):
+        captured["meta"] = meta
+        captured["text"] = text
+        captured["kwargs"] = kwargs
+        return {"ready": True, "factCount": 4}
+
+    monkeypatch.setattr(
+        "content.homepage.homepage_text.homepage_base_draft_readiness",
+        shared_readiness,
     )
-    assert not _resolved_source_title_matches_entity(
-        source,
-        resolved_title="金沙湖 (新疆)",
-        entity_id="杭州金沙湖",
+    admission = homepage_base_draft_admission(
+        {
+            "researchLane": "homepage",
+            "sourceKind": "baidu_baike",
+            "sourceTitle": "莫氏庄园",
+            "qualifiedAuthorityTitle": "莫氏庄园",
+        },
+        source_text="莫氏庄园有足够的事实正文。",
+        entity_id="平湖莫氏庄园",
+        resolved_title="莫氏庄园",
     )
+
+    assert admission.accepted is True
+    assert admission.fact_count == 4
+    assert admission.issue_code is None
+    assert captured["meta"]["resolvedTitle"] == "莫氏庄园"
+    assert captured["kwargs"]["aliases"] == ("莫氏庄园",)
 
 
 def test_source_fetch_exception_is_converted_to_typed_issue():

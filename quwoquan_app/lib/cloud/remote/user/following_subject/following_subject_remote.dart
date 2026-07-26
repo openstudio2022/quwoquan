@@ -2,7 +2,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef FollowingSubjectInvocationContextFactory =
-    CloudOperationInvocationContext Function(String clientPageId);
+    CloudOperationInvocationContext Function(
+      String clientPageId, {
+      String? idempotencyKey,
+    });
 
 final class RemoteFollowingSubjectFacet
     implements FollowingSubjectQuery, FollowedSubjectVisitCommandWriter {
@@ -28,9 +31,13 @@ final class RemoteFollowingSubjectFacet
   Future<FollowedSubjectVisitResult> markFollowedSubjectVisited(
     MarkFollowedSubjectVisitedCommand command,
   ) {
+    final requestId = command.clientRequestId?.trim() ?? '';
     return client.userFollowedSubjectVisitStateMarkFollowedSubjectVisited(
       command,
-      context: invocationContext(UserRequestPageIds.markFollowedSubjectVisited),
+      context: invocationContext(
+        UserRequestPageIds.markFollowedSubjectVisited,
+        idempotencyKey: requestId.isEmpty ? null : requestId,
+      ),
     );
   }
 }

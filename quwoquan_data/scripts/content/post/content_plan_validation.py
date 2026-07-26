@@ -38,14 +38,15 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
             f"content_plan_packet.schema must be {CONTENT_PLAN_SCHEMA!r}, "
             f"got {packet.get('schema')!r}"
         )
-    from content.execution.workspace import load_execution_manifest
-
     try:
-        execution_content_type = str(
-            load_execution_manifest(execution_id).get("contentType") or ""
-        )
-    except (FileNotFoundError, TypeError, ValueError) as exc:
-        return [f"canonical execution manifest unavailable: {exc}"]
+        from content.execution.identity import parse_execution_id
+        from governance.coverage.license import rights_proof_required
+
+        execution_identity = parse_execution_id(execution_id)
+        execution_content_type = execution_identity.content_type.value
+        require_rights_proof = rights_proof_required(execution_identity.vertical)
+    except ValueError as exc:
+        return [f"canonical execution identity unavailable: {exc}"]
 
     packet_content_types = {
         str(item.get("carrier") or item.get("contentType") or "article").strip()
@@ -332,6 +333,7 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
             issues.extend(
                 validate_video_plan_item(
                     root=root,
+                    vertical=execution_identity.vertical,
                     item=item,
                     ref=ref,
                     claim_asset=_claim_asset,
@@ -510,11 +512,26 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
                 if not isinstance(asset, Mapping):
                     issues.append(f"item[{ref}]: article asset metadata missing: {asset_ref}")
                     continue
-                missing_asset_fields = [
-                    field
-                    for field in ("license", "credit", "sourceUrl", "termsUrl", "usageScope")
-                    if not str(asset.get(field) or "").strip()
-                ]
+                missing_asset_fields = (
+                    [
+                        field
+                        for field in (
+                            "license",
+                            "credit",
+                            "sourceUrl",
+                            "termsUrl",
+                            "usageScope",
+                        )
+                        if not str(asset.get(field) or "").strip()
+                    ]
+                    if require_rights_proof
+                    else (
+                        []
+                        if str(asset.get("rightsAuditStatus") or "").strip()
+                        in {"verified", "unverified"}
+                        else ["rightsAuditStatus"]
+                    )
+                )
                 if missing_asset_fields:
                     issues.append(
                         f"item[{ref}]: baseSourceRef asset {asset.get('fileName') or '?'} "

@@ -5,6 +5,8 @@ import sys
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -13,6 +15,7 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib import output_paths
 from quwoquan_ops.cli import legal_static
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.prod import render_prod_plane_stack as render
 from quwoquan_ops.gate.verify_output_layout import output_layout_issues
 from quwoquan_ops.gate.verify_root_layout import source_cache_issues
 from quwoquan_ops.gate import verify_output_path_source_contract as source_contract
@@ -21,6 +24,11 @@ from quwoquan_ops.gate import verify_output_path_source_contract as source_contr
 MANIFEST = ROOT / "quwoquan_ops" / "environments" / "output_layout_manifest.yaml"
 GATE_REPO = ROOT / "quwoquan_ops" / "gate" / "gate_repo.sh"
 MAKEFILE = ROOT / "Makefile"
+DEPLOY_BASH_ENTRIES = {
+    ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh": "beta-local",
+    ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh": "prod-sim",
+    ROOT / "quwoquan_ops/cli/prod/deploy_to_prod.sh": "prod-hosted",
+}
 
 
 def test_legal_static_source_manifest_uses_the_current_versioned_schema() -> None:
@@ -77,7 +85,9 @@ def test_path_resolver_honors_custom_root_and_orthogonal_scopes(
     monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(deploy_root))
 
     assert output_paths.output_root() == root
-    assert output_paths.deployment_work_root("gamma-local") == deploy_root / "gamma-local"
+    assert output_paths.deployment_work_root("gamma-local") == (
+        deploy_root / "gamma-local"
+    ).resolve()
     assert output_paths.deployment_package_root("gamma") == (
         deploy_root / "gamma-local/packages"
     )
@@ -85,7 +95,7 @@ def test_path_resolver_honors_custom_root_and_orthogonal_scopes(
         deploy_root / "gamma-local/packages/app"
     )
     assert output_paths.service_deployment_package_dir("gamma", "content-service") == (
-        deploy_root / "gamma-local/packages/service/content-service"
+        deploy_root / "gamma-local/packages/services/content-service"
     )
     assert output_paths.target_process_dir("gamma-local") == (
         root / "env/gamma/local/gamma-local/process"
@@ -96,6 +106,144 @@ def test_path_resolver_honors_custom_root_and_orthogonal_scopes(
     assert output_paths.repo_runs_root() == root / "env/repo/runs"
     assert output_paths.data_tasks_root() == root / "data/tasks"
     assert output_paths.data_releases_root() == root / "data/releases"
+
+
+def test_deployment_workspace_resolves_to_a_real_absolute_target_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    external = tmp_path / "external-workspace"
+    external.mkdir()
+    alias = tmp_path / "workspace-alias"
+    alias.symlink_to(external, target_is_directory=True)
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(alias))
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+
+    resolved = output_paths.deployment_work_root("gamma-local")
+
+    assert resolved == (external / "gamma-local").resolve()
+    assert resolved.is_absolute()
+    assert output_paths.deployment_package_root("gamma") == (
+        external / "gamma-local/packages"
+    ).resolve()
+    assert output_paths.certificate_export_dir("gamma-local") == (
+        external / "gamma-local/certificates"
+    ).resolve()
+
+
+@pytest.mark.parametrize(
+    "configured_root",
+    (
+        ".",
+        str(ROOT / "deployment-work"),
+        str(ROOT / ".qwq_output"),
+    ),
+)
+def test_deployment_workspace_rejects_repository_and_output_roots(
+    configured_root: str,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(ROOT)
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", configured_root)
+
+    with pytest.raises(ValueError, match="QWQ_DEPLOY_WORK_ROOT"):
+        output_paths.deployment_work_root("gamma-local")
+
+
+def test_deployment_workspace_rejects_output_root_and_symbolic_link_escape(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    output = tmp_path / "output"
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(output))
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(output / "deployment"))
+    with pytest.raises(ValueError, match="QWQ_OUTPUT_ROOT"):
+        output_paths.deployment_work_root("gamma-local")
+
+    link_to_repository = tmp_path / "link-to-repository"
+    link_to_repository.symlink_to(ROOT, target_is_directory=True)
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(link_to_repository))
+    with pytest.raises(ValueError, match="source tree"):
+        output_paths.deployment_work_root("gamma-local")
+
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "gamma-local").symlink_to(ROOT, target_is_directory=True)
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(external))
+    with pytest.raises(ValueError, match="symbolic link"):
+        output_paths.deployment_work_root("gamma-local")
+
+
+def test_deployment_cleanup_and_output_parameters_fail_closed(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    deploy_root = tmp_path / "deploy"
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(deploy_root))
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+
+    with pytest.raises(ValueError, match="target root"):
+        output_paths.remove_deployment_tree("gamma-local")
+
+    target_root = output_paths.deployment_work_root("gamma-local")
+    (target_root / "cleanup").parent.mkdir(parents=True)
+    (target_root / "cleanup").symlink_to(ROOT, target_is_directory=True)
+    with pytest.raises(ValueError, match="symbolic link"):
+        output_paths.remove_deployment_tree("gamma-local", "cleanup")
+
+    legal_root = output_paths.legal_static_deployment_package_dir("alpha")
+    assert legal_static._resolve_package_root(
+        "alpha",
+        output_root=legal_root,
+    ) == legal_root
+    with pytest.raises(ValueError, match="target-scoped"):
+        legal_static._resolve_package_root(
+            "alpha",
+            output_root=tmp_path / "outside",
+        )
+
+    render_root = output_paths.deployment_render_dir(
+        "prod",
+        target="prod-hosted",
+        name="service-prod",
+    )
+    assert render._resolve_render_output_dir(
+        render_root,
+        plane="service",
+        instance="prod",
+    ) == render_root
+    with pytest.raises(SystemExit, match="resolver-derived"):
+        render._resolve_render_output_dir(
+            tmp_path / "outside-render",
+            plane="service",
+            instance="prod",
+        )
+
+
+def test_deploy_bash_entries_reuse_the_python_target_resolver() -> None:
+    for entry, target in DEPLOY_BASH_ENTRIES.items():
+        source = entry.read_text(encoding="utf-8")
+        assert f'deployment_work_root("{target}")' in source
+        assert f"QWQ_DEPLOY_WORK_ROOT/{target}" not in source
+    prod_source = (
+        ROOT / "quwoquan_ops/cli/prod/deploy_to_prod.sh"
+    ).read_text(encoding="utf-8")
+    assert "deployment_render_dir(" in prod_source
+    alpha_source = (
+        ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
+    ).read_text(encoding="utf-8")
+    beta_source = (
+        ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh"
+    ).read_text(encoding="utf-8")
+    prod_sim_source = (
+        ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh"
+    ).read_text(encoding="utf-8")
+    assert "certificate_export_dir(" in alpha_source
+    assert "deployment_render_dir(" in beta_source
+    assert "deployment_render_dir(" in prod_sim_source
+    assert "deployment_target_path(" in prod_sim_source
 
 
 def test_layout_gate_accepts_canonical_fixture(tmp_path: Path) -> None:
@@ -247,6 +395,43 @@ def test_layout_gate_rejects_deployment_files_and_secret_values(
 
     assert any("deployment configuration, TLS or secret material" in issue for issue in issues)
     assert any("unredacted secret assignment is forbidden" in issue for issue in issues)
+
+
+def test_layout_gate_allows_only_fixed_schema_runtime_process_records(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / ".qwq_output"
+    process_record = (
+        root / "env/beta/local/beta-local/process/processes/gateway.env"
+    )
+    process_record.parent.mkdir(parents=True)
+    process_record.write_text(
+        "\n".join(
+            (
+                "name=gateway",
+                "pid=123",
+                "pgid=123",
+                "wrapper_pid=122",
+                "owner_id=beta-local-123",
+                "log=/tmp/gateway.log",
+                "cwd=/tmp/repo",
+                "started_at=123456",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    assert output_layout_issues(root) == []
+
+    process_record.write_text(
+        f"{process_record.read_text(encoding='utf-8')}CONFIG_ROOT=/tmp/config\n",
+        encoding="utf-8",
+    )
+    assert any(
+        "deployment configuration, TLS or secret material" in issue
+        for issue in output_layout_issues(root)
+    )
 
 
 def test_layout_gate_rejects_interpreter_cache_under_disposable_output(

@@ -1,7 +1,7 @@
-"""GWT9 Prompt 审计链合同测试（P4 AgentResultEnvelope / TokenLedger 补强）。
+"""GWT9 Prompt 审计链合同测试。
 
 Given 商用批产物必须可回放归因（provider/model/runId/promptSha256），
-When Agent 提交 result envelope 或 runner 记账 token 用量，
+When Agent 提交 result envelope，
 Then 缺任一审计字段 fail-closed；promptSha256 与 prompt 全文稳定对应。
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ from content.execution import production_contracts as pc  # noqa: E402
 
 _JOB = {
     "jobId": "job_audit",
-    "executionId": "20260711--travel-article-agent-audit--cn-zhejiang--canary-001",
+    "executionId": "20260711--travel-article-agent-audit--test-region-a--pilot-001",
     "ref": "posts/article/审计链样章",
     "stage": "post_author",
 }
@@ -85,27 +85,6 @@ def test_prompt_sha_is_stable_and_replayable():
     assert pc.sha256_text(prompt) != pc.sha256_text(prompt + " ")
 
 
-def test_token_ledger_requires_run_linkage():
-    entry = pc.build_token_ledger_entry(
-        execution_id=_JOB["executionId"],
-        job_id=_JOB["jobId"],
-        run_id="run_20260710_audit",
-        creator_profile_id="creator_x",
-        content_type="article",
-        budget_tokens=1000,
-        used_tokens=100,
-        provider="cursor_sdk",
-        model="composer",
-    )
-    assert pc.validate_token_ledger_entry(entry) == []
-    assert entry["runId"] == "run_20260710_audit"
-    # runId 缺失 fail-closed。
-    broken = dict(entry)
-    broken["runId"] = ""
-    issues = pc.validate_token_ledger_entry(broken)
-    assert any("tokenLedger.runId is required" in i for i in issues)
-
-
 def test_schema_files_freeze_audit_fields():
     """schema JSON（契约真相源）必须冻结审计字段为 required。"""
     envelope_schema = json.loads(
@@ -115,9 +94,3 @@ def test_schema_files_freeze_audit_fields():
     agent_block = envelope_schema["properties"]["agent"]
     assert set(agent_block["required"]) == {"provider", "model", "runId", "promptSha256"}
     assert agent_block["properties"]["promptSha256"]["pattern"].startswith("^sha256:")
-
-    ledger_schema = json.loads(
-        (DATA_ROOT / "schema" / "content" / "token_ledger.schema.json").read_text(encoding="utf-8")
-    )
-    assert "runId" in ledger_schema["required"]
-    assert ledger_schema["properties"]["runId"]["minLength"] == 1

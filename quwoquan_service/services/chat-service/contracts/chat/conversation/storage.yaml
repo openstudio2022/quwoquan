@@ -1,0 +1,96 @@
+backend: mongodb
+collections:
+  conversations:
+    entity: Conversation
+    indexes:
+    - name: idx_conv_type_updated
+      keys:
+        type: 1
+        updatedAt: -1
+    - name: idx_conv_circle
+      keys:
+        circleId: 1
+      sparse: true
+    - name: uq_conv_circle_group
+      keys:
+        circleGroupId: 1
+      sparse: true
+      unique: true
+    - name: idx_conv_status
+      keys:
+        status: 1
+    - name: idx_conv_last_msg_time
+      keys:
+        lastMessageTime: -1
+    search_indexes:
+    - name: search_conv_title
+      source: search_conv_title
+      type: text
+      fields:
+      - title
+  conversations_command_receipts:
+    entity: Conversation
+    role: authoritative
+    description: 与 aggregate state 和 outbox 在同一 mongodb transaction 提交的幂等回执。
+  conversations_outbox:
+    entity: Conversation
+    role: append_only
+    description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
+  chat_aggregate_outbox_sequences:
+    entity: Conversation
+    role: authoritative
+    description: chat 域三个非 Message 聚合 outbox 的共享全序分配器（_id 为 outbox 集合名），与事件写入同事务推进。
+  chat_schema_migrations:
+    entity: Conversation
+    role: authoritative
+    description: 受租约保护的 chat 数据库架构迁移账本；记录前检、失败证据与完成水位，禁止以数据卷重置替代迁移。
+  chat_projection_checkpoints:
+    entity: Conversation
+    role: projection
+    description: chat 域 relay/projector 各 consumer 独立保存的可重放水位。
+  circle_group_chat_binding_projection_states:
+    entity: Conversation
+    role: projection
+    description: CircleGroupCreated/Archived source-version 水位；处理跨 Stream 乱序时防止已归档 CircleGroup 被迟到创建事件重新
+      provision。
+    indexes:
+    - name: uq_circle_group_chat_binding_projection_group
+      keys:
+        circleGroupId: 1
+      unique: true
+    - name: idx_circle_group_chat_binding_projection_status
+      keys:
+        status: 1
+        sourceVersion: -1
+  chat_user_account_closed_inbox:
+    entity: Conversation
+    role: projection
+    description: UserAccountClosed 清理的不可逆幂等 inbox；不保存原账号或 persona 原值。
+    indexes:
+    - name: idx_chat_user_account_closed_inbox_event
+      keys:
+        eventDigest: 1
+  chat_user_account_closed_failures:
+    entity: Conversation
+    role: projection
+    description: UserAccountClosed 有限重试状态，只保存 source message reference、
+      event/error digest、attempts 与时间戳，禁止保存 payload 或主体标识。普通失败按 expiresAt
+      回收；terminal marker 必须移除 expiresAt，原 source PEL 只能由受控 recovery 释放。
+    indexes:
+    - name: idx_chat_user_account_closed_failure_event
+      keys:
+        eventDigest: 1
+    - name: ttl_chat_user_account_closed_failures
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
+redis_cache:
+- key: cache:conversation:{conversationId}
+  ttl_seconds: 300
+  entity: Conversation
+  invalidate_on:
+  - MessageSent
+  - ConversationMemberAdded
+  - ConversationMemberRemoved
+  - ConversationUserSettingsChanged
+role: authoritative

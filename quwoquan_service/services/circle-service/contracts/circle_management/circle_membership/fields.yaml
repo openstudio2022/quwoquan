@@ -1,0 +1,368 @@
+description: 单一 Persona 在 Circle 中的权威成员关系聚合。
+fields:
+- name: _id
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  role: authoritative_state
+- name: version
+  type: int64
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: circleId
+  type: ObjectId
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+  reference: true
+- name: personaId
+  type: string
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+  reference: true
+- name: role
+  type: enum
+  enum_ref: CircleMemberRole
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: state
+  type: enum
+  enum_ref: CircleMembershipState
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: joinedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: leftAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  role: authoritative_state
+- name: lastActiveAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  role: authoritative_state
+- name: contribution
+  type: int64
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: createdAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: updatedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+types:
+  CircleMembershipCommandResult:
+    description: Membership 命令的稳定提交回执。
+    fields:
+    - name: membershipId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: version
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: state
+      type: enum
+      enum_ref: CircleMembershipState
+      constraints:
+      - NOT_NULL
+    - name: role
+      type: enum
+      enum_ref: CircleMemberRole
+      constraints:
+      - NOT_NULL
+    - name: idempotentReplay
+      type: bool
+      constraints:
+      - NOT_NULL
+  CircleMembershipSlice:
+    description: CircleMembershipReader 返回的强类型只读切片；不暴露 Mongo _id 或允许跨边界修改聚合。
+    fields:
+    - name: membershipId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: version
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: circleId
+      type: ObjectId
+      constraints:
+      - NOT_NULL
+    - name: personaId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: role
+      type: enum
+      enum_ref: CircleMemberRole
+      constraints:
+      - NOT_NULL
+    - name: state
+      type: enum
+      enum_ref: CircleMembershipState
+      constraints:
+      - NOT_NULL
+    - name: joinedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+    - name: leftAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+    - name: lastActiveAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+    - name: contribution
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: createdAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+    - name: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+  PersonaCircleSlice:
+    description: PersonaCircleReader 返回的公开 Circle 摘要投影；它不是 Circle 聚合且不暴露存储字段名。
+    fields:
+    - name: circleId
+      type: ObjectId
+      constraints:
+      - NOT_NULL
+    - name: name
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: description
+      type: string
+      constraints:
+      - NULLABLE
+    - name: coverUrl
+      type: string
+      constraints:
+      - NULLABLE
+    - name: iconUrl
+      type: string
+      constraints:
+      - NULLABLE
+    - name: ownerPersonaId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: ownerDisplayNameSnapshot
+      type: string
+      constraints:
+      - NULLABLE
+    - name: category
+      type: string
+      constraints:
+      - NULLABLE
+    - name: subCategory
+      type: string
+      constraints:
+      - NULLABLE
+    - name: tags
+      type: '[]string'
+      constraints:
+      - NULLABLE
+    - name: memberCount
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: postCount
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: weeklyActiveCount
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: state
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: visibility
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: joinPolicy
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: kind
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: displaySubjectType
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: followEnabled
+      type: bool
+      constraints:
+      - NOT_NULL
+    - name: defaultPublicGroupId
+      type: string
+      constraints:
+      - NULLABLE
+    - name: linkedHomepageId
+      type: string
+      constraints:
+      - NULLABLE
+    - name: linkedHomepageType
+      type: string
+      constraints:
+      - NULLABLE
+    - name: linkedHomepageTitle
+      type: string
+      constraints:
+      - NULLABLE
+    - name: createdAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+    - name: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+  UpdateCircleMembershipRoleRequest:
+    description: 管理员变更目标 membership 角色的强类型命令。
+    fields:
+    - name: role
+      type: enum
+      enum_ref: CircleMemberRole
+      constraints:
+      - NOT_NULL
+  CircleMembershipCommandReceipt:
+    description: actor-scoped idempotency receipt。
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: commandDigest
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: membershipId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: version
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: state
+      type: enum
+      enum_ref: CircleMembershipState
+      constraints:
+      - NOT_NULL
+    - name: role
+      type: enum
+      enum_ref: CircleMemberRole
+      constraints:
+      - NOT_NULL
+    - name: expiresAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+  CircleMembershipOutbox:
+    description: 与 aggregate/version/receipt 同事务提交的不可变事实。
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: outboxSequence
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: eventType
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: aggregateId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: aggregateVersion
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: payloadJson
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: occurredAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+  CircleMembershipOutboxSequence:
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: sequence
+      type: int64
+      constraints:
+      - NOT_NULL
+  CircleMembershipProjectionCheckpoint:
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: sequence
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+  CircleMembershipProjectionInbox:
+    fields:
+    - name: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: aggregateId
+      type: string
+      constraints:
+      - NOT_NULL
+    - name: aggregateVersion
+      type: int64
+      constraints:
+      - NOT_NULL
+    - name: appliedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL

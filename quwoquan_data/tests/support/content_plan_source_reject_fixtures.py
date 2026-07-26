@@ -42,8 +42,8 @@ from core.paths import STAGE_COMPOSE, execution_content_plan_packet_path, execut
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit
 from support.execution_manifest_fixture import build_execution_fixture
 
-EXECUTION_ID = "20260711--travel-article-contract--test-content-plan--canary-903"
-IMAGE_EXECUTION_ID = "20260711--travel-image-contract--test-content-plan--canary-904"
+EXECUTION_ID = "20260711--travel-article-contract--test-content-plan--pilot-903"
+IMAGE_EXECUTION_ID = "20260711--travel-image-contract--test-content-plan--pilot-904"
 
 
 @pytest.fixture(autouse=True)
@@ -112,6 +112,8 @@ def _write_article_source_asset(source_dir: Path, *, label: str) -> Path:
                     "sourceUrl": "https://example.com/image.jpg",
                     "termsUrl": "https://example.com/terms",
                     "usageScope": "commercial_editorial",
+                    "rightsAuditStatus": "verified",
+                    "rightsAuditIssues": [],
                     "caption": "与正文底稿同源的配图",
                     "relevance": "与景区正文段落同源相关",
                 }

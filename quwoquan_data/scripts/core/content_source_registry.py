@@ -431,6 +431,7 @@ def render_lane_source_prompt(
             "open_license_publish": "当前 imageAssetStrategy=open_license_publish：只能把开放许可或逐资产可发布授权图片写入 collections。",
             "licensed_provider_publish": "当前 imageAssetStrategy=licensed_provider_publish：只能把授权图库/授权池中有凭证的图片写入 collections。",
             "ai_generated_original": "当前 imageAssetStrategy=ai_generated_original：可使用原创生成图，但必须写 generationModel、generationPromptHash、generatedAt、syntheticDisclosure 和完整权利字段。",
+            "attribution_audited_publish": "当前 imageAssetStrategy=attribution_audited_publish：每张图片必须通过标题、图注或描述的主题匹配，写入来源地址与权利审计结果；缺少商业许可只标为 unverified，不替代或静默丢弃匹配素材。",
             "reference_only_no_image_release": "当前 imageAssetStrategy=reference_only_no_image_release：只能做发现/参考验证，不得把未授权图片写成可发布 collections。",
         }.get(
             image_asset_strategy,
@@ -445,11 +446,17 @@ def render_lane_source_prompt(
             f"授权候选看：{', '.join(licensed[:16])}；"
             f"发现/参考源包括：{', '.join(discovery[:16])}。"
         )
-        lines.append(
-            f"至少形成 {int(per_target_image_works or 1)} 个图片作品容量；"
-            "Pinterest、小红书、微博、抖音、B站等可做发现；其中 Pinterest 只有在 "
-            "attribution_no_watermark 证据链完整时才可进入 collections，其他来源未形成逐图授权链不得进入 collections。"
-        )
+        if image_asset_strategy == "attribution_audited_publish":
+            lines.append(
+                f"至少形成 {int(per_target_image_works or 1)} 个图片作品容量；"
+                "进入 collections 前必须验证标题、图注或描述与主题匹配，并保留来源页、原始地址、作者或署名、权利审计状态及审计问题。"
+            )
+        else:
+            lines.append(
+                f"至少形成 {int(per_target_image_works or 1)} 个图片作品容量；"
+                "Pinterest、小红书、微博、抖音、B站等可做发现；其中 Pinterest 只有在 "
+                "attribution_no_watermark 证据链完整时才可进入 collections，其他来源未形成逐图授权链不得进入 collections。"
+            )
     elif lane == "video":
         lines.append(
             "只做视频素材/参考检索。通用视频平台、素材视频库、官方账号和垂类视频源都可进入发现。"

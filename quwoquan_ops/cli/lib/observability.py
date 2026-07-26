@@ -192,21 +192,18 @@ def canonical_log_record(
             f"runtime log kind mismatch: expected {kind}, received {declared_kind}"
         )
     declared_signal = str(source.pop("signal", "") or "")
-    occurred_at = str(source.pop("occurredAt", source.pop("ts", utc_now())))
+    occurred_at = str(source.pop("occurredAt", utc_now()))
     observed_at = str(source.pop("observedAt", occurred_at))
-    severity = str(source.pop("severity", source.pop("level", "INFO"))).upper()
+    severity = str(source.pop("severity", "INFO")).upper()
     message = _bounded(
         _redact_text(
             str(
                 source.pop(
                     "message",
-                    source.pop(
-                        "msg",
-                        source.get("event")
-                        or source.get("step")
-                        or source.get("action")
-                        or kind,
-                    ),
+                    source.get("event")
+                    or source.get("step")
+                    or source.get("action")
+                    or kind,
                 )
             )
         ),
@@ -216,20 +213,16 @@ def canonical_log_record(
     if not resolved_resource:
         resolved_resource = _default_resource(path)
     resolved_correlation = dict(correlation or source.pop("correlation", {}) or {})
-    _move_if_present(source, resolved_correlation, "requestId", "req")
-    _move_if_present(source, resolved_correlation, "traceId", "trace")
-    _move_if_present(source, resolved_correlation, "spanId", "span")
+    _move_if_present(source, resolved_correlation, "requestId")
+    _move_if_present(source, resolved_correlation, "traceId")
+    _move_if_present(source, resolved_correlation, "spanId")
     _move_if_present(source, resolved_correlation, "operationId")
     _move_if_present(source, resolved_correlation, "pageName")
     _move_if_present(source, resolved_correlation, "surfaceId")
     _move_if_present(source, resolved_correlation, "executionId")
     _move_if_present(source, resolved_correlation, "workPackageId")
     _move_if_present(source, resolved_correlation, "environmentRunId")
-    _rename(source, "durationMs", "durMs")
-    _rename(source, "errorCode", "err")
-    raw_attributes = source.pop("attributes", None)
-    if raw_attributes is None:
-        raw_attributes = source.pop("attrs", {})
+    raw_attributes = source.pop("attributes", {})
     resolved_signal = signal or declared_signal or _default_signal(kind, resolved_resource)
     record: dict[str, Any] = {
         "schema": OBSERVABILITY_SCHEMA,
@@ -592,17 +585,9 @@ def _move_if_present(
     source: dict[str, Any],
     destination: dict[str, Any],
     canonical: str,
-    legacy: str | None = None,
 ) -> None:
     if canonical in source:
         destination[canonical] = source.pop(canonical)
-    elif legacy is not None and legacy in source:
-        destination[canonical] = source.pop(legacy)
-
-
-def _rename(source: dict[str, Any], canonical: str, legacy: str) -> None:
-    if canonical not in source and legacy in source:
-        source[canonical] = source.pop(legacy)
 
 
 def _repo_rel(path: Path) -> str:

@@ -1,0 +1,51 @@
+kind: runtime_session
+description: 'realtime-gateway 连接运行时会话。
+
+  Connection 仅在 WebSocket 连接期间存在，不作为持久化业务聚合。
+
+  可信连接身份由 accountId + personaId + deviceId 三元组构成；RTC 业务路由只使用
+
+  personaId，设备级在线状态通过 Redis Hash（presence:persona:{personaId}）维护。
+
+  realtime-gateway 作为平台级基础设施，不属于任何业务域，独立部署。
+
+  '
+identity:
+  fields:
+  - connectionId
+  version_source: session
+access:
+  commands: session_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+  - name: account
+    target_object: user.UserAccount
+    reference_fields: [accountId]
+    kind: reference
+    cardinality: N:1
+    consistency: runtime
+    access: named_reader
+    on_delete: retain
+  - name: persona
+    target_object: user.Persona
+    reference_fields: [personaId]
+    kind: reference
+    cardinality: N:1
+    consistency: runtime
+    access: named_reader
+    on_delete: retain
+  - name: device
+    target_object: user.DeviceRegistration
+    reference_fields: [deviceId]
+    kind: reference
+    cardinality: N:1
+    consistency: runtime
+    access: named_reader
+    on_delete: detach
+local_identity_reasons:
+  nodeId: 运行节点路由标识，不是业务对象引用
+capabilities:
+- queryable
+taggable: false
+vector_enabled: false

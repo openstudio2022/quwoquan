@@ -6,6 +6,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
@@ -342,11 +343,16 @@ void main() {
     expect(activePersonaContext.ownerUserId, currentUserId);
     expect(activePersonaContext.subAccountId, currentUserId);
     expect(currentUser.displayName, matches(_defaultNicknamePattern));
-    expect(
-      currentUser.backgroundUrl,
-      isEmpty,
-      reason: '未注入媒体交付 endpoint 时，不得把 object key 当作可加载 URL',
-    );
+    final imageBase = CloudRuntimeConfig.mediaImageCdnBaseUrl.trim();
+    if (imageBase.isEmpty) {
+      expect(
+        currentUser.backgroundUrl,
+        isEmpty,
+        reason: '未注入媒体交付 endpoint 时，不得把 object key 当作可加载 URL',
+      );
+    } else {
+      expect(currentUser.backgroundUrl, startsWith('$imageBase/'));
+    }
     final userPostsPage = await contentPostReader.listUserPosts(
       userId: 'fixture_user_current',
       limit: 20,
@@ -374,7 +380,7 @@ void main() {
     );
 
     final pois = await _getJsonList(
-      '$baseUrl/integration/locations/pois',
+      '$baseUrl/integration/external_integration/locations/pois',
       'items',
     );
     expect(
@@ -446,28 +452,28 @@ class _BusinessFixtures {
 
   static _BusinessFixtures load() {
     final content = _loadFixture(
-      '../quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json',
+      '../quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json',
     );
     final chat = _loadFixture(
-      '../quwoquan_service/contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.json',
+      '../quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json',
     );
     final circle = _loadFixture(
-      '../quwoquan_service/contracts/metadata/social/circle/test_fixtures/scenarios/circle_scenarios.json',
+      '../quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.json',
     );
     final user = _loadFixture(
-      '../quwoquan_service/contracts/metadata/user/test_fixtures/scenarios/user_scenarios.json',
+      '../quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.json',
     );
     final entity = _loadFixture(
-      '../quwoquan_service/contracts/metadata/entity/test_fixtures/scenarios/entity_scenarios.json',
+      '../quwoquan_service/services/entity-service/tests/support/contract_fixtures/scenarios/entity_scenarios.json',
     );
     final integration = _loadFixture(
-      '../quwoquan_service/contracts/metadata/integration/test_fixtures/scenarios/integration_scenarios.json',
+      '../quwoquan_service/services/integration-service/tests/support/contract_fixtures/scenarios/integration_scenarios.json',
     );
     final notification = _loadFixture(
-      '../quwoquan_service/contracts/metadata/notification/test_fixtures/scenarios/notification_scenarios.json',
+      '../quwoquan_service/services/notification-service/tests/support/contract_fixtures/scenarios/notification_scenarios.json',
     );
     final rtc = _loadFixture(
-      '../quwoquan_service/contracts/metadata/rtc/test_fixtures/scenarios/rtc_scenarios.json',
+      '../quwoquan_service/services/rtc-service/tests/support/contract_fixtures/scenarios/rtc_scenarios.json',
     );
     return _BusinessFixtures(
       contentSeed:
@@ -681,7 +687,7 @@ class _ContractSeedHttpServer {
         _writeJson(request, {'items': _fixtures.entitySeed['homepages']});
         return;
       }
-      if (path == '/integration/locations/pois') {
+      if (path == '/integration/external_integration/locations/pois') {
         _writeJson(request, {'items': _fixtures.integrationSeed['pois']});
         return;
       }

@@ -1,68 +1,49 @@
-# L2 设计：onboarding-and-identity-entry
+# L2 Design：引导与身份入口 (`onboarding-and-identity-entry`)
 
-## 设计目标
+> 对应规格：[L2 spec](./spec.md)
 
-本能力用一个登录页面、一套结构化错误契约和一个环境装配入口承载手机号 OTP、三网本机号认证、微信、支付宝与 QQ 登录。任何失败都必须让用户知道发生了什么、接下来能做什么，并且不会出现重复提示、自动提交、失效入口或关闭后再次弹登录。
+> 设计触发原因：“负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路”需要 `four-environment-commercial-login-maturity`、`onboarding-consent-flow`、`post-login-landing`、`two-state-one-tap-login-commercial-login-entry`、`welcome-entry-routing` 共享状态 owner、契约或质量边界。
 
-## 单一反馈链
+## 1. 背景、目标与非目标
 
-```text
-errors.yaml
-  -> RuntimeErrorResponse / CloudException / RuntimeFailure
-  -> RuntimeRecoveryPolicy
-  -> LoginErrorPresentation
-  -> LoginErrorSurface
-  -> LoginPage 单一展示位置
-```
+- 设计目标：负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路。
+- 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
-- `errors.yaml` 是稳定错误码、双语 baseline、`recovery.action`、`disruptionLevel` 与 `afterSeconds` 的唯一真相源。
-- `LoginErrorPresentation` 是登录页唯一反馈模型；页面不得另建错误码 switch、直接展示异常字符串或同时触发 Toast/Snackbar。
-- `LoginErrorSurface` 只决定“在哪里显示”，不重新解释错误：
-  - `phoneField`：手机号格式。
-  - `otpField`：验证码错误、过期、发送失败、频控。
-  - `agreement`：协议未同意。
-  - `socialMethod`：微信、支付宝、QQ 授权失败或不可用。
-  - `topLevel`：运营商、网络、会话等流程失败。
-  - `accountBlocked`：账号暂停、删除、锁定等阻断态。
-- 同一次失败只允许一个可见承载面。`social_provider_cancelled` 为 `absorb + silent`，恢复原状态且不显示错误。
+## 2. Story 协作与状态流
+
+- [`four-environment-commercial-login-maturity`](./four-environment-commercial-login-maturity/spec.md)：application contract 覆盖 provider 失败、正常排队和错误验证码拒绝。
+- [`onboarding-consent-flow`](./onboarding-consent-flow/spec.md)：定义“引导同意流程”的可观察主路径、失败语义及父能力交接。
+- [`post-login-landing`](./post-login-landing/spec.md)：定义“内容登录落点”的可观察主路径、失败语义及父能力交接。
+- [`two-state-one-tap-login-commercial-login-entry`](./two-state-one-tap-login-commercial-login-entry/spec.md)：本机号码首次登录在服务端完成账号、persona、credential、device 与 consent 持久化。
+- [`welcome-entry-routing`](./welcome-entry-routing/spec.md)：定义“欢迎入口路由”的可观察主路径、失败语义及父能力交接。
+
+## 3. 端云与数据流
+
+- 上游能力：[`user-identity-profile-relationship`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 4. 关键决策
+
+<a id="dec-001"></a>
+### DEC-001 登录方式共用页面骨架、结构化错误与环境装配
+- 决策：登录方式共用页面骨架、结构化错误与环境装配。
+- 理由：负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路。
+- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 关联要求：`REQ-001`
+- 影响 Story：[`four-environment-commercial-login-maturity`](./four-environment-commercial-login-maturity/spec.md)、[`onboarding-consent-flow`](./onboarding-consent-flow/spec.md)、[`post-login-landing`](./post-login-landing/spec.md)、[`two-state-one-tap-login-commercial-login-entry`](./two-state-one-tap-login-commercial-login-entry/spec.md)、[`welcome-entry-routing`](./welcome-entry-routing/spec.md)
+- 关联验收：`SIT-001`
+
+## 5. 失败与恢复
+
+- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
+- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
+- 恢复动作：调用方按 canonical recovery action 重试、刷新或停止；不得自行合成成功结果。
+- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
+
+## 6. 质量与观测
+
 - 用户可见文案不得包含 `debugMessage`、provider 原始响应、authCode、token、secret、URL query、requestId 或 traceId；关联标识只进入结构化观测。
-
-## OTP 状态与提交
-
-- 手机号编辑、验证码编辑、异步活动和反馈相互独立，输入中不构成错误。
-- 系统短信自动填充只写入 6 位验证码，不自动登录；登录必须由用户显式点击。
-- returning account 的短信降级只预填手机号，不自动发码；发码必须由用户显式点击。
-- 重发失败时保留已送达 challenge、手机号与验证码，避免把用户从可继续状态退回起点。
-- 每次异步尝试带单调 attempt id；过期结果不得覆盖新状态，重复点击在活动期间被抑制。
-
-## 登录能力与平台防腐
-
-- UI 只消费 `PlatformCapabilities`，不判断 Android/iOS/Web。
-- `NativeAuthBridge` 统一承载微信、支付宝、QQ SDK 授权；`OneTapLoginClient` 统一承载三网 capability probe 与本机号 token。
-- 能力已知不可用时不展示入口；能力运行时失败时在原位置给出重试或切换方式，不能保留可点击死入口。
-- 原生桥只返回短期 authCode/carrier token，服务端完成身份置换；App 不持久化厂商 secret、真实本机号或长期 provider token。
-
-## 四环境装配
-
-- alpha：确定性本地 fixture 只用于 local_contract，不进入运行时认证链路。
-- beta/gamma/prod：真实 user-service 与部署注入的外部 provider；凭据或平台能力缺失时 fail-closed。
 - prod：真实厂商与真实运营商；缺配置时隐藏入口或返回结构化 unavailable，绝不 mock 成功。
-- 所有环境共享同一 DTO、错误码、页面状态机与观测字段，不维护环境专属业务分支。
-
-## AuthContinuation 与退出
-
 - 关闭登录页先清理 pending continuation，再进入不会重新触发登录门的安全态。
-- 登录成功不提前清理 continuation；由目标表面原子消费并清理。
-- 所有强登录入口声明 `allowGuestDismissPop: false`；内部 tab 目标用 continuation，不以路由字符串猜测。
-
-## 可观测与安全
-
-- 记录 `code`、`operationId`、`surfaceId`、`recoveryAction`、`disruptionLevel`、`requestId`、`traceId`、provider、耗时与结果；不记录可见 message 或凭证。
-- user-service 客户端错误响应默认不含 debug；外部 provider 错误必须脱敏后再进入日志或 RuntimeErrorResponse。
-- SLO：capability probe/hint P95 ≤ 1200ms，票据置换 P95 ≤ 1500ms，登录成功到目标态 P95 ≤ 2000ms。
-
-## 回滚
-
-- 单 provider 可由能力开关下线，页面自动收敛到剩余方式。
-- 运营商链路异常时降级手机号 OTP，不得回退到 dev token。
-- 服务端缺凭证、签名失败或上游异常一律 fail-closed；回滚不允许启用 mock、debugCode 或客户端 secret。

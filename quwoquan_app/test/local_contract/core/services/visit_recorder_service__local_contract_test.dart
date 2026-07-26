@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -38,7 +40,7 @@ void main() {
       expect(input.targetKey, equals('page_discovery_recommend'));
       expect(input.source, equals('page_access'));
       expect(input.idempotencyKey, isNotEmpty);
-      // 出站 wire 形状与 ops/visit_record 契约对齐：actor 由服务端派生。
+      // 出站 wire 形状与 ops/product_ops/visit_record 契约对齐：actor 由服务端派生。
       expect(input.toWireJson().containsKey('userId'), isFalse);
       expect(input.toWireJson().containsKey('idempotencyKey'), isFalse);
     });
@@ -83,6 +85,24 @@ void main() {
       );
       expect(persisted.idempotencyKey, equals(failed.idempotencyKey));
       expect(persisted.targetKey, equals(failed.targetKey));
+    });
+
+    test('账号 closed 终态清空访问画像和补传回执并停止旧实例记录', () async {
+      const recordsBoxName = 'visit_recorder_service_test_closed';
+      final service = VisitRecorderService(boxName: recordsBoxName);
+      await service.recordVisit(const VisitTarget.page('account_security'));
+      final recordsBox = Hive.box<String>(recordsBoxName);
+      final pendingBox = await Hive.openBox<String>(kVisitPendingSyncBoxName);
+      await pendingBox.put('pending', '{"targetKey":"sensitive"}');
+      expect(recordsBox, isNotEmpty);
+      expect(pendingBox, isNotEmpty);
+
+      await service.clearForTerminalAccountClosure();
+
+      expect(recordsBox, isEmpty);
+      expect(pendingBox, isEmpty);
+      await service.recordVisit(const VisitTarget.page('after_closed'));
+      expect(recordsBox, isEmpty);
     });
   });
 }

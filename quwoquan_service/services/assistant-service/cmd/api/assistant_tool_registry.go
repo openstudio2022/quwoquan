@@ -5,14 +5,14 @@ import (
 	"net/http"
 
 	runtimeconfig "quwoquan_service/runtime/config"
-	"quwoquan_service/services/assistant-service/internal/application"
-	"quwoquan_service/services/assistant-service/internal/application/tool"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/finance"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/modelprovider"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/providerbinding"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/publicsearch"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/searchclient"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/weather"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/tool"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/finance"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/modelprovider"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/providerbinding"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/publicsearch"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/searchclient"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/weather"
 )
 
 func buildAgentLoop(
@@ -56,7 +56,10 @@ func buildModelProvider(
 	binding, err := resolveAssistantBinding(
 		appEnv,
 		"assistant.model.generation",
-		"ext.llm.xiaomi_mimo",
+		[]string{
+			providerbinding.ModelAdapterXiaomiMimo,
+			providerbinding.ModelAdapterProtocolFixture,
+		},
 		configProvider,
 	)
 	if err != nil {
@@ -113,7 +116,10 @@ func buildPublicSearchProvider(
 	binding, err := resolveAssistantBinding(
 		appEnv,
 		"assistant.public.search",
-		"ext.search.duckduckgo_html",
+		[]string{
+			providerbinding.SearchAdapterDuckDuckGoHTML,
+			providerbinding.SearchAdapterProtocolFixture,
+		},
 		configProvider,
 	)
 	if err != nil {
@@ -141,7 +147,10 @@ func buildWeatherProvider(
 	binding, err := resolveAssistantBinding(
 		appEnv,
 		"assistant.weather.forecast",
-		"ext.weather.open_meteo",
+		[]string{
+			providerbinding.WeatherAdapterOpenMeteo,
+			providerbinding.WeatherAdapterProtocolFixture,
+		},
 		configProvider,
 	)
 	if err != nil {
@@ -173,7 +182,10 @@ func buildFinanceProvider(
 	binding, err := resolveAssistantBinding(
 		appEnv,
 		"assistant.finance.quote",
-		"ext.finance.yahoo_chart",
+		[]string{
+			providerbinding.FinanceAdapterYahooChart,
+			providerbinding.FinanceAdapterProtocolFixture,
+		},
 		configProvider,
 	)
 	if err != nil {
@@ -196,18 +208,20 @@ func buildFinanceProvider(
 func resolveAssistantBinding(
 	appEnv string,
 	capabilityID string,
-	expectedAdapterID string,
+	allowedAdapterIDs []string,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 ) (providerbinding.ResolvedBinding, error) {
 	binding, err := providerbinding.Resolve(appEnv, capabilityID, configProvider)
 	if err != nil {
 		return providerbinding.ResolvedBinding{}, err
 	}
-	if binding.AdapterID != expectedAdapterID {
-		return providerbinding.ResolvedBinding{}, fmt.Errorf(
-			"provider binding adapter mismatch for capability=%s",
-			capabilityID,
-		)
+	for _, allowed := range allowedAdapterIDs {
+		if binding.AdapterID == allowed {
+			return binding, nil
+		}
 	}
-	return binding, nil
+	return providerbinding.ResolvedBinding{}, fmt.Errorf(
+		"provider binding adapter mismatch for capability=%s",
+		capabilityID,
+	)
 }

@@ -19,115 +19,9 @@ from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+sys.dont_write_bytecode = True
 
 from quwoquan_ops.cli.lib.output_paths import repo_run_dir
-
-HIGH_CONFIDENCE_PATHS = {
-    ".gitmodules": "App 已是 monorepo 普通目录，残留 submodule 声明与 Git 索引不一致",
-    "quwoquan_service/api": "服务端默认 go build Mach-O 输出，源码树不应保存构建产物",
-    "quwoquan_service/services/user-service/internal/infrastructure/user/persistence/pg__store.g.go": "缺少实体映射时生成的非法空名 PG store，metadata 与 codegen 已改为 fail-fast",
-    "quwoquan_service/services/user-service/internal/domain/user/model/.g.go": "无实体辅助表生成的非法空名 Go model，metadata 已标记 infrastructure_only",
-    "quwoquan_service/api_integration.test": "已跟踪的服务端 Mach-O 测试二进制，源码树不应保存构建产物",
-    "quwoquan_app/scripts/content/verify_content_post_mock_test_roots.py": "校验已不存在的旧 test/ui 与 test/cloud 根目录，且无活动入口引用",
-    "quwoquan_app/docs/content_post_mock_test_alignment.md": "只说明已退役的旧 mock-test 根目录校验脚本",
-    "quwoquan_app/scripts/chat/regenerate_conv_grid_group_avatars.py": "生成入口与目标 fixture 均已不存在，且无活动调用方",
-    "quwoquan_app/assets/assistant/config/agent_run_observability_schema.json": "无运行时、测试、生成器或 metadata 消费者的打包孤儿配置",
-    "quwoquan_app/assets/assistant/config/geo_resolution_config.json": "无运行时、测试、生成器或 metadata 消费者的打包孤儿配置",
-    "quwoquan_app/assets/assistant/config/retrieval_time_contract.json": "无运行时、测试、生成器或 metadata 消费者的打包孤儿配置",
-    "quwoquan_app/assets/assistant/config/user_phase_hints.json": "无运行时、测试、生成器或 metadata 消费者的打包孤儿配置",
-    "quwoquan_app/scripts/runtime/.verify_dart_semantic_baseline.txt": "语义债务已清零，门禁已改为零容忍且不再允许更新历史基线",
-    "quwoquan_app/scripts/runtime/.verify_error_code_semantic_baseline.txt": "错误码语义债务已清零，门禁已改为零容忍且不再允许更新历史基线",
-    "quwoquan_app/scripts/runtime/.verify_unified_error_semantics_ratchet_baseline.txt": "统一错误语义债务已清零，门禁已改为零容忍且不再允许更新历史基线",
-    "quwoquan_app/scripts/media/render_group_avatar_composite.swift": "无调用方的 macOS 专用头像渲染器，已由 canonical Go 工具取代",
-    "quwoquan_app/scripts/verify_orchestration_map_governance.py": "目标目录已不存在且会空扫假绿的孤立门禁",
-    "quwoquan_app/scripts/run_ios_simulator.sh": "仅剩历史 CR 引用的第二套 iOS 启动入口",
-    "quwoquan_app/scripts/content/run_l2_content_tests.sh": "退役的 L2 命名与裸本地 Mongo 测试入口，统一由 api_integration gate 承接",
-    "quwoquan_app/scripts/ios/test_ios_shortcut_log_hygiene.py": "测试已迁入 local_contract 测试树",
-    "quwoquan_app/vendor/plugins/video_thumbnail/grep": "零字节 vendor 残片，无构建或源码引用",
-    "quwoquan_data/scripts/verify/audit/__init__.py": "未注册的旧 Data audit 包，唯一 release-integrity 入口已迁入 verify handler",
-    "quwoquan_data/scripts/verify/audit/handler.py": "未注册且与 verify release-integrity 重复的旧 Data audit handler",
-    "quwoquan_ops/cli/gamma/check_public_ip_open_port.py": "远端 gamma 已退役，本地公网回源端口探针无活动入口",
-    "quwoquan_ops/cli/gamma/start_gamma_local_media_origin.sh": "远端 gamma 已退役，媒体公网回源旁路不再属于当前拓扑",
-    "quwoquan_ops/cli/gamma/start_public_ip_media_origin.sh": "远端 gamma 已退役，公网媒体回源包装脚本无活动入口",
-    "quwoquan_ops/cli/gamma/verify_gamma_environment_ready.py": "无活动入口的旧 gamma readiness 包装器",
-    "quwoquan_ops/cli/gamma/verify_gamma_public_gateway_routing.py": "无活动入口且带写请求副作用的旧 gamma readiness 探针",
-    "quwoquan_ops/cli/gamma/run_gamma_patrol_matrix_ci.py": "已被通用环境 Patrol runner 取代的旧 gamma 专用矩阵",
-    "quwoquan_ops/cli/beta/verify_ops_control_plane_smoke.sh": "无调用方且硬编码退役端口的旧 beta smoke",
-    "quwoquan_ops/gate/verify_artifacts_layout.py": "无调用方且只转发 root layout 的兼容门禁",
-    "quwoquan_ops/gate/scaffold/migrate_acceptance_test_evidence.py": "迁移已完成的一次性 acceptance 迁移器",
-    "quwoquan_service/scripts/install-hooks.sh": "已迁移到 Ops scaffold 的兼容转发壳",
-    "quwoquan_service/scripts/media/verify_gamma_curated_media_routes.py": "无调用方且已由 stackctl 媒体探针取代",
-    "quwoquan_service/scripts/media/media_slice_server.py": "只与旧 registry 互相引用的媒体切片孤岛",
-    "quwoquan_service/scripts/media/media_slice_registry.py": "只与旧 server 互相引用的媒体切片孤岛",
-    "quwoquan_service/scripts/content/run_content_import_mongo_test.sh": "未启用 mongo_integration build tag、实际不执行目标测试的孤立 runner",
-    "quwoquan_service/scripts/verify/verify_redis_keyspace.py": "未登记前缀分支直接 pass 的假绿门禁，已由 Redis router codegen --check 取代",
-    "quwoquan_service/scripts/recommendation/eval_interest_profile.py": "无规格、测试或调用方的旧单点评估脚本，闭环评估由 eval_content_flywheel_loop 承接",
-    "quwoquan_service/scripts/search/verify_search_service_module.sh": "根 Go module 构建与测试已由统一 service gate 承接的重复包装器",
-    "quwoquan_service/scripts/search/test_output_paths.py": "测试已迁入 Ops local_contract 测试树",
-    "quwoquan_service/services/assistant-service/configs/config.yaml": "已由 default + environment 配置单轨取代",
-    "quwoquan_service/services/content-service/configs/config.yaml": "已由 default + environment 配置单轨取代",
-    "quwoquan_service/services/entity-service/configs/config.yaml": "已由 default + environment 配置单轨取代",
-    "quwoquan_service/services/integration-service/configs/config.yaml": "已由 default + environment 配置单轨取代",
-    "quwoquan_service/services/platform-ops-service/configs/config.yaml": "已由 default + environment 配置单轨取代",
-    "quwoquan_service/services/product-ops-service/configs/config.yaml": "已由 default + environment 配置单轨取代",
-    "quwoquan_service/services/search-service/configs/config.yaml": "已由 default + environment 配置单轨取代",
-    "quwoquan_service/services/tag-service/configs/config.yaml": "已由 default + environment 配置单轨取代",
-    "quwoquan_service/services/user-service/configs/config.yaml": "已由 default + environment 配置单轨取代",
-    "specs/feature-tree/runtime/runtime-media/gamma-local-origin-runbook.md": "描述已退役的 ECS gamma 公网回源旁路",
-    "specs/feature-tree/discovery-content/content-type-framework/content-unification-admission-gate-checklist.md": "已完成的历史执行清单，不属于特性树正式 spec/design/acceptance 文档",
-    "quwoquan_ops/environments/workflow_consolidation_plan.md": "已被 CI/CD 端到端设计取代，且仍描述不存在的远端 gamma workflows",
-    "specs/changelog/CR-20260330-010-mock-isolation-implementation-wave.md": "非规范 Markdown CR 副本，且声明的 YAML 真相源从未存在",
-    "specs/feature-tree/02_JOURNEY_SCENARIO_MIGRATION_GUIDE.md": "描述已废止的树内计划文档迁移模型",
-    "specs/feature-tree/03_PROFILE_HOMEPAGE_REDESIGN_MIGRATION_SAMPLE.md": "已完成的迁移样板，仍以废止的树内计划文档为目标",
-    "specs/feature-tree/recommendation-platform/preconditions.md": "Create 阶段历史清单，重复 spec/acceptance 且引用已废止 tasks",
-    "specs/feature-tree/recommendation-platform/rec-model-service/readiness.md": "历史就绪清单，重复 L3 spec/acceptance 且包含旧接口口径",
-    "specs/feature-tree/runtime/runtime-recommendation/推荐系统八期审计规划.plan.md": "历史会话计划文件，不属于正式特性树文档",
-    "specs/feature-tree/runtime/tree.yaml": "已退役的第二套特性树镜像，canonical tree_index 已完整承接",
-    "specs/feature-tree/assistant-run-learning/tree.yaml": "已退役的旧五层特性树镜像",
-    "specs/feature-tree/chat-conversation/tree.yaml": "已退役的旧五层特性树镜像",
-    "specs/feature-tree/circle-community/tree.yaml": "已退役的旧五层特性树镜像",
-    "specs/feature-tree/discovery-content/tree.yaml": "已退役的旧五层特性树镜像",
-    "specs/feature-tree/gateway-orchestrator-foundation/tree.yaml": "已退役的旧五层特性树镜像",
-    "specs/feature-tree/global-search-experience/tree.yaml": "已退役的旧五层特性树镜像",
-    "specs/feature-tree/platform-ops-governance/tree.yaml": "已退役的旧五层特性树镜像",
-    "specs/feature-tree/product-ops-growth/tree.yaml": "已退役的旧五层特性树镜像",
-    "specs/feature-tree/user-identity-profile-relationship/tree.yaml": "已退役的旧五层特性树镜像",
-    "specs/feature-tree/experience_coverage_standard.md": "无消费者的旧体验覆盖说明，正式验收已由特性树 acceptance 承接",
-    "specs/feature-tree/runtime/runtime-messaging/reliable-async-task-channel/self_check.md": "已完成的历史自检清单，不属于正式特性树文档",
-    "specs/feature-tree/runtime/runtime-client-foundation/user_domain_dynamic_audit.md": "无消费者的历史审计快照",
-    "specs/feature-tree/runtime/runtime-client-foundation/map-typing-m4-chat-user-rtc-status.md": "无消费者的历史状态快照",
-    "docs/intersection-unification-plan.md": "无消费者的旧执行计划，当前规格已进入 canonical feature tree",
-    "docs/exception-observability-rollout.md": "无消费者且保留已退役 mock/remote 双轨的历史 rollout 文档",
-    "docs/user_facing_prompt_backlog.md": "已解决的第二套 backlog，长期风险只允许进入正式风险清单",
-    "specs/gates/environment_noise_cleanup_inventory.md": "已完成且无消费者的历史清理 inventory",
-    "specs/gates/phase2_acceptance.md": "无消费者的旧 phase 验收凭证，不属于当前三层测试模型",
-    "specs/gates/phase3_acceptance.md": "无消费者的旧 phase 验收凭证，不属于当前三层测试模型",
-    "specs/gates/notification_service_seed_gap.md": "与当前已落地 notification-service 冲突的历史缺口说明",
-    "specs/gates/session_b_current_governance.md": "无消费者的历史会话治理快照",
-    "specs/gates/metadata_client_codegen_pr_workflow.md": "无消费者的历史 PR 工作流说明",
-    "specs/gates/alpha_beta_contract_seed_sessions.md": "仅与两份旧 Alpha/Beta 会话说明互引的退役执行记录",
-    "specs/gates/assistant_alpha_beta_real_chain_spec.md": "已由四环境 seed manifest、正式 acceptance 与 runtime smoke 取代",
-    "specs/gates/business_alpha_beta_db_seed_spec.md": "已由四环境 seed manifest、正式 acceptance 与三层测试策略取代",
-    "quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media/portrait_legacy_city_01.jpg": "与 archived 原始素材同哈希且无 source catalog 消费者",
-    "quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media/portrait_legacy_design_01.jpg": "与 archived 原始素材同哈希且无 source catalog 消费者",
-    "quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media/portrait_legacy_food_01.jpg": "与 archived 原始素材同哈希且无 source catalog 消费者",
-    "quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media/portrait_legacy_lifestyle_01.jpg": "与 archived 原始素材同哈希且无 source catalog 消费者",
-    "quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media/portrait_legacy_photography_01.jpg": "与 archived 原始素材同哈希且无 source catalog 消费者",
-    "quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media/portrait_legacy_travel_01.jpg": "与 archived 原始素材同哈希且无 source catalog 消费者",
-    "quwoquan_service/runtime/agentpack/types.go": "仅承载已废止 agent_task_pack 的死类型，无生产调用方",
-}
-
-REVIEW_REQUIRED_PATHS: dict[str, str] = {}
-
-RETAINED_PATHS = {
-    "quwoquan_service/services/rec-model-service/scripts/requirements.txt": "训练、评估与样本处理 lane 的独立依赖清单，活动 CI 和训练镜像均显式消费",
-    "quwoquan_ops/backup/pg_backup.sh": "宿主机 PostgreSQL 备份运维入口，保留环境变量注入和保留期清理能力",
-    "quwoquan_ops/backup/mongo_backup.sh": "宿主机 MongoDB 备份运维入口，保留环境变量注入和保留期清理能力",
-    "specs/gates/v6_git_branch_cleanup_decisions.md": "CR-20260531-028 直接引用的远程分支删除与可恢复 SHA 历史证据",
-    "quwoquan_service/scripts/search/search_load_benchmark.py": "搜索容量验收仍在 feature-tree spec/acceptance 中声明的人工压测入口",
-    "quwoquan_service/scripts/search/search_rollback_rehearsal.py": "搜索故障注入与恢复的已登记运维演练入口",
-    "quwoquan_service/scripts/search/verify_search_local_gamma_capacity.py": "R-S06-S-1 已登记的 gamma-local 容量与可重复性验证入口",
-}
 
 CACHE_SEGMENTS = {
     ".dart_tool",
@@ -344,15 +238,6 @@ def _iter_inventory(
     for path in paths:
         status = statuses.get(path, "  ")
         category, reason = _category(path, status, path in tracked)
-        if path in HIGH_CONFIDENCE_PATHS and status in {"  ", "??", "!!"}:
-            category = "high_confidence_retire"
-            reason = HIGH_CONFIDENCE_PATHS[path]
-        elif not status.strip() and path in REVIEW_REQUIRED_PATHS:
-            category = "review_required_candidate"
-            reason = REVIEW_REQUIRED_PATHS[path]
-        elif not status.strip() and path in RETAINED_PATHS:
-            category = "retained_operational_or_lane_dependency"
-            reason = RETAINED_PATHS[path]
 
         disk_path = ROOT / path
         size = None
@@ -407,10 +292,7 @@ def _write_report(
 
     candidates: list[dict[str, object]] = []
     for record in records:
-        if record["category"] not in {
-            "high_confidence_retire",
-            "review_required_candidate",
-        }:
+        if record["category"] != "review_required_candidate":
             continue
         path = str(record["path"])
         candidates.append(
@@ -458,9 +340,6 @@ def _write_report(
         "category_counts": dict(sorted(by_category.items())),
         "category_bytes": dict(sorted(bytes_by_category.items())),
         "git_status_counts": dict(sorted(by_status.items())),
-        "high_confidence_candidates": [
-            item for item in candidates if item["category"] == "high_confidence_retire"
-        ],
         "review_required_candidates": [
             item for item in candidates if item["category"] == "review_required_candidate"
         ],
@@ -533,8 +412,8 @@ def main() -> int:
                 if output_dir.is_relative_to(ROOT)
                 else str(output_dir),
                 "recordCount": len(records),
-                "highConfidenceCount": sum(
-                    record["category"] == "high_confidence_retire"
+                "reviewRequiredCount": sum(
+                    record["category"] == "review_required_candidate"
                     for record in records
                 ),
                 "wipCount": sum(

@@ -97,7 +97,8 @@ func (j DataContentJob) payload(idempotencyKey string) map[string]string {
 // DataContentFleet 复用 runtime/reliabletask 的 Store/ReadyIndex/Worker，
 // 不在 data 仓再实现 Mongo/Redis 状态机。
 type DataContentFleet struct {
-	Store          Store
+	Store          DataContentExecutionStore
+	ExecutionID    string
 	Ready          ReadyIndex
 	WorkerID       string
 	LeaseTTL       time.Duration
@@ -107,9 +108,55 @@ type DataContentFleet struct {
 	Now            func() time.Time
 }
 
+// DataContentExecutionStore is the execution-scoped ReliableTask boundary for
+// Data content work. A content worker must never dispatch or re-index another
+// execution merely because its outbox happens to be due at the same time.
+type DataContentExecutionStore interface {
+	Store
+	DispatchDataContentExecution(
+		ctx context.Context,
+		executionID string,
+		now time.Time,
+		limit int,
+	) ([]ReliableAsyncTask, error)
+	ListReadyDataContentExecution(
+		ctx context.Context,
+		executionID string,
+		limit int,
+		now time.Time,
+	) ([]ReliableAsyncTask, error)
+	PurgeDataContentExecution(
+		ctx context.Context,
+		executionID string,
+	) (DataContentExecutionPurgeResult, error)
+}
+
+// DataContentExecutionPurgeResult reports only records owned by one discarded
+// execution. It is intentionally not a retention policy or a global cleanup.
+type DataContentExecutionPurgeResult struct {
+	TaskIDs         []string
+	TasksDeleted    int64
+	OutboxesDeleted int64
+}
+
+func (f DataContentFleet) executionID() (string, error) {
+	executionID := strings.TrimSpace(f.ExecutionID)
+	if executionID == "" {
+		return "", fmt.Errorf("data content fleet executionId is required")
+	}
+	return executionID, nil
+}
+
 func (f DataContentFleet) Declare(ctx context.Context, job DataContentJob) (TaskOutboxRecord, error) {
 	if f.Store == nil {
 		return TaskOutboxRecord{}, ErrStoreRequired
+	}
+	executionID, err := f.executionID()
+	if err != nil {
+		return TaskOutboxRecord{}, err
+	}
+	if strings.TrimSpace(job.ExecutionID) != executionID {
+		return TaskOutboxRecord{}, fmt.Errorf("data content job executionId does not match fleet execution")
 	}
 	key, err := job.ValidateIdentity()
 	if err != nil {
@@ -135,8 +182,29 @@ func (f DataContentFleet) Declare(ctx context.Context, job DataContentJob) (Task
 }
 
 func (f DataContentFleet) Dispatch(ctx context.Context, limit int) ([]ReliableAsyncTask, error) {
-	dispatcher := Dispatcher{Store: f.Store, Ready: f.Ready, Now: f.Now}
-	return dispatcher.DispatchDue(ctx, limit)
+	if f.Store == nil {
+		return nil, ErrStoreRequired
+	}
+	executionID, err := f.executionID()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	if f.Now != nil {
+		now = f.Now().UTC()
+	}
+	tasks, err := f.Store.DispatchDataContentExecution(ctx, executionID, now, limit)
+	if err != nil {
+		return nil, err
+	}
+	if f.Ready != nil {
+		for _, task := range tasks {
+			if err := f.Ready.EnqueueReadyOrMerge(ctx, task); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return tasks, nil
 }
 
 // RecoverAuditedDeadJobs revives only request-selected dead tasks. The
@@ -190,13 +258,17 @@ func (f DataContentFleet) ReconcileReadyIndex(ctx context.Context, limit int) (i
 	if f.Ready == nil {
 		return 0, nil
 	}
+	executionID, err := f.executionID()
+	if err != nil {
+		return 0, err
+	}
 	now := time.Now().UTC()
 	if f.Now != nil {
 		now = f.Now().UTC()
 	}
-	tasks, err := f.Store.ListReadyTasks(
+	tasks, err := f.Store.ListReadyDataContentExecution(
 		ctx,
-		[]string{DataContentTaskType},
+		executionID,
 		limit,
 		now,
 	)

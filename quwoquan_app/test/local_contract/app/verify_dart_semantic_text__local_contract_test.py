@@ -82,6 +82,21 @@ class VerifyDartSemanticTextTest(unittest.TestCase):
             )
         )
 
+    def test_generated_metadata_is_outside_visual_token_scan(self) -> None:
+        lib_root = "/repo/quwoquan_app/lib"
+        self.assertTrue(
+            self.verifier.should_skip(
+                f"{lib_root}/application/content/media/generated/policy.g.dart",
+                lib_root,
+            )
+        )
+        self.assertFalse(
+            self.verifier.should_skip(
+                f"{lib_root}/ui/content/page.dart",
+                lib_root,
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

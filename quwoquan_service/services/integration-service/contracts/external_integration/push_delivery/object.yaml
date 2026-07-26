@@ -1,0 +1,23 @@
+kind: external_reference
+description: 'ExternalInteraction 的强类型来电 push delivery 引用。它不拥有独立 transport
+
+  operation 或 token 生命周期；worker 只在调用 user-service secret reader 后，
+
+  将一次内存 token 交给 APNs VoIP/FCM provider。
+
+  '
+identity:
+  fields:
+  - endpointRef
+  - deliveryKey
+  version_source: external
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: external_port
+relationships: []
+capabilities:
+- reliable_async
+- auditable
+taggable: false
+vector_enabled: false

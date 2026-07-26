@@ -14,7 +14,33 @@ func readShared(path string) (*sharedTypes, error) {
 
 func readFields(path string) (*fieldsFile, error) {
 	var parsed fieldsFile
-	return &parsed, decodeMetadataDocument(path, &parsed)
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
+		return &parsed, err
+	}
+	if parsed.Entities == nil {
+		parsed.Entities = map[string]entityDef{}
+	}
+	for name, definition := range parsed.Types {
+		parsed.Entities[name] = definition
+	}
+	if len(parsed.Fields) > 0 {
+		objectName := filepath.Base(filepath.Dir(path))
+		parsed.Entities[objectTypeName(objectName)] = entityDef{
+			Fields: parsed.Fields,
+		}
+	}
+	return &parsed, nil
+}
+
+func objectTypeName(value string) string {
+	parts := strings.Split(value, "_")
+	for index, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[index] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	return strings.Join(parts, "")
 }
 
 func readService(path string) (*serviceFile, error) {
@@ -132,15 +158,16 @@ func collectProjectionReadModelDartClass(metadataDir string) (map[string]string,
 func collectDomainServiceRoutes(metadataDir string) (map[string][]routeDef, error) {
 	grouped := map[string][]routeDef{}
 	seen := map[string]bool{}
-	for _, path := range metadataDocumentPaths("", "/service.yaml") {
+	for _, path := range metadataDocumentPaths("", "/operations.yaml") {
 		service, readErr := readService(path)
 		if readErr != nil {
 			return nil, readErr
 		}
-		domain := strings.TrimSpace(service.Service.Domain)
-		if domain == "" {
+		relative, relErr := filepath.Rel(metadataDir, path)
+		if relErr != nil || len(strings.Split(filepath.ToSlash(relative), "/")) < 4 {
 			continue
 		}
+		domain := strings.Split(filepath.ToSlash(relative), "/")[0]
 		for _, route := range service.APIRoutes {
 			if strings.TrimSpace(route.Operation) == "" || strings.TrimSpace(route.Path) == "" {
 				continue
@@ -196,19 +223,18 @@ func readUserDomainErrors(metadataDir string) (*errorsFile, error) {
 // 与 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py 及
 // quwoquan_service/scripts/verify/verify_error_recovery_alignment.py 的列表保持一致。
 func contentDomainErrorsPaths(metadataDir string) []string {
-	contentDir := filepath.Join(metadataDir, "content")
 	return []string{
-		filepath.Join(contentDir, "post", "errors.yaml"),
-		filepath.Join(contentDir, "comment", "errors.yaml"),
-		filepath.Join(contentDir, "content_reaction", "errors.yaml"),
-		filepath.Join(contentDir, "deleted_post_tombstone", "errors.yaml"),
-		filepath.Join(contentDir, "filter_catalog_release", "errors.yaml"),
-		filepath.Join(contentDir, "media_asset", "errors.yaml"),
-		filepath.Join(contentDir, "media_original_access_fact", "errors.yaml"),
-		filepath.Join(contentDir, "media_upload_session", "errors.yaml"),
-		filepath.Join(contentDir, "outbound_share_fact", "errors.yaml"),
-		filepath.Join(contentDir, "post_moderation_case", "errors.yaml"),
-		filepath.Join(contentDir, "report", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "post", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "comment", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "content_reaction", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "deleted_post_tombstone", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "media", "filter_catalog_release", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "media", "media_asset", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "media", "media_original_access_fact", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "media", "media_upload_session", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "outbound_share_fact", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "trust_safety", "post_moderation_case", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "trust_safety", "report", "errors.yaml"),
 	}
 }
 
@@ -222,9 +248,51 @@ func readPrivacy(path string) (*privacyFile, error) {
 	return &parsed, decodeMetadataDocument(path, &parsed)
 }
 
-func readUIConfig(path string) (*uiConfigFile, error) {
+func readUIConfig(
+	path string,
+	requireOnboardingInterestCatalog bool,
+) (*uiConfigFile, error) {
 	var parsed uiConfigFile
-	return &parsed, decodeMetadataDocument(path, &parsed)
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
+		return nil, err
+	}
+	catalog := parsed.OnboardingInterestCatalog
+	if !requireOnboardingInterestCatalog &&
+		strings.TrimSpace(catalog.Version) == "" &&
+		strings.TrimSpace(catalog.TaxonomyReleaseID) == "" &&
+		catalog.MinSelectionCount == 0 &&
+		catalog.MaxSelectionCount == 0 &&
+		len(catalog.Dimensions) == 0 {
+		return &parsed, nil
+	}
+	if strings.TrimSpace(catalog.Version) == "" ||
+		strings.TrimSpace(catalog.TaxonomyReleaseID) == "" ||
+		catalog.MinSelectionCount <= 0 ||
+		catalog.MaxSelectionCount < catalog.MinSelectionCount ||
+		len(catalog.Dimensions) == 0 {
+		return nil, fmt.Errorf(
+			"onboarding_interest_catalog requires version, taxonomy_release_id, valid selection bounds, and dimensions",
+		)
+	}
+	dimensionIDs := make(map[string]struct{}, len(catalog.Dimensions))
+	for _, dimension := range catalog.Dimensions {
+		if strings.TrimSpace(dimension.ID) == "" ||
+			strings.TrimSpace(dimension.TagRef) == "" ||
+			dimension.MinSelections < 0 ||
+			dimension.MaxSelections < dimension.MinSelections {
+			return nil, fmt.Errorf(
+				"onboarding_interest_catalog dimension requires id/tag_ref and valid selection bounds",
+			)
+		}
+		if _, exists := dimensionIDs[dimension.ID]; exists {
+			return nil, fmt.Errorf(
+				"onboarding_interest_catalog dimension id %q is duplicated",
+				dimension.ID,
+			)
+		}
+		dimensionIDs[dimension.ID] = struct{}{}
+	}
+	return &parsed, nil
 }
 
 func readContentPublicationPolicy(

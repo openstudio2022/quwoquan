@@ -1,6 +1,6 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 /// Post 列表预览组件。
 ///
@@ -105,13 +105,14 @@ class PostPreviewListTile extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       if (_hasCover)
-                        CachedNetworkImage(
+                        AppCachedNetworkImage(
                           imageUrl: coverUrl,
                           fit: BoxFit.cover,
-                          placeholder: (context, url) => ColoredBox(
+                          cdnPreset: CdnImagePreset.thumbnail,
+                          placeholder: ColoredBox(
                             color: fgSecondary.withValues(alpha: 0.12),
                           ),
-                          errorWidget: (context, url, error) => ColoredBox(
+                          errorWidget: ColoredBox(
                             color: fgSecondary.withValues(alpha: 0.12),
                             child: Icon(
                               CupertinoIcons.photo,

@@ -1,137 +1,170 @@
-# L1 规格：群组入口与圈子内核（v3）
+# L1 Domain Service：圈子与群组社区 (`circle-community`)
 
-## 背景与动机
+> 一句话定位：让用户围绕主题、组织或具体事物发现并加入圈子，在圈内参与内容、群组和成员协作。
 
-当前产品在“圈子 / 群 / 学校 / 公司 / 具体事物”之间存在三类认知裂缝：
+## 1. 目标与用户价值
 
-1. **全局入口裂缝**：首页和搜索仍以“圈子”作为统一入口，但学校、院系、班级、公司、部门并不天然适合被用户理解为圈子。
-2. **详情模板裂缝**：现有详情页默认只有一种兴趣社区模板，无法同时承接兴趣型关系沉淀与组织型关系沉淀。
-3. **参与方式裂缝**：公开内容、成员归属、群内互动与资料沉淀边界不清，用户难以理解“先加入哪里、再去哪里交流、发布内容会出现在哪里”。
+让用户以清晰的圈子、组织节点与群组边界完成发现、加入、内容参与和成员协作，并保持圈子主页、默认群与共享主页之间的唯一关系语义。
 
-本次 PRD 的目标，是把产品冻结为一套统一的“群组”入口与“圈子内核”：
+## 2. 领域边界
+
+### 本领域拥有
+
+- 拥有 `Circle`、`CircleMembership`、圈子分区、圈内活动、圈子文件以及圈子与群单元绑定关系的生命周期与写入决定权。
+- 只能通过本领域公开 command 修改其拥有事实。
+
+### 本领域不拥有
+
+- 不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
+- 不复制 metadata 中的字段、path、错误码和 wire 语义。
+
+### 上下游协作
+
+- 上游：AppRoot Journey 与公开输入事实。
+- 下游：直接 L2 能力以及协作 L1 的公开结果。
+- 跨域写入：目标领域公开 command；禁止直写目标存储。
+- 跨域读取：目标领域公开 query/projection。
+
+## 3. Journey / Scenario 职责
+
+- [`JNY-004 / SCN-001`](../spec.md#scn-001)
+  - 本领域负责：在“写文字创建、可靠发布与结果回流”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
+  - 进入条件：`user-identity-profile-relationship` 已交付其公开结果。
+  - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `runtime` 继续处理。
+  - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
+- [`JNY-004 / SCN-002`](../spec.md#scn-002)
+  - 本领域负责：在“照片创建、像素编辑、原图可靠上传与发布回流”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
+  - 进入条件：`user-identity-profile-relationship` 已交付其公开结果。
+  - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `runtime` 继续处理。
+  - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
+- [`JNY-004 / SCN-003`](../spec.md#scn-003)
+  - 本领域负责：在“视频创建、转码处理、发布与结果回流”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
+  - 进入条件：`user-identity-profile-relationship` 已交付其公开结果。
+  - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `runtime` 继续处理。
+  - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
+- [`JNY-005 / SCN-011`](../spec.md#scn-011)
+  - 本领域负责：在“全局搜索查询与筛选”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
+  - 进入条件：`discovery-content` 已交付其公开结果。
+  - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `chat-conversation` 继续处理。
+  - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
+- [`JNY-007 / SCN-013`](../spec.md#scn-013)
+  - 本领域负责：在“私建群、圈子群、组织节点群与主页相关群入口”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
+  - 进入条件：`chat-conversation` 已交付其公开结果。
+  - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `shared-homepage-network` 继续处理。
+  - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
+- [`JNY-008 / SCN-014`](../spec.md#scn-014)
+  - 本领域负责：在“实体主页到圈子、组织节点、群单元与会话协作”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
+  - 进入条件：用户发起“实体主页到圈子、组织节点、群单元与会话协作”且身份、输入与权限前置成立。
+  - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `shared-homepage-network` 继续处理。
+  - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
+- [`JNY-010 / SCN-023`](../spec.md#scn-023)
+  - 本领域负责：在“对象对外分享分发”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
+  - 进入条件：`user-identity-profile-relationship` 已交付其公开结果。
+  - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `shared-homepage-network` 继续处理。
+  - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
+- [`JNY-011 / SCN-027`](../spec.md#scn-027)
+  - 本领域负责：在“附近同趣·结伴同行·线下局”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
+  - 进入条件：用户发起“附近同趣·结伴同行·线下局”且身份、输入与权限前置成立。
+  - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `recommendation-platform` 继续处理。
+  - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
+
+## 4. 业务能力
+
+- [`activity-member-governance`](./activity-member-governance/spec.md)：让圈子 owner 管理圈子生命周期与成员角色，并让成员以稳定分页读取圈内动态。
+- [`circle-client-platform`](./circle-client-platform/spec.md)：统一圈子端侧领域模型、Repository 边界与页面状态
+- [`circle-collaboration-tools`](./circle-collaboration-tools/spec.md)：以圈子或组织主页内的群为协作单元，统一交流、资料与公告
+- [`circle-experience-redesign`](./circle-experience-redesign/spec.md)：按群组类型提供一致的发现、详情与协作入口
+- [`circle-management-and-stats`](./circle-management-and-stats/spec.md)：为圈子治理与运营提供权限受控的处置、固定口径指标和可下钻运营视图。
+- [`in-circle-recommendation-loop`](./in-circle-recommendation-loop/spec.md)：把圈内行为事实转为权限受控的候选排序，并将曝光与反馈归因回评估链路。
+
+## 5. 领域要求
+
+<a id="req-001"></a>
+### REQ-001 circle community 领域边界验收
+
+- 领域边界、上下游依赖、工程映射和服务治理清晰。
+- 9 个业务对象（circle 含 section_config、membership、group、group_membership、file、post_placement、behavior_fact、search_item_view）按对象 packet 治理：state/receipt/outbox 同事务、命名迁移服务端 CAS、no-op receipt 持久化、If-Match 仅 group/file 快照覆盖两处（封闭清单）。
+- Circle 聚合本体命令仅圈主/管理员（BOLA fail-closed）；展示位（pin/feature）唯一写入口是 CirclePostPlacement，feed 读模型由 placement outbox 投影回写。
+
+<a id="req-002"></a>
+### REQ-002 圈子发现聚合读模型契约
+
+- ListCircleDiscoveryFeed 是圈子频道唯一聚合读接口；服务端完成 category、subCategory、scope、可见性和成员范围过滤，App 不得 listCircles 后逐圈拉取 feed。
+- 默认 recommended 首屏只有一次 discovery-feed 请求；mine 仅由已认证 Persona 主动切换后按需请求，匿名 mine 不返回成员数据。
+- CircleDiscoveryFeedPageSlice 与 CircleFeedPageSlice 均为 metadata 生成的强类型 Slice；排序、keyset cursor、同分 tie-breaker、placement 归属与必填字段可由 ContractGraph 验证。
+- discovery feed 读缓存 TTL 为 60 秒，缓存键按 persona、scope、category、subCategory、sort、cursor 隔离；Circle、Membership、Post、Placement 变化会失效相关切片。
+- 聚合查询具有索引/explain 与 10k/100k 数据集 P95 不超过 800ms 的证据，不得以单 HTTP 请求掩盖存储 N+1。
+
+<a id="req-003"></a>
+### REQ-003 全局入口层统一叫 群组
 
 - 全局入口层统一叫 `群组`
-- 详情页层按类型落为 `圈子` 或 `学校 / 院系 / 班级 / 公司 / 部门`
-- 群组、组织主页与群共享同一套内容、成员、群内核
-- 具体事物只作为内容可关联对象，不与群组入口并列教育用户
-
-## 目标用户
-
 - **群组发现者**：希望在一个统一入口里找到兴趣圈子、学校、班级、公司或部门等可加入的关系主页。
-- **群组成员**：在群组内消费公开内容、加入合适的群、获取资料并沉淀关系。
-- **群组管理者**：包括圈主 / 圈管、负责人 / 管理员，需要管理成员、群结构、首页模块和内容秩序。
-- **内容发布者**：在群组内发布笔记、作品、提问或口碑，并在需要时关联具体事物。
-
-## 核心定义
-
 - **群组**：首页与搜索中的统一一级入口，表示所有“可加入、可沉淀关系”的主页集合。
-- **圈子**：群组中的兴趣型详情页模板。
-- **组织主页**：群组中的组织型详情页模板，前台直接显示为学校、院系、班级、公司、部门等具体名称。
-- **群**：圈子或组织主页内可加入的子单元，包含聊天、资料、公告等能力；聊天只是群的一种能力。
 - **内容**：群组层的公开表达单元，统一动作叫 `发布内容`。
-- **内容类型**：`笔记 / 作品 / 提问 / 口碑`。
-- **表达形式**：`图文笔记 / 视频 / 文章`。
-- **具体事物**：内容可关联的具体类目对象；前台永远显示为学校、车型、酒店、景点、餐厅等具体名称，不显示“实体”字样。
-
-## 功能范围
-
-### R1：群组入口与统一发现
-
 - R1.1：首页一级入口与全局搜索一级筛选统一从 `圈子` 收口为 `群组`。
-- R1.2：群组列表和搜索结果同时容纳两类详情模板：`圈子` 与 `组织主页`。
 - R1.3：群组卡片使用统一信息骨架（名称、类型徽章、简介、成员数、最近活跃、是否已加入）。
 - R1.4：群组分类与推荐继续由统一领域标签体系驱动，兼容现有 circle taxonomy 与推荐链路。
-- R1.5：群组内唤起助理时，继续通过所属领域上下文做路由，不因模板差异造成断裂。
-
-### R2：模板化详情页
-
-- R2.1：`通用圈子模板` 使用 `首页 / 内容 / 群 / 成员` 四个页签。
-- R2.2：`组织主页模板` 使用 `首页 / 内容 / 组织 / 成员` 四个页签。
-- R2.3：通用圈子首页强调公告、内容精选、群入口、活跃成员与可选的具体事物摘要卡。
-- R2.4：组织主页首页强调官方公告、找到我的组织、组织结构入口、内容精选与成员入口。
-- R2.5：组织节点（如院系、班级、部门）底层可复用群能力，但前台优先显示为具体节点名称，不强制露出“群”字。
-
-### R3：内容模型与发布
-
 - R3.1：用户在群组内的统一动作叫 `发布内容`，不再全局统一叫“发帖”。
-- R3.2：一级内容类型冻结为 `笔记 / 作品 / 提问 / 口碑`。
-- R3.3：基础表达形式冻结为 `图文笔记 / 视频 / 文章`；总添加入口继续按 `相册 / 视频 / 长文` 起步。
-- R3.4：全局添加入口和群组内入口共用同一套发布页，只改变默认上下文。
 - R3.5：`口碑` 必须绑定 1 个主具体事物；`笔记 / 作品 / 提问` 可绑定也可不绑定具体事物。
-- R3.6：公开内容的主分发面在群组层，而不是群层；群层以交流、资料、公告为主，不作为公开内容主时间线。
-
-### R4：成员与角色
-
-- R4.1：群组成员关系至少区分 `访客 / 关注者 / 成员` 三层。
-- R4.2：圈子模板使用圈级角色 `圈主 / 圈管`。
-- R4.3：组织主页模板使用主页级角色 `负责人 / 管理员`。
 - R4.4：群级统一使用 `群主 / 群管`。
-- R4.5：圈级角色或组织级角色拥有上位治理权，但不自动等于所有群的群主或群管。
-- R4.6：组织型群组支持按节点授权的范围管理员，不要求管理员自动加入所有下级节点。
 
-### R5：群模型
+## 6. 领域验收
 
-- R5.1：群分为 `公共群` 与 `自建群` 两类。
-- R5.2：小型群组默认 1 个公共群；大型群组在 500 人限制下支持多个公共群。
-- R5.3：组织型群组优先通过组织节点承接扩容，而不是简单追加“大厅 2 / 大厅 3”。
-- R5.4：群内默认能力为 `交流 / 资料 / 公告`，后续可扩展活动等协作能力。
-- R5.5：成员默认加入 1 个公共群，可加入多个自建群。
-- R5.6：公共群由圈主 / 圈管或负责人 / 管理员治理，自建群由成员发起并由群主治理。
+<a id="dom-001"></a>
+### DOM-001 circle community 领域边界验收
 
-### R6：创建入口与生命周期
+- 条件：本领域收到有效输入且前置领域事实成立。
+- 可观察结果：领域边界、上下游依赖、工程映射和服务治理清晰。
+- 9 个业务对象（circle 含 section_config、membership、group、group_membership、file、post_placement、behavior_fact、search_item_view）按对象 packet 治理：state/receipt/outbox 同事务、命名迁移服务端 CAS、no-op receipt 持久化、If-Match 仅 group/file 快照覆盖两处（封闭清单）。
+- Circle 聚合本体命令仅圈主/管理员（BOLA fail-closed）
+- 展示位（pin/feature）唯一写入口是 CirclePostPlacement，feed 读模型由 placement outbox 投影回写。
+- 禁止结果：Circle↔MediaAsset 引用完整性由 tombstone 关系承载，不得声明不存在的 `MediaAssetDeleted` 消费者；hub 多圈发现 feed 只能使用有界并发扇出，聚合 API 变化必须先更新规格。
 
-- R6.1：群组创建入口来自首页群组入口、搜索空态、具体事物页关联创建入口、邀请链路。
-- R6.2：通用圈子支持轻量自助创建；组织主页优先走认领、申请开通或官方创建。
-- R6.3：建圈流程至少包含模板选择、基础信息、成员规则、群规则、内容规则、预览创建。
-- R6.4：生命周期冻结为 `草稿 / 开通 / 冷启动 / 成长 / 扩群治理 / 成熟运营 / 归档或转让`。
-- R6.5：组织主页生命周期在前期增加 `认领 / 身份校验 / 组织结构导入`。
+<a id="dom-002"></a>
+### DOM-002 圈子发现聚合读模型契约
 
-### R7：端云与平台基线延续
+- 条件：本领域收到有效输入且前置领域事实成立。
+- 可观察结果：ListCircleDiscoveryFeed 是圈子频道唯一聚合读接口
+- 服务端完成 category、subCategory、scope、可见性和成员范围过滤，App 不得 listCircles 后逐圈拉取 feed。
+- 默认 recommended 首屏只有一次 discovery-feed 请求
+- mine 仅由已认证 Persona 主动切换后按需请求，匿名 mine 不返回成员数据。
+- CircleDiscoveryFeedPageSlice 与 CircleFeedPageSlice 均为 metadata 生成的强类型 Slice
+- 排序、keyset cursor、同分 tie-breaker、placement 归属与必填字段可由 ContractGraph 验证。
+- discovery feed 读缓存 TTL 为 60 秒，缓存键按 persona、scope、category、subCategory、sort、cursor 隔离
+- Circle、Membership、Post、Placement 变化会失效相关切片。
+- 聚合查询具有索引/explain 与 10k/100k 数据集 P95 不超过 800ms 的证据，不得以单 HTTP 请求掩盖存储 N+1。
+- 禁止结果：CircleDiscoveryFeed 只读 Circle、CircleMembership、Post、CirclePostPlacement 的投影，不加载 Circle 聚合或维护第二套成员/内容事实。
+- GetCircleFeed 与 discovery feed 共用 CircleFeedItemView 的 placement/post 强类型表达
+- 不得以 Post.toMap 或动态 wire map 补展示字段。
 
-- R7.1：端侧继续遵循 `ui/circle/ -> cloud/services/circle/ -> contracts/metadata/social/circle/` 的分层与 Provider 约束。
-- R7.2：继续以 `CircleRepository` 与 `circle-service` 承载群组详情、内容、成员与群摘要的 typed contract。
-- R7.3：群组、群、成员角色与具体事物摘要的路径、surface、request context 必须保持 metadata 单一真相源。
-- R7.4：现有目录迁移、DTO 类型化、硬编码清理和契约测试要求继续有效。
+## 7. 工程归属
 
-## 不做什么（Out of Scope）
+- App：`quwoquan_app/lib/ui/circle`、`quwoquan_app/lib/cloud/services/circle`
+- Service：`quwoquan_service/services/circle-service`
+- 测试：
+  - `local_contract`：`quwoquan_service/services/circle-service/tests`
+  - `api_integration`：`quwoquan_service/services/circle-service/tests`
+  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
 
-- OS1：不做支付、交易闭环、群组广告投放或付费会员体系。
-- OS2：不做跨群组公开内容同步与搬运。
-- OS3：不做 IM 协议层实现；群交流继续依赖 chat 域能力。
-- OS4：不在本 L1 内定义具体事物的完整主数据、抓取、归一与展示模型。
-- OS5：不做在线文档协作、复杂文件版本管理。
+## 8. 开放事项
 
-## 约束
+<a id="open-001"></a>
+### OPEN-001 circle community 领域边界验收
 
-### 产品约束
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：领域边界、上下游依赖、工程映射和服务治理清晰。
+- 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
 
-- 首页和搜索的统一用户词必须是 `群组`。
-- `圈子` 只作为兴趣型详情页名称，不再作为全局总称。
-- 学校、院系、班级、公司、部门等组织型详情页前台直接显示具体名称，不强制包装成“圈子”。
-- 前台不出现“实体”字样；只显示具体类目名称。
-- 公开内容必须归群组层，群层不承接主公开时间线。
+<a id="open-002"></a>
+### OPEN-002 圈子发现聚合读模型契约
 
-### 业务约束
-
-- 公共群受 500 人限制约束，必须支持扩群或节点化分流。
-- 群的治理权限与圈级 / 组织级治理权限必须分层。
-- 群组关联具体事物时，只消费摘要，不拥有主档。
-- 领域标签对齐继续采用增量方案，兼容现有分类数据。
-
-### 技术约束
-
-- 群组分类与推荐继续由 metadata 驱动，禁止在 UI 或 Repository 手写第二套分类表。
-- 群成员同步与群摘要读取需通过 typed contract 治理，禁止长期停留在松散 `Map` 模型。
-- 所有 UI 代码禁止新增硬编码视觉字面量。
-
-## 验收重点
-
-详见 `acceptance.yaml`，核心维度：
-
-- A1~A2：端侧目录迁移与 Repository 基线继续有效。
-- A3：首页与搜索入口统一为 `群组`，并支持兴趣型圈子与组织主页混合发现。
-- A4：通用圈子模板与组织主页模板完成冻结。
-- A5：内容发布模型统一为 `发布内容 + 笔记/作品/提问/口碑`。
-- A6：群模型与圈级 / 组织级 / 群级角色分层成立。
-- A7~A8：端侧代码质量与云侧 typed contract 基线继续有效。
-- A9：同频发现推荐与群组入口口径保持一致。
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：ListCircleDiscoveryFeed 是圈子频道唯一聚合读接口；服务端完成 category、subCategory、scope、可见性和成员范围过滤，App 不得 listCircles 后逐圈拉取 feed。
+- 完成判定：`DOM-002` 对应行为满足且真实测试 `spec_ref` 有效

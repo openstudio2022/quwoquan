@@ -24,7 +24,7 @@ from content.source.research.source_quality import (
     _source_category,
 )
 from core.content_source_registry import homepage_core_source_limit
-from content.source.research.homepage_text_quality import _homepage_text_quality_issue
+from content.source.research.homepage_text_quality import assess_homepage_text_quality
 from content.source.research.text_match import _normalized_title, _text_mentions_entity
 
 def _sources_from_article_plan(path: Path) -> list[dict[str, Any]]:
@@ -104,12 +104,12 @@ def _verified_homepage_sources_from_source_units(
             source_text = text_path.read_text(encoding="utf-8", errors="ignore")
         except Exception:  # noqa: BLE001
             continue
-        issue = _homepage_text_quality_issue(
+        quality_verdict = assess_homepage_text_quality(
             source_text,
             entity_id,
             require_fact_ready=True,
         )
-        if issue:
+        if not quality_verdict.accepted:
             continue
         url = str(
             meta.get("canonicalUrl")
@@ -192,6 +192,7 @@ def _verified_article_sources_from_prior_plans(
     entity_id: str,
     *,
     entity_type: str,
+    vertical: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
     rejected_source_urls: set[str] | None = None,
     limit: int = 24,
@@ -237,6 +238,7 @@ def _verified_article_sources_from_prior_plans(
                 source,
                 entity_id=entity_id,
                 lane="article",
+                vertical=vertical,
                 entity_aliases=entity_aliases,
             )
             if not current_gate["passed"]:

@@ -13,9 +13,13 @@ import yaml
 APP_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = APP_ROOT.parent
 METADATA = REPO_ROOT / "quwoquan_service/contracts/metadata"
-EVENT_CATALOG = METADATA / "ops/event_record/event_catalog.yaml"
+PRODUCT_OPS_CONTRACT = (
+    REPO_ROOT
+    / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record"
+)
+EVENT_CATALOG = PRODUCT_OPS_CONTRACT / "event_catalog.yaml"
 GOLDEN_METRIC_CATALOG = (
-    METADATA / "ops/event_record/golden_metric_catalog.yaml"
+    PRODUCT_OPS_CONTRACT / "golden_metric_catalog.yaml"
 )
 APP_PAGES = METADATA / "_shared/app_pages.yaml"
 SLS_RESOURCES = (
@@ -387,7 +391,7 @@ def verify_experience_collection_wiring(errors: list[str]) -> None:
         errors,
     )
     require_source(
-        "quwoquan_service/services/product-ops-service/internal/application/telemetry_service.go",
+        "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application/telemetry_service.go",
         [
             'generated.EventContextExtensions["devicePlatform"]',
             "type EventRecordInput = generated.EventRecordInput",
@@ -395,7 +399,7 @@ def verify_experience_collection_wiring(errors: list[str]) -> None:
         errors,
     )
     require_source(
-        "quwoquan_service/services/product-ops-service/internal/generated/event_catalog.go",
+        "quwoquan_service/services/product-ops-service/generated/product_ops/event_record/event_catalog.go",
         [
             'out["recoveryAction"]',
             'out["detectionSource"]',

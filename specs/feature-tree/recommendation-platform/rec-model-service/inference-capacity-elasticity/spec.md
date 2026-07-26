@@ -1,26 +1,72 @@
-# L3 Story：inference-capacity-elasticity
+# L3 Story：推理容量弹性 (`inference-capacity-elasticity`)
 
-## 功能说明
+> 所属能力：[`recommendation-service`](../spec.md)
 
-rec-model-service 的商用并发容量与实时性工程：多进程、打分/特征缓存、跨请求合批、超时预算分层，以及与治理 guardrails 口径统一。当前单 Uvicorn worker + 紧超时导致频繁回退规则打分，无缓存/合批，难以承载商用 QPS。
+> Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
 
-## 范围
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-- 多进程：`uvicorn --workers` 或 gunicorn + uvicorn worker，按 CPU 核数水平扩容，替换单 worker。
-- 缓存：打分结果短 TTL 缓存（同候选 + 特征指纹）、特征缓存层。
-- 合批：可选跨请求 micro-batch coalescing，降低 numpy/LightGBM 调用次数。
-- 超时预算分层：feature/recall/model 预算与重试预算分离，避免一次重试挤占全预算导致大面积回退 rule。
+## 1. 用户价值
+
+作为消费推荐的用户或策略运营者，
+我希望guardrails 口径统一：`policy.yaml` guardrails `suggest_only` 与 `online_guardrail.py` 自动切流口径对齐，
+从而获得可解释且受治理的推荐结果。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- “推理容量弹性”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 多进程水平扩容与单进程 GIL 解除。
+- 打分/特征缓存与跨请求 micro-batch。
+- 超时预算分层与 guardrails 口径统一。
+- 不引入深度模型平台轨的服务拆分或 ANN 检索；P1 仅完成当前 recommendation-service 的容量工程最小集。
+- 深度模型平台轨。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 推理容量弹性
+
 - guardrails 口径统一：`policy.yaml` guardrails `suggest_only` 与 `online_guardrail.py` 自动切流口径对齐。
 
-## 非目标
+<a id="req-002"></a>
+### REQ-002 guardrails 口径统一：policy.yaml guardrails suggest_only 与 online_guardrail.py 自动切流口径对齐
 
-- 不引入深度模型平台轨的服务拆分或 ANN 检索；P1 仅完成当前 rec-model-service 的容量工程最小集。
-- 不引入深度模型平台轨（MMoE/PLE/双塔 ANN/IPS）。
+- guardrails 口径统一：`policy.yaml` guardrails `suggest_only` 与 `online_guardrail.py` 自动切流口径对齐。
 
-## 验收标准
+## 4. 契约引用
 
-- A1：服务可多进程水平扩容，单进程 GIL 不再是吞吐上限。
-- A2：打分/特征缓存命中可降低模型调用与尾延迟，缓存有 TTL 与失效策略。
-- A3：超时预算分层后 `model_fallback_rate` 不因单次重试大面积升高。
-- A4：guardrails `suggest_only` 与 `online_guardrail` 自动切流口径一致，无治理语义冲突。
-- A5：容量指标（QPS、P95/P99、fallback 率、缓存命中率、合批度）可观测并以 SLO 为真相源。
+- canonical：`quwoquan_service/services/content-service/observability/slo/recommendation_slo.yaml`
+- canonical：`quwoquan_service/services/recommendation-service/config/schema.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 推理容量弹性
+
+- GIVEN 消费推荐的用户或策略运营者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“推理容量弹性”对应的公开行为。
+- THEN guardrails 口径统一：`policy.yaml` guardrails `suggest_only` 与 `online_guardrail.py` 自动切流口径对齐。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`recommendation-service`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 推理容量弹性 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“推理容量弹性”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+
 import 'dart:io';
 import 'dart:convert';
 
@@ -180,6 +182,48 @@ void main() {
 
       final state = container.read(clientStateSyncOutboxProvider);
       expect(state.entries, isEmpty);
+    });
+
+    test('账号 closed 终态清除交互投影与 outbox 并停止旧 notifier 入队', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final outbox = container.read(clientStateSyncOutboxProvider.notifier);
+      container.read(userRelationshipStateProvider.notifier).seedFollowing(
+        const <String>['profile-closed'],
+      );
+      container
+          .read(postInteractionStateProvider.notifier)
+          .setLiked('post-closed', true, likeCount: 1);
+      outbox.enqueuePostLike(
+        postId: 'post-pending',
+        currentLiked: false,
+        isLiked: true,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      outbox.purgeForTerminalAccountClosure();
+      await clearClientInteractionStateForTerminalAccountClosure();
+      container.invalidate(userRelationshipStateProvider);
+      container.invalidate(postInteractionStateProvider);
+      container.invalidate(clientStateSyncOutboxProvider);
+
+      final box = Hive.box<String>('client_interaction_state');
+      expect(box, isEmpty);
+      expect(
+        container.read(userRelationshipStateProvider).followingSubAccountIds,
+        isEmpty,
+      );
+      expect(
+        container.read(postInteractionStateProvider).likedPostIds,
+        isEmpty,
+      );
+      expect(container.read(clientStateSyncOutboxProvider).entries, isEmpty);
+      outbox.enqueuePostLike(
+        postId: 'post-after-closed',
+        currentLiked: false,
+        isLiked: true,
+      );
+      expect(box, isEmpty);
     });
   });
 

@@ -11,9 +11,9 @@ from content.execution.identity import SelectionPolicy
 from content.execution.workspace import TARGET_SET_REF, write_frozen_target_set
 
 
-def write_selected_task(spec: dict[str, Any], report: dict[str, Any], *, force: bool) -> Path:
-    if store.spec_exists(spec["executionId"]) and not force:
-        raise FileExistsError(f"execution already exists: {spec['executionId']} (use --force)")
+def write_selected_task(spec: dict[str, Any], report: dict[str, Any]) -> Path:
+    if store.spec_exists(spec["executionId"]):
+        raise FileExistsError(f"execution already exists: {spec['executionId']}")
     spec_path = store.save_spec(spec)
     targets = (spec.get("scope") or {}).get("coverageTargets") or []
     source_ref = str(report.get("discoveryPath") or "").strip()
@@ -21,14 +21,14 @@ def write_selected_task(spec: dict[str, Any], report: dict[str, Any], *, force: 
         source_ref = Path(source_ref).resolve().relative_to(REPO_ROOT.resolve()).as_posix()
     except ValueError as exc:
         raise ValueError("target selection source must be inside the repository") from exc
-    target_set_path, target_set_sha256 = write_frozen_target_set(
+    target_set_path, target_set_digest = write_frozen_target_set(
         spec["executionId"],
         targets=targets,
         source_ref=source_ref,
     )
     report["selectionPolicy"] = SelectionPolicy.FROZEN.value
     report["targetSetRef"] = TARGET_SET_REF
-    report["targetSetSha256"] = target_set_sha256
+    report["targetSetDigest"] = target_set_digest
     remaining = [f"{target['entityType']}/{target['name']}" for target in targets]
     store.save_progress(store.init_progress(spec["executionId"], remaining=remaining))
     rows = []

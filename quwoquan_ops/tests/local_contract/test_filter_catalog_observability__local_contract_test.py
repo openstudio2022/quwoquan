@@ -14,8 +14,8 @@ DASHBOARD = (
 )
 METRICS = (
     ROOT
-    / "quwoquan_service/services/content-service/internal/infrastructure/content/"
-    "filter_catalog_release/observability/metrics.go"
+    / "quwoquan_service/services/content-service/internal/media/"
+    "filter_catalog_release/infrastructure/observability/metrics.go"
 )
 
 

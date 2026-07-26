@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 )
 
@@ -117,14 +118,36 @@ func (c *S3PresignClient) StatObject(ctx context.Context, bucket, key string) (*
 }
 
 func (c *S3PresignClient) PromoteObject(ctx context.Context, bucket, sourceKey, targetKey string, metadata map[string]string) error {
+	copyMetadata := make(map[string]string, len(metadata))
+	contentType := ""
+	for key, value := range metadata {
+		if strings.EqualFold(strings.TrimSpace(key), "content-type") {
+			contentType = strings.TrimSpace(value)
+			continue
+		}
+		copyMetadata[key] = value
+	}
+	if contentType == "" {
+		source, err := c.StatObject(ctx, bucket, sourceKey)
+		if err != nil {
+			return fmt.Errorf("s3 stat promotion source: %w", err)
+		}
+		if source == nil || !source.Exists {
+			return errors.New("s3 promotion source does not exist")
+		}
+		contentType = strings.TrimSpace(source.ContentType)
+	}
 	input := &s3.CopyObjectInput{
 		Bucket:            aws.String(bucket),
 		Key:               aws.String(targetKey),
 		CopySource:        aws.String(bucket + "/" + sourceKey),
 		MetadataDirective: "REPLACE",
 	}
-	if len(metadata) > 0 {
-		input.Metadata = metadata
+	if len(copyMetadata) > 0 {
+		input.Metadata = copyMetadata
+	}
+	if contentType != "" {
+		input.ContentType = aws.String(contentType)
 	}
 	_, err := c.client.CopyObject(ctx, input)
 	if err != nil {
@@ -174,6 +197,110 @@ func (c *S3PresignClient) DeleteObject(
 		return fmt.Errorf("s3 delete object: %w", err)
 	}
 	return nil
+}
+
+// DeletePrefix deletes every object below a tightly validated, service-owned
+// prefix. It is intentionally not part of PresignClient: callers that need
+// destructive prefix cleanup must explicitly opt into this stronger capability.
+func (c *S3PresignClient) DeletePrefix(
+	ctx context.Context,
+	bucket string,
+	prefix string,
+) error {
+	prefix = strings.Trim(strings.TrimSpace(prefix), "/")
+	if bucket == "" || prefix == "" {
+		return errors.New("s3 delete prefix requires bucket and prefix")
+	}
+	for {
+		listing, err := c.client.ListObjectsV2(
+			ctx,
+			&s3.ListObjectsV2Input{
+				Bucket:  aws.String(bucket),
+				Prefix:  aws.String(prefix + "/"),
+				MaxKeys: aws.Int32(1000),
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("s3 list prefix for deletion: %w", err)
+		}
+		if len(listing.Contents) == 0 {
+			return nil
+		}
+		objects := make(
+			[]s3types.ObjectIdentifier,
+			0,
+			len(listing.Contents),
+		)
+		for _, object := range listing.Contents {
+			if object.Key == nil || *object.Key == "" {
+				continue
+			}
+			objects = append(
+				objects,
+				s3types.ObjectIdentifier{Key: object.Key},
+			)
+		}
+		if len(objects) == 0 {
+			return errors.New(
+				"s3 list prefix returned objects without deletion keys",
+			)
+		}
+		deleted, deleteErr := c.client.DeleteObjects(
+			ctx,
+			&s3.DeleteObjectsInput{
+				Bucket: aws.String(bucket),
+				Delete: &s3types.Delete{
+					Objects: objects,
+					Quiet:   aws.Bool(true),
+				},
+			},
+		)
+		if deleteErr != nil {
+			return fmt.Errorf("s3 delete prefix objects: %w", deleteErr)
+		}
+		if len(deleted.Errors) != 0 {
+			return errors.New("s3 delete prefix objects was incomplete")
+		}
+		// Relist from the beginning after every batch. Continuation tokens
+		// address the pre-delete listing and can skip keys after that listing
+		// mutates; a fresh first page is the residual-proof deletion contract.
+	}
+}
+
+// HasObjectsWithPrefix is the read-back half of destructive prefix cleanup.
+// S3-compatible stores provide strongly consistent LIST semantics, so a true
+// result blocks the caller from marking cleanup complete.
+func (c *S3PresignClient) HasObjectsWithPrefix(
+	ctx context.Context,
+	bucket string,
+	prefix string,
+) (bool, error) {
+	prefix = strings.Trim(strings.TrimSpace(prefix), "/")
+	if bucket == "" || prefix == "" {
+		return false, errors.New(
+			"s3 prefix residual check requires bucket and prefix",
+		)
+	}
+	listing, err := c.client.ListObjectsV2(
+		ctx,
+		&s3.ListObjectsV2Input{
+			Bucket:  aws.String(bucket),
+			Prefix:  aws.String(prefix + "/"),
+			MaxKeys: aws.Int32(1),
+		},
+	)
+	if err != nil {
+		return false, fmt.Errorf(
+			"s3 list prefix for residual check: %w",
+			err,
+		)
+	}
+	for _, object := range listing.Contents {
+		if object.Key != nil && *object.Key != "" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // GetObject streams a stored object. The media-processing worker downloads

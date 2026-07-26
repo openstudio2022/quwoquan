@@ -147,6 +147,7 @@ def curated_sources_for_entity(
                     "finalUrl": src.get("finalUrl") or "",
                     "sourceKind": src.get("sourceKind") or "",
                     "sourceTitle": src.get("sourceTitle") or "",
+                    "qualifiedAuthorityTitle": src.get("qualifiedAuthorityTitle") or "",
                     "extractor": src.get("extractor") or "",
                     "policyRevision": src.get("policyRevision") or "",
                     "body": src.get("body", ""),

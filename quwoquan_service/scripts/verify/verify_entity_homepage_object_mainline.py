@@ -39,11 +39,11 @@ FORBIDDEN_APP = {
 }
 
 REQUIRED_FILES = (
-    "quwoquan_service/services/entity-service/internal/domain/homepage/model/homepage.go",
-    "quwoquan_service/services/entity-service/internal/domain/homepage/ports/aggregate_store.go",
-    "quwoquan_service/services/entity-service/internal/infrastructure/homepage/persistence/mongo_homepage_store.go",
-    "quwoquan_service/services/entity-service/internal/domain/homepage_claim_request/model/homepage_claim_request.go",
-    "quwoquan_service/services/entity-service/internal/domain/homepage_status_report/model/homepage_status_report.go",
+    "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model/homepage.go",
+    "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports/aggregate_store.go",
+    "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/mongo_homepage_store.go",
+    "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/domain/model/homepage_claim_request.go",
+    "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/domain/model/homepage_status_report.go",
     "quwoquan_app/lib/ui/entity/models/homepage_type_labels.dart",
 )
 

@@ -1,6 +1,6 @@
 /// 圈子全局搜索视图 DTO。
 ///
-/// 字段对齐：contracts/metadata/social/circle/fields.yaml
+/// 字段对齐：contracts/metadata/circle/circle/circle/fields.yaml
 /// `CircleSearchItemView` / `CircleFacetBucketView` / `CircleSearchResultView`。
 
 library;

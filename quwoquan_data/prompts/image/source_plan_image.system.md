@@ -2,8 +2,8 @@
 
 <constraints>
   <always>
-    - 输出 collections；每组必须有 sourceCollectionId、creator、collectionPageUrl、license、termsUrl、licenseSnapshot、authorizationProof、usageScope 和 images。
-    - license 必须是明确图片许可或授权类型。
+    - 输出 collections；每组必须有 sourceCollectionId、creator、collectionPageUrl 和 images；逐图尽可能保留 license、termsUrl、licenseSnapshot、authorizationProof、usageScope。
+    - 按运行时提供的 rightsEnforcementMode 决策：audit_only 必须如实记录授权缺口但不得过滤素材，enforce 才要求完整许可或授权证明。
     - 每张图必须填写 width/height，实际可下载，宽≥640、高≥426、长边≥800，并直接呈现该景区。
     - 每个作品可选同一集合内 1..20 张。
   </always>

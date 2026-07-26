@@ -33,7 +33,7 @@ from content.post.article.route_assets import _build_route_assets  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
-EXECUTION_ID = "20260711--travel-article-route-assets--cn-sichuan--canary-001"
+EXECUTION_ID = "20260711--travel-article-route-assets--test-region-b--pilot-001"
 ENTITIES = ["九寨沟", "稻城亚丁", "色达", "新都桥"]
 
 

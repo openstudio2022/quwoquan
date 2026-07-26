@@ -20,6 +20,8 @@ routes:
     path: /circles
   - id: interestMatch
     path: /interest-match
+  - id: interestOnboarding
+    path: /onboarding/interests
   - id: chat
     path: /chat
   - id: startGroupChat

@@ -32,7 +32,7 @@ def operation(status: str) -> dict[str, object]:
         "domain": "content",
         "objectId": "content.post",
         "method": "GET",
-        "pathTemplate": "/content/posts/{postId}",
+        "pathTemplate": "/content/content/posts/{postId}",
         "commercial": {"status": status, "explicit": True},
         "telemetry": {"metric": "content_post_get", "trace": True},
         "slo": {

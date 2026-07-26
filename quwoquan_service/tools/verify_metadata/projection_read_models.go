@@ -5,7 +5,7 @@ import (
 )
 
 // loadProjectionReadModels 收集全仓 projections/*.yaml 的 read_model 闭集（跨域可见），
-// 作为 service.yaml operation response_body 的唯一指向性真相源。
+// 作为 operations.yaml operation response_body 的唯一指向性真相源。
 func (v *validator) loadProjectionReadModels() {
 	v.projectionReadModels = map[string]bool{}
 	for _, path := range v.source.Paths("", ".yaml") {

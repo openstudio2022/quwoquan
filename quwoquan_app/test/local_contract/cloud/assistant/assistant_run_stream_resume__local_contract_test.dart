@@ -36,7 +36,7 @@ void main() {
         .toList();
 
     expect(events.map((event) => event.seq), <int>[1, 2]);
-    expect(events.map((event) => event.eventType), <String>[
+    expect(events.map((event) => event.eventType.wireName), <String>[
       'answer_delta',
       'completed',
     ]);

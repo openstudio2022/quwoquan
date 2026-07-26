@@ -1,68 +1,71 @@
-# L3 特性：iOS 原生页面壳与门禁（ios-native-page-enforcement）
+# L3 Story：iOS 原生页面壳与门禁（ios-native-page-enforcement） (`ios-native-page-enforcement`)
 
-## 背景与动机
+> 所属能力：[`runtime-client-foundation`](../spec.md)
 
-`quwoquan_app` 面向 **iOS 原生画质**（`specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md`）。记录上部分全屏页仍使用 **Material `Scaffold` 作为根壳**，与「Native First / No Android Leakage」冲突，且难以在 PR 阶段自动拦截新增违规。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-## 目标用户与目标
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-| 角色 | 目标 |
-|------|------|
-| 终端用户 | 全应用页面层级、导航栏、材质与 iOS 系统应用一致 |
-| 开发者 | 新增/修改页面时有 **可执行门禁** 阻断违规根壳 |
-| 质量 / CI | `make gate` 失败即阻止合入非 iOS 根壳页面 |
+## 1. 用户价值
 
-## 功能范围（In Scope）
+作为开发、测试或运维角色，
+我希望不禁止 `Material(type: transparency)` 作为 **Cupertino 子树** 的防溢出/字体渲染宿主（与现有 `AppScaffold` 模式一致），
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-1. **页面根壳策略**：`lib/ui/**/pages/` 下业务页及约定的 `components` 全屏页，根 `build` **必须**以 `CupertinoPageScaffold` 或 `AppScaffold`（及项目内等价的 iOS 壳封装）作为最外层可导航壳，**禁止** `return Scaffold(` 作为页面根（Material 全屏壳）。
-2. **门禁**：仓库 `quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py` + `specs/gates/ios_native_surface_allowlist.yaml`；**默认阻断** 新增 `return Scaffold(`；存量例外仅经 allowlist 登记，且 **allowlist 仅允许收缩**（新违规不得加入长期豁免，除非同步记为技术债任务）。
-3. **规范对齐**：本 L3 与 `page-layout-semantics`、`07-ios-native-ux` 规则、`SettingsInsetFormPageScaffold` 等已落地模式一致；不重复定义 token，仅约束 **根壳选型** 与 **CI 阻断面**。
+## 2. 范围与非目标
 
-## Out of Scope
+### In Scope
 
-- 不在本 L3 一次性改写所有记录页面的视觉细节（圆角、间距等）——由后续切片与 `page-layout-semantics` 子项消化。
+- “iOS 原生页面壳与门禁（ios-native-page-enforcement）”的输入、可观察主路径、失败语义以及与父能力的交接。
+- iOS-facing 页面根壳、导航、反馈、加载、选择与浮层语义。
+- `AppColors`、`AppSpacing`、`AppTypography` 与语义常量的唯一视觉来源。
+- 对 Material 行为底座的透明隔离和只减不增例外治理。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 iOS 原生页面壳与门禁（ios-native-page-enforcement）
+
 - 不禁止 `Material(type: transparency)` 作为 **Cupertino 子树** 的防溢出/字体渲染宿主（与现有 `AppScaffold` 模式一致）。
-- 不覆盖 **非 Dart UI**（Web、Android 专属壳）。
-- 不在本 baseline 内实现 **AST 级** 全量组件审计（仅约定 v1 为基于文件的正则门禁，v2 可演进）。
 
-## 约束与对标
+<a id="req-002"></a>
+### REQ-002 不禁止 Material(type: transparency) 作为 Cupertino 子树 的防溢出/字体渲染宿主（与现有 AppScaffold 模式一致）
 
-- **唯一体验标准**：`specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md` §2.1、§2.8。
-- **架构约束**：页面入口仍在 `lib/ui/{domain}/pages/`（见仓库目录规则）。
+- 不禁止 `Material(type: transparency)` 作为 **Cupertino 子树** 的防溢出/字体渲染宿主（与现有 `AppScaffold` 模式一致）。
+- 所有被扫描页面都必须满足该约束；不存在空 allowlist 或 baseline，新增违规直接阻断。
 
-## 覆盖矩阵
+## 4. 契约引用
 
-| 既有 Story | 关系 |
-|------------|------|
-| `page-layout-semantics` | 本 L3 补齐 **根壳** 与 **CI**；其负责 leading/选择器/设置块结构 |
-| `dart-semantic-gate` | 互补：语义 token / 相对路径；本门禁专盯 **Material 根 Scaffold** |
-| `dual-theme-page-coverage`（**S6**） | 同一套 iOS 壳在 **浅色/深色** 下材质与对比达标；见兄弟 L3 `dual-theme-page-coverage/spec.md` |
-| `page-horizontal-quality` | **P1** 与本门禁对齐；全页清单与 **P1–P8** 矩阵见 `page-horizontal-quality-spec.md` / `page-horizontal-quality-matrix.md` |
+- 父能力公开契约：[`L2 spec`](../spec.md)。
 
-## 数据生命周期 / 权限
+## 5. 验收场景
 
-不适用（工程治理与 UI 壳）。
+<a id="gwt-001"></a>
+### GWT-001 iOS 原生页面壳与门禁（ios-native-page-enforcement）
 
-## 迁移与回滚
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“iOS 原生页面壳与门禁（ios-native-page-enforcement）”对应的公开行为。
+- THEN 不禁止 `Material(type: transparency)` 作为 **Cupertino 子树** 的防溢出/字体渲染宿主（与现有 `AppScaffold` 模式一致）。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
 
-- **迁移**：将 allowlist 中文件逐一切换为 `AppScaffold`/`CupertinoPageScaffold` 后从 allowlist 删除。
-- **回滚**：若门禁误伤，可短期扩大 allowlist 并开 issue；**禁止**在无 CR 说明下永久扩大豁免列表。
+## 6. 依赖
 
-## 场景验收 S1（本会话可独立 baseline 的边界）
+- 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
 
-> **`acceptance.yaml` 中 `scenario_acceptance.id: S1`**：开发者在**约定扫描路径**内的 Dart 文件写入 **`return Scaffold(`**（Material 根壳典型写法）时，本地 **`make gate` 非零退出**，且 stderr **引用** `specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md`（Native First / No Android Leakage）。  
-> **S1 不等价于**：全量满足 `02` 全文（Token、断点、深色、无 ripple 等）；后者由 **`page-horizontal-quality` P1**、`dart-semantic-gate`、`dual-theme-page-coverage`（S6）等分担，**不得**在仅交付 S1 的会话中要求「逐条 02 审计完毕」。
+## 7. 开放事项
 
-## 验收重点摘要
+<a id="open-001"></a>
+### OPEN-001 Material 视觉语义泄露收口
 
-- `make gate` 执行时运行 `verify_ios_native_surface_gate.py` 且通过。
-- 新增页面若使用 `return Scaffold(` 且无 allowlist 条目 → **gate 失败**。
-- `spec.md` / `acceptance.yaml` / 上层 design / `CR` 已归档。
-
-## L1 / L2 / L3 映射
-
-| 层级 | 标识 |
-|------|------|
-| L1 capability | `runtime` |
-| L2 journey | `runtime-client-foundation` |
-| L3 scenario | `ios-native-page-enforcement` |
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：`lib/ui` 与 `lib/components` 仍有 Material import、Theme/Colors、MaterialPageRoute 和 Material 控件存量，可能引入 Android 视觉语义或第二套 token。
+- 完成判定：运行时扫描报告中的违规信号按真实语义清零或由最小平台适配边界解释；iOS surface、semantic token、深浅色和可访问性均有直接测试证据。
+- 依赖：`scan_material_leaks.py` 动态报告与 iOS native surface gate。

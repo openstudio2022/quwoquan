@@ -31,7 +31,7 @@ _KINDS = "USER|AUTH|SUB_ACCOUNT|GREETING|INVITE|CONTACT|SETTING|MIDDLEWARE|SYSTE
 PATTERN = re.compile(
     rf"['\"](?:{_MODULES})\.(?:{_KINDS})\.[a-z0-9_]+['\"]"
 )
-HINT = "错误码应使用 *ErrorCode.xxx.code，禁止硬编码字符串；见 01-arch-constraints.mdc §3.3"
+HINT = "错误码应使用 *ErrorCode.xxx.code，禁止硬编码字符串；见 quwoquan_app/AGENTS.md"
 
 # Path substrings to exclude (codegen 产物内的 case/return 字符串为合法)
 EXCLUDE_SUBSTRINGS = [

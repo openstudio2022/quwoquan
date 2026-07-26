@@ -23,13 +23,16 @@ REPO_DATA_ROOT = _REPO_DATA_ROOT
 # 仓库根（quwoquan_data 的上级）：服务侧 contracts/metadata 等跨工程契约真相源都挂在这里，
 # 同样受版本控制、跟代码走，禁止用 DATA_ROOT.parent 推导（隔离根下会漂移到 /tmp/quwoquan_service）。
 REPO_ROOT = _REPO_DATA_ROOT.parent
-# 服务侧 metadata 契约根（字段/错误码/path/ui_config 等唯一真相源），跨工程消费统一走此常量。
-SERVICE_CONTRACTS_METADATA_ROOT = Path(
-    os.environ.get(
-        "QWQ_SERVICE_CONTRACTS_METADATA_ROOT",
-        REPO_ROOT / "quwoquan_service" / "contracts" / "metadata",
-    )
-)
+# 服务契约由每个领域服务自治；Data 只能按服务名读取其 contracts，不再读取已删除的
+# 根级 metadata 聚合目录，也不接受运行环境覆盖仓内契约真相源。
+SERVICE_DOMAINS_ROOT = REPO_ROOT / "quwoquan_service" / "services"
+
+
+def service_contracts_root(service_name: str) -> Path:
+    normalized = str(service_name or "").strip()
+    if not re.fullmatch(r"[a-z][a-z0-9-]*-service", normalized):
+        raise ValueError(f"invalid service contract owner: {service_name}")
+    return SERVICE_DOMAINS_ROOT / normalized / "contracts"
 DATA_ROOT = Path(os.environ.get("QWQ_DATA_ROOT", _REPO_DATA_ROOT))
 
 # ─── 统一输出根（版本控制之外、工程目录之内）────────────────────────
@@ -37,12 +40,7 @@ DATA_ROOT = Path(os.environ.get("QWQ_DATA_ROOT", _REPO_DATA_ROOT))
 # `.qwq_output/data/` 一个根：tasks/<executionId>、releases/<releaseId>、local/。
 # 不再支持 QWQ_RUNTIME_ROOT、runtime/batches 或第二个 state 根。
 _DEFAULT_OUTPUT_ROOT = REPO_ROOT / ".qwq_output"
-if os.environ.get("QWQ_OUTPUT_ROOT"):
-    OUTPUT_ROOT = Path(os.environ["QWQ_OUTPUT_ROOT"])
-elif os.environ.get("QWQ_DATA_ROOT"):
-    OUTPUT_ROOT = DATA_ROOT
-else:
-    OUTPUT_ROOT = _DEFAULT_OUTPUT_ROOT
+OUTPUT_ROOT = Path(os.environ.get("QWQ_OUTPUT_ROOT") or _DEFAULT_OUTPUT_ROOT)
 
 DATA_OUTPUT_ROOT = OUTPUT_ROOT / "data"
 DATA_EXECUTIONS_ROOT = DATA_OUTPUT_ROOT / "tasks"
@@ -119,12 +117,6 @@ def now_iso() -> str:
 
 
 NOW_ISO = now_iso()
-EXECUTION_SHARED_LEDGER_FILENAMES = (
-    "catalog.ndjson",
-    "dedup_ledger.json",
-    "entities.ndjson",
-    "tags.ndjson",
-)
 EXECUTION_ROOT_ALLOWED_ENTRIES = frozenset({
     "0.plan",
     "sources",
@@ -136,10 +128,19 @@ EXECUTION_ROOT_ALLOWED_ENTRIES = frozenset({
     "publish_ref.json",
 })
 
-# ─── execution 证据面：_shared 只保留跨阶段账本和不可重算决定。 ──────
-# execution/_shared 最小证据面：跨对象账本 + explore/baseline 阶段的不可重算决策包。
+# Discovery and deduplication facts remain execution evidence.  They are not
+# provider accounting and must stay distinct from any billing concern.
+EXECUTION_SHARED_DISCOVERY_FILENAMES = (
+    "catalog.ndjson",
+    "dedup_ledger.json",
+    "entities.ndjson",
+    "tags.ndjson",
+)
+
+# ─── execution 证据面：_shared 只保留不可重算决定。 ────────────────
+# execution/_shared 最小证据面：explore/baseline 阶段的不可重算决策包。
 EXECUTION_SHARED_ALLOWED_ENTRIES = frozenset({
-    *EXECUTION_SHARED_LEDGER_FILENAMES,
+    *EXECUTION_SHARED_DISCOVERY_FILENAMES,
     "baseline_freeze_packet.json",
     "baseline_report.json",
     "explore_packet.json",
@@ -149,7 +150,7 @@ EXECUTION_SHARED_ALLOWED_ENTRIES = frozenset({
 # execution/_shared 权威证据（不可重算真相源）：readiness / monitoring / ship /
 # release 消费方只认这些 canonical 条目；新增证据必须先登记再写入。
 EXECUTION_SHARED_AUTHORITATIVE_ENTRIES = frozenset({
-    *EXECUTION_SHARED_LEDGER_FILENAMES,
+    *EXECUTION_SHARED_DISCOVERY_FILENAMES,
     "execution_progress.json",
     "target_selection.json",
     "runtime_state.json",
@@ -158,7 +159,6 @@ EXECUTION_SHARED_AUTHORITATIVE_ENTRIES = frozenset({
     "content_object_index.json",
     "env_ready_report.json",
     "execution_state.json",
-    "token_ledger.json",
     "managed_execution_audit.json",
     "scale_readiness.json",
     "ship_report.json",
@@ -248,7 +248,7 @@ def normalize_execution_workspace_command(command: str) -> str:
 # Content execution has one identity and one runtime work package.
 _EXECUTION_ID_PATH_RE = re.compile(
     r"^20\d{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-"
-    r"[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3|h10k)-\d{3,}$"
+    r"[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-\d{3,}$"
 )
 
 

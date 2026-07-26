@@ -54,7 +54,7 @@ export function PlatformServiceCatalogPage() {
               <div>
                 <p className="item-title">{item.label}</p>
                 <p className="item-subtitle">
-                  kind={item.object_kind} · source={item.source_entity} · view={item.view_model}
+                  viewKind={item.view_kind} · source={item.source_entity} · view={item.view_model}
                 </p>
               </div>
               <span className="badge badge--neutral">{item.deployment_profile}</span>
@@ -66,10 +66,10 @@ export function PlatformServiceCatalogPage() {
       <SectionCard title="当前服务目录" subtitle="作为 platform-ops 接入清单、责任边界与后续自动发现的门户承接层">
         <div className="stack-list">
           {services.map((item) => {
-            const matchedBindings = bindings.filter((binding) => binding.process === item.service);
+            const matchedBindings = bindings.filter((binding) => binding.workload === item.service);
             const planeText =
               matchedBindings.length > 0
-                ? Array.from(new Set(matchedBindings.flatMap((binding) => binding.planes))).join(' / ')
+                ? Array.from(new Set(matchedBindings.map((binding) => binding.plane))).join(' / ')
                 : item.plane;
             return (
             <div className="policy-item" key={item.service}>

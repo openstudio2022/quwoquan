@@ -1,5 +1,0 @@
-service:
-  name: realtime-gateway
-config:
-  env: prod
-  version: "v2026.07.08.0"

@@ -10,7 +10,7 @@
   "seedRefs": [
     {
       "domain": "assistant",
-      "fixturePath": "assistant/test_fixtures/scenarios/assistant_scenarios.json",
+      "fixturePath": "quwoquan_service/services/assistant-service/tests/support/contract_fixtures/scenarios/assistant_scenarios.json",
       "refs": [
         "assistant_p0_core",
         "skill_management_core"
@@ -24,7 +24,7 @@
     },
     {
       "domain": "content",
-      "fixturePath": "content/test_fixtures/scenarios/content_scenarios.json",
+      "fixturePath": "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json",
       "refs": [
         "content_discovery_core",
         "home_feed_core",
@@ -41,20 +41,20 @@
       "targetStore": "mongodb:content_test.posts",
       "verifiedEndpoints": [
         "/content/feed",
-        "/content/posts/fixture_photo_001",
-        "/content/posts/fixture_photo_001/comments",
-        "/content/posts/fixture_photo_001/comments?sort=hot",
-        "/content/posts/fixture_photo_001/comments?sort=latest",
-        "/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
-        "/content/comments/fixture_comment_parent_001/reaction",
-        "/content/comments/fixture_comment_parent_001/media:bind",
+        "/content/content/posts/fixture_photo_001",
+        "/content/content/posts/fixture_photo_001/comments",
+        "/content/content/posts/fixture_photo_001/comments?sort=hot",
+        "/content/content/posts/fixture_photo_001/comments?sort=latest",
+        "/content/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
+        "/content/content/comments/fixture_comment_parent_001/reaction",
+        "/content/content/comments/fixture_comment_parent_001/media:bind",
         "/content/sub-accounts/fixture_user_current/interactions/received?type=share",
         "/content/sub-accounts/fixture_user_current/interactions/sent?type=share"
       ]
     },
     {
       "domain": "circle",
-      "fixturePath": "social/circle/test_fixtures/scenarios/circle_scenarios.json",
+      "fixturePath": "quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.json",
       "refs": [
         "circle_core",
         "circle_home_feed_core",
@@ -70,7 +70,7 @@
     },
     {
       "domain": "chat",
-      "fixturePath": "messages/chat/test_fixtures/scenarios/chat_scenarios.json",
+      "fixturePath": "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json",
       "refs": [
         "chat_core",
         "chat_settings_core",
@@ -87,7 +87,7 @@
     },
     {
       "domain": "user",
-      "fixturePath": "user/test_fixtures/scenarios/user_scenarios.json",
+      "fixturePath": "quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.json",
       "refs": [
         "user_profile_core",
         "persona_core",
@@ -110,7 +110,7 @@
     },
     {
       "domain": "entity",
-      "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.json",
+      "fixturePath": "quwoquan_service/services/entity-service/tests/support/contract_fixtures/scenarios/entity_scenarios.json",
       "refs": [
         "entity_homepage_core",
         "entity_claim_core",
@@ -127,19 +127,19 @@
     },
     {
       "domain": "integration",
-      "fixturePath": "integration/test_fixtures/scenarios/integration_scenarios.json",
+      "fixturePath": "quwoquan_service/services/integration-service/tests/support/contract_fixtures/scenarios/integration_scenarios.json",
       "refs": [
         "location_poi_core"
       ],
       "resetScope": "fixture_integration_*",
       "targetStore": "integration-service:memory",
       "verifiedEndpoints": [
-        "/integration/locations/pois"
+        "/integration/external_integration/locations/pois"
       ]
     },
     {
       "domain": "search",
-      "fixturePath": "search/test_fixtures/scenarios/search_scenarios.json",
+      "fixturePath": "quwoquan_service/services/search-service/tests/support/contract_fixtures/scenarios/search_scenarios.json",
       "refs": [
         "search_remote_acceptance"
       ],
@@ -157,7 +157,7 @@
     },
     {
       "domain": "notification",
-      "fixturePath": "notification/test_fixtures/scenarios/notification_scenarios.json",
+      "fixturePath": "quwoquan_service/services/notification-service/tests/support/contract_fixtures/scenarios/notification_scenarios.json",
       "refs": [
         "notification_core"
       ],
@@ -169,7 +169,7 @@
     },
     {
       "domain": "rtc",
-      "fixturePath": "rtc/test_fixtures/scenarios/rtc_scenarios.json",
+      "fixturePath": "quwoquan_service/services/rtc-service/tests/support/contract_fixtures/scenarios/rtc_scenarios.json",
       "refs": [
         "rtc_core"
       ],
@@ -237,7 +237,7 @@
       }
     ]
   },
-  "mediaSeedRef": "quwoquan_ops/environments/media_delivery_manifest.json",
+  "mediaSeedRef": "quwoquan_service/services/content-service/resources/static/media/media_delivery_manifest.json",
   "mediaCanary": {
     "profileRef": "quwoquan_data/reference/media_canary/video_playback.yaml",
     "readyAssetIds": [

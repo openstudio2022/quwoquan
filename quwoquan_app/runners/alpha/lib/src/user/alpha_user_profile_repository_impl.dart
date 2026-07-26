@@ -69,15 +69,17 @@ class MockUserProfileRepository
     'me',
     'fixture_user_current',
     'user_001',
-    PrefabUserResolver.currentUserVariantSubAccountId,
-    PrefabUserResolver.currentUserVariantUserId,
+    AlphaFixtureUserResolver.currentUserVariantSubAccountId,
+    AlphaFixtureUserResolver.currentUserVariantUserId,
   };
 
   @override
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
     String subAccountId,
   ) async {
-    final resolvedId = PrefabUserResolver.resolveSubAccountId(subAccountId);
+    final resolvedId = AlphaFixtureUserResolver.resolveSubAccountId(
+      subAccountId,
+    );
     final profile = await getUserProfile(resolvedId);
     final stats = UserProfileStatsViewData.fromProfile(profile);
     final isOwner =
@@ -86,7 +88,7 @@ class MockUserProfileRepository
     final relation = await getRelationship(resolvedId);
     final viewerSubAccountId = isOwner
         ? resolvedId
-        : PrefabUserResolver.currentUserVariantSubAccountId;
+        : AlphaFixtureUserResolver.currentUserVariantSubAccountId;
     final relationshipCapability = isOwner
         ? null
         : RelationshipCapabilityDto.fromFollowFlags(
@@ -188,9 +190,7 @@ class MockUserProfileRepository
   @override
   Future<AuthorImpactSummary> getAuthorImpact(String userId) async {
     // Contract seed（intersection_core.authorImpact）驱动；无 seed/未登记作者时返回空摘要（不造假）。
-    final seed = ContractFixtureRuntimeLoader.contentSeedSet(
-      'intersection_core',
-    );
+    final seed = alphaFixtureSeedReader.contentSeedSet('intersection_core');
     final impactByAuthor = seed?['authorImpact'];
     if (impactByAuthor is Map) {
       // alpha 原型：guest / 空 / owner-like 视角（me / user_001）解析为本人种子作者，
@@ -201,7 +201,11 @@ class MockUserProfileRepository
         return AuthorImpactSummary.fromMap(entry.cast<String, dynamic>());
       }
     }
-    return AuthorImpactSummary(authorId: userId);
+    return AuthorImpactSummary(
+      authorId: userId,
+      total: 0,
+      items: const <AuthorImpactItem>[],
+    );
   }
 
   @override
@@ -221,6 +225,10 @@ class MockUserProfileRepository
       return AuthorImpactEvidencePage(
         impactId: impactId,
         evidenceSnapshotId: evidenceSnapshotId,
+        totalCount: 0,
+        items: const <AuthorImpactEvidenceItem>[],
+        nextCursor: '',
+        hasMore: false,
       );
     }
     final allRows = _deriveEvidenceRows(item);

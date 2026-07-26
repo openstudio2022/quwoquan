@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+
 import 'dart:async';
 import 'dart:io';
 
@@ -79,7 +81,6 @@ void main() {
       expect(uploadedBytes, bytes);
       expect(uploadedContentType, 'video/mp4');
       expect(result.assetId, 'video_asset_1');
-      expect(result.cdnUrl, 'https://cdn.quwoquan.test/video_asset_1.mp4');
     });
 
     test('数据面失败会中止权威 session 且不伪造成功', () async {
@@ -129,6 +130,40 @@ void main() {
       expect(media.abortedSessions, <String>['session_1']);
       expect(result.status, UploadStatus.failed);
       expect(result.error, RuntimeFailureCodes.cloudSystemUnavailable);
+    });
+
+    test('账号 closed 后 disposed manager 清空队列并拒绝旧实例继续上传', () async {
+      final manager = MediaUploadManager(
+        coordinator: ContentMediaUploadCoordinator(
+          media: RecordingContentMediaFacet(),
+        ),
+        sourceReader: const LocalContentMediaSourceReader(),
+        uploadStream:
+            (
+              _,
+              _, {
+              required contentLength,
+              required contentType,
+              required expectedSha256,
+              Future<void>? abortTrigger,
+            }) async {},
+      );
+
+      manager.dispose();
+
+      await expectLater(
+        manager.enqueue(
+          UploadTask(
+            localPath: '/tmp/closed.jpg',
+            category: MediaCategory.chatImage,
+            contentType: 'image/jpeg',
+            fileSize: 4,
+          ),
+        ),
+        throwsStateError,
+      );
+      expect(manager.pendingCount, 0);
+      expect(manager.activeCount, 0);
     });
   });
 }

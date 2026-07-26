@@ -16,7 +16,7 @@ enum PersonaIsolationLevel {
 }
 
 /// Persona（分身/子账号）聚合命令的 pure contracts。
-/// 真相源：contracts/metadata/user/persona/{service,fields}.yaml 与
+/// 真相源：quwoquan_service/services/user-service/contracts/persona_management/persona/{service,fields}.yaml 与
 /// user_profile/fields.yaml 的 persona 管理视图。
 /// userHandle 由服务端系统分配，客户端不提交；激活切换为强一致排他写。
 
@@ -107,12 +107,22 @@ final class UpdateUserProfileCommand {
     this.regionTagRef,
     this.occupationTagRef,
     this.interestTagRefs,
+    String? expectedTaxonomyReleaseId,
     this.identityTags,
     this.profileVisibility,
     this.applyScope,
     this.syncTargetIds,
     this.fieldsMask,
-  });
+  }) : expectedTaxonomyReleaseId = expectedTaxonomyReleaseId?.trim() {
+    if ((occupationTagRef != null || interestTagRefs != null) &&
+        (this.expectedTaxonomyReleaseId?.isEmpty ?? true)) {
+      throw ArgumentError.value(
+        expectedTaxonomyReleaseId,
+        'expectedTaxonomyReleaseId',
+        'required when occupationTagRef or interestTagRefs is provided',
+      );
+    }
+  }
 
   final String? nickname;
   final String? displayName;
@@ -126,6 +136,7 @@ final class UpdateUserProfileCommand {
   final String? regionTagRef;
   final String? occupationTagRef;
   final List<String>? interestTagRefs;
+  final String? expectedTaxonomyReleaseId;
   final List<String>? identityTags;
   final String? profileVisibility;
   final String? applyScope;
@@ -372,6 +383,8 @@ CloudOperationRequestPayload encodeUpdateUserProfileCommand(
       'occupationTagRef': command.occupationTagRef,
     if (command.interestTagRefs != null)
       'interestTagRefs': command.interestTagRefs,
+    if (command.expectedTaxonomyReleaseId != null)
+      'expectedTaxonomyReleaseId': command.expectedTaxonomyReleaseId,
     if (command.identityTags != null) 'identityTags': command.identityTags,
     if (command.profileVisibility != null)
       'profileVisibility': command.profileVisibility,

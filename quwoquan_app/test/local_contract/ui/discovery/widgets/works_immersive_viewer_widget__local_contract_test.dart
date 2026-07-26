@@ -1117,9 +1117,19 @@ void main() {
     final imageBookSource = File(
       'lib/components/media/image/book/image_book_canvas.dart',
     ).readAsStringSync();
-    final mediaPageflipSource = File(
-      'lib/components/media/shared/pageflip/media_page_flip_book.dart',
-    ).readAsStringSync();
+    final mediaPageflipSource =
+        File(
+          'lib/components/media/shared/pageflip/media_page_flip_book.dart',
+        ).readAsStringSync() +
+        File(
+          'lib/components/media/shared/pageflip/media_page_flip_book_soft_surface.dart',
+        ).readAsStringSync() +
+        File(
+          'lib/components/media/shared/pageflip/media_page_flip_book_gestures.dart',
+        ).readAsStringSync() +
+        File(
+          'lib/components/media/shared/pageflip/media_page_flip_book_texture_cache.dart',
+        ).readAsStringSync();
     final videoPlayerSource = File(
       'lib/components/media/video/player/video_player_widget.dart',
     ).readAsStringSync();

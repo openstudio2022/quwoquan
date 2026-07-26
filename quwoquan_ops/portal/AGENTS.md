@@ -2,9 +2,8 @@
 
 在 `quwoquan_ops/portal/` 工作时，除仓库根 `AGENTS.md` 外，先阅读：
 
-1. `docs/agent_context_contract.md`
-2. `.cursor/rules/10-runtime-error-cutover.mdc`
-3. `quwoquan_ops/portal/package.json`
+1. `specs/feature-tree/README.md` 与目标特性父链
+2. `quwoquan_ops/portal/package.json`
 
 ## Ops Portal 硬约束
 

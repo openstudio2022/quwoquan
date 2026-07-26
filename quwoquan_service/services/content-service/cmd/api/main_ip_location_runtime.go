@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	iplocationapp "quwoquan_service/services/content-service/internal/application/iplocation"
-	iplocationinfra "quwoquan_service/services/content-service/internal/infrastructure/iplocation"
+	iplocationapp "quwoquan_service/services/content-service/internal/content/post/application/iplocation"
+	iplocationinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/iplocation"
 )
 
 type ipLocationResolverFactory func(

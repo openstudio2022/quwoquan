@@ -26,7 +26,7 @@ def main() -> int:
         issues,
     )
     _require_text(
-        ROOT / "quwoquan_service/services/product-ops-service/internal/application/runtime_log_service.go",
+        ROOT / "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application/runtime_log_service.go",
         ("CanonicalRuntimeLogFields", "GetRuntimeLogSummary", "GetRuntimeLogDrilldown"),
         issues,
     )

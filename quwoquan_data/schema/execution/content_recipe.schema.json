@@ -22,28 +22,8 @@
       "type": "object",
       "description": "可复用目标选择策略；省市、实体与 executionId 只由运行参数注入。",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "intentLabel": {
-          "type": "string"
-        },
-        "discovery": {
-          "type": "string",
-          "description": "repo 相对 discovery 路径（JSON、主清单目录或市州级主清单 YAML 单文件）"
-        },
-        "region": {
-          "type": "string"
-        },
         "category": {
           "type": "string"
-        },
-        "limit": {
-          "type": "integer",
-          "minimum": 1
         },
         "entityArticlesPerTarget": {
           "type": "integer",
@@ -60,14 +40,6 @@
         "videoWorksPerTarget": {
           "type": "integer",
           "minimum": 0
-        },
-        "mandatory": {
-          "type": "string",
-          "description": "必保实体逗号分隔；显式空串=空 mandatory（覆盖 select-targets 缺省）"
-        },
-        "homepageExecutionId": {
-          "type": "string",
-          "description": "post execution 显式绑定的同省同档 homepage executionId"
         }
       },
       "additionalProperties": false
@@ -78,38 +50,8 @@
       "properties": {
         "requireActiveStatus": {
           "type": "boolean"
-        },
-        "targetObjectCount": {
-          "type": "integer",
-          "minimum": 1
         }
       },
-      "additionalProperties": false
-    },
-    "instanceParams": {
-      "type": "object",
-      "description": "通用 family recipe 的实例参数声明：required 列出的 selection 字段必须由 CLI 运行参数注入。",
-      "properties": {
-        "required": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "region",
-              "discovery",
-              "name",
-              "title",
-              "intentLabel",
-              "homepageExecutionId",
-              "mandatory",
-              "limit"
-            ]
-          }
-        }
-      },
-      "required": [
-        "required"
-      ],
       "additionalProperties": false
     },
     "execution": {
@@ -129,6 +71,9 @@
             "grok"
           ]
         },
+        "modelParameters": {
+          "$ref": "#/$defs/modelParameters"
+        },
         "reviewModel": {
           "type": "string",
           "minLength": 1
@@ -142,13 +87,18 @@
             "gpt",
             "grok"
           ]
+        },
+        "reviewModelParameters": {
+          "$ref": "#/$defs/modelParameters"
         }
       },
       "required": [
         "model",
         "modelFamily",
+        "modelParameters",
         "reviewModel",
-        "reviewModelFamily"
+        "reviewModelFamily",
+        "reviewModelParameters"
       ],
       "additionalProperties": false
     },
@@ -156,14 +106,6 @@
       "type": "object",
       "description": "运行后放量验收（execution audit + sdk monitoring + scale readiness）",
       "properties": {
-        "dailyTarget": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "target": {
-          "type": "integer",
-          "minimum": 1
-        },
         "minPassRate": {
           "type": "number",
           "minimum": 0,
@@ -174,10 +116,6 @@
         },
         "failOnNoGo": {
           "type": "boolean"
-        },
-        "acceptEstimatedTokenLedger": {
-          "type": "boolean",
-          "description": "显式接受 estimated_from_artifacts 账本（本地 bridge 不回传 usage，2026-07-06 裁定）"
         },
         "requireReviewed": {
           "type": "boolean",
@@ -199,5 +137,20 @@
     "selection",
     "execution"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "modelParameters": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "value": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
 }

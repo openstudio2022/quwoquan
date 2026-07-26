@@ -108,8 +108,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
                 InteractionSubTab.likes => ContentProfileInteractionType.like,
                 InteractionSubTab.comments =>
                   ContentProfileInteractionType.comment,
-                InteractionSubTab.shares =>
-                  ContentProfileInteractionType.share,
+                InteractionSubTab.shares => ContentProfileInteractionType.share,
               },
             ),
             direction: direction == InteractionDirection.received
@@ -209,25 +208,20 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
         : _loading
         ? Center(child: CupertinoActivityIndicator())
         : _loadError != null
-        ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  runtimeErrorDisplayMessage(_loadError!),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    color: fgSecondary,
-                  ),
-                ),
-                SizedBox(height: AppSpacing.md),
-                CupertinoButton(
-                  onPressed: _load,
-                  child: Text(UITextConstants.retry),
-                ),
-              ],
+        ? AppSectionErrorCard(
+            semantic: runtimeErrorSemantic(
+              context,
+              error: _loadError!,
+              category: UiErrorCategory.sectionLoad,
+              scope: UiErrorScope.section,
+              presentation: UiErrorPresentation.sectionSoftCard,
             ),
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry ||
+                  action.type == UiErrorActionType.resubmit) {
+                await _load();
+              }
+            },
           )
         : _items == null || _items!.isEmpty
         ? Center(

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 
 class MediaAssistantPanel extends StatelessWidget {
@@ -271,25 +272,21 @@ class _MediaAssistantMessageBubble extends StatelessWidget {
               padding: EdgeInsets.only(
                 left: context.safeGetIntraGroupSpacing(SpacingSize.sm),
               ),
-              child: CircleAvatar(
-                radius: AppSpacing.iconMedium,
+              child: AppCircularAvatar(
+                imageUrl: selfAvatarUrl,
+                size: AppSpacing.iconMedium * 2,
                 backgroundColor: AppColorsFunctional.getColor(
                   isDark,
                   ColorType.backgroundSecondary,
                 ),
-                backgroundImage: selfAvatarUrl != null
-                    ? NetworkImage(selfAvatarUrl)
-                    : null,
-                child: selfAvatarUrl == null
-                    ? Icon(
-                        Icons.person,
-                        size: AppSpacing.iconSmall,
-                        color: AppColorsFunctional.getColor(
-                          isDark,
-                          ColorType.foregroundSecondary,
-                        ),
-                      )
-                    : null,
+                fallback: Icon(
+                  Icons.person,
+                  size: AppSpacing.iconSmall,
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.foregroundSecondary,
+                  ),
+                ),
               ),
             ),
         ],

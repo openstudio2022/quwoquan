@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/core/platform/temporary_file_cleanup.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
@@ -24,7 +25,8 @@ class ChatSendOutbox {
     required this.maxQueueSize,
     required this.sendCommand,
     required this.sendQueuedVoice,
-  });
+    Future<void> Function(String path)? deleteTemporaryFile,
+  }) : _deleteTemporaryFile = deleteTemporaryFile ?? deleteAppTemporaryFile;
 
   final int maxQueueSize;
   final Future<void> Function(ChatSendMessageCommand command) sendCommand;
@@ -33,12 +35,14 @@ class ChatSendOutbox {
     VoiceRecordResult result,
   )
   sendQueuedVoice;
+  final Future<void> Function(String path) _deleteTemporaryFile;
 
   static const String boxName = 'chat_send_outbox';
 
   Box<String>? _box;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   bool _draining = false;
+  bool _terminallyPurged = false;
 
   Future<void> init() async {
     try {
@@ -59,7 +63,9 @@ class ChatSendOutbox {
   /// 文本/已上传媒体命令入队（发送失败或离线时调用）。
   Future<bool> enqueueCommand(ChatSendMessageCommand command) async {
     final box = _box;
-    if (box == null || box.length >= maxQueueSize) return false;
+    if (_terminallyPurged || box == null || box.length >= maxQueueSize) {
+      return false;
+    }
     if (command.card != null) return false;
     await box.add(
       jsonEncode(<String, Object?>{
@@ -87,7 +93,9 @@ class ChatSendOutbox {
     required VoiceRecordResult result,
   }) async {
     final box = _box;
-    if (box == null || box.length >= maxQueueSize) return false;
+    if (_terminallyPurged || box == null || box.length >= maxQueueSize) {
+      return false;
+    }
     await box.add(
       jsonEncode(<String, Object?>{
         'kind': 'voice',
@@ -105,6 +113,9 @@ class ChatSendOutbox {
 
   /// 监听连通性恢复后自动 drain。
   void startMonitor() {
+    if (_terminallyPurged) {
+      return;
+    }
     _connectivitySub ??= Connectivity().onConnectivityChanged.listen((results) {
       final hasConnection = results.any((r) => r != ConnectivityResult.none);
       if (hasConnection) {
@@ -116,11 +127,14 @@ class ChatSendOutbox {
   /// 顺序重发全部队列项；单项失败停止本轮（保持发送顺序），等待下次触发。
   Future<void> drainQueue() async {
     final box = _box;
-    if (box == null || _draining) return;
+    if (_terminallyPurged || box == null || _draining) return;
     _draining = true;
     try {
       final keys = box.keys.toList();
       for (final key in keys) {
+        if (_terminallyPurged) {
+          break;
+        }
         final raw = box.get(key);
         if (raw == null) continue;
         try {
@@ -200,6 +214,48 @@ class ChatSendOutbox {
 
   int get queueLength => _box?.length ?? 0;
 
+  /// 云侧账号 closed 后停止重试并物理清空待发文本、媒体引用与语音引用。
+  Future<void> purgeForTerminalAccountClosure() async {
+    _terminallyPurged = true;
+    await _connectivitySub?.cancel();
+    _connectivitySub = null;
+    final box = _box;
+    if (box == null) {
+      return;
+    }
+    final voicePaths = <String>{};
+    for (final raw in box.values) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map && decoded['kind'] == 'voice') {
+          final path = decoded['filePath']?.toString().trim() ?? '';
+          if (path.isNotEmpty) {
+            voicePaths.add(path);
+          }
+        }
+      } on FormatException {
+        // 损坏队列仍会被物理清空；无法可信解析的路径绝不能用于文件删除。
+      }
+    }
+    Object? firstFileError;
+    StackTrace? firstFileStackTrace;
+    for (final path in voicePaths) {
+      try {
+        await _deleteTemporaryFile(path);
+      } catch (error, stackTrace) {
+        firstFileError ??= error;
+        firstFileStackTrace ??= stackTrace;
+      }
+    }
+    await box.clear();
+    if (box.isNotEmpty) {
+      throw StateError('chat send outbox cleanup verification failed');
+    }
+    if (firstFileError != null) {
+      Error.throwWithStackTrace(firstFileError, firstFileStackTrace!);
+    }
+  }
+
   Future<void> dispose() async {
     await _connectivitySub?.cancel();
     await _box?.close();
@@ -210,6 +266,7 @@ class ChatSendOutbox {
 class ChatSendOutboxNotifier extends Notifier<int> {
   ChatSendOutbox? _outbox;
   Future<void>? _ready;
+  bool _terminalPurgeRequested = false;
 
   @override
   int build() {
@@ -226,6 +283,11 @@ class ChatSendOutboxNotifier extends Notifier<int> {
     });
     _ready = Future<void>.microtask(() async {
       await outbox.init();
+      if (_terminalPurgeRequested) {
+        await outbox.purgeForTerminalAccountClosure();
+        state = 0;
+        return;
+      }
       state = outbox.queueLength;
       if (state > 0) {
         outbox.startMonitor();
@@ -264,6 +326,17 @@ class ChatSendOutboxNotifier extends Notifier<int> {
     if (outbox == null) return;
     await _ready;
     await outbox.drainQueue();
+    state = outbox.queueLength;
+  }
+
+  Future<void> purgeForTerminalAccountClosure() async {
+    _terminalPurgeRequested = true;
+    final outbox = _outbox;
+    if (outbox == null) {
+      return;
+    }
+    await _ready;
+    await outbox.purgeForTerminalAccountClosure();
     state = outbox.queueLength;
   }
 }

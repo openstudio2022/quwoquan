@@ -27,7 +27,7 @@ from core.paths import (  # noqa: E402
     execution_source_catalog_path,
 )
 
-_TASK = "20260711--travel-homepage-shared--cn-sichuan--canary-001"
+_TASK = "20260711--travel-homepage-shared--test-region-b--pilot-001"
 _BATCH = _TASK
 _IDENTITY: dict[str, object] = {}
 
@@ -46,7 +46,7 @@ def test_execution_runtime_state_is_object_first_and_idempotent():
     assert p1.parent == execution_root(_TASK) / "_shared"
     m = read_json(p1)
     assert m["executionId"] == _TASK
-    assert m["targetSetSha256"] == _IDENTITY["targetSetSha256"]
+    assert m["targetSetDigest"] == _IDENTITY["targetSetDigest"]
     assert isinstance(m["executionSequence"], int) and m["executionSequence"] > 0
     assert m["commandChain"] == ["execution"]
     created = m["createdAt"]

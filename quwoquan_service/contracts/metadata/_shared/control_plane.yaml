@@ -37,13 +37,14 @@ approval_modes:
   - id: dual
     requires_distinct_approvers: true
 
-object_kinds:
+view_kinds:
   - id: snapshot
   - id: policy
   - id: workflow_case
   - id: release
   - id: audit
   - id: dashboard
+  - id: operational_queue
 
 dashboard_schema:
   required_fields:
@@ -67,7 +68,7 @@ object_type_schema:
     - deployment_profile
     - operations
   optional_fields:
-    - object_kind
+    - view_kind
     - primary_route
     - dashboard_widgets
     - supported_planes

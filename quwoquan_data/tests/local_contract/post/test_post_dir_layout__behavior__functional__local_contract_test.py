@@ -42,7 +42,7 @@ from content.post.materialize_contract import _materialized_asset_refs  # noqa: 
 from content.post.materialize_residue_cleanup import prune_materialized_post_refs  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
-EXECUTION_ID = "20260711--travel-article-layout--cn-sichuan--canary-001"
+EXECUTION_ID = "20260711--travel-article-layout--test-region-b--pilot-001"
 ANGLE = "攻略"
 
 

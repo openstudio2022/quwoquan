@@ -27,22 +27,22 @@ final class RemoteUserProfileQueryFacet
 
   @override
   Future<SubAccountProfileProjection> getMeProfile(GetMeProfileQuery query) {
-    return client.userUserProfileGetMeProfile(
+    return client.userUserAccountGetMeProfile(
       query,
       context: invocationContext(
         UserRequestPageIds.getMeProfile,
-        AppCloudOperationIds.userUserProfileGetMeProfile,
+        AppCloudOperationIds.userUserAccountGetMeProfile,
       ),
     );
   }
 
   @override
   Future<ListPersonasResult> listPersonas(ListPersonasQuery query) {
-    return client.userUserProfileListPersonas(
+    return client.userUserAccountListPersonas(
       query,
       context: invocationContext(
         UserRequestPageIds.listPersonas,
-        AppCloudOperationIds.userUserProfileListPersonas,
+        AppCloudOperationIds.userUserAccountListPersonas,
       ),
     );
   }
@@ -51,11 +51,11 @@ final class RemoteUserProfileQueryFacet
   Future<PersonaManagementSummaryProjection> getPersonaManagementSummary(
     GetPersonaManagementSummaryQuery query,
   ) {
-    return client.userUserProfileGetPersonaManagementSummary(
+    return client.userUserAccountGetPersonaManagementSummary(
       query,
       context: invocationContext(
         UserRequestPageIds.getPersonaManagementSummary,
-        AppCloudOperationIds.userUserProfileGetPersonaManagementSummary,
+        AppCloudOperationIds.userUserAccountGetPersonaManagementSummary,
       ),
     );
   }
@@ -64,11 +64,11 @@ final class RemoteUserProfileQueryFacet
   Future<ActivePersonaContextProjection> getActivePersonaContext(
     GetActivePersonaContextQuery query,
   ) {
-    return client.userUserProfileGetActivePersonaContext(
+    return client.userUserAccountGetActivePersonaContext(
       query,
       context: invocationContext(
         UserRequestPageIds.getActivePersonaContext,
-        AppCloudOperationIds.userUserProfileGetActivePersonaContext,
+        AppCloudOperationIds.userUserAccountGetActivePersonaContext,
       ),
     );
   }
@@ -77,11 +77,11 @@ final class RemoteUserProfileQueryFacet
   Future<PersonaLifecycleGuardProjection> getPersonaLifecycleGuard(
     GetPersonaLifecycleGuardQuery query,
   ) {
-    return client.userUserProfileGetPersonaLifecycleGuard(
+    return client.userUserAccountGetPersonaLifecycleGuard(
       query,
       context: invocationContext(
         UserRequestPageIds.getPersonaLifecycleGuard,
-        AppCloudOperationIds.userUserProfileGetPersonaLifecycleGuard,
+        AppCloudOperationIds.userUserAccountGetPersonaLifecycleGuard,
       ),
     );
   }
@@ -90,11 +90,11 @@ final class RemoteUserProfileQueryFacet
   Future<SubAccountProfileProjection> getSubAccountProfile(
     GetSubAccountProfileQuery query,
   ) {
-    return client.userUserProfileGetSubAccountProfile(
+    return client.userUserAccountGetSubAccountProfile(
       query,
       context: invocationContext(
         UserRequestPageIds.getSubAccountProfile,
-        AppCloudOperationIds.userUserProfileGetSubAccountProfile,
+        AppCloudOperationIds.userUserAccountGetSubAccountProfile,
       ),
     );
   }
@@ -103,11 +103,11 @@ final class RemoteUserProfileQueryFacet
   Future<UserHomepageBundleProjection> getUserHomepageBundle(
     GetUserHomepageBundleQuery query,
   ) {
-    return client.userUserProfileGetUserHomepageBundle(
+    return client.userUserAccountGetUserHomepageBundle(
       query,
       context: invocationContext(
         UserRequestPageIds.getUserHomepageBundle,
-        AppCloudOperationIds.userUserProfileGetUserHomepageBundle,
+        AppCloudOperationIds.userUserAccountGetUserHomepageBundle,
       ),
     );
   }
@@ -116,11 +116,11 @@ final class RemoteUserProfileQueryFacet
   Future<ProfileEditSnapshotProjection> getProfileEditSnapshot(
     GetProfileEditSnapshotQuery query,
   ) {
-    return client.userUserProfileGetProfileEditSnapshot(
+    return client.userUserAccountGetProfileEditSnapshot(
       query,
       context: invocationContext(
         UserRequestPageIds.getProfileEditSnapshot,
-        AppCloudOperationIds.userUserProfileGetProfileEditSnapshot,
+        AppCloudOperationIds.userUserAccountGetProfileEditSnapshot,
       ),
     );
   }
@@ -129,11 +129,11 @@ final class RemoteUserProfileQueryFacet
   Future<ProfileQrCardProjection> getProfileQrCard(
     GetProfileQrCardQuery query,
   ) {
-    return client.userUserProfileGetProfileQrCard(
+    return client.userUserAccountGetProfileQrCard(
       query,
       context: invocationContext(
         UserRequestPageIds.getProfileQrCard,
-        AppCloudOperationIds.userUserProfileGetProfileQrCard,
+        AppCloudOperationIds.userUserAccountGetProfileQrCard,
       ),
     );
   }
@@ -142,11 +142,11 @@ final class RemoteUserProfileQueryFacet
   Future<ProfileQrResolveProjection> resolveProfileQrToken(
     ResolveProfileQrTokenQuery query,
   ) {
-    return client.userUserProfileResolveProfileQrToken(
+    return client.userUserAccountResolveProfileQrToken(
       query,
       context: invocationContext(
         UserRequestPageIds.resolveProfileQrToken,
-        AppCloudOperationIds.userUserProfileResolveProfileQrToken,
+        AppCloudOperationIds.userUserAccountResolveProfileQrToken,
       ),
     );
   }
@@ -155,11 +155,11 @@ final class RemoteUserProfileQueryFacet
   Future<SearchSocialRelationsResult> searchSocialRelations(
     SearchSocialRelationsQuery query,
   ) {
-    return client.userUserProfileSearchSocialRelations(
+    return client.userUserAccountSearchSocialRelations(
       query,
       context: invocationContext(
         UserRequestPageIds.searchSocialRelations,
-        AppCloudOperationIds.userUserProfileSearchSocialRelations,
+        AppCloudOperationIds.userUserAccountSearchSocialRelations,
       ),
     );
   }

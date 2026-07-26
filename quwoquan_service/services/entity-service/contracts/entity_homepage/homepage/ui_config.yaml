@@ -1,0 +1,54 @@
+aggregate: Homepage
+description: 'Homepage 对象页端侧 UI 配置。
+
+  codegen 从本文件生成 Dart HomepageUIConfig（DO NOT EDIT），
+
+  端侧实体主页通过 HomepageUIConfig 消费一级 Tab、记录流二级过滤配置与
+
+  适用「想去」意图的主页类型，消除页面内硬编码。
+
+  '
+homepage_wishlist_types:
+- hotel
+- restaurant
+- sight
+- museum
+- heritage_site
+- ancient_town
+- religious_site
+- check_in_spot
+- natural_landscape
+- park
+- hot_spring
+- theme_park
+homepage_tabs:
+- id: content
+  label_key: homepage_tab_record
+  body_slot: content
+  order: 0
+  default: true
+- id: discussion
+  label_key: homepage_tab_discussion
+  body_slot: discussion
+  order: 1
+- id: interest_circles
+  label_key: homepage_tab_related_circles
+  body_slot: interest_circles
+  order: 2
+homepage_sub_tabs:
+- id: all
+  label_key: homepage_sub_all
+  order: 0
+  default: true
+- id: image
+  label_key: homepage_sub_image
+  order: 1
+- id: video
+  label_key: homepage_sub_video
+  order: 2
+- id: opinion
+  label_key: homepage_sub_opinion
+  order: 3
+- id: question
+  label_key: homepage_sub_question
+  order: 4

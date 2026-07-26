@@ -530,6 +530,8 @@ class AppUiSurfaces {
       'ListPersonaCircles',
       'ListProfileInteractionActivitiesReceived',
       'ListProfileInteractionActivitiesSent',
+      'GetAuthorImpact',
+      'ListAuthorImpactEvidence',
     ],
   );
 
@@ -546,6 +548,19 @@ class AppUiSurfaces {
       'ListTagChildren',
       'ValidateTagRefs',
       'ReportTagFeedback',
+    ],
+  );
+
+  static const AppUiSurface interestOnboarding = AppUiSurface(
+    id: 'interestOnboarding',
+    owner: 'content',
+    routeId: 'interestOnboarding',
+    pathTemplate: '/onboarding/interests',
+    description: '游客首启兴趣先验采集；选择在登录后经确认型行为提交，跳过回安全首页',
+    operationIds: <String>[
+      'ListTagChildren',
+      'ValidateTagRefs',
+      'ReportBehaviors',
     ],
   );
 
@@ -661,6 +676,7 @@ class AppUiSurfaces {
       'InitMediaUpload',
       'CompleteMediaUpload',
       'AbortMediaUpload',
+      'DiscardMediaAsset',
       'CreateOutboundShare',
       'PlacePostInCircle',
       'ListPersonaCircles',
@@ -715,6 +731,8 @@ class AppUiSurfaces {
       'ListCommentsForPostAuthor',
       'DeleteComment',
       'ReactToComment',
+      'GetAuthorImpact',
+      'ListAuthorImpactEvidence',
     ],
   );
 
@@ -748,7 +766,7 @@ class AppUiSurfaces {
 
   static const AppUiSurface legalUserAgreement = AppUiSurface(
     id: 'legalUserAgreement',
-    owner: 'legal',
+    owner: 'user',
     routeId: 'legalUserAgreement',
     pathTemplate: '/legal/user-agreement',
     description: '用户协议静态正文',
@@ -758,7 +776,7 @@ class AppUiSurfaces {
 
   static const AppUiSurface legalPrivacyPolicy = AppUiSurface(
     id: 'legalPrivacyPolicy',
-    owner: 'legal',
+    owner: 'user',
     routeId: 'legalPrivacyPolicy',
     pathTemplate: '/legal/privacy-policy',
     description: '隐私政策静态正文',
@@ -768,7 +786,7 @@ class AppUiSurfaces {
 
   static const AppUiSurface legalPermissions = AppUiSurface(
     id: 'legalPermissions',
-    owner: 'legal',
+    owner: 'user',
     routeId: 'legalPermissions',
     pathTemplate: '/legal/permissions',
     description: '权限说明静态正文',
@@ -778,7 +796,7 @@ class AppUiSurfaces {
 
   static const AppUiSurface legalThirdPartySdkList = AppUiSurface(
     id: 'legalThirdPartySdkList',
-    owner: 'legal',
+    owner: 'user',
     routeId: 'legalThirdPartySdkList',
     pathTemplate: '/legal/third-party-sdk-list',
     description: '第三方 SDK 清单静态正文',
@@ -1109,6 +1127,8 @@ class AppUiSurfaces {
     pathTemplate: '/profile/intersections',
     description: '我的交集与影响力收件箱',
     operationIds: <String>[
+      'GetAuthorImpact',
+      'ListAuthorImpactEvidence',
     ],
   );
 
@@ -1231,6 +1251,7 @@ class AppUiSurfaces {
     myFootprint,
     userProfile,
     profileCareerInterests,
+    interestOnboarding,
     addContact,
     addContactSearch,
     addContactScan,
@@ -1311,6 +1332,7 @@ class AppUiSurfaces {
     'myFootprint': myFootprint,
     'userProfile': userProfile,
     'profileCareerInterests': profileCareerInterests,
+    'interestOnboarding': interestOnboarding,
     'addContact': addContact,
     'addContactSearch': addContactSearch,
     'addContactScan': addContactScan,

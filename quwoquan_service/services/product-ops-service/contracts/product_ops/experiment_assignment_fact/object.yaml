@@ -1,0 +1,31 @@
+kind: append_only_fact
+description: 'A/B 实验的不可变确定性 assignment fact。Experiment 聚合拥有实验生命周期；
+
+  分配经 typed append sink 以 (experimentId, policyVersion, trustedSubjectKey) 幂等追加；
+
+  trustedSubjectKey 只能由已验签 Persona 或 Device Actor 派生，禁止客户端指定。
+
+  '
+identity:
+  fields:
+  - id
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: experiment
+  on_delete: retain
+  reference_fields:
+  - experimentId
+  target_object: ops.Experiment
+capabilities:
+- append_only
+- queryable
+taggable: false
+vector_enabled: false

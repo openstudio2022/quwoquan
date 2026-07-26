@@ -1,0 +1,13 @@
+overrides:
+  sys.chat-service.redis.general.addr: redis:6379
+  sys.chat-service.redis.realtime.addr: redis:6379
+  sys.chat-service.runtime.auth.account_security_authority.timeout_ms: 500
+  sys.chat-service.runtime.media.group_avatar_cdn_base_url: https://gamma-avatar.quwoquan-env.test:19100
+  sys.chat-service.runtime.media.group_avatar_local_media_root: /var/lib/quwoquan/chat-media
+secretRefs:
+  sys.chat-service.mongodb.uri: MONGO_URI
+externalBindings:
+  runtime.message.transport:
+    state: enabled
+    adapter: infra.redis.message_transport
+    timeoutMs: 5000

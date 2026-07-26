@@ -16,8 +16,6 @@ import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timel
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
-    show AssistantIntersectionEvidenceRef;
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
@@ -31,234 +29,18 @@ import 'package:quwoquan_app/ui/assistant/providers/assistant_history_loader.dar
 import 'package:quwoquan_app/ui/assistant/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import 'package:uuid/uuid.dart';
 
 part 'personal_assistant_stream_controller_projection.dart';
-
-enum PersonalAssistantTranscriptRole { user, assistant, system }
-
-enum _PersonalAssistantRetryKind { send, openTurn }
-
-const Object _unsetAssistantFailure = Object();
-
-const String _assistantTurnActionSubmit = 'submit';
-const String _assistantTurnActionFirstAnswer = 'first_answer';
-const String _assistantTurnActionCompleted = 'completed';
-const String _assistantTurnActionFailed = 'failed';
-const String _assistantTurnActionCancelled = 'cancelled';
-const String _assistantTurnActionStreamFailure = 'stream_failure';
-
-const String _assistantTurnResultSuccess = 'success';
-const String _assistantTurnResultFailure = 'failure';
-const String _assistantTurnResultCancelled = 'cancelled';
-
-class PersonalAssistantTranscriptItem {
-  const PersonalAssistantTranscriptItem({
-    required this.id,
-    required this.role,
-    required this.text,
-    this.turnId = '',
-    this.eventType = '',
-    this.proactive = false,
-    this.streaming = false,
-  });
-
-  final String id;
-  final PersonalAssistantTranscriptRole role;
-  final String text;
-  final String turnId;
-  final String eventType;
-  final bool proactive;
-  final bool streaming;
-
-  PersonalAssistantTranscriptItem copyWith({
-    String? text,
-    String? turnId,
-    String? eventType,
-    bool? proactive,
-    bool? streaming,
-  }) {
-    return PersonalAssistantTranscriptItem(
-      id: id,
-      role: role,
-      text: text ?? this.text,
-      turnId: turnId ?? this.turnId,
-      eventType: eventType ?? this.eventType,
-      proactive: proactive ?? this.proactive,
-      streaming: streaming ?? this.streaming,
-    );
-  }
-}
-
-class PersonalAssistantStreamState {
-  const PersonalAssistantStreamState({
-    this.conversationId = '',
-    this.turnId = '',
-    this.answer = '',
-    this.transcript = const <AssistantTranscriptTimelineRow>[],
-    this.processSummary = const PersonalAssistantProcessSummary(),
-    this.events = const <AssistantStreamEventWire>[],
-    this.answerGateOpen = false,
-    this.running = false,
-    this.errorMessage = '',
-    this.errorFailure,
-    this.retryAvailable = false,
-    this.appMessageUnreadCount = 0,
-    this.managementSummaryLoading = false,
-    this.feedbackMessage = '',
-    this.feedbackType = '',
-    this.historyInitialized = false,
-    this.historyLoading = false,
-  });
-
-  final String conversationId;
-  final String turnId;
-  final String answer;
-  final List<AssistantTranscriptTimelineRow> transcript;
-  final PersonalAssistantProcessSummary processSummary;
-  final List<AssistantStreamEventWire> events;
-  final bool answerGateOpen;
-  final bool running;
-  final String errorMessage;
-  final RuntimeFailureBase? errorFailure;
-  final bool retryAvailable;
-  final int appMessageUnreadCount;
-  final bool managementSummaryLoading;
-  final String feedbackMessage;
-  final String feedbackType;
-  final bool historyInitialized;
-  final bool historyLoading;
-
-  PersonalAssistantStreamState copyWith({
-    String? conversationId,
-    String? turnId,
-    String? answer,
-    List<AssistantTranscriptTimelineRow>? transcript,
-    PersonalAssistantProcessSummary? processSummary,
-    List<AssistantStreamEventWire>? events,
-    bool? answerGateOpen,
-    bool? running,
-    String? errorMessage,
-    Object? errorFailure = _unsetAssistantFailure,
-    bool? retryAvailable,
-    int? appMessageUnreadCount,
-    bool? managementSummaryLoading,
-    String? feedbackMessage,
-    String? feedbackType,
-    bool? historyInitialized,
-    bool? historyLoading,
-  }) {
-    return PersonalAssistantStreamState(
-      conversationId: conversationId ?? this.conversationId,
-      turnId: turnId ?? this.turnId,
-      answer: answer ?? this.answer,
-      transcript: transcript ?? this.transcript,
-      processSummary: processSummary ?? this.processSummary,
-      events: events ?? this.events,
-      answerGateOpen: answerGateOpen ?? this.answerGateOpen,
-      running: running ?? this.running,
-      errorMessage: errorMessage ?? this.errorMessage,
-      errorFailure: identical(errorFailure, _unsetAssistantFailure)
-          ? this.errorFailure
-          : errorFailure as RuntimeFailureBase?,
-      retryAvailable: retryAvailable ?? this.retryAvailable,
-      appMessageUnreadCount:
-          appMessageUnreadCount ?? this.appMessageUnreadCount,
-      managementSummaryLoading:
-          managementSummaryLoading ?? this.managementSummaryLoading,
-      feedbackMessage: feedbackMessage ?? this.feedbackMessage,
-      feedbackType: feedbackType ?? this.feedbackType,
-      historyInitialized: historyInitialized ?? this.historyInitialized,
-      historyLoading: historyLoading ?? this.historyLoading,
-    );
-  }
-}
-
-class PersonalAssistantProcessSummary {
-  const PersonalAssistantProcessSummary({
-    this.processedCount = 0,
-    this.searchCount = 0,
-    this.acceptedCount = 0,
-    this.elapsedMs = 0,
-    this.lines = const <String>[],
-    this.understandingSummary = '',
-    this.retrievalDesignNarrative = '',
-    this.processingSummary = '',
-    this.expansionReason = '',
-    this.finalAnswerSummary = '',
-    this.finalAnswerReady = false,
-    this.processes = const <AssistantRunVisibleProcess>[],
-    this.selectedKeyPoints = const <String>[],
-    this.acceptedReferences = const <RetrievalProcessingReference>[],
-  });
-
-  final int processedCount;
-  final int searchCount;
-  final int acceptedCount;
-  final int elapsedMs;
-  final List<String> lines;
-  final String understandingSummary;
-  final String retrievalDesignNarrative;
-  final String processingSummary;
-  final String expansionReason;
-  final String finalAnswerSummary;
-  final bool finalAnswerReady;
-  final List<AssistantRunVisibleProcess> processes;
-  final List<String> selectedKeyPoints;
-  final List<RetrievalProcessingReference> acceptedReferences;
-
-  PersonalAssistantProcessSummary copyWith({
-    int? processedCount,
-    int? searchCount,
-    int? acceptedCount,
-    int? elapsedMs,
-    List<String>? lines,
-    String? understandingSummary,
-    String? retrievalDesignNarrative,
-    String? processingSummary,
-    String? expansionReason,
-    String? finalAnswerSummary,
-    bool? finalAnswerReady,
-    List<AssistantRunVisibleProcess>? processes,
-    List<String>? selectedKeyPoints,
-    List<RetrievalProcessingReference>? acceptedReferences,
-  }) {
-    return PersonalAssistantProcessSummary(
-      processedCount: processedCount ?? this.processedCount,
-      searchCount: searchCount ?? this.searchCount,
-      acceptedCount: acceptedCount ?? this.acceptedCount,
-      elapsedMs: elapsedMs ?? this.elapsedMs,
-      lines: lines ?? this.lines,
-      understandingSummary: understandingSummary ?? this.understandingSummary,
-      retrievalDesignNarrative:
-          retrievalDesignNarrative ?? this.retrievalDesignNarrative,
-      processingSummary: processingSummary ?? this.processingSummary,
-      expansionReason: expansionReason ?? this.expansionReason,
-      finalAnswerSummary: finalAnswerSummary ?? this.finalAnswerSummary,
-      finalAnswerReady: finalAnswerReady ?? this.finalAnswerReady,
-      processes: processes ?? this.processes,
-      selectedKeyPoints: selectedKeyPoints ?? this.selectedKeyPoints,
-      acceptedReferences: acceptedReferences ?? this.acceptedReferences,
-    );
-  }
-
-  bool get hasContent =>
-      processedCount > 0 ||
-      searchCount > 0 ||
-      acceptedCount > 0 ||
-      lines.isNotEmpty ||
-      processes.isNotEmpty ||
-      understandingSummary.trim().isNotEmpty ||
-      retrievalDesignNarrative.trim().isNotEmpty ||
-      processingSummary.trim().isNotEmpty ||
-      finalAnswerSummary.trim().isNotEmpty ||
-      acceptedReferences.isNotEmpty;
-}
+part 'personal_assistant_stream_controller_models.dart';
 
 class PersonalAssistantStreamController
     extends Notifier<PersonalAssistantStreamState> {
   Future<void>? _historyInitializationFuture;
   _PersonalAssistantRetryKind? _retryKind;
   String _retryValue = '';
+  String _retryRunClientRequestId = '';
+  String _retryConversationClientRequestId = '';
   List<AssistantIntersectionEvidenceRef> _pendingIntersectionEvidenceRefs =
       const <AssistantIntersectionEvidenceRef>[];
 
@@ -303,7 +85,14 @@ class PersonalAssistantStreamController
           .read(assistantHistoryLoaderProvider)
           .load(subAccountId: subAccountId);
       if (snapshot == null) {
-        state = state.copyWith(historyInitialized: true, historyLoading: false);
+        state = state.copyWith(
+          historyInitialized: true,
+          historyLoading: false,
+          errorMessage: '',
+          errorFailure: null,
+          retryAvailable: false,
+        );
+        _clearRetry();
         return;
       }
       final currentIds = state.transcript.map((row) => row.id).toSet();
@@ -321,16 +110,26 @@ class PersonalAssistantStreamController
         ],
         historyInitialized: true,
         historyLoading: false,
+        errorMessage: '',
+        errorFailure: null,
+        retryAvailable: false,
       );
+      _clearRetry();
     } catch (error, stackTrace) {
-      // 云端历史恢复失败可容忍：记录后按"无历史"继续，不阻断新会话。
       developer.log(
         'assistant history initialization failed',
         name: 'personal_assistant',
         error: error,
         stackTrace: stackTrace,
       );
-      state = state.copyWith(historyInitialized: true, historyLoading: false);
+      state = state.copyWith(
+        historyInitialized: false,
+        historyLoading: false,
+        errorMessage: runtimeErrorDisplayMessage(error),
+        errorFailure: runtimeFailureFromError(error),
+        retryAvailable: true,
+      );
+      _rememberRetry(_PersonalAssistantRetryKind.history, 'history');
     }
   }
 
@@ -365,8 +164,13 @@ class PersonalAssistantStreamController
       state = state.copyWith(
         transcript:
             snapshot?.transcript ?? const <AssistantTranscriptTimelineRow>[],
+        historyInitialized: true,
         historyLoading: false,
+        errorMessage: '',
+        errorFailure: null,
+        retryAvailable: false,
       );
+      _clearRetry();
     } catch (error, stackTrace) {
       developer.log(
         'assistant conversation switch failed conversationId=$target',
@@ -375,10 +179,13 @@ class PersonalAssistantStreamController
         stackTrace: stackTrace,
       );
       state = state.copyWith(
+        historyInitialized: false,
         historyLoading: false,
         errorMessage: runtimeErrorDisplayMessage(error),
         errorFailure: runtimeFailureFromError(error),
+        retryAvailable: true,
       );
+      _rememberRetry(_PersonalAssistantRetryKind.switchConversation, target);
     }
   }
 
@@ -506,7 +313,7 @@ class PersonalAssistantStreamController
       sessionId: AppTraceContextStore.instance.sessionId,
       pageType: 'assistant_dialog',
       domainId: 'assistant',
-      feedbackType: 'regenerated',
+      feedbackType: FeedbackType.regenerated,
       copiedAnswer: false,
       sharedAnswer: false,
       regeneratedAnswer: true,
@@ -575,6 +382,9 @@ class PersonalAssistantStreamController
       return;
     }
     await ensureHistoryInitialized();
+    if (!state.historyInitialized) {
+      return;
+    }
     state = state.copyWith(
       running: true,
       errorMessage: '',
@@ -612,12 +422,34 @@ class PersonalAssistantStreamController
     }
   }
 
-  Future<void> send(String text) async {
+  Future<void> send(String text) {
+    return _send(text);
+  }
+
+  Future<void> _send(
+    String text, {
+    String runClientRequestId = '',
+    String conversationClientRequestId = '',
+  }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || state.running) {
       return;
     }
     await ensureHistoryInitialized();
+    if (!state.historyInitialized) {
+      return;
+    }
+    final resolvedRunClientRequestId = _assistantClientRequestId(
+      runClientRequestId,
+      scope: 'run',
+    );
+    final resolvedConversationClientRequestId =
+        state.conversationId.trim().isEmpty
+        ? _assistantClientRequestId(
+            conversationClientRequestId,
+            scope: 'conversation',
+          )
+        : '';
     _debugPersonalAssistant(
       'send text="${_debugSnippet(trimmed)}" existingConversation=${state.conversationId}',
     );
@@ -648,13 +480,23 @@ class PersonalAssistantStreamController
       if (conversationId.isEmpty) {
         final conversation = await repository.createAssistantConversation(
           summary: AssistantText.assistantCloudConversationSummary,
+          clientRequestId: resolvedConversationClientRequestId,
         );
-        conversationId = conversation.conversationId;
+        conversationId = conversation.conversationId.trim();
+        if (conversationId.isEmpty) {
+          throw const FormatException(
+            'CreateAssistantConversation returned an empty conversationId',
+          );
+        }
+        // 创建成功后立即固定会话，StartAssistantRun 超时/失败的重试才会沿用该
+        // conversation 与同一 run intent，而不是额外创建空会话。
+        state = state.copyWith(conversationId: conversationId);
         _debugPersonalAssistant('conversation created id=$conversationId');
       }
       final turn = await repository.startAssistantRun(
         conversationId: conversationId,
         text: trimmed,
+        clientRequestId: resolvedRunClientRequestId,
         domainId: 'assistant',
         intersectionEvidenceRefs: _pendingIntersectionEvidenceRefs,
       );
@@ -773,7 +615,7 @@ class PersonalAssistantStreamController
             turnId: turn.turnId,
             traceId: turn.traceId,
             sourceQuery: trimmed,
-            eventType: event.eventType,
+            eventType: event.eventType.wireName,
             streaming: false,
             processSummary: processSummary,
           );
@@ -806,7 +648,7 @@ class PersonalAssistantStreamController
             turnId: turn.turnId,
             traceId: turn.traceId,
             sourceQuery: trimmed,
-            eventType: event.eventType,
+            eventType: event.eventType.wireName,
             streaming:
                 streamEvent.type != AssistantRunStreamEventType.completed,
             processSummary: processSummary,
@@ -901,7 +743,12 @@ class PersonalAssistantStreamController
             ? AssistantApiMetadata.streamAssistantRunEventsOperation
             : AssistantApiMetadata.startAssistantRunOperation,
       );
-      _rememberRetry(_PersonalAssistantRetryKind.send, trimmed);
+      _rememberRetry(
+        _PersonalAssistantRetryKind.send,
+        trimmed,
+        runClientRequestId: resolvedRunClientRequestId,
+        conversationClientRequestId: resolvedConversationClientRequestId,
+      );
     }
   }
 
@@ -923,9 +770,23 @@ class PersonalAssistantStreamController
           transcript.removeLast();
           state = state.copyWith(transcript: transcript);
         }
-        return send(value);
+        return _send(
+          value,
+          runClientRequestId: _retryRunClientRequestId,
+          conversationClientRequestId: _retryConversationClientRequestId,
+        );
       case _PersonalAssistantRetryKind.openTurn:
         return openTurnFromAppMessage(value);
+      case _PersonalAssistantRetryKind.history:
+        state = state.copyWith(
+          errorMessage: '',
+          errorFailure: null,
+          retryAvailable: false,
+        );
+        _clearRetry();
+        return ensureHistoryInitialized();
+      case _PersonalAssistantRetryKind.switchConversation:
+        return switchConversation(value);
     }
   }
 
@@ -938,14 +799,31 @@ class PersonalAssistantStreamController
     _clearRetry();
   }
 
-  void _rememberRetry(_PersonalAssistantRetryKind kind, String value) {
+  String _assistantClientRequestId(String value, {required String scope}) {
+    final normalized = value.trim();
+    if (normalized.isNotEmpty) {
+      return normalized;
+    }
+    return 'assistant-$scope-${const Uuid().v4()}';
+  }
+
+  void _rememberRetry(
+    _PersonalAssistantRetryKind kind,
+    String value, {
+    String runClientRequestId = '',
+    String conversationClientRequestId = '',
+  }) {
     _retryKind = kind;
     _retryValue = value;
+    _retryRunClientRequestId = runClientRequestId.trim();
+    _retryConversationClientRequestId = conversationClientRequestId.trim();
   }
 
   void _clearRetry() {
     _retryKind = null;
     _retryValue = '';
+    _retryRunClientRequestId = '';
+    _retryConversationClientRequestId = '';
   }
 
   void _recordAssistantTurnQuality({
@@ -1027,7 +905,7 @@ class PersonalAssistantStreamController
       sessionId: AppTraceContextStore.instance.sessionId,
       pageType: 'assistant_dialog',
       domainId: 'assistant',
-      feedbackType: feedbackType,
+      feedbackType: parseFeedbackTypeStrict(feedbackType),
       copiedAnswer: feedbackType == 'copied',
       sharedAnswer: false,
       regeneratedAnswer: false,
@@ -1054,8 +932,20 @@ class PersonalAssistantStreamController
           .reportInteractionEvents(events: batch);
       final acceptedCount =
           ack.acceptedCount ?? (ack.accepted ? batch.length : 0);
-      if (acceptedCount > 0) {
-        _pendingFeedbackEvents.clear();
+      final acceptedIds = <String>{...?ack.acceptedIds};
+      // Older server releases may omit acceptedIds only when the whole batch
+      // was accepted. Treat every partial acknowledgement without identities as
+      // unacknowledged so a retry is idempotent rather than silently dropping
+      // feedback facts.
+      if (acceptedIds.isEmpty &&
+          ack.accepted &&
+          acceptedCount == batch.length) {
+        acceptedIds.addAll(batch.map((event) => event.eventId));
+      }
+      if (acceptedIds.isNotEmpty) {
+        _pendingFeedbackEvents.removeWhere(
+          (pending) => acceptedIds.contains(pending.eventId),
+        );
       }
     } catch (error) {
       developer.log(

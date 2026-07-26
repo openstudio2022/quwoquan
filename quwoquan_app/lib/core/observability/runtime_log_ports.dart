@@ -68,7 +68,8 @@ final class InMemoryRuntimeLogBuffer implements ReliableRuntimeLogBuffer {
     this.capacity = RuntimeLogCatalog.appBufferCapacity,
     this.deadLetterCapacity = RuntimeLogCatalog.appDeadLetterCapacity,
     this.ttl = const Duration(hours: RuntimeLogCatalog.deliveryTtlHours),
-  }) {
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now {
     if (capacity <= 0 || deadLetterCapacity <= 0 || ttl <= Duration.zero) {
       throw ArgumentError('runtime log buffer limits must be positive');
     }
@@ -77,6 +78,7 @@ final class InMemoryRuntimeLogBuffer implements ReliableRuntimeLogBuffer {
   final int capacity;
   final int deadLetterCapacity;
   final Duration ttl;
+  final DateTime Function() _now;
   final List<_RuntimeLogQueueEntry> _entries = <_RuntimeLogQueueEntry>[];
   final List<RuntimeLogDeadLetter> _deadLetters = <RuntimeLogDeadLetter>[];
 
@@ -95,7 +97,7 @@ final class InMemoryRuntimeLogBuffer implements ReliableRuntimeLogBuffer {
 
   @override
   Future<List<RuntimeLogRecord>> pending({int limit = 50}) async {
-    final now = DateTime.now().toUtc();
+    final now = _now().toUtc();
     await expire(now: now);
     final ordered =
         _entries
@@ -196,7 +198,7 @@ final class InMemoryRuntimeLogBuffer implements ReliableRuntimeLogBuffer {
         RuntimeLogDeadLetter(
           record: removed.record,
           reason: 'capacity_evicted',
-          failedAt: DateTime.now().toUtc(),
+          failedAt: _now().toUtc(),
         ),
       );
       _trimDeadLetters();

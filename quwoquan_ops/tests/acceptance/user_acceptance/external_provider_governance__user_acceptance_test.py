@@ -11,26 +11,36 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 
 
-def test_prod_readiness_refuses_user_acceptance_before_required_capabilities_are_ready() -> None:
+def test_local_test_environments_use_substitutes_and_prod_uses_real_adapters() -> None:
     compiled, issues = governance.load_and_compile()
 
     assert issues == []
-    blocked = [
-        capability_id
-        for capability_id, readiness in compiled["readiness"]["prod"].items()
-        if readiness["required"] and not readiness["capability_ready"]
-    ]
 
-    assert {
-        "identity.sms.otp",
-        "integration.push.delivery",
-        "assistant.model.generation",
-        "rtc.room.transport",
-        "runtime.log.sink",
-        "runtime.message.transport",
-    }.issubset(blocked)
-    assert "runtime.dns.resolution" not in blocked
+    for environment in governance.SUBSTITUTE_ENVIRONMENTS:
+        for capability_id, readiness in compiled["readiness"][environment].items():
+            if not readiness["required"] or not readiness.get("adapter_id"):
+                continue
+            assert readiness["state"] == "enabled", (environment, capability_id)
+            assert governance.is_local_substitute_adapter(
+                readiness["adapter_id"]
+            ), (environment, capability_id)
+
+    for environment in governance.RELEASE_ADAPTER_ENVIRONMENTS:
+        for capability_id, readiness in compiled["readiness"][environment].items():
+            if not readiness["required"] or not readiness.get("adapter_id"):
+                continue
+            assert readiness["state"] == "enabled", (environment, capability_id)
+            assert not governance.is_prod_forbidden_adapter(
+                readiness["adapter_id"]
+            ), (environment, capability_id)
+
+    # Platform message transport may be enabled on prod; it is not a SaaS substitute.
+    transport = compiled["readiness"]["prod"]["runtime.message.transport"]
+    assert transport["required"]
+    assert transport["adapter_id"] == "infra.redis.message_transport"
+
+    assert "runtime.dns.resolution" not in compiled["readiness"]["prod"]
 
 
 if __name__ == "__main__":
-    test_prod_readiness_refuses_user_acceptance_before_required_capabilities_are_ready()
+    test_local_test_environments_use_substitutes_and_prod_uses_real_adapters()

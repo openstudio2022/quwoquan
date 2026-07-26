@@ -1,9 +1,0 @@
-aggregate: ExternalInteraction
-layer: app_side
-
-description: |
-  ExternalInteraction 是 service principal 内部对象，App 不直接调用其 operation；
-  端侧无 DTO/widget 场景。App 只经业务域（如登录 OTP、通知 inbox）间接受益。
-
-dto_scenarios: []
-widget_scenarios: []

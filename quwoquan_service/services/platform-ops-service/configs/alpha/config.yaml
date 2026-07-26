@@ -1,7 +1,0 @@
-# alpha overrides (developer single-instance validation)
-service:
-  http:
-    addr: ":18087"
-
-postgres:
-  dsn: "${POSTGRES_DSN}"

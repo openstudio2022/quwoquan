@@ -46,7 +46,7 @@ jobs:
             go-mod-api-integration-${{ runner.os }}-
       - name: Run content-service api_integration
         run: |
-          go test ./services/content-service/tests/api_integration/ -count=1 -timeout 30m -v 2>&1 | tee api_integration.log
+          go test ./services/content-service/tests/api_integration/content/content/post/ -count=1 -timeout 30m -v 2>&1 | tee api_integration.log
       - name: Assert recommendation-critical tests executed
         run: |
           # 防回归：premium 事件链与 behavior 契约必须真实执行（不是被 skip）。

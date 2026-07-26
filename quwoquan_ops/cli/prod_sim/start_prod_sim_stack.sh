@@ -4,11 +4,23 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
 QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
+DEPLOY_TARGET_ROOT="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_work_root
+
+print(deployment_work_root("prod-sim"))
+PY
+)"
+QWQ_DEPLOY_WORK_ROOT="$(dirname "$DEPLOY_TARGET_ROOT")"
+export QWQ_DEPLOY_WORK_ROOT
 ACTION="${1:-up}"
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
   --env prod --target prod-sim --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
-DEPLOY_RUNTIME_ROOT="${QWQ_DEPLOY_WORK_ROOT}/prod-sim"
-RUNTIME_CONFIG_DIR="${DEPLOY_RUNTIME_ROOT}/rendered"
+RUNTIME_CONFIG_DIR="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
+
+print(deployment_render_dir("prod", target="prod-sim"))
+PY
+)"
 CACHE_DIR="${QWQ_OUTPUT_ROOT}/env/prod/local/prod-sim/cache"
 STATE_DIR="${QWQ_OUTPUT_ROOT}/env/prod/local/prod-sim/process"
 LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
@@ -61,10 +73,30 @@ INTERNAL_API_BASE_URL="http://127.0.0.1:${CONTENT_PORT}"
 INTERNAL_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}"
 INTERNAL_MEDIA_BASE_URL="http://127.0.0.1:${MEDIA_PROCESSOR_PORT}"
 TLS_PROXY_NAME="quwoquan_prod_sim_tls_proxy"
-TLS_CADDYFILE="$RUNTIME_CONFIG_DIR/Caddyfile"
-TLS_DATA_DIR="$DEPLOY_RUNTIME_ROOT/caddy-data"
-TLS_CONFIG_DIR="$DEPLOY_RUNTIME_ROOT/caddy-config"
-TLS_ROOT_CERT="$DEPLOY_RUNTIME_ROOT/certificates/root.crt"
+TLS_CADDYFILE="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_target_path
+
+print(deployment_target_path("prod-sim", "rendered", "Caddyfile"))
+PY
+)"
+TLS_DATA_DIR="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_target_path
+
+print(deployment_target_path("prod-sim", "caddy-data"))
+PY
+)"
+TLS_CONFIG_DIR="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_target_path
+
+print(deployment_target_path("prod-sim", "caddy-config"))
+PY
+)"
+TLS_ROOT_CERT="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import deployment_target_path
+
+print(deployment_target_path("prod-sim", "certificates", "root.crt"))
+PY
+)"
 CONTAINER_RUNTIME=""
 CONTAINER_HOST_ALIAS=""
 

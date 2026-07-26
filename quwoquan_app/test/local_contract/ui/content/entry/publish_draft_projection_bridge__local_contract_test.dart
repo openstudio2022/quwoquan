@@ -272,7 +272,7 @@ void main() {
       },
     );
 
-    test('article asset manifest requests server-side variant generation', () {
+    test('article asset manifest carries identity and presentation only', () {
       final document = ArticleDocumentData(
         nodes: const <ArticleDocumentNode>[
           ArticleDocumentNode(
@@ -295,13 +295,9 @@ void main() {
       final cover = assets.cast<Map<Object?, Object?>>().firstWhere(
         (asset) => asset['assetId'] == 'cover',
       );
-      final variantGeneration =
-          cover['variantGeneration'] as Map<Object?, Object?>;
-
-      expect(variantGeneration['required'], isTrue);
-      expect(variantGeneration['source'], 'server');
-      expect(variantGeneration['profiles'], contains('display'));
-      expect(variantGeneration['profiles'], contains('original'));
+      expect(cover['role'], 'cover');
+      expect(cover.keys, unorderedEquals(<Object?>['assetId', 'kind', 'role']));
+      expect('${manifest['assets']}', isNot(contains('/tmp/')));
     });
 
     test('article markdown is serialized directly from document nodes', () {

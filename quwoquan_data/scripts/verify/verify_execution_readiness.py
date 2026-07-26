@@ -9,13 +9,13 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.article_package import compute_document_sha256
+from content.execution.runtime_contract import file_sha256
 from core.io import read_json
 from core.paths import DATA_EXECUTIONS_ROOT, is_execution_id
 from core.schema import assert_valid
 from content.execution.workspace import load_execution_manifest
 from content.execution.identity import parse_execution_id
-from content.execution.production_contracts import validate_token_ledger_entry
-from core.control_types import ContentType
+from core.control_types import ContentType, expected_content_generator
 from verify.verify_content_execution_layout import content_execution_layout_issues
 from verify.verify_homepage_media_completeness import homepage_media_completeness_report
 
@@ -83,92 +83,13 @@ def _execution_model_readiness(root: Path, execution_id: str, issues: list[str])
     return payload
 
 
-def _token_ledger_issues(
-    root: Path,
-    execution_id: str,
-    *,
-    model_readiness: dict,
-) -> list[str]:
-    path = root / "_shared" / "token_ledger.json"
-    if not path.is_file():
-        return [f"{path}: authoritative token ledger is missing"]
-    try:
-        payload = read_json(path)
-    except (OSError, ValueError, TypeError) as exc:
-        return [f"{path}: token ledger is invalid ({exc})"]
-    issues: list[str] = []
-    if payload.get("executionId") != execution_id:
-        issues.append("token ledger executionId drift")
-    if payload.get("measurementMode") not in {
-        "cursor_sdk_result_usage",
-        "object_queue_authoritative",
-        "mixed_authoritative",
-    }:
-        issues.append("token ledger is not authoritative")
-    entries = payload.get("entries")
-    if not isinstance(entries, list) or not entries:
-        return [*issues, "token ledger has no entries"]
-    expected_models = {
-        str(binding.get("model") or "")
-        for binding in (
-            model_readiness.get("author"),
-            model_readiness.get("reviewer"),
-        )
-        if isinstance(binding, dict)
-    }
-    pricing_revisions: set[str] = set()
-    for index, entry in enumerate(entries):
-        if not isinstance(entry, dict):
-            issues.append(f"token ledger entry {index} is not an object")
-            continue
-        try:
-            assert_valid(
-                entry,
-                "content",
-                "token_ledger",
-                label=f"{path.as_posix()}#entries/{index}",
-            )
-        except (ValueError, TypeError) as exc:
-            issues.append(f"token ledger entry {index} schema invalid ({exc})")
-            continue
-        issues.extend(
-            f"token ledger entry {index}: {issue}"
-            for issue in validate_token_ledger_entry(entry)
-        )
-        model = str(entry.get("model") or "")
-        if model not in expected_models:
-            issues.append(f"token ledger entry {index} model drift")
-        revision = str(entry.get("pricingRevision") or "")
-        if not revision:
-            issues.append(f"token ledger entry {index} pricingRevision is missing")
-        else:
-            pricing_revisions.add(revision)
-        if entry.get("costKnown") is not True or entry.get("costUsd") is None:
-            issues.append(f"token ledger entry {index} cost is unknown")
-        if entry.get("budgetExceeded") is True:
-            issues.append(f"token ledger entry {index} exceeded budget")
-    if len(pricing_revisions) > 1:
-        issues.append("token ledger pricingRevision drift")
-    summary = payload.get("summary")
-    if not isinstance(summary, dict):
-        return [*issues, "token ledger summary is missing"]
-    if int(summary.get("unknownCostEntryCount") or 0) != 0:
-        issues.append("token ledger summary contains unknown cost entries")
-    if int(summary.get("budgetExceededCount") or 0) != 0:
-        issues.append("token ledger summary contains budget overflow")
-    if not isinstance(summary.get("costUsd"), (int, float)):
-        issues.append("token ledger summary costUsd is unknown")
-    if not isinstance(summary.get("unitPassedCostUsd"), (int, float)):
-        issues.append("token ledger summary unitPassedCostUsd is unknown")
-    return issues
-
-
 def _reviewed_object_issues(
     root: Path,
     object_root: Path,
     execution_id: str,
     *,
     model_readiness: dict,
+    content_type: ContentType,
 ) -> list[str]:
     rel = object_root.relative_to(root)
     issues: list[str] = []
@@ -179,6 +100,12 @@ def _reviewed_object_issues(
     draft_dir = object_root / "4.draft"
     draft_meta = _read_valid_json(draft_dir / "draft_meta.json", "content", "draft_meta", issues)
     draft_page = draft_dir / "page.md"
+    if content_type is ContentType.ARTICLE:
+        draft_page = draft_dir / "draft.article.md"
+    elif content_type is ContentType.VIDEO:
+        draft_page = draft_dir / "video_script.json"
+    elif content_type is ContentType.IMAGE:
+        draft_page = Path()
     if draft_meta:
         if str(draft_meta.get("executionId") or "") != execution_id:
             issues.append(f"{rel}/4.draft: executionId drift")
@@ -194,11 +121,18 @@ def _reviewed_object_issues(
         author = model_readiness.get("author") if isinstance(model_readiness.get("author"), dict) else {}
         if author and draft_meta.get("model") != author.get("model"):
             issues.append(f"{rel}/4.draft: author model drift from execution readiness")
-        if not draft_page.is_file():
+        if content_type is ContentType.IMAGE:
+            if not str(draft_meta.get("draftSha256") or "").startswith("sha256:"):
+                issues.append(f"{rel}/4.draft: image evidence digest is missing")
+        elif not draft_page.is_file():
             issues.append(f"{rel}/4.draft: page.md is missing")
         else:
             try:
-                actual_digest = compute_document_sha256(draft_page.read_text(encoding="utf-8"))
+                actual_digest = (
+                    file_sha256(draft_page)
+                    if content_type is ContentType.VIDEO
+                    else compute_document_sha256(draft_page.read_text(encoding="utf-8"))
+                )
             except OSError as exc:
                 issues.append(f"{rel}/4.draft: page.md is unreadable ({exc})")
             else:
@@ -218,12 +152,18 @@ def _reviewed_object_issues(
             issues.append(f"{rel}/manifest.json: manifest must be an object")
             manifest = {}
         if manifest:
-            if str(manifest.get("generator") or "") != "agent":
-                issues.append(f"{rel}/manifest.json: generator is not agent")
-            if not str(manifest.get("agentRunId") or "").strip():
-                issues.append(f"{rel}/manifest.json: agentRunId is missing")
-            if draft_meta and manifest.get("agentRunId") != draft_meta.get("agentRunId"):
-                issues.append(f"{rel}/manifest.json: agentRunId drift from draft_meta")
+            expected_generator = expected_content_generator(content_type)
+            if str(manifest.get("generator") or "") != expected_generator.value:
+                issues.append(
+                    f"{rel}/manifest.json: generator must be {expected_generator.value}"
+                )
+            if content_type is ContentType.HOMEPAGE:
+                if not str(manifest.get("agentRunId") or "").strip():
+                    issues.append(f"{rel}/manifest.json: agentRunId is missing")
+                if draft_meta and manifest.get("agentRunId") != draft_meta.get("agentRunId"):
+                    issues.append(f"{rel}/manifest.json: agentRunId drift from draft_meta")
+            elif str(manifest.get("contentType") or "") != content_type.value:
+                issues.append(f"{rel}/manifest.json: contentType drift")
 
     review_dir = object_root / "5.review"
     reviewer_result = _read_valid_json(
@@ -286,7 +226,7 @@ def execution_readiness_issues(
     mode: str = "commercial",
     fail_on_no_go: bool = True,
 ) -> list[str]:
-    issues = content_execution_layout_issues()
+    issues = content_execution_layout_issues(execution_id=execution_id)
     if not 0 <= min_pass_rate <= 1:
         return [*issues, "minPassRate must be between 0 and 1"]
     if mode not in {"calibration", "commercial"}:
@@ -306,14 +246,8 @@ def execution_readiness_issues(
 
     issues.extend(_terminal_execution_issues(root, execution_id))
     model_readiness = _execution_model_readiness(root, execution_id, issues)
-    issues.extend(
-        _token_ledger_issues(
-            root,
-            execution_id,
-            model_readiness=model_readiness,
-        )
-    )
-    if parse_execution_id(execution_id).content_type is ContentType.HOMEPAGE:
+    content_type = parse_execution_id(execution_id).content_type
+    if content_type is ContentType.HOMEPAGE:
         media_report = homepage_media_completeness_report(execution_id)
         if not bool(media_report.get("passed")):
             for row in media_report.get("issues") or []:
@@ -326,7 +260,12 @@ def execution_readiness_issues(
                         message=str(row.get("message") or "media closure failed"),
                     )
                 )
-    objects = [path.parent for path in root.rglob("1.download")]
+    object_search_root = (
+        root / "entities"
+        if content_type is ContentType.HOMEPAGE
+        else root / "posts" / content_type.value
+    )
+    objects = [path.parent for path in object_search_root.rglob("1.download")]
     if not objects:
         issues.append("reviewed execution has no content objects")
         return issues
@@ -336,12 +275,13 @@ def execution_readiness_issues(
             object_root,
             execution_id,
             model_readiness=model_readiness,
+            content_type=content_type,
         )
         for object_root in objects
     ]
     selected_count = len(objects)
     selection_path = root / "_shared" / "target_selection.json"
-    if selection_path.is_file():
+    if content_type is ContentType.HOMEPAGE and selection_path.is_file():
         try:
             selection = read_json(selection_path)
             selected_count = max(

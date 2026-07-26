@@ -18,7 +18,7 @@ import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring
 ///
 /// 抽取自 `HomePage._openFeedPost`，移动端与 Web 宽屏壳共用同一实现，保证
 /// `referralSource` / `feedRequestId` 归因链与 [MediaViewerExtra] 构造同源，
-/// 不在 Web 侧另起第二套数据链（见 .cursor/rules/13-coding-discipline R24/R25）。
+/// 不在 Web 侧另起第二套数据链。
 Future<void> openHomeFeedPost(
   BuildContext context,
   WidgetRef ref, {

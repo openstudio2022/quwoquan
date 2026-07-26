@@ -1,0 +1,145 @@
+description: 对象→tagRef 反向索引只读投影（供 inverted / shared-tags）
+fields:
+- name: objectId
+  source: objectId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: objectType
+  source: objectType
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: post / circle / entity / user
+  role: projection
+- name: tagRefs
+  source: tagRefs
+  type: string[]
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  tag_ref: true
+  role: projection
+- name: createdAt
+  source: createdAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: updatedAt
+  source: updatedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: releaseId
+  source: releaseId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: 环境数据发布导入批次；在线源对象投影可为空
+  role: projection
+  reference: true
+- name: visibleFromReleaseId
+  source: visibleFromReleaseId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: 首次对查询可见的数据发布批次
+  role: projection
+  reference: true
+- name: sourceOwner
+  source: sourceOwner
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: 写入该派生投影的源对象 owner 或数据发布管道
+  role: projection
+- name: taxonomyReleaseId
+  source: taxonomyReleaseId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: 在线源对象 tagRefs 已校验通过的 taxonomy release
+  role: projection
+  reference: true
+- name: sourceAggregateVersion
+  source: sourceAggregateVersion
+  type: int64
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  description: 源聚合版本；tag-service 仅允许更大版本覆盖，保证乱序重放收敛
+  role: projection
+- name: sourceEventId
+  source: sourceEventId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  description: durable 事件身份，用于消费审计与幂等诊断
+  role: projection
+- name: lifecycleStatus
+  source: lifecycleStatus
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: 数据发布导入记录的生命周期状态
+  role: projection
+- name: releaseUpdatedAt
+  source: releaseUpdatedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  description: 最近一次数据发布导入更新时间
+  role: projection

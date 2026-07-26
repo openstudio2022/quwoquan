@@ -1,0 +1,64 @@
+# 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
+services:
+  product-ops-service:
+    profiles: ["commercial-observability"]
+    image: "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_IMAGE:-localhost/quwoquan_service_product-ops-service:latest}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/product-ops-service/build/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${QWQ_COMPOSE_GO_BASE_IMAGE:?QWQ_COMPOSE_GO_BASE_IMAGE is required}"
+        ALPINE_BASE_IMAGE: "${QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}"
+        GO_BUILD_FLAGS: "${QWQ_COMPOSE_GO_BUILD_FLAGS:--p=1}"
+    environment:
+      SERVICE_NAME: product-ops-service
+      APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_PRODUCT_OPS_SERVICE_CONFIG_VERSION is required}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      PRODUCT_OPS_SERVICE_ADDR: ":18086"
+      MONGO_URI: mongodb://mongodb:27017
+      POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
+      PRODUCT_OPS_REDIS_REC_ADDR: redis:6379
+      PRODUCT_OPS_REDIS_GENERAL_ADDR: redis:6379
+      # 配置热更与 drift ACK 回报的平台控制面地址（config_sync 循环）。
+      PLATFORM_OPS_BASE_URL: "${QWQ_COMPOSE_PLATFORM_OPS_BASE_URL:-http://platform-ops-service:18088}"
+      # Gamma: 本地 Elasticsearch 替身；Prod: 真实 SLS。
+      PRODUCT_OPS_ELASTICSEARCH_ENDPOINT: "${PRODUCT_OPS_ELASTICSEARCH_ENDPOINT:-}"
+      PRODUCT_OPS_ELASTICSEARCH_RAW_INDEX: "${PRODUCT_OPS_ELASTICSEARCH_RAW_INDEX:-}"
+      PRODUCT_OPS_ELASTICSEARCH_STARTUP_DIAGNOSTIC_INDEX: "${PRODUCT_OPS_ELASTICSEARCH_STARTUP_DIAGNOSTIC_INDEX:-}"
+      PRODUCT_OPS_ELASTICSEARCH_RUNTIME_LOG_INDEX: "${PRODUCT_OPS_ELASTICSEARCH_RUNTIME_LOG_INDEX:-}"
+      PRODUCT_OPS_ELASTICSEARCH_AGGREGATE_INDEX: "${PRODUCT_OPS_ELASTICSEARCH_AGGREGATE_INDEX:-}"
+      PRODUCT_OPS_SLS_REGION: "${PRODUCT_OPS_SLS_REGION:-}"
+      PRODUCT_OPS_SLS_ENDPOINT: "${PRODUCT_OPS_SLS_ENDPOINT:-}"
+      PRODUCT_OPS_SLS_PROJECT: "${PRODUCT_OPS_SLS_PROJECT:-}"
+      ALIBABA_CLOUD_ACCESS_KEY_ID: "${ALIBABA_CLOUD_ACCESS_KEY_ID:-}"
+      ALIBABA_CLOUD_ACCESS_KEY_SECRET: "${ALIBABA_CLOUD_ACCESS_KEY_SECRET:-}"
+      ALIBABA_CLOUD_SECURITY_TOKEN: "${ALIBABA_CLOUD_SECURITY_TOKEN:-}"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
+      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
+      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
+      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_PORT:-19250}:18086"
+    volumes:
+      - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
+      retries: 10

@@ -20,6 +20,9 @@ test('entity homepage governance page closes all three governance queues', async
     assert.match(source, new RegExp(`\\b${operation}\\b`));
   }
   assert.match(source, /必须填写审核意见/);
+  assert.match(source, /safeExternalEvidenceURL/);
+  assert.match(source, /parsed\.protocol !== 'https:'/);
+  assert.doesNotMatch(source, /href=\{href\}/);
   assert.doesNotMatch(source, /\bfetch\s*\(/);
   assert.doesNotMatch(source, /['"`]\/homepages/);
 });

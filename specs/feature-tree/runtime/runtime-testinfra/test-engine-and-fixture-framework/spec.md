@@ -1,20 +1,61 @@
-# L3 子特性：test-engine-and-fixture-framework
+# L3 Story：测试引擎与 Fixture 框架 (`test-engine-and-fixture-framework`)
 
-## 功能说明
-- **TestSuite 基类**：抽象测试引擎生命周期（Start/Stop），提供 DB 连接、迁移执行、清理接口。支持 PG/Mongo/Redis 三种引擎的抽象。
-- **Fixture 框架**：Builder 模式，从 fields.yaml 约束生成合规测试数据。支持 WithXxx 链式调用，Build() 输出实体。
-- **EventPublisher Spy**：捕获发布的领域事件，支持 AssertPublished(eventType, matcher) 断言。
+> 所属能力：[`runtime-testinfra`](../spec.md)
 
-## 实现要点
-- **Engine 抽象**：定义 TestEngine 接口（Start/Stop/Conn/Migrate/Cleanup），各引擎实现此接口。
-- **Fixture 设计**：从构建期生成的 ContractGraph fixture descriptor 获取字段与约束，
-  生成默认值并支持显式覆盖；测试运行期不读取 metadata。
-- **Spy 设计**：包装 EventPublisher，记录 Publish 调用，提供查询和断言方法。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-## 约束
-- 引擎选型与 _shared/test_infra.yaml 一致。
-- Fixture 生成数据符合 fields.yaml 约束。
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 验收标准
-- A1：TestSuite 可正确启动/停止引擎；Fixture 可生成合规数据。
-- A7：配置与 test_infra.yaml 一致；Fixture 与 fields.yaml 一致。
+## 1. 用户价值
+
+作为开发、测试或运维角色，
+我希望按 canonical 测试目录发现用例，隔离 fixture 与真实依赖，并从执行结果生成证据，
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- “测试引擎与 Fixture 框架”的输入、可观察主路径、失败语义以及与父能力的交接。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 测试引擎与 Fixture 框架
+
+- 按 canonical 测试目录发现用例，隔离 fixture 与真实依赖，并从执行结果生成证据。
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 测试引擎与 Fixture 框架
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“测试引擎与 Fixture 框架”对应的公开行为。
+- THEN 按 canonical 测试目录发现用例，隔离 fixture 与真实依赖，并从执行结果生成证据。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-testinfra`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 测试引擎与 Fixture 框架 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“测试引擎与 Fixture 框架”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

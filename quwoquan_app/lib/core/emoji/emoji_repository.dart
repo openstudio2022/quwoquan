@@ -34,7 +34,9 @@ class EmojiRepository {
     try {
       final map = jsonDecode(raw) as Map<String, dynamic>?;
       if (map == null) return {};
-      return map.map((k, v) => MapEntry(k, (v is int) ? v : int.tryParse(v.toString()) ?? 0));
+      return map.map(
+        (k, v) => MapEntry(k, (v is int) ? v : int.tryParse(v.toString()) ?? 0),
+      );
     } catch (_) {
       return {};
     }
@@ -47,7 +49,9 @@ class EmojiRepository {
     try {
       final map = jsonDecode(raw) as Map<String, dynamic>?;
       if (map == null) return {};
-      return map.map((k, v) => MapEntry(k, (v is int) ? v : int.tryParse(v.toString()) ?? 0));
+      return map.map(
+        (k, v) => MapEntry(k, (v is int) ? v : int.tryParse(v.toString()) ?? 0),
+      );
     } catch (_) {
       return {};
     }
@@ -62,6 +66,21 @@ class EmojiRepository {
   /// 清空待上报增量（上报成功后调用）
   Future<void> clearIncremental() async {
     await _prefs.remove(_keyIncremental);
+  }
+
+  Future<void> clearForTerminalAccountClosure() async {
+    const keys = <String>[
+      _keyRecent,
+      _keyTotal,
+      _keyIncremental,
+      _keyLastReportDate,
+    ];
+    for (final key in keys) {
+      await _prefs.remove(key);
+    }
+    if (keys.any(_prefs.containsKey)) {
+      throw StateError('emoji usage cleanup verification failed');
+    }
   }
 
   /// 统一记录入口：更新最近使用、总统计、待上报增量

@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
 
+from core.cursor_model import CursorModelSelection
 from core.runtime_policy import active_runtime_policy
 from core.python_environment import (
     DEFAULT_CURSOR_STARTUP_MODEL,
@@ -24,7 +25,7 @@ from core.python_environment import (
 
 def cursor_startup_probe(
     *,
-    model: str = DEFAULT_CURSOR_STARTUP_MODEL,
+    model: str | CursorModelSelection = DEFAULT_CURSOR_STARTUP_MODEL,
     runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
     timeout_seconds: float | None = None,
     cwd: Path | None = None,
@@ -36,6 +37,7 @@ def cursor_startup_probe(
     short subprocess so a stuck SDK call cannot wedge the parent readiness gate.
     """
 
+    selection = CursorModelSelection.from_value(model)
     try:
         from core.cursor_credentials import resolve_cursor_api_key
     except Exception:  # noqa: BLE001
@@ -48,7 +50,8 @@ def cursor_startup_probe(
             "ready": False,
             "started": False,
             "runtime": runtime,
-            "model": model,
+            "model": selection.model_id,
+            "modelParameters": selection.parameters_document(),
             "issues": ["credential_not_ready"],
         }
     runtime_policy = active_runtime_policy()
@@ -67,6 +70,7 @@ import sys
 token_patch_warning = None
 try:
     from cursor_sdk import Agent, AgentOptions, CloudAgentOptions, LocalAgentOptions, Client
+    from cursor_sdk.types import ModelSelection
     try:
         from cursor_sdk.errors import CursorAgentError
     except Exception:
@@ -89,7 +93,7 @@ except Exception as exc:
     raise SystemExit(0)
 
 api_key = os.environ.get("CURSOR_API_KEY", "")
-model = sys.argv[1]
+model = ModelSelection.from_json(json.loads(sys.argv[1]))
 runtime = sys.argv[2]
 cwd = sys.argv[3]
 bridge_timeout = int(sys.argv[4])
@@ -110,17 +114,34 @@ try:
                 model=model,
                 local=LocalAgentOptions(cwd=cwd, setting_sources=[]),
             )
-        result = Agent.prompt(
-            "quwoquan_data env startup probe. Do not edit files. Reply with the single word READY.",
-            opts,
-            client=client,
-        )
+        agent = Agent.create(opts, client=client)
+        terminal_status_message = ""
+        try:
+            run = agent.send(
+                "quwoquan_data env startup probe. Do not edit files. Reply with the single word READY."
+            )
+            for event in run.events():
+                message = getattr(event, "sdk_message", None)
+                if (
+                    getattr(message, "type", "") == "status"
+                    and str(getattr(message, "status", "")).casefold() == "error"
+                ):
+                    terminal_status_message = str(
+                        getattr(message, "message", "") or ""
+                    ).strip()
+            result = run.wait()
+        finally:
+            agent.close()
     status = getattr(result, "status", "")
     print(json.dumps({
         "ready": status == "finished",
         "started": True,
         "probeType": "agent_prompt_smoke",
         "status": status,
+        "errorClass": "AgentStatusError" if status != "finished" else None,
+        "error": terminal_status_message if status != "finished" else None,
+        "errorCode": "provider_rejected" if terminal_status_message else None,
+        "retryable": False,
         "agentId": getattr(result, "agent_id", None),
         "runId": getattr(result, "id", None),
         "bridgePid": getattr(endpoint, "pid", None),
@@ -167,7 +188,7 @@ except Exception as exc:
                     str(probe_python),
                     "-c",
                     code,
-                    str(model),
+                    json.dumps(selection.to_sdk_document(), ensure_ascii=True, sort_keys=True),
                     str(runtime),
                     probe_cwd,
                     str(runtime_policy.cursor_bridge_handshake_timeout_seconds),
@@ -202,7 +223,8 @@ except Exception as exc:
                 "ready": False,
                 "started": False,
                 "runtime": runtime,
-                "model": model,
+                "model": selection.model_id,
+                "modelParameters": selection.parameters_document(),
                 "probePython": str(probe_python),
                 "status": "timeout",
                 "retryable": True,
@@ -287,7 +309,8 @@ except Exception as exc:
         "started": bool(payload.get("started")),
         "probeType": payload.get("probeType") or "agent_prompt_smoke",
         "runtime": runtime,
-        "model": model,
+        "model": selection.model_id,
+        "modelParameters": selection.parameters_document(),
         "probePython": str(probe_python),
         "status": payload.get("status"),
         "error": _redact_secret_value(payload.get("error")),
@@ -391,7 +414,7 @@ def _p95(values: list[float]) -> float:
 
 def cursor_startup_probe_suite(
     *,
-    model: str = DEFAULT_CURSOR_STARTUP_MODEL,
+    model: str | CursorModelSelection = DEFAULT_CURSOR_STARTUP_MODEL,
     runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
     attempts: int | None = None,
     timeout_seconds: float | None = None,
@@ -408,6 +431,7 @@ def cursor_startup_probe_suite(
     sub-attempts under a timeout are not a stable backend 5xx verdict).
     """
     runtime_policy = active_runtime_policy()
+    selection = CursorModelSelection.from_value(model)
     total = int(
         attempts
         if attempts is not None
@@ -445,7 +469,7 @@ def cursor_startup_probe_suite(
         begin = time.monotonic()
         try:
             payload = cursor_startup_probe(
-                model=model,
+                model=selection,
                 runtime=runtime,
                 timeout_seconds=effective_timeout_seconds,
                 cwd=cwd,
@@ -544,7 +568,8 @@ def cursor_startup_probe_suite(
         issues.append("Cursor startup probe never succeeded")
     return {
         "schema": "quwoquan_data.cursor_startup_probe_suite",
-        "model": model,
+        "model": selection.model_id,
+        "modelParameters": selection.parameters_document(),
         "runtime": runtime,
         "attempts": total,
         "timeoutSeconds": round(effective_timeout_seconds, 4),

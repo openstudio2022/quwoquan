@@ -100,7 +100,7 @@ class _ContactSearchResultPageState
               journey: 'contact_discovery',
               action: 'search_contact',
               pageName: 'ContactSearchResultPage',
-              payload: <String, dynamic>{
+              payload: <String, Object?>{
                 'result': 'success',
                 'resultCount': items.length,
               },

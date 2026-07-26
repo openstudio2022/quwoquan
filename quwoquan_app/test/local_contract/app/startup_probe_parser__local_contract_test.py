@@ -31,7 +31,7 @@ class StartupProbeParserContractTest(unittest.TestCase):
     def test_ttid_ratchet_default_mode_is_structural_and_self_compare_is_blocked(
         self,
     ) -> None:
-        ratchet = APP_DIR.parent / "specs/gates/startup_ttid_ratchet_baseline.json"
+        ratchet = APP_DIR.parent / "quwoquan_ops/policies/gates/startup_ttid_ratchet_baseline.json"
         with mock.patch.object(sys, "argv", ["verify_startup_ttid_baseline.py"]):
             self.assertEqual(verify_startup_ttid_main(), 0)
         with mock.patch.object(

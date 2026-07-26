@@ -294,6 +294,9 @@ final class _EmptyPushEndpointGateway implements PushEndpointGateway {
   Future<void> queueActiveEndpointRemovals() async {}
 
   @override
+  Future<void> purgeForTerminalAccountClosure() async {}
+
+  @override
   Future<List<PushEndpointMutation>> readPendingMutations() async =>
       const <PushEndpointMutation>[];
 

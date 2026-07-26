@@ -63,6 +63,7 @@ domain_operation_page_ids:
   content:
     AbortMediaUpload: content.media.abort
     CompleteMediaUpload: content.media.complete
+    DiscardMediaAsset: content.media.discard
     CreateComment: content.comment.create
     CreateOutboundShare: content.outbound_share.create
     SubmitPostPublication: content.post.publish
@@ -179,6 +180,7 @@ standalone_page_ids:
   homepageClaim: entity.homepage.claim.page
   homepageMaintenance: entity.homepage.maintenance.page
   homepageStatusReport: entity.homepage.status_report.page
+  interestOnboarding: content.interest_onboarding
   profileCareerInterests: user.profile.career_interests
   createLocationNearby: create.location.nearby
   createLocationSearch: create.location.search

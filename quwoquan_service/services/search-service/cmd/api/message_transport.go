@@ -7,7 +7,7 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	searchgenerated "quwoquan_service/services/search-service/internal/generated"
+	bindingdescriptor "quwoquan_service/services/search-service/generated/search/search_query"
 )
 
 const searchAPIMessageTransportRoot = "search-service-api"
@@ -18,58 +18,33 @@ func requireSearchAPIMessageTransport(
 	router *rtredis.Router,
 	sceneModes map[string]string,
 ) (*runtimemessaging.RedisMessageTransport, error) {
-	descriptor, found := searchgenerated.ExternalProviderBindingFor(
+	binding, found := bindingdescriptor.ExternalProviderBindingFor(
 		environment,
 		runtimemessaging.RuntimeMessageTransportCapability,
 	)
-	rootDescriptor, rootFound := searchgenerated.ExternalProviderBindingRootFor(
-		runtimemessaging.RuntimeMessageTransportCapability,
-		searchAPIMessageTransportRoot,
-	)
-	if !rootFound {
-		return nil, fmt.Errorf(
-			"generated message transport root %s is missing",
-			searchAPIMessageTransportRoot,
-		)
-	}
 	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
-		ctx,
-		environment,
-		found,
+		ctx, environment, found,
 		runtimemessaging.MessageTransportBinding{
-			State:               descriptor.State,
-			AdapterID:           descriptor.AdapterID,
-			TimeoutMilliseconds: descriptor.TimeoutMilliseconds,
+			State: binding.State, AdapterID: binding.AdapterID,
+			TimeoutMilliseconds: binding.TimeoutMilliseconds,
 		},
 		runtimemessaging.MessageTransportRoot{
-			RootID:              rootDescriptor.RootID,
-			RequiredRedisScenes: rootDescriptor.RequiredRedisScenes,
+			RootID:              searchAPIMessageTransportRoot,
+			RequiredRedisScenes: binding.RequiredRedisScenes,
 		},
-		router,
-		sceneModes,
+		router, sceneModes,
 	)
 	if err != nil {
 		return nil, err
 	}
-	if len(rootDescriptor.RequiredRedisScenes) != 1 {
-		return nil, fmt.Errorf(
-			"generated message transport root %s must declare exactly one Redis scene",
-			rootDescriptor.RootID,
-		)
+	if len(binding.RequiredRedisScenes) != 1 {
+		return nil, fmt.Errorf("generated message transport root %s must declare exactly one Redis scene", searchAPIMessageTransportRoot)
 	}
-	scene, ok := resolved.Scene(
-		strings.TrimSpace(rootDescriptor.RequiredRedisScenes[0]),
-	)
+	scene, ok := resolved.Scene(strings.TrimSpace(binding.RequiredRedisScenes[0]))
 	if !ok {
-		return nil, fmt.Errorf(
-			"preflighted message transport root %s is missing its declared Redis scene",
-			rootDescriptor.RootID,
-		)
+		return nil, fmt.Errorf("preflighted message transport root %s is missing its declared Redis scene", searchAPIMessageTransportRoot)
 	}
 	return runtimemessaging.NewRedisMessageTransportForRoot(
-		rootDescriptor.RootID,
-		descriptor.AdapterID,
-		scene,
-		scene,
+		searchAPIMessageTransportRoot, binding.AdapterID, scene, scene,
 	)
 }

@@ -1,5 +1,5 @@
 // GENERATED FILE — DO NOT EDIT BY HAND.
-// Source: contracts/metadata/content/post/projections/post_read_presentation.yaml
+// Source: services/content-service/contracts/content/post/projections/post_read_presentation.yaml
 // Regenerate: make codegen-app
 
 import 'package:quwoquan_app/cloud/runtime/generated/content/article_detail_wire_keys.g.dart';

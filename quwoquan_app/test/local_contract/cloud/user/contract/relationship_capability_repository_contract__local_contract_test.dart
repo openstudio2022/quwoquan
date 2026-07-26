@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/conversation-entry-matrix/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-005
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:test/test.dart';

@@ -1,0 +1,5 @@
+overrides: {}
+secretRefs: {}
+externalBindings:
+  runtime.message.transport:
+    state: enabled

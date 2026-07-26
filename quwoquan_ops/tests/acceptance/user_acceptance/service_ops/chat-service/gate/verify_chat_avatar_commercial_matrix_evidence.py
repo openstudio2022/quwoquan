@@ -72,7 +72,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
         except ImportError as exc:
             raise SystemExit(
                 "读取 YAML manifest 需要 PyYAML：pip install pyyaml "
-                f"（rec-model-service requirements 已含）: {exc}"
+                f"（recommendation-service requirements 已含）: {exc}"
             ) from exc
         data = yaml.safe_load(text)
         if not isinstance(data, dict):

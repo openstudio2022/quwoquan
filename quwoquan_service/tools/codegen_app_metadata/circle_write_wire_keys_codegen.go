@@ -11,10 +11,10 @@ import (
 // 对象 packet 读取 writable_fields，生成尚未迁移对象的 App Wire DTO 键集合。
 // CircleGroup 已使用 operation-specific pure contracts，不得在此生成第二套 DTO 键。
 func renderCircleWriteWireWritableKeysDart(metadataDir string) (string, error) {
-	circleServicePath := filepath.Join(metadataDir, "social", "circle", "service.yaml")
+	circleServicePath := filepath.Join(metadataDir, "circle", "circle_management", "circle", "operations.yaml")
 	circleService, err := readService(circleServicePath)
 	if err != nil {
-		return "", fmt.Errorf("read circle service.yaml: %w", err)
+		return "", fmt.Errorf("read circle operations.yaml: %w", err)
 	}
 	create := findWritableFields(circleService.APIRoutes, "CreateCircle")
 	if len(create) == 0 {
@@ -40,7 +40,7 @@ func renderCircleWriteWireWritableKeysDart(metadataDir string) (string, error) {
 	}
 	writeList := func(name string, keys []string) {
 		b.WriteString(fmt.Sprintf(
-			"  /// service.yaml 中 `%s` 声明顺序（与对应 Set 成员一致，用于序列化/校验对照）。\n",
+			"  /// operations.yaml 中 `%s` 声明顺序（与对应 Set 成员一致，用于序列化/校验对照）。\n",
 			name,
 		))
 		b.WriteString(fmt.Sprintf("  static const List<String> %s = [\n", name))

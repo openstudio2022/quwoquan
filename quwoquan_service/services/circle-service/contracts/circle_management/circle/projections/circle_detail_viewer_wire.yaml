@@ -1,0 +1,15 @@
+projection: CircleDetailViewerWire
+description: GetCircle 等响应中 role / joinStatus / isFollowed / categoryId 等视角键
+fields:
+- name: role
+  source: role
+  type: string
+- name: joinStatus
+  source: joinStatus
+  type: string
+- name: isFollowed
+  source: isFollowed
+  type: bool
+- name: categoryId
+  source: categoryId
+  type: string

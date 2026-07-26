@@ -231,12 +231,20 @@ class _LatestContactDiscoveryCard extends StatelessWidget {
       future: future,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return _InlineQrStateCard(
-            icon: CupertinoIcons.exclamationmark_circle,
-            title: UITextConstants.pageLoadFailedTitle,
-            body: UITextConstants.pageLoadFailedMessage,
-            actionLabel: UITextConstants.retry,
-            onAction: onRetry,
+          return AppSectionErrorCard(
+            semantic: runtimeErrorSemantic(
+              context,
+              error: snapshot.error!,
+              category: UiErrorCategory.sectionLoad,
+              scope: UiErrorScope.section,
+              presentation: UiErrorPresentation.sectionSoftCard,
+            ),
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry ||
+                  action.type == UiErrorActionType.resubmit) {
+                onRetry();
+              }
+            },
           );
         }
         if (snapshot.connectionState != ConnectionState.done) {
@@ -343,12 +351,20 @@ class _InlineMyQrCard extends StatelessWidget {
           return MyQrCardContent(card: snapshot.data!, compact: true);
         }
         if (snapshot.hasError) {
-          return _InlineQrStateCard(
-            icon: CupertinoIcons.qrcode_viewfinder,
-            title: UITextConstants.pageLoadFailedTitle,
-            body: UITextConstants.pageLoadFailedMessage,
-            actionLabel: UITextConstants.retry,
-            onAction: onRetry,
+          return AppSectionErrorCard(
+            semantic: runtimeErrorSemantic(
+              context,
+              error: snapshot.error!,
+              category: UiErrorCategory.sectionLoad,
+              scope: UiErrorScope.section,
+              presentation: UiErrorPresentation.sectionSoftCard,
+            ),
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry ||
+                  action.type == UiErrorActionType.resubmit) {
+                onRetry();
+              }
+            },
           );
         }
         return const _InlineQrStateCard(
@@ -366,15 +382,11 @@ class _InlineQrStateCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.body,
-    this.actionLabel,
-    this.onAction,
   });
 
   final IconData icon;
   final String title;
   final String body;
-  final String? actionLabel;
-  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -411,28 +423,6 @@ class _InlineQrStateCard extends StatelessWidget {
                 color: AppColors.iosSecondaryLabel(context),
               ),
             ),
-            if (actionLabel != null && onAction != null) ...<Widget>[
-              SizedBox(height: AppSpacing.containerLg),
-              CupertinoButton(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerLg,
-                  vertical: AppSpacing.intraGroupSm,
-                ),
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.radiusNinetyNine,
-                ),
-                color: AppColors.iosAccent(context),
-                onPressed: onAction,
-                child: Text(
-                  actionLabel!,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosCallout,
-                    fontWeight: AppTypography.semiBold,
-                    color: AppColors.white,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),

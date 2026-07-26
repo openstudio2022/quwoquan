@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show CloudOperationCancellationSignal;

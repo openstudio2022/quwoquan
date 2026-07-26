@@ -1,7 +1,7 @@
 # Delivery Gate — PR 合入主门禁（L1+L2）
 # 触发：pull_request(main) + workflow_dispatch
 # 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract) + portal
-# 端到端闭环见 quwoquan_ops/environments/ci_cd_end_to_end_design.md
+# 执行语义见 .cursor/commands/deliver.md；本 workflow 是 CI 行为真相源。
 name: 03. Delivery Gate
 
 permissions:
@@ -72,9 +72,7 @@ jobs:
       - name: Environment Topology Regression
         if: ${{ steps.detect.outputs.topology == 'true' }}
         run: |
-          bash quwoquan_ops/environments/verify/verify_deployment_domain_mapping.sh
-          bash quwoquan_ops/environments/verify/verify_topology_contract_regression.sh
-          bash quwoquan_ops/environments/verify/report_deployment_mapping_impact.sh
+          make verify-service-architecture
       - id: finish
         if: always()
         name: Finish timer
@@ -103,9 +101,9 @@ jobs:
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
-      - name: 安装 Python 依赖 (rec-model-service)
+      - name: 安装 Python 依赖 (recommendation-service)
         run: |
-          pip install -r quwoquan_service/services/rec-model-service/requirements.txt
+          pip install -r quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt
       - name: Gate (quwoquan_service)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope service
@@ -140,7 +138,7 @@ jobs:
           go-version-file: quwoquan_service/go.mod
       - name: Verify canonical /search response contract
         working-directory: quwoquan_service
-        run: go test ./services/search-service/tests/api_integration -count=1
+        run: go test ./services/search-service/tests/api_integration/search/search/search_query -count=1
       - name: Verify four-environment search probe contract
         run: |
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \

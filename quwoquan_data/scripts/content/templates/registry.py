@@ -17,7 +17,7 @@ import yaml
 from core.paths import (
     _REPO_DATA_ROOT,
     CONTROL_PLANE_TAXONOMY_ROOT,
-    SERVICE_CONTRACTS_METADATA_ROOT,
+    service_contracts_root,
 )
 
 
@@ -39,7 +39,9 @@ ROUTING_ROOT = CONTROL_PLANE_ROOT / "_shared" / "routing"
 BLUEPRINTS_ROOT = TEMPLATES_ROOT
 CREATORS_ROOT = CONTROL_PLANE_ROOT / "governance" / "creator_pool" / "profiles" / "system_builtin"
 # ui_config 是服务侧受版本控制的契约真相源，跟代码走，禁止随 QWQ_DATA_ROOT 漂移。
-UI_CONFIG_PATH = SERVICE_CONTRACTS_METADATA_ROOT / "content" / "post" / "ui_config.yaml"
+UI_CONFIG_PATH = (
+    service_contracts_root("content-service") / "content" / "post" / "ui_config.yaml"
+)
 
 
 def load_yaml(path: Path) -> dict[str, Any]:

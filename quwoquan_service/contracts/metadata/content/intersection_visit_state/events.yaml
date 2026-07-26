@@ -1,6 +1,0 @@
-entity: IntersectionVisitState
-
-# 已读水位是用户私有 UI 状态，单调收敛且无跨上下文消费者；不声明领域事件。
-# （旧 recommendation 域声明的 IntersectionVisited 事件从未有任何实现或订阅者，已随
-# 对象迁移一并删除，避免空头事件契约。）
-events: []

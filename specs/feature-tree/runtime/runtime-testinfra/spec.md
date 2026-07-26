@@ -1,31 +1,70 @@
-# L2 特性：Runtime Testinfra
+# L2 Business Capability：运行时测试基础设施 (`runtime-testinfra`)
 
-## Summary
+> 所属领域：[`runtime`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-`runtime-testinfra` 负责把三层测试迁移所需的基础设施、bridge 生成、目录清单、report 结构和页面矩阵真相源变成可重复执行的仓库能力。
+## 1. 能力目标
 
-## In Scope
+以物理目录扫描和运行报告提供三层测试证据，不维护路径登记或目录清单。
 
-- `generate_canonical_test_bridges.py` 生成 App / Service / Data / Ops canonical bridge
-- `generate_test_directory_inventory.py` 与 `specs/gates/test_directory_inventory.yaml`
-- `specs/gates/test_legacy_source_allowlist.yaml`
-- `specs/gates/user_acceptance_page_inventory.yaml`
-- `artifacts/tests/**/report.json` 的报告口径
-- Go / Python / Dart bridge runner 的最小执行契约
+## 2. 范围与非目标
 
-## Core Rules
+### In Scope
 
-- 任何新增 legacy 测试文件，若无 canonical bridge，`verify-test-directory-layout` 必须失败
-- 任何新增 legacy 测试文件，即使同步补了 bridge，也必须因 `test_legacy_source_allowlist.yaml` ratchet 而失败；新增测试只能直接落 canonical 根
-- 页面 inventory 必须与 metadata `ui_surfaces` / `app_routes` 同步
-- bridge 是执行入口，不得把 fake assertion、手写绿报告或纯说明文档当作测试证据；`verify-test-no-fake` 必须同时扫描 canonical bridge 与其背后的 legacy 源
-- 不为 App / Service / Data / Ops 维护第二套目录清单或第二套页面矩阵
-- bench-only legacy runner 必须显式登记例外；未登记的 benchmark-only 源文件不得混入 `api_integration` 命名空间
+- App / Service / Data / Ops canonical 测试发现
+- case ID、测试入口、运行结果、环境和制品摘要闭环
+- directory-layout / no-fake / coverage-map 门禁
 
-## Done When
+### Out of Scope
 
-- canonical bridge 可覆盖全仓现有 legacy suite
-- inventory 中 `pending=0`，且该状态只表示“全部 legacy suite 已被 canonical bridge 接管”，不表示 legacy 文件已从磁盘移除
-- `test_legacy_source_allowlist.yaml` 只减不增；如需新增条目，必须先被视为新的治理风险并单独评审
-- page inventory 与 metadata surface/route 无漂移
-- `verify-test-no-fake` 与 `verify-test-coverage-map` 能独立阻断伪迁移与证据漂移
+- 具体业务断言实现
+- 远端环境容量与凭证供给
+
+## 3. Journey / Scenario 贡献
+
+- [`JNY-001 / SCN-004`](../../spec.md#scn-004)
+  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
+  - 本能力处理：以物理目录扫描和运行报告提供三层测试证据，不维护路径登记或目录清单。
+  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
+  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
+
+## 4. Story
+
+
+
+- [`test-engine-and-fixture-framework`](./test-engine-and-fixture-framework/spec.md)：按 canonical 测试目录发现用例，隔离 fixture 与真实依赖，并从执行结果生成证据。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 三层测试基础设施单轨可追溯
+
+- UAT/DOM/SIT/GWT 只在所属节点定义；真实测试直接写稳定 `spec_ref`，不登记测试文件路径清单。
+- App、Service、Data、Ops 测试均能由 canonical 目录直接发现，且不存在 bridge、tracked inventory 或 coverage map。
+- runner 报告能由 `spec_ref` 反向关联实际测试、结果、环境和制品摘要。
+- directory-layout、no-fake 与动态追踪门禁能独立阻断漂移。
+
+<a id="req-002"></a>
+### REQ-002 测试文件必须物理位于 canonical 目录
+
+- 测试文件必须物理位于 canonical 目录；禁止 bridge、legacy allowlist 和手写绿色报告
+- `support/` 只保存 fixture、harness、builder，不得保存测试入口
+
+## 6. 契约与依赖
+
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 三层测试基础设施单轨可追溯
+
+- GIVEN 执行“三层测试基础设施单轨可追溯”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“三层测试基础设施单轨可追溯”对应动作。
+- THEN UAT/DOM/SIT/GWT 只在所属节点定义，真实测试直接写稳定 `spec_ref`，不登记测试文件路径清单。
+- THEN App、Service、Data、Ops 测试均能由 canonical 目录直接发现，且不存在 bridge、tracked inventory 或 coverage map。
+- THEN runner 报告能由 `spec_ref` 反向关联实际测试、结果、环境和制品摘要。
+- THEN directory-layout、no-fake 与动态追踪门禁能独立阻断漂移。

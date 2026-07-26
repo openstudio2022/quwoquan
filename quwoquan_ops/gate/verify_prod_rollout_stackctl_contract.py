@@ -13,7 +13,7 @@ WORKFLOWS = [
     ROOT / ".github" / "workflows" / "deploy-prod-auto.yml",
 ]
 SERVICE_PIPELINE = ROOT / ".github" / "workflows" / "service_pipeline.yml"
-ACCESS_MANIFEST = ROOT / "quwoquan_ops" / "environments" / "prod_plane_access_isolation.yaml"
+ACCESS_MANIFEST = ROOT / "quwoquan_ops" / "environments" / "prod" / "access-isolation.yaml"
 RELEASE_GENERATOR = (
     ROOT / "quwoquan_ops" / "cli" / "prod" / "generate_mainline_release_artifact.py"
 )

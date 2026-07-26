@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/platform/rtc_room_service.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 
 class ParticipantTile extends StatelessWidget {
@@ -71,24 +71,20 @@ class ParticipantTile extends StatelessWidget {
             )
           else
             Center(
-              child: CircleAvatar(
-                radius: AppSpacing.xl,
+              child: AppCircularAvatar(
+                imageUrl: participant.avatarUrl,
+                size: AppSpacing.xl * 2,
                 backgroundColor: AppColors.primaryColor.withValues(alpha: 0.3),
-                backgroundImage: participant.avatarUrl != null
-                    ? NetworkImage(participant.avatarUrl!)
-                    : null,
-                child: participant.avatarUrl == null
-                    ? Text(
-                        participant.displayName.isNotEmpty
-                            ? participant.displayName[0].toUpperCase()
-                            : '?',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: AppTypography.xxl,
-                          fontWeight: AppTypography.semiBold,
-                        ),
-                      )
-                    : null,
+                fallback: Text(
+                  participant.displayName.isNotEmpty
+                      ? participant.displayName[0].toUpperCase()
+                      : '?',
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: AppTypography.xxl,
+                    fontWeight: AppTypography.semiBold,
+                  ),
+                ),
               ),
             ),
           if (showName)

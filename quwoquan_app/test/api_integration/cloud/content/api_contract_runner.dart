@@ -3,7 +3,7 @@
 /// **请求/响应断言**：优先用 codegen `dto.toMap()` 再 `Map<String, Object?>.from(...)` 对齐形状；HTTP 响应仍 `json.decode` 后做 wire 校验（session_c §6）。
 ///
 /// 守护目标：端云数据合约不漂移（cursor 分页语义、错误码格式、字段可见性、响应时间 SLO）
-/// 驱动文件：contracts/metadata/content/post/tests/e2e.yaml [test_type: api_contract]
+/// 用例身份由 acceptance 稳定 case ID 绑定，测试路径由 runner 扫描生成。
 ///
 /// 执行方式：
 ///   ```

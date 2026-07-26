@@ -14,12 +14,13 @@ from core.schema import assert_valid
 from core.prompt_render import render
 from content.homepage.homepage_review import (
     apply_independent_homepage_review,
+    homepage_asset_file_evidence,
     homepage_media_review_dispositions,
 )
 
 
-EXECUTION_ID = "20260713--travel-homepage-coverage--cn-zhejiang--canary-901"
-OBJECT_REF = "/entity/地点/景区/普陀山"
+EXECUTION_ID = "20260713--travel-homepage-coverage--test-region-a--pilot-901"
+OBJECT_REF = "/entity/地点/景区/测试实体甲"
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -60,6 +61,7 @@ def _review_dir(tmp_path: Path) -> Path:
             "schema": "quwoquan_data.evidence_index",
             "stage": "5.review",
             "executionId": EXECUTION_ID,
+            "executionBinding": "frozen",
             "objectRef": OBJECT_REF,
             "evidence": [],
         },
@@ -83,18 +85,18 @@ def test_homepage_independent_review__binds_typed_response_to_canonical_evidence
     assert apply_independent_homepage_review(
         review_dir=review_dir,
         provider="cursor_sdk",
-        model="gpt-5.5",
-        model_family="gpt",
+        model="grok-4.5",
+        model_family="grok",
         run_id="review-run-001",
         result_payload=response,
     ) == []
 
     reviewer_result = json.loads((review_dir / "reviewer_result.json").read_text(encoding="utf-8"))
-    assert reviewer_result["modelFamily"] == "gpt"
+    assert reviewer_result["modelFamily"] == "grok"
     assert reviewer_result["verdict"] == "passed"
     assert_valid(reviewer_result, "content", "reviewer_result")
     attestation = json.loads((review_dir / "attestation.json").read_text(encoding="utf-8"))
-    assert attestation["independentReviewer"]["modelFamily"] == "gpt"
+    assert attestation["independentReviewer"]["modelFamily"] == "grok"
     assert_valid(attestation, "content", "review_attestation")
 
 
@@ -172,8 +174,34 @@ def test_homepage_independent_review__group_members_are_gallery_only__local_cont
             "object_ref": OBJECT_REF,
             "object_dir": "/tmp/object",
             "output_path": "/tmp/response.json",
-            "media_policy": '{"assets":[{"assetId":"gallery","expected":"related_gallery_only"}]}',
+            "media_policy": '{"rightsEnforcementMode":"audit_only","assets":[{"assetId":"gallery","expected":"related_gallery_only"}]}',
         },
     )
     assert "related_gallery_only" in prompt
     assert "禁止以" in prompt
+    assert "audit_only" in prompt
+    assert "不得进入 issues" in prompt
+
+
+def test_homepage_independent_review__uses_deterministic_asset_file_evidence__local_contract(
+    tmp_path: Path,
+) -> None:
+    object_dir = tmp_path / "entity"
+    asset_path = object_dir / "assets" / "cover.jpg"
+    asset_path.parent.mkdir(parents=True)
+    asset_path.write_bytes(b"image-bytes")
+
+    evidence = homepage_asset_file_evidence(
+        object_dir,
+        {
+            "assets": [
+                {"assetId": "cover", "fileName": "cover.jpg"},
+                {"assetId": "missing", "fileName": "missing.jpg"},
+            ]
+        },
+    )
+
+    assert evidence[0]["exists"] is True
+    assert str(evidence[0]["sha256"])
+    assert evidence[1]["exists"] is False
+    assert evidence[1]["sha256"] == ""

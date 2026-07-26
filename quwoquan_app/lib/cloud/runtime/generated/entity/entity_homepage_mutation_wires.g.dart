@@ -1,5 +1,5 @@
 // GENERATED FILE — DO NOT EDIT BY HAND.
-// Source: contracts/metadata/entity/{homepage,homepage_claim_request,homepage_status_report}/service.yaml (writable_fields per operation).
+// Source: services/entity-service/contracts/{homepage,homepage_claim_request,homepage_status_report}/operations.yaml (writable_fields per operation).
 // Regenerate: make codegen-app
 
 Map<String, dynamic> _entityHomepageMutationPutOpt(Map<String, dynamic> m, String k, Object? v) {

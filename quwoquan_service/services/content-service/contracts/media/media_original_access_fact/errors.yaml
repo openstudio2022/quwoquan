@@ -1,0 +1,31 @@
+entity: MediaOriginalAccessFact
+domain: CONTENT
+description: 'MediaOriginalAccessFact 对象专属错误码（原图访问授权与限频）。
+
+  共享错误码唯一定义于 content/content/post/errors.yaml；content 域 codegen 与端云 parity
+
+  按固定文件列表合并，code 全域唯一。
+
+  '
+errors:
+- code: CONTENT.USER.original_access_denied
+  kind: USER
+  reason: original_access_denied
+  http_status: 403
+  recovery_action: surface
+  dart_const: originalAccessDenied
+  go_const: ErrOriginalAccessDenied
+  user_message:
+    zh: 当前内容不支持查看或保存原图
+    en: Original media access is not allowed
+- code: CONTENT.USER.original_access_rate_limited
+  kind: USER
+  reason: original_access_rate_limited
+  http_status: 429
+  recovery_action: retry
+  recovery_after_seconds: 60
+  dart_const: originalAccessRateLimited
+  go_const: ErrOriginalAccessRateLimited
+  user_message:
+    zh: 原图访问过于频繁，请稍后再试
+    en: Too many original media requests, please retry later

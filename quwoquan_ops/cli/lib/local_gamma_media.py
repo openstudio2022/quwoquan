@@ -20,7 +20,14 @@ CANONICAL_MEDIA_ROOT = (
     / "media"
 )
 MEDIA_DELIVERY_MANIFEST = (
-    ROOT / "quwoquan_ops" / "environments" / "media_delivery_manifest.json"
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "content-service"
+    / "resources"
+    / "static"
+    / "media"
+    / "media_delivery_manifest.json"
 )
 CANONICAL_VIDEO_LOGICAL_ASSET_ID = "content-video-primary"
 

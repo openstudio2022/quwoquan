@@ -140,7 +140,7 @@ class ContentArticleRender {
 /// 覆盖 micro/image/video/article 四媒体类型。媒体差异由 [kind] + 强类型可选字段
 /// 表达，surface widget 只读结果，不再各自从 DTO/Map 抽字段。
 ///
-/// 字段集与 fallback 口径对齐 `contracts/metadata/content/post` 投影
+/// 字段集与 fallback 口径对齐 `quwoquan_service/services/content-service/contracts/content/post` 投影
 /// （`fields.yaml` / `discovery_feed.yaml` / `post_read_presentation.yaml`）。
 class ContentSurfaceView {
   const ContentSurfaceView({

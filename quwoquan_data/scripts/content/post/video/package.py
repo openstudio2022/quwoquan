@@ -17,10 +17,12 @@ from content.post.video.package_common import (
     subtitles as _subtitles,
 )
 from content.post.video.source_video import SourcedVideoAsset
-from governance.coverage.cold_start_supply import (
+from governance.content_supply_policy import (
     VideoDeliveryPolicy,
-    load_cold_start_supply_policy,
+    load_content_supply_policy,
 )
+from governance.coverage.license import RightsAuditStatus
+from content.execution.identity import parse_execution_id
 
 
 class VideoSourceBasis(StrEnum):
@@ -123,7 +125,8 @@ def _portrait_frame(path: Path, policy: VideoDeliveryPolicy) -> np.ndarray:
 
 
 def render_video_work_package(request: VideoRenderRequest) -> Path:
-    policy = load_cold_start_supply_policy().video_delivery
+    identity = parse_execution_id(request.execution_id)
+    policy = load_content_supply_policy(identity.vertical).video_delivery
     if request.source_video is not None:
         if request.source_frames:
             raise ValueError(
@@ -250,6 +253,7 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
     rights_refs = [frame.rights_ref for frame in request.source_frames]
     manifest = {
         "schema": "quwoquan_data.post_manifest",
+        "vertical": identity.vertical,
         "topicId": request.topic_id,
         "contentType": "video",
         "carrier": "video",
@@ -288,6 +292,8 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
                 "provenanceRef": "provenance.json",
                 "sourceAssetRefs": source_asset_refs,
                 "rightsRefs": rights_refs,
+                "rightsAuditStatus": RightsAuditStatus.VERIFIED.value,
+                "rightsAuditIssues": [],
                 "coverStrategy": "manual",
             },
             {
@@ -303,6 +309,8 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
                 "caption": request.caption,
                 "sourceAssetRefs": source_asset_refs,
                 "rightsRefs": rights_refs,
+                "rightsAuditStatus": RightsAuditStatus.VERIFIED.value,
+                "rightsAuditIssues": [],
             },
         ],
         "videoBindings": [{"assetId": asset_id, "role": "shortVideo"}],
@@ -323,11 +331,18 @@ def _video_codec(capture: cv2.VideoCapture) -> str:
 
 
 def validate_video_work_package(package_dir: Path) -> list[str]:
-    policy = load_cold_start_supply_policy().video_delivery
     manifest_path = package_dir / "manifest.json"
     if not manifest_path.is_file():
         return ["video manifest is missing"]
     manifest = read_json(manifest_path)
+    if not isinstance(manifest, dict):
+        return ["video manifest must be an object"]
+    try:
+        policy = load_content_supply_policy(
+            parse_execution_id(str(manifest.get("executionId") or "")).vertical
+        ).video_delivery
+    except (TypeError, ValueError) as exc:
+        return [f"video manifest execution identity is invalid: {exc}"]
     issues = validate_result(manifest, "content", "post_manifest")
     assets = manifest.get("assets") if isinstance(manifest, dict) else None
     video_assets = [
@@ -351,6 +366,15 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
         issues.append("video posterAssetId must resolve to exactly one cover image asset")
     elif str(poster_assets[0].get("sha256") or "") != str(asset.get("posterSha256") or ""):
         issues.append("video poster asset digest does not match posterSha256")
+    for media_asset in (asset, *poster_assets):
+        status = str(media_asset.get("rightsAuditStatus") or "").strip()
+        if status not in {item.value for item in RightsAuditStatus}:
+            issues.append("video asset rightsAuditStatus is invalid")
+        elif (
+            status == RightsAuditStatus.UNVERIFIED.value
+            and not media_asset.get("rightsAuditIssues")
+        ):
+            issues.append("unverified video asset must record rightsAuditIssues")
     file_fields = {
         "fileName": "sha256",
         "posterFileName": "posterSha256",

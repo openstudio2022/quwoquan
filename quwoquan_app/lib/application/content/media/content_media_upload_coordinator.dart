@@ -90,6 +90,8 @@ enum ContentMediaPreparationPhase {
   completed,
   cancelling,
   aborted,
+  deleting,
+  deleted,
 }
 
 /// Durable, path-free checkpoint for one source slot in a publication draft.
@@ -107,6 +109,8 @@ final class ContentMediaPreparationCheckpoint {
     required this.initIdempotencyKey,
     required this.completeIdempotencyKey,
     required this.abortIdempotencyKey,
+    required this.discardIdempotencyKey,
+    this.expiresAt,
     this.sessionId = '',
     this.phase = ContentMediaPreparationPhase.initializing,
     this.attempt = 0,
@@ -119,6 +123,8 @@ final class ContentMediaPreparationCheckpoint {
   final String initIdempotencyKey;
   final String completeIdempotencyKey;
   final String abortIdempotencyKey;
+  final String discardIdempotencyKey;
+  final DateTime? expiresAt;
   final String sessionId;
   final ContentMediaPreparationPhase phase;
   final int attempt;
@@ -148,6 +154,7 @@ final class ContentMediaPreparationCheckpoint {
       initIdempotencyKey: commandKey('init'),
       completeIdempotencyKey: commandKey('complete'),
       abortIdempotencyKey: commandKey('abort'),
+      discardIdempotencyKey: commandKey('discard'),
       attempt: attempt,
     );
   }
@@ -165,6 +172,7 @@ final class ContentMediaPreparationCheckpoint {
   ContentMediaPreparationCheckpoint copyWith({
     String? assetId,
     String? sessionId,
+    DateTime? expiresAt,
     ContentMediaPreparationPhase? phase,
     int? attempt,
   }) {
@@ -176,6 +184,8 @@ final class ContentMediaPreparationCheckpoint {
       initIdempotencyKey: initIdempotencyKey,
       completeIdempotencyKey: completeIdempotencyKey,
       abortIdempotencyKey: abortIdempotencyKey,
+      discardIdempotencyKey: discardIdempotencyKey,
+      expiresAt: expiresAt ?? this.expiresAt,
       sessionId: sessionId ?? this.sessionId,
       phase: phase ?? this.phase,
       attempt: attempt ?? this.attempt,
@@ -199,6 +209,8 @@ final class ContentMediaPreparationCheckpoint {
       initIdempotencyKey: retryKey(initIdempotencyKey),
       completeIdempotencyKey: retryKey(completeIdempotencyKey),
       abortIdempotencyKey: retryKey(abortIdempotencyKey),
+      discardIdempotencyKey: retryKey(discardIdempotencyKey),
+      expiresAt: null,
       phase: ContentMediaPreparationPhase.initializing,
       attempt: nextAttempt,
     );
@@ -212,6 +224,8 @@ final class ContentMediaPreparationCheckpoint {
     'initIdempotencyKey': initIdempotencyKey,
     'completeIdempotencyKey': completeIdempotencyKey,
     'abortIdempotencyKey': abortIdempotencyKey,
+    'discardIdempotencyKey': discardIdempotencyKey,
+    'expiresAt': expiresAt?.toUtc().toIso8601String(),
     'sessionId': sessionId,
     'phase': phase.name,
     'attempt': attempt,
@@ -230,7 +244,12 @@ final class ContentMediaPreparationCheckpoint {
         value['completeIdempotencyKey']?.toString().trim() ?? '';
     final abortIdempotencyKey =
         value['abortIdempotencyKey']?.toString().trim() ?? '';
+    final discardIdempotencyKey =
+        value['discardIdempotencyKey']?.toString().trim() ?? '';
     final sessionId = value['sessionId']?.toString().trim() ?? '';
+    final expiresAt = DateTime.tryParse(
+      value['expiresAt']?.toString().trim() ?? '',
+    )?.toUtc();
     final mediaType = ContentMediaType.values.where(
       (candidate) => candidate.name == value['mediaType']?.toString(),
     );
@@ -243,6 +262,7 @@ final class ContentMediaPreparationCheckpoint {
         initIdempotencyKey.isEmpty ||
         completeIdempotencyKey.isEmpty ||
         abortIdempotencyKey.isEmpty ||
+        discardIdempotencyKey.isEmpty ||
         phase.isEmpty) {
       return null;
     }
@@ -254,6 +274,8 @@ final class ContentMediaPreparationCheckpoint {
       initIdempotencyKey: initIdempotencyKey,
       completeIdempotencyKey: completeIdempotencyKey,
       abortIdempotencyKey: abortIdempotencyKey,
+      discardIdempotencyKey: discardIdempotencyKey,
+      expiresAt: expiresAt,
       sessionId: sessionId,
       phase: phase.first,
       attempt: (value['attempt'] as num?)?.toInt() ?? 0,
@@ -281,15 +303,10 @@ Future<PreparedContentMediaSource> prepareContentMediaSource({
 }
 
 final class UploadedContentMedia {
-  const UploadedContentMedia({
-    required this.sessionId,
-    required this.assetId,
-    required this.cdnUrl,
-  });
+  const UploadedContentMedia({required this.sessionId, required this.assetId});
 
   final String sessionId;
   final String assetId;
-  final Uri? cdnUrl;
 }
 
 /// Application coordinator for the upload-session aggregate and its external
@@ -376,16 +393,59 @@ final class ContentMediaUploadCoordinator {
   /// already have completed. Callers must retain the returned checkpoint when
   /// the transition remains [ContentMediaPreparationPhase.cancelling].
   Future<ContentMediaPreparationCheckpoint> cancelPreparedCheckpoint(
-    ContentMediaPreparationCheckpoint checkpoint,
-  ) async {
+    ContentMediaPreparationCheckpoint checkpoint, {
+    Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+    onCheckpoint,
+  }) async {
     var resolved = checkpoint;
-    await _reconcileAndAbortPendingSession(
-      checkpoint,
-      onCheckpoint: (updated) async {
-        resolved = updated;
-      },
-    );
+    Future<void> persist(ContentMediaPreparationCheckpoint updated) async {
+      resolved = updated;
+      await onCheckpoint?.call(updated);
+    }
+
+    if (resolved.phase == ContentMediaPreparationPhase.deleted) {
+      return resolved;
+    }
+    if (resolved.assetId.trim().isNotEmpty &&
+        (resolved.phase == ContentMediaPreparationPhase.completed ||
+            resolved.phase == ContentMediaPreparationPhase.deleting)) {
+      await _discardCompletedAsset(resolved, onCheckpoint: persist);
+      return resolved;
+    }
+    await _reconcileAndAbortPendingSession(resolved, onCheckpoint: persist);
+    if (resolved.assetId.trim().isNotEmpty &&
+        resolved.phase == ContentMediaPreparationPhase.completed) {
+      await _discardCompletedAsset(resolved, onCheckpoint: persist);
+    }
     return resolved;
+  }
+
+  Future<void> _discardCompletedAsset(
+    ContentMediaPreparationCheckpoint checkpoint, {
+    required Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)
+    onCheckpoint,
+  }) async {
+    final mediaID = checkpoint.assetId.trim();
+    if (mediaID.isEmpty) {
+      throw StateError('completed media checkpoint is missing assetId');
+    }
+    final deleting = checkpoint.copyWith(
+      phase: ContentMediaPreparationPhase.deleting,
+    );
+    await onCheckpoint(deleting);
+    final result = await media.discardMediaAsset(
+      DiscardContentMediaAssetCommand(mediaId: mediaID),
+      ContentMediaAssetCommandContext(
+        idempotencyKey: checkpoint.discardIdempotencyKey,
+      ),
+    );
+    if (result.mediaId != mediaID ||
+        result.status != ContentMediaProcessingStatus.deleted) {
+      throw StateError('media discard response does not match checkpoint');
+    }
+    await onCheckpoint(
+      deleting.copyWith(phase: ContentMediaPreparationPhase.deleted),
+    );
   }
 
   Future<UploadedContentMedia> _upload({
@@ -492,26 +552,58 @@ final class ContentMediaUploadCoordinator {
       await onCheckpoint?.call(next);
     }
 
-    final recovered = await _recoverCompletedSession(
-      durable,
-      onCheckpoint: persist,
-    );
-    if (recovered != null) {
-      return recovered;
-    }
+    late ContentMediaUploadSessionCommandResult init;
+    while (true) {
+      final recovered = await _recoverCompletedSession(
+        durable,
+        onCheckpoint: persist,
+      );
+      if (recovered != null) {
+        return recovered;
+      }
+      if (_checkpointGrantExpired(durable)) {
+        await _reconcileAndAbortPendingSession(durable, onCheckpoint: persist);
+        if (durable.phase == ContentMediaPreparationPhase.completed) {
+          return UploadedContentMedia(
+            sessionId: durable.sessionId,
+            assetId: durable.assetId,
+          );
+        }
+        if (durable.phase == ContentMediaPreparationPhase.aborted) {
+          await persist(durable.restartAfterAbort());
+          continue;
+        }
+      }
 
-    final init = await media.initUpload(
-      InitContentMediaUploadCommand(
-        mediaType: mediaType,
-        contentType: contentType,
-        fileSize: fileSize,
-        expectedSha256: expectedSha256,
-      ),
-      ContentMediaUploadCommandContext(
-        idempotencyKey: durable.initIdempotencyKey,
-        cancellation: operationCancellation,
-      ),
-    );
+      final candidate = await media.initUpload(
+        InitContentMediaUploadCommand(
+          mediaType: mediaType,
+          contentType: contentType,
+          fileSize: fileSize,
+          expectedSha256: expectedSha256,
+        ),
+        ContentMediaUploadCommandContext(
+          idempotencyKey: durable.initIdempotencyKey,
+          cancellation: operationCancellation,
+        ),
+      );
+      final candidateSessionId = candidate.sessionId.trim();
+      if (candidateSessionId.isEmpty) {
+        throw StateError('media upload session is missing');
+      }
+      await persist(
+        durable.copyWith(
+          sessionId: candidateSessionId,
+          expiresAt: candidate.expiresAt,
+          phase: ContentMediaPreparationPhase.uploading,
+        ),
+      );
+      if (_checkpointGrantExpired(durable)) {
+        continue;
+      }
+      init = candidate;
+      break;
+    }
     final sessionId = init.sessionId.trim();
     if (sessionId.isEmpty) throw StateError('media upload session is missing');
     if (init.status == ContentMediaUploadStatus.completed) {
@@ -520,17 +612,12 @@ final class ContentMediaUploadCoordinator {
         durable.copyWith(
           sessionId: completed.sessionId,
           assetId: completed.assetId,
+          expiresAt: init.expiresAt,
           phase: ContentMediaPreparationPhase.completed,
         ),
       );
       return completed;
     }
-    await persist(
-      durable.copyWith(
-        sessionId: sessionId,
-        phase: ContentMediaPreparationPhase.uploading,
-      ),
-    );
     final uploadUrl = init.uploadUrl;
     if (uploadUrl == null) {
       await _reconcileAndAbortPendingSession(durable, onCheckpoint: persist);
@@ -559,6 +646,7 @@ final class ContentMediaUploadCoordinator {
         durable.copyWith(
           sessionId: completed.sessionId,
           assetId: completed.assetId,
+          expiresAt: init.expiresAt,
           phase: ContentMediaPreparationPhase.completed,
         ),
       );
@@ -612,11 +700,7 @@ final class ContentMediaUploadCoordinator {
             'completed media upload session is missing recoverable assetId',
           );
         }
-        return UploadedContentMedia(
-          sessionId: sessionId,
-          assetId: assetId,
-          cdnUrl: null,
-        );
+        return UploadedContentMedia(sessionId: sessionId, assetId: assetId);
       }
       if (session.status == ContentMediaUploadStatus.aborted) {
         Error.throwWithStackTrace(lastError, lastStackTrace);
@@ -641,11 +725,7 @@ final class ContentMediaUploadCoordinator {
     if (assetId.isEmpty) {
       throw StateError('completed media upload is missing assetId');
     }
-    return UploadedContentMedia(
-      sessionId: sessionId,
-      assetId: assetId,
-      cdnUrl: completed.cdnUrl,
-    );
+    return UploadedContentMedia(sessionId: sessionId, assetId: assetId);
   }
 
   Future<ContentMediaUploadSessionSlice?> _readUploadSessionForReconciliation(
@@ -675,7 +755,6 @@ final class ContentMediaUploadCoordinator {
       return UploadedContentMedia(
         sessionId: checkpoint.sessionId,
         assetId: checkpoint.assetId,
-        cdnUrl: null,
       );
     }
     final sessionId = checkpoint.sessionId.trim();
@@ -685,6 +764,9 @@ final class ContentMediaUploadCoordinator {
     final session = await _readUploadSessionForReconciliation(sessionId);
     if (session == null) {
       return null;
+    }
+    if (checkpoint.expiresAt?.toUtc() != session.expiresAt.toUtc()) {
+      await onCheckpoint(checkpoint.copyWith(expiresAt: session.expiresAt));
     }
     if (session.status == ContentMediaUploadStatus.completed) {
       final assetId = (session.assetId ?? '').trim();
@@ -696,14 +778,11 @@ final class ContentMediaUploadCoordinator {
       await onCheckpoint(
         checkpoint.copyWith(
           assetId: assetId,
+          expiresAt: session.expiresAt,
           phase: ContentMediaPreparationPhase.completed,
         ),
       );
-      return UploadedContentMedia(
-        sessionId: sessionId,
-        assetId: assetId,
-        cdnUrl: null,
-      );
+      return UploadedContentMedia(sessionId: sessionId, assetId: assetId);
     }
     if (session.status == ContentMediaUploadStatus.aborted) {
       await onCheckpoint(checkpoint.restartAfterAbort());
@@ -718,6 +797,9 @@ final class ContentMediaUploadCoordinator {
   }) async {
     final sessionId = checkpoint.sessionId.trim();
     if (sessionId.isEmpty) {
+      await onCheckpoint(
+        checkpoint.copyWith(phase: ContentMediaPreparationPhase.aborted),
+      );
       return;
     }
     await onCheckpoint(
@@ -742,20 +824,40 @@ final class ContentMediaUploadCoordinator {
       );
       return;
     }
+    Object? abortError;
+    StackTrace? abortStackTrace;
     try {
-      await media.abortUpload(
+      final aborted = await media.abortUpload(
         AbortContentMediaUploadCommand(sessionId: sessionId),
         ContentMediaUploadCommandContext(
           idempotencyKey: checkpoint.abortIdempotencyKey,
         ),
       );
-    } catch (error, stackTrace) {
-      developer.log(
-        'Media upload session abort failed',
-        name: 'ContentMediaUploadCoordinator',
-        error: error,
-        stackTrace: stackTrace,
+      if (aborted.status == ContentMediaUploadStatus.completed) {
+        final assetId = (aborted.assetId ?? '').trim();
+        if (assetId.isNotEmpty) {
+          await onCheckpoint(
+            checkpoint.copyWith(
+              assetId: assetId,
+              phase: ContentMediaPreparationPhase.completed,
+            ),
+          );
+          return;
+        }
+      }
+      if (aborted.status == ContentMediaUploadStatus.aborted) {
+        await onCheckpoint(
+          checkpoint.copyWith(phase: ContentMediaPreparationPhase.aborted),
+        );
+        return;
+      }
+      abortError = StateError(
+        'media abort response did not reach a terminal state',
       );
+      abortStackTrace = StackTrace.current;
+    } catch (error, stackTrace) {
+      abortError = error;
+      abortStackTrace = stackTrace;
     }
     final afterAbort = await _readUploadSessionForReconciliation(sessionId);
     if (afterAbort?.status == ContentMediaUploadStatus.completed) {
@@ -774,7 +876,21 @@ final class ContentMediaUploadCoordinator {
       await onCheckpoint(
         checkpoint.copyWith(phase: ContentMediaPreparationPhase.aborted),
       );
+      return;
     }
+    Error.throwWithStackTrace(abortError, abortStackTrace);
+  }
+
+  bool _checkpointGrantExpired(ContentMediaPreparationCheckpoint checkpoint) {
+    final expiresAt = checkpoint.expiresAt;
+    if (expiresAt == null ||
+        checkpoint.sessionId.trim().isEmpty ||
+        checkpoint.phase == ContentMediaPreparationPhase.completed ||
+        checkpoint.phase == ContentMediaPreparationPhase.aborted ||
+        checkpoint.phase == ContentMediaPreparationPhase.deleted) {
+      return false;
+    }
+    return !DateTime.now().toUtc().isBefore(expiresAt.toUtc());
   }
 
   CloudOperationCancellationSignal? _operationCancellation(

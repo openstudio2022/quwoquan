@@ -45,7 +45,6 @@ class FilterAdjustmentValues:
         value: object,
         *,
         label: str,
-        fill_missing_with_zero: bool = False,
     ) -> "FilterAdjustmentValues":
         payload = _mapping(value, label)
         expected = set(ADJUSTMENT_FIELD_NAMES)
@@ -53,10 +52,10 @@ class FilterAdjustmentValues:
         missing = sorted(expected - set(payload))
         if unknown:
             raise CatalogContractError(f"{label} 含未知调整字段：{unknown}")
-        if missing and not fill_missing_with_zero:
+        if missing:
             raise CatalogContractError(f"{label} 缺少调整字段：{missing}")
         values = {
-            name: _decimal(payload.get(name, 0), f"{label}.{name}")
+            name: _decimal(payload[name], f"{label}.{name}")
             for name in ADJUSTMENT_FIELD_NAMES
         }
         return cls(**values)
@@ -259,150 +258,6 @@ def normalize_release(
     return normalized
 
 
-def build_release_from_legacy(
-    value: object,
-    *,
-    release_id: str,
-    source_owner: str,
-) -> dict[str, object]:
-    payload = _mapping(value, "legacy filter catalog")
-    allowed = {
-        "version",
-        "categories",
-        "presets",
-        "recommendedFallbackPresetIds",
-    }
-    unknown = sorted(set(payload) - allowed)
-    missing = sorted(
-        {
-            "categories",
-            "presets",
-            "recommendedFallbackPresetIds",
-        }
-        - set(payload)
-    )
-    if unknown or missing:
-        raise CatalogContractError(
-            f"legacy catalog 字段不合法：missing={missing} unknown={unknown}"
-        )
-
-    categories: list[dict[str, object]] = []
-    for index, item in enumerate(_list(payload["categories"], "categories")):
-        category = _mapping(item, f"categories[{index}]")
-        _require_exact_keys(
-            category,
-            {"id", "label", "sort", "enabled"},
-            f"categories[{index}]",
-        )
-        categories.append(
-            {
-                "categoryId": _string(
-                    category["id"],
-                    f"categories[{index}].id",
-                ),
-                "displayNameZhHans": _string(
-                    category["label"],
-                    f"categories[{index}].label",
-                ),
-                "displayNameEn": None,
-                "sort": _integer(
-                    category["sort"],
-                    f"categories[{index}].sort",
-                ),
-                "enabled": _boolean(
-                    category["enabled"],
-                    f"categories[{index}].enabled",
-                ),
-            }
-        )
-    categories.sort(
-        key=lambda item: (int(item["sort"]), str(item["categoryId"]))
-    )
-
-    presets: list[dict[str, object]] = []
-    for index, item in enumerate(_list(payload["presets"], "presets")):
-        preset = _mapping(item, f"presets[{index}]")
-        _require_exact_keys(
-            preset,
-            {
-                "id",
-                "categoryId",
-                "name",
-                "sort",
-                "enabled",
-                "defaultStrength",
-                "params",
-            },
-            f"presets[{index}]",
-        )
-        adjustments = FilterAdjustmentValues.from_payload(
-            preset["params"],
-            label=f"presets[{index}].params",
-            fill_missing_with_zero=True,
-        )
-        presets.append(
-            {
-                "presetId": _string(
-                    preset["id"],
-                    f"presets[{index}].id",
-                ),
-                "categoryId": _string(
-                    preset["categoryId"],
-                    f"presets[{index}].categoryId",
-                ),
-                "displayNameZhHans": _string(
-                    preset["name"],
-                    f"presets[{index}].name",
-                ),
-                "displayNameEn": None,
-                "sort": _integer(
-                    preset["sort"],
-                    f"presets[{index}].sort",
-                ),
-                "enabled": _boolean(
-                    preset["enabled"],
-                    f"presets[{index}].enabled",
-                ),
-                "defaultStrength": _decimal(
-                    preset["defaultStrength"],
-                    f"presets[{index}].defaultStrength",
-                ),
-                "adjustments": adjustments.to_payload(),
-            }
-        )
-    presets.sort(
-        key=lambda item: (
-            str(item["categoryId"]),
-            int(item["sort"]),
-            str(item["presetId"]),
-        )
-    )
-    fallbacks = [
-        _string(item, f"recommendedFallbackPresetIds[{index}]")
-        for index, item in enumerate(
-            _list(
-                payload["recommendedFallbackPresetIds"],
-                "recommendedFallbackPresetIds",
-            )
-        )
-    ]
-    digest = canonical_digest_for_payload(
-        categories=categories,
-        presets=presets,
-        recommended_fallback_preset_ids=fallbacks,
-    )
-    return normalize_release(
-        {
-            "releaseId": release_id,
-            "sourceOwner": source_owner,
-            "canonicalDigest": digest,
-            "categories": categories,
-            "presets": presets,
-            "recommendedFallbackPresetIds": fallbacks,
-        }
-    )
-
-
 def _normalize_category(value: object, *, index: int) -> dict[str, object]:
     label = f"categories[{index}]"
     payload = _mapping(value, label)
@@ -568,5 +423,3 @@ def _require_unique(values: Sequence[object], label: str) -> None:
         seen.add(value)
     if duplicates:
         raise CatalogContractError(f"{label} 必须唯一：{duplicates}")
-
-

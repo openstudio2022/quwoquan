@@ -134,6 +134,7 @@ void main() {
           regionTagRef: 'Topic/地理/行政区/中国/广东省/云浮市',
           occupationTagRef: 'Audience/用户/职业/产品/产品经理',
           interestTagRefs: const <String>['Audience/用户/兴趣偏好/影像/摄影'],
+          expectedTaxonomyReleaseId: 'taxonomy-release-test',
         ),
       );
 

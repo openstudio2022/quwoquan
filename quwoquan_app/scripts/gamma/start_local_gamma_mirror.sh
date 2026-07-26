@@ -2,6 +2,22 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
+LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+
+cleanup_active_child() {
+  local exit_status="$?"
+  if [[ -n "$LOCAL_GAMMA_ACTIVE_CHILD_PID" ]] \
+    && kill -0 "$LOCAL_GAMMA_ACTIVE_CHILD_PID" >/dev/null 2>&1; then
+    echo "[local-gamma] stopping active child before exit" >&2
+    kill "$LOCAL_GAMMA_ACTIVE_CHILD_PID" >/dev/null 2>&1 || true
+    wait "$LOCAL_GAMMA_ACTIVE_CHILD_PID" >/dev/null 2>&1 || true
+  fi
+  LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+  trap - EXIT INT TERM HUP
+  exit "$exit_status"
+}
+trap cleanup_active_child EXIT INT TERM HUP
+
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
 PRODUCT_TELEMETRY_AVAILABLE="${QWQ_PRODUCT_TELEMETRY_AVAILABLE:-1}"
@@ -29,7 +45,7 @@ case "$WORKLOAD" in
       echo "[local-gamma] GATE_BLOCK: full workload requires product telemetry" >&2
       exit 2
     fi
-    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability,assistant-runtime"
+    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability,assistant-runtime,edge-media"
     ;;
   *)
     echo "[local-gamma] FAIL: QWQ_WORKLOAD must be content-release or full" >&2
@@ -44,12 +60,25 @@ eval "$(python3 "$ROOT/quwoquan_ops/cli/lib/local_run.py" \
   --env gamma --target gamma-local --action "$LOCAL_RUN_ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
 export QWQ_OUTPUT_ROOT QWQ_DEPLOY_WORK_ROOT QWQ_OBSERVABILITY_RUN_ROOT QWQ_RUN_ROOT
 COMPOSE_FILE="$ROOT/quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+COMPOSE_FILES=("$COMPOSE_FILE")
+while IFS= read -r service_compose_file; do
+  COMPOSE_FILES+=("$service_compose_file")
+done < <(find "$ROOT/quwoquan_service/services" -mindepth 3 -maxdepth 3 -path '*/deploy/compose.yaml' -type f | sort)
+while IFS= read -r service_environment_compose_file; do
+  COMPOSE_FILES+=("$service_environment_compose_file")
+done < <(find "$ROOT/quwoquan_service/services" -mindepth 5 -maxdepth 5 -path '*/environments/gamma/deploy/compose.yaml' -type f | sort)
+COMPOSE_FILES+=("$ROOT/quwoquan_service/control-plane/platform-ops/deploy/compose.yaml")
+COMPOSE_FILE_ARGS=()
+for service_compose_file in "${COMPOSE_FILES[@]}"; do
+  COMPOSE_FILE_ARGS+=(-f "$service_compose_file")
+done
 LOCAL_GAMMA_COMPOSE_PROJECT_NAME="${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:-quwoquan_service}"
+LOCAL_GAMMA_REC_POLICY_SOURCE="${LOCAL_GAMMA_REC_POLICY_SOURCE:-$ROOT/quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy_object_cards_v1.yaml}"
+export LOCAL_GAMMA_REC_POLICY_SOURCE
 if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
    || -z "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-}" \
    || -z "${LOCAL_GAMMA_PLATFORM_OPS_PORT:-}" \
    || -z "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-}" \
-   || -z "${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:-}" \
    || -z "${LOCAL_GAMMA_CONTENT_PORT:-}" \
    || -z "${LOCAL_GAMMA_CHAT_PORT:-}" \
    || -z "${LOCAL_GAMMA_USER_PORT:-}" \
@@ -63,7 +92,6 @@ if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
    || -z "${LOCAL_GAMMA_CIRCLE_PORT:-}" \
    || -z "${LOCAL_GAMMA_INTEGRATION_PORT:-}" \
    || -z "${LOCAL_GAMMA_NOTIFICATION_PORT:-}" \
-   || -z "${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:-}" \
    || -z "${LOCAL_GAMMA_POSTGRES_PORT:-}" \
    || -z "${LOCAL_GAMMA_MONGO_PORT:-}" \
    || -z "${LOCAL_GAMMA_REDIS_PORT:-}" \
@@ -77,7 +105,6 @@ export \
   LOCAL_GAMMA_PRODUCT_OPS_PORT \
   LOCAL_GAMMA_PLATFORM_OPS_PORT \
   LOCAL_GAMMA_MEDIA_EDGE_PORT \
-  LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT \
   LOCAL_GAMMA_CONTENT_PORT \
   LOCAL_GAMMA_CHAT_PORT \
   LOCAL_GAMMA_USER_PORT \
@@ -96,6 +123,20 @@ export \
   LOCAL_GAMMA_MONGO_CACHE_SIZE_GB \
   LOCAL_GAMMA_REDIS_PORT \
   LOCAL_GAMMA_ES_PORT
+
+export_service_compose_environment() {
+  local source_name target_name
+  export QWQ_COMPOSE_ENV=gamma
+  while IFS= read -r source_name; do
+    # gamma-local infrastructure Compose still owns LOCAL_GAMMA_* mount/port
+    # variables (for example the immutable Caddyfile source). Export both the
+    # source name and its service-owned QWQ_COMPOSE alias.
+    export "$source_name"
+    target_name="QWQ_COMPOSE_${source_name#LOCAL_GAMMA_}"
+    printf -v "$target_name" '%s' "${!source_name}"
+    export "$target_name"
+  done < <(compgen -A variable LOCAL_GAMMA_ | sort)
+}
 CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
 IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
 GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-https://gamma-api.quwoquan-env.test:${LOCAL_GAMMA_HTTP_PORT}}"
@@ -103,7 +144,11 @@ PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-
 MEDIA_AVATAR_BASE_URL="${LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL:-https://gamma-avatar.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}"
 MEDIA_IMAGE_BASE_URL="${LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL:-${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}}}"
 MEDIA_VIDEO_BASE_URL="${LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL:-https://gamma-video.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}"
-MEDIA_UPLOAD_BASE_URL="${LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL:-https://gamma-upload.quwoquan-env.test:${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT}}"
+MEDIA_UPLOAD_BASE_URL="${LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL:-}"
+if [[ -z "$MEDIA_UPLOAD_BASE_URL" ]]; then
+  echo "[local-gamma] GATE_BLOCK: LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL must provide the canonical media upload base URL" >&2
+  exit 2
+fi
 MEDIA_BASE_URL="$MEDIA_IMAGE_BASE_URL"
 PUBLIC_HOSTS=(
   gamma-api.quwoquan-env.test
@@ -114,7 +159,42 @@ PUBLIC_HOSTS=(
   gamma-upload.quwoquan-env.test
 )
 LOCAL_GAMMA_TAGS_DIR="${LOCAL_GAMMA_TAGS_DIR:-$ROOT/quwoquan_data/control_plane/governance/taxonomy}"
-LOCAL_GAMMA_TAG_OBJECTS_FILE="${LOCAL_GAMMA_TAG_OBJECTS_FILE:-$ROOT/quwoquan_service/contracts/metadata/tag/test_fixtures/scenarios/tag_scenarios.json}"
+LOCAL_GAMMA_SEED_MANIFEST="$ROOT/quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
+resolve_gamma_seed_field() {
+  PYTHONDONTWRITEBYTECODE=1 python3 - "$ROOT" "$LOCAL_GAMMA_SEED_MANIFEST" "$1" "$2" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1]).resolve()
+manifest_path = pathlib.Path(sys.argv[2]).resolve()
+domain = sys.argv[3]
+field = sys.argv[4]
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+matches = [
+    item
+    for item in manifest.get("seedRefs", [])
+    if str(item.get("domain") or "").strip() == domain
+]
+if len(matches) != 1:
+    raise SystemExit(f"{manifest_path} must declare exactly one {domain} seed")
+item = matches[0]
+if field == "fixturePath":
+    value = root / str(item.get(field) or "").strip()
+    if not value.is_file():
+        raise SystemExit(f"{domain} seed fixture does not exist: {value}")
+    print(value)
+elif field == "refs":
+    refs = [str(ref).strip() for ref in item.get(field, []) if str(ref).strip()]
+    if not refs:
+        raise SystemExit(f"{domain} seed must declare refs")
+    print(",".join(refs))
+else:
+    raise SystemExit(f"unsupported seed field: {field}")
+PY
+}
+LOCAL_GAMMA_TAG_OBJECTS_FILE="$(resolve_gamma_seed_field tag fixturePath)"
+LOCAL_GAMMA_TAG_SEED_REFS="$(resolve_gamma_seed_field tag refs)"
 LOCAL_GAMMA_TAG_DB="${LOCAL_GAMMA_TAG_DB:-quwoquan_tag}"
 # 2G onebox 在 gray/prod 切换窗口会短时双栈并存；显式压低 Mongo cache，避免数据面被 OOM kill。
 LOCAL_GAMMA_MONGO_CACHE_SIZE_GB="${LOCAL_GAMMA_MONGO_CACHE_SIZE_GB:-0.25}"
@@ -132,7 +212,7 @@ GAMMA_RUN_ROOT="${QWQ_RUN_ROOT}"
 LOCAL_GAMMA_CONFIG_ROOT="${LOCAL_GAMMA_DEPLOY_RENDER_ROOT}/config-root"
 LOCAL_GAMMA_MEDIA_ROOT="${LOCAL_GAMMA_CACHE_ROOT}/media"
 # Ops owns the immutable local-gamma route table. Runtime output never carries static routing config.
-LOCAL_GAMMA_CADDYFILE="$ROOT/quwoquan_ops/environments/local-gamma/Caddyfile"
+LOCAL_GAMMA_CADDYFILE="$ROOT/quwoquan_ops/environments/gamma/local/Caddyfile"
 LOCAL_GAMMA_CADDY_DATA_VOLUME="${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}"
 LOCAL_GAMMA_CADDY_CONFIG_VOLUME="${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}"
 LOCAL_GAMMA_MODEL_CACHE_ROOT="${LOCAL_GAMMA_CACHE_ROOT}/model"
@@ -149,10 +229,8 @@ case "$STAGE" in
     CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-gamma}"
     LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-local-gamma}"
     ENABLE_FIXTURE_SEEDS="${ENABLE_FIXTURE_SEEDS:-1}"
-    # gamma 必须消费 configs/gamma/config.yaml 的真实 provider；空环境覆盖表示
-    # 保留配置真相源，禁止用 deterministic 绕过商用依赖校验。
-    ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-}"
-    ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-}"
+    # gamma-local 保持生产 Remote composition 与完整第一方拓扑；
+    # 所有外部 Provider 由服务 Binding 选择 Port 对等本地替身，并由 stackctl 统一材料化。
     ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}"
     ;;
   prod)
@@ -160,9 +238,7 @@ case "$STAGE" in
     CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-prod}"
     LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-prod-onebox}"
     ENABLE_FIXTURE_SEEDS="${ENABLE_FIXTURE_SEEDS:-0}"
-    # prod 同样保留 configs/prod/config.yaml 的真实 provider，缺凭据必须 fail-fast。
-    ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-}"
-    ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-}"
+    # prod 只消费 environments/prod 的真实 Provider Binding，缺凭据必须 fail-fast。
     ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-}"
     ;;
   *)
@@ -171,6 +247,9 @@ case "$STAGE" in
     ;;
 esac
 if [[ "${LOCAL_GAMMA_SKIP_FIXTURE_SEEDS:-0}" == "1" ]]; then
+  ENABLE_FIXTURE_SEEDS=0
+fi
+if [[ "$WORKLOAD" == "content-release" ]]; then
   ENABLE_FIXTURE_SEEDS=0
 fi
 LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
@@ -189,8 +268,6 @@ export \
   LOCAL_GAMMA_APP_ENV \
   CONFIG_SOURCE_ENV \
   ENABLE_FIXTURE_SEEDS \
-  ASSISTANT_MODEL_PROVIDER \
-  ALLOW_DETERMINISTIC_BETA \
   ASSISTANT_SCENARIO_SEED_REFS \
   LOCAL_GAMMA_READY_INDEX_STREAM \
   LOCAL_GAMMA_READY_INDEX_GROUP \
@@ -219,14 +296,14 @@ export LOCAL_GAMMA_MINIO_IMAGE="${LOCAL_GAMMA_MINIO_IMAGE:-minio/minio:RELEASE.2
 export LOCAL_GAMMA_MINIO_MC_IMAGE="${LOCAL_GAMMA_MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-03-12T17-29-24Z}"
 # ES 镜像来自 elastic 官方 registry（非 docker.io/library），不经 library_image 前缀。
 export LOCAL_GAMMA_ELASTICSEARCH_IMAGE="${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:8.13.4}"
-export LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-$(library_image golang:1.24-bookworm)}"
-export LOCAL_GAMMA_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-$(library_image alpine:3.19)}"
+export LOCAL_GAMMA_GO_BASE_IMAGE="${LOCAL_GAMMA_GO_BASE_IMAGE:?LOCAL_GAMMA_GO_BASE_IMAGE is required}"
+export LOCAL_GAMMA_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_ALPINE_BASE_IMAGE:?LOCAL_GAMMA_ALPINE_BASE_IMAGE is required}"
 export LOCAL_GAMMA_PYTHON_BASE_IMAGE="${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-$(library_image python:3.11-slim)}"
 LOCAL_GAMMA_RTC_SOURCE_IMAGE_PLACEHOLDER="localhost/quwoquan_service_rtc-service:source-provenance-required"
 
 local_gamma_service_default_image_ref() {
   case "$1" in
-    rec-model-service) echo "localhost/quwoquan_service_rec-model-service:source-provenance-required" ;;
+    recommendation-service) echo "localhost/quwoquan_service_recommendation-service:source-provenance-required" ;;
     content-service) echo "localhost/quwoquan_service_content-service:source-provenance-required" ;;
     chat-service) echo "localhost/quwoquan_service_chat-service:source-provenance-required" ;;
     user-service) echo "localhost/quwoquan_service_user-service:source-provenance-required" ;;
@@ -246,7 +323,7 @@ local_gamma_service_default_image_ref() {
 
 local_gamma_service_repository_name() {
   case "$1" in
-    rec-model-service) echo "recommendation-service" ;;
+    recommendation-service) echo "recommendation-service" ;;
     content-service|chat-service|user-service|assistant-service|product-ops-service|platform-ops-service|tag-service|search-service|entity-service|circle-service|integration-service|notification-service|rtc-service) echo "$1" ;;
     *) return 1 ;;
   esac
@@ -268,7 +345,7 @@ resolve_local_gamma_service_image_ref() {
   printf '%s\n' "$default_ref"
 }
 
-export LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE="${LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref rec-model-service)}"
+export LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE="${LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref recommendation-service)}"
 export LOCAL_GAMMA_CONTENT_SERVICE_IMAGE="${LOCAL_GAMMA_CONTENT_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref content-service)}"
 export LOCAL_GAMMA_CHAT_SERVICE_IMAGE="${LOCAL_GAMMA_CHAT_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref chat-service)}"
 export LOCAL_GAMMA_USER_SERVICE_IMAGE="${LOCAL_GAMMA_USER_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref user-service)}"
@@ -293,6 +370,7 @@ tunnel_pid_file="${LOCAL_GAMMA_PROCESS_ROOT}/colima-tunnels.pids"
 stack_report="${LOCAL_GAMMA_STACK_STATUS_REPORT}"
 gamma_proxy_ensure_attempts=0
 compose_up_timed_out=0
+compose_build_timed_out=0
 
 # wait_local_gamma_host_ready() 会在 podman/manual 与 docker compose 两条路径共用。
 # docker compose 分支会在后面重载成真实探测逻辑；这里提供默认 noop，
@@ -302,11 +380,12 @@ ensure_docker_gamma_proxy_started() {
 }
 
 local_gamma_has_existing_stack() {
-  if docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps -q 2>/dev/null | awk 'NF {found=1} END {exit found ? 0 : 1}'; then
+  export_service_compose_environment
+  if docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" ps -q 2>/dev/null | awk 'NF {found=1} END {exit found ? 0 : 1}'; then
     return 0
   fi
   if command -v podman >/dev/null 2>&1 && \
-    podman ps -a --format '{{.Names}}' 2>/dev/null | awk '/^quwoquan_service_(gamma-proxy|assistant-service|user-service|chat-service|content-service|product-ops-service|platform-ops-service|tag-service|search-service|entity-service|circle-service|integration-service|notification-service|rec-model-service|elasticsearch|redis|mongodb|postgres)_1$/ {found=1} END {exit found ? 0 : 1}'; then
+    podman ps -a --format '{{.Names}}' 2>/dev/null | awk '/^quwoquan_service_(gamma-proxy|assistant-service|user-service|chat-service|content-service|product-ops-service|platform-ops-service|tag-service|search-service|entity-service|circle-service|integration-service|notification-service|recommendation-service|elasticsearch|redis|mongodb|postgres)_1$/ {found=1} END {exit found ? 0 : 1}'; then
     return 0
   fi
   return 1
@@ -338,10 +417,8 @@ LOCAL_GAMMA_MANAGED_CONTAINER_BASE_NAMES=(
   circle-service
   integration-service
   notification-service
-  object-storage-init
-  object-storage
   mongo-init
-  rec-model-service
+  recommendation-service
   elasticsearch
   redis
   mongodb
@@ -399,7 +476,7 @@ cleanup_existing_gamma_runtime() {
       quwoquan_service_circle-service \
       quwoquan_service_integration-service \
       quwoquan_service_notification-service \
-      quwoquan_service_rec-model-service \
+      quwoquan_service_recommendation-service \
       quwoquan_service_rtc-service; do
       podman rmi -f "$image_name" >/dev/null 2>&1 || true
       podman rmi -f "localhost/${image_name}:latest" >/dev/null 2>&1 || true
@@ -431,7 +508,6 @@ start_colima_tunnels_if_needed() {
   local http_port="${LOCAL_GAMMA_HTTP_PORT:-19000}"
   local product_ops_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
   local media_edge_port="${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
-  local object_storage_edge_port="${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:-19130}"
   # user-service 直连健康探针（wait_local_gamma_host_ready）使用 user_port，必须同步开隧道，
   # 否则 colima 下 host 无法直达 user-service 发布端口，host 就绪探测会卡死。
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
@@ -445,7 +521,7 @@ start_colima_tunnels_if_needed() {
   stop_colima_tunnels
   colima ssh-config > "$ssh_config"
   : > "$tunnel_pid_file"
-  for port in "$http_port" "$product_ops_port" "$media_edge_port" "$object_storage_edge_port" "$user_port"; do
+  for port in "$http_port" "$product_ops_port" "$media_edge_port" "$user_port"; do
     if host_port_open "$port"; then
       continue
     fi
@@ -628,98 +704,68 @@ from quwoquan_ops.cli.lib.output_paths import deployment_package_root
 print(deployment_package_root(sys.argv[1]))
 PY
 )"
+
   copy_service_package_config() {
-    local package_service="$1"
-    local runtime_service="$2"
-    local package_dir="${package_root}/service/${package_service}"
-    if [[ ! -f "$package_dir/default_config.yaml" || ! -f "$package_dir/config.yaml" ]]; then
-      echo "[local-gamma] FAIL: missing environment package for ${package_service}: ${package_dir}" >&2
+    local service="$1"
+    local package_dir="${package_root}/services/${service}"
+    local config_file="${package_dir}/config/config.yaml"
+    local provenance_file="${package_dir}/provenance.json"
+    if [[ ! -f "$config_file" || ! -f "$provenance_file" ]]; then
+      echo "[local-gamma] FAIL: missing autonomous service package for ${service}: ${package_dir}" >&2
       return 1
     fi
-    python3 - "$package_dir" <<'PY'
+    local config_version
+    config_version="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$service" "$CONFIG_SOURCE_ENV" "$config_file" "$provenance_file" <<'PY'
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
-package_dir = Path(sys.argv[1])
-report_path = package_dir / "report.json"
-try:
-    report = json.loads(report_path.read_text(encoding="utf-8"))
-    files = report["provenance"]["files"]
-except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"invalid package provenance: {report_path}: {exc}")
-for name, filename in {
-    "defaultConfig": "default_config.yaml",
-    "environmentConfig": "config.yaml",
-}.items():
-    actual = "sha256:" + hashlib.sha256((package_dir / filename).read_bytes()).hexdigest()
-    if files.get(name) != actual:
-        raise SystemExit(f"package digest mismatch: {package_dir / filename}")
+service, environment, config_value, provenance_value = sys.argv[1:5]
+config_path = Path(config_value)
+provenance_path = Path(provenance_value)
+provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+actual = "sha256:" + hashlib.sha256(config_path.read_bytes()).hexdigest()
+if provenance.get("service") != service or provenance.get("environment") != environment:
+    raise SystemExit(f"service package identity mismatch: {provenance_path}")
+if (provenance.get("digests") or {}).get("config") != actual:
+    raise SystemExit(f"service package config digest mismatch: {config_path}")
+version = str(provenance.get("configVersion") or "")
+if not re.fullmatch(r"sha256:[0-9a-f]{64}", version):
+    raise SystemExit(f"invalid derived config version: {provenance_path}")
+print(version)
 PY
-    cp "$package_dir/default_config.yaml" "$out/configs/${runtime_service}/default/config.yaml"
-    cp "$package_dir/config.yaml" "$out/configs/${runtime_service}/${CONFIG_SOURCE_ENV}/config.yaml"
+)" || return 1
+    cp "$config_file" "$out/${service}.yaml"
+    local service_env_key
+    service_env_key="$(printf '%s' "$service" | tr '[:lower:]-' '[:upper:]_')"
+    local version_var="LOCAL_GAMMA_${service_env_key}_CONFIG_VERSION"
+    export "${version_var}=${config_version}"
   }
+
   rm -rf "$out"
-  mkdir -p \
-    "$out/configs/content-service/default" \
-    "$out/configs/content-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/content-service" \
-    "$out/configs/chat-service/default" \
-    "$out/configs/chat-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/chat-service" \
-    "$out/configs/user-service/default" \
-    "$out/configs/user-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/user-service" \
-    "$out/configs/assistant-service/default" \
-    "$out/configs/assistant-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/assistant-service" \
-    "$out/quwoquan_ops/environments" \
-    "$out/configs/product-ops-service/default" \
-    "$out/configs/product-ops-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/product-ops-service" \
-    "$out/configs/platform-ops-service/default" \
-    "$out/configs/platform-ops-service/${CONFIG_SOURCE_ENV}" \
-    "$out/configs/platform-ops-service/gamma-integration" \
-    "$out/releases/config/platform-ops-service" \
-    "$out/configs/recommendation-service/default" \
-    "$out/configs/recommendation-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/recommendation-service" \
-    "$out/configs/tag-service/default" \
-    "$out/configs/tag-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/tag-service" \
-    "$out/configs/search-service/default" \
-    "$out/configs/search-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/search-service" \
-    "$out/configs/entity-service/default" \
-    "$out/configs/entity-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/entity-service" \
-    "$out/configs/circle-service/default" \
-    "$out/configs/circle-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/circle-service" \
-    "$out/configs/integration-service/default" \
-    "$out/configs/integration-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/integration-service" \
-    "$out/configs/notification-service/default" \
-    "$out/configs/notification-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/notification-service"
-  copy_service_package_config content-service content-service
-  copy_service_package_config chat-service chat-service
-  copy_service_package_config user-service user-service
-  copy_service_package_config assistant-service assistant-service
-  copy_service_package_config product-ops-service product-ops-service
-  copy_service_package_config platform-ops-service platform-ops-service
-  # 本地 Gamma 使用 gamma-integration 的认证策略，但配置内容仍唯一派生自 Gamma 包。
-  cp \
-    "$out/configs/platform-ops-service/${CONFIG_SOURCE_ENV}/config.yaml" \
-    "$out/configs/platform-ops-service/gamma-integration/config.yaml"
-  copy_service_package_config rec-model-service recommendation-service
-  copy_service_package_config tag-service tag-service
-  copy_service_package_config search-service search-service
-  copy_service_package_config entity-service entity-service
-  copy_service_package_config circle-service circle-service
-  copy_service_package_config integration-service integration-service
-  copy_service_package_config notification-service notification-service
+  mkdir -p "$out/quwoquan_service/runtime/reliabletask/resources"
+  local service
+  for service in \
+    assistant-service \
+    chat-service \
+    circle-service \
+    content-service \
+    entity-service \
+    integration-service \
+    notification-service \
+    product-ops-service \
+    realtime-gateway \
+    recommendation-service \
+    rtc-service \
+    search-service \
+    tag-service \
+    user-service \
+    platform-ops-service; do
+    copy_service_package_config "$service"
+  done
+
   local -a report_account_backfill_args=(
     --write-report-account-backfill
     gamma
@@ -732,284 +778,13 @@ PY
   PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 \
     python3 -m quwoquan_ops.cli.lib.local_environment_auth \
       "${report_account_backfill_args[@]}" >/dev/null
-  if [[ ! -f "$package_root/runtime-shared/reliable_task_module_catalog.yaml" || ! -f "$package_root/runtime-shared/reliable_task_retention_policy.yaml" ]]; then
+
+  if [[ ! -f "$package_root/runtime-shared/module_catalog.yaml" || ! -f "$package_root/runtime-shared/retention_policy.yaml" ]]; then
     echo "[local-gamma] FAIL: missing runtime shared package: $package_root/runtime-shared" >&2
     return 1
   fi
-  cp "$package_root/runtime-shared/reliable_task_module_catalog.yaml" "$out/quwoquan_ops/environments/reliable_task_module_catalog.yaml"
-  cp "$package_root/runtime-shared/reliable_task_retention_policy.yaml" "$out/quwoquan_ops/environments/reliable_task_retention_policy.yaml"
-  cat > "$out/releases/config/content-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18080"
-mongo:
-  uri: "mongodb://mongodb:27017"
-  database: "quwoquan_content"
-  collection: "posts"
-redis:
-  rec:
-    mode: standalone
-    addr: "redis:6379"
-    db: 0
-    tls: false
-  general:
-    mode: standalone
-    addr: "redis:6379"
-    db: 1
-    tls: false
-rec_model_service:
-  enabled: true
-  url: "http://recommendation-service:8000"
-  timeout_ms: 100
-YAML
-  if [[ "$WORKLOAD" == "content-release" ]]; then
-    cat >> "$out/releases/config/content-service/${CONFIG_VERSION}.yaml" <<'YAML'
-# The content-feedback lifecycle profile deliberately excludes embedding and
-# ES projection. Full Gamma owns those external-provider acceptance checks.
-embedding:
-  enabled: false
-  vector_recall_enabled: false
-es:
-  enabled: false
-  endpoints: []
-YAML
-  fi
-  cat > "$out/releases/config/chat-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18081"
-mongodb:
-  uri: "mongodb://mongodb:27017"
-  database: "quwoquan_chat"
-redis:
-  realtime:
-    mode: standalone
-    addr: "redis:6379"
-    tls: false
-  general:
-    mode: standalone
-    addr: "redis:6379"
-    tls: false
-  reliable_task:
-    mode: standalone
-    addr: "redis:6379"
-    tls: false
-runtime:
-  media:
-    group_avatar_cdn_base_url: "${MEDIA_BASE_URL}"
-    group_avatar_local_media_root: "/var/lib/quwoquan/chat-media"
-  sync:
-    patch_ttl_hours: 720
-  reliable_task:
-    ready_index:
-      enabled: true
-      stream: "${LOCAL_GAMMA_READY_INDEX_STREAM}"
-      group: "${LOCAL_GAMMA_READY_INDEX_GROUP}"
-      queue: "${LOCAL_GAMMA_READY_INDEX_QUEUE}"
-  observability:
-    runtime_media:
-      group_avatar_recompute_duration_ms_p95: 500
-      group_avatar_fallback_ratio: 0.05
-      hint_to_pull_delay_ms_p95: 500
-      patch_fanout_failure_ratio: 0.01
-YAML
-  cat > "$out/releases/config/user-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18082"
-postgres:
-  dsn: "postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable"
-  max_open_conns: 25
-  max_idle_conns: 5
-  conn_max_lifetime_minutes: 30
-mongodb:
-  uri: "mongodb://mongodb:27017"
-  database: "quwoquan_user"
-redis:
-  general:
-    mode: standalone
-    addr: "redis:6379"
-    db: 0
-    tls: false
-YAML
-  cat > "$out/releases/config/assistant-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18087"
-mongodb:
-  uri: "mongodb://mongodb:27017"
-  database: "quwoquan_assistant"
-redis:
-  rec:
-    mode: standalone
-    addr: "redis:6379"
-    db: 0
-    tls: false
-  general:
-    mode: standalone
-    addr: "redis:6379"
-    db: 1
-    tls: false
-YAML
-  cat > "$out/releases/config/product-ops-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18086"
-mongodb:
-  uri: "mongodb://mongodb:27017"
-  database: "quwoquan_product_ops"
-postgres:
-  dsn: "postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable"
-redis:
-  rec:
-    mode: standalone
-    addr: "redis:6379"
-    db: 0
-    tls: false
-  general:
-    mode: standalone
-    addr: "redis:6379"
-    db: 1
-    tls: false
-YAML
-  cat > "$out/releases/config/platform-ops-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  name: "platform-ops-service"
-  http:
-    addr: ":18088"
-postgres:
-  dsn: "postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable"
-YAML
-  cat > "$out/releases/config/recommendation-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":8000"
-YAML
-  cat > "$out/releases/config/tag-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18092"
-mongo:
-  uri: "mongodb://mongodb:27017"
-  database: "quwoquan_tag"
-YAML
-  # search-service：gamma 下 CONFIG_VERSION 必填且 release 版本文件必须存在（缺失即启动失败）。
-  # es.endpoints / mongo.uri 经 SEARCH_ES_ENDPOINTS / SEARCH_MONGO_URI 注入并在配置加载后覆盖，
-  # 这里 es.enabled 固定 true（与 gamma 主链路一致），endpoints 留空交由 env 注入。
-  cat > "$out/releases/config/search-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18095"
-es:
-  enabled: true
-  endpoints: []
-  index: "quwoquan_objects"
-  shards: 1
-  replicas: 1
-mongo:
-  uri: "mongodb://mongodb:27017"
-  database: "quwoquan_search"
-YAML
-  # entity-service：gamma 下 CONFIG_VERSION 必填且 release 版本文件必须存在（缺失即启动失败）。
-  # mongo/ES endpoints 经 ENTITY_MONGO_* / SEARCH_ES_* 注入；这里固定 addr 与共享检索索引名。
-  cat > "$out/releases/config/entity-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18084"
-mongo:
-  uri: "mongodb://mongodb:27017"
-  database: "quwoquan_entity"
-es:
-  enabled: true
-  endpoints: []
-  index: "quwoquan_objects"
-  shards: 1
-  replicas: 1
-YAML
-  # circle-service：启动时强校验 config.version == CONFIG_VERSION，故 release 版本文件必须声明同一版本。
-  # mongo/redis/ES endpoints 经 CIRCLE_MONGO_* / CIRCLE_REDIS_* / SEARCH_ES_* 注入。
-  cat > "$out/releases/config/circle-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18082"
-mongo:
-  uri: "mongodb://mongodb:27017"
-  database: "quwoquan_circle"
-redis:
-  general:
-    mode: standalone
-    addr: "redis:6379"
-    db: 0
-    tls: false
-es:
-  enabled: true
-  endpoints: []
-  index: "quwoquan_objects"
-  shards: 1
-  replicas: 1
-YAML
-  cat > "$out/releases/config/integration-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18086"
-YAML
-  cat > "$out/releases/config/notification-service/${CONFIG_VERSION}.yaml" <<YAML
-config:
-  version: "${CONFIG_VERSION}"
-  min_image_version: "0.0.1"
-  max_image_version: "9.9.9"
-service:
-  http:
-    addr: ":18087"
-YAML
+  cp "$package_root/runtime-shared/module_catalog.yaml" "$out/quwoquan_service/runtime/reliabletask/resources/module_catalog.yaml"
+  cp "$package_root/runtime-shared/retention_policy.yaml" "$out/quwoquan_service/runtime/reliabletask/resources/retention_policy.yaml"
 }
 
 verify_canonical_video_materialization() {
@@ -1083,14 +858,46 @@ preflight_local_gamma_inputs() {
   fi
 }
 
-preflight_docker_storage() {
-  if ! command -v docker >/dev/null 2>&1; then
+run_docker_probe_with_timeout() {
+  local probe_pid=""
+  local deadline=""
+  local timeout_seconds="${LOCAL_GAMMA_DOCKER_PROBE_TIMEOUT_SECONDS:?LOCAL_GAMMA_DOCKER_PROBE_TIMEOUT_SECONDS is required}"
+  if ! [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[local-gamma] FAIL: LOCAL_GAMMA_DOCKER_PROBE_TIMEOUT_SECONDS must be a positive integer" >&2
+    return 2
+  fi
+
+  docker info --format '{{.ServerVersion}} {{.Driver}}' >/dev/null 2>&1 &
+  probe_pid="$!"
+  LOCAL_GAMMA_ACTIVE_CHILD_PID="$probe_pid"
+  deadline=$((SECONDS + timeout_seconds))
+  while kill -0 "$probe_pid" >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      echo "[local-gamma] GATE_BLOCK: Docker daemon did not answer readiness probe within ${timeout_seconds}s" >&2
+      kill "$probe_pid" >/dev/null 2>&1 || true
+      wait "$probe_pid" >/dev/null 2>&1 || true
+      LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+      return 124
+    fi
+    sleep 1
+  done
+  if wait "$probe_pid"; then
+    LOCAL_GAMMA_ACTIVE_CHILD_PID=""
     return 0
+  else
+    local probe_status=$?
+    LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+    return "$probe_status"
   fi
-  echo "[local-gamma] Docker storage snapshot before compose build:"
-  if ! docker system df; then
-    echo "[local-gamma] WARN: docker system df failed; compose build will report the concrete Docker error" >&2
+}
+
+preflight_docker_daemon() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "[local-gamma] GATE_BLOCK: docker is required for gamma-local" >&2
+    return 1
   fi
+  echo "[local-gamma] checking Docker daemon readiness before compose build"
+  run_docker_probe_with_timeout
 }
 
 ensure_local_gamma_base_images() {
@@ -1120,21 +927,43 @@ ensure_local_gamma_base_images() {
 }
 
 expected_local_gamma_built_image_ref() {
-  local_gamma_service_default_image_ref "$1"
+  case "$1" in
+    recommendation-service) printf '%s\n' "$LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE" ;;
+    content-service) printf '%s\n' "$LOCAL_GAMMA_CONTENT_SERVICE_IMAGE" ;;
+    chat-service) printf '%s\n' "$LOCAL_GAMMA_CHAT_SERVICE_IMAGE" ;;
+    user-service) printf '%s\n' "$LOCAL_GAMMA_USER_SERVICE_IMAGE" ;;
+    assistant-service) printf '%s\n' "$LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE" ;;
+    product-ops-service) printf '%s\n' "$LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE" ;;
+    platform-ops-service) printf '%s\n' "$LOCAL_GAMMA_PLATFORM_OPS_SERVICE_IMAGE" ;;
+    tag-service) printf '%s\n' "$LOCAL_GAMMA_TAG_SERVICE_IMAGE" ;;
+    search-service) printf '%s\n' "$LOCAL_GAMMA_SEARCH_SERVICE_IMAGE" ;;
+    entity-service) printf '%s\n' "$LOCAL_GAMMA_ENTITY_SERVICE_IMAGE" ;;
+    circle-service) printf '%s\n' "$LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE" ;;
+    integration-service) printf '%s\n' "$LOCAL_GAMMA_INTEGRATION_SERVICE_IMAGE" ;;
+    notification-service) printf '%s\n' "$LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE" ;;
+    rtc-service) printf '%s\n' "$LOCAL_GAMMA_RTC_SERVICE_IMAGE" ;;
+    *) return 1 ;;
+  esac
 }
 
 validate_local_gamma_built_images() {
   local service=""
   local image_ref=""
-  [[ "${podman_compose:-0}" == "1" ]] || return 0
   for service in "${compose_build_services[@]}"; do
     image_ref="$(expected_local_gamma_built_image_ref "$service" || true)"
     [[ -n "$image_ref" ]] || continue
-    if ! podman image exists "$image_ref" >/dev/null 2>&1; then
-      echo "[local-gamma] FAIL: expected podman image missing after build: $image_ref" >&2
-      return 1
+    if [[ "${podman_compose:-0}" == "1" ]]; then
+      if podman image exists "$image_ref" >/dev/null 2>&1; then
+        continue
+      fi
+    elif docker image inspect "$image_ref" >/dev/null 2>&1; then
+      continue
     fi
+    echo "[local-gamma] GATE_BLOCK: packaged image is unavailable: $image_ref" >&2
+    echo "[local-gamma] Repair: run stackctl up without --skip-build to build the package-bound image." >&2
+    return 1
   done
+  return 0
 }
 
 podman_build_log_has_nonzero_exit_codes() {
@@ -1155,17 +984,20 @@ run_compose_build() {
   local build_embedding_endpoint="${LOCAL_GAMMA_EMBEDDING_ENDPOINT:-https://build-only.invalid}"
   local build_embedding_api_key="${LOCAL_GAMMA_EMBEDDING_API_KEY:-build-only-not-a-runtime-secret}"
   mkdir -p "$(dirname "$build_log")"
-  rm -f "$build_log"
-  preflight_docker_storage
+  : >"$build_log"
+  if ! preflight_docker_daemon; then
+    echo "[local-gamma] FAIL: Docker preflight did not complete; startup aborted." >&2
+    return 1
+  fi
   ensure_local_gamma_base_images
   echo "[local-gamma] building services: ${compose_build_services[*]}"
   # Compose interpolates every service environment before selecting build
   # targets. Scope inert values to this build subprocess only; compose-up
   # still receives the real binding and rejects a missing runtime secret.
-  env \
-    LOCAL_GAMMA_EMBEDDING_ENDPOINT="$build_embedding_endpoint" \
-    LOCAL_GAMMA_EMBEDDING_API_KEY="$build_embedding_api_key" \
-    "${compose_cmd[@]}" build "${compose_build_services[@]}" 2>&1 | tee "$build_log" || build_status=$?
+  run_compose_build_with_timeout \
+    "$build_log" \
+    "$build_embedding_endpoint" \
+    "$build_embedding_api_key" || build_status=$?
   if [[ "$build_status" -eq 0 && "${podman_compose:-0}" == "1" ]]; then
     if podman_build_log_has_nonzero_exit_codes "$build_log"; then
       echo "[local-gamma] FAIL: podman-compose build reported non-zero inner exit codes." >&2
@@ -1176,7 +1008,6 @@ run_compose_build() {
     build_status=1
   fi
   if [[ "$build_status" -eq 0 ]]; then
-    rm -f "$build_log"
     return 0
   fi
   if python3 - "$build_log" <<'PY'
@@ -1199,6 +1030,117 @@ PY
   return 1
 }
 
+run_compose_build_with_timeout() {
+  local build_log="$1"
+  local build_embedding_endpoint="$2"
+  local build_embedding_api_key="$3"
+  local compose_pid=""
+  local deadline=""
+  local last_progress_seconds=""
+  local last_log_size="0"
+  local current_log_size="0"
+  local timeout_seconds="${LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS:?LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS is required}"
+  local no_progress_timeout_seconds="${LOCAL_GAMMA_COMPOSE_BUILD_NO_PROGRESS_TIMEOUT_SECONDS:?LOCAL_GAMMA_COMPOSE_BUILD_NO_PROGRESS_TIMEOUT_SECONDS is required}"
+  # Each service build compiles a complete Go module. Limit local Compose
+  # concurrency so a onebox cannot exhaust its container filesystem with
+  # simultaneous /tmp/go-build directories.
+  local compose_parallel_limit="${LOCAL_GAMMA_COMPOSE_BUILD_PARALLEL_LIMIT:-1}"
+  if ! [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[local-gamma] FAIL: LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS must be a positive integer" >&2
+    return 2
+  fi
+  if ! [[ "$no_progress_timeout_seconds" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[local-gamma] FAIL: LOCAL_GAMMA_COMPOSE_BUILD_NO_PROGRESS_TIMEOUT_SECONDS must be a positive integer" >&2
+    return 2
+  fi
+  if ! [[ "$compose_parallel_limit" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[local-gamma] FAIL: LOCAL_GAMMA_COMPOSE_BUILD_PARALLEL_LIMIT must be a positive integer" >&2
+    return 2
+  fi
+
+  env \
+    COMPOSE_PARALLEL_LIMIT="$compose_parallel_limit" \
+    LOCAL_GAMMA_EMBEDDING_ENDPOINT="$build_embedding_endpoint" \
+    LOCAL_GAMMA_EMBEDDING_API_KEY="$build_embedding_api_key" \
+    "${compose_cmd[@]}" build "${compose_build_services[@]}" >"$build_log" 2>&1 &
+  compose_pid="$!"
+  LOCAL_GAMMA_ACTIVE_CHILD_PID="$compose_pid"
+  deadline=$((SECONDS + timeout_seconds))
+  last_progress_seconds="$SECONDS"
+  while kill -0 "$compose_pid" >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      compose_build_timed_out=1
+      echo "[local-gamma] FAIL: compose build exceeded ${timeout_seconds}s; preserving build log for inspection" >&2
+      kill "$compose_pid" >/dev/null 2>&1 || true
+      wait "$compose_pid" >/dev/null 2>&1 || true
+      LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+      return 124
+    fi
+    current_log_size=$(wc -c <"$build_log")
+    if [[ "$current_log_size" != "$last_log_size" ]]; then
+      last_log_size="$current_log_size"
+      last_progress_seconds="$SECONDS"
+    elif (( SECONDS - last_progress_seconds >= no_progress_timeout_seconds )); then
+      echo "[local-gamma] FAIL: compose build produced no log progress for ${no_progress_timeout_seconds}s; preserving build log for inspection" >&2
+      kill "$compose_pid" >/dev/null 2>&1 || true
+      wait "$compose_pid" >/dev/null 2>&1 || true
+      LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+      return 125
+    fi
+    sleep 1
+  done
+  if wait "$compose_pid"; then
+    LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+    return 0
+  else
+    local compose_status=$?
+    LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+    return "$compose_status"
+  fi
+}
+
+prepare_down_compose_environment() {
+  # `docker compose down` still interpolates every declared service.  Teardown
+  # must therefore be independent from a prior successful config render: these
+  # values are parse-only placeholders and are never used to start a process.
+  local down_config_version="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-down}"
+  local service=""
+  local service_key=""
+  local version_key=""
+  for service in \
+    assistant-service \
+    chat-service \
+    circle-service \
+    content-service \
+    entity-service \
+    integration-service \
+    notification-service \
+    product-ops-service \
+    realtime-gateway \
+    recommendation-service \
+    rtc-service \
+    search-service \
+    tag-service \
+    user-service \
+    platform-ops-service; do
+    service_key="$(printf '%s' "$service" | tr '[:lower:]-' '[:upper:]_')"
+    version_key="LOCAL_GAMMA_${service_key}_CONFIG_VERSION"
+    if [[ -z "${!version_key:-}" ]]; then
+      printf -v "$version_key" '%s' "$down_config_version"
+    fi
+    export "$version_key"
+  done
+  : "${LOCAL_GAMMA_REC_POLICY_SOURCE:=down-not-used}"
+  : "${LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE:=localhost/quwoquan_service_realtime_gateway:down}"
+  : "${LOCAL_GAMMA_RTC_SERVICE_IMAGE:=localhost/quwoquan_service_rtc_service:down}"
+  export \
+    LOCAL_GAMMA_CONFIG_ROOT \
+    LOCAL_GAMMA_REC_POLICY_SOURCE \
+    LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE \
+    LOCAL_GAMMA_RTC_SERVICE_IMAGE
+  export_service_compose_environment
+}
+
 if [[ "$print_env" == "1" ]]; then
   # This is an introspection command. It must not render configuration, create
   # runtime output, touch Docker, or alter the currently running environment.
@@ -1208,7 +1150,8 @@ fi
 
 if [[ "$down" == "1" ]]; then
   stop_colima_tunnels
-  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" down
+  prepare_down_compose_environment
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" down
   cleanup_stale_named_gamma_containers
   rm -f "$stack_report"
   exit 0
@@ -1238,12 +1181,13 @@ if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
 fi
 
 podman_compose=0
+export_service_compose_environment
 if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose >/dev/null 2>&1; then
   podman_compose=1
-  compose_cmd=(podman-compose -f "$COMPOSE_FILE" --podman-build-args=--pull=never --podman-run-args=--pull=never)
+  compose_cmd=(podman-compose "${COMPOSE_FILE_ARGS[@]}" --podman-build-args=--pull=never --podman-run-args=--pull=never)
   compose_up_args=(up -d --no-build)
 else
-  compose_cmd=(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE")
+  compose_cmd=(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}")
   compose_up_args=(up -d --remove-orphans)
   if [[ "$skip_build" == "1" ]]; then
     compose_up_args+=(--no-build)
@@ -1299,7 +1243,7 @@ else
 fi
 
 compose_build_services=(
-  rec-model-service
+  recommendation-service
   content-service
   chat-service
   user-service
@@ -1328,6 +1272,7 @@ if [[ "$WORKLOAD" == "content-release" ]]; then
   compose_build_services=("${filtered_build_services[@]}")
 fi
 if [[ ",${COMPOSE_PROFILES:-}," == *,edge-media,* ]]; then
+  compose_build_services+=(realtime-gateway)
   compose_build_services+=(rtc-service)
 fi
 
@@ -1378,6 +1323,8 @@ fi
 
 if [[ "$skip_build" == "0" ]]; then
   run_compose_build
+elif ! validate_local_gamma_built_images; then
+  exit 1
 fi
 if [[ "$build_only" == "1" ]]; then
   echo "[local-gamma] built services only: ${compose_build_services[*]}"
@@ -1454,7 +1401,7 @@ if [[ "$podman_compose" == "1" ]]; then
     quwoquan_service_integration-service_1 \
     quwoquan_service_notification-service_1 \
     quwoquan_service_mongo-init_1 \
-    quwoquan_service_rec-model-service_1 \
+    quwoquan_service_recommendation-service_1 \
     quwoquan_service_elasticsearch_1 \
     quwoquan_service_redis_1 \
     quwoquan_service_mongodb_1 \
@@ -1528,8 +1475,8 @@ if [[ "$podman_compose" == "1" ]]; then
       }
     '" >/dev/null
 
-  podman run --pull=never --name quwoquan_service_rec-model-service_1 -d \
-    --net "$network_name" --network-alias rec-model-service --network-alias recommendation-service \
+  podman run --pull=never --name quwoquan_service_recommendation-service_1 -d \
+    --net "$network_name" --network-alias recommendation-service --network-alias recommendation-service \
     -e SERVICE_NAME=recommendation-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PYTHONUNBUFFERED=1 \
@@ -1540,7 +1487,7 @@ if [[ "$podman_compose" == "1" ]]; then
     --healthcheck-command "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 5 \
     "$LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE" >/dev/null
-  wait_healthy quwoquan_service_rec-model-service_1
+  wait_healthy quwoquan_service_recommendation-service_1
 
   if [[ "$PRODUCT_TELEMETRY_AVAILABLE" == "1" ]]; then
     podman run --pull=never --name quwoquan_service_product-ops-service_1 -d \
@@ -1551,12 +1498,7 @@ if [[ "$podman_compose" == "1" ]]; then
       -e MONGO_URI=mongodb://mongodb:27017 \
       -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
       -e PRODUCT_OPS_REDIS_REC_ADDR=redis:6379 -e PRODUCT_OPS_REDIS_GENERAL_ADDR=redis:6379 \
-      -e PRODUCT_OPS_SLS_REGION="${PRODUCT_OPS_SLS_REGION:?PRODUCT_OPS_SLS_REGION is required}" \
-      -e PRODUCT_OPS_SLS_ENDPOINT="${PRODUCT_OPS_SLS_ENDPOINT:?PRODUCT_OPS_SLS_ENDPOINT is required}" \
-      -e PRODUCT_OPS_SLS_PROJECT="${PRODUCT_OPS_SLS_PROJECT:?PRODUCT_OPS_SLS_PROJECT is required}" \
-      -e ALIBABA_CLOUD_ACCESS_KEY_ID="${ALIBABA_CLOUD_ACCESS_KEY_ID:?ALIBABA_CLOUD_ACCESS_KEY_ID is required}" \
-      -e ALIBABA_CLOUD_ACCESS_KEY_SECRET="${ALIBABA_CLOUD_ACCESS_KEY_SECRET:?ALIBABA_CLOUD_ACCESS_KEY_SECRET is required}" \
-      -e ALIBABA_CLOUD_SECURITY_TOKEN="${ALIBABA_CLOUD_SECURITY_TOKEN:-}" \
+      -e PRODUCT_OPS_ELASTICSEARCH_ENDPOINT="${PRODUCT_OPS_ELASTICSEARCH_ENDPOINT:-http://elasticsearch:9200}" \
       -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
       -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
       -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
@@ -1602,6 +1544,11 @@ if [[ "$podman_compose" == "1" ]]; then
     -e MONGO_URI=mongodb://mongodb:27017 \
     -e REPORT_DATABASE_URL='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
     -e CONTENT_REDIS_REC_ADDR=redis:6379 -e CONTENT_REDIS_GENERAL_ADDR=redis:6379 -e CONTENT_REDIS_REALTIME_ADDR=redis:6379 \
+    -e CONTENT_EMBEDDING_FIXTURE_ENDPOINT \
+    -e CONTENT_EMBEDDING_FIXTURE_API_KEY \
+    -e CONTENT_OSS_ENDPOINT \
+    -e CONTENT_OSS_ACCESS_KEY_ID \
+    -e CONTENT_OSS_ACCESS_KEY_SECRET \
     -e SEARCH_ES_ENABLED=true -e SEARCH_ES_ENDPOINTS=http://elasticsearch:9200 \
     -e REC_MODEL_SERVICE_ENABLED=true -e REC_MODEL_SERVICE_URL=http://recommendation-service:8000 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
@@ -1638,16 +1585,31 @@ if [[ "$podman_compose" == "1" ]]; then
     --net "$network_name" --network-alias user-service \
     -e SERVICE_NAME=user-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
-    -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e USER_SERVICE_ADDR=:18082 \
+    -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e USER_SERVICE_ADDR=:18081 \
     -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
     -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_user \
     -e TAG_MONGO_URI=mongodb://mongodb:27017 -e TAG_MONGO_DATABASE=quwoquan_tag \
     -e REDIS_ADDR=redis:6379 \
+    -e IDENTITY_ONE_TAP_FIXTURE_ENDPOINT \
+    -e IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_ID \
+    -e IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET \
+    -e IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL \
+    -e IDENTITY_SOCIAL_FIXTURE_WECHAT_USER_INFO_URL \
+    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL \
+    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_USER_INFO_URL \
+    -e IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL \
+    -e IDENTITY_SOCIAL_FIXTURE_WECHAT_APP_ID \
+    -e IDENTITY_SOCIAL_FIXTURE_WECHAT_APP_SECRET \
+    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_APP_ID \
+    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_APP_PRIVATE_KEY_PEM \
+    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_PLATFORM_PUBLIC_KEY_PEM \
+    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_MERCHANT_PID \
+    -e IDENTITY_SOCIAL_FIXTURE_QQ_APP_ID \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -v "${ROOT}/quwoquan_service/contracts/metadata/user:/contracts/metadata/user:ro" \
-    -v "${ROOT}/quwoquan_service/services/user-service/internal/infrastructure/migration:/internal/infrastructure/migration:ro" \
-    -p "${LOCAL_GAMMA_USER_PORT:-19210}:18082" \
-    --healthcheck-command "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1" \
+    -v "${ROOT}/quwoquan_service/services/user-service/internal/account/user_account/infrastructure/migration:/internal/infrastructure/migration:ro" \
+    -p "${LOCAL_GAMMA_USER_PORT:-19210}:18081" \
+    --healthcheck-command "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
     "$LOCAL_GAMMA_USER_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_user-service_1
@@ -1658,9 +1620,13 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e INTEGRATION_SERVICE_ADDR=:18086 \
     -e INTEGRATION_MONGO_URI=mongodb://mongodb:27017 -e INTEGRATION_MONGO_DATABASE=quwoquan_integration \
-    -e INTEGRATION_PUSH_ENABLED=false \
-    -e INTEGRATION_LOCATION_BAIDU_AK="${LOCAL_GAMMA_BAIDU_AK:-}" \
-    -e INTEGRATION_LOCATION_AMAP_KEY="${LOCAL_GAMMA_AMAP_KEY:-}" \
+    -e INTEGRATION_PUSH_ENABLED=true \
+    -e INTEGRATION_SMS_FIXTURE_ENDPOINT \
+    -e INTEGRATION_SMS_FIXTURE_TOKEN \
+    -e INTEGRATION_PUSH_FIXTURE_USER_SERVICE_BASE_URL \
+    -e INTEGRATION_PUSH_FIXTURE_HMAC_KEY \
+    -e INTEGRATION_LOCATION_FIXTURE_BASE_URL \
+    -e INTEGRATION_LOCATION_FIXTURE_AK \
     -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
     -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
     -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
@@ -1685,7 +1651,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e NOTIFICATION_MONGO_DATABASE=quwoquan_notification \
     -e NOTIFICATION_INTEGRATION_BASE_URL=http://integration-service:18086 \
     -e NOTIFICATION_INTEGRATION_TIMEOUT_MS=1500 \
-    -e NOTIFICATION_USER_BASE_URL=http://user-service:18082 \
+    -e NOTIFICATION_USER_BASE_URL=http://user-service:18081 \
     -e NOTIFICATION_REALTIME_BASE_URL=http://realtime-gateway:18090 \
     -e NOTIFICATION_CLAIM_PER_SECOND=100 -e NOTIFICATION_DISPATCH_PER_SECOND=100 -e NOTIFICATION_RETRY_PER_SECOND=20 \
     -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
@@ -1711,16 +1677,18 @@ if [[ "$podman_compose" == "1" ]]; then
       -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e ASSISTANT_SERVICE_ADDR=:18087 \
       -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_assistant \
       -e REDIS_GENERAL_ADDR=redis:6379 -e REDIS_REC_ADDR=redis:6379 \
-      -e ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-}" \
-      -e ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-}" \
+      -e ASSISTANT_MODEL_FIXTURE_ENDPOINT \
+      -e ASSISTANT_MODEL_API_KEY \
+      -e ASSISTANT_PUBLIC_SEARCH_FIXTURE_URL \
+      -e ASSISTANT_WEATHER_FIXTURE_GEOCODING_URL \
+      -e ASSISTANT_WEATHER_FIXTURE_FORECAST_URL \
+      -e ASSISTANT_FINANCE_FIXTURE_CHART_URL \
       -e ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-}" \
       -e ASSISTANT_NOTIFICATION_BASE_URL=http://notification-service:18087 \
       -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
       -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
       -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
       -e AUTH_JWT_TOKEN_VERSION="${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}" \
-      -e ASSISTANT_SEARCH_PROVIDER="${ASSISTANT_SEARCH_PROVIDER:-}" \
-      -e ASSISTANT_MODEL_API_KEY="${ASSISTANT_MODEL_API_KEY:-}" \
       -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
       -p "${LOCAL_GAMMA_ASSISTANT_PORT:-19230}:18087" \
       --healthcheck-command "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1" \
@@ -1910,7 +1878,7 @@ else
     # eight minutes while rebuilding Painless lookup data.  The previous
     # timeout tore down a healthy-in-progress stack and retried with images
     # that may not exist locally, so no service ever reached its seed phase.
-    local timeout_seconds="${LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS:-900}"
+    local timeout_seconds="${LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS:?LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS is required}"
     if ! [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]]; then
       echo "[local-gamma] FAIL: LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS must be a positive integer" >&2
       return 2
@@ -1919,6 +1887,7 @@ else
     compose_up_timed_out=0
     "${compose_cmd[@]}" "$@" &
     compose_pid="$!"
+    LOCAL_GAMMA_ACTIVE_CHILD_PID="$compose_pid"
     deadline=$((SECONDS + timeout_seconds))
     while kill -0 "$compose_pid" >/dev/null 2>&1; do
       if (( SECONDS >= deadline )); then
@@ -1926,11 +1895,19 @@ else
         echo "[local-gamma] FAIL: compose up exceeded ${timeout_seconds}s; preserving the partial runtime for inspection" >&2
         kill "$compose_pid" >/dev/null 2>&1 || true
         wait "$compose_pid" >/dev/null 2>&1 || true
+        LOCAL_GAMMA_ACTIVE_CHILD_PID=""
         return 124
       fi
       sleep 1
     done
-    wait "$compose_pid"
+    if wait "$compose_pid"; then
+      LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+      return 0
+    else
+      local compose_status=$?
+      LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+      return "$compose_status"
+    fi
   }
   if ! run_compose_up_with_timeout "${compose_up_args[@]}"; then
     if [[ "$compose_up_timed_out" == "1" ]]; then
@@ -1976,6 +1953,16 @@ gamma_product_ops_ready() {
     "${PRODUCT_OPS_BASE_URL%/}/healthz" >/dev/null 2>&1
 }
 
+gamma_platform_ops_ready() {
+  # platform-ops belongs to the full operational control-plane. The
+  # content-release slice deliberately has no operator OIDC material and its
+  # acceptance scope does not include that service.
+  if [[ "$WORKLOAD" == "content-release" ]]; then
+    return 0
+  fi
+  curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}/healthz" >/dev/null 2>&1
+}
+
 wait_local_gamma_host_ready() {
   local gw="${GATEWAY_BASE_URL%/}"
   local gw_host="gamma-api.quwoquan-env.test"
@@ -1986,7 +1973,6 @@ wait_local_gamma_host_ready() {
   local video_host="gamma-video.quwoquan-env.test"
   local media_edge_port="${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
   local po_port="${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}"
-  local platform_ops_port="${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}"
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
   local integration_port="${LOCAL_GAMMA_INTEGRATION_PORT:-19310}"
   local notification_port="${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}"
@@ -2003,7 +1989,7 @@ wait_local_gamma_host_ready() {
       && curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >/dev/null 2>&1 \
       && gamma_canonical_video_range_mime_ready "$video_host" "$media_edge_port" \
       && { [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]] || curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1; } \
-      && curl -fsS "http://127.0.0.1:${platform_ops_port}/healthz" >/dev/null 2>&1 \
+      && gamma_platform_ops_ready \
       && curl -fsS "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
       && curl -fsS "http://127.0.0.1:${integration_port}/healthz" >/dev/null 2>&1 \
       && curl -fsS "http://127.0.0.1:${notification_port}/healthz" >/dev/null 2>&1
@@ -2017,10 +2003,10 @@ wait_local_gamma_host_ready() {
   gamma_product_ops_ready >&2 || true
   curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >&2 || true
   gamma_canonical_video_range_mime_ready "$video_host" "$media_edge_port" || true
-  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps >&2 || true
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" ps >&2 || true
   curl -fsS "http://127.0.0.1:${integration_port}/healthz" >&2 || true
   curl -fsS "http://127.0.0.1:${notification_port}/healthz" >&2 || true
-  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" logs --tail 80 gamma-proxy product-ops-service platform-ops-service user-service integration-service notification-service >&2 || true
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" logs --tail 80 gamma-proxy product-ops-service platform-ops-service user-service integration-service notification-service >&2 || true
   return 1
 }
 ensure_gamma_filter_catalog_release() {
@@ -2048,11 +2034,6 @@ export_local_gamma_root_ca() {
   mkdir -p "$(dirname "$destination")"
   if docker cp "${container_name}:/data/caddy/pki/authorities/local/root.crt" "$destination" >/dev/null 2>&1 \
     || podman cp "${container_name}:/data/caddy/pki/authorities/local/root.crt" "$destination" >/dev/null 2>&1; then
-    if [[ -z "${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:-}" || ! -f "${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE}" ]]; then
-      echo "[local-gamma] FAIL: object-storage CA is unavailable for local trust export" >&2
-      return 1
-    fi
-    cat "${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE}" >> "$destination"
     chmod 0644 "$destination"
     echo "[local-gamma] exported local trust root: $destination"
     return 0
@@ -2064,7 +2045,7 @@ export_local_gamma_root_ca
 
 seed_integration_location_data() {
   local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
-  local fixture="$ROOT/quwoquan_service/contracts/metadata/integration/test_fixtures/scenarios/integration_scenarios.json"
+  local fixture="$ROOT/quwoquan_service/services/integration-service/tests/support/contract_fixtures/scenarios/integration_scenarios.json"
   if [[ -z "$mongo_port" || ! -f "$fixture" ]]; then
     echo "[local-gamma] FAIL: Integration Location seed input is unavailable" >&2
     return 1
@@ -2136,7 +2117,7 @@ fi
 
 # tag-service 数据在 local-gamma 启动时按当前真相源重建：
 #  - tag_nodes ← control_plane/governance/taxonomy（路径制 taxonomy 唯一真相源）
-#  - object_tag_index ← contracts/metadata/tag 的 contract fixture（与契约测试/app mock 同源）
+#  - object_tag_index ← app_gamma_seed_manifest 声明的 ref 子集
 # local-gamma 尚未上线；这里直接清库重建，拒绝保留任何旧索引名、旧数据或兼容路径。
 seed_tag_service_data() {
   local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
@@ -2145,19 +2126,20 @@ seed_tag_service_data() {
     return 1
   fi
   local mongo_uri="mongodb://127.0.0.1:${mongo_port}/?directConnection=true"
-  local data_release_id="${LOCAL_GAMMA_DATA_RELEASE_ID:-local-gamma-tag-seed}"
+  local data_release_id="${LOCAL_GAMMA_DATA_RELEASE_ID:-tag-taxonomy-20260723-001}"
   echo "[local-gamma] rebuilding ${LOCAL_GAMMA_TAG_DB} from current tag sources ..."
   mongosh "$mongo_uri" --quiet --eval "db.getSiblingDB(\"${LOCAL_GAMMA_TAG_DB}\").dropDatabase()"
   echo "[local-gamma] seeding tag_nodes (${LOCAL_GAMMA_TAGS_DIR} -> ${LOCAL_GAMMA_TAG_DB}.tag_nodes) ..."
   ( cd "$ROOT/quwoquan_service" && go run ./services/tag-service/cmd/import \
       --tags-dir "$LOCAL_GAMMA_TAGS_DIR" \
       --mongo-uri "$mongo_uri" --db "$LOCAL_GAMMA_TAG_DB" \
-      --release-id "$data_release_id" --source-owner fixture )
+      --release-id "$data_release_id" --source-owner qwq_data )
   echo "[local-gamma] seeding object_tag_index (${LOCAL_GAMMA_TAG_OBJECTS_FILE} -> ${LOCAL_GAMMA_TAG_DB}.object_tag_index) ..."
   ( cd "$ROOT/quwoquan_service" && go run ./services/tag-service/cmd/import-objects \
       --objects-file "$LOCAL_GAMMA_TAG_OBJECTS_FILE" \
+      --seed-refs "$LOCAL_GAMMA_TAG_SEED_REFS" \
       --mongo-uri "$mongo_uri" --db "$LOCAL_GAMMA_TAG_DB" \
-      --release-id "$data_release_id" --source-owner fixture )
+      --release-id "$data_release_id" --source-owner gamma_seed_manifest )
 }
 if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
   seed_tag_service_data
@@ -2682,7 +2664,7 @@ else
   echo "[local-gamma] skip search backfill because STAGE=${STAGE} uses persisted/host data"
 fi
 
-python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$PREVIOUS_IMAGE_VERSION" "$STAGE" "$LOCAL_GAMMA_APP_ENV" "$CONFIG_SOURCE_ENV" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$restarted_from_previous" <<'PY'
+python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$PREVIOUS_IMAGE_VERSION" "$STAGE" "$LOCAL_GAMMA_APP_ENV" "$CONFIG_SOURCE_ENV" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$restarted_from_previous" "$WORKLOAD" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -2700,9 +2682,11 @@ from pathlib import Path
     product_ops,
     media,
     restarted,
-) = sys.argv[1:12]
+    workload,
+) = sys.argv[1:13]
 payload = {
     "status": "passed",
+    "workload": workload,
     "serviceMode": "single-stack",
     "restartedFromPrevious": restarted == "1",
     "stage": stage,

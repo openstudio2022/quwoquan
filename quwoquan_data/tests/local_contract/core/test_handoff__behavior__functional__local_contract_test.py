@@ -9,15 +9,18 @@ from pathlib import Path
 from types import SimpleNamespace
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
-for _path in (DATA_ROOT, SCRIPTS_ROOT):
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
 from content.execution import handoff  # noqa: E402
 from core.runtime_policy import active_runtime_policy  # noqa: E402
+from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
-EXECUTION_ID = "20260711--travel-homepage-coverage--cn-zhejiang--canary-902"
+ARTICLE_EXECUTION_ID = "20260711--travel-article-handoff--test-region-a--pilot-902"
+IMAGE_EXECUTION_ID = "20260711--travel-image-handoff--test-region-a--pilot-902"
 
 
 def _stub_execution_model(monkeypatch) -> None:
@@ -35,6 +38,7 @@ def _stub_execution_model(monkeypatch) -> None:
 
 def test_author_job_packet_isolation_and_exit_gates(monkeypatch):
     _stub_execution_model(monkeypatch)
+    build_execution_fixture(ARTICLE_EXECUTION_ID)
     brief = {"writingIntent": "planning_consultation", "baseSourceRef": "sources/a.md", "carrier": "article"}
     pack = {
         "title": "三沟联线攻略",
@@ -43,7 +47,7 @@ def test_author_job_packet_isolation_and_exit_gates(monkeypatch):
         "bannedRegisterTerms": ["看展"],
     }
     packet = handoff.build_author_job_packet(
-        execution_id=EXECUTION_ID,
+        execution_id=ARTICLE_EXECUTION_ID,
         ref="r1",
         brief=brief,
         writing_pack=pack,
@@ -63,6 +67,7 @@ def test_author_job_packet_isolation_and_exit_gates(monkeypatch):
 
 def test_image_author_job_packet_is_compact_and_image_scoped(monkeypatch):
     _stub_execution_model(monkeypatch)
+    build_execution_fixture(IMAGE_EXECUTION_ID)
     brief = {"carrier": "image", "titleHint": "湖面晨光"}
     pack = {
         "title": "湖面晨光",
@@ -81,7 +86,7 @@ def test_image_author_job_packet_is_compact_and_image_scoped(monkeypatch):
         ],
     }
     packet = handoff.build_author_job_packet(
-        execution_id=EXECUTION_ID,
+        execution_id=IMAGE_EXECUTION_ID,
         ref="r_img",
         brief=brief,
         writing_pack=pack,

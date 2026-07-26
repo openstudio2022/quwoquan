@@ -4,10 +4,9 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 enum ProfileMediaTarget { avatar, cover }
 
 class ProfileMediaUploadResult {
-  const ProfileMediaUploadResult({required this.assetId, required this.cdnUrl});
+  const ProfileMediaUploadResult({required this.assetId});
 
   final String assetId;
-  final String cdnUrl;
 }
 
 abstract class ProfileMediaUploadGateway {
@@ -48,10 +47,7 @@ class ContentProfileMediaUploadGateway implements ProfileMediaUploadGateway {
         ProfileMediaTarget.cover => ContentMediaAccessPolicy.ownerOnly,
       },
     );
-    return ProfileMediaUploadResult(
-      assetId: uploaded.assetId,
-      cdnUrl: uploaded.cdnUrl?.toString().trim() ?? '',
-    );
+    return ProfileMediaUploadResult(assetId: uploaded.assetId);
   }
 }
 

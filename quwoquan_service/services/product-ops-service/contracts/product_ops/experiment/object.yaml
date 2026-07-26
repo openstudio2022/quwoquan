@@ -1,0 +1,32 @@
+kind: aggregate_root
+description: 实验定义、变体、受众约束、启停窗口与发布版本的唯一生命周期根。
+identity:
+  fields:
+  - id
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships: []
+capabilities:
+- commandable
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- experiment key 与 assignment unit 创建后不可变
+- variant weights 总和必须为 10000 basis points
+- 只有 draft 可以修改受众和变体，running 只能暂停或结束
+- assignment 由稳定 hash 与激活版本决定，同一 unit 结果确定
+- aggregate、receipt 与 outbox 必须在同一 PostgreSQL transaction 提交
+lifecycle:
+  states:
+  - draft
+  - scheduled
+  - running
+  - paused
+  - ended
+  optimistic_concurrency: version
+  idempotency: command_receipt

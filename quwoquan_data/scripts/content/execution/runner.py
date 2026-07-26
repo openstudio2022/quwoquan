@@ -17,7 +17,10 @@ from content.execution.controller.entrypoint import ControllerRequest, run_contr
 from content.execution.baseline import handle_baseline
 from content.source.discovery.handler import handle_explore
 
-from .model_contract import ExecutionModel, execution_model_pair
+from .model_contract import (
+    ExecutionModel,
+    execution_model_pair,
+)
 from .workspace import execution_root
 
 
@@ -42,9 +45,6 @@ def _prepare_execution(execution_id: str) -> None:
             catalog=None,
             spec_doc=None,
             design_doc=None,
-            acceptance_doc=None,
-            execution_guide=None,
-            command_matrix_doc=None,
             catalog_config=None,
             naming_rules=None,
             geo_band_rules=None,
@@ -65,6 +65,7 @@ def _startup_projection(report: Mapping[str, Any], model: ExecutionModel) -> dic
         "httpStatus": startup.get("httpStatus"),
         "runtime": str(startup.get("runtime") or ""),
         "model": model.model_id,
+        "modelParameters": model.selection.parameters_document(),
         "cacheHit": bool(startup.get("cacheHit")),
     }
 
@@ -89,7 +90,7 @@ def preflight_execution_models(recipe: Mapping[str, Any]) -> dict[str, object]:
             require_cursor_key=True,
             check_network=True,
             check_cursor_startup=True,
-            cursor_startup_model=model.model_id,
+            cursor_startup_model=model.selection,
             cursor_startup_runtime=runtime,
             cursor_startup_timeout_seconds=timeout_seconds,
         )
@@ -120,11 +121,13 @@ def preflight_execution_models(recipe: Mapping[str, Any]) -> dict[str, object]:
         "author": {
             "model": pair.author.model_id,
             "modelFamily": pair.author.family.value,
+            "modelParameters": pair.author.selection.parameters_document(),
             "startup": author_startup,
         },
         "reviewer": {
             "model": pair.reviewer.model_id,
             "modelFamily": pair.reviewer.family.value,
+            "modelParameters": pair.reviewer.selection.parameters_document(),
             "startup": reviewer_startup,
         },
     }
@@ -193,10 +196,14 @@ def require_execution_model_readiness(
         if (
             str(proof.get("model") or "") != model.model_id
             or str(proof.get("modelFamily") or "") != model.family.value
+            or proof.get("modelParameters")
+            != model.selection.parameters_document()
             or not isinstance(startup, Mapping)
             or not bool(startup.get("ready"))
             or str(startup.get("runtime") or "") != runtime
             or str(startup.get("model") or "") != model.model_id
+            or startup.get("modelParameters")
+            != model.selection.parameters_document()
         ):
             raise RuntimeError(
                 f"execution model readiness {role} proof does not match the immutable model contract"

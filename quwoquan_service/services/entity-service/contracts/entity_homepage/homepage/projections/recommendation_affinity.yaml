@@ -1,0 +1,44 @@
+read_model: RecommendationAffinity
+description: '推荐亲和度。只用于首页/频道交集 Top-N 排序与灰度实验，不生成用户可见交集事实文案。
+
+  '
+source_entities:
+- Homepage
+consumers:
+- app
+- recommendation
+client_projection:
+  dart_class: RecommendationAffinity
+  base_class: ''
+  output_path: cloud/runtime/generated/entity/recommendation_affinity.g.dart
+  fields:
+  - name: affinityId
+    dart_type: String
+    nullable: false
+    source: affinityId
+    default: ''''''
+  - name: objectId
+    dart_type: String
+    nullable: false
+    source: objectId
+    default: ''''''
+  - name: channelId
+    dart_type: String
+    nullable: false
+    source: channelId
+    default: ''''''
+  - name: score
+    dart_type: double
+    nullable: false
+    source: score
+    default: '0.0'
+  - name: modelReasonBucket
+    dart_type: String
+    nullable: false
+    source: modelReasonBucket
+    default: ''''''
+  - name: experimentBucket
+    dart_type: String
+    nullable: false
+    source: experimentBucket
+    default: ''''''

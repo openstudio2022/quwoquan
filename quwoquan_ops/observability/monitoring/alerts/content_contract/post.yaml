@@ -70,7 +70,7 @@ groups:
           service: "content-service"
           operation: "content.post.GetAuthorImpact"
           contract_metric: "content_author_impact_get"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
@@ -80,7 +80,7 @@ groups:
           service: "content-service"
           operation: "content.post.GetAuthorImpact"
           contract_metric: "content_author_impact_get"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total

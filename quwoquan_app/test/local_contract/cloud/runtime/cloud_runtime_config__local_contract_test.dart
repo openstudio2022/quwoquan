@@ -57,6 +57,27 @@ void main() {
       );
     });
 
+    test('RTC endpoint 缺失时返回配置错误而非固定列表异常', () {
+      expect(
+        () => CloudRuntimeConfig.validateRuntimePackage(
+          runtimeEnv: 'beta',
+          gatewayBaseUrl: 'https://api.example.test',
+          mediaAvatarCdnBaseUrl: 'https://avatar.example.test',
+          mediaImageCdnBaseUrl: 'https://image.example.test',
+          mediaVideoCdnBaseUrl: 'https://video.example.test',
+          mediaUploadBaseUrl: 'https://upload.example.test',
+          rtcMediaConnectionUrl: '',
+        ),
+        throwsA(
+          isA<CloudRuntimeConfigurationException>().having(
+            (error) => error.invalidKeys,
+            'invalidKeys',
+            contains('RTC_MEDIA_CONNECTION_URL'),
+          ),
+        ),
+      );
+    });
+
     test('配置摘要只暴露环境、入口和缺失键，不暴露 endpoint', () {
       expect(
         CloudRuntimeConfig.runtimeDefineSummary.keys,

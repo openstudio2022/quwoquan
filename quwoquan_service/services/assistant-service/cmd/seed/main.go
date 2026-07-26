@@ -16,11 +16,15 @@ import (
 	"strings"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/application"
-	"quwoquan_service/services/assistant-service/internal/environmentseed"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/messaging"
-	"quwoquan_service/services/assistant-service/internal/runtimeconfig"
-	"quwoquan_service/services/assistant-service/internal/runtimewiring"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/environmentseed"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/messaging"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimewiring"
+	preferenceports "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/domain/ports"
+	preferencepersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/infrastructure/persistence"
 )
 
 const assistantServiceName = "assistant-service"
@@ -122,7 +126,13 @@ func run(parent context.Context, options commandOptions) error {
 		return runtimewiring.NewDependencyError("runtime.message.transport", "preflight", err)
 	}
 
-	deps, err := runtimewiring.OpenPersistentDependencies(ctx, cfg)
+	deps, err := runtimewiring.OpenPersistentDependencies(ctx, cfg, func(db *mongo.Database) (preferenceports.Store, preferenceports.Reader, error) {
+		store := preferencepersistence.NewMongoStore(db)
+		if err := store.EnsureIndexes(ctx); err != nil {
+			return nil, nil, err
+		}
+		return store, store, nil
+	})
 	if err != nil {
 		return err
 	}

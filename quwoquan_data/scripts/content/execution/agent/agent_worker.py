@@ -1,5 +1,6 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
+from core.cursor_model import CursorModelSelection
 from core.runtime_policy import active_runtime_policy
 from content.execution.support import Callable, ExecutionContext, MANAGED_AGENT_TIMEOUT_SECONDS, Path, _MANAGED_AGENT_SUBPROCESS_LOCK, _MANAGED_AGENT_SUBPROCESS_PIDS, _normalize_managed_agent_provider, _resolve_managed_model, json, os, signal, subprocess, sys, tempfile, time
 
@@ -19,6 +20,11 @@ def _managed_agent_worker_main() -> None:
     agent_provider = _normalize_managed_agent_provider(
         str(ctx_payload.get("agentProvider") or "cursor_sdk")
     )
+    model_selection = CursorModelSelection.from_config(
+        ctx_payload.get("model"),
+        ctx_payload.get("modelParameters"),
+        label="agent_worker.ctx",
+    )
     ctx = ExecutionContext(
         execution_id=str(ctx_payload.get("executionId") or ""),
         entity_ids=[str(item) for item in (ctx_payload.get("entityIds") or [])],
@@ -26,18 +32,10 @@ def _managed_agent_worker_main() -> None:
         managed=True,
         runtime=str(ctx_payload.get("runtime") or "local"),
         max_workers=int(ctx_payload.get("maxWorkers") or 1),
-        model=_resolve_managed_model(agent_provider, str(ctx_payload.get("model") or "")),
+        model=_resolve_managed_model(agent_provider, model_selection.model_id),
+        model_parameters=model_selection.parameters,
         agent_provider=agent_provider,
         release_only=bool(ctx_payload.get("releaseOnly")),
-        agent_usage_scope=str(
-            ctx_payload.get("agentUsageScope") or "execution_stage"
-        ),
-        agent_content_object_ref=str(
-            ctx_payload.get("agentContentObjectRef") or ""
-        ),
-        agent_execution_stage=str(
-            ctx_payload.get("agentExecutionStage") or ""
-        ),
     )
     outcome = _managed_agent_runner_for_provider(ctx, str(payload.get("prompt") or ""))
     output_path.write_text(
@@ -108,11 +106,9 @@ def _default_managed_agent_runner_isolated(
                         "runtime": ctx.runtime,
                         "maxWorkers": ctx.max_workers,
                         "model": ctx.model,
+                        "modelParameters": ctx.model_selection.parameters_document(),
                         "agentProvider": _normalize_managed_agent_provider(ctx.agent_provider),
                         "releaseOnly": ctx.release_only,
-                        "agentUsageScope": ctx.agent_usage_scope,
-                        "agentContentObjectRef": ctx.agent_content_object_ref,
-                        "agentExecutionStage": ctx.agent_execution_stage,
                     },
                     "prompt": prompt,
                 },

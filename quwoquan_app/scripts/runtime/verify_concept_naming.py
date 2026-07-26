@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/circle-facet-search-and-filter/spec.md#gwt-001
 """Guard user-facing concept names for the 2026H1 positioning refactor."""
 
 from __future__ import annotations

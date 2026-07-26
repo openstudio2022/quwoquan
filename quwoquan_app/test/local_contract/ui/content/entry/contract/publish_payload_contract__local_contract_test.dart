@@ -4,7 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// L1a 契约测试：创作入口发布 payload 与 content/post metadata 对齐
+/// L1a 契约测试：创作入口发布 payload 与 content/content/post metadata 对齐
 ///
 /// 验证 Post 发布字段与 CirclePostPlacement 跨上下文输入严格分离。
 /// 不依赖 lib/features/create/，仅引用 cloud 元数据。

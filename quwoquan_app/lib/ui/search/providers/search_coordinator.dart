@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
@@ -14,7 +13,6 @@ import 'package:quwoquan_app/core/services/app_request_wait_controller.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 part 'search_coordinator_support.dart';
 part 'search_coordinator_execution.dart';
@@ -33,6 +31,19 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
 
   @override
   SearchSessionState build() {
+    final ownerUserId = ref.watch(resolvedOwnerUserIdProvider).trim();
+    final activeActorId = ref.watch(currentUserIdProvider).trim();
+    final actorNamespace = ownerUserId.isEmpty
+        ? 'guest'
+        : '$ownerUserId::${activeActorId.isEmpty ? ownerUserId : activeActorId}';
+    _localStore = SearchRecentHistoryStore(actorNamespace: actorNamespace);
+    _pendingRecentUpsertKeys = <String>{};
+    _pendingRecentDeleteKeys = <String>{};
+    _recentUpsertTokens = <String, int>{};
+    _recentUpsertSequence = 0;
+    _recentClearToken = 0;
+    _recentHistoryMutationRevision = 0;
+    _pendingRecentClear = false;
     ref.onDispose(() {
       _debounceTimer?.cancel();
       _searchRequestToken += 1;
@@ -62,6 +73,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
   static const int _conversationSearchLimit = 12;
   static const int _maxNetworkSuggestions = 6;
   static const int _guessKeywordBatchSize = 10;
+  static const int _recentSearchMaxEntries = 12;
   static const Set<String> _locationHomepageTypes = <String>{
     'hotel',
     'restaurant',
@@ -78,8 +90,15 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
     'theme_park',
   };
 
-  final SearchRecentHistoryStore _localStore = const SearchRecentHistoryStore();
+  late SearchRecentHistoryStore _localStore;
   final AppRequestWaitController _waitController = AppRequestWaitController();
+  Set<String> _pendingRecentUpsertKeys = <String>{};
+  Set<String> _pendingRecentDeleteKeys = <String>{};
+  Map<String, int> _recentUpsertTokens = <String, int>{};
+  int _recentUpsertSequence = 0;
+  int _recentClearToken = 0;
+  int _recentHistoryMutationRevision = 0;
+  bool _pendingRecentClear = false;
 
   Timer? _debounceTimer;
   int _searchRequestToken = 0;
@@ -235,54 +254,320 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
   }
 
   Future<void> hydrateRecentSearches() async {
+    final store = _localStore;
+    final clearToken = _recentClearToken;
+    final mutationRevision = _recentHistoryMutationRevision;
     _setState(state.copyWith(isHydratingHistory: true));
     // 本地 SharedPreferences 是游客态/离线的表现层缓存；
     // 登录态以 search 域 RecentSearchState 远端为真相源。
-    final localEntries = await _localStore.load();
-    if (ref.mounted && localEntries.isNotEmpty) {
+    var localSnapshot = const SearchRecentHistoryCacheSnapshot();
+    try {
+      localSnapshot = await store.load();
+    } on Object catch (error) {
+      if (error is FormatException) {
+        await store.clear();
+      }
+      _recordRecentHistoryFailure(
+        operation: 'local_cache_load',
+        error: error,
+        cacheInvalidated: error is FormatException,
+      );
+    }
+    if (!ref.mounted ||
+        !identical(store, _localStore) ||
+        clearToken != _recentClearToken ||
+        mutationRevision != _recentHistoryMutationRevision) {
+      if (ref.mounted && identical(store, _localStore)) {
+        _setState(state.copyWith(isHydratingHistory: false));
+        unawaited(hydrateRecentSearches());
+      }
+      return;
+    }
+    _pendingRecentUpsertKeys = localSnapshot.pendingUpsertKeys.toSet();
+    _pendingRecentDeleteKeys = localSnapshot.pendingDeleteKeys.toSet();
+    _pendingRecentClear = localSnapshot.pendingClear;
+    final localEntries = localSnapshot.entries
+        .where((entry) {
+          final historyKey = _historyKeyForEntry(entry);
+          if (_pendingRecentDeleteKeys.contains(historyKey)) {
+            return false;
+          }
+          return !_pendingRecentClear ||
+              _pendingRecentUpsertKeys.contains(historyKey);
+        })
+        .toList(growable: false);
+    if (localEntries.isNotEmpty) {
       _setState(state.copyWith(recentSearches: localEntries));
     }
     try {
       final slice = await ref
           .read(recentSearchQueryProvider)
           .listRecentSearches(ListRecentSearchesQuery());
-      final remoteEntries = slice.items
+      var remoteEntries = slice.items
           .map(_recentEntryFromContract)
           .toList(growable: false);
-      final merged = _mergeHistory(localEntries, remoteEntries);
-      if (!ref.mounted) {
+      if (!ref.mounted ||
+          !identical(store, _localStore) ||
+          clearToken != _recentClearToken ||
+          mutationRevision != _recentHistoryMutationRevision) {
+        if (ref.mounted && identical(store, _localStore)) {
+          _setState(state.copyWith(isHydratingHistory: false));
+          unawaited(hydrateRecentSearches());
+        }
         return;
       }
-      _setState(
-        state.copyWith(recentSearches: merged, isHydratingHistory: false),
-      );
-      await _localStore.save(merged);
-      final remoteKeys = remoteEntries.map(_historyKeyForEntry).toSet();
-      final writer = ref.read(recentSearchCommandWriterProvider);
-      for (final entry in localEntries) {
-        if (remoteKeys.contains(_historyKeyForEntry(entry))) {
+
+      if (_pendingRecentClear) {
+        try {
+          await ref
+              .read(recentSearchCommandWriterProvider)
+              .clearRecentSearches(ClearRecentSearchesCommand());
+          _pendingRecentClear = false;
+          _pendingRecentDeleteKeys.clear();
+          remoteEntries = const <RecentSearchEntryView>[];
+        } on Object catch (error) {
+          _recordRecentHistoryFailure(
+            operation: 'remote_clear_retry',
+            error: error,
+          );
+          await _saveRecentHistory(localEntries, store: store);
+          _setState(
+            state.copyWith(
+              recentSearches: localEntries,
+              isHydratingHistory: false,
+            ),
+          );
+          return;
+        }
+      }
+
+      final deleteHistoryKeys = _pendingRecentDeleteKeys.toSet();
+      final deleteIntentTokens = <String, int?>{
+        for (final historyKey in deleteHistoryKeys)
+          historyKey: _recentUpsertTokens[historyKey],
+      };
+      final remoteEntriesByHistoryKey = <String, RecentSearchEntryView>{
+        for (final entry in remoteEntries) _historyKeyForEntry(entry): entry,
+      };
+      for (final historyKey in deleteHistoryKeys) {
+        final remoteEntry = remoteEntriesByHistoryKey[historyKey];
+        if (remoteEntry == null) {
+          if (deleteIntentTokens[historyKey] ==
+              _recentUpsertTokens[historyKey]) {
+            _pendingRecentDeleteKeys.remove(historyKey);
+          } else if (_currentState.recentSearches.any(
+            (entry) => _historyKeyForEntry(entry) == historyKey,
+          )) {
+            // 删除请求发出后用户又恢复了同一语义项；保留 upsert 回执，
+            // 让后续 hydrate 重新确认 Remote 终态，不能让旧删除赢得竞态。
+            _pendingRecentUpsertKeys.add(historyKey);
+          }
           continue;
         }
-        unawaited(
-          writer.upsertRecentSearch(
+        try {
+          await ref
+              .read(recentSearchCommandWriterProvider)
+              .deleteRecentSearch(
+                DeleteRecentSearchCommand(entryId: remoteEntry.entryId),
+              );
+          if (deleteIntentTokens[historyKey] ==
+              _recentUpsertTokens[historyKey]) {
+            _pendingRecentDeleteKeys.remove(historyKey);
+          } else if (_currentState.recentSearches.any(
+            (entry) => _historyKeyForEntry(entry) == historyKey,
+          )) {
+            _pendingRecentUpsertKeys.add(historyKey);
+          }
+        } on Object catch (error) {
+          _recordRecentHistoryFailure(
+            operation: 'remote_delete_retry',
+            error: error,
+          );
+        }
+      }
+
+      final hiddenHistoryKeys = <String>{
+        ...deleteHistoryKeys,
+        ..._pendingRecentDeleteKeys,
+      };
+      final visibleRemoteEntries = remoteEntries
+          .where(
+            (entry) => !hiddenHistoryKeys.contains(_historyKeyForEntry(entry)),
+          )
+          .toList(growable: false);
+      final remoteByHistoryKey = <String, RecentSearchEntryView>{
+        for (final entry in visibleRemoteEntries)
+          _historyKeyForEntry(entry): entry,
+      };
+      final failedPendingEntries = <RecentSearchEntryView>[];
+      final canonicalBackfills = <RecentSearchEntryView>[];
+      final unresolvedUpsertKeys = <String>{};
+      final attemptedUpsertKeys = _pendingRecentUpsertKeys.toSet();
+      final attemptedUpsertTokens = <String, int?>{
+        for (final historyKey in attemptedUpsertKeys)
+          historyKey: _recentUpsertTokens[historyKey],
+      };
+      final pendingBackfills =
+          localSnapshot.entries.asMap().entries.toList(growable: false)
+            ..sort((left, right) {
+              final updatedAtOrder = left.value.updatedAt.compareTo(
+                right.value.updatedAt,
+              );
+              if (updatedAtOrder != 0) {
+                return updatedAtOrder;
+              }
+              // 本地顺序为 newest-first；同一时间戳下先回填尾部旧项，避免服务端
+              // 以受理时间生成 canonical updatedAt 后把历史顺序整体反转。
+              return right.key.compareTo(left.key);
+            });
+      for (final indexedEntry in pendingBackfills) {
+        final entry = indexedEntry.value;
+        final historyKey = _historyKeyForEntry(entry);
+        if (!attemptedUpsertKeys.contains(historyKey) ||
+            !_pendingRecentUpsertKeys.contains(historyKey) ||
+            _pendingRecentDeleteKeys.contains(historyKey)) {
+          continue;
+        }
+        if (remoteByHistoryKey.containsKey(historyKey)) {
+          continue;
+        }
+        final canonicalEntry = await _backfillLocalRecentSearch(entry);
+        if (canonicalEntry == null) {
+          unresolvedUpsertKeys.add(historyKey);
+          failedPendingEntries.add(entry);
+        } else if (clearToken != _recentClearToken ||
+            attemptedUpsertTokens[historyKey] !=
+                _recentUpsertTokens[historyKey]) {
+          if (_pendingRecentDeleteKeys.contains(historyKey) ||
+              !_currentState.recentSearches.any(
+                (current) => _historyKeyForEntry(current) == historyKey,
+              )) {
+            final deleted = await _deleteCanonicalRecentSearch(
+              canonicalEntry,
+              operation: 'remote_delete_after_obsolete_backfill',
+            );
+            if (deleted) {
+              _pendingRecentDeleteKeys.remove(historyKey);
+            }
+          }
+        } else if (_pendingRecentDeleteKeys.contains(historyKey)) {
+          final deleted = await _deleteCanonicalRecentSearch(
+            canonicalEntry,
+            operation: 'remote_delete_after_backfill',
+          );
+          if (deleted) {
+            _pendingRecentDeleteKeys.remove(historyKey);
+          }
+        } else {
+          canonicalBackfills.add(canonicalEntry);
+        }
+      }
+      if (clearToken != _recentClearToken ||
+          mutationRevision != _recentHistoryMutationRevision) {
+        await _saveRecentHistory(_currentState.recentSearches, store: store);
+        _setState(_currentState.copyWith(isHydratingHistory: false));
+        unawaited(hydrateRecentSearches());
+        return;
+      }
+      for (final historyKey in attemptedUpsertKeys) {
+        if (!unresolvedUpsertKeys.contains(historyKey) &&
+            attemptedUpsertTokens[historyKey] ==
+                _recentUpsertTokens[historyKey]) {
+          _pendingRecentUpsertKeys.remove(historyKey);
+          _recentUpsertTokens.remove(historyKey);
+        }
+      }
+
+      var resolvedEntries = _mergeHistory(
+        visibleRemoteEntries,
+        failedPendingEntries,
+      );
+      for (final canonicalEntry in canonicalBackfills) {
+        resolvedEntries = _replaceHistoryEntryWithCanonical(
+          resolvedEntries,
+          canonicalEntry,
+        );
+      }
+      _setState(
+        state.copyWith(
+          recentSearches: resolvedEntries,
+          isHydratingHistory: false,
+        ),
+      );
+      await _saveRecentHistory(resolvedEntries, store: store);
+    } on Object catch (error) {
+      // 游客态/断网降级本地缓存；失败保留结构化日志，不合成远端成功。
+      _recordRecentHistoryFailure(operation: 'remote_hydrate', error: error);
+      if (!ref.mounted || !identical(store, _localStore)) {
+        return;
+      }
+      _setState(_currentState.copyWith(isHydratingHistory: false));
+    }
+  }
+
+  Future<RecentSearchEntryView?> _backfillLocalRecentSearch(
+    RecentSearchEntryView entry,
+  ) async {
+    try {
+      final remoteEntry = await ref
+          .read(recentSearchCommandWriterProvider)
+          .upsertRecentSearch(
             UpsertRecentSearchCommand(
               query: entry.query,
               scope: entry.scope.wireValue,
               facet: entry.facet,
             ),
-          ),
-        );
-      }
+          );
+      return _recentEntryFromContract(remoteEntry);
     } on Object catch (error) {
-      // 游客态/断网降级本地缓存；失败保留结构化日志，不合成远端成功。
-      if (kDebugMode) {
-        debugPrint('recent search hydrate degraded to local cache: $error');
-      }
-      if (!ref.mounted) {
-        return;
-      }
-      _setState(state.copyWith(isHydratingHistory: false));
+      _recordRecentHistoryFailure(operation: 'remote_backfill', error: error);
+      return null;
     }
+  }
+
+  Future<bool> _deleteCanonicalRecentSearch(
+    RecentSearchEntryView entry, {
+    required String operation,
+  }) async {
+    try {
+      await ref
+          .read(recentSearchCommandWriterProvider)
+          .deleteRecentSearch(
+            DeleteRecentSearchCommand(entryId: entry.entryId),
+          );
+      return true;
+    } on Object catch (error) {
+      _recordRecentHistoryFailure(operation: operation, error: error);
+      return false;
+    }
+  }
+
+  Future<void> _saveRecentHistory(
+    List<RecentSearchEntryView> entries, {
+    SearchRecentHistoryStore? store,
+  }) {
+    return (store ?? _localStore).save(
+      SearchRecentHistoryCacheSnapshot(
+        entries: entries,
+        pendingUpsertKeys: _pendingRecentUpsertKeys,
+        pendingDeleteKeys: _pendingRecentDeleteKeys,
+        pendingClear: _pendingRecentClear,
+      ),
+    );
+  }
+
+  void _recordRecentHistoryFailure({
+    required String operation,
+    required Object error,
+    bool cacheInvalidated = false,
+  }) {
+    ref
+        .read(cacheTelemetrySinkProvider)
+        .record('search.recent_history.degraded', <String, Object?>{
+          'operation': operation,
+          'errorType': error.runtimeType.toString(),
+          'cacheInvalidated': cacheInvalidated,
+        });
   }
 
   RecentSearchEntryView _recentEntryFromContract(RecentSearchEntry entry) {

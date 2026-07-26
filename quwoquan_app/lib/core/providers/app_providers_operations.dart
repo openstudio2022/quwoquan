@@ -26,7 +26,8 @@ final generatedCloudOperationClientProvider =
 /// VisitRecord typed append 写面：production Remote-only（08 Mock 隔离），
 /// alpha/test 经 ProviderScope override 注入替身。
 final opsVisitAppendWriterProvider = Provider<OpsVisitAppendWriter>((ref) {
-  return RemoteOpsVisitAppendWriter(
+  return AppProductionComposition.httpAdapter<OpsVisitAppendWriter>(
+    AppProductionHttpAdapter.opsVisitAppend,
     httpClient: ref.watch(cloudHttpClientProvider),
   );
 });
@@ -35,34 +36,39 @@ final locationGatewayProvider = Provider<LocationGateway>((ref) {
   return const GeolocatorLocationGateway();
 });
 
-final _createLocationRemoteAdapterProvider =
-    Provider<RemoteLocationQueryAdapter>((ref) {
-      return RemoteLocationQueryAdapter(
-        client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId) => _locationInvocationContext(
-          ref,
-          surface: AppUiSurfaces.createWorkspace,
-          clientPageId: clientPageId,
-        ),
-      );
-    });
-
 final createLocationNearbyReaderProvider = Provider<NearbyLocationReader>((
   ref,
 ) {
-  return ref.watch(_createLocationRemoteAdapterProvider);
+  return AppProductionComposition.generatedAdapter<NearbyLocationReader>(
+    AppProductionAdapter.locationQuery,
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId) => _locationInvocationContext(
+      ref,
+      surface: AppUiSurfaces.createWorkspace,
+      clientPageId: clientPageId,
+    ),
+  );
 });
 
 final createLocationSearchReaderProvider = Provider<LocationSearchReader>((
   ref,
 ) {
-  return ref.watch(_createLocationRemoteAdapterProvider);
+  return AppProductionComposition.generatedAdapter<LocationSearchReader>(
+    AppProductionAdapter.locationQuery,
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId) => _locationInvocationContext(
+      ref,
+      surface: AppUiSurfaces.createWorkspace,
+      clientPageId: clientPageId,
+    ),
+  );
 });
 
 final globalSearchLocationReaderProvider = Provider<LocationSearchReader>((
   ref,
 ) {
-  return RemoteLocationQueryAdapter(
+  return AppProductionComposition.generatedAdapter<LocationSearchReader>(
+    AppProductionAdapter.locationQuery,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId) => _locationInvocationContext(
       ref,
@@ -82,9 +88,12 @@ final createLocationCoordinatorProvider = Provider<CreateLocationCoordinator>((
   );
 });
 
-final _contentReportRemoteAdapterProvider =
-    Provider.family<RemoteContentReportAdapter, AppUiSurface>((ref, surface) {
-      return RemoteContentReportAdapter(
+final _contentReportCommandWriterProvider =
+    Provider.family<ContentReportCommandWriter, AppUiSurface>((ref, surface) {
+      return AppProductionComposition.generatedAdapter<
+        ContentReportCommandWriter
+      >(
+        AppProductionAdapter.contentReportCommand,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId) => _reportInvocationContext(
           ref,
@@ -97,34 +106,35 @@ final _contentReportRemoteAdapterProvider =
 final homeFeedContentReportCommandWriterProvider =
     Provider<ContentReportCommandWriter>((ref) {
       return ref.watch(
-        _contentReportRemoteAdapterProvider(AppUiSurfaces.homeFeed),
+        _contentReportCommandWriterProvider(AppUiSurfaces.homeFeed),
       );
     });
 
 final workBrowserContentReportCommandWriterProvider =
     Provider<ContentReportCommandWriter>((ref) {
       return ref.watch(
-        _contentReportRemoteAdapterProvider(AppUiSurfaces.workBrowser),
+        _contentReportCommandWriterProvider(AppUiSurfaces.workBrowser),
       );
     });
 
 final userProfileContentReportCommandWriterProvider =
     Provider<ContentReportCommandWriter>((ref) {
       return ref.watch(
-        _contentReportRemoteAdapterProvider(AppUiSurfaces.userProfile),
+        _contentReportCommandWriterProvider(AppUiSurfaces.userProfile),
       );
     });
 
 final circleDetailContentReportCommandWriterProvider =
     Provider<ContentReportCommandWriter>((ref) {
       return ref.watch(
-        _contentReportRemoteAdapterProvider(AppUiSurfaces.circleDetail),
+        _contentReportCommandWriterProvider(AppUiSurfaces.circleDetail),
       );
     });
 
 final myReportsContentReportQueryProvider = Provider<ContentMyReportQueryFacet>(
   (ref) {
-    return RemoteContentReportQueryAdapter(
+    return AppProductionComposition.generatedAdapter<ContentMyReportQueryFacet>(
+      AppProductionAdapter.contentReportQuery,
       client: ref.watch(generatedCloudOperationClientProvider),
       invocationContext: (clientPageId) => _reportInvocationContext(
         ref,
@@ -135,43 +145,71 @@ final myReportsContentReportQueryProvider = Provider<ContentMyReportQueryFacet>(
   },
 );
 
-final _profileUpdateProposalRemoteProvider =
-    Provider.family<RemoteProfileUpdateProposalFacet, AppUiSurface>(
-      (ref, surface) => RemoteProfileUpdateProposalFacet(
-        client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId, {required command}) =>
-            _profileUpdateProposalInvocationContext(
-              ref,
-              surface: surface,
-              clientPageId: clientPageId,
-              command: command,
-            ),
-      ),
-    );
-
-final _subjectFollowRemoteProvider =
-    Provider.family<RemoteSubjectFollowFacet, AppUiSurface>(
-      (ref, surface) => RemoteSubjectFollowFacet(
-        client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId) => _reportInvocationContext(
+ProfileUpdateProposalCommandWriter _profileUpdateProposalCommandWriter(
+  Ref ref,
+  AppUiSurface surface,
+) {
+  return AppProductionComposition.generatedAdapter<
+    ProfileUpdateProposalCommandWriter
+  >(
+    AppProductionAdapter.profileUpdateProposal,
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId, {required command}) =>
+        _profileUpdateProposalInvocationContext(
           ref,
           surface: surface,
           clientPageId: clientPageId,
+          command: command,
         ),
-      ),
-    );
+  );
+}
+
+ProfileUpdateProposalQueryReader _profileUpdateProposalQueryReader(
+  Ref ref,
+  AppUiSurface surface,
+) {
+  return AppProductionComposition.generatedAdapter<
+    ProfileUpdateProposalQueryReader
+  >(
+    AppProductionAdapter.profileUpdateProposal,
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId, {required command}) =>
+        _profileUpdateProposalInvocationContext(
+          ref,
+          surface: surface,
+          clientPageId: clientPageId,
+          command: command,
+        ),
+  );
+}
+
+SubjectFollowCommandWriter _subjectFollowCommandWriter(
+  Ref ref,
+  AppUiSurface surface,
+) {
+  return AppProductionComposition.generatedAdapter<SubjectFollowCommandWriter>(
+    AppProductionAdapter.subjectFollow,
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId) => _reportInvocationContext(
+      ref,
+      surface: surface,
+      clientPageId: clientPageId,
+    ),
+  );
+}
 
 /// 实体主页详情页的关注写入口；关注关系唯一归属 user.SubjectFollow 聚合。
 final homepageSubjectFollowCommandWriterProvider =
     Provider<SubjectFollowCommandWriter>((ref) {
-      return ref.watch(
-        _subjectFollowRemoteProvider(AppUiSurfaces.homepageDetail),
-      );
+      return _subjectFollowCommandWriter(ref, AppUiSurfaces.homepageDetail);
     });
 
-final _accountSessionRemoteProvider =
-    Provider<RemoteAccountSessionCommandWriter>((ref) {
-      return RemoteAccountSessionCommandWriter(
+final _accountSessionCommandWriterProvider =
+    Provider<AccountSessionCommandWriter>((ref) {
+      return AppProductionComposition.generatedAdapter<
+        AccountSessionCommandWriter
+      >(
+        AppProductionAdapter.accountSession,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId) {
           final surface =
@@ -193,7 +231,7 @@ final _accountSessionRemoteProvider =
 /// AccountSession 组合装配边界；业务消费者使用下方细粒度子 Facet。
 final accountSessionCommandWriterProvider =
     Provider<AccountSessionCommandWriter>((ref) {
-      return ref.watch(_accountSessionRemoteProvider);
+      return ref.watch(_accountSessionCommandWriterProvider);
     });
 
 /// 六路 public bootstrap 登录写面。
@@ -212,7 +250,10 @@ final accountSessionLifecycleCommandWriterProvider =
 /// production Remote-only；alpha/test 经 ProviderScope override 注入替身。
 final accountLifecycleCommandWriterProvider =
     Provider<AccountLifecycleCommandWriter>((ref) {
-      return RemoteAccountLifecycleCommandWriter(
+      return AppProductionComposition.generatedAdapter<
+        AccountLifecycleCommandWriter
+      >(
+        AppProductionAdapter.accountLifecycle,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId) => _reportInvocationContext(
           ref,
@@ -225,7 +266,10 @@ final accountLifecycleCommandWriterProvider =
 /// AuthenticationChallenge OTP/一键/支付宝授权的对象级 production 写面。
 final authenticationChallengeCommandWriterProvider =
     Provider<AuthenticationChallengeCommandWriter>((ref) {
-      return RemoteAuthenticationChallengeCommandWriter(
+      return AppProductionComposition.generatedAdapter<
+        AuthenticationChallengeCommandWriter
+      >(
+        AppProductionAdapter.authenticationChallenge,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId) => _reportInvocationContext(
           ref,
@@ -238,7 +282,10 @@ final authenticationChallengeCommandWriterProvider =
 /// 设置页当前暴露的 CredentialBinding 商用写面。
 final appCredentialBindingCommandWriterProvider =
     Provider<AppCredentialBindingCommandWriter>((ref) {
-      return RemoteAppCredentialBindingCommandWriter(
+      return AppProductionComposition.generatedAdapter<
+        AppCredentialBindingCommandWriter
+      >(
+        AppProductionAdapter.credentialBindingCommand,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId) => _reportInvocationContext(
           ref,
@@ -249,7 +296,8 @@ final appCredentialBindingCommandWriterProvider =
     });
 
 final credentialBindingQueryProvider = Provider<CredentialBindingQuery>((ref) {
-  return RemoteCredentialBindingQuery(
+  return AppProductionComposition.generatedAdapter<CredentialBindingQuery>(
+    AppProductionAdapter.credentialBindingQuery,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId) => _reportInvocationContext(
       ref,
@@ -259,68 +307,70 @@ final credentialBindingQueryProvider = Provider<CredentialBindingQuery>((ref) {
   );
 });
 
-final _userProfileQueryFacetProvider =
-    Provider.family<RemoteUserProfileQueryFacet, AppUiSurface>((ref, surface) {
-      return RemoteUserProfileQueryFacet(
-        client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId, canonicalOperationId) {
-          final operation = appCloudOperationContracts[canonicalOperationId];
-          if (operation == null || !operation.surfaceIds.contains(surface.id)) {
-            throw StateError(
-              'UserProfile operation 未绑定调用 surface: '
-              '$canonicalOperationId -> ${surface.id}; '
-              '允许值=${operation?.surfaceIds.join(',') ?? ''}',
-            );
-          }
-          if (canonicalOperationId ==
-              AppCloudOperationIds.userUserProfileGetActivePersonaContext) {
-            final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
-            return CloudOperationInvocationContext(
-              surfaceId: surface.id,
-              clientPageId: clientPageId,
-              routeId: surface.routeId,
-              actor: CloudOperationActorContext(
-                accountId: accountId.isEmpty ? null : accountId,
-              ),
-            );
-          }
-          return _locationInvocationContext(
-            ref,
-            surface: surface,
-            clientPageId: clientPageId,
-          );
-        },
+CloudOperationInvocationContext Function(String, String)
+_userProfileInvocationContext(Ref ref, AppUiSurface surface) {
+  return (clientPageId, canonicalOperationId) {
+    final operation = appCloudOperationContracts[canonicalOperationId];
+    if (operation == null || !operation.surfaceIds.contains(surface.id)) {
+      throw StateError(
+        'UserProfile operation 未绑定调用 surface: '
+        '$canonicalOperationId -> ${surface.id}; '
+        '允许值=${operation?.surfaceIds.join(',') ?? ''}',
       );
-    });
+    }
+    if (canonicalOperationId ==
+        AppCloudOperationIds.userUserAccountGetActivePersonaContext) {
+      final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
+      return CloudOperationInvocationContext(
+        surfaceId: surface.id,
+        clientPageId: clientPageId,
+        routeId: surface.routeId,
+        actor: CloudOperationActorContext(
+          accountId: accountId.isEmpty ? null : accountId,
+        ),
+      );
+    }
+    return _locationInvocationContext(
+      ref,
+      surface: surface,
+      clientPageId: clientPageId,
+    );
+  };
+}
 
 /// UserProfile 公开资料、主页聚合与统计读面。
 final profileQueryProvider = Provider.family<ProfileQuery, AppUiSurface>((
   ref,
   surface,
 ) {
-  final userProfileQuery = ref.watch(_userProfileQueryFacetProvider(surface));
-  return RemoteProfileQuery(
-    publicProfileQuery: userProfileQuery,
-    userHomepageQuery: userProfileQuery,
+  return AppProductionComposition.generatedAdapter<ProfileQuery>(
+    AppProductionAdapter.profileQuery,
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: _userProfileInvocationContext(ref, surface),
   );
 });
 
 /// Content/Post 作者影响摘要与证据读面。
-final authorImpactQueryProvider = Provider<AuthorImpactQuery>((ref) {
-  return RemoteAuthorImpactQuery(
-    httpClient: ref.watch(cloudHttpClientProvider),
-  );
-});
+final authorImpactQueryProvider =
+    Provider.family<AuthorImpactQuery, AppUiSurface>((ref, surface) {
+      return AppProductionComposition.generatedAdapter<AuthorImpactQuery>(
+        AppProductionAdapter.authorImpact,
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: (clientPageId) => _locationInvocationContext(
+          ref,
+          surface: surface,
+          clientPageId: clientPageId,
+        ),
+      );
+    });
 
 /// Profile 私有编辑快照与二维码读面。
 final profileEditQueryProvider =
     Provider.family<ProfileEditQuery, AppUiSurface>((ref, surface) {
-      final userProfileQuery = ref.watch(
-        _userProfileQueryFacetProvider(surface),
-      );
-      return RemoteProfileEditQuery(
-        editSnapshotQuery: userProfileQuery,
-        publicProfileQuery: userProfileQuery,
+      return AppProductionComposition.generatedAdapter<ProfileEditQuery>(
+        AppProductionAdapter.profileEditQuery,
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: _userProfileInvocationContext(ref, surface),
       );
     });
 
@@ -329,10 +379,10 @@ final personaQueryProvider = Provider.family<PersonaQuery, AppUiSurface>((
   ref,
   surface,
 ) {
-  final userProfileQuery = ref.watch(_userProfileQueryFacetProvider(surface));
-  return RemotePersonaQuery(
-    managementQuery: userProfileQuery,
-    publicProfileQuery: userProfileQuery,
+  return AppProductionComposition.generatedAdapter<PersonaQuery>(
+    AppProductionAdapter.personaQuery,
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: _userProfileInvocationContext(ref, surface),
   );
 });
 
@@ -538,24 +588,22 @@ final homepageReviewQueryProvider = Provider<HomepageReviewQuery>((ref) {
 
 final profileEditProposalCommandWriterProvider =
     Provider<ProfileUpdateProposalCommandWriter>((ref) {
-      return ref.watch(
-        _profileUpdateProposalRemoteProvider(AppUiSurfaces.profileEdit),
+      return _profileUpdateProposalCommandWriter(
+        ref,
+        AppUiSurfaces.profileEdit,
       );
     });
 
 final profileEditProposalQueryReaderProvider =
     Provider<ProfileUpdateProposalQueryReader>((ref) {
-      return ref.watch(
-        _profileUpdateProposalRemoteProvider(AppUiSurfaces.profileEdit),
-      );
+      return _profileUpdateProposalQueryReader(ref, AppUiSurfaces.profileEdit);
     });
 
 final assistantProfileProposalCommandWriterProvider =
     Provider<ProfileUpdateProposalCommandWriter>((ref) {
-      return ref.watch(
-        _profileUpdateProposalRemoteProvider(
-          AppUiSurfaces.personalAssistantDialog,
-        ),
+      return _profileUpdateProposalCommandWriter(
+        ref,
+        AppUiSurfaces.personalAssistantDialog,
       );
     });
 
@@ -698,6 +746,7 @@ CloudOperationInvocationContext _locationInvocationContext(
   Ref ref, {
   required AppUiSurface surface,
   required String clientPageId,
+  String? idempotencyKey,
 }) {
   final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
   final persona = ref.read(activePersonaContextProvider).asData?.value;
@@ -706,6 +755,7 @@ CloudOperationInvocationContext _locationInvocationContext(
     surfaceId: surface.id,
     clientPageId: clientPageId,
     routeId: surface.routeId,
+    idempotencyKey: idempotencyKey,
     actor: CloudOperationActorContext(
       accountId: accountId.isEmpty ? null : accountId,
       personaId: personaId.isEmpty ? null : personaId,

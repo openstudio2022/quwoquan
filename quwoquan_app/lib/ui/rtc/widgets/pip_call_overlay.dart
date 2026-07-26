@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -8,6 +7,7 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/core/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 
 /// In-app floating PiP window for active calls.
@@ -147,21 +147,17 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircleAvatar(
-              radius: AppSpacing.lg,
+            AppCircularAvatar(
+              imageUrl: speaker?.avatarUrl,
+              size: AppSpacing.lg * 2,
               backgroundColor: AppColors.primaryColor.withValues(alpha: 0.3),
-              backgroundImage: speaker?.avatarUrl != null
-                  ? NetworkImage(speaker!.avatarUrl!)
-                  : null,
-              child: speaker?.avatarUrl == null
-                  ? Icon(
-                      callState.callType == 'video'
-                          ? CupertinoIcons.video_camera
-                          : CupertinoIcons.phone,
-                      color: AppColors.white,
-                      size: AppSpacing.iconMedium,
-                    )
-                  : null,
+              fallback: Icon(
+                callState.callType == 'video'
+                    ? CupertinoIcons.video_camera
+                    : CupertinoIcons.phone,
+                color: AppColors.white,
+                size: AppSpacing.iconMedium,
+              ),
             ),
             SizedBox(height: AppSpacing.xs),
             Text(

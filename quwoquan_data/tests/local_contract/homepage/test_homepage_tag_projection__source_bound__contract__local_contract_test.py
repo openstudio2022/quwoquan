@@ -17,9 +17,9 @@ def test_homepage_tags_keep_declared_kind_and_reject_unevidenced_coverage_facets
     tags = _homepage_tag_refs(
         "地点",
         "景区",
-        "普陀山",
+        "测试实体甲",
         {
-            "geoTagRef": "Topic/地理/行政区/中国/浙江省/舟山市/普陀区",
+            "geoTagRef": "Topic/地理/行政区/中国/test-region-a/舟山市/普陀区",
             "typeTagRefs": [
                 "Entity/地点/景区/5A景区",
                 "Entity/地点/宗教场所",
@@ -29,6 +29,6 @@ def test_homepage_tags_keep_declared_kind_and_reject_unevidenced_coverage_facets
     )
 
     assert "Entity/地点/景区" in tags
-    assert "Topic/地理/行政区/中国/浙江省/舟山市/普陀区" in tags
+    assert "Topic/地理/行政区/中国/test-region-a/舟山市/普陀区" in tags
     assert "Entity/地点/景区/5A景区" not in tags
     assert "Entity/地点/宗教场所" not in tags

@@ -31,7 +31,8 @@ extension _ImageEditorOperationPanelFilter on ImageEditorOperationPanel {
     if (filterCatalogLoading) {
       return SizedBox(
         key: const ValueKey<String>('image_editor_filter_catalog_loading'),
-        height: AppSpacing.filterTemplatePreviewSize +
+        height:
+            AppSpacing.filterTemplatePreviewSize +
             AppSpacing.filterTemplateLabelBarHeight +
             AppSpacing.intraGroupSm,
         child: const Center(child: CupertinoActivityIndicator()),
@@ -40,7 +41,8 @@ extension _ImageEditorOperationPanelFilter on ImageEditorOperationPanel {
     if (filterCatalogLoadFailed) {
       return SizedBox(
         key: const ValueKey<String>('image_editor_filter_catalog_failure'),
-        height: AppSpacing.filterTemplatePreviewSize +
+        height:
+            AppSpacing.filterTemplatePreviewSize +
             AppSpacing.filterTemplateLabelBarHeight +
             AppSpacing.intraGroupSm,
         child: Center(
@@ -60,7 +62,7 @@ extension _ImageEditorOperationPanelFilter on ImageEditorOperationPanel {
                   vertical: AppSpacing.xs,
                 ),
                 onPressed: onFilterCatalogRetry,
-                child: const Text(UITextConstants.retry),
+                child: const Text(UITextConstants.tryAgain),
               ),
             ],
           ),

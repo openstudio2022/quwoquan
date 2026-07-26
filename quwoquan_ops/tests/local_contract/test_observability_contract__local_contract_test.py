@@ -23,7 +23,7 @@ from quwoquan_ops.gate.verify_observability_envelope import envelope_issues
 from quwoquan_ops.gate.verify_observability_layout import layout_issues
 
 
-def test_canonical_deploy_log_normalizes_short_writer_fields(tmp_path: Path) -> None:
+def test_canonical_deploy_log_accepts_canonical_writer_fields(tmp_path: Path) -> None:
     root = tmp_path / ".qwq_output"
     run = root / "env" / "gamma" / "observability" / "run-1"
     write_run_manifest(
@@ -37,10 +37,10 @@ def test_canonical_deploy_log_normalizes_short_writer_fields(tmp_path: Path) -> 
     append_log_line(
         run / "logs" / "ci" / "stackctl" / "deploy.log",
         {
-            "level": "INFO",
+            "severity": "INFO",
             "step": "package",
             "result": "ok",
-            "msg": "package ready, with comma",
+            "message": "package ready, with comma",
         },
     )
 
@@ -52,9 +52,9 @@ def test_version_and_release_identifiers_are_rejected() -> None:
     record = canonical_log_record(
         "event",
         {
-            "ts": "2026-07-08T10:00:00Z",
-            "level": "INFO",
-            "msg": "too chatty",
+            "occurredAt": "2026-07-08T10:00:00Z",
+            "severity": "INFO",
+            "message": "too chatty",
             "event": "open",
             "result": "ok",
         },
@@ -73,11 +73,11 @@ def test_attrs_are_string_only_sanitized_and_secret_keys_dropped() -> None:
     record = canonical_log_record(
         "exception",
         {
-            "ts": "2026-07-08T10:00:00Z",
-            "level": "ERROR",
-            "msg": "failed",
-            "err": "RuntimeError",
-            "attrs": {
+            "occurredAt": "2026-07-08T10:00:00Z",
+            "severity": "ERROR",
+            "message": "failed",
+            "errorCode": "RuntimeError",
+            "attributes": {
                 "apiToken": "should-not-appear",
                 "protocolVersion": "must-not-appear",
                 "releaseVersion": "must-not-appear",
@@ -103,9 +103,9 @@ def test_canonical_log_rejects_signal_kind_mismatch_and_normalizes_status() -> N
             "logKind": "access",
             "signal": "service.access.http",
             "method": "GET",
-            "route": "/content/posts/{postId}",
+            "route": "/content/content/posts/{postId}",
             "status": 200,
-            "durMs": 12,
+            "durationMs": 12,
         },
         resource={"sourceType": "service", "service": "content-service"},
     )
@@ -145,10 +145,10 @@ def test_json_log_parser_preserves_message_commas_and_stack_lines() -> None:
     record = canonical_log_record(
         "exception",
         {
-            "ts": "2026-07-08T10:00:00Z",
-            "level": "ERROR",
-            "err": "APP.SYSTEM.failed",
-            "msg": "message, with comma\nat frame one\nat frame two",
+            "occurredAt": "2026-07-08T10:00:00Z",
+            "severity": "ERROR",
+            "errorCode": "APP.SYSTEM.failed",
+            "message": "message, with comma\nat frame one\nat frame two",
         },
         resource={"sourceType": "ops", "service": "stackctl"},
     )
@@ -307,6 +307,47 @@ def test_runtime_stdout_adapter_never_copies_raw_process_output_into_runtime_log
     rendered = log_path.read_text(encoding="utf-8")
     assert "secret-token" not in rendered
     assert "managed process emitted a non-info line" in rendered
+
+
+def test_runtime_stdout_adapter_writes_explicit_diagnostic_output_outside_observability(
+    tmp_path: Path,
+) -> None:
+    log_path = (
+        tmp_path
+        / ".qwq_output"
+        / "env"
+        / "beta"
+        / "observability"
+        / "run-1"
+        / "logs"
+        / "service"
+        / "app-beta"
+        / "local"
+        / "runtime.log"
+    )
+    diagnostic_path = (
+        tmp_path
+        / ".qwq_output"
+        / "env"
+        / "beta"
+        / "local"
+        / "beta-local"
+        / "process"
+        / "stdout"
+        / "app-beta.log"
+    )
+
+    result = run_logged_process(
+        [sys.executable, "-c", "print('GATE_BLOCK authorization=secret-token')"],
+        log_path=log_path,
+        event="app-beta",
+        diagnostic_log_path=diagnostic_path,
+    )
+
+    assert result == 0
+    assert "secret-token" not in log_path.read_text(encoding="utf-8")
+    assert diagnostic_path.read_text(encoding="utf-8") == "GATE_BLOCK authorization=secret-token\n"
+    assert diagnostic_path.stat().st_mode & 0o777 == 0o600
 
 
 def test_runtime_stdout_adapter_preserves_canonical_service_records(

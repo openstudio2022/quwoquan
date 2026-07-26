@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:quwoquan_app/application/content/onboarding/interest_onboarding.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
@@ -120,7 +121,7 @@ extension ReferralSourceExt on ReferralSource {
 ///
 /// 用户 / 圈子 / 实体对象面（对象页交集 section、对象交集列表页）共享此映射，
 /// 去除各展示位 `organicFeed` 一刀切硬编，按当前所在对象面精确归因（R23/R32）。
-/// 用现有闭集最近邻：user→authorProfile、circle→circlePost、entity/homepage→entityPage。
+/// 用现有闭集最近邻：user→authorProfile、circle→circlePost、entity/entity_homepage/homepage→entityPage。
 ReferralSource referralSourceForObjectType(String objectType) {
   switch (objectType.trim()) {
     case 'circle':
@@ -174,6 +175,8 @@ class BehaviorEvent {
     this.intersectionEvidenceId,
     this.subjectId,
     this.feedbackKind,
+    this.catalogVersion,
+    this.taxonomyReleaseId,
     this.motionDirection,
     this.motionProfile,
     this.settleMs,
@@ -297,6 +300,12 @@ class BehaviorEvent {
   /// （intersectionFeedbackKinds，端云同源），驱动 subject 跨会话降权 / 冷却。
   final String? feedbackKind;
 
+  /// 首启兴趣目录版本；服务端依此校验目录、维度和 tag leaf。
+  final String? catalogVersion;
+
+  /// 首启兴趣选择时绑定的 taxonomy snapshot identity.
+  final String? taxonomyReleaseId;
+
   /// Client-side pageflip motion telemetry, used by video-book comfort audits.
   final String? motionDirection;
   final String? motionProfile;
@@ -360,6 +369,10 @@ class BehaviorEvent {
       if (subjectId != null && subjectId!.isNotEmpty) 'subjectId': subjectId,
       if (feedbackKind != null && feedbackKind!.isNotEmpty)
         'feedbackKind': feedbackKind,
+      if (catalogVersion != null && catalogVersion!.isNotEmpty)
+        'catalogVersion': catalogVersion,
+      if (taxonomyReleaseId != null && taxonomyReleaseId!.isNotEmpty)
+        'taxonomyReleaseId': taxonomyReleaseId,
       if (motionDirection != null && motionDirection!.isNotEmpty)
         'direction': motionDirection,
       if (motionProfile != null && motionProfile!.isNotEmpty)
@@ -392,6 +405,14 @@ abstract interface class BehaviorReporter {
 abstract class BehaviorRepository implements BehaviorReporter {
   @override
   Future<void> reportEvents({required List<BehaviorEvent> events});
+
+  /// 确认型首启行为：失败向调用方返回，绝不静默入尽力队列。
+  Future<void> submitOnboardingInterest({
+    required String clientEventId,
+    required String catalogVersion,
+    required String taxonomyReleaseId,
+    required List<String> tagRefs,
+  });
 
   Future<void> clearPendingForLogout();
 
@@ -443,6 +464,26 @@ class MockBehaviorRepository extends BehaviorRepository {
   @override
   Future<void> reportEvents({required List<BehaviorEvent> events}) async {
     recorded.addAll(events);
+  }
+
+  @override
+  Future<void> submitOnboardingInterest({
+    required String clientEventId,
+    required String catalogVersion,
+    required String taxonomyReleaseId,
+    required List<String> tagRefs,
+  }) async {
+    recorded.add(
+      BehaviorEvent(
+        contentId: '',
+        action: BehaviorAction.onboardingInterest,
+        clientEventId: clientEventId,
+        catalogVersion: catalogVersion,
+        taxonomyReleaseId: taxonomyReleaseId,
+        sourceSurface: 'interest_onboarding',
+        tags: tagRefs,
+      ),
+    );
   }
 
   @override
@@ -565,6 +606,49 @@ class RemoteBehaviorRepository extends BehaviorRepository
     }
   }
 
+  @override
+  Future<void> submitOnboardingInterest({
+    required String clientEventId,
+    required String catalogVersion,
+    required String taxonomyReleaseId,
+    required List<String> tagRefs,
+  }) async {
+    if (_disposed) {
+      throw StateError('BehaviorRepository disposed');
+    }
+    final tags = tagRefs
+        .map((tagRef) => tagRef.trim())
+        .where((tagRef) => tagRef.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (catalogVersion.trim().isEmpty ||
+        taxonomyReleaseId.trim().isEmpty ||
+        tags.isEmpty) {
+      throw ArgumentError(
+        'onboarding catalogVersion, taxonomyReleaseId and tagRefs are required',
+      );
+    }
+    final feedSessionId = _resolvedFeedSessionId;
+    await _postBehaviorBatch(
+      _uri(ContentApiMetadata.reportBehaviorsPath),
+      <String, dynamic>{
+        'sessionId': _resolvedSessionId,
+        if (feedSessionId.isNotEmpty) 'feedSessionId': feedSessionId,
+        'events': <Map<String, dynamic>>[
+          BehaviorEvent(
+            contentId: '',
+            action: BehaviorAction.onboardingInterest,
+            clientEventId: clientEventId,
+            catalogVersion: catalogVersion,
+            taxonomyReleaseId: taxonomyReleaseId,
+            sourceSurface: 'interest_onboarding',
+            tags: tags,
+          ).toJson(),
+        ],
+      },
+    );
+  }
+
   Future<void> _flushPending() async {
     if (_disposed) return;
     final box = await _ensureQueueBox();
@@ -646,8 +730,11 @@ class RemoteBehaviorRepository extends BehaviorRepository
   }
 
   Future<void> _enqueue(List<BehaviorEvent> events) async {
+    if (_disposed) {
+      return;
+    }
     final box = await _ensureQueueBox();
-    if (box == null) {
+    if (_disposed || box == null) {
       return;
     }
     final key = DateTime.now().microsecondsSinceEpoch.toString();
@@ -771,6 +858,7 @@ class RemoteBehaviorRepository extends BehaviorRepository
     );
     final actionIsContentless =
         action == BehaviorAction.assistantInterest ||
+        action == BehaviorAction.onboardingInterest ||
         action == BehaviorAction.intersectionFeedback ||
         action == BehaviorAction.wishlistAdd ||
         action == BehaviorAction.wishlistRemove;
@@ -819,6 +907,8 @@ class RemoteBehaviorRepository extends BehaviorRepository
       intersectionEvidenceId: json['intersectionEvidenceId'] as String?,
       subjectId: json['subjectId'] as String?,
       feedbackKind: json['feedbackKind'] as String?,
+      catalogVersion: json['catalogVersion'] as String?,
+      taxonomyReleaseId: json['taxonomyReleaseId'] as String?,
       motionDirection: json['direction'] as String?,
       motionProfile: json['motionProfile'] as String?,
       settleMs: (json['settleMs'] as num?)?.toInt(),
@@ -833,5 +923,27 @@ class RemoteBehaviorRepository extends BehaviorRepository
       if (source.value == value) return source;
     }
     return null;
+  }
+}
+
+final class BehaviorOnboardingInterestWriter
+    implements ConfirmedOnboardingInterestWriter {
+  const BehaviorOnboardingInterestWriter(this._repository);
+
+  final BehaviorRepository _repository;
+
+  @override
+  Future<void> submit({
+    required String clientEventId,
+    required String catalogVersion,
+    required String taxonomyReleaseId,
+    required List<String> tagRefs,
+  }) {
+    return _repository.submitOnboardingInterest(
+      clientEventId: clientEventId,
+      catalogVersion: catalogVersion,
+      taxonomyReleaseId: taxonomyReleaseId,
+      tagRefs: tagRefs,
+    );
   }
 }

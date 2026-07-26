@@ -3,7 +3,7 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 /// Thrown by anti-corruption gateways when a capability is not available on the
 /// current platform. Exposes a structured [RuntimeFailure] so UI/provider error
 /// surfaces can render a consistent, cross-platform degradation message rather
-/// than a raw exception string (see rule 10-runtime-error-cutover).
+/// than a raw exception string, as required by the App runtime error contract.
 class PlatformCapabilityUnavailableException implements Exception {
   PlatformCapabilityUnavailableException({
     required this.capability,

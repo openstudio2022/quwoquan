@@ -13,6 +13,7 @@ from core.control_types import (
     ModalityContract,
     SelectionPolicy,
 )
+from content.source.contracts import QualifiedHomepageSource
 
 
 EXECUTION_SPEC_SCHEMA = "quwoquan.content.execution_spec"
@@ -67,6 +68,7 @@ class CoverageTarget:
     geo_tag_refs: tuple[str, ...] = ()
     type_tag_refs: tuple[str, ...] = ()
     aliases: tuple[str, ...] = ()
+    qualified_homepage_source: QualifiedHomepageSource | None = None
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "CoverageTarget":
@@ -77,6 +79,11 @@ class CoverageTarget:
             geo_tag_refs=_strings(payload.get("geoTagRefs"), field="geoTagRefs"),
             type_tag_refs=_strings(payload.get("typeTagRefs"), field="typeTagRefs"),
             aliases=_strings(payload.get("aliases"), field="aliases"),
+            qualified_homepage_source=(
+                QualifiedHomepageSource.from_mapping(raw)
+                if isinstance(raw := payload.get("qualifiedHomepageSource"), Mapping)
+                else None
+            ),
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -92,6 +99,8 @@ class CoverageTarget:
             payload["typeTagRefs"] = list(self.type_tag_refs)
         if self.aliases:
             payload["aliases"] = list(self.aliases)
+        if self.qualified_homepage_source is not None:
+            payload["qualifiedHomepageSource"] = self.qualified_homepage_source.to_dict()
         return payload
 
 
@@ -455,6 +464,17 @@ class ExecutionSpec:
             raise ValueError(
                 "content.quotas.routeArticles is unsupported without a route carrier"
             )
+        if positive_carriers[0] is ContentType.HOMEPAGE:
+            missing = [
+                target.name
+                for target in self.scope.coverage_targets
+                if target.qualified_homepage_source is None
+            ]
+            if missing:
+                raise ValueError(
+                    "homepage execution targets require qualifiedHomepageSource: "
+                    + ", ".join(missing)
+                )
         objects_per_target = self.content.quotas.for_type(positive_carriers[0])
         expected_object_count = target_count * objects_per_target
         if self.execution_policy.target_object_count != expected_object_count:

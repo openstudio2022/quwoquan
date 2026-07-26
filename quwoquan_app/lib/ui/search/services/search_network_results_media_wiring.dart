@@ -4,11 +4,9 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 /// 全局搜索网络结果 → 媒体查看器单行 raw（非 `*_page.dart`）。
 Map<String, MediaViewerPostWireRow> searchNetworkSinglePostMediaRaws({
   required PostBaseDto dto,
-  required Map<String, dynamic> wire,
+  required Map<String, Object?> wire,
 }) {
   return <String, MediaViewerPostWireRow>{
-    dto.id: MediaViewerPostWireRow.fromDynamicMap(
-      Map<String, dynamic>.from(wire),
-    ),
+    dto.id: MediaViewerPostWireRow.fromObjectEntries(wire),
   };
 }

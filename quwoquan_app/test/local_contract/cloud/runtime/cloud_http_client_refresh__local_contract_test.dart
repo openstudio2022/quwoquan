@@ -95,6 +95,47 @@ void main() {
     expect(requestCount, 1);
     expect(refreshCount, 1);
   });
+
+  test('仅 canonical account_deleted 410 触发一次 refresh 以清除本地会话', () async {
+    var accountClosureRequestCount = 0;
+    var ordinaryGoneRequestCount = 0;
+    var refreshCount = 0;
+    final client = CloudHttpClient(
+      client: MockClient((request) async {
+        if (request.url.path == '/account-closed') {
+          accountClosureRequestCount++;
+          return http.Response('{"code":"USER.AUTH.account_deleted"}', 410);
+        }
+        ordinaryGoneRequestCount++;
+        return http.Response('{"code":"CONTENT.POST.not_found"}', 410);
+      }),
+      authTokenProvider: const _StaticTokenProvider('pre-closure-token'),
+      onUnauthorizedRefresh: (_) async {
+        refreshCount++;
+        // 真正的 refresh 会因账号已注销而清除会话并返回 false。
+        return false;
+      },
+    );
+
+    await expectLater(
+      () => client.getJson(
+        Uri.parse('https://gateway.example.com/account-closed'),
+        headers: const <String, String>{'X-Client-Page-Id': 'test.page'},
+      ),
+      throwsA(isA<Exception>()),
+    );
+    await expectLater(
+      () => client.getJson(
+        Uri.parse('https://gateway.example.com/ordinary-gone'),
+        headers: const <String, String>{'X-Client-Page-Id': 'test.page'},
+      ),
+      throwsA(isA<Exception>()),
+    );
+
+    expect(accountClosureRequestCount, 1);
+    expect(ordinaryGoneRequestCount, 1);
+    expect(refreshCount, 1);
+  });
 }
 
 class _MemoryTokenProvider implements CloudAuthTokenProvider {

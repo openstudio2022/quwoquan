@@ -1,0 +1,15 @@
+backend: mongodb
+role: append_only
+collections:
+  message_receipts:
+    entity: MessageReceipt
+    indexes:
+    - name: idx_mr_msg_user
+      keys:
+        messageId: 1
+        userId: 1
+      unique: true
+    - name: idx_mr_conv_msg
+      keys:
+        conversationId: 1
+        messageId: 1

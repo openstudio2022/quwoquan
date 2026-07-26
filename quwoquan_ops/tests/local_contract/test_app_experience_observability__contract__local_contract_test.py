@@ -16,7 +16,7 @@ VERIFIER_PATH = (
 )
 GOLDEN_CATALOG_PATH = (
     REPO_ROOT
-    / "quwoquan_service/contracts/metadata/ops/event_record/"
+    / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/"
     "golden_metric_catalog.yaml"
 )
 

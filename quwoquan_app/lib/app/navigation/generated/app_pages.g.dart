@@ -71,6 +71,7 @@ abstract final class PageNames {
   static const String homepagePicker = 'homepage_picker';
   static const String homepageStatusReport = 'homepage_status_report';
   static const String interestMatch = 'interest_match';
+  static const String interestOnboarding = 'interest_onboarding';
   static const String legalPermissions = 'legal_permissions';
   static const String legalPrivacyPolicy = 'legal_privacy_policy';
   static const String legalThirdPartySdkList = 'legal_third_party_sdk_list';
@@ -125,6 +126,7 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'legal_privacy_policy', routeId: 'legalPrivacyPolicy', pathTemplate: '/legal/privacy-policy', collectPageAccess: true),
     AppPageDefinition(pageName: 'legal_user_agreement', routeId: 'legalUserAgreement', pathTemplate: '/legal/user-agreement', collectPageAccess: true),
     AppPageDefinition(pageName: 'object_intersections', routeId: 'objectIntersections', pathTemplate: '/object/intersections', collectPageAccess: true),
+    AppPageDefinition(pageName: 'interest_onboarding', routeId: 'interestOnboarding', pathTemplate: '/onboarding/interests', collectPageAccess: true),
     AppPageDefinition(pageName: 'settings_permissions', routeId: 'settingsPermissions', pathTemplate: '/settings/permissions', collectPageAccess: true),
     AppPageDefinition(pageName: 'add_contact_confirm', routeId: 'addContactConfirm', pathTemplate: '/add-contact/confirm', collectPageAccess: true),
     AppPageDefinition(pageName: 'my_reports', routeId: 'myReports', pathTemplate: '/settings/my-reports', collectPageAccess: true),

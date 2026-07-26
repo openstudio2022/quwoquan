@@ -24,14 +24,13 @@ func main() {
 	var metadataDir string
 	var outputDir string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
-	flag.StringVar(&outputDir, "output-dir", "services/user-service/internal", "user-service internal output directory")
+	flag.StringVar(&outputDir, "output-dir", "services/user-service/generated", "user-service generated root directory")
 	flag.Parse()
 
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
 		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
 	}
-	merged := contractcodegen.ErrorsFile{Domain: "user"}
 	paths := source.Paths("user", "/errors.yaml")
 	if len(paths) == 0 {
 		exitErr(fmt.Errorf("no user errors metadata found"))
@@ -41,22 +40,22 @@ func main() {
 		if err := source.Decode(path, &file); err != nil {
 			exitErr(fmt.Errorf("load %s: %w", path, err))
 		}
-		merged.Errors = append(merged.Errors, file.Errors...)
+		parts := strings.Split(filepath.ToSlash(path), "/")
+		if len(parts) != 4 || parts[0] != "user" || parts[3] != "errors.yaml" {
+			exitErr(fmt.Errorf("unexpected user errors owner path %q", path))
+		}
+		writeErrorsFile(
+			&file,
+			filepath.Join(outputDir, parts[1], parts[2], "errors.go"),
+			contractcodegen.GoErrorsFileOptions{
+				Generator:    "tools/codegen_user_service",
+				SourcePath:   filepath.ToSlash(path),
+				CommentLines: []string{fmt.Sprintf("%s object error sentinels and helpers. user_message from errors.yaml user_message.zh.", parts[2])},
+			},
+		)
 	}
-	rendered := contractcodegen.RenderGoErrorsFile(&merged, contractcodegen.GoErrorsFileOptions{
-		Generator:    "tools/codegen_user_service",
-		SourcePath:   "user/**/errors.yaml",
-		CommentLines: []string{"User domain error sentinels and helpers. user_message from errors.yaml user_message.zh."},
-	})
-	formatted, err := format.Source([]byte(rendered))
-	if err != nil {
-		exitErr(fmt.Errorf("gofmt generated errors: %w", err))
-	}
-	errorsPath := filepath.Join(outputDir, "generated", "errors.go")
-	writeGoFile(errorsPath, formatted)
-	fmt.Printf("codegen_user_service: wrote %d errors to %s\n", len(merged.Errors), errorsPath)
 
-	const routesSource = "user/device_registration/service.yaml"
+	const routesSource = "user/account/device_registration/operations.yaml"
 	var routes serviceRoutesFile
 	if err := source.Decode(routesSource, &routes); err != nil {
 		exitErr(fmt.Errorf("load %s: %w", routesSource, err))
@@ -104,9 +103,23 @@ func main() {
 	}
 	service.WriteString(")\n")
 	writeGoSource(
-		filepath.Join(outputDir, "generated", "device_registration_metadata.go"),
+		filepath.Join(outputDir, "account", "device_registration", "device_registration_metadata.go"),
 		service.String(),
 	)
+}
+
+func writeErrorsFile(
+	errorsFile *contractcodegen.ErrorsFile,
+	path string,
+	options contractcodegen.GoErrorsFileOptions,
+) {
+	rendered := contractcodegen.RenderGoErrorsFile(errorsFile, options)
+	formatted, err := format.Source([]byte(rendered))
+	if err != nil {
+		exitErr(fmt.Errorf("gofmt generated errors: %w", err))
+	}
+	writeGoFile(path, formatted)
+	fmt.Printf("codegen_user_service: wrote %d errors to %s\n", len(errorsFile.Errors), path)
 }
 
 func writeGoSource(path string, contents string) {

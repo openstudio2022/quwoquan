@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from content.execution.identity import validate_execution_id
-from content.execution.workspace import execution_manifest_path
+from content.execution.workspace import load_execution_manifest
 
 
 def canonical_sha256(value: Any) -> str:
@@ -19,17 +19,11 @@ def file_sha256(path: Path) -> str:
     return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
 
 
-def stage_execution_context(execution_id: str, duplicate_id: str = "") -> dict[str, str]:
-    """Return the only stage identity allowed by the execution contract.
-
-    Internal callers still have a two-argument signature during source cleanup, but
-    both arguments must be the same readable executionId.  No task, batch, plan or
-    worker identity is projected into stage artifacts.
-    """
+def stage_execution_context(execution_id: str) -> dict[str, str]:
+    """Return the frozen identity of a current execution work package."""
     normalized = validate_execution_id(execution_id)
-    if duplicate_id and validate_execution_id(duplicate_id) != normalized:
-        raise ValueError("content execution must use one executionId")
+    load_execution_manifest(normalized)
     return {
         "executionId": normalized,
-        "executionBinding": "frozen" if execution_manifest_path(normalized).is_file() else "standalone",
+        "executionBinding": "frozen",
     }

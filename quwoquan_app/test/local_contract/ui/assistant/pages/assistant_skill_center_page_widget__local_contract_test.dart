@@ -204,7 +204,10 @@ void main() {
 
     expect(find.byType(CupertinoAlertDialog), findsOneWidget);
     expect(find.text(UITextConstants.submitNotCompleted), findsOneWidget);
-    expect((await repository.listSkillSubscriptions()).single.status, 'active');
+    expect(
+      (await repository.listSkillSubscriptions()).single.status,
+      SkillSubscriptionStatus.active,
+    );
     expect(tester.widget<CupertinoSwitch>(toggleFinder).value, isTrue);
   });
 

@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-001
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
@@ -10,16 +11,18 @@ import '../../../../support/cloud_services/assistant_facets_mock.dart';
 
 class _TrackingAssistantRepository extends AlphaAssistantFacets {
   final List<String> calls = <String>[];
-  Map<String, dynamic>? lastContextSnapshot;
+  AssistantContextSnapshot? lastContextSnapshot;
 
   @override
   Future<PageContextAck> reportPageContext({
     required AssistantOpenContext context,
     String? userAction,
-    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
   }) async {
     calls.add('reportPageContext:$userAction');
-    lastContextSnapshot = assistantContextSnapshotFromOpenContext(context);
+    lastContextSnapshot = assistantContextSnapshotFromOpenContext(
+      context,
+      userAction: userAction,
+    );
     return const PageContextAck(accepted: true, contextKey: 'ctx_test');
   }
 
@@ -100,11 +103,16 @@ void main() {
       expect(value.welcomeMessage, '服务端欢迎语');
       expect(value.chips.single.label, '服务端找资料');
       expect(value.suggestionLines, <String>['服务端动作']);
-      expect(repo.lastContextSnapshot?['pageType'], 'home');
-      expect(repo.lastContextSnapshot?['pageObjects'], isA<List<dynamic>>());
+      expect(repo.lastContextSnapshot?.pageType, 'home');
+      expect(repo.lastContextSnapshot?.pageObjects, hasLength(1));
       expect(
-        repo.lastContextSnapshot?['intersectionEvidenceRefs'],
-        isA<List<dynamic>>(),
+        repo.lastContextSnapshot?.userActions?.single.action,
+        'open_assistant_entry',
+      );
+      expect(
+        repo.lastContextSnapshot?.intersectionEvidenceRefs,
+        isEmpty,
+        reason: '页面上下文上报不得代替 StartAssistantRun 提交交集证据引用',
       );
     },
   );

@@ -44,19 +44,24 @@ CloudOperationInvocationContext rtcOperationInvocationContext(
 
 final incomingCallPresentationAcknowledgerProvider =
     Provider<IncomingCallPresentationAcknowledger>(
-      (ref) => RemoteIncomingCallPresentationAcknowledger(
-        client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId) => rtcOperationInvocationContext(
-          ref,
-          surface: AppUiSurfaces.rtcIncoming,
-          clientPageId: clientPageId,
-          command: true,
-        ),
-      ),
+      (ref) =>
+          AppProductionComposition.generatedAdapter<
+            IncomingCallPresentationAcknowledger
+          >(
+            AppProductionAdapter.incomingCallPresentation,
+            client: ref.watch(generatedCloudOperationClientProvider),
+            invocationContext: (clientPageId) => rtcOperationInvocationContext(
+              ref,
+              surface: AppUiSurfaces.rtcIncoming,
+              clientPageId: clientPageId,
+              command: true,
+            ),
+          ),
     );
 
 final devicePushEndpointWriterProvider = Provider<DevicePushEndpointWriter>(
-  (ref) => RemoteDevicePushEndpointWriter(
+  (ref) => AppProductionComposition.generatedAdapter<DevicePushEndpointWriter>(
+    AppProductionAdapter.devicePushEndpoint,
     client: ref.watch(generatedCloudOperationClientProvider),
     clientContextSnapshot: ref.watch(cloudClientContextProvider).snapshot,
     invocationContext: (clientPageId) => rtcOperationInvocationContext(
@@ -78,7 +83,10 @@ final devicePushEndpointCoordinatorProvider =
 
 final rtcCallLifecycleCommandWriterProvider =
     Provider.family<CallLifecycleCommandWriter, AppUiSurface>((ref, surface) {
-      return RemoteCallLifecycleCommandWriter(
+      return AppProductionComposition.generatedAdapter<
+        CallLifecycleCommandWriter
+      >(
+        AppProductionAdapter.rtcCallLifecycle,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, {required command}) =>
             _rtcInvocationContext(
@@ -92,7 +100,10 @@ final rtcCallLifecycleCommandWriterProvider =
 
 final rtcCallParticipantCommandWriterProvider =
     Provider.family<CallParticipantCommandWriter, AppUiSurface>((ref, surface) {
-      return RemoteCallParticipantCommandWriter(
+      return AppProductionComposition.generatedAdapter<
+        CallParticipantCommandWriter
+      >(
+        AppProductionAdapter.rtcCallParticipant,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, {required command}) =>
             _rtcInvocationContext(
@@ -106,7 +117,8 @@ final rtcCallParticipantCommandWriterProvider =
 
 final rtcCallMediaControlWriterProvider =
     Provider.family<CallMediaControlWriter, AppUiSurface>((ref, surface) {
-      return RemoteCallMediaControlWriter(
+      return AppProductionComposition.generatedAdapter<CallMediaControlWriter>(
+        AppProductionAdapter.rtcCallMediaControl,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, {required command}) =>
             _rtcInvocationContext(
@@ -120,7 +132,8 @@ final rtcCallMediaControlWriterProvider =
 
 final rtcCallScreenShareWriterProvider =
     Provider.family<CallScreenShareWriter, AppUiSurface>((ref, surface) {
-      return RemoteCallScreenShareWriter(
+      return AppProductionComposition.generatedAdapter<CallScreenShareWriter>(
+        AppProductionAdapter.rtcCallScreenShare,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, {required command}) =>
             _rtcInvocationContext(
@@ -136,7 +149,8 @@ final rtcCallQueryProvider = Provider.family<CallQuery, AppUiSurface>((
   ref,
   surface,
 ) {
-  return RemoteCallQuery(
+  return AppProductionComposition.generatedAdapter<CallQuery>(
+    AppProductionAdapter.rtcCallQuery,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, {required command}) =>
         _rtcInvocationContext(

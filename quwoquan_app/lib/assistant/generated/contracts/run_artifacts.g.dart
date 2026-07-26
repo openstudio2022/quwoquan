@@ -834,21 +834,21 @@ class RetrievalProcessingSnapshotFields {
 class RetrievalProcessingReference {
   const RetrievalProcessingReference({
     this.title = "",
-    this.url = "",
+    required this.destination,
     this.source = "",
     this.snippet = "",
     this.rank = 0,
   });
 
   final String title;
-  final String url;
+  final CitationDestination destination;
   final String source;
   final String snippet;
   final int rank;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'title': title,
-        'url': url,
+        'destination': destination.toJson(),
         'source': source,
         'snippet': snippet,
         'rank': rank,
@@ -857,17 +857,18 @@ class RetrievalProcessingReference {
   factory RetrievalProcessingReference.fromJson(Map<String, dynamic> json) {
     return RetrievalProcessingReference(
       title: (json['title'] as String?)?.trim() ?? "",
-      url: (json['url'] as String?)?.trim() ?? "",
+      destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
       source: (json['source'] as String?)?.trim() ?? "",
       snippet: (json['snippet'] as String?)?.trim() ?? "",
       rank: (json['rank'] as num?)?.toInt() ?? 0,
     );
   }
+
 }
 
 class RetrievalProcessingReferenceFields {
   static const String title = 'title';
-  static const String url = 'url';
+  static const String destination = 'destination';
   static const String source = 'source';
   static const String snippet = 'snippet';
   static const String rank = 'rank';

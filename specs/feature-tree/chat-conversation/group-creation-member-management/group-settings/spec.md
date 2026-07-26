@@ -1,160 +1,81 @@
-# L3 规格：group-settings — 群聊设置与治理边界
+# L3 Story：group-settings — 群聊设置与治理边界 (`group-settings`)
 
-> **层级**：L3_feature（隶属 L2 `group-creation-member-management`）
-> **状态**：baseline（2026-03-29：§9–§10 全屏表单态与搜索入口冻结）
->
-> **全局布局同源**：`specs/ux/page-layout-semantics.md` §4.3（Inset A/B 类壳与门禁清单）。
+> 所属能力：[`group-creation-member-management`](../spec.md)
 
-## 0. 一句话定义
+> Journey / Scenario：[`JNY-007 / SCN-013`](../../../spec.md#scn-013)
 
-群聊设置页负责“会话配置与成员信息”，不承担“群对象举报/拉黑”能力；当前阶段唯一危险操作为 `退出群聊`，其余治理动作下沉到成员与消息对象。
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 1. 背景与动机
+## 1. 用户价值
 
-群聊设置页是高频管理入口，但如果把成员管理、消息治理、群对象举报、拉黑、退出等动作全部堆在一个页面，会造成两个问题：
+作为发起或接收消息的用户，
+我希望群设置中显示的成员入口必须可追溯到具体用户对象，方便后续举报/拉黑下沉，
+从而稳定完成会话、消息或通话协作。
 
-1. 用户很难区分“针对群”“针对成员”“针对消息”的治理对象。
-2. 危险操作过多，容易误点，也与 1v1 会话设置页的治理语义混淆。
+## 2. 范围与非目标
 
-因此本特性要先把群聊设置页的职责边界冻结。
+### In Scope
 
-## 2. 功能范围
+- “group-settings — 群聊设置与治理边界”的输入、可观察主路径、失败语义以及与父能力的交接。
+- UpdateGroupGovernanceSettings（owner/admin）写 Conversation 权威字段并被 UpdateConversationTitle 授权消费。
+- UpdateAnnouncement（owner/admin）写权威公告并经 system_announcement 消息触达全员。
+- GetConversation / GroupHome 回读真实治理开关与公告（消灭硬编码空串假实现）
+- 用户级 mute/pin 走 ConversationUserState.UpdateConversationSettings，与群治理单轨分离。
 
-### 2.1 In-Scope
+### Out of Scope
 
-| 编号 | 能力 | 说明 |
-|------|------|------|
-| GS1 | 成员信息展示 | 头像、昵称、成员数量、成员入口、添加成员入口 |
-| GS2 | 群基础信息 | 群名、群二维码、群公告等资料型信息 |
-| GS3 | 会话个性化配置 | 免打扰、置顶、隐私屏蔽、聊天背景 |
-| GS4 | 会话记录治理 | 清空聊天记录 |
-| GS5 | 危险操作 | 退出群聊 |
-| GS6 | 治理边界说明 | 举报/拉黑能力下沉到消息与成员对象 |
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+- 邀请链接、扫码入群和入群审批不在当前发布范围；设置页不得显示无权威对象支撑的假开关。
 
-### 2.2 Out-of-Scope
+## 3. 行为要求
 
-- 举报群
-- 拉黑群聊
-- 在群设置页直接举报某条消息
-- 在群设置页直接拉黑某个成员
-- 解散群（管理员专项能力，后续单独建模）
+<a id="req-001"></a>
+### REQ-001 group-settings — 群聊设置与治理边界
 
-## 3. 页面结构基线
+- 群设置中显示的成员入口必须可追溯到具体用户对象，方便后续举报/拉黑下沉。
 
-### 3.1 群聊设置页包含的区块
+<a id="req-002"></a>
+### REQ-002 群聊设置页不得承担对象级治理聚合页角色
 
-1. 成员区：成员头像网格、查看更多、添加成员
-2. 资料区：群名、二维码、群公告
-3. 配置区：免打扰、置顶、隐私屏蔽
-4. 个性化区：聊天背景、清空聊天记录
-5. 危险操作区：退出群聊
-
-### 3.2 群聊设置页不包含的动作
-
-- 举报群
-- 拉黑群聊
-- 通话发起入口
-- 用户级举报/拉黑按钮
-
-这些动作应走更贴近对象的路径。
-
-## 4. 治理动作下沉规则
-
-### 4.1 成员对象
-
-当用户在群成员列表、群成员卡片、群成员主页中操作时，可执行：
-
-- 查看主页
-- 举报用户
-- 拉黑用户
-
-### 4.2 消息对象
-
-当用户长按群消息时，可执行：
-
-- 举报消息
-- 其他消息级动作（引用、转发、撤回等）
-
-### 4.3 群对象
-
-当前阶段不提供“举报群”与“拉黑群聊”能力。若后续需要群对象治理，应单独定义群举报对象、流转状态、运营处理链路，不在本特性内临时扩展。
-
-## 5. 与通话入口的边界
-
-- 群聊实时语音/视频发起入口不放在 AppBar，也不放在群设置页。
-- 群聊实时语音/视频发起入口放在会话页输入区 `+` 面板。
-- 进入多人选择页后遵循：
-  - `<= 8 人` 默认全选
-  - `> 8 人` 默认不选，由用户主动选择
-
-## 6. 业务约束
-
-- 群聊设置页当前阶段唯一危险操作为 `退出群聊`。
 - 群聊设置页不得承担对象级治理聚合页角色。
 - 群设置中显示的成员入口必须可追溯到具体用户对象，方便后续举报/拉黑下沉。
 - 若用户已拉黑某成员，群设置页中仍可展示该成员基础占位，但必须在下游消费层阻断互动和实时沟通入口。
-
-## 7. 非功能要求
-
-### 7.1 可理解性
-
-- 用户进入群设置页后，应能一眼区分“资料设置”和“危险退出”，不应被额外治理动作干扰。
-
-### 7.2 一致性
-
 - 1v1 会话设置与群聊设置都应遵循“设置页用于会话管理，不用于动作型扩展能力”的统一原则。
-
-### 7.3 可扩展性
-
 - 如未来新增“举报群”，必须通过独立 metadata 与对象建模接入，不能在设置页先加一个临时入口占位。
-
-## 8. 验收重点
-
-### local_contract
-- 群聊设置页能力边界与 metadata/路由一致
-
-### local_contract
-- 群聊设置页仅展示资料、配置、记录、退出
-- 不出现“举报群”“拉黑群聊”
-
-### api_integration
-- 成员举报/拉黑、消息举报能从对象级路径正常到达
-- 群聊发起通话入口不从设置页触发
-
-### user_acceptance
-- 用户真实旅程下，能顺利完成“查看群信息”“退出群聊”“举报消息”“拉黑成员”而不混淆操作对象
-
-## 9. 全屏设置页视觉与交互基线（2026-03-29 baseline）
-
-> 本节为 **表现层与 IA 基线**，**不新增** 云侧字段、HTTP 路由或 `service.yaml` 契约；与 `SettingsInsetForm*`、`insetForm*` 语义 token 对齐。
-
-### 9.1 表单态（全屏 Inset Grouped）
-
-- **适用页面**：`ChatSettingsPage`（群聊信息）、`GroupManagePage`（群管理，群主/管理员）及后续同类全屏设置页。
-- **骨架**：`SettingsInsetFormPageScaffold`（`lib/components/settings_form/`）；页面底与顶栏背景使用 `SettingsSemanticConstants.insetFormPageBackground` / `insetFormNavigationBarBackground`，与 iOS 系统「设置」分组列表一致。
-- **分组**：`SettingsInsetGroupedSection` + `SettingsInsetFormRow` + `SettingsInsetFormSectionDivider`；列表水平边距 `insetFormListHorizontalPadding`，组间 `insetFormSectionVerticalGap`。
 - **禁止**：在全屏表单页使用帖子「更多功能」式 **描边大圆角卡片**（`selectionCardBorderRadius` + `blockBorderColor`）作为默认分组容器。
-
-### 9.2 对话态（半屏更多操作）
-
 - **适用**：Feed/媒体上下文贴底 `MoreActionPopup` 等，归属 `lib/components/settings_conversation/`，与全屏表单态区分，不得混用默认容器语义。
-
-### 9.3 成员网格折叠
-
-- **规则**：成员头像区默认最多展示 **4 行 × 5 列** 容量内成员（末格为「添加」）；超过则折叠，展示「更多成员」；展开后展示 **全部成员** + 添加。
-- **不改变**：成员数据来源、权限与路由；仅展示行数策略。
-
-### 9.4 全局搜索入口（群聊信息顶栏）
-
-- **条件**：成员数大于约定阈值时展示搜索（与产品一致，当前实现为 `> 5`）。
-- **样式**：与首页顶栏一致，使用 `GlobalTopBarIconButton`（`lib/core/widgets/global_surface_actions.dart`），**非**默认 Cupertino 蓝。
-- **行为**：`GlobalSearchLauncher.open`，默认 scope 为消息域（`GlobalSearchScope.messages`），不新增全局搜索路由契约。
-
-### 9.5 文案与门禁
-
 - 用户可见静态文案须 `UITextConstants` / l10n；群管理解散确认等 **禁止** 在业务 Dart 中硬编码中文（满足 `verify_dart_semantic`）。
-
-## 10. 与群管理页（GroupManagePage）的关系
-
 - 群管理页为 **管理员专项** 全屏页，**不**纳入本节 GS1–GS5 的「普通成员设置」清单，但 **必须** 与 §9.1 使用同一套表单态组件与 token，保证与群聊信息页视觉一致。
-- 解散群聊等危险操作保留在群管理页；普通群设置页仍以「退出群聊」为唯一危险操作（与 §2、§6 一致）。
+
+<a id="req-003"></a>
+### REQ-003 群治理设置、公告与用户偏好分离
+
+- 系统必须群设置与治理：治理开关权威对象链（nameEditableByAdminOnly）、群公告权威化（公告即触达）、用户级 mute/pin 与治理设置分离，且失败时不得写入成功事实。
+
+<a id="req-004"></a>
+### REQ-004 服务本地契约引用边界
+
+- 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#UpdateGroupGovernanceSettings`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#UpdateAnnouncement`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/projections/chat_group_settings_client.yaml`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/projections/group_home.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 group-settings — 群聊设置与治理边界
+
+- GIVEN 发起或接收消息的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“group-settings — 群聊设置与治理边界”对应的公开行为。
+- THEN 群设置中显示的成员入口必须可追溯到具体用户对象，方便后续举报/拉黑下沉。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`group-creation-member-management`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

@@ -8,7 +8,7 @@ from typing import Any
 from core.image_rules import pixel_size_issue, relevance_issue
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 from core.image_safety import dedupe_image_payloads
-from core.image_variants import image_dimensions
+from core.image_decode import probe_image_bytes
 from content.source.gate import download_requirements
 from content.source.handler_images import (
     _assess_source_image,
@@ -143,8 +143,14 @@ def prepare_entity_images(
             rejected_by_category["fetch_or_non_image"] += 1
             continue
         # 最小像素尺寸门：糊图/缩略图不进内容页。
-        dims = image_dimensions(payload["bytes"]) or (0, 0)
-        width, height = dims
+        image_probe = probe_image_bytes(payload["bytes"])
+        if not image_probe.succeeded:
+            image_quality_issues.append(
+                f"imageDecode: {asset_label} {image_probe.failure.value}"
+            )
+            rejected_by_category["safety_or_watermark"] += 1
+            continue
+        width, height = image_probe.width, image_probe.height
         px_issue = pixel_size_issue(width, height, asset_id=asset_label)
         if px_issue:
             image_quality_issues.append(px_issue)

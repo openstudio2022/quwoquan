@@ -4,13 +4,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 
 from core.control_types import DeploymentEnvironment
 from core.paths import REPO_ROOT
 from content.filter_catalog.artifact import (
-    APP_BOOTSTRAP_REF,
-    initialize_from_legacy,
     materialize_release,
     validate_repository,
 )
@@ -23,14 +20,7 @@ from content.filter_catalog.publisher import (
 
 def handle_filter_catalog(args: argparse.Namespace) -> None:
     try:
-        if args.filter_catalog_command == "initialize":
-            report = initialize_from_legacy(
-                repo_root=REPO_ROOT,
-                legacy_source=Path(args.legacy_source),
-                release_id=str(args.release_id),
-                source_owner=str(args.source_owner),
-            )
-        elif args.filter_catalog_command == "materialize":
+        if args.filter_catalog_command == "materialize":
             report = materialize_release(
                 repo_root=REPO_ROOT,
                 release_id=str(args.release_id),
@@ -72,17 +62,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         dest="filter_catalog_command",
         required=True,
     )
-
-    initialize = commands.add_parser(
-        "initialize",
-        help="一次性把旧 App 目录提升为不可变 canonical release",
-    )
-    initialize.add_argument(
-        "--legacy-source",
-        default=str(REPO_ROOT / APP_BOOTSTRAP_REF),
-    )
-    initialize.add_argument("--release-id", required=True)
-    initialize.add_argument("--source-owner", required=True)
 
     materialize = commands.add_parser(
         "materialize",

@@ -25,6 +25,7 @@ export 'src/user/alpha_following_subject_facets.dart';
 export 'src/user/alpha_greeting_request_facets.dart';
 export 'src/user/alpha_persona_relationship_facets.dart';
 export 'src/user/alpha_profile_update_proposal_facets.dart';
+export 'src/user/alpha_fixture_user_resolver.dart';
 export 'src/user/alpha_account_facets.dart';
 export 'src/user/alpha_b1_identity_facets.dart';
 export 'src/user/alpha_subject_follow_facets.dart';

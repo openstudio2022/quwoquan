@@ -1,6 +1,6 @@
 """全国地点静态覆盖身份门（discovery_seed/2，仿 verify_tag_tree R1-R12 模式）。
 
-walk `verticals/travel/coverage/中国/{省}/{市州}.yaml`（目录即行政层级、市州级
+walk `reference/travel/entities/china/{省}/{市州}.yaml`（目录即行政层级、市州级
 一文件自闭环、无总控 index——裁决 8），逐文件校验：
 
   C1  - 目录归属：省目录名/市州文件名命中行政区树 `Topic/地理/行政区/{国}` 对应层级节点
@@ -169,25 +169,16 @@ def scan_master_list(
 
     if not root.is_dir():
         return ([f"C1: 主清单根目录不存在: {root}"], 0, 0)
-    country = root.name
-    country_geo = f"{ADMIN_REGION_PREFIX}/{country}"
-    if not _is_tag_node(tags, country_geo):
-        errors.append(f"C1: 国家目录 '{country}' 未命中行政区树 {country_geo}")
+    declared_country: str | None = None
 
     for path in sorted(root.rglob("*.yaml")):
         rel = path.relative_to(root.parent).as_posix()
         file_count += 1
         parts = path.relative_to(root).parts
         if len(parts) != 2:
-            errors.append(f"C1: {rel} 必须位于 {country}/{{省}}/{{市州}}.yaml 两级路径")
+            errors.append(f"C1: {rel} 必须位于 <country-root>/{{省}}/{{市州}}.yaml 两级路径")
             continue
         province, city = parts[0], path.stem
-        province_geo = f"{country_geo}/{province}"
-        city_geo = f"{province_geo}/{city}"
-        if not _is_tag_node(tags, province_geo):
-            errors.append(f"C1: {rel} 省目录 '{province}' 未命中行政区树 {province_geo}")
-        if not _is_tag_node(tags, city_geo):
-            errors.append(f"C1: {rel} 市州文件 '{city}' 未命中行政区树 {city_geo}")
 
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -197,6 +188,29 @@ def scan_master_list(
         if not isinstance(data, dict):
             errors.append(f"C2: {rel} 顶层必须是 mapping")
             continue
+
+        country = str(data.get("country") or "").strip()
+        if not country:
+            errors.append(f"C2: {rel} 缺 country")
+            continue
+        if declared_country is None:
+            declared_country = country
+            country_geo = f"{ADMIN_REGION_PREFIX}/{country}"
+            if not _is_tag_node(tags, country_geo):
+                errors.append(
+                    f"C1: country '{country}' 未命中行政区树 {country_geo}"
+                )
+        elif country != declared_country:
+            errors.append(
+                f"C3: {rel} country='{country}' 与 reference 根其他文件 '{declared_country}' 不一致"
+            )
+        country_geo = f"{ADMIN_REGION_PREFIX}/{country}"
+        province_geo = f"{country_geo}/{province}"
+        city_geo = f"{province_geo}/{city}"
+        if not _is_tag_node(tags, province_geo):
+            errors.append(f"C1: {rel} 省目录 '{province}' 未命中行政区树 {province_geo}")
+        if not _is_tag_node(tags, city_geo):
+            errors.append(f"C1: {rel} 市州文件 '{city}' 未命中行政区树 {city_geo}")
 
         unknown = set(data) - contract["fileFields"]
         if unknown:
@@ -209,7 +223,7 @@ def scan_master_list(
             errors.append(f"C2: {rel} schema '{version}' != '{contract['schema']}'")
 
         # C3: 归属字段 ↔ 路径一致
-        for field, expected in (("country", country), ("province", province), ("city", city)):
+        for field, expected in (("province", province), ("city", city)):
             actual = str(data.get(field) or "")
             if actual and actual != expected:
                 errors.append(f"C3: {rel} {field}='{actual}' 与路径 '{expected}' 不一致")

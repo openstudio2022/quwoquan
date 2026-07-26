@@ -1,0 +1,31 @@
+read_model: ChatGroupSettings
+description: '群管理页治理开关与圈子绑定信息（从 GetConversation 权威字段解析）。
+
+  当前发布只承载有权威对象链支撑的字段；邀请链接、扫码入群和入群审批不在发布范围，禁止输出假开关。
+
+  '
+client_projection:
+  dart_class: ChatGroupSettingsDto
+  base_class: ''
+  output_path: cloud/runtime/generated/chat/chat_group_settings_dto.g.dart
+  fields:
+  - name: nameEditableByAdminOnly
+    dart_type: bool
+    nullable: false
+    source: nameEditableByAdminOnly
+    default: 'false'
+  - name: conversationType
+    dart_type: String
+    nullable: false
+    source: type
+    default: '''group'''
+  - name: circleId
+    dart_type: String
+    nullable: false
+    source: circleId
+    default: ''''''
+  - name: circleGroupId
+    dart_type: String
+    nullable: false
+    source: circleGroupId
+    default: ''''''

@@ -4,12 +4,15 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../generated/alpha_fixture_bundle.g.dart';
 
-/// Alpha tag 目录/图谱 Facet：数据唯一来源为 metadata seed manifest 生成的
+/// Alpha tag 目录 Facet：数据唯一来源为 metadata seed manifest 生成的
 /// immutable fixture bundle（tag_scenarios.json 的 tag_catalog_core），
 /// 不发 HTTP、不在代码内维护第二套目录数据。
-final class AlphaTagFacet implements TagCatalogQuery, TagGraphQuery {
-  AlphaTagFacet() : _catalog = _loadCatalog();
+final class AlphaTagFacet implements TagCatalogQuery {
+  AlphaTagFacet({required String taxonomyReleaseId})
+    : taxonomyReleaseId = _requiredTaxonomyReleaseId(taxonomyReleaseId),
+      _catalog = _loadCatalog();
 
+  final String taxonomyReleaseId;
   final _TagCatalogFixture _catalog;
 
   static _TagCatalogFixture _loadCatalog() {
@@ -17,13 +20,18 @@ final class AlphaTagFacet implements TagCatalogQuery, TagGraphQuery {
     if (asset == null) {
       throw StateError('alpha fixture bundle is missing the tag domain');
     }
-    final decoded = json.decode(asset.sourceJson) as Map<String, dynamic>;
-    final seedSets = decoded['seedSets'] as Map<String, dynamic>? ?? const {};
-    final core = seedSets['tag_catalog_core'] as Map<String, dynamic>?;
-    if (core == null) {
+    final decoded = _requiredObject(
+      json.decode(asset.sourceJson),
+      'tag fixture root',
+    );
+    final seedSets = _requiredObject(decoded['seedSets'], 'tag seedSets');
+    final coreValue = seedSets['tag_catalog_core'];
+    if (coreValue == null) {
       throw StateError('tag fixture is missing the tag_catalog_core scenario');
     }
-    return _TagCatalogFixture.fromJson(core);
+    return _TagCatalogFixture.fromJson(
+      _requiredObject(coreValue, 'tag_catalog_core'),
+    );
   }
 
   @override
@@ -31,8 +39,14 @@ final class AlphaTagFacet implements TagCatalogQuery, TagGraphQuery {
     String parentTagRef, {
     int limit = TagApiDefaults.childrenLimit,
   }) async {
-    return (_catalog.childrenByParent[parentTagRef.trim()] ??
-            const <TagChild>[])
+    final query = ListTagChildrenQuery(
+      parentTagRef: parentTagRef,
+      limit: limit,
+    );
+    if (!_catalog.knownTagRefs.contains(query.parentTagRef)) {
+      throw StateError('TAG.USER.tag_not_found');
+    }
+    return (_catalog.childrenByParent[query.parentTagRef] ?? const <TagChild>[])
         .take(limit)
         .toList(growable: false);
   }
@@ -54,137 +68,45 @@ final class AlphaTagFacet implements TagCatalogQuery, TagGraphQuery {
         }
       }
     }
-    for (final suggestion in _catalog.suggestions) {
-      if (suggestion.tagRef == ref) {
-        return TagResolve(
-          tagRef: suggestion.tagRef,
-          group: suggestion.tagRef.split('/').first,
-          label: suggestion.label,
-          labelEn: suggestion.labelEn,
-        );
-      }
-    }
-    final parts = ref.split('/').where((part) => part.isNotEmpty).toList();
-    final fallback = parts.isEmpty ? ref : parts.last;
-    return TagResolve(
-      tagRef: ref,
-      group: parts.isEmpty ? '' : parts.first,
-      label: fallback,
-    );
+    throw StateError('TAG.USER.tag_not_found');
   }
 
   @override
-  Future<List<TagDimension>> listDimensions() async => _catalog.dimensions;
-
-  @override
-  Future<List<TagSuggestion>> suggest(
-    String query, {
-    String? group,
-    int limit = TagApiDefaults.suggestLimit,
+  Future<TagValidationResult> validateRefs({
+    required String expectedTaxonomyReleaseId,
+    required List<String> tagRefs,
   }) async {
-    final lower = query.toLowerCase();
-    return _catalog.suggestions
-        .where(
-          (s) =>
-              s.label.contains(lower) ||
-              s.labelEn.toLowerCase().contains(lower) ||
-              s.tagRef.toLowerCase().contains(lower),
-        )
-        .take(limit)
-        .toList(growable: false);
-  }
-
-  @override
-  Future<TagValidationResult> validateRefs(List<String> tagRefs) async {
+    final query = ValidateTagRefsQuery(
+      expectedTaxonomyReleaseId: expectedTaxonomyReleaseId,
+      tagRefs: tagRefs,
+    );
     final valid = <String>[];
     final invalid = <String>[];
-    for (final ref in tagRefs) {
-      if (_catalog.validTagRefs.contains(ref)) {
+    for (final ref in query.tagRefs) {
+      if (query.expectedTaxonomyReleaseId == taxonomyReleaseId &&
+          _catalog.validTagRefs.contains(ref)) {
         valid.add(ref);
       } else {
         invalid.add(ref);
       }
     }
     return TagValidationResult(
+      taxonomyReleaseId: taxonomyReleaseId,
       valid: valid,
       invalid: invalid,
-      suggestions: const [],
     );
   }
 
-  @override
-  Future<List<TagSearchResult>> search(
-    String query, {
-    String? group,
-    int limit = TagApiDefaults.searchLimit,
-  }) async {
-    final lower = query.toLowerCase();
-    return _catalog.suggestions
-        .where(
-          (s) =>
-              s.label.contains(lower) ||
-              s.labelEn.toLowerCase().contains(lower),
-        )
-        .map(
-          (s) => TagSearchResult(tagRef: s.tagRef, label: s.label, score: 1.0),
-        )
-        .take(limit)
-        .toList(growable: false);
-  }
-
-  @override
-  Future<List<RelatedTag>> related(
-    String tagRef, {
-    int limit = TagApiDefaults.relatedLimit,
-  }) async {
-    return _catalog.relatedTags.take(limit).toList(growable: false);
-  }
-
-  @override
-  Future<List<TagObjectMatch>> searchByTags(
-    List<String> tagRefs, {
-    String? objectType,
-    int limit = TagApiDefaults.searchLimit,
-  }) async {
-    return const <TagObjectMatch>[];
-  }
-
-  @override
-  Future<List<TagCooccurrence>> cooccurrence({
-    String? tagRef,
-    int minCount = TagApiDefaults.minCooccurCount,
-    int limit = TagApiDefaults.graphLimit,
-  }) async {
-    return _catalog.cooccurrences.take(limit).toList(growable: false);
-  }
-
-  @override
-  Future<TagInvertedResult> invertedIndex(
-    String tagRef, {
-    String? objectType,
-    int limit = TagApiDefaults.graphLimit,
-  }) async {
-    return TagInvertedResult(tag: tagRef, objectCount: 0, objects: const []);
-  }
-
-  @override
-  Future<List<RelatedObject>> relatedObjects(
-    String objectId, {
-    String? objectType,
-    int limit = TagApiDefaults.relatedLimit,
-  }) async {
-    return const <RelatedObject>[];
-  }
-
-  @override
-  Future<List<SharedTagView>> sharedTags({
-    required String objectAId,
-    required String objectAType,
-    required String objectBId,
-    required String objectBType,
-    int limit = TagApiDefaults.graphLimit,
-  }) async {
-    return _catalog.sharedTags.take(limit).toList(growable: false);
+  static String _requiredTaxonomyReleaseId(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(
+        value,
+        'taxonomyReleaseId',
+        'must not be empty',
+      );
+    }
+    return normalized;
   }
 }
 
@@ -210,47 +132,70 @@ final class AlphaTagFeedbackWriter implements TagFeedbackCommandWriter {
 final class _TagCatalogFixture {
   const _TagCatalogFixture({
     required this.childrenByParent,
-    required this.dimensions,
-    required this.suggestions,
     required this.validTagRefs,
-    required this.relatedTags,
-    required this.cooccurrences,
-    required this.sharedTags,
+    required this.knownTagRefs,
   });
 
   final Map<String, List<TagChild>> childrenByParent;
-  final List<TagDimension> dimensions;
-  final List<TagSuggestion> suggestions;
   final Set<String> validTagRefs;
-  final List<RelatedTag> relatedTags;
-  final List<TagCooccurrence> cooccurrences;
-  final List<SharedTagView> sharedTags;
+  final Set<String> knownTagRefs;
 
-  factory _TagCatalogFixture.fromJson(Map<String, dynamic> json) {
-    final rawChildren =
-        json['childrenByParent'] as Map<String, dynamic>? ?? const {};
+  factory _TagCatalogFixture.fromJson(Map<String, Object?> json) {
+    final rawChildren = _requiredObject(
+      json['childrenByParent'],
+      'tag childrenByParent',
+    );
     final childrenByParent = <String, List<TagChild>>{
       for (final entry in rawChildren.entries)
-        entry.key: (entry.value as List)
-            .map((item) => TagChild.fromJson(item as Map<String, dynamic>))
-            .toList(growable: false),
+        entry.key:
+            _requiredList(entry.value, 'tag childrenByParent.${entry.key}')
+                .map(
+                  (item) =>
+                      TagChild.fromJson(_requiredObject(item, 'tag child')),
+                )
+                .toList(growable: false),
     };
-    List<T> parseList<T>(String key, T Function(Map<String, dynamic>) parse) {
-      return ((json[key] as List?) ?? const [])
-          .map((item) => parse(item as Map<String, dynamic>))
-          .toList(growable: false);
-    }
 
+    final validTagRefs = _requiredList(json['validTagRefs'], 'tag validTagRefs')
+        .map((item) {
+          if (item is! String || item.trim().isEmpty) {
+            throw const FormatException(
+              'tag validTagRefs entries must be non-empty strings',
+            );
+          }
+          return item.trim();
+        })
+        .toSet();
     return _TagCatalogFixture(
       childrenByParent: childrenByParent,
-      dimensions: parseList('dimensions', TagDimension.fromJson),
-      suggestions: parseList('suggestions', TagSuggestion.fromJson),
-      validTagRefs: ((json['validTagRefs'] as List?) ?? const [])
-          .map((item) => item.toString())
-          .toSet(),
-      relatedTags: parseList('relatedTags', RelatedTag.fromJson),
-      cooccurrences: parseList('cooccurrences', TagCooccurrence.fromJson),
-      sharedTags: parseList('sharedTags', SharedTagView.fromJson),
+      validTagRefs: validTagRefs,
+      knownTagRefs: <String>{
+        ...validTagRefs,
+        ...childrenByParent.keys,
+        for (final children in childrenByParent.values)
+          for (final child in children) child.tagRef,
+      },
     );
   }
+}
+
+Map<String, Object?> _requiredObject(Object? value, String label) {
+  if (value is! Map) {
+    throw FormatException('$label must be an object');
+  }
+  final result = <String, Object?>{};
+  for (final entry in value.entries) {
+    if (entry.key is! String) {
+      throw FormatException('$label keys must be strings');
+    }
+    result[entry.key as String] = entry.value;
+  }
+  return result;
+}
+
+List<Object?> _requiredList(Object? value, String label) {
+  if (value is! List) {
+    throw FormatException('$label must be a list');
+  }
+  return value.cast<Object?>();
 }

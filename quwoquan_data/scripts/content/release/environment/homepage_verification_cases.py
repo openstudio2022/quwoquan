@@ -90,8 +90,6 @@ def write_homepage_verification_case_manifest(
     importer_report: Mapping[str, Any],
 ) -> Path:
     """Write one immutable case manifest for an active environment import."""
-    if environment is DeploymentEnvironment.ALPHA:
-        raise HomepageVerificationCaseError("alpha is projection-only and cannot create imported homepage cases")
     release_id = release_root.name
     cases = _cases_from_importer_report(
         importer_report,

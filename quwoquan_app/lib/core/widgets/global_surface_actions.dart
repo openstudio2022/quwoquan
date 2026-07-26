@@ -13,7 +13,7 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
-import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
+import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';

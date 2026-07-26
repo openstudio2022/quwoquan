@@ -26,22 +26,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
 
 from core import prompt_render as pr  # noqa: E402
 
-FAMILIES = (
-    "article_author",
-    "entity_homepage",
-    "homepage_source_judge",
-    "image_curation",
-    "review_repair",
-    # P4 checkpoint/controller prompt 外置（commercial closeout）。
-    "source_plan_homepage",
-    "source_plan_article",
-    "source_plan_image",
-    "checkpoint_build_homepage",
-    "checkpoint_content_plan",
-    "checkpoint_author_image",
-    "checkpoint_author_article",
-    "homepage_independent_review",
-)
+FAMILIES = pr.declared_prompt_names()
 
 # scripts 中允许出现 prompt 渲染调用、但禁止硬编码 prompt 正文的迁移函数（必须经 render()）。
 RENDER_CALLERS = {

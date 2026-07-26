@@ -46,10 +46,10 @@ void main() {
     expect(
       executor.operationIds,
       containsAll(<String>[
-        AppCloudOperationIds.userUserProfileGetMeProfile,
-        AppCloudOperationIds.userUserProfileGetSubAccountProfile,
-        AppCloudOperationIds.userUserProfileGetUserHomepageBundle,
-        AppCloudOperationIds.userUserProfileSearchSocialRelations,
+        AppCloudOperationIds.userUserAccountGetMeProfile,
+        AppCloudOperationIds.userUserAccountGetSubAccountProfile,
+        AppCloudOperationIds.userUserAccountGetUserHomepageBundle,
+        AppCloudOperationIds.userUserAccountSearchSocialRelations,
       ]),
     );
   });
@@ -68,15 +68,15 @@ void main() {
     expect(personas.single.avatarVersion, 3);
     expect(summary.quota.usedSubAccounts, 1);
     expect(summary.activeContext?.displayName, '主分身');
-    expect(active.personaContextVersion, '7');
+    expect(active.contextVersion, 7);
     expect(guard.allowed, isTrue);
     expect(
       executor.operationIds,
       containsAll(<String>[
-        AppCloudOperationIds.userUserProfileListPersonas,
-        AppCloudOperationIds.userUserProfileGetPersonaManagementSummary,
-        AppCloudOperationIds.userUserProfileGetActivePersonaContext,
-        AppCloudOperationIds.userUserProfileGetPersonaLifecycleGuard,
+        AppCloudOperationIds.userUserAccountListPersonas,
+        AppCloudOperationIds.userUserAccountGetPersonaManagementSummary,
+        AppCloudOperationIds.userUserAccountGetActivePersonaContext,
+        AppCloudOperationIds.userUserAccountGetPersonaLifecycleGuard,
       ]),
     );
   });
@@ -101,9 +101,9 @@ void main() {
     expect(
       executor.operationIds,
       containsAll(<String>[
-        AppCloudOperationIds.userUserProfileGetProfileEditSnapshot,
-        AppCloudOperationIds.userUserProfileGetProfileQrCard,
-        AppCloudOperationIds.userUserProfileResolveProfileQrToken,
+        AppCloudOperationIds.userUserAccountGetProfileEditSnapshot,
+        AppCloudOperationIds.userUserAccountGetProfileQrCard,
+        AppCloudOperationIds.userUserAccountResolveProfileQrToken,
       ]),
     );
     final resolvePayload = executor.payloads.last;
@@ -115,18 +115,18 @@ void main() {
 }
 
 final Map<String, Object?> _responses = <String, Object?>{
-  AppCloudOperationIds.userUserProfileGetMeProfile: _profile(
+  AppCloudOperationIds.userUserAccountGetMeProfile: _profile(
     'persona-1',
     '主分身',
   ),
-  AppCloudOperationIds.userUserProfileGetSubAccountProfile: _profile(
+  AppCloudOperationIds.userUserAccountGetSubAccountProfile: _profile(
     'persona-2',
     '小趣',
   ),
-  AppCloudOperationIds.userUserProfileListPersonas: <String, Object?>{
+  AppCloudOperationIds.userUserAccountListPersonas: <String, Object?>{
     'items': <Object?>[_persona],
   },
-  AppCloudOperationIds.userUserProfileGetPersonaManagementSummary:
+  AppCloudOperationIds.userUserAccountGetPersonaManagementSummary:
       <String, Object?>{
         'items': <Object?>[_persona],
         'quota': <String, Object?>{
@@ -137,8 +137,8 @@ final Map<String, Object?> _responses = <String, Object?>{
         },
         'activeContext': _activeContext,
       },
-  AppCloudOperationIds.userUserProfileGetActivePersonaContext: _activeContext,
-  AppCloudOperationIds.userUserProfileGetPersonaLifecycleGuard:
+  AppCloudOperationIds.userUserAccountGetActivePersonaContext: _activeContext,
+  AppCloudOperationIds.userUserAccountGetPersonaLifecycleGuard:
       <String, Object?>{
         'subAccountId': 'persona-2',
         'requestedAction': 'retire',
@@ -146,7 +146,7 @@ final Map<String, Object?> _responses = <String, Object?>{
         'reason': '',
         'requiresSuccessor': false,
       },
-  AppCloudOperationIds.userUserProfileGetProfileEditSnapshot: <String, Object?>{
+  AppCloudOperationIds.userUserAccountGetProfileEditSnapshot: <String, Object?>{
     'ownerUserId': 'owner-1',
     'subAccountId': 'persona-1',
     'nickname': '主分身',
@@ -159,14 +159,14 @@ final Map<String, Object?> _responses = <String, Object?>{
     },
     'qrCard': _qrCard,
   },
-  AppCloudOperationIds.userUserProfileGetProfileQrCard: _qrCard,
-  AppCloudOperationIds.userUserProfileResolveProfileQrToken: <String, Object?>{
+  AppCloudOperationIds.userUserAccountGetProfileQrCard: _qrCard,
+  AppCloudOperationIds.userUserAccountResolveProfileQrToken: <String, Object?>{
     'subAccountId': 'persona-2',
     'userHandle': 'xiaoq',
     'publicProfileUrl': 'https://quwoquan.example/u/xiaoq',
     'scanStatus': 'accepted',
   },
-  AppCloudOperationIds.userUserProfileSearchSocialRelations: <String, Object?>{
+  AppCloudOperationIds.userUserAccountSearchSocialRelations: <String, Object?>{
     'items': <Object?>[
       <String, Object?>{
         'subAccountId': 'persona-2',
@@ -186,7 +186,7 @@ final Map<String, Object?> _responses = <String, Object?>{
     ],
     'cursor': '',
   },
-  AppCloudOperationIds.userUserProfileGetUserHomepageBundle: <String, Object?>{
+  AppCloudOperationIds.userUserAccountGetUserHomepageBundle: <String, Object?>{
     'profile': _profile('persona-2', '小趣'),
     'stats': <String, Object?>{
       'followingCount': 8,

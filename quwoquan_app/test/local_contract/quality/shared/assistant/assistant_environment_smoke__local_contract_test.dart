@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
@@ -191,7 +192,9 @@ Future<void> _sendAndExpect(
   if (runtimeEnv == 'beta' || runtimeEnv == 'gamma') {
     for (final eventType in const ['run_started', 'completed']) {
       expect(
-        streamState.events.any((event) => event.eventType == eventType),
+        streamState.events.any(
+          (event) => event.eventType.wireName == eventType,
+        ),
         isTrue,
         reason:
             '期望关键 stream event $eventType，实际为 '
@@ -205,8 +208,8 @@ Future<void> _sendAndExpect(
             final process = event.payload['process'];
             return process is Map &&
                 process['stage'] == 'tool_execution' &&
-                (event.eventType == 'process_append' ||
-                    event.eventType == 'process_commit');
+                (event.eventType.wireName == 'process_append' ||
+                    event.eventType.wireName == 'process_commit');
           });
       // 云侧在 geocode miss / 检索无可靠摘要场景会返回 searchedDocumentCount=0，
       // 但仍应保留真实的检索或工具链事件证据。
@@ -227,7 +230,9 @@ Future<void> _sendAndExpect(
     }
     for (final eventType in scenario.eventTypesFor(runtimeEnv)) {
       expect(
-        streamState.events.any((event) => event.eventType == eventType),
+        streamState.events.any(
+          (event) => event.eventType.wireName == eventType,
+        ),
         isTrue,
         reason:
             '期望 stream event $eventType，实际为 '
@@ -259,7 +264,7 @@ void _assertCloudPersonalAssistantNarrativeQuality(
   expect(narrative, isNot(contains('reliable=')));
   for (final event in state.events) {
     expect(
-      event.eventType,
+      event.eventType.wireName,
       isIn(const <String>[
         'run_started',
         'process_replace',

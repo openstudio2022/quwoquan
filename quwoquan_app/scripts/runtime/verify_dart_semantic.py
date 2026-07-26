@@ -12,7 +12,8 @@ Scans quwoquan_app/lib/**/*.dart for:
    positions. Migrated domains are zero-tolerance; remaining domains use a
    checked-in per-file ratchet that may only decrease.
 
-Excluded paths: lib/core/design_system/, lib/core/constants/, *_test.dart
+Excluded paths: lib/core/design_system/, lib/core/constants/, *_test.dart,
+generated *.g.dart outputs (their metadata/codegen source owns numeric policy values)
 
 Usage:
   python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py [--targets PATH]
@@ -108,7 +109,7 @@ EXCLUDE_SUBSTRINGS = [
 
 def should_skip(path: str, lib_root: str) -> bool:
     rel = os.path.relpath(path, lib_root).replace("\\", "/")
-    if rel.endswith("_test.dart"):
+    if rel.endswith(("_test.dart", ".g.dart")):
         return True
     for exc in EXCLUDE_SUBSTRINGS:
         if exc in rel:

@@ -109,7 +109,7 @@ type appContractLock struct {
 	} `json:"contractGraph"`
 }
 
-func initializeContractGraph(metadataDir string) error {
+func initializeMetadataSourceForServiceOutput(metadataDir string) error {
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
 		return fmt.Errorf("compile ContractGraph: %w", err)

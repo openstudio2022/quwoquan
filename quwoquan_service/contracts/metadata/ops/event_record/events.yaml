@@ -1,5 +1,0 @@
-entity: EventRecord
-
-# 产品日志只用于运营查询，不发布领域事件，也不驱动推荐或 Assistant。
-# 推荐的唯一领域事件是 content-service 发布的 BehaviorBatchReported。
-events: []

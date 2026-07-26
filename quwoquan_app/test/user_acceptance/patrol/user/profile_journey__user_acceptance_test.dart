@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
 /// user_acceptance Patrol: 用户主页核心旅程（用户主页商用化收口 R-UPROF-004）
 ///
 /// 对应 AppRoot Journey：profile-private-activity-history 与
@@ -29,9 +30,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
+import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
+import 'package:quwoquan_app/ui/user/widgets/author_impact_evidence.dart';
 
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
@@ -78,6 +83,7 @@ void main() {
         isTrue,
         reason: '我的主页必须渲染壳层骨架（头像/身份卡，真实 bundle 非空态）',
       );
+      await _verifyAuthorImpactEvidence($);
 
       // 编辑资料真实保存并回读：入口、字段编辑、远端写入及主页刷新缺一不可。
       final editEntry = find.text(UITextConstants.profileEditLabel);
@@ -157,6 +163,45 @@ void main() {
       await patrolGoTo($, AppRoutePaths.home);
     },
   );
+}
+
+Future<void> _verifyAuthorImpactEvidence(PatrolIntegrationTester $) async {
+  final card = find.byKey(AuthorImpactCard.cardKey);
+  final reachedCard = await _waitForFinderInTree(
+    $,
+    card,
+    timeout: const Duration(seconds: 20),
+  );
+  expect(reachedCard, isTrue, reason: '我的主页必须回读并展示 Gamma AuthorImpact 摘要');
+
+  final statement = find.descendant(
+    of: card.first,
+    matching: find.byType(IntersectionStatementRow),
+  );
+  final reachedStatement = await _waitForFinderInTree(
+    $,
+    statement,
+    timeout: const Duration(seconds: 15),
+  );
+  expect(reachedStatement, isTrue, reason: 'Gamma AuthorImpact 摘要必须包含可下钻的权威事实');
+  await $.tester.ensureVisible(statement.first);
+  await $.tester.tap(statement.first);
+  await $.pump(const Duration(milliseconds: 400));
+
+  final reachedSheet = await _waitForFinderInTree(
+    $,
+    find.byType(AuthorImpactEvidenceSheet),
+    timeout: const Duration(seconds: 12),
+  );
+  expect(reachedSheet, isTrue, reason: '点击影响力事实必须打开证据明细');
+  final reachedEvidence = await _waitForFinderInTree(
+    $,
+    find.text(DiscoveryFeedText.impactEvidenceSheetDetailLabel),
+    timeout: const Duration(seconds: 15),
+  );
+  expect(reachedEvidence, isTrue, reason: '证据明细必须回读服务端 evidence，而非样本或空态');
+  await $.tester.tap(find.text(UITextConstants.confirm));
+  await $.pump(const Duration(milliseconds: 300));
 }
 
 // ───────────────────────── helpers ─────────────────────────

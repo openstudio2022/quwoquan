@@ -1,75 +1,72 @@
-# L2 设计：runtime-client-foundation
+# L2 Design：运行时客户端基础 (`runtime-client-foundation`)
 
-## 设计动因
+> 对应规格：[L2 spec](./spec.md)
 
-项目已存在 `UITextConstants`（520 行）、`AppStrings`（63 行）两个静态常量文件，以及 `AppColors.dark.*`/`AppColors.light.*` 主题 token。这些是**部分解**：它们集中了字符串，但：
+> 设计触发原因：“为 Flutter App 提供网络、缓存、本地化、日志、媒体与语义门禁等跨域基础能力”需要 `app-locale-infrastructure`、`app-remote-config`、`app-theme-infrastructure`、`article-editor-refactor`、`cold-start-performance`、`unrecoverable-runtime-recovery`、`cross-platform-portability`、`dart-semantic-gate`、`dual-theme-page-coverage`、`entity-link-templates-metadata`、`error-permission-display-semantics`、`external-inbound-deeplink-routing`、`ios-native-page-enforcement`、`local-cache-architecture`、`metadata-driven-client-data-contract`、`page-horizontal-quality`、`page-layout-semantics`、`public-content-web-entry`、`s8-p8-semantic-token`、`unified-app-page-access` 共享状态 owner、契约或质量边界。
 
-1. **i18n**：无 locale 切换能力，无参数插值，无 plural 支持；`main.dart` 已声明 `supportedLocales: [zh-CN, en-US]` 但缺 `AppLocalizations.delegate`
-2. **主题**：token 存在但无动态切换机制，所有页面强制取 `AppColors.light.*` 或 `AppColors.dark.*` 中的一套
+## 1. 背景、目标与非目标
 
-本 L2 将这两类能力系统化，参照服务端 `runtime-codegen`、`runtime-config` 的建立方式，在客户端建立同等规格的基础设施。
+- 设计目标：为 Flutter App 提供网络、缓存、本地化、日志、媒体与语义门禁等跨域基础能力。
+- 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
-## 架构定位
+## 2. Story 协作与状态流
 
-```
-服务端：runtime-config / runtime-codegen / runtime-errors
-          ↕ 端云一体，对称设计
-客户端：runtime-client-foundation
-         ├── app-locale-infrastructure       (对应 runtime-config：配置/文本资源注入)
-         ├── app-theme-infrastructure        (对应 runtime-config：主题资源注入)
-         ├── error-permission-display-semantics (云端错误与权限类统一展示语义)
-         ├── app-remote-config               (App 远程运营配置：运营参数 / feature flag / LKG 快照)
-         └── page-layout-semantics (页面布局统一语义：顶部 leading、内容区、底部栏；不含用户/作者/圈子主页)
-```
+- [`app-locale-infrastructure`](./app-locale-infrastructure/spec.md)：通过 ARB 与 flutter gen-l10n 生成本地化资源，并在 locale 切换后保持页面文案一致。
+- [`app-remote-config`](./app-remote-config/spec.md)：冷启动首帧可在无远程配置的情况下正常进入欢迎页和首页。
+- [`app-theme-infrastructure`](./app-theme-infrastructure/spec.md)：必须坚持 `Cupertino-first`：Material 仅用于兼容和平台必要能力，不得成为主要视觉语法来源。
+- [`article-editor-refactor`](./article-editor-refactor/spec.md)：不可用时 **置灰**；可用时符合对比度与触控热区（≥44pt）。
+- [`cold-start-performance`](./cold-start-performance/spec.md)：启动时限用于性能告警而不是致命判定，已确认致命异常由原生最小恢复层接管。
+- [`unrecoverable-runtime-recovery`](./unrecoverable-runtime-recovery/spec.md)：业务 ProviderScope 外的恢复宿主持有一次性主容器重建次数和恢复终态。
+- [`cross-platform-portability`](./cross-platform-portability/spec.md)：业务层不新增直接平台分支。
+- [`dart-semantic-gate`](./dart-semantic-gate/spec.md)：**约束**：gate 必须调用 verify_dart_semantic，失败即阻塞。
+- [`dual-theme-page-coverage`](./dual-theme-page-coverage/spec.md)：优先 **替换为语义色 + 双模式分支**；能统一走 `Theme` / `CupertinoTheme.of(context)` 的 **不重复传 `isDark`**。
+- [`entity-link-templates-metadata`](./entity-link-templates-metadata/spec.md)：归因 query 解析单测覆盖注入与剥离两端。
+- [`error-permission-display-semantics`](./error-permission-display-semantics/spec.md)：统一错误组件、分身页、评论区及栈页面宿主的 local_contract 同时通过。
+- [`external-inbound-deeplink-routing`](./external-inbound-deeplink-routing/spec.md)：每种失败路径都有明确 UI 与文案，无静默失败。
+- [`ios-native-page-enforcement`](./ios-native-page-enforcement/spec.md)：不禁止 `Material(type: transparency)` 作为 **Cupertino 子树** 的防溢出/字体渲染宿主（与现有 `AppScaffold` 模式一致）。
+- [`local-cache-architecture`](./local-cache-architecture/spec.md)：feed 与 userPosts 共用 ContentQuerySnapshotStore，清理临时资源不删除 post metadata，离线内容清理可删除 query snapshot。
+- [`metadata-driven-client-data-contract`](./metadata-driven-client-data-contract/spec.md)：同一 **Repository 抽象接口** 的 `Mock*` 与 `Remote*` 实现：对同一业务操作返回 **同一 codegen 类型**（或经同一 `fromMap`/工厂解析到该类型），**禁止** Mock 返回「另一套 Map 键名」而 Remote 另一套。
+- [`page-horizontal-quality`](./page-horizontal-quality/spec.md)：在受支持屏宽、文字缩放和本地化文案下保持页面无横向溢出且关键动作可达。
+- [`page-layout-semantics`](./page-layout-semantics/spec.md)：Cupertino 场景不混用 Material 交互组件（Checkbox/SnackBar），选择态统一 iOS 语义。
+- [`public-content-web-entry`](./public-content-web-entry/spec.md)：公开内容网页同时提供可访问的 landing URL 与可恢复目标的 deep link。
+- [`s8-p8-semantic-token`](./s8-p8-semantic-token/spec.md)：横向质量矩阵 **P8** 要求：间距、字阶、圆角、色等走 **语义 token**，禁止魔法数与非语义混用（与 `verify_dart_semantic.py` 同向）。
+- [`unified-app-page-access`](./unified-app-page-access/spec.md)：**P4（横向质量）**：页面级 **open / return /（可选）停留** 进入 **`AppLogService`** 统一管道，与 `AppTraceContextStore` 的 `sessionId` / `pageVisitId` 对齐。
 
-## 关键决策
+## 3. 端云与数据流
 
-| 决策点 | 选项 A | 选项 B（选定） | 原因 |
-|---|---|---|---|
-| 字符串管理方式 | 继续扩展静态常量 | ARB + `flutter gen-l10n` | 官方标准，支持 locale 切换、plural、参数插值；codegen 保护；与服务端 codegen 理念一致 |
-| 非 widget 上下文 | 全部迁移 | 双轨共存：`UITextConstants` 保留 | StateNotifier/catch 无 BuildContext，短期保留常量可降低迁移风险；长期通过 locale 感知异常层演进 |
-| 主题切换 | 硬编码分支 | Riverpod Provider 驱动 | 与 Repository mock/remote 切换模式对称 |
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-## 结构化错误的呈现与导航所有权
+## 4. 关键决策
 
-错误展示与页面导航是两个不同职责：
+<a id="dec-001"></a>
+### DEC-001 端侧基础能力通过稳定接口隔离平台实现和远端契约
+- 决策：端侧基础能力通过稳定接口隔离平台实现和远端契约。
+- 理由：为 Flutter App 提供网络、缓存、本地化、日志、媒体与语义门禁等跨域基础能力。
+- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 关联要求：`REQ-001`
+- 影响 Story：[`app-locale-infrastructure`](./app-locale-infrastructure/spec.md)、[`app-remote-config`](./app-remote-config/spec.md)、[`app-theme-infrastructure`](./app-theme-infrastructure/spec.md)、[`article-editor-refactor`](./article-editor-refactor/spec.md)、[`cold-start-performance`](./cold-start-performance/spec.md)、[`cross-platform-portability`](./cross-platform-portability/spec.md)、[`dart-semantic-gate`](./dart-semantic-gate/spec.md)、[`dual-theme-page-coverage`](./dual-theme-page-coverage/spec.md)、[`entity-link-templates-metadata`](./entity-link-templates-metadata/spec.md)、[`error-permission-display-semantics`](./error-permission-display-semantics/spec.md)、[`external-inbound-deeplink-routing`](./external-inbound-deeplink-routing/spec.md)、[`ios-native-page-enforcement`](./ios-native-page-enforcement/spec.md)、[`local-cache-architecture`](./local-cache-architecture/spec.md)、[`metadata-driven-client-data-contract`](./metadata-driven-client-data-contract/spec.md)、[`page-horizontal-quality`](./page-horizontal-quality/spec.md)、[`page-layout-semantics`](./page-layout-semantics/spec.md)、[`public-content-web-entry`](./public-content-web-entry/spec.md)、[`s8-p8-semantic-token`](./s8-p8-semantic-token/spec.md)、[`unified-app-page-access`](./unified-app-page-access/spec.md)
+- 关联验收：`SIT-001`
 
-- `UiErrorSemanticResolver` 负责把 `RuntimeFailure` / `CloudException` 解析为“发生了什么、可以如何恢复”，不决定页面如何退出。
-- 栈内页面的退出只由宿主导航栏的返回按钮负责；底部弹层、全屏模态和对话框的退出只由其模态容器的关闭按钮或 barrier 负责。
-- `AppPageErrorState` 不再注入 X 、“返回”或 Home fallback；它只展示错误说明与恢复动作。这避免宿主返回、错误 X、错误 CTA 三重退出并存。
-- 区块首屏完全失败使用无卡片外框的 `AppSectionErrorState`；局部数据失败且其它内容仍可用时才使用 `AppSectionErrorCard`；已有数据刷新失败使用 `AppTransientErrorNotice`；追加分页失败使用 `AppListAppendErrorFooter`。
-- 错误标题可按业务 surface 定制，原因和恢复动作仍必须来自结构化 semantic；禁止把 Remote 失败改写为空数据。
+<a id="dec-002"></a>
+### DEC-002 根级恢复采用平台证据单轨与外层恢复宿主
+- 决策：启动致命异常由不依赖业务 Router、登录和延迟插件的原生最小恢复层承接；Flutter 运行时恢复由业务 ProviderScope 外的固定宿主持有，运行时主容器最多重建一次。单纯超时、进程未留下成功标记、用户强制结束或系统回收均不得推断为致命崩溃。
+- 理由：恢复能力必须在故障业务框架不可用时仍可操作，同时避免无限重启、误判崩溃和第二套 Crash 体系。
+- 被否决方案：6 秒超时直接显示错误页、用户反复重启 Flutter Engine、以 pending 标记推断硬崩溃、新增远程 Crash SDK 或不安全 signal handler。
+- 约束与影响：异常日志严格十字段并静默后台化；版本与跳转由原生能力接口完成；Android 官网 APK 与 iOS App Store 分流由服务端受信 release contract 决定。
+- 关联要求：`REQ-001`
+- 影响 Story：[`cold-start-performance`](./cold-start-performance/spec.md)、[`unrecoverable-runtime-recovery`](./unrecoverable-runtime-recovery/spec.md)、[`public-content-web-entry`](./public-content-web-entry/spec.md)
+- 关联验收：`SIT-001`
 
-## 适用场景与约束
+## 5. 失败与恢复
 
-- **适用**：Flutter App 在 `lib/ui/`、`lib/components/` 中需要展示用户可见文本的所有 widget 上下文（目录规范见 `specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN.md`）
-- **不适用**：Go 服务端错误消息（由 `runtime-errors` 负责）；Dart 代码中纯日志/调试字符串
-- **约束**：生成文件 `lib/l10n/app_localizations*.dart` 标注 `DO NOT EDIT`，与服务端 codegen 产物同等保护
+- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
+- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
+- 恢复动作：调用方按 canonical recovery action 重试、刷新或停止；不得自行合成成功结果。
+- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
 
-## 冷启动品牌静态帧
+## 6. 质量与观测
 
-冷启动原生页、Flutter 第一帧、最终全开帧和应用图标共享同一品牌视觉链：
-
-```text
-AppColors / AppTypography / AppSpacing
-  -> WelcomeAppearance（唯一花瓣 appearance）
-  -> WelcomeStaticFrame / WelcomeFlowerMarkPainter
-  -> Flutter runtime + golden + native asset generator
-  -> Android launch resources + iOS LaunchScreen assets
-```
-
-- 图一高保只作为布局、色彩和字形语言的验收参考，禁止把截图或截图文字烘焙为运行时页面。
-- 品牌中文字体固定使用仓内 `Noto Sans SC` 可变字体；其 OFL-1.1、上游 commit 和
-  SHA-256 由 `assets/fonts/bundled_fonts_manifest.yaml` 审计，不再维护“临时字体待替换”分支。
-- 欢迎页、登录页品牌标与应用图标不得使用不同的透明度/渐变 appearance；花瓣路径、颜色、
-  花蕊和开放终态只由 `WelcomeFlowerMarkPainter` 解释。
-- Android `launch_background.xml` 与启动色资源由原生资产生成器从 Dart 品牌 token 生成；
-  iOS 自适应渐变位图与品牌簇也由同一生成器输出，原生资源不是可独立手调的第二真相源。
-- 状态栏、Flutter 布局与原生静态资源分别受 contract/golden 约束；任何 token 变更必须同步
-  重生成原生资源并通过首帧同构测试。
-
-## 未来演进
-
-- 主题基础设施（`app-theme-infrastructure`）在本 L2 中作为独立 L3 建立，本次仅建节点，下一迭代交付
-- 非 widget 上下文的 locale 感知（StateNotifier 通过 Provider 获取 locale）：在 `UITextConstants` 全量替换后作为演进项
-- 英文翻译填充：本次 `app_en.arb` 创建 TODO 占位，后续接入翻译流程时填充
+- 沿用父 L1 质量约束；新增特有 SLO 时在本节声明。

@@ -201,7 +201,8 @@ class ActivePersonaContextViewData {
     required this.displayName,
     required this.avatarUrl,
     this.avatarVersion = 0,
-    required this.personaContextVersion,
+    this.contextVersion = 1,
+    this.personaSnapshotVersion = 1,
     this.isPrimary = false,
     this.isFallback = false,
   });
@@ -212,13 +213,10 @@ class ActivePersonaContextViewData {
   final String displayName;
   final String avatarUrl;
   final int avatarVersion;
-  final String personaContextVersion;
+  final int contextVersion;
+  final int personaSnapshotVersion;
   final bool isPrimary;
   final bool isFallback;
-
-  String get contextVersion => personaContextVersion;
-
-  String get personaSnapshotVersion => '1';
 
   bool get hasSubAccount => subAccountId.isNotEmpty;
 
@@ -228,7 +226,7 @@ class ActivePersonaContextViewData {
   }) {
     return <String, Object?>{
       'subAccountId': subAccountId,
-      if (contextVersion.isNotEmpty) 'contextVersion': contextVersion,
+      if (contextVersion > 0) 'contextVersion': contextVersion,
       'personaSnapshotVersion': personaSnapshotVersion,
       if (sourceSurfaceId.trim().isNotEmpty)
         'sourceSurfaceId': sourceSurfaceId.trim(),
@@ -256,7 +254,8 @@ class ActivePersonaContextViewData {
         avatarVersion: w.avatarVersion,
       ),
       avatarVersion: w.avatarVersion,
-      personaContextVersion: '${w.contextVersion}',
+      contextVersion: w.contextVersion,
+      personaSnapshotVersion: w.personaSnapshotVersion,
       isPrimary: w.isPrimary,
     );
   }
@@ -282,7 +281,8 @@ class ActivePersonaContextViewData {
         avatarVersion: projection.avatarVersion,
       ),
       avatarVersion: projection.avatarVersion,
-      personaContextVersion: '${projection.contextVersion}',
+      contextVersion: projection.contextVersion,
+      personaSnapshotVersion: projection.personaSnapshotVersion,
       isPrimary: projection.isPrimary,
     );
   }
@@ -294,7 +294,8 @@ class ActivePersonaContextViewData {
     required String avatarUrl,
     int avatarVersion = 0,
     String subjectType = 'subAccount',
-    String personaContextVersion = '',
+    int contextVersion = 1,
+    int personaSnapshotVersion = 1,
   }) {
     return ActivePersonaContextViewData(
       subAccountId: subAccountId,
@@ -303,7 +304,8 @@ class ActivePersonaContextViewData {
       displayName: displayName,
       avatarUrl: avatarUrl,
       avatarVersion: avatarVersion,
-      personaContextVersion: personaContextVersion,
+      contextVersion: contextVersion,
+      personaSnapshotVersion: personaSnapshotVersion,
       isFallback: true,
     );
   }

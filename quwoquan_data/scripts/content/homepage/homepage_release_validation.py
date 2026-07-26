@@ -13,12 +13,12 @@ from content.homepage.homepage import (
 from content.homepage.homepage_introduction import _normalize_homepage_manifest_assets
 from content.homepage.homepage_prompt import _homepage_base_source_issues
 from content.homepage.homepage_release import (
-    HOMEPAGE_FIDELITY_MAX,
     MIN_PAGE_CHARS,
     _CONDITION_CATALOGS_ROOT,
     _GEO_TAG_REF_PREFIX,
     _REQUIRED_ENTITY_FIELDS,
 )
+from content.homepage.quality_policy import homepage_source_fidelity_limit
 from content.homepage.homepage_review import _entity_review_paths
 from content.homepage.homepage_validation import (
     _asset_closure_issues,
@@ -61,7 +61,7 @@ def _homepage_authenticity_issues(
                 gate_body,
                 base_text,
                 carrier="article",
-                max_ratio=HOMEPAGE_FIDELITY_MAX,
+                max_ratio=homepage_source_fidelity_limit(execution_id),
                 source_use_mode=str((base or {}).get("sourceUseMode") or "factual_reference_only"),
             )
         )
@@ -160,6 +160,25 @@ def validate_entity_page(
         except (OSError, ValueError, TypeError) as exc:
             issues.append(f"{label}: source catalog invalid: {exc}")
         else:
+            catalog_sources = [
+                row
+                for row in (source_catalog.get("sources") or [])
+                if isinstance(row, dict)
+            ]
+            catalog_unit_ids = {
+                str(row.get("sourceUnitId") or "").strip()
+                for row in catalog_sources
+                if str(row.get("sourceUnitId") or "").strip()
+            }
+            declared_source_unit_ids = {
+                Path(str(ref)).parent.name
+                for ref in (manifest_payload.get("sourceRefs") or [])
+                if str(ref).strip()
+            }
+            if catalog_unit_ids != declared_source_unit_ids:
+                issues.append(
+                    f"{label}: source catalog 未精确闭包 manifest.sourceRefs"
+                )
             projected_primary = {
                 key: (source_catalog.get("primarySource") or {}).get(key)
                 for key in (

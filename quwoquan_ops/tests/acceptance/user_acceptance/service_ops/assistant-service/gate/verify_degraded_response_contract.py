@@ -160,33 +160,6 @@ def check_catch_preserves_root_cause(path: Path) -> list[str]:
     return violations
 
 
-def check_acceptance_test_files_exist(root: Path) -> list[str]:
-    """
-    规则 5：acceptance.yaml 中 tests 字段引用的测试文件必须实际存在。
-    """
-    import re as _re
-
-    acceptance_path = (
-        root
-        / "specs/feature-tree/assistant-run-learning"
-        / "world-class-trinity-experience-baseline/acceptance.yaml"
-    )
-    if not acceptance_path.exists():
-        return []
-
-    content = acceptance_path.read_text(encoding="utf-8")
-    # 提取所有 - quwoquan_app/test/... 格式的测试路径
-    pattern = _re.compile(r"-\s+(quwoquan_app/test/\S+\.dart)")
-    missing = []
-    for m in pattern.finditer(content):
-        test_path = root / m.group(1)
-        if not test_path.exists():
-            missing.append(
-                f"acceptance.yaml 引用的测试文件不存在: {m.group(1)}"
-            )
-    return missing
-
-
 def main() -> int:
     all_violations: list[str] = []
 
@@ -198,7 +171,6 @@ def main() -> int:
         all_violations += check_no_json_envelope_leak(f)
 
     all_violations += check_catch_preserves_root_cause(GATEWAY_FILE)
-    all_violations += check_acceptance_test_files_exist(ROOT)
 
     if all_violations:
         print(

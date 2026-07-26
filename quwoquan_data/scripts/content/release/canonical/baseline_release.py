@@ -13,7 +13,6 @@ from core.release_layout import (
     payload_file,
     payload_root,
 )
-from core.control_types import RolloutMilestone
 from core.schema import assert_valid
 from core.source_digest import current_source_digest
 from content.release.canonical.object_transaction_contract import (
@@ -51,13 +50,12 @@ def build_empty_baseline_release(
     if final_root.exists():
         header = _read_json(payload_file(final_root, "release.json"))
         desired = _read_json(payload_file(final_root, "desired_state.json"))
-        aggregate = _read_json(attestation_root(final_root) / "aggregate.json")
+        aggregate = _read_json(attestation_root(final_root) / "release.json")
         if (
             header.get("releaseId") == release_id
             and header.get("releaseKind") == ReleaseKind.EMPTY_BASELINE
             and header.get("canonicalMerkle") == object_closure_digest(final_root)
             and header.get("executionIds") == []
-            and header.get("rolloutMilestone") == "baseline"
             and header.get("sourceDigests") == [source_digest.to_document()]
             and aggregate.get("sourceDigests") == [source_digest.to_document()]
             and desired.get("desiredRefs") == _EMPTY_DESIRED_REFS
@@ -85,7 +83,6 @@ def build_empty_baseline_release(
                 "releaseKind": ReleaseKind.EMPTY_BASELINE,
                 "canonicalMerkle": canonical_merkle,
                 "executionIds": [],
-                "rolloutMilestone": "baseline",
                 "sourceDigests": [source_digest.to_document()],
             },
         )
@@ -119,11 +116,10 @@ def build_empty_baseline_release(
                 "issues": [],
             },
         )
-        aggregate_attestation = ReleaseAttestation(
+        release_attestation = ReleaseAttestation(
             release_id=release_id,
             release_kind=ReleaseKind.EMPTY_BASELINE,
             execution_ids=(),
-            rollout_milestone=RolloutMilestone.BASELINE,
             entity_count=0,
             post_count=0,
             creator_count=0,
@@ -134,12 +130,12 @@ def build_empty_baseline_release(
             recorded_at=_now(),
         ).to_document()
         assert_valid(
-            aggregate_attestation,
+            release_attestation,
             "release",
-            "aggregate_release_attestation",
-            label=f"aggregate_release_attestation:{release_id}",
+            "release_attestation",
+            label=f"release_attestation:{release_id}",
         )
-        _write_json(attestation_root(staging) / "aggregate.json", aggregate_attestation)
+        _write_json(attestation_root(staging) / "release.json", release_attestation)
         assert_environment_neutral(staging)
         staging.replace(final_root)
         return {

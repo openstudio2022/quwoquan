@@ -1,0 +1,238 @@
+client_projection:
+  base_class: ''
+  computed_getters:
+  - body: 'if (workType == ''video'' || (videoUrl != null && videoUrl!.isNotEmpty)) return ''video'';
+
+      if (workType == ''article'' || workType == ''note'') return ''article'';
+
+      if (workType == ''micro'' || workType == ''moment'') return ''micro'';
+
+      return ''image'';
+
+      '
+    dart_return_type: String
+    description: 作品类型闭集归一：image / video / article / micro（moment 别名归 micro）。
+    name: normalizedWorkType
+    nullable: false
+  - body: "final fromContract = mediaItems\n    .where((item) => item.kind == 'video' && item.url.isNotEmpty)\n\
+      \    .toList(growable: false);\nif (fromContract.isNotEmpty) return fromContract;\nfinal fallback\
+      \ = videoUrl;\nif (fallback == null || fallback.isEmpty) return const <WorkBrowserMediaItemDto>[];\n\
+      return <WorkBrowserMediaItemDto>[\n  WorkBrowserMediaItemDto(\n    kind: 'video',\n    url: fallback,\n\
+      \    coverUrl: thumbnailUrl.isNotEmpty\n        ? thumbnailUrl\n        : (coverUrl.isEmpty ? null\
+      \ : coverUrl),\n    durationMs: durationMs,\n    mediaAssetId: mediaAssetId,\n    mediaAssetVersion:\
+      \ mediaAssetVersion,\n    previewTrackManifestUrl: previewTrackManifestUrl,\n    previewTrackVersion:\
+      \ previewTrackVersion,\n    width: width,\n    height: height,\n    title: null,\n  ),\n];\n"
+    dart_return_type: List<WorkBrowserMediaItemDto>
+    description: 视频集序列：mediaItems[kind=video]；为空时由 videoUrl 派生单元素序列。
+    name: videoItems
+    nullable: false
+  - body: "final fromContract = mediaItems\n    .where((item) => item.kind == 'image' && item.url.isNotEmpty)\n\
+      \    .map((item) => item.url)\n    .toList(growable: false);\nif (fromContract.isNotEmpty) return\
+      \ fromContract;\nreturn imageUrls;\n"
+    dart_return_type: List<String>
+    description: 图片序列：mediaItems[kind=image] 的 url；为空时回落 imageUrls。
+    name: effectiveImageUrls
+    nullable: false
+  - body: 'return intersectionReasons?.length ?? 0;
+
+      '
+    dart_return_type: int
+    description: 作者区交集摘要数字（同一 reasons 列表派生，禁止第二事实来源）。
+    name: intersectionCount
+    nullable: false
+  dart_class: WorkBrowserItemDto
+  dart_imports:
+  - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
+  - article_entity_mention_dto.g.dart
+  - work_browser_media_item_dto.g.dart
+  fields:
+  - dart_type: String
+    default: ''''''
+    name: workId
+    nullable: false
+    source: postId
+  - dart_type: String
+    default: ''''''
+    name: workType
+    nullable: false
+    source: contentType
+  - dart_type: String
+    default: '''work'''
+    name: workIdentity
+    nullable: false
+    source: contentIdentity
+  - dart_type: String
+    default: 'null'
+    name: title
+    nullable: true
+    source: title
+  - dart_type: String
+    default: 'null'
+    name: caption
+    nullable: true
+    source: body
+  - dart_type: String
+    default: ''''''
+    name: authorId
+    nullable: false
+    source: authorId
+  - dart_type: String
+    default: ''''''
+    name: authorName
+    nullable: false
+    source: authorDisplayName
+  - dart_type: String
+    default: ''''''
+    name: authorAvatarUrl
+    nullable: false
+    source: authorAvatarUrl
+  - dart_type: String
+    default: 'null'
+    description: 作者认证角标（云侧快照，端不得本地推断）
+    name: authorBadge
+    nullable: true
+    source: badge
+  - dart_type: int
+    default: '0'
+    name: likeCount
+    nullable: false
+    source: likeCount
+  - dart_type: int
+    default: '0'
+    name: commentCount
+    nullable: false
+    source: commentCount
+  - dart_type: int
+    default: '0'
+    name: shareCount
+    nullable: false
+    source: shareCount
+  - dart_type: String
+    default: ''''''
+    name: coverUrl
+    nullable: false
+    source: coverUrl
+  - dart_type: String
+    default: ''''''
+    description: 视频未播放态主封面；为空时回退 coverUrl
+    name: thumbnailUrl
+    nullable: false
+    source: thumbnailUrl
+  - dart_type: List<String>
+    default: <String>[]
+    name: imageUrls
+    nullable: false
+    source: mediaUrls
+  - dart_type: String
+    default: 'null'
+    name: videoUrl
+    nullable: true
+    source: videoUrl
+  - dart_type: int
+    default: 'null'
+    name: durationMs
+    nullable: true
+    source: durationMs
+  - dart_type: String
+    default: 'null'
+    name: mediaAssetId
+    nullable: true
+    source: mediaAssetId
+  - dart_type: int
+    default: 'null'
+    name: mediaAssetVersion
+    nullable: true
+    source: mediaAssetVersion
+  - dart_type: String
+    default: 'null'
+    name: previewTrackManifestUrl
+    nullable: true
+    source: previewTrackManifestUrl
+  - dart_type: int
+    default: 'null'
+    name: previewTrackVersion
+    nullable: true
+    source: previewTrackVersion
+  - dart_type: int
+    default: 'null'
+    name: width
+    nullable: true
+    source: width
+  - dart_type: int
+    default: 'null'
+    name: height
+    nullable: true
+    source: height
+  - dart_type: List<WorkBrowserMediaItemDto>
+    list_element_dart_class: WorkBrowserMediaItemDto
+    name: mediaItems
+    nullable: false
+    source: mediaItems
+  - dart_type: String
+    default: 'null'
+    name: articleMarkdown
+    nullable: true
+    source: articleMarkdown
+  - dart_type: String
+    default: 'null'
+    name: articleTemplate
+    nullable: true
+    source: articleTemplate
+  - dart_type: String
+    default: 'null'
+    name: articleFontPreset
+    nullable: true
+    source: articleFontPreset
+  - dart_type: Map<String, dynamic>
+    default: 'null'
+    name: articleRenderProfile
+    nullable: true
+    source: articleRenderProfile
+  - dart_type: String
+    default: 'null'
+    description: 文章深色纸张系统适配垂类。
+    name: contentVertical
+    nullable: true
+    source: contentVertical
+  - dart_type: String
+    default: 'null'
+    description: system/manual；可由 articleRenderProfile.paperThemeMode 冗余到顶层。
+    name: paperThemeMode
+    nullable: true
+    source: paperThemeMode
+  - dart_type: String
+    default: 'null'
+    description: darkPaper/coolGray/warmBlack/inkGreen/deepBrown；手动选择或云侧推荐纸张。
+    name: paperTexture
+    nullable: true
+    source: paperTexture
+  - dart_type: List<ArticleEntityMentionDto>
+    default: <ArticleEntityMentionDto>[]
+    list_element_dart_class: ArticleEntityMentionDto
+    name: entityMentions
+    nullable: false
+    source: entityMentions
+  - dart_type: List<IntersectionReason>
+    default: 'null'
+    list_element_dart_class: IntersectionReason
+    name: intersectionReasons
+    nullable: true
+    source: intersectionReasons
+  output_path: cloud/runtime/generated/content/work_browser_item_dto.g.dart
+consumers:
+- app
+description: 'Work Browser 作品呈现契约（V1.0）。统一沉浸式作品浏览器的每作品强类型投影：
+
+  标题/配文/作者快照/互动计数/统一媒体序列/文章载荷/交集摘要，
+
+  端侧从 post wire JSON（feed item 或 GET post 详情）解码，禁止浏览器再从 raw Map 拼装。
+
+
+  workType 闭集（normalizedWorkType getter 派生）：image | video | article | micro。
+
+  交集只允许两个形态：作者区摘要 `N 个交集 >`（intersectionCount 派生）与点击后的
+
+  详情 sheet（intersectionReasons 云侧产出文案，端只读，G2）。
+
+  '
+read_model: WorkBrowserItem

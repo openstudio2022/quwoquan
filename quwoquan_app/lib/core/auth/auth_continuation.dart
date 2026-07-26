@@ -242,6 +242,21 @@ class OpenHomeChannelContinuation extends AuthContinuation {
   final String channelId;
 }
 
+/// 游客首启兴趣在登录成功后恢复同一稳定行为 intent。
+class SubmitOnboardingInterestContinuation extends AuthContinuation {
+  const SubmitOnboardingInterestContinuation({
+    required this.catalogVersion,
+    required this.taxonomyReleaseId,
+    required this.clientEventId,
+    required this.tagRefs,
+  });
+
+  final String catalogVersion;
+  final String taxonomyReleaseId;
+  final String clientEventId;
+  final List<String> tagRefs;
+}
+
 /// 单槽位续接控制器：set 登记、take 按类型取出并清空。
 class AuthContinuationController extends Notifier<AuthContinuation?> {
   String? _ownerToken;

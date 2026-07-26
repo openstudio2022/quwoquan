@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
-from governance.coverage.cold_start_supply import load_cold_start_supply_policy
+from governance.content_supply_policy import load_content_supply_policy
 from content.source.research.plan_state import (
     _record_unavailable,
     _safe_collection_id,
@@ -15,8 +15,8 @@ from content.source.research.plan_state import (
 from content.source.research.source_quality import _collection_gate
 
 
-def _minimum_frame_count() -> int:
-    return load_cold_start_supply_policy().video_delivery.minimum_segment_count
+def _minimum_source_frame_count(vertical: str) -> int:
+    return load_content_supply_policy(vertical).video_delivery.minimum_source_frames
 
 
 def _video_frame_candidate(
@@ -99,7 +99,7 @@ def write_video_lane(
     updated: list[dict[str, Any]],
     open_license_image_pool: list[dict[str, Any]],
 ) -> None:
-    minimum_frames = _minimum_frame_count()
+    minimum_frames = _minimum_source_frame_count(vertical)
     frames: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     for ordinal, raw in enumerate(open_license_image_pool, start=1):

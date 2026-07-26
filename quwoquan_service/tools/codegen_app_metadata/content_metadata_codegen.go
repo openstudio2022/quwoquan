@@ -48,7 +48,7 @@ func renderContentMetadataDart(
 
 	b.WriteString(fmt.Sprintf("  static const int feedDefaultLimit = %d;\n\n", feedDefaultLimit))
 	b.WriteString(fmt.Sprintf("  static const String feedPath = '%s';\n", nonEmpty(feedRoute.Path, "/content/feed")))
-	b.WriteString(fmt.Sprintf("  static const String postDetailPathTemplate = '%s';\n\n", nonEmpty(getPostRoute.Path, "/content/posts/{postId}")))
+	b.WriteString(fmt.Sprintf("  static const String postDetailPathTemplate = '%s';\n\n", nonEmpty(getPostRoute.Path, "/content/content/posts/{postId}")))
 
 	b.WriteString("  static const List<String> feedQueryParams = <String>[\n")
 	for _, key := range feedRoute.QueryParams {
@@ -64,7 +64,7 @@ func renderContentMetadataDart(
 
 	// Mutation route paths (like/save)
 	if len(likeRoutes) > 0 {
-		b.WriteString("  // Reaction mutation route paths (from post/service.yaml).\n")
+		b.WriteString("  // Reaction mutation route paths (from post/operations.yaml).\n")
 		b.WriteString("  static const Map<String, String> reactionRoutePaths = <String, String>{\n")
 		writeSortedStringMap(&b, likeRoutes)
 		b.WriteString("  };\n")
@@ -75,4 +75,4 @@ func renderContentMetadataDart(
 }
 
 // renderStandaloneDtoDart generates a standalone DTO (no base class) from client_projection.
-// Used for integration/location LocationPoiDto etc.
+// Used for integration/external_integration/location LocationPoiDto etc.

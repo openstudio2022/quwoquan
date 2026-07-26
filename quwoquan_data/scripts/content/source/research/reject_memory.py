@@ -40,7 +40,6 @@ from content.source.research.source_quality import (
     _collection_gate,
     _source_category,
 )
-from content.source.research.homepage_text_quality import _homepage_text_quality_issue
 from content.source.research.source_registry import _travel_registry_url_fetchable
 from content.source.research.text_match import _normalized_title, _text_mentions_entity
 
@@ -294,6 +293,7 @@ def _verified_image_collections_from_prior_plans(
     entity_id: str,
     *,
     entity_type: str,
+    vertical: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
     rejected_image_urls: set[str] | None = None,
     limit: int = 8,
@@ -330,6 +330,7 @@ def _verified_image_collections_from_prior_plans(
                 entity_id=entity_id,
                 entity_aliases=entity_aliases,
                 allow_verified_collection_id_match=False,
+                vertical=vertical,
             )
             if not verdict["passed"]:
                 continue

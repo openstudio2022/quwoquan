@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 STACKCTL = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
+RUNNER = ROOT / "quwoquan_ops" / "cli" / "provider_conformance_runner.py"
 
 
 def _function_source(source: str, tree: ast.Module, name: str) -> str:
@@ -21,6 +22,7 @@ def _function_source(source: str, tree: ast.Module, name: str) -> str:
 
 def main() -> int:
     source = STACKCTL.read_text(encoding="utf-8")
+    runner_source = RUNNER.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(STACKCTL))
     issues: list[str] = []
 
@@ -30,9 +32,18 @@ def main() -> int:
         '"--require-ready"',
         '"provider-readiness.json"',
         '"failureCategories"',
+        '"--matrix"',
+        '"--capability-id"',
     ):
         if token not in source:
             issues.append(f"stackctl Provider readiness contract missing {token}")
+    for token in (
+        '"releaseReadiness"',
+        'case_result.get("releaseReadiness")',
+        "CaseResult must own",
+    ):
+        if token not in runner_source:
+            issues.append(f"Provider runner must derive release receipts from CaseResult: {token}")
     for forbidden in ('"stdout": result.stdout', '"stderr": result.stderr'):
         if forbidden in preflight:
             issues.append(

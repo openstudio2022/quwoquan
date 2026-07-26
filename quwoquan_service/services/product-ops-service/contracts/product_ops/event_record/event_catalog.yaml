@@ -1,0 +1,699 @@
+log_types:
+- event
+- error
+network_classes:
+- wifi
+- ethernet
+- 5g
+- 4g
+- mobile
+- other
+- none
+ingestion:
+  max_batch_items: 50
+  max_canonical_body_bytes: 131072
+  occurred_at_max_age_hours: 72
+  occurred_at_max_future_minutes: 5
+common_fields:
+- logType
+- eventType
+- sessionId
+- pageName
+- occurredAt
+- deviceManufacturer
+- deviceModel
+- appVersion
+- networkClass
+context_extensions:
+- devicePlatform
+extension_fields:
+  durationMs:
+    type: int
+    minimum: 0
+  result:
+    type: string
+    max_length: 128
+  failReasonCode:
+    type: string
+    max_length: 128
+  errorCode:
+    type: string
+    max_length: 128
+  operationId:
+    type: string
+    max_length: 128
+  requestId:
+    type: string
+    max_length: 256
+  traceId:
+    type: string
+    max_length: 256
+  recoveryAction:
+    type: string
+    max_length: 64
+  httpStatus:
+    type: int
+    minimum: 100
+    maximum: 599
+  callStack:
+    type: string_list
+    max_items: 10
+    item_max_length: 256
+    sensitive: true
+  tClickToFirstFrameMs:
+    type: int
+    minimum: 0
+  tFirstFrameToShellMs:
+    type: int
+    minimum: 0
+  tShellToContentMs:
+    type: int
+    minimum: 0
+  tClickToContentMs:
+    type: int
+    minimum: 0
+  hasError:
+    type: bool
+  action:
+    type: string
+    max_length: 128
+  journey:
+    type: string
+    max_length: 128
+  callType:
+    type: string
+    enum:
+    - audio
+    - video
+  participantCount:
+    type: int
+    minimum: 0
+  connectTimeMs:
+    type: int
+    minimum: 0
+  mediaConnected:
+    type: bool
+  reconnectCount:
+    type: int
+    minimum: 0
+  disconnectReason:
+    type: string
+    max_length: 128
+  networkQuality:
+    type: string
+    enum:
+    - excellent
+    - good
+    - poor
+    - unknown
+  transport:
+    type: string
+    enum:
+    - websocket
+    - long_poll
+  readyMs:
+    type: int
+    minimum: 0
+  ttffMs:
+    type: int
+    minimum: 0
+  rebufferCount:
+    type: int
+    minimum: 0
+  rebufferMs:
+    type: int
+    minimum: 0
+  effectivePlaybackMs:
+    type: int
+    minimum: 0
+  seekCount:
+    type: int
+    minimum: 0
+  seekFailureCount:
+    type: int
+    minimum: 0
+  seekCommandMaxMs:
+    type: int
+    minimum: 0
+  seekSettleMaxMs:
+    type: int
+    minimum: 0
+  droppedFrames:
+    type: int
+    minimum: 0
+  processedVideoFrames:
+    type: int
+    minimum: 0
+  audioUnderrunCount:
+    type: int
+    minimum: 0
+  rendererMode:
+    type: string
+    enum:
+    - platform_view
+    - texture_view
+  decoderQueueMode:
+    type: string
+    enum:
+    - synchronous
+  decoderFallbackEnabled:
+    type: bool
+  seekEvidenceSource:
+    type: string
+    enum:
+    - controller_command_completion
+    - native_settled
+  declaredDurationMs:
+    type: int
+    minimum: 0
+  observedDurationMs:
+    type: int
+    minimum: 0
+  turnAction:
+    type: string
+    enum:
+    - submit
+    - first_answer
+    - completed
+    - failed
+    - cancelled
+    - stream_failure
+  durationMismatch:
+    type: bool
+  devicePlatform:
+    type: string
+    enum:
+    - android
+    - ios
+    - ohos
+    - web
+    - desktop
+  playbackMode:
+    type: string
+    max_length: 32
+  publicationStage:
+    type: string
+    enum:
+    - editor_ready
+    - draft_saved
+    - draft_restored
+    - submit_started
+    - queued
+    - retry_scheduled
+    - retry_exhausted
+    - pending_review
+    - cancelled
+    - blocked
+    - published
+  contentType:
+    type: string
+    enum:
+    - micro
+    - article
+    - image
+    - video
+    - unknown
+  objectState:
+    type: string
+    enum:
+    - draft
+    - submitting
+    - retry_wait
+    - pending_review
+    - blocked
+    - published
+    - cancelled
+  backgroundRetryTerminal:
+    type: string
+    enum:
+    - not_applicable
+    - retry_scheduled
+    - retry_exhausted
+    - published
+    - pending_review
+    - rejected
+    - cancelled
+  surfaceId:
+    type: string
+    max_length: 128
+  correlationHash:
+    type: string
+    max_length: 64
+  detectionSource:
+    type: string
+    enum:
+    - dart_event_loop_watchdog
+    - android_application_exit_info
+    - ios_metric_kit
+  sampledFrames:
+    type: int
+    minimum: 1
+  jankyFrames:
+    type: int
+    minimum: 1
+  worstFrameMs:
+    type: int
+    minimum: 0
+  jankThresholdMs:
+    type: int
+    minimum: 1
+  terminalState:
+    type: string
+    enum:
+    - content
+    - empty
+    - error
+  resultCount:
+    type: int
+    minimum: 0
+  rankPosition:
+    type: int
+    minimum: 0
+  objectType:
+    type: string
+    max_length: 64
+  objectId:
+    type: string
+    max_length: 256
+  reasonId:
+    type: string
+    max_length: 256
+  targetType:
+    type: string
+    max_length: 64
+  targetId:
+    type: string
+    max_length: 256
+  environment:
+    type: string
+    enum:
+    - alpha
+    - beta
+    - gamma
+    - prod
+  catalogSource:
+    type: string
+    enum:
+    - remote
+    - verified_cache
+    - bootstrap_replica
+  releaseIdHash:
+    type: string
+    max_length: 64
+  digestMatch:
+    type: bool
+  cacheAgeBucket:
+    type: string
+    enum:
+    - not_applicable
+    - under_1h
+    - one_to_24h
+    - over_24h
+  chatAction:
+    type: string
+    enum:
+    - candidate_source_open
+    - candidate_source_select
+    - group_create
+    - member_add
+    - mention_select
+    - mention_send
+    - read_watermark
+    - group_governance
+  chatOutcome:
+    type: string
+    enum:
+    - succeeded
+    - failed
+    - rejected
+    - cancelled
+    - unchanged
+  chatSource:
+    type: string
+    enum:
+    - contacts
+    - group
+    - circle
+    - roster
+    - composer
+    - conversation
+    - settings
+  mentionScope:
+    type: string
+    enum:
+    - none
+    - member
+    - all
+    - assistant
+  governanceAction:
+    type: string
+    enum:
+    - none
+    - announcement_update
+    - admin_assign
+    - admin_revoke
+    - ownership_transfer
+    - member_remove
+    - member_leave
+  watermarkResult:
+    type: string
+    enum:
+    - none
+    - advanced
+    - already_current
+    - rejected
+    - failed
+  memberCountBucket:
+    type: string
+    enum:
+    - zero
+    - one
+    - two_to_five
+    - six_to_fifty
+    - fifty_one_to_five_hundred
+    - five_hundred_one_to_one_thousand
+  unreadCountBucket:
+    type: string
+    enum:
+    - zero
+    - one
+    - two_to_five
+    - six_to_fifty
+    - fifty_one_to_five_hundred
+    - five_hundred_one_to_one_thousand
+events:
+- event_type: page_open
+  log_type: event
+  required_extensions: []
+  optional_extensions:
+  - readyMs
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: page_return
+  log_type: event
+  required_extensions:
+  - durationMs
+  optional_extensions: []
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: page_first_usable
+  log_type: event
+  required_extensions:
+  - durationMs
+  - terminalState
+  optional_extensions:
+  - surfaceId
+  - failReasonCode
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: page_error_outcome
+  log_type: event
+  required_extensions:
+  - surfaceId
+  - errorCode
+  - recoveryAction
+  - result
+  optional_extensions:
+  - action
+  - durationMs
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: app_anr_outcome
+  log_type: event
+  required_extensions:
+  - detectionSource
+  - result
+  optional_extensions:
+  - durationMs
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: app_frame_jank_outcome
+  log_type: event
+  required_extensions:
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - result
+  optional_extensions: []
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: app_startup
+  log_type: event
+  required_extensions:
+  - tClickToFirstFrameMs
+  - tFirstFrameToShellMs
+  - tShellToContentMs
+  - tClickToContentMs
+  - hasError
+  optional_extensions: []
+  normal_sample_rate: 1.0
+  slow_threshold_ms: 3000
+  internal_priority: critical
+- event_type: runtime_exception
+  log_type: error
+  required_extensions:
+  - errorCode
+  optional_extensions:
+  - operationId
+  - httpStatus
+  - callStack
+  normal_sample_rate: 1.0
+  internal_priority: error
+- event_type: product_action
+  log_type: event
+  required_extensions:
+  - journey
+  - action
+  optional_extensions:
+  - surfaceId
+  - objectType
+  - objectId
+  - reasonId
+  - targetType
+  - targetId
+  - environment
+  - durationMs
+  - result
+  - failReasonCode
+  - recoveryAction
+  - requestId
+  - traceId
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: chat_interaction_outcome
+  log_type: event
+  required_extensions:
+  - chatAction
+  - chatOutcome
+  optional_extensions:
+  - chatSource
+  - mentionScope
+  - governanceAction
+  - watermarkResult
+  - memberCountBucket
+  - unreadCountBucket
+  - surfaceId
+  - durationMs
+  - failReasonCode
+  - recoveryAction
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: performance_sample
+  log_type: event
+  required_extensions:
+  - operationId
+  - durationMs
+  optional_extensions:
+  - result
+  - failReasonCode
+  - recoveryAction
+  - requestId
+  - traceId
+  normal_sample_rate: 0.1
+  internal_priority: normal
+- event_type: operation_result
+  log_type: event
+  required_extensions:
+  - operationId
+  - result
+  optional_extensions:
+  - durationMs
+  - failReasonCode
+  - recoveryAction
+  - requestId
+  - traceId
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: filter_catalog_load
+  log_type: event
+  required_extensions:
+  - catalogSource
+  - releaseIdHash
+  - digestMatch
+  - cacheAgeBucket
+  - result
+  optional_extensions:
+  - durationMs
+  - failReasonCode
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: content_publication
+  log_type: event
+  required_extensions:
+  - publicationStage
+  - contentType
+  - objectState
+  - surfaceId
+  - result
+  optional_extensions:
+  - durationMs
+  - failReasonCode
+  - correlationHash
+  - backgroundRetryTerminal
+  - recoveryAction
+  - requestId
+  - traceId
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: video_preview_track_load
+  log_type: event
+  required_extensions:
+  - result
+  optional_extensions:
+  - durationMs
+  - failReasonCode
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: rtc_call_outcome
+  log_type: event
+  required_extensions:
+  - callType
+  - result
+  optional_extensions:
+  - durationMs
+  - failReasonCode
+  - participantCount
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: rtc_media_qoe
+  log_type: event
+  required_extensions:
+  - callType
+  - result
+  - connectTimeMs
+  - mediaConnected
+  - reconnectCount
+  optional_extensions:
+  - disconnectReason
+  - networkQuality
+  - participantCount
+  - failReasonCode
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: realtime_connect_result
+  log_type: event
+  required_extensions:
+  - transport
+  - result
+  optional_extensions:
+  - durationMs
+  - failReasonCode
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: video_playback_qoe
+  log_type: event
+  required_extensions:
+  - readyMs
+  - rebufferCount
+  - rebufferMs
+  - effectivePlaybackMs
+  - seekCount
+  - seekFailureCount
+  - seekCommandMaxMs
+  - seekSettleMaxMs
+  - seekEvidenceSource
+  - devicePlatform
+  - playbackMode
+  optional_extensions:
+  - ttffMs
+  - droppedFrames
+  - processedVideoFrames
+  - audioUnderrunCount
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - declaredDurationMs
+  - observedDurationMs
+  - durationMismatch
+  - result
+  - failReasonCode
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: assistant_turn_quality
+  log_type: event
+  required_extensions:
+  - turnAction
+  - result
+  optional_extensions:
+  - durationMs
+  - failReasonCode
+  - operationId
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: search_query_submit
+  log_type: event
+  required_extensions:
+  - requestId
+  - surfaceId
+  optional_extensions:
+  - action
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: search_result_impression
+  log_type: event
+  required_extensions:
+  - requestId
+  - resultCount
+  - durationMs
+  optional_extensions:
+  - action
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: search_result_click
+  log_type: event
+  required_extensions:
+  - requestId
+  - objectType
+  - rankPosition
+  optional_extensions:
+  - action
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: search_refine
+  log_type: event
+  required_extensions:
+  - requestId
+  - action
+  optional_extensions: []
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: search_zero_result
+  log_type: event
+  required_extensions:
+  - requestId
+  - durationMs
+  optional_extensions:
+  - action
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: search_result_dwell
+  log_type: event
+  required_extensions:
+  - requestId
+  - durationMs
+  - resultCount
+  optional_extensions:
+  - action
+  normal_sample_rate: 1.0
+  internal_priority: critical

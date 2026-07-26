@@ -18,12 +18,12 @@ import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.da
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
-import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
 import 'content_mock_data.dart';
 // ── 发现区 wire 聚合与查找（原 lib discovery_wire_lookup.dart，仅测试消费）──
@@ -84,7 +84,7 @@ const String _mockContentDefaultAuthorAvatarUrl =
     'media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png';
 
 List<PostBaseDto>? _contractSeedPosts() {
-  final seed = ContractFixtureRuntimeLoader.contentSeedSet();
+  final seed = alphaFixtureSeedReader.contentSeedSet();
   final posts = seed?['posts'];
   final contractPosts = <PostBaseDto>[];
   if (posts is! List) {
@@ -207,9 +207,9 @@ class MockContentRepository
     } else if (channelRouted && resolvedChannelId == 'travel') {
       // travel 垂类同构：镜像云侧 postMatchesVertical（contentVertical 优先，
       // 关键词兜底），不混入非旅行内容。
-      items = (await _resolveDiscoveryPosts(category: 'recommend'))
-          .where(_matchesTravelVerticalPost)
-          .toList(growable: false);
+      items = (await _resolveDiscoveryPosts(
+        category: 'recommend',
+      )).where(_matchesTravelVerticalPost).toList(growable: false);
     } else {
       items = await _resolveDiscoveryPosts(
         category: channelRouted ? resolvedChannelId : category,
@@ -279,7 +279,7 @@ class MockContentRepository
 
   /// 精品池成员（home_feed_core.featuredFeedPostIds，env-seed-first 唯一池 seed）。
   Set<String> _premiumPoolPostIds() {
-    final raw = ContractFixtureRuntimeLoader.contentSeedSet(
+    final raw = alphaFixtureSeedReader.contentSeedSet(
       'home_feed_core',
     )?['featuredFeedPostIds'];
     if (raw is! List) {
@@ -392,9 +392,14 @@ class MockContentRepository
   }
 
   @override
-  Future<void> deletePost({required String postId}) async {
-    if (postId.trim().isEmpty) {
-      return;
+  Future<void> deletePost({
+    required String postId,
+    required String idempotencyKey,
+  }) async {
+    if (postId.trim().isEmpty || idempotencyKey.trim().isEmpty) {
+      throw ArgumentError(
+        'DeletePost requires postId and caller-owned idempotencyKey',
+      );
     }
     _deletedPostIds.add(postId);
   }
@@ -694,7 +699,7 @@ extension _MockContentPosts on MockContentRepository {
     if (trimmed.isEmpty) {
       return null;
     }
-    final raw = ContractFixtureRuntimeLoader.contentSeedSet()?['posts'];
+    final raw = alphaFixtureSeedReader.contentSeedSet()?['posts'];
     if (raw is! List) {
       return null;
     }
@@ -845,7 +850,7 @@ class MockFootprintRepository implements FootprintRepository {
     String? cursor,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
   }) async {
-    final seed = ContractFixtureRuntimeLoader.contentSeedSet('footprint_core');
+    final seed = alphaFixtureSeedReader.contentSeedSet('footprint_core');
     final rawItems = seed?['items'];
     if (rawItems is! List) {
       return const CursorPage<FootprintEntry>(items: <FootprintEntry>[]);
@@ -882,7 +887,7 @@ class MockFootprintRepository implements FootprintRepository {
   }
 
   static Map<String, Map<String, dynamic>> _discoveryPostsById() {
-    final seed = ContractFixtureRuntimeLoader.contentSeedSet();
+    final seed = alphaFixtureSeedReader.contentSeedSet();
     final rawPosts = seed?['posts'];
     final byId = <String, Map<String, dynamic>>{};
     if (rawPosts is List) {

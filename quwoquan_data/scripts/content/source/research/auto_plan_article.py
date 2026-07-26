@@ -33,6 +33,7 @@ from content.source.research.qunar_sources import (
     _qunar_review_support_source,
     _qunar_travelogue_sources,
 )
+from content.source.research.public_search import public_search_article_sources
 
 
 def write_article_lane(
@@ -40,6 +41,7 @@ def write_article_lane(
     execution_id: str,
     entity_id: str,
     entity_type: str,
+    vertical: str,
     selected_lanes: set[str],
     report: dict[str, Any],
     issues: list[str],
@@ -71,6 +73,7 @@ def write_article_lane(
                 source,
                 entity_id=entity_id,
                 lane="article",
+                vertical=vertical,
                 entity_aliases=entity_aliases,
             )
             if accepted:
@@ -80,10 +83,26 @@ def write_article_lane(
             _qunar_review_support_source(entity_id),
             entity_id=entity_id,
             lane="article",
+            vertical=vertical,
             entity_aliases=entity_aliases,
         )
         if accepted:
             article_sources.append(accepted)
+        for source in public_search_article_sources(
+            entity_id,
+            entity_aliases=entity_aliases,
+            limit=required_article_bases,
+        ):
+            accepted = _accept_source(
+                report,
+                source,
+                entity_id=entity_id,
+                lane="article",
+                vertical=vertical,
+                entity_aliases=entity_aliases,
+            )
+            if accepted:
+                article_sources.append(accepted)
         for related_index, related_title in enumerate(related_wiki_titles, start=1):
             related_url = _wiki_url("zh.wikipedia.org", related_title)
             if not related_url:
@@ -113,6 +132,7 @@ def write_article_lane(
                 ),
                 entity_id=entity_id,
                 lane="article",
+                vertical=vertical,
                 entity_aliases=entity_aliases,
             )
             if accepted:
@@ -139,6 +159,7 @@ def write_article_lane(
                 ),
                 entity_id=entity_id,
                 lane="article",
+                vertical=vertical,
                 entity_aliases=entity_aliases,
             )
             if accepted:
@@ -171,6 +192,7 @@ def write_article_lane(
                 ),
                 entity_id=entity_id,
                 lane="article",
+                vertical=vertical,
                 entity_aliases=entity_aliases,
             )
             if accepted:
@@ -203,6 +225,7 @@ def write_article_lane(
                     ),
                     entity_id=entity_id,
                     lane="article",
+                    vertical=vertical,
                     entity_aliases=entity_aliases,
                 )
                 if accepted:
@@ -231,6 +254,7 @@ def write_article_lane(
                 ),
                 entity_id=entity_id,
                 lane="article",
+                vertical=vertical,
                 entity_aliases=entity_aliases,
             )
             if accepted:
@@ -263,6 +287,7 @@ def write_article_lane(
                 source,
                 entity_id=entity_id,
                 lane="article",
+                vertical=vertical,
                 entity_aliases=entity_aliases,
             )
             if accepted:

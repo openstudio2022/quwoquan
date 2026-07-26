@@ -12,7 +12,6 @@ import {
   fetchHomepageCandidates,
   fetchHomepageClaimRequests,
   fetchHomepageStatusReports,
-  fetchOnboardingDomains,
   fetchPlatformConfigInstanceReports,
   fetchPlatformProjectionSummary,
   fetchPremiumPoolEntries,
@@ -339,45 +338,6 @@ test('requests stage-scoped gray routing policy from platform control plane', as
   assert.equal(calls[0], 'http://platform.test/control-plane/platform/rollout/routing-policy');
   assert.deepEqual(response.policy.stageDimensions['gray-initial'].userIds, ['ops-release-canary']);
   assert.deepEqual(response.policy.stageDimensions.full.appVersions, []);
-  restoreEnvAndFetch();
-});
-
-test('requests onboarding domains from platform control plane', async () => {
-  process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
-  const calls = stubFetch({
-    items: [
-      {
-        domain: 'content',
-        display_name: 'Content',
-        template_role: 'template_seed',
-        rollout_group: 'wave_0_template',
-        acceptance_status: 'minimum_test_ready',
-        metadata_paths: ['content/post'],
-        service_names: ['content-service'],
-        control_planes: {
-          platform: { enabled: true, object_types: ['service_catalog_entry'], config_prefixes: ['sys.content.'] },
-          product: { enabled: true, object_types: ['moderation_case'], config_prefixes: ['ops.content.'] },
-        },
-        minimum_package: {
-          metadata_files: ['contracts/metadata/content/post/service.yaml'],
-          codegen_targets: ['go_runtime', 'python_runtime', 'ops_portal'],
-          test_evidence: { t1: ['a'], t2: ['b'], t3: [], t4: [] },
-        },
-        deployment: {
-          plane_binding_domain: 'content',
-          plane_binding_source: 'quwoquan_ops/environments/process_domain_plane_mapping.yaml',
-          current_binding_source: 'quwoquan_ops/environments/process_domain_mapping.yaml',
-        },
-        replication: { source_template: 'content', next_copy_targets: ['chat'], copy_notes: ['seed'] },
-        blocking_gaps: [],
-      },
-    ],
-  });
-
-  const items = await fetchOnboardingDomains();
-
-  assert.equal(calls[0], 'http://platform.test/control-plane/platform/onboarding/domains');
-  assert.equal(items[0].domain, 'content');
   restoreEnvAndFetch();
 });
 

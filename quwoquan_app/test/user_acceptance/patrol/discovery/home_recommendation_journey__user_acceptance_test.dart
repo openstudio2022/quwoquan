@@ -19,7 +19,7 @@
 ///      surface + channelId 归因），identity/type 不再参与；seed 内容经引擎
 ///      PostProjectionSource 兜底召回仍可返回。已按 env-seed-first 向 gamma
 ///      quwoquan_content 注入 24 条多形态 moment
-///      （applier=quwoquan_service/services/seed-box/scripts/apply_content_moment_channel_seed.py，
+///      （applier=quwoquan_service/services/content-service/cmd/jobs/seed-moment-channel/main.py，
 ///      fixture=contracts/metadata/_shared/test_fixtures/
 ///      content_recommendation_moment_channel.gamma_seed.json；全新非抑制作者 +
 ///      全新 id t4hrec_moment_* + 既有 archived-* 媒体 object key，createdAt 递减唯一

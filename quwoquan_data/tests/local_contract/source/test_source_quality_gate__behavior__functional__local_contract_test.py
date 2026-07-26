@@ -57,7 +57,7 @@ def test_source_reject_memory_ignores_soft_fetch_policy_failures():
     )
 
 def test_download_reject_memory_ignores_registry_fetchable_homepage_baike_soft_failures():
-    task = "20260711--travel-homepage-reject-memory--cn-zhejiang--canary-001"
+    task = "20260711--travel-homepage-reject-memory--test-region-a--pilot-001"
     build_execution_fixture(task)
     entity = "沙湖旅游景区"
     obj = resolve_entity_object_dir(task, entity, etype_hint="地点/景区")
@@ -93,7 +93,9 @@ def test_homepage_candidate_gate_allows_registry_fetchable_baike_sources():
         discovery_provider="baidu_baike_exact_item_url",
         match_confidence=0.86,
     )
-    baidu_verdict = _candidate_gate(baidu, entity_id="喀纳斯景区", lane="homepage")
+    baidu_verdict = _candidate_gate(
+        baidu, entity_id="喀纳斯景区", lane="homepage", vertical="travel"
+    )
     assert baidu_verdict["passed"]
 
     bare_official = _source(
@@ -104,7 +106,9 @@ def test_homepage_candidate_gate_allows_registry_fetchable_baike_sources():
         discovery_provider="curated_official_url",
         match_confidence=0.9,
     )
-    bare_verdict = _candidate_gate(bare_official, entity_id="喀纳斯景区", lane="homepage")
+    bare_verdict = _candidate_gate(
+        bare_official, entity_id="喀纳斯景区", lane="homepage", vertical="travel"
+    )
     assert not bare_verdict["passed"]
     assert "registry-fetchable" in "\n".join(bare_verdict["issues"])
 
@@ -116,7 +120,9 @@ def test_homepage_candidate_gate_allows_registry_fetchable_baike_sources():
         discovery_provider="Chinese Wikipedia",
         match_confidence=0.95,
     )
-    assert _candidate_gate(wiki, entity_id="喀纳斯景区", lane="homepage")["passed"]
+    assert _candidate_gate(
+        wiki, entity_id="喀纳斯景区", lane="homepage", vertical="travel"
+    )["passed"]
 
     snapshotted = _source(
         source_id="home_official_snapshot",
@@ -127,7 +133,9 @@ def test_homepage_candidate_gate_allows_registry_fetchable_baike_sources():
         match_confidence=0.9,
     )
     snapshotted["body"] = "喀纳斯景区位于新疆阿勒泰，包含湖泊、森林、河湾等核心景观。"
-    assert _candidate_gate(snapshotted, entity_id="喀纳斯景区", lane="homepage")["passed"]
+    assert _candidate_gate(
+        snapshotted, entity_id="喀纳斯景区", lane="homepage", vertical="travel"
+    )["passed"]
 
 def test_verified_homepage_reuse_filters_bad_or_thin_source_units():
     # 源单元复用过滤：消歧页/过短页应滤除，正常三百科主页保留。
@@ -137,7 +145,7 @@ def test_verified_homepage_reuse_filters_bad_or_thin_source_units():
     from core.paths import ensure_execution_layout, ensure_execution_command_layout
     from content.execution.runtime_state import write_execution_runtime_state
 
-    task = "20260711--travel-homepage-source-filter--cn-zhejiang--canary-002"
+    task = "20260711--travel-homepage-source-filter--test-region-a--pilot-002"
     build_execution_fixture(task)
     entity = "沙湖旅游景区"
     obj = resolve_entity_object_dir(task, entity, etype_hint="地点/景区")
@@ -227,7 +235,7 @@ def test_verified_homepage_reuse_hydrates_mediawiki_same_source_images():
     from core.paths import ensure_execution_command_layout, ensure_execution_layout
     from content.source.source_unit import write_source_unit
 
-    task = "20260711--travel-homepage-source-hydrate--cn-zhejiang--canary-003"
+    task = "20260711--travel-homepage-source-hydrate--test-region-a--pilot-003"
     build_execution_fixture(task)
     entity = "黄龙"
     title = "黄龙风景名胜区"
@@ -243,7 +251,7 @@ def test_verified_homepage_reuse_hydrates_mediawiki_same_source_images():
         ordinal=1,
         source_id="home_wikipedia_huanglong_scenic_area",
         source_md=(
-            "黄龙风景名胜区位于四川省阿坝藏族羌族自治州松潘县。"
+            "黄龙风景名胜区位于test-region-b阿坝藏族羌族自治州松潘县。"
             "黄龙风景名胜区以彩池、雪山、峡谷和森林景观著称。"
             "黄龙风景名胜区是世界自然遗产和国家5A级旅游景区。"
             "黄龙风景名胜区的开放、票务和交通接驳以景区公告为准。"
@@ -313,7 +321,9 @@ def test_source_candidate_gate_rejects_weak_entity_match():
         match_confidence=0.4,
         source_role="base",
     )
-    verdict = _candidate_gate(source, entity_id="碧峰峡", lane="article")
+    verdict = _candidate_gate(
+        source, entity_id="碧峰峡", lane="article", vertical="travel"
+    )
     assert not verdict["passed"]
     assert any("matchConfidence" in issue for issue in verdict["issues"])
 
@@ -421,20 +431,20 @@ def test_wiki_title_for_entity_accepts_alias_with_admin_disambiguation():
     original = network_io_mod.wiki_api
 
     def fake_wiki_api(_host: str, params: dict) -> dict:
-        if params.get("prop") == "extracts" and params.get("titles") == "金沙湖 (浙江省)":
+        if params.get("prop") == "extracts" and params.get("titles") == "金沙湖 (测试省)":
             return {
                 "query": {
                     "pages": {
                         "1": {
                             "pageid": 1,
-                            "title": "金沙湖 (浙江省)",
+                            "title": "金沙湖 (测试省)",
                             "extract": "金沙湖位于杭州下沙，是一座城市人工湖。",
                         }
                     }
                 }
             }
         if params.get("list") == "search" and params.get("srsearch") == "金沙湖":
-            return {"query": {"search": [{"title": "金沙湖 (浙江省)"}]}}
+            return {"query": {"search": [{"title": "金沙湖 (测试省)"}]}}
         return {"query": {"pages": {"-1": {"missing": ""}}}}
 
     network_io_mod.wiki_api = fake_wiki_api
@@ -445,7 +455,7 @@ def test_wiki_title_for_entity_accepts_alias_with_admin_disambiguation():
                 "杭州金沙湖",
                 entity_aliases=("金沙湖", "金沙湖公园"),
             )
-            == "金沙湖 (浙江省)"
+            == "金沙湖 (测试省)"
         )
     finally:
         network_io_mod.wiki_api = original
@@ -499,7 +509,9 @@ def test_article_base_rejects_entity_encyclopedia_with_same_source_images():
         image_evidence_mode="same_authorized_collection",
         images=[image],
     )
-    verdict = _candidate_gate(source, entity_id="九寨沟", lane="article")
+    verdict = _candidate_gate(
+        source, entity_id="九寨沟", lane="article", vertical="travel"
+    )
     assert not verdict["passed"]
     assert any("article-quality source class" in issue for issue in verdict["issues"])
 
@@ -533,6 +545,7 @@ def test_article_base_accepts_ugc_and_platform_article_source_classes_equally():
             ),
             entity_id="九寨沟",
             lane="article",
+            vertical="travel",
         )
         assert verdict["passed"], (category, verdict)
 
@@ -556,7 +569,9 @@ def test_external_article_links_become_base_only_for_article_quality_classes():
             source_role="base" if category != "authoritative_reference" else "supporting",
         )
         assert source["category"] == expected_category
-        verdict = _candidate_gate(source, entity_id="九寨沟", lane="article")
+        verdict = _candidate_gate(
+            source, entity_id="九寨沟", lane="article", vertical="travel"
+        )
         assert verdict["passed"], (url, source, verdict)
 
 def test_external_article_category_uses_article_url_shape_not_portal_page():
@@ -597,31 +612,31 @@ def test_source_availability_summary_marks_failed_candidate_ineligible():
     assert "unsupported license" in "\n".join(summary["ineligibleTargets"][0]["issues"])
 
 
-def test_source_availability_summary_treats_missing_homepage_media_as_fatal():
+def test_source_availability_summary_keeps_media_availability_as_auditable_advisory():
     report = {
         "issues": [],
-        "sourceUnavailable": [
-            data_issue(
-                DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                stage=DataIssueStage.DOWNLOAD_PLAN,
-                ref="天童国家森林公园",
-                lane=DataIssueLane.HOMEPAGE,
-                recovery=DataRecoveryAction.STOP,
-                message="homepage has no publishable media",
-            ).as_dict()
+        "sourceUnavailable": [],
+        "homepageMediaAdvisories": [
+            {
+                "entityId": "天童国家森林公园",
+                "sameSourceImageCount": 0,
+                "independentCollectionCount": 0,
+            }
         ],
-        "candidates": [],
+        "candidates": [
+            {
+                "entityId": "天童国家森林公园",
+                "lane": "homepage",
+                "source_id": "home_wikipedia",
+                "passed": True,
+            }
+        ],
     }
 
     summary = _source_availability_summary(report, ["天童国家森林公园"])
 
-    assert summary["readyTargets"] == []
-    assert summary["ineligibleTargetCount"] == 1
-    assert summary["ineligibleTargets"][0]["lanes"] == ["homepage"]
-    assert summary["ineligibleTargets"][0]["blockers"][0]["message"] == (
-        "homepage has no publishable media"
-    )
-    assert summary["ineligibleTargets"][0]["recoveries"] == ["stop"]
+    assert summary["readyTargets"] == ["天童国家森林公园"]
+    assert summary["ineligibleTargetCount"] == 0
 
 def test_source_quality_entity_grounding_accepts_common_entity_alias():
     assessment = score_source_markdown(
@@ -657,7 +672,7 @@ def test_clean_source_markdown_strips_wiki_tail_sections_and_citations():
         "platform: 维基百科\n"
         "title: 都江堰\n"
         "---\n"
-        "都江堰位于四川省成都平原西部的岷江上，是著名的水利工程[1]。\n"
+        "都江堰位于test-region-b成都平原西部的岷江上，是著名的水利工程[1]。\n"
         "由秦国蜀郡太守李冰主持修建[12]，至今仍在灌溉成都平原。\n\n"
         "== 历史 ==\n"
         "都江堰始建于公元前256年，是世界文化遗产。\n\n"
@@ -674,7 +689,7 @@ def test_clean_source_markdown_strips_wiki_tail_sections_and_citations():
     )
     cleaned = clean_source_markdown(raw, raw_format="mediawiki_api_json")
     # 正文与正常小节保留
-    assert "都江堰位于四川省" in cleaned
+    assert "都江堰位于test-region-b" in cleaned
     assert "历史" in cleaned and "都江堰始建于公元前256年" in cleaned
     # 行内引用/失链标记清除
     assert "[1]" not in cleaned and "[12]" not in cleaned and "[来源请求]" not in cleaned
@@ -730,7 +745,9 @@ def test_qunar_search_result_is_directory_not_article_base():
         source_role="base",
     )
 
-    gate = _candidate_gate(source, entity_id="剑门关", lane="article")
+    gate = _candidate_gate(
+        source, entity_id="剑门关", lane="article", vertical="travel"
+    )
 
     assert not gate["passed"], gate
     assert "search result directory" in "\n".join(gate["issues"])

@@ -40,7 +40,7 @@ enum LocalPostPublicationBlockReason {
   remoteFailure,
 }
 
-enum LocalPostPublicationStage { preparingMedia, submitting }
+enum LocalPostPublicationStage { preparingMedia, submitting, cancellingMedia }
 
 final class LocalPostPublicationIntent {
   const LocalPostPublicationIntent({
@@ -83,8 +83,14 @@ final class LocalPostPublicationIntent {
       acceptedAt != null &&
       (publicationState == ContentPostPublicationState.pendingReview ||
           publicationState == ContentPostPublicationState.published);
+  bool get serverAccepted =>
+      postId?.trim().isNotEmpty == true &&
+      committedVersion != null &&
+      acceptedAt != null;
   bool get requiresMediaPreparation =>
       stage == LocalPostPublicationStage.preparingMedia;
+  bool get requiresMediaCancellation =>
+      stage == LocalPostPublicationStage.cancellingMedia;
 
   LocalPostPublicationIntent copyWith({
     SubmitContentPostPublicationCommand? command,
@@ -377,44 +383,107 @@ final class PostPublicationIntentQueueNotifier
     if (intent == null) {
       return;
     }
-    if (intent.publicationAccepted) {
+    if (intent.serverAccepted) {
+      if (intent.publicationState == ContentPostPublicationState.rejected) {
+        _remove(intent.command.localDraftId);
+        await _persist();
+        await _reportBackgroundRetryTerminal(
+          intent,
+          event: 'create_publish_rejected_dismissed',
+          terminal: 'rejected',
+        );
+        _scheduleRetry();
+        return;
+      }
       throw StateError('accepted publication cannot be cancelled locally');
     }
-    if (intent.requiresMediaPreparation) {
-      final coordinator = ContentMediaUploadCoordinator(
-        media: ref.read(createContentMediaFacetProvider),
+    final cancelling = intent.copyWith(
+      stage: LocalPostPublicationStage.cancellingMedia,
+      nextAttemptAt: DateTime.now().toUtc(),
+      blocked: false,
+      clearLastErrorCode: true,
+      clearBlockReason: true,
+    );
+    _replace(cancelling);
+    await _persist();
+    _scheduleRetry();
+    try {
+      await _continueMediaCancellation(cancelling);
+    } on CloudException catch (error) {
+      final latest = _intentForDraft(localDraftId) ?? cancelling;
+      final retryable = _isRetryable(error);
+      await _markFailed(
+        latest,
+        error.code ?? error.runtimeFailure.code,
+        retryable,
+        retryAfter: _retryAfter(error),
+        blockReason: retryable
+            ? null
+            : LocalPostPublicationBlockReason.remoteFailure,
       );
-      final reconciled = <ContentMediaPreparationCheckpoint>[];
-      for (var index = 0; index < intent.preparedMediaAssets.length; index++) {
-        final checkpoint = intent.preparedMediaAssets[index];
-        if (checkpoint.isCompleted ||
-            checkpoint.phase == ContentMediaPreparationPhase.aborted) {
-          reconciled.add(checkpoint);
-          continue;
-        }
-        final resolved = await coordinator.cancelPreparedCheckpoint(checkpoint);
-        if (resolved.phase == ContentMediaPreparationPhase.cancelling) {
-          _replace(
-            intent.copyWith(
-              preparedMediaAssets: <ContentMediaPreparationCheckpoint>[
-                ...reconciled,
-                resolved,
-                ...intent.preparedMediaAssets.skip(index + 1),
-              ],
-            ),
-          );
-          await _persist();
-          throw StateError('media upload cancellation requires reconciliation');
-        }
-        reconciled.add(resolved);
+      rethrow;
+    } catch (error) {
+      final latest = _intentForDraft(localDraftId) ?? cancelling;
+      await _markFailed(latest, error.runtimeType.toString(), true);
+      rethrow;
+    }
+  }
+
+  Future<void> _continueMediaCancellation(
+    LocalPostPublicationIntent intent,
+  ) async {
+    if (intent.serverAccepted) {
+      throw StateError('accepted publication cannot discard media locally');
+    }
+    final coordinator = ContentMediaUploadCoordinator(
+      media: ref.read(createContentMediaFacetProvider),
+    );
+    var current = _intentForDraft(intent.command.localDraftId) ?? intent;
+    for (var index = 0; index < current.preparedMediaAssets.length; index++) {
+      final checkpoint = current.preparedMediaAssets[index];
+      if (checkpoint.phase == ContentMediaPreparationPhase.aborted ||
+          checkpoint.phase == ContentMediaPreparationPhase.deleted) {
+        continue;
       }
-      _replace(intent.copyWith(preparedMediaAssets: reconciled));
-      await _persist();
+      final resolved = await coordinator.cancelPreparedCheckpoint(
+        checkpoint,
+        onCheckpoint: (updated) async {
+          final latest =
+              _intentForDraft(intent.command.localDraftId) ?? current;
+          final checkpoints = List<ContentMediaPreparationCheckpoint>.of(
+            latest.preparedMediaAssets,
+          );
+          checkpoints[index] = updated;
+          current = latest.copyWith(
+            stage: LocalPostPublicationStage.cancellingMedia,
+            preparedMediaAssets: checkpoints,
+          );
+          _replace(current);
+          await _persist();
+        },
+      );
+      if (resolved.phase != ContentMediaPreparationPhase.aborted &&
+          resolved.phase != ContentMediaPreparationPhase.deleted) {
+        throw StateError(
+          'media cancellation has not reached an authoritative terminal state',
+        );
+      }
+      current = _intentForDraft(intent.command.localDraftId) ?? current;
+    }
+    final allTerminal = current.preparedMediaAssets.every(
+      (checkpoint) =>
+          checkpoint.phase == ContentMediaPreparationPhase.aborted ||
+          checkpoint.phase == ContentMediaPreparationPhase.deleted,
+    );
+    if (!allTerminal) {
+      throw StateError(
+        'media cancellation has unfinished authoritative transitions',
+      );
     }
     _remove(intent.command.localDraftId);
     await _persist();
     await _reportBackgroundRetryTerminal(
-      intent,
+      current,
       event: 'create_publish_cancelled',
       terminal: 'cancelled',
     );
@@ -463,7 +532,9 @@ final class PostPublicationIntentQueueNotifier
           .toList(growable: false);
       for (final intent in due) {
         try {
-          if (intent.publicationState ==
+          if (intent.requiresMediaCancellation) {
+            await _continueMediaCancellation(intent);
+          } else if (intent.publicationState ==
               ContentPostPublicationState.pendingReview) {
             await _refreshPendingIntent(intent);
           } else if (intent.publicationAccepted) {

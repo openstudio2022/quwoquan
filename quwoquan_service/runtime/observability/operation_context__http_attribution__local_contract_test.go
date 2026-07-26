@@ -37,7 +37,7 @@ func TestHTTPServerMiddlewareBuildsTypedOperationContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	request := httptest.NewRequest(http.MethodPost, "/content/posts/post-1:publish", nil)
+	request := httptest.NewRequest(http.MethodPost, "/content/content/posts/post-1:publish", nil)
 	request.Header.Set("X-Request-Id", "request-1")
 	request.Header.Set("X-Trace-Id", "trace-1")
 	request.Header.Set("Idempotency-Key", "idempotency-1")

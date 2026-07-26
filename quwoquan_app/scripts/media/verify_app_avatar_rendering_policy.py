@@ -9,7 +9,7 @@ LIB = ROOT / "quwoquan_app/lib"
 MEDIA_ROOT = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
 CHAT_FIXTURE = (
     ROOT
-    / "quwoquan_service/contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.json"
+    / "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json"
 )
 
 violations = []

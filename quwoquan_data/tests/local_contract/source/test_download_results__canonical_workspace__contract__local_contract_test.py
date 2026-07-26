@@ -21,7 +21,7 @@ def test_all_download_gate_readers_use_canonical_workspace(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    execution_id = "20260712--travel-homepage-coverage--cn-zhejiang--m1-099"
+    execution_id = "20260712--travel-homepage-coverage--test-region-a--scale-099"
     execution_dir = tmp_path / execution_id
     command_root = execution_dir / "_shared" / "workspace" / "source"
     report_dir = command_root / "results" / "image_fetch_gate"

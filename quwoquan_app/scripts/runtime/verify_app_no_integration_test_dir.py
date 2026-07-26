@@ -8,13 +8,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 INTEGRATION_DIR = ROOT / "quwoquan_app" / "integration_test"
-INVENTORY = ROOT / "specs" / "gates" / "environment_test_layout_inventory.md"
 
 
 def main() -> int:
-    if not INVENTORY.is_file():
-        print(f"BLOCK: inventory missing: {INVENTORY}", file=sys.stderr)
-        return 1
     dart_files = []
     if INTEGRATION_DIR.exists():
         dart_files = sorted(INTEGRATION_DIR.rglob("*.dart"))

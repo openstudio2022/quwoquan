@@ -16,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[3]
 SERVICE_DIR = (
     ROOT
     / "quwoquan_service"
+    / "services"
+    / "assistant-service"
     / "contracts"
-    / "metadata"
-    / "assistant"
 )
 
 def route_auth_mode(route: dict) -> str:
@@ -49,7 +49,7 @@ def is_explicit_public_catalog_route(route: dict) -> bool:
 def main() -> int:
     by_operation: dict[str, dict] = {}
     failures: list[str] = []
-    service_paths = sorted(SERVICE_DIR.glob("*/service.yaml"))
+    service_paths = sorted(SERVICE_DIR.glob("*/*/operations.yaml"))
     if not service_paths:
         print(f"FAIL: {SERVICE_DIR} has no service metadata", file=sys.stderr)
         return 1

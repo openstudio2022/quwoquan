@@ -1,36 +1,68 @@
-# L3 子特性：works-unified-feed
+# L3 Story：作品统一内容流 (`works-unified-feed`)
 
-## 功能说明
+> 所属能力：[`dual-rail-discovery-redesign`](../spec.md)
 
-新增服务端混排统一 works-feed API 端点，替代当前三路独立 feed（`images`/`video`/`article`）。服务端负责三类精品内容的交替排序，客户端通过 `filter_type` 参数筛选，共用同一 cursor 分页。
+> Journey / Scenario：[`JNY-003 / SCN-007`](../../../spec.md#scn-007)
 
-## 范围
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- 新增 `GET /content/works-feed` 端点到 `contracts/metadata/content/service.yaml`
-- 端侧新增 `ContentRepository.listWorksFeedPage(filterType, cursor, limit)` 方法
-- `WorksFeedProvider`（Riverpod AsyncNotifier）：管理 works-feed cursor 分页状态
-- `filter_type` 枚举：`null`（全部）/ `image` / `video` / `article`
-- 响应类型：`CursorPage<PostBaseDto>`，沿用现有 `postBaseDtoFromMap()` 多态派发
+## 1. 用户价值
 
-## 适用范围与约束
+作为浏览作品的用户，
+我希望在同一内容流查看图片、视频和文章并进入各自统一浏览落点，
+从而以一致方式发现不同形态的作品。
 
-- **适用**：作品频道所有三类媒体（美图/视频/文章）；`filter_type` 筛选切换时 cursor 重置
-- **不适用**：微趣（moment）使用独立 category；推荐排序算法逻辑由后端实现
-- **约束**：
-  - 端点必须先在 `service.yaml` 声明，`make verify` → `make codegen` 后方可编写 Repository
-  - Remote 实现必须使用 `CloudRuntimeConfig.gatewayBaseUrl`，禁止硬编码 URL
-  - Mock 实现必须覆盖三类 DTO（至少各 2 条混排样本）
+## 2. 范围与非目标
 
-## 与父/子节点关系
+### In Scope
 
-- **父**：`dual-rail-discovery-redesign`（L2）
-- **依赖**：`feed-item-dto-contract`（FeedItemDto/PostBaseDto 已 codegen）
-- **被依赖**：`works-immersive-viewer` 的 `WorksFeedProvider` 依赖本节点输出
+- “作品统一内容流”的输入、可观察主路径、失败语义以及与父能力的交接。
 
-## 验收标准概要
+### Out of Scope
 
-- A1：`service.yaml` 中 works-feed 端点定义存在，`make codegen` 生成对应 Repository 方法签名
-- A2：Mock 实现返回三类 DTO 混排，`postBaseDtoFromMap()` 正确派发类型
-- A3：`filter_type=image` 只返回 `PhotoPostDto`；`filter_type=null` 返回混排
-- A4：cursor 分页：第二页 cursor 正确，追加到现有列表末尾，不重复
-- A5：Remote 实现使用正确端点路径和 `CloudRequestHeaders.forPage('works.feed')`
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 作品统一内容流
+
+- 端点必须先在 `service.yaml` 声明，`make verify` → `make codegen` 后方可编写 Repository。
+
+<a id="req-002"></a>
+### REQ-002 端点必须先在 service.yaml 声明，make verify → make codegen 后方可编写 Repository
+
+- 端点必须先在 `service.yaml` 声明，`make verify` → `make codegen` 后方可编写 Repository。
+- Remote 实现必须使用 `CloudRuntimeConfig.gatewayBaseUrl`，禁止硬编码 URL。
+- Mock 实现必须覆盖三类 DTO（至少各 2 条混排样本）
+
+## 4. 契约引用
+
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 作品统一内容流
+
+- GIVEN 内容创作者或浏览者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“作品统一内容流”对应的公开行为。
+- THEN 端点必须先在 `service.yaml` 声明，`make verify` → `make codegen` 后方可编写 Repository。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`dual-rail-discovery-redesign`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 作品统一内容流 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“作品统一内容流”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

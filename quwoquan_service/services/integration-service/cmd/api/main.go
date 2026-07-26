@@ -19,16 +19,18 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	rtgov "quwoquan_service/runtime/governance"
+	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
-	httpadapter "quwoquan_service/services/integration-service/internal/adapters/http"
-	"quwoquan_service/services/integration-service/internal/application"
-	"quwoquan_service/services/integration-service/internal/infrastructure/provider"
-	"quwoquan_service/services/integration-service/internal/infrastructure/providerbinding"
+	httpadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/http"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/providerbinding"
+	locationapplication "quwoquan_service/services/integration-service/internal/external_integration/location/application"
 )
 
 func main() {
@@ -58,6 +60,28 @@ func run() error {
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
 		return fmt.Errorf("access token verifier invalid: %w", err)
+	}
+	accountSecurityAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"integration-service",
+		[]string{"user.account.security.read"},
+	)
+	if err != nil {
+		return fmt.Errorf("account security authority credential init failed: %w", err)
+	}
+	accountSecurityAuthorityTimeout := time.Duration(
+		cfg.AccountSecurityAuthority.TimeoutMs,
+	) * time.Millisecond
+	accountSecurityAuthority, err := rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL:     cfg.AccountSecurityAuthority.BaseURL,
+			HTTPClient:  &http.Client{Timeout: accountSecurityAuthorityTimeout},
+			Credentials: accountSecurityAuthorityCredentials,
+			Timeout:     accountSecurityAuthorityTimeout,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("account security authority config invalid: %w", err)
 	}
 	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
@@ -113,11 +137,11 @@ func run() error {
 		return fmt.Errorf("exception logger init failed: %w", err)
 	}
 
-	var locationService *application.Service
+	var locationService *locationapplication.Service
 	locationAdapter := "blocked"
 	locationTimeout := int64(0)
 	if locationCapabilityBlocked {
-		locationService, err = application.NewService(
+		locationService, err = locationapplication.NewService(
 			provider.NewUnavailableLocationProvider(locationBindingErr.Error()),
 		)
 	} else {
@@ -149,7 +173,7 @@ func run() error {
 		if providerErr != nil {
 			return fmt.Errorf("location provider initialization failed: %w", providerErr)
 		}
-		locationService, err = application.NewService(locationProvider)
+		locationService, err = locationapplication.NewService(locationProvider)
 		locationAdapter = locationBinding.AdapterID
 		locationTimeout = locationBinding.Timeout.Milliseconds()
 	}
@@ -253,11 +277,11 @@ func run() error {
 	).Routes()
 
 	rootMux := http.NewServeMux()
-	rootMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("account_security_authority", func(hctx context.Context) error {
+		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
 	})
+	rootMux.HandleFunc("/healthz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
 	rootMux.Handle(
 		"/",
@@ -283,8 +307,9 @@ func run() error {
 	server := &http.Server{
 		Addr: cfg.Service.HTTP.Addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
-			AccessTokenVerifier:  accessVerifier,
-			DeviceTicketVerifier: deviceVerifier,
+			AccessTokenVerifier:      accessVerifier,
+			DeviceTicketVerifier:     deviceVerifier,
+			AccountSecurityAuthority: accountSecurityAuthority,
 		})(rateLimited),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,

@@ -195,6 +195,7 @@ def run(
     check: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     merged_env = os.environ.copy()
+    merged_env.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     if env:
         merged_env.update(env)
     with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:

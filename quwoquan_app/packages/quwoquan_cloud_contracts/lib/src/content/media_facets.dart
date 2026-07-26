@@ -44,13 +44,28 @@ abstract interface class ContentMediaAssetQuery {
   Future<ContentMediaAssetSlice> getMediaAsset(GetContentMediaAssetQuery query);
 }
 
+final class ContentMediaAssetCommandContext {
+  const ContentMediaAssetCommandContext({required this.idempotencyKey});
+
+  final String idempotencyKey;
+}
+
+abstract interface class ContentMediaAssetCommandWriter {
+  Future<ContentMediaAssetDiscardResult> discardMediaAsset(
+    DiscardContentMediaAssetCommand command,
+    ContentMediaAssetCommandContext context,
+  );
+}
+
 abstract interface class ContentMediaCoverCommandWriter {
   Future<ContentMediaCoverSelectionResult> selectAutoCover(
     SelectAutoContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
   );
 
   Future<ContentMediaCoverSelectionResult> selectManualCover(
     SelectManualContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
   );
 }
 
@@ -68,5 +83,6 @@ abstract interface class ContentMediaFacet
         ContentMediaUploadCommandWriter,
         ContentMediaUploadQuery,
         ContentMediaAssetQuery,
+        ContentMediaAssetCommandWriter,
         ContentMediaCoverCommandWriter,
         ContentMediaOriginalAccessWriter {}

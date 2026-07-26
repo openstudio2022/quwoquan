@@ -1,3 +1,7 @@
+// spec_ref: specs/feature-tree/spec.md#uat-001
+// spec_ref: specs/feature-tree/global-search-experience/spec.md#dom-001
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/spec.md#sit-001
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
 /// user_acceptance Patrol：全局搜索真实 Gamma 旅程。
 ///
 /// 本用例启动真实 App 与 production Remote composition，不注入 Mock、fixture
@@ -11,7 +15,7 @@
 ///     --dart-define=APP_RUNTIME_ENV=gamma \
 ///     --dart-define=API_CONTRACT_ENV=gamma \
 ///     --dart-define=RUN_T4_PATROL=true \
-///     --dart-define=QWQ_PATROL_SESSION_MODE=local_gamma_anonymous \
+///     --dart-define=QWQ_PATROL_SESSION_MODE=gamma_local_anonymous_runtime \
 ///     --dart-define=CLOUD_GATEWAY_BASE_URL=https://gamma-api.localhost:19000
 library;
 
@@ -20,6 +24,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/services/search_recent_history_store.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 
@@ -100,6 +105,11 @@ void main() {
         reason: '结果页必须渲染 Gamma ES 中的真实西湖内容，不得使用端侧假数据',
       );
 
+      // 等待提交路径完成 RecentSearchState 远端 upsert，再销毁当前页面状态并
+      // 清空本地表现层缓存。随后只能由 Remote hydrate 重新显示该查询。
+      await $.pump(const Duration(seconds: 2));
+      await patrolGoTo($, AppRoutePaths.home);
+      await SearchRecentHistoryStore.clearAllNamespaces();
       await patrolGoTo($, AppRoutePaths.globalSearch);
       final recentSearchVisible = await _waitForFinder(
         $,
@@ -109,7 +119,7 @@ void main() {
       expect(
         recentSearchVisible,
         isTrue,
-        reason: '登录态搜索后必须从 Remote RecentSearchState 回显最近搜索',
+        reason: '匿名登录态清空本地缓存后必须从 Remote RecentSearchState 回显最近搜索',
       );
     },
   );

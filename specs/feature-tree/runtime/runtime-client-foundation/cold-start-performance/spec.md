@@ -1,159 +1,147 @@
-# L3 特性：cold-start-performance
+# L3 Story：冷启动安全进入与致命异常恢复 (`cold-start-performance`)
 
-## 归属
+> 所属能力：[`runtime-client-foundation`](../spec.md)
+>
+> Journey / Scenario：[`JNY-002 / SCN-005`](../../../spec.md#scn-005)
+>
+> 设计归属：[L2 DEC-002](../design.md#dec-002)
 
-- Journey：应用冷启动 → 品牌欢迎 → 主壳
-- L1_domain_service：`runtime`
-- L2_business_capability：`runtime-client-foundation`
-- L3_story：`cold-start-performance`
-- 验收：`GWT + SIT + UAT`；证据为 `local_contract + api_integration + user_acceptance`。
-  其中状态机与视觉合同以本地契约为主，匿名启动遥测接入、幂等、投影和告警以
-  `api_integration` 为主，真机/网页完整路径以 `user_acceptance` 为主。
+## 1. 用户价值
 
-## 用户目标
+作为启动应用的用户，
+我希望应用能够安全运行时直接进入登录页、首页、新用户流程或降级 Shell，只有确实无法安全启动时才进入确定、克制且始终可操作的恢复页，
+从而避免白屏、技术信息暴露、误判故障和无意义的重复重试。
 
-- 点开应用后尽快看到稳定的品牌终态，不出现被拉伸的整屏图、第二套原生动画或长时间空蓝。
-- Flutter 首帧稳定后立即完整播放一次「全开 → 逆序聚拢 → 顺时针逐瓣绽放」，初始化与动效并行。
-- Shell 可构建时一轮结束即进入；正常目标为进程启动后 3 秒内完成 Shell 首帧。
-- 偶发初始化偏慢时用最多两次重放和一行提示承接；任何可控启动不得晚于进程启动后 6 秒离开欢迎页。
+## 2. 范围与非目标
 
-## 时间契约
+### In Scope
 
-`StartupWelcomeTiming.production` 是唯一生产默认值：
+- Android/iPhone 正常冷启动、Flutter Engine、根组件、必要数据库、核心配置与根依赖的致命失败边界。
+- 同 Build 上一进程在进入安全 Shell 前发生且有平台强证据的硬崩溃恢复。
+- 启动恢复 S0 检查中、S1 有新版、S2 已最新、S3 检查未完成四个状态。
+- 原生最小恢复页、版本确认、iOS App Store、Android 官网 APK 和官方网页版恢复。
+- 脱敏异常先保存、后异步上报与后续补报。
+- 正常启动性能采样、Welcome 动效和安全 Shell 交接。
 
-| 阶段 | 时长 |
-|---|---:|
-| 原生/Flutter 终态接管 hold | 90ms |
-| 逆序聚拢 | 单瓣 240ms、stagger 25ms，总计 415ms |
-| 花苞停顿 | 70ms |
-| 顺时针绽放 | 单瓣 500ms、stagger 45ms，总计 815ms |
-| 全开稳定 | 90ms |
-| 首轮合计 | 1480ms |
-| 单次重放 | 1390ms |
-| 正常 Shell 首帧目标 | ≤3s |
-| 欢迎页硬退出上限 | ≤6s |
-| 最大重放 | 2 次 |
+### Out of Scope
 
-- `6s` 是从 Android Activity / iOS AppDelegate / Web bootstrap 最早单调时钟起算的硬上限，不是最短停留时间。
-- 测试不得改写生产默认值；短时测试只通过 `StartupWelcomeTiming.test` 与 fake clock 注入。
-- Flutter 首帧已经消耗大部分预算时，可压缩一次完整周期，比例不得低于 `0.65`；预算不足时保持全开 90ms 内直接进入降级 Shell。
+- 普通断网、接口超时、登录失效、权限拒绝、非关键模块故障和可局部降级错误。
+- 只有启动等待超时但没有捕获到致命异常的情形。
+- 启动恢复页的重试、自动重启、自动重复跳转商店或下载页。
+- 应用内 APK 下载器、iOS 应用内安装、强制退出应用。
+- 启动尝试 ID、诊断编号、异常指纹和启动检查点列表。
 
-## 启动故障终态合同
+## 3. 行为要求
 
-- `runApp` 前的配置、绑定或初始化失败不得只写 Zone 日志。最小 Flutter 绑定建立后，
-  必须挂载不依赖 Router、Repository 或远端配置的恢复根；恢复根显示结构化、脱敏的
-  失败语义，并提供重新尝试或支持引导。
-- Root 在首个 Flutter 帧提交时即武装绝对截止，不能等待 Welcome 可见回调。该截止从
-  原生/Web 最早单调时钟起算；`onFinish`、Router 预加载、生命周期恢复、observer
-  异常和 shell 首帧彼此竞争时，只能单向进入 `safeRecovery`、`safeShell` 或
-  `routerShell` 之一。
-- Router deferred load 有单次共享的、带超时的尝试状态。加载失败、永不完成或 Router
-  builder 抛错时，显示可操作安全 Shell；重试创建新的受控加载尝试，不能仅重绘既有
-  失败 future。
-- Android/iOS 在前台预算内未收到 Flutter renderer 首帧确认时显示无动画原生恢复面，并把该
-  attempt 原子写入本地 journal；后台暂停预算，恢复后重新判断。收到首帧确认后原生层只能
-  记录 `startup_safe_terminal_slow`，不得覆盖已可见的 Flutter 恢复根、Welcome 或 Shell。
-- 每个 attempt 在首次 arm 时固定单一单调时钟 origin；native process clock 迟到只能补充
-  诊断，不能重新 arm、rebase 或改变该 attempt 的绝对 deadline。
-- 原生“重试”必须生成新的 attemptId，并隔离旧 watchdog/journal；`Activity.recreate()` 不是
-  进程冷启动，不能被记录或宣称为冷启动重试。
-- 安全 Shell 或 Router Shell 的真实首帧绘制后，欢迎 overlay 才能在剩余 120ms 预算内
-  淡出和移除；`child == null`、Router redirect/error 或失败回调不得退化为空白页。
+<a id="req-001"></a>
+### REQ-001 能进入安全 Shell 就不得显示恢复页
 
-## 状态机
+- 正常启动目标仍为 3 秒进入 Shell；启动时限只用于性能观测和告警，不作为致命异常判定。
+- 登录页、首页、新用户流程或明确可安全运行的降级 Shell 首帧完成后，当前 Build 标记为已进入安全 Shell并清除该 Build 的启动失败状态。
+- 普通网络、登录、权限、业务接口或非关键依赖失败必须留在应用内按所属错误语义降级。
 
-`nativeStatic → handoffHold → gathering → budPause → blooming → openSettle → ready/replay/degraded → shellFirstPaint → fadeOut → overlayRemoved`
+<a id="req-002"></a>
+### REQ-002 启动致命异常采用闭集判定
 
-- `shellEntryReady` 只表示 Router、Provider 与安全 Shell 可构建，不等待首页、聊天、资料或远端同步。
-- readiness 在动效中只锁存，只能在 `openSettle` 全开边界决定退出。
-- 首轮未 ready 才显示单行 `启动中，马上进入` 并进入 replay 1；每轮结束重新检查，最多 replay 2。
-- 只有剩余预算足够完整播放下一轮并预留 120ms Shell 转场时才重放。
-- `onFinish` 使用 terminal latch，readiness、deadline、生命周期恢复与 cycle completion 竞争时整个生命周期恰好调用一次。
-- 进入后台暂停 controller，但单调时钟继续；恢复时若超过硬期限，直接进入降级 Shell。
-- `disableAnimations=true` 时保持全开静态终态，不做折叠，也不得无限等待。
+- Flutter Engine、根组件、必要数据库、核心资源或配置、无安全降级的必要依赖、根路由或主容器确认无法创建时停止后续初始化并进入 S0。
+- Android 只依据同 Build 的 Java 未处理异常或 `ApplicationExitInfo` crash/native crash，iOS 只依据同 Build 的未处理 NSException 或后来到达的 MetricKit crash diagnostic 判定上一进程启动崩溃。
+- 用户强制结束、系统回收、低内存终止、设备关机或只有未完成标记不得判为启动崩溃。
 
-## 视觉与原生边界
+<a id="req-003"></a>
+### REQ-003 启动恢复状态由版本服务可靠推进
 
-- Android/iOS 原生层只显示自适应渐变背景、同源透明品牌簇与贴底品牌名条，不实现 controller、提示、重放或动画进度；Android 渐变与启动色资源必须由原生资产生成器从 Dart 品牌 token 生成，不允许手调第二套色值。
-- 欢迎页信息结构固定为：深蓝渐变背景 + 八瓣花 + slogan「遇见同趣，绽放热爱」+ 底部品牌名「趣我圈」+ 系统状态栏；不出现中央大标题、小趣低语、按钮、进度或装饰光斑。品牌深蓝与浅色状态栏内容在深浅色系统模式下统一，不随主题切换。
-- 图一高保作为视觉验收参考但不进入运行时资产：背景使用上亮下深的纯净品牌蓝渐变；花瓣保持高饱和全开终态；slogan 使用单色近白、32sp/600（紧凑屏 28sp）；底部品牌名使用同字体家族 18sp/500。禁止截图文字、未知授权字体、噪点纹理和可识别光斑。
-- 品牌中文字体固定为仓内 `Noto Sans SC` 可变字体；OFL-1.1、上游 commit 与 SHA-256 由 bundled font manifest 审计，该字体是正式选择而非开发态 fallback。
-- 花朵可见直径约占屏宽 40%（clamp 132~168dp）；品牌簇整体锚定 `Alignment(0, -0.12)`；底部品牌名视觉中心约在屏幕高度 90% 且不进入底部安全区。品牌簇只暴露单一无障碍语义「趣我圈，遇见同趣，绽放热爱」。
-- Android 12+ 必须使用同源的静态花瓣 icon，避免系统 SplashScreen API 忽略普通 `windowBackground` 品牌簇后退化成纯蓝屏；该 icon 不得包含动画、提示、状态或进度镜像。Launcher 直接进入 `MainActivity`，不得恢复 `StartupActivity`、`NativeWelcomeView` 或 overlay。
-- Flutter `WelcomeScreen` 是唯一动效页面；`/welcome` 使用 `WelcomeFlowMode.entry`，固定一轮、零重放、不依赖 startup readiness。
-- 每片花瓣使用 `bloomAmount ∈ [0,1]`：`0` 是历史花苞态，`1` 是全开终态；全开不应用动态变换，和原生静态终态、应用图标保持 identity。
-- 历史花苞视觉因子固定为 `easeOutCubic(0.24)=0.561024`；`visualFactor=lerp(0.561024, 1, bloomAmount)`。
-- 花瓣宽高、花瓣中心半径、透明度和阴影强度统一使用 `visualFactor`；宽高比全程保持 `52:94`，中心半径从 `54×0.561024` 单调增加到 `54`。
-- 聚拢使用 `easeInOutCubic` 并按 `7→0` 逆序；绽放使用远端基线的 `easeOutCubic` 并按 `0→7` 顺时针逐瓣执行。
-- 禁止 `Matrix4.rotateX/Y`、透视 `setEntry`、`scaleY`、宽高分别插值、spring 或 overshoot；平面品牌标识不使用缺乏深度线索的伪 3D 折叠。
-- 单一 `AnimationController` 通过纯函数时间轴计算八片花瓣，不恢复八控制器和 Timer 队列。
-- 欢迎页、登录页品牌标和应用图标消费同一个 `WelcomeAppearance`；禁止用透明度、渐变分支或独立 painter 形成第二套八瓣花终态。
-- 花蕊、slogan、底部品牌名和品牌簇位置固定；重放提示限一行、24px 高，轻微淡入固定挂在品牌名上方，不推动其他元素重排，不使用卡片或阶段列表。
+- S0 固定显示“应用暂时无法启动／正在检查可用版本／正在检查…／使用网页版”，网页版从首帧起可用。
+- 版本服务确认远端 Build 大于当前 Build 后进入 S1，显示“当前版本需要更新／更新后即可正常启动／前往更新／使用网页版”。
+- 版本服务确认当前 Build 已是最新后进入 S2，只显示“当前已是最新版本／请使用网页版继续／使用网页版”。
+- 版本检查在可见截止时间内未完成时进入 S3，只显示“应用暂时无法启动／请使用网页版继续／使用网页版”；随后获得可靠结果可平滑进入 S1 或 S2。
+- 本地缓存、网络失败或解析失败不得推断“需要更新”或“已是最新版本”。
 
-## Shell 与失败边界
+<a id="req-004"></a>
+### REQ-004 iOS 与 Android 使用不同受信更新通道
 
-- Router deferred library 从欢迎页可见后并行预加载，不串行追加在动效之后。
-- 欢迎终态结束后先渲染正常 Shell；Router 构建失败则渲染可操作的安全错误 Shell，禁止回到欢迎页。
-- Shell 首帧在欢迎层背后出现后，欢迎静态终帧用 120ms opacity 淡出；动画回调异常时同一 120ms 预算的 terminal fallback 必须移除 Flutter 欢迎层，禁止已画出 Shell 仍被欢迎层遮住。
-- auth、appearance、日志、realtime、analytics 和 startup prerequisites 均为 best-effort；失败记录 `failureKind/sourceCode/requestId/traceId`，不得阻断欢迎页退出。
-- 首页与业务页面继续由各自的骨架、缓存、失败和重试生命周期承接，不新增客户端私有错误码。
+- iOS 的“前往更新”只打开已验证的 App Store 产品页；不能在应用内下载安装或强制退出。
+- Android 的“前往更新”只打开趣我圈官方 HTTPS 下载端点，下载端点重定向至受信 CDN 上的当前正式签名 APK；不打开第三方商店或来源不明 APK。
+- 通用官网下载页按 User-Agent 自动识别 iOS、Android/鸿蒙或桌面；iOS 进入 App Store，Android/鸿蒙进入 APK 下载，桌面提供两个明确入口。
+- 更新或下载页返回前台后只重新读取本地 Build 和查询版本，不自动重新启动流程或重复打开外部页面。
 
-## 启动遥测与隐私
+<a id="req-005"></a>
+### REQ-005 恢复页只表达事实、状态和动作
 
-- 每次启动由 native/Web 最早阶段生成 `StartupAttempt`，以 `attemptId + sequence` 作为
-  幂等主键。该标识只能用于单次启动下钻，禁止作为 Prometheus label 或用户身份。
-- 统一阶段为 `native_pre_flutter`、`dart_bootstrap`、`configuration_validation`、
-  `flutter_first_frame`、`router_preload`、`router_ready`、`router_failure`、
-  `shell_first_paint`、`home_feed_first_usable` 和 terminal/recovery；每条记录只含
-  phase、单调耗时、终态/恢复面、平台、版本、环境与脱敏 failure code/source。
-- `home_feed_first_usable` 只在默认推荐首页的非空内容卡片已经完成首帧、且欢迎遮罩已经
-  实际移除后记录；Router ready、Provider `AsyncData`、空态、错误态、其他频道与后台
-  `IndexedStack` 页面均不得伪造该阶段。
-- 首帧、失败、恢复和 attempt summary 100% 写入容量受限的本地 journal；正常详细阶段可
-  受控采样，但每次启动至少保留一条 summary。journal 不按登录 actor 分区，只有服务端
-  ACK 覆盖整批稳定 eventId 后才能删除，零 ACK 或部分 ACK 必须保留重试。
-- `/ops/startup-events` 是专用、受限、固定 schema 的匿名接收面；它复用 Ops 投影但不
-  放宽 `/ops/events` 的登录主体要求。客户端和服务端都必须拒绝用户标识、原始异常、
-  堆栈、token、业务文本及未声明字段。
-- Android/iOS 原生 fatal/timeout 仅落盘，下一次成功启动补传；Web 使用 IndexedDB，
-  `sendBeacon` 仅作 pagehide 加速，不能替代可恢复 drain。
+- 页面只包含系统状态栏、标题、副标题、一个固定上方操作槽、一个固定下方操作槽和系统底部安全区。
+- 不显示 Logo、花瓣、图标、插画、卡片、错误红色、技术原因、错误码、诊断编号、日志状态、版本号、客服或其他说明。
+- 背景、文字、按钮、间距、圆角与交互热区只使用现有语义 Token，并向原生资源生成等价值。
+- 状态切换只使用 80ms 旧内容淡出、120ms 新内容淡入和 120ms 按钮颜色/透明度过渡，内容簇位置保持固定。
 
-## 指标与告警
+<a id="req-006"></a>
+### REQ-006 致命异常日志静默且不阻塞恢复
 
-| 指标 | 定义 / 目标 |
-|---|---|
-| TTID | 品牌静态终态可见；P50 ≤1s、P95 ≤2s |
-| `shellFirstPaintMs` | `processStart → shellFirstPaint`；正常目标 ≤3s |
-| `welcomeExitMs` | `processStart → welcomeExit`；硬门 ≤6s，超限率 0 |
-| `overlayRemovedMs` | `processStart → Flutter 欢迎层实际移除`；硬门 ≤6s，超限率 0 |
+- 异常数据只包含 `occurredAt`、`appVersion`、`buildNumber`、`platform`、`osVersion`、`deviceModel`、`errorSource`、`errorType`、`errorMessage`、`stackTrace`。
+- 错误摘要和堆栈上传前脱敏；禁止诊断编号、启动尝试 ID、发布渠道、检查点、异常指纹、身份与业务内容、Token/Cookie/请求头、用户名路径和完整 URL 查询参数。
+- 异常先写入加密本地队列，再展示恢复页并异步上传；失败不改变页面、更新、下载或网页版状态。
+- 队列最多 20 条、最长 7 天、单条不超过 64KiB；消息最多 2KiB、堆栈最多 32KiB；损坏记录必须安全丢弃。
 
-`startup_welcome_sequence` 是本地启动探针事实，必须记录：`phase`、`motionSpec=petal_bloom`、`cycleIndex`、`replayCount`、`deadlineOrigin`、`elapsedSinceProcessStartMs`、`remainingBudgetMs`、`readyAtCycleStart`、`readyAtCycleEnd`、`hintVisible`、`motionReduced`、`animationCompressed`、`exitReason`、`buildFrameP95Ms`、`rasterFrameP95Ms`、`shellFirstPaintMs`、`overlayRemovedMs`。它只进入设备/Web 发布 UAT 证据，不再投影为不存在生产者的 `ops_events_total` 或 `ops_event_metrics_*`。
+## 4. 契约引用
 
-启动投影必须产生 `ops_startup_phase_total` 和阶段耗时 histogram；标签只能包含低基数
-`phase`、`outcome`、`platform`、`runtime_env` 与 `recovery_surface`。Mongo→ES 与指标
-投影使用可重试 outbox/DLQ，投影失败、journal 丢弃、未终态 attempt 和补传延迟均需
-可查询和可告警。
+- 版本与下载：`quwoquan_service/services/product-ops-service/contracts/product_ops/app_release/operations.yaml`
+- 恢复异常：`quwoquan_service/services/product-ops-service/contracts/product_ops/recovery_failure/operations.yaml`
+- 受信公开链接：`quwoquan_service/contracts/metadata/_shared/link_templates.yaml`
 
-`ops_startup_phase_duration_seconds` 的首帧 P95 不得超过 2 秒、`shell_first_paint`
-阶段 P95 不得超过 3 秒；`native_pre_flutter → terminal` 漏斗缺口超过 1%、`recovery`
-比例超过 0.1% 或任意 `terminal/journal_drop` 都必须触发告警。上述指标只由
-`/ops/startup-events` 新插入的受限事件生产，不能以旧 Analytics/AppLog 的采样事件替代。
+## 5. 验收场景
 
-在线告警只使用受限启动遥测的低基数阶段指标，以及 SLS 中 100% 采集的 `app_startup`
-产品事件。`app_startup` 的内容可用 P95 超过 3 秒或 `hasError` 比例超过 0.1% 时告警。
+<a id="gwt-001"></a>
+### GWT-001 正常、缓慢和可降级启动进入安全 Shell
 
-以下阈值属于 Android、iPhone 与 Web 发布 UAT 硬门，由启动探针报告阻断放量，不冒充在线指标：
+- GIVEN 启动没有闭集中的致命异常，或只发生等待超时、网络、登录、权限或非关键依赖故障。
+- WHEN 应用完成可用根路由或降级 Shell 的首帧。
+- THEN 用户进入应用而不是恢复页，当前 Build 被标记为已进入安全 Shell，启动性能另行记录。
 
-- replay 1 比例 >5%
-- replay 2 比例 >0.5%
-- `degraded/deadline` 比例 >0.1%
-- 任一 `welcomeExitMs > 6000`
-- 任一 `overlayRemovedMs > 6000` 或字段缺失
-- 动效期间单帧 >32ms 连续两帧
+<a id="gwt-002"></a>
+### GWT-002 启动致命异常无重试并可靠分流
 
-## Out of Scope
+- GIVEN 当前进程捕获启动致命异常，或平台强证据确认同 Build 上次在安全 Shell 前崩溃。
+- WHEN 恢复页检查版本。
+- THEN 首帧立即提供网页版；有新版时 iOS 进入 App Store、Android 经官网 HTTPS 端点下载正式签名 APK，已最新或未完成时提供网页版且不存在启动重试。
 
-- 恢复原生动态欢迎、原生提示或 MethodChannel 动画 handoff
-- 为等待首页业务数据延长欢迎页
-- 用 debug 启动耗时替代 profile/release 商用结论
-- 把模拟器截图或 build 成功记录为 Android/iPhone 真机 UAT
+<a id="gwt-003"></a>
+### GWT-003 异常日志失败不影响恢复
+
+- GIVEN 无网络、日志服务失败、本地队列已接近上限或单条记录损坏。
+- WHEN 启动致命异常进入恢复状态。
+- THEN 页面和外部恢复动作立即可用，队列按加密、脱敏、上限和补报规则收敛，日志故障不会产生第二次崩溃。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
+- 协作 Story：[`public-content-web-entry`](../public-content-web-entry/spec.md)、[`unrecoverable-runtime-recovery`](../unrecoverable-runtime-recovery/spec.md)。
+- 父级设计：[L2 DEC-002](../design.md#dec-002)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 正式商店、签名 APK 与真机故障证据
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前缺少正式 iOS App Store 产品 ID、Android 生产签名密钥、官网 CDN 正式 APK URL，以及 Android/iPhone 真机硬崩溃与外部跳转录像证据。
+- 完成判定：`GWT-002` 在 Alpha、Beta、Gamma 和 Prod 对应真实端点完成，且 Prod APK 签名、SHA-256、包名与发布配置一致。
+- 依赖：Apple 开发者后台、Android 生产签名 Secret、官方域名/CDN 与发布权限。
+
+<a id="open-002"></a>
+### OPEN-002 iOS signal 类崩溃即时分类边界
+
+- 类型：`risk`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：在不新增远程 Crash SDK、不安装 signal handler 的约束下，部分 Swift fatal、abort 与 signal 崩溃只能在 MetricKit 后续送达诊断后确认，无法保证下一次启动即时进入恢复页。
+- 完成判定：NSException、MetricKit 与用户终止负例均有真机证据，未覆盖边界在发布说明和监控中保持可见。
+
+<a id="open-003"></a>
+### OPEN-003 静默异常队列端云闭环
+
+- 类型：`implementation_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：旧启动遥测仍包含 attempt/checkpoint 语义，尚未切换为严格十字段的恢复异常、端侧加密队列与断网补报，不能证明日志失败不会影响恢复操作。
+- 完成判定：`GWT-003` 由端侧队列、服务接收、本地损坏负例和断网补报测试直接 `spec_ref` 证明，旧 `/ops/startup-events` 不再承载恢复异常。
+- 依赖：`product-ops-service` 的 `recovery_failure` 契约与 iOS/Android 安全存储实现。

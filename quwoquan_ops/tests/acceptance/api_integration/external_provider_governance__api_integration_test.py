@@ -11,8 +11,8 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 
 
-def test_gamma_integration_is_blocked_until_real_provider_bindings_are_injected() -> None:
-    """A missing secret must remain a release blocker, never become a local success."""
+def test_gamma_integration_uses_enabled_release_candidate_bindings() -> None:
+    """Gamma must bind enabled real adapters before runtime credential preflight."""
     compiled, issues = governance.load_and_compile()
 
     assert issues == []
@@ -22,9 +22,14 @@ def test_gamma_integration_is_blocked_until_real_provider_bindings_are_injected(
         if readiness["required"]
     }
     assert required
-    assert all(readiness["state"] == "blocked" for readiness in required.values())
-    assert not any(readiness["capability_ready"] for readiness in required.values())
+    assert all(readiness["state"] == "enabled" for readiness in required.values())
+    assert all(
+        not governance.is_prod_forbidden_adapter(readiness["adapter_id"])
+        for readiness in required.values()
+        if readiness.get("adapter_id")
+    )
+    assert all(readiness["capability_ready"] for readiness in required.values())
 
 
 if __name__ == "__main__":
-    test_gamma_integration_is_blocked_until_real_provider_bindings_are_injected()
+    test_gamma_integration_uses_enabled_release_candidate_bindings()

@@ -452,7 +452,11 @@ extension _ArticleEditorContentBuilders on _ArticleEditorState {
 
     Widget image;
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      image = Image.network(url, fit: BoxFit.cover);
+      image = AppCachedNetworkImage(
+        imageUrl: url,
+        fit: BoxFit.cover,
+        cdnPreset: CdnImagePreset.inline,
+      );
     } else {
       image = Image.file(File(url), fit: BoxFit.cover);
     }

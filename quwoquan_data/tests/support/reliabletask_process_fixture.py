@@ -13,7 +13,7 @@ from PIL import Image
 
 EXECUTION_ID = (
     "20260720--travel-image-reliabletask-publish--"
-    "cn-zhejiang--canary-902"
+    "test-region-a--pilot-902"
 )
 QUEUE_REF = "image-reliabletask-source-001"
 POST_REL = "posts/image/风光画报/西湖光影/1"
@@ -51,6 +51,10 @@ def prepare(output_root: Path, publish_root: Path) -> dict[str, object]:
     source_asset.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (1280, 720), color=(30, 80, 140)).save(source_asset)
     digest = "sha256:" + hashlib.sha256(source_asset.read_bytes()).hexdigest()
+    source_asset_ref = "sources/commons/assets/cover.jpg"
+    source_asset_path = execution / source_asset_ref
+    source_asset_path.parent.mkdir(parents=True, exist_ok=True)
+    source_asset_path.write_bytes(source_asset.read_bytes())
     _write_json(
         execution / "execution_manifest.json",
         {
@@ -65,6 +69,7 @@ def prepare(output_root: Path, publish_root: Path) -> dict[str, object]:
             "assets": [
                 {
                     "sourceAssetId": "west-lake-cover",
+                    "fileName": "cover.jpg",
                     "url": (
                         "https://upload.wikimedia.org/wikipedia/"
                         "commons/example.jpg"
@@ -82,6 +87,8 @@ def prepare(output_root: Path, publish_root: Path) -> dict[str, object]:
                     "license": "CC BY 4.0",
                     "platform": "Wikimedia Commons",
                     "fetchedAt": "2026-07-20T05:00:00Z",
+                    "rightsAuditStatus": "verified",
+                    "rightsAuditIssues": [],
                     "modelReleaseStatus": "not_required",
                 }
             ]
@@ -91,6 +98,7 @@ def prepare(output_root: Path, publish_root: Path) -> dict[str, object]:
         post / "manifest.json",
         {
             "schema": "quwoquan_data.post_manifest",
+            "vertical": "travel",
             "topicId": "西湖__image_reliabletask_1",
             "contentType": "image",
             "carrier": "image",
@@ -108,6 +116,7 @@ def prepare(output_root: Path, publish_root: Path) -> dict[str, object]:
                     "assetId": "west-lake-cover",
                     "fileName": "assets/cover.jpg",
                     "sourceAssetId": "west-lake-cover",
+                    "sourceAssetRef": source_asset_ref,
                     "caption": "西湖光影",
                     "creator": "Fixture Photographer",
                     "license": "CC BY 4.0",
@@ -117,6 +126,8 @@ def prepare(output_root: Path, publish_root: Path) -> dict[str, object]:
                     "authorizationProof": (
                         "https://commons.wikimedia.org/wiki/File:Example.jpg"
                     ),
+                    "rightsAuditStatus": "verified",
+                    "rightsAuditIssues": [],
                     "sha256": digest,
                 }
             ],

@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from typing import Any, Mapping
 
 from core.io import read_json
-from core.image_rules import image_caption_quality_issue, image_known_reject_issue
+from core.image_rules import image_caption_quality_issue
 from core import paths
 from core.paths import execution_root, release_root
 from content.post.article.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness
@@ -21,6 +21,10 @@ from core.media_asset_url import build_release_media_manifest
 from core.tree_integrity import tree_integrity_stats
 from core.release_layout import object_closure_digest, payload_file, payload_root
 from content.release.environment.consistency import scan_release_contract
+from governance.coverage.license import (
+    rights_audit_status_recorded,
+    rights_proof_required,
+)
 
 
 REPORT_SCHEMA = "quwoquan_data.release_integrity"
@@ -159,6 +163,24 @@ def _has_rights_proof(*payloads: Mapping[str, Any]) -> bool:
     return False
 
 
+def _asset_rights_issues(
+    asset_label: str,
+    asset: Mapping[str, Any],
+    source_meta: Mapping[str, Any],
+    *,
+    vertical: str,
+) -> list[str]:
+    if not vertical:
+        return [f"{asset_label} missing vertical rights policy owner"]
+    if rights_proof_required(vertical):
+        if not _has_rights_proof(asset, source_meta):
+            return [f"{asset_label} missing required rights proof"]
+        return []
+    if not rights_audit_status_recorded(asset, source_meta):
+        return [f"{asset_label} missing rights audit status"]
+    return []
+
+
 def _effective_review(path: Path) -> dict[str, Any]:
     return _payload(path)
 
@@ -282,25 +304,6 @@ def _asset_alignment_issues(post_rel: str, manifest: Mapping[str, Any], asset: M
     )
     if caption_quality_issue:
         issues.append(f"{post_rel}: {caption_quality_issue}")
-    known_reject_issue = image_known_reject_issue(
-        " ".join(
-            str(value or "")
-            for value in (
-                caption,
-                manifest.get("caption"),
-                manifest.get("title"),
-                manifest.get("publishTitle"),
-                asset.get("sourceRef"),
-                asset.get("sourceAssetRef"),
-                asset.get("collectionPageUrl"),
-                asset.get("sourceCollectionId"),
-            )
-        ),
-        entity_id=entity_name,
-        asset_id=asset_label,
-    )
-    if known_reject_issue:
-        issues.append(f"{post_rel}: {known_reject_issue}")
     if _is_image_post(manifest) or is_video:
         return issues
     if not caption:
@@ -344,7 +347,12 @@ def _entity_homepage_issues(root: Path, runtime_batch: Path | None) -> list[str]
             issues.append(
                 f"{entity_rel}: entity homepage base draft must not be author travelogue/guide/comment source, got {source_kind}"
             )
-        assets = _json(manifest_path).get("assets") or []
+        manifest = _json(manifest_path)
+        vertical = str(manifest.get("vertical") or "").strip()
+        if not vertical:
+            issues.append(f"{entity_rel}: entity homepage missing vertical policy owner")
+            continue
+        assets = manifest.get("assets") or []
         if not isinstance(assets, list) or not assets:
             issues.append(f"{entity_rel}: entity homepage must include at least one sourced image asset")
         for index, asset in enumerate(assets if isinstance(assets, list) else []):
@@ -358,8 +366,15 @@ def _entity_homepage_issues(root: Path, runtime_batch: Path | None) -> list[str]
             if source_ref and source_asset_ref and not _same_source_unit(source_ref, source_asset_ref):
                 issues.append(f"{entity_rel}: {asset_label} sourceAssetRef does not belong to sourceRef unit")
             asset_meta = _source_unit_meta(runtime_batch, source_ref)
-            if not _has_rights_proof(asset, asset_meta):
-                issues.append(f"{entity_rel}: {asset_label} missing entity homepage image rights proof")
+            issues.extend(
+                f"{entity_rel}: {issue}"
+                for issue in _asset_rights_issues(
+                    asset_label,
+                    asset,
+                    asset_meta,
+                    vertical=vertical,
+                )
+            )
     return issues
 
 

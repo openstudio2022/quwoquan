@@ -1,0 +1,926 @@
+fields:
+- name: pairId
+  source: pairId
+  type: string
+  constraints:
+  - PK
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: lowerPersonaId 与 upperPersonaId 的 canonical digest
+  role: authoritative_state
+- name: version
+  source: version
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_1
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: lowerPersonaId
+  source: lowerPersonaId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 规范化后字典序较小的 persona ID
+  role: authoritative_state
+  reference: true
+- name: upperPersonaId
+  source: upperPersonaId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 规范化后字典序较大的 persona ID
+  role: authoritative_state
+  reference: true
+- name: directions
+  source: directions
+  type: '[]RelationshipDirection'
+  constraints:
+  - NOT_NULL
+  - MAX_2
+  classification: PRIVATE
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: owned_value
+- name: updatedAt
+  source: updatedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+members:
+  RelationshipDirection:
+    kind: owned_entity
+    fields:
+    - name: sourcePersonaId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: owned_value
+    - name: targetPersonaId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: owned_value
+    - name: following
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: owned_value
+    - name: blocked
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PRIVATE
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: owned_value
+    - name: followSource
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: owned_value
+    - name: followedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: owned_value
+    - name: blockedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: PRIVATE
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: owned_value
+    - name: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: owned_value
+types:
+  RelationshipDirection:
+    fields:
+    - name: sourcePersonaId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: targetPersonaId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: following
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: blocked
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PRIVATE
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: followSource
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: followedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: blockedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: PRIVATE
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  PersonaRelationshipCommandReceipt:
+    description: 与 PersonaRelationship state 和 outbox 同事务提交的幂等命令回执
+    fields:
+    - name: receiptId
+      type: string
+      constraints:
+      - PK
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: actorPersonaId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PRIVATE
+      log_policy: mask
+      api_exposure: drop
+      ops_exposure: read
+    - name: idempotencyKey
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: drop
+      ops_exposure: read
+    - name: operation
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: targetPersonaId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PRIVATE
+      log_policy: mask
+      api_exposure: drop
+      ops_exposure: read
+    - name: pairId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: aggregateVersion
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: responseJson
+      type: jsonb
+      constraints:
+      - NOT_NULL
+      classification: PRIVATE
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: drop
+    - name: createdAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+  PersonaRelationshipOutbox:
+    description: PersonaRelationship 聚合按版本追加且可 checkpoint/replay 的事件事实
+    fields:
+    - name: eventId
+      type: string
+      constraints:
+      - PK
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: aggregateId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: aggregateVersion
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: eventName
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: payloadJson
+      type: jsonb
+      constraints:
+      - NOT_NULL
+      classification: PRIVATE
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: drop
+    - name: occurredAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: claimOwner
+      type: string
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: claimedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: publishedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+  FollowCommandRequest:
+    description: sub-account 级别 follow / unfollow 命令请求
+    fields:
+    - name: actorSubAccountId
+      source: actorSubAccountId
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read_write
+      ops_exposure: read
+      description: 显式覆盖当前 active persona 时使用；为空表示由服务端从上下文解析
+    - name: source
+      source: source
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read_write
+      ops_exposure: read
+      description: 关注来源（profile / recommendation / circle）
+    - name: clientRequestId
+      source: clientRequestId
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read_write
+      ops_exposure: read
+      description: 客户端幂等键；为空时由服务端使用主体对唯一约束兜底
+  FollowCommandResult:
+    description: sub-account 级别 follow / unfollow 命令返回
+    fields:
+    - name: actorSubAccountId
+      source: actorSubAccountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: targetSubAccountId
+      source: targetSubAccountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: relationState
+      source: relationState
+      type: enum
+      enum_ref: RelationshipState
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: idempotentReplay
+      source: idempotentReplay
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: updatedAt
+      source: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  BlockCommandResult:
+    description: block / unblock 命令的版本化返回
+    fields:
+    - name: targetSubAccountId
+      source: targetSubAccountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: blocked
+      source: blocked
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PRIVATE
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: idempotentReplay
+      source: idempotentReplay
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: updatedAt
+      source: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  RelationshipView:
+    description: 基础关系态查询视图
+    fields:
+    - name: viewerSubAccountId
+      source: viewerSubAccountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: targetSubAccountId
+      source: targetSubAccountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: relationState
+      source: relationState
+      type: enum
+      enum_ref: RelationshipState
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: isBlocked
+      source: isBlocked
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: isBlockedBy
+      source: isBlockedBy
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  BlockedListItemView:
+    description: 当前 persona 的屏蔽列表项；只暴露目标的公开展示快照与屏蔽时间。
+    fields:
+    - name: targetSubAccountId
+      source: targetSubAccountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: displayName
+      source: displayName
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: userHandle
+      source: userHandle
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: avatarUrl
+      source: avatarUrl
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: blockedAt
+      source: blockedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: PRIVATE
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  FollowingListItemView:
+    description: following 列表项；以 subAccountId 为展示主键
+    fields:
+    - name: subAccountId
+      source: subAccountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: username
+      source: username
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: userHandle
+      source: userHandle
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      description: 公开主页 handle；兼容别名 username，但主页列表页应优先消费该字段显示 @handle
+    - name: displayName
+      source: displayName
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: avatarUrl
+      source: avatarUrl
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: profileVisibility
+      source: profileVisibility
+      type: enum
+      enum_ref: ProfileVisibility
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: relationState
+      source: relationState
+      type: enum
+      enum_ref: RelationshipState
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: followedAt
+      source: followedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: relationshipCapability
+      source: relationshipCapability
+      type: RelationshipCapabilityView
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      description: 当前 viewer 对该列表行主体的关系能力位；列表页 follow/button 矩阵唯一真相源
+  FollowerListItemView:
+    description: 粉丝列表项（ListFollowers API）；以 subAccountId 为展示主键
+    fields:
+    - name: subAccountId
+      source: subAccountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: username
+      source: username
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: userHandle
+      source: userHandle
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      description: 公开主页 handle；兼容别名 username，但主页列表页应优先消费该字段显示 @handle
+    - name: displayName
+      source: displayName
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: avatarUrl
+      source: avatarUrl
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: profileVisibility
+      source: profileVisibility
+      type: enum
+      enum_ref: ProfileVisibility
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: relationState
+      source: relationState
+      type: enum
+      enum_ref: RelationshipState
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: followedAt
+      source: followedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: relationshipCapability
+      source: relationshipCapability
+      type: RelationshipCapabilityView
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      description: 当前 viewer 对该列表行主体的关系能力位；列表页 follow/button 矩阵唯一真相源
+  RelationshipCapabilityView:
+    description: 主页按钮矩阵与聊天/通话门禁统一消费的关系能力视图
+    fields:
+    - name: viewerSubAccountId
+      source: viewerSubAccountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: targetSubAccountId
+      source: targetSubAccountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: relationState
+      source: relationState
+      type: enum
+      enum_ref: RelationshipState
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: canFollow
+      source: canFollow
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: canUnfollow
+      source: canUnfollow
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: canFollowBack
+      source: canFollowBack
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: canGreet
+      source: canGreet
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: canOpenConversation
+      source: canOpenConversation
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      description: 是否可打开会话入口（canCreateDirectConversation 或已存在正式会话）
+    - name: canCreateDirectConversation
+      source: canCreateDirectConversation
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: canSendMessage
+      source: canSendMessage
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: hasPendingGreeting
+      source: hasPendingGreeting
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: hasFormalConversation
+      source: hasFormalConversation
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: canStartVoiceCall
+      source: canStartVoiceCall
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: canStartVideoCall
+      source: canStartVideoCall
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: isBlocked
+      source: isBlocked
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: isBlockedBy
+      source: isBlockedBy
+      type: bool
+      constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read

@@ -12,7 +12,10 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from content.post.object_index import require_title_hint
+from content.post.article.base_draft import load_base_draft_text
+from content.execution.identity import parse_execution_id
 from core.creative_brief import build_creative_brief
+from core.public_contacts import verified_contact_numbers_from_source
 from governance.creators.assignment import creator_from_payload
 from core.prompt_render import render
 from core.quality_gates import WRITING_INTENTS
@@ -93,6 +96,8 @@ def _compact_assets(
         "license",
         "termsUrl",
         "authorizationProof",
+        "rightsAuditStatus",
+        "rightsAuditIssues",
     )
     rows: list[dict[str, Any]] = []
     for asset in assets:
@@ -150,8 +155,18 @@ def build_writing_pack(
         style_family=style_family,
     )
     creator_assignment = creator_from_payload(brief)
+    verified_contacts = verified_contact_numbers_from_source(
+        load_base_draft_text(execution_id, brief.get("baseSourceRef"))
+    )
     # 图片作品/画报是结构化图集 + 短配文，不携带长文叙事的章节意图与证据点。
     from content.execution.runtime_contract import stage_execution_context
+
+    identity = parse_execution_id(execution_id)
+    declared_vertical = str(brief.get("vertical") or "").strip()
+    if declared_vertical and declared_vertical != identity.vertical:
+        raise ValueError(
+            f"brief vertical {declared_vertical!r} conflicts with execution vertical {identity.vertical!r}"
+        )
 
     return {
         "schema": "quwoquan_data.writing_pack",
@@ -164,6 +179,7 @@ def build_writing_pack(
         "caption": source_caption,
         "byline": byline,
         "carrier": carrier,
+        "vertical": identity.vertical,
         "publishLayout": publish_layout,
         "publishMediaMode": brief.get("publishMediaMode"),
         "sourceCollectionId": brief.get("sourceCollectionId"),
@@ -187,13 +203,11 @@ def build_writing_pack(
         "sourcePaths": [str(x) for x in source_paths if x],
         "writingIntent": brief.get("writingIntent"),
         "baseSourceRef": brief.get("baseSourceRef"),
+        "allowedContactNumbers": list(verified_contacts),
         "baseSourceReusePolicy": brief.get("baseSourceReusePolicy"),
         "sourceUseMode": brief.get("sourceUseMode"),
         "bannedRegisterTerms": [str(x) for x in (brief.get("bannedRegisterTerms") or []) if x],
     }
-
-
-
 
 
 

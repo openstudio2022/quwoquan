@@ -10,10 +10,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
-import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 
 const bool _defaultIntersectionCommerceActionsEnabled = bool.fromEnvironment(
   'INTERSECTION_COMMERCE_ACTIONS_ENABLED',

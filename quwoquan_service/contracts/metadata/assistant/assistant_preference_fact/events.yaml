@@ -1,4 +1,0 @@
-aggregate: AssistantPreferenceFact
-# 偏好事实当前只由 assistant-service 内的 owner-scoped Reader 注入下一次 Run，
-# 不向跨服务总线发布虚构的 transactional outbox 事件。
-events: []

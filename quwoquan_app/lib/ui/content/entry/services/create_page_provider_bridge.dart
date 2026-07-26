@@ -197,7 +197,9 @@ attachActivePersonaToPostPublicationCommand(
       activeContext.isFallback) {
     throw ActivePersonaContextUnavailableFailure();
   }
-  final personaVersion = int.tryParse(activeContext.personaContextVersion);
+  final personaVersion = activeContext.contextVersion > 0
+      ? activeContext.contextVersion
+      : null;
   return submitContentPostPublicationCommandFromPreparedPayload(
     prepared.payload,
     localDraftId: localDraftId,

@@ -1,0 +1,106 @@
+backend: redis
+description: 'realtime-gateway 连接状态全部存储在 Redis（realtime scene）。
+
+  Connection 实体存在于进程内存中（Hub map），不持久化。
+
+  PresenceEntry 通过 Redis Hash 实现多节点共享在线查询。
+
+  '
+redis_cache:
+- key: rt:ticket:{ticket}
+  ttl_seconds: 30
+  type: string
+  scene: realtime
+  description: '短期一次性连接 ticket。value = JSON{accountId, personaId, deviceId, issuedAt}。
+
+    签发时 SET NX EX 30 写入；WS/LongPoll 升级时 GETDEL 一次性消费，
+
+    不存在=invalid、已消费=replayed、超 TTL 自动过期=expired。
+
+    '
+- key: rt:account:tickets:{accountId}
+  ttl_seconds: 30
+  type: set
+  scene: realtime
+  description: '账户待消费 ticket 索引。签发时追加 ticket，消费/终态时删除；UserAccountClosed
+    与 UserSuspended 必须先清除该集合关联 ticket，再允许事件 ACK。
+
+    '
+- key: rt:account:security:{accountId}
+  ttl_seconds: 0
+  type: string
+  scene: realtime
+  description: '账户安全 admission fence。value = JSON{accountState,authEpoch,updatedAt}；
+    closed 不可逆，suspended/active 仅允许更高 authEpoch 推进。连接登记前后均读取该值，
+    以阻断终态事件与重连并发。
+
+    '
+- key: rt:account:sessions:{accountId}
+  ttl_seconds: 0
+  type: set
+  scene: realtime
+  description: 账户当前连接 ID 索引；终态事件据此清除 lease、presence 和本地连接。
+- key: rt:account:session:{accountId}:{connId}
+  ttl_seconds: 0
+  type: string
+  scene: realtime
+  description: '账户连接清理记录。value = JSON{accountId,personaId,deviceId,connectionId}；
+    仅用于终态会话回收，不对 API 或日志暴露。
+
+    '
+- key: rt:account:security-events:{accountId}
+  ttl_seconds: 2592000
+  type: set
+  scene: realtime
+  description: UserAccount security eventId 的不可逆摘要去重集合。
+- key: rt:account:security-failure:{digest}
+  ttl_seconds: 2592000
+  type: string
+  scene: realtime
+  description: durable security consumer 的 source stream/message reference、失败次数、
+    事件/错误摘要和 DLQ 状态；不得保存原始 payload 或账户标识。ttl_seconds 只约束普通重试，
+    terminal marker 必须无 TTL 持有原 source PEL，直到受控 recovery。
+- key: rt:conn:lease:{personaId}:{deviceId}:{connId}
+  ttl_seconds: 60
+  type: string
+  scene: realtime
+  description: '连接租约（lease + fencing）。value = 单调递增 fencing token
+
+    （INCR rt:conn:fence:{personaId}:{deviceId} 派生）。
+
+    心跳续租；节点崩溃后租约过期自动出清；旧连接携带过期 fencing token 的写入一律拒绝。
+
+    '
+- key: rt:conn:fence:{personaId}:{deviceId}
+  ttl_seconds: 86400
+  type: string
+  scene: realtime
+  description: 每 persona/device fencing token 单调计数器（INCR，任何新连接取号，保证旧连接不可回写）。
+- key: presence:persona:{personaId}
+  ttl_seconds: 120
+  type: hash
+  scene: realtime
+  description: 'Persona 设备级在线状态 Hash。field = deviceId，
+
+    value = JSON{accountId,personaId,deviceId,connId,nodeId,transport,lastHeartbeatAt}。
+
+    整体 TTL 只作进程崩溃兜底；PresenceView reader 必须按 lastHeartbeatAt
+
+    对每个 hash field 独立剔除陈旧设备，不能由活跃设备续命 stale field。
+
+    '
+- key: presence:node:{nodeId}:count
+  ttl_seconds: 60
+  type: string
+  scene: realtime
+  description: 节点当前连接数（INCR/DECR，用于负载均衡和容量限流）
+- key: transport:state:{personaId}:{deviceId}
+  ttl_seconds: 300
+  type: string
+  scene: realtime
+  description: 用户传输状态缓存（IDLE/ACTIVE/BACKGROUND，用于跨请求状态一致性）
+- key: rt:account:security-relay
+  type: pubsub_channel
+  scene: realtime
+  description: 已持久化账户终态的跨节点即时踢出通知；admission 真相仍是 rt:account:security。
+role: runtime

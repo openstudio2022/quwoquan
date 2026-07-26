@@ -14,36 +14,21 @@ except ImportError:  # pragma: no cover - repository tool dependency
 
 
 ROOT = Path(__file__).resolve().parents[3]
-USER_CONFIGS = ROOT / "quwoquan_service" / "services" / "user-service" / "configs"
+USER_SERVICE = ROOT / "quwoquan_service" / "services" / "user-service"
+USER_CONFIG_SCHEMA = USER_SERVICE / "config" / "schema.yaml"
+USER_ENVIRONMENTS = USER_SERVICE / "environments"
 USER_CMD_API = ROOT / "quwoquan_service" / "services" / "user-service" / "cmd" / "api"
 USER_INTEGRATION = (
-    ROOT
-    / "quwoquan_service"
-    / "services"
-    / "user-service"
+    USER_SERVICE
     / "internal"
+    / "account"
+    / "user_account"
     / "infrastructure"
     / "integration"
 )
-USER_APPLICATION = (
-    ROOT
-    / "quwoquan_service"
-    / "services"
-    / "user-service"
-    / "internal"
-    / "application"
-)
-USER_DOMAIN = (
-    ROOT
-    / "quwoquan_service"
-    / "services"
-    / "user-service"
-    / "internal"
-    / "domain"
-)
-USER_DOCKERFILE = ROOT / "quwoquan_service" / "services" / "user-service" / "deploy" / "Dockerfile"
-GAMMA_COMPOSE = ROOT / "quwoquan_ops" / "environments" / "compose" / "docker-compose.gamma-local.yaml"
-ENVIRONMENTS = ("default", "alpha", "beta", "gamma", "prod")
+USER_DOCKERFILE = USER_SERVICE / "build" / "Dockerfile"
+GAMMA_COMPOSE = USER_SERVICE / "deploy" / "compose.yaml"
+ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
 RETIRED_KEYS = frozenset(
     {
         "pass_through_enabled",
@@ -79,25 +64,42 @@ def retired_key_paths(value: object, path: str = "") -> list[str]:
     return []
 
 
-def verify_config(env: str, config: Mapping[str, object]) -> list[str]:
-    failures = [f"{env}: retired login config key {key}" for key in retired_key_paths(config)]
-    integration = config.get("integration")
-    if not isinstance(integration, Mapping):
-        return failures + [f"{env}: integration config is required"]
+def schema_defaults(schema: Mapping[str, object]) -> dict[str, object]:
+    definitions = schema.get("configs")
+    if not isinstance(definitions, list):
+        return {}
+    return {
+        str(item["key"]): item.get("default")
+        for item in definitions
+        if isinstance(item, Mapping) and item.get("key") and "default" in item
+    }
 
-    base_url = integration.get("external_interaction_base_url")
+
+def verify_config(
+    env: str,
+    config: Mapping[str, object],
+    defaults: Mapping[str, object],
+) -> list[str]:
+    failures = [f"{env}: retired login config key {key}" for key in retired_key_paths(config)]
+    overrides = config.get("overrides")
+    if not isinstance(overrides, Mapping):
+        overrides = {}
+    base_url = overrides.get(
+        "sys.user-service.integration.external_interaction_base_url",
+        defaults.get("sys.user-service.integration.external_interaction_base_url"),
+    )
     if not isinstance(base_url, str) or not base_url.startswith("https://"):
-        failures.append(f"{env}: integration.external_interaction_base_url must use https")
-    for retired_selector in ("social", "one_tap"):
-        if retired_selector in integration:
-            failures.append(
-                f"{env}: integration.{retired_selector} must not select an authentication adapter"
-            )
-    otp = integration.get("otp")
-    expected_otp_mode = "provider" if env == "prod" else "fixed_test"
-    if not isinstance(otp, Mapping) or otp.get("mode") != expected_otp_mode:
         failures.append(
-            f"{env}: integration.otp.mode must be {expected_otp_mode}"
+            f"{env}: sys.user-service.integration.external_interaction_base_url must use https"
+        )
+    otp_mode = overrides.get(
+        "sys.user-service.integration.otp.mode",
+        defaults.get("sys.user-service.integration.otp.mode"),
+    )
+    expected_otp_mode = "provider" if env == "prod" else "fixed_test"
+    if otp_mode != expected_otp_mode:
+        failures.append(
+            f"{env}: sys.user-service.integration.otp.mode must be {expected_otp_mode}"
         )
     return failures
 
@@ -105,14 +107,16 @@ def verify_config(env: str, config: Mapping[str, object]) -> list[str]:
 def verify_auth_boundary_isolation() -> list[str]:
     failures: list[str] = []
     forbidden_vendor_tokens = ("wechat", "alipay", "aliyun", "qq")
-    for source_root in (USER_APPLICATION, USER_DOMAIN):
-        for path in source_root.rglob("*.go"):
-            source = path.read_text(encoding="utf-8").lower()
-            for token in forbidden_vendor_tokens:
-                if token in source:
-                    failures.append(
-                        f"vendor token {token!r} leaked into application/domain source: {path}"
-                    )
+    for path in (USER_SERVICE / "internal").rglob("*.go"):
+        parts = path.relative_to(USER_SERVICE / "internal").parts
+        if len(parts) < 4 or parts[2] not in {"application", "domain"}:
+            continue
+        source = path.read_text(encoding="utf-8").lower()
+        for token in forbidden_vendor_tokens:
+            if token in source:
+                failures.append(
+                    f"vendor token {token!r} leaked into application/domain source: {path}"
+                )
     composition = (USER_CMD_API / "main_auth_runtime.go").read_text(encoding="utf-8")
     for retired_selector in (
         "USER_AUTH_EXTERNAL_PROVIDER_MODE",
@@ -165,7 +169,7 @@ def verify_nonprod_source_isolation() -> list[str]:
     if "ARG GO_BUILD_FLAGS=-p=1 -tags=nonprod" in dockerfile:
         failures.append("user-service production Dockerfile must not default to nonprod tag")
     compose = GAMMA_COMPOSE.read_text(encoding="utf-8")
-    if 'LOCAL_GAMMA_USER_GO_BUILD_FLAGS:--p=1 -tags=nonprod' not in compose:
+    if 'QWQ_COMPOSE_USER_GO_BUILD_FLAGS:--p=1 -tags=nonprod' not in compose:
         failures.append("gamma-local user-service must explicitly compile the nonprod OTP adapter")
     mtls_source = (USER_INTEGRATION / "service_mtls_client.go").read_text(encoding="utf-8")
     for env_name in (
@@ -183,12 +187,17 @@ def verify_nonprod_source_isolation() -> list[str]:
 
 def main() -> int:
     failures: list[str] = []
+    schema = load_mapping(USER_CONFIG_SCHEMA)
+    failures.extend(
+        f"schema: retired login config key {key}" for key in retired_key_paths(schema)
+    )
+    defaults = schema_defaults(schema)
     for env in ENVIRONMENTS:
-        config_path = USER_CONFIGS / env / "config.yaml"
+        config_path = USER_ENVIRONMENTS / env / "config.yaml"
         if not config_path.is_file():
             failures.append(f"{env}: config file missing: {config_path}")
             continue
-        failures.extend(verify_config(env, load_mapping(config_path)))
+        failures.extend(verify_config(env, load_mapping(config_path), defaults))
     failures.extend(verify_auth_boundary_isolation())
     failures.extend(verify_nonprod_source_isolation())
     if failures:

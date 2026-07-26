@@ -3,9 +3,8 @@ schema: app_page_object_contract
 source_path_root: quwoquan_app
 description: |
   App 页面扫描路径到业务对象、生产路由、Surface、Query Slice、强类型展示、
-  鉴权、平台能力与 telemetry 的唯一契约。页面横向质量矩阵只维护页面类型与
-  P1–P8；metadata_driven_ui_gap_inventory 只维护 DTO/ReadPresentation typing
-  治理状态，二者不得复制本文件中的对象绑定。
+  鉴权、平台能力与 telemetry 的唯一契约。页面集合由目录实时扫描，质量与
+  typing 状态由代码、metadata 和可执行 gate 推导，不维护矩阵或 inventory。
 query_slice_reference_format:
   projection: "<object_id>.projection.<projection_file_stem>"
   object: "<object_id>.aggregate|entity"
@@ -242,8 +241,8 @@ pages:
       - assistant.assistant_preference_fact
       - assistant.skill_consent
     query_slices:
-      - assistant.assistant_preference_fact.aggregate
-      - assistant.skill_consent.entity
+      - assistant.assistant_preference_fact
+      - assistant.skill_consent
     typed_presentation: [PersonalContentAccessState, AssistantPreferenceFact]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -277,9 +276,9 @@ pages:
     data_owners: [assistant]
     object_ids: [assistant.assistant_run, assistant.assistant_conversation, assistant.skill_consent]
     query_slices:
-      - assistant.assistant_run.aggregate
-      - assistant.assistant_conversation.aggregate
-      - assistant.skill_consent.entity
+      - assistant.assistant_run
+      - assistant.assistant_conversation
+      - assistant.skill_consent
     typed_presentation: [SkillSubscriptionWire, AssistantConversationWire]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
@@ -297,10 +296,10 @@ pages:
     data_owners: [assistant, notification]
     object_ids: [assistant.assistant_run, assistant.assistant_conversation, assistant.skill_consent, notification.notification]
     query_slices:
-      - assistant.assistant_run.aggregate
-      - assistant.assistant_conversation.aggregate
-      - assistant.skill_consent.entity
-      - notification.notification.entity
+      - assistant.assistant_run
+      - assistant.assistant_conversation
+      - assistant.skill_consent
+      - notification.notification
     typed_presentation:
       - AssistantConversationWire
       - AssistantConversationListPage
@@ -343,7 +342,7 @@ pages:
     query_slices:
       - chat.conversation.projection.message_home_row
       - chat.conversation.projection.contact_home_row
-      - notification.notification.entity
+      - notification.notification
     typed_presentation: [MessageHomeRowDto, ContactHomeRowDto, AppMessage]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -361,7 +360,7 @@ pages:
     experience_owner: chat
     data_owners: [user, chat]
     object_ids: [user.greeting_request, chat.conversation]
-    query_slices: [user.greeting_request.entity]
+    query_slices: [user.greeting_request]
     typed_presentation: [GreetingRequestDto, GreetingReplyResultDto]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -469,7 +468,7 @@ pages:
       - chat.conversation.projection.chat_inbox
       - chat.conversation.projection.chat_conversation_created_client
       - user.user_account.projection.social_relation_search_item_wire
-      - circle.circle.aggregate
+      - circle.circle
     typed_presentation: [ChatInboxDto, ChatConversationCreatedDto, CircleDto]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -521,7 +520,7 @@ pages:
     experience_owner: circle
     data_owners: [circle]
     object_ids: [circle.circle]
-    query_slices: [circle.circle.aggregate]
+    query_slices: [circle.circle]
     typed_presentation: [CircleDto, CircleEditSubmitPayload]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -537,7 +536,7 @@ pages:
     experience_owner: circle
     data_owners: [circle]
     object_ids: [circle.circle_membership]
-    query_slices: [circle.circle_membership.aggregate]
+    query_slices: [circle.circle_membership]
     typed_presentation: [CircleMembershipSlice, CircleMembershipPageSlice]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -649,10 +648,10 @@ pages:
       - circle.circle
       - entity.homepage
     query_slices:
-      - content.post.aggregate
+      - content.post
       - content.post.projection.post_read_presentation
-      - circle.circle.aggregate
-      - entity.homepage.aggregate
+      - circle.circle
+      - entity.homepage
       - local.create_draft_store
     typed_presentation: [ContentPublishDraftComposite, PostReadPresentation]
     auth_requirement: required
@@ -686,8 +685,8 @@ pages:
     data_owners: [circle, content]
     object_ids: [circle.circle, content.post]
     query_slices:
-      - circle.circle.aggregate
-      - content.post.aggregate
+      - circle.circle
+      - content.post
     typed_presentation: [CircleDto, CreateCircleOption, PublishSettings]
     auth_requirement: inherited
     capability_requirements: { all_of: [], any_of: [] }
@@ -705,7 +704,7 @@ pages:
     object_ids: [integration.location, content.post]
     query_slices:
       - integration.location.projection.location_poi
-      - content.post.aggregate
+      - content.post
     typed_presentation: [LocationPoiDto, CreateLocationOption, PublishSettings]
     auth_requirement: inherited
     capability_requirements: { all_of: [], any_of: [] }
@@ -862,8 +861,8 @@ pages:
     data_owners: [entity]
     object_ids: [entity.homepage, entity.homepage_claim_request]
     query_slices:
-      - entity.homepage.aggregate
-      - entity.homepage_claim_request.entity
+      - entity.homepage
+      - entity.homepage_claim_request
     typed_presentation: [HomepageClaimRequestDraft]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
@@ -955,7 +954,7 @@ pages:
     experience_owner: entity
     data_owners: [entity]
     object_ids: [entity.homepage]
-    query_slices: [entity.homepage.aggregate]
+    query_slices: [entity.homepage]
     typed_presentation: [HomepageBasicDraft]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
@@ -971,7 +970,7 @@ pages:
     experience_owner: entity
     data_owners: [entity]
     object_ids: [entity.homepage]
-    query_slices: [entity.homepage.aggregate]
+    query_slices: [entity.homepage]
     typed_presentation: [HomepageSummary]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
@@ -988,8 +987,8 @@ pages:
     data_owners: [entity]
     object_ids: [entity.homepage, entity.homepage_status_report]
     query_slices:
-      - entity.homepage.aggregate
-      - entity.homepage_status_report.entity
+      - entity.homepage
+      - entity.homepage_status_report
     typed_presentation: [HomepageStatusReportDraft]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
@@ -1005,7 +1004,7 @@ pages:
     experience_owner: entity
     data_owners: [entity]
     object_ids: [entity.homepage]
-    query_slices: [entity.homepage.aggregate]
+    query_slices: [entity.homepage]
     typed_presentation: [HomepageSuggestionDraft]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
@@ -1057,7 +1056,7 @@ pages:
     data_owners: [rtc, chat]
     object_ids: [rtc.call_session, chat.conversation]
     query_slices:
-      - rtc.call_session.aggregate
+      - rtc.call_session
       - chat.conversation.projection.chat_inbox
       - chat.conversation.projection.conversation_member_list_row
     typed_presentation: [CallPickerParticipantRow, ChatInboxDto, ChatConversationMemberDto]
@@ -1075,7 +1074,7 @@ pages:
     experience_owner: rtc
     data_owners: [rtc]
     object_ids: [rtc.call_session]
-    query_slices: [rtc.call_session.aggregate]
+    query_slices: [rtc.call_session]
     typed_presentation: [CallSessionDto, CallSessionState]
     auth_requirement: required
     capability_requirements: { all_of: [realtimeCommunication], any_of: [] }
@@ -1091,7 +1090,7 @@ pages:
     experience_owner: rtc
     data_owners: [rtc]
     object_ids: [rtc.call_session]
-    query_slices: [rtc.call_session.aggregate]
+    query_slices: [rtc.call_session]
     typed_presentation: [CallSessionDto, CallSessionState]
     auth_requirement: required
     capability_requirements: { all_of: [realtimeCommunication], any_of: [] }
@@ -1107,7 +1106,7 @@ pages:
     experience_owner: rtc
     data_owners: [rtc]
     object_ids: [rtc.call_session]
-    query_slices: [rtc.call_session.aggregate]
+    query_slices: [rtc.call_session]
     typed_presentation: [CallSessionDto, CallSessionState]
     auth_requirement: required
     capability_requirements: { all_of: [realtimeCommunication], any_of: [] }
@@ -1123,7 +1122,7 @@ pages:
     experience_owner: rtc
     data_owners: [rtc]
     object_ids: [rtc.call_session]
-    query_slices: [rtc.call_session.aggregate]
+    query_slices: [rtc.call_session]
     typed_presentation: [CallSessionDto, CallSessionState]
     auth_requirement: required
     capability_requirements: { all_of: [realtimeCommunication], any_of: [] }
@@ -1304,7 +1303,7 @@ pages:
     experience_owner: content
     data_owners: [content]
     object_ids: [content.report]
-    query_slices: [content.report.entity]
+    query_slices: [content.report]
     typed_presentation: [ContentMyReportItem]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -1387,12 +1386,28 @@ pages:
     object_ids: [user.user_account, user.persona, user.profile_update_proposal, tag.tag_node_view]
     query_slices:
       - user.user_account.projection.profile_edit_snapshot_wire
-      - tag.tag_node_view.entity
+      - tag.tag_node_view
     typed_presentation: [ProfileEditSnapshotData, UpdateUserProfileCommand]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.career_interest, lifecycle: [enter, exit, submit, failure] }
     entry_widget: CareerInterestPage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
+
+  - page_id: discovery.interest_onboarding
+    source_path: lib/ui/discovery/pages/interest_onboarding_page.dart
+    page_kind: routed
+    route_id: interestOnboarding
+    surface_ids: [interestOnboarding]
+    experience_owner: discovery
+    data_owners: [content, tag]
+    object_ids: [content.post, tag.tag_node_view]
+    query_slices: [tag.tag_node_view]
+    typed_presentation: [OnboardingInterestCatalogConfig, BehaviorEvent]
+    auth_requirement: optional
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.discovery.interest_onboarding, lifecycle: [enter, exit, submit, skip, failure] }
+    entry_widget: InterestOnboardingPage
     route_registration_evidence: [lib/app/navigation/app_router.dart]
 
   - page_id: user.contact_confirm
@@ -1443,7 +1458,7 @@ pages:
       - user.user_account.projection.profile_edit_snapshot_wire
       - user.user_account.projection.profile_qr_card_wire
       - user.profile_update_proposal.projection.profile_update_proposal_view
-      - tag.tag_node_view.entity
+      - tag.tag_node_view
     typed_presentation: [ProfileEditSnapshotData, ProfileQrCardData, UpdateUserProfileCommand, ProfileUpdateProposalView]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -1457,7 +1472,7 @@ pages:
     route_id: legalUserAgreement
     additional_route_ids: [legalPrivacyPolicy, legalPermissions, legalThirdPartySdkList]
     surface_ids: [legalUserAgreement, legalPrivacyPolicy, legalPermissions, legalThirdPartySdkList]
-    experience_owner: legal
+    experience_owner: user
     data_owners: [app]
     object_ids: []
     query_slices: none
@@ -1522,7 +1537,8 @@ pages:
       - recommendation.recommendation_model_release.projection.intersection_reason
       - recommendation.recommendation_model_release.projection.intersection_inbox_summary
       - content.post.projection.author_impact_summary
-    typed_presentation: [IntersectionReason, IntersectionInboxSummary, AuthorImpactSummary]
+      - content.post.projection.author_impact_evidence_page
+    typed_presentation: [IntersectionReason, IntersectionInboxSummary, AuthorImpactSummary, AuthorImpactEvidencePage]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.my_intersections, lifecycle: [enter, exit, visit, failure] }
@@ -1548,8 +1564,10 @@ pages:
       - user.user_account.projection.user_homepage_bundle_wire
       - content.profile_interaction_activity_view.projection.profile_interaction_activity_view
       - content.post.projection.post_read_presentation
-      - circle.circle.aggregate
-    typed_presentation: [UserHomepageBundleViewData, ContentProfileInteractionActivity, ProfileInteractionActivityViewData, PostReadPresentation]
+      - content.post.projection.author_impact_summary
+      - content.post.projection.author_impact_evidence_page
+      - circle.circle
+    typed_presentation: [UserHomepageBundleViewData, ContentProfileInteractionActivity, ProfileInteractionActivityViewData, PostReadPresentation, AuthorImpactSummary, AuthorImpactEvidencePage]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor:
@@ -1610,7 +1628,7 @@ pages:
     query_slices:
       - user.user_account.projection.user_homepage_bundle_wire
       - content.post.projection.post_read_presentation
-      - circle.circle.aggregate
+      - circle.circle
     typed_presentation: [UserHomepageBundleViewData, PostReadPresentation, CircleDto]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
@@ -1646,7 +1664,7 @@ pages:
     experience_owner: user
     data_owners: [user]
     object_ids: [user.persona]
-    query_slices: [user.persona.aggregate]
+    query_slices: [user.persona]
     typed_presentation: [PersonaManagementItemViewData, PersonaIsolationLevel, PersonaFormResult]
     auth_requirement: inherited
     capability_requirements: { all_of: [], any_of: [] }
@@ -1683,7 +1701,7 @@ pages:
     query_slices:
       - user.user_account.projection.user_profile_stats_wire
       - user.user_account.projection.profile_social_relation_row_wire
-      - circle.circle.aggregate
+      - circle.circle
     typed_presentation: [ProfileSocialRelationRowViewData, CircleDto]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }

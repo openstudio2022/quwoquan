@@ -1,0 +1,49 @@
+events:
+- name: ReportCreated
+  description: 举报提交
+  producer: content-service
+  consumers:
+  - notification-service
+  channel: event_store
+  payload_fields:
+  - id
+  - version
+  - reporterId
+  - reporterAccountId
+  - targetType
+  - targetId
+  - reason
+  - idempotencyKey
+- name: ReportResolved
+  description: 举报处理完成；comment + delete_content 由 content-comment-moderation-projector 幂等收敛为隐藏态。
+  producer: content-service
+  consumers:
+  - notification-service
+  - user-service
+  - content-comment-moderation-projector
+  channel: event_store
+  payload_fields:
+  - id
+  - version
+  - reporterId
+  - reporterAccountId
+  - targetType
+  - targetId
+  - resolution
+  - reviewerId
+  - idempotencyKey
+- name: ReportDismissed
+  description: 举报审核完成但未发现违规
+  producer: content-service
+  consumers:
+  - notification-service
+  channel: event_store
+  payload_fields:
+  - id
+  - version
+  - reporterId
+  - reporterAccountId
+  - targetType
+  - targetId
+  - reviewerId
+  - idempotencyKey

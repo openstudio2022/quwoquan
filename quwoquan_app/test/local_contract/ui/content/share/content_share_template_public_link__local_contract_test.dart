@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';

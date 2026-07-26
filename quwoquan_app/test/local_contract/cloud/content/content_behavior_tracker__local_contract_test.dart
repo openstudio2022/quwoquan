@@ -30,6 +30,25 @@ class _FlakyBehaviorRepository extends BehaviorRepository {
     }
     recorded.addAll(events);
   }
+
+  @override
+  Future<void> submitOnboardingInterest({
+    required String clientEventId,
+    required String catalogVersion,
+    required String taxonomyReleaseId,
+    required List<String> tagRefs,
+  }) async {
+    recorded.add(
+      BehaviorEvent(
+        contentId: '',
+        action: BehaviorAction.onboardingInterest,
+        clientEventId: clientEventId,
+        catalogVersion: catalogVersion,
+        taxonomyReleaseId: taxonomyReleaseId,
+        tags: tagRefs,
+      ),
+    );
+  }
 }
 
 void main() {

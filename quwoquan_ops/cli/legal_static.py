@@ -23,11 +23,13 @@ from quwoquan_ops.cli.lib.environment_topology import (
     load_environment_topology,
 )
 from quwoquan_ops.cli.lib.output_paths import (
-    legal_static_deployment_package_dir,
-    output_root as resolve_output_root,
+    deployment_target_for_env,
+    deployment_target_path,
+    remove_deployment_tree,
+    resolve_deployment_target_path,
 )
 
-DEFAULT_MANIFEST = ROOT / "quwoquan_service" / "services" / "legal-static" / "source" / "manifest.yaml"
+DEFAULT_MANIFEST = ROOT / "quwoquan_service" / "static" / "legal" / "manifest.yaml"
 LEGAL_STATIC_SOURCE_SCHEMA = "legal-static"
 REQUIRED_DOCUMENTS = {
     "user-agreement",
@@ -65,19 +67,11 @@ def _resolve_package_root(
     output_root: Path | None,
     target: str = "",
 ) -> Path:
-    package_root = (
-        output_root
-        if output_root is not None
-        else legal_static_deployment_package_dir(env_name, target=target)
-    )
-    package_root = package_root.expanduser().resolve()
-    try:
-        package_root.relative_to(resolve_output_root().expanduser().resolve())
-    except ValueError:
-        return package_root
-    raise ValueError(
-        "legal-static package root must be outside QWQ_OUTPUT_ROOT; "
-        ".qwq_output cannot contain deployment payloads"
+    target_name = deployment_target_for_env(env_name, target=target)
+    return resolve_deployment_target_path(
+        output_root,
+        target=target_name,
+        segments=("packages", "legal-static"),
     )
 
 
@@ -269,16 +263,17 @@ def _legal_static_root(package_root: Path, env_name: str) -> Path:
     return package_root
 
 
-def _package_dir(package_root: Path, env_name: str, version: str) -> Path:
-    return _legal_static_root(package_root, env_name) / version
-
-
-def _refresh_current_pointer(env_root: Path, package_dir: Path) -> str:
+def _refresh_current_pointer(
+    env_root: Path,
+    package_dir: Path,
+    *,
+    target_name: str,
+) -> str:
     current = env_root / "current"
     if current.is_symlink() or current.is_file():
         current.unlink()
     elif current.exists():
-        shutil.rmtree(current)
+        remove_deployment_tree(target_name, "packages", "legal-static", "current")
     try:
         os.symlink(package_dir.name, current, target_is_directory=True)
         return relpath(current)
@@ -303,15 +298,26 @@ def build_package(
             "exitCode": 1,
         }
     version = str(manifest["currentVersion"])
+    target_name = deployment_target_for_env(env_name, target=target)
     package_root = _resolve_package_root(
         env_name,
         output_root=output_root,
         target=target,
     )
     with _package_lock(package_root, exclusive=True):
-        package_dir = _package_dir(package_root, env_name, version)
+        package_dir = deployment_target_path(
+            target_name,
+            "packages",
+            "legal-static",
+            version,
+        )
         if package_dir.exists():
-            shutil.rmtree(package_dir)
+            remove_deployment_tree(
+                target_name,
+                "packages",
+                "legal-static",
+                version,
+            )
         public_root = package_dir / "public"
         public_legal_root = public_root / "legal"
         public_legal_root.mkdir(parents=True, exist_ok=True)
@@ -393,6 +399,7 @@ def build_package(
         current_pointer = _refresh_current_pointer(
             _legal_static_root(package_root, env_name),
             package_dir,
+            target_name=target_name,
         )
     return {
         "status": "ok",
@@ -421,12 +428,20 @@ def verify_package(
         output_root=output_root,
         target=target,
     )
+    target_name = deployment_target_for_env(env_name, target=target)
     with _package_lock(resolved_package_root, exclusive=False):
-        package_dir = package_root or _package_dir(
-            resolved_package_root,
-            env_name,
+        expected_package_dir = deployment_target_path(
+            target_name,
+            "packages",
+            "legal-static",
             version,
         )
+        if package_root is not None and package_root.expanduser().resolve() != expected_package_dir:
+            raise ValueError(
+                "legal-static package root must resolve to its target-scoped "
+                f"workspace: expected {expected_package_dir}"
+            )
+        package_dir = package_root or expected_package_dir
         return _verify_package_locked(
             env_name,
             manifest=manifest,
@@ -528,11 +543,7 @@ def main() -> int:
     args = parse_args()
     manifest_path = Path(args.manifest)
     output_root = Path(args.output_root) if args.output_root else None
-    if output_root is not None and not output_root.is_absolute():
-        output_root = ROOT / output_root
     package_root = Path(args.package_root) if args.package_root else None
-    if package_root is not None and not package_root.is_absolute():
-        package_root = ROOT / package_root
 
     if args.command == "package":
         payload = build_package(

@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_picker_participant_row.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
@@ -613,23 +613,17 @@ class _ContactRow extends StatelessWidget {
                   : null,
             ),
             SizedBox(width: AppSpacing.sm),
-            CircleAvatar(
-              radius: AppSpacing.twenty,
+            AppCircularAvatar(
+              imageUrl: avatarUrl,
+              size: AppSpacing.twenty * 2,
               backgroundColor: AppColors.primaryColor.withValues(alpha: 0.2),
-              backgroundImage: avatarUrl != null
-                  ? NetworkImage(avatarUrl)
-                  : null,
-              child: avatarUrl == null
-                  ? Text(
-                      displayName.isNotEmpty
-                          ? displayName[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        fontSize: AppTypography.md,
-                        fontWeight: AppTypography.semiBold,
-                      ),
-                    )
-                  : null,
+              fallback: Text(
+                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                style: TextStyle(
+                  fontSize: AppTypography.md,
+                  fontWeight: AppTypography.semiBold,
+                ),
+              ),
             ),
             SizedBox(width: AppSpacing.sm),
             Expanded(

@@ -58,6 +58,9 @@ def object_image_candidates(object_dir: Path, execution_id: str) -> list[dict[st
                     "licenseSnapshot": asset_meta.get("licenseSnapshot") or "",
                     "authorizationProof": asset_meta.get("authorizationProof") or "",
                     "usageScope": asset_meta.get("usageScope") or "",
+                    "modelReleaseStatus": asset_meta.get("modelReleaseStatus") or "",
+                    "rightsAuditStatus": asset_meta.get("rightsAuditStatus") or "",
+                    "rightsAuditIssues": list(asset_meta.get("rightsAuditIssues") or []),
                 }
             )
     return candidates

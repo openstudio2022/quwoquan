@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/providers/provider_cache.dart';
@@ -17,16 +18,20 @@ final _authorImpactCacheProvider = Provider<TtlCache<AuthorImpactSummary>>(
   (ref) => TtlCache<AuthorImpactSummary>(),
 );
 
+/// 摘要读取的主体与实际触发 surface；两者共同决定 generated operation 的调用上下文。
+typedef AuthorImpactRequest = ({String subAccountId, AppUiSurface surface});
+
 final authorImpactProvider = FutureProvider.autoDispose
-    .family<AuthorImpactSummary, String>((ref, userId) async {
+    .family<AuthorImpactSummary, AuthorImpactRequest>((ref, request) async {
       final cache = ref.read(_authorImpactCacheProvider);
-      final hit = cache.readFresh(userId, _authorImpactCacheTtl);
+      final cacheKey = '${request.surface.id}:${request.subAccountId}';
+      final hit = cache.readFresh(cacheKey, _authorImpactCacheTtl);
       if (hit != null) {
         return hit.value;
       }
       final summary = await ref
-          .watch(authorImpactQueryProvider)
-          .getAuthorImpact(userId);
-      cache.write(userId, summary);
+          .watch(authorImpactQueryProvider(request.surface))
+          .getAuthorImpact(request.subAccountId);
+      cache.write(cacheKey, summary);
       return summary;
     });

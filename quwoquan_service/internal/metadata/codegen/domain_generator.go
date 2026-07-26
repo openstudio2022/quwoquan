@@ -23,6 +23,7 @@ type domainGeneratorConfig struct {
 	skipViewEntities    bool
 	goFieldIDSuffix     bool
 	businessObjectsOnly bool
+	objectFirstRoot     bool
 }
 
 func WithTypedEnums() DomainGeneratorOption {
@@ -51,11 +52,19 @@ func WithGoFieldIDSuffix() DomainGeneratorOption {
 
 // WithBusinessObjectEntitiesOnly prevents transport DTOs, command receipts,
 // outbox records, checkpoints and inbox rows from leaking into generated
-// domain model packages. An entity is eligible only when business_object_map
-// registers it as a governed business object for the same fields document.
+// contract model packages. An entity is eligible only when object.yaml owns it
+// as the aggregate root or one of its bounded members.
 func WithBusinessObjectEntitiesOnly() DomainGeneratorOption {
 	return func(config *domainGeneratorConfig) {
 		config.businessObjectsOnly = true
+	}
+}
+
+// WithObjectFirstRoot emits domain/model and domain/event relative to an
+// already-resolved <domain>/<context>/<object> source root.
+func WithObjectFirstRoot() DomainGeneratorOption {
+	return func(config *domainGeneratorConfig) {
+		config.objectFirstRoot = true
 	}
 }
 
@@ -113,6 +122,7 @@ type fieldsDocument struct {
 	Entity   string                          `yaml:"entity"`
 	Fields   []domainField                   `yaml:"fields"`
 	Entities map[string]domainEntityDocument `yaml:"entities"`
+	Members  map[string]domainEntityDocument `yaml:"members"`
 }
 
 type domainEntityDocument struct {
@@ -193,17 +203,27 @@ func (generator *DomainGenerator) buildTemplateData(
 	); err != nil {
 		return domainTemplateData{}, err
 	}
-	if len(fields.Entities) == 0 && fields.Entity != "" {
-		fields.Entities = map[string]domainEntityDocument{
-			fields.Entity: {Fields: fields.Fields},
+	if len(fields.Entities) == 0 && len(fields.Fields) > 0 {
+		entityName := strings.TrimSpace(fields.Entity)
+		if entityName == "" {
+			entityName = object.Name
 		}
+		fields.Entities = map[string]domainEntityDocument{
+			entityName: {Fields: fields.Fields},
+		}
+	}
+	if fields.Entities == nil {
+		fields.Entities = make(map[string]domainEntityDocument)
+	}
+	for name, member := range fields.Members {
+		fields.Entities[name] = member
 	}
 
 	data := domainTemplateData{
 		PackageName:     strings.ToLower(aggregateName),
 		AggregateRoot:   aggregateName,
 		SnakeName:       CamelToSnake(aggregateName),
-		DomainModelPath: domainModelOutputPath(object),
+		DomainModelPath: generator.domainModelOutputPath(object),
 	}
 	entityNames := make([]string, 0, len(fields.Entities))
 	registeredEntities, err := generator.registeredBusinessEntities(object, path.Join(objectDir, "fields.yaml"))
@@ -291,10 +311,20 @@ func (generator *DomainGenerator) registeredBusinessEntities(object ast.Object, 
 	if generator.config.businessObjectsOnly && !rootFound {
 		return nil, fmt.Errorf("business object %q has no source_entity registration for %s", object.Name, fieldsPath)
 	}
+	if rootFound {
+		for _, member := range object.Members {
+			if name := strings.TrimSpace(member.Name); name != "" {
+				registered[name] = struct{}{}
+			}
+		}
+	}
 	return registered, nil
 }
 
-func domainModelOutputPath(object ast.Object) string {
+func (generator *DomainGenerator) domainModelOutputPath(object ast.Object) string {
+	if generator.config.objectFirstRoot {
+		return path.Join("contract", "model")
+	}
 	configured := path.Clean(strings.TrimSpace(object.DDDLayer.DomainModel))
 	if configured == "." || configured == "" {
 		return path.Join("domain", strings.ToLower(object.Name), "model")

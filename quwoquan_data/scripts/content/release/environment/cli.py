@@ -18,7 +18,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     apply.add_argument(
         "--full-sync",
         action="store_true",
-        help="按 release desired state tombstone 缺失对象；baseline/canary/M1/M2/M3/H10K 强制使用",
+        help="按 release desired state tombstone 缺失对象；所有 immutable release 必须使用",
     )
     apply.add_argument("--dry-run", action="store_true")
     apply.add_argument("--confirm-prod-apply", action="store_true")
@@ -36,7 +36,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     verify = commands.add_parser(
         ReleaseRunKind.VERIFY,
-        help="从环境导入回执逐主页验证 detail/introduction API",
+        help="从环境导入回执逐主页及逐帖子验证公开消费 API",
     )
     verify.add_argument("--release-id", required=True)
     verify.add_argument("--env", required=True, choices=sorted(VALID_ENVS))

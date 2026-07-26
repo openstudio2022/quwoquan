@@ -325,6 +325,7 @@ def render_source_markdown(
 
 
 _RENDERED_HEADING_RE = re.compile(r"^(={2,6})\s*(.*?)\s*\1$")
+_MARKDOWN_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 
 
 def rendered_text_blocks(text: str) -> list[dict[str, Any]]:
@@ -343,12 +344,14 @@ def rendered_text_blocks(text: str) -> list[dict[str, Any]]:
     for raw_line in str(text or "").splitlines():
         line = raw_line.strip()
         heading = _RENDERED_HEADING_RE.match(line)
-        if heading:
+        markdown_heading = _MARKDOWN_HEADING_RE.match(line)
+        if heading or markdown_heading:
             _flush_paragraph()
-            heading_text = heading.group(2).strip()
+            active_heading = heading or markdown_heading
+            heading_text = active_heading.group(2).strip()
             section_slug = slugify_rendered_section(heading_text)
             blocks.append(
-                make_heading_block(len(heading.group(1)), heading_text, section_slug)
+                make_heading_block(len(active_heading.group(1)), heading_text, section_slug)
             )
             continue
         if not line:

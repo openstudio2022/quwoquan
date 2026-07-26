@@ -187,6 +187,7 @@ void main() {
     expect(checkpoint.initIdempotencyKey, isNotEmpty);
     expect(checkpoint.completeIdempotencyKey, isNotEmpty);
     expect(checkpoint.abortIdempotencyKey, isNotEmpty);
+    expect(checkpoint.discardIdempotencyKey, isNotEmpty);
   });
 
   test('放弃媒体准备前先与服务端会话对账并中止 pending session', () async {
@@ -209,14 +210,14 @@ void main() {
       preparationIdentity: 'draft-1',
       slot: 'video:0',
       mediaType: ContentMediaType.video,
-      sha256Digest: 'sha256:${_pendingVideoDigest}',
+      sha256Digest: 'sha256:$_pendingVideoDigest',
     );
     final initialized = await media.initUpload(
       InitContentMediaUploadCommand(
         mediaType: ContentMediaType.video,
         contentType: 'video/mp4',
         fileSize: 4,
-        expectedSha256: 'sha256:${_pendingVideoDigest}',
+        expectedSha256: 'sha256:$_pendingVideoDigest',
       ),
       ContentMediaUploadCommandContext(
         idempotencyKey: checkpoint.initIdempotencyKey,
@@ -233,6 +234,140 @@ void main() {
     await notifier.cancelPending('draft-1');
 
     expect(media.abortedSessions, <String>[initialized.sessionId]);
+    expect(container.read(postPublicationIntentQueueProvider).intents, isEmpty);
+  });
+
+  test('放弃已完成媒体时先取得 discarded 回执再移除本地意图', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final media = RecordingContentMediaFacet();
+    final container = _container(
+      writer: _SuccessfulPublicationWriter(),
+      drafts: _RecordingDraftRepository(),
+      media: media,
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(
+      postPublicationIntentQueueProvider.notifier,
+    );
+    await notifier.beginMediaPreparation(
+      command: _command(contentType: ContentPostType.image),
+      authorPersonaId: 'persona-publication',
+    );
+    final checkpoint = ContentMediaPreparationCheckpoint.forSource(
+      preparationIdentity: 'draft-1',
+      slot: 'image:0',
+      mediaType: ContentMediaType.image,
+      sha256Digest: 'sha256:$_pendingVideoDigest',
+    );
+    final initialized = await media.initUpload(
+      InitContentMediaUploadCommand(
+        mediaType: ContentMediaType.image,
+        contentType: 'image/jpeg',
+        fileSize: 4,
+        expectedSha256: 'sha256:$_pendingVideoDigest',
+      ),
+      ContentMediaUploadCommandContext(
+        idempotencyKey: checkpoint.initIdempotencyKey,
+      ),
+    );
+    final completed = await media.completeUpload(
+      CompleteContentMediaUploadCommand(sessionId: initialized.sessionId),
+      ContentMediaUploadCommandContext(
+        idempotencyKey: checkpoint.completeIdempotencyKey,
+      ),
+    );
+    final completedAssetId = completed.assetId!;
+    final completedCheckpoint = checkpoint.copyWith(
+      sessionId: initialized.sessionId,
+      assetId: completedAssetId,
+      phase: ContentMediaPreparationPhase.completed,
+    );
+    await notifier.recordPreparedMediaAsset('draft-1', completedCheckpoint);
+
+    await notifier.cancelPending('draft-1');
+
+    expect(media.discardCommands.map((command) => command.mediaId), <String>[
+      completedAssetId,
+    ]);
+    expect(media.discardIdempotencyKeys, <String>[
+      completedCheckpoint.discardIdempotencyKey,
+    ]);
+    expect(container.read(postPublicationIntentQueueProvider).intents, isEmpty);
+  });
+
+  test('提交失败后的未受理意图仍会回收已完成媒体', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final media = RecordingContentMediaFacet();
+    final writer = _CloudFailingPublicationWriter(
+      CloudException(
+        type: CloudErrorType.server,
+        message: 'temporary publication failure',
+        runtimeFailure: testRuntimeFailure(
+          code: 'CONTENT.SYSTEM.storage_write_failed',
+          nature: RuntimeFailureNature.transient,
+          recovery: const RuntimeRecoveryDirective(
+            action: 'retry',
+            afterSeconds: 1,
+            disruptionLevel: 'silent',
+          ),
+        ),
+      ),
+    );
+    final container = _container(
+      writer: writer,
+      drafts: _RecordingDraftRepository(),
+      media: media,
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(
+      postPublicationIntentQueueProvider.notifier,
+    );
+    final command = _command(contentType: ContentPostType.image);
+    await notifier.beginMediaPreparation(
+      command: command,
+      authorPersonaId: 'persona-publication',
+    );
+    final checkpoint = ContentMediaPreparationCheckpoint.forSource(
+      preparationIdentity: 'draft-1',
+      slot: 'image:0',
+      mediaType: ContentMediaType.image,
+      sha256Digest: 'sha256:$_pendingVideoDigest',
+    );
+    final initialized = await media.initUpload(
+      InitContentMediaUploadCommand(
+        mediaType: ContentMediaType.image,
+        contentType: 'image/jpeg',
+        fileSize: 4,
+        expectedSha256: 'sha256:$_pendingVideoDigest',
+      ),
+      ContentMediaUploadCommandContext(
+        idempotencyKey: checkpoint.initIdempotencyKey,
+      ),
+    );
+    final completed = await media.completeUpload(
+      CompleteContentMediaUploadCommand(sessionId: initialized.sessionId),
+      ContentMediaUploadCommandContext(
+        idempotencyKey: checkpoint.completeIdempotencyKey,
+      ),
+    );
+    final completedAssetId = completed.assetId!;
+    await notifier.recordPreparedMediaAsset(
+      'draft-1',
+      checkpoint.copyWith(
+        sessionId: initialized.sessionId,
+        assetId: completedAssetId,
+        phase: ContentMediaPreparationPhase.completed,
+      ),
+    );
+    await expectLater(
+      notifier.submit(command: command, authorPersonaId: 'persona-publication'),
+      throwsA(isA<PostPublicationQueuedException>()),
+    );
+
+    await notifier.cancelPending('draft-1');
+
+    expect(media.discardCommands, hasLength(1));
+    expect(media.discardCommands.single.mediaId, completedAssetId);
     expect(container.read(postPublicationIntentQueueProvider).intents, isEmpty);
   });
 

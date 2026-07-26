@@ -15,7 +15,7 @@ Usage:
 
 Behavior:
   - Validates rollout step sequence.
-  - Ensures target config version file exists.
+  - Ensures target CONFIG_VERSION is the digest of the current autonomous prod package.
   - Writes rollout state to QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/<service>.state.
 EOF
 }
@@ -53,9 +53,27 @@ case "$STEP" in
   *) echo "FAIL: --step must be one of 5|25|50|100" >&2; exit 2 ;;
 esac
 
-cfg_file="$ROOT/quwoquan_service/services/$SERVICE/configs/releases/$TO_CONFIG.yaml"
-if [[ ! -f "$cfg_file" ]]; then
-  echo "FAIL: target config version file not found: $cfg_file" >&2
+digest_re='^sha256:[0-9a-f]{64}$'
+for value in "$FROM_IMAGE" "$TO_IMAGE" "$FROM_CONFIG" "$TO_CONFIG"; do
+  if [[ ! "$value" =~ $digest_re ]]; then
+    echo "FAIL: image/config versions must be sha256 digests: $value" >&2
+    exit 1
+  fi
+done
+
+package_version="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$SERVICE" <<'PY'
+import json
+import sys
+from quwoquan_ops.cli.lib.output_paths import service_deployment_package_dir
+
+path = service_deployment_package_dir("prod", sys.argv[1]) / "provenance.json"
+if not path.is_file():
+    raise SystemExit(f"missing autonomous prod service package: {path}")
+print(json.loads(path.read_text(encoding="utf-8"))["configVersion"])
+PY
+)" || exit 1
+if [[ "$TO_CONFIG" != "$package_version" ]]; then
+  echo "FAIL: target config digest does not match current prod service package: package=$package_version requested=$TO_CONFIG" >&2
   exit 1
 fi
 

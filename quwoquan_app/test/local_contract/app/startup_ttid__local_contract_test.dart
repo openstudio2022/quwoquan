@@ -53,12 +53,12 @@ void main() {
       final ratchet = File(
         '${repoRoot.path}/quwoquan_app/scripts/device/verify_startup_ttid_baseline.py',
       );
-      final acceptance = File(
-        '${repoRoot.path}/specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/acceptance.yaml',
+      final spec = File(
+        '${repoRoot.path}/specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md',
       );
       expect(probe.existsSync(), isTrue, reason: probe.path);
       expect(ratchet.existsSync(), isTrue, reason: ratchet.path);
-      expect(acceptance.existsSync(), isTrue, reason: acceptance.path);
+      expect(spec.existsSync(), isTrue, reason: spec.path);
     });
   });
 }

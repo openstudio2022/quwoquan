@@ -1,0 +1,46 @@
+events:
+- name: HomepageReviewPublished
+  producer: entity-service
+  consumers:
+  - homepage-review-projection
+  - recommendation-engine
+  channel: event_store
+  payload_entity: HomepageReview
+  payload_fields:
+  - reviewId
+  - homepageId
+  - authorPersonaId
+  - rating
+  - tagRefs
+  - status
+  - createdAt
+  - version
+- name: HomepageReviewUpdated
+  producer: entity-service
+  consumers:
+  - homepage-review-projection
+  - recommendation-engine
+  channel: event_store
+  payload_entity: HomepageReview
+  payload_fields:
+  - reviewId
+  - homepageId
+  - authorPersonaId
+  - rating
+  - tagRefs
+  - status
+  - updatedAt
+  - version
+- name: HomepageReviewRemoved
+  producer: entity-service
+  consumers:
+  - homepage-review-projection
+  - recommendation-engine
+  channel: event_store
+  payload_entity: HomepageReview
+  payload_fields:
+  - reviewId
+  - homepageId
+  - status
+  - updatedAt
+  - version

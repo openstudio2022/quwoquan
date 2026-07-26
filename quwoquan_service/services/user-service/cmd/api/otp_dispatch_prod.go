@@ -4,7 +4,7 @@ package main
 
 import (
 	rtauth "quwoquan_service/runtime/auth"
-	"quwoquan_service/services/user-service/internal/application"
+	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 )
 
 func otpExternalInteractionClientForEnvironment(

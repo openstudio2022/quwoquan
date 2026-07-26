@@ -52,6 +52,7 @@ enum ContentErrorCode {
   mediaNotFound('CONTENT.USER.media_not_found', 'surface', 0, 404),
   mediaNotReady('CONTENT.USER.media_not_ready', 'retry', 3, 400),
   mediaProcessingRejected('CONTENT.USER.media_processing_rejected', 'surface', 0, 422),
+  mediaInUse('CONTENT.USER.media_in_use', 'surface', 0, 409),
   mediaPlaybackNetworkUnavailable('CONTENT.SYSTEM.media_playback_network_unavailable', 'retry', 0, 503),
   mediaPlaybackTemporarilyUnavailable('CONTENT.SYSTEM.media_playback_temporarily_unavailable', 'retry', 0, 503),
   mediaPlaybackServiceBusy('CONTENT.SYSTEM.media_playback_service_busy', 'retry', 0, 503),
@@ -62,6 +63,7 @@ enum ContentErrorCode {
   originalAccessRateLimited('CONTENT.USER.original_access_rate_limited', 'retry', 60, 429),
   mediaFileTooLarge('CONTENT.USER.media_file_too_large', 'surface', 0, 413),
   mediaTypeUnsupported('CONTENT.USER.media_type_unsupported', 'surface', 0, 415),
+  mediaUploadSessionExpired('CONTENT.USER.media_upload_session_expired', 'retry', 0, 409),
   moderationCaseNotFound('CONTENT.USER.moderation_case_not_found', 'refresh', 0, 404),
   moderationApprovalRequired('CONTENT.USER.moderation_approval_required', 'retry', 3, 409),
   moderationDecisionStale('CONTENT.USER.moderation_decision_stale', 'refresh', 0, 409),
@@ -177,6 +179,8 @@ enum ContentErrorCode {
         return ContentErrorCode.mediaNotReady;
       case 'CONTENT.USER.media_processing_rejected':
         return ContentErrorCode.mediaProcessingRejected;
+      case 'CONTENT.USER.media_in_use':
+        return ContentErrorCode.mediaInUse;
       case 'CONTENT.SYSTEM.media_playback_network_unavailable':
         return ContentErrorCode.mediaPlaybackNetworkUnavailable;
       case 'CONTENT.SYSTEM.media_playback_temporarily_unavailable':
@@ -197,6 +201,8 @@ enum ContentErrorCode {
         return ContentErrorCode.mediaFileTooLarge;
       case 'CONTENT.USER.media_type_unsupported':
         return ContentErrorCode.mediaTypeUnsupported;
+      case 'CONTENT.USER.media_upload_session_expired':
+        return ContentErrorCode.mediaUploadSessionExpired;
       case 'CONTENT.USER.moderation_case_not_found':
         return ContentErrorCode.moderationCaseNotFound;
       case 'CONTENT.USER.moderation_approval_required':
@@ -266,6 +272,7 @@ class ContentErrorMessages {
     ContentErrorCode.mediaNotFound: '媒体资源不存在或已过期',
     ContentErrorCode.mediaNotReady: '媒体文件正在处理中，请稍后发布',
     ContentErrorCode.mediaProcessingRejected: '媒体文件无法处理，请更换后重新发布',
+    ContentErrorCode.mediaInUse: '媒体已被内容引用，无法放弃',
     ContentErrorCode.mediaPlaybackNetworkUnavailable: '网络不太稳定',
     ContentErrorCode.mediaPlaybackTemporarilyUnavailable: '暂时无法播放',
     ContentErrorCode.mediaPlaybackServiceBusy: '暂时无法播放',
@@ -276,6 +283,7 @@ class ContentErrorMessages {
     ContentErrorCode.originalAccessRateLimited: '原图访问过于频繁，请稍后再试',
     ContentErrorCode.mediaFileTooLarge: '文件超过 50 MB，请选择更短或更小的媒体',
     ContentErrorCode.mediaTypeUnsupported: '暂不支持这种媒体格式',
+    ContentErrorCode.mediaUploadSessionExpired: '上传凭证已过期，正在重新准备',
     ContentErrorCode.moderationCaseNotFound: '未找到当前内容的审核记录',
     ContentErrorCode.moderationApprovalRequired: '内容尚未通过当前版本审核',
     ContentErrorCode.moderationDecisionStale: '内容已编辑，请基于最新版本重新审核',
@@ -333,6 +341,7 @@ class ContentErrorMessages {
     ContentErrorCode.mediaNotFound: 'Media asset not found or expired',
     ContentErrorCode.mediaNotReady: 'Media is still processing, please retry shortly',
     ContentErrorCode.mediaProcessingRejected: 'This media could not be processed. Replace it and publish again',
+    ContentErrorCode.mediaInUse: 'This media is referenced by content and cannot be discarded',
     ContentErrorCode.mediaPlaybackNetworkUnavailable: 'The network is unstable.',
     ContentErrorCode.mediaPlaybackTemporarilyUnavailable: 'Playback is temporarily unavailable.',
     ContentErrorCode.mediaPlaybackServiceBusy: 'Playback is temporarily unavailable.',
@@ -343,6 +352,7 @@ class ContentErrorMessages {
     ContentErrorCode.originalAccessRateLimited: 'Too many original media requests, please retry later',
     ContentErrorCode.mediaFileTooLarge: 'The file exceeds 50 MB. Choose a shorter or smaller media file.',
     ContentErrorCode.mediaTypeUnsupported: 'This media format is not supported.',
+    ContentErrorCode.mediaUploadSessionExpired: 'The upload grant expired and will be prepared again.',
     ContentErrorCode.moderationCaseNotFound: 'No current moderation case was found',
     ContentErrorCode.moderationApprovalRequired: 'The current content version is not approved',
     ContentErrorCode.moderationDecisionStale: 'Content changed; review the latest version',

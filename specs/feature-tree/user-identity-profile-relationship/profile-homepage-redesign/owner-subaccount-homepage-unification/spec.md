@@ -1,179 +1,170 @@
-# L3 特性：Owner/SubAccount 一体化个人主页统一改版
+# L3 Story：Owner/SubAccount 一体化个人主页统一改版 (`owner-subaccount-homepage-unification`)
 
-## 背景与动机
+> 所属能力：[`profile-homepage-redesign`](../spec.md)
+>
+> Journey / Scenario：[`JNY-003 / SCN-009`](../../../spec.md#scn-009)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-当前个人主页存在两类根问题：
+## 1. 用户价值
 
-1. UI 与交互割裂：`MyProfilePage/ProfileShell` 与 `OtherProfilePage/AuthorProfile` 并行维护，导致滚动、拉伸、按钮矩阵、Tab 结构和视觉风格长期漂移。
-2. 端云契约失真：用户域已经明确 `OwnerAccount` 与 `SubAccount` 双层身份模型，但个人主页仍在 `userId / subAccountId / username / Persona` 多套语义之间摇摆，端侧大量直接消费手写 `Map<String, dynamic>`，无法进入稳定的 metadata-first 开发。
+作为管理账号、Persona 或关系的用户，我希望我的主页互动转发双向列表与 owner/sub-account 隔离验收，从而安全地维持身份、画像与关系状态。
 
-这次 Story 的目标不是单纯“重画页面”，而是把 `owner` 与 `subAccount` 一体化主页的交互规格、metadata 消费边界和端云消费链一次性收拢，为后续 `/dev` 提供稳定设计基线。
+## 2. 范围与非目标
 
-补充冻结：
+### In Scope
 
-- user 域关于 `SubAccountProfileView / SubAccountProfileMutation / 分身可见性 / 记录归因` 的真相源归 `persona-follow-graph/persona-profile-subject-and-visibility`。
-- 本场景消费这些 user 域契约来构建主页与资料编辑体验，不再拥有分身生命周期与公开身份模型的主定义权。
+- 互动二级控制行
+- type=share received/initiated 列表
+- cursor 分页、双方向缓存、seen/read、impact、隐私与观测
 
-## 目标用户
+### Out of Scope
 
-- 默认只有一个 `owner` 账号的普通用户。
-- 有身份隔离需求、会创建多个 `subAccount` 的用户。
-- 查看自己主页、查看他人主页、编辑资料并同步到其它身份的用户。
+- 主页头部与一级 Tab
+- 点赞、评论、浏览列表实现
+- 独立转发页面与公开转发资产
 
-## 功能范围
+## 3. 行为要求
 
-### F1: 主页主体模型统一
+<a id="req-001"></a>
+### REQ-001 互动导航保持两层且只改转发
 
-- 不再引入单独的“公开主页实体”。
-- `owner` 和每个 `subAccount` 都各自拥有一个别人可见的主页。
-- `subAccount` 创建时默认继承 `owner` 的资料基线，但允许局部覆写。
+- 本 Story 只改变转发互动；点赞、评论与浏览列表的内容、顺序和点击目标不得改变。
+
+<a id="req-002"></a>
+### REQ-002 收到与我发起文案和行结构正确
+
+- 行高、头像、角标、预览、间距、字号、分割线和 44pt 热区符合 token 契约。
+
+<a id="req-003"></a>
+### REQ-003 预览与失效降级完整
+
+- 所有目标仍保留时间、转发关系和可进入的用户身份。
+
+<a id="req-004"></a>
+### REQ-004 received 未读和真实影响归因
+
+- 切换到 received 不会批量标记全部已读。
+
+<a id="req-005"></a>
+### REQ-005 双方向缓存分页和竞态安全
+
+- cursor 全序无重复遗漏，底部状态完整。
+
+<a id="req-006"></a>
+### REQ-006 点击解析优先级一致
+
+- 不存在同一行两条不同内容跳转路径。
+
+<a id="req-007"></a>
+### REQ-007 私有列表与子账号隔离
+
+- 我发起的转发不进入公开主页、搜索索引、交集或影响数字。
+
+<a id="req-008"></a>
+### REQ-008 转发列表观测闭环
+
+- 指标可按方向、目标类型、缓存命中、失败码和环境聚合。
+
+<a id="req-009"></a>
+### REQ-009 对外路由稳定且端云身份语义统一
+
 - 对外路由仍保持 `/user/{username}`，但端云契约内统一为 `ProfileSubject` 语义，避免继续混用 `userId / subAccountId / username`。
-
-### F2: 资料编辑与同步提示
-
 - 编辑入口进入统一的资料编辑流。
-- 当修改 `owner` 或某个 `subAccount` 时，保存后需要提示是否将本次变更同步到其它关联身份。
 - “是否同步给 owner / 其它 subAccount” 必须进入写入契约，不能只停留在前端临时状态。
-
-### F3: 我的主页与他人主页统一壳层
-
 - `我的主页` 与 `他人主页` 最终都落到统一的 `ProfileShell`。
-- 差异只由 `self / other / relationship state` 驱动，不再保留双轨滚动与拉伸实现。
 - 头部布局统一为：头像侵入背景约 `1/3`，名字与资料主体在 profile 区 `2/3`，个人介绍独立成块。
-
-### F4: 关系态按钮矩阵
-
-- `self`：资料可编辑，保留设置入口。
-- `未关注`：`关注 + 私信`。
-- `我关注 Ta`：`已关注 + 私信`。
-- `Ta 关注我`：`回关 + 私信`。
-- `互关`：`消息 + 语音通话 + 视频通话`。
-- 本次版本不启用旧扩展关系层级作为主页主流程前提。
-
-### F5: 一级/二级 Tab 结构重定
-
-- 一级 Tab 固定为：`创作 | 圈子 | 互动`，默认选中 `创作`。
-- 一级 Tab 视觉语义对齐首页 `CenteredScrollableTabBar`：字重、下划线、热区一致，但间距更大。
-- `创作` 内保留左对齐二级胶囊筛选：`全部 | 微趣 | 图片 | 视频 | 文字`。
-- `互动` 内保留左对齐二级胶囊筛选：`赞 | 评论 | 转发`。
-- 我的主页额外支持互动方向切换 `收到 | 发出`；他人主页仅展示 `Ta 收到` 的公开互动。
-- 去掉 `收藏` 与 `生活 Tab`。
-
-### F6: 下拉拉伸与 iOS 风格统一
-
-- 个人主页顶部背景图默认高度为屏幕高的 `1/4`。
-- 下拉时允许背景图最大拉伸到屏幕高的 `1/3`，松手后需要有回弹效果。
-- 拉伸对象是完整 profile 头部，而不是只缩放背景图：
-  - 背景图
-  - 用户头像与资料区
-  - 一级 Tab
-  - 当前一级 Tab 下的列表起始位置
 - 用户资料区顶部必须始终锚定在背景图底边，不允许出现“背景图在拉伸，但资料区没有下移”或“资料区下沉到背景图底边以下”的断层。
 - 一级 Tab 下的内部列表不能再误触发头图拉伸。
 - 个人主页整体升级到统一 iOS 风格：优先使用 Cupertino 风格按钮、分段、底部动作和图标语义。
-
-### F7: 整页上卷与双阶段吸顶
-
-- 上滑时应表现为整页整体上移，而不是背景、资料区、Tab、列表各自独立滚动。
 - 在头像触顶前，背景图、头像、用户名、资料区、一级 Tab 和列表必须处于同一主滚动坐标系。
-- 当头像底部越过顶部工具栏区域时，顶部工具栏进入紧凑态，显示小头像和用户名。
-- 当一级 Tab 滚动到顶部工具栏下沿时，一级 Tab 吸顶固定在工具栏下方。
 - 二级 Tab 不进入壳层吸顶体系，只属于各一级 Tab 的内容区，并随列表滚动；回滑到对应区域时必须自然回显。
 
-### F8: metadata / codegen / 端云同步
+## 4. 契约引用
 
-- 用户域需要正式定义 `SubAccountProfileView`、`ProfileInheritanceStateView`、`RelationshipCapabilityView`。
-- 内容域需要正式定义 `ProfileInteractionActivityView`，统一 `赞 / 评论 / 转发` 的互动活动语义。
-- `_shared` 需要补齐 route、request_context，以及个人主页 tab/filter 的 UI 配置真相源。
-- `user_profile/ui_config.yaml` 需要补齐头图几何参数与滚动/吸顶策略真相源，至少可表达：
-  - `header_base_height_ratio = 0.25`
-  - `header_max_stretch_ratio = 0.333`
-  - `avatar_overlap_ratio = 0.333`
-  - `compact_identity_bar`
-  - `primary_tab_sticky_below_toolbar`
-  - `secondary_tab_inline_scroll`
-- App 侧 repository/provider/UI 必须改为消费新的 codegen 视图与常量，不再依赖手写 map 协议。
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/ui_config.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/profile_interaction_activity_view/operations.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/operations.yaml`
+- canonical：`quwoquan_service/contracts/metadata/_shared/ui_surfaces.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/errors.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/behaviors.yaml`
 
-### F9: 我的主页互动转发双向列表
+## 5. 验收场景
 
-- 一级 Tab 保持 `记录 / 互动 / 足迹`；互动二级控制行固定为
-  `点赞 / 评论 / 转发 / 浏览 + 收到的 / 我发起的`，不提供“全部”、第三行筛选、
-  “互动明细”标题或独立转发页面。
-- 方向选择器属于互动二级控制行。移动该公共控制不改变点赞、评论、浏览的列表、
-  数据源和点击行为；只有选中 `type=share` 时进入本功能的专属列表状态。
-- `received` 表示别人转发当前分身的记录或讨论；`initiated` 表示当前分身转发
-  别人的记录或讨论。前台只使用“转发 / 记录 / 讨论”。
-- 每次转发按稳定 `interactionId` 独立成行，不做多人聚合。服务端可按同一 actor、
-  target、shareRecordId 与短时间窗口去重，App 不自行去重或计算影响结果。
-- received 行可显示未读与服务端完整返回的 `impactPrimaryText`；initiated 行不显示
-  未读、已读或传播影响。附言最多两行。
-- 点击头像/昵称进入方向对应的用户主页；点击行与预览统一按
-  `可用 shareRecord -> 可用原目标 -> 失效不跳转` 解析。传播结果仅在同时存在
-  `impactPrimaryText` 与可枚举 `impactDeepLink` 时可点击。
-- 图片、视频、长文/纯文本、讨论均使用 64pt 预览；deleted/private/reviewing/
-  author_deactivated 使用明确文本降级，保留时间与转发关系。
-- 两个方向分别保存 items、cursor、滚动位置、加载态、最近拉取时间和结构化错误；
-  缓存 TTL 为 5 分钟，过期先显示缓存再后台刷新，请求 generation 防止旧结果覆盖。
-- 首屏 4 条骨架，page size 20，距尾 5 条预加载；下拉刷新只刷新当前方向；
-  日期按用户时区分为今天、昨天、更早，同组按 occurredAt 倒序。
-- received 行达到可见面积 50% 且连续 1 秒后逐条上报 seen；打开详情后逐条 read，
-  切换方向不得批量标记。
-- 转发互动仅当前主页所有者可见。他人主页不显示转发筛选也不请求接口；服务端校验
-  owner 与 active sub-account，分身切换立即清空旧分身缓存，拉黑与匿名语义由服务端处理。
-- 观测事件固定为 `share_interaction_view`、`share_direction_change`、
-  `share_interaction_impression`、`share_interaction_open`、`share_actor_open`、
-  `share_impact_open`、`share_refresh`、`share_load_more`，公共来源为
-  `profile_interaction_share`。
-- 性能目标：缓存方向切换下一帧可见；20 条 API p95 不高于 500ms；App 首批数据
-  p95 不高于 1.5s；越权读取与 cursor 重复/遗漏为 0。
+<a id="gwt-001"></a>
+### GWT-001 互动导航保持两层且只改转发
 
-## 不做什么（Out of Scope）
+- GIVEN 当前用户进入我的主页互动 Tab。
+- WHEN 二级控制行完成渲染并选择转发。
+- THEN 一级保持记录/互动/足迹。
+- THEN 二级为点赞/评论/转发/浏览和收到的/我发起的。
+- THEN 页面不存在全部、互动明细、第三行导航或独立转发页。
 
-- **O1**: `subAccount` 管理页完整重构；本 Story 只定义同步提示与主页消费的身份模型。
-- **O2**: 统计详情页、共鸣页、圈子推荐算法的全面重做。
-- **O3**: 旧扩展关系层级的完整产品化。
-- **O4**: 新增独立 BFF 或聚合网关层承接个人主页。
-- **O5**: Web/Desktop 端适配。
-- **O6**: 重构主页头部、一级 Tab 或点赞/评论/浏览列表。
-- **O7**: 将“我发起的”转发公开为主页资产、搜索索引、公开交集或影响数字。
+<a id="gwt-002"></a>
+### GWT-002 收到与我发起文案和行结构正确
 
-## 约束
+- GIVEN received 与 initiated 均存在记录、讨论、附言和无附言 fixture。
+- WHEN 用户分别查看两个方向。
+- THEN received 显示“用户名 转发了你的记录/讨论”。
+- THEN initiated 显示“你转发了 用户名 的记录/讨论”。
+- THEN 附言最多两行，每次转发独立成行。
 
-- 以 `spec-first + metadata-first` 为前置，不允许先改 UI 再倒推契约。
-- 保留现有 `/user/{username}` 路由形态，避免外部分享链接漂移。
-- 允许兼容现有 `Persona` 记录命名，但新设计语义统一以 `SubAccount` 解释；兼容路径必须写明退出条件。
-- 互动流的领域归属以内容域为主，用户域负责主页主体与关系能力，不在本 Story 内把所有互动读模型强行搬到 user-service。
-- 滚动与吸顶交互必须建立在单一主滚动坐标系之上，不允许通过多个相互独立的 scroll view / offset 叠加去“拼”出头部动效。
+<a id="gwt-003"></a>
+### GWT-003 预览与失效降级完整
 
-## 对标输入与吸收结论
+- GIVEN 图片、视频、文本、讨论和四种 availability fixture 已加载。
+- WHEN 转发行或媒体加载失败被渲染。
+- THEN 图片使用 aspectFill，视频只显示封面和播放图标，文本和讨论最多两行。
+- THEN deleted/private/reviewing/author_deactivated 显示明确文本，不显示空白灰图或加载失败大块。
 
-### 抖音 / 小红书个人主页
+<a id="gwt-004"></a>
+### GWT-004 received 未读和真实影响归因
 
-| 维度 | 对标做法 | 吸收结论 |
-|------|---------|---------|
-| 头像侵入头图 | 头像上侵、名字与资料主体分层 | 吸收 |
-| 一级 Tab 吸顶 | 顶部吸顶、选中态清晰 | 吸收 |
-| 二级胶囊筛选 | 左对齐、轻量切换 | 吸收 |
-| 互动类型 | 点赞/评论/转发按内容动作组织 | 吸收 |
-| 资料编辑同步 | 大多没有多身份同步 | 需要按本产品 owner/subAccount 模型自定义 |
+- GIVEN received 行具有 unread、可选 impact 文案与可选 evidence destination。
+- WHEN 行可见超过 50% 持续 1 秒，或用户打开详情/影响明细。
+- THEN 逐条上报 impression 与 seen，打开详情逐条 read。
+- THEN 只有服务端完整返回 impactPrimaryText 才展示，且必须同时有 impactDeepLink 才可点击。
+- THEN initiated 不显示未读、已读或影响数据。
 
-### 内部对标
+<a id="gwt-005"></a>
+### GWT-005 双方向缓存分页和竞态安全
 
-- 首页一级 Tab：复用 `CenteredScrollableTabBar` 的交互语义。
-- 圈子页二级胶囊：复用 `SecondaryCapsuleTabBar` 的视觉语义。
-- `comment-thread`：复用评论流在内容域的分页、身份展示和弱网处理经验。
-- `user-service-cloud-delivery`：复用 user-service 的 DDD 分层、错误码、测试分层和交付约束。
+- GIVEN received 与 initiated 各有超过 20 条稳定排序事件。
+- WHEN 用户切换方向、滚动、预加载、下拉刷新并快速来回切换。
+- THEN 两个方向分别保存 items/cursor/scrollOffset/loading/lastFetchedAt/error。
+- THEN 缓存 5 分钟内立即显示，过期后台刷新，旧 generation 不覆盖当前结果。
+- THEN 距尾 5 条预加载，刷新只作用当前方向。
 
-## 非功能目标
+<a id="gwt-006"></a>
+### GWT-006 点击解析优先级一致
 
-- 端云契约单一真相源，不再出现 `Persona` 路由、`SubAccount` 路由和 UI 文案三套漂移。
-- 个人主页首屏与折叠滚动行为在弱网和回弹场景下稳定，不出现“背景缩放但 profile 不下拉”的结构性错误。
-- 下拉拉伸、整体上卷、头像吸顶与一级 Tab 吸顶的阈值可由统一配置推导，不依赖散落在 UI 内的魔法数。
-- 资料编辑同步链路可灰度、可观测、可回滚。
+- GIVEN shareRecord、原目标和失效目标三类 fixture 已准备。
+- WHEN 用户点击整行、预览、头像、昵称或影响结果。
+- THEN 行和预览统一按可用 shareRecord、可用原目标、失效不跳转解析。
+- THEN 头像和昵称按方向进入 actor 或 counterpart 主页。
+- THEN 影响结果只进入 metadata 枚举的传播来源明细。
 
-## 验收重点
+<a id="gwt-007"></a>
+### GWT-007 私有列表与子账号隔离
 
-1. owner/subAccount 一体化主页模型与写入同步契约已经冻结为 metadata 真相源。
-2. 用户域与内容域对主页的职责边界清晰，关系能力与互动活动不再混在同一个手写 DTO 中。
-3. 端侧可基于新 DTO/常量收敛到统一 `ProfileShell`，进入 `/dev` 后不再需要重新裁决 IA。
-4. 整页下拉拉伸、整体上卷、头像/名称吸顶、一级 Tab 吸顶与二级 Tab 回显行为已经冻结为可开发规格。
+- GIVEN 当前账号具有多个 sub-account，另有他人主页和拉黑关系 fixture。
+- WHEN 用户访问他人主页、切换 sub-account 或直接调用/deep link 到转发互动。
+- THEN 他人主页不展示 share 筛选且不发请求。
+- THEN 服务端只允许 owner 的 active sub-account 读取，越权返回结构化 401/403。
+- THEN 分身切换立即清空旧缓存，拉黑与匿名身份按服务端投影处理。
+
+<a id="gwt-008"></a>
+### GWT-008 转发列表观测闭环
+
+- GIVEN 用户进入转发、切方向、曝光、点击、刷新和分页。
+- WHEN 对应动作发生。
+- THEN 上报规格定义的 8 个 share interaction 事件。
+- THEN 公共参数包含 subAccountId/direction/interactionId/targetKind/targetId/shareRecordId/source。
+- THEN 列表浏览事件不复用执行转发行为事件。
+
+## 6. 依赖
+
+- 前置要求：[`profile-homepage-redesign`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

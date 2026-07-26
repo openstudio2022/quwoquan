@@ -37,14 +37,8 @@ class _SwitchableModeNotifier extends AppDataSourceModeNotifier {
 }
 
 void main() {
-  test('mock mode 会刷新出文章阅读相关 runtime flags', () async {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-
-    container.read(contentRuntimeConfigProvider);
-    await Future<void>.delayed(const Duration(milliseconds: 1));
-    await Future<void>.delayed(const Duration(milliseconds: 1));
-    final state = _effectiveState(container);
+  test('alpha runner 显式配置会启用内容 story runtime flags', () {
+    final state = buildAlphaContentRuntimeConfigDefaults();
 
     expect(state.isEnabled('enable_create_action_entry'), isTrue);
     expect(state.isEnabled('enable_unified_create_editor'), isTrue);

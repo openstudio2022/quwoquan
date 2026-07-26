@@ -88,19 +88,23 @@ from content.execution import store
 
 CLI = SCRIPTS_ROOT / "cli.py"
 
-def _make_task(execution_id: str = "旅行/地域/四川省/景区/景区精选", *, with_baseline: bool = True) -> str:
+def _make_task(
+    execution_id: str = "20260722--travel-homepage-contract--test-region-a--pilot-001",
+    *,
+    with_baseline: bool = True,
+) -> str:
     spec = store.scaffold_spec(
         vertical="travel",
-        organize_by="地域",
-        key="四川省",
-        name="景区精选",
+        organize_by="test-region",
+        key="test-region-a",
+        name="测试实体丙ollection",
         category="景区",
         scope={
-            "region": "四川省",
+            "region": "test-region-a",
             "entityTypes": ["地点/景区"],
             "coverageTargets": [
-                {"entityType": "地点/景区", "name": "峨眉山"},
-                {"entityType": "地点/景区", "name": "乐山大佛"},
+                {"entityType": "地点/景区", "name": "测试实体甲"},
+                {"entityType": "地点/景区", "name": "测试实体乙"},
             ],
         },
         content={
@@ -115,14 +119,19 @@ def _make_task(execution_id: str = "旅行/地域/四川省/景区/景区精选"
         created_by="test",
     )
     spec["executionId"] = execution_id
-    spec["title"] = "四川景区精选"
+    spec["title"] = "test-entity collection"
     spec["executionPolicy"] = {
         "selectionPolicy": "frozen",
         "targetEntityCount": 2,
         "targetObjectCount": 2,
     }
     store.save_spec(spec)
-    store.save_progress(store.init_progress(execution_id, remaining=["地点/景区/峨眉山", "地点/景区/乐山大佛"]))
+    store.save_progress(
+        store.init_progress(
+            execution_id,
+            remaining=["地点/景区/测试实体甲", "地点/景区/测试实体乙"],
+        )
+    )
     if with_baseline:
         _seed_baseline(execution_id)
     else:
@@ -367,7 +376,7 @@ def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, na
                     "source": "geoTagRef",
                     "tagRefs": [],
                     "actionType": "view_object",
-                    "actionTargetId": "四川",
+                    "actionTargetId": "test-region-b",
                 },
             ],
         },

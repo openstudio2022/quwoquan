@@ -257,9 +257,9 @@ class _AssistantSkillCenterPageState
           ? AssistantText.assistantSkillConsentRequired
           : AssistantText.assistantSkillSubscriptionUnavailable;
     }
-    return switch (subscription.status.trim().toLowerCase()) {
-      'active' => AssistantText.assistantSkillSubscribed,
-      'paused' => AssistantText.assistantSkillPaused,
+    return switch (subscription.status) {
+      SkillSubscriptionStatus.active => AssistantText.assistantSkillSubscribed,
+      SkillSubscriptionStatus.paused => AssistantText.assistantSkillPaused,
       _ => AssistantText.assistantSkillStatusPendingSync,
     };
   }

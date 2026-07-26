@@ -17,7 +17,7 @@ from typing import Any
 from urllib import error, request
 from urllib.parse import urlparse
 
-from .output_paths import deployment_work_root
+from .output_paths import deployment_target_path
 
 
 _SECRET_KEYS = (
@@ -28,6 +28,7 @@ _SECRET_KEYS = (
     "account_closure_subject_hmac_secret",
 )
 _LOCAL_TARGETS = {
+    "alpha": "alpha-local",
     "beta": "beta-local",
     "gamma": "gamma-local",
     # prod-sim 使用 production 配置投影，但其认证材料仍限定在本机部署目录。
@@ -72,7 +73,7 @@ def prepare_local_environment_auth(
 ) -> LocalEnvironmentAuth:
     """Create target-isolated auth material in the external deploy workspace."""
     _require_local_environment(environment, target_name)
-    secret_path = deployment_work_root(target_name) / "secrets" / "auth.env"
+    secret_path = deployment_target_path(target_name, "secrets", "auth.env")
     values = _load_or_create_secrets(secret_path)
     key_version = f"local-{environment}-k1"
     return LocalEnvironmentAuth(
@@ -401,11 +402,11 @@ def write_local_report_account_backfill(
     *,
     include_acceptance_principal: bool = True,
 ) -> dict[str, object]:
-    """Create a target-local, reviewed legacy Report ownership mapping.
+    """Create a target-local, reviewed Report ownership mapping.
 
     The only populated local mapping is derived from the canonical acceptance
     fixture. Production deployment never synthesizes a mapping: unresolved
-    legacy rows stay fail-closed until an operator provides a verified export.
+    ownerless rows stay fail-closed until an operator provides a verified export.
     """
 
     _require_local_environment(environment, target_name)
@@ -454,8 +455,8 @@ if __name__ == "__main__":
     else:
         raise SystemExit(
             "usage: python -m quwoquan_ops.cli.lib.local_environment_auth "
-            "--shell <beta|gamma> <beta-local|gamma-local>\n"
+            "--shell <alpha|beta|gamma> <alpha-local|beta-local|gamma-local>\n"
             "   or: python -m quwoquan_ops.cli.lib.local_environment_auth "
-            "--write-report-account-backfill <beta|gamma> "
-            "<beta-local|gamma-local> <output-path> [--empty]"
+            "--write-report-account-backfill <alpha|beta|gamma> "
+            "<alpha-local|beta-local|gamma-local> <output-path> [--empty]"
         )

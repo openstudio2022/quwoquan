@@ -83,6 +83,51 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('素材清理中的任务保持可见且只允许重试清理', (tester) async {
+    String? retriedDraftId;
+    final createdAt = DateTime.utc(2026, 7, 20);
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: CupertinoPageScaffold(
+          child: PostPublicationTaskSection(
+            intents: <LocalPostPublicationIntent>[
+              _intent(
+                draftId: 'draft-media-cleanup',
+                createdAt: createdAt,
+                stage: LocalPostPublicationStage.cancellingMedia,
+                retryCount: 1,
+              ),
+            ],
+            onRetry: (intent) => retriedDraftId = intent.command.localDraftId,
+            onEdit: (_) {},
+            onRemove: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.text(UITextConstants.publishTaskCancellingMediaStatus),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.publishTaskCancellingMediaDescription),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('publication_task_remove_draft-media-cleanup'),
+      ),
+      findsNothing,
+    );
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('publication_task_retry_draft-media-cleanup'),
+      ),
+    );
+    expect(retriedDraftId, 'draft-media-cleanup');
+  });
 }
 
 LocalPostPublicationIntent _intent({
@@ -92,6 +137,7 @@ LocalPostPublicationIntent _intent({
   String? postId,
   LocalPostPublicationStage stage = LocalPostPublicationStage.submitting,
   bool blocked = false,
+  int retryCount = 0,
   LocalPostPublicationBlockReason? blockReason,
 }) {
   return LocalPostPublicationIntent(
@@ -112,5 +158,6 @@ LocalPostPublicationIntent _intent({
     publicationState: publicationState,
     blocked: blocked,
     blockReason: blockReason,
+    retryCount: retryCount,
   );
 }

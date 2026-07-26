@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -142,7 +143,7 @@ Future<void> _sendAndExpect(
   }
   for (final eventType in scenario.eventTypesFor(runtimeEnv)) {
     expect(
-      streamState.events.any((event) => event.eventType == eventType),
+      streamState.events.any((event) => event.eventType.wireName == eventType),
       isTrue,
       reason:
           '期望 stream event $eventType，实际为 '

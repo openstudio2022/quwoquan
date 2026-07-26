@@ -1,9 +1,0 @@
-entity: ProfileInteractionReadFact
-
-events:
-  - name: ProfileInteractionReadFactAppended
-    description: owner persona 对 received activity 的 seen/read 不可变事实已追加。
-    producer: content-service
-    consumers: [profile-interaction-activity-projector]
-    channel: outbox
-    payload_fields: [factId, ownerPersonaId, activityId, state, occurredAt]

@@ -1,0 +1,175 @@
+part of 'ui_text_constants.dart';
+
+abstract final class _UITextObjectHomepage {
+  static const String profileStatementFallbackSubtitle = '新的交集正在生成';
+  static const String objectIntersectionCtaFollowAuthor = '关注作者';
+  static const String objectIntersectionCtaJoinCircle = '加入圈子';
+  static const String objectIntersectionCtaAddContact = '加为联系人';
+  static const String objectIntersectionCtaAskAssistant = '问问小趣';
+  static const String objectIntersectionCtaView = '查看这条交集';
+  static const String objectMyIntersectionsTitle = '我的交集';
+  static const String objectImpactTitleEntity = '这里打动的人';
+  static const String objectImpactTitleCircle = '圈子打动的人';
+  static const String objectIntersectionEmptyEntity =
+      '你和这里暂时没有可展示交集，发记录或关注相关内容后会在这里沉淀';
+  static const String objectIntersectionEmptyCircle =
+      '你和这个圈子暂时没有可展示交集，进入讨论或关注成员后会在这里沉淀';
+  static const String entityActionPublishRecord = '发记录';
+  static const String circleActionEnterDiscussion = '进入讨论';
+  static const String objectConnectionWithYou = '与你的交集';
+  static const String impactEnumerableHintMine = '可查看与你内容相关的连接来源';
+  static const String impactEnumerableHintOther = '可查看与TA内容相关的连接来源';
+  static const String impactEnumerableHintCircle = '可查看这个影响的连接来源';
+  static const String impactEnumerableHintEntity = '可查看这个影响的连接来源';
+  static const String objectIntersectionsTitle = '全部交集';
+  static const String objectIntersectionsEmpty = '暂时没有可展示的交集';
+  static const String objectIntersectionsUnavailableTitle = '交集暂不可用';
+  static const String objectHomepageDefaultTitle = '这个主页';
+  static const String homepageShareAction = '分享主页';
+  static const String homepageShareUnavailable = '该主页暂不可分享';
+  static const String homepageWishlistAction = '想去';
+  static const String homepageWishlistedAction = '已想去';
+  static const String homepageMaintainAction = '维护主页';
+  static const String homepageMaintenanceSave = '保存主页信息';
+  static const String homepageMaintenanceClaimRequired = '需先完成认领';
+  static const String homepageMaintenanceOwnedDescription =
+      '你可以维护标题、简介、位置与标签；用户记录和评价不会被改写。';
+  static const String homepageMaintenanceUnavailableTitle = '当前账号不能维护此主页';
+  static const String homepageMaintenanceUnavailableMessage =
+      '只有已通过认领审核的主页所有者可以修改基础信息。';
+  static const String homepageMaintenanceSafeReturn = '返回主页';
+  static const String homepageMaintenanceNameLabel = '主页名称';
+  static const String homepageMaintenanceNamePlaceholder = '填写主页名称';
+  static const String homepageMaintenanceSubtitleLabel = '一句话简介';
+  static const String homepageMaintenanceSubtitlePlaceholder = '用一句话介绍这里';
+  static const String homepageMaintenanceCityLabel = '城市';
+  static const String homepageMaintenanceCityPlaceholder = '填写所在城市';
+  static const String homepageMaintenanceAddressLabel = '地址';
+  static const String homepageMaintenanceAddressPlaceholder = '填写详细地址';
+  static const String homepageMaintenanceTagsLabel = '分类标签';
+  static const String homepageMaintenanceTagsPlaceholder =
+      '用空格分隔，例如 景点 城市地标 赏景';
+  static const String homepageMaintenanceNameRequired = '请填写主页名称';
+  static const String homepageMaintenanceUpdated = '主页信息已更新';
+  static const String homepageFormOverviewSection = '主页状态';
+  static const String homepageFormDetailsSection = '基础信息';
+  static const String homepageClaimAction = '认领主页';
+  static const String homepageClaimPendingAction = '认领审核中';
+  static const String homepageClaimAlreadyClaimed = '该主页已被认领';
+  static const String homepageClaimHomepageOffline = '主页已下线';
+  static const String homepageClaimSubmit = '提交认领申请';
+  static const String homepageClaimHomepageFallback = '主页';
+  static const String homepageClaimOfflineDescription =
+      '该主页已下线，仅保留记录内容，当前不可继续认领。';
+  static const String homepageClaimClaimedDescription =
+      '该主页已被认领，如信息有误可通过状态上报反馈。';
+  static const String homepageClaimReviewDescription =
+      '提交后会进入审核，审核通过后即可维护主页基本信息。';
+  static const String homepageClaimTier = '认领等级';
+  static const String homepageClaimTierBasic = '基础';
+  static const String homepageClaimTierVerified = '认证';
+  static const String homepageClaimContactPhone = '联系电话';
+  static const String homepageClaimContactPhoneHint = '用于审核联系';
+  static const String homepageClaimBusinessLicense = '营业执照材料链接';
+  static const String homepageClaimIdentityCardFront = '身份证正面材料链接';
+  static const String homepageClaimIdentityCardBack = '身份证反面材料链接';
+  static const String homepageClaimOptionalMaterialHint = '可选，上传后填入链接';
+  static const String homepageClaimNote = '补充说明';
+  static const String homepageClaimNoteHint = '说明你与该主页的关系';
+  static const String homepageClaimPhoneRequired = '请填写联系电话';
+  static const String homepageClaimSubmitted = '认领申请已提交';
+  static const String homepageClaimMaterialsSection = '认领信息';
+  static const String homepageStatusReportAction = '状态上报';
+  static const String homepageStatusReportSubmit = '提交状态上报';
+  static const String homepageStatusReportAlreadyOffline = '主页已下线';
+  static const String homepageStatusReportOfflineDescription =
+      '该主页已经下线，过往记录会继续保留供浏览。';
+  static const String homepageStatusReportDescription =
+      '如果主页信息失效、重复或长期停用，可以发起状态上报。';
+  static const String homepageStatusReportReasonSection = '状态原因';
+  static const String homepageStatusReportSelectReason = '选择原因';
+  static const String homepageStatusReportReasonOffline = '已停业 / 已关闭';
+  static const String homepageStatusReportReasonIncorrectInfo = '信息不准确';
+  static const String homepageStatusReportReasonDuplicate = '重复主页';
+  static const String homepageStatusReportReasonInactive = '长期失效';
+  static const String homepageStatusReportDescriptionLabel = '补充说明';
+  static const String homepageStatusReportDescriptionPlaceholder =
+      '补充当前状态，例如已停业、地址变更或重复来源';
+  static const String homepageStatusReportReasonRequired = '请选择状态原因';
+  static const String homepageStatusReportSubmitted = '状态上报已提交';
+  static const String homepageAttachPublishEnabled = '关联到本次发布';
+  static const String homepageAttachPublishDisabled = '这个主页待审核，暂不可操作';
+  static const String homepageContentSectionTitle = '相关内容';
+  static const String homepageDiscussionSectionTitle = '大家在聊';
+  static const String homepageInterestCircleSectionTitle = '相关圈子';
+  static const String homepageContentEmptyTitle = '还没有相关内容';
+  static const String homepageContentEmptyDescription = '后续围绕这个主页发布的内容会展示在这里。';
+  static const String homepageDiscussionEmptyTitle = '还没有讨论';
+  static const String homepageDiscussionEmptyDescription = '大家围绕这个主页的讨论会展示在这里。';
+  static const String homepageInterestCircleEmptyTitle = '还没有相关圈子';
+  static const String homepageInterestCircleEmptyDescription =
+      '围绕这个主页形成的圈子会展示在这里。';
+  static const String homepageRelatedGroupSubtitle = '位成员也在这里';
+  static const String homepageReviewSectionTitle = '真实评价';
+  static const String homepageReviewWriteAction = '写评价';
+  static const String homepageReviewEditAction = '编辑评价';
+  static const String homepageReviewDeleteAction = '删除评价';
+  static const String homepageReviewMineLabel = '我的评价';
+  static const String homepageReviewSheetTitle = '评价这里';
+  static const String homepageReviewSheetEditTitle = '编辑我的评价';
+  static const String homepageReviewRatingLabel = '总体评分';
+  static const String homepageReviewBodyPlaceholder = '分享你的真实体验（可选）';
+  static const String homepageReviewTagsLabel = '亮点标签（可选）';
+  static const String homepageReviewSubmitAction = '发布评价';
+  static const String homepageReviewUpdateAction = '保存修改';
+  static const String homepageReviewSubmitted = '评价已发布';
+  static const String homepageReviewUpdated = '评价已更新';
+  static const String homepageReviewDeleted = '评价已删除';
+  static const String homepageReviewEmptyTitle = '还没有评价';
+  static const String homepageReviewEmptyDescription = '来过这里的人留下的真实评价会展示在这里。';
+  static const String homepageReviewDeleteConfirmTitle = '删除这条评价？';
+  static const String homepageReviewDeleteConfirmMessage = '删除后可以重新发布新的评价。';
+  static const String homepageReviewRatingRequired = '请先选择评分';
+  static const String homepageReviewAnonymousAuthor = '趣友';
+  static const String homepageRatingPending = '待积累口碑';
+  static const String homepageRatingMetric = '评分';
+  static const String homepageReviewMetric = '口碑';
+  static const String homepageStatusMetric = '状态';
+  static const String homepageRatingUnavailable = '--';
+  static const String homepageContentTypeArticle = '文章';
+  static const String homepageContentTypeVideo = '视频';
+  static const String homepageContentTypeImage = '图片';
+  static const String homepageContentTypeOpinion = '口碑';
+  static const String homepageContentTypeQuestion = '提问';
+  static const String homepageContentTypeDefault = '内容';
+  static const String homepageTypeDefault = '地点和事物';
+  static const String circleInfoUnavailableTitle = '圈子信息暂不可用';
+  static const String publishAssistantSuggestTitle = '小趣推荐';
+  static const String publishAssistantSuggestAction = '推荐标签和关联主页';
+  static const String publishAssistantSuggestSubtitle =
+      '基于草稿内容推荐标签、关联主页和摘要，结果可继续调整';
+  static const String publishAssistantSuggestUnavailable = '创作助手暂未启用';
+  static const String publishAssistantSuggestNoResult = '暂时没有新的推荐';
+  static const String publishAssistantSuggestFailed = '小趣推荐失败，请稍后再试';
+  static const String objectTabContent = '内容';
+  static const String objectTabRecord = '记录';
+  static const String objectTabDiscussion = '讨论';
+  static const String objectTabRelatedCircles = '相关圈子';
+  static const String objectTabMembers = '成员';
+  static const String homepageSubCampusLife = '校园生活';
+  static const String homepageSubOpinion = '口碑';
+  static const String homepageSubQuestion = '提问';
+  static const String objectIntroMoreLabel = '查看更多';
+  static const String objectIntroNavigationTitle = '认识';
+  static const String objectIntroRelatedObjectsTitle = '相关地点和事物';
+  static const String objectIntroViewHomepage = '查看主页';
+  static const String objectIntroViewCircle = '查看圈子';
+  static const String objectIntroReturnRecord = '看记录';
+  static const String objectIntroReturnDiscussion = '看讨论';
+  static const String objectIntroReturnCircles = '找相关圈子';
+  static const String objectIntroEmptyTitle = '介绍正在整理中';
+  static const String objectIntroEmptyMessage = '先回到主页查看相关内容和讨论。';
+  static const String objectIntroBackToHomepage = '回到主页';
+  static const String objectIntroSourceTitle = '内容来源';
+  static const String objectIntroSourceOpen = '查看原始来源';
+}

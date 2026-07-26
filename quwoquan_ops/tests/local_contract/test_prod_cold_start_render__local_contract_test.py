@@ -1,3 +1,6 @@
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-001
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-001
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-001
 from __future__ import annotations
 
 import os
@@ -69,6 +72,7 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
             compose["services"]["gamma-proxy"],
             {"gamma-proxy", "content-service", "product-ops-service"},
             image_version="1.20260720.1",
+            config_version="sha256:" + "a" * 64,
             versioned_image=False,
             instance="prod",
             config_root="/runtime/config-root",

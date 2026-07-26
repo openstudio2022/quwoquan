@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"quwoquan_service/runtime/recommendation"
@@ -20,6 +21,14 @@ func NewRecAdapter(client Client) recommendation.RedisClient {
 
 func (a *recAdapter) Get(ctx context.Context, key string) (string, error) {
 	return a.client.Get(ctx, key)
+}
+
+func (a *recAdapter) HasKey(ctx context.Context, key string) (bool, error) {
+	_, err := a.client.Get(ctx, key)
+	if errors.Is(err, ErrKeyNotFound) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func (a *recAdapter) Set(ctx context.Context, key, value string, ttl time.Duration) error {

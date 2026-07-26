@@ -111,7 +111,7 @@ final class StartupInitScheduler {
       ref.read(appTelemetryReporterProvider),
     );
     _bestEffort('startup_runtime_diagnostics', () {
-      ref.read(runtimeDiagnosticsProvider);
+      ref.read(runtimeDiagnosticsProvider).install();
     });
     _bestEffort('startup_realtime_foreground', () {
       ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground();

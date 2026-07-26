@@ -37,7 +37,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[3]
 
 SCENARIO_DIR = (
-    ROOT / "quwoquan_service/contracts/metadata/content/test_fixtures/scenarios"
+    ROOT / "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios"
 )
 
 # 端云共享真相源（默认门禁范围）。

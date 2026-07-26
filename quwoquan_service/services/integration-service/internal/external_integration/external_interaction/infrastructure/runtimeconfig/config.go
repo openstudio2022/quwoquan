@@ -1,0 +1,468 @@
+package runtimeconfig
+
+import (
+	"fmt"
+	"os"
+	configrelease "quwoquan_service/runtime/configrelease"
+	"strconv"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+
+	"quwoquan_service/runtime/reliabletask"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
+)
+
+type Config struct {
+	Environment string `yaml:"-"`
+	Service     struct {
+		Name string `yaml:"name"`
+		HTTP struct {
+			Addr string `yaml:"addr"`
+		} `yaml:"http"`
+	} `yaml:"service"`
+	AccountSecurityAuthority AccountSecurityAuthorityConfig `yaml:"account_security_authority"`
+	MongoDB                  struct {
+		URI      string `yaml:"uri"`
+		Database string `yaml:"database"`
+	} `yaml:"mongodb"`
+	Integration struct {
+		Location struct {
+			NearbyDefaultRadiusMeters int     `yaml:"nearby_default_radius_meters"`
+			NearbyDefaultLimit        int     `yaml:"nearby_default_limit"`
+			SearchDefaultLimit        int     `yaml:"search_default_limit"`
+			DefaultLatitude           float64 `yaml:"default_latitude"`
+			DefaultLongitude          float64 `yaml:"default_longitude"`
+		} `yaml:"location"`
+		ExternalInteraction struct {
+			CallbackSecret string                     `yaml:"callback_secret"`
+			SMS            ExternalProviderConfig     `yaml:"sms"`
+			Push           PushDeliveryProviderConfig `yaml:"push"`
+		} `yaml:"external_interaction"`
+	} `yaml:"integration"`
+}
+
+type AccountSecurityAuthorityConfig struct {
+	BaseURL   string `yaml:"base_url"`
+	TimeoutMs int    `yaml:"timeout_ms"`
+}
+
+type ExternalProviderConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Provider  string `yaml:"provider"`
+	Endpoint  string `yaml:"endpoint"`
+	Token     string `yaml:"token"`
+	TimeoutMs int    `yaml:"timeout_ms"`
+}
+
+type PushDeliveryProviderConfig struct {
+	Enabled            bool   `yaml:"enabled"`
+	Mode               string `yaml:"mode"`
+	TimeoutMs          int    `yaml:"timeout_ms"`
+	UserServiceBaseURL string `yaml:"user_service_base_url"`
+	APNs               struct {
+		Environment string `yaml:"environment"`
+		KeyFile     string `yaml:"key_file"`
+		KeyID       string `yaml:"key_id"`
+		TeamID      string `yaml:"team_id"`
+		Topic       string `yaml:"topic"`
+	} `yaml:"apns"`
+	FCM struct {
+		ServiceAccountFile string `yaml:"service_account_file"`
+		ProjectID          string `yaml:"project_id"`
+	} `yaml:"fcm"`
+}
+
+func Load() (Config, error) {
+	cfg := Config{}
+	serviceName := getenvOrDefault("SERVICE_NAME", "integration-service")
+	appEnv := getenvOrDefault("APP_ENV", "alpha")
+	configRoot := strings.TrimSpace(os.Getenv("CONFIG_ROOT"))
+	configVersion := strings.TrimSpace(os.Getenv("CONFIG_VERSION"))
+	if !isValidAppEnv(appEnv) {
+		return Config{}, fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
+	}
+	cfg.Environment = appEnv
+	if requiresConfigVersion(appEnv) && configVersion == "" {
+		return Config{}, fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
+	}
+	path, err := configrelease.File(configRoot, serviceName, appEnv)
+	if err != nil {
+		return Config{}, err
+	}
+	if err := MergeFile(&cfg, path); err != nil {
+		return Config{}, fmt.Errorf("read generated runtime config: %w", err)
+	}
+	return cfg, nil
+}
+
+func isValidAppEnv(env string) bool {
+	switch env {
+	case "alpha", "beta", "gamma", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+func requiresConfigVersion(env string) bool {
+	switch env {
+	case "gamma", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+func MergeFile(cfg *Config, path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := rejectRetiredLocationProviderConfig(raw, path); err != nil {
+		return err
+	}
+	if err := yaml.Unmarshal(raw, cfg); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	return nil
+}
+
+func rejectRetiredLocationProviderConfig(raw []byte, path string) error {
+	var document map[string]any
+	if err := yaml.Unmarshal(raw, &document); err != nil {
+		return fmt.Errorf("parse %s for location provider validation: %w", path, err)
+	}
+	integration, _ := document["integration"].(map[string]any)
+	location, _ := integration["location"].(map[string]any)
+	for _, key := range []string{
+		"provider",
+		"primary_provider",
+		"backup_provider",
+		"baidu_ak",
+		"amap_key",
+		"baidu_base_url",
+		"amap_base_url",
+		"timeout_ms",
+	} {
+		if _, found := location[key]; found {
+			return fmt.Errorf(
+				"%s: integration.location.%s is retired; use the generated external provider binding",
+				path,
+				key,
+			)
+		}
+	}
+	return nil
+}
+
+func NormalizeDefaults(cfg *Config) {
+	if strings.TrimSpace(cfg.Service.HTTP.Addr) == "" {
+		cfg.Service.HTTP.Addr = ":18086"
+	}
+	if cfg.Integration.Location.NearbyDefaultRadiusMeters <= 0 {
+		cfg.Integration.Location.NearbyDefaultRadiusMeters = 3000
+	}
+	if cfg.Integration.Location.NearbyDefaultLimit <= 0 {
+		cfg.Integration.Location.NearbyDefaultLimit = 20
+	}
+	if cfg.Integration.Location.SearchDefaultLimit <= 0 {
+		cfg.Integration.Location.SearchDefaultLimit = 20
+	}
+	if cfg.Integration.Location.DefaultLatitude == 0 {
+		cfg.Integration.Location.DefaultLatitude = 30.6586
+	}
+	if cfg.Integration.Location.DefaultLongitude == 0 {
+		cfg.Integration.Location.DefaultLongitude = 104.0648
+	}
+	if cfg.Integration.ExternalInteraction.Push.TimeoutMs <= 0 {
+		cfg.Integration.ExternalInteraction.Push.TimeoutMs = 5000
+	}
+}
+
+func Validate(cfg Config) error {
+	if invalidRequiredConfigValue(cfg.MongoDB.URI) {
+		return fmt.Errorf("mongodb.uri is required (INTEGRATION_MONGO_URI or MONGO_URI)")
+	}
+	if invalidRequiredConfigValue(cfg.MongoDB.Database) {
+		return fmt.Errorf(
+			"mongodb.database is required (INTEGRATION_MONGO_DATABASE or MONGO_DATABASE)",
+		)
+	}
+	if invalidRequiredConfigValue(cfg.AccountSecurityAuthority.BaseURL) {
+		return fmt.Errorf("account_security_authority.base_url is required")
+	}
+	if cfg.AccountSecurityAuthority.TimeoutMs <= 0 {
+		return fmt.Errorf("account_security_authority.timeout_ms must be positive")
+	}
+	for operation, providerCfg := range map[string]ExternalProviderConfig{
+		reliabletask.ExternalInteractionOperationSmsOTP: cfg.Integration.ExternalInteraction.SMS,
+	} {
+		if !providerCfg.Enabled {
+			continue
+		}
+		if invalidRequiredConfigValue(providerCfg.Provider) {
+			return fmt.Errorf("external provider name is required for enabled operation %s", operation)
+		}
+		if strings.Contains(strings.ToLower(providerCfg.Provider), "mock") {
+			return fmt.Errorf("enabled operation %s cannot use mock provider", operation)
+		}
+		if invalidRequiredConfigValue(providerCfg.Endpoint) {
+			return fmt.Errorf("external provider endpoint is required for enabled operation %s", operation)
+		}
+		if invalidRequiredConfigValue(providerCfg.Token) {
+			return fmt.Errorf("external provider token is required for enabled operation %s", operation)
+		}
+		if providerCfg.TimeoutMs <= 0 {
+			return fmt.Errorf("external provider timeout is required for enabled operation %s", operation)
+		}
+	}
+	if err := validatePushDeliveryConfig(cfg.Environment, cfg.Integration.ExternalInteraction.Push); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validatePushDeliveryConfig(
+	appEnv string,
+	push PushDeliveryProviderConfig,
+) error {
+	if !push.Enabled {
+		return nil
+	}
+	mode := strings.TrimSpace(push.Mode)
+	if mode == "local_recorder" {
+		if appEnv != "alpha" && appEnv != "beta" {
+			return fmt.Errorf(
+				"integration push local_recorder is only permitted in alpha/beta, got APP_ENV=%s",
+				appEnv,
+			)
+		}
+		if push.TimeoutMs <= 0 {
+			return fmt.Errorf("integration push timeout must be positive")
+		}
+		return nil
+	}
+	if mode != "real" && mode != "remote" {
+		return fmt.Errorf(
+			"integration push mode must be real/remote, or local_recorder in alpha/beta, when APP_ENV=%s",
+			appEnv,
+		)
+	}
+	required := map[string]string{
+		"user_service_base_url":    push.UserServiceBaseURL,
+		"apns.environment":         push.APNs.Environment,
+		"apns.key_file":            push.APNs.KeyFile,
+		"apns.key_id":              push.APNs.KeyID,
+		"apns.team_id":             push.APNs.TeamID,
+		"apns.topic":               push.APNs.Topic,
+		"fcm.service_account_file": push.FCM.ServiceAccountFile,
+		"fcm.project_id":           push.FCM.ProjectID,
+	}
+	for field, value := range required {
+		if invalidRequiredConfigValue(value) {
+			return fmt.Errorf(
+				"integration push %s is required when APP_ENV=%s",
+				field,
+				appEnv,
+			)
+		}
+	}
+	apnsEnvironment := strings.TrimSpace(push.APNs.Environment)
+	if apnsEnvironment != provider.APNsEnvironmentSandbox &&
+		apnsEnvironment != provider.APNsEnvironmentProduction {
+		return fmt.Errorf("integration push apns.environment must be sandbox or production")
+	}
+	if appEnv == "prod" && apnsEnvironment != provider.APNsEnvironmentProduction {
+		return fmt.Errorf("integration push APNs environment must be production in prod")
+	}
+	if push.TimeoutMs <= 0 {
+		return fmt.Errorf("integration push timeout must be positive")
+	}
+	if err := requireReadableSecretFile("APNs key", push.APNs.KeyFile); err != nil {
+		return err
+	}
+	if err := requireReadableSecretFile(
+		"FCM service-account",
+		push.FCM.ServiceAccountFile,
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
+func requireReadableSecretFile(label string, path string) error {
+	file, err := os.Open(strings.TrimSpace(path))
+	if err != nil {
+		return fmt.Errorf("integration push %s secret file is required: %w", label, err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("inspect integration push %s secret file: %w", label, err)
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		return fmt.Errorf("integration push %s secret file must be a non-empty regular file", label)
+	}
+	return nil
+}
+
+func invalidRequiredConfigValue(value string) bool {
+	normalized := strings.TrimSpace(value)
+	return normalized == "" ||
+		(strings.HasPrefix(normalized, "${") && strings.HasSuffix(normalized, "}"))
+}
+
+func ApplyEnvOverrides(cfg *Config) error {
+	if err := rejectRetiredLocationProviderEnvOverrides(); err != nil {
+		return err
+	}
+	if value := strings.TrimSpace(os.Getenv("MONGO_URI")); value != "" {
+		cfg.MongoDB.URI = value
+	}
+	if value := strings.TrimSpace(os.Getenv("MONGO_DATABASE")); value != "" {
+		cfg.MongoDB.Database = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_MONGO_URI")); value != "" {
+		cfg.MongoDB.URI = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_MONGO_DATABASE")); value != "" {
+		cfg.MongoDB.Database = value
+	}
+	if value := os.Getenv("INTEGRATION_SERVICE_ADDR"); value != "" {
+		cfg.Service.HTTP.Addr = value
+	}
+	if value := os.Getenv("INTEGRATION_LOCATION_DEFAULT_LATITUDE"); value != "" {
+		latitude, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("INTEGRATION_LOCATION_DEFAULT_LATITUDE must be numeric: %w", err)
+		}
+		cfg.Integration.Location.DefaultLatitude = latitude
+	}
+	if value := os.Getenv("INTEGRATION_LOCATION_DEFAULT_LONGITUDE"); value != "" {
+		longitude, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("INTEGRATION_LOCATION_DEFAULT_LONGITUDE must be numeric: %w", err)
+		}
+		cfg.Integration.Location.DefaultLongitude = longitude
+	}
+	if err := applyExternalProviderEnv(
+		&cfg.Integration.ExternalInteraction.SMS,
+		"INTEGRATION_SMS",
+	); err != nil {
+		return err
+	}
+	if err := applyPushDeliveryEnv(
+		&cfg.Integration.ExternalInteraction.Push,
+	); err != nil {
+		return err
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_CALLBACK_SECRET")); value != "" {
+		cfg.Integration.ExternalInteraction.CallbackSecret = value
+	}
+	return nil
+}
+
+func rejectRetiredLocationProviderEnvOverrides() error {
+	for _, key := range []string{
+		"INTEGRATION_LOCATION_PROVIDER",
+		"INTEGRATION_LOCATION_PRIMARY_PROVIDER",
+		"INTEGRATION_LOCATION_BACKUP_PROVIDER",
+		"INTEGRATION_LOCATION_TIMEOUT_MS",
+	} {
+		if _, found := os.LookupEnv(key); found {
+			return fmt.Errorf(
+				"%s is retired; use the generated external provider binding",
+				key,
+			)
+		}
+	}
+	return nil
+}
+
+func applyExternalProviderEnv(cfg *ExternalProviderConfig, prefix string) error {
+	if raw, present := os.LookupEnv(prefix + "_ENABLED"); present {
+		value, err := strconv.ParseBool(strings.TrimSpace(raw))
+		if err != nil {
+			return fmt.Errorf("%s_ENABLED must be boolean: %w", prefix, err)
+		}
+		cfg.Enabled = value
+	}
+	if value := strings.TrimSpace(os.Getenv(prefix + "_PROVIDER")); value != "" {
+		cfg.Provider = value
+	}
+	if value := strings.TrimSpace(os.Getenv(prefix + "_ENDPOINT")); value != "" {
+		cfg.Endpoint = value
+	}
+	if value := strings.TrimSpace(os.Getenv(prefix + "_TOKEN")); value != "" {
+		cfg.Token = value
+	}
+	if raw := strings.TrimSpace(os.Getenv(prefix + "_TIMEOUT_MS")); raw != "" {
+		value, err := parsePositiveIntEnv(prefix+"_TIMEOUT_MS", raw)
+		if err != nil {
+			return err
+		}
+		cfg.TimeoutMs = value
+	}
+	return nil
+}
+
+func applyPushDeliveryEnv(cfg *PushDeliveryProviderConfig) error {
+	if raw, present := os.LookupEnv("INTEGRATION_PUSH_ENABLED"); present {
+		value, err := strconv.ParseBool(strings.TrimSpace(raw))
+		if err != nil {
+			return fmt.Errorf("INTEGRATION_PUSH_ENABLED must be boolean: %w", err)
+		}
+		cfg.Enabled = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_MODE")); value != "" {
+		cfg.Mode = value
+	}
+	if raw := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_TIMEOUT_MS")); raw != "" {
+		value, err := parsePositiveIntEnv("INTEGRATION_PUSH_TIMEOUT_MS", raw)
+		if err != nil {
+			return err
+		}
+		cfg.TimeoutMs = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_USER_SERVICE_BASE_URL")); value != "" {
+		cfg.UserServiceBaseURL = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_ENVIRONMENT")); value != "" {
+		cfg.APNs.Environment = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_KEY_FILE")); value != "" {
+		cfg.APNs.KeyFile = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_KEY_ID")); value != "" {
+		cfg.APNs.KeyID = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_TEAM_ID")); value != "" {
+		cfg.APNs.TeamID = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_TOPIC")); value != "" {
+		cfg.APNs.Topic = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE")); value != "" {
+		cfg.FCM.ServiceAccountFile = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_FCM_PROJECT_ID")); value != "" {
+		cfg.FCM.ProjectID = value
+	}
+	return nil
+}
+
+func parsePositiveIntEnv(key string, raw string) (int, error) {
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", key)
+	}
+	return value, nil
+}
+
+func getenvOrDefault(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
+}

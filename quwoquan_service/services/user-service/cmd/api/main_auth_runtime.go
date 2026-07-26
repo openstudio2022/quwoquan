@@ -7,9 +7,10 @@ import (
 	"strings"
 
 	runtimeconfig "quwoquan_service/runtime/config"
-	"quwoquan_service/services/user-service/internal/application"
-	usergenerated "quwoquan_service/services/user-service/internal/generated"
-	userintegration "quwoquan_service/services/user-service/internal/infrastructure/integration"
+	usergenerated "quwoquan_service/services/user-service/generated/account/user_account"
+	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
+	credentialmodel "quwoquan_service/services/user-service/internal/account/credential_binding/domain/model"
+	userintegration "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
 )
 
 // ErrAuthRuntimeCapabilityBlocked 表示 metadata 明确禁用认证外部能力。
@@ -34,6 +35,31 @@ func newFederatedLoginBindings(
 	binding, err := resolveFederatedIdentityBinding()
 	if err != nil {
 		return federatedLoginBindings{}, err
+	}
+	if binding.adapterID == "ext.auth.federated_identity_protocol_fixture" {
+		return federatedLoginBindings{
+			wechat: application.NewFederatedLoginFacade(
+				auth,
+				userintegration.NewProtocolFixtureFederatedIdentityVerifier(
+					credentialmodel.CredentialTypeFederatedSlotA,
+				),
+				nil,
+			),
+			alipay: application.NewFederatedLoginFacade(
+				auth,
+				userintegration.NewProtocolFixtureFederatedIdentityVerifier(
+					credentialmodel.CredentialTypeFederatedSlotB,
+				),
+				nil,
+			),
+			qq: application.NewFederatedLoginFacade(
+				auth,
+				userintegration.NewProtocolFixtureFederatedIdentityVerifier(
+					credentialmodel.CredentialTypeFederatedSlotC,
+				),
+				nil,
+			),
+		}, nil
 	}
 	wechatVerifier, err := userintegration.NewWechatFederatedIdentityVerifier(
 		oauthConfig(
@@ -108,6 +134,9 @@ func newCarrierPhoneResolver() (application.CarrierPhoneResolver, error) {
 	if err != nil {
 		return nil, err
 	}
+	if binding.adapterID == "ext.auth.carrier_one_tap_protocol_fixture" {
+		return userintegration.NewProtocolFixtureCarrierPhoneResolver(), nil
+	}
 	return userintegration.NewAliyunOneTapPhoneResolver(
 		binding.secret("ALIYUN_DYPNS_ACCESS_KEY_ID"),
 		binding.secret("ALIYUN_DYPNS_ACCESS_KEY_SECRET"),
@@ -116,6 +145,7 @@ func newCarrierPhoneResolver() (application.CarrierPhoneResolver, error) {
 }
 
 type authRuntimeBinding struct {
+	adapterID string
 	endpoints map[string]string
 	secrets   map[string]string
 }
@@ -123,20 +153,26 @@ type authRuntimeBinding struct {
 func resolveCarrierOneTapBinding() (authRuntimeBinding, error) {
 	return resolveAuthRuntimeBinding(
 		"identity.carrier.one_tap",
-		"ext.auth.carrier_one_tap",
+		[]string{
+			"ext.auth.carrier_one_tap",
+			"ext.auth.carrier_one_tap_protocol_fixture",
+		},
 	)
 }
 
 func resolveFederatedIdentityBinding() (authRuntimeBinding, error) {
 	return resolveAuthRuntimeBinding(
 		"identity.social.login",
-		"ext.auth.federated_identity",
+		[]string{
+			"ext.auth.federated_identity",
+			"ext.auth.federated_identity_protocol_fixture",
+		},
 	)
 }
 
 func resolveAuthRuntimeBinding(
 	capabilityID string,
-	expectedAdapterID string,
+	allowedAdapterIDs []string,
 ) (authRuntimeBinding, error) {
 	appEnv := strings.TrimSpace(os.Getenv("APP_ENV"))
 	if appEnv == "" {
@@ -158,7 +194,14 @@ func resolveAuthRuntimeBinding(
 			appEnv,
 		)
 	}
-	if descriptor.AdapterID != expectedAdapterID {
+	allowed := false
+	for _, adapterID := range allowedAdapterIDs {
+		if descriptor.AdapterID == adapterID {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
 		return authRuntimeBinding{}, fmt.Errorf(
 			"%s binding selects an unexpected adapter for environment=%s",
 			capabilityID,
@@ -167,6 +210,7 @@ func resolveAuthRuntimeBinding(
 	}
 	configProvider := runtimeconfig.EnvRuntimeConfigProvider{}
 	binding := authRuntimeBinding{
+		adapterID: descriptor.AdapterID,
 		endpoints: make(map[string]string, len(descriptor.EndpointEnvironmentKeys)),
 		secrets:   make(map[string]string, len(descriptor.SecretEnvironmentKeys)),
 	}

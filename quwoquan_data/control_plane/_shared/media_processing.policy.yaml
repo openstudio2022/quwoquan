@@ -1,7 +1,8 @@
 policyId: media_processing
 sourceAssetMaxBytes: 25165824
 maxPublishableImagePixels: 80000000
-maxAssessmentImagePixels: 50000000
+maxAssessmentImagePixels: 2000000
+assessmentJpegQuality: 85
 ocrImagePixels: 2000000
 baseDraftImageCandidates: 8
 imageFetchTargetSurplus: 2

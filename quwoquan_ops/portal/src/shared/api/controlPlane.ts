@@ -123,39 +123,12 @@ export interface ServiceCatalogItem {
   summary: string;
 }
 
-export interface OnboardingDomainItem {
-  domain: string;
-  display_name: string;
-  template_role: string;
-  rollout_group: string;
-  acceptance_status: string;
-  metadata_paths: string[];
-  service_names: string[];
-  control_planes: Record<string, { enabled: boolean; object_types: string[]; config_prefixes: string[] }>;
-  minimum_package: {
-    metadata_files: string[];
-    codegen_targets: string[];
-    test_evidence: Record<string, string[]>;
-  };
-  deployment: {
-    plane_binding_domain: string;
-    plane_binding_source: string;
-    current_binding_source: string;
-  };
-  replication: {
-    source_template: string;
-    next_copy_targets: string[];
-    copy_notes: string[];
-  };
-  blocking_gaps: string[];
-}
-
 export interface PlaneBindingItem {
   id: string;
   env: string;
-  process: string;
-  domain: string;
-  planes: string[];
+  workload: string;
+  plane: string;
+  deploymentRef: string;
 }
 
 export interface RuntimeClusterItem {
@@ -1081,14 +1054,6 @@ export async function fetchServiceCatalog(): Promise<ServiceCatalogItem[]> {
   const payload = await fetchJSON<{ items: ServiceCatalogItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
     '/control-plane/platform/catalog/services',
-  );
-  return payload.items;
-}
-
-export async function fetchOnboardingDomains(): Promise<OnboardingDomainItem[]> {
-  const payload = await fetchJSON<{ items: OnboardingDomainItem[] }>(
-    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/control-plane/platform/onboarding/domains',
   );
   return payload.items;
 }

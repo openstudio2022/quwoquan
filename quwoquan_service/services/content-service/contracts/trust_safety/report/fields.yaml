@@ -1,0 +1,163 @@
+fields:
+- name: id
+  source: id
+  type: string
+  constraints:
+  - PK
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: version
+  source: version
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_1
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: Report 乐观并发版本；每次状态迁移原子递增
+  role: authoritative_state
+- name: reporterId
+  source: reporterId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: reporterAccountId
+  source: reporterAccountId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  description: 举报创建时可信 principal 的账户归属；仅用于将结案通知投递至账户 Inbox，不得由客户端提供或回显。
+  role: authoritative_state
+  reference: true
+- name: targetType
+  source: targetType
+  type: enum
+  enum_ref: ReportTargetType
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read_write
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: targetId
+  source: targetId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read_write
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: reason
+  source: reason
+  type: enum
+  enum_ref: ReportReason
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read_write
+  ops_exposure: read
+  role: authoritative_state
+- name: description
+  source: description
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read_write
+  ops_exposure: read
+  role: authoritative_state
+- name: status
+  source: status
+  type: enum
+  enum_ref: ReportStatus
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read_write
+  role: authoritative_state
+- name: reviewerId
+  source: reviewerId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: resolution
+  source: resolution
+  type: enum
+  enum_ref: ReportResolution
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read_write
+  role: authoritative_state
+- name: createdAt
+  source: createdAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: updatedAt
+  source: updatedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: resolvedAt
+  source: resolvedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+state_machine:
+  field: status
+  transitions:
+  - from: pending
+    to:
+    - reviewing
+  - from: reviewing
+    to:
+    - resolved
+    - dismissed

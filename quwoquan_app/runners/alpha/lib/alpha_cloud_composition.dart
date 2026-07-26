@@ -6,9 +6,9 @@ import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifie
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_media_upload_gateway.dart';
 import 'package:quwoquan_app/cloud/services/user/contact_discovery_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/following_subject_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
@@ -22,7 +22,7 @@ import 'alpha_chat_repository.dart';
 import 'alpha_content_adapters.dart';
 import 'alpha_intersection_repository.dart';
 import 'alpha_realtime_connection_delegate.dart';
-import 'alpha_user_profile_repository.dart' hide ContractFixtureRuntimeLoader;
+import 'alpha_user_profile_repository.dart';
 import 'alpha_user_repository.dart';
 
 /// Alpha-only dependency composition. Production never imports this runner.
@@ -147,7 +147,7 @@ List<Override> buildAlphaCloudOverrides() {
     ),
     credentialBindingQueryProvider.overrideWithValue(credentialBindings),
     profileQueryProvider.overrideWith((ref, surface) => userProfiles),
-    authorImpactQueryProvider.overrideWithValue(userProfiles),
+    authorImpactQueryProvider.overrideWith((ref, surface) => userProfiles),
     profileEditQueryProvider.overrideWith((ref, surface) => userProfiles),
     personaRelationshipQueryProvider.overrideWith(
       (ref, surface) => userProfiles,
@@ -161,11 +161,9 @@ List<Override> buildAlphaCloudOverrides() {
         query: contactDiscovery,
       ),
     ),
-    followingSubjectRepositoryProvider.overrideWithValue(
-      RemoteFollowingSubjectRepository(
-        query: followingSubjects,
-        visitWriter: followingSubjects,
-      ),
+    followingSubjectQueryProvider.overrideWithValue(followingSubjects),
+    followedSubjectVisitCommandWriterProvider.overrideWithValue(
+      followingSubjects,
     ),
     relationshipCapabilityRepositoryProvider.overrideWithValue(
       RemoteRelationshipCapabilityRepository(query: personaRelationships),
@@ -184,10 +182,13 @@ List<Override> buildAlphaCloudOverrides() {
     recentSearchQueryProvider.overrideWithValue(recentSearches),
     recentSearchCommandWriterProvider.overrideWithValue(recentSearches),
     searchFeedbackCommandWriterProvider.overrideWithValue(searchFeedback),
-    // tag 域两个查询 Facet 共用同一 fixture bundle 驱动的 Alpha 替身；
-    // 反馈写面用进程内幂等替身。
-    tagCatalogQueryProvider.overrideWith((ref) => AlphaTagFacet()),
-    tagGraphQueryProvider.overrideWith((ref) => AlphaTagFacet()),
+    // tag 目录查询由 fixture bundle 驱动；反馈写面用进程内幂等替身。
+    tagCatalogQueryProvider.overrideWith(
+      (ref) => AlphaTagFacet(
+        taxonomyReleaseId:
+            ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
+      ),
+    ),
     tagFeedbackCommandWriterProvider.overrideWith(
       (ref) => AlphaTagFeedbackWriter(),
     ),
@@ -401,7 +402,6 @@ final class _AlphaProfileMediaUploadGateway
     final scope = target == ProfileMediaTarget.avatar ? 'avatar' : 'cover';
     return ProfileMediaUploadResult(
       assetId: 'alpha_profile_${scope}_${path.hashCode.abs()}',
-      cdnUrl: 'https://alpha-cdn.invalid/profile/$scope',
     );
   }
 }

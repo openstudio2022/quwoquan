@@ -68,7 +68,7 @@ class CloudContractHandoffTest(unittest.TestCase):
                 "invariantTarget": "",
                 "actorRequirement": "persona",
                 "concurrency": {"versionPrecondition": "if_match"},
-                "sourcePath": "sample/thing/service.yaml",
+                "sourcePath": "sample/thing/operations.yaml",
             }
         ]
         if duplicate:
@@ -78,7 +78,7 @@ class CloudContractHandoffTest(unittest.TestCase):
                     "id": "other.thing.ListThings",
                     "domain": "other",
                     "objectId": "other.thing",
-                    "sourcePath": "other/thing/service.yaml",
+                    "sourcePath": "other/thing/operations.yaml",
                 }
             )
         graph = {
@@ -88,13 +88,13 @@ class CloudContractHandoffTest(unittest.TestCase):
             "businessObjectMaps": [],
             "sources": [
                 {
-                    "path": "sample/thing/service.yaml",
+                    "path": "sample/thing/operations.yaml",
                     "sha256": "a" * 64,
                 }
             ],
             "documents": [
                 {
-                    "path": "sample/thing/service.yaml",
+                    "path": "sample/thing/operations.yaml",
                     "sha256": "a" * 64,
                     "mediaType": "application/yaml",
                     "content": {

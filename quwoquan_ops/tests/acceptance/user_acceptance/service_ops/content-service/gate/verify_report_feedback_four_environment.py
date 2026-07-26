@@ -45,11 +45,11 @@ LIFECYCLE_FACTS = frozenset(
 
 REQUIRED_CODE_EVIDENCE = (
     "quwoquan_app/test/local_contract/ui/content/more_action_popup__functional__local_contract_test.dart",
-    "quwoquan_app/test/user_acceptance/pages/settings/my_reports/my_reports_page__user_acceptance_test.dart",
-    "quwoquan_app/test/user_acceptance/pages/settings/blocked_keywords/blocked_keywords_page__user_acceptance_test.dart",
-    "quwoquan_service/services/content-service/tests/api_integration/report_crud_contract__api_integration_test.go",
-    "quwoquan_service/services/content-service/tests/api_integration/report_dismiss_contract__api_integration_test.go",
-    "quwoquan_service/services/notification-service/tests/api_integration/interaction_notification_stream__api_integration_test.go",
+    "quwoquan_app/test/user_acceptance/patrol/settings/my_reports_page__user_acceptance_test.dart",
+    "quwoquan_app/test/local_contract/ui/settings/pages/blocked_keywords/blocked_keywords_page__local_contract_test.dart",
+    "quwoquan_service/services/content-service/tests/api_integration/content/post/report_crud_contract__api_integration_test.go",
+    "quwoquan_service/services/content-service/tests/api_integration/content/post/report_dismiss_contract__api_integration_test.go",
+    "quwoquan_service/services/notification-service/tests/api_integration/notification_delivery/notification/interaction_notification_stream__api_integration_test.go",
     "quwoquan_service/services/user-service/cmd/acceptance-session/main__local_contract_test.go",
     "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_report_feedback_lifecycle_probe.py",
     "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/report_feedback_probe_support.py",

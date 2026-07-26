@@ -5,7 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_pag
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// IntersectionVisitState 对象的 typed 写面
-/// （contracts/metadata/content/intersection_visit_state/service.yaml）。
+/// （quwoquan_service/services/content-service/contracts/content/intersection_visit_state/operations.yaml）。
 ///
 /// 推进「我的交集」已读水位并清零未读红点；[dimension] 为空推进全部维度。
 /// 服务端水位以 $max 单调合并，任意重放自然收敛（无需 Idempotency-Key）。

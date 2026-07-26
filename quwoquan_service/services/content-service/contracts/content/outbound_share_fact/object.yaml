@@ -1,0 +1,53 @@
+kind: append_only_fact
+description: '站外渠道确认成功后追加的不可变分享事实。引用发布由 Post(sourcePostId) 承担，
+
+  圈内放置由 CirclePostPlacement 承担；本对象不存在 revoke/unshare 生命周期。
+
+  '
+identity:
+  fields:
+  - eventId
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: none
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: post
+  on_delete: retain
+  reference_fields:
+  - postId
+  target_object: content.Post
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: actor
+  on_delete: retain
+  reference_fields:
+  - actorDimension
+  - actorId
+  target_objects:
+  - user.Persona
+  - user.DeviceRegistration
+local_identity_reasons:
+  referralId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
+    reference
+capabilities:
+- append_only
+- idempotent_append
+- outbox
+taggable: false
+vector_enabled: false
+business_rules:
+- 只有渠道返回成功后才能追加事实
+- 同一 actor 与 idempotencyKey 只产生一个 eventId 和一条 outbox 事件
+- destination 只保存类型与不可逆摘要，不保存收件人明文
+lifecycle:
+  states:
+  - recorded
+  immutable: true

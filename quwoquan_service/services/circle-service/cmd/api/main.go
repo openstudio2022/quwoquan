@@ -6,12 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
@@ -20,37 +17,40 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
+	rterr "quwoquan_service/runtime/errors"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
-	httpadapter "quwoquan_service/services/circle-service/internal/adapters/http"
-	"quwoquan_service/services/circle-service/internal/application"
-	behaviorfactapp "quwoquan_service/services/circle-service/internal/application/circle/circle_behavior_fact"
-	fileapp "quwoquan_service/services/circle-service/internal/application/circle/circle_file"
-	groupapp "quwoquan_service/services/circle-service/internal/application/circle/circle_group"
-	groupmembershipapp "quwoquan_service/services/circle-service/internal/application/circle/circle_group_membership"
-	membershipapp "quwoquan_service/services/circle-service/internal/application/circle/circle_membership"
-	placementapp "quwoquan_service/services/circle-service/internal/application/circle/circle_post_placement"
-	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
-	circleports "quwoquan_service/services/circle-service/internal/domain/circle/ports"
-	"quwoquan_service/services/circle-service/internal/infrastructure/cache"
-	circlepersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle/persistence"
-	behaviorfactpersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_behavior_fact/persistence"
-	fileexternal "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_file/external"
-	filepersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_file/persistence"
-	groupersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_group/persistence"
-	groupmembershippersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_group_membership/persistence"
-	membershippersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_membership/persistence"
-	placementpersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_post_placement/persistence"
-	"quwoquan_service/services/circle-service/internal/infrastructure/messaging"
-	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
-	"quwoquan_service/services/circle-service/internal/infrastructure/searchindex"
+	httpadapter "quwoquan_service/services/circle-service/internal/circle_management/circle/adapters/inbound/http"
+	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
+	circleports "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/ports"
+	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/cache"
+	circlepersistence "quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/circle/persistence"
+	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
+	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
+	circleconfig "quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/runtimeconfig"
+	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/searchindex"
+	behaviorfactapp "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/application"
+	behaviorfactpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/infrastructure/persistence"
+	fileapp "quwoquan_service/services/circle-service/internal/circle_management/circle_file/application"
+	fileexternal "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/external"
+	filepersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/persistence"
+	groupapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group/application"
+	groupersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/persistence"
+	groupmembershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/application"
+	groupmembershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/infrastructure/persistence"
+	membershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/application"
+	membershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/infrastructure/persistence"
+	placementapp "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/application"
+	placementports "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/domain/ports"
+	placementpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/persistence"
 )
 
 type redisSceneCfg struct {
@@ -78,6 +78,11 @@ type config struct {
 			Addr string `yaml:"addr"`
 		} `yaml:"http"`
 	} `yaml:"service"`
+
+	UserAccountSecurityAuthority struct {
+		BaseURL   string `yaml:"base_url"`
+		TimeoutMs int    `yaml:"timeout_ms"`
+	} `yaml:"user_account_security_authority"`
 
 	Mongo struct {
 		URI      string `yaml:"uri"`
@@ -110,6 +115,31 @@ func run() error {
 	applyEnvOverrides(&cfg)
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("circle-service config compatibility failed: %v", err)
+	}
+
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("access token config invalid: %v", err)
+	}
+	accountSecurityAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"circle-service",
+		[]string{"user.account.security.read"},
+	)
+	if err != nil {
+		log.Fatalf("account security authority credential init failed: %v", err)
+	}
+	accountSecurityAuthorityTimeout := time.Duration(cfg.UserAccountSecurityAuthority.TimeoutMs) * time.Millisecond
+	accountSecurityAuthority, err := rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL:     cfg.UserAccountSecurityAuthority.BaseURL,
+			HTTPClient:  &http.Client{Timeout: accountSecurityAuthorityTimeout},
+			Credentials: accountSecurityAuthorityCredentials,
+			Timeout:     accountSecurityAuthorityTimeout,
+		},
+	)
+	if err != nil {
+		log.Fatalf("account security authority config invalid: %v", err)
 	}
 
 	addr := getenvOrDefault("CIRCLE_SERVICE_ADDR", cfg.Service.HTTP.Addr)
@@ -235,10 +265,6 @@ func run() error {
 		cachedCircleStore,
 		nil,
 	)
-	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
-	if err != nil {
-		log.Fatalf("access token config invalid: %v", err)
-	}
 	contentCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig, "circle-service", []string{"content.media.reference.read"},
 	)
@@ -314,7 +340,7 @@ func run() error {
 	}
 	placementCountRelay := placementapp.NewOutboxRelay(
 		placementStore, placementStore,
-		placementpersistence.NewMongoPostCountProjector(db, redisClient),
+		placementpersistence.NewMongoPostCountProjector(db, cachedCircleStore),
 		"circle-post-count",
 	)
 	placementStreamRelay := placementapp.NewOutboxRelay(
@@ -324,7 +350,7 @@ func run() error {
 	)
 	membershipCountRelay := membershipapp.NewOutboxRelay(
 		membershipStore, membershipStore,
-		membershippersistence.NewMongoMemberCountProjector(db, redisClient),
+		membershippersistence.NewMongoMemberCountProjector(db, cachedCircleStore),
 		"circle-member-count",
 	)
 	membershipStreamRelay := membershipapp.NewOutboxRelay(
@@ -334,7 +360,7 @@ func run() error {
 	)
 	behaviorWeeklyActiveRelay := behaviorfactapp.NewOutboxRelay(
 		behaviorFactStore, behaviorFactStore,
-		behaviorfactpersistence.NewMongoWeeklyActiveProjector(db, redisClient),
+		behaviorfactpersistence.NewMongoWeeklyActiveProjector(db, cachedCircleStore),
 		"circle-weekly-active",
 	)
 	behaviorStreamRelay := behaviorfactapp.NewOutboxRelay(
@@ -376,6 +402,17 @@ func run() error {
 		groupMembershipCommands, groupMembershipQueries,
 		membershipCommands, membershipQueries, placementCommands,
 	).Routes()
+	handler, err = runtimemessaging.WithDeadLetterRecoveryRoute(
+		handler,
+		runtimemessaging.DeadLetterRecoveryRouteConfig{
+			Path:     "/internal/circle/account-closure/dead-letters:recover",
+			Module:   rterr.ModuleCircle,
+			Releaser: accountClosedConsumer,
+		},
+	)
+	if err != nil {
+		log.Fatalf("circle account-closure recovery route failed: %v", err)
+	}
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
 		log.Fatalf("access token verifier invalid: %v", err)
@@ -393,6 +430,9 @@ func run() error {
 	)(handler)
 
 	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("account_security_authority", func(hctx context.Context) error {
+		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
+	})
 	if ping := searchBuilt.HealthPing(); ping != nil {
 		healthChecker.Register("elasticsearch", ping)
 	}
@@ -556,7 +596,9 @@ func run() error {
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
-			AccessTokenVerifier: accessVerifier, DeviceTicketVerifier: deviceTicketVerifier,
+			AccessTokenVerifier:      accessVerifier,
+			DeviceTicketVerifier:     deviceTicketVerifier,
+			AccountSecurityAuthority: accountSecurityAuthority,
 		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -648,48 +690,10 @@ func getenvOrDefault(key, fallback string) string {
 
 func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
 	cfg := config{}
-	if strings.TrimSpace(configRoot) != "" {
-		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
-		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
-			return config{}, fmt.Errorf("read default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, envFile); err != nil {
-			return config{}, fmt.Errorf("read env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
-			if err := mergeConfigFile(&cfg, versionFile); err != nil {
-				return config{}, fmt.Errorf("read version config: %w", err)
-			}
-		}
-		return cfg, nil
-	}
-	localDefault := filepath.Join("configs", "default", "config.yaml")
-	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	if err := mergeConfigFile(&cfg, localDefault); err != nil {
-		return config{}, fmt.Errorf("read local default config: %w", err)
-	}
-	if err := mergeConfigFile(&cfg, localEnv); err != nil {
-		return config{}, fmt.Errorf("read local env config: %w", err)
-	}
-	if strings.TrimSpace(configVersion) != "" {
-		if err := mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml")); err != nil {
-			return config{}, fmt.Errorf("read local version config: %w", err)
-		}
+	if err := circleconfig.LoadCanonicalSnapshot(serviceName, appEnv, configRoot, &cfg); err != nil {
+		return config{}, fmt.Errorf("read generated runtime config: %w", err)
 	}
 	return cfg, nil
-}
-
-func mergeConfigFile(cfg *config, path string) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if err := yaml.Unmarshal(raw, cfg); err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
-	}
-	return nil
 }
 
 func applyEnvOverrides(cfg *config) {

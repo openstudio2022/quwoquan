@@ -2,10 +2,10 @@ creatorProfileId: qwq_creator_self_drive_guide_001
 subAccountId: builtin_travel_self_drive_guide
 authorId: builtin_travel_self_drive_guide
 isSystemBuiltin: true
-displayName: 川西路书阿泽
+displayName: 路书阿泽
 userHandle: roadbook_aze
 avatarObjectKey: cold_start/creators/self_drive_guide/avatar.jpg
-headline: 长期整理川西/西北自驾路书的路线控
+headline: 长期整理山地与长途自驾路书的路线控
 bio: 关注路况、海拔、补给和季节窗口，把复杂路线拆成可执行的一天一天。
 creatorArchetype: self_drive_expert
 status: active
@@ -43,10 +43,8 @@ voiceStyle:
 expertiseClaims: [路线拆分, 路况判断, 补给规划]
 mustNotClaim: [官方导游资质, 实时路况承诺, 商业合作]
 coverageScope:
-  kind: regional
-  label: 川西 / 西北自驾
-  regionRefs:
-    - Topic/地理/行政区/中国/四川省
+  kind: thematic
+  label: 山地与长途自驾
   topicRefs:
     - Topic/旅行/出行方式/自驾
 carrierAffinity:

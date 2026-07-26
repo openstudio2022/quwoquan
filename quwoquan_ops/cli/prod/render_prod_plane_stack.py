@@ -17,26 +17,30 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.output_paths import output_root as resolve_output_root
-from quwoquan_ops.cli.lib.output_paths import deployment_work_root
+from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
+from quwoquan_ops.cli.lib.output_paths import deployment_target_path
 from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
 from quwoquan_ops.cli.lib.output_paths import portal_deployment_package_dir
+from quwoquan_ops.cli.lib.output_paths import remove_deployment_tree
+from quwoquan_ops.cli.lib.output_paths import resolve_deployment_target_path
 from quwoquan_ops.cli.lib.output_paths import service_deployment_package_dir
 from quwoquan_ops.cli.lib.output_paths import target_local_dir as resolve_target_local_dir
+from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
+from quwoquan_ops.cli.lib.compose_layout import domain_service_compose_files
 
 try:
     import yaml
 except ImportError:  # pragma: no cover
     raise SystemExit("FAIL: PyYAML required")
 
-ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
-TOPOLOGY_MANIFEST = ROOT / "quwoquan_ops/environments/environment_topology_manifest.yaml"
+ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 OBSERVABILITY_SOURCE_ROOT = ROOT / "quwoquan_ops/observability/monitoring"
-DEFAULT_OUTPUT_ROOT = deployment_work_root("prod-hosted") / "rendered"
+DEFAULT_OUTPUT_ROOT = deployment_render_dir(
+    "prod",
+    target="prod-hosted",
+    name="service-prod",
+)
 
-CONFIG_PACKAGE_ALIAS = {
-    "recommendation-service": "rec-model-service",
-}
 EXTERNAL_DATA_HOST = "host.containers.internal"
 EXTERNAL_POSTGRES_PORT = 19400
 EXTERNAL_MONGO_PORT = 19410
@@ -77,7 +81,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--config-version", required=True)
     parser.add_argument("--image-version", default=os.environ.get("IMAGE_VERSION", "0.0.1"))
-    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_ROOT / "service"))
+    parser.add_argument(
+        "--output-dir",
+        default="",
+        help=(
+            "resolver-derived target-scoped render directory; defaults to "
+            "QWQ_DEPLOY_WORK_ROOT/prod-hosted/rendered/<plane>-<instance>"
+        ),
+    )
     parser.add_argument("--host", default="")
     return parser.parse_args()
 
@@ -93,46 +104,67 @@ def _sha256(path: Path) -> str:
     return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
 
 
-def _require_external_deployment_root(output_root: Path) -> None:
-    """Reject deployment configs under disposable repository output."""
-    output_root = output_root.expanduser().resolve()
-    repository_output_root = resolve_output_root().expanduser().resolve()
+def _resolve_render_output_dir(
+    configured_output: str | Path | None,
+    *,
+    plane: str,
+    instance: str,
+) -> Path:
+    render_name = f"{plane}-{instance}"
     try:
-        output_root.relative_to(repository_output_root)
-    except ValueError:
-        return
-    raise SystemExit(
-        "FAIL: prod deployment rendering must use QWQ_DEPLOY_WORK_ROOT outside "
-        "QWQ_OUTPUT_ROOT; .qwq_output may only retain redacted evidence, "
-        "observability, process and cache records"
+        return resolve_deployment_target_path(
+            configured_output,
+            target="prod-hosted",
+            segments=("rendered", render_name),
+        )
+    except ValueError as exc:
+        raise SystemExit(
+            "FAIL: prod deployment rendering must use the QWQ_DEPLOY_WORK_ROOT "
+            "resolver-derived prod-hosted target directory"
+        ) from exc
+
+
+def _require_external_deployment_root(output_root: Path) -> None:
+    """Compatibility guard retained for direct local-contract probes."""
+    _resolve_render_output_dir(
+        output_root,
+        plane="service",
+        instance="prod",
     )
 
 
-def _verified_package_release(
+def _verified_package_config(
     package_dir: Path,
     *,
-    config_version: str,
+    release_id: str,
 ) -> Path:
-    report_path = package_dir / "report.json"
-    release_path = package_dir / "releases" / f"{config_version}.yaml"
-    if not report_path.is_file() or not release_path.is_file():
-        raise SystemExit(
-            f"FAIL: package missing report or requested config release: {package_dir}"
-        )
+    report_path = package_dir / "provenance.json"
+    config_path = package_dir / "config" / "config.yaml"
+    if not report_path.is_file() or not config_path.is_file():
+        raise SystemExit(f"FAIL: incomplete autonomous service package: {package_dir}")
     try:
-        report = json.loads(report_path.read_text(encoding="utf-8"))
-        provenance = report["provenance"]
-        release_files = provenance["releaseFiles"]
-        expected_digest = release_files[release_path.name]
+        provenance = json.loads(report_path.read_text(encoding="utf-8"))
+        file_digest = provenance["digests"]["config"]
     except (KeyError, TypeError, json.JSONDecodeError) as exc:
         raise SystemExit(f"FAIL: invalid package provenance: {report_path}") from exc
-    if expected_digest != _sha256(release_path):
-        raise SystemExit(f"FAIL: package release digest mismatch: {release_path}")
+    if file_digest != _sha256(config_path):
+        raise SystemExit(f"FAIL: package config digest mismatch: {config_path}")
+    config_payload = _load_yaml(config_path)
+    config_section = config_payload.get("config") if isinstance(config_payload, dict) else None
+    embedded_version = (
+        str(config_section.get("version") or "")
+        if isinstance(config_section, dict)
+        else ""
+    )
+    if provenance.get("configVersion") != embedded_version:
+        raise SystemExit(f"FAIL: package CONFIG_VERSION differs from effective config: {report_path}")
     release_artifact = provenance.get("releaseArtifact")
     if not isinstance(release_artifact, dict):
         raise SystemExit(f"FAIL: package release artifact provenance missing: {report_path}")
-    if release_artifact.get("configVersion") != config_version:
-        raise SystemExit(f"FAIL: package release config version mismatch: {report_path}")
+    if release_artifact.get("releaseId") != release_id:
+        raise SystemExit(f"FAIL: package release ID mismatch: {report_path}")
+    if release_artifact.get("verifiedConfigDigest") != file_digest:
+        raise SystemExit(f"FAIL: package release config evidence mismatch: {report_path}")
     manifest_rel = str(release_artifact.get("manifest") or "")
     manifest_path = Path(manifest_rel)
     if not manifest_path.is_absolute():
@@ -143,7 +175,7 @@ def _verified_package_release(
         or release_artifact.get("manifestSha256") != _sha256(manifest_path)
     ):
         raise SystemExit(f"FAIL: package release artifact manifest mismatch: {report_path}")
-    return release_path
+    return config_path
 
 
 def _git_revision() -> str:
@@ -224,6 +256,7 @@ def _rewrite_service(
     selected: set[str],
     *,
     image_version: str,
+    config_version: str,
     versioned_image: bool,
     instance: str,
     config_root: str,
@@ -263,6 +296,8 @@ def _rewrite_service(
     if isinstance(environment, dict) and environment.get("APP_ENV") == "gamma":
         environment["APP_ENV"] = "prod"
     if isinstance(environment, dict):
+        if config_version:
+            environment["CONFIG_VERSION"] = config_version
         environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = (
             "${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-collector:4318}"
         )
@@ -287,7 +322,7 @@ def _rewrite_service(
             environment["RUNTIME_LOG_SPOOL_DIR"] = (
                 f"/var/lib/quwoquan/runtime-log-spool/{name}"
             )
-        if name == "rec-model-service":
+        if name == "recommendation-service":
             environment["MONGODB_URI"] = EXTERNAL_MONGO_URI
         if name == "content-service":
             environment["MONGO_URI"] = EXTERNAL_MONGO_URI
@@ -507,75 +542,6 @@ def _filter_top_level_volumes(services: dict[str, Any], top_level: dict[str, Any
     return {name: value for name, value in top_level.items() if name in referenced}
 
 
-def _ensure_mapping(payload: dict[str, Any], *keys: str) -> dict[str, Any]:
-    node = payload
-    for key in keys:
-        child = node.get(key)
-        if not isinstance(child, dict):
-            child = {}
-            node[key] = child
-        node = child
-    return node
-
-
-def _set_standalone_redis(spec: dict[str, Any], addr_placeholder: str) -> None:
-    spec["mode"] = "standalone"
-    spec["addr"] = addr_placeholder
-    spec["addrs"] = []
-    spec["tls"] = False
-
-
-def _rewrite_env_override(service: str, payload: dict[str, Any]) -> dict[str, Any]:
-    updated = copy.deepcopy(payload)
-    if service == "content-service":
-        _ensure_mapping(updated, "mongo")["uri"] = "${MONGO_URI}"
-        _set_standalone_redis(_ensure_mapping(updated, "redis", "rec"), "${CONTENT_REDIS_REC_ADDR}")
-        _set_standalone_redis(
-            _ensure_mapping(updated, "redis", "general"),
-            "${CONTENT_REDIS_GENERAL_ADDR}",
-        )
-        rec_model = _ensure_mapping(updated, "rec_model_service")
-        rec_model["url"] = "${REC_MODEL_SERVICE_URL}"
-        rec_model["enabled"] = True
-    elif service == "chat-service":
-        _ensure_mapping(updated, "mongodb")["uri"] = "${MONGO_URI}"
-        _set_standalone_redis(_ensure_mapping(updated, "redis", "realtime"), "${REDIS_ADDR}")
-        _set_standalone_redis(_ensure_mapping(updated, "redis", "general"), "${REDIS_ADDR}")
-        _set_standalone_redis(
-            _ensure_mapping(updated, "redis", "reliabletask"),
-            "${REDIS_ADDR}",
-        )
-    elif service == "user-service":
-        _ensure_mapping(updated, "postgres")["dsn"] = "${POSTGRES_DSN}"
-        _ensure_mapping(updated, "mongodb")["uri"] = "${MONGODB_URI}"
-        _set_standalone_redis(_ensure_mapping(updated, "redis", "general"), "${REDIS_ADDR}")
-    elif service == "assistant-service":
-        _ensure_mapping(updated, "mongodb")["uri"] = "${MONGODB_URI}"
-        _set_standalone_redis(_ensure_mapping(updated, "redis", "rec"), "${REDIS_REC_ADDR}")
-        _set_standalone_redis(
-            _ensure_mapping(updated, "redis", "general"),
-            "${REDIS_GENERAL_ADDR}",
-        )
-    elif service == "product-ops-service":
-        _ensure_mapping(updated, "postgres")["dsn"] = "${POSTGRES_DSN}"
-        _ensure_mapping(updated, "mongodb")["uri"] = "${MONGO_URI}"
-        _set_standalone_redis(
-            _ensure_mapping(updated, "redis", "rec"),
-            "${PRODUCT_OPS_REDIS_REC_ADDR}",
-        )
-        _set_standalone_redis(
-            _ensure_mapping(updated, "redis", "general"),
-            "${PRODUCT_OPS_REDIS_GENERAL_ADDR}",
-        )
-    elif service == "tag-service":
-        _set_standalone_redis(_ensure_mapping(updated, "redis", "rec"), "${REDIS_ADDR}")
-        _set_standalone_redis(_ensure_mapping(updated, "redis", "general"), "${REDIS_ADDR}")
-    elif service == "entity-service":
-        # mongo 经 ENTITY_MONGO_URI env 注入；prod-hosted 首波无 ES，配置层同步关闭。
-        _ensure_mapping(updated, "es")["enabled"] = False
-    return updated
-
-
 def _write_config_tree(
     *,
     config_services: list[str],
@@ -585,48 +551,30 @@ def _write_config_tree(
     config_root = output_root / "runtime" / "config-root"
     sources: dict[str, Any] = {}
     for service in config_services:
-        package_service = CONFIG_PACKAGE_ALIAS.get(service, service)
         package_dir = service_deployment_package_dir(
             "prod",
-            package_service,
+            service,
             target="prod-hosted",
         )
         if not package_dir.is_dir():
             raise SystemExit(f"FAIL: missing prod service package for {service}: {package_dir}")
-        default_src = package_dir / "default_config.yaml"
-        env_src = package_dir / "config.yaml"
-        if not default_src.is_file() or not env_src.is_file():
+        effective_config = package_dir / "config" / "config.yaml"
+        if not effective_config.is_file():
             raise SystemExit(f"FAIL: incomplete service package for {service}: {package_dir}")
-        target_default = config_root / "configs" / service / "default" / "config.yaml"
-        target_env = config_root / "configs" / service / "prod" / "config.yaml"
-        target_default.parent.mkdir(parents=True, exist_ok=True)
-        target_env.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(default_src, target_default)
-        env_payload = yaml.safe_load(env_src.read_text(encoding="utf-8")) or {}
-        if not isinstance(env_payload, dict):
-            raise SystemExit(f"FAIL: env override must be object: {env_src}")
-        target_env.write_text(
-            yaml.safe_dump(
-                _rewrite_env_override(service, env_payload),
-                sort_keys=False,
-                allow_unicode=True,
-            ),
-            encoding="utf-8",
-        )
         sources[service] = {
             "package": str(package_dir),
-            "defaultConfigDigest": _sha256(default_src),
-            "environmentConfigDigest": _sha256(env_src),
+            "effectiveConfigDigest": _sha256(effective_config),
         }
 
-        release_src = _verified_package_release(
+        config_src = _verified_package_config(
             package_dir,
-            config_version=config_version,
+            release_id=config_version,
         )
-        release_target = config_root / "releases" / "config" / service / f"{config_version}.yaml"
-        release_target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(release_src, release_target)
-        sources[service]["releaseConfigDigest"] = _sha256(release_src)
+        config_target = config_root / f"{service}.yaml"
+        config_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(config_src, config_target)
+        provenance = json.loads((package_dir / "provenance.json").read_text(encoding="utf-8"))
+        sources[service]["configVersion"] = provenance["configVersion"]
 
     # IaC 只读配置快照的另外两个域：端侧 App 发布配置与数据工程共享 catalog。
     # platform-ops 生产容器只挂 config-root，不含仓库树，必须在渲染期落盘。
@@ -652,7 +600,7 @@ def _write_config_tree(
 
     # 灰度路由策略（IaC）：编译进 Caddyfile 的同时落进 config-root，
     # 供 platform-ops 生产容器只读展示（Portal 灰度页）。
-    routing_policy_src = ROOT / "quwoquan_ops" / "environments" / "gray_routing_policy.yaml"
+    routing_policy_src = ROOT / "quwoquan_ops" / "environments" / "prod" / "rollout" / "routing_policy.yaml"
     if not routing_policy_src.is_file():
         raise SystemExit(f"FAIL: missing gray routing policy: {routing_policy_src}")
     routing_target = config_root / "gray-routing" / "policy.yaml"
@@ -669,7 +617,7 @@ def _prod_public_hosts() -> dict[str, str]:
     """从环境拓扑真相源解析生产域名，禁止生产 Caddy 回退本地域名或 IP。"""
     from urllib.parse import urlparse
 
-    topology = _load_yaml(TOPOLOGY_MANIFEST)
+    topology = load_environment_topology()
     public_bases = (
         ((topology.get("targets") or {}).get("prod-hosted") or {}).get("publicBases")
         or {}
@@ -693,7 +641,7 @@ def _render_gray_routing_block(rollout_stage: str) -> str:
     仅 prod 实例栈注入：命中任一启用维度的请求被转发到 gray 栈 edge，
     未命中继续走本栈稳定服务。gray 栈自身不注入（防转发环）。
     """
-    policy_path = ROOT / "quwoquan_ops" / "environments" / "gray_routing_policy.yaml"
+    policy_path = ROOT / "quwoquan_ops" / "environments" / "prod" / "rollout" / "routing_policy.yaml"
     policy = (_load_yaml(policy_path).get("policy") or {}) if policy_path.is_file() else {}
     if not policy.get("enabled"):
         return ""
@@ -809,6 +757,10 @@ prod-api.quwoquan-env.test {
 \thandle @api_tag {
 \t\treverse_proxy tag-service:18092
 \t}
+\t@api_search path /search*
+\thandle @api_search {
+\t\treverse_proxy search-service:18095
+\t}
 \t@api_entity path /homepages*
 \thandle @api_entity {
 \t\treverse_proxy entity-service:18084
@@ -910,6 +862,10 @@ prod-upload.quwoquan-env.test {
 \t@pub_tag path /tag*
 \thandle @pub_tag {
 \t\treverse_proxy tag-service:18092
+\t}
+\t@pub_search path /search*
+\thandle @pub_search {
+\t\treverse_proxy search-service:18095
 \t}
 \t@pub_entity path /homepages*
 \thandle @pub_entity {
@@ -1092,6 +1048,8 @@ def _write_env_file(
 def _write_observability_tree(
     output_root: Path,
     plane_name: str,
+    *,
+    render_name: str,
 ) -> dict[str, Any] | None:
     plane = _plane_spec(plane_name)
     runtime = plane.get("rootlessObservabilityRuntime")
@@ -1140,9 +1098,19 @@ def _write_observability_tree(
     if not alerts.is_dir():
         raise SystemExit(f"FAIL: observability alerts directory is missing: {alerts}")
 
-    destination = output_root / directory
+    destination = deployment_target_path(
+        "prod-hosted",
+        "rendered",
+        render_name,
+        *directory.parts,
+    )
     if destination.exists():
-        shutil.rmtree(destination)
+        remove_deployment_tree(
+            "prod-hosted",
+            "rendered",
+            render_name,
+            *directory.parts,
+        )
     destination.mkdir(parents=True)
     for source in required_files:
         shutil.copy2(source, destination / source.name)
@@ -1240,21 +1208,25 @@ def main() -> int:
     legal_root = str(layout.get("legalStaticRoot") or "runtime/legal-static")
     portal_root = str(layout.get("portalStaticRoot") or "runtime/portal")
     model_cache_root = str(layout.get("modelCacheRoot") or "runtime/model-cache")
-    if Path(config_root).is_absolute():
+    if Path(config_root).is_absolute() or ".." in Path(config_root).parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.configRoot must remain relative")
-    if Path(caddyfile_path).is_absolute():
+    if Path(caddyfile_path).is_absolute() or ".." in Path(caddyfile_path).parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.caddyfile must remain relative")
-    if Path(legal_root).is_absolute():
+    if Path(legal_root).is_absolute() or ".." in Path(legal_root).parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.legalStaticRoot must remain relative")
-    if Path(portal_root).is_absolute():
+    if Path(portal_root).is_absolute() or ".." in Path(portal_root).parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.portalStaticRoot must remain relative")
-    if Path(model_cache_root).is_absolute():
+    if Path(model_cache_root).is_absolute() or ".." in Path(model_cache_root).parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.modelCacheRoot must remain relative")
 
-    output_root = Path(args.output_dir).expanduser().resolve()
-    _require_external_deployment_root(output_root)
+    render_name = f"{args.plane}-{args.instance}"
+    output_root = _resolve_render_output_dir(
+        args.output_dir,
+        plane=args.plane,
+        instance=args.instance,
+    )
     if output_root.exists():
-        shutil.rmtree(output_root)
+        remove_deployment_tree("prod-hosted", "rendered", render_name)
     output_root.mkdir(parents=True, exist_ok=True)
     Path(media_root).mkdir(parents=True, exist_ok=True)
     legal_package_public = (
@@ -1262,9 +1234,19 @@ def main() -> int:
         / "current"
         / "public"
     )
-    legal_output_root = output_root / legal_root
+    legal_output_root = deployment_target_path(
+        "prod-hosted",
+        "rendered",
+        render_name,
+        *Path(legal_root).parts,
+    )
     if legal_output_root.exists():
-        shutil.rmtree(legal_output_root)
+        remove_deployment_tree(
+            "prod-hosted",
+            "rendered",
+            render_name,
+            *Path(legal_root).parts,
+        )
     if legal_package_public.is_dir():
         shutil.copytree(legal_package_public, legal_output_root)
     else:
@@ -1276,17 +1258,49 @@ def main() -> int:
         / "current"
         / "dist"
     )
-    portal_output_root = output_root / portal_root
+    portal_output_root = deployment_target_path(
+        "prod-hosted",
+        "rendered",
+        render_name,
+        *Path(portal_root).parts,
+    )
     if portal_output_root.exists():
-        shutil.rmtree(portal_output_root)
+        remove_deployment_tree(
+            "prod-hosted",
+            "rendered",
+            render_name,
+            *Path(portal_root).parts,
+        )
     if portal_release_dist.is_dir():
         shutil.copytree(portal_release_dist, portal_output_root)
     else:
         portal_output_root.mkdir(parents=True, exist_ok=True)
-    (output_root / model_cache_root).mkdir(parents=True, exist_ok=True)
+    deployment_target_path(
+        "prod-hosted",
+        "rendered",
+        render_name,
+        *Path(model_cache_root).parts,
+    ).mkdir(parents=True, exist_ok=True)
 
     template = _load_yaml(compose_template)
-    services = template.get("services") or {}
+    services = dict(template.get("services") or {})
+    service_fragments = domain_service_compose_files(ROOT)
+    service_fragments.append(
+        ROOT
+        / "quwoquan_service"
+        / "control-plane"
+        / "platform-ops"
+        / "deploy"
+        / "compose.yaml"
+    )
+    for fragment in service_fragments:
+        fragment_services = _load_yaml(fragment).get("services") or {}
+        duplicates = set(services) & set(fragment_services)
+        if duplicates:
+            raise SystemExit(
+                f"FAIL: Compose service has multiple owners {sorted(duplicates)}: {fragment}"
+            )
+        services.update(fragment_services)
     rendered_services: dict[str, Any] = {}
     selected_names = set(selected)
     governed_names = set(governed)
@@ -1294,6 +1308,11 @@ def main() -> int:
     service_network_name = str(
         observability_config.get("serviceNetworkName") or ""
     ).strip()
+    config_sources = _write_config_tree(
+        config_services=config_services,
+        config_version=args.config_version,
+        output_root=output_root,
+    )
     for service_name in selected:
         raw = services.get(service_name)
         if raw is None:
@@ -1305,6 +1324,9 @@ def main() -> int:
             raw,
             selected_names,
             image_version=args.image_version,
+            config_version=str(
+                (config_sources.get(service_name) or {}).get("configVersion") or ""
+            ),
             versioned_image=service_name in governed_names,
             instance=args.instance,
             config_root=config_root,
@@ -1336,17 +1358,21 @@ def main() -> int:
         ((plane.get("rootlessRuntimeLayout") or {}).get("composeFile"))
         or "docker-compose.prod-hosted.yaml"
     )
+    if (
+        Path(str(compose_file_name)).is_absolute()
+        or ".." in Path(str(compose_file_name)).parts
+    ):
+        raise SystemExit("FAIL: rootlessRuntimeLayout.composeFile must remain relative")
     compose_out = output_root / str(compose_file_name)
     compose_out.write_text(
         yaml.safe_dump(compose_payload, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
     )
 
-    observability_runtime = _write_observability_tree(output_root, args.plane)
-    config_sources = _write_config_tree(
-        config_services=config_services,
-        config_version=args.config_version,
-        output_root=output_root,
+    observability_runtime = _write_observability_tree(
+        output_root,
+        args.plane,
+        render_name=render_name,
     )
     _write_caddyfile(output_root, args.instance, args.rollout_stage)
     _write_env_file(output_root, args.config_version, args.image_version, args.instance)

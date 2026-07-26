@@ -14,8 +14,9 @@ defaults:
     research:
       lanes:
       - image
+      imageAssetStrategy: attribution_audited_publish
       allowAiImages: false
-      # 图作品批次的图不是加分项而是产出本体：无 rights-cleared 图 = 该目标无作品。
+      # 图作品批次的图不是加分项而是产出本体；授权完备度由垂类 policy 决定审计或阻断。
       imageCountPolicy: hard_quota
     quotas:
       entityHomepagesPerTarget: 0

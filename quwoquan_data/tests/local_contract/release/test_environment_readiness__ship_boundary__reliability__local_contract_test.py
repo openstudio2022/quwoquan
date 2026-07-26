@@ -15,7 +15,7 @@ from content.release.model import DeploymentEnvironment  # noqa: E402
 
 
 def test_environment_readiness__maps_ship_action_to_minimal_phase__local_contract() -> None:
-    assert phase_for_environment(DeploymentEnvironment.ALPHA, consumer=False) is None
+    assert phase_for_environment(DeploymentEnvironment.ALPHA, consumer=False) is ShipReadinessPhase.IMPORT
     assert phase_for_environment(DeploymentEnvironment.BETA, consumer=False) is ShipReadinessPhase.IMPORT
     assert phase_for_environment(DeploymentEnvironment.GAMMA, consumer=False) is ShipReadinessPhase.IMPORT
     assert phase_for_environment(DeploymentEnvironment.GAMMA, consumer=True) is ShipReadinessPhase.CONSUMER

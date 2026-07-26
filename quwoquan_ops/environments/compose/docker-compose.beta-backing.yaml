@@ -32,7 +32,7 @@ services:
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
       interval: 5s
-      timeout: 3s
+      timeout: 10s
       retries: 20
 
   mongo-init:
@@ -121,109 +121,6 @@ services:
         echo "object-storage did not become ready" >&2
         exit 1
     restart: "no"
-
-  rec-model-service:
-    networks:
-      default:
-        aliases:
-          - recommendation-service
-          - rec-model-service
-    image: "${BETA_RECOMMENDATION_SERVICE_IMAGE:-localhost/quwoquan_service_rec-model-service:latest}"
-    build:
-      context: ../../..
-      dockerfile: quwoquan_service/services/rec-model-service/deploy/Dockerfile
-      args:
-        PYTHON_BASE_IMAGE: "${BETA_PYTHON_BASE_IMAGE:-python:3.11}"
-        PIP_INDEX_URL: "${BETA_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
-        PIP_TRUSTED_HOST: "${BETA_PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}"
-    environment:
-      SERVICE_NAME: recommendation-service
-      APP_ENV: beta
-      CONFIG_ROOT: /etc/qwq-config
-      MONGODB_URI: "mongodb://mongodb:27017/?replicaSet=rs0"
-      MONGODB_DATABASE: quwoquan_content
-      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
-      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
-      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
-      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
-    ports:
-      - "${BETA_REC_MODEL_PORT:?BETA_REC_MODEL_PORT is required}:8000"
-    volumes:
-      - ${BETA_SERVICE_CONFIG_ROOT:?BETA_SERVICE_CONFIG_ROOT is required}:/etc/qwq-config:ro
-      - ${BETA_MODEL_CACHE_ROOT:?BETA_MODEL_CACHE_ROOT is required}:/app/cache
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
-      interval: 10s
-      timeout: 3s
-      start_period: 120s
-      retries: 10
-
-  content-service:
-    image: "${BETA_CONTENT_SERVICE_IMAGE:-localhost/quwoquan_service_content-service:latest}"
-    build:
-      context: ../../../quwoquan_service
-      dockerfile: services/content-service/deploy/Dockerfile
-      args:
-        GO_BASE_IMAGE: "${BETA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
-        ALPINE_BASE_IMAGE: "${BETA_ALPINE_BASE_IMAGE:-alpine:3.19}"
-        GO_BUILD_FLAGS: "${BETA_GO_BUILD_FLAGS:--p=1}"
-    environment:
-      SERVICE_NAME: content-service
-      APP_ENV: beta
-      CONFIG_ROOT: /etc/qwq-config
-      CONFIG_VERSION: "${CONTENT_CONFIG_VERSION:-}"
-      MONGO_URI: "mongodb://mongodb:27017/?replicaSet=rs0"
-      REPORT_DATABASE_URL: "postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable"
-      CONTENT_REPORT_ACCOUNT_BACKFILL_FILE: /etc/qwq-config/report-account-backfill.json
-      CONTENT_REDIS_REC_ADDR: redis:6379
-      CONTENT_REDIS_GENERAL_ADDR: redis:6379
-      CONTENT_REDIS_REALTIME_ADDR: redis:6379
-      CONTENT_OSS_ENDPOINT: "${BETA_OBJECT_STORAGE_ENDPOINT:?BETA_OBJECT_STORAGE_ENDPOINT is required}"
-      CONTENT_OSS_BUCKET: "${BETA_OBJECT_STORAGE_BUCKET:?BETA_OBJECT_STORAGE_BUCKET is required}"
-      CONTENT_OSS_REGION: "${BETA_OBJECT_STORAGE_REGION:?BETA_OBJECT_STORAGE_REGION is required}"
-      CONTENT_OSS_ACCESS_KEY_ID: "${BETA_OBJECT_STORAGE_ACCESS_KEY_ID:?BETA_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
-      CONTENT_OSS_ACCESS_KEY_SECRET: "${BETA_OBJECT_STORAGE_ACCESS_KEY_SECRET:?BETA_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
-      CONTENT_CDN_DOMAIN: "${BETA_OBJECT_STORAGE_CDN_DOMAIN:?BETA_OBJECT_STORAGE_CDN_DOMAIN is required}"
-      CONTENT_CDN_SIGN_KEY: "${BETA_OBJECT_STORAGE_CDN_SIGN_KEY:?BETA_OBJECT_STORAGE_CDN_SIGN_KEY is required}"
-      CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET: "${CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET:?CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET is required}"
-      SSL_CERT_FILE: /etc/ssl/local-ca/object-storage-ca.crt
-      SEARCH_ES_ENABLED: "false"
-      REC_MODEL_SERVICE_ENABLED: "true"
-      REC_MODEL_SERVICE_URL: http://recommendation-service:8000
-      CONTENT_EMBEDDING_ENDPOINT: "${CONTENT_EMBEDDING_ENDPOINT:-}"
-      CONTENT_EMBEDDING_API_KEY: "${CONTENT_EMBEDDING_API_KEY:-}"
-      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
-      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
-      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
-      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
-      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
-      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
-      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
-      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      mongo-init:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      object-storage-init:
-        condition: service_completed_successfully
-      rec-model-service:
-        condition: service_healthy
-    ports:
-      - "${CONTENT_PORT:?CONTENT_PORT is required}:18080"
-    volumes:
-      - ${BETA_SERVICE_CONFIG_ROOT:?BETA_SERVICE_CONFIG_ROOT is required}:/etc/qwq-config:ro
-      - ${BETA_OBJECT_STORAGE_CA_FILE:?BETA_OBJECT_STORAGE_CA_FILE is required}:/etc/ssl/local-ca/object-storage-ca.crt:ro
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 3s
-      start_period: 120s
-      retries: 12
 
 volumes:
   beta-local-postgres:

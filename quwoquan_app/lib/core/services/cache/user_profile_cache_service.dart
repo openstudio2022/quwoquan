@@ -13,7 +13,7 @@ class UserProfileCacheService {
     this._persistToPreferences = false,
   }) : _maxMemory = maxMemoryEntries {
     if (_persistToPreferences) {
-      unawaited(_hydrateFromPreferences());
+      _hydrationFuture = _hydrateFromPreferences();
     }
   }
 
@@ -23,6 +23,8 @@ class UserProfileCacheService {
   final bool _persistToPreferences;
   final LinkedHashMap<String, _ProfileEntry> _memory = LinkedHashMap();
   final Map<String, _ProfileEntry> _disk = {};
+  Future<void> _hydrationFuture = Future<void>.value();
+  Future<void> _persistenceTail = Future<void>.value();
 
   Map<String, dynamic>? get(String userId) {
     if (_memory.containsKey(userId)) {
@@ -97,6 +99,23 @@ class UserProfileCacheService {
     return ids.length;
   }
 
+  /// 不可逆账号终态专用：等待既有持久化完成后清空并读回验证。
+  Future<void> clearAllForTerminalAccountClosure() async {
+    await _hydrationFuture;
+    _memory.clear();
+    _disk.clear();
+    if (!_persistToPreferences) {
+      return;
+    }
+    await _enqueuePersistence(() async {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.remove(_prefsKey);
+      if (preferences.containsKey(_prefsKey)) {
+        throw StateError('user profile cache cleanup verification failed');
+      }
+    });
+  }
+
   int get diskCount => _disk.length;
 
   int get memoryCount => _memory.length;
@@ -145,7 +164,19 @@ class UserProfileCacheService {
     if (!_persistToPreferences) {
       return;
     }
-    unawaited(_persistToPreferencesStore());
+    unawaited(_enqueuePersistence(_persistToPreferencesStore));
+  }
+
+  Future<void> _enqueuePersistence(Future<void> Function() operation) {
+    final result = _persistenceTail.then((_) => operation());
+    _persistenceTail = result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        // [result] 仍把原始异常交给本次调用方；这里只恢复串行队列，
+        // 使后续终态清理不会因早先一次写失败而永远跳过。
+      },
+    );
+    return result;
   }
 
   Future<void> _persistToPreferencesStore() async {

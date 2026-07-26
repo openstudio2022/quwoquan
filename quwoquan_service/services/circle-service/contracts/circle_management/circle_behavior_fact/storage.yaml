@@ -1,0 +1,36 @@
+backend: mongodb
+collections:
+  circle_behavior_facts:
+    entity: CircleBehaviorFact
+    role: append_only
+    indexes:
+    - name: idx_circle_behavior_circle_time
+      keys:
+        circleId: 1
+        occurredAt: -1
+    - name: idx_circle_behavior_persona_time
+      keys:
+        personaId: 1
+        occurredAt: -1
+    - name: idx_circle_behavior_device_time
+      keys:
+        deviceActorId: 1
+        occurredAt: -1
+  circle_behavior_fact_outbox:
+    entity: CircleBehaviorFactOutbox
+    role: append_only
+    indexes:
+    - name: idx_circle_behavior_outbox_sequence
+      keys:
+        outboxSequence: 1
+      unique: true
+  circle_behavior_fact_outbox_sequences:
+    entity: CircleBehaviorFactOutboxSequence
+    role: authoritative
+  circle_behavior_fact_projection_checkpoints:
+    entity: CircleBehaviorFactProjectionCheckpoint
+    role: projection
+  circle_behavior_fact_projection_inbox:
+    entity: CircleBehaviorFactProjectionInbox
+    role: append_only
+role: append_only

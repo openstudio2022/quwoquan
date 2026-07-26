@@ -1,0 +1,105 @@
+{
+  "schema": "environment-runtime",
+  "environment": "gamma",
+  "dataReleaseTarget": "gamma-local",
+  "publicBases": {
+    "api": "https://gamma-api.quwoquan-env.test:19000",
+    "realtime": "wss://gamma-api.quwoquan-env.test:19000",
+    "rtc": "wss://gamma-rtc.quwoquan-env.test:19000",
+    "productOps": "https://gamma-product-ops.quwoquan-env.test:19010",
+    "mediaAvatar": "https://gamma-avatar.quwoquan-env.test:19100",
+    "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
+    "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",
+    "mediaUpload": "https://gamma-upload.quwoquan-env.test:19130"
+  },
+  "subnets": {
+    "edge": "172.40.10.0/24",
+    "media": "172.40.20.0/24",
+    "service": "172.40.30.0/24",
+    "data": "172.40.40.0/24"
+  },
+  "serviceAliases": {
+    "edge": "gamma-edge",
+    "media": "gamma-media",
+    "service": "gamma-service",
+    "data": "gamma-data"
+  },
+  "artifactPolicy": {
+    "app": {
+      "runtimeEnv": "gamma",
+      "dataSource": "remote",
+      "allowSeeds": false,
+      "allowLocalHosts": true,
+      "allowProdHosts": false,
+      "distribution": "internal-only"
+    },
+    "service": {
+      "allowFixtureRefs": false,
+      "allowReleaseSnapshot": true,
+      "secretScope": "gamma",
+      "distribution": "internal-only"
+    }
+  },
+  "hostAllowlist": [
+    "gamma-api.quwoquan-env.test",
+    "gamma-rtc.quwoquan-env.test",
+    "gamma-product-ops.quwoquan-env.test",
+    "gamma-avatar.quwoquan-env.test",
+    "gamma-image.quwoquan-env.test",
+    "gamma-video.quwoquan-env.test",
+    "gamma-upload.quwoquan-env.test"
+  ],
+  "forbiddenHostTokens": [
+    "api.quwoquan.com",
+    "avatar-cdn.quwoquan.com",
+    "118.31.239.122"
+  ],
+  "rolloutStagePolicy": {
+    "mode": "fixed-env",
+    "allowedStages": []
+  },
+  "targets": {
+    "gamma-local": {
+      "env": "gamma",
+      "backend": "local",
+      "portProfile": "gamma-local",
+      "startup": {
+        "dockerProbeTimeoutSeconds": 30,
+        "composeBuildTimeoutSeconds": 3600,
+        "composeBuildNoProgressTimeoutSeconds": 1200,
+        "composeUpTimeoutSeconds": 900
+      },
+      "buildImages": {
+        "goBaseImage": "golang:1.24-bookworm",
+        "alpineBaseImage": "alpine:3.21"
+      },
+      "publicBases": {
+        "api": "https://gamma-api.quwoquan-env.test:19000",
+        "realtime": "wss://gamma-api.quwoquan-env.test:19000",
+        "rtc": "wss://gamma-rtc.quwoquan-env.test:19000",
+        "productOps": "https://gamma-product-ops.quwoquan-env.test:19010",
+        "mediaAvatar": "https://gamma-avatar.quwoquan-env.test:19100",
+        "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
+        "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",
+        "mediaUpload": "https://gamma-upload.quwoquan-env.test:19130"
+      },
+      "origins": {
+        "mediaOrigin": "http://127.0.0.1:19110",
+        "contentService": "http://127.0.0.1:19220"
+      },
+      "playbackCanary": {
+        "source": "published-release",
+        "workIdEnv": "VIDEO_PLAYBACK_CANARY_WORK_ID",
+        "publicSliceKeyEnv": "VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY"
+      },
+      "dataRelease": {
+        "mode": "local-import",
+        "mongoPortRole": "mongodb",
+        "mediaLocalRef": "cache/media",
+        "mediaPublicBaseKey": "mediaImage",
+        "userPostgresPortRole": "postgres",
+        "publicReadyTimeoutSeconds": 240
+      }
+    }
+  }
+}

@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/content/post/author_impact_query.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
@@ -12,6 +14,22 @@ import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
+
+const _authorImpactEvidenceSnapshotId = 'impact_evidence_snapshot_001';
+
+AuthorImpactEvidencePage _emptyAuthorImpactEvidencePage({
+  required String impactId,
+  required String evidenceSnapshotId,
+}) {
+  return AuthorImpactEvidencePage(
+    impactId: impactId,
+    evidenceSnapshotId: evidenceSnapshotId,
+    totalCount: 0,
+    items: const <AuthorImpactEvidenceItem>[],
+    nextCursor: '',
+    hasMore: false,
+  );
+}
 
 /// A2：Provider 级短时去重——同一会话内 rebuild / 重订阅不重复打服务
 /// （backlog R-ID09 验收项④）。
@@ -91,14 +109,31 @@ void main() {
     test('TTL 窗口内重复读取仅触发一次 GetAuthorImpact', () async {
       final repo = _CountingAuthorImpactQuery();
       final container = ProviderContainer(
-        overrides: [authorImpactQueryProvider.overrideWithValue(repo)],
+        overrides: [
+          authorImpactQueryProvider.overrideWith((ref, surface) => repo),
+        ],
       );
       addTearDown(container.dispose);
 
-      await container.read(authorImpactProvider('u_demo').future);
+      await container.read(
+        authorImpactProvider((
+          subAccountId: 'u_demo',
+          surface: AppUiSurfaces.profileHome,
+        )).future,
+      );
       // 无监听者：若非 keepAlive，autoDispose 会销毁并在二次读取时重新取数。
-      await container.read(authorImpactProvider('u_demo').future);
-      await container.read(authorImpactProvider('u_demo').future);
+      await container.read(
+        authorImpactProvider((
+          subAccountId: 'u_demo',
+          surface: AppUiSurfaces.profileHome,
+        )).future,
+      );
+      await container.read(
+        authorImpactProvider((
+          subAccountId: 'u_demo',
+          surface: AppUiSurfaces.profileHome,
+        )).future,
+      );
 
       expect(repo.impactCalls['u_demo'], 1);
     });
@@ -106,12 +141,24 @@ void main() {
     test('不同 userId 各自取数互不串用', () async {
       final repo = _CountingAuthorImpactQuery();
       final container = ProviderContainer(
-        overrides: [authorImpactQueryProvider.overrideWithValue(repo)],
+        overrides: [
+          authorImpactQueryProvider.overrideWith((ref, surface) => repo),
+        ],
       );
       addTearDown(container.dispose);
 
-      await container.read(authorImpactProvider('u_a').future);
-      await container.read(authorImpactProvider('u_b').future);
+      await container.read(
+        authorImpactProvider((
+          subAccountId: 'u_a',
+          surface: AppUiSurfaces.profileHome,
+        )).future,
+      );
+      await container.read(
+        authorImpactProvider((
+          subAccountId: 'u_b',
+          surface: AppUiSurfaces.profileHome,
+        )).future,
+      );
 
       expect(repo.impactCalls['u_a'], 1);
       expect(repo.impactCalls['u_b'], 1);
@@ -190,10 +237,10 @@ final class _CountingAuthorImpactQuery implements AuthorImpactQuery {
     String evidenceSnapshotId = '',
     String cursor = '',
     int limit = 20,
-  }) async {
-    return AuthorImpactEvidencePage(
-      impactId: impactId,
-      evidenceSnapshotId: evidenceSnapshotId,
-    );
-  }
+  }) async => _emptyAuthorImpactEvidencePage(
+    impactId: impactId,
+    evidenceSnapshotId: evidenceSnapshotId.isEmpty
+        ? _authorImpactEvidenceSnapshotId
+        : evidenceSnapshotId,
+  );
 }

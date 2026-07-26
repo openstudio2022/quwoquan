@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/spec.md#gwt-001
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,14 +10,21 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../typed_circle_query_test_double.dart';
 
-class _NoopCircleBehaviorFactWriter implements CircleBehaviorFactWriter {
+class _RecordingCircleBehaviorFactWriter implements CircleBehaviorFactWriter {
+  final List<AppendCircleBehaviorFactCommand> commands =
+      <AppendCircleBehaviorFactCommand>[];
+
   @override
-  Future<void> append(AppendCircleBehaviorFactCommand command) async {}
+  Future<void> append(AppendCircleBehaviorFactCommand command) async {
+    commands.add(command);
+  }
 }
 
 Widget _scopedApp({
   CircleQueryReader? circleQuery,
   String circleId = 'fixture_circle_photo',
+  String ownerUserId = '',
+  CircleBehaviorFactWriter? behaviorFactWriter,
 }) {
   final query = circleQuery ?? CircleQueryReaderTestDouble();
   return ProviderScope(
@@ -24,9 +32,9 @@ Widget _scopedApp({
       circleDetailQueryProvider.overrideWithValue(query),
       circlesListQueryProvider.overrideWithValue(query),
       // 游客态：行为信号守卫短路，不触发 Remote-only 装配链。
-      resolvedOwnerUserIdProvider.overrideWithValue(''),
+      resolvedOwnerUserIdProvider.overrideWithValue(ownerUserId),
       circleDetailBehaviorFactWriterProvider.overrideWithValue(
-        _NoopCircleBehaviorFactWriter(),
+        behaviorFactWriter ?? _RecordingCircleBehaviorFactWriter(),
       ),
       behaviorRepositoryProvider.overrideWithValue(MockBehaviorRepository()),
     ],
@@ -61,6 +69,39 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byType(CircleDetailPage), findsOneWidget);
+    });
+
+    testWidgets('游客不写行为事实，认证用户只写入 impression 与 dwell', (tester) async {
+      final visitorWriter = _RecordingCircleBehaviorFactWriter();
+      await tester.pumpWidget(_scopedApp(behaviorFactWriter: visitorWriter));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(visitorWriter.commands, isEmpty);
+
+      final authenticatedWriter = _RecordingCircleBehaviorFactWriter();
+      await tester.pumpWidget(
+        _scopedApp(
+          ownerUserId: 'user-1',
+          behaviorFactWriter: authenticatedWriter,
+        ),
+      );
+      await tester.pump();
+      expect(
+        authenticatedWriter.commands.map((command) => command.eventType),
+        contains(CircleBehaviorEventType.impression),
+      );
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(
+        authenticatedWriter.commands.map((command) => command.eventType),
+        contains(CircleBehaviorEventType.dwell),
+      );
+      expect(
+        authenticatedWriter.commands.map((command) => command.circleId).toSet(),
+        <String>{'fixture_circle_photo'},
+      );
     });
   });
 

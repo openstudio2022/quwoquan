@@ -96,4 +96,23 @@ void main() {
       reason: '恢复根本身也必须确认 Flutter 首帧，避免 native watchdog 覆盖可操作恢复 UI',
     );
   });
+
+  test('重试复用首次 bootstrap Zone，避免 Zone mismatch', () {
+    final source = File('lib/app_bootstrap.dart').readAsStringSync();
+
+    expect(source, contains('Zone? _bootstrapZone'));
+    expect(source, contains('_bootstrapZone = Zone.current'));
+    expect(source, contains('_runQuwoquanAppInBootstrapZone'));
+    expect(source, contains('existingZone.run('));
+    expect(
+      source,
+      contains('zone.scheduleMicrotask('),
+      reason: '首帧前恢复调度也必须回到 bootstrap Zone',
+    );
+    expect(
+      'runZonedGuarded('.allMatches(source).length,
+      1,
+      reason: '整个 isolate 生命周期只允许创建一次 bootstrap Zone',
+    );
+  });
 }

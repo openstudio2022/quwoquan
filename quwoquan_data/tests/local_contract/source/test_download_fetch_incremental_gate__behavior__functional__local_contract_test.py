@@ -8,7 +8,7 @@ def test_download_fetch_result_writes_entity_screen_gates_incrementally():
     from content.source.handler_images import _source_screen_report_ref
     from content.execution.stage_reports import read_stage_envelope
 
-    execution_id = "20260712--travel-homepage-fetch-gate--cn-test--canary-001"
+    execution_id = "20260712--travel-homepage-fetch-gate--cn-test--pilot-001"
     entity = "测试景区"
     source_id = "su_fetch_incremental"
     fetched_source = {

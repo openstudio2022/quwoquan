@@ -28,7 +28,7 @@ def main() -> int:
     )
     failures.require_any_text(
         label="security/privacy governance",
-        roots=(ROOT / "specs" / "gates", ROOT / "specs" / "feature-tree"),
+        roots=(ROOT / "specs" / "feature-tree",),
         patterns=(r"privacy", r"auth", r"permission", r"security", r"audit"),
     )
     return failures.exit_code("[verify] OK: security coverage checked")

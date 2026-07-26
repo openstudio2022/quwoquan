@@ -22,7 +22,7 @@ from core.paths import STAGE_DOWNLOAD, execution_root, execution_shared_dir  # n
 from content.source.source_unit import resolve_entity_object_dir  # noqa: E402
 from content.source.prepare import RESEARCH_PLAN_FILES, prepare_source_plan  # noqa: E402
 
-_TASK = "20260711--travel-article-carrier-lane--cn-zhejiang--canary-001"
+_TASK = "20260711--travel-article-carrier-lane--test-region-a--pilot-001"
 _EID = "西湖"
 
 

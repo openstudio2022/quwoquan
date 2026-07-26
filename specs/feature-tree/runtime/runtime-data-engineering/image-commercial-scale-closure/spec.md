@@ -1,48 +1,109 @@
-# L3 特性：image-commercial-scale-closure
+# L3 Story：图片商用规模闭环 (`image-commercial-scale-closure`)
 
-## 概述
+> 所属能力：[`runtime-data-engineering`](../spec.md)
+>
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-面向浙江、四川旅行对象的图片商业放量 Story。通过逐图权利、无水印、对象匹配和
-跨批去重合同，依次完成 Canary、H200、H1000 与 H10K 真实发布；100,000/日只依据
-H10K 权威证据外推。
+## 1. 用户价值
 
-## 归属
+作为开发、测试或运维角色，我希望通用图片 rights、去重、Agent 文案与 release 生命周期验收，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-- L1_domain_service: `runtime`
-- L2_business_capability: `runtime-data-engineering`
-- L3_story: `image-commercial-scale-closure`
+## 2. 范围与非目标
 
-## In Scope
+### In Scope
 
-- Wikimedia、Openverse、Pinterest、授权图库与摄影师池的分层准入。
-- 原始落地页、原图 URL、作者、license/terms 或 authorization proof、usage scope、
-  model/property release、watermark/OCR 与 collectedAt 的逐资产证据。
-- SHA-256、pHash 与视觉相似度去重。
-- 真实 Cursor SDK 用户可见标题/配文、独立 reviewer 与权威成本账本。
-- Canary（浙江 2、四川 1）、H200、H1000、H10K 的 execution、canonical、
-  immutable release、Gamma import/API/App UAT、rollback/replay。
+- provider policy、资产级 rights/provenance、watermark 和对象匹配
+- 跨 execution canonical identity 去重
+- request 驱动的 environment import、consumer、rollback/replay 证据
 
-## Out of Scope
+### Out of Scope
 
-- 把 `fetchable=false` 或 `crawlAllowed=false` 的站点批量抓取。
-- 把 Pinterest 归因发布依据描述为商业版权授权。
-- 100,000/日实际生产。
+- 静态区域、目标对象、数量或阶段清单
+- 绕过登录、DRM、robots 或反爬
 
-## 核心合同
+## 3. 行为要求
 
-1. discovery/reference 来源不自动取得发布资格；每张图独立完成 rights admission。
-2. 水印只能拒绝，禁止去除；作者、来源和权利信息必须进入对象属性与消费者展示。
-3. 同一视觉资产跨 URL、尺寸和批次只允许一个 canonical identity。
-4. H10K 必须每省 5,000、共 10,000 张 unique accepted/canonical/Gamma 可查询图片在
-   24 小时内完成，accepted throughput 不低于 416.67/h。
-5. author/reviewer usage、真实 billed cost、重试成本与 unitPassedCost 必须权威落账；
-   超预算立即停止派发。
-6. 文件存在、候选数、dry-run 或 assembled release 不计完成。
+<a id="req-001"></a>
+### REQ-001 each publishable image has an asset-level disposition
 
-## 真相源
+- 缺任一 required rights 字段的资产不能进入 release。
 
-- `quwoquan_data/verticals/travel/sources/source_registry.yaml`
-- `quwoquan_data/verticals/travel/rights/license_policy.yaml`
-- `quwoquan_data/schema/release/asset_rights_closure.schema.json`
-- `quwoquan_data/scripts/content/release/canonical/rollout_attestation.py`
-- `docs/outstanding_risks_backlog.md`
+<a id="req-002"></a>
+### REQ-002 image identity and visible copy are unique and attributable
+
+- 同一视觉资产不能通过改 URL、尺寸或文件名成为第二对象。
+
+<a id="req-003"></a>
+### REQ-003 image release and capacity evidence are request-derived
+
+- 任何 dry-run、缺环境 receipt 或估算值都不能作为放量完成。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_data/verticals/<vertical>/providers.yaml`
+- canonical：`quwoquan_data/schema/release/asset_rights_closure.schema.json`
+- canonical：`quwoquan_data/scripts/content/post/image`
+- canonical：`quwoquan_data/scripts/content/release`
+- canonical：`quwoquan_data/scripts/governance/coverage/benchmark.py`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 each publishable image has an asset-level disposition
+
+- GIVEN family 和 provider policy 已声明来源分类和 rights 规则。
+- WHEN 图片候选进入 source unit、review 和 canonical promotion。
+- THEN 原始落地页、作者、rights、使用范围、watermark、对象匹配与处置结论完整可审计。
+
+<a id="gwt-002"></a>
+### GWT-002 image identity and visible copy are unique and attributable
+
+- GIVEN 资产已通过 rights admission，模型绑定已冻结。
+- WHEN 图片完成下载、安全检测、Agent 配文、独立 review 和对象事务。
+- THEN hash、perceptual similarity 和 source identity 阻止重复发布。
+- THEN 归因和用户可见 copy 与 canonical 对象一致。
+
+<a id="gwt-003"></a>
+### GWT-003 image release and capacity evidence are request-derived
+
+- GIVEN request 冻结 target set、runtime policy、source digest 和模型绑定。
+- WHEN execution 形成 immutable release 并进入 integration 环境。
+- THEN import、API、consumer、rollback/replay 和成本吞吐 evidence 都绑定同一 release digest。
+- THEN 后续容量评估只读取真实 receipt。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-data-engineering`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 each publishable image has an asset-level disposition
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺任一 required rights 字段的资产不能进入 release。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 image identity and visible copy are unique and attributable
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：同一视觉资产不能通过改 URL、尺寸或文件名成为第二对象。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 image release and capacity evidence are request-derived
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：任何 dry-run、缺环境 receipt 或估算值都不能作为放量完成。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效

@@ -1,0 +1,5 @@
+overrides:
+  sys.recommendation-service.redis.rec.mode: cluster
+  sys.recommendation-service.redis.rec.tls: true
+secretRefs: {}
+externalBindings: {}

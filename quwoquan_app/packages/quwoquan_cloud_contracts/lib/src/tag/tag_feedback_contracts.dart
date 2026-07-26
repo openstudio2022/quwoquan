@@ -46,7 +46,11 @@ TagFeedbackAck decodeTagFeedbackAck(Object? value) {
   if (value is! Map) {
     throw const FormatException('TagFeedbackAck must be an object');
   }
-  return TagFeedbackAck(accepted: value['accepted'] == true);
+  final accepted = value['accepted'];
+  if (accepted is! bool) {
+    throw const FormatException('TagFeedbackAck.accepted must be a bool');
+  }
+  return TagFeedbackAck(accepted: accepted);
 }
 
 String _required(String value, String name) {

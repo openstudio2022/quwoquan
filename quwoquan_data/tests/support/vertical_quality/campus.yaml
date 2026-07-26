@@ -1,0 +1,11 @@
+schema: quwoquan.vertical_quality_samples
+vertical: campus
+samples:
+  - id: campus.sample.test-entity-a
+    entityRef: /entity/机构/学校/test-entity-a
+    requiredEvidenceCategories: [school_official, forum, map_geo]
+    requiredChecks: [official_fact_traceability, student_life_differentiation, admission_employment]
+  - id: campus.sample.test-entity-b
+    entityRef: /entity/机构/学校/test-entity-b
+    requiredEvidenceCategories: [school_official, forum, map_geo]
+    requiredChecks: [district_policy, commute_context, template_similarity]

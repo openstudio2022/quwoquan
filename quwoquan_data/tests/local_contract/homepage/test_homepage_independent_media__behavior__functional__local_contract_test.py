@@ -14,19 +14,29 @@ from core.paths import ensure_execution_command_layout, ensure_execution_layout 
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from core.asset_identity import compute_post_asset_id  # noqa: E402
 from content.post.article.draft_io import is_placeholder  # noqa: E402
-from content.homepage.homepage_assets import select_homepage_assets  # noqa: E402
+from content.homepage.homepage_assets import (  # noqa: E402
+    select_homepage_assets,
+    write_homepage_media_dispositions,
+)
+from core.io import read_json  # noqa: E402
 from content.homepage.homepage_materialization import _homepage_source_figure_issues  # noqa: E402
 from content.homepage.homepage_prompt import (  # noqa: E402
     _homepage_base_text_with_image_placeholders,
     _write_entity_page_prompt_and_placeholder,
 )
 from content.homepage.homepage_validation import _asset_closure_issues  # noqa: E402
+from verify.verify_homepage_media_completeness import _manifest_issues  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
+from support.image_fixture import jpeg_bytes  # noqa: E402
 
 
 def test_homepage_assets_fall_back_to_independent_rights_cleared_media_unit():
-    execution_id = "20260712--travel-homepage-media-contract--cn-zhejiang--canary-001"
+    execution_id = "20260712--travel-homepage-media-contract--test-region-a--pilot-001"
     entity = "独立媒体景区"
+    build_execution_fixture(
+        execution_id,
+        targets=[{"name": entity, "entityType": "地点/景区"}],
+    )
     ensure_execution_layout(execution_id)
     ensure_execution_command_layout(execution_id, "source")
     obj = resolve_entity_object_dir(
@@ -39,7 +49,7 @@ def test_homepage_assets_fall_back_to_independent_rights_cleared_media_unit():
         obj,
         ordinal=1,
         source_id="home_toutiao_baike",
-        source_md=f"{entity}位于浙江省。{entity}包含自然景观与游览步道。",
+        source_md=f"{entity}位于test-region-a。{entity}包含自然景观与游览步道。",
         quality={"sourceId": "home_toutiao_baike", "quality": "B-fact", "score": 6},
         platform="今日头条百科",
         source_category="encyclopedia",
@@ -64,22 +74,22 @@ def test_homepage_assets_fall_back_to_independent_rights_cleared_media_unit():
         source_use_mode="licensed_adaptation",
         research_lane="homepage_image",
         license_value="CC BY-SA 4.0",
-        url="https://commons.wikimedia.org/wiki/File:Independent.jpg",
+        url="https://commons.wikimedia.org/wiki/File:Independent_panoramio.jpg",
         title=f"{entity}开放许可图片",
         target_ref=f"/entity/地点/景区/{entity}",
         relevance=entity,
         images=[
             {
-                "bytes": b"\xff\xd8\xff\xe0" + b"homepage-media" * 100,
+                "bytes": jpeg_bytes(seed=1),
                 "ext": ".jpg",
-                "url": "https://upload.wikimedia.org/Independent.jpg",
-                "sourceUrl": "https://commons.wikimedia.org/wiki/File:Independent.jpg",
+                "url": "https://upload.wikimedia.org/Independent_panoramio.jpg",
+                "sourceUrl": "https://commons.wikimedia.org/wiki/File:Independent_panoramio.jpg",
                 "sourceCollectionId": "homepage_media:independent",
                 "license": "CC BY-SA 4.0",
                 "credit": "Commons contributor",
                 "creator": "Commons contributor",
                 "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Independent.jpg",
+                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Independent_panoramio.jpg",
                 "usageScope": "app_publish",
                 "caption": entity,
                 "relevance": entity,
@@ -102,6 +112,155 @@ def test_homepage_assets_fall_back_to_independent_rights_cleared_media_unit():
     assert assets[0]["authorizationProof"].startswith("https://commons.wikimedia.org/")
 
 
+def test_homepage_assets_reject_non_place_specimen_subject():
+    execution_id = "20260722--travel-homepage-media-subject--test-region-a--pilot-001"
+    entity = "测试景区乙"
+    build_execution_fixture(
+        execution_id,
+        targets=[{"name": entity, "entityType": "地点/景区"}],
+    )
+    ensure_execution_layout(execution_id)
+    ensure_execution_command_layout(execution_id, "source")
+    obj = resolve_entity_object_dir(execution_id, entity, etype_hint="地点/景区")
+    shutil.rmtree(obj, ignore_errors=True)
+    primary = write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="home_toutiao_baike",
+        source_md=f"{entity}是山岳型旅游景区。",
+        quality={"sourceId": "home_toutiao_baike", "quality": "B-fact", "score": 6},
+        platform="快懂百科",
+        source_category="encyclopedia",
+        source_kind="toutiao_baike",
+        extractor="toutiao_baike_html",
+        policy_revision="encyclopedia-primary",
+        source_use_mode="factual_reference_only",
+        research_lane="homepage",
+        url="https://www.baike.com/wikiid/456",
+        title=entity,
+        target_ref=f"/entity/地点/景区/{entity}",
+        execution_id=execution_id,
+    )
+    write_source_unit(
+        obj,
+        ordinal=2,
+        source_id="homepage_media_specimen",
+        source_md=f"{entity}相关科研图片。",
+        quality={"sourceId": "homepage_media_specimen", "quality": "B-fact", "score": 1},
+        platform="Wikimedia Commons",
+        source_category="image_collection",
+        source_use_mode="licensed_adaptation",
+        research_lane="homepage_image",
+        license_value="CC BY 4.0",
+        url="https://commons.wikimedia.org/wiki/File:Specimen.jpg",
+        title=f"{entity}相关标本",
+        target_ref=f"/entity/地点/景区/{entity}",
+        relevance=entity,
+        images=[
+            {
+                "bytes": jpeg_bytes(seed=2),
+                "ext": ".jpg",
+                "url": "https://upload.wikimedia.org/Specimen.jpg",
+                "sourceUrl": "https://commons.wikimedia.org/wiki/File:Specimen.jpg",
+                "sourceCollectionId": "homepage_media:specimen",
+                "license": "CC BY 4.0",
+                "credit": "Research contributor",
+                "creator": "Research contributor",
+                "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Specimen.jpg",
+                "usageScope": "app_publish",
+                "caption": "Photos of the holotype in dorsal view",
+                "relevance": "scientific specimen",
+            }
+        ],
+        execution_id=execution_id,
+        build_variants=False,
+    )
+
+    selection = select_homepage_assets(
+        execution_id,
+        "地点",
+        "景区",
+        entity,
+        primary_ref=str(primary["sourceRef"]),
+    )
+
+    assert selection.publishable == ()
+    assert len(selection.excluded) == 1
+    assert selection.excluded[0].reason.startswith("media_subject_not_representative:")
+
+
+def test_homepage_assets_exclude_non_cover_image_with_same_visual_subject(monkeypatch):
+    execution_id = "20260726--travel-homepage-cover-dedup--test-region-a--pilot-001"
+    entity = "测试景区丙"
+    build_execution_fixture(
+        execution_id,
+        targets=[{"name": entity, "entityType": "地点/景区"}],
+    )
+    ensure_execution_layout(execution_id)
+    candidates = [
+        {
+            "researchLane": "homepage_image",
+            "sourceRef": "sources/cover/source.md",
+            "sourceAssetRef": "sources/cover/assets/001.jpg",
+            "authorizationProof": "https://commons.wikimedia.org/wiki/File:Peak.jpg",
+            "caption": f"{entity}中央观景平台",
+            "sha256": "sha256:cover",
+        },
+        {
+            "researchLane": "homepage_image",
+            "sourceRef": "sources/detail/source.md",
+            "sourceAssetRef": "sources/detail/assets/001.jpg",
+            "authorizationProof": "https://commons.wikimedia.org/wiki/File:Peak_view.jpg",
+            "caption": f"{entity}中央观景平台东侧",
+            "sha256": "sha256:detail",
+        },
+    ]
+    monkeypatch.setattr(
+        "content.source.source_assets.object_image_candidates",
+        lambda *_args, **_kwargs: candidates,
+    )
+
+    selection = select_homepage_assets(
+        execution_id,
+        "地点",
+        "景区",
+        entity,
+        primary_ref="sources/primary/source.md",
+    )
+
+    assert len(selection.publishable) == 1
+    assert selection.publishable[0]["sourceAssetRef"] == "sources/cover/assets/001.jpg"
+    assert len(selection.excluded) == 1
+    assert selection.excluded[0].disposition.value == "duplicateAlias"
+    assert selection.excluded[0].reason == "cover_visual_subject_conflict"
+
+
+def test_homepage_media_dispositions_allow_an_empty_observed_media_set(tmp_path: Path):
+    write_homepage_media_dispositions(
+        entity_dir=tmp_path,
+        execution_id="20260725--travel-homepage-coverage--test-region-a--pilot-001",
+        object_ref="地点/景区/无图实体",
+        records=[],
+    )
+
+    payload = read_json(tmp_path / "evidence" / "media_dispositions.json")
+
+    assert payload["assets"] == []
+
+
+def test_homepage_media_contract_allows_no_cover_when_no_asset_was_available(tmp_path: Path):
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text("{}", encoding="utf-8")
+
+    assert _manifest_issues(
+        "无图实体",
+        manifest_path,
+        {"assets": []},
+        "---\ncoverImage: \n---\n\n# 无图实体\n",
+    ) == []
+
+
 def test_homepage_asset_closure_allows_independent_media_source(tmp_path: Path):
     entity_dir = tmp_path / "独立媒体景区"
     assets_dir = entity_dir / "assets"
@@ -120,6 +279,7 @@ def test_homepage_asset_closure_allows_independent_media_source(tmp_path: Path):
     text_ref = "sources/primary/source.md"
     image_ref = "sources/media/source.md"
     manifest = {
+        "vertical": "travel",
         "textSourceRefs": [text_ref],
         "imageSourceRefs": [image_ref],
         "assets": [
@@ -130,6 +290,7 @@ def test_homepage_asset_closure_allows_independent_media_source(tmp_path: Path):
                 "sourceRef": image_ref,
                 "sourceAssetRef": "sources/media/assets/001.jpg",
                 "authorizationProof": "https://commons.wikimedia.org/wiki/File:Independent.jpg",
+                "rightsAuditStatus": "verified",
             }
         ],
     }
@@ -138,7 +299,7 @@ def test_homepage_asset_closure_allows_independent_media_source(tmp_path: Path):
 
 
 def test_changed_homepage_base_source_invalidates_stale_draft_and_failure():
-    execution_id = "20260712--travel-homepage-source-refresh--cn-zhejiang--canary-001"
+    execution_id = "20260712--travel-homepage-source-refresh--test-region-a--pilot-001"
     entity = "来源刷新景区"
     build_execution_fixture(
         execution_id,
@@ -211,7 +372,7 @@ def test_homepage_source_asset_refs_defer_to_canonical_image_placeholders():
 def test_homepage_agent_base_draft_hides_group_media_without_inline_binding():
     """图集成员不进入 Agent 输入，仍由 finalize 归入相关图片区。"""
     base = (
-        "# 东钱湖\n\n概况正文。\n\n"
+        "# 测试实体乙\n\n概况正文。\n\n"
         ":::figure\n![](asset://001_001)\n:::\n\n"
         "## 主要景点\n\n景点正文。\n\n"
         ":::gallery ids=\"001_002,001_003\"\nasset://001_002\nasset://001_003\n:::\n"
@@ -230,7 +391,7 @@ def test_homepage_agent_base_draft_hides_group_media_without_inline_binding():
 def test_homepage_agent_base_draft_exposes_only_bound_inline_placeholders():
     """正文锚定图由最小占位符承接，非锚定来源图不会泄漏给 Agent。"""
     base = (
-        "# 普陀山\n\n概况正文。\n\n"
+        "# 测试实体甲\n\n概况正文。\n\n"
         "## 地理生态\n\n地理正文。\n\n"
         ":::figure\n![](asset://001_002)\n:::\n\n"
         ":::figure\n![](asset://001_003)\n:::\n"
@@ -239,7 +400,7 @@ def test_homepage_agent_base_draft_exposes_only_bound_inline_placeholders():
         {
             "figId": "fig_02",
             "sourceAssetId": "001_002",
-            "caption": "普陀山全貌模型",
+            "caption": "测试实体甲全貌模型",
             "sectionAnchor": "地理生态",
             "paragraphIndex": 1,
         }

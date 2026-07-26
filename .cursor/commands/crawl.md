@@ -13,7 +13,7 @@ immutable release 一直编排到环境导入。只允许调用 `qwq-data task e
 
 ## 自然语言等价触发
 
-用户说“按省市区生成主页”“跑内容任务到发布”“生产内容并导入环境”时，均按本命令语义执行。
+用户说“按区域生成主页”“跑内容任务到发布”“生产内容并导入环境”时，均按本命令语义执行。
 
 ## Spec Entry
 
@@ -35,12 +35,11 @@ immutable release 一直编排到环境导入。只允许调用 `qwq-data task e
 ```bash
 python3 quwoquan_data/scripts/cli.py task preflight --json
 python3 quwoquan_data/scripts/cli.py task execute \
-  --execution-id YYYYMMDD--travel-homepage-coverage--cn-zhejiang--canary-001 \
-  --milestone canary \
-  --country 中国 \
-  --province 浙江省 \
-  --discovery quwoquan_data/verticals/travel/coverage/中国/浙江省 \
-  --limit 1 \
+  --execution-id YYYYMMDD--travel-homepage-coverage--cn-region-a--pilot-001 \
+  --family content/travel/homepage/homepage \
+  --region-ref china/test-region-a \
+  --selector priority \
+  --count 1 \
   --stage run
 ```
 

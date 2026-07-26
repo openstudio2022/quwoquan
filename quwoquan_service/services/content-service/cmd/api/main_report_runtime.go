@@ -10,10 +10,10 @@ import (
 
 	rthealth "quwoquan_service/runtime/health"
 	rtredis "quwoquan_service/runtime/redis"
-	moderationapp "quwoquan_service/services/content-service/internal/application/moderation"
-	"quwoquan_service/services/content-service/internal/infrastructure/messaging"
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 )
 
 // buildReportRuntime 装配举报事实的 PostgreSQL 存储、独立 outbox 消费者与健康检查。

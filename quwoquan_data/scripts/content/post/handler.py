@@ -18,6 +18,7 @@ from content.post.article.draft_io import (
     is_placeholder,
     read_draft_article,
     read_draft_meta,
+    write_annotated_agent_draft,
 )
 from content.review.annotation.entity_annotation import (
     annotate_inline,
@@ -248,10 +249,12 @@ def _stage_annotate_entities(execution_id: str, refs, *, allow_partial: bool) ->
         draft_meta = read_draft_meta(execution_id, ref) or {}
         dictionary, required = build_entity_dictionary(execution_id, brief, draft_meta)
         new_article, annotated = annotate_inline(article, dictionary)
-        if new_article != article:
-            draft_article_path(execution_id, ref).write_text(new_article, encoding="utf-8")
-        draft_meta["annotatedEntityRefs"] = sorted(annotated)
-        write_json(draft_meta_path(execution_id, ref), draft_meta)
+        write_annotated_agent_draft(
+            execution_id,
+            ref,
+            new_article,
+            annotated_entity_refs=annotated,
+        )
         total_links += len(annotated)
         issues = annotation_closure_issues(
             new_article,

@@ -1,21 +1,26 @@
 # quwoquan_service Codex Guide
 
-在 `quwoquan_service/` 工作时，除仓库根 `AGENTS.md` 外，先阅读仓库根 `.cursor/rules/` 与服务契约入口：
+在 `quwoquan_service/` 工作时，除仓库根 `AGENTS.md` 外，先阅读服务契约入口：
 
 1. `quwoquan_service/contracts/metadata/README.md`
-2. `.cursor/rules/01-arch-constraints.mdc`
-3. `.cursor/rules/10-runtime-error-cutover.mdc`
 
 ## 服务端硬约束
 
 - 先 metadata，后 verify/codegen，再写实现；不要直接手改生成文件。
-- `contracts/metadata/**` 是字段、错误码、path、operation、surface、route 与契约测试口径的唯一真相源。
-- DDD 依赖方向固定：`domain <- application <- adapters <- infrastructure`。
+- codegen 输入只来自对象自己的 contracts；禁止新增服务级 `codegen_*manifest*`、对象路径清单或输出路径注册表。
+- 一旦服务生成 errors，必须为每个 `contracts/<context>/<object>/errors.yaml` 生成独立的 `generated/<context>/<object>/errors.*`；禁止将整个 domain 的错误聚合到主对象包。
+- 跨服务公共契约可生成到实际消费对象，但 header 必须指向存在的外部对象契约；这只是可重建客户端，不得复制或改写外部真相源。
+- `services/<service>/contracts/**` 是该服务字段、错误码、path、operation、surface、route 与契约测试口径的唯一真相源；`contracts/metadata/**` 只保留跨服务 schema、共享协议和值定义。
+- 目录组织轴固定为 `services/<service>/internal/<context>/<object>/<layer>`；domain 从该服务 `contracts/domain.yaml` 推导，context/object 从路径推导，kind 只在对象 `object.yaml` 声明。
+- 声明 `operations.yaml.api_routes` 的对象必须拥有同路径真实源码；禁止把对象实现集中到同服务“主对象”目录，也禁止用空目录或占位文件冒充 source owner。
+- DDD 依赖方向固定：`adapters/inbound -> application -> domain`，`infrastructure` 只实现 application/domain port。
+- 对象的 `adapters`/`infrastructure` 属于私有实现，禁止被兄弟对象直接导入；跨对象只依赖对方的 domain/application port 或事件，多个对象的 adapter 只在 `cmd` 组合。
 - 数据库驱动、缓存驱动、外部存储 SDK 只应出现在 `infrastructure/` 与测试。
 - HTTP 错误边界统一走 runtime errors；不要自造并行错误响应结构。
 - 新增/变更 API、事件、字段、错误码时，要同步评估 app codegen 与 contract tests。
 - 新增 API、消费者、导入器、推荐投影或后台任务必须同步声明 metrics、trace/request id、日志脱敏、SLO、告警阈值、配置来源与回滚策略。
-- 四环境配置必须来自统一 topology/config/seed manifest；不要手写端口、host、public URL 或环境分支。
+- 四环境配置必须来自服务内 `config/schema.yaml` 和 `environments/<env>/config.yaml`；稳定资源归服务 `resources/`，环境资源只保存 seed/release/artifact 引用。
+- 第一方部署基线归服务 `deploy/base`，四环境部署入口归 `environments/<env>/deploy`；Ops 只做跨服务装配与外部 workload，不维护第一方 workload/topology 注册表。
 - 当前阶段未上线：错误领域模型、错误 API 契约、错误存储抽象或临时兼容直接纠正，不保留 shim、fallback 或旧路径兼容。
 
 ## 错误码与可观测
@@ -35,6 +40,7 @@
 ## Review 与测试要求
 
 - 每个服务改动都要覆盖 `local_contract` metadata/static/domain/application 模块、`api_integration` HTTP/真实存储/消息链路，涉及用户旅程或发布前验证时补 `user_acceptance`。
+- 对象测试必须位于 `tests/<layer>/<context>/<object>/`；共享启动器只能放 `tests/support`，不得把兄弟对象测试借放到主对象目录。
 - 服务端 `api_integration` 真实 API 行为必须能回到 App 端 `local_contract` Mock/Provider/Widget 对应断言，避免 Mock 与 Remote 分裂。
 - 错误码链路的 `local_contract` 覆盖 metadata/codegen/硬编码扫描，`api_integration` 覆盖 HTTP 响应、trace/request id、Remote 映射输入；涉及用户恢复体验时补 App `user_acceptance`。
 - 内容 importer、推荐 HotPath、行为事件、特征投影、AB 分桶和运营指标必须保持同一 trace/subject/referral 语义，不得新增双轨标识。
@@ -42,6 +48,7 @@
 ## 推荐验证
 
 - metadata 变更后优先执行：`make verify-metadata`
+- 服务目录、配置、资源、部署装配或外部 capability 变更先执行：`make verify-service-architecture`
 - 需要生成产物时执行：`make codegen` 与必要的 `make codegen-app`
 - 结构化错误边界变化时执行：`dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart`
 - 再运行对应 Go 测试与 `make gate`

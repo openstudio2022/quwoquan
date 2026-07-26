@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/spec.md#sit-006
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/remote/chat/conversation/contact_remote.dart';
 import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_membership_remote.dart';

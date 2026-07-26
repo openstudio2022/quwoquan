@@ -26,47 +26,55 @@ import (
 
 	rtredis "quwoquan_service/runtime/redis"
 	runtimesync "quwoquan_service/runtime/sync"
-	httpadapter "quwoquan_service/services/user-service/internal/adapters/http"
-	"quwoquan_service/services/user-service/internal/adapters/mq"
-	"quwoquan_service/services/user-service/internal/application"
-	accountsessionapp "quwoquan_service/services/user-service/internal/application/account/account_session"
-	challengeapp "quwoquan_service/services/user-service/internal/application/account/authentication_challenge"
-	credentialapp "quwoquan_service/services/user-service/internal/application/account/credential_binding"
-	registrationapp "quwoquan_service/services/user-service/internal/application/account/device_registration"
-	useraccountapp "quwoquan_service/services/user-service/internal/application/account/user_account"
-	usersettingsapp "quwoquan_service/services/user-service/internal/application/account/user_settings"
-	personaapp "quwoquan_service/services/user-service/internal/application/persona/persona"
-	proposalapp "quwoquan_service/services/user-service/internal/application/persona/profile_update_proposal"
-	visitapp "quwoquan_service/services/user-service/internal/application/relationship/followed_subject_visit_state"
-	followingapp "quwoquan_service/services/user-service/internal/application/relationship/following_subject"
-	relationshipapp "quwoquan_service/services/user-service/internal/application/relationship/persona_relationship"
-	subjectfollowapp "quwoquan_service/services/user-service/internal/application/relationship/subject_follow"
-	reltelemetry "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/telemetry"
-	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
-	accountsessionpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/account_session/persistence"
-	challengepersistence "quwoquan_service/services/user-service/internal/infrastructure/account/authentication_challenge/persistence"
-	credentialpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/credential_binding/persistence"
-	registrationpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/device_registration/persistence"
-	useraccountcache "quwoquan_service/services/user-service/internal/infrastructure/account/user_account/cache"
-	useraccountobservability "quwoquan_service/services/user-service/internal/infrastructure/account/user_account/observability"
-	useraccountpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/user_account/persistence"
-	useraccountprojection "quwoquan_service/services/user-service/internal/infrastructure/account/user_account/projection"
-	usersettingspersistence "quwoquan_service/services/user-service/internal/infrastructure/account/user_settings/persistence"
-	"quwoquan_service/services/user-service/internal/infrastructure/cache"
-	userintegration "quwoquan_service/services/user-service/internal/infrastructure/integration"
-	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
-	personapersistence "quwoquan_service/services/user-service/internal/infrastructure/persona/persona/persistence"
-	proposalpersistence "quwoquan_service/services/user-service/internal/infrastructure/persona/profile_update_proposal/persistence"
-	"quwoquan_service/services/user-service/internal/infrastructure/projection"
-	relobservability "quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/observability"
-	relationshippersistence "quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/persistence"
-	relationshipprojection "quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/projection"
-	subjectfollowpersistence "quwoquan_service/services/user-service/internal/infrastructure/relationship/subject_follow/persistence"
-	"quwoquan_service/services/user-service/internal/infrastructure/searchindex"
-	"quwoquan_service/services/user-service/internal/infrastructure/tagindex"
-	usercache "quwoquan_service/services/user-service/internal/infrastructure/user/cache"
-	userobservability "quwoquan_service/services/user-service/internal/infrastructure/user/observability"
-	userpersistence "quwoquan_service/services/user-service/internal/infrastructure/user/persistence"
+	accountsessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
+	accountsessionpersistence "quwoquan_service/services/user-service/internal/account/account_session/infrastructure/persistence"
+	challengeapp "quwoquan_service/services/user-service/internal/account/authentication_challenge/application"
+	challengepersistence "quwoquan_service/services/user-service/internal/account/authentication_challenge/infrastructure/persistence"
+	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
+	credentialpersistence "quwoquan_service/services/user-service/internal/account/credential_binding/infrastructure/persistence"
+	registrationapp "quwoquan_service/services/user-service/internal/account/device_registration/application"
+	registrationpersistence "quwoquan_service/services/user-service/internal/account/device_registration/infrastructure/persistence"
+	invitationhttp "quwoquan_service/services/user-service/internal/account/invitation/adapters/inbound/http"
+	invitationapp "quwoquan_service/services/user-service/internal/account/invitation/application"
+	invitationpersistence "quwoquan_service/services/user-service/internal/account/invitation/infrastructure/persistence"
+	httpadapter "quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/http"
+	"quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/mq"
+	useraccountapp "quwoquan_service/services/user-service/internal/account/user_account/application"
+	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
+	usertelemetry "quwoquan_service/services/user-service/internal/account/user_account/domain/user/telemetry"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache"
+	useraccountcache "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache"
+	userintegration "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
+	useraccountobservability "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/observability"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
+	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
+	useraccountprojection "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/searchindex"
+	usercache "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/cache"
+	userobservability "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/observability"
+	userpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/persistence"
+	usersettingsapp "quwoquan_service/services/user-service/internal/account/user_settings/application"
+	usersettingspersistence "quwoquan_service/services/user-service/internal/account/user_settings/infrastructure/persistence"
+	personaapp "quwoquan_service/services/user-service/internal/persona_management/persona/application/persona"
+	personapersistence "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/persistence"
+	proposalapp "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/application"
+	proposalpersistence "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/infrastructure/persistence"
+	followingapp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/application"
+	contacthttp "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/adapters/inbound/http"
+	contactapp "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/application"
+	contactpersistence "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/infrastructure/persistence"
+	visitapp "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/application"
+	greetinghttp "quwoquan_service/services/user-service/internal/relationship/greeting_request/adapters/inbound/http"
+	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
+	greetingpersistence "quwoquan_service/services/user-service/internal/relationship/greeting_request/infrastructure/persistence"
+	relationshipapp "quwoquan_service/services/user-service/internal/relationship/persona_relationship/application"
+	reltelemetry "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/telemetry"
+	relobservability "quwoquan_service/services/user-service/internal/relationship/persona_relationship/infrastructure/observability"
+	relationshippersistence "quwoquan_service/services/user-service/internal/relationship/persona_relationship/infrastructure/persistence"
+	relationshipprojection "quwoquan_service/services/user-service/internal/relationship/persona_relationship/infrastructure/projection"
+	subjectfollowapp "quwoquan_service/services/user-service/internal/relationship/subject_follow/application"
+	subjectfollowpersistence "quwoquan_service/services/user-service/internal/relationship/subject_follow/infrastructure/persistence"
 )
 
 func main() {
@@ -164,12 +172,24 @@ func main() {
 	// 5. Stores
 	profileStore := persistence.NewPgProfileStore(pgPool)
 	personaStore := userpersistence.NewPgPersonaStore(pgPool)
+	invitationStore, err := invitationpersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		log.Fatalf("Invitation store init failed: %v", err)
+	}
+	invitationFacade, err := invitationapp.NewFacade(invitationStore, personaStore)
+	if err != nil {
+		log.Fatalf("Invitation facade init failed: %v", err)
+	}
+	invitationHandler, err := invitationhttp.NewHandler(invitationFacade)
+	if err != nil {
+		log.Fatalf("Invitation HTTP composition failed: %v", err)
+	}
 	userSettingsStore, err := usersettingspersistence.NewPostgresStore(pgPool)
 	if err != nil {
 		log.Fatalf("user-service UserSettings store init failed: %v", err)
 	}
 	relationshipStore := relationshippersistence.NewPgPersonaRelationshipStore(pgPool)
-	greetingStore := userpersistence.NewPgGreetingStore(pgPool)
+	greetingStore := greetingpersistence.NewPgGreetingStore(pgPool)
 	credentialStore, err := credentialpersistence.NewPostgresStore(pgPool)
 	if err != nil {
 		log.Fatalf("CredentialBinding store init failed: %v", err)
@@ -211,7 +231,7 @@ func main() {
 	consentRecordStore := persistence.NewPgConsentRecordStore(pgPool)
 	anonymousDeviceBindingStore := userpersistence.NewPgAnonymousDeviceBindingStore(pgPool)
 	profileQrTokenStore := userpersistence.NewPgProfileQrTokenStore(pgPool)
-	contactDiscoveryStore := userpersistence.NewPgContactDiscoveryStore(pgPool)
+	contactDiscoveryStore := contactpersistence.NewPgContactDiscoveryStore(pgPool)
 	personaProfileProposalStore, err := personapersistence.NewProfileProposalPostgresStore(pgPool)
 	if err != nil {
 		log.Fatalf("Persona profile proposal Store init failed: %v", err)
@@ -251,20 +271,6 @@ func main() {
 		accountCloseProjections = searchindex.ComposePublisher(
 			accountCloseProjections,
 			searchBuilt.Projector,
-		)
-	}
-	// object_tag_index 是 tag 域跨服务共享派生读模型（tag/storage.yaml），
-	// writer 必须与 tag-service 读同一 Mongo database：优先 TAG_MONGO_URI/
-	// TAG_MONGO_DATABASE（与 tag-service 同名 env，环境注入同值即对齐）。
-	if objectTagColl := resolveObjectTagIndexCollection(ctx, mongoDB); objectTagColl != nil {
-		objectTagProjector := tagindex.NewProjector(objectTagColl, profileStore)
-		userEventPublisher = searchindex.ComposePublisher(
-			userEventPublisher,
-			objectTagProjector,
-		)
-		accountCloseProjections = searchindex.ComposePublisher(
-			accountCloseProjections,
-			objectTagProjector,
 		)
 	}
 	if mongoDB != nil {
@@ -335,19 +341,19 @@ func main() {
 		log.Fatal("user-service startup failed: CHAT_SERVICE_BASE_URL is required")
 	}
 	conversationGateway := userintegration.NewChatServiceClient(chatServiceBaseURL, nil)
-	greetingService := application.NewGreetingService(
+	greetingService := greetingapp.NewGreetingService(
 		greetingStore,
 		greetingStore,
 		relationshipService,
 		conversationGateway,
 		userEventPublisher,
 		relationshipEventPublisher,
-		application.NewSettingsGreetingNotifyPolicy(
+		greetingapp.NewSettingsGreetingNotifyPolicy(
 			userSettingsStore,
 			personaStore,
 		),
 	)
-	greetingOutboxRelay := application.NewGreetingOutboxRelay(
+	greetingOutboxRelay := greetingapp.NewGreetingOutboxRelay(
 		greetingStore,
 		userEventPublisher,
 		relationshipEventPublisher,
@@ -518,7 +524,7 @@ func main() {
 		profileCache,
 		subAccountOptions...,
 	)
-	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore, userEventPublisher)
+	contactDiscoveryService := contactapp.NewContactDiscoveryService(contactDiscoveryStore, userEventPublisher)
 	go contactDiscoveryService.RunExpiredCleanup(ctx, time.Hour)
 	personaProfileProposalFacade, err := personaapp.NewProfileProposalFacade(personaProfileProposalStore)
 	if err != nil {
@@ -583,6 +589,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("UserAccount outbox relay init failed: %v", err)
 	}
+	healthChecker.Register("user_account_outbox_relay", func(hctx context.Context) error {
+		return accountOutboxRelay.Healthy(hctx, 15*time.Second)
+	})
 	go accountOutboxRelay.Run(ctx)
 	closeAccountFacade := useraccountapp.NewCloseAccountFacade(
 		accountCloseStore,
@@ -595,7 +604,7 @@ func main() {
 		userSettingsCommands, userSettingsQueries,
 		authService, credentialQueries,
 		deviceRegistrationCommands, deviceRegistrationQueries,
-		subAccountService, contactDiscoveryService,
+		subAccountService,
 		interestProfileService,
 		profileProposalFacade,
 		subjectFollowService,
@@ -605,6 +614,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("user-service HTTP composition failed: %v", err)
 	}
+	greetingHandler, err := greetinghttp.NewHandler(greetingService)
+	if err != nil {
+		log.Fatalf("GreetingRequest HTTP composition failed: %v", err)
+	}
+	contactDiscoveryHandler, err := contacthttp.NewHandler(
+		contactDiscoveryService,
+		relationshipService,
+		greetingService,
+	)
+	if err != nil {
+		log.Fatalf("ContactDiscoveryRecord HTTP composition failed: %v", err)
+	}
 	userHandler.WithAccountLifecycle(closeAccountFacade)
 	userHandler.WithAccountEnforcement(accountEnforcementFacade)
 	userHandler.WithAccountSecurityReader(accountEnforcementStore)
@@ -613,7 +634,12 @@ func main() {
 		federatedLogins.alipay,
 		federatedLogins.qq,
 	)
-	handler := userHandler.Routes()
+	serviceMux := http.NewServeMux()
+	userHandler.RegisterRoutes(serviceMux)
+	invitationHandler.RegisterRoutes(serviceMux)
+	greetingHandler.RegisterRoutes(serviceMux)
+	contactDiscoveryHandler.RegisterRoutes(serviceMux)
+	handler := userHandler.WrapAccountSecurity(serviceMux)
 
 	outerMux := buildUserHTTPMux(handler, healthChecker)
 

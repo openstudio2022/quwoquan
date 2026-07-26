@@ -1,0 +1,27 @@
+kind: append_only_fact
+description: 'Persona 或设备对标签推荐的反馈事实。反馈只追加且不修改 TagTaxonomyRelease 或 TagNode。
+
+  '
+identity:
+  fields:
+  - id
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: none
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: actor
+  on_delete: retain
+  reference_fields:
+  - actorKind
+  - actorId
+  target_objects:
+  - user.Persona
+  - user.DeviceRegistration
+capabilities:
+- auditable

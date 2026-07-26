@@ -10,7 +10,7 @@ groups:
           service: "content-service"
           operation: "content.media_original_access_fact.RequestOriginalImageAccess"
           contract_metric: "content_media_original_access_request"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "800"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
@@ -20,6 +20,6 @@ groups:
           service: "content-service"
           operation: "content.media_original_access_fact.RequestOriginalImageAccess"
           contract_metric: "content_media_original_access_request"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "800"
           slo_availability_percent: "99.9"

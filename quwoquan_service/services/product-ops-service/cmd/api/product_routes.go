@@ -8,6 +8,10 @@ import (
 	"quwoquan_service/generated/operationsecurity"
 	"quwoquan_service/runtime/health"
 	rtmetrics "quwoquan_service/runtime/metrics"
+	appreleasehttp "quwoquan_service/services/product-ops-service/internal/product_ops/app_release/adapters/inbound/http"
+	recoveryfailurehttp "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/adapters/inbound/http"
+	experimentassignmenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/adapters/inbound/http"
+	visithttp "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/adapters/inbound/http"
 )
 
 const getRtcMediaQoeSummaryOperationID = "ops.event_record.GetRtcMediaQoeSummary"
@@ -19,20 +23,13 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 	mux.HandleFunc("/ops/experiments/", func(w http.ResponseWriter, r *http.Request) {
 		service.experimentHTTP.ServeHTTP(w, r)
 	})
-	mux.HandleFunc("/ops/visits", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleRecordVisit(w, r)
+	experimentassignmenthttp.Register(mux, service.experimentHTTP)
+	visithttp.Register(mux, visithttp.Handlers{
+		Record: service.handleRecordVisit, Stats: service.handleGetVisitStats,
+		NotFound: writeRuntimeNotFound,
 	})
-	mux.HandleFunc("/ops/visits/stats", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleGetVisitStats(w, r)
-	})
+	appreleasehttp.NewHandler(service.appRelease).Register(mux)
+	recoveryfailurehttp.NewHandler(service.recoveryFailures, writeRuntimeError).Register(mux)
 	mux.HandleFunc("/ops/events", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeRuntimeNotFound(w, r)

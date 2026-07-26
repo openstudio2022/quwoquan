@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/contact_discovery_match_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/relationship/contact_discovery_record_match_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 

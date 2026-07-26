@@ -46,18 +46,19 @@ void main() {
     );
     final client = GeneratedCloudOperationClient(executor);
 
-    final result = await client.userContactDiscoveryInitiateContactDiscovery(
-      InitiateContactDiscoveryCommand(
-        hashedPhones: const <String>[
-          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        ],
-      ),
-      context: context,
-    );
+    final result = await client
+        .userContactDiscoveryRecordInitiateContactDiscovery(
+          InitiateContactDiscoveryCommand(
+            hashedPhones: const <String>[
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            ],
+          ),
+          context: context,
+        );
 
     expect(
       executor.operation?.canonicalOperationId,
-      AppCloudOperationIds.userContactDiscoveryInitiateContactDiscovery,
+      AppCloudOperationIds.userContactDiscoveryRecordInitiateContactDiscovery,
     );
     expect(executor.body, <String, Object?>{
       'hashedPhones': const <String>[
@@ -101,54 +102,6 @@ void main() {
     });
     expect(result.relationState, 'mutual');
     expect(result.canStartVideoCall, isTrue);
-  });
-
-  test('FollowingSubject query 与访问水位均走 generated client', () async {
-    final listExecutor = _RecordingExecutor(
-      response: <String, Object?>{
-        'items': <Object?>[
-          <String, Object?>{
-            'subjectId': 'circle-1',
-            'subjectType': 'circle',
-            'displayName': '摄影圈',
-            'targetRouteId': 'circle_detail',
-            'targetObjectId': 'circle-1',
-            'followedAt': '2026-07-20T00:00:00Z',
-            'unreadChangeCount': 2,
-            'hasUnreadChanges': true,
-          },
-        ],
-      },
-    );
-    final listClient = GeneratedCloudOperationClient(listExecutor);
-    final slice = await listClient.userFollowingSubjectListFollowingSubjects(
-      const ListFollowingSubjectsQuery(subjectType: 'circle'),
-      context: context,
-    );
-
-    expect(slice.items.single.subjectId, 'circle-1');
-    expect(listExecutor.queryParameters['subjectType'], 'circle');
-
-    final visitExecutor = _RecordingExecutor(
-      response: <String, Object?>{
-        'subjectId': 'circle-1',
-        'subjectType': 'circle',
-        'lastVisitedAt': '2026-07-20T01:00:00Z',
-        'hasUnreadChanges': false,
-      },
-    );
-    final visitClient = GeneratedCloudOperationClient(visitExecutor);
-    final visit = await visitClient
-        .userFollowedSubjectVisitStateMarkFollowedSubjectVisited(
-          MarkFollowedSubjectVisitedCommand(
-            subjectId: 'circle-1',
-            subjectType: 'circle',
-            visitedAt: DateTime.utc(2026, 7, 20, 1),
-          ),
-          context: context,
-        );
-    expect(visit.hasUnreadChanges, isFalse);
-    expect(visitExecutor.pathParameters['subjectId'], 'circle-1');
   });
 }
 

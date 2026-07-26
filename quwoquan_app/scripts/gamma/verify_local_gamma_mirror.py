@@ -26,7 +26,7 @@ GAMMA_RUN_ROOT = Path(
 DEFAULT_REPORT = GAMMA_RUN_ROOT / "report.json"
 DEFAULT_STACK_REPORT = target_process_dir("gamma-local") / "stack_status.json"
 START_SCRIPT = ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
-README = ROOT / "quwoquan_ops/environments/local-gamma/README.md"
+README = ROOT / "quwoquan_ops/environments/gamma/local/README.md"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -93,7 +93,7 @@ def main() -> int:
             "dryRun": True,
             "commitSha": git_sha(),
             "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "gammaValidationSuiteRegistry": "quwoquan_ops/environments/gamma_validation_suites.json",
+            "gammaValidationSuiteRegistry": "quwoquan_ops/environments/gamma/validation_suites.json",
             "serviceMode": "single-stack",
             "restartedFromPrevious": False,
             "tests": {
@@ -127,7 +127,7 @@ def main() -> int:
             "configVersion": args.config_version,
             "imageVersion": args.image_version,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "gammaValidationSuiteRegistry": "quwoquan_ops/environments/gamma_validation_suites.json",
+            "gammaValidationSuiteRegistry": "quwoquan_ops/environments/gamma/validation_suites.json",
             "serviceMode": str(stack.get("serviceMode") or "single-stack"),
             "restartedFromPrevious": bool(stack.get("restartedFromPrevious")),
             "stack": stack,

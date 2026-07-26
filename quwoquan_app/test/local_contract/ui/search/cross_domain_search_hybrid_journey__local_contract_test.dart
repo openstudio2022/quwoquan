@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/spec.md#sit-001
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/local-chat-search-contract/spec.md#gwt-001
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,12 +13,13 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import '../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_search_index.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/hybrid_search_repository.dart';
@@ -194,7 +197,7 @@ final class _SearchJourneyHarness {
       subjectType: 'owner',
       displayName: '契约当前用户',
       avatarUrl: '',
-      personaContextVersion: 'search-local-contract',
+      contextVersion: 1,
     );
     final alphaChatState = AlphaChatStateEngine();
     final photoConversation = alphaChatState.conversationSeeds.singleWhere(
@@ -232,6 +235,7 @@ final class _SearchJourneyHarness {
         RemoteSearchRepository(remoteQuery: canonicalSearch),
         store,
         sync,
+        _EmptyCircleGroupSearchIndex(),
         () async => persona,
         const NoopCacheTelemetrySink(),
       ),
@@ -286,6 +290,18 @@ SearchLaunchContext _launchContext() => SearchLaunchContext(
   restoreState: false,
 );
 
+final class _EmptyCircleGroupSearchIndex
+    implements LocalCircleGroupSearchIndex {
+  @override
+  Future<bool> sync() async => true;
+
+  @override
+  Future<List<LocalCircleGroupSnapshotRecord>> searchGroups({
+    required String query,
+    int limit = 20,
+  }) async => const <LocalCircleGroupSnapshotRecord>[];
+}
+
 final class _RecordingCanonicalSearchFacet
     implements CanonicalSearchQueryFacet {
   _RecordingCanonicalSearchFacet(this._delegate);
@@ -323,7 +339,7 @@ final class _FailOnceAssistantSearchFacet
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
+    AssistantContextSnapshot? contextSnapshot,
   }) async {
     attempts += 1;
     if (attempts == 1) {
@@ -338,7 +354,7 @@ final class _AssistantSearchFacet implements AssistantXiaoquSearchFacet {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
+    AssistantContextSnapshot? contextSnapshot,
   }) async => _assistantResult(query, searchIntensity);
 }
 
@@ -358,6 +374,25 @@ final class _RecordingBehaviorRepository extends BehaviorRepository {
   @override
   Future<void> reportEvents({required List<BehaviorEvent> events}) async {
     this.events.addAll(events);
+  }
+
+  @override
+  Future<void> submitOnboardingInterest({
+    required String clientEventId,
+    required String catalogVersion,
+    required String taxonomyReleaseId,
+    required List<String> tagRefs,
+  }) async {
+    events.add(
+      BehaviorEvent(
+        contentId: '',
+        action: BehaviorAction.onboardingInterest,
+        clientEventId: clientEventId,
+        catalogVersion: catalogVersion,
+        taxonomyReleaseId: taxonomyReleaseId,
+        tags: tagRefs,
+      ),
+    );
   }
 
   @override

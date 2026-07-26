@@ -3,7 +3,6 @@ from __future__ import annotations
 import fcntl
 import os
 import secrets
-import shutil
 import stat
 import subprocess
 import tempfile
@@ -11,7 +10,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from .output_paths import deployment_work_root
+from .output_paths import deployment_target_path, deployment_work_root, remove_deployment_tree
 
 
 _SECRET_KEYS = ("access_key_id", "access_key_secret", "cdn_sign_key")
@@ -40,7 +39,7 @@ def prepare_local_environment_object_storage(
     region: str = "cn-local-1",
 ) -> LocalEnvironmentObjectStorage:
     """Prepare target-isolated MinIO credentials and a trusted local TLS chain."""
-    if environment not in {"beta", "gamma"}:
+    if environment not in {"alpha", "beta", "gamma"}:
         raise ValueError(f"unsupported local object-storage environment: {environment}")
     if not target_name.endswith("-local"):
         raise ValueError(f"local object-storage target must end with -local: {target_name}")
@@ -50,11 +49,20 @@ def prepare_local_environment_object_storage(
         raise ValueError("object-storage host names and environment prefix are required")
 
     work_root = deployment_work_root(target_name)
-    secret_path = work_root / "secrets" / "object-storage.env"
-    certificate_root = work_root / "certificates" / "object-storage"
+    secret_path = deployment_target_path(
+        target_name,
+        "secrets",
+        "object-storage.env",
+    )
+    certificate_root = deployment_target_path(
+        target_name,
+        "certificates",
+        "object-storage",
+    )
     secret_values = _load_or_create_secrets(secret_path)
     ca_path = _load_or_create_tls(
         certificate_root,
+        target_name=target_name,
         public_host=public_host,
         local_host=local_host,
         environment=environment,
@@ -131,6 +139,7 @@ def _read_secret_file(path: Path) -> dict[str, str]:
 def _load_or_create_tls(
     root: Path,
     *,
+    target_name: str,
     public_host: str,
     local_host: str,
     environment: str,
@@ -148,7 +157,11 @@ def _load_or_create_tls(
             _require_mode(server_key, 0o600, "object-storage server key")
             return ca_path
         if root.exists():
-            shutil.rmtree(root)
+            remove_deployment_tree(
+                target_name,
+                "certificates",
+                "object-storage",
+            )
         with tempfile.TemporaryDirectory(prefix="object-storage-", dir=root.parent) as temp_dir:
             staged = Path(temp_dir)
             minio_dir = staged / "minio"

@@ -1,0 +1,43 @@
+kind: aggregate_root
+description: 登录后 refresh rotation、设备绑定、过期与吊销的 Account Session 聚合。
+identity:
+  fields:
+  - id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: command_facade
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: account
+  on_delete: cascade
+  reference_fields:
+  - accountId
+  target_object: user.UserAccount
+local_identity_reasons:
+  deviceId: device-platform fingerprint key scoped to account session or registration lookup, not the
+    DeviceRegistration aggregate identity
+capabilities:
+- commandable
+- queryable
+- idempotent_commands
+business_rules:
+- access/refresh token 明文不得持久化，只保存 refreshTokenHash 与 rotation lineage
+- refresh 必须单次轮换，重放旧 token 立即吊销整条 lineage
+- session 必须绑定 accountId、deviceId、issuer 与 audience
+- logout、security revoke 或 expiresAt 后不可恢复
+- anonymous login 也创建受限 AccountSession，不使用 prod mock fallback
+- login 每次合法创建新 session，不接收调用方幂等键；logout 对已吊销 session 为幂等 no-op
+- session 状态事件与 aggregate 变更在同一事务经 outbox 提交
+lifecycle:
+  states:
+  - active
+  - rotated
+  - revoked
+  - expired
+  optimistic_concurrency: version
+  idempotency: rotation_lineage_and_natural_idempotency

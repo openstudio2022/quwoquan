@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
@@ -216,7 +217,10 @@ class _MyIntersectionInboxPageState
     final children = _selectedTab == _IntersectionDetailTab.impact
         ? _buildImpactTimelineChildren(
             ref.watch(
-              authorImpactProvider(ref.watch(currentUserIdProvider)),
+              authorImpactProvider((
+                subAccountId: ref.watch(currentUserIdProvider),
+                surface: AppUiSurfaces.myIntersections,
+              )),
             ),
             isDark,
           )

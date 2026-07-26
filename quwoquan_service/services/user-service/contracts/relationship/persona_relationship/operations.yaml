@@ -1,0 +1,645 @@
+api_routes:
+- method: POST
+  path: /user/sub-accounts/{targetSubAccountId}/follow
+  operation: FollowUser
+  actor: persona
+  application:
+    kind: command
+    facet: PersonaRelationshipCommandFacade
+    method: followUser
+    aggregate_owner: PersonaRelationship
+    mutation_target: PersonaRelationship
+    invariant_target: PersonaRelationship
+  description: 关注公开主体（subAccount 级别）；set 语义由服务端内部 CAS 与幂等 receipt 保证重放安全
+  request_entity: FollowCommandRequest
+  request_fields:
+  - actorSubAccountId
+  - source
+  - clientRequestId
+  response_entity: FollowCommandResult
+  response_fields:
+  - actorSubAccountId
+  - targetSubAccountId
+  - relationState
+  - idempotentReplay
+  - updatedAt
+  client_contract:
+    dart_import: ../user/persona_relationship_contracts.dart
+    request_type: FollowUserCommand
+    response_type: FollowCommandResult
+    request_encoder: encodeFollowUserCommand
+    response_decoder: decodeFollowCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: actor_self
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.USER.unauthorized
+  - USER.USER.invalid_argument
+  - USER.RELATIONSHIP.follow_blocked
+  - USER.RELATIONSHIP.target_not_found
+  - USER.RELATIONSHIP.actor_forbidden
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_relationship_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - idempotent_replay
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+- method: DELETE
+  path: /user/sub-accounts/{targetSubAccountId}/follow
+  operation: UnfollowUser
+  actor: persona
+  application:
+    kind: command
+    facet: PersonaRelationshipCommandFacade
+    method: unfollowUser
+    aggregate_owner: PersonaRelationship
+    mutation_target: PersonaRelationship
+    invariant_target: PersonaRelationship
+  description: 取消关注公开主体（subAccount 级别）；unset 语义天然幂等
+  response_entity: FollowCommandResult
+  response_fields:
+  - actorSubAccountId
+  - targetSubAccountId
+  - relationState
+  - idempotentReplay
+  - updatedAt
+  client_contract:
+    dart_import: ../user/persona_relationship_contracts.dart
+    request_type: UnfollowUserCommand
+    response_type: FollowCommandResult
+    request_encoder: encodeUnfollowUserCommand
+    response_decoder: decodeFollowCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: actor_self
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.USER.unauthorized
+  - USER.USER.invalid_argument
+  - USER.RELATIONSHIP.actor_forbidden
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_relationship_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - idempotent_replay
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+- method: GET
+  path: /user/sub-accounts/{subAccountId}/following
+  operation: ListFollowing
+  actor: persona_or_device
+  application:
+    kind: query
+    facet: RelationshipQueryFacade
+    method: listFollowing
+    reader: ListFollowingReader
+    slice: ListFollowingSlice
+  description: 关注列表（按 subAccount 读取）
+  query_params:
+  - query
+  - cursor
+  - limit
+  response_entity: FollowingListItemView
+  response_fields:
+  - subAccountId
+  - username
+  - userHandle
+  - displayName
+  - avatarUrl
+  - profileVisibility
+  - relationState
+  - followedAt
+  - relationshipCapability
+  client_contract:
+    dart_import: ../user/persona_relationship_contracts.dart
+    request_type: PersonaRelationshipListQuery
+    response_type: PersonaRelationshipPage
+    request_encoder: encodePersonaRelationshipListQuery
+    response_decoder: decodePersonaRelationshipPage
+  authorization:
+    principal: public
+    ownership_policy: public_profile_visibility
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - USER.USER.unauthorized
+  - USER.USER.invalid_argument
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: PUBLIC
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_relationship_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  security:
+    auth_mode: optional
+    principal: public
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+- method: GET
+  path: /user/sub-accounts/{subAccountId}/followers
+  operation: ListFollowers
+  actor: persona_or_device
+  application:
+    kind: query
+    facet: RelationshipQueryFacade
+    method: listFollowers
+    reader: ListFollowersReader
+    slice: ListFollowersSlice
+  description: 粉丝列表（按 subAccount 读取）
+  query_params:
+  - query
+  - cursor
+  - limit
+  response_entity: FollowerListItemView
+  response_fields:
+  - subAccountId
+  - username
+  - userHandle
+  - displayName
+  - avatarUrl
+  - profileVisibility
+  - relationState
+  - followedAt
+  - relationshipCapability
+  client_contract:
+    dart_import: ../user/persona_relationship_contracts.dart
+    request_type: PersonaRelationshipListQuery
+    response_type: PersonaRelationshipPage
+    request_encoder: encodePersonaRelationshipListQuery
+    response_decoder: decodePersonaRelationshipPage
+  authorization:
+    principal: public
+    ownership_policy: public_profile_visibility
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - USER.USER.unauthorized
+  - USER.USER.invalid_argument
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: PUBLIC
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_relationship_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  security:
+    auth_mode: optional
+    principal: public
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+- method: GET
+  path: /user/sub-accounts/{subAccountId}/relationship
+  operation: GetRelationship
+  actor: persona_or_device
+  application:
+    kind: query
+    facet: RelationshipQueryFacade
+    method: getRelationship
+    reader: GetRelationshipReader
+    slice: GetRelationshipSlice
+  description: 关系查询（subAccount 级别的基础关系态）
+  response_entity: RelationshipView
+  response_fields:
+  - viewerSubAccountId
+  - targetSubAccountId
+  - relationState
+  - isBlocked
+  - isBlockedBy
+  authorization:
+    principal: public
+    ownership_policy: viewer_relationship_scope
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - USER.USER.unauthorized
+  - USER.USER.invalid_argument
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: PUBLIC
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_relationship_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  security:
+    auth_mode: optional
+    principal: public
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+- method: GET
+  path: /user/sub-accounts/{subAccountId}/relationship/capability
+  operation: GetRelationshipCapability
+  actor: persona_or_device
+  application:
+    kind: query
+    facet: RelationshipQueryFacade
+    method: getRelationshipCapability
+    reader: GetRelationshipCapabilityReader
+    slice: GetRelationshipCapabilitySlice
+  description: 关系能力位投影（统一真相源）。基于 PersonaRelationship + Persona 计算 relationState 与消息/通话能力。端侧用户主页按钮矩阵和 RTC
+    门禁直接消费。
+  response_entity: RelationshipCapabilityView
+  response_fields:
+  - viewerSubAccountId
+  - targetSubAccountId
+  - relationState
+  - canFollow
+  - canUnfollow
+  - canFollowBack
+  - canGreet
+  - canOpenConversation
+  - canCreateDirectConversation
+  - canSendMessage
+  - hasPendingGreeting
+  - hasFormalConversation
+  - canStartVoiceCall
+  - canStartVideoCall
+  - isBlocked
+  - isBlockedBy
+  client_contract:
+    dart_import: ../user/persona_relationship_contracts.dart
+    request_type: GetRelationshipCapabilityQuery
+    response_type: RelationshipCapabilityResult
+    request_encoder: encodeGetRelationshipCapabilityQuery
+    response_decoder: decodeRelationshipCapabilityResult
+  authorization:
+    principal: public
+    ownership_policy: viewer_relationship_scope
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - USER.USER.unauthorized
+  - USER.USER.invalid_argument
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: PUBLIC
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_relationship_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  security:
+    auth_mode: optional
+    principal: public
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+- method: POST
+  path: /user/sub-accounts/{targetSubAccountId}/block
+  operation: BlockUser
+  actor: persona
+  commercial:
+    status: ready
+  application:
+    kind: command
+    facet: PersonaRelationshipCommandFacade
+    method: blockUser
+    aggregate_owner: PersonaRelationship
+    mutation_target: PersonaRelationship
+    invariant_target: PersonaRelationship
+  description: 屏蔽目标 persona，并在同一 commit 中清除 pair 双向 follow
+  path_params:
+  - targetSubAccountId
+  response_entity: BlockCommandResult
+  response_fields:
+  - targetSubAccountId
+  - blocked
+  - idempotentReplay
+  - updatedAt
+  client_contract:
+    dart_import: ../user/persona_relationship_contracts.dart
+    request_type: BlockUserCommand
+    response_type: BlockCommandResult
+    request_encoder: encodeBlockUserCommand
+    response_decoder: decodeBlockCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: actor_self
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.USER.unauthorized
+  - USER.USER.invalid_argument
+  - USER.RELATIONSHIP.target_not_found
+  - USER.RELATIONSHIP.actor_forbidden
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_relationship_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - idempotent_replay
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  security:
+    auth_mode: required
+- method: DELETE
+  path: /user/sub-accounts/{targetSubAccountId}/block
+  operation: UnblockUser
+  actor: persona
+  commercial:
+    status: ready
+  application:
+    kind: command
+    facet: PersonaRelationshipCommandFacade
+    method: unblockUser
+    aggregate_owner: PersonaRelationship
+    mutation_target: PersonaRelationship
+    invariant_target: PersonaRelationship
+  description: 取消屏蔽但不恢复历史 follow
+  path_params:
+  - targetSubAccountId
+  response_entity: BlockCommandResult
+  response_fields:
+  - targetSubAccountId
+  - blocked
+  - idempotentReplay
+  - updatedAt
+  client_contract:
+    dart_import: ../user/persona_relationship_contracts.dart
+    request_type: UnblockUserCommand
+    response_type: BlockCommandResult
+    request_encoder: encodeUnblockUserCommand
+    response_decoder: decodeBlockCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: actor_self
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.USER.unauthorized
+  - USER.USER.invalid_argument
+  - USER.RELATIONSHIP.actor_forbidden
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_relationship_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - idempotent_replay
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  security:
+    auth_mode: required
+- method: GET
+  path: /user/blocked
+  operation: ListBlockedUsers
+  actor: persona
+  commercial:
+    status: ready
+  application:
+    kind: query
+    facet: RelationshipQueryFacade
+    method: listBlockedUsers
+    reader: ListBlockedUsersReader
+    slice: ListBlockedUsersSlice
+  description: 当前 persona 的已屏蔽对象切片
+  query_params:
+  - cursor
+  - limit
+  response_entity: BlockedListItemView
+  response_fields:
+  - targetSubAccountId
+  - displayName
+  - userHandle
+  - avatarUrl
+  - blockedAt
+  client_contract:
+    dart_import: ../user/persona_relationship_contracts.dart
+    request_type: ListBlockedUsersQuery
+    response_type: BlockedUserSlice
+    request_encoder: encodeListBlockedUsersQuery
+    response_decoder: decodeBlockedUserSlice
+  authorization:
+    principal: persona
+    ownership_policy: self
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - USER.USER.unauthorized
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: PUBLIC
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_persona_relationship_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  security:
+    auth_mode: required
+consumers:
+- name: app
+  capabilities:
+  - follow
+  - unfollow
+  - block
+  - unblock
+  - list_blocked
+  - list_following
+  - list_followers
+  - check_relationship
+- name: recommendation-engine
+  capabilities:
+  - read_graph
+- name: notification-service
+  capabilities:
+  - read_follow
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: user-service API (follow)
+      data_source: fields.yaml
+      scenarios:
+      - name: follow_unfollow_toggle
+        routes:
+        - POST /user/sub-accounts/{targetSubAccountId}/follow
+        - DELETE /user/sub-accounts/{targetSubAccountId}/follow
+        assertions:
+        - follow_created
+        - follow_removed
+        - idempotent
+      - name: mutual_follow_detection
+        route: GET /user/sub-accounts/{subAccountId}/relationship
+        assertions:
+        - status_200
+        - mutual_flag_correct
+      - name: follower_list_pagination
+        route: GET /user/sub-accounts/{subAccountId}/followers
+        assertions:
+        - status_200
+        - cursor_pagination_works
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        postgres: testcontainers (postgres:16)
+      spy_targets:
+      - event_publisher
+      mock_targets:
+      - user_service_client
+      data_management:
+        seed: fixture 工厂预制到真实 PostgreSQL
+        cleanup: TRUNCATE persona_relationships, persona_relationship_directions, persona_relationship_command_receipts,
+          persona_relationship_outbox CASCADE
+      scenarios:
+      - name: follow_with_async_counter_projection
+        command: FollowUser
+        seed: []
+        assertions:
+        - SELECT pair_id FROM persona_relationships WHERE lower_persona_id=? AND upper_persona_id=? →
+          row exists
+        - eventSpy.AssertPublished('PersonaFollowStateChanged', {sourcePersonaId, targetPersonaId, following:true})
+        - counter projector eventually updates follower/following exactly once without command-path COUNT
+      - name: unfollow
+        command: UnfollowUser
+        seed:
+        - fixture.NewPersonaRelationship()
+        assertions:
+        - direction following=false 且 pair aggregate 仍保留版本历史
+        - eventSpy.AssertPublished('PersonaFollowStateChanged', {following:false})
+      - name: duplicate_follow_idempotent
+        command: FollowUser x2 (same pair)
+        seed: []
+        assertions:
+        - persona_relationship_directions 同方向 exactly 1
+        - no error on second call
+  coverage_requirements:
+  - idempotency tested
+  - counter projection replay and periodic reconciliation verified
+  - mutual follow scenario covered

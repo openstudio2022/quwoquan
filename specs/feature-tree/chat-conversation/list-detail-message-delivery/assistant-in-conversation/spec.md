@@ -1,14 +1,65 @@
-# L3 特性：assistant-in-conversation
+# L3 Story：助手圈内会话 (`assistant-in-conversation`)
 
-## 功能说明
-- 小趣以 `ConversationMember.memberType=assistant` 参与 direct/group 会话：可被邀入、被移除，@小趣 触发 AssistantMentioned 可靠事件。
+> 所属能力：[`list-detail-message-delivery`](../spec.md)
+>
+> Journey / Scenario：[`JNY-007 / SCN-012`](../../../spec.md#scn-012)
+>
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-## 约束
-- chat-conversation 负责成员、消息、mentions 事实与事件发布；回复生成归 assistant-service，不在 chat 域内维护第二套助手逻辑。
+## 1. 用户价值
+
+作为发起或接收消息的用户，我希望小趣以 `ConversationMember.memberType=assistant` 参与 direct/group 会话：可被邀入、被移除，@小趣 触发 AssistantMentioned 可靠事件，从而稳定完成会话、消息或通话协作。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- assistant memberType 成员生命周期
+- mention 事实与 AssistantMentioned 事件发布
+
+### Out of Scope
+
+- 小趣回复生成（归 runtime-assistant/assistant-mentioned-consumer）
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 会话内 @小趣 事件链
+
+- 小趣被移除后新 mention 不再发布事件；AssistantRemoved 生效。
+
+<a id="req-002"></a>
+### REQ-002 个人助手全屏会话（AssistantConversation）与会话内 @小趣 共享助手 runtime，不得把个人助手会话伪装成 chat Conversation
+
 - 个人助手全屏会话（AssistantConversation）与会话内 @小趣 共享助手 runtime，不得把个人助手会话伪装成 chat Conversation。
-- 小趣成员被移除后，历史消息保留，新 mention 不再产生事件消费副作用。
 
-## 验收标准
-- A1：邀请小趣入会→@小趣→会话内收到小趣回复链路可用。
-- A2：移除小趣成员后 mention 不再触发回复。
-- A7：AssistantMentioned 事件流契约测试可复跑。
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 会话内 @小趣 事件链
+
+- GIVEN 会话中含 memberType=assistant 的小趣成员。
+- WHEN 用户发送 @小趣 消息。
+- THEN chat 域持久化 mention 事实并发布 AssistantMentioned 到可靠事件流。
+
+## 6. 依赖
+
+- 前置要求：[`list-detail-message-delivery`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 会话内 @小趣 事件链
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：小趣被移除后新 mention 不再发布事件；AssistantRemoved 生效。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效

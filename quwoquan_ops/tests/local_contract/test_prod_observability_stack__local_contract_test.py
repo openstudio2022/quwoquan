@@ -1,8 +1,11 @@
+# spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-005
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -10,7 +13,7 @@ from quwoquan_ops.cli.prod import render_prod_plane_stack as render
 
 
 ROOT = Path(__file__).resolve().parents[3]
-ACCESS = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
+ACCESS = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEPLOY = ROOT / "quwoquan_ops/cli/prod/deploy_to_prod.sh"
 COMPOSE = ROOT / "quwoquan_ops/observability/monitoring/docker-compose.prod.yml"
 OTEL = ROOT / "quwoquan_ops/observability/monitoring/otel-collector.yml"
@@ -56,8 +59,18 @@ class ProdObservabilityStackContractTest(unittest.TestCase):
 
     def test_rendered_service_plane_contains_the_observability_composition(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            output = Path(temporary)
-            render._write_observability_tree(output, "service")
+            deploy_root = Path(temporary) / "deploy"
+            output = deploy_root / "prod-hosted/rendered/service-prod"
+            with mock.patch.dict(
+                os.environ,
+                {"QWQ_DEPLOY_WORK_ROOT": str(deploy_root)},
+                clear=False,
+            ):
+                render._write_observability_tree(
+                    output,
+                    "service",
+                    render_name="service-prod",
+                )
 
             rendered_compose = output / "observability/docker-compose.prod.yml"
             self.assertTrue(rendered_compose.is_file())

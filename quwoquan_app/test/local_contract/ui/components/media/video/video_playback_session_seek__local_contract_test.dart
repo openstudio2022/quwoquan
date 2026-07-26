@@ -67,7 +67,9 @@ void main() {
     var now = DateTime.utc(2026, 7, 20, 12);
     final controller = await _initializedController();
     controller.value = controller.value.copyWith(isPlaying: true);
-    final session = VideoPlaybackSession(now: () => now)..attach(controller);
+    final session = VideoPlaybackSession(now: () => now)
+      ..setAutomaticPlaybackEligible(true)
+      ..attach(controller);
 
     now = now.add(const Duration(milliseconds: 1800));
     controller.value = controller.value.copyWith(isBuffering: true);

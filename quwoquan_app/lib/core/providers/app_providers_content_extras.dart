@@ -5,29 +5,18 @@ final contentPostProjectionMapperProvider =
       (ref) => const ContentPostProjectionMapper(),
     );
 
-final _remoteContentPostReaderAdapterProvider =
-    Provider.family<RemoteContentPostReaderAdapter, AppUiSurface>((
+final _contentPostReaderFacetsProvider =
+    Provider.family<AppProductionContentPostReaderFacets, AppUiSurface>((
       ref,
       surface,
     ) {
-      return RemoteContentPostReaderAdapter(
+      return AppProductionComposition.contentPostReaderFacets(
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId) => _contentQueryInvocationContext(
           ref,
           surface: surface,
           clientPageId: clientPageId,
         ),
-      );
-    });
-
-final _contentPostReaderProvider =
-    Provider.family<CachedContentPostReader, AppUiSurface>((ref, surface) {
-      final adapter = ref.watch(
-        _remoteContentPostReaderAdapterProvider(surface),
-      );
-      return CachedContentPostReader(
-        detailDelegate: adapter,
-        authorPostsDelegate: adapter,
         postCache: ref.watch(postObjectCacheProvider),
         querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
         userProfileCache: ref.watch(userProfileCacheProvider),
@@ -35,41 +24,55 @@ final _contentPostReaderProvider =
       );
     });
 
+final _contentPostReaderProvider =
+    Provider.family<AppProductionContentPostReaderFacets, AppUiSurface>(
+      (ref, surface) => ref.watch(_contentPostReaderFacetsProvider(surface)),
+    );
+
 final workBrowserContentPostDetailReaderProvider =
     Provider<ContentPostDetailReader>(
-      (ref) => ref.watch(_contentPostReaderProvider(AppUiSurfaces.workBrowser)),
+      (ref) => ref
+          .watch(_contentPostReaderProvider(AppUiSurfaces.workBrowser))
+          .detail,
     );
 
 final globalSearchContentPostDetailReaderProvider =
     Provider<ContentPostDetailReader>(
-      (ref) => ref.watch(
-        _contentPostReaderProvider(AppUiSurfaces.globalSearchNetworkResults),
-      ),
+      (ref) => ref
+          .watch(
+            _contentPostReaderProvider(
+              AppUiSurfaces.globalSearchNetworkResults,
+            ),
+          )
+          .detail,
     );
 
 final createWorkspaceContentPostPublicationStatusReaderProvider =
     Provider<ContentPostPublicationStatusReader>(
-      (ref) => ref.watch(
-        _remoteContentPostReaderAdapterProvider(AppUiSurfaces.createWorkspace),
-      ),
+      (ref) => ref
+          .watch(
+            _contentPostReaderFacetsProvider(AppUiSurfaces.createWorkspace),
+          )
+          .publicationStatus,
     );
 
 final homepageDetailEntityWishlistStateReaderProvider =
     Provider<ContentEntityWishlistStateReader>(
-      (ref) => ref.watch(
-        _remoteContentPostReaderAdapterProvider(AppUiSurfaces.homepageDetail),
-      ),
+      (ref) => ref
+          .watch(_contentPostReaderFacetsProvider(AppUiSurfaces.homepageDetail))
+          .wishlistState,
     );
 
 final userProfileContentAuthorPostsReaderProvider =
     Provider<ContentAuthorPostsReader>(
-      (ref) => ref.watch(_contentPostReaderProvider(AppUiSurfaces.userProfile)),
+      (ref) => ref
+          .watch(_contentPostReaderProvider(AppUiSurfaces.userProfile))
+          .authorPosts,
     );
 
-final _remoteFootprintRepositoryProvider = Provider<RemoteFootprintRepository>((
-  ref,
-) {
-  return RemoteFootprintRepository(
+final _remoteFootprintRepositoryProvider = Provider<FootprintRepository>((ref) {
+  return AppProductionComposition.generatedAdapter<FootprintRepository>(
+    AppProductionAdapter.contentFootprint,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId) => _contentQueryInvocationContext(
       ref,

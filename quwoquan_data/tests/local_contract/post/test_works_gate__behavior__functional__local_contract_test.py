@@ -16,7 +16,7 @@ from core.io import read_json
 
 _AUTHORITATIVE = """# 九寨沟旅游全攻略
 
-九寨沟位于四川省阿坝州，是著名的自然风景区。最佳游览时间为秋季十月。
+九寨沟位于test-region-b阿坝州，是著名的自然风景区。最佳游览时间为秋季十月。
 
 ## 交通与门票
 门票旺季169元，观光车90元。从成都出发约8小时车程。
@@ -27,7 +27,7 @@ _AUTHORITATIVE = """# 九寨沟旅游全攻略
 _CASUAL = "今天天气真好，随手拍了张照片，开心！这家店还不错下次再来。"
 
 _SAFE = {"imageStatus": "safe"}
-EXECUTION_ID = "20260711--travel-works-gate--cn-sichuan--canary-001"
+EXECUTION_ID = "20260711--travel-works-gate--test-region-b--pilot-001"
 
 
 def _brief() -> dict:

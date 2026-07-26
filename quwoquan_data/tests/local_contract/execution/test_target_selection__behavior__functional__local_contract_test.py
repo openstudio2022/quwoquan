@@ -4,14 +4,27 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import yaml
 
-from content.execution.selection import build_execution_spec, select_targets, write_selected_task
+from content.execution.selection import (
+    build_execution_spec,
+    select_targets,
+    write_selected_task,
+)
+from content.execution.source_selection import (
+    TargetSourceCandidate,
+    TargetSourceQualification,
+)
+from content.source.contracts import HomepageAuthorityProvider, QualifiedHomepageSource
+from core.data_issue import DataIssueCode, DataIssueError
+from core.control_types import TargetSelector
 from content.execution import store
+from content.execution.spec_contract import ExecutionSpec
 
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
-EXECUTION_ID = "20260711--travel-homepage-coverage--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260711--travel-homepage-coverage--test-region-a--pilot-001"
 
 
 def _coverage_file(path: Path) -> Path:
@@ -23,10 +36,10 @@ def _coverage_file(path: Path) -> Path:
                         "district": "普陀区",
                         "leaves": [
                             {
-                                "name": "普陀山",
-                                "canonicalName": "普陀山",
+                                "name": "测试实体甲",
+                                "canonicalName": "测试实体甲",
                                 "entityType": "地点/景区",
-                                "geoTagRef": "Topic/地理/行政区/中国/浙江省/舟山市/普陀区",
+                                "geoTagRef": "Topic/地理/行政区/中国/test-region-a/舟山市/普陀区",
                                 "typeTagRefs": ["Entity/地点/景区/5A景区"],
                                 "selectionPriority": 1,
                             }
@@ -45,20 +58,25 @@ def _coverage_file(path: Path) -> Path:
 def _spec() -> dict:
     return build_execution_spec(
         execution_id=EXECUTION_ID,
-        name="浙江省实体主页金丝雀",
-        title="浙江省实体主页金丝雀",
-        region="中国/浙江省",
+        name="test-region-a实体主页金丝雀",
+        title="test-region-a实体主页金丝雀",
+        region="中国/test-region-a",
         category="景区",
         targets=[
             {
-                "name": "普陀山",
+                "name": "测试实体甲",
                 "entityType": "地点/景区",
-                "geoTagRef": "Topic/地理/行政区/中国/浙江省/舟山市/普陀区",
+                "geoTagRef": "Topic/地理/行政区/中国/test-region-a/舟山市/普陀区",
                 "typeTagRefs": ["Entity/地点/景区/5A景区"],
+                "qualifiedHomepageSource": {
+                    "provider": "wikipedia",
+                    "title": "测试实体甲",
+                    "url": "https://zh.wikipedia.org/wiki/测试实体甲",
+                },
             }
         ],
         created_by="test",
-        intent_label="zhejiang-homepage-canary",
+        intent_label="zhejiang-homepage-pilot",
         entity_articles_per_target=0,
         entity_homepages_per_target=1,
         image_works_per_target=0,
@@ -71,10 +89,9 @@ def test_select_targets_uses_static_coverage_identity_only(tmp_path: Path):
     targets, report = select_targets(
         discovery_path=_coverage_file(tmp_path / "舟山市.yaml"),
         limit=1,
-        mandatory=["普陀山"],
-        excluded=set(),
+        target_selector=TargetSelector.ALL,
     )
-    assert [item["name"] for item in targets] == ["普陀山"]
+    assert [item["name"] for item in targets] == ["测试实体甲"]
     assert targets[0]["geoTagRef"].endswith("/普陀区")
     assert {"name", "entityType", "geoTagRef", "typeTagRefs", "region", "sourceName"}.issubset(targets[0])
     assert all("readiness" not in key.lower() and "primarysource" not in key.lower() for key in targets[0])
@@ -109,8 +126,7 @@ def test_select_targets_preserves_leaf_name_as_canonical_alias(tmp_path: Path):
     targets, _report = select_targets(
         discovery_path=path,
         limit=1,
-        mandatory=["杭州金沙湖"],
-        excluded=set(),
+        target_selector=TargetSelector.ALL,
     )
 
     assert targets[0]["name"] == "杭州金沙湖"
@@ -118,13 +134,199 @@ def test_select_targets_preserves_leaf_name_as_canonical_alias(tmp_path: Path):
     assert targets[0]["aliases"] == ["金沙湖", "金沙湖公园"]
 
 
+def test_select_targets_applies_priority_only_when_explicit(tmp_path: Path) -> None:
+    path = tmp_path / "排序市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "测试区",
+                        "leaves": [
+                            {"name": "主清单顺序对象", "selectionPriority": 2},
+                            {"name": "优先对象", "selectionPriority": 1},
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    all_targets, _ = select_targets(
+        discovery_path=path,
+        limit=1,
+        target_selector=TargetSelector.ALL,
+    )
+    priority_targets, report = select_targets(
+        discovery_path=path,
+        limit=1,
+        target_selector=TargetSelector.PRIORITY,
+    )
+
+    assert all_targets[0]["name"] == "主清单顺序对象"
+    assert priority_targets[0]["name"] == "优先对象"
+    assert report["targetSelector"] == TargetSelector.PRIORITY.value
+
+
+def test_source_ready_priority_qualifies_until_target_set_is_frozen(tmp_path: Path) -> None:
+    path = tmp_path / "来源预选市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "测试区",
+                        "leaves": [
+                            {"name": "缺百科来源对象", "selectionPriority": 1},
+                            {"name": "缺百科来源对象乙", "selectionPriority": 2},
+                            {"name": "缺百科来源对象丙", "selectionPriority": 3},
+                            {"name": "可用百科来源对象", "selectionPriority": 4},
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    def qualify(target: TargetSourceCandidate) -> TargetSourceQualification:
+        if target.name == "可用百科来源对象":
+            return TargetSourceQualification(
+                True,
+                QualifiedHomepageSource(
+                    provider=HomepageAuthorityProvider.WIKIPEDIA,
+                    title=target.name,
+                    url="https://zh.wikipedia.org/wiki/可用百科来源对象",
+                ),
+            )
+        return TargetSourceQualification(
+            False,
+            None,
+            rejection_code=DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
+        )
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=1,
+        target_selector=TargetSelector.SOURCE_READY_PRIORITY,
+        source_qualifier=qualify,
+    )
+
+    assert [item["name"] for item in targets] == ["可用百科来源对象"]
+    qualification = report["sourceQualification"]
+    assert qualification["evaluatedCount"] == 4
+    assert qualification["acceptedCount"] == 1
+    assert qualification["rejectedCount"] == 3
+    assert qualification["candidates"][0]["rejectionCode"] == "DATA.SOURCE.PRIMARY_AUTHORITY_MISSING"
+    assert targets[0]["qualifiedHomepageSource"] == {
+        "provider": "wikipedia",
+        "title": "可用百科来源对象",
+        "url": "https://zh.wikipedia.org/wiki/可用百科来源对象",
+    }
+
+
+def test_source_ready_priority_uses_explicit_runtime_targets_before_freezing(tmp_path: Path) -> None:
+    path = tmp_path / "显式来源预选市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "测试区",
+                        "leaves": [
+                            {"name": "非目标对象", "selectionPriority": 1},
+                            {"name": "金丝雀对象", "selectionPriority": 2},
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    qualified: list[str] = []
+
+    def qualify(target: TargetSourceCandidate) -> TargetSourceQualification:
+        qualified.append(target.name)
+        return TargetSourceQualification(
+            True,
+            QualifiedHomepageSource(
+                provider=HomepageAuthorityProvider.WIKIPEDIA,
+                title=target.name,
+                url=f"https://zh.wikipedia.org/wiki/{target.name}",
+            ),
+        )
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=1,
+        target_selector=TargetSelector.SOURCE_READY_PRIORITY,
+        source_qualifier=qualify,
+        target_names=("金丝雀对象",),
+    )
+
+    assert [item["name"] for item in targets] == ["金丝雀对象"]
+    assert qualified == ["金丝雀对象"]
+    assert report["requestedTargetNames"] == ["金丝雀对象"]
+
+
+def test_source_ready_priority_reports_exhaustion_only_after_all_candidates(tmp_path: Path) -> None:
+    path = tmp_path / "预算来源预选市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "测试区",
+                        "leaves": [{"name": f"对象{index}"} for index in range(3)],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(DataIssueError) as raised:
+        select_targets(
+            discovery_path=path,
+            limit=1,
+            target_selector=TargetSelector.SOURCE_READY_PRIORITY,
+            source_qualifier=lambda _target: TargetSourceQualification(
+                False,
+                None,
+                rejection_code=DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
+            ),
+        )
+
+    issue = raised.value.issues[0]
+    assert issue.code is DataIssueCode.SOURCE_QUALIFICATION_EXHAUSTED
+    assert dict(issue.attributes)["candidateCount"] == "3"
+    assert dict(issue.attributes)["evaluatedCount"] == "3"
+    assert dict(issue.attributes)["rejectionCounts"] == "DATA.SOURCE.PRIMARY_AUTHORITY_MISSING:3"
+
+
 def test_execution_spec_has_one_identity_and_readable_intent():
     spec = _spec()
     assert spec["schema"] == "quwoquan.content.execution_spec"
     assert spec["executionId"] == EXECUTION_ID
-    assert spec["intentLabel"] == "zhejiang-homepage-canary"
+    assert spec["intentLabel"] == "zhejiang-homepage-pilot"
     assert "taskId" not in spec
     assert "batchId" not in spec
+
+
+def test_homepage_execution_rejects_target_without_frozen_qualified_source():
+    spec = store.resolve_spec(_spec())
+    del spec["scope"]["coverageTargets"][0]["qualifiedHomepageSource"]
+
+    with pytest.raises(ValueError, match="qualifiedHomepageSource"):
+        ExecutionSpec.from_mapping(spec)
 
 
 def test_homepage_execution_inherits_media_policy_from_preset_only():
@@ -136,20 +338,20 @@ def test_homepage_execution_inherits_media_policy_from_preset_only():
 
     effective = store.resolve_spec(raw)
     research = effective["content"]["research"]
-    assert research["imageAssetStrategy"] == "open_license_publish"
-    assert research["imageCountPolicy"] == "hard_quota"
-    assert research["minimumPublishableImagesPerTarget"] == 1
+    assert research["imageAssetStrategy"] == "attribution_audited_publish"
+    assert research["imageCountPolicy"] == "score_bonus"
+    assert "minimumPublishableImagesPerTarget" not in research
 
 
 def test_execution_spec_derives_entity_types_from_selected_targets():
     spec = build_execution_spec(
-        execution_id="20260712--travel-homepage-coverage--cn-zhejiang--m1-001",
-        name="浙江省实体主页M1百级放量",
-        title="浙江省实体主页M1百级放量",
-        region="中国/浙江省",
+        execution_id="20260712--travel-homepage-coverage--test-region-a--scale-001",
+        name="test-region-a实体主页SCALE百级放量",
+        title="test-region-a实体主页SCALE百级放量",
+        region="中国/test-region-a",
         category="景区",
         targets=[
-            {"name": "普陀山", "entityType": "地点/景区"},
+            {"name": "测试实体甲", "entityType": "地点/景区"},
             {"name": "良渚博物院", "entityType": "地点/博物馆"},
             {"name": "前童古镇", "entityType": "地点/古镇"},
         ],
@@ -170,12 +372,12 @@ def test_execution_spec_derives_entity_types_from_selected_targets():
 
 def test_execution_spec_supports_strict_full_delivery():
     spec = build_execution_spec(
-        execution_id="20260712--travel-homepage-coverage--cn-zhejiang--m1-002",
-        name="浙江省实体主页M1严格放量",
-        title="浙江省实体主页M1严格放量",
-        region="中国/浙江省",
+        execution_id="20260712--travel-homepage-coverage--test-region-a--scale-002",
+        name="test-region-a实体主页SCALE严格放量",
+        title="test-region-a实体主页SCALE严格放量",
+        region="中国/test-region-a",
         category="景区",
-        targets=[{"name": "普陀山", "entityType": "地点/景区"}],
+        targets=[{"name": "测试实体甲", "entityType": "地点/景区"}],
         created_by="test",
         entity_articles_per_target=0,
         entity_homepages_per_target=1,
@@ -203,9 +405,8 @@ def test_write_selected_execution_creates_only_canonical_plan_and_shared_evidenc
         {
             "executionId": EXECUTION_ID,
             "selectedCount": 1,
-            "discoveryPath": str(DATA_ROOT / "verticals/travel/coverage/中国/浙江省"),
+            "discoveryPath": str(DATA_ROOT / "reference/travel/entities/china/test-region-a"),
         },
-        force=True,
     )
     root = path.parent.parent
     assert path == root / "0.plan" / "execution_spec.yaml"
@@ -214,7 +415,7 @@ def test_write_selected_execution_creates_only_canonical_plan_and_shared_evidenc
     assert (root / "_shared/catalog.ndjson").is_file()
     assert (root / "0.plan/target_set.json").is_file()
     assert all(
-        (root / "entities/地点/景区/普陀山" / stage).is_dir()
+        (root / "entities/地点/景区/测试实体甲" / stage).is_dir()
         for stage in ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
     )
 
@@ -236,7 +437,7 @@ def test_execution_spec_requires_readable_execution_id():
             execution_id="old-task-id",
             name="bad",
             title="bad",
-            region="中国/浙江省",
+            region="中国/test-region-a",
             category="景区",
             targets=[],
             created_by="test",

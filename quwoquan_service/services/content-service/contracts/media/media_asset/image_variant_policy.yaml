@@ -1,0 +1,27 @@
+schema: content_image_variant_policy
+derivative_policy_version: 1
+profiles:
+  thumbnail:
+    width: 320
+    format: webp
+    quality: 80
+    scene: feed_grid
+    processing: image/resize,w_320/format,webp/quality,q_80
+  display:
+    width: 960
+    format: webp
+    quality: 82
+    scene: article_body
+    processing: image/resize,w_960/format,webp/quality,q_82
+  cover:
+    width: 1280
+    format: webp
+    quality: 85
+    scene: feed_cover
+    processing: image/resize,w_1280/format,webp/quality,q_85
+  full:
+    width: 2048
+    format: webp
+    quality: 90
+    scene: immersive_viewer
+    processing: image/resize,w_2048/format,webp/quality,q_90

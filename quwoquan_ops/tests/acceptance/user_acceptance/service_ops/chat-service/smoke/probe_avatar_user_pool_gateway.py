@@ -24,7 +24,10 @@ def _find_repo_root() -> Path:
 ROOT = _find_repo_root()
 SHARED = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures"
 MEDIA_ROOT = SHARED / "media"
-USER_POOL_PATH = SHARED / "user_pool.json"
+USER_POOL_PATH = (
+    ROOT
+    / "quwoquan_service/services/user-service/tests/support/contract_fixtures/user_pool.json"
+)
 HTTP_TIMEOUT_SECONDS = 10
 READY_TIMEOUT_SECONDS = 20
 READY_PROBE_TIMEOUT_SECONDS = 2

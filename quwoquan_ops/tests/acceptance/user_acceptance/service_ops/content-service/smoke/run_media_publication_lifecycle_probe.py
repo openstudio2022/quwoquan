@@ -7,6 +7,7 @@ import argparse
 import base64
 import datetime as dt
 import hashlib
+import ipaddress
 import json
 import os
 import subprocess
@@ -15,13 +16,15 @@ import time
 import urllib.parse
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from report_feedback_probe_support import (
     LOCAL_TARGETS,
     REPO_ROOT,
     ProbeClient,
     ProbeFailure,
+    media_viewer_session as build_media_viewer_session,
+    moderation_operator_session as build_moderation_operator_session,
     put_presigned_object,
     reporter_session as build_reporter_session,
 )
@@ -29,6 +32,7 @@ from report_feedback_probe_support import (
 
 SCHEMA = "content-media-publication-lifecycle-probe-report"
 SCENARIO = "content.media_publication.lifecycle"
+MEDIA_VIEWER_SUBJECT = "fixture_user_friend"
 _PNG_PAYLOAD = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/"
     "iZk9HQAAAABJRU5ErkJggg=="
@@ -86,6 +90,11 @@ def _parse_args() -> argparse.Namespace:
         help="拓扑 target；仅 prod-sim 可使用受控本地 canary 会话。",
     )
     parser.add_argument("--base-url", required=True)
+    parser.add_argument(
+        "--moderation-base-url",
+        default="",
+        help="仅本地 lifecycle 使用的 content-service loopback origin。",
+    )
     parser.add_argument("--resolve-host", default="")
     parser.add_argument(
         "--mode",
@@ -109,6 +118,28 @@ def _parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.env in LOCAL_TARGETS and not args.resolve_host:
         args.resolve_host = "127.0.0.1"
+    if args.mode == "lifecycle":
+        parsed = urllib.parse.urlparse(args.moderation_base_url)
+        host = parsed.hostname or ""
+        loopback = host == "localhost"
+        if host and not loopback:
+            try:
+                loopback = ipaddress.ip_address(host).is_loopback
+            except ValueError:
+                loopback = False
+        if (
+            parsed.scheme != "http"
+            or not loopback
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in {"", "/"}
+        ):
+            parser.error(
+                "--moderation-base-url must be an origin-only loopback HTTP URL "
+                "for lifecycle mode"
+            )
     return args
 
 
@@ -220,6 +251,7 @@ def _upload_complete_and_wait(
     content_type: str,
     payload: bytes,
     idempotency_prefix: str,
+    access_policy: str,
 ) -> tuple[str, dict[str, Any]]:
     initialized = _init_upload(
         client,
@@ -242,14 +274,14 @@ def _upload_complete_and_wait(
         "POST",
         complete_path,
         operation_id="CompleteMediaUpload",
-        body={"accessPolicy": "owner_only"},
+        body={"accessPolicy": access_policy},
         idempotency_key=f"{idempotency_prefix}-complete",
     )
     _, replayed = client.request(
         "POST",
         complete_path,
         operation_id="CompleteMediaUpload",
-        body={"accessPolicy": "owner_only"},
+        body={"accessPolicy": access_policy},
         idempotency_key=f"{idempotency_prefix}-complete",
     )
     asset_id = _required_text(completed, "assetId", "mediaId")
@@ -270,6 +302,7 @@ def _upload_complete_lost_response_and_wait(
     content_type: str,
     payload: bytes,
     idempotency_prefix: str,
+    access_policy: str,
 ) -> tuple[str, dict[str, Any]]:
     """丢弃 complete 响应后只按权威 session 状态恢复，不重做上传。"""
     initialized = _init_upload(
@@ -294,7 +327,7 @@ def _upload_complete_lost_response_and_wait(
         "POST",
         complete_path,
         operation_id="CompleteMediaUpload",
-        body={"accessPolicy": "owner_only"},
+        body={"accessPolicy": access_policy},
         idempotency_key=f"{idempotency_prefix}-complete",
     )
     _, authoritative = client.request(
@@ -312,42 +345,116 @@ def _upload_complete_lost_response_and_wait(
     return asset_id, session
 
 
+def _discard_unreferenced_asset(
+    client: ProbeClient,
+    *,
+    owner_query_client: ProbeClient,
+    asset_id: str,
+    idempotency_key: str,
+) -> None:
+    path = f"/content/media/{urllib.parse.quote(asset_id)}"
+    _, discarded = client.request(
+        "DELETE",
+        path,
+        operation_id="DiscardMediaAsset",
+        idempotency_key=idempotency_key,
+    )
+    result = _data(discarded)
+    if (
+        _required_text(result, "mediaId") != asset_id
+        or _required_text(result, "status") != "deleted"
+        or bool(result.get("replayed"))
+    ):
+        raise ProbeFailure(
+            "media_discard_failed",
+            "first unreferenced MediaAsset discard did not return deleted",
+        )
+    _, replayed = client.request(
+        "DELETE",
+        path,
+        operation_id="DiscardMediaAsset",
+        idempotency_key=idempotency_key,
+    )
+    replay = _data(replayed)
+    if (
+        _required_text(replay, "mediaId") != asset_id
+        or _required_text(replay, "status") != "deleted"
+        or not bool(replay.get("replayed"))
+    ):
+        raise ProbeFailure(
+            "media_discard_replay_failed",
+            "MediaAsset discard did not replay its durable receipt",
+        )
+    status, payload = owner_query_client.request(
+        "GET",
+        f"/internal/content/media/{urllib.parse.quote(asset_id)}",
+        operation_id="GetOwnedMediaAsset",
+        expected_statuses=frozenset({404}),
+    )
+    if status != 404 or _error_code(payload) != "CONTENT.USER.media_not_found":
+        raise ProbeFailure(
+            "media_discard_readback_failed",
+            "discarded MediaAsset remained owner-readable",
+        )
+
+
 def _select_auto_video_cover(
     client: ProbeClient,
     *,
     asset_id: str,
     idempotency_key: str,
+    processing_timeout_seconds: float,
 ) -> None:
-    _, payload = client.request(
-        "POST",
-        f"/content/media/{urllib.parse.quote(asset_id)}/cover:auto",
-        operation_id="SelectAutoVideoCover",
-        body={},
-        idempotency_key=idempotency_key,
-    )
-    selection = _data(payload)
-    if (
-        _required_text(selection, "mediaId") != asset_id
-        or _required_text(selection, "coverStrategy") != "first_frame"
-        or not _required_text(selection, "coverUrl", "thumbnailUrl")
-    ):
-        raise ProbeFailure(
-            "cover_selection_failed",
-            "automatic video cover selection did not return the ready asset cover",
+    deadline = time.monotonic() + processing_timeout_seconds
+    while time.monotonic() < deadline:
+        status, payload = client.request(
+            "POST",
+            f"/content/media/{urllib.parse.quote(asset_id)}/cover:auto",
+            operation_id="SelectAutoVideoCover",
+            expected_statuses=frozenset({200, 400, 409}),
+            body={},
+            idempotency_key=idempotency_key,
         )
+        if status in {400, 409}:
+            if _error_code(payload) not in {
+                "CONTENT.USER.media_not_ready",
+                "CONTENT.USER.version_conflict",
+            }:
+                raise ProbeFailure(
+                    "cover_selection_failed",
+                    "automatic cover was rejected for a non-retryable reason",
+                )
+            time.sleep(1.0)
+            continue
+        selection = _data(payload)
+        if (
+            _required_text(selection, "mediaId") != asset_id
+            or _required_text(selection, "coverStrategy") != "first_frame"
+            or not _required_text(selection, "coverUrl", "thumbnailUrl")
+        ):
+            raise ProbeFailure(
+                "cover_selection_failed",
+                "automatic video cover selection did not return the ready asset cover",
+            )
+        return
+    raise ProbeFailure(
+        "processing_timeout",
+        f"video asset {asset_id} did not become cover-selectable within "
+        f"{processing_timeout_seconds}s",
+    )
 
 
-def _verify_original_access_denial_and_rate_limit(
-    client: ProbeClient,
+def _verify_original_access_denial(
+    viewer_client: ProbeClient,
     *,
     image_asset_id: str,
-    video_asset_id: str,
     idempotency_prefix: str,
 ) -> None:
-    """验证原图授权的 403 denied 和 metadata policy 的 429 终态。"""
-    denied_status, denied = client.request(
+    """验证 referenced_post 策略对不可见 private Post 稳定返回 403。"""
+
+    denied_status, denied = viewer_client.request(
         "POST",
-        f"/content/media/{urllib.parse.quote(video_asset_id)}/original:access",
+        f"/content/media/{urllib.parse.quote(image_asset_id)}/original:access",
         operation_id="RequestOriginalImageAccess",
         expected_statuses=frozenset({403}),
         body={"purpose": "view"},
@@ -357,11 +464,21 @@ def _verify_original_access_denial_and_rate_limit(
     if denied_status != 403 or denied_code != "CONTENT.USER.original_access_denied":
         raise ProbeFailure(
             "original_access_denial_contract_failed",
-            "video original access must be rejected with "
+            "image original access must be rejected with "
             f"CONTENT.USER.original_access_denied, got {denied_code or '<missing-code>'}",
         )
+
+
+def _verify_original_access_grant_and_rate_limit(
+    viewer_client: ProbeClient,
+    *,
+    image_asset_id: str,
+    idempotency_prefix: str,
+) -> None:
+    """验证 public Post 可见后签发短时 grant，且第七次请求稳定 429。"""
+
     for index in range(6):
-        _, granted = client.request(
+        _, granted = viewer_client.request(
             "POST",
             f"/content/media/{urllib.parse.quote(image_asset_id)}/original:access",
             operation_id="RequestOriginalImageAccess",
@@ -378,7 +495,7 @@ def _verify_original_access_denial_and_rate_limit(
                 "original_access_grant_contract_failed",
                 "authorized original access must return only a short-lived grant",
             )
-    limited_status, limited = client.request(
+    limited_status, limited = viewer_client.request(
         "POST",
         f"/content/media/{urllib.parse.quote(image_asset_id)}/original:access",
         operation_id="RequestOriginalImageAccess",
@@ -406,14 +523,22 @@ def _publish_and_readback(
     asset_id: str,
     run_id: str,
     processing_timeout_seconds: float,
+    visibility: str = "public",
+    on_post_created: Callable[[str], None] | None = None,
 ) -> str:
-    publish_intent_id = f"media-publication-probe-{media_type}-{run_id}"
+    publish_intent_id = (
+        f"media-publication-probe-{media_type}-{visibility}-{run_id}"
+    )
     body: dict[str, Any] = {
         "publishIntentId": publish_intent_id,
-        "localDraftId": f"media-publication-probe-draft-{media_type}-{run_id}",
+        "localDraftId": (
+            f"media-publication-probe-draft-{media_type}-{visibility}-{run_id}"
+        ),
         "contentType": media_type,
-        "body": f"media-publication-probe:{media_type}:{run_id[:12]}",
-        "visibility": "public",
+        "body": (
+            f"media-publication-probe:{media_type}:{visibility}:{run_id[:12]}"
+        ),
+        "visibility": visibility,
         "mediaAssetIds": [asset_id],
         "mediaItems": [{"kind": media_type, "mediaId": asset_id}],
     }
@@ -421,19 +546,25 @@ def _publish_and_readback(
         body["coverStrategy"] = "first_frame"
     deadline = time.monotonic() + processing_timeout_seconds
     receipt: dict[str, Any] | None = None
+    retryable_transport_statuses = frozenset({502, 503, 504})
     while time.monotonic() < deadline:
         status, candidate = client.request(
             "POST",
             "/content/posts:publish",
             operation_id="SubmitPostPublication",
-            expected_statuses=frozenset({200, 202, 400}),
+            expected_statuses=frozenset({200, 202, 400})
+            | retryable_transport_statuses,
+            allow_non_json_statuses=retryable_transport_statuses,
             body=body,
             idempotency_key=publish_intent_id,
         )
         if status in {200, 202}:
             receipt = candidate
             break
-        if "media_not_ready" not in json.dumps(candidate):
+        if status in retryable_transport_statuses:
+            time.sleep(1.0)
+            continue
+        if _error_code(candidate) != "CONTENT.USER.media_not_ready":
             raise ProbeFailure(
                 "publication_admission_failed",
                 "publication was rejected for a reason other than media_not_ready",
@@ -454,10 +585,23 @@ def _publish_and_readback(
         idempotency_key=publish_intent_id,
     )
     post_id = _required_text(receipt, "postId")
+    if on_post_created is not None:
+        on_post_created(post_id)
     if _required_text(replayed, "postId") != post_id:
         raise ProbeFailure(
             "idempotency_drift",
             "SubmitPostPublication replay returned a different Post",
+        )
+    receipt_state = _required_text(receipt, "state")
+    if _required_text(replayed, "state") != receipt_state:
+        raise ProbeFailure(
+            "idempotency_drift",
+            "SubmitPostPublication replay returned a different publication state",
+        )
+    if receipt_state not in {"pending_review", "published"}:
+        raise ProbeFailure(
+            "publication_state_contract_failed",
+            f"publication entered unsupported state {receipt_state}",
         )
     _, post_payload = client.request(
         "GET",
@@ -467,11 +611,47 @@ def _publish_and_readback(
     post = _data(post_payload)
     if str(post.get("id") or post.get("postId") or "").strip() != post_id:
         raise ProbeFailure("readback_missing", "published post is not readable")
+    if str(post.get("status") or "").strip() != receipt_state:
+        raise ProbeFailure(
+            "publication_state_contract_failed",
+            "Post readback does not match the publication receipt state",
+        )
     media_items = post.get("mediaItems")
     if not isinstance(media_items, list) or not media_items:
         raise ProbeFailure(
             "readback_missing",
             "published post does not expose canonical processed media items",
+        )
+    media_item = media_items[0]
+    if not isinstance(media_item, dict):
+        raise ProbeFailure(
+            "readback_missing",
+            "published post media item is not a canonical object",
+        )
+    if str(media_item.get("kind") or "").strip() != media_type:
+        raise ProbeFailure(
+            "readback_missing",
+            "published post media item kind does not match the uploaded asset",
+        )
+    if media_type == "image":
+        media_urls = post.get("mediaUrls")
+        if (
+            not isinstance(media_urls, list)
+            or not media_urls
+            or not str(media_urls[0] or "").strip()
+            or not str(post.get("coverUrl") or "").strip()
+        ):
+            raise ProbeFailure(
+                "readback_missing",
+                "published image post is missing its processed public slice",
+            )
+    elif (
+        not str(post.get("videoUrl") or "").strip()
+        or not str(post.get("thumbnailUrl") or "").strip()
+    ):
+        raise ProbeFailure(
+            "readback_missing",
+            "published video post is missing normalized video or selected cover",
         )
     return post_id
 
@@ -489,6 +669,124 @@ def _delete_published_post(
         expected_statuses=frozenset({200, 204}),
         idempotency_key=idempotency_key,
     )
+
+
+def _load_post(client: ProbeClient, post_id: str) -> dict[str, Any]:
+    _, payload = client.request(
+        "GET",
+        f"/content/posts/{urllib.parse.quote(post_id)}",
+        operation_id="GetPost",
+    )
+    post = _data(payload)
+    if str(post.get("id") or post.get("postId") or "").strip() != post_id:
+        raise ProbeFailure("readback_missing", "Post readback identity drifted")
+    return post
+
+
+def _approve_post_for_publication(
+    publisher_client: ProbeClient,
+    operator_client: ProbeClient,
+    *,
+    post_id: str,
+    idempotency_prefix: str,
+    timeout_seconds: float,
+) -> bool:
+    """经 PostModerationCase review/decide/outbox 走完真实人工审核主线。"""
+
+    post = _load_post(publisher_client, post_id)
+    status = str(post.get("status") or "").strip()
+    if status == "published":
+        return False
+    if status != "pending_review":
+        raise ProbeFailure(
+            "publication_state_contract_failed",
+            "Post must be pending_review before manual moderation",
+        )
+
+    deadline = time.monotonic() + timeout_seconds
+    case: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        case_status, payload = operator_client.request(
+            "GET",
+            f"/internal/content/posts/{urllib.parse.quote(post_id)}/moderation-case",
+            operation_id="GetCurrentPostModerationCase",
+            expected_statuses=frozenset({200, 404}),
+        )
+        if case_status == 200:
+            case = _data(payload)
+            break
+        if _error_code(payload) != "CONTENT.USER.moderation_case_not_found":
+            raise ProbeFailure(
+                "moderation_case_contract_failed",
+                "pending_review Post returned a non-canonical moderation Case failure",
+            )
+        time.sleep(0.5)
+    if case is None:
+        raise ProbeFailure(
+            "processing_timeout",
+            f"moderation Case for Post {post_id} was not opened within {timeout_seconds}s",
+        )
+
+    case_id = _required_text(case, "id")
+    case_state = _required_text(case, "status")
+    if case_state == "pending":
+        operator_client.request(
+            "POST",
+            f"/internal/content/posts/{urllib.parse.quote(post_id)}:review-moderation",
+            operation_id="ReviewPostModerationCase",
+            body={"caseId": case_id},
+            idempotency_key=f"{idempotency_prefix}-review",
+        )
+        case_state = "reviewed"
+    if case_state == "reviewed":
+        operator_client.request(
+            "POST",
+            f"/internal/content/posts/{urllib.parse.quote(post_id)}:moderate",
+            operation_id="DecidePostModeration",
+            body={
+                "caseId": case_id,
+                "decision": "approved",
+                "decisionReason": "local_acceptance_safe_media_publication",
+            },
+            idempotency_key=f"{idempotency_prefix}-decide",
+        )
+    elif case_state != "approved":
+        raise ProbeFailure(
+            "moderation_case_contract_failed",
+            f"moderation Case entered unsupported state {case_state}",
+        )
+
+    while time.monotonic() < deadline:
+        post = _load_post(publisher_client, post_id)
+        status = str(post.get("status") or "").strip()
+        if status == "published":
+            return True
+        if status != "pending_review":
+            raise ProbeFailure(
+                "publication_state_contract_failed",
+                "approved moderation Case projected an invalid Post state",
+            )
+        time.sleep(0.5)
+    raise ProbeFailure(
+        "processing_timeout",
+        f"approved moderation Case did not publish Post {post_id} within {timeout_seconds}s",
+    )
+
+
+def _verify_public_post_readback(
+    viewer_client: ProbeClient,
+    *,
+    post_id: str,
+) -> None:
+    post = _load_post(viewer_client, post_id)
+    if (
+        str(post.get("status") or "").strip() != "published"
+        or str(post.get("visibility") or "").strip() != "public"
+    ):
+        raise ProbeFailure(
+            "public_readback_contract_failed",
+            "approved public Post is not visible to an isolated viewer",
+        )
 
 
 def _verify_abort_cleanup(
@@ -522,6 +820,16 @@ def _verify_abort_cleanup(
     )
     if str(_data(aborted).get("status") or "").strip() != "aborted":
         raise ProbeFailure("abort_not_persisted", "AbortMediaUpload did not persist aborted")
+    _, authoritative = client.request(
+        "GET",
+        f"/content/media/uploads/{urllib.parse.quote(initialized['sessionId'])}",
+        operation_id="GetMediaUploadSession",
+    )
+    if str(_data(authoritative).get("status") or "").strip() != "aborted":
+        raise ProbeFailure(
+            "abort_not_persisted",
+            "authoritative upload session did not remain aborted after cancellation",
+        )
     return initialized["sessionId"]
 
 
@@ -559,7 +867,11 @@ def main() -> int:
     }
     return_code = 1
     client: ProbeClient | None = None
+    viewer_client: ProbeClient | None = None
+    operator_client: ProbeClient | None = None
+    owner_query_client: ProbeClient | None = None
     published_posts: list[tuple[str, str]] = []
+    moderation_case_approvals = 0
     try:
         if (
             args.env == "prod"
@@ -585,6 +897,34 @@ def main() -> int:
             return_code = 0
         else:
             run_id = uuid.uuid4().hex
+            viewer = build_media_viewer_session(
+                environment=args.env,
+                base_url=args.base_url,
+                resolve_host=args.resolve_host,
+                target_name=args.target_name,
+                subject=MEDIA_VIEWER_SUBJECT,
+            )
+            viewer_client = ProbeClient(
+                args.base_url,
+                args.resolve_host,
+                viewer,
+            )
+            operator = build_moderation_operator_session(
+                environment=args.env,
+                base_url=args.base_url,
+                resolve_host=args.resolve_host,
+                target_name=args.target_name,
+            )
+            operator_client = ProbeClient(
+                args.moderation_base_url,
+                args.resolve_host,
+                operator,
+            )
+            owner_query_client = ProbeClient(
+                args.moderation_base_url,
+                args.resolve_host,
+                session,
+            )
             image_asset_id = ""
             video_asset_id = ""
             if args.scenario in {"all", "photo", "recovery"}:
@@ -594,10 +934,35 @@ def main() -> int:
                     content_type="image/png",
                     payload=_PNG_PAYLOAD,
                     idempotency_prefix=f"media-publication-probe-image-lost-response-{run_id}",
+                    access_policy="referenced_post",
                 )
                 report["steps"].append(
                     {
                         "name": "image_complete_lost_response_reconciled_processing_pending",
+                        "status": "passed",
+                    }
+                )
+                disposable_asset_id, _ = _upload_complete_and_wait(
+                    client,
+                    media_type="image",
+                    content_type="image/png",
+                    payload=_PNG_PAYLOAD,
+                    idempotency_prefix=(
+                        f"media-publication-probe-image-discard-{run_id}"
+                    ),
+                    access_policy="owner_only",
+                )
+                _discard_unreferenced_asset(
+                    client,
+                    owner_query_client=owner_query_client,
+                    asset_id=disposable_asset_id,
+                    idempotency_key=(
+                        f"media-publication-probe-image-discard-command-{run_id}"
+                    ),
+                )
+                report["steps"].append(
+                    {
+                        "name": "unreferenced_media_discarded_and_replayed",
                         "status": "passed",
                     }
                 )
@@ -608,52 +973,139 @@ def main() -> int:
                     content_type="video/mp4",
                     payload=_render_probe_video(),
                     idempotency_prefix=f"media-publication-probe-video-{run_id}",
+                    access_policy="owner_only",
                 )
                 report["steps"].append(
                     {"name": "video_upload_complete_processing_pending", "status": "passed"}
                 )
-            if args.scenario in {"all", "photo"}:
+            if args.scenario == "all":
+                private_image_post_id = _publish_and_readback(
+                    client,
+                    media_type="image",
+                    asset_id=image_asset_id,
+                    run_id=run_id,
+                    processing_timeout_seconds=args.processing_timeout_seconds,
+                    visibility="private",
+                    on_post_created=lambda post_id: published_posts.append(
+                        ("image-private", post_id)
+                    ),
+                )
+                if operator_client is None or viewer_client is None:
+                    raise ProbeFailure(
+                        "auth_missing",
+                        "private visibility check requires viewer and moderation sessions",
+                    )
+                moderation_case_approvals += int(_approve_post_for_publication(
+                    client,
+                    operator_client,
+                    post_id=private_image_post_id,
+                    idempotency_prefix=(
+                        f"media-publication-probe-private-moderation-{run_id}"
+                    ),
+                    timeout_seconds=args.processing_timeout_seconds,
+                ))
+                _verify_original_access_denial(
+                    viewer_client,
+                    image_asset_id=image_asset_id,
+                    idempotency_prefix=(
+                        f"media-publication-probe-original-private-{run_id}"
+                    ),
+                )
+                report["steps"].append(
+                    {
+                        "name": "private_image_original_access_denied",
+                        "status": "passed",
+                    }
+                )
+            if args.scenario in {"all", "photo", "recovery"}:
                 image_post_id = _publish_and_readback(
                     client,
                     media_type="image",
                     asset_id=image_asset_id,
                     run_id=run_id,
                     processing_timeout_seconds=args.processing_timeout_seconds,
+                    on_post_created=lambda post_id: published_posts.append(
+                        ("image-public", post_id)
+                    ),
                 )
-                published_posts.append(("image", image_post_id))
+                if operator_client is None or viewer_client is None:
+                    raise ProbeFailure(
+                        "auth_missing",
+                        "public image verification requires viewer and moderation sessions",
+                    )
+                moderation_case_approvals += int(_approve_post_for_publication(
+                    client,
+                    operator_client,
+                    post_id=image_post_id,
+                    idempotency_prefix=(
+                        f"media-publication-probe-image-moderation-{run_id}"
+                    ),
+                    timeout_seconds=args.processing_timeout_seconds,
+                ))
+                _verify_public_post_readback(
+                    viewer_client,
+                    post_id=image_post_id,
+                )
                 report["steps"].append(
                     {"name": "image_publish_idempotent_readback", "status": "passed"}
                 )
             if args.scenario in {"all", "video"}:
+                _select_auto_video_cover(
+                    client,
+                    asset_id=video_asset_id,
+                    idempotency_key=f"media-publication-probe-video-cover-{run_id}",
+                    processing_timeout_seconds=args.processing_timeout_seconds,
+                )
+                report["steps"].append(
+                    {"name": "video_auto_cover_selected", "status": "passed"}
+                )
                 video_post_id = _publish_and_readback(
                     client,
                     media_type="video",
                     asset_id=video_asset_id,
                     run_id=run_id,
                     processing_timeout_seconds=args.processing_timeout_seconds,
+                    on_post_created=lambda post_id: published_posts.append(
+                        ("video", post_id)
+                    ),
                 )
-                published_posts.append(("video", video_post_id))
+                if operator_client is None or viewer_client is None:
+                    raise ProbeFailure(
+                        "auth_missing",
+                        "public video verification requires viewer and moderation sessions",
+                    )
+                moderation_case_approvals += int(_approve_post_for_publication(
+                    client,
+                    operator_client,
+                    post_id=video_post_id,
+                    idempotency_prefix=(
+                        f"media-publication-probe-video-moderation-{run_id}"
+                    ),
+                    timeout_seconds=args.processing_timeout_seconds,
+                ))
+                _verify_public_post_readback(
+                    viewer_client,
+                    post_id=video_post_id,
+                )
                 report["steps"].append(
                     {"name": "video_publish_idempotent_readback", "status": "passed"}
                 )
-                _select_auto_video_cover(
-                    client,
-                    asset_id=video_asset_id,
-                    idempotency_key=f"media-publication-probe-video-cover-{run_id}",
-                )
-                report["steps"].append(
-                    {"name": "video_auto_cover_selected", "status": "passed"}
-                )
             if args.scenario == "all":
-                _verify_original_access_denial_and_rate_limit(
-                    client,
+                if viewer_client is None:
+                    raise ProbeFailure(
+                        "auth_missing",
+                        "original access rate-limit check requires an isolated viewer",
+                    )
+                _verify_original_access_grant_and_rate_limit(
+                    viewer_client,
                     image_asset_id=image_asset_id,
-                    video_asset_id=video_asset_id,
-                    idempotency_prefix=f"media-publication-probe-original-access-{run_id}",
+                    idempotency_prefix=(
+                        f"media-publication-probe-original-public-{run_id}"
+                    ),
                 )
                 report["steps"].append(
                     {
-                        "name": "original_access_denied_and_rate_limited",
+                        "name": "public_image_original_access_granted_and_rate_limited",
                         "status": "passed",
                     }
                 )
@@ -683,7 +1135,10 @@ def main() -> int:
                     ),
                     "completeLostResponseReconciled": bool(image_asset_id),
                     "videoAutoCoverSelected": bool(video_asset_id),
+                    "moderationCaseApprovedCount": moderation_case_approvals,
                     "originalAccessDenied403": args.scenario == "all",
+                    "originalAccessGrantedAfterPublicVisibility": args.scenario
+                    == "all",
                     "originalAccessRateLimited429": args.scenario == "all",
                     "temporaryUploadAbort": bool(aborted_session_id),
                 }

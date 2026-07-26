@@ -11,6 +11,22 @@ class ContentType(StrEnum):
     VIDEO = "video"
 
 
+class ContentGenerator(StrEnum):
+    """Canonical provenance state at the content generation boundary."""
+
+    AGENT = "agent"
+    IMAGE_EVIDENCE_PACK = "image_evidence_pack"
+    PENDING = "pending"
+
+
+def expected_content_generator(content_type: ContentType) -> ContentGenerator:
+    """Return the only valid publication generator for one carrier."""
+
+    if content_type is ContentType.IMAGE:
+        return ContentGenerator.IMAGE_EVIDENCE_PACK
+    return ContentGenerator.AGENT
+
+
 class ExecutionSpecStatus(StrEnum):
     DRAFT = "draft"
     ACTIVE = "active"
@@ -24,6 +40,7 @@ class ImageAssetStrategy(StrEnum):
     OPEN_LICENSE_PUBLISH = "open_license_publish"
     LICENSED_PROVIDER_PUBLISH = "licensed_provider_publish"
     AI_GENERATED_ORIGINAL = "ai_generated_original"
+    ATTRIBUTION_AUDITED_PUBLISH = "attribution_audited_publish"
     REFERENCE_ONLY_NO_IMAGE_RELEASE = "reference_only_no_image_release"
 
 
@@ -32,14 +49,12 @@ class ImageCountPolicy(StrEnum):
     HARD_QUOTA = "hard_quota"
 
 
-class RolloutMilestone(StrEnum):
-    BASELINE = "baseline"
-    CANARY = "canary"
-    M1 = "m1"
-    M2 = "m2"
-    M3 = "m3"
-    H10K = "h10k"
-    LAUNCH = "launch"
+class ExecutionPhase(StrEnum):
+    """Generic runtime scale marker; product campaigns are never static types."""
+
+    PILOT = "pilot"
+    SCALE = "scale"
+    FULL = "full"
 
 
 class DeploymentEnvironment(StrEnum):
@@ -109,6 +124,14 @@ class QueueJobStage(StrEnum):
     PUBLISH = "publish"
 
 
+class ReliableTaskDispatchStatus(StrEnum):
+    """Terminal result of one controller dispatch to the service-owned fleet."""
+
+    COMPLETED = "completed"
+    WAITING = "waiting"
+    BLOCKED = "blocked"
+
+
 class QueueFailureKind(StrEnum):
     """Machine-readable reason class for a queue transition to failure."""
 
@@ -116,7 +139,6 @@ class QueueFailureKind(StrEnum):
     GOVERNANCE = "governance"
     STARTUP = "startup"
     RESULT_ENVELOPE = "result_envelope"
-    BUDGET = "budget"
     TIMEOUT = "timeout"
 
 
@@ -168,6 +190,14 @@ class SelectionPolicy(StrEnum):
     FROZEN = "frozen"
 
 
+class TargetSelector(StrEnum):
+    """Explicit ordering policy for one frozen execution target set."""
+
+    ALL = "all"
+    PRIORITY = "priority"
+    SOURCE_READY_PRIORITY = "source-ready-priority"
+
+
 class ReplacementPolicy(StrEnum):
     FORBIDDEN = "forbidden"
 
@@ -206,7 +236,7 @@ class AgentFailureKind(StrEnum):
 
     SDK_UNAVAILABLE = "sdk_unavailable"
     CREDENTIAL_INVALID = "credential_invalid"
-    BUDGET_EXCEEDED = "budget_exceeded"
+    PROVIDER_REJECTED = "provider_rejected"
     BRIDGE_UNAVAILABLE = "bridge_unavailable"
     SDK_EXECUTION_FAILED = "sdk_execution_failed"
     NO_RESULT = "no_result"
@@ -265,36 +295,22 @@ class PostStage(StrEnum):
     REVIEW = "review"
 
 
-EXECUTION_MILESTONES = (
-    RolloutMilestone.CANARY,
-    RolloutMilestone.M1,
-    RolloutMilestone.M2,
-    RolloutMilestone.M3,
-    RolloutMilestone.H10K,
-)
-MILESTONE_ORDER = EXECUTION_MILESTONES
-MILESTONE_PREDECESSOR = {
-    RolloutMilestone.CANARY: None,
-    RolloutMilestone.M1: RolloutMilestone.CANARY,
-    RolloutMilestone.M2: RolloutMilestone.M1,
-    RolloutMilestone.M3: RolloutMilestone.M2,
-    RolloutMilestone.H10K: RolloutMilestone.M3,
-}
+EXECUTION_PHASES = tuple(ExecutionPhase)
 
 
 __all__ = [
-    "EXECUTION_MILESTONES",
-    "MILESTONE_ORDER",
-    "MILESTONE_PREDECESSOR",
+    "EXECUTION_PHASES",
     "AgentFailureKind",
     "AgentProvider",
     "AgentRunStatus",
     "ManagedAgentCheckpointStatus",
     "AppUatDataSource",
     "AppUatStatus",
+    "ContentGenerator",
     "ContentImportStatus",
     "ContentType",
     "DeploymentEnvironment",
+    "ExecutionPhase",
     "ExecutionStage",
     "ExecutionStateStatus",
     "ImageSafetyReviewStatus",
@@ -304,6 +320,7 @@ __all__ = [
     "QueueFailureKind",
     "QueueJobStage",
     "QueueJobState",
+    "ReliableTaskDispatchStatus",
     "QueueTimelineEvent",
     "ReleaseDeletePolicy",
     "ReleaseRunKind",
@@ -315,10 +332,10 @@ __all__ = [
     "ReviewOverride",
     "ReviewPublishState",
     "ReplacementPolicy",
-    "RolloutMilestone",
     "RuntimeEnvironment",
     "SelectionPolicy",
     "SourcePolicyRevision",
     "StageKind",
     "StageStatus",
+    "expected_content_generator",
 ]

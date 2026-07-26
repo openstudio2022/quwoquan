@@ -47,15 +47,16 @@ AssistantJourneyEntry _normalizeEntryForTimeline(AssistantJourneyEntry entry) {
       .map(
         (reference) => AssistantJourneyReference(
           title: reference.title.trim(),
-          url: reference.url.trim(),
+          destination: reference.destination,
           source: reference.source.trim(),
         ),
       )
       .where(
-        (reference) =>
-            reference.title.isNotEmpty ||
-            reference.url.isNotEmpty ||
-            reference.source.isNotEmpty,
+        (reference) => hasUsableCitationDestination(
+          reference.destination,
+          title: reference.title,
+          source: reference.source,
+        ),
       )
       .toList(growable: false);
   final headline = _normalizeTimelineHeadline(entry);
@@ -90,12 +91,16 @@ AssistantJourneyReferenceSummary _normalizeReferenceSummary(
       .map(
         (reference) => AssistantJourneyReference(
           title: reference.title.trim(),
-          url: reference.url.trim(),
+          destination: reference.destination,
           source: reference.source.trim(),
         ),
       )
       .where(
-        (reference) => reference.title.isNotEmpty || reference.url.isNotEmpty,
+        (reference) => hasUsableCitationDestination(
+          reference.destination,
+          title: reference.title,
+          source: reference.source,
+        ),
       )
       .toList(growable: false);
   if (references.isNotEmpty || summary.count > 0) {
@@ -107,9 +112,11 @@ AssistantJourneyReferenceSummary _normalizeReferenceSummary(
   final deduped = <String, AssistantJourneyReference>{};
   for (final entry in fallbackEntries) {
     for (final reference in entry.references) {
-      final key = reference.url.trim().isNotEmpty
-          ? reference.url.trim()
-          : '${reference.source.trim()}:${reference.title.trim()}';
+      final key = citationReferenceKey(
+        reference.destination,
+        source: reference.source,
+        title: reference.title,
+      );
       if (key.trim().isEmpty || deduped.containsKey(key)) {
         continue;
       }

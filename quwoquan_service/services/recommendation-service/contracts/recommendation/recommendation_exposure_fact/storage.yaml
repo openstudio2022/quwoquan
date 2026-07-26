@@ -1,0 +1,23 @@
+backend: mongodb
+role: append_only
+collections:
+  rec_learning_events:
+    entity: RecommendationExposureFact
+    role: append_only
+    description: 曝光（rec_impression）与反馈（rec_engagement）事实的共用事件信封。 dedupe 由确定性 eventId 承载并作为 _id 提交——曝光
+      eventId 从 feedRequestId+targetId+eventType 派生，反馈 eventId 从 feedRequestId+targetId+action（缺 feedRequestId
+      时回退 clientEventId）派生； 重放写入被 _id 唯一约束拒绝后按已存在处理，禁止时间戳参与 eventId。
+    indexes:
+    - name: idx_rec_learning_user_type
+      keys:
+        userId: 1
+        eventType: 1
+        occurredAt: -1
+    - name: idx_rec_learning_scenario_time
+      keys:
+        scenario: 1
+        occurredAt: -1
+    - name: ttl_rec_learning_events
+      keys:
+        createdAt: 1
+      ttl_days: 30

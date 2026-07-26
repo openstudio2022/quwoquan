@@ -21,7 +21,7 @@ from content.release.canonical.release_attestation import (
 )
 
 
-AGGREGATE_ATTESTATION = "aggregate.json"
+RELEASE_ATTESTATION = "release.json"
 
 
 def _read_object(path: Path, *, label: str, issues: list[str]) -> dict:
@@ -63,12 +63,12 @@ def release_lifecycle_issues(release_id: str, *, release_root: Path | None = Non
     required = (
         payload_file(root, "release.json"),
         payload_file(root, "desired_state.json"),
-        attestation_root(root) / AGGREGATE_ATTESTATION,
+        attestation_root(root) / RELEASE_ATTESTATION,
     )
     issues = [f"{path}: missing immutable release evidence" for path in required if not path.is_file()]
     release_file = payload_file(root, "release.json")
     desired_file = payload_file(root, "desired_state.json")
-    aggregate_file = attestation_root(root) / AGGREGATE_ATTESTATION
+    aggregate_file = attestation_root(root) / RELEASE_ATTESTATION
     if not release_file.is_file() or not desired_file.is_file() or not aggregate_file.is_file():
         return issues
 
@@ -81,8 +81,8 @@ def release_lifecycle_issues(release_id: str, *, release_root: Path | None = Non
         assert_valid(
             aggregate,
             "release",
-            "aggregate_release_attestation",
-            label=f"aggregate_release_attestation:{release_id}",
+            "release_attestation",
+            label=f"release_attestation:{release_id}",
         )
     except (FileNotFoundError, ValueError) as exc:
         issues.append(str(exc))

@@ -1,0 +1,7 @@
+backend: redis_stream
+role: append_only
+streams:
+  events.search.recommendation_signals:
+    idempotency_key: signalId
+    retention_seconds: 86400
+    description: 推荐短期意图流；消费方按 signalId 去重，原始查询词不进入日志或 DLQ

@@ -1,0 +1,37 @@
+kind: aggregate_root
+description: '外部可靠交互请求聚合。统一承载短信、推送、一键登录与 webhook 的异步提交、
+
+  provider attempt ledger、回调结果和死信状态。
+
+  '
+identity:
+  fields:
+  - requestId
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships: []
+capabilities:
+- reliable_async
+- auditable
+- callback_enabled
+taggable: false
+vector_enabled: false
+business_rules:
+- interaction type、destination digest 与 payload digest 创建后不可变
+- provider attempt 只能通过 typed append sink 追加，不能更新或删除
+- 同一 idempotency key 与 payload digest 只产生一个 interaction
+- provider callback 必须验证签名、时效和 interaction identity
+- 超过重试预算后只能进入 dead_letter，人工恢复产生新 attempt
+lifecycle:
+  states:
+  - accepted
+  - dispatching
+  - delivered
+  - failed
+  - dead_letter
+  - cancelled
+  optimistic_concurrency: version
+  idempotency: command_receipt

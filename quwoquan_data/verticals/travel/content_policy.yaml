@@ -1,0 +1,67 @@
+policyId: travel-content-supply
+feedMinimumPosts: 20
+contentPerEntity:
+  article: 1
+  image: 1
+  video: 1
+quality:
+  nonEmptyRateMinimum: 0.999
+  duplicateExposureRateMaximum: 0.01
+  homepageMaxSourceFidelity: 0.92
+mediaSubject:
+  representativeIndicators:
+    - landscape
+    - habitat
+    - scenery
+    - scenic
+    - panorama
+    - aerial view
+    - forest
+    - mountain
+    - lake
+    - river
+    - stream
+    - waterfall
+    - architecture
+    - temple
+    - 景观
+    - 风景
+    - 全景
+    - 航拍
+    - 森林
+    - 山岳
+    - 湖泊
+    - 河流
+    - 溪流
+    - 瀑布
+    - 建筑
+    - 寺庙
+    - 栖息地
+  prohibitedIndicators:
+    - holotype
+    - paratype
+    - specimen
+    - sp. nov.
+    - dorsal view
+    - ventral view
+    - 模式标本
+    - 正模标本
+    - 副模标本
+    - 物种标本
+    - 新种描述
+videoDelivery:
+  container: mp4
+  codec: h264
+  width: 1080
+  height: 1920
+  aspectRatio: "9:16"
+  pixelFormat: yuv420p
+  framesPerSecond: 24
+  segmentDurationSeconds: 2
+  minimumSourceFrames: 2
+  minimumDurationSeconds: 6
+  maximumDurationSeconds: 30
+  posterRequired: true
+  subtitlesRequired: true
+  checksumRequired: true
+  rightsProvenanceRequired: true

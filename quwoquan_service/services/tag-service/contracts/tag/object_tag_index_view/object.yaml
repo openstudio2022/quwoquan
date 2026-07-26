@@ -1,0 +1,25 @@
+kind: projection
+description: ObjectTagIndexView 的领域对象契约。
+identity:
+  fields:
+  - objectType
+  - objectId
+  version_source: checkpoint
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: releaseProvenance
+  on_delete: retain
+  reference_fields:
+  - releaseId
+  - visibleFromReleaseId
+  - taxonomyReleaseId
+  target_object: tag.TagTaxonomyRelease
+local_identity_reasons:
+  sourceEventId: durable stream 事件相关键，仅用于幂等审计与故障诊断，不是 ObjectTagIndexView 对象身份

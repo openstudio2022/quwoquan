@@ -65,7 +65,7 @@ DEFAULT_NETWORK_ENDPOINTS = (
     "https://commons.wikimedia.org/",
 )
 _RUNTIME_POLICY = active_runtime_policy()
-DEFAULT_CURSOR_STARTUP_MODEL = _RUNTIME_POLICY.cursor_model
+DEFAULT_CURSOR_STARTUP_MODEL = _RUNTIME_POLICY.cursor_model_selection
 DEFAULT_CURSOR_STARTUP_RUNTIME = _RUNTIME_POLICY.cursor_runtime.value
 DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS = float(_RUNTIME_POLICY.startup_timeout_seconds)
 
@@ -189,7 +189,9 @@ def agent_command_needs_bootstrap(argv: list[str]) -> bool:
     args = list(argv[1:])
     if len(args) >= 2 and args[:2] == ["task", "execute"]:
         return True
-    if len(args) >= 2 and args[:2] == ["governance", "media-canary"]:
+    if len(args) >= 2 and args[:2] == ["verify", "homepage-draft"]:
+        return True
+    if len(args) >= 2 and args[:2] == ["governance", "media-probe"]:
         return True
     return False
 

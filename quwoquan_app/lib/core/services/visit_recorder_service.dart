@@ -20,6 +20,7 @@ class VisitRecorderService {
   final String _boxName;
   final OpsVisitAppendWriter? _remoteWriter;
   Timer? _pendingFlushTimer;
+  bool _terminallyPurged = false;
 
   Future<Box<String>?> _ensurePendingBox() async {
     return HiveRuntime.openStringBoxOrNull(kVisitPendingSyncBoxName);
@@ -30,7 +31,13 @@ class VisitRecorderService {
   }
 
   Future<void> recordVisit(VisitTarget target) async {
+    if (_terminallyPurged) {
+      return;
+    }
     final box = await _ensureBox();
+    if (_terminallyPurged) {
+      return;
+    }
     if (box == null) {
       if (_remoteWriter != null) {
         unawaited(_syncRemote(target));
@@ -136,6 +143,9 @@ class VisitRecorderService {
   }
 
   Future<void> _syncRemote(VisitTarget target) async {
+    if (_terminallyPurged) {
+      return;
+    }
     final writer = _remoteWriter;
     if (writer == null) {
       return;
@@ -150,8 +160,14 @@ class VisitRecorderService {
     );
     try {
       await writer.recordVisit(input);
+      if (_terminallyPurged) {
+        return;
+      }
       _schedulePendingFlush(writer, delay: const Duration(seconds: 4));
     } catch (_) {
+      if (_terminallyPurged) {
+        return;
+      }
       await _enqueuePending(input);
       _schedulePendingFlush(writer, delay: const Duration(seconds: 12));
     }
@@ -161,6 +177,9 @@ class VisitRecorderService {
     OpsVisitAppendWriter writer, {
     Duration delay = const Duration(seconds: 8),
   }) {
+    if (_terminallyPurged) {
+      return;
+    }
     _pendingFlushTimer?.cancel();
     _pendingFlushTimer = Timer(delay, () {
       _pendingFlushTimer = null;
@@ -169,13 +188,19 @@ class VisitRecorderService {
   }
 
   Future<void> _flushPending(OpsVisitAppendWriter writer) async {
+    if (_terminallyPurged) {
+      return;
+    }
     final box = await _ensurePendingBox();
-    if (box == null) {
+    if (_terminallyPurged || box == null) {
       return;
     }
     final keys = box.keys.map((key) => key.toString()).toList(growable: false)
       ..sort();
     for (final key in keys) {
+      if (_terminallyPurged) {
+        break;
+      }
       final raw = box.get(key);
       if (raw == null || raw.isEmpty) {
         await box.delete(key);
@@ -195,8 +220,11 @@ class VisitRecorderService {
   }
 
   Future<void> _enqueuePending(OpsVisitReportInput input) async {
+    if (_terminallyPurged) {
+      return;
+    }
     final box = await _ensurePendingBox();
-    if (box == null) {
+    if (_terminallyPurged || box == null) {
       return;
     }
     final key = DateTime.now().microsecondsSinceEpoch.toString();
@@ -209,6 +237,24 @@ class VisitRecorderService {
       final overflow = box.length - maxBacklog;
       for (var i = 0; i < overflow; i++) {
         await box.delete(keys[i]);
+      }
+    }
+  }
+
+  Future<void> clearForTerminalAccountClosure() async {
+    _terminallyPurged = true;
+    _pendingFlushTimer?.cancel();
+    _pendingFlushTimer = null;
+    for (final boxName in <String>[_boxName, kVisitPendingSyncBoxName]) {
+      final box = await HiveRuntime.openStringBoxOrNull(boxName);
+      if (box == null) {
+        continue;
+      }
+      await box.clear();
+      if (box.isNotEmpty) {
+        throw StateError(
+          'visit state cleanup verification failed for $boxName',
+        );
       }
     }
   }

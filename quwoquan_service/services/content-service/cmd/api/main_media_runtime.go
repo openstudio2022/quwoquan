@@ -11,21 +11,28 @@ import (
 
 	rthealth "quwoquan_service/runtime/health"
 	runtimemedia "quwoquan_service/runtime/media"
-	commentapp "quwoquan_service/services/content-service/internal/application/comment"
-	iplocation "quwoquan_service/services/content-service/internal/application/iplocation"
-	mediaapp "quwoquan_service/services/content-service/internal/application/media"
-	mediaprocessing "quwoquan_service/services/content-service/internal/application/media/processing"
-	mediareprocess "quwoquan_service/services/content-service/internal/application/media/reprocess"
-	postapp "quwoquan_service/services/content-service/internal/application/post"
-	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
-	mediainfra "quwoquan_service/services/content-service/internal/infrastructure/content/media"
-	mediaprocinfra "quwoquan_service/services/content-service/internal/infrastructure/content/media/processing"
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
+	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	postapp "quwoquan_service/services/content-service/internal/content/post/application"
+	iplocation "quwoquan_service/services/content-service/internal/content/post/application/iplocation"
+	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
+	mediaprocessing "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
+	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
+	mediainfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
+	mediaprocinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media/processing"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/objectstorage"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	mediareprocess "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/application"
+	uploadsession "quwoquan_service/services/content-service/internal/media/media_upload_session/application"
+	uploadsessionstorage "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/objectstorage"
+	uploadsessionpersistence "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/persistence"
+
+	runtimeconfig "quwoquan_service/runtime/config"
 )
 
 type mediaRuntimeComposition struct {
 	mediaService               *mediaapp.Facades
+	mediaUploadSessionService  *uploadsession.UseCases
 	mediaImageReprocessService *mediareprocess.Service
 	mediaObjectGateway         *mediainfra.ObjectGateway
 	commentServiceCore         *commentapp.CommentService
@@ -40,18 +47,23 @@ func buildMediaRuntime(
 	logger *slog.Logger,
 	healthChecker *rthealth.Checker,
 	mediaStore *persistence.MongoMediaStore,
+	mediaUploadSessionStore *uploadsessionpersistence.MongoStore,
 	commentDataAdapter *persistence.MongoCommentDataAdapter,
 	reactionStore *persistence.MongoContentReactionStore,
 	recDB *mongo.Database,
 	postMediaReader postports.MediaReferencedPostReader,
 	viewerBlockReader *recinfra.PersonaBlockReader,
 ) (mediaRuntimeComposition, func()) {
+	ossBinding, err := objectstorage.LoadBinding(appEnv, runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("content-service object storage binding invalid: %v", err)
+	}
 	ossCfg := runtimemedia.OSSConfig{
-		Endpoint:        contentOSSEndpoint(getenvOrDefault("CONTENT_OSS_ENDPOINT", cfg.OSS.Endpoint), cfg.OSS.UseSSL),
+		Endpoint:        contentOSSEndpoint(ossBinding.Endpoint, cfg.OSS.UseSSL),
 		Bucket:          getenvOrDefault("CONTENT_OSS_BUCKET", cfg.OSS.Bucket),
 		Region:          getenvOrDefault("CONTENT_OSS_REGION", cfg.OSS.Region),
-		AccessKeyID:     getenvOrDefault("CONTENT_OSS_ACCESS_KEY_ID", cfg.OSS.AccessKeyID),
-		AccessKeySecret: getenvOrDefault("CONTENT_OSS_ACCESS_KEY_SECRET", cfg.OSS.AccessKeySecret),
+		AccessKeyID:     ossBinding.AccessKeyID,
+		AccessKeySecret: ossBinding.AccessKeySecret,
 		CDNDomain:       getenvOrDefault("CONTENT_CDN_DOMAIN", cfg.OSS.CDNDomain),
 		CDNSignKey:      getenvOrDefault("CONTENT_CDN_SIGN_KEY", cfg.OSS.CDNSignKey),
 		PresignTTL:      time.Duration(cfg.OSS.PresignTTLMin) * time.Minute,
@@ -70,7 +82,12 @@ func buildMediaRuntime(
 		log.Fatal("content-service OSS endpoint, bucket, region, credentials, CDN domain and signing key are required")
 	}
 	ossPresigner := runtimemedia.NewS3PresignClient(ossCfg)
-	log.Printf("content-service oss presigner=s3 endpoint=%s bucket=%s", ossCfg.Endpoint, ossCfg.Bucket)
+	log.Printf(
+		"content-service oss adapter=%s presigner=s3 endpoint=%s bucket=%s",
+		ossBinding.AdapterID,
+		ossCfg.Endpoint,
+		ossCfg.Bucket,
+	)
 
 	mediaObjectGateway, err := mediainfra.NewObjectGateway(mediainfra.ObjectGatewayConfig{
 		Bucket: ossCfg.Bucket, CDNDomain: ossCfg.CDNDomain, CDNSignKey: ossCfg.CDNSignKey, DeliveryTTL: ossCfg.CDNTTL,
@@ -80,6 +97,9 @@ func buildMediaRuntime(
 	}
 	if mediaStore == nil {
 		log.Fatal("content-service MediaUploadSession/MediaAsset store is not configured")
+	}
+	if mediaUploadSessionStore == nil {
+		log.Fatal("content-service MediaUploadSession store is not configured")
 	}
 	if postMediaReader == nil || viewerBlockReader == nil {
 		log.Fatal("content-service Post media visibility reader is not configured")
@@ -92,6 +112,19 @@ func buildMediaRuntime(
 		),
 	)
 	mediaService := mediaapp.BindFacades(mediaServiceCore)
+	mediaUploadSessionGateway, err := uploadsessionstorage.NewGateway(
+		uploadsessionstorage.Config{
+			Bucket: ossCfg.Bucket,
+		},
+		ossPresigner,
+	)
+	if err != nil {
+		log.Fatalf("content-service media upload session object gateway invalid: %v", err)
+	}
+	mediaUploadSessionService := uploadsession.NewUseCases(
+		mediaUploadSessionStore,
+		mediaUploadSessionGateway,
+	)
 
 	// Media processing worker 是 media outbox 的唯一生产消费者。图片与视频发布
 	// 都依赖 processing -> ready/rejected 的确定终态，因此生产组合不提供禁用或内存回退。
@@ -117,6 +150,7 @@ func buildMediaRuntime(
 		mediaServiceCore,
 		mediaStore,
 		mediaprocessing.WithObserver(mediaprocinfra.NewMetricsObserver()),
+		mediaprocessing.WithArtifactCleanup(mediaStore, mediaObjectGateway),
 	)
 	workerInterval := time.Duration(cfg.MediaProcessing.IntervalMs) * time.Millisecond
 	if workerInterval <= 0 {
@@ -190,6 +224,7 @@ func buildMediaRuntime(
 
 	return mediaRuntimeComposition{
 		mediaService:               mediaService,
+		mediaUploadSessionService:  mediaUploadSessionService,
 		mediaImageReprocessService: mediaImageReprocessService,
 		mediaObjectGateway:         mediaObjectGateway,
 		commentServiceCore:         commentServiceCore,

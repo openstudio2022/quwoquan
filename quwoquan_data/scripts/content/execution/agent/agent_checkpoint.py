@@ -249,6 +249,7 @@ def _finalize_managed_author_outputs(
     from content.execution.controller.post_author_evidence import (
         write_post_author_evidence,
     )
+    from content.execution.runtime_contract import stage_execution_context
 
     for job_outcome in outcomes:
         if not job_outcome.succeeded:
@@ -277,8 +278,15 @@ def _finalize_managed_author_outputs(
             write_post_author_evidence(ctx, ref=ref, outcome=outcome)
             continue
         if is_image_carrier:
-            if _managed_image_author_meta_issues(meta, writing_pack=pack, require_agent_run=False):
-                continue
+            image_issues = _managed_image_author_meta_issues(
+                meta,
+                writing_pack=pack,
+                require_agent_run=False,
+            )
+            if image_issues:
+                raise ValueError(
+                    f"{ref}: image author output invalid: " + "; ".join(image_issues)
+                )
             title = str(meta.get("title") or "").strip()
             caption = str(meta.get("caption") or "").strip()
             cited_paths = meta.get("citedSourcePaths") or pack.get("sourcePaths") or []
@@ -299,9 +307,14 @@ def _finalize_managed_author_outputs(
             enriched_meta = dict(meta)
             enriched_meta.update(
                 {
+                    "schema": "quwoquan_data.draft_meta",
+                    "stage": "4.draft",
+                    **stage_execution_context(ctx.execution_id),
+                    "objectRef": ref,
                     "ref": ref,
                     "generator": "image_evidence_pack",
                     "status": "completed",
+                    "provider": "cursor_sdk",
                     "model": meta.get("model") or ctx.model,
                     "agentRunId": outcome.run_id or meta.get("agentRunId"),
                     "agentId": outcome.agent_id or meta.get("agentId"),
@@ -333,9 +346,14 @@ def _finalize_managed_author_outputs(
         enriched_meta = dict(meta)
         enriched_meta.update(
             {
+                "schema": "quwoquan_data.draft_meta",
+                "stage": "4.draft",
+                **stage_execution_context(ctx.execution_id),
+                "objectRef": ref,
                 "ref": ref,
                 "generator": "agent",
                 "status": "completed",
+                "provider": "cursor_sdk",
                 "model": meta.get("model") or ctx.model,
                 "agentRunId": outcome.run_id or meta.get("agentRunId"),
                 "agentId": outcome.agent_id or meta.get("agentId"),

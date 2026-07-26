@@ -17,7 +17,7 @@ def test_governance_schemas_are_valid_json_and_freeze_status_vocabulary() -> Non
         "backfill_event.schema.json",
         "candidate.schema.json",
         "cleanup_report.schema.json",
-        "cold_start_supply_policy.schema.json",
+        "content_supply_policy.schema.json",
         "discovery_checkpoint.schema.json",
         "master_list.schema.json",
         "review.schema.json",

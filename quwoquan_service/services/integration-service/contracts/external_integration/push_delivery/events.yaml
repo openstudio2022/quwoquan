@@ -1,0 +1,71 @@
+events:
+- name: PushDeliveryQueued
+  description: 外部推送请求已进入可靠队列。
+  producer: integration-service
+  consumers:
+  - notification-service
+  - platform-ops
+  channel: event_store
+  payload_fields:
+  - requestId
+  - action
+  - endpointRef
+  - deliveryKey
+  - callId
+  - callType
+  - queuedAt
+- name: PushDeliveryProviderAttempted
+  description: 一次推送 provider 调用尝试已完成并写入 ledger。
+  producer: integration-service
+  consumers:
+  - platform-ops
+  channel: event_store
+  payload_fields:
+  - requestId
+  - provider
+  - providerRequestId
+  - status
+  - latencyMs
+  - normalizedError
+- name: PushDeliverySucceeded
+  description: 外部推送已被供应商接受；APNs/FCM 无端到端送达回执时状态为 sent_unconfirmed。
+  producer: integration-service
+  consumers:
+  - notification-service
+  - platform-ops
+  channel: callback_or_event
+  payload_fields:
+  - requestId
+  - action
+  - deliveryKey
+  - callId
+  - provider
+  - providerRequestId
+  - status
+- name: PushDeliveryFailed
+  description: 外部推送最终失败。
+  producer: integration-service
+  consumers:
+  - notification-service
+  - platform-ops
+  channel: callback_or_event
+  payload_fields:
+  - requestId
+  - action
+  - deliveryKey
+  - callId
+  - provider
+  - normalizedError
+  - recoveryAction
+- name: PushEndpointInvalidationRequested
+  description: APNs/FCM 返回永久 endpoint 错误后，请求 user-service 失效对应 endpointRef。
+  producer: integration-service
+  consumers:
+  - user-service
+  - platform-ops
+  channel: internal_http_audit
+  payload_fields:
+  - endpointRef
+  - endpointKind
+  - normalizedError
+  - requestedAt

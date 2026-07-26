@@ -2,6 +2,32 @@
 from __future__ import annotations
 from content.execution.support import Any, Mapping, Path, Sequence, _MANAGED_LOCAL_DATA_CLI_MARKERS, _MANAGED_LOCAL_DESTRUCTIVE_MARKERS, _normalize_managed_agent_provider, os, re, shlex, signal, store, time
 
+
+class ManagedWorkspaceConflictError(RuntimeError):
+    """A local Cursor execution would contend for the same workspace."""
+
+
+_EXECUTION_OUTPUT_CLEANUP_MARKERS = (
+    "rm -rf",
+    "rm -r ",
+    "shutil.rmtree",
+    "rmtree(",
+    "-delete",
+)
+
+
+def _deletes_execution_output(command: str, workspace: Path) -> bool:
+    """Return whether a live shell is deleting this checkout's task work packages."""
+    normalized = str(command or "").replace("\\\\", "/")
+    task_roots = (
+        str((workspace / ".qwq_output" / "data" / "tasks").resolve()),
+        ".qwq_output/data/tasks",
+    )
+    return (
+        any(marker in normalized for marker in _EXECUTION_OUTPUT_CLEANUP_MARKERS)
+        and any(root in normalized for root in task_roots)
+    )
+
 def _managed_process_monitor_command(command: str) -> bool:
     stripped = command.strip()
     return (
@@ -51,6 +77,20 @@ def _managed_command_execution_id(command: str) -> str:
             execution_id = part.split("=", 1)[1]
     return str(execution_id or "")
 
+
+def _is_data_cli_process(command: str) -> bool:
+    """Recognize the Python CLI process itself, never a parent shell's text."""
+    try:
+        parts = shlex.split(str(command or ""))
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    executable = Path(parts[0]).name.lower()
+    return executable.startswith("python") and any(
+        part.endswith("scripts/cli.py") for part in parts[1:]
+    )
+
 def _cursor_bridge_in_workspace(command: str, process_cwd: str, workspace: Path) -> bool:
     bridge_workspace = _cursor_bridge_workspace_from_command(command)
     if bridge_workspace:
@@ -93,8 +133,7 @@ def _managed_local_workspace_conflicts(workspace: Path) -> list[dict[str, Any]]:
                 kind = "managed_agent_worker"
         elif (
             not monitor_command
-            and
-            ("quwoquan_data/scripts/cli.py" in command or "scripts/cli.py" in command)
+            and _is_data_cli_process(command)
             and any(marker in command for marker in _MANAGED_LOCAL_DATA_CLI_MARKERS)
             and any(marker in command for marker in _MANAGED_LOCAL_DESTRUCTIVE_MARKERS)
         ):
@@ -103,8 +142,14 @@ def _managed_local_workspace_conflicts(workspace: Path) -> list[dict[str, Any]]:
                 kind = "destructive_data_cli"
         elif (
             not monitor_command
-            and
-            ("quwoquan_data/scripts/cli.py" in command or "scripts/cli.py" in command)
+            and _deletes_execution_output(command, workspace_path)
+        ):
+            process_cwd = cwd_by_pid.setdefault(pid, _process_cwd(pid))
+            if _process_in_workspace(process_cwd, workspace_path, command):
+                kind = "execution_output_cleanup"
+        elif (
+            not monitor_command
+            and _is_data_cli_process(command)
             and any(marker in command for marker in _MANAGED_LOCAL_DATA_CLI_MARKERS)
         ):
             process_cwd = cwd_by_pid.setdefault(pid, _process_cwd(pid))
@@ -136,6 +181,37 @@ def _managed_workspace_conflicts_for_provider(
         for item in conflicts
         if str(item.get("kind") or "") != "cursor_sdk_bridge"
     ]
+
+
+def assert_managed_workspace_available(
+    workspace: Path,
+    *,
+    provider: str,
+    execution_id: str,
+) -> None:
+    """Fail before execution setup when another task owns the local workspace."""
+    from content.execution.agent.agent_runner import _redact_managed_secret
+
+    conflicts = _managed_workspace_conflicts_for_provider(
+        _managed_local_workspace_conflicts(workspace),
+        provider,
+    )
+    foreign = [
+        item
+        for item in conflicts
+        if _managed_command_execution_id(str(item.get("command") or ""))
+        != execution_id
+    ]
+    if not foreign:
+        return
+    rendered = "; ".join(
+        f"{item.get('kind')} pid={item.get('pid')}"
+        for item in foreign[:8]
+    )
+    raise ManagedWorkspaceConflictError(
+        "managed local workspace is occupied by another execution: "
+        + _redact_managed_secret(rendered)
+    )
 
 def _cross_task_managed_data_cli_conflicts(
     conflicts: Sequence[Mapping[str, Any]],

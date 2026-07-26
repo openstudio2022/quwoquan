@@ -27,6 +27,7 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
             {"image": f"example/{name}:digest", "environment": {}, "volumes": []},
             {name, "product-ops-service"},
             image_version="1.20260720.1",
+            config_version="config-20260720-1",
             versioned_image=True,
             instance="prod",
             config_root="/runtime/config-root",
@@ -79,7 +80,7 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
         )
 
     def test_non_go_recommendation_process_is_not_given_unused_spool(self) -> None:
-        rendered = self.rewrite("rec-model-service")
+        rendered = self.rewrite("recommendation-service")
         env = rendered["environment"]
         self.assertNotIn("RUNTIME_LOG_INGEST_URL", env)
         self.assertNotIn("RUNTIME_LOG_SPOOL_DIR", env)

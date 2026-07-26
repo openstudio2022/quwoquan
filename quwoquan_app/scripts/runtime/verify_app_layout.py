@@ -4,6 +4,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_ROOT = ROOT / "quwoquan_app"
@@ -52,6 +54,8 @@ ALLOWED_TRACKED_EXECUTABLE_PREFIXES = (
     "quwoquan_app/vendor/commercial_auth/alipay/",
     "quwoquan_app/vendor/commercial_auth/qq/",
 )
+REMOTE_RUNTIME_ENVS = ("alpha", "beta", "gamma", "prod")
+RETIRED_RUNTIME_SEED_TOKENS = ("fixture_", "mock", "test_fixtures")
 
 
 def _rel(path: Path) -> str:
@@ -67,6 +71,35 @@ def _tracked_files() -> list[str]:
         capture_output=True,
     )
     return [line for line in result.stdout.splitlines() if line]
+
+
+def _remote_runtime_config_issues() -> list[str]:
+    issues: list[str] = []
+    for env_name in REMOTE_RUNTIME_ENVS:
+        path = APP_ROOT / "configs" / env_name / "app_runtime.yaml"
+        if not path.is_file():
+            issues.append(f"{_rel(path)}: missing remote runtime config")
+            continue
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:
+            issues.append(f"{_rel(path)}: invalid runtime YAML: {exc}")
+            continue
+        if not isinstance(document, dict):
+            issues.append(f"{_rel(path)}: runtime config must be a mapping")
+            continue
+        runtime = document.get("runtime")
+        seed = document.get("seed")
+        if not isinstance(runtime, dict) or not isinstance(seed, dict):
+            issues.append(f"{_rel(path)}: runtime and seed mappings are required")
+            continue
+        for field, value in (("runtime.currentUserId", runtime.get("currentUserId")), ("seed.manifest", seed.get("manifest"))):
+            text = str(value or "").lower()
+            if any(token in text for token in RETIRED_RUNTIME_SEED_TOKENS):
+                issues.append(f"{_rel(path)}: {field} must not reference fixture or mock data")
+        if seed.get("enabled") is not False:
+            issues.append(f"{_rel(path)}: remote runtime seed.enabled must be false")
+    return issues
 
 
 def app_layout_issues() -> list[str]:
@@ -97,7 +130,7 @@ def app_layout_issues() -> list[str]:
             )
             if is_executable and not is_allowed_vendor_binary:
                 issues.append(f"{tracked}: executable binary must not be tracked")
-    return issues
+    return issues + _remote_runtime_config_issues()
 
 
 def main() -> int:

@@ -1,0 +1,28 @@
+entity: ContentReaction
+domain: CONTENT
+description: 'ContentReaction 对象专属错误码。共享错误码唯一定义于 content/content/post/errors.yaml；
+
+  content 域 codegen 与端云 parity 按固定文件列表合并，code 全域唯一。
+
+  '
+errors:
+- code: CONTENT.USER.comment_like_duplicate
+  kind: USER
+  reason: comment_like_duplicate
+  http_status: 409
+  recovery_action: surface
+  dart_const: commentLikeDuplicate
+  go_const: ErrCommentLikeDuplicate
+  user_message:
+    zh: 已经点过赞了
+    en: Already liked
+- code: CONTENT.USER.comment_reaction_forbidden
+  kind: USER
+  reason: comment_reaction_forbidden
+  http_status: 403
+  recovery_action: surface
+  dart_const: commentReactionForbidden
+  go_const: ErrCommentReactionForbidden
+  user_message:
+    zh: 当前无法评价这条评论
+    en: Not allowed to react to this comment

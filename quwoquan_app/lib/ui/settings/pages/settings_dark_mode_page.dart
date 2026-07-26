@@ -206,8 +206,8 @@ class SettingsDarkModePage extends ConsumerWidget {
         .trackEvent(
           AnalyticsEvent(
             eventType: 'settings',
-        eventName: action,
-            properties: <String, dynamic>{'action': action},
+            eventName: action,
+            properties: <String, Object?>{'action': action},
           ),
         );
   }

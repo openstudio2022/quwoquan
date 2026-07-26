@@ -47,6 +47,15 @@ class JsonObject:
             raise JsonObjectDecodeError(f"{key} must be a non-empty string array")
         return tuple(value)
 
+    def string_list(self, key: str) -> tuple[str, ...]:
+        """Read a string array that may intentionally be empty."""
+        value = self.value(key)
+        if not isinstance(value, list) or any(
+            not isinstance(item, str) or not item.strip() for item in value
+        ):
+            raise JsonObjectDecodeError(f"{key} must be a string array")
+        return tuple(value)
+
     def integer(self, key: str) -> int:
         value = self.value(key)
         if isinstance(value, bool) or not isinstance(value, int):

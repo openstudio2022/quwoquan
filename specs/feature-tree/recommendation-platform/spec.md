@@ -1,48 +1,90 @@
-# L1 特性：recommendation-platform（推荐/ML 平台）
+# L1 Domain Service：推荐与模型平台 (`recommendation-platform`)
 
-## 功能说明
+> 一句话定位：将行为和内容特征转化为可版本化、可评估、可晋升并可回滚的推荐模型能力。
 
-- **定位**：推荐与 ML 平台能力域，下辖训练、推理与评估飞轮能力，与 runtime 下的 Go 推荐引擎通过 HTTP/离线产物协作：
-  - **rec-model-training**（训练集部署工程服务）：对接不同训练场景，样本→数据集→训练→模型注册；部署形态为任务/训练镜像。
-  - **rec-model-service**（模型服务）：装载不同模型，暴露 POST /score，对接 Go 业务服务；部署形态为常驻推理服务。
-  - **evaluation-and-flywheel**（评估与飞轮）：离线 replay、在线 AB 显著性与真实流量训练晋升证据；不直接写业务库。
-- **服务清单**：计为**两个独立服务**（rec-model-training、rec-model-service），与 content-service、user-service 等并列，开发与运维边界清晰。
-- **分离依据**：训练与推理在实际部署上为两种形态（任务/作业 vs 常驻服务），职责、SLA 与契约不同；设计动因与结构见 [design.md](design.md)。
+## 1. 目标与用户价值
 
-## 与 runtime 的关系
+为训练、推理和评估提供统一模型生命周期，使推荐策略能够基于真实反馈安全晋升或回滚，并通过 HTTP 或不可变离线产物与 Go 推荐引擎协作。
 
-- **runtime**（L1）：推荐引擎（dual-channel-recommendation-engine）通过 HTTP 调用本平台下的 **rec-model-service** 完成 ML 打分；不直接依赖 rec-model-training。
-- **本平台**：不归属 runtime，独立部署、独立版本与门禁。
+## 2. 领域边界
 
-## 约束
+### 本领域拥有
 
-- 训练与推理均不写业务库；仅读 rec_learning_events、rec_training_samples、rm_recommend_feature 等。
-- 推理 API 需满足 Go 侧超时预算（如 30–50ms），超时或失败时由 Go CascadeScorer 回退 RuleScorer。
-- 两 L3 共用 feature_registry、ModelPredictRequest/Response 契约；训练产出与推理加载通过 ModelRegistry + OSS 解耦。
+- 拥有训练数据集引用、模型版本、评估结果、晋升决定和推理服务版本的生命周期与写入决定权。
+- 只能通过本领域公开 command 修改其拥有事实。
 
-## 适用范围与约束
+### 本领域不拥有
 
-- **适用**：推荐/ML 场景下「训练（批/任务）」与「推理（常驻服务）」分离的架构；当前模型形态为 LightGBM/规则可回退，场景为 content_feed 等有限 scenario；与 runtime 推荐引擎通过 HTTP 集成、不直接依赖训练侧。
-- **不适用/不负责**：非推荐场景（如纯检索、风控模型）的模型服务形态不在本节点约定；按 scenario 拆成多推理服务、训练侧对外暴露「提交训练任务」API 等，由后续 L3 Story 的 spec/acceptance 说明。
-- **前置条件**：ModelRegistry + OSS/TOS 可用；Go 侧已具备 CascadeScorer 与 RuleScorer 兜底；feature_registry 与推理契约已对齐。
+- 不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
+- 不复制 metadata 中的字段、path、错误码和 wire 语义。
 
-## 子节点与验收重点
+### 上下游协作
 
-| L3 | 说明 | 验收重点 |
-|----|------|----------|
-| rec-model-training | 训练管线 + 训练部署 | 样本→数据集→训练→注册可跑通；feature_registry 与推理侧一致；见本节点 acceptance。 |
-| rec-model-service | 推理 API + Go 集成 + 推理部署 | generated operation、延迟与兜底、契约与 metadata 一致；见本节点 acceptance。 |
-| evaluation-and-flywheel | replay 评估 + 在线 AB + 真实训练晋升 | NDCG/Recall@K/MAP/覆盖率/多样性、AB 显著性与 reload 证据；深度模型仍为长期上限。 |
+- 上游：AppRoot Journey 与公开输入事实。
+- 下游：直接 L2 能力以及协作 L1 的公开结果。
+- 跨域写入：目标领域公开 command；禁止直写目标存储。
+- 跨域读取：目标领域公开 query/projection。
 
-## 进入开发前置条件
+## 3. Journey / Scenario 职责
 
-- 进入两服务（rec-model-training、rec-model-service）Implement 前须通过 G1，并以各节点
-  `spec.md` / `acceptance.yaml` 与 metadata 验证结果为准。
+- [`JNY-011 / SCN-026`](../spec.md#scn-026)
+  - 本领域负责：在“对象页交集行动深化（同趣围观到破冰升级）”中，基于行为、对象和模型版本生成排序或交集候选，并保留评估与回滚边界。
+  - 进入条件：`object-homepage-network` 已交付其公开结果。
+  - 交付给下游的结果：基于行为、对象和模型版本生成排序或交集候选，并保留评估与回滚边界，供 `chat-conversation` 继续处理。
+  - 不负责：不写入内容、关系、圈子或会话事实，也不由模型结果绕过权限。
+- [`JNY-011 / SCN-027`](../spec.md#scn-027)
+  - 本领域负责：在“附近同趣·结伴同行·线下局”中，基于行为、对象和模型版本生成排序或交集候选，并保留评估与回滚边界。
+  - 进入条件：`circle-community` 已交付其公开结果。
+  - 交付给下游的结果：基于行为、对象和模型版本生成排序或交集候选，并保留评估与回滚边界，供 `user-identity-profile-relationship` 继续处理。
+  - 不负责：不写入内容、关系、圈子或会话事实，也不由模型结果绕过权限。
+- [`JNY-011 / SCN-028`](../spec.md#scn-028)
+  - 本领域负责：在“派生称谓与联系人标签驱动连接”中，基于行为、对象和模型版本生成排序或交集候选，并保留评估与回滚边界。
+  - 进入条件：`chat-conversation` 已交付其公开结果。
+  - 交付给下游的结果：基于行为、对象和模型版本生成排序或交集候选，并保留评估与回滚边界，形成该场景中本领域负责的终态。
+  - 不负责：不写入内容、关系、圈子或会话事实，也不由模型结果绕过权限。
 
-## 验收标准（L1 概要）
+## 4. 业务能力
 
-- A1：两 L3 边界清晰，训练侧无推理 API 交付责任，推理侧无训练镜像交付责任。
-- A2：rec-model-service 推理延迟与可用性满足约定；超时/失败时 Go 侧可回退。
-- A3：evaluation-and-flywheel 冻结离线 replay、在线 AB 与真实训练晋升口径，证明“越用越准”。
-- A7：rec_model_service 契约与 metadata/OpenAPI/endpoint_catalog 一致。
-- A8：训练管线与推理 API 各有对应 local_contract、api_integration 与必要的 user_acceptance。
+- [`evaluation-and-flywheel`](./evaluation-and-flywheel/spec.md)：推荐准确性评估、在线 AB 和真实流量训练晋升闭环。
+- [`rec-model-service`](./rec-model-service/spec.md)：**定位**：推荐平台下的模型推理服务，装载不同 scenario 的模型，对接 Go 业务服务（content-service 等）提供统一打分能力。
+- [`rec-model-training`](./rec-model-training/spec.md)：**定位**：推荐平台下的训练工程服务，对接不同模型训练场景（content_feed / circle_discovery / friend_suggestion），产出模型与元信息写入 ModelRegistry + OSS/TOS，供模型服务加载。
+
+## 5. 领域要求
+
+<a id="req-001"></a>
+### REQ-001 recommendation platform 领域边界验收
+
+- 领域边界、上下游依赖、工程映射和服务治理清晰。
+- evaluation-and-flywheel 的离线 replay、在线 AB 与真实训练晋升规格已登记，且不与训练/推理服务职责混淆。
+
+## 6. 领域验收
+
+<a id="dom-001"></a>
+### DOM-001 recommendation platform 领域边界验收
+
+- 条件：本领域收到有效输入且前置领域事实成立。
+- 可观察结果：领域边界、上下游依赖、工程映射和服务治理清晰。；evaluation-and-flywheel 的离线 replay、在线 AB 与真实训练晋升规格已登记，且不与训练/推理服务职责混淆。
+- 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
+
+## 7. 工程归属
+
+- App（协作引用，不用于代码归属）：`quwoquan_app/lib/ui/discovery`
+- Metadata：`quwoquan_service/contracts/metadata/_vectors`
+- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/recommendation-service/contracts`
+- Service：`quwoquan_service/services/recommendation-service`
+- Service（协作引用，不用于代码归属）：`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime`
+- 测试：
+  - `local_contract`：`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime`
+  - `api_integration`：`quwoquan_service/services/recommendation-service/tests`
+  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 recommendation platform 领域边界验收
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：领域边界、上下游依赖、工程映射和服务治理清晰。
+- 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效

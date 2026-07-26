@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"quwoquan_service/services/product-ops-service/internal/application"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 )
 
 type l1l4MetricsScope struct {

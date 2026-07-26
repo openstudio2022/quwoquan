@@ -36,11 +36,11 @@ MESSAGE_WRITER = ENGINE.with_name("alpha_message_writer.dart")
 PROTOTYPE = ROOT / "quwoquan_app/lib/core/mock/prototype_mock_data.dart"
 CHAT_FIXTURE = (
     ROOT
-    / "quwoquan_service/contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.json"
+    / "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json"
 )
 GO_HANDLER_SUPPORT = (
     ROOT
-    / "quwoquan_service/services/chat-service/internal/adapters/http/chat_handler_support.go"
+    / "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/http/chat_handler_support.go"
 )
 
 violations: list[str] = []

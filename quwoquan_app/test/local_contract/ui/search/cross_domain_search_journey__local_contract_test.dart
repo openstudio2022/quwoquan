@@ -1,16 +1,16 @@
-import 'dart:convert';
-
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-001
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import '../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
@@ -238,16 +238,19 @@ void main() {
   });
 
   testWidgets('最近搜索本地水合后可见并可重新发起 suggest', (tester) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'global_search_recent_entries_v1': jsonEncode(<Map<String, dynamic>>[
-        <String, dynamic>{
-          'entryId': '西湖',
-          'query': '西湖',
-          'scope': SearchScope.all.wireValue,
-          'updatedAt': DateTime(2026, 3, 22, 10).toIso8601String(),
-        },
-      ]),
-    });
+    final cachedEntry = RecentSearchEntryView(
+      entryId: 'local-pending-west-lake',
+      query: '西湖',
+      scope: SearchScope.all,
+      facet: null,
+      updatedAt: DateTime(2026, 3, 22, 10),
+    );
+    await SearchRecentHistoryStore(actorNamespace: 'guest').save(
+      SearchRecentHistoryCacheSnapshot(
+        entries: <RecentSearchEntryView>[cachedEntry],
+        pendingUpsertKeys: const <String>{'all||西湖'},
+      ),
+    );
     await sizeAndPump(
       tester,
       _buildApp(searchRepository: _JourneySearchRepository()),
@@ -256,6 +259,15 @@ void main() {
 
     expect(find.text('搜索历史'), findsOneWidget);
     expect(find.text('西湖'), findsWidgets);
+    final hydratedCache = await SearchRecentHistoryStore(
+      actorNamespace: 'guest',
+    ).load();
+    expect(hydratedCache.pendingUpsertKeys, isEmpty);
+    expect(
+      hydratedCache.entries.single.entryId,
+      isNot('local-pending-west-lake'),
+      reason: 'Remote 回填成功后必须持久化 canonical entryId',
+    );
 
     await tester.tap(find.text('西湖').first);
     await _pumpUntil(
@@ -382,7 +394,12 @@ void main() {
     expect(resultImpression.referralSource, ReferralSource.search);
     expect(resultImpression.feedRequestId, isNotNull);
     expect(resultImpression.feedRequestId, isNotEmpty);
-    expect(resultImpression.tags, contains('西湖'));
+    expect(resultImpression.channelId, 'all');
+    expect(
+      resultImpression.tags,
+      anyOf(isNull, isEmpty),
+      reason: '原始查询词与 surface/tab 不能伪装成 canonical tagRefs',
+    );
   });
 }
 
@@ -570,7 +587,7 @@ class _FlakyXiaoquAssistantRepository extends _FakeAssistantRepository {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
+    AssistantContextSnapshot? contextSnapshot,
   }) async {
     if (failNext) {
       throw StateError('xiaoqu backend unavailable');
@@ -588,13 +605,13 @@ class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
+    AssistantContextSnapshot? contextSnapshot,
   }) async {
     return AssistantSearchResultView(
       queryEcho: query,
       summary: '$query 的推荐结果',
       searchIntensity: searchIntensity,
-      citations: const <AssistantSearchCitationView>[
+      citations: <AssistantSearchCitationView>[
         AssistantSearchCitationView(
           citationId: 'citation_1',
           objectType: 'content.post',
@@ -602,6 +619,11 @@ class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
           title: '西湖夜景推荐',
           snippet: '小趣整理的推荐结果',
           sourceDomain: '小趣搜',
+          destination: CitationDestination(
+            kind: CitationDestinationKind.internal,
+            objectTypeRef: 'content.post',
+            objectId: 'post_1',
+          ),
         ),
       ],
     );

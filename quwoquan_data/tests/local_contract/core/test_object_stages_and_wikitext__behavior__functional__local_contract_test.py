@@ -43,21 +43,21 @@ def test_wikitext_parse_outline_and_placements() -> None:
 
 def test_putuoshan_snapshot_keeps_all_17_images_and_cleans_dimension_caption() -> None:
     gallery_rows = "\n".join(
-        f"File:普陀山图集_{index:02d}.jpg|普陀山图集说明{index:02d}"
+        f"File:测试实体甲图集_{index:02d}.jpg|测试实体甲图集说明{index:02d}"
         for index in range(1, 13)
     )
-    text = f"""[[File:南海观音像.jpg|thumb|[[普陀山南海观音立像|普陀山“南海观音”]]|291x291px]]
+    text = f"""[[File:南海观音像.jpg|thumb|[[测试实体甲南海观音立像|测试实体甲“南海观音”]]|291x291px]]
 
 == 地理生态 ==
-[[File:Model_of_Putuo_Shan_island.JPG|thumb|普陀山全貌模型]]
+[[File:Model_of_Putuo_Shan_island.JPG|thumb|测试实体甲全貌模型]]
 正文。
-[[File:Putuo_Shan_2006_1.JPG|thumb|普陀山海景]]
+[[File:Putuo_Shan_2006_1.JPG|thumb|测试实体甲海景]]
 
 == 人文景观 ==
 {{{{Infobox
-| name = 普陀山牌坊
-| image = 2013年普陀山牌坊.jpg
-| caption = 普陀山海岸牌坊
+| name = 测试实体甲牌坊
+| image = 2013年测试实体甲牌坊.jpg
+| caption = 测试实体甲海岸牌坊
 }}}}
 === 南海观音像 ===
 [[File:Statue_of_Guanyin,_Mt_Putuo,_China.jpg|thumb|南海观音像]]
@@ -70,14 +70,14 @@ def test_putuoshan_snapshot_keeps_all_17_images_and_cleans_dimension_caption() -
     _outline, placements = parse_wikitext_placements(text)
     assert len(placements) == 17
     assert placements[0]["placementType"] == "lead"
-    assert placements[0]["caption"] == "普陀山“南海观音”"
+    assert placements[0]["caption"] == "测试实体甲“南海观音”"
     assert "291x291px" not in placements[0]["caption"]
     assert len([row for row in placements if row["placementType"] == "groupMember"]) == 12
 
 
 def test_dongqianlake_snapshot_keeps_infobox_and_four_gallery_members() -> None:
     text = """{{Infobox
-| name = 东钱湖
+| name = 测试实体乙
 | image = 20240730_Dongqian_Hu.jpg
 | caption = Dongqian Lake
 }}

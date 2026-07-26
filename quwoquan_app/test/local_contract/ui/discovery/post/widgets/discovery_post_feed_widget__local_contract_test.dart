@@ -80,7 +80,7 @@ void main() {
       expect(feed.appendError, isNull);
     });
 
-    test('appendNextPage 会在存在 nextCursor 时追加下一页并清空 cursor', () async {
+    test('appendNextPage 会在存在 nextCursor 时追加下一页并推进 cursor', () async {
       final container = _container(MockContentRepository());
       addTearDown(container.dispose);
 
@@ -100,7 +100,8 @@ void main() {
       final afterCount = afterFeed?.items.length ?? 0;
 
       expect(afterCount, greaterThan(beforeCount));
-      expect(afterFeed?.hasMore, isFalse);
+      expect(afterFeed?.isLoading, isFalse);
+      expect(afterFeed?.nextCursor, isNot(beforeFeed?.nextCursor));
       expect(afterFeed?.error, isNull);
     });
 

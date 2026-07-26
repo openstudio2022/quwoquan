@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Compare contracts/metadata **/service.yaml api_routes (operation → path) with
-quwoquan_app/lib/cloud/runtime/generated/*/*_api_metadata.g.dart operationToPathTemplate.
+Compare each service's canonical contracts/**/operations.yaml api_routes
+(operation -> path) with quwoquan_app/lib/cloud/runtime/generated/*/
+*_api_metadata.g.dart operationToPathTemplate.
 
 Fails on missing/extra operations or path template mismatches (per domain).
 """
@@ -19,41 +20,53 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[3]
-METADATA_DIR = ROOT / "quwoquan_service" / "contracts" / "metadata"
+SERVICE_DIR = ROOT / "quwoquan_service"
 GEN_DIR = ROOT / "quwoquan_app" / "lib" / "cloud" / "runtime" / "generated"
+
+
+def domain_contract_roots() -> dict[str, list[Path]]:
+    roots: dict[str, list[Path]] = {}
+    for path in sorted(SERVICE_DIR.glob("**/contracts/domain.yaml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            continue
+        domain = str(data.get("domain") or "").strip()
+        if not domain:
+            continue
+        roots.setdefault(domain, []).append(path.parent)
+    return roots
 
 
 def collect_yaml_routes_by_domain() -> dict[str, dict[str, str]]:
     by_domain: dict[str, dict[str, str]] = {}
-    for path in sorted(METADATA_DIR.rglob("service.yaml")):
-        raw = path.read_text(encoding="utf-8")
-        data = yaml.safe_load(raw)
-        if not isinstance(data, dict):
-            continue
-        svc = data.get("service")
-        if not isinstance(svc, dict):
-            continue
-        domain = str(svc.get("domain") or "").strip()
-        if not domain:
-            continue
-        routes = data.get("api_routes")
-        if not isinstance(routes, list):
-            continue
+    for domain, contract_roots in domain_contract_roots().items():
         bucket = by_domain.setdefault(domain, {})
-        for r in routes:
-            if not isinstance(r, dict):
+        operation_paths = sorted(
+            path
+            for contract_root in contract_roots
+            for path in contract_root.rglob("operations.yaml")
+        )
+        for path in operation_paths:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
                 continue
-            op = str(r.get("operation") or "").strip()
-            pth = str(r.get("path") or "").strip()
-            if not op or not pth:
+            routes = data.get("api_routes")
+            if not isinstance(routes, list):
                 continue
-            prev = bucket.get(op)
-            if prev is not None and prev != pth:
-                raise SystemExit(
-                    f"FAIL: duplicate operation {domain}.{op!r} "
-                    f"paths {prev!r} vs {pth!r} in {path}"
-                )
-            bucket[op] = pth
+            for route in routes:
+                if not isinstance(route, dict):
+                    continue
+                op = str(route.get("operation") or "").strip()
+                route_path = str(route.get("path") or "").strip()
+                if not op or not route_path:
+                    continue
+                previous = bucket.get(op)
+                if previous is not None and previous != route_path:
+                    raise SystemExit(
+                        f"FAIL: duplicate operation {domain}.{op!r} paths "
+                        f"{previous!r} vs {route_path!r} in {path}"
+                    )
+                bucket[op] = route_path
     return by_domain
 
 
@@ -72,8 +85,8 @@ def parse_dart_operation_map(dart_path: Path) -> dict[str, str]:
 
 
 def main() -> int:
-    if not METADATA_DIR.is_dir():
-        print(f"FAIL: missing {METADATA_DIR}", file=sys.stderr)
+    if not SERVICE_DIR.is_dir():
+        print(f"FAIL: missing {SERVICE_DIR}", file=sys.stderr)
         return 1
     if not GEN_DIR.is_dir():
         print(f"FAIL: missing {GEN_DIR}", file=sys.stderr)
@@ -92,7 +105,9 @@ def main() -> int:
             continue
         ymap = yaml_routes.get(domain)
         if not ymap:
-            # Domain-only codegen file without metadata service.yaml (yet)
+            errors.append(
+                f"{domain}: generated operation map has no canonical service contracts"
+            )
             continue
 
         checked += 1
@@ -110,7 +125,7 @@ def main() -> int:
         for op in extra_in_dart:
             errors.append(
                 f"{domain}: operation {op!r} in {dart_path.name} but not in "
-                f"metadata service.yaml for domain {domain!r}"
+                f"canonical operations.yaml for domain {domain!r}"
             )
 
         for op in sorted(yaml_ops & dart_ops):
@@ -120,6 +135,17 @@ def main() -> int:
                     f"{domain}: operation {op!r} path mismatch metadata={yp!r} "
                     f"dart={dp!r}"
                 )
+
+    for domain, routes in sorted(yaml_routes.items()):
+        if routes and not (GEN_DIR / domain / f"{domain}_api_metadata.g.dart").is_file():
+            errors.append(
+                f"{domain}: {len(routes)} canonical routes have no generated App metadata"
+            )
+
+    if checked == 0:
+        errors.append(
+            "zero domains were checked; canonical service contracts must never produce an empty green gate"
+        )
 
     if errors:
         print("verify_metadata_routes_vs_codegen_app: FAIL", file=sys.stderr)

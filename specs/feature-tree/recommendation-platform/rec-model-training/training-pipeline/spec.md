@@ -1,26 +1,66 @@
-# L3 对象任务：training-pipeline（训练管线）
+# L3 Story：training-pipeline（训练管线） (`training-pipeline`)
 
-## 功能说明
+> 所属能力：[`rec-model-training`](../spec.md)
 
-- **样本**：从 rec_learning_events 拼接 impression 与 engagement，写入 rec_training_samples；样本带 scenario、用户/物品/交叉特征快照、多目标标签。
-- **数据集**：DatasetManager 按时间切分 train/val/test，版本化写入 rec_datasets；支持滑动窗口与增量训练。
+> Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
+
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
+
+## 1. 用户价值
+
+作为消费推荐的用户或策略运营者，
+我希望FeatureTransformer 与 feature_registry.yaml 统一特征名、类型、归一化；训练与推理共用同一注册表，
+从而获得可解释且受治理的推荐结果。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- “training-pipeline（训练管线）”的输入、可观察主路径、失败语义以及与父能力的交接。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 training-pipeline（训练管线）
+
 - **特征工程**：FeatureTransformer 与 feature_registry.yaml 统一特征名、类型、归一化；训练与推理共用同一注册表。
-- **训练**：LightGBM 训练脚本（含增量 init_model）、超参搜索、离线评估（AUC/NDCG/GAUC）；产出模型文件与元信息。
-- **注册**：ModelRegistry 写入 rec_model_registry，模型文件上传 OSS/TOS；支持 production 标记与热加载。
 
-## 实现要点
+<a id="req-002"></a>
+### REQ-002 特征工程：FeatureTransformer 与 feature_registry.yaml 统一特征名、类型、归一化；训练与推理共用同一注册表
 
-- SampleJoiner（Go 或 Python）消费 events，可定时或事件驱动。
-- 训练脚本支持 --scenario、--datasetId；导出模型与元信息供推理服务加载。
-- 特征注册表与 Go 侧 OnlineFeatureStore / 推理请求体字段对齐。
+- **特征工程**：FeatureTransformer 与 feature_registry.yaml 统一特征名、类型、归一化；训练与推理共用同一注册表。
 
-## 约束
+## 4. 契约引用
 
-- 仅读 events/feature 等集合，不写业务库。
-- 数据集切分按时间避免泄露；评估通过阈值后方可标记 production。
+- 父能力公开契约：[`L2 spec`](../spec.md)。
 
-## 验收标准
+## 5. 验收场景
 
-- A1：从 events 到样本、到 dataset、到训练、到 Registry 全链路可跑通。
-- A7：特征注册表与推理侧一致。
-- A8：样本生成与训练脚本有自动化或文档化运行方式。
+<a id="gwt-001"></a>
+### GWT-001 training-pipeline（训练管线）
+
+- GIVEN 消费推荐的用户或策略运营者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“training-pipeline（训练管线）”对应的公开行为。
+- THEN **特征工程**：FeatureTransformer 与 feature_registry.yaml 统一特征名、类型、归一化；训练与推理共用同一注册表。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`rec-model-training`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 training-pipeline（训练管线） 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“training-pipeline（训练管线）”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

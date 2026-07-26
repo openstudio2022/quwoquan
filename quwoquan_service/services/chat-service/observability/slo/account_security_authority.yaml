@@ -1,0 +1,46 @@
+version: 1
+service: chat-service
+domain: chat
+capability: synchronous-account-security-authority
+
+# These runtime metrics expose only fixed outcomes and the fixed readiness
+# check name. They must never be labeled with an account, persona, subject,
+# token, JWT ID, or any other identifying value.
+metrics:
+  authority_checks_total:
+    name: runtime_auth_account_security_authority_checks_total
+    labels: [outcome]
+    outcomes:
+      - allowed
+      - denied_deleted
+      - denied_suspended
+      - denied_token_stale
+      - unavailable
+  authority_check_duration_seconds:
+    name: runtime_auth_account_security_authority_check_duration_seconds
+    labels: [outcome]
+  readiness_status:
+    name: runtime_health_check_status
+    labels:
+      check: account_security_authority
+
+slis:
+  - id: authority_availability
+    description: 已验证的终端用户访问令牌同步安全校验可用性；不可用时必须拒绝请求。
+    source: runtime_auth_account_security_authority_checks_total
+    sli: 1 - sum(rate(runtime_auth_account_security_authority_checks_total{outcome="unavailable"}[5m])) / sum(rate(runtime_auth_account_security_authority_checks_total[5m]))
+    objective_min: 0.999
+    measured: true
+  - id: authority_latency
+    description: 同步安全校验延迟，受已配置的有界超时约束。
+    source: runtime_auth_account_security_authority_check_duration_seconds
+    sli: histogram_quantile(0.99, sum(rate(runtime_auth_account_security_authority_check_duration_seconds_bucket[5m])) by (le))
+    objectives:
+      p99_ms: 500
+    measured: true
+  - id: authority_readiness
+    description: UserAccount 的 scoped authority health 路由必须保持就绪。
+    source: runtime_health_check_status
+    sli: min(runtime_health_check_status{check="account_security_authority"})
+    objective_min: 1
+    measured: true

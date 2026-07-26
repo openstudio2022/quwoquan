@@ -40,7 +40,7 @@ def _retarget_roots() -> None:
 
 def _seed_dirty_homepage() -> Path:
     _retarget_roots()
-    execution_id = "20260711--travel-homepage-quality-cleanup--cn-sichuan--canary-001"
+    execution_id = "20260711--travel-homepage-quality-cleanup--test-region-b--pilot-001"
     entity_dir = _paths_mod.DATA_EXECUTIONS_ROOT / execution_id / "entities" / "地点" / "景区" / "毕棚沟"
     assets = entity_dir / "assets"
     assets.mkdir(parents=True, exist_ok=True)
@@ -56,7 +56,7 @@ def _seed_dirty_homepage() -> Path:
 
 def _seed_dirty_post() -> Path:
     _retarget_roots()
-    execution_id = "20260711--travel-homepage-quality-cleanup--cn-sichuan--canary-001"
+    execution_id = "20260711--travel-homepage-quality-cleanup--test-region-b--pilot-001"
     post_dir = _paths_mod.DATA_EXECUTIONS_ROOT / execution_id / "posts" / "article" / "都江堰" / "1"
     post_dir.mkdir(parents=True, exist_ok=True)
     (post_dir / "article.md").write_text("正文足够长" * 200 + "\nasset://missing_cover\n", encoding="utf-8")

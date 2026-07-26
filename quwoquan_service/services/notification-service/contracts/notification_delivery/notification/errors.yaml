@@ -1,0 +1,87 @@
+domain: NOTIFICATION
+aggregate: Notification
+description: Notification/AppMessage 端云稳定错误语义。
+errors:
+- code: NOTIFICATION.USER.unauthorized
+  kind: USER
+  reason: unauthorized
+  http_status: 401
+  recovery_action: surface
+  dart_const: unauthorized
+  go_const: ErrUnauthorized
+  user_message:
+    zh: 请先登录
+    en: Please sign in
+- code: NOTIFICATION.USER.invalid_argument
+  kind: USER
+  reason: invalid_argument
+  http_status: 400
+  recovery_action: surface
+  dart_const: invalidArgument
+  go_const: ErrInvalidArgument
+  user_message:
+    zh: 消息参数有误，请检查后重试
+    en: Invalid app message request
+- code: NOTIFICATION.USER.app_message_not_found
+  kind: USER
+  reason: not_found
+  http_status: 404
+  recovery_action: surface
+  dart_const: appMessageNotFound
+  go_const: ErrAppMessageNotFound
+  user_message:
+    zh: 消息不存在或已过期
+    en: App message not found
+- code: NOTIFICATION.USER.delivery_not_found
+  kind: USER
+  reason: not_found
+  http_status: 404
+  recovery_action: refresh
+  dart_const: deliveryNotFound
+  go_const: ErrDeliveryNotFound
+  user_message:
+    zh: 投递记录不存在或已不在死信状态
+    en: Notification delivery was not found in dead-letter state
+- code: NOTIFICATION.USER.idempotency_conflict
+  kind: USER
+  reason: idempotency_conflict
+  http_status: 409
+  recovery_action: refresh
+  dart_const: idempotencyConflict
+  go_const: ErrIdempotencyConflict
+  user_message:
+    zh: 重复请求与原消息不一致，请刷新后重试
+    en: Idempotency key conflicts with the existing message
+- code: NOTIFICATION.SYSTEM.storage_read_failed
+  kind: SYSTEM
+  reason: storage_read_failed
+  http_status: 500
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: storageReadFailed
+  go_const: ErrStorageReadFailed
+  user_message:
+    zh: 读取消息失败，请稍后重试
+    en: Failed to read app messages
+- code: NOTIFICATION.SYSTEM.storage_write_failed
+  kind: SYSTEM
+  reason: storage_write_failed
+  http_status: 500
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: storageWriteFailed
+  go_const: ErrStorageWriteFailed
+  user_message:
+    zh: 更新消息失败，请稍后重试
+    en: Failed to update app message
+- code: NOTIFICATION.SYSTEM.internal_error
+  kind: SYSTEM
+  reason: internal_error
+  http_status: 500
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: internalError
+  go_const: ErrInternalError
+  user_message:
+    zh: 通知服务暂时无法完成该操作
+    en: Notification service could not complete the operation

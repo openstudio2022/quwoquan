@@ -1,0 +1,15 @@
+events:
+- name: ChannelIngressReceiptAccepted
+  description: 外部渠道事件已验签、去重并追加到权威接收事实表
+  producer: realtime-gateway
+  consumers:
+  - realtime-dispatcher
+  - platform-ops
+  channel: event_store
+  payload_entity: ChannelIngressReceipt
+  payload_fields:
+  - id
+  - channelType
+  - providerEventId
+  - payloadDigest
+  - receivedAt

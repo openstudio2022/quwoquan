@@ -80,7 +80,7 @@ List<Map<String, dynamic>> _mockFollowerWiresFor(String userId) {
 }
 
 List<Map<String, dynamic>> _contractProfileRows() {
-  final seed = ContractFixtureRuntimeLoader.userSeedSet('user_profile_core');
+  final seed = alphaFixtureSeedReader.userSeedSet('user_profile_core');
   final profiles = seed?['profiles'];
   if (profiles is! List) {
     return const <Map<String, dynamic>>[];
@@ -92,7 +92,7 @@ List<Map<String, dynamic>> _contractProfileRows() {
 }
 
 List<Map<String, dynamic>> _contractRelationshipRows() {
-  final seed = ContractFixtureRuntimeLoader.userSeedSet('relationship_core');
+  final seed = alphaFixtureSeedReader.userSeedSet('relationship_core');
   final relationships = seed?['relationships'];
   if (relationships is! List) {
     return const <Map<String, dynamic>>[];
@@ -244,7 +244,7 @@ List<Map<String, dynamic>> _contractFollowerWiresFor(String userId) {
 }
 
 List<Map<String, dynamic>> _contractPersonaRows() {
-  final seed = ContractFixtureRuntimeLoader.userSeedSet('persona_core');
+  final seed = alphaFixtureSeedReader.userSeedSet('persona_core');
   final personas = seed?['personas'];
   if (personas is! List) {
     return const <Map<String, dynamic>>[];

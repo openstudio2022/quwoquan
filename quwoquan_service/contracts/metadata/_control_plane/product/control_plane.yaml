@@ -10,7 +10,7 @@ dashboard:
     - sla_watch
 object_types:
   - object_type: l1l4_metric_snapshot
-    object_kind: dashboard
+    view_kind: dashboard
     label: 四层指标快照
     source_entity: ProductMetricSnapshot
     view_model: ProductMetricSnapshot
@@ -35,7 +35,7 @@ object_types:
         scopes: [ops.product.dashboard.read]
 
   - object_type: rtc_media_qoe_summary
-    object_kind: dashboard
+    view_kind: dashboard
     label: RTC 媒体 QoE 24 小时权威回读
     source_entity: EventRecord
     view_model: RtcMediaQoeSummarySlice
@@ -49,7 +49,7 @@ object_types:
         drilldown_route_id: product.dashboard
 
   - object_type: product_control_plane_journal
-    object_kind: audit
+    view_kind: audit
     label: 产品控制面工作流与审计投影
     source_entity: ControlPlaneJournal
     view_model: ProductControlPlaneJournal
@@ -78,7 +78,7 @@ object_types:
         scopes: [ops.product.dashboard.read]
 
   - object_type: report_queue
-    object_kind: operational_queue
+    view_kind: operational_queue
     label: 举报运营队列
     source_entity: Report
     view_model: ReportQueue
@@ -123,7 +123,7 @@ object_types:
         approval_mode: single
 
   - object_type: homepage_candidate_queue
-    object_kind: operational_queue
+    view_kind: operational_queue
     label: 实体主页候选治理队列
     source_entity: Homepage
     view_model: HomepageCandidateQueue
@@ -146,7 +146,7 @@ object_types:
         approval_mode: single
 
   - object_type: homepage_claim_request_queue
-    object_kind: operational_queue
+    view_kind: operational_queue
     label: 实体主页认领审核队列
     source_entity: HomepageClaimRequest
     view_model: HomepageClaimRequestQueue
@@ -165,7 +165,7 @@ object_types:
         approval_mode: single
 
   - object_type: homepage_status_report_queue
-    object_kind: operational_queue
+    view_kind: operational_queue
     label: 实体主页状态上报审核队列
     source_entity: HomepageStatusReport
     view_model: HomepageStatusReportQueue
@@ -184,7 +184,7 @@ object_types:
         approval_mode: single
 
   - object_type: experiment
-    object_kind: release
+    view_kind: release
     label: 实验
     source_entity: Experiment
     view_model: Experiment
@@ -199,7 +199,7 @@ object_types:
   # 全局精选池：premium-pool 写入经 outbox 事件广播，content-service 投影进
   # rm_premium_pool 供 feed 消费；takedown 为高危处置，双 principal 双签后执行。
   - object_type: premium_pool_entry
-    object_kind: policy
+    view_kind: policy
     label: 全局精选池条目
     source_entity: VisitRecord
     view_model: PremiumPoolEntry

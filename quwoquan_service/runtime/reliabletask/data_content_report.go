@@ -7,24 +7,35 @@ import (
 )
 
 type DataContentFleetReport struct {
-	Schema                            string  `json:"schema"`
-	Passed                            bool    `json:"passed"`
-	Backend                           string  `json:"backend"`
-	Total                             int     `json:"total"`
-	Succeeded                         int     `json:"succeeded"`
-	StageCompletedCount               int     `json:"stageCompletedCount"`
-	PublishTaskCount                  int     `json:"publishTaskCount"`
-	ObjectTransactionResultCount      int     `json:"objectTransactionResultCount"`
-	CommercialAcceptedCount           int     `json:"commercialAcceptedCount"`
-	ControlPlaneTaskThroughputPerHour float64 `json:"controlPlaneTaskThroughputPerHour"`
-	AcceptedContentThroughputPerHour  float64 `json:"acceptedContentThroughputPerHour"`
-	AcceptedContentThroughputStatus   string  `json:"acceptedContentThroughputStatus"`
-	AutomaticRecoveryRate             float64 `json:"automaticRecoveryRate"`
-	FinalizedWithinStageBudgetRate    float64 `json:"finalizedWithinStageBudgetRate"`
-	DuplicatePublishCount             int     `json:"duplicatePublishCount"`
-	MissingObjectCount                int     `json:"missingObjectCount"`
-	IdempotencyKey                    string  `json:"idempotencyKey"`
-	CompletedAt                       string  `json:"completedAt"`
+	Schema                            string                   `json:"schema"`
+	Passed                            bool                     `json:"passed"`
+	Backend                           string                   `json:"backend"`
+	Total                             int                      `json:"total"`
+	Succeeded                         int                      `json:"succeeded"`
+	StageCompletedCount               int                      `json:"stageCompletedCount"`
+	PublishTaskCount                  int                      `json:"publishTaskCount"`
+	ObjectTransactionResultCount      int                      `json:"objectTransactionResultCount"`
+	CommercialAcceptedCount           int                      `json:"commercialAcceptedCount"`
+	ControlPlaneTaskThroughputPerHour float64                  `json:"controlPlaneTaskThroughputPerHour"`
+	AcceptedContentThroughputPerHour  float64                  `json:"acceptedContentThroughputPerHour"`
+	AcceptedContentThroughputStatus   string                   `json:"acceptedContentThroughputStatus"`
+	AutomaticRecoveryRate             float64                  `json:"automaticRecoveryRate"`
+	FinalizedWithinStageBudgetRate    float64                  `json:"finalizedWithinStageBudgetRate"`
+	DuplicatePublishCount             int                      `json:"duplicatePublishCount"`
+	MissingObjectCount                int                      `json:"missingObjectCount"`
+	IdempotencyKey                    string                   `json:"idempotencyKey"`
+	TaskOutcomes                      []DataContentTaskOutcome `json:"taskOutcomes"`
+	CompletedAt                       string                   `json:"completedAt"`
+}
+
+// DataContentTaskOutcome is the minimal service-owned completion receipt for
+// one frozen Data job. Detailed failure text remains in ReliableTask storage;
+// only its stable classification crosses the Data service boundary.
+type DataContentTaskOutcome struct {
+	JobID       string `json:"jobId"`
+	Status      string `json:"status"`
+	Attempts    int    `json:"attempts"`
+	FailureCode string `json:"failureCode,omitempty"`
 }
 
 func BuildDataContentFleetReport(
@@ -46,6 +57,7 @@ func BuildDataContentFleetReport(
 	publishTasks := 0
 	transactionResults := 0
 	commercialAccepted := 0
+	outcomes := make([]DataContentTaskOutcome, 0, len(tasks))
 	for _, task := range tasks {
 		if task.Payload["stage"] == "publish" {
 			publishTasks++
@@ -62,6 +74,16 @@ func BuildDataContentFleetReport(
 		if task.Status == TaskStatusSucceeded && dataContentResultCommerciallyAccepted(task) {
 			commercialAccepted++
 		}
+		failureCode := ""
+		if task.LastFailure != nil {
+			failureCode = strings.TrimSpace(task.LastFailure.Code)
+		}
+		outcomes = append(outcomes, DataContentTaskOutcome{
+			JobID:       task.Payload["jobId"],
+			Status:      task.Status,
+			Attempts:    task.Attempts,
+			FailureCode: failureCode,
+		})
 	}
 	total := len(tasks)
 	finalizedRate := 0.0
@@ -94,6 +116,7 @@ func BuildDataContentFleetReport(
 		DuplicatePublishCount:             duplicatePublishCount,
 		MissingObjectCount:                missingObjectCount,
 		IdempotencyKey:                    "executionId+entity+carrier+sourceRevision+stage",
+		TaskOutcomes:                      outcomes,
 		CompletedAt:                       completedAt.UTC().Format(time.RFC3339Nano),
 	}
 }

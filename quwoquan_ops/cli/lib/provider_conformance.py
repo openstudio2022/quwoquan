@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 from typing import Any
@@ -25,11 +26,13 @@ from quwoquan_ops.cli.lib.output_paths import output_root
 
 
 EVIDENCE_SCHEMA = ROOT / "quwoquan_ops" / "environments" / "provider_conformance_evidence.schema.json"
-# Conformance evidence has exactly three executable environments.  Production
-# consumes Gamma's release evidence; it must never contribute a fourth matrix
-# row or overwrite Gamma's result with a smoke run.
+# Alpha/Beta/Gamma exercise Port-equivalent substitutes. Prod owns the
+# independent hosted real-Provider rollout receipt.
 ENVIRONMENTS = ("alpha", "beta", "gamma")
-READINESS_ENVIRONMENTS = (*ENVIRONMENTS, "prod")
+RELEASE_ENVIRONMENT = "prod"
+RELEASE_READINESS_ENVIRONMENTS = frozenset({RELEASE_ENVIRONMENT})
+EVIDENCE_ENVIRONMENTS = (*ENVIRONMENTS, RELEASE_ENVIRONMENT)
+READINESS_ENVIRONMENTS = EVIDENCE_ENVIRONMENTS
 LAYERS = ("local_contract", "api_integration", "user_acceptance")
 CELL_PROFILES = {
     ("alpha", "local_contract"): "baseline",
@@ -37,11 +40,22 @@ CELL_PROFILES = {
     ("gamma", "local_contract"): "baseline",
     ("alpha", "api_integration"): "smoke",
     ("beta", "api_integration"): "integration",
-    ("gamma", "api_integration"): "integration",
+    ("gamma", "api_integration"): "release",
     ("alpha", "user_acceptance"): "smoke",
     ("beta", "user_acceptance"): "integration",
     ("gamma", "user_acceptance"): "release",
 }
+
+
+def execution_profile_for(environment: str, layer: str) -> str | None:
+    """Return the only permitted profile for a conformance evidence cell."""
+    if environment == RELEASE_ENVIRONMENT:
+        return "release" if layer == "user_acceptance" else None
+    return CELL_PROFILES.get((environment, layer))
+
+
+def requires_release_readiness(environment: str, layer: str) -> bool:
+    return environment in RELEASE_READINESS_ENVIRONMENTS and layer == "user_acceptance"
 MESSAGE_TRANSPORT_CAPABILITY_ID = "runtime.message.transport"
 MESSAGE_TRANSPORT_METRIC_NAMES = (
     "pending_lag",
@@ -64,6 +78,14 @@ REQUIRED_FIELDS = frozenset(
         "artifactRef",
         "artifactDigest",
         "artifactAttestation",
+        "testArtifactRef",
+        "testArtifactDigest",
+        "testSource",
+        "testSourceDigest",
+        "testCommand",
+        "testTarget",
+        "typedPort",
+        "contractRef",
         "commit",
         "imageDigest",
         "configDigest",
@@ -80,15 +102,16 @@ REQUIRED_FIELDS = frozenset(
 )
 RELEASE_READINESS_FIELDS = frozenset(
     {
+        "bindingPreflightReceiptRef",
+        "adapterHealthReceiptRef",
         "switchCompatibilityReceiptRef",
         "callbackDrainReceiptRef",
         "lastGoodReceiptRef",
         "rollbackReceiptRef",
-        "prodBindingPreflightReceiptRef",
     }
 )
 EXECUTION_REPORT_SCHEMA = "provider-conformance-test-report"
-EXECUTION_REPORT_VERSION = 1
+EXECUTION_REPORT_VERSION = 2
 EXECUTION_REPORT_REQUIRED_FIELDS = frozenset(
     {
         "schema",
@@ -106,12 +129,90 @@ EXECUTION_REPORT_REQUIRED_FIELDS = frozenset(
         "configDigest",
         "contractGraphDigest",
         "adapterDigest",
+        "testArtifactRef",
+        "testArtifactDigest",
+        "testSource",
+        "testSourceDigest",
+        "testCommand",
+        "testTarget",
+        "typedPort",
+        "contractRef",
         "assertionIds",
         "networkBoundary",
         "dataDigest",
         "testSource",
         "testCommand",
         "exitCode",
+    }
+)
+CASE_RESULT_SCHEMA = "provider-conformance-case-results"
+CASE_RESULT_VERSION = 1
+CASE_RESULT_REQUIRED_FIELDS = frozenset(
+    {
+        "schema",
+        "version",
+        "status",
+        "adapterId",
+        "capabilityId",
+        "environment",
+        "testLayer",
+        "typedPort",
+        "contractRef",
+        "networkBoundary",
+        "testTarget",
+        "configDigest",
+        "assertionIds",
+        "caseResults",
+        "dataDigest",
+        "cleanupReceipt",
+        "observabilityRefs",
+    }
+)
+CASE_RESULT_RELEASE_FIELDS = frozenset({"releaseReadiness"})
+SOURCE_METADATA_RE = re.compile(
+    r"^\s*(?:#|//)\s*provider_conformance:\s*(\{.+\})\s*$"
+)
+SOURCE_STATIC_BLOCK_RE = re.compile(
+    r"\b(?:should[\s_-]*block|gate[\s_-]*block|not[\s_-]*run|dry[\s_-]*run)\b",
+    re.IGNORECASE,
+)
+SOURCE_DYNAMIC_EXECUTOR_RE = re.compile(
+    r"(?:QWQ_PROVIDER_CONFORMANCE_EXECUTOR_COMMAND_JSON|"
+    r"external_provider_executor)",
+)
+TEST_LAYER_ROOTS = {
+    "local_contract": ROOT / "quwoquan_ops" / "tests" / "local_contract",
+    "api_integration": ROOT
+    / "quwoquan_ops"
+    / "tests"
+    / "acceptance"
+    / "api_integration",
+    "user_acceptance": ROOT
+    / "quwoquan_ops"
+    / "tests"
+    / "acceptance"
+    / "user_acceptance",
+}
+PUBLIC_ASSERTION_IDS = frozenset(
+    {
+        "provider.success",
+        "provider.validation",
+        "provider.auth",
+        "provider.network_dns",
+        "provider.timeout",
+        "provider.throttle",
+        "provider.retry",
+        "provider.idempotency",
+        "provider.callback_ordering",
+        "provider.redaction",
+        "provider.observability",
+    }
+)
+RELEASE_ASSERTION_IDS = frozenset(
+    {
+        "provider.adapter_health",
+        "provider.adapter_switch",
+        "provider.adapter_rollback",
     }
 )
 ALLOWED_FIELDS = REQUIRED_FIELDS | {"failure", "releaseReadiness"}
@@ -148,7 +249,7 @@ def _output_path(reference: str, *, root: Path) -> Path | None:
 def evidence_files(root: Path | None = None) -> list[Path]:
     base = Path(root) if root is not None else output_root()
     files: list[Path] = []
-    for environment in ENVIRONMENTS:
+    for environment in EVIDENCE_ENVIRONMENTS:
         run_root = base / "env" / environment / "runs"
         if run_root.is_dir():
             files.extend(sorted(run_root.rglob("provider-conformance-*.evidence.json")))
@@ -278,23 +379,382 @@ def _valid_receipt_ref(value: object) -> bool:
     )
 
 
-def _expected_test_source(
-    manifest: Mapping[str, Any],
+def network_boundary_for_layer(layer: str) -> str:
+    return {
+        "local_contract": "offline_harness",
+        "api_integration": "remote_protocol",
+        "user_acceptance": "user_journey",
+    }[layer]
+
+
+def capability_assertion_id(capability: Mapping[str, Any]) -> str:
+    profile = capability.get("conformance_profile")
+    if not isinstance(profile, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", profile):
+        raise ValueError("capability conformance_profile must be a stable identifier")
+    return f"provider.{profile}"
+
+
+def _digest_bytes(value: bytes) -> str:
+    return f"sha256:{hashlib.sha256(value).hexdigest()}"
+
+
+def implementation_digest(path: Path) -> str | None:
+    """Digest one Adapter source file or its deterministic source closure."""
+    try:
+        if path.is_file():
+            return _digest_bytes(path.read_bytes())
+        if not path.is_dir():
+            return None
+        source_suffixes = {
+            ".c",
+            ".cc",
+            ".go",
+            ".h",
+            ".html",
+            ".java",
+            ".js",
+            ".kt",
+            ".mod",
+            ".proto",
+            ".py",
+            ".rs",
+            ".sh",
+            ".sql",
+            ".sum",
+            ".swift",
+            ".tmpl",
+            ".ts",
+        }
+        files = sorted(
+            candidate
+            for candidate in path.rglob("*")
+            if candidate.is_file()
+            and candidate.suffix in source_suffixes
+            and not candidate.name.endswith("_test.go")
+            and not any(
+                part in {"testdata", "tests", ".git", ".qwq_output"}
+                for part in candidate.relative_to(path).parts
+            )
+        )
+        if not files:
+            return None
+        digest = hashlib.sha256()
+        for candidate in files:
+            digest.update(candidate.relative_to(path).as_posix().encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(candidate.read_bytes())
+            digest.update(b"\0")
+        return f"sha256:{digest.hexdigest()}"
+    except OSError:
+        return None
+
+
+def binding_config_digest(
+    binding: Mapping[str, Any],
+    binding_roots: Iterable[Mapping[str, Any]],
+) -> str:
+    """Digest the compiled Binding selected for a concrete execution cell."""
+    return _digest_bytes(
+        json.dumps(
+            {
+                "binding": binding,
+                "bindingRoots": list(binding_roots),
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    )
+
+
+def _source_spec_refs(raw_source: str, *, location: str) -> list[str]:
+    refs = [
+        match.group(1)
+        for line in raw_source.splitlines()
+        if (
+            match := re.match(r"^\s*(?://|#)\s*spec_ref:\s*(\S+)\s*$", line)
+        )
+        is not None
+    ]
+    if not refs:
+        raise ValueError(f"{location} must declare at least one spec_ref")
+    return list(dict.fromkeys(refs))
+
+
+def _source_metadata(raw_source: str, *, location: str) -> Mapping[str, Any]:
+    declarations = [
+        match.group(1)
+        for line in raw_source.splitlines()
+        if (match := SOURCE_METADATA_RE.match(line)) is not None
+    ]
+    if len(declarations) != 1:
+        raise ValueError(
+            f"{location} must declare exactly one provider_conformance JSON header"
+        )
+    try:
+        metadata = json.loads(declarations[0])
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{location} has invalid provider_conformance JSON: {exc}") from exc
+    if not isinstance(metadata, Mapping):
+        raise ValueError(f"{location} provider_conformance header must be an object")
+    return metadata
+
+
+def load_test_source(
+    path: Path,
     *,
-    adapter: Mapping[str, Any],
-    layer: object,
-) -> str | None:
-    if not isinstance(layer, str):
-        return None
-    profiles = manifest.get("profiles")
-    profile_id = adapter.get("conformance_profile")
-    if not isinstance(profiles, Mapping) or not isinstance(profile_id, str):
-        return None
-    profile = profiles.get(profile_id)
-    if not isinstance(profile, Mapping):
-        return None
-    source = profile.get(layer)
-    return source if _is_non_empty_string(source) else None
+    capabilities: Mapping[str, Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Load a self-describing executable Provider Conformance source.
+
+    The test source, instead of a registry/manifest, declares its identity,
+    exact command and target. Its command must write a CaseResult document to
+    ``QWQ_PROVIDER_CONFORMANCE_RESULT_PATH``.
+    """
+    try:
+        resolved = path.resolve()
+        relative = resolved.relative_to(ROOT.resolve()).as_posix()
+    except ValueError as exc:
+        raise ValueError("Provider Conformance test source must be inside the repository") from exc
+    if not resolved.is_file() or resolved.suffix not in {".py", ".go"}:
+        raise ValueError(f"{relative} is not a supported Provider Conformance test source")
+    raw = resolved.read_text(encoding="utf-8")
+    metadata = _source_metadata(raw, location=relative)
+    required = {
+        "adapterId",
+        "capabilityId",
+        "testLayer",
+        "typedPort",
+        "contractRef",
+        "assertionIds",
+        "command",
+        "target",
+        "networkBoundary",
+    }
+    if set(metadata) != required:
+        raise ValueError(
+            f"{relative} provider_conformance header fields must be exactly {sorted(required)}"
+        )
+    layer = metadata.get("testLayer")
+    if layer not in LAYERS:
+        raise ValueError(f"{relative} declares an unsupported testLayer")
+    layer_root = TEST_LAYER_ROOTS[str(layer)].resolve()
+    if layer_root not in resolved.parents:
+        raise ValueError(f"{relative} must live under the declared {layer} test root")
+    adapter_id = metadata.get("adapterId")
+    capability_id = metadata.get("capabilityId")
+    typed_port = metadata.get("typedPort")
+    contract_ref = metadata.get("contractRef")
+    target = metadata.get("target")
+    command = metadata.get("command")
+    assertion_ids = metadata.get("assertionIds")
+    if not isinstance(adapter_id, str) or not ADAPTER_PATTERN.fullmatch(adapter_id):
+        raise ValueError(f"{relative} declares an invalid adapterId")
+    if not isinstance(capability_id, str) or not CAPABILITY_PATTERN.fullmatch(capability_id):
+        raise ValueError(f"{relative} declares an invalid capabilityId")
+    if not all(_is_non_empty_string(value) for value in (typed_port, contract_ref, target)):
+        raise ValueError(f"{relative} must declare typedPort, contractRef and target")
+    if (
+        not isinstance(command, list)
+        or not command
+        or not all(_is_non_empty_string(item) and "\n" not in item for item in command)
+    ):
+        raise ValueError(f"{relative} must declare a concrete argv command")
+    if any(
+        re.search(r"(?:--dry-run|\bdry[\s_-]*run\b)", item, re.IGNORECASE)
+        for item in command
+    ):
+        raise ValueError(f"{relative} command must not declare a dry-run")
+    if (
+        not isinstance(assertion_ids, list)
+        or not assertion_ids
+        or len(assertion_ids) != len(set(assertion_ids))
+        or not all(
+            isinstance(assertion_id, str)
+            and ASSERTION_ID_PATTERN.fullmatch(assertion_id)
+            for assertion_id in assertion_ids
+        )
+    ):
+        raise ValueError(f"{relative} must declare unique stable assertionIds")
+    missing_public = PUBLIC_ASSERTION_IDS - set(assertion_ids)
+    if missing_public:
+        raise ValueError(
+            f"{relative} omits mandatory public assertions {sorted(missing_public)}"
+        )
+    if capabilities is None:
+        capabilities = {
+            str(capability["capability_id"]): capability
+            for capability in governance.load_registry().get("capabilities", [])
+            if isinstance(capability, Mapping) and capability.get("capability_id")
+        }
+    capability = capabilities.get(str(capability_id))
+    if capability is None:
+        raise ValueError(f"{relative} declares an unknown capabilityId")
+    expected_capability_assertion = capability_assertion_id(capability)
+    if expected_capability_assertion not in assertion_ids:
+        raise ValueError(
+            f"{relative} omits capability assertion {expected_capability_assertion}"
+        )
+    if typed_port != capability.get("canonical_port"):
+        raise ValueError(f"{relative} typedPort does not match the canonical capability Port")
+    if contract_ref != capability.get("source"):
+        raise ValueError(f"{relative} contractRef does not match the capability source")
+    if metadata.get("networkBoundary") != network_boundary_for_layer(str(layer)):
+        raise ValueError(f"{relative} networkBoundary conflicts with its testLayer")
+    if "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH" not in raw:
+        raise ValueError(
+            f"{relative} must write command results to QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
+        )
+    if layer in {"api_integration", "user_acceptance"} and SOURCE_STATIC_BLOCK_RE.search(raw):
+        raise ValueError(
+            f"{relative} is a static should-block/GATE_BLOCK test and cannot prove remote evidence"
+        )
+    if SOURCE_DYNAMIC_EXECUTOR_RE.search(raw):
+        raise ValueError(
+            f"{relative} delegates to a runtime-selected executor and cannot prove "
+            "the declared Adapter/target"
+        )
+    return {
+        **dict(metadata),
+        "testSource": relative,
+        "testSourceDigest": _digest_bytes(raw.encode("utf-8")),
+        "acceptanceRefs": _source_spec_refs(raw, location=relative),
+    }
+
+
+def discover_test_sources() -> tuple[dict[tuple[str, str, str], dict[str, Any]], list[str]]:
+    """Discover source-declared harnesses without a path or assertion registry."""
+    sources: dict[tuple[str, str, str], dict[str, Any]] = {}
+    issues: list[str] = []
+    capabilities = {
+        str(capability["capability_id"]): capability
+        for capability in governance.load_registry().get("capabilities", [])
+        if isinstance(capability, Mapping) and capability.get("capability_id")
+    }
+    for root in TEST_LAYER_ROOTS.values():
+        if not root.is_dir():
+            continue
+        paths = [
+            *root.rglob("*provider_conformance*.py"),
+            *root.rglob("*provider_conformance*.go"),
+        ]
+        for path in sorted(paths):
+            raw = path.read_text(encoding="utf-8")
+            if not any(
+                SOURCE_METADATA_RE.match(line) for line in raw.splitlines()
+            ):
+                continue
+            try:
+                source = load_test_source(path, capabilities=capabilities)
+            except (OSError, ValueError) as exc:
+                issues.append(str(exc))
+                continue
+            key = (
+                str(source["capabilityId"]),
+                str(source["adapterId"]),
+                str(source["testLayer"]),
+            )
+            if key in sources:
+                issues.append(
+                    f"{source['testSource']} duplicates Provider Conformance source "
+                    f"for capability/adapter/layer {key}"
+                )
+                continue
+            sources[key] = source
+    return sources, issues
+
+
+def source_for_cell(
+    *,
+    capability_id: str,
+    adapter_id: str,
+    layer: str,
+    sources: Mapping[tuple[str, str, str], Mapping[str, Any]] | None = None,
+) -> Mapping[str, Any] | None:
+    catalog, _ = discover_test_sources() if sources is None else (sources, [])
+    return catalog.get((capability_id, adapter_id, layer))
+
+
+def source_coverage_issues(
+    *,
+    compiled: Mapping[str, Any],
+    sources: Mapping[tuple[str, str, str], Mapping[str, Any]] | None = None,
+) -> list[str]:
+    """Return release-blocking gaps in the selected-Binding source catalog.
+
+    One self-describing source may serve the same Adapter in more than one
+    environment, so coverage is evaluated by the unique
+    Capability/Adapter/layer key consumed by ``source_for_cell`` rather than
+    by blindly counting all nine environment cells.
+    """
+
+    catalog, discovery_issues = (
+        discover_test_sources() if sources is None else (dict(sources), [])
+    )
+    issues = list(discovery_issues)
+    required: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    selected_bindings = compiled.get("selectedBindings")
+    if not isinstance(selected_bindings, Mapping):
+        return [*issues, _issue("source_coverage", "compiled selected Bindings are unavailable")]
+    for environment in ENVIRONMENTS:
+        environment_bindings = selected_bindings.get(environment)
+        if not isinstance(environment_bindings, Mapping):
+            issues.append(
+                _issue(
+                    f"source_coverage.{environment}",
+                    "compiled selected Bindings are unavailable",
+                )
+            )
+            continue
+        for capability_id, binding in environment_bindings.items():
+            if not isinstance(capability_id, str) or not isinstance(binding, Mapping):
+                continue
+            adapter_id = binding.get("adapter_id")
+            if not isinstance(adapter_id, str):
+                issues.append(
+                    _issue(
+                        f"source_coverage.{environment}.{capability_id}",
+                        "selected Binding has no Adapter ID",
+                    )
+                )
+                continue
+            required[capability_id].update((adapter_id, layer) for layer in LAYERS)
+    release_bindings = selected_bindings.get(RELEASE_ENVIRONMENT)
+    if not isinstance(release_bindings, Mapping):
+        issues.append(
+            _issue(
+                f"source_coverage.{RELEASE_ENVIRONMENT}",
+                "compiled selected Bindings are unavailable",
+            )
+        )
+    else:
+        for capability_id, binding in release_bindings.items():
+            if not isinstance(capability_id, str) or not isinstance(binding, Mapping):
+                continue
+            adapter_id = binding.get("adapter_id")
+            if not isinstance(adapter_id, str):
+                issues.append(
+                    _issue(
+                        f"source_coverage.{RELEASE_ENVIRONMENT}.{capability_id}",
+                        "selected Binding has no Adapter ID",
+                    )
+                )
+                continue
+            required[capability_id].add((adapter_id, "user_acceptance"))
+    for capability_id, cells in sorted(required.items()):
+        missing = [
+            f"{adapter_id}/{layer}"
+            for adapter_id, layer in sorted(cells)
+            if (capability_id, adapter_id, layer) not in catalog
+        ]
+        if missing:
+            issues.append(
+                _issue(
+                    f"source_coverage.{capability_id}",
+                    "missing self-describing executable sources for " + ", ".join(missing),
+                )
+            )
+    return issues
 
 
 def sign_execution_report(raw: bytes, *, key: str | None = None) -> str:
@@ -309,11 +769,200 @@ def sign_execution_report(raw: bytes, *, key: str | None = None) -> str:
     ).hexdigest()
 
 
+def _observability_refs_valid(value: object) -> bool:
+    return (
+        isinstance(value, Mapping)
+        and set(value) == {"logs", "traces", "metrics"}
+        and all(
+            isinstance(value[facet], list)
+            and value[facet]
+            and all(_is_non_empty_string(ref) for ref in value[facet])
+            for facet in ("logs", "traces", "metrics")
+        )
+    )
+
+
+def load_case_results(
+    artifact_path: Path,
+    *,
+    source: Mapping[str, Any],
+    environment: str,
+    config_digest: str,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Validate the real test-owned CaseResult artifact for one execution cell."""
+    issues: list[str] = []
+    try:
+        result = json.loads(artifact_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, [_issue(str(artifact_path), f"invalid CaseResult artifact: {exc}")]
+    if not isinstance(result, dict):
+        return None, [_issue(str(artifact_path), "CaseResult artifact root must be an object")]
+    is_release_case = requires_release_readiness(
+        environment,
+        str(source.get("testLayer") or ""),
+    )
+    expected_fields = (
+        CASE_RESULT_REQUIRED_FIELDS | CASE_RESULT_RELEASE_FIELDS
+        if is_release_case
+        else CASE_RESULT_REQUIRED_FIELDS
+    )
+    missing = expected_fields - set(result)
+    unknown = set(result) - expected_fields
+    if missing or unknown:
+        if missing:
+            issues.append(
+                _issue(str(artifact_path), f"CaseResult missing fields {sorted(missing)}")
+            )
+        if unknown:
+            issues.append(
+                _issue(str(artifact_path), f"CaseResult contains unknown fields {sorted(unknown)}")
+            )
+        return None, issues
+    if (
+        result.get("schema") != CASE_RESULT_SCHEMA
+        or result.get("version") != CASE_RESULT_VERSION
+    ):
+        issues.append(_issue(str(artifact_path), "CaseResult has unsupported schema/version"))
+    expected = {
+        "adapterId": source.get("adapterId"),
+        "capabilityId": source.get("capabilityId"),
+        "environment": environment,
+        "testLayer": source.get("testLayer"),
+        "typedPort": source.get("typedPort"),
+        "contractRef": source.get("contractRef"),
+        "networkBoundary": source.get("networkBoundary"),
+        "testTarget": source.get("target"),
+        "configDigest": config_digest,
+    }
+    for field, value in expected.items():
+        if result.get(field) != value:
+            issues.append(
+                _issue(
+                    str(artifact_path),
+                    f"CaseResult {field} does not match the executed source/binding",
+                )
+            )
+    if result.get("status") != "passed":
+        issues.append(_issue(str(artifact_path), "CaseResult status must be passed"))
+    assertion_ids = result.get("assertionIds")
+    expected_assertion_ids = source.get("assertionIds")
+    if (
+        not isinstance(assertion_ids, list)
+        or not assertion_ids
+        or len(assertion_ids) != len(set(assertion_ids))
+        or tuple(sorted(assertion_ids)) != tuple(sorted(expected_assertion_ids or []))
+    ):
+        issues.append(
+            _issue(
+                str(artifact_path),
+                "CaseResult assertionIds must exactly match its source-declared assertion set",
+            )
+        )
+    cases = result.get("caseResults")
+    if not isinstance(cases, list) or len(cases) != len(assertion_ids or []):
+        issues.append(
+            _issue(
+                str(artifact_path),
+                "CaseResult must contain exactly one result for every assertionId",
+            )
+        )
+    else:
+        case_ids: list[str] = []
+        for case in cases:
+            if (
+                not isinstance(case, Mapping)
+                or set(case) != {"assertionId", "status", "logRef", "traceRef", "metricRefs"}
+                or not _is_non_empty_string(case.get("assertionId"))
+                or case.get("status") != "passed"
+                or not _is_non_empty_string(case.get("logRef"))
+                or not _is_non_empty_string(case.get("traceRef"))
+                or not isinstance(case.get("metricRefs"), list)
+                or not case["metricRefs"]
+                or not all(_is_non_empty_string(ref) for ref in case["metricRefs"])
+            ):
+                issues.append(
+                    _issue(
+                        str(artifact_path),
+                        "every CaseResult must be a passed assertion with log/trace/metric references",
+                    )
+                )
+                break
+            case_ids.append(str(case["assertionId"]))
+        if sorted(case_ids) != sorted(assertion_ids or []):
+            issues.append(
+                _issue(
+                    str(artifact_path),
+                    "CaseResult assertion records must exactly cover assertionIds",
+                )
+            )
+    if not isinstance(result.get("configDigest"), str) or not SHA256_PATTERN.fullmatch(
+        str(result.get("configDigest"))
+    ):
+        issues.append(_issue(str(artifact_path), "CaseResult configDigest must be sha256"))
+    if not isinstance(result.get("dataDigest"), str) or not SHA256_PATTERN.fullmatch(
+        str(result.get("dataDigest"))
+    ):
+        issues.append(_issue(str(artifact_path), "CaseResult dataDigest must be sha256"))
+    if not _valid_receipt_ref(result.get("cleanupReceipt")):
+        issues.append(
+            _issue(
+                str(artifact_path),
+                "CaseResult cleanupReceipt must be a non-sensitive receipt reference",
+            )
+        )
+    if not _observability_refs_valid(result.get("observabilityRefs")):
+        issues.append(
+            _issue(
+                str(artifact_path),
+                "CaseResult observabilityRefs must contain logs/traces/metrics",
+            )
+        )
+    elif isinstance(cases, list):
+        observability_refs = result["observabilityRefs"]
+        for case in cases:
+            if not isinstance(case, Mapping):
+                continue
+            if (
+                case.get("logRef") not in observability_refs["logs"]
+                or case.get("traceRef") not in observability_refs["traces"]
+                or not set(case.get("metricRefs", [])).issubset(
+                    set(observability_refs["metrics"])
+                )
+            ):
+                issues.append(
+                    _issue(
+                        str(artifact_path),
+                        "CaseResult observabilityRefs must include each assertion's log/trace/metric references",
+                    )
+                )
+                break
+    if is_release_case and not _release_readiness_valid(result):
+        issues.append(
+            _issue(
+                str(artifact_path),
+                "release Provider CaseResult must contain test-owned release "
+                "readiness receipts",
+            )
+        )
+    if re.search(
+        r"(?:endpoint|secret|credential|token|password|https?://)",
+        json.dumps(result, sort_keys=True),
+        re.IGNORECASE,
+    ):
+        issues.append(
+            _issue(
+                str(artifact_path),
+                "CaseResult must not contain endpoint, credential, token or URL values",
+            )
+        )
+    return result, issues
+
+
 def _validate_execution_report(
     *,
     artifact_path: Path,
     evidence: Mapping[str, Any],
-    expected_test_source: str | None,
+    expected_source: Mapping[str, Any] | None,
 ) -> list[str]:
     issues: list[str] = []
     try:
@@ -389,6 +1038,12 @@ def _validate_execution_report(
         "contractGraphDigest",
         "adapterDigest",
         "bindingRoots",
+        "testArtifactRef",
+        "testArtifactDigest",
+        "testSourceDigest",
+        "testTarget",
+        "typedPort",
+        "contractRef",
         "assertionIds",
         "networkBoundary",
         "dataDigest",
@@ -400,11 +1055,13 @@ def _validate_execution_report(
                     f"execution report {field} does not match evidence",
                 )
             )
-    if report.get("testSource") != expected_test_source:
+    if report.get("testSource") != (
+        expected_source.get("testSource") if expected_source is not None else None
+    ):
         issues.append(
             _issue(
                 str(artifact_path),
-                "execution report testSource does not match the Adapter profile/layer contract",
+                "execution report testSource does not match the discovered source contract",
             )
         )
     if not _is_non_empty_string(report.get("testCommand")):
@@ -438,30 +1095,49 @@ def _current_commit() -> str | None:
     return commit if COMMIT_PATTERN.fullmatch(commit) else None
 
 
+def _current_contract_graph_digest() -> str | None:
+    path = ROOT / "quwoquan_service" / "generated" / "contract_graph.json"
+    try:
+        return _digest_bytes(path.read_bytes()) if path.is_file() else None
+    except OSError:
+        return None
+
+
+def _current_adapter_digest(adapter: Mapping[str, Any]) -> str | None:
+    implementation_path = adapter.get("implementation_path")
+    if not isinstance(implementation_path, str):
+        return None
+    path = ROOT / implementation_path
+    return implementation_digest(path)
+
+
 def validate_evidence(
     evidence: Iterable[Mapping[str, Any]],
     *,
     registry: Mapping[str, Any],
     root: Path | None = None,
     current_commit: str | None = None,
-    conformance_manifest: Mapping[str, Any] | None = None,
     compiled: Mapping[str, Any] | None = None,
+    source_catalog: Mapping[tuple[str, str, str], Mapping[str, Any]] | None = None,
+    expected_image_digest: str | None = None,
 ) -> list[str]:
     issues: list[str] = []
-    manifest = (
-        conformance_manifest
-        if conformance_manifest is not None
-        else governance.load_conformance_manifest()
-    )
     compiled_governance = compiled
     if compiled_governance is None:
         compiled_governance, _ = governance.compile_governance(
             registry,
             governance.load_bindings(),
-            manifest,
+            governance.load_conformance_manifest(),
         )
-    common_assertion_ids = manifest.get("common_assertion_ids", [])
-    profile_assertion_ids = manifest.get("profile_assertion_ids", {})
+    discovered_sources, source_issues = (
+        discover_test_sources() if source_catalog is None else (dict(source_catalog), [])
+    )
+    issues.extend(source_issues)
+    expected_image = (
+        expected_image_digest
+        if expected_image_digest is not None
+        else os.environ.get("QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST", "")
+    )
     adapter_by_id = {
         str(adapter.get("adapter_id")): adapter
         for adapter in registry.get("adapters", [])
@@ -486,7 +1162,7 @@ def validate_evidence(
         if unknown:
             issues.append(_issue(location, f"contains unknown fields {sorted(unknown)}"))
             continue
-        if item.get("schema") != "provider-conformance-evidence" or item.get("version") != 1:
+        if item.get("schema") != "provider-conformance-evidence" or item.get("version") != 4:
             issues.append(_issue(location, "has unsupported evidence schema/version"))
         adapter_id = item.get("adapterId")
         capability_id = item.get("capabilityId")
@@ -514,6 +1190,14 @@ def validate_evidence(
                     location,
                     "capabilityId does not resolve to a registered canonical typed Port",
                 )
+            )
+        elif item.get("typedPort") != capability.get("canonical_port"):
+            issues.append(
+                _issue(location, "typedPort does not match the capability canonical typed Port")
+            )
+        elif item.get("contractRef") != capability.get("source"):
+            issues.append(
+                _issue(location, "contractRef does not match the capability contract source")
             )
         evidence_root_ids = _root_id_list(item.get("bindingRoots"))
         if evidence_root_ids is None:
@@ -558,9 +1242,17 @@ def validate_evidence(
                     )
         environment = item.get("environment")
         layer = item.get("testLayer")
-        if environment not in ENVIRONMENTS or layer not in LAYERS:
+        expected_source: Mapping[str, Any] | None = None
+        selected_binding: Mapping[str, Any] | None = None
+        compiled_roots: list[dict[str, Any]] | None = None
+        expected_profile = (
+            execution_profile_for(environment, layer)
+            if isinstance(environment, str) and isinstance(layer, str)
+            else None
+        )
+        if expected_profile is None:
             issues.append(_issue(location, "environment/testLayer is not a required conformance cell"))
-        elif item.get("executionProfile") != CELL_PROFILES[(environment, layer)]:
+        elif item.get("executionProfile") != expected_profile:
             issues.append(_issue(location, "executionProfile does not match the nine-cell contract"))
         else:
             selected_binding = _selected_binding(
@@ -587,18 +1279,67 @@ def validate_evidence(
                         "adapterId does not match the environment-selected Binding adapter",
                     )
                 )
-            if environment not in adapter.get("allowed_environments", []):
-                issues.append(_issue(location, "adapterId is not allowed in this environment"))
+            expected_source = source_for_cell(
+                capability_id=str(capability_id),
+                adapter_id=adapter_id,
+                layer=layer,
+                sources=discovered_sources,
+            )
+            if expected_source is None:
+                issues.append(
+                    _issue(
+                        location,
+                        "no self-describing executable Provider Conformance source exists "
+                        "for the selected capability/adapter/layer",
+                    )
+                )
+            else:
+                if item.get("testSource") != expected_source.get("testSource"):
+                    issues.append(
+                        _issue(location, "testSource does not match the discovered source contract")
+                    )
+                if item.get("testSourceDigest") != expected_source.get("testSourceDigest"):
+                    issues.append(
+                        _issue(location, "testSourceDigest does not match current source bytes")
+                    )
+                if item.get("testTarget") != expected_source.get("target"):
+                    issues.append(
+                        _issue(location, "testTarget does not match the discovered source contract")
+                    )
+                if item.get("typedPort") != expected_source.get("typedPort"):
+                    issues.append(
+                        _issue(location, "typedPort does not match the discovered source contract")
+                    )
+                if item.get("contractRef") != expected_source.get("contractRef"):
+                    issues.append(
+                        _issue(location, "contractRef does not match the discovered source contract")
+                    )
+                if item.get("networkBoundary") != expected_source.get("networkBoundary"):
+                    issues.append(
+                        _issue(location, "networkBoundary does not match the discovered source contract")
+                    )
+                if item.get("acceptanceRefs") != expected_source.get("acceptanceRefs"):
+                    issues.append(
+                        _issue(location, "acceptanceRefs must exactly match source spec_ref values")
+                    )
+            if isinstance(selected_binding, Mapping):
+                try:
+                    compiled_roots = compiled_capability_binding_roots(
+                        compiled_governance,
+                        capability_id=str(capability_id),
+                    )
+                except ValueError:
+                    compiled_roots = None
             implementation_status = adapter.get("implementation_status")
             accepted_statuses = (
-                {
+                governance.READY_IMPLEMENTATION_STATUSES
+                if environment in governance.RELEASE_ADAPTER_ENVIRONMENTS
+                else {
                     *governance.READY_IMPLEMENTATION_STATUSES,
                     "mock",
                     "test_fixture_only",
                     "sandbox",
                 }
-                if environment == "alpha"
-                else governance.READY_IMPLEMENTATION_STATUSES
             )
             if implementation_status not in accepted_statuses:
                 issues.append(
@@ -611,8 +1352,13 @@ def validate_evidence(
         if cell in duplicate_cells:
             issues.append(_issue(location, "duplicates a Capability/environment/layer cell"))
         duplicate_cells.add(cell)
-        if item.get("status") not in {"passed", "blocked", "failed"}:
-            issues.append(_issue(location, "status must be passed, blocked or failed"))
+        if item.get("status") != "passed":
+            issues.append(
+                _issue(
+                    location,
+                    "blocked/failed/dry-run reports are not Provider Conformance evidence",
+                )
+            )
         parsed_time: datetime | None = None
         try:
             parsed_time = datetime.fromisoformat(str(item["executedAt"]).replace("Z", "+00:00"))
@@ -625,22 +1371,35 @@ def validate_evidence(
         except (TypeError, ValueError):
             issues.append(_issue(location, "executedAt must be an ISO-8601 timestamp with timezone"))
         artifact_path: Path | None = None
-        artifact_ref = item.get("artifactRef")
-        if not isinstance(artifact_ref, str) or not artifact_ref.startswith(
-            f".qwq_output/env/{environment}/runs/"
+        test_artifact_path: Path | None = None
+        for field, destination in (
+            ("artifactRef", "execution"),
+            ("testArtifactRef", "test"),
         ):
-            issues.append(_issue(location, "artifactRef must remain inside its environment run root"))
-        else:
-            artifact_path = _output_path(artifact_ref, root=configured_root)
-            if artifact_path is None or not artifact_path.exists():
-                issues.append(_issue(location, "artifactRef must resolve to an existing output artifact"))
-            elif configured_root.resolve() not in artifact_path.parents and artifact_path != configured_root:
-                issues.append(_issue(location, "artifactRef escapes configured output root"))
-            elif artifact_ref in artifact_refs:
-                issues.append(_issue(location, "artifactRef must identify one conformance cell only"))
-            artifact_refs.add(artifact_ref)
+            reference = item.get(field)
+            if not isinstance(reference, str) or not reference.startswith(
+                f".qwq_output/env/{environment}/runs/"
+            ):
+                issues.append(
+                    _issue(location, f"{field} must remain inside its environment run root")
+                )
+                continue
+            path = _output_path(reference, root=configured_root)
+            if path is None or not path.exists():
+                issues.append(_issue(location, f"{field} must resolve to an existing output artifact"))
+            elif configured_root.resolve() not in path.parents and path != configured_root:
+                issues.append(_issue(location, f"{field} escapes configured output root"))
+            elif reference in artifact_refs:
+                issues.append(_issue(location, f"{field} must identify one conformance cell only"))
+            artifact_refs.add(reference)
+            if destination == "execution":
+                artifact_path = path
+            else:
+                test_artifact_path = path
         for field in (
             "artifactDigest",
+            "testArtifactDigest",
+            "testSourceDigest",
             "imageDigest",
             "configDigest",
             "contractGraphDigest",
@@ -653,17 +1412,55 @@ def validate_evidence(
                 _validate_execution_report(
                     artifact_path=artifact_path,
                     evidence=item,
-                    expected_test_source=_expected_test_source(
-                        manifest,
-                        adapter=adapter,
-                        layer=layer,
-                    ),
+                    expected_source=expected_source,
                 )
             )
+        if test_artifact_path is not None and test_artifact_path.exists():
+            expected_test_artifact_digest = _digest_bytes(test_artifact_path.read_bytes())
+            if item.get("testArtifactDigest") != expected_test_artifact_digest:
+                issues.append(
+                    _issue(
+                        location,
+                        "testArtifactDigest does not match the test-owned CaseResult artifact",
+                    )
+                )
+            if expected_source is not None and isinstance(environment, str):
+                _, case_result_issues = load_case_results(
+                    test_artifact_path,
+                    source=expected_source,
+                    environment=environment,
+                    config_digest=str(item.get("configDigest") or ""),
+                )
+                issues.extend(case_result_issues)
         if not isinstance(item.get("commit"), str) or not COMMIT_PATTERN.fullmatch(str(item["commit"])):
             issues.append(_issue(location, "commit must be a git commit digest"))
         elif current_commit is not None and item["commit"] != current_commit:
             issues.append(_issue(location, "commit does not match the current source revision"))
+        if not isinstance(expected_image, str) or not SHA256_PATTERN.fullmatch(expected_image):
+            issues.append(
+                _issue(
+                    location,
+                    "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST must identify the active immutable image",
+                )
+            )
+        elif item.get("imageDigest") != expected_image:
+            issues.append(_issue(location, "imageDigest does not match the active immutable image"))
+        if isinstance(selected_binding, Mapping) and compiled_roots is not None:
+            current_config_digest = binding_config_digest(selected_binding, compiled_roots)
+            if item.get("configDigest") != current_config_digest:
+                issues.append(
+                    _issue(location, "configDigest does not match the current selected Binding")
+                )
+        current_contract_graph_digest = _current_contract_graph_digest()
+        if current_contract_graph_digest is None:
+            issues.append(_issue(location, "current ContractGraph digest is unavailable"))
+        elif item.get("contractGraphDigest") != current_contract_graph_digest:
+            issues.append(_issue(location, "contractGraphDigest is stale"))
+        current_adapter_digest = _current_adapter_digest(adapter)
+        if current_adapter_digest is None:
+            issues.append(_issue(location, "current Adapter digest is unavailable"))
+        elif item.get("adapterDigest") != current_adapter_digest:
+            issues.append(_issue(location, "adapterDigest is stale"))
         if not isinstance(item.get("dataDigest"), str) or not SHA256_PATTERN.fullmatch(str(item["dataDigest"])):
             issues.append(_issue(location, "dataDigest must be a sha256 digest"))
         if not isinstance(item.get("assertionCount"), int) or item["assertionCount"] <= 0:
@@ -680,29 +1477,26 @@ def validate_evidence(
         ):
             issues.append(_issue(location, "assertionIds must be a non-empty unique stable list"))
         else:
-            profile = adapter.get("conformance_profile")
-            profile_ids = (
-                profile_assertion_ids.get(profile, [])
-                if isinstance(profile_assertion_ids, Mapping)
-                else []
-            )
-            required_assertion_ids = {
-                *(common_assertion_ids if isinstance(common_assertion_ids, list) else []),
-                *(profile_ids if isinstance(profile_ids, list) else []),
-            }
-            missing_assertions = required_assertion_ids - set(assertion_ids)
-            if missing_assertions:
+            if not PUBLIC_ASSERTION_IDS.issubset(set(assertion_ids)):
                 issues.append(
                     _issue(
                         location,
-                        f"assertionIds omit required scenarios {sorted(missing_assertions)}",
+                        "assertionIds omit mandatory public Provider scenarios",
+                    )
+                )
+            if expected_source is not None and tuple(sorted(assertion_ids)) != tuple(
+                sorted(expected_source.get("assertionIds", []))
+            ):
+                issues.append(
+                    _issue(
+                        location,
+                        "assertionIds must exactly match the discovered source assertion set",
                     )
                 )
             if item.get("assertionCount") != len(assertion_ids):
                 issues.append(_issue(location, "assertionCount must equal assertionIds length"))
         if item.get("networkBoundary") not in {
             "offline_harness",
-            "local_protocol",
             "remote_protocol",
             "user_journey",
         }:
@@ -713,8 +1507,10 @@ def validate_evidence(
             issues.append(_issue(location, "api_integration must use remote_protocol"))
         elif layer == "user_acceptance" and item["networkBoundary"] != "user_journey":
             issues.append(_issue(location, "user_acceptance must use user_journey"))
-        if not _is_non_empty_string(item.get("cleanupReceipt")):
-            issues.append(_issue(location, "cleanupReceipt must be non-empty"))
+        if not _valid_receipt_ref(item.get("cleanupReceipt")):
+            issues.append(
+                _issue(location, "cleanupReceipt must be a non-sensitive receipt reference")
+            )
         acceptance_refs = item.get("acceptanceRefs")
         if not isinstance(acceptance_refs, list) or not acceptance_refs or not all(
             isinstance(ref, str) and ref.startswith("specs/feature-tree/") for ref in acceptance_refs
@@ -722,17 +1518,15 @@ def validate_evidence(
             issues.append(
                 _issue(location, "acceptanceRefs must be non-empty feature-tree references")
             )
-        observability_refs = item.get("observabilityRefs")
         if (
-            not isinstance(observability_refs, Mapping)
-            or set(observability_refs) != {"logs", "traces", "metrics"}
-            or not all(
-                isinstance(observability_refs[facet], list)
-                and observability_refs[facet]
-                and all(_is_non_empty_string(ref) for ref in observability_refs[facet])
-                for facet in ("logs", "traces", "metrics")
-            )
+            expected_source is not None
+            and acceptance_refs != expected_source.get("acceptanceRefs")
         ):
+            issues.append(
+                _issue(location, "acceptanceRefs must exactly match source spec_ref values")
+            )
+        observability_refs = item.get("observabilityRefs")
+        if not _observability_refs_valid(observability_refs):
             issues.append(
                 _issue(location, "observabilityRefs must contain non-empty logs/traces/metrics lists")
             )
@@ -752,23 +1546,37 @@ def validate_evidence(
                 )
         if item["status"] == "passed" and "failure" in item:
             issues.append(_issue(location, "passed evidence must not contain failure"))
-        if item["status"] != "passed":
-            failure = item.get("failure")
-            if not isinstance(failure, Mapping) or not _is_non_empty_string(failure.get("code")):
-                issues.append(_issue(location, "blocked/failed evidence requires failure.code"))
-        is_gamma_release_cell = environment == "gamma" and layer == "user_acceptance"
-        if is_gamma_release_cell and not _release_readiness_valid(item):
+        if expected_source is not None and item.get("testCommand") != shlex.join(
+            list(expected_source["command"])
+        ):
+            issues.append(
+                _issue(location, "testCommand does not match the source-declared executable argv")
+            )
+        is_release_cell = requires_release_readiness(str(environment), str(layer))
+        if is_release_cell and not _release_readiness_valid(item):
             issues.append(
                 _issue(
                     location,
-                    "Gamma release user_acceptance requires complete non-sensitive releaseReadiness receipts",
+                    "release Provider user_acceptance requires adapter-health, "
+                    "switch and rollback receipt references",
                 )
             )
-        elif not is_gamma_release_cell and "releaseReadiness" in item:
+        if is_release_cell and not RELEASE_ASSERTION_IDS.issubset(
+            set(assertion_ids) if isinstance(assertion_ids, list) else set()
+        ):
             issues.append(
                 _issue(
                     location,
-                    "releaseReadiness is reserved for the Gamma release user_acceptance cell",
+                    "release Provider user_acceptance must execute "
+                    "adapter health/switch/rollback assertions",
+                )
+            )
+        elif not is_release_cell and "releaseReadiness" in item:
+            issues.append(
+                _issue(
+                    location,
+                    "releaseReadiness is reserved for Gamma/Prod release "
+                    "user_acceptance cells",
                 )
             )
     return issues
@@ -793,7 +1601,13 @@ def _assertion_semantics(cell: Mapping[str, Any]) -> tuple[str, ...] | None:
         )
     ):
         return None
-    return tuple(sorted(assertion_ids))
+    return tuple(
+        sorted(
+            assertion_id
+            for assertion_id in assertion_ids
+            if assertion_id not in RELEASE_ASSERTION_IDS
+        )
+    )
 
 
 def _cells_share_release(
@@ -821,6 +1635,11 @@ def _cells_share_release(
     if len({_assertion_semantics(cell) for cell in concrete_cells}) != 1:
         return False
     if any(_assertion_semantics(cell) is None for cell in concrete_cells):
+        return False
+    if (
+        len({cell.get("typedPort") for cell in concrete_cells}) != 1
+        or len({cell.get("contractRef") for cell in concrete_cells}) != 1
+    ):
         return False
     for environment in expected_environments:
         environment_cells = [
@@ -858,8 +1677,7 @@ def derive_readiness(
                     environment=environment,
                 )
                 == adapter_id
-                and environment in ENVIRONMENTS
-                and layer in LAYERS
+                and execution_profile_for(environment, layer) is not None
             ):
                 by_cell[(capability_id, environment, layer)] = item
 
@@ -920,13 +1738,13 @@ def derive_readiness(
                 expected_environments=ENVIRONMENTS,
                 require_adapter_digest=False,
             )
-            gamma_release_cell = by_cell.get(
-                (capability_id, "gamma", "user_acceptance")
+            prod_remote_release_cell = by_cell.get(
+                (capability_id, RELEASE_ENVIRONMENT, "user_acceptance")
             )
-            gamma_release_ready = (
-                gamma_release_cell is not None
-                and gamma_release_cell.get("status") == "passed"
-                and _release_readiness_valid(gamma_release_cell)
+            prod_remote_release_ready = (
+                prod_remote_release_cell is not None
+                and prod_remote_release_cell.get("status") == "passed"
+                and _release_readiness_valid(prod_remote_release_cell)
             )
             matrix_selected_adapters_ready = all(
                 adapter_ready.get(
@@ -949,16 +1767,24 @@ def derive_readiness(
             )
             item["evidence_ready"] = capability_matrix_ready
             item["adapter_ready"] = selected_adapter_ready
-            item["gamma_release_ready"] = gamma_release_ready
             item["matrix_selected_adapters_ready"] = matrix_selected_adapters_ready
-            item["capability_ready"] = (
-                item.get("state") == "enabled"
-                and bool(item.get("adapter_preflight_ready"))
-                and selected_adapter_ready
-                and capability_matrix_ready
-                and matrix_selected_adapters_ready
-                and gamma_release_ready
-            )
+            if environment == RELEASE_ENVIRONMENT:
+                item["prod_remote_release_ready"] = prod_remote_release_ready
+                item["capability_ready"] = (
+                    item.get("state") == "enabled"
+                    and bool(item.get("adapter_preflight_ready"))
+                    and capability_matrix_ready
+                    and matrix_selected_adapters_ready
+                    and prod_remote_release_ready
+                )
+            else:
+                item["capability_ready"] = (
+                    item.get("state") == "enabled"
+                    and bool(item.get("adapter_preflight_ready"))
+                    and selected_adapter_ready
+                    and capability_matrix_ready
+                    and matrix_selected_adapters_ready
+                )
             environment_result[capability_id] = item
         result[environment] = environment_result
     return result
@@ -975,23 +1801,32 @@ def load_validate_and_derive(
         if evidence and current_commit is None
         else []
     )
+    executable_sources, source_discovery_issues = discover_test_sources()
     evidence_issues = validate_evidence(
         evidence,
         registry=governance.load_registry(),
         root=root,
         current_commit=current_commit,
-        conformance_manifest=governance.load_conformance_manifest(),
+        compiled=compiled,
+        source_catalog=executable_sources,
     )
     readiness = derive_readiness(compiled=compiled, evidence=evidence)
+    coverage_issues = source_coverage_issues(
+        compiled=compiled,
+        sources=executable_sources,
+    )
     report = {
         "schema": "provider-conformance-readiness",
         "version": 1,
         "evidenceCount": len(evidence),
+        "executableSourceCount": len(executable_sources),
+        "sourceCoverageIssues": coverage_issues,
         "readiness": readiness,
         "issues": [
             *(issue.render() for issue in governance_issues),
             *evidence_load_issues,
             *current_commit_issues,
+            *source_discovery_issues,
             *evidence_issues,
         ],
     }
@@ -1005,9 +1840,14 @@ def readiness_issues(
 ) -> list[str]:
     if environment not in READINESS_ENVIRONMENTS:
         return [_issue("readiness", f"unsupported readiness environment {environment}")]
+    issues: list[str] = []
+    source_coverage = report.get("sourceCoverageIssues")
+    if isinstance(source_coverage, list):
+        issues.extend(str(issue) for issue in source_coverage)
     evidence_count = report.get("evidenceCount")
     if not isinstance(evidence_count, int) or evidence_count <= 0:
         return [
+            *issues,
             _issue(
                 f"readiness.{environment}",
                 "zero Provider Conformance evidence artifacts cannot satisfy release readiness",
@@ -1021,7 +1861,6 @@ def readiness_issues(
     )
     if not isinstance(readiness, Mapping):
         return [_issue(f"readiness.{environment}", "is unavailable")]
-    issues: list[str] = []
     for capability_id, capability_readiness in readiness.items():
         if not isinstance(capability_readiness, Mapping):
             continue

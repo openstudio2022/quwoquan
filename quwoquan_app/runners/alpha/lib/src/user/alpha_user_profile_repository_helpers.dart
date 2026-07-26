@@ -28,7 +28,7 @@ SubAccountProfileWireDto resolveMockUserProfileWire(String userId) {
       return contractWire;
     }
   }
-  final sharedProfileWire = PrefabUserResolver.profileWireFor(userId);
+  final sharedProfileWire = AlphaFixtureUserResolver.profileWireFor(userId);
   if (sharedProfileWire != null) {
     return SubAccountProfileWireDto.fromMap(sharedProfileWire);
   }
@@ -58,12 +58,13 @@ List<String> _mockProfileLookupKeys(String userId) {
   final trimmed = userId.trim();
   add(trimmed);
   if (trimmed.isNotEmpty) {
-    add(PrefabUserResolver.resolveSubAccountId(trimmed));
-    add(PrefabUserResolver.resolveUserId(trimmed));
+    add(AlphaFixtureUserResolver.resolveSubAccountId(trimmed));
+    add(AlphaFixtureUserResolver.resolveUserId(trimmed));
   }
-  if (trimmed.isEmpty || PrefabUserResolver.isOwnerLikeSubAccountId(trimmed)) {
-    add(PrefabUserResolver.currentUserVariantSubAccountId);
-    add(PrefabUserResolver.currentUserVariantUserId);
+  if (trimmed.isEmpty ||
+      AlphaFixtureUserResolver.isOwnerLikeSubAccountId(trimmed)) {
+    add(AlphaFixtureUserResolver.currentUserVariantSubAccountId);
+    add(AlphaFixtureUserResolver.currentUserVariantUserId);
   }
   return keys;
 }

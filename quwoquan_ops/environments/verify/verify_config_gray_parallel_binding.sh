@@ -8,19 +8,20 @@ QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 echo "[verify] config gray parallel binding"
 
 SERVICE="content-service"
-FROM_CONFIG="v2026.02.27.1"
-TO_CONFIG="v2026.02.28.0"
-FROM_IMAGE="1.7.2"
-TO_IMAGE="1.8.0"
+FROM_CONFIG="sha256:$(printf '0%.0s' {1..64})"
+FROM_IMAGE="sha256:$(printf '1%.0s' {1..64})"
+TO_IMAGE="sha256:$(printf '2%.0s' {1..64})"
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/quwoquan_ops/cli/stackctl.py" \
+  package --env prod --service "$SERVICE" >/dev/null
+TO_CONFIG="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$SERVICE" <<'PY'
+import json
+import sys
+from quwoquan_ops.cli.lib.output_paths import service_deployment_package_dir
 
-for f in \
-  "$ROOT/quwoquan_service/services/$SERVICE/configs/releases/$FROM_CONFIG.yaml" \
-  "$ROOT/quwoquan_service/services/$SERVICE/configs/releases/$TO_CONFIG.yaml"; do
-  if [[ ! -f "$f" ]]; then
-    echo "[verify] FAIL: missing release config snapshot: $f" >&2
-    exit 1
-  fi
-done
+path = service_deployment_package_dir("prod", sys.argv[1]) / "provenance.json"
+print(json.loads(path.read_text(encoding="utf-8"))["configVersion"])
+PY
+)"
 
 state_file="$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/$SERVICE.state"
 audit_file="$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/$SERVICE.audit.log"

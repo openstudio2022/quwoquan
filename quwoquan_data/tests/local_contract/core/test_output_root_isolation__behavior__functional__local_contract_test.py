@@ -15,13 +15,12 @@ _ENV_KEYS = (
     "QWQ_OUTPUT_ROOT",
     "QWQ_PUBLISH_ROOT",
     "QWQ_SCHEMA_ROOT",
-    "QWQ_SERVICE_CONTRACTS_METADATA_ROOT",
     "QWQ_RUNTIME_ROOT",
     "QWQ_RELEASE_ROOT",
     "QWQ_COMMITTED_TASKS_ROOT",
 )
 _BASELINE = {key: os.environ.get(key) for key in _ENV_KEYS}
-EXECUTION_ID = "20260711--travel-homepage-output--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260711--travel-homepage-output--test-region-a--pilot-001"
 
 
 def _reload(monkeypatch, **env: str):
@@ -61,11 +60,11 @@ def test_output_root_has_tasks_releases_and_disposable_local_only(tmp_path, monk
     assert loaded.PUBLISH_ROOT == loaded._REPO_DATA_ROOT / "publish"
 
 
-def test_isolated_data_root_isolates_runtime_and_publish_but_not_schema(tmp_path, monkeypatch, restore_paths):
+def test_data_root_does_not_relocate_runtime_output(tmp_path, monkeypatch, restore_paths):
     isolated = tmp_path / "isolated"
     loaded = _reload(monkeypatch, QWQ_DATA_ROOT=str(isolated))
-    assert loaded.DATA_EXECUTIONS_ROOT == isolated / "data/tasks"
-    assert loaded.RELEASE_ROOT == isolated / "data/releases"
+    assert loaded.DATA_EXECUTIONS_ROOT == loaded.REPO_ROOT / ".qwq_output/data/tasks"
+    assert loaded.RELEASE_ROOT == loaded.REPO_ROOT / ".qwq_output/data/releases"
     assert loaded.PUBLISH_ROOT == isolated / "publish"
     assert loaded.SCHEMA_ROOT == loaded._REPO_DATA_ROOT / "schema"
 
@@ -76,7 +75,7 @@ def test_execution_id_is_the_only_runtime_address(tmp_path, monkeypatch, restore
     with pytest.raises(TypeError):
         loaded.execution_root(EXECUTION_ID, "retired-batch")
     with pytest.raises(ValueError, match="valid executionId"):
-        loaded.execution_root("旅行/地域/浙江省/旧任务")
+        loaded.execution_root("旅行/地域/test-region-a/旧任务")
 
 
 def test_retired_output_environment_variables_are_ignored(tmp_path, monkeypatch, restore_paths):

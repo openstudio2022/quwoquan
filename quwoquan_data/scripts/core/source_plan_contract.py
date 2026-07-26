@@ -11,15 +11,14 @@ import yaml
 SOURCE_PLAN_RULE_SIGNATURE_VERSION = "quwoquan.source_plan_rules"
 
 _DATA_ROOT = Path(__file__).resolve().parents[2]
-_ENTITY_SCOPED_REGISTRY_KEYS = {
-    "knownOfficialSites",
-    "knownEntityAliases",
-    "knownArticleSources",
-}
 _GLOBAL_RULE_RELATIVE_PATHS = (
     "scripts/content/source/prepare.py",
     "scripts/content/source/source_inputs.py",
     "scripts/content/source/research/auto_plan_writer.py",
+    "scripts/content/source/research/auto_plan_article.py",
+    "scripts/content/source/research/public_search.py",
+    "scripts/content/source/research/qunar_sources.py",
+    "scripts/content/source/research/source_registry.py",
     "scripts/content/source/research/source_quality.py",
     "scripts/content/source/research/network_io.py",
     "scripts/content/source/research/wiki_core.py",
@@ -40,19 +39,6 @@ def _file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _normalized_name(value: str) -> str:
-    return "".join(str(value or "").strip().split()).casefold()
-
-
-def _entity_row_matches(row: Mapping[str, Any], entity_id: str) -> bool:
-    target = _normalized_name(entity_id)
-    if not target:
-        return False
-    entity = _normalized_name(str(row.get("entity") or ""))
-    aliases = {_normalized_name(str(item)) for item in (row.get("aliases") or [])}
-    return target == entity or target in aliases
-
-
 def _load_yaml(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
@@ -63,40 +49,20 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 def _travel_registry_parts(vertical: str, entity_id: str) -> dict[str, Any]:
     if vertical != "travel":
         return {}
-    path = _DATA_ROOT / "verticals" / "travel" / "sources" / "source_registry.yaml"
+    del entity_id
+    path = _DATA_ROOT / "verticals" / "travel" / "providers.yaml"
     data = _load_yaml(path)
     if not data:
-        return {"path": str(path.relative_to(_DATA_ROOT)), "global": {}, "entityScoped": {}}
-    global_part = {
-        key: value
-        for key, value in data.items()
-        if key not in _ENTITY_SCOPED_REGISTRY_KEYS
-    }
-    entity_part: dict[str, list[Any]] = {}
-    for key in sorted(_ENTITY_SCOPED_REGISTRY_KEYS):
-        rows = data.get(key) or []
-        if not isinstance(rows, list):
-            continue
-        matched = [
-            row for row in rows
-            if isinstance(row, Mapping) and _entity_row_matches(row, entity_id)
-        ]
-        if matched:
-            entity_part[key] = matched
-    return {
-        "path": str(path.relative_to(_DATA_ROOT)),
-        "global": global_part,
-        "entityScoped": entity_part,
-    }
+        return {"path": str(path.relative_to(_DATA_ROOT)), "providers": {}}
+    return {"path": str(path.relative_to(_DATA_ROOT)), "providers": data}
 
 
 def source_plan_rule_signature(vertical: str, entity_id: str) -> dict[str, Any]:
     """Return a stable signature for the rules that affect one entity content.execution.planning.
 
     Global executable/catalog changes intentionally affect every entity. The
-    travel source registry is split: site/extractor policy is global, while
-    known official/article rows are scoped by entity；homepage authority 只由
-    content_source_registry 的三百科 policy 控制。
+    provider policy is global; entity facts are read from the reference catalog.
+    Homepage authority remains controlled by content_source_registry.
     """
     vertical = str(vertical or "travel").strip() or "travel"
     entity_id = str(entity_id or "").strip()

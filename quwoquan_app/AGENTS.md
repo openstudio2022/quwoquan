@@ -1,11 +1,9 @@
 # quwoquan_app Codex Guide
 
-在 `quwoquan_app/` 工作时，除仓库根 `AGENTS.md` 外，默认补读仓库根 `.cursor/rules/` 下的以下规则：
+在 `quwoquan_app/` 工作时，除仓库根 `AGENTS.md` 外，默认补读仓库根 `.cursor/rules/` 下与 App 文件类型直接相关的规则：
 
 1. `.cursor/rules/02-dart-coding.mdc`
-2. `.cursor/rules/01-arch-constraints.mdc`
-3. `.cursor/rules/08-mock-data-isolation.mdc`
-4. `.cursor/rules/10-runtime-error-cutover.mdc`
+2. `.cursor/rules/08-mock-data-isolation.mdc`
 
 按触达范围追加：
 
@@ -41,7 +39,7 @@
 ## 典型触发与 E2E
 
 - 用户说“页面、登录、搜索、创作、消息、错误提示、恢复按钮、推荐曝光、行为反馈”时，默认加载本文件。
-- 若同时涉及服务错误码、Remote API、数据导入、推荐反馈或环境发布，必须启用 `docs/agent_context_contract.md` 的跨域 E2E 模式。
+- 若同时涉及服务错误码、Remote API、数据导入、推荐反馈或环境发布，必须按根 `AGENTS.md` 的 Pre-work Reflection 启用跨域 E2E 模式。
 - App 不得单独完成端云链路：`api_integration` Remote 行为必须能回到 `local_contract` Mock/Widget/Provider 断言。
 
 ## Review 与测试要求

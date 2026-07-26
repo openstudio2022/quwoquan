@@ -15,7 +15,7 @@ if str(SCRIPTS) not in sys.path:
 from content.execution import qualification  # noqa: E402
 
 
-EXECUTION_ID = "20260713--travel-homepage-coverage--cn-zhejiang--canary-901"
+EXECUTION_ID = "20260713--travel-homepage-coverage--test-region-a--pilot-901"
 
 
 def _spec() -> dict:
@@ -23,10 +23,10 @@ def _spec() -> dict:
         "scope": {
             "coverageTargets": [
                 {
-                    "name": "普陀山",
+                    "name": "测试实体甲",
                     "entityType": "地点/景区",
-                    "geoTagRef": "Topic/地理/行政区/中国/浙江省/舟山市/普陀区",
-                    "aliases": ["普陀山风景名胜区"],
+                    "geoTagRef": "Topic/地理/行政区/中国/test-region-a/舟山市/普陀区",
+                    "aliases": ["测试实体甲风景名胜区"],
                 }
             ]
         }
@@ -42,8 +42,8 @@ def _install_execution(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
 
 
 def _write_source_catalog(root: Path, *, source_kind: str = "wikipedia") -> None:
-    object_root = root / "entities" / "地点" / "景区" / "普陀山"
-    evidence_ref = "evidence/sources/普陀山__wikipedia__abc/meta.json"
+    object_root = root / "entities" / "地点" / "景区" / "测试实体甲"
+    evidence_ref = "evidence/sources/测试实体甲__wikipedia__abc/meta.json"
     evidence = object_root / evidence_ref
     evidence.parent.mkdir(parents=True)
     evidence.write_text("{}\n", encoding="utf-8")
@@ -52,13 +52,13 @@ def _write_source_catalog(root: Path, *, source_kind: str = "wikipedia") -> None
         "policyRevision": "encyclopedia-primary",
         "primaryEvidenceRef": evidence_ref,
         "primarySource": {
-            "sourceUnitId": "普陀山__wikipedia__abc",
-            "entityName": "普陀山",
+            "sourceUnitId": "测试实体甲__wikipedia__abc",
+            "entityName": "测试实体甲",
             "sourceKind": source_kind,
             "extractor": "wikipedia_api" if source_kind == "wikipedia" else "generic_html",
             "canonicalUrl": "https://zh.wikipedia.org/wiki/%E6%99%AE%E9%99%80%E5%B1%B1",
             "sourceUrl": "https://zh.wikipedia.org/wiki/%E6%99%AE%E9%99%80%E5%B1%B1",
-            "title": "普陀山",
+            "title": "测试实体甲",
             "fetchedAt": "2026-07-13T00:00:00Z",
             "snapshotHash": "sha256:" + "a" * 64,
             "policyRevision": "encyclopedia-primary",
@@ -81,10 +81,10 @@ def test_request_contains_only_static_target_identity(monkeypatch: pytest.Monkey
     request = json.loads(path.read_text(encoding="utf-8"))
     target = request["targets"][0]
     assert target == {
-        "name": "普陀山",
+        "name": "测试实体甲",
         "entityType": "地点/景区",
-        "geoTagRef": "Topic/地理/行政区/中国/浙江省/舟山市/普陀区",
-        "aliases": ["普陀山风景名胜区"],
+        "geoTagRef": "Topic/地理/行政区/中国/test-region-a/舟山市/普陀区",
+        "aliases": ["测试实体甲风景名胜区"],
     }
 
 

@@ -2,6 +2,7 @@ package reliabletask
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"sync"
@@ -114,12 +115,42 @@ func (s *MemoryStore) DispatchDueTasksForShard(ctx context.Context, now time.Tim
 	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.dispatchDueTasksLocked(now, limit, func(record TaskOutboxRecord) bool {
+		return shardID < 0 || record.ShardID == shardID
+	})
+}
+
+// DispatchDataContentExecution mirrors the production Mongo execution scope.
+func (s *MemoryStore) DispatchDataContentExecution(
+	ctx context.Context,
+	executionID string,
+	now time.Time,
+	limit int,
+) ([]ReliableAsyncTask, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dispatchDueTasksLocked(now, limit, func(record TaskOutboxRecord) bool {
+		return record.TaskType == DataContentTaskType &&
+			record.Payload["executionId"] == executionID
+	})
+}
+
+func (s *MemoryStore) dispatchDueTasksLocked(
+	now time.Time,
+	limit int,
+	include func(TaskOutboxRecord) bool,
+) ([]ReliableAsyncTask, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 	outboxes := make([]TaskOutboxRecord, 0, len(s.outboxes))
 	for _, record := range s.outboxes {
-		if shardID >= 0 && record.ShardID != shardID {
+		if !include(record) {
 			continue
 		}
 		if (record.Status == TaskOutboxStatusPending || record.Status == TaskOutboxStatusFailed) && !record.StartAt.After(now) {
@@ -236,12 +267,84 @@ func (s *MemoryStore) ListReadyTasks(
 	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.listReadyTasksLocked(taskTypes, limit, now, func(ReliableAsyncTask) bool { return true }), nil
+}
+
+// ListReadyDataContentExecution mirrors the production Mongo execution scope.
+func (s *MemoryStore) ListReadyDataContentExecution(
+	ctx context.Context,
+	executionID string,
+	limit int,
+	now time.Time,
+) ([]ReliableAsyncTask, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.listReadyTasksLocked(
+		[]string{DataContentTaskType},
+		limit,
+		now,
+		func(task ReliableAsyncTask) bool {
+			return task.Payload["executionId"] == executionID
+		},
+	), nil
+}
+
+// PurgeDataContentExecution mirrors the production exact execution cleanup.
+func (s *MemoryStore) PurgeDataContentExecution(
+	ctx context.Context,
+	executionID string,
+) (DataContentExecutionPurgeResult, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return DataContentExecutionPurgeResult{}, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := DataContentExecutionPurgeResult{}
+	for taskID, task := range s.tasks {
+		if task.TaskType != DataContentTaskType || task.Payload["executionId"] != executionID {
+			continue
+		}
+		delete(s.tasks, taskID)
+		delete(s.taskByDedupe, task.DedupeKey)
+		result.TaskIDs = append(result.TaskIDs, taskID)
+		result.TasksDeleted++
+	}
+	for outboxID, outbox := range s.outboxes {
+		if outbox.TaskType != DataContentTaskType || outbox.Payload["executionId"] != executionID {
+			continue
+		}
+		delete(s.outboxes, outboxID)
+		delete(s.outboxByDedupe, outbox.DedupeKey)
+		if outbox.IdempotencyKey != "" {
+			delete(s.outboxByIdempotency, outbox.IdempotencyKey)
+		}
+		result.OutboxesDeleted++
+	}
+	return result, nil
+}
+
+func (s *MemoryStore) listReadyTasksLocked(
+	taskTypes []string,
+	limit int,
+	now time.Time,
+	include func(ReliableAsyncTask) bool,
+) []ReliableAsyncTask {
 	if limit <= 0 {
 		limit = 100
 	}
 	tasks := make([]ReliableAsyncTask, 0, limit)
 	for _, task := range s.tasks {
 		if len(taskTypes) > 0 && !contains(task.TaskType, taskTypes) {
+			continue
+		}
+		if !include(task) {
 			continue
 		}
 		leaseExpired := !task.LeaseUntil.IsZero() && !task.LeaseUntil.After(now)
@@ -263,7 +366,7 @@ func (s *MemoryStore) ListReadyTasks(
 	if len(tasks) > limit {
 		tasks = tasks[:limit]
 	}
-	return tasks, nil
+	return tasks
 }
 
 func (s *MemoryStore) RenewTaskLease(

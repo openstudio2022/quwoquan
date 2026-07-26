@@ -46,12 +46,13 @@ from core.paths import execution_root  # noqa: E402
 from core.video_source_admission import (  # noqa: E402
     assert_video_source_admitted,
 )
-from governance.coverage.cold_start_supply import (  # noqa: E402
-    load_cold_start_supply_policy,
+from governance.content_supply_policy import (  # noqa: E402
+    load_content_supply_policy,
 )
+from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
-EXECUTION_ID = "20260720--travel-video-zhejiang--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260720--travel-video-supply--test-region-a--pilot-001"
 
 
 def _video(path: Path, *, seconds: int = 7) -> Path:
@@ -155,6 +156,7 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     tmp_path: Path,
 ) -> None:
     _patch_output_root(monkeypatch, tmp_path)
+    build_execution_fixture(EXECUTION_ID)
     source = _video(tmp_path / "source.mp4")
     evidence_path = write_admitted_sourced_video_unit(
         execution_id=EXECUTION_ID,
@@ -226,10 +228,16 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
             agent_model="test-model",
             created_at="2026-07-20T12:00:00Z",
         ),
-        policy=load_cold_start_supply_policy().video_delivery,
+        policy=load_content_supply_policy("travel").video_delivery,
     )
     manifest = json.loads(
         (output / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["vertical"] == "travel"
+    assert all(
+        asset["rightsAuditStatus"] == "verified"
+        and asset["rightsAuditIssues"] == []
+        for asset in manifest["assets"]
     )
     assert manifest["sourceAttribution"]["originalCreatorName"] == "山海旅行者"
     assert manifest["sourceAttribution"]["platform"] == "头条"

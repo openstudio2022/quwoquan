@@ -24,7 +24,7 @@ void main() {
         'go',
         <String>[
           'test',
-          './services/content-service/tests/api_integration',
+          './services/content-service/tests/api_integration/content/post',
           '-run',
           '^(${targetTests.join('|')})\$',
           '-count=1',

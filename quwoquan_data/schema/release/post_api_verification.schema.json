@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/post_api_verification.schema.json",
+  "title": "Environment post API verification report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "environment",
+    "releaseId",
+    "runId",
+    "sourceImportReportRef",
+    "creatorImportReportRef",
+    "apiBaseUrl",
+    "verifiedAt",
+    "passed",
+    "posts",
+    "issues"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.post_api_verification"},
+    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "releaseId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "sourceImportReportRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
+    "creatorImportReportRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
+    "apiBaseUrl": {"type": "string", "pattern": "^https?://"},
+    "apiResolveHost": {"type": "string", "minLength": 1},
+    "verifiedAt": {"type": "string", "minLength": 1},
+    "passed": {"const": true},
+    "posts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["postRef", "postId", "contentType", "authorId", "detailStatus", "feedStatus", "mediaReady", "authorProfileStatus"],
+        "properties": {
+          "postRef": {"type": "string", "minLength": 1},
+          "postId": {"type": "string", "minLength": 1},
+          "contentType": {"enum": ["article", "image", "video"]},
+          "authorId": {"type": "string", "minLength": 1},
+          "detailStatus": {"const": 200},
+          "feedStatus": {"const": 200},
+          "mediaReady": {"const": true},
+          "authorProfileStatus": {"const": 200}
+        }
+      }
+    },
+    "issues": {"type": "array", "maxItems": 0}
+  }
+}

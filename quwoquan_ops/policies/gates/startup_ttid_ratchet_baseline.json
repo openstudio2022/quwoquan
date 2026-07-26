@@ -1,0 +1,13 @@
+{
+  "_governance": {
+    "owner": "runtime-client-foundation",
+    "reason": "startup TTID regression threshold",
+    "expires_when": "replaced atomically by a measured stricter baseline"
+  },
+  "metric": "brandWelcomeFirstVisibleMs",
+  "p50": {
+    "firstVisibleMs": 600
+  },
+  "note": "2026-06-26 arm64 release + deferred plugins; branded content TTID P50=600ms (emulator API35)",
+  "schema": "startup-ttid-ratchet-baseline"
+}

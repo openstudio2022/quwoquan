@@ -53,8 +53,8 @@ def test_highland_topic_content_prefers_specialist_creator():
         _registry(),
         _TRAVEL_BLUEPRINT,
         carrier="article",
-        tag_refs=["Topic/地理/行政区/中国/四川省/甘孜藏族自治州", "Topic/旅行/旅行主题/高原秘境"],
-        region="四川省",
+        tag_refs=["Topic/地理/行政区/中国/test-region-b/甘孜藏族自治州", "Topic/旅行/旅行主题/高原秘境"],
+        region="test-region-b",
         vertical="travel",
         seed="entity/地点/景区/稻城亚丁",
     )
@@ -108,7 +108,7 @@ def test_spread_mode_distributes_equal_fit_creators_by_seed():
             {"carrier": "image", "vertical": "travel", "creatorPersona": {}},
             carrier="image",
             tag_refs=["Topic/旅行", "Topic/旅行/玩法/摄影旅拍"],
-            region="四川省",
+            region="test-region-b",
             vertical="travel",
             seed=f"spread-seed-{index}",
             preferred_archetype="",
@@ -121,7 +121,7 @@ def test_spread_mode_distributes_equal_fit_creators_by_seed():
         {"carrier": "image", "vertical": "travel", "creatorPersona": {}},
         carrier="image",
         tag_refs=["Topic/旅行", "Topic/旅行/玩法/摄影旅拍"],
-        region="四川省",
+        region="test-region-b",
         vertical="travel",
         seed="same-spread-seed",
         preferred_archetype="",
@@ -132,7 +132,7 @@ def test_spread_mode_distributes_equal_fit_creators_by_seed():
         {"carrier": "image", "vertical": "travel", "creatorPersona": {}},
         carrier="image",
         tag_refs=["Topic/旅行", "Topic/旅行/玩法/摄影旅拍"],
-        region="四川省",
+        region="test-region-b",
         vertical="travel",
         seed="same-spread-seed",
         preferred_archetype="",
@@ -171,7 +171,7 @@ def test_coverage_range_fit_topic_hit_beats_miss_and_nationwide_is_neutral():
     highland = reg.creators["qwq_creator_highland_travel_blogger_001"]
     nationwide = reg.creators["qwq_creator_travel_blogger_001"]
     hit = coverage_range_fit(
-        highland, region="四川省", tag_refs=["Topic/旅行/旅行主题/高原秘境"]
+        highland, region="test-region-b", tag_refs=["Topic/旅行/旅行主题/高原秘境"]
     )
     miss = coverage_range_fit(highland, region="沿海海岛", tag_refs=["Topic/旅行/旅行主题/海岛度假"])
     neutral = coverage_range_fit(nationwide, region=None, tag_refs=None)

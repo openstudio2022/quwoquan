@@ -1,0 +1,11 @@
+read_model: BlockedListItemView
+description: '当前 persona 的私有拉黑列表切片元素。只暴露目标 persona 的公开展示快照
+
+  与 blockedAt；pairId、aggregateVersion、双向 direction 均不穿透。
+
+  '
+source_entities:
+- PersonaRelationship
+- Persona
+consumers:
+- app

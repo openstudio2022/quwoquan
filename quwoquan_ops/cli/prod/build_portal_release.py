@@ -27,8 +27,10 @@ sys.path.insert(0, str(ROOT / "quwoquan_ops" / "cli"))
 
 from lib.output_paths import (  # noqa: E402
     deployment_target_for_env,
+    deployment_target_path,
     deployment_work_root,
     portal_deployment_package_dir,
+    remove_deployment_tree,
 )
 
 
@@ -88,12 +90,17 @@ def main() -> int:
     )
     subprocess.run(["npm", "run", "build"], cwd=PORTAL_DIR, check=True, env=env)
 
-    build_dist = deployment_work_root(target_name) / "build" / "ops-portal"
+    build_dist = deployment_target_path(target_name, "build", "ops-portal")
     if not build_dist.is_dir():
         raise SystemExit(f"FAIL: vite build output missing: {build_dist}")
 
     release_root = portal_deployment_package_dir("prod", target=target_name)
-    version_dir = release_root / version
+    version_dir = deployment_target_path(
+        target_name,
+        "packages",
+        "ops-portal",
+        version,
+    )
     if version_dir.exists():
         raise SystemExit(f"FAIL: release version already exists (immutable): {version_dir}")
     version_dir.mkdir(parents=True)
@@ -116,7 +123,12 @@ def main() -> int:
     current = release_root / "current"
     if current.is_symlink() or current.exists():
         if current.is_dir() and not current.is_symlink():
-            shutil.rmtree(current)
+            remove_deployment_tree(
+                target_name,
+                "packages",
+                "ops-portal",
+                "current",
+            )
         else:
             current.unlink()
     current.symlink_to(version_dir.name)

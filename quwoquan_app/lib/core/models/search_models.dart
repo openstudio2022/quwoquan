@@ -274,12 +274,6 @@ class SocialRelationshipCapabilityView {
       canStartVideoCall: projection.canStartVideoCall,
     );
   }
-
-  factory SocialRelationshipCapabilityView.fromMap(Map<String, dynamic> map) {
-    return SocialRelationshipCapabilityView.fromSocialRelationshipCapabilityWire(
-      SocialRelationshipCapabilityWireDto.fromMap(map),
-    );
-  }
 }
 
 class SocialRelationSearchItemView {
@@ -366,12 +360,6 @@ class SocialRelationSearchItemView {
       relationshipCapability: capView,
     );
   }
-
-  factory SocialRelationSearchItemView.fromMap(Map<String, dynamic> map) {
-    return SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
-      SocialRelationSearchItemWireDto.fromMap(map),
-    );
-  }
 }
 
 /// 联系人本地检索结果行（chat 本地检索单轨 ViewModel）。
@@ -402,20 +390,6 @@ class ChatContactSearchItemDto {
   final String? highlightText;
   final String? matchedField;
 
-  factory ChatContactSearchItemDto.fromMap(Map<String, dynamic> m) {
-    return ChatContactSearchItemDto(
-      contactId: m['contactId']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? '',
-      avatarUrl: m['avatarUrl']?.toString(),
-      conversationId: m['conversationId']?.toString(),
-      conversationType: m['conversationType']?.toString(),
-      source: m['source']?.toString(),
-      subtitle: m['subtitle']?.toString(),
-      highlightText: m['highlightText']?.toString(),
-      matchedField: m['matchedField']?.toString(),
-    );
-  }
-
   ChatContactSearchItemDto copyWith({
     String? contactId,
     String? displayName,
@@ -440,8 +414,8 @@ class ChatContactSearchItemDto {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return <String, dynamic>{
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
       'contactId': contactId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
@@ -482,23 +456,7 @@ class ConversationSearchItemView {
   final String? highlightText;
   final String? matchedField;
 
-  factory ConversationSearchItemView.fromMap(Map<String, dynamic> map) {
-    return ConversationSearchItemView(
-      conversationId: (map['conversationId'] ?? '').toString().trim(),
-      type: (map['type'] ?? 'direct').toString().trim(),
-      title: (map['title'] ?? '').toString().trim(),
-      avatarUrl: _optionalString(map['avatarUrl']),
-      lastMessagePreview: map['lastMessagePreview']?.toString(),
-      lastMessageTime: _parseDateTime(map['lastMessageTime']),
-      memberCount: (map['memberCount'] as num?)?.toInt() ?? 0,
-      circleId: map['circleId']?.toString(),
-      circleGroupId: map['circleGroupId']?.toString(),
-      highlightText: map['highlightText']?.toString(),
-      matchedField: map['matchedField']?.toString(),
-    );
-  }
-
-  Map<String, dynamic> toMap() => <String, dynamic>{
+  Map<String, Object?> toMap() => <String, Object?>{
     'conversationId': conversationId,
     'type': type,
     'title': title,
@@ -545,25 +503,7 @@ class MessageSearchItemView {
   final String? highlightText;
   final String? matchedField;
 
-  factory MessageSearchItemView.fromMap(Map<String, dynamic> map) {
-    return MessageSearchItemView(
-      messageId: (map['messageId'] ?? '').toString().trim(),
-      conversationId: (map['conversationId'] ?? '').toString().trim(),
-      conversationTitle: map['conversationTitle']?.toString(),
-      conversationAvatarUrl: map['conversationAvatarUrl']?.toString(),
-      senderPersonaId: map['senderPersonaId']?.toString(),
-      senderDisplayName: map['senderDisplayName']?.toString(),
-      senderAvatarUrl: map['senderAvatarUrl']?.toString(),
-      messageType: (map['messageType'] ?? 'text').toString().trim(),
-      contentPreview: (map['contentPreview'] ?? '').toString().trim(),
-      seq: (map['seq'] as num?)?.toInt(),
-      timestamp: _parseDateTime(map['timestamp']) ?? DateTime.now(),
-      highlightText: map['highlightText']?.toString(),
-      matchedField: map['matchedField']?.toString(),
-    );
-  }
-
-  Map<String, dynamic> toMap() => <String, dynamic>{
+  Map<String, Object?> toMap() => <String, Object?>{
     'messageId': messageId,
     'conversationId': conversationId,
     if (conversationTitle != null) 'conversationTitle': conversationTitle,
@@ -626,22 +566,6 @@ class RecentSearchEntryView {
     );
   }
 
-  factory RecentSearchEntryView.fromMap(Map<String, dynamic> map) {
-    return RecentSearchEntryView.fromRecentSearchEntryWire(
-      RecentSearchEntryWireDto.fromMap(map),
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'entryId': entryId,
-      'query': query,
-      'scope': scope.wireValue,
-      'facet': facet,
-      'updatedAt': updatedAt.toIso8601String(),
-    };
-  }
-
   RecentSearchEntryView copyWith({
     String? entryId,
     String? query,
@@ -657,19 +581,4 @@ class RecentSearchEntryView {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
-}
-
-String? _optionalString(Object? value) {
-  final s = value?.toString().trim() ?? '';
-  return s.isEmpty ? null : s;
-}
-
-DateTime? _parseDateTime(Object? value) {
-  if (value is DateTime) {
-    return value;
-  }
-  if (value is String && value.trim().isNotEmpty) {
-    return DateTime.tryParse(value);
-  }
-  return null;
 }

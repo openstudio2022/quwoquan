@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"quwoquan_service/services/product-ops-service/internal/application"
-	productopsgenerated "quwoquan_service/services/product-ops-service/internal/generated"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
+	productopsgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
 )
 
 // serviceRouteREDItem 是单个接口的 RED 指标行（每接口平均/P99 延迟、流量、成功率）。

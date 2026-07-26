@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - ../../../quwoquan_service/services/assistant-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/chat-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/circle-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/content-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/entity-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/integration-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/notification-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/product-ops-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/realtime-gateway/environments/prod/deploy
+  - ../../../quwoquan_service/services/recommendation-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/rtc-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/search-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/tag-service/environments/prod/deploy
+  - ../../../quwoquan_service/services/user-service/environments/prod/deploy
+  - ../../external/coturn/environments/prod
+  - ../../external/livekit/environments/prod
+  - ../../../quwoquan_service/control-plane/platform-ops/environments/prod/deploy

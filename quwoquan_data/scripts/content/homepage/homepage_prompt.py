@@ -72,7 +72,6 @@ from content.homepage.homepage_assets import (
     write_homepage_media_dispositions,
 )
 MIN_PAGE_CHARS = 350
-HOMEPAGE_FIDELITY_MAX = 0.92
 # 实体主页底稿下发上限：取消旧的 4000 截断（旧值会把维基百科页在中段截断，
 # Agent 看不到「技术变革 / 相关古迹」等后段章节，导致多级目录与章节缺失）。
 # 放宽到覆盖绝大多数百科页全文，仅兜底极端超长源避免 token 失控。

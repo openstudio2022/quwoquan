@@ -64,8 +64,8 @@ void main() {
         utmSource: 'app',
         utmMedium: 'social',
       );
-      expect(a.applyTo('quwoquan://content/post/p1'),
-          'quwoquan://content/post/p1');
+      expect(a.applyTo('quwoquan://content/content/post/p1'),
+          'quwoquan://content/content/post/p1');
       expect(a.applyTo(''), '');
     });
   });

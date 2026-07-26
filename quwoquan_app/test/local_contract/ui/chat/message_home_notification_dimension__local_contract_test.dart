@@ -1,9 +1,12 @@
+// spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/message-home-filter-contract/spec.md#gwt-001
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
@@ -133,9 +136,19 @@ Widget _scopedApp(_FakeAppMessageFacet facet) {
             builder: (_, _) => const Scaffold(body: ChatPage()),
           ),
           GoRoute(
-            path: '/content/posts/:id',
-            builder: (_, _) =>
-                const SizedBox(key: ValueKey('post-detail-page')),
+            path: AppRoutePaths.workBrowserPathTemplate.replaceAll(
+              '{workId}',
+              ':workId',
+            ),
+            builder: (_, state) => SizedBox(
+              key: const ValueKey('work-browser-page'),
+              child: Text(
+                '${state.pathParameters['workId']}:'
+                '${state.uri.queryParameters['source']}:'
+                '${state.uri.queryParameters[MediaViewerCommentContext.queryEntrySource]}:'
+                '${state.uri.queryParameters[MediaViewerCommentContext.queryTargetCommentId]}',
+              ),
+            ),
           ),
         ],
       ),
@@ -197,7 +210,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('post-detail-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('work-browser-page')), findsOneWidget);
+    expect(find.text('post-1:notification:notification:cmt-1'), findsOneWidget);
     expect(facet.readMessageIds, contains('msg-1'));
   });
 

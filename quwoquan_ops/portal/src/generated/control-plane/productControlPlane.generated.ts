@@ -16,7 +16,6 @@ export const productControlPlane = {
     {
       "deployment_profile": "latency_sensitive",
       "label": "四层指标快照",
-      "object_kind": "dashboard",
       "object_type": "l1l4_metric_snapshot",
       "operations": [
         {
@@ -54,6 +53,7 @@ export const productControlPlane = {
       ],
       "risk_level": "medium",
       "source_entity": "ProductMetricSnapshot",
+      "view_kind": "dashboard",
       "view_model": "ProductMetricSnapshot"
     },
     {
@@ -70,7 +70,6 @@ export const productControlPlane = {
       ],
       "deployment_profile": "latency_sensitive",
       "label": "RTC 媒体 QoE 24 小时权威回读",
-      "object_kind": "dashboard",
       "object_type": "rtc_media_qoe_summary",
       "operations": [
         {
@@ -85,12 +84,12 @@ export const productControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "EventRecord",
+      "view_kind": "dashboard",
       "view_model": "RtcMediaQoeSummarySlice"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "产品控制面工作流与审计投影",
-      "object_kind": "audit",
       "object_type": "product_control_plane_journal",
       "operations": [
         {
@@ -136,12 +135,12 @@ export const productControlPlane = {
       ],
       "risk_level": "medium",
       "source_entity": "ControlPlaneJournal",
+      "view_kind": "audit",
       "view_model": "ProductControlPlaneJournal"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "举报运营队列",
-      "object_kind": "operational_queue",
       "object_type": "report_queue",
       "operations": [
         {
@@ -215,12 +214,12 @@ export const productControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "Report",
+      "view_kind": "operational_queue",
       "view_model": "ReportQueue"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "实体主页候选治理队列",
-      "object_kind": "operational_queue",
       "object_type": "homepage_candidate_queue",
       "operations": [
         {
@@ -252,12 +251,12 @@ export const productControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "Homepage",
+      "view_kind": "operational_queue",
       "view_model": "HomepageCandidateQueue"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "实体主页认领审核队列",
-      "object_kind": "operational_queue",
       "object_type": "homepage_claim_request_queue",
       "operations": [
         {
@@ -281,12 +280,12 @@ export const productControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "HomepageClaimRequest",
+      "view_kind": "operational_queue",
       "view_model": "HomepageClaimRequestQueue"
     },
     {
       "deployment_profile": "audit_heavy",
       "label": "实体主页状态上报审核队列",
-      "object_kind": "operational_queue",
       "object_type": "homepage_status_report_queue",
       "operations": [
         {
@@ -310,12 +309,12 @@ export const productControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "HomepageStatusReport",
+      "view_kind": "operational_queue",
       "view_model": "HomepageStatusReportQueue"
     },
     {
       "deployment_profile": "latency_sensitive",
       "label": "实验",
-      "object_kind": "release",
       "object_type": "experiment",
       "operations": [
         {
@@ -341,12 +340,12 @@ export const productControlPlane = {
       ],
       "risk_level": "medium",
       "source_entity": "Experiment",
+      "view_kind": "release",
       "view_model": "Experiment"
     },
     {
       "deployment_profile": "latency_sensitive",
       "label": "全局精选池条目",
-      "object_kind": "policy",
       "object_type": "premium_pool_entry",
       "operations": [
         {
@@ -391,6 +390,7 @@ export const productControlPlane = {
       ],
       "risk_level": "high",
       "source_entity": "VisitRecord",
+      "view_kind": "policy",
       "view_model": "PremiumPoolEntry"
     }
   ],

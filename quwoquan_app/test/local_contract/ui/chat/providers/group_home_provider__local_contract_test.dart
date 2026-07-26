@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/group-home-chat-info-contract/spec.md#gwt-001
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';

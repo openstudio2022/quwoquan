@@ -53,6 +53,12 @@ class EntityMediaClosureInput:
     kept_source_homepage_images: int
 
 
+def _source_collection_title(image: Mapping[str, Any]) -> str:
+    """Keep only an explicit source title; collection identifiers are not copy."""
+
+    return str(image.get("title") or "").strip()
+
+
 def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
     written = set(spec.written_source_dirs)
     image_groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
@@ -98,7 +104,7 @@ def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
             research_lane=unit_lane,
             license_value=str(first.get("license") or ""),
             url=collection_page,
-            title=f"{spec.entity_id} image collection {collection_id}",
+            title=_source_collection_title(first),
             target_ref=spec.target_ref,
             relevance=f"{spec.entity_id} 同一来源图片集合",
             images=group,

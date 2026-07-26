@@ -4,311 +4,334 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 cd "$ROOT"
 
-service=""
-env_name=""
+service="${SERVICE:-}"
+env_name="${ENV:-}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --service)
-      service="${2:-}"
-      shift 2
-      ;;
-    --env)
-      env_name="${2:-}"
-      shift 2
-      ;;
-    *)
-      echo "FAIL: unknown argument: $1" >&2
-      exit 2
-      ;;
+    --service) service="${2:-}"; shift 2 ;;
+    --env) env_name="${2:-}"; shift 2 ;;
+    *) echo "FAIL: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-service="${service:-${SERVICE:-}}"
-env_name="${env_name:-${ENV:-}}"
+case "$env_name" in alpha|beta|gamma|prod) ;; *) echo "FAIL: --env must be alpha|beta|gamma|prod" >&2; exit 2 ;; esac
+[[ -n "$service" ]] || { echo "FAIL: --service is required" >&2; exit 2; }
 
-case "$env_name" in
-  alpha|beta|gamma|prod) ;;
-  *)
-    echo "FAIL: --env must be one of alpha|beta|gamma|prod" >&2
-    exit 2
-    ;;
-esac
-if [[ -z "$service" ]]; then
-  echo "FAIL: --service is required" >&2
-  exit 2
+if [[ "$service" == "platform-ops-service" ]]; then
+  owner="quwoquan_service/control-plane/platform-ops"
+  overlay="$owner/environments/$env_name/deploy"
+else
+  owner="quwoquan_service/services/$service"
+  overlay="$owner/environments/$env_name/deploy"
 fi
-
-cfg_root="quwoquan_service/services/${service}/configs"
-default_cfg="${cfg_root}/default/config.yaml"
-env_cfg="${cfg_root}/${env_name}/config.yaml"
-topology_manifest="quwoquan_ops/environments/environment_topology_manifest.yaml"
-if [[ ! -f "$default_cfg" ]]; then
-  echo "FAIL: default service config not found: $default_cfg" >&2
-  exit 1
-fi
-if [[ ! -f "$env_cfg" ]]; then
-  echo "FAIL: env service config not found: $env_cfg" >&2
-  exit 1
-fi
-if [[ ! -f "$topology_manifest" ]]; then
-  echo "FAIL: environment topology manifest not found: $topology_manifest" >&2
-  exit 1
-fi
-if [[ "$env_name" == prod* ]] && grep -E "test_fixtures|seedRefs|requiresSeedReset|APP_DATA_SOURCE=mock" "$env_cfg" >/dev/null; then
-  echo "FAIL: production service config must not reference test seed: $env_cfg" >&2
-  exit 1
-fi
-python3 - "$service" "$env_name" "$env_cfg" "$topology_manifest" <<'PY'
-import json
-import re
-import sys
-from pathlib import Path
-
-service, env_name, cfg_path, topology_path = sys.argv[1:5]
-text = Path(cfg_path).read_text(encoding="utf-8")
-topology = json.loads(Path(topology_path).read_text(encoding="utf-8"))
-env_cfg = ((topology.get("environments") or {}).get(env_name) or {})
-public_bases = env_cfg.get("publicBases") or {}
-allowed_tokens = {
-    str(item).strip()
-    for item in env_cfg.get("hostAllowlist", [])
-    if str(item).strip()
-}
-
-for key, value in public_bases.items():
-    if not value or value not in text:
-        continue
-    if key in {"api", "realtime", "productOps"}:
-        raise SystemExit(
-            f"{service} config must not reference {key} public base {value}"
-        )
-
-for other_env, other_cfg in (topology.get("environments") or {}).items():
-    if other_env == env_name:
-        continue
-    for token in other_cfg.get("hostAllowlist", []) or []:
-        token = str(token).strip()
-        if not token or token in allowed_tokens:
-            continue
-        if token in text:
-            raise SystemExit(
-                f"{service} config leaks {other_env} host token {token}"
-            )
-
-if service == "chat-service":
-    match = re.search(r"^\s*group_avatar_cdn_base_url:\s*[\"']?([^\"'\n]+)[\"']?\s*$", text, re.M)
-    if not match:
-        raise SystemExit("chat-service config missing group_avatar_cdn_base_url")
-    value = match.group(1).strip()
-    if value.startswith("${"):
-        value = {
-            "prod": str(public_bases.get("mediaAvatar", "")),
-        }.get(env_name, value)
-    if not (value.startswith("http://") or value.startswith("https://")):
-        raise SystemExit("chat-service group_avatar_cdn_base_url must include http/https scheme")
-    expected = str(public_bases.get("mediaAvatar", "")).strip()
-    if expected and not value.startswith("${") and value != expected:
-        raise SystemExit(
-            f"chat-service group avatar CDN mismatch: {value} != {expected}"
-        )
-    if env_name in {"prod"}:
-        forbidden = tuple(env_cfg.get("forbiddenHostTokens") or ()) or (
-            ".example",
-            ".test",
-            "127.0.0.1",
-            "10.0.2.2",
-            "192.168.",
-            "mock-cdn.example.com",
-        )
-        if any(token in value for token in forbidden):
-            raise SystemExit("prod chat-service group avatar CDN must not use local/test host")
-PY
+[[ -d "$owner" ]] || { echo "FAIL: unknown service: $service" >&2; exit 1; }
+schema="$owner/config/schema.yaml"
+environment="$owner/environments/$env_name"
+[[ -f "$schema" ]] || { echo "FAIL: missing config schema: $schema" >&2; exit 1; }
+[[ -f "$environment/config.yaml" ]] || { echo "FAIL: missing environment config: $environment/config.yaml" >&2; exit 1; }
+[[ -f "$overlay/kustomization.yaml" ]] || { echo "FAIL: missing environment deploy entry: $overlay/kustomization.yaml" >&2; exit 1; }
 
 out_dir="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$env_name" "$service" <<'PY'
 import sys
-
 from quwoquan_ops.cli.lib.output_paths import service_deployment_package_dir
-
 print(service_deployment_package_dir(sys.argv[1], sys.argv[2]))
 PY
 )"
-rm -rf "$out_dir"
-mkdir -p "$out_dir"
-cp "$default_cfg" "$out_dir/default_config.yaml"
-cp "$env_cfg" "$out_dir/config.yaml"
-cp "$topology_manifest" "$out_dir/environment_topology_manifest.yaml"
-if [[ -d "$ROOT/quwoquan_service/services/$service/configs/releases" ]]; then
-  cp -R "$ROOT/quwoquan_service/services/$service/configs/releases" "$out_dir/releases"
+parent_dir="$(dirname "$out_dir")"
+mkdir -p "$parent_dir"
+stage_dir="$(mktemp -d "$parent_dir/.${service}.${env_name}.XXXXXX")"
+cleanup() { rm -rf "$stage_dir"; }
+trap cleanup EXIT
+mkdir -p "$stage_dir/config" "$stage_dir/resources" "$stage_dir/manifests"
+
+PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/render_runtime_config.py \
+  --env "$env_name" \
+  --workload "$service" \
+  --output "$stage_dir/config/config.yaml" >/dev/null
+
+if [[ -d "$owner/resources" ]]; then
+  mkdir -p "$stage_dir/resources/common"
+  cp -R "$owner/resources/." "$stage_dir/resources/common/"
 fi
-python3 - "$service" "$env_name" "$topology_manifest" "$out_dir/report.json" <<'PY'
+if [[ -d "$environment/resources" ]]; then
+  mkdir -p "$stage_dir/resources/environment"
+  cp -R "$environment/resources/." "$stage_dir/resources/environment/"
+fi
+
+if command -v kustomize >/dev/null 2>&1; then
+  kustomize build "$overlay" > "$stage_dir/manifests/all.yaml"
+elif command -v kubectl >/dev/null 2>&1; then
+  kubectl kustomize "$overlay" > "$stage_dir/manifests/all.yaml"
+else
+  echo "FAIL: kustomize or kubectl is required to package deployment manifests" >&2
+  exit 1
+fi
+
+PYTHONDONTWRITEBYTECODE=1 python3 - "$service" "$env_name" "$owner" "$stage_dir" <<'PY'
 import hashlib
+import base64
 import json
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+import yaml
 
-try:
-    import yaml  # type: ignore
-except ModuleNotFoundError:
-    yaml = None
-
-service, env_name, topology_path, report_path = sys.argv[1:5]
+service, environment, owner_value, package_value = sys.argv[1:5]
 root = Path.cwd()
-module_mapping_path = root / "quwoquan_ops/environments/module_package_mapping.yaml"
-catalog_path = root / "quwoquan_ops/environments/reliable_task_module_catalog.yaml"
-retention_path = root / "quwoquan_ops/environments/reliable_task_retention_policy.yaml"
-topology = json.loads(Path(topology_path).read_text(encoding="utf-8"))
-env_topology = ((topology.get("environments") or {}).get(env_name) or {})
-artifact_policy = ((env_topology.get("artifactPolicy") or {}).get("service") or {})
+owner = root / owner_value
+package = Path(package_value)
 
 def digest(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
-revision = subprocess.run(
-    ["git", "rev-parse", "HEAD"],
-    text=True,
-    capture_output=True,
-    check=False,
-).stdout.strip()
-if not re.fullmatch(r"[0-9a-f]{40}", revision):
-    raise SystemExit("unable to resolve package git revision")
+def tree_digest(path: Path) -> tuple[str, int]:
+    accumulator = hashlib.sha256()
+    files = sorted(item for item in path.rglob("*") if item.is_file()) if path.exists() else []
+    for item in files:
+        relative = item.relative_to(path).as_posix().encode()
+        content = item.read_bytes()
+        accumulator.update(len(relative).to_bytes(8, "big"))
+        accumulator.update(relative)
+        accumulator.update(len(content).to_bytes(8, "big"))
+        accumulator.update(content)
+    return "sha256:" + accumulator.hexdigest(), len(files)
 
-module_package = None
-catalog_version = None
-retention_version = None
-enabled_modules = []
+def safe_relative_path(raw: object, *, field: str, manifest: Path) -> Path:
+    value = str(raw or "").strip()
+    candidate = Path(value)
+    if not value or candidate.is_absolute() or ".." in candidate.parts:
+        raise SystemExit(f"FAIL: {manifest}: {field} must be a safe relative path")
+    return candidate
 
+materialized_resources: list[dict[str, object]] = []
+environment_resources = owner / "environments" / environment / "resources"
+for category in ("releases", "artifacts"):
+    for declaration in sorted((environment_resources / category).rglob("*.yaml")):
+        payload = yaml.safe_load(declaration.read_text()) or {}
+        if not isinstance(payload, dict):
+            raise SystemExit(f"FAIL: {declaration}: resource declaration must be a mapping")
+        reference = str(payload.get("releaseRef") or payload.get("artifactRef") or "").strip()
+        if not reference.startswith("service-resource://"):
+            raise SystemExit(
+                f"FAIL: {declaration}: deployable resource must use service-resource://"
+            )
+        source_relative = safe_relative_path(
+            reference.removeprefix("service-resource://"),
+            field="releaseRef/artifactRef",
+            manifest=declaration,
+        )
+        source_root = (owner / "resources").resolve()
+        source = (source_root / source_relative).resolve()
+        try:
+            source.relative_to(source_root)
+        except ValueError as exc:
+            raise SystemExit(f"FAIL: {declaration}: resource reference escapes service resources") from exc
+        if not source.is_file():
+            raise SystemExit(f"FAIL: {declaration}: resource source does not exist: {source}")
+        expected_digest = str(payload.get("digest") or "").strip()
+        actual_digest = digest(source)
+        if expected_digest != actual_digest:
+            raise SystemExit(
+                f"FAIL: {declaration}: digest {expected_digest!r} differs from {actual_digest}"
+            )
+        target = safe_relative_path(payload.get("target"), field="target", manifest=declaration)
+        destination = package / "resources" / "materialized" / target
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(source.read_bytes())
+        environment_variable = str(payload.get("environmentVariable") or "").strip()
+        if environment_variable and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", environment_variable):
+            raise SystemExit(
+                f"FAIL: {declaration}: environmentVariable must be a portable environment variable name"
+            )
+        materialized_resources.append(
+            {
+                "source": source,
+                "target": target.as_posix(),
+                "content": source.read_bytes(),
+                "environmentVariable": environment_variable,
+            }
+        )
 
-def _parse_inline_list(value: str) -> list[str]:
-    value = value.strip()
-    if not (value.startswith("[") and value.endswith("]")):
-        return []
-    inner = value[1:-1].strip()
-    if not inner:
-        return []
-    return [item.strip().strip("'\"") for item in inner.split(",") if item.strip()]
+if service == "chat-service":
+    shared_root = root / "quwoquan_service" / "runtime" / "reliabletask" / "resources"
+    for filename, environment_variable in (
+        ("module_catalog.yaml", "RELIABLE_TASK_CATALOG_PATH"),
+        ("retention_policy.yaml", "RELIABLE_TASK_RETENTION_POLICY_PATH"),
+    ):
+        source = shared_root / filename
+        if not source.is_file():
+            raise SystemExit(f"FAIL: missing reliable task runtime resource: {source}")
+        target = Path("reliabletask") / filename
+        destination = package / "resources" / "materialized" / target
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        content = source.read_bytes()
+        destination.write_bytes(content)
+        materialized_resources.append(
+            {
+                "source": source,
+                "target": target.as_posix(),
+                "content": content,
+                "environmentVariable": environment_variable,
+            }
+        )
 
-
-def _fallback_load_mapping(path: Path, target_env: str, target_service: str) -> tuple[Optional[str], list[str]]:
-    env_indent = None
-    service_indent = None
-    package = None
-    modules: list[str] = []
-    collecting_modules = False
-
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        stripped = raw.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        indent = len(raw) - len(raw.lstrip(" "))
-
-        env_match = re.match(r"([A-Za-z0-9_-]+):\s*$", stripped)
-        if indent == 2 and env_match:
-            env_indent = env_match.group(1) if env_match.group(1) == target_env else None
-            service_indent = None
-            collecting_modules = False
-            continue
-        if env_indent != target_env:
-            continue
-
-        service_match = re.match(r"([A-Za-z0-9_.-]+):\s*$", stripped)
-        if indent == 4 and service_match:
-            service_indent = service_match.group(1) if service_match.group(1) == target_service else None
-            collecting_modules = False
-            continue
-        if service_indent != target_service:
-            continue
-
-        if indent <= 4:
-            break
-
-        if indent == 6 and stripped.startswith("package:"):
-            package = stripped.split(":", 1)[1].strip().strip("'\"")
-            collecting_modules = False
-            continue
-        if indent == 6 and stripped.startswith("modules:"):
-            value = stripped.split(":", 1)[1].strip()
-            modules = _parse_inline_list(value)
-            collecting_modules = not bool(modules) and not value
-            continue
-        if collecting_modules and indent >= 8 and stripped.startswith("- "):
-            modules.append(stripped[2:].strip().strip("'\""))
-            continue
-        if collecting_modules and indent <= 6:
-            collecting_modules = False
-
-    return package, modules
-
-
-def _fallback_load_top_level_version(path: Path) -> Optional[object]:
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        stripped = raw.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if stripped.startswith("version:"):
-            value = stripped.split(":", 1)[1].strip().strip("'\"")
-            if value.isdigit():
-                return int(value)
-            return value or None
-    return None
-
-if module_mapping_path.exists():
-    if yaml is not None:
-        module_mapping = yaml.safe_load(module_mapping_path.read_text(encoding="utf-8")) or {}
-        package_cfg = ((module_mapping.get("environments") or {}).get(env_name) or {}).get(service)
-        if package_cfg:
-            module_package = package_cfg.get("package")
-            enabled_modules = package_cfg.get("modules") or []
-    else:
-        module_package, enabled_modules = _fallback_load_mapping(module_mapping_path, env_name, service)
-if catalog_path.exists():
-    if yaml is not None:
-        catalog_version = (yaml.safe_load(catalog_path.read_text(encoding="utf-8")) or {}).get("version")
-    else:
-        catalog_version = _fallback_load_top_level_version(catalog_path)
-if retention_path.exists():
-    if yaml is not None:
-        retention_version = (yaml.safe_load(retention_path.read_text(encoding="utf-8")) or {}).get("version")
-    else:
-        retention_version = _fallback_load_top_level_version(retention_path)
-
-release_files = {
-    path.name: digest(path)
-    for path in sorted((Path(report_path).parent / "releases").glob("*.yaml"))
-}
-
-report = {
-    "status": "packaged",
-    "service": service,
-    "env": env_name,
-    "configLayout": "default+env",
-    "modulePackage": module_package,
-    "enabledModules": enabled_modules,
-    "disabledModules": [],
-    "catalogVersion": catalog_version,
-    "retentionPolicyVersion": retention_version,
-    "topologySchemaVersion": topology.get("schema"),
-    "artifactPolicy": artifact_policy,
-    "provenance": {
-        "gitRevision": revision,
-        "files": {
-            "defaultConfig": digest(Path(report_path).parent / "default_config.yaml"),
-            "environmentConfig": digest(Path(report_path).parent / "config.yaml"),
-            "topologyManifest": digest(Path(topology_path)),
+source_digest, source_count = tree_digest(owner)
+resource_digest, resource_count = tree_digest(package / "resources")
+config_path = package / "config/config.yaml"
+manifest_path = package / "manifests/all.yaml"
+config_payload = yaml.safe_load(config_path.read_text()) or {}
+config_version = str(((config_payload.get("config") or {}).get("version") or "")).strip()
+if not config_version.startswith("sha256:"):
+    raise SystemExit("FAIL: rendered CONFIG_VERSION must be a sha256 digest")
+revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+image_digest = ("sha256:" + source_digest.removeprefix("sha256:"))
+(package / "image.lock").write_text(
+    yaml.safe_dump(
+        {
+            "service": service,
+            "repository": f"quwoquan/{service}",
+            "digest": image_digest,
+            "digestSource": "build-input",
         },
-        "releaseFiles": release_files,
+        sort_keys=False,
+    )
+)
+documents = [item for item in yaml.safe_load_all(manifest_path.read_text()) if isinstance(item, dict)]
+deployment_found = False
+deployment_document = None
+service_container = None
+for document in documents:
+    if document.get("kind") != "Deployment" or (document.get("metadata") or {}).get("name") != service:
+        continue
+    deployment_found = True
+    deployment_document = document
+    pod_metadata = document.setdefault("spec", {}).setdefault("template", {}).setdefault("metadata", {})
+    annotations = pod_metadata.setdefault("annotations", {})
+    annotations["quwoquan.io/config-version"] = config_version
+    annotations["quwoquan.io/image-version"] = image_digest
+    containers = document["spec"]["template"].setdefault("spec", {}).get("containers") or []
+    for container in containers:
+        if isinstance(container, dict) and container.get("name") == service:
+            service_container = container
+            container["image"] = f"quwoquan/{service}@{image_digest}"
+if not deployment_found:
+    raise SystemExit(f"FAIL: deployment manifest for {service} was not rendered")
+if service_container is None or deployment_document is None:
+    raise SystemExit(f"FAIL: deployment manifest for {service} has no matching container")
+expected_namespace = f"quwoquan-{environment}"
+deployment_namespace = str((deployment_document.get("metadata") or {}).get("namespace") or "")
+if deployment_namespace != expected_namespace:
+    raise SystemExit(
+        f"FAIL: deployment namespace {deployment_namespace!r} must equal {expected_namespace!r}"
+    )
+documents.append(
+    {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {"name": f"{service}-runtime-config", "namespace": expected_namespace},
+        "data": {f"{service}.yaml": config_path.read_text()},
+    }
+)
+pod_spec = deployment_document["spec"]["template"].setdefault("spec", {})
+volumes = pod_spec.setdefault("volumes", [])
+runtime_config_name = f"{service}-runtime-config"
+runtime_config_volume = next(
+    (item for item in volumes if isinstance(item, dict) and item.get("name") == "runtime-config"),
+    None,
+)
+if not isinstance(runtime_config_volume, dict) or str(
+    (runtime_config_volume.get("configMap") or {}).get("name") or ""
+) != runtime_config_name:
+    raise SystemExit(
+        f"FAIL: deployment {service} must mount ConfigMap {runtime_config_name} as runtime-config"
+    )
+runtime_mount = next(
+    (
+        item
+        for item in service_container.get("volumeMounts") or []
+        if isinstance(item, dict) and item.get("name") == "runtime-config"
+    ),
+    None,
+)
+if not isinstance(runtime_mount, dict) or not str(runtime_mount.get("mountPath") or "").strip():
+    raise SystemExit(f"FAIL: deployment {service} must mount runtime-config in its service container")
+
+if materialized_resources:
+    resource_config_name = f"{service}-runtime-resources"
+    binary_data: dict[str, str] = {}
+    resource_items: list[dict[str, str]] = []
+    for index, resource in enumerate(materialized_resources):
+        key = f"resource-{index:03d}"
+        binary_data[key] = base64.b64encode(resource["content"]).decode("ascii")
+        resource_items.append({"key": key, "path": str(resource["target"])})
+        environment_variable = str(resource["environmentVariable"] or "")
+        if environment_variable:
+            env_values = service_container.setdefault("env", [])
+            existing = next(
+                (
+                    item
+                    for item in env_values
+                    if isinstance(item, dict) and item.get("name") == environment_variable
+                ),
+                None,
+            )
+            value = f"/etc/qwq/resources/{resource['target']}"
+            if existing is None:
+                env_values.append({"name": environment_variable, "value": value})
+            elif existing.get("value") != value:
+                raise SystemExit(
+                    f"FAIL: deployment {service} has conflicting {environment_variable} value"
+                )
+    volumes.append(
+        {
+            "name": "runtime-resources",
+            "configMap": {"name": resource_config_name, "items": resource_items},
+        }
+    )
+    service_container.setdefault("volumeMounts", []).append(
+        {
+            "name": "runtime-resources",
+            "mountPath": "/etc/qwq/resources",
+            "readOnly": True,
+        }
+    )
+    documents.append(
+        {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {"name": resource_config_name, "namespace": expected_namespace},
+            "binaryData": binary_data,
+        }
+    )
+manifest_path.write_text(yaml.safe_dump_all(documents, allow_unicode=True, sort_keys=False))
+provenance = {
+    "schema": "qwq.service_package.v1",
+    "service": service,
+    "environment": environment,
+    "gitRevision": revision,
+    "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    "configVersion": config_version,
+    "digests": {
+        "imageLock": digest(package / "image.lock"),
+        "config": digest(config_path),
+        "resources": resource_digest,
+        "manifests": digest(manifest_path),
+        "sourceTree": source_digest,
+    },
+    "counts": {"sourceFiles": source_count, "resourceFiles": resource_count},
+    "sources": {
+        "serviceRoot": owner_value,
+        "configSchema": f"{owner_value}/config/schema.yaml",
+        "environment": f"{owner_value}/environments/{environment}",
     },
 }
-Path(report_path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+(package / "provenance.json").write_text(json.dumps(provenance, ensure_ascii=False, indent=2) + "\n")
 PY
 
-if [[ -f "quwoquan_service/services/${service}/deploy/Dockerfile" ]]; then
-  PYTHONDONTWRITEBYTECODE=1 python3 \
-    quwoquan_service/scripts/runtime/generate_service_supply_chain.py \
-    --service "$service" \
-    --env "$env_name" \
-    --package-dir "$out_dir"
+if [[ -e "$out_dir" ]]; then
+  rm -rf "$out_dir"
 fi
-
-echo "service env package prepared: $out_dir"
+mv "$stage_dir" "$out_dir"
+trap - EXIT
+echo "[package] OK: $out_dir"

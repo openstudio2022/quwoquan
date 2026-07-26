@@ -18,7 +18,7 @@ import (
 
 // recPatchContractYAML mirrors the metadata single source of truth so the test
 // can assert Go constants/struct stay aligned with
-// contracts/metadata/content/post/projections/recommendation_realtime_patch.yaml.
+// services/content-service/contracts/content/post/projections/recommendation_realtime_patch.yaml.
 type recPatchContractYAML struct {
 	RealtimeChannelTemplate string `yaml:"realtime_channel_template"`
 	PatchTypes              []struct {
@@ -38,7 +38,17 @@ type recPatchContractYAML struct {
 
 func loadRecPatchContract(t *testing.T) recPatchContractYAML {
 	t.Helper()
-	path := filepath.Join("..", "..", "contracts", "metadata", "content", "post", "projections", "recommendation_realtime_patch.yaml")
+	path := filepath.Join(
+		"..",
+		"..",
+		"services",
+		"content-service",
+		"contracts",
+		"content",
+		"post",
+		"projections",
+		"recommendation_realtime_patch.yaml",
+	)
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read patch contract: %v", err)

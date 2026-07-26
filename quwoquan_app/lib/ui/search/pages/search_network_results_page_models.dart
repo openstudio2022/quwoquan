@@ -61,14 +61,14 @@ class _ContentCloudMeta {
   final double? coverHeight;
   final List<String> rankReasons;
 
-  /// 是否携带任一云侧信号；无信号的命中（本地/mock）不入元信息表。
+  /// 是否携带任一云侧信号；未携带可选信号的命中不入元信息表。
   bool get hasCloudSignal =>
       rankPosition != null ||
       coverWidth != null ||
       coverHeight != null ||
       rankReasons.isNotEmpty;
 
-  /// 云侧封面真实宽高比；缺失任一维度则返回 null，由调用方回退默认比例。
+  /// 云侧封面真实宽高比；缺失任一维度则返回 null，由调用方使用既定默认比例。
   double? get aspectRatio {
     final width = coverWidth;
     final height = coverHeight;

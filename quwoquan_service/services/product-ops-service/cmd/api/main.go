@@ -30,13 +30,17 @@ import (
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
-	experimenthttp "quwoquan_service/services/product-ops-service/internal/adapters/http/experiment"
-	"quwoquan_service/services/product-ops-service/internal/application"
-	experimentapp "quwoquan_service/services/product-ops-service/internal/application/product_ops/experiment"
-	"quwoquan_service/services/product-ops-service/internal/infrastructure/messaging"
-	opsobservability "quwoquan_service/services/product-ops-service/internal/infrastructure/observability"
-	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
-	experimentpersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/product_ops/experiment/persistence"
+	apprelease "quwoquan_service/services/product-ops-service/internal/product_ops/app_release/application"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/logsink"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/messaging"
+	opsobservability "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/observability"
+	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence"
+	experimenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/adapters/inbound"
+	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
+	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
+	visitpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/infrastructure/persistence"
+	recoveryfailure "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/application"
 )
 
 type metricSnapshot struct {
@@ -65,6 +69,8 @@ type productService struct {
 	prometheus      application.PrometheusQuery
 	experimentHTTP  *experimenthttp.Handler
 	publisher       runtimemessaging.EventPublisher
+	appRelease      *apprelease.Service
+	recoveryFailures *recoveryfailure.Service
 }
 
 func main() {
@@ -77,13 +83,13 @@ func main() {
 		log.Fatalf("product-ops-service config load failed: %v", err)
 	}
 	applyEnvOverrides(&cfg)
-	cfg, err = resolveSLSBinding(
+	cfg, err = resolveLogSinkBinding(
 		cfg,
 		appEnv,
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
 	if err != nil {
-		log.Fatalf("product-ops-service SLS binding invalid: %v", err)
+		log.Fatalf("product-ops-service log sink binding invalid: %v", err)
 	}
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("product-ops-service config compatibility failed: %v", err)
@@ -96,6 +102,28 @@ func main() {
 	)
 	if err != nil {
 		log.Fatalf("product-ops-service access token config invalid: %v", err)
+	}
+	accountSecurityAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		serviceName,
+		[]string{"user.account.security.read"},
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service account security authority credential init failed: %v", err)
+	}
+	accountSecurityAuthorityTimeout := time.Duration(
+		cfg.AccountSecurityAuthority.TimeoutMS,
+	) * time.Millisecond
+	accountSecurityAuthority, err := rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL:     cfg.AccountSecurityAuthority.BaseURL,
+			HTTPClient:  &http.Client{Timeout: accountSecurityAuthorityTimeout},
+			Credentials: accountSecurityAuthorityCredentials,
+			Timeout:     accountSecurityAuthorityTimeout,
+		},
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service account security authority config invalid: %v", err)
 	}
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
@@ -190,6 +218,9 @@ func main() {
 		log.Fatalf("product-ops-service redis unavailable: %v", err)
 	}
 	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("account-security-authority", func(hctx context.Context) error {
+		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
+	})
 	healthChecker.Register("redis", func(ctx context.Context) error {
 		return router.PingAll(ctx)
 	})
@@ -218,7 +249,7 @@ func main() {
 		_ = mongoClient.Disconnect(shutdownCtx)
 	}()
 	dbName := strings.TrimSpace(cfg.MongoDB.Database)
-	mongoVisitStore := telemetrypersistence.NewMongoVisitStore(mongoClient.Database(dbName))
+	mongoVisitStore := visitpersistence.NewMongoVisitStore(mongoClient.Database(dbName))
 	if err := mongoVisitStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("product-ops-service visit index initialization failed: %v", err)
 	}
@@ -235,9 +266,15 @@ func main() {
 	var batchLedger application.EventBatchLedger
 	// 协议与契约证据由 local_contract 测试直接组装 in-memory store；生产二进制
 	// 不承载任何 Memory composition，缺后端能力时按下方分支 fail-fast。
-	if schema := postgresTelemetrySchema(appEnv); schema != "" {
-		// beta/gamma integration 使用独立 schema 的 Postgres local。该选择在
-		// composition root 固定，release/prod artifact 不会加载此分支。
+	switch cfg.LogSinkAdapterID {
+	case logsink.PostgresTelemetryLocalAdapterID:
+		schema := postgresTelemetrySchema(appEnv)
+		if schema == "" {
+			log.Fatalf(
+				"product-ops-service postgres telemetry adapter is unsupported for environment=%s",
+				appEnv,
+			)
+		}
 		localStore, err := telemetrypersistence.NewPostgresTelemetryStore(postgresPool, schema)
 		if err != nil {
 			log.Fatalf("product-ops-service postgres telemetry composition invalid: %v", err)
@@ -257,7 +294,47 @@ func main() {
 			"product-ops-service telemetry storage=postgres_local schema=%s evidence=api_integration",
 			schema,
 		)
-	} else {
+	case logsink.ElasticsearchLocalAdapterID:
+		elasticsearchStore, err := telemetrypersistence.NewElasticsearchEventLogStore(
+			telemetrypersistence.ElasticsearchConfig{
+				Endpoint:               strings.TrimSpace(cfg.Elasticsearch.Endpoint),
+				RawIndex:               strings.TrimSpace(cfg.Elasticsearch.RawIndex),
+				StartupDiagnosticIndex: strings.TrimSpace(cfg.Elasticsearch.StartupDiagnosticIndex),
+				RuntimeLogIndex:        strings.TrimSpace(cfg.Elasticsearch.RuntimeLogIndex),
+				AggregateIndex:         strings.TrimSpace(cfg.Elasticsearch.AggregateIndex),
+				Timeout:                time.Duration(cfg.Elasticsearch.TimeoutMS) * time.Millisecond,
+			},
+		)
+		if err != nil {
+			log.Fatalf(
+				"product-ops-service Elasticsearch telemetry store invalid: %v",
+				err,
+			)
+		}
+		if err := elasticsearchStore.EnsureIndices(ctx); err != nil {
+			log.Fatalf(
+				"product-ops-service Elasticsearch telemetry index initialization failed: %v",
+				err,
+			)
+		}
+		eventStore = elasticsearchStore
+		rtcMediaQoeReader = elasticsearchStore
+		runtimeLogStore = elasticsearchStore
+		batchLedger = telemetrypersistence.NewRedisEventBatchLedger(
+			router.Scene("general"),
+		)
+		healthChecker.Register(
+			"telemetry-elasticsearch-local",
+			elasticsearchStore.Ping,
+		)
+		log.Printf(
+			"product-ops-service telemetry storage=elasticsearch_local raw=%s runtime=%s aggregate=%s visit_storage=mongodb db=%s",
+			cfg.Elasticsearch.RawIndex,
+			cfg.Elasticsearch.RuntimeLogIndex,
+			cfg.Elasticsearch.AggregateIndex,
+			dbName,
+		)
+	case logsink.AliyunSLSAdapterID:
 		slsConfig := telemetrypersistence.SLSConfig{
 			Region:                    strings.TrimSpace(cfg.SLS.Region),
 			Endpoint:                  strings.TrimSpace(cfg.SLS.Endpoint),
@@ -310,6 +387,11 @@ func main() {
 			slsConfig.AggregateLogstore,
 			dbName,
 		)
+	default:
+		log.Fatalf(
+			"product-ops-service runtime.log.sink adapter is unsupported: %s",
+			cfg.LogSinkAdapterID,
+		)
 	}
 	service := newProductServiceWithRuntimeLogs(
 		store,
@@ -323,6 +405,13 @@ func main() {
 		experimentFacade,
 		publisher,
 	)
+	service.recoveryFailures = recoveryfailure.NewService(service.runtimeLogs)
+	appReleaseService, appReleaseErr := buildAppReleaseService(cfg)
+	if appReleaseErr != nil {
+		log.Printf("product-ops-service app release recovery unavailable: %v", appReleaseErr)
+	} else {
+		service.appRelease = appReleaseService
+	}
 	service.prometheus = prometheusReader
 	service.runtimeLogStore = runtimeLogStore
 	// 运营增长聚合（user_activity_daily）：事件仓库出 distinct session，
@@ -346,6 +435,14 @@ func main() {
 	outerMux.HandleFunc("/ops/startup-events", func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
+	outerMux.HandleFunc("/ops/app-recovery/version", func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
+	outerMux.HandleFunc("/ops/recovery-failures", func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
+	outerMux.Handle("/download", mux)
+	outerMux.Handle("/download/", mux)
 	// 云侧服务日志上云的内部通道：以 X-Runtime-Log-Ingest-Token 机器凭据
 	// fail-closed（handler 内校验），不走用户 JWT；app sourceType 被拒绝。该路径
 	// 在最外层跳过 access/process logger，避免 product-ops 自身 spool 回灌时把
@@ -419,9 +516,10 @@ func main() {
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
-			AccessTokenVerifier:  accessVerifier,
-			DeviceTicketVerifier: deviceTicketVerifier,
-			OperatorOIDCVerifier: operatorOIDCVerifier,
+			AccessTokenVerifier:      accessVerifier,
+			DeviceTicketVerifier:     deviceTicketVerifier,
+			OperatorOIDCVerifier:     operatorOIDCVerifier,
+			AccountSecurityAuthority: accountSecurityAuthority,
 		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,

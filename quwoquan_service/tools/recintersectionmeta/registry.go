@@ -1,5 +1,5 @@
 // Package recintersectionmeta 是交集 kind 注册表
-// (contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml)
+// (services/recommendation-service/contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml)
 // 的唯一解析/校验层，供端侧 Dart codegen (tools/codegen_app_metadata) 与
 // 服务端 Go codegen (tools/codegen_rec_intersection) 共用同一份解析器，
 // 避免「两个生成器各写一份 registry struct」的第二真相源。

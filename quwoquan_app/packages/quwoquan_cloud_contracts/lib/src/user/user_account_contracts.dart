@@ -1,7 +1,7 @@
 import '../operation_request_payload.dart';
 
 /// UserAccount（账号生命周期根）命令的 pure contracts。
-/// 真相源：contracts/metadata/user/user_profile/{service,fields,aggregate}.yaml。
+/// 真相源：quwoquan_service/services/user-service/contracts/account/user_account/{service,fields,aggregate}.yaml。
 /// CloseAccount（Apple 5.1.1(v) 账号注销）：closed 为终态，重放幂等。
 
 final class CloseAccountCommand {

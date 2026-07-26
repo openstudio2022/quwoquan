@@ -1,45 +1,69 @@
-# L2 规格：趣聊体验优化 — 聊天入口/对话页/对话设置全面打磨
+# L2 Business Capability：趣聊体验优化 — 聊天入口/对话页/对话设置全面打磨 (`chat-experience-optimization`)
 
-> **特性树路径**：`specs/feature-tree/chat-conversation/chat-experience-optimization/`（L2）
+> 所属领域：[`chat-conversation`](../spec.md)
 >
-> **一句话定义**：面向趣聊日活用户，从聊天列表页、对话页到群管理页的 UI 交互与数据同步全面对齐微信级体验基线，消除头像形状不一致、列表白屏、群管理缺失三大体验断层。
+> 设计归属：[本层 design.md](./design.md)
 
-## 1. 功能说明
+## 1. 能力目标
 
-本特性覆盖四个紧密关联的 L3 story，围绕"打开趣聊 → 进入对话 → 管理群聊"的用户旅程，逐层优化：
+统一趣聊入口、会话详情与群聊管理的交互和状态
 
-```
-趣聊列表页                    对话页                     对话设置/群管理
-├── Tab 居中修复               ├── 用户头像显示            ├── 群管理页（管理员专属）
-├── 移除小趣助理条目            ├── 圆角方形头像            ├── 群主转让
-├── 圆角方形头像               ├── 关系标识               ├── 管理员设置（最多 3 人）
-├── 群聊九宫格头像             ├── 点击跳转用户主页        ├── 群名称权限控制
-└── 本地缓存 + 时间戳同步       └── 用户信息本地缓存        └── 隐私屏障权限控制
-```
+## 2. 范围与非目标
 
-### 1.1 对标
+### In Scope
 
-| 能力 | 微信 | 趣聊当前 | 趣聊目标 |
-|---|---|---|---|
-| 头像形状 | 圆角方形 | 圆形 | 圆角方形 |
-| 群头像 | 九宫格 | 无 | 九宫格（品字/4/5/6/7/8/9 宫格） |
-| 列表缓存 | 本地+增量同步 | 无本地缓存 | 时间戳驱动本地缓存 |
-| 对话页头像 | 显示 | 不显示 | 显示+点击跳转 |
-| 群管理 | 群主/管理员分级 | 无 | 群主+最多 3 管理员 |
-| 群名称权限 | 管理员可控 | 无控制 | 管理员设置开关 |
+- 由本目录 Story 组合交付“趣聊体验优化 — 聊天入口/对话页/对话设置全面打磨”的独立业务结果。
 
-## 2. L3 Story 清单
+### Out of Scope
 
-| L3 | 名称 | 核心交付 |
-|---|---|---|
-| chat-list-ui-polish | 聊天列表 UI 打磨 | Tab 居中、去助理、圆角头像、九宫格 |
-| chat-list-local-cache | 会话列表本地缓存 | 时间戳驱动端云增量同步 |
-| chat-detail-avatar-display | 对话页头像展示 | 用户头像+关系标识+缓存 |
-| chat-group-admin-govern | 群聊管理与治理 | 群管理页+群主转让+管理员设置+权限控制 |
+- 其他 L2 的事实所有权、metadata schema 与实现施工步骤。
 
-## 3. 非功能目标
+## 3. Journey / Scenario 贡献
 
-- 打开趣聊列表 ≤100ms 首屏渲染（本地缓存优先）
-- 无白屏：任何网络条件下先渲染本地数据
-- 头像缓存：内存 LRU 200 条 + 磁盘永久保存，时间戳驱动按需刷新
-- 群头像九宫格：纯前端组合渲染，不额外请求接口
+- [`JNY-003 / SCN-008`](../../spec.md#scn-008)
+  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
+  - 本能力处理：统一趣聊入口、会话详情与群聊管理的交互和状态。
+  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
+  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
+
+## 4. Story
+
+
+
+- [`chat-detail-avatar-display`](./chat-detail-avatar-display/spec.md)：展示对方的版本化头像，点击可进入用户主页，缓存加载不得阻塞会话打开。
+- [`chat-group-admin-govern`](./chat-group-admin-govern/spec.md)：确认弹窗必须屏幕上下左右居中。
+- [`chat-list-local-cache`](./chat-list-local-cache/spec.md)：会话对象缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 `object-cache-policy.yaml` 中 `Conversation` 为准。
+- [`chat-list-ui-polish`](./chat-list-ui-polish/spec.md)：`@我` 和 `未读` 的角标数量来自同一模型，并在阅读后按统一规则递减。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 chat experience optimization 能力 SIT
+
+- 本能力必须组合直属 Story 与公开契约，交付“统一趣聊入口、会话详情与群聊管理的交互和状态”所定义的业务结果；失败终态必须可区分且不得伪造成功。
+
+## 6. 契约与依赖
+
+- 上游能力：[`chat-conversation`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 chat experience optimization 能力 SIT
+
+- GIVEN 执行“chat experience optimization 能力”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“chat experience optimization 能力”对应动作。
+- THEN 直属 Story 共同交付“统一趣聊入口、会话详情与群聊管理的交互和状态”，失败终态可区分且不产生伪成功事实。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 chat experience optimization 能力 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：统一趣聊入口、会话详情与群聊管理的交互和状态。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

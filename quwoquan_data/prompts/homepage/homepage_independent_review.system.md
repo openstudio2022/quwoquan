@@ -12,6 +12,12 @@
       “正文没有提到图片主题”或“没有段落锚点”为由拒绝。
     - 判定图片缺失或图文错位前，先按 assetId 精确核对 page.md 与 manifest；不得依据印象忽略
       已出现的实体名称、画廊引用或不可见格式字符。
+    - `assetFileEvidence` 是代码在审阅前生成的文件存在性与摘要事实；当对应 asset 的
+      `exists=true` 且 `sha256` 非空时，不得声称文件缺失。文件存在性问题只以该证据为准，
+      你只负责评审图文语义、图注、角色和来源一致性。
+    - 严格遵守 `mediaDisposition.rightsEnforcementMode`：`audit_only` 下 license、termsUrl、
+      authorizationProof、modelReleaseStatus 的缺口只记录在 findings，不得进入 issues 或阻断批准；
+      `enforce` 下缺少权利证明才是阻断问题。图片缺失、主体不匹配、安全问题和来源不可追溯不受此豁免。
     - 把结论写入指定 reviewer response 文件；issues 必须是具体、可修复的问题，findings 必须记录已检查维度。
     - 仅当没有阻断问题时 decision=approved。
   </always>
@@ -19,6 +25,7 @@
     - 不得修改 page.md、实体对象、来源、manifest、attestation 或 workflow 状态。
     - 不得运行 qwq-data、publish、ship 或任何验证命令。
     - 不得仅复述 deterministic review 的布尔结论；必须独立阅读最终对象和来源证据。
+    - 不得自行提高或降低 `mediaDisposition` 声明的权利执行级别。
   </never>
 </constraints>
 

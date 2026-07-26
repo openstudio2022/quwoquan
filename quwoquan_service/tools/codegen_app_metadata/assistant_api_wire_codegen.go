@@ -14,7 +14,7 @@ import (
 // aggregate while its command packet lives in assistant_run, so those fields
 // must be merged before rendering rather than recreated as hand-written Dart.
 func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
-	path := filepath.Join(metadataDir, "assistant", "assistant_run", "fields.yaml")
+	path := filepath.Join(metadataDir, "assistant", "assistant", "assistant_run", "fields.yaml")
 	ff, err := readFields(path)
 	if err != nil {
 		return err
@@ -28,14 +28,14 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 	if err != nil {
 		return err
 	}
-	svc, err := readService(filepath.Join(metadataDir, "assistant", "assistant_run", "service.yaml"))
+	svc, err := readService(filepath.Join(metadataDir, "assistant", "assistant", "assistant_run", "operations.yaml"))
 	if err != nil {
 		return err
 	}
 	for _, relativePath := range []string{
-		"assistant/assistant_interaction_event/fields.yaml",
-		"assistant/assistant_preference_fact/fields.yaml",
-		"assistant/assistant_scorecard_fact/fields.yaml",
+		"assistant/assistant/assistant_interaction_event/fields.yaml",
+		"assistant/assistant/assistant_preference_fact/fields.yaml",
+		"assistant/assistant/assistant_scorecard_fact/fields.yaml",
 	} {
 		additional, readErr := readFields(filepath.Join(metadataDir, relativePath))
 		if readErr != nil {
@@ -48,16 +48,72 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 			ff.Entities[name] = entity
 		}
 	}
+	if interaction, exists := ff.Entities["AssistantInteractionEvent"]; exists {
+		ff.Entities["InteractionEvent"] = interaction
+	}
+	if scorecard, exists := ff.Entities["AssistantScorecardFact"]; exists {
+		ff.Entities["Scorecard"] = scorecard
+	}
+	conversationFields, err := readFields(filepath.Join(
+		metadataDir,
+		"assistant",
+		"assistant",
+		"assistant_conversation",
+		"fields.yaml",
+	))
+	if err != nil {
+		return err
+	}
+	const createConversationRequest = "AssistantCreateConversationRequest"
+	requestEntity, exists := conversationFields.Entities[createConversationRequest]
+	if !exists {
+		return fmt.Errorf(
+			"assistant conversation metadata is missing %s",
+			createConversationRequest,
+		)
+	}
+	if _, exists := ff.Entities[createConversationRequest]; exists {
+		return fmt.Errorf(
+			"assistant wire entity %q declared more than once",
+			createConversationRequest,
+		)
+	}
+	ff.Entities[createConversationRequest] = requestEntity
 	preferenceService, err := readService(filepath.Join(
 		metadataDir,
 		"assistant",
+		"assistant",
 		"assistant_preference_fact",
-		"service.yaml",
+		"operations.yaml",
 	))
 	if err != nil {
 		return err
 	}
 	svc.APIRoutes = append(svc.APIRoutes, preferenceService.APIRoutes...)
+	conversationService, err := readService(filepath.Join(
+		metadataDir,
+		"assistant",
+		"assistant",
+		"assistant_conversation",
+		"operations.yaml",
+	))
+	if err != nil {
+		return err
+	}
+	foundCreateConversation := false
+	for _, route := range conversationService.APIRoutes {
+		if route.Operation != "CreateAssistantConversation" {
+			continue
+		}
+		svc.APIRoutes = append(svc.APIRoutes, route)
+		foundCreateConversation = true
+		break
+	}
+	if !foundCreateConversation {
+		return fmt.Errorf(
+			"assistant conversation metadata is missing CreateAssistantConversation route",
+		)
+	}
 	names := collectAssistantWireEntities(ff, svc)
 	out := renderAssistantCloudApiWireDart(ff, names, enumCatalog)
 	outPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "assistant", "assistant_cloud_api_wire.g.dart")
@@ -172,40 +228,7 @@ func renderAssistantCloudWireEnumsDart(catalog *assistantEnumCatalog) string {
 	if catalog == nil || len(catalog.Enums) == 0 {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString("final class AssistantWireEnumParseFailure implements FormatException {\n")
-	b.WriteString("  const AssistantWireEnumParseFailure(this.enumName, this.wireValue);\n\n")
-	b.WriteString("  final String enumName;\n  final String wireValue;\n\n")
-	b.WriteString("  @override\n")
-	b.WriteString("  String toString() => 'Unknown $enumName wire value: $wireValue';\n")
-	b.WriteString("}\n\n")
-	for _, enum := range catalog.Enums {
-		if strings.TrimSpace(enum.Name) == "" {
-			continue
-		}
-		fmt.Fprintf(&b, "enum %s {\n", enum.Name)
-		for _, value := range enum.Values {
-			fmt.Fprintf(&b, "  %s,\n", value.Name)
-		}
-		b.WriteString("}\n\n")
-		fmt.Fprintf(&b, "%s parse%sStrict(Object? raw) {\n", enum.Name, enum.Name)
-		b.WriteString("  final wire = raw?.toString().trim() ?? '';\n")
-		b.WriteString("  switch (wire) {\n")
-		for _, value := range enum.Values {
-			fmt.Fprintf(&b, "    case %q:\n      return %s.%s;\n", value.Wire, enum.Name, value.Name)
-		}
-		fmt.Fprintf(&b, "    default:\n      throw AssistantWireEnumParseFailure(%q, wire);\n", enum.Name)
-		b.WriteString("  }\n")
-		b.WriteString("}\n\n")
-		fmt.Fprintf(&b, "extension %sWire on %s {\n", enum.Name, enum.Name)
-		b.WriteString("  String get wireName => switch (this) {\n")
-		for _, value := range enum.Values {
-			fmt.Fprintf(&b, "    %s.%s => %q,\n", enum.Name, value.Name, value.Wire)
-		}
-		b.WriteString("  };\n")
-		b.WriteString("}\n\n")
-	}
-	return b.String()
+	return "import 'assistant_runtime_enums.g.dart';\n\n"
 }
 
 func assistantWireHasEnum(catalog *assistantEnumCatalog, name string) bool {
@@ -346,6 +369,11 @@ func assistantWireDartType(
 			return "double?"
 		}
 		return "double"
+	case "datetime":
+		if nullable {
+			return "DateTime?"
+		}
+		return "DateTime"
 	case "timestamp":
 		return "String?"
 	case "object", "jsonb":
@@ -449,13 +477,13 @@ func assistantWireFromJsonExpr(
 	if t == "enum" && assistantWireHasEnum(enumCatalog, f.EnumRef) {
 		if nul {
 			return fmt.Sprintf(
-				"json['%s'] == null ? null : parse%sStrict(json['%s'])",
+				"json['%s'] == null ? null : parse%sStrict(json['%s'].toString())",
 				n,
 				f.EnumRef,
 				n,
 			)
 		}
-		return fmt.Sprintf("parse%sStrict(json['%s'])", f.EnumRef, n)
+		return fmt.Sprintf("parse%sStrict((json['%s'] ?? '').toString())", f.EnumRef, n)
 	}
 
 	if _, isEnt := ff.Entities[t]; isEnt {
@@ -572,6 +600,12 @@ func assistantWireFromJsonExpr(
 			return `(json['` + n + `'] as num?)?.toDouble()`
 		}
 		return `(json['` + n + `'] as num?)?.toDouble() ?? 0.0`
+	case "datetime":
+		parsed := `DateTime.tryParse((json['` + n + `'] ?? '').toString().trim())`
+		if nul {
+			return parsed
+		}
+		return `(` + parsed + ` ?? (throw FormatException('required datetime field ` + n + ` is invalid')))`
 	case "timestamp":
 		// Single-track: only camelCase wire keys; no snake_case dual-read.
 		return `json['` + n + `']?.toString()`
@@ -612,6 +646,12 @@ func assistantWireToJsonExpr(
 			}
 			return f.Name + ".map((item) => item.toJson()).toList(growable: false)"
 		}
+	}
+	if t == "datetime" {
+		if assistantWireFieldNullable(f) {
+			return f.Name + "?.toUtc().toIso8601String()"
+		}
+		return f.Name + ".toUtc().toIso8601String()"
 	}
 	return f.Name
 }

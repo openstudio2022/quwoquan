@@ -1,0 +1,375 @@
+description: CircleGroup 对象专属 Command Facade 与 named Reader。
+commercial_defaults:
+  status: blocked
+  block_reason: 新增 operation 需按 B4 商用水位补齐三层证据后逐个翻牌
+  gap_id: CIRCLE_GROUP_COMMERCIAL_CLOSURE
+  target_story: app-cloud-business-object-commercial-closure
+api_routes:
+- method: GET
+  path: /circles/{circleId}/groups
+  operation: ListCircleGroups
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  application:
+    kind: query
+    facet: CircleGroupQueryFacet
+    method: listCircleGroups
+    reader: CircleGroupReader
+    slice: CircleGroupPageSlice
+  query_params:
+  - groupType
+  - visibility
+  - parentGroupId
+  - nodeType
+  - cursor
+  - limit
+  response_entity: CircleGroupSlice
+  authorization:
+    principal: persona
+    ownership_policy: active_circle_member
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.not_member
+  - CIRCLE.SYSTEM.group_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_group_list
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/group_contracts.dart
+    request_type: CircleGroupListQuery
+    response_type: CircleGroupPageSlice
+    request_encoder: encodeCircleGroupListQuery
+    response_decoder: decodeCircleGroupPageSlice
+- method: GET
+  path: /circles/{circleId}/groups/search
+  operation: SearchCircleGroups
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  application:
+    kind: query
+    facet: CircleGroupQueryFacet
+    method: searchCircleGroups
+    reader: CircleGroupSearchReader
+    slice: CircleGroupPageSlice
+  query_params:
+  - query
+  - visibility
+  - groupType
+  - cursor
+  - limit
+  response_entity: CircleGroupSlice
+  authorization:
+    principal: persona
+    ownership_policy: active_circle_member
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.not_member
+  - CIRCLE.SYSTEM.group_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_group_search
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/group_contracts.dart
+    request_type: CircleGroupSearchQuery
+    response_type: CircleGroupPageSlice
+    request_encoder: encodeCircleGroupSearchQuery
+    response_decoder: decodeCircleGroupPageSlice
+- method: POST
+  path: /circles/{circleId}/groups
+  operation: CreateCircleGroup
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  application:
+    kind: command
+    facet: CircleGroupCommandFacet
+    method: createCircleGroup
+    aggregate_owner: CircleGroup
+    mutation_target: CircleGroup
+    invariant_target: CircleGroup
+  request_entity: CreateCircleGroupRequest
+  response_entity: CircleGroupCommandResult
+  writable_fields:
+  - parentGroupId
+  - groupType
+  - nodeType
+  - name
+  - description
+  - visibility
+  - joinPolicy
+  - storageEnabled
+  - noticeEnabled
+  authorization:
+    principal: persona
+    ownership_policy: active_circle_member
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.not_member
+  - CIRCLE.USER.permission_denied
+  - CIRCLE.USER.group_parent_invalid
+  - CIRCLE.USER.group_default_conflict
+  - CIRCLE.USER.group_idempotency_conflict
+  - CIRCLE.SYSTEM.group_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_group_create
+    trace: true
+    attributes:
+    - outcome
+    - group_type
+  slo:
+    latency_p95_ms: 700
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/group_contracts.dart
+    request_type: CreateCircleGroupCommand
+    response_type: CircleGroupCommandResult
+    request_encoder: encodeCreateCircleGroupCommand
+    response_decoder: decodeCircleGroupCommandResult
+- method: GET
+  path: /circles/{circleId}/groups/{groupId}
+  operation: GetCircleGroup
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  application:
+    kind: query
+    facet: CircleGroupQueryFacet
+    method: getCircleGroup
+    reader: CircleGroupReader
+    slice: CircleGroupSlice
+  response_entity: CircleGroupSlice
+  authorization:
+    principal: persona
+    ownership_policy: active_circle_member
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.not_member
+  - CIRCLE.USER.group_not_found
+  - CIRCLE.SYSTEM.group_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_group_get
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 350
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/group_contracts.dart
+    request_type: CircleGroupQuery
+    response_type: CircleGroupSlice
+    request_encoder: encodeCircleGroupQuery
+    response_decoder: decodeCircleGroupSlice
+- method: PATCH
+  path: /circles/{circleId}/groups/{groupId}
+  operation: UpdateCircleGroup
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  headers:
+  - If-Match
+  - Idempotency-Key
+  concurrency:
+    version_precondition: if_match
+  application:
+    kind: command
+    facet: CircleGroupCommandFacet
+    method: updateCircleGroup
+    aggregate_owner: CircleGroup
+    mutation_target: CircleGroup
+    invariant_target: CircleGroup
+  request_entity: UpdateCircleGroupRequest
+  response_entity: CircleGroupCommandResult
+  writable_fields:
+  - parentGroupId
+  - nodeType
+  - name
+  - description
+  - visibility
+  - joinPolicy
+  - storageEnabled
+  - noticeEnabled
+  authorization:
+    principal: persona
+    ownership_policy: group_owner_or_manager
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.permission_denied
+  - CIRCLE.USER.group_not_found
+  - CIRCLE.USER.group_archived
+  - CIRCLE.USER.group_parent_invalid
+  - CIRCLE.USER.group_version_conflict
+  - CIRCLE.USER.group_idempotency_conflict
+  - CIRCLE.SYSTEM.group_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_group_update
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 700
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/group_contracts.dart
+    request_type: UpdateCircleGroupCommand
+    response_type: CircleGroupCommandResult
+    request_encoder: encodeUpdateCircleGroupCommand
+    response_decoder: decodeCircleGroupCommandResult
+- method: DELETE
+  path: /circles/{circleId}/groups/{groupId}
+  operation: ArchiveCircleGroup
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  headers:
+  - Idempotency-Key
+  application:
+    kind: command
+    facet: CircleGroupCommandFacet
+    method: archiveCircleGroup
+    aggregate_owner: CircleGroup
+    mutation_target: CircleGroup
+    invariant_target: CircleGroup
+  response_entity: CircleGroupCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: group_owner_only
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.permission_denied
+  - CIRCLE.USER.group_not_found
+  - CIRCLE.USER.group_default_cannot_archive
+  - CIRCLE.USER.group_version_conflict
+  - CIRCLE.USER.group_idempotency_conflict
+  - CIRCLE.SYSTEM.group_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_group_archive
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 700
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/group_contracts.dart
+    request_type: ArchiveCircleGroupCommand
+    response_type: CircleGroupCommandResult
+    request_encoder: encodeArchiveCircleGroupCommand
+    response_decoder: decodeCircleGroupCommandResult
+contract_test:
+  coverage_requirements:
+  - aggregate invariants, parent cycle and optimistic version conflicts covered
+  - actor and group membership BOLA negative cases covered
+  - aggregate, command receipt and outbox commit in one real Mongo transaction
+  - Reader never exposes aggregate storage identity or derived state as writable fields
+  mock_strategy:
+    service_side:
+      description: 使用 MongoDB 7 replica set testcontainers，不 mock Store/outbox/Reader
+      real_engines:
+        mongodb: testcontainers (mongo:7 replica set)
+      data_management:
+        seed: 仅插入目标 Circle 与 actor CircleMembership policy；CircleGroup 必须经真实 HTTP 创建
+        cleanup: DeleteMany all circle_group_* collections
+      scenarios:
+      - name: group_transaction_and_replay
+        commands:
+        - CreateCircleGroup
+        - UpdateCircleGroup
+        - ArchiveCircleGroup
+        assertions:
+        - forged actor header returns 401 before persistence
+        - same Idempotency-Key and command replays one receipt
+        - same key with changed command returns CIRCLE.USER.group_idempotency_conflict
+        - state, receipt and outbox remain unique
+      - name: group_reader_and_bola
+        commands:
+        - ListCircleGroups
+        - SearchCircleGroups
+        - GetCircleGroup
+        assertions:
+        - non-member cannot enumerate private group data
+        - reader emits CircleGroupSlice without _id or createdByPersonaId

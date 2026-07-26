@@ -42,8 +42,6 @@ def phase_for_environment(
     *,
     consumer: bool,
 ) -> ShipReadinessPhase | None:
-    if environment is DeploymentEnvironment.ALPHA:
-        return None
     if environment is DeploymentEnvironment.PROD:
         return ShipReadinessPhase.COMMERCIAL
     if consumer and environment is DeploymentEnvironment.GAMMA:

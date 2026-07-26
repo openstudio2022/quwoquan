@@ -8,7 +8,7 @@ import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import '../../cloud_services/assistant_facets_mock.dart';
 
 const String assistantScenarioFixtureName =
-    'assistant/test_fixtures/scenarios/assistant_scenarios.json';
+    'quwoquan_service/services/assistant-service/tests/support/contract_fixtures/scenarios/assistant_scenarios.json';
 const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
   'ASSISTANT_SCENARIO_FIXTURE_JSON_B64',
 );
@@ -235,6 +235,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
   @override
   Future<AssistantConversationWire> createAssistantConversation({
     String summary = '',
+    required String clientRequestId,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
     return AssistantConversationWire(
@@ -250,6 +251,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
   Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
+    required String clientRequestId,
     String turnType = 'user',
     String skillId = '',
     String domainId = '',
@@ -265,8 +267,8 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
       turnType: turnType,
       skillId: skillId.isEmpty ? scenario.skillId : skillId,
       domainId: domainId.isEmpty ? scenario.domainId : domainId,
-      input: <String, dynamic>{'text': text},
-      trigger: const <String, dynamic>{'type': 'user_message'},
+      input: AssistantTurnInputWire(text: text),
+      trigger: const AssistantTurnTriggerWire(type: 'user_message'),
       traceId: 'trace_fixture_${scenario.id}',
       createdAt: DateTime.now().toUtc().toIso8601String(),
     );
@@ -288,7 +290,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 1,
-      eventType: 'run_started',
+      eventType: AssistantStreamEventType.runStarted,
       payload: const <String, dynamic>{'status': 'running', 'restarted': false},
       createdAt: createdAt,
     );
@@ -298,7 +300,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 2,
-      eventType: 'process_replace',
+      eventType: AssistantStreamEventType.processReplace,
       payload: const <String, dynamic>{'processes': <Object?>[]},
       createdAt: createdAt,
     );
@@ -308,7 +310,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 3,
-      eventType: 'process_append',
+      eventType: AssistantStreamEventType.processAppend,
       payload: <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'planning',
@@ -329,7 +331,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 4,
-      eventType: 'process_append',
+      eventType: AssistantStreamEventType.processAppend,
       payload: <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'tool_execution',
@@ -351,7 +353,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 5,
-      eventType: 'process_commit',
+      eventType: AssistantStreamEventType.processCommit,
       payload: <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'evidence_review',
@@ -374,7 +376,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 6,
-      eventType: 'process_append',
+      eventType: AssistantStreamEventType.processAppend,
       payload: const <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'answer_generation',
@@ -392,7 +394,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 7,
-      eventType: 'answer_delta',
+      eventType: AssistantStreamEventType.answerDelta,
       payload: <String, dynamic>{'text': scenario.alphaMockStream.finalAnswer},
       createdAt: createdAt,
     );
@@ -402,7 +404,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 8,
-      eventType: 'process_commit',
+      eventType: AssistantStreamEventType.processCommit,
       payload: const <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'answer_generation',
@@ -420,7 +422,7 @@ class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
       seq: 9,
-      eventType: 'completed',
+      eventType: AssistantStreamEventType.completed,
       payload: <String, dynamic>{
         'status': 'completed',
         'finalAnswer': scenario.alphaMockStream.finalAnswer,
@@ -452,11 +454,14 @@ Map<String, dynamic> _loadContractFixtureObject(String metadataRelativePath) {
   return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
 }
 
-File? _tryContractFixtureFile(String metadataRelativePath) {
+File? _tryContractFixtureFile(String repositoryOrMetadataPath) {
+  final suffix = repositoryOrMetadataPath.startsWith('quwoquan_service/')
+      ? repositoryOrMetadataPath
+      : 'quwoquan_service/contracts/metadata/$repositoryOrMetadataPath';
   final candidates = <File>[
-    File('../quwoquan_service/contracts/metadata/$metadataRelativePath'),
-    File('quwoquan_service/contracts/metadata/$metadataRelativePath'),
-    File('../../quwoquan_service/contracts/metadata/$metadataRelativePath'),
+    File('../$suffix'),
+    File(suffix),
+    File('../../$suffix'),
   ];
   for (final candidate in candidates) {
     if (candidate.existsSync()) {

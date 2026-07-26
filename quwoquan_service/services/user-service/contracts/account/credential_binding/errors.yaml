@@ -1,0 +1,36 @@
+domain: USER
+aggregate: CredentialBinding
+description: 'CredentialBinding 对象专属错误码。格式：MODULE.KIND.REASON。
+
+  覆盖凭证绑定唯一性冲突与最后凭证保护；codegen 与 user 域其余对象
+
+  errors.yaml 聚合生成端云错误契约。
+
+  '
+errors:
+- code: USER.AUTH.credential_conflict
+  kind: AUTH
+  reason: conflict
+  http_status: 409
+  recovery:
+    action: surface
+    disruptionLevel: inlineCard
+  l10n_key: userAuthCredentialConflict
+  dart_const: credentialConflict
+  go_const: ErrCredentialConflict
+  user_message:
+    zh: 该账号已被其他用户绑定
+    en: This account is already linked to another user
+- code: USER.AUTH.last_credential
+  kind: AUTH
+  reason: constraint_violation
+  http_status: 400
+  recovery:
+    action: surface
+    disruptionLevel: inlineCard
+  l10n_key: userAuthLastCredential
+  dart_const: lastCredential
+  go_const: ErrLastCredential
+  user_message:
+    zh: 无法解绑，这是您唯一的登录方式
+    en: Cannot unlink the only login method

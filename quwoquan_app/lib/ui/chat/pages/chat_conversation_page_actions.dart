@@ -11,6 +11,8 @@ abstract class _ChatConversationPageActionsState
     maxDurationMs: kMaxRecordDurationMs + 1000,
   );
 
+  void _updateSelection(VoidCallback action) => setState(action);
+
   ConversationDto? _conversationDto;
   String? _resolvedTitle;
   String? _otherParticipantId;
@@ -158,7 +160,7 @@ abstract class _ChatConversationPageActionsState
           .searchMembers(
             conversationId: widget.conversationId,
             query: query,
-            limit: 50,
+            limit: CloudApiDefaults.chatMemberSearchLimit,
           ),
     );
     if (selected != null && mounted) {
@@ -532,11 +534,8 @@ abstract class _ChatConversationPageActionsState
       ),
     );
     final uploaded = await _awaitUploadCompletion(uploadManager, queued);
-    final cdnUrl = uploaded.cdnUrl?.trim() ?? '';
     final assetId = uploaded.assetId?.trim() ?? '';
-    if (uploaded.status == UploadStatus.failed ||
-        cdnUrl.isEmpty ||
-        assetId.isEmpty) {
+    if (uploaded.status == UploadStatus.failed || assetId.isEmpty) {
       await _showAttachmentFailure(
         title: ChatText.chatAttachmentUploadFailed,
         message: ChatText.attachmentUploadIncomplete,
@@ -546,13 +545,15 @@ abstract class _ChatConversationPageActionsState
     final messageType = _attachmentMessageType(item);
     final media = ChatMessageMediaViewData(
       assetId: assetId,
-      deliveryUrl: cdnUrl,
+      // 乐观气泡继续显示本地源；Message 命令只提交 assetId，远端 ACK/
+      // sync projection 才携带 ready MediaAsset 的 canonical delivery URL。
+      deliveryUrl: localPath,
       mediaType: messageType,
       fileName: item.name,
       contentType: _attachmentContentType(item),
       fileSizeBytes: uploaded.fileSize,
       thumbnailUrl: messageType == 'image' || messageType == 'video'
-          ? cdnUrl
+          ? localPath
           : null,
     );
     final sent = await notifier.sendMessage(
@@ -990,22 +991,5 @@ abstract class _ChatConversationPageActionsState
     if (lines.isEmpty) return;
     final text = lines.join('\n\n');
     await SharePlus.instance.share(ShareParams(text: text));
-  }
-
-  void _toggleSelect(String id) {
-    setState(() {
-      if (_selectedIds.contains(id)) {
-        _selectedIds.remove(id);
-      } else {
-        _selectedIds.add(id);
-      }
-    });
-  }
-
-  void _cancelSelection() {
-    setState(() {
-      _isSelectionMode = false;
-      _selectedIds.clear();
-    });
   }
 }

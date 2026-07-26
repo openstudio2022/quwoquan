@@ -5,6 +5,7 @@ import re
 from typing import Any, Mapping, Sequence
 
 from content.post.article.draft_io import iter_draft_articles, PLACEHOLDER_MARKER
+from core.control_types import ContentGenerator
 from core.fact_coverage import fact_covered
 
 from core.image_safety import assess_image, assess_asset_sources, is_near_duplicate, STATUS_UNSAFE
@@ -74,7 +75,7 @@ STANDALONE_TIPS_MARKERS = ("实用信息", "实用攻略信息", "来源平台",
 from core.quality_gates import SOFT_QUALITY_GATES as _SOFT_QUALITY_GATES
 
 SOFT_CHECKS: set[str] = set(_SOFT_QUALITY_GATES)
-IMAGE_EVIDENCE_GENERATOR = "image_evidence_pack"
+IMAGE_EVIDENCE_GENERATOR = ContentGenerator.IMAGE_EVIDENCE_PACK.value
 
 
 def _compact_public_text(value: Any, limit: int) -> str:

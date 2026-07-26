@@ -42,16 +42,16 @@ void main() {
       expect(find.bySemanticsLabel('转发'), findsOneWidget);
     });
 
-    testWidgets('feedbackStatus=helpful 时有帮助图标为填充态', (tester) async {
-      await tester.pumpWidget(_wrapToolbar(feedbackStatus: 'helpful'));
+    testWidgets('feedbackStatus=useful 时有帮助图标为填充态', (tester) async {
+      await tester.pumpWidget(_wrapToolbar(feedbackStatus: 'useful'));
       await tester.pump();
 
       expect(find.byIcon(CupertinoIcons.hand_thumbsup_fill), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.hand_thumbsdown), findsOneWidget);
     });
 
-    testWidgets('feedbackStatus=unhelpful 时没帮助图标为填充态', (tester) async {
-      await tester.pumpWidget(_wrapToolbar(feedbackStatus: 'unhelpful'));
+    testWidgets('feedbackStatus=irrelevant 时没帮助图标为填充态', (tester) async {
+      await tester.pumpWidget(_wrapToolbar(feedbackStatus: 'irrelevant'));
       await tester.pump();
 
       expect(find.byIcon(CupertinoIcons.hand_thumbsdown_fill), findsOneWidget);

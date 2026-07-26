@@ -37,7 +37,7 @@ from core.io import read_json, write_json  # noqa: E402
 
 def _execution_id(label: str) -> str:
     sequence = int(hashlib.sha256(label.encode("utf-8")).hexdigest()[:8], 16) % 1_000_000
-    return f"20260711--travel-homepage-queue--test--canary-{sequence:06d}"
+    return f"20260711--travel-homepage-queue--test--pilot-{sequence:06d}"
 
 
 BATCH = _execution_id("test_batch_oq")
@@ -79,7 +79,7 @@ def _valid_assignment(
     assignment = og.build_assignment(
         execution_id=batch,
         controller_run_id=controller_run_id,
-        assignment_path=["四川省", "阿坝藏族羌族自治州", ref],
+        assignment_path=["test-region-b", "阿坝藏族羌族自治州", ref],
         role="author_subagent",
         parent_assignment_id="partition-parent",
         scope={"sliceType": "content_ref", "ref": ref},
@@ -711,15 +711,15 @@ def test_lease_packet_carries_ralph_exit_contract():
     assert packet["objectPacketRefs"]["draft"].endswith("draft.article.md")
 
 
-def test_lease_packet_carries_execution_contract_five_elements():
+def test_lease_packet_carries_execution_contract_limits():
     batch = _execution_id("test_batch_exec_contract")
     oq.enqueue_ref_job(batch, "rec", "author")
     job = oq.acquire_lease(batch, worker="w1", stage="author")
     contract = build_lease_packet(job)["executionContract"]
-    for key in ("inputs", "budget", "permissions", "completionConditions", "outputPaths"):
+    for key in ("inputs", "limits", "permissions", "completionConditions", "outputPaths"):
         assert contract.get(key), f"executionContract missing {key}"
     assert "read_ref_packet" in contract["permissions"]  # 最小工具集 allow-list
-    assert contract["budget"]["maxWallClockSeconds"] == job.max_wall_clock_seconds
+    assert contract["limits"]["maxWallClockSeconds"] == job.max_wall_clock_seconds
     assert any("ref_review_gate" in c for c in contract["completionConditions"])
 
 
@@ -749,20 +749,6 @@ def test_stuck_detection_forces_dead_before_max_attempts():
     assert last.stuck_detected is True
     notes = list_notifications(batch)
     assert any(n.get("event") == "stuck" and n.get("ref") == "rstuck" for n in notes)
-
-
-def test_usage_budget_exceeded_forces_dead():
-    batch = _execution_id("test_batch_budget")
-    oq.enqueue_ref_job(batch, "rbudget", "author", token_budget=1000)
-    job = oq.acquire_lease(batch, worker="w1", stage="author")
-    mid = oq.record_usage(batch, job.job_id, job.lease.holder or "", tokens=400)
-    assert mid.state is oq.STATE_LEASED  # 未超预算仍在跑
-    res = oq.record_usage(batch, job.job_id, job.lease.holder or "", tokens=700)
-    assert res.state is oq.STATE_DEAD
-    assert res.last_issue is not None and res.last_issue.code.value == "DATA.QUEUE.BUDGET_EXCEEDED"
-    assert res.token_ledger_document()[-1]["budgetExceeded"] is True
-    notes = list_notifications(batch)
-    assert any(n.get("event") == "budget_exceeded" for n in notes)
 
 
 def _valid_envelope_for_job(

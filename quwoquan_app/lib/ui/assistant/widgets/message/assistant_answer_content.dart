@@ -386,7 +386,9 @@ class AssistantAnswerContent extends StatelessWidget {
         href: url,
         fallbackTitle: title,
       );
-      onReferenceTap?.call(citation);
+      if (citation != null) {
+        onReferenceTap?.call(citation);
+      }
     }
 
     try {
@@ -510,12 +512,69 @@ class AssistantAnswerContent extends StatelessWidget {
     AssistantTranscriptTimelineRow row,
   ) {
     return switch (row) {
-      AssistantAnswerTranscriptRow r => _resolveReferenceItemsFromAnswerParts(
-        runArtifactsMap: r.runArtifacts,
-        uiReferences: r.uiReferences,
-      ),
+      AssistantAnswerTranscriptRow r => _resolveReferenceItemsFromAnswerRow(r),
       _ => const <_AssistantReferenceItem>[],
     };
+  }
+
+  static List<_AssistantReferenceItem> _resolveReferenceItemsFromAnswerRow(
+    AssistantAnswerTranscriptRow row,
+  ) {
+    final terminalItems = _resolveReferenceItemsFromTerminalSnapshot(row);
+    if (terminalItems.isNotEmpty) {
+      return terminalItems;
+    }
+    return _resolveReferenceItemsFromAnswerParts(
+      runArtifactsMap: row.runArtifacts,
+      uiReferences: row.uiReferences,
+    );
+  }
+
+  static List<_AssistantReferenceItem>
+  _resolveReferenceItemsFromTerminalSnapshot(AssistantAnswerTranscriptRow row) {
+    final snapshot = row.terminalSnapshot;
+    if (snapshot == null) {
+      return const <_AssistantReferenceItem>[];
+    }
+    final items = <_AssistantReferenceItem>[];
+    final seenDestinations = <String>{};
+    for (final process in snapshot.processes) {
+      for (final reference in process.acceptedReferences) {
+        final destination = reference.destination;
+        final destinationKey =
+            '${destination.kind}|${destination.objectTypeRef}|'
+            '${destination.objectId}|${destination.url}';
+        if (!seenDestinations.add(destinationKey)) {
+          continue;
+        }
+        late final AssistantCitation citation;
+        try {
+          citation = AssistantCitation.fromDestination(
+            destination: destination,
+            title: reference.title.trim(),
+            source: reference.source.trim(),
+            snippet: reference.snippet.trim(),
+          );
+        } on FormatException {
+          continue;
+        }
+        final url = citation.externalUrl;
+        final index = items.length + 1;
+        items.add(
+          _AssistantReferenceItem(
+            index: index,
+            title: citation.title.isNotEmpty
+                ? citation.title
+                : (url.isNotEmpty ? url : citation.destination.objectId ?? ''),
+            source: citation.source,
+            snippet: citation.snippet,
+            label: '[$index]',
+            citation: citation,
+          ),
+        );
+      }
+    }
+    return items;
   }
 
   static List<_AssistantReferenceItem> _resolveReferenceItemsFromAnswerParts({
@@ -529,20 +588,17 @@ class AssistantAnswerContent extends StatelessWidget {
     if (bindings.isNotEmpty) {
       for (var index = 0; index < bindings.length; index++) {
         final binding = bindings[index];
-        final url = binding.destination.url?.trim() ?? '';
-        final citation = AssistantCitation(
-          destination: binding.destination,
-          title: binding.title,
-          source: binding.source,
-          snippet: binding.snippet,
+        final citation = AssistantCitation.tryFromReferenceMap(
+          binding.toJson(),
         );
+        if (citation == null) continue;
+        final url = citation.externalUrl;
         items.add(
           _AssistantReferenceItem(
             index: index + 1,
             title: binding.title.trim().isNotEmpty
                 ? binding.title.trim()
                 : (url.isNotEmpty ? url : binding.label.trim()),
-            url: url,
             source: binding.source.trim(),
             snippet: binding.snippet.trim(),
             label: binding.label.trim(),
@@ -556,24 +612,19 @@ class AssistantAnswerContent extends StatelessWidget {
     }
     for (var index = 0; index < uiReferences.length; index++) {
       final reference = uiReferences[index];
-      final url = (reference['url'] as String?)?.trim() ?? '';
-      if (url.isEmpty) continue;
+      final citation = AssistantCitation.tryFromReferenceMap(reference);
+      if (citation == null) continue;
+      final url = citation.externalUrl;
       items.add(
         _AssistantReferenceItem(
           index: index + 1,
           title: (reference['title'] as String?)?.trim().isNotEmpty == true
               ? (reference['title'] as String).trim()
-              : url,
-          url: url,
+              : (url.isNotEmpty ? url : citation.destination.objectId ?? ''),
           source: (reference['source'] as String?)?.trim() ?? '',
           snippet: (reference['snippet'] as String?)?.trim() ?? '',
           label: '[${index + 1}]',
-          citation: AssistantCitation.external(
-            url: url,
-            title: (reference['title'] as String?)?.trim() ?? '',
-            source: (reference['source'] as String?)?.trim() ?? '',
-            snippet: (reference['snippet'] as String?)?.trim() ?? '',
-          ),
+          citation: citation,
         ),
       );
     }
@@ -595,7 +646,7 @@ class AssistantAnswerContent extends StatelessWidget {
     }
   }
 
-  static AssistantCitation _citationForTap({
+  static AssistantCitation? _citationForTap({
     required List<_AssistantReferenceItem> references,
     required String text,
     required String href,
@@ -610,7 +661,11 @@ class AssistantAnswerContent extends StatelessWidget {
       return matched.toCitation();
     }
     final title = text.trim().isNotEmpty ? text.trim() : fallbackTitle;
-    return AssistantCitation.external(url: href, title: title);
+    try {
+      return AssistantCitation.external(url: href, title: title);
+    } on FormatException {
+      return null;
+    }
   }
 
   static _AssistantReferenceItem? _matchReference({
@@ -676,17 +731,16 @@ class _AssistantLinkBuilder extends MarkdownElementBuilder {
             : () => onReferenceTap!(matched.toCitation()),
       );
     }
+    final citation = AssistantAnswerContent._citationForTap(
+      references: references,
+      text: text,
+      href: href,
+      fallbackTitle: text,
+    );
     return GestureDetector(
-      onTap: onReferenceTap == null
+      onTap: onReferenceTap == null || citation == null
           ? null
-          : () => onReferenceTap!(
-              AssistantAnswerContent._citationForTap(
-                references: references,
-                text: text,
-                href: href,
-                fallbackTitle: text,
-              ),
-            ),
+          : () => onReferenceTap!(citation),
       child: Text(
         text,
         style: (preferredStyle ?? parentStyle ?? const TextStyle()).copyWith(
@@ -738,7 +792,6 @@ class _AssistantReferenceItem {
   const _AssistantReferenceItem({
     required this.index,
     required this.title,
-    required this.url,
     required this.source,
     required this.snippet,
     required this.label,
@@ -747,17 +800,17 @@ class _AssistantReferenceItem {
 
   final int index;
   final String title;
-  final String url;
   final String source;
   final String snippet;
   final String label;
   final AssistantCitation citation;
 
+  String get url => citation.externalUrl;
+
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'index': index,
       'title': title,
-      'url': url,
       'source': source,
       'snippet': snippet,
       'label': label,

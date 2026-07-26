@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+from enum import Enum
 from typing import Any, Mapping
 
 import yaml
@@ -13,6 +14,46 @@ _POLICY_PATHS = {
     "photography": _VERTICALS_ROOT / "photography" / "rights" / "license_policy.yaml",
     "travel": _VERTICALS_ROOT / "travel" / "rights" / "license_policy.yaml",
 }
+
+
+class RightsEnforcementMode(str, Enum):
+    AUDIT_ONLY = "audit_only"
+    ENFORCE = "enforce"
+
+
+class RightsAuditStatus(str, Enum):
+    VERIFIED = "verified"
+    UNVERIFIED = "unverified"
+
+
+def rights_enforcement_mode(vertical: str) -> RightsEnforcementMode:
+    raw = str(load_vertical_license_policy(vertical).get("enforcementMode") or "").strip()
+    try:
+        return RightsEnforcementMode(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"{vertical} license policy enforcementMode is invalid: {raw!r}"
+        ) from exc
+
+
+def rights_proof_required(vertical: str) -> bool:
+    return rights_enforcement_mode(vertical) is RightsEnforcementMode.ENFORCE
+
+
+def parse_rights_audit_status(*payloads: Mapping[str, Any]) -> RightsAuditStatus:
+    for payload in payloads:
+        raw = str(payload.get("rightsAuditStatus") or "").strip()
+        if raw:
+            return RightsAuditStatus(raw)
+    raise ValueError("rightsAuditStatus is required")
+
+
+def rights_audit_status_recorded(*payloads: Mapping[str, Any]) -> bool:
+    try:
+        parse_rights_audit_status(*payloads)
+    except ValueError:
+        return False
+    return True
 
 
 def load_photography_license_policy() -> dict[str, Any]:
@@ -82,7 +123,7 @@ def _scan_status_passed(value: Any) -> bool:
     }
 
 
-def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str]:
+def audit_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str]:
     if vertical not in _POLICY_PATHS:
         return []
     policy = load_vertical_license_policy(vertical)
@@ -143,6 +184,12 @@ def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str
     if str(spec.get("modelReleaseRequired") or "").lower() in ("true", "1", "yes") and model_release != "obtained":
         issues.append("imageRights: modelReleaseRequired requires modelReleaseStatus=obtained")
     return issues
+
+
+def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str]:
+    """Return blocking rights issues under the vertical's current policy."""
+    issues = audit_image_rights(spec, vertical=vertical)
+    return issues if rights_proof_required(vertical) else []
 
 
 def normalize_rights_payload(spec: Mapping[str, Any]) -> dict[str, Any]:

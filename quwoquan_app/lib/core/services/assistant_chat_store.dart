@@ -51,6 +51,10 @@ class AssistantChatStore {
     messages.value = normalized;
   }
 
+  static void clearForTerminalAccountClosure() {
+    messages.value = const <AssistantChatMessage>[];
+  }
+
   static void ensureSummaryForContext({
     required String contextId,
     required String summaryText,

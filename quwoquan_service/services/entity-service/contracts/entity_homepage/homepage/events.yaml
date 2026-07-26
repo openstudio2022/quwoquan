@@ -1,0 +1,31 @@
+events:
+- name: HomepageCandidateIntaken
+  description: 候选共享主页创建
+  producer: entity-service
+  consumers:
+  - platform-ops
+  channel: event_store
+  payload_entity: Homepage
+  payload_fields:
+  - homepageId
+  - title
+  - homepageType
+  - status
+  - sourceType
+  - createdAt
+- name: HomepagePublished
+  description: 候选共享主页发布
+  producer: entity-service
+  consumers:
+  - content-service
+  - circle-service
+  - recommendation-engine
+  channel: event_store
+  payload_entity: Homepage
+  payload_fields:
+  - homepageId
+  - title
+  - homepageType
+  - status
+  - claimStatus
+  - publishedAt

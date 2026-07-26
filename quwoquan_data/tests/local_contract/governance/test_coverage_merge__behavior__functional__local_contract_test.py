@@ -45,9 +45,9 @@ def test_expand_runtime_dir_uses_canonical_data_runtime_root(monkeypatch, tmp_pa
 
 
 def test_normalize_name_strips_scenic_suffix_variants():
-    assert normalize_name("普陀山风景名胜区") == "普陀山"
-    assert normalize_name("普陀山景区") == "普陀山"
-    assert normalize_name(" 普陀山 ") == "普陀山"
+    assert normalize_name("测试实体甲风景名胜区") == "测试实体甲"
+    assert normalize_name("测试实体甲景区") == "测试实体甲"
+    assert normalize_name(" 测试实体甲 ") == "测试实体甲"
     # 后缀本身即全名时不剥（护栏：len 检查）
     assert normalize_name("景区") == "景区"
 
@@ -227,7 +227,7 @@ def test_wiki_category_members_keeps_ns0_pages_and_ns14_subcats():
     2026-07-09 生产回归：两省 discover 批 wiki_category 全程 0 条目产出，
     根因即该 falsy 陷阱（子分类 ns=14 truthy 不受影响，掩盖了问题）。
     """
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
 
     class _Bridge:
         @staticmethod
@@ -250,7 +250,7 @@ def test_wiki_category_members_keeps_ns0_pages_and_ns14_subcats():
 
 def test_wiki_api_with_retry_backs_off_on_empty_response(monkeypatch):
     """限流返回空体时必须退避重试，不得静默空产。"""
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
 
     responses = iter([{}, {}, {"query": {"categorymembers": []}}])
     calls = {"n": 0}
@@ -271,7 +271,7 @@ def test_wiki_api_with_retry_backs_off_on_empty_response(monkeypatch):
 
 def test_overpass_query_distinguishes_empty_result_from_failure(monkeypatch):
     """空 elements=[]（真空区县）ok=True；无 elements（限流/失败）重试后 ok=False。"""
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
 
     monkeypatch.setattr(mod.time, "sleep", lambda s: None)
 
@@ -298,7 +298,7 @@ def test_overpass_query_distinguishes_empty_result_from_failure(monkeypatch):
 
 
 def test_osm_discovery_admits_travel_signals_for_later_cross_source_confirmation():
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
 
     for tags in (
         {"tourism": "attraction"},
@@ -314,7 +314,7 @@ def test_osm_discovery_admits_travel_signals_for_later_cross_source_confirmation
 def test_osm_discovery_splits_heavy_query_and_scopes_duplicate_district_names(
     monkeypatch,
 ):
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
 
     monkeypatch.setattr(mod, "admin_geo_ref", lambda *_args: "province-ref")
     monkeypatch.setattr(
@@ -389,7 +389,7 @@ def test_osm_discovery_splits_heavy_query_and_scopes_duplicate_district_names(
 
 
 def test_wikidata_bindings_produce_stable_typed_geo_candidates():
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
 
     bindings = [
         {
@@ -430,7 +430,7 @@ def test_wikidata_bindings_produce_stable_typed_geo_candidates():
 
 
 def test_wikidata_query_retries_and_distinguishes_empty_success(monkeypatch):
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
 
     monkeypatch.setattr(mod.time, "sleep", lambda _seconds: None)
 
@@ -466,7 +466,7 @@ def test_wikidata_query_retries_and_distinguishes_empty_success(monkeypatch):
 
 
 def test_baike_corroboration_preserves_discovery_identity(monkeypatch):
-    import governance.coverage.coverage_discovery as mod
+    import governance.coverage.discovery as mod
     from content.source.research import baidu_baike
 
     monkeypatch.setattr(
@@ -516,7 +516,7 @@ def test_coverage_discover_keeps_typed_block_visible_without_failing_minimum_pro
 ):
     import argparse
 
-    import governance.coverage.coverage_discovery as discovery
+    import governance.coverage.discovery as discovery
     import governance.coverage.coverage_matrix as matrix
     from governance.coverage.handler import handle_coverage_discover
 

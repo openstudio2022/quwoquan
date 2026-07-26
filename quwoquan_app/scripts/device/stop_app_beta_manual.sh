@@ -84,9 +84,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 beta_manual_init
-if [[ -z "$FLUTTER_DEVICE_ID" && -f "$BETA_MANUAL_STATE_DIR/stack.env" ]]; then
+if [[ -z "$FLUTTER_DEVICE_ID" && -f "$BETA_MANUAL_STATE_DIR/stack.state" ]]; then
   # shellcheck disable=SC1090
-  source "$BETA_MANUAL_STATE_DIR/stack.env"
+  source "$BETA_MANUAL_STATE_DIR/stack.state"
   FLUTTER_DEVICE_ID="${flutter_device_id:-}"
 fi
 

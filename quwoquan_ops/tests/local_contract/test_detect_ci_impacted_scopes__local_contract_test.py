@@ -32,7 +32,7 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
 
     def test_metadata_change_impacts_service_app_and_portal(self) -> None:
         result = run_detect(
-            "quwoquan_service/contracts/metadata/user/user_profile/storage.yaml"
+            "quwoquan_service/services/user-service/contracts/account/user_account/storage.yaml"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("service=true", result.stdout)
@@ -48,17 +48,17 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         self.assertIn("portal=true", result.stdout)
         self.assertIn("topology=true", result.stdout)
 
-    def test_doc_only_change_does_not_trigger_scopes(self) -> None:
+    def test_l1_spec_change_triggers_its_owned_app_scope(self) -> None:
         result = run_detect("specs/feature-tree/runtime/runtime-client-foundation/spec.md")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("service=false", result.stdout)
-        self.assertIn("app=false", result.stdout)
+        self.assertIn("app=true", result.stdout)
         self.assertIn("portal=false", result.stdout)
         self.assertIn("topology=false", result.stdout)
 
-    def test_acceptance_change_triggers_scopes_by_feature_ownership(self) -> None:
+    def test_spec_change_triggers_scopes_by_feature_ownership(self) -> None:
         result = run_detect(
-            "specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/acceptance.yaml"
+            "specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("service=false", result.stdout)
@@ -66,9 +66,9 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         self.assertIn("portal=false", result.stdout)
         self.assertIn("topology=false", result.stdout)
 
-    def test_product_ops_acceptance_change_triggers_service_and_portal(self) -> None:
+    def test_product_ops_spec_change_triggers_service_and_portal(self) -> None:
         result = run_detect(
-            "specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/acceptance.yaml"
+            "specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("service=true", result.stdout)
@@ -76,9 +76,9 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         self.assertIn("portal=true", result.stdout)
         self.assertIn("topology=false", result.stdout)
 
-    def test_platform_acceptance_change_triggers_service_and_portal(self) -> None:
+    def test_platform_spec_change_triggers_service_and_portal(self) -> None:
         result = run_detect(
-            "specs/feature-tree/platform-ops-governance/config-and-reliability-governance/acceptance.yaml"
+            "specs/feature-tree/platform-ops-governance/config-and-reliability-governance/spec.md"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("service=true", result.stdout)

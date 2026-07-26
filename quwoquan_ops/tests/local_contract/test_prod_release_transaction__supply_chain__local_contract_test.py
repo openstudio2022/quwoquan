@@ -40,7 +40,7 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             release_files: dict[str, str] = {}
             release_digests: dict[str, str] = {}
             for service in generator.RELEASE_SERVICES:
-                relative = Path("releases/config") / service / f"{config_version}.yaml"
+                relative = Path("packages/services") / service / "config/config.yaml"
                 path = artifact / relative
                 generator.write_release_snapshot(
                     path,

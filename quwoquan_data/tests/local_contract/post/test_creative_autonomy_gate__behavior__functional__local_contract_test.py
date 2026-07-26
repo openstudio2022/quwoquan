@@ -21,10 +21,12 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
 from core.creative_brief import complete_creative_meta, creative_governance_issues  # noqa: E402
 from content.post.article.prompt_renderer import render_prompt_md  # noqa: E402
 from content.post.article.writing_pack import build_writing_pack  # noqa: E402
+from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
 def _pack() -> dict:
-    execution_id = "20260711--travel-article-creative-autonomy--cn-sichuan--canary-001"
+    execution_id = "20260711--travel-article-creative-autonomy--test-region-b--pilot-001"
+    build_execution_fixture(execution_id)
     return build_writing_pack(
         execution_id=execution_id,
         ref="九寨沟_decision",

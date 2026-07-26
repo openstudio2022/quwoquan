@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/search-intersection-consumption/spec.md#gwt-001
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,7 +10,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
@@ -28,7 +28,7 @@ class _FakeXiaoquSearchFacet implements AssistantXiaoquSearchFacet {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
+    AssistantContextSnapshot? contextSnapshot,
   }) async {
     return AssistantSearchResultView(
       queryEcho: query.trim(),
@@ -45,7 +45,7 @@ class _ThrowingXiaoquSearchFacet implements AssistantXiaoquSearchFacet {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
+    AssistantContextSnapshot? contextSnapshot,
   }) async {
     throw CloudErrorMapper.fromException(
       StateError('xiaoqu search unavailable (test)'),

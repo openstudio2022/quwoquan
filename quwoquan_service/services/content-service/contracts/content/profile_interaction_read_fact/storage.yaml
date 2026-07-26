@@ -1,0 +1,51 @@
+backend: mongodb
+collections:
+  profile_interaction_read_facts:
+    entity: ProfileInteractionReadFact
+    role: append_only
+    indexes:
+    - name: idx_profile_interaction_read_fact_semantic_key
+      keys:
+        ownerPersonaId: 1
+        activityId: 1
+        state: 1
+      unique: true
+    - name: idx_profile_interaction_read_fact_activity
+      keys:
+        ownerPersonaId: 1
+        activityId: 1
+        occurredAt: 1
+  profile_interaction_read_fact_outbox:
+    entity: ProfileInteractionReadFact
+    role: append_only
+    indexes:
+    - name: idx_profile_interaction_read_fact_outbox_event
+      keys:
+        eventId: 1
+      unique: true
+    - name: idx_profile_interaction_read_fact_outbox_sequence
+      keys:
+        outboxSequence: 1
+      unique: true
+  profile_interaction_read_fact_outbox_sequences:
+    entity: ProfileInteractionReadFact
+    role: append_only
+    description: 为 read fact outbox transaction 分配全局单调 sequence。
+  profile_interaction_read_fact_projection_checkpoints:
+    entity: ProfileInteractionReadFact
+    role: projection
+    indexes:
+    - name: idx_profile_interaction_read_fact_checkpoint_consumer
+      keys:
+        consumer: 1
+      unique: true
+transaction:
+  scope:
+  - profile_interaction_read_facts
+  - profile_interaction_read_fact_outbox
+  - profile_interaction_read_fact_outbox_sequences
+  isolation: mongo_transaction
+  guarantees:
+  - semantic_unique_dedupe
+  - fact_and_outbox_atomic_commit
+role: append_only

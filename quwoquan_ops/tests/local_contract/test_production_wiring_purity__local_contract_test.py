@@ -42,6 +42,8 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
                 / "services"
                 / "sample-service"
                 / "internal"
+                / "sample"
+                / "sample_object"
                 / "application"
             )
             adapters = (
@@ -49,6 +51,8 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
                 / "services"
                 / "sample-service"
                 / "internal"
+                / "sample"
+                / "sample_object"
                 / "adapters"
                 / "http"
             )
@@ -84,13 +88,19 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
             issues,
         )
         self.assertTrue(
-            any("internal/application/service.go" in issue for issue in issues),
+            any(
+                "internal/sample/sample_object/application/service.go" in issue
+                for issue in issues
+            ),
             issues,
         )
         self.assertTrue(any("生产 API 装配" in issue for issue in issues), issues)
         self.assertTrue(any("生产默认值" in issue for issue in issues), issues)
         self.assertTrue(
-            any("internal/adapters/http/handler.go" in issue for issue in issues),
+            any(
+                "internal/sample/sample_object/adapters/http/handler.go" in issue
+                for issue in issues
+            ),
             issues,
         )
 
@@ -104,6 +114,8 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
                 / "services"
                 / "sample-service"
                 / "internal"
+                / "sample"
+                / "sample_object"
                 / "infrastructure"
                 / "persistence"
             )
@@ -123,6 +135,60 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
 
         self.assertEqual([], issues)
 
+    def test_python_command_and_application_test_symbols_are_blocked(self) -> None:
+        gate = _load_gate()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service_root = Path(temp_dir)
+            command = (
+                service_root / "services" / "sample-service" / "cmd" / "worker"
+            )
+            application = (
+                service_root
+                / "services"
+                / "sample-service"
+                / "internal"
+                / "sample"
+                / "sample_object"
+                / "application"
+            )
+            infrastructure = (
+                service_root
+                / "services"
+                / "sample-service"
+                / "internal"
+                / "sample"
+                / "sample_object"
+                / "infrastructure"
+            )
+            command.mkdir(parents=True)
+            application.mkdir(parents=True)
+            infrastructure.mkdir(parents=True)
+            (command / "main.py").write_text(
+                "from tests.support import sample_fixture\n",
+                encoding="utf-8",
+            )
+            (application / "service.py").write_text(
+                "gateway = MockGateway()\n",
+                encoding="utf-8",
+            )
+            (infrastructure / "memory_store.py").write_text(
+                "def NewMemoryStore():\n    return object()\n",
+                encoding="utf-8",
+            )
+            gate.SERVICE_ROOT = service_root
+
+            issues = gate.collect_issues()
+
+        self.assertTrue(any("cmd/worker/main.py" in issue for issue in issues), issues)
+        self.assertTrue(
+            any("application/service.py" in issue for issue in issues),
+            issues,
+        )
+        self.assertFalse(
+            any("infrastructure/memory_store.py" in issue for issue in issues),
+            issues,
+        )
+
     def test_beta_gamma_and_prod_configs_cannot_select_fake_storage(self) -> None:
         gate = _load_gate()
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -136,7 +202,7 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
                     service_root
                     / "services"
                     / "sample-service"
-                    / "configs"
+                    / "environments"
                     / environment
                 )
                 config_dir.mkdir(parents=True)

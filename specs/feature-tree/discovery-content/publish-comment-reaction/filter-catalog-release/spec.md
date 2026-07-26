@@ -1,100 +1,133 @@
-# L3 特性：filter-catalog-release
+# L3 Story：筛选目录发布 (`filter-catalog-release`)
 
-## 用户目标
+> 所属能力：[`publish-comment-reaction`](../spec.md)
+>
+> Journey / Scenario：[`JNY-003 / SCN-008`](../../../spec.md#scn-008)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-创作者打开图片编辑器时，应获得可用、稳定、可回滚且跨环境一致的滤镜目录；运营可以发布或回滚目录，而无需重新发版 App。断网时只能使用已验证的同一发布副本，禁止用手写空列表、动态 Map 或另一套资产配置伪造成功。
+## 1. 用户价值
 
-## 对象边界
+作为内容创作者或浏览者，我希望滤镜目录以不可变 FilterCatalogRelease 单轨发布，App 经 typed query、verified cache 和同源 bootstrap replica 消费，从而完成可恢复的内容创作、发现或互动。
 
-| 对象 | 类型 | 职责 | 非职责 |
-|---|---|---|---|
-| `FilterCatalogRelease` | aggregate root | 承载一次不可变目录发布、摘要、状态和有界成员 | 不记录用户使用事实，不保存编辑会话 |
-| `FilterCategoryDefinition` | owned entity | 分类显示、排序和启停 | 不独立写入、查询或维护生命周期 |
-| `FilterPresetDefinition` | owned entity | 预设显示、排序、默认强度和强类型调整参数 | 不保存图片、不直接执行像素处理 |
-| `FilterAdjustmentValues` | owned value | 15 项调整参数，范围统一为 `[-100, 100]` | 不允许任意键 Map |
-| `VerifiedFilterCatalogCache` | App local infrastructure replica | 按 `releaseId + canonicalDigest` 保存最近一次校验通过的发布 | 不是业务真相源，不允许修改目录 |
+## 2. 范围与非目标
 
-`FilterCatalogRelease` 属于 `content.media` bounded context。目录只描述可用滤镜；像素执行仍由 `ImageEditorExportEngine` 负责，编辑器本地会话仍归 `image-editing`。
+### In Scope
 
-## 关系与不变量
+- FilterCatalogRelease、FilterCategoryDefinition、FilterPresetDefinition、FilterAdjustmentValues 的 metadata 与状态机。
+- Stage、Activate、Rollback、GetActiveFilterCatalog typed operations。
+- content-service Store/Reader/Facade/HTTP 装配和单 active 原子切换。
+- App RemoteFilterCatalogQuery、VerifiedFilterCatalogStore、coordinator 与图片编辑器注入。
+- canonical catalog artifact、四环境 seed、bootstrap replica 和 digest 同源门禁。
+- `qwq-data filter-catalog publish` 与 `stackctl filter-catalog` 的受信环境发布、只读回查和 prod gray 防误触边界。
+
+### Out of Scope
+
+- EditRecipe、FilterUsageFact、FilterUsageStatsView 与圈子交集。
+- 图片像素算法和 MediaAsset variants。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 不可变目录可幂等 Stage 并单 active 激活
+
+- Mongo 真实引擎 contract 覆盖 digest 幂等、状态机和单 active CAS
+
+<a id="req-002"></a>
+### REQ-002 active catalog 可公开读取且可原子回滚
+
+- 服务公开 HTTP 必须与 FilterCatalogRelease command/query 契约使用同一状态和错误语义。
+
+<a id="req-003"></a>
+### REQ-003 App 只消费 typed release 并具备可证明离线能力
+
+- Remote 映射、cache 校验与 bootstrap 必须同源；缓存损坏或远端失败时 UI 展示明确错误与重试态。
+
+<a id="req-004"></a>
+### REQ-004 四环境发布、观测和回滚证据闭环
+
+- canonical binding、环境 import payload、发布 HTTP path 与 `Idempotency-Key` 必须同源，回执不得暴露敏感字段。
+- beta/gamma 的 stackctl Stage→Activate→GET 与 App 在线/离线证据均 recorded。
+- prod gray Stage/Activate、public GET 与 Rollback 证据均 recorded，且 activation 未绕过显式人工批准。
+- stackctl verify 与 CONTENT_MEDIA_GAMMA_UAT 证据均 recorded。
+
+<a id="req-005"></a>
+### REQ-005 一个 release 最多包含 32 个分类、256 个预设
 
 - 一个 release 最多包含 32 个分类、256 个预设；每个预设必须引用同 release 内已启用分类。
 - `releaseId`、`canonicalDigest`、分类、预设和推荐列表在 Stage 成功后不可变。
 - 分类 ID、分类排序、预设 ID、同分类预设排序必须唯一；`original` 必须存在且调整参数全为 0。
-- `defaultStrength` 范围为 `[0, 100]`；15 项调整参数范围为 `[-100, 100]`。
-- 同一环境同一时刻只能有一个 `active` release。
 - public Reader 只返回完整校验通过的 active release；禁止返回 staged 或半写入目录。
-- `Stage` 以 digest 和 Idempotency-Key 幂等；同 key 不同 payload 返回冲突。
-- `Activate` 只允许 `staged -> active`，旧 active 原子进入 `retired`。
-- `Rollback` 只允许目标 `retired -> active`，当前 active 原子进入 `retired`；重复目标已 active 为 no-op receipt。
-
-## 生命周期
-
-```text
-canonical catalog artifact
-  -> StageFilterCatalogRelease
-  -> staged
-  -> ActivateFilterCatalogRelease
-  -> active
-  -> retired
-  -> RollbackFilterCatalogRelease
-  -> active
-
-invalid artifact -> stable validation failure (no persisted release)
-```
-
-Stage、Activate、Rollback 均由受信 data publish plane 调用；App 只有公开只读能力 `GetActiveFilterCatalog`。
-
-- 唯一发布入口为 `qwq-data filter-catalog publish`：它先验证 canonical binding，再从
-  metadata 解析 operation path，以稳定 Idempotency-Key 执行 Stage/Activate/Rollback，
-  并以 public GET 回读 `releaseId`、digest 和成员计数。发布回执不得记录 bearer、
-  目录全文、用户身份或图片内容。
-- beta/gamma 仅可经 `stackctl filter-catalog --target <beta-local|gamma-local>` 调用；
-  stackctl 在进程内签发最小权限的本地 `service` principal
-  (`content.filter_catalog.manage`)，只经子进程环境变量传递 bearer。prod 不签发本地
-  token，必须由受控 secret 提供 service principal；`activate` 还必须显式声明
-  `--prod-gray-activation`，防止 Stage 被误当作已放量。
-
-## 端云读取与离线策略
-
-```text
-content-service ActiveFilterCatalogReader
-  -> generated operation client
-  -> RemoteFilterCatalogQuery
-  -> FilterCatalogCoordinator
-       -> VerifiedFilterCatalogStore
-       -> ImageEditorFilterCatalog
-  -> ImageEditorPage
-```
-
-- Remote adapter 只做 generated DTO 到 typed application model 的映射，不读资产、不吞异常。
-- coordinator 成功校验远端 release 后原子替换本地 verified cache。
-- 无网时只允许读取 digest 已校验的 cache；首次安装无 cache 时读取由同一 canonical release artifact 生成的 bootstrap replica。
 - bootstrap replica 必须带真实 `releaseId/canonicalDigest`，并由门禁与环境 seed 校验同源；禁止手写第二套 `filter_presets.json`。
-- cache/bootstrap 都无效时返回结构化 `RuntimeFailure`，滤镜面板展示可重试错误态，编辑器其他工具保持可用。
-
-## 安全、性能与可观测
-
-- public GET 不需要登录，不返回 source owner、内部 receipt 或操作审计字段。
 - Stage/Activate/Rollback 仅允许 service principal 与 `content.filter_catalog.manage` scope。
-- `GetActiveFilterCatalog` P95 ≤ 300ms、可用性 ≥ 99.9%；App warm cache 加载 P95 ≤ 100ms。
-- 指标：`content_filter_catalog_get/stage/activate/rollback`、`filter_catalog_load`。
 - 维度：`outcome`、`source=remote|cache|bootstrap`、`release_id_hash`、`digest_match`、`cache_age_bucket`；禁止记录用户 ID 或图片内容。
-- 告警：连续 5 分钟 active catalog 读取成功率低于 99.9%，或任一环境 active release 缺失。
-
-## 四环境与发布回滚
-
-- alpha/beta/gamma/prod 均由各自 seed manifest 导入同一结构的 release；环境可使用不同 `releaseId`，但字段和不变量一致。
 - beta/gamma 必须完成 Stage→Activate→GET→App 映射→离线 cache 重启验证。
-- prod 发布先 Stage 校验，再灰度 Activate；回滚只执行 `RollbackFilterCatalogRelease`，不回滚 App 二进制。
 - 发布证据必须记录 releaseId、digest、presetCount、激活时间和回滚目标，不记录目录内容全文。
-- `stackctl verify` 的 integration/release profile 对 beta、gamma、prod-hosted 自动追加
-  public active-release readback；它只读，不会隐式 Stage 或 Activate。实际 mutation
-  仍需显式 `stackctl filter-catalog`，避免环境巡检改变业务状态。
 
-## Out of Scope
+## 4. 契约引用
 
-- 用户配方、滤镜使用事实和圈子热度交集，归 `EditRecipe/FilterUsageFact/FilterUsageStatsView` Story。
-- 像素算法、预览缩略图生成和编辑会话，归 `image-editing`。
-- 图片压缩、variants 与 CDN 交付，归媒体处理 Story。
+- canonical：`quwoquan_service/services/content-service/contracts/media/filter_catalog_release/object.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/media/filter_catalog_release/operations.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/media/filter_catalog_release/errors.yaml`
+- canonical：`quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/filter_catalog_facets.dart`
+- canonical：`quwoquan_app/lib/application/content/filter_catalog`
+- canonical：`quwoquan_app/lib/infrastructure/local/content/filter_catalog`
+- canonical：`specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md`
 
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 不可变目录可幂等 Stage 并单 active 激活
+
+- GIVEN data publish plane 持有通过 schema 与目录不变量校验的 canonical catalog artifact
+- WHEN Stage 相同 digest 两次并 Activate 新 release
+- THEN 相同 digest 重放返回首次 release，不产生第二份目录。
+- THEN 同 Idempotency-Key 不同 payload 返回 CONTENT.USER.filter_catalog_idempotency_conflict。
+- THEN 新 release 原子变为 active，旧 active 变为 retired，同一环境只有一个 active。
+- THEN 分类、预设、推荐列表和调整参数在 Stage 后不可修改。
+
+<a id="gwt-002"></a>
+### GWT-002 active catalog 可公开读取且可原子回滚
+
+- GIVEN 环境已有 active release 和至少一个 retired release
+- WHEN public Reader 获取 active catalog，随后 publish plane Rollback 到 retired release
+- THEN GET 只返回完整 active release，不暴露 sourceOwner、receipt 或内部操作字段。
+- THEN Rollback 后 public GET 立即返回目标 release，原 active 变 retired。
+- THEN 重复回滚到已 active release 为 no-op receipt，不递增 version。
+
+<a id="gwt-003"></a>
+### GWT-003 App 只消费 typed release 并具备可证明离线能力
+
+- GIVEN App production composition 已注入 RemoteFilterCatalogQuery 和 VerifiedFilterCatalogStore
+- WHEN 首次在线加载、重启离线加载、远端发布新 release、cache 损坏
+- THEN 在线成功校验后按 releaseId + canonicalDigest 原子替换 cache。
+- THEN 离线重启读取最后一次 verified cache；无 cache 时只读取同源 bootstrap replica。
+- THEN cache 或 bootstrap digest 不匹配时拒绝使用并输出 RuntimeFailure，不返回手写空目录。
+- THEN ImageEditorPage 不实例化 Remote、Mock、文件 Store 或动态 Map 配置。
+
+<a id="gwt-004"></a>
+### GWT-004 四环境发布、观测和回滚证据闭环
+
+- GIVEN alpha/beta/gamma/prod manifest 均声明 FilterCatalogRelease seed 或发布输入
+- WHEN 运行 environment import、gamma UAT 和 prod gray activation
+- THEN 每个环境可证明 releaseId、digest、presetCount 与 active 状态。
+- THEN gamma 完成在线获取、编辑器展示、离线重启与回滚后再获取。
+- THEN 读取、Stage、Activate、Rollback 指标与告警可查询，日志不含图片和用户身份。
+
+## 6. 依赖
+
+- 前置要求：[`publish-comment-reaction`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-004"></a>
+### OPEN-004 四环境发布、观测和回滚证据闭环
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：仍缺 gamma 编辑器在线/离线重启与回滚后的 Remote 证据，以及受保护 prod gray activation/rollback 的批准与执行证据。beta 已可经受信 publish plane 完成 Stage→Activate→GET。
+- 完成判定：`GWT-004` 的 gamma 与 prod gray 行为均实际执行，真实
+  `spec_ref` 与环境 report 可复验。

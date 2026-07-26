@@ -51,7 +51,7 @@ def _seed_entity(root: Path, *, with_manifest: bool = True) -> Path:
         "label": "毕棚沟",
         "domain": "地点",
         "type": "景区",
-        "originExecutionId": "20260711--travel-homepage-assets--cn-sichuan--canary-001",
+        "originExecutionId": "20260711--travel-homepage-assets--test-region-b--pilot-001",
         "tagRefs": ["Topic/旅行/季节/秋", "Topic/旅行/场景/徒步"],
     })
     if with_manifest:
@@ -69,7 +69,7 @@ def test_scan_flags_page_without_asset():
 
 def test_repair_without_real_assets_fails_closed():
     entity_dir = _seed_entity(
-        _TMP / "data/tasks/20260711--travel-homepage-assets--cn-sichuan--canary-001"
+        _TMP / "data/tasks/20260711--travel-homepage-assets--test-region-b--pilot-001"
     )
     issue = [i for i in scan_homepages(include_runtime=True, include_publish=False) if i.entity_dir == entity_dir][0]
     result = repair_homepage(issue)
@@ -80,7 +80,7 @@ def test_repair_without_real_assets_fails_closed():
 
 def test_repair_reuses_existing_homepage_assets_only():
     entity_dir = _seed_entity(
-        _TMP / "data/tasks/20260711--travel-homepage-assets--cn-sichuan--canary-002"
+        _TMP / "data/tasks/20260711--travel-homepage-assets--test-region-b--pilot-002"
     )
     assets_dir = entity_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)

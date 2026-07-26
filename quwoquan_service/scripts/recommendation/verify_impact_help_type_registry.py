@@ -2,7 +2,7 @@
 """影响力 helpType 注册表单一真相源门禁（§23 去桥接闭集校验，对齐交集 verify）。
 
 唯一真相源:
-  contracts/metadata/recommendation/rec_model/impact_help_type_registry.yaml
+  services/recommendation-service/contracts/recommendation/recommendation_model_release/impact_help_type_registry.yaml
 
 校验项:
   1. 注册表自洽：helpTypes 闭集非空、每项 iconKey/summaryAction/evidenceAction/status 完整；
@@ -31,7 +31,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SVC = REPO_ROOT / "quwoquan_service"
-REGISTRY = SVC / "contracts/metadata/recommendation/rec_model/impact_help_type_registry.yaml"
+REGISTRY = SVC / "services/recommendation-service/contracts/recommendation/recommendation_model_release/impact_help_type_registry.yaml"
 GO_TABLE = SVC / "runtime/impact/help_type_table.go"
 DART_META = (
     REPO_ROOT
@@ -39,13 +39,13 @@ DART_META = (
 )
 RESOLVER = REPO_ROOT / "quwoquan_app/lib/components/object_page/intersection_icon_resolver.dart"
 
-LANG_GO = SVC / "services/content-service/internal/application/authorimpact/author_impact_language.go"
-EVIDENCE_GO = SVC / "services/content-service/internal/application/authorimpact/author_impact_evidence_view.go"
-BEHAVIOR_GO = SVC / "services/content-service/internal/application/behavior/behavior_service.go"
-STORE_GO = SVC / "services/content-service/internal/infrastructure/persistence/author_impact_store.go"
-CIRCLE_GO = SVC / "services/circle-service/internal/application/circle_service.go"
+LANG_GO = SVC / "services/content-service/internal/content/post/application/authorimpact/author_impact_language.go"
+EVIDENCE_GO = SVC / "services/content-service/internal/content/post/application/authorimpact/author_impact_evidence_view.go"
+BEHAVIOR_GO = SVC / "services/content-service/internal/content/post/application/behavior/behavior_service.go"
+STORE_GO = SVC / "services/content-service/internal/content/post/infrastructure/persistence/author_impact_store.go"
+CIRCLE_GO = SVC / "services/circle-service/internal/circle_management/circle/application/circle_service.go"
 
-FIXTURE_DIR = SVC / "contracts/metadata/content/test_fixtures/scenarios"
+FIXTURE_DIR = SVC / "services/content-service/tests/support/contract_fixtures/scenarios"
 
 STATUSES = {"active", "deferred"}
 LEGACY_ICON_KEYS = {"audience", "compass", "read"}

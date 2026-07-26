@@ -233,7 +233,7 @@ bool _isWrapParagraphCandidate(ArticleDocumentNode node) {
   return node.type == ArticleDocumentNodeType.paragraph;
 }
 
-/// 行内样式 span（与 contracts/metadata/content/post/article_document_schema.yaml 对齐）
+/// 行内样式 span（与 quwoquan_service/services/content-service/contracts/content/post/article_document_schema.yaml 对齐）
 @immutable
 class ArticleInlineSpan {
   const ArticleInlineSpan({

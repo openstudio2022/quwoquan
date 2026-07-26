@@ -107,7 +107,7 @@ class SearchObjectSelection {
         targets: targets,
         contentTypes: contentTypes,
       ).normalized();
-    } catch (_) {
+    } on FormatException {
       return const SearchObjectSelection();
     }
   }

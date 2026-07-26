@@ -1,0 +1,28 @@
+read_model: NotificationDeliveryJobDeadLetter
+description: 已耗尽重试预算的 NotificationDeliveryJob operator 审计投影。
+storage_backend: mongodb
+collection: notification_delivery_jobs
+projection_mode: authoritative_query
+source_entities:
+- NotificationDeliveryJob
+consumers:
+- notification-service
+- platform-ops
+fields:
+- name: jobId
+  type: string
+- name: notificationId
+  type: string
+- name: channel
+  type: string
+- name: eventType
+  type: string
+- name: attempts
+  type: int
+- name: attemptEpoch
+  type: int
+- name: failureCode
+  type: string
+  nullable: true
+- name: updatedAt
+  type: timestamp

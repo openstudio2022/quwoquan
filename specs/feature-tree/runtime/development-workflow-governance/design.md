@@ -1,302 +1,46 @@
-# 设计方案：development-workflow-governance（三层治理重构）
+# L2 Design：开发流程治理 (`development-workflow-governance`)
 
-## 设计动因
+> 对应规格：[L2 spec](./spec.md)
 
-本特性不是业务功能设计，而是仓库治理系统的结构性重构。上游 `spec.md` 已明确冻结三层目标：
+> 设计触发原因：“让开发者、审核者和编程 Agent 使用同一套目录原生规格、动态上下文和可执行门禁完成需求理解、实现与验收”需要 `directory-native-sdd` 共享状态 owner、契约或质量边界。
 
-- `L1_domain_service`
-- `L2_business_capability`
-- `L3_story`
+## 1. 背景、目标与非目标
 
-并且明确：
+- 设计目标：让开发者、审核者和编程 Agent 使用同一套目录原生规格、动态上下文和可执行门禁完成需求理解、实现与验收。
+- 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
-- 不再保留 `L4/L5`
-- 不再保留记录兼容映射
-- 不再让测试层与树层共用 `L*` 语义
+## 2. Story 协作与状态流
 
-因此设计阶段的核心任务，不是继续讨论“四层还是三层”，而是回答：
+- [`directory-native-sdd`](./directory-native-sdd/spec.md)：工具必须直接扫描目录与 Markdown；删除 `.qwq_output` 后仍可从受版本控制真相源重建上下文。
 
-1. 三层模型如何落到目录、索引、命令、规则、门禁与验收结构上。
-2. 如何避免旧脚本、旧树和旧命名继续把仓库拉回四/五层。
-3. 如何把一次性迁移风险收敛到可执行的切换窗口和回滚方案内。
+## 3. 端云与数据流
 
-## 上游输入评审
+- 上游能力：[`runtime`](../spec.md) 的仓库执行约束。
+- 下游能力：仓库内所有业务节点、metadata、代码和测试。
+- 读取事实：目录、Markdown、metadata、测试 `spec_ref` 与 Git diff。
+- 写入事实：只修改正式规格、设计、metadata、代码和测试；派生结果写入 `.qwq_output`。
+- 一致性要求：README 模板、命令和 gate 必须同步更新。
 
-### `spec.md` 评审结论
+## 4. 关键决策
 
-- 目标已经清晰：本次只接受三层治理，不接受兼容方案。
-- 交付范围清晰：覆盖特性树、命令、主流程、脚本、索引、门禁与 `acceptance.yaml`。
-- Out of scope 清晰：本轮不直接改业务代码，不讨论是否回到微软四层，也不保留双轨并行。
-- 风险已识别：最大风险在于旧脚本、旧索引和旧文案同时存在，导致新树回长。
+<a id="dec-001"></a>
+### DEC-001 目录结构和父子 spec 构成唯一特性树
+- 决策：目录结构和父子 spec 构成唯一特性树。
+- 理由：让开发者、审核者和编程 Agent 使用同一套目录原生规格、动态上下文和可执行门禁完成需求理解、实现与验收。
+- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 关联要求：`REQ-001`
+- 影响 Story：[`directory-native-sdd`](./directory-native-sdd/spec.md)
+- 关联验收：`SIT-001`
 
-### `acceptance.yaml` 评审结论
+## 5. 失败与恢复
 
-- 已有 8 条可测验收项，覆盖三层冻结、命令改写、测试去耦、脚本切换、存量迁移和切换约束。
-- 作为设计输入已经足够，不存在阻断设计的缺项。
-- 当前最需要补充的是：把这些验收项映射成具体的文档改造、脚本改造和迁移任务序列。
+- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
+- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
+- 恢复动作：调用方按 canonical recovery action 重试、刷新或停止；不得自行合成成功结果。
+- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
 
-### 阻断项结论
+## 6. 质量与观测
 
-- 无阻断项，可进入设计。
-
-## 对标输入分析
-
-### 对标对象
-
-- Azure DevOps：`Epic -> Feature -> Story -> Task`
-- Jira / Atlassian：常见 `Epic/Feature -> Story -> Task`
-- Aha!：Theme / Epic / Story / Task
-
-### 借鉴点
-
-- `Story` 必须是最小业务交付与验收单元。
-- `Task` 必须服务于 `Story`，而不是继续长成树层级。
-- 治理树与测试矩阵应分离，不能用同一套层级名表示两种语义。
-
-### 不借鉴点
-
-- 不采用微软四层，因为当前仓库的核心矛盾是“层级过深、旧新并存、口径漂移”，而不是“缺少中间管理层”。
-- 不采用兼容迁移，因为兼容层会使脚手架、门禁和索引长期保留双重逻辑。
-
-### 迁移前差距
-
-- 目录、索引生成器、脚手架、门禁、命令文案曾深度绑定旧层级。
-- `03-testing.mdc` 已有 `三层测试` 治理视图，但主流程和 deploy 文案曾混用 `L3/L4` 测试称呼。
-- `changes/` 旧脚手架体系曾与 `specs/feature-tree/` 主树并存，形成第二真相源。
-
-## 方案对比
-
-### 方案 A：文档先收口，脚本后续渐进改造
-
-先改 `spec.md / design.md / acceptance.yaml` 与命令文案，暂不强制脚本零兼容，后续再迁移生成器和 gate。
-
-**优点**：
-- 改动节奏更平滑。
-- 文档收口快，设计阻力较低。
-
-**缺点**：
-- 旧脚手架和旧索引仍会持续产出旧层级。
-- 文档与自动化会长期不一致。
-- 用户一旦继续新增节点，旧模型会立刻回流。
-
-**适用条件**：
-- 允许长期双轨并存。
-
-### 方案 B：三层文档与自动化分两波切换
-
-第一波统一文档、命令和标准；第二波集中切换脚手架、索引和门禁；中间短暂冻结新特性创建。
-
-**优点**：
-- 风险比一次性全改小。
-- 比纯文档方案更接近真正切换。
-
-**缺点**：
-- 中间冻结期内仍存在旧树残留。
-- 两波之间需要维持临时人工纪律。
-- 若冻结控制不严，旧节点仍可能混入。
-
-**适用条件**：
-- 允许短周期冻结和严格人工管控。
-
-### 方案 C：单窗口一次性切换三层治理（本期选型）
-
-在一个治理分支和切换窗口内，统一完成：
-
-- 三层定义重写
-- 命令文案重写
-- 主流程重写
-- 测试口径去耦
-- 脚手架与 tree index 生成器重写
-- 门禁脚本改为零兼容
-- 存量特性树和 `acceptance.yaml` 全量迁移
-
-**优点**：
-- 不会留下长期兼容负担。
-- 能保证命令、脚本、树和门禁从切换日开始使用同一套语义。
-- 最符合上游规格“不要兼容”的前提。
-
-**缺点**：
-- 变更面最大。
-- 必须有明确冻结窗口和回滚方案。
-- 需要先把设计与任务拆解得足够细，避免执行期混乱。
-
-**适用条件**：
-- 已经明确接受一次性治理重构成本，并能在切换窗口内集中推进。
-
-## 选型决策
-
-**选定方案**：方案 C，单窗口一次性切换三层治理。
-
-**理由**：
-
-- 上游规格已经明确排除兼容方案。
-- 当前旧树、旧脚本、旧索引、旧命令并存，如果不一次性切换，三层模型会立即被旧工具侵蚀。
-- 本次重构目标是“清除记录层级与第二真相源”，不是“在旧模型上贴新文案”。
-
-## 关键设计决策
-
-- 决策 1：三层唯一正式层级为 `L1_domain_service / L2_business_capability / L3_story`。
-- 决策 2：目录树保留到 `L3_story`，`Task` 不进入目录。
-- 决策 3：`acceptance.yaml` 在 `L1`、`L2_business_capability` 与 `L3_story` 存在；`Task` 不单独有验收文件。
-- 决策 4：测试只保留 `三层测试` 作为治理语言，不再使用 `L3/L4` 表示测试层。
-- 决策 5：`changes/` 旧五层脚手架退出特性树主治理链路。
-- 决策 6：任何旧层级、旧兼容字段、旧目录深度在门禁中直接 fail。
-- 决策 7：存量中间层若仍有语义价值，迁移为 tag 或元数据，不继续保留目录层。
-
-## 元数据唯一源分层
-
-本特性不是业务 API metadata 设计，而是治理元数据分层设计。
-
-### 唯一真相源
-
-- `specs/feature-tree/tree_index.yaml`
-  - 特性树结构唯一索引真相源
-- `specs/feature-tree/<L1>/<L2>/spec.md`
-  - 规格真相源
-- `specs/feature-tree/<L1>/<L2>/design.md`
-  - 设计真相源
-- `specs/feature-tree/<L1>/<L2>/acceptance.yaml`
-  - 验收真相源
-- 当前会话、PR 拆分或外部执行台账
-  - 短期任务状态，不进入正式特性树
-
-### 已移除的第二真相源
-
-- `specs/feature-tree/runtime/tree.yaml` 退役镜像
-- `changes/feature_catalog.yaml` 与旧 taxonomy
-- 脚手架中硬编码的旧 level 枚举
-- 测试规则和 deploy 文案中的 `L3/L4` 测试层表达
-
-## TDD / ATDD 策略
-
-本特性本身是治理重构，不是业务功能；因此测试策略以“文档一致性 + 脚本一致性 + 抽样迁移验证”为主。
-
-### ATDD
-
-先以 `acceptance.yaml` 的 A1~A8 作为设计与实施目标：
-
-- 先冻结三层规则
-- 再设计切换方案
-- 再实施脚本与文档重构
-- 最后用 gate 与样例节点验证
-
-### TDD
-
-实施阶段应先补充或更新：
-
-- tree index 生成器测试
-- 特性树校验脚本测试
-- 旧层级残留扫描测试
-- 样例节点迁移验证
-
-再修改对应脚本与文档。
-
-## Story 与测试层映射
-
-本特性自身当前落在 `runtime/development-workflow-governance` 这个治理节点下，后续以其下 `L3_story` 的 Task 作为实施映射：
-
-- 任务 `文档与标准重写`
-  - 主要覆盖 `local_contract`
-- 任务 `命令与流程去四层化`
-  - 主要覆盖 `local_contract`
-- 任务 `脚手架、索引和 gate 重写`
-  - 主要覆盖 `local_contract + api_integration`
-- 任务 `存量节点迁移与抽样验证`
-  - 主要覆盖 `local_contract + api_integration`
-- 任务 `切换窗口与回滚演练`
-  - 主要覆盖 `api_integration + user_acceptance`
-
-## 角色职责与多重防护网
-
-- **产品/治理 owner**：冻结三层定义，不接受中途回到四层。
-- **架构**：定义目录、索引、脚手架和门禁的最终结构。
-- **开发**：按任务序列实施文档、脚本、生成器与迁移。
-- **测试**：验证 `acceptance.yaml`、`三层测试`、样例节点迁移和 gate 结果。
-- **发布**：控制冻结窗口、合入时机与回滚策略。
-
-多重防护网：
-
-- 规格防偏：`spec.md`
-- 方案防漂：`design.md`
-- 任务防漏：当前会话与 PR 检查清单
-- 验收防回归：`acceptance.yaml`
-- 自动化防回长：tree index、脚手架、verify scripts、gate
-
-## 实时性与弱网设计
-
-本特性不涉及实时协议或弱网交互，暂无专项设计要求。
-
-## 并发性能与容量设计
-
-本特性不涉及高并发业务链路，但涉及仓库级批量迁移和 gate 执行时长。需要关注：
-
-- 批量迁移脚本可重复执行
-- tree index 重建对全仓目录扫描的稳定性
-- 门禁脚本在发现旧层级时应快速失败，避免长时间无效运行
-
-## 灰度发布与回滚设计
-
-这是一次仓库治理切换，不做线上灰度，但需要单一治理切换窗口和增量级回滚。
-
-### 切换策略
-
-- 在长期工作分支 `dev1.0` 的单一窗口完成所有文档、脚本、索引和迁移修改
-- 切换前冻结新特性创建入口
-- 完成 gate 与样例节点验证后一次性合入
-
-### 回滚策略
-
-- 若 tree index 无法稳定重建，撤销本次治理增量
-- 若 gate 对旧层级扫描仍有漏网，撤销本次治理增量
-- 若样例节点迁移后 `acceptance` 或命令流程不可用，撤销本次治理增量
-
-## 迁移前状态到完成态
-
-### 迁移前状态
-
-- 命令文案默认围绕四层/五层运行
-- 特性树与测试层使用重复的 `L*` 术语
-- 脚手架和索引生成器产出旧层级
-- `changes/` 与 `specs/feature-tree/` 双轨并存
-- 存量 `acceptance.yaml` level 枚举不统一
-
-### 完成态
-
-- 仓库只有一套三层治理语言
-- 目录到 `L3_story`
-- 测试只用 `三层测试`
-- 脚手架、索引和 gate 对旧层级零容忍
-- 所有 `specs/feature-tree/` 节点和验收文件使用同一结构
-
-## 受影响文档与同步边界
-
-本次设计要求覆盖并最终同步以下内容：
-
-- `specs/00_MASTER_DEVELOPMENT_FLOW.md`
-- `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`
-- `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`
-- `.cursor/rules/03-testing.mdc`
-- `.cursor/commands/explore.md`
-- `.cursor/commands/prd.md`
-- `.cursor/commands/design.md`
-- `.cursor/commands/dev.md`
-- `.cursor/commands/verify.md`
-- `.cursor/commands/commit.md`
-- `.cursor/commands/deliver.md`
-- `.cursor/commands/deploy.md`
-- `quwoquan_ops/gate/scaffold/new_feature_fullstack.sh`
-- `quwoquan_ops/gate/scaffold/verify_feature_traceability.sh`
-- `quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh`
-- `quwoquan_service/runtime/agentpack/tree_index.go`
-- `quwoquan_service/tools/gen_tree_index/main.go`
-- `specs/feature-tree/tree_index.yaml`
-
-## 后续演进边界
-
-- Task 只存在于当前会话、PR 拆分或外部执行台账，不新增树内任务文件。
-- `/explore`、`/prd`、`/design` 的结构化输入仍由命令契约承载，不复制为节点级模板真相源。
-- 树迁移审计持续由现有 feature-tree gate 承载。
-
-## 剩余风险
-
-长期遗留与风险只登记在 `docs/outstanding_risks_backlog.md`；本节点不维护第二套规划任务或风险清单。
+- 门禁必须可重复、输出精确文件和原因，并在仓库规模下保持秒级目录扫描。
+- 报告记录节点数、规格/设计数、问题分类和未归属变更，不记录敏感内容。

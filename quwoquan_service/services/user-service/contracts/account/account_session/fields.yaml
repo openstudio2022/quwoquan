@@ -1,0 +1,49 @@
+description: 登录会话、刷新轮换与吊销的独立生命周期根
+fields:
+- name: id
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  role: authoritative_state
+- name: accountId
+  type: string
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+  reference: true
+- name: deviceId
+  type: string
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: refreshTokenHash
+  type: string
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: status
+  type: string
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: issuedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: expiresAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  role: authoritative_state
+- name: rotatedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  role: authoritative_state
+- name: revokedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  role: authoritative_state

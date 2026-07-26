@@ -1,0 +1,324 @@
+description: CircleFile 对象专属 command/query packet；上传统一由 Media bounded context 完成。
+commercial_defaults:
+  status: blocked
+  block_reason: 新增 operation 需按 B4 商用水位补齐三层证据后逐个翻牌
+  gap_id: CIRCLE_FILE_COMMERCIAL_CLOSURE
+  target_story: app-cloud-business-object-commercial-closure
+api_routes:
+- method: GET
+  path: /circles/{circleId}/files
+  operation: ListCircleFiles
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  application:
+    kind: query
+    facet: CircleFileQueryFacet
+    method: listCircleFiles
+    reader: CircleFileReader
+    slice: CircleFilePageSlice
+  query_params:
+  - groupId
+  - parentFolderId
+  - cursor
+  - limit
+  response_entity: CircleFilePageSlice
+  authorization:
+    principal: persona
+    ownership_policy: active_circle_and_optional_group_member
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.not_member
+  - CIRCLE.SYSTEM.file_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_file_list
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/file_contracts.dart
+    request_type: CircleFileListQuery
+    response_type: CircleFilePageSlice
+    request_encoder: encodeCircleFileListQuery
+    response_decoder: decodeCircleFilePageSlice
+- method: POST
+  path: /circles/{circleId}/files
+  operation: CreateCircleFile
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  headers:
+  - Idempotency-Key
+  application:
+    kind: command
+    facet: CircleFileCommandFacet
+    method: createCircleFile
+    aggregate_owner: CircleFile
+    mutation_target: CircleFile
+    invariant_target: CircleFile
+  writable_fields:
+  - groupId
+  - parentFolderId
+  - name
+  - fileType
+  - assetId
+  response_entity: CircleFileCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_circle_and_optional_group_member
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.not_member
+  - CIRCLE.USER.file_parent_invalid
+  - CIRCLE.USER.file_asset_invalid
+  - CIRCLE.USER.storage_quota_exceeded
+  - CIRCLE.USER.file_idempotency_conflict
+  - CIRCLE.SYSTEM.file_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_file_create
+    trace: true
+    attributes:
+    - outcome
+    - file_type
+  slo:
+    latency_p95_ms: 900
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/file_contracts.dart
+    request_type: CreateCircleFileCommand
+    response_type: CircleFileCommandResult
+    request_encoder: encodeCreateCircleFileCommand
+    response_decoder: decodeCircleFileCommandResult
+- method: GET
+  path: /circles/{circleId}/files/{fileId}
+  operation: GetCircleFile
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  application:
+    kind: query
+    facet: CircleFileQueryFacet
+    method: getCircleFile
+    reader: CircleFileDetailReader
+    slice: CircleFileSlice
+  response_entity: CircleFileSlice
+  authorization:
+    principal: persona
+    ownership_policy: active_circle_and_file_group_member
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.not_member
+  - CIRCLE.USER.file_not_found
+  - CIRCLE.SYSTEM.file_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_file_get
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 350
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/file_contracts.dart
+    request_type: CircleFileQuery
+    response_type: CircleFileSlice
+    request_encoder: encodeCircleFileQuery
+    response_decoder: decodeCircleFileSlice
+- method: PATCH
+  path: /circles/{circleId}/files/{fileId}
+  operation: UpdateCircleFile
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  headers:
+  - If-Match
+  - Idempotency-Key
+  concurrency:
+    version_precondition: if_match
+  application:
+    kind: command
+    facet: CircleFileCommandFacet
+    method: updateCircleFile
+    aggregate_owner: CircleFile
+    mutation_target: CircleFile
+    invariant_target: CircleFile
+  writable_fields:
+  - parentFolderId
+  - name
+  response_entity: CircleFileCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: uploader_or_space_manager
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.not_member
+  - CIRCLE.USER.permission_denied
+  - CIRCLE.USER.file_not_found
+  - CIRCLE.USER.file_parent_invalid
+  - CIRCLE.USER.file_version_conflict
+  - CIRCLE.USER.file_idempotency_conflict
+  - CIRCLE.SYSTEM.file_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_file_update
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 700
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/file_contracts.dart
+    request_type: UpdateCircleFileCommand
+    response_type: CircleFileCommandResult
+    request_encoder: encodeUpdateCircleFileCommand
+    response_decoder: decodeCircleFileCommandResult
+- method: DELETE
+  path: /circles/{circleId}/files/{fileId}
+  operation: DeleteCircleFile
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+  headers:
+  - Idempotency-Key
+  application:
+    kind: command
+    facet: CircleFileCommandFacet
+    method: deleteCircleFile
+    aggregate_owner: CircleFile
+    mutation_target: CircleFile
+    invariant_target: CircleFile
+  response_entity: CircleFileCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: uploader_or_space_manager
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.USER.not_member
+  - CIRCLE.USER.permission_denied
+  - CIRCLE.USER.file_not_found
+  - CIRCLE.USER.file_version_conflict
+  - CIRCLE.USER.file_idempotency_conflict
+  - CIRCLE.SYSTEM.file_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_file_delete
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 700
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../circle/file_contracts.dart
+    request_type: DeleteCircleFileCommand
+    response_type: CircleFileCommandResult
+    request_encoder: encodeDeleteCircleFileCommand
+    response_decoder: decodeCircleFileCommandResult
+contract_test:
+  coverage_requirements:
+  - file 只能引用 actor 自己已 ready 的 MediaAsset，folder 禁止 assetId
+  - CircleFile 只保存 assetId，不暴露 object key、上传凭证或 storage URL
+  - parentFolderId 必须属于同一 Circle 和可选 Group，目录环与跨空间父引用被拒绝
+  - aggregate、version、command receipt 与 outbox 在同一真实 Mongo transaction 提交
+  - list/get 通过 named Reader 返回 typed Slice，并覆盖 Circle/Group membership BOLA
+  - App Remote、alpha fixture 与真实页面使用同一 typed contract，旧 Repository/DTO 不可达
+  mock_strategy:
+    app_side:
+      mock_target: CircleFileCommandWriter + CircleFileQueryReader
+      data_source: typed alpha fixture bundle
+      scenarios:
+      - name: upload_bind_browse_and_open
+        assertions:
+        - Media upload session completes before CircleFile create
+        - page only submits MediaAsset id to CircleFile
+        - folder navigation queries exact parentFolderId
+        - file open requests a short-lived Media original access grant
+    service_side:
+      description: MongoDB 7 replica set、Redis 7 与真实 Content MediaAsset owner Reader；不 mock Store/outbox/Reader
+      real_engines:
+        mongodb: testcontainers (mongo:7 replica set)
+        redis: testcontainers (redis:7)
+      data_management:
+        seed: 仅创建目标 Circle、CircleMembership、可选 CircleGroupMembership 与真实 ready MediaAsset
+        cleanup: DeleteMany all circle_file_* collections and FLUSHDB isolated Redis
+      scenarios:
+      - name: circle_file_transaction_and_replay
+        commands:
+        - CreateCircleFile
+        - UpdateCircleFile
+        - DeleteCircleFile
+        assertions:
+        - same Idempotency-Key and digest replays one receipt
+        - changed digest with same key returns CIRCLE.USER.file_idempotency_conflict
+        - stale If-Match returns CIRCLE.USER.file_version_conflict
+        - state, receipt and outbox remain unique
+      - name: circle_file_reader_and_bola
+        commands:
+        - ListCircleFiles
+        - GetCircleFile
+        assertions:
+        - non-member and wrong group member cannot enumerate file metadata
+        - owner mismatch and non-ready MediaAsset are rejected before commit
+        - Reader response contains no objectKey, uploadUrl or actor alias

@@ -14,11 +14,11 @@ LOCAL_MEDIA_ORIGIN = ROOT / "quwoquan_ops/cli/lib/local_media_origin.py"
 MEDIA_ROOT = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
 CHAT_SCENARIOS = (
     ROOT
-    / "quwoquan_service/contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.json"
+    / "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json"
 )
 CHAT_SCENARIOS_GAMMA = (
     ROOT
-    / "quwoquan_service/contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.gamma-curated.json"
+    / "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.gamma-curated.json"
 )
 DART_RUNNER = (
     ROOT / "quwoquan_app/scripts/chat/verify_chat_group_roster_consistency_runner.dart"

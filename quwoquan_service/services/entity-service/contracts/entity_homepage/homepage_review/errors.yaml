@@ -1,0 +1,18 @@
+aggregate: HomepageReview
+domain: ENTITY
+description: 'HomepageReview 聚合专属错误码。通用命令错误（invalid_argument、permission_denied、
+
+  version_conflict、idempotency_conflict）复用 entity/entity_homepage/homepage/errors.yaml 的域级定义。
+
+  '
+errors:
+- code: ENTITY.USER.review_not_found
+  kind: USER
+  reason: not_found
+  http_status: 404
+  recovery_action: surface
+  dart_const: reviewNotFound
+  go_const: ErrReviewNotFound
+  user_message:
+    zh: 评价不存在或已删除
+    en: Review not found or deleted

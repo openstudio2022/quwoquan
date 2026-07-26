@@ -10,7 +10,7 @@ from core.paths import REPO_ROOT
 from content.execution import baseline
 
 
-EXECUTION_ID = "20260715--travel-homepage-coverage--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260715--travel-homepage-coverage--test-region-a--pilot-001"
 
 
 def _args() -> argparse.Namespace:
@@ -19,9 +19,6 @@ def _args() -> argparse.Namespace:
         catalog=None,
         spec_doc=None,
         design_doc=None,
-        acceptance_doc=None,
-        execution_guide=None,
-        command_matrix_doc=None,
         catalog_config=None,
         naming_rules=None,
         geo_band_rules=None,
@@ -32,11 +29,9 @@ def _args() -> argparse.Namespace:
 
 
 def test_execution_baseline_defaults_use_repository_specs_not_data_subtree():
-    assert baseline.DEFAULT_SPEC_DOC == REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/spec.md"
-    assert baseline.DEFAULT_DESIGN_DOC == REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/design.md"
-    assert baseline.DEFAULT_ACCEPTANCE_DOC == REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/acceptance.yaml"
-    assert baseline.DEFAULT_EXECUTION_GUIDE.is_file()
-    assert baseline.DEFAULT_COMMAND_MATRIX_DOC.is_file()
+    root = REPO_ROOT / "specs/feature-tree/discovery-content/object-homepage-coverage-scaling"
+    assert baseline.DEFAULT_SPEC_DOC == root / "spec.md"
+    assert baseline.DEFAULT_DESIGN_DOC == root / "design.md"
 
 
 def test_execution_baseline_missing_input_writes_failed_report_without_traceback(
@@ -64,9 +59,6 @@ def test_execution_baseline_missing_input_writes_failed_report_without_traceback
     monkeypatch.setattr(baseline, "execution_shared_path", lambda _execution_id, _name: report)
     monkeypatch.setattr(baseline, "DEFAULT_SPEC_DOC", missing)
     monkeypatch.setattr(baseline, "DEFAULT_DESIGN_DOC", missing)
-    monkeypatch.setattr(baseline, "DEFAULT_ACCEPTANCE_DOC", missing)
-    monkeypatch.setattr(baseline, "DEFAULT_EXECUTION_GUIDE", missing)
-    monkeypatch.setattr(baseline, "DEFAULT_COMMAND_MATRIX_DOC", missing)
 
     with pytest.raises(SystemExit) as exc_info:
         baseline.handle_baseline(_args())

@@ -1,0 +1,95 @@
+read_model: ChatMessageClient
+description: 'Message 实体在 ListMessages / Sync 等 API 上的 wire 投影，对齐 fields.yaml → Message。
+
+  客户端列表与气泡展示的统一类型（codegen）；UI 派生展示 Map 见 chat_message_dto_extensions.dart。
+
+  '
+client_projection:
+  dart_class: ChatMessageDto
+  base_class: ''
+  output_path: cloud/runtime/generated/chat/chat_message_dto.g.dart
+  strict: true
+  dart_imports:
+  - chat_message_card_dto.g.dart
+  fields:
+  - name: id
+    dart_type: String
+    nullable: false
+    source: id
+  - name: conversationId
+    dart_type: String
+    nullable: false
+    source: conversationId
+  - name: seq
+    dart_type: int
+    nullable: false
+    source: seq
+  - name: clientMsgId
+    dart_type: String
+    nullable: false
+    source: clientMsgId
+  - name: senderId
+    dart_type: String
+    nullable: false
+    source: senderId
+  - name: senderName
+    dart_type: String
+    nullable: true
+    source: senderDisplayNameSnapshot
+  - name: senderAvatar
+    dart_type: String
+    nullable: true
+    source: senderAvatarUrlSnapshot
+  - name: type
+    dart_type: String
+    nullable: false
+    source: type
+  - name: content
+    dart_type: String
+    nullable: true
+    source: content
+  - name: mediaAssetId
+    dart_type: String
+    nullable: true
+    source: mediaAssetId
+  - name: mediaDeliveryUrl
+    dart_type: String
+    nullable: true
+    source: mediaDeliveryUrl
+  - name: mediaType
+    dart_type: String
+    nullable: true
+    source: mediaType
+  - name: mediaContentType
+    dart_type: String
+    nullable: true
+    source: mediaContentType
+  - name: mediaFileSizeBytes
+    dart_type: int
+    nullable: true
+    source: mediaFileSizeBytes
+  - name: card
+    dart_type: ChatMessageCardDto
+    nullable: true
+    source: card
+    map_from_string_key_class: ChatMessageCardDto
+  - name: replyToMessageId
+    dart_type: String
+    nullable: true
+    source: replyToMessageId
+  - name: mentions
+    dart_type: List<String>
+    nullable: true
+    source: mentions
+  - name: status
+    dart_type: String
+    nullable: false
+    source: status
+  - name: recalledAt
+    dart_type: DateTime
+    nullable: true
+    source: recalledAt
+  - name: timestamp
+    dart_type: DateTime
+    nullable: true
+    source: timestamp

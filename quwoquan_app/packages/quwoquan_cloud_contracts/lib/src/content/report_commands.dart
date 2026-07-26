@@ -1,7 +1,7 @@
 import '../operation_request_payload.dart';
 
 /// Content Report command contract sourced from
-/// `contracts/metadata/content/report`.
+/// `quwoquan_service/services/content-service/contracts/trust_safety/report`.
 enum ContentReportTargetType { post, comment, user, circle, message }
 
 /// Stable wire values from metadata `ReportReason`.

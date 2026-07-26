@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "releaseId", "releaseKind", "executionIds", "entityCount", "postCount", "creatorCount", "tagCount", "canonicalMerkle", "sourceDigests", "payloadSha256", "recordedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.release_attestation"},
+    "releaseId": {"type": "string", "minLength": 1},
+    "releaseKind": {"enum": ["content", "empty_baseline"]},
+    "executionIds": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "entityCount": {"type": "integer", "minimum": 0},
+    "postCount": {"type": "integer", "minimum": 0},
+    "creatorCount": {"type": "integer", "minimum": 0},
+    "tagCount": {"type": "integer", "minimum": 0},
+    "canonicalMerkle": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceDigests": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["algorithm", "digest", "inputs"], "additionalProperties": false, "properties": {"algorithm": {"const": "sha256"}, "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}}}},
+    "payloadSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "recordedAt": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {"if": {"properties": {"releaseKind": {"const": "content"}}}, "then": {"properties": {"executionIds": {"minItems": 1}}, "anyOf": [{"properties": {"entityCount": {"minimum": 1}}}, {"properties": {"postCount": {"minimum": 1}}}]}},
+    {"if": {"properties": {"releaseKind": {"const": "empty_baseline"}}}, "then": {"properties": {"executionIds": {"maxItems": 0}, "entityCount": {"const": 0}, "postCount": {"const": 0}, "creatorCount": {"const": 0}, "tagCount": {"const": 0}}}}
+  ]
+}

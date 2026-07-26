@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-001
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
@@ -247,7 +250,7 @@ void main() {
     expect(semantic.message, isNot(contains('稍后')));
   });
 
-  // 错误展示载体决策矩阵：守护 specs/ux/error-and-permission-semantics.md §1.13.2
+  // 错误展示载体：守护 error-permission-display-semantics L3 spec。
   // 与 UiErrorSemanticResolver._presentationFor 的一一对应。任何改动需同步本组断言。
   group('错误展示载体决策矩阵', () {
     Future<UiErrorSemantic> resolveCase(

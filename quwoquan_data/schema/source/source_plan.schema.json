@@ -20,6 +20,7 @@
           "platform": { "type": "string" },
           "sourceKind": { "type": "string" },
           "sourceTitle": { "type": "string", "minLength": 1 },
+          "qualifiedAuthorityTitle": { "type": "string", "minLength": 1 },
           "url": { "type": "string", "pattern": "^https://" },
           "canonicalUrl": { "type": "string", "pattern": "^https://" },
           "extractor": { "type": "string" },

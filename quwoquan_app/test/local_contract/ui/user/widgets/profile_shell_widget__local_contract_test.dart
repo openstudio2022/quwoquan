@@ -51,6 +51,7 @@ import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import '../../../../support/fakes/test_profile_interaction_facets.dart';
+import '../../../../support/fixtures/author_impact_fixtures.dart';
 
 /// 在 UI 测试中使 capability 保持 null（current 关注/私信 布局）
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -375,7 +376,9 @@ Widget _scopedApp({
   return ProviderScope(
     overrides: [
       profileQueryProvider.overrideWith((ref, surface) => profileQuery),
-      authorImpactQueryProvider.overrideWithValue(authorImpactQuery),
+      authorImpactQueryProvider.overrideWith(
+        (ref, surface) => authorImpactQuery,
+      ),
       ...mockContentFacetOverrides(
         contentRepository ?? MockContentRepository(),
       ),
@@ -814,6 +817,57 @@ void main() {
       );
     });
 
+    testWidgets('打动摘要读取失败展示可重试终态，重试后恢复数据', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var attempts = 0;
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          capabilityRepository: _StaticCapabilityRepository(),
+          overrides: [
+            authorImpactProvider.overrideWith((ref, request) async {
+              attempts++;
+              if (attempts == 1) {
+                throw StateError('author impact temporarily unavailable');
+              }
+              return AuthorImpactSummary(
+                authorId: request.subAccountId,
+                total: 0,
+                items: const <AuthorImpactItem>[],
+              );
+            }),
+          ],
+        ),
+      );
+      await _pumpFrames(tester);
+
+      expect(
+        find.text(UITextConstants.profileImpactUnavailableTitleOther),
+        findsOneWidget,
+      );
+      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+
+      final retryAction = find.text(UITextConstants.tryAgain);
+      await tester.ensureVisible(retryAction);
+      await tester.tap(retryAction);
+      await _pumpFrames(tester);
+
+      expect(attempts, greaterThanOrEqualTo(2));
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, 1200),
+      );
+      await tester.pump();
+      expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
+      expect(
+        find.text(UITextConstants.profileImpactUnavailableTitleOther),
+        findsNothing,
+      );
+    });
+
     testWidgets('other 模式四段式文案不串入 mine 口径', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
@@ -862,17 +916,20 @@ void main() {
                 ),
               ];
             }),
-            authorImpactProvider.overrideWith((ref, userId) async {
+            authorImpactProvider.overrideWith((ref, request) async {
               return AuthorImpactSummary(
-                authorId: userId,
+                authorId: request.subAccountId,
                 total: 2,
                 items: <AuthorImpactItem>[
-                  AuthorImpactItem(
+                  authorImpactItemFixture(
                     helpType: 'community',
                     action: 'join',
                     intersectionDimension: 'interest',
+                    tagRef: 'interest/film-photography',
+                    source: 'source:circle_join',
                     count: 2,
                     primaryText: '2人加入相关圈子',
+                    subtitleText: '来自胶片摄影圈',
                   ),
                 ],
               );

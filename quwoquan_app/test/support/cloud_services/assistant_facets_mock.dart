@@ -39,7 +39,7 @@ final class AssistantPrototypeSkillRow {
 }
 
 /// Assistant alpha fixture 的强类型边界；不聚合 Chat、Circle 或 Content 数据。
-/// 数据源自旧 `PrototypeMockData.assistant*Data`（已随本次迁移从 lib 删除）。
+/// 数据源自已退役的助手内联测试数据（已随本次迁移从 lib 删除）。
 final class AssistantPrototypeFixture {
   const AssistantPrototypeFixture._();
 
@@ -189,7 +189,7 @@ class AlphaAssistantFacets
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
+    AssistantContextSnapshot? contextSnapshot,
   }) async {
     // alpha/test 确定性 fixture（production Remote 失败一律抛 CloudException，
     // 不再存在共享 fallback 构造器）。
@@ -208,7 +208,6 @@ class AlphaAssistantFacets
   Future<PageContextAck> reportPageContext({
     required AssistantOpenContext context,
     String? userAction,
-    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
   }) async {
     return PageContextAck(
       accepted: true,
@@ -326,23 +325,23 @@ class AlphaAssistantFacets
     final now = DateTime.now().toUtc().toIso8601String();
     final index = _preferences.indexWhere(
       (fact) =>
-          fact.scope == scope.wireName &&
+          fact.scope == scope &&
           (fact.conversationId ?? '') == conversationId.trim() &&
-          fact.kind == kind.wireName,
+          fact.kind == kind,
     );
     final existing = index < 0 ? null : _preferences[index];
     final fact = AssistantPreferenceFact(
       preferenceId:
           existing?.preferenceId ?? 'apf_alpha_${_preferences.length + 1}',
       userId: 'alpha_persona',
-      scope: scope.wireName,
+      scope: scope,
       conversationId: conversationId.trim().isEmpty
           ? null
           : conversationId.trim(),
-      kind: kind.wireName,
+      kind: kind,
       value: value.trim(),
-      sourceType: sourceType.wireName,
-      status: AssistantPreferenceStatus.active.wireName,
+      sourceType: sourceType,
+      status: AssistantPreferenceStatus.active,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       version: (existing?.version ?? 0) + 1,
@@ -364,8 +363,8 @@ class AlphaAssistantFacets
     return _preferences
         .where(
           (fact) =>
-              fact.status == status.wireName &&
-              (scope == null || fact.scope == scope.wireName) &&
+              fact.status == status &&
+              (scope == null || fact.scope == scope) &&
               (conversationId.trim().isEmpty ||
                   (fact.conversationId ?? '') == conversationId.trim()),
         )
@@ -383,7 +382,7 @@ class AlphaAssistantFacets
       throw StateError('assistant preference not found');
     }
     final current = _preferences[index];
-    if (current.status == AssistantPreferenceStatus.revoked.wireName) {
+    if (current.status == AssistantPreferenceStatus.revoked) {
       return current;
     }
     final now = DateTime.now().toUtc();
@@ -395,7 +394,7 @@ class AlphaAssistantFacets
       kind: current.kind,
       value: current.value,
       sourceType: current.sourceType,
-      status: AssistantPreferenceStatus.revoked.wireName,
+      status: AssistantPreferenceStatus.revoked,
       revokedAt: now.toIso8601String(),
       revocationDeadline: now
           .add(const Duration(minutes: 10))
@@ -419,7 +418,7 @@ class AlphaAssistantFacets
       throw StateError('assistant preference not found');
     }
     final current = _preferences[index];
-    if (current.status == AssistantPreferenceStatus.active.wireName) {
+    if (current.status == AssistantPreferenceStatus.active) {
       return current;
     }
     final deadline = DateTime.tryParse(current.revocationDeadline ?? '');
@@ -435,7 +434,7 @@ class AlphaAssistantFacets
       kind: current.kind,
       value: current.value,
       sourceType: current.sourceType,
-      status: AssistantPreferenceStatus.active.wireName,
+      status: AssistantPreferenceStatus.active,
       createdAt: current.createdAt,
       updatedAt: now.toIso8601String(),
       version: current.version + 1,
@@ -509,7 +508,9 @@ class AlphaAssistantFacets
     required AssistantCreationSuggestRequest request,
   }) async {
     final enabled = _subscriptions.any(
-      (item) => item.skillId == 'creation_assistant' && item.status == 'active',
+      (item) =>
+          item.skillId == 'creation_assistant' &&
+          item.status == SkillSubscriptionStatus.active,
     );
     if (!enabled) {
       return const AssistantCreationSuggestResponse(
@@ -559,9 +560,9 @@ class AlphaAssistantFacets
     final filtered = _subscriptions
         .where((item) {
           if (status.trim().isEmpty) {
-            return item.status != 'archived';
+            return item.status != SkillSubscriptionStatus.archived;
           }
-          return item.status == status.trim();
+          return item.status.wireName == status.trim();
         })
         .toList(growable: false);
     return filtered.take(limit).toList(growable: false);
@@ -618,7 +619,7 @@ class AlphaAssistantFacets
       skillId: current.skillId,
       domainId: current.domainId,
       tagRefs: current.tagRefs,
-      status: status,
+      status: parseSkillSubscriptionStatusStrict(status),
       searchQueryPlan: current.searchQueryPlan,
       trigger: current.trigger,
       destination: current.destination,
@@ -632,6 +633,7 @@ class AlphaAssistantFacets
   @override
   Future<AssistantConversationWire> createAssistantConversation({
     String summary = '',
+    required String clientRequestId,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
     return AssistantConversationWire(
@@ -679,6 +681,7 @@ class AlphaAssistantFacets
   Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
+    required String clientRequestId,
     String turnType = 'user',
     String skillId = '',
     String domainId = '',
@@ -691,8 +694,8 @@ class AlphaAssistantFacets
       turnType: turnType,
       skillId: skillId,
       domainId: domainId,
-      input: <String, dynamic>{'text': text},
-      trigger: const <String, dynamic>{'type': 'user_message'},
+      input: AssistantTurnInputWire(text: text),
+      trigger: const AssistantTurnTriggerWire(type: 'user_message'),
       traceId: 'trace_mock_personal_assistant',
       createdAt: DateTime.now().toUtc().toIso8601String(),
     );
@@ -728,7 +731,7 @@ class AlphaAssistantFacets
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
       seq: 1,
-      eventType: 'run_started',
+      eventType: AssistantStreamEventType.runStarted,
       payload: const <String, dynamic>{'status': 'running', 'restarted': false},
       createdAt: createdAt,
     );
@@ -738,7 +741,7 @@ class AlphaAssistantFacets
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
       seq: 2,
-      eventType: 'process_replace',
+      eventType: AssistantStreamEventType.processReplace,
       payload: const <String, dynamic>{'processes': <Object?>[]},
       createdAt: createdAt,
     );
@@ -748,7 +751,7 @@ class AlphaAssistantFacets
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
       seq: 3,
-      eventType: 'process_append',
+      eventType: AssistantStreamEventType.processAppend,
       payload: const <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'tool_execution',
@@ -768,7 +771,7 @@ class AlphaAssistantFacets
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
       seq: 4,
-      eventType: 'answer_delta',
+      eventType: AssistantStreamEventType.answerDelta,
       payload: const <String, dynamic>{'text': '找私助 mock stream 已接通。'},
       createdAt: createdAt,
     );
@@ -778,7 +781,7 @@ class AlphaAssistantFacets
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
       seq: 5,
-      eventType: 'completed',
+      eventType: AssistantStreamEventType.completed,
       payload: const <String, dynamic>{
         'status': 'completed',
         'finalAnswer': '找私助 mock stream 已接通。',

@@ -32,52 +32,6 @@ SearchScope _scopeForSelection(SearchObjectSelection selection) {
   }
 }
 
-class SearchRecentHistoryStore {
-  const SearchRecentHistoryStore();
-
-  static const String _storageKey = 'global_search_recent_entries_v1';
-
-  Future<List<RecentSearchEntryView>> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_storageKey);
-    if (raw == null || raw.trim().isEmpty) {
-      return const <RecentSearchEntryView>[];
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return const <RecentSearchEntryView>[];
-      }
-      return decoded
-          .whereType<Map>()
-          .map(
-            (item) =>
-                RecentSearchEntryView.fromMap(item.cast<String, dynamic>()),
-          )
-          .where((item) => item.query.trim().isNotEmpty)
-          .toList(growable: false);
-    } on Object catch (error) {
-      if (kDebugMode) {
-        debugPrint('recent search local cache decode failed: $error');
-      }
-      return const <RecentSearchEntryView>[];
-    }
-  }
-
-  Future<void> save(List<RecentSearchEntryView> entries) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _storageKey,
-      jsonEncode(entries.map((entry) => entry.toMap()).toList(growable: false)),
-    );
-  }
-
-  Future<void> clear() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_storageKey);
-  }
-}
-
 class _ChatRecordAccumulator {
   _ChatRecordAccumulator({
     required this.conversationId,

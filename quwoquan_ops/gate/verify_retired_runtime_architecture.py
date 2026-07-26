@@ -17,7 +17,7 @@ CURRENT_AUTHORITY_FILES = (
     ),
     (
         "specs/feature-tree/runtime/system-architecture-and-engineering-guide/"
-        "acceptance.yaml"
+        "spec.md"
     ),
     "quwoquan_service/contracts/metadata/DESIGN.md",
 )
@@ -66,11 +66,7 @@ RETIRED_DYNAMIC_PATTERNS = (
 )
 
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-MARKDOWN_LINK_FILES = (
-    "specs/00_AGENT_MASTER_SPEC.md",
-    "specs/README.md",
-    "specs/runtime_extension_catalog.md",
-)
+MARKDOWN_LINK_FILES = ("specs/README.md",)
 
 NEGATIVE_REFERENCE_PATHS = {
     ".cursor/commands/infra-audit.md",
@@ -99,30 +95,9 @@ NEGATIVE_MARKERS = (
     "out of scope",
 )
 
-HISTORICAL_PATHS = {
-    "docs/outstanding_risks_backlog.md",
-}
+HISTORICAL_PATHS: set[str] = set()
 
 REQUIRED_TOKENS: dict[str, tuple[str, ...]] = {
-    "specs/runtime_extension_catalog.md": (
-        "system-architecture-and-engineering-guide/design.md",
-        "quwoquan_service/contracts/metadata/DESIGN.md",
-        "commercial validate",
-        "Object Application Facade",
-        "Object Data Ports",
-        "owned_entity",
-        "separate_aggregate",
-        "无界集合禁止内嵌",
-        "query 绑定 named Reader/Slice",
-        "local_contract",
-        "api_integration",
-        "user_acceptance",
-        "alpha",
-        "beta",
-        "gamma",
-        "prod",
-        "Memory、Noop、Mock",
-    ),
     ".cursor/commands/extend.md": (
         "EX01–EX11",
         "commercial validate",
@@ -135,27 +110,21 @@ REQUIRED_TOKENS: dict[str, tuple[str, ...]] = {
         "api_integration",
         "user_acceptance",
     ),
-    ".cursor/rules/01-arch-constraints.mdc": (
-        "system-architecture-and-engineering-guide/design.md",
-        "对象专属 command/query Facade",
-        "对象专属 `AggregateStore` / named Reader / typed Slice",
-        "显式 composition root",
-        "qwq-contract commercial validate",
+    "quwoquan_service/AGENTS.md": (
+        "services/<service>/internal/<context>/<object>/<layer>",
+        "adapters/inbound -> application -> domain",
+        "第一方部署基线归服务",
+        "make verify-service-architecture",
     ),
-    "specs/README.md": (
-        "system-architecture-and-engineering-guide/design.md",
-        "system-architecture-and-engineering-guide/acceptance.yaml",
-        "quwoquan_service/contracts/metadata/DESIGN.md",
-    ),
-    "specs/00_AGENT_MASTER_SPEC.md": (
-        "system-architecture-and-engineering-guide/design.md",
-        "system-architecture-and-engineering-guide/acceptance.yaml",
-        "metadata/DESIGN.md",
-    ),
-    "quwoquan_service/contracts/metadata/README.md": (
-        "system-architecture-and-engineering-guide/design.md",
-        "ContractGraph operation + Object Facade facet/method",
-        "服务 composition root 显式注入 Store/Reader 实现",
+    (
+        "specs/feature-tree/runtime/system-architecture-and-engineering-guide/"
+        "design.md"
+    ): (
+        "ContractGraph",
+        "services/<service>/contracts/<context>/<object>",
+        "internal/<context>/<object>/<layer>",
+        "typed port/event",
+        "make verify-service-architecture",
     ),
 }
 
@@ -189,7 +158,6 @@ def _active_instruction_files(root: Path) -> list[Path]:
         path
         for path in paths
         if _relative(path, root) not in HISTORICAL_PATHS
-        and "specs/changelog" not in path.as_posix()
     )
 
 

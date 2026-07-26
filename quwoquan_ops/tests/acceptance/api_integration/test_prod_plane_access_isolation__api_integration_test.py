@@ -13,7 +13,7 @@ except ImportError:  # pragma: no cover
 
 
 ROOT = Path(__file__).resolve().parents[4]
-ACCESS = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
+ACCESS = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 
 
 def _run(argv: list[str], **env_overrides: str) -> subprocess.CompletedProcess[str]:

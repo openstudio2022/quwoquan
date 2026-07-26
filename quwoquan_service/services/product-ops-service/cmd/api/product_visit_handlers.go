@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"quwoquan_service/services/product-ops-service/internal/application"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 )
 
 func (s *productService) handleRecordVisit(w http.ResponseWriter, r *http.Request) {

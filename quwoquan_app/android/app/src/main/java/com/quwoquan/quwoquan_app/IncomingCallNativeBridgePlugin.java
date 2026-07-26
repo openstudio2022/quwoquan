@@ -37,6 +37,9 @@ final class IncomingCallNativeBridgePlugin {
                 case "queueActivePushEndpointRemovals":
                   result.success(null);
                   break;
+                case "purgePushEndpointStateForTerminalAccountClosure":
+                  result.success(true);
+                  break;
                 default:
                   result.notImplemented();
                   break;

@@ -1,0 +1,49 @@
+kind: append_only_fact
+description: RecommendationExposureFact 的领域对象契约。
+identity:
+  fields:
+  - id
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: none
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: modelRelease
+  on_delete: retain
+  reference_fields:
+  - modelReleaseId
+  target_object: recommendation.RecommendationModelRelease
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: persona
+  on_delete: cascade
+  reference_fields:
+  - personaId
+  target_object: user.Persona
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: target
+  on_delete: tombstone
+  reference_fields:
+  - targetType
+  - targetId
+  target_objects:
+  - user.Persona
+  - entity.Homepage
+  - circle.Circle
+  - content.Post
+  - tag.TagNodeView
+local_identity_reasons:
+  requestId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
+    reference
+  userId: recommendation actor key; persona is preferred but device/anonymous actors have no canonical
+    Persona aggregate reference

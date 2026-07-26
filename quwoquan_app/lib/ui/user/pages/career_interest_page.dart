@@ -6,15 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show ReportTagFeedbackCommand, TagFeedbackAck, UpdateUserProfileCommand;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -35,6 +32,7 @@ class _CareerTagOption {
     required this.parentTagRef,
     required this.parentLabel,
     required this.categoryId,
+    required this.taxonomyReleaseId,
   });
 
   final String tagRef;
@@ -42,6 +40,7 @@ class _CareerTagOption {
   final String parentTagRef;
   final String parentLabel;
   final String categoryId;
+  final String taxonomyReleaseId;
 }
 
 class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
@@ -55,6 +54,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       <String, List<_CareerTagOption>>{};
   List<_CareerTagOption> _occupationOptions = const <_CareerTagOption>[];
   List<String> _initialInterestRefs = const <String>[];
+  String _taxonomyReleaseId = '';
   String _initialOccupationRef = '';
   String _occupationTagRef = '';
   List<String> _interestTagRefs = const <String>[];
@@ -99,7 +99,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
           journey: 'career_interest',
           action: 'exit',
           pageName: 'CareerInterestPage',
-          payload: <String, dynamic>{
+          payload: <String, Object?>{
             'durationMs': DateTime.now().difference(_enteredAt).inMilliseconds,
           },
         ),
@@ -121,6 +121,11 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       final snapshot = await profileEditQuery.getProfileEditSnapshot();
       final occupationOptions = await _loadOccupationOptions(tagRepo);
       final interestByCategory = await _loadInterestOptions(tagRepo);
+      final taxonomyReleaseId = _requireSingleTaxonomyReleaseId(
+        occupationOptions.followedBy(
+          interestByCategory.values.expand((options) => options),
+        ),
+      );
       final tagByRef = <String, _CareerTagOption>{};
       for (final option in occupationOptions) {
         tagByRef[option.tagRef] = option;
@@ -130,7 +135,12 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
           tagByRef[option.tagRef] = option;
         }
       }
-      await _resolveMissingSelectedTags(tagRepo, snapshot, tagByRef);
+      await _resolveMissingSelectedTags(
+        tagRepo,
+        snapshot,
+        tagByRef,
+        taxonomyReleaseId,
+      );
       if (!mounted) {
         return;
       }
@@ -146,6 +156,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
         _occupationTagRef = _initialOccupationRef;
         _initialInterestRefs = _dedupe(snapshot.interestTagRefs);
         _interestTagRefs = List<String>.from(_initialInterestRefs);
+        _taxonomyReleaseId = taxonomyReleaseId;
         _loading = false;
         _loadError = null;
       });
@@ -176,6 +187,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
             parentTagRef: category.tagRef,
             parentLabel: parentLabel,
             categoryId: category.id,
+            taxonomyReleaseId: child.releaseId,
           ),
         );
       }
@@ -202,6 +214,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
             parentTagRef: category.tagRef,
             parentLabel: parentLabel,
             categoryId: category.id,
+            taxonomyReleaseId: child.releaseId,
           ),
       ];
     }
@@ -217,6 +230,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
     TagCatalogQuery tagRepo,
     ProfileEditSnapshotData snapshot,
     Map<String, _CareerTagOption> tagByRef,
+    String taxonomyReleaseId,
   ) async {
     final refs = <String>[
       if (snapshot.occupationTagRef.trim().isNotEmpty)
@@ -235,6 +249,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
         parentTagRef: parentRef,
         parentLabel: _leafLabel(parentRef),
         categoryId: parentRef,
+        taxonomyReleaseId: taxonomyReleaseId,
       );
     }
   }
@@ -295,9 +310,12 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       ];
       final validation = await ref
           .read(tagCatalogQueryProvider)
-          .validateRefs(refs);
+          .validateRefs(
+            expectedTaxonomyReleaseId: _taxonomyReleaseId,
+            tagRefs: refs,
+          );
       if (validation.invalid.isNotEmpty) {
-        // 结构化校验失败：走 TAG.USER.invalid_tag_ref 语义（对齐 tag/errors.yaml），
+        // 结构化校验失败：走 TAG.USER.invalid_tag_ref 语义（对齐对象级 errors.yaml），
         // 不抛裸 StateError（军规 R18）。
         throw CloudErrorMapper.invalidResponse(
           message: UITextConstants.careerInterestInvalidTagToast,
@@ -311,12 +329,9 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
             UpdateUserProfileCommand(
               occupationTagRef: _occupationTagRef,
               interestTagRefs: _interestTagRefs,
+              expectedTaxonomyReleaseId: _taxonomyReleaseId,
             ),
           );
-      // 兴趣采集回流推荐（N2-4，W11 interest-onboarding-prior）：保存成功的
-      // 职业/兴趣 tagRefs 经 onboarding_interest 行为进 HotPath tag 先验，
-      // 首刷 TagRecall 立即可用；只回流 tagRefs，不绑定 post。
-      ref.read(contentBehaviorTrackerProvider).trackOnboardingInterest(refs);
       if (!mounted) {
         return;
       }
@@ -713,6 +728,28 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       return _leafLabel(_occupationTagRef);
     }
     return '${option.parentLabel} · ${option.label}';
+  }
+
+  static String _requireSingleTaxonomyReleaseId(
+    Iterable<_CareerTagOption> options,
+  ) {
+    final releaseIds = <String>{};
+    for (final option in options) {
+      final releaseId = option.taxonomyReleaseId.trim();
+      if (releaseId.isEmpty) {
+        throw const FormatException(
+          'career interest tag is missing taxonomyReleaseId',
+        );
+      }
+      releaseIds.add(releaseId);
+    }
+    if (releaseIds.length != 1) {
+      throw FormatException(
+        'career interest catalog must use one taxonomy release; '
+        'found ${releaseIds.length}',
+      );
+    }
+    return releaseIds.single;
   }
 
   static BoxDecoration _cardDecoration(BuildContext context) => BoxDecoration(

@@ -37,6 +37,7 @@ SUPPORTED_TEXT_EXTRACTORS: frozenset[str] = frozenset(
         "baidu_baike_html",
         "toutiao_baike_html",
         "qunar_html",
+        "ctrip_sight_html",
         "static_official_html",
         "generic_html",
     }
@@ -382,6 +383,22 @@ def _extract_text_by_extractor(extractor: str, html_bytes: bytes, url: str = "")
         return text
     if extractor == "qunar_html":
         return _qunar_html_plaintext(html_bytes, url)
+    if extractor == "ctrip_sight_html":
+        raw = html_bytes.decode("utf-8", errors="replace")
+        text = _html_to_plain_text(raw)
+        start = text.find("旅游攻略社区>")
+        if start < 0:
+            start = text.rfind("详情介绍")
+        if start >= 0:
+            text = text[start:]
+        end_positions = [
+            position
+            for marker in ("用户问答更多", "用户点评")
+            if (position := text.find(marker)) > 0
+        ]
+        if end_positions:
+            text = text[: min(end_positions)]
+        return text[:50000]
     if extractor == "static_official_html":
         return _static_official_plaintext(url)
     raw = html_bytes.decode("utf-8", errors="replace")

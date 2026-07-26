@@ -13,7 +13,7 @@
      （apply_content_object_cards_seed.py），envelope.objectCards 必须出现
      entity_homepage 卡且 objectId 可路由；--require-object-cards 控制是否阻断。
 
-契约对齐：响应字段以 contracts/metadata/content/post/service.yaml 的
+契约对齐：响应字段以 quwoquan_service/services/content-service/contracts/content/post/operations.yaml 的
 GetFeed response_fields 为真相源（items/nextCursor/cursor/feedRequestId/
 rankingVersion/reasonVersion/objectCards）。
 
@@ -148,7 +148,7 @@ def check_object_cards(payload: dict[str, Any], required: bool) -> list[str]:
     if required and not cards:
         errors.append(
             "objectCards empty: apply seed via "
-            "quwoquan_service/services/seed-box/scripts/apply_content_object_cards_seed.py"
+            "quwoquan_service/services/content-service/cmd/jobs/seed-object-cards/main.py"
         )
     for index, card in enumerate(cards):
         if not isinstance(card, dict):

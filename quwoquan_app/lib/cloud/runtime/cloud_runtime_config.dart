@@ -225,10 +225,12 @@ class CloudRuntimeConfig {
       'MEDIA_VIDEO_CDN_BASE_URL': mediaVideoCdnBaseUrl,
       'MEDIA_UPLOAD_BASE_URL': mediaUploadBaseUrl,
     };
-    final invalidEndpoints = endpoints.entries
-        .where((entry) => !_isValidHttpsBaseUrl(entry.value))
-        .map((entry) => entry.key)
-        .toList(growable: false);
+    // 必须用可变 List 字面量；空 where().toList() 在部分运行时会得到定长列表，
+    // 随后 add RTC 键会抛 UnsupportedError，掩盖真正的配置错误。
+    final invalidEndpoints = <String>[
+      for (final entry in endpoints.entries)
+        if (!_isValidHttpsBaseUrl(entry.value)) entry.key,
+    ];
     if (!_isValidSecureWebSocketUrl(rtcMediaConnectionUrl)) {
       invalidEndpoints.add('RTC_MEDIA_CONNECTION_URL');
     }

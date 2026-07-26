@@ -9,25 +9,25 @@ sealed class SearchHitPayload {
   const SearchHitPayload();
 
   /// 可编码 wire Map，仅供 transport/观测兼容边界；新业务消费必须增加具名 payload。
-  Map<String, dynamic> toWireMap();
+  Map<String, Object?> toWireMap();
 }
 
 final class SearchHitPayloadEmpty extends SearchHitPayload {
   const SearchHitPayloadEmpty();
 
   @override
-  Map<String, dynamic> toWireMap() => const <String, dynamic>{};
+  Map<String, Object?> toWireMap() => const <String, Object?>{};
 }
 
 /// 仅供 transport/fixture 边界保留；生产 Remote adapter 不允许把该类型传入 UI。
 final class SearchHitPayloadWireMap extends SearchHitPayload {
-  const SearchHitPayloadWireMap([Map<String, dynamic>? map])
-    : map = map ?? const <String, dynamic>{};
+  const SearchHitPayloadWireMap([Map<String, Object?>? map])
+    : map = map ?? const <String, Object?>{};
 
-  final Map<String, dynamic> map;
+  final Map<String, Object?> map;
 
   @override
-  Map<String, dynamic> toWireMap() => map;
+  Map<String, Object?> toWireMap() => map;
 }
 
 /// 聊天联系人命中（与 [ChatContactSearchItemDto] 同源）。
@@ -37,7 +37,7 @@ final class SearchHitPayloadChatContact extends SearchHitPayload {
   final ChatContactSearchItemDto item;
 
   @override
-  Map<String, dynamic> toWireMap() => item.toMap();
+  Map<String, Object?> toWireMap() => item.toMap();
 }
 
 final class SearchHitPayloadChatConversation extends SearchHitPayload {
@@ -46,7 +46,7 @@ final class SearchHitPayloadChatConversation extends SearchHitPayload {
   final ConversationSearchItemView item;
 
   @override
-  Map<String, dynamic> toWireMap() => item.toMap();
+  Map<String, Object?> toWireMap() => item.toMap();
 }
 
 final class SearchHitPayloadChatMessage extends SearchHitPayload {
@@ -55,7 +55,7 @@ final class SearchHitPayloadChatMessage extends SearchHitPayload {
   final MessageSearchItemView item;
 
   @override
-  Map<String, dynamic> toWireMap() => item.toMap();
+  Map<String, Object?> toWireMap() => item.toMap();
 }
 
 /// Canonical Search 内容帖子命中。
@@ -65,7 +65,7 @@ final class SearchHitPayloadContentPost extends SearchHitPayload {
   final PostSearchItemView item;
 
   @override
-  Map<String, dynamic> toWireMap() => postSearchItemViewToSearchHitWire(item);
+  Map<String, Object?> toWireMap() => postSearchItemViewToSearchHitWire(item);
 }
 
 /// Canonical Search 用户命中。用户检索只承载公开资料摘要；头像当前未进入
@@ -92,7 +92,7 @@ final class SearchHitPayloadUserProfile extends SearchHitPayload {
   final SearchUserProfileHitView item;
 
   @override
-  Map<String, dynamic> toWireMap() => <String, dynamic>{
+  Map<String, Object?> toWireMap() => <String, Object?>{
     'userId': item.userId,
     'displayName': item.displayName,
     'bio': ?item.bio,
@@ -109,7 +109,8 @@ final class SearchHitPayloadCircleCircle extends SearchHitPayload {
   final CircleSearchItemView item;
 
   @override
-  Map<String, dynamic> toWireMap() => item.toSearchHitPayload();
+  Map<String, Object?> toWireMap() =>
+      Map<String, Object?>.from(item.toSearchHitPayload());
 }
 
 final class SearchHitPayloadCircleGroup extends SearchHitPayload {
@@ -118,7 +119,8 @@ final class SearchHitPayloadCircleGroup extends SearchHitPayload {
   final CircleSearchItemView item;
 
   @override
-  Map<String, dynamic> toWireMap() => item.toSearchHitPayload();
+  Map<String, Object?> toWireMap() =>
+      Map<String, Object?>.from(item.toSearchHitPayload());
 }
 
 final class SearchEntityHomepageHitView {
@@ -147,7 +149,7 @@ final class SearchHitPayloadEntityHomepage extends SearchHitPayload {
   final SearchEntityHomepageHitView item;
 
   @override
-  Map<String, dynamic> toWireMap() => <String, dynamic>{
+  Map<String, Object?> toWireMap() => <String, Object?>{
     'homepageId': item.homepageId,
     'name': item.name,
     'subtitle': ?item.subtitle,
@@ -176,7 +178,7 @@ final class SearchHitPayloadLocationPlace extends SearchHitPayload {
   final SearchLocationPlaceHitView item;
 
   @override
-  Map<String, dynamic> toWireMap() => <String, dynamic>{
+  Map<String, Object?> toWireMap() => <String, Object?>{
     'placeId': item.placeId,
     'name': item.name,
     'address': ?item.address,
@@ -189,7 +191,7 @@ final class SearchHitPayloadLocationPoi extends SearchHitPayload {
   final LocationPoiDto item;
 
   @override
-  Map<String, dynamic> toWireMap() => Map<String, dynamic>.from(item.toMap());
+  Map<String, Object?> toWireMap() => Map<String, Object?>.from(item.toMap());
 }
 
 final class SearchHitPayloadSocialRelation extends SearchHitPayload {
@@ -198,7 +200,7 @@ final class SearchHitPayloadSocialRelation extends SearchHitPayload {
   final SocialRelationSearchItemView item;
 
   @override
-  Map<String, dynamic> toWireMap() => <String, dynamic>{
+  Map<String, Object?> toWireMap() => <String, Object?>{
     'subAccountId': item.subAccountId,
     'username': item.username,
     'displayName': item.displayName,
@@ -206,7 +208,7 @@ final class SearchHitPayloadSocialRelation extends SearchHitPayload {
     'avatarVersion': item.avatarVersion,
     'headline': ?item.headline,
     'chatAvailable': item.chatAvailable,
-    'relationshipCapability': <String, dynamic>{
+    'relationshipCapability': <String, Object?>{
       'relationState': item.relationshipCapability.relationState,
       'canFollow': item.relationshipCapability.canFollow,
       'canUnfollow': item.relationshipCapability.canUnfollow,
@@ -218,10 +220,10 @@ final class SearchHitPayloadSocialRelation extends SearchHitPayload {
 }
 
 /// SearchHit 的序列化边界；业务消费禁止通过该 Map 回转内容 DTO。
-Map<String, dynamic> postSearchItemViewToSearchHitWire(
+Map<String, Object?> postSearchItemViewToSearchHitWire(
   PostSearchItemView item,
 ) {
-  return <String, dynamic>{
+  return <String, Object?>{
     'postId': item.postId,
     'contentType': item.contentType,
     'contentIdentity': item.contentIdentity,

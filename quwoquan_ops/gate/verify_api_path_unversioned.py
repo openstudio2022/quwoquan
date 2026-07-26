@@ -27,6 +27,9 @@ THIRD_PARTY = re.compile(
 THIRD_PARTY_PATH = re.compile(
     r"""["'`]/v[0-9]+/(?:geocode|place|direction|weather|distance)/"""
 )
+EXTERNAL_PROVIDER_PATH = re.compile(
+    r"""["'`]/v[0-9]+/(?:chat/completions(?:["'`]|$)|projects/)"""
+)
 GO_MODULE = re.compile(r"github\.com/.+/v[0-9]+")
 SCHEMA_IDENTITY = re.compile(
     r"""(?:schemaVersion|schema)\s*[:=]\s*["'][^"']*/v?[0-9]+["']"""
@@ -51,7 +54,7 @@ SCAN_ROOTS = [
     "quwoquan_data/scripts/content/release",
     "quwoquan_data/tests",
     "specs/feature-tree",
-    "specs/gates",
+    "quwoquan_ops/policies/gates",
     ".cursor/rules",
 ]
 
@@ -91,6 +94,8 @@ def should_skip_path(path: Path) -> bool:
         return True
     if path.name == "verify_api_path_runtime_unversioned.py":
         return True
+    if path.name == "verify_entrypoint_script_paths.py":
+        return True
     if path.name == "test_api_path_unversioned__contract__local_contract_test.py":
         return True
     if path.name == (
@@ -110,7 +115,12 @@ def line_is_excluded(line: str) -> bool:
         if not re.search(r"""["'`\s(=]/(?:internal/|callbacks/)?v[0-9]+/""", line):
             if not re.search(r"https?://[^/\s\"']+/(?:internal/|callbacks/)?v[0-9]+/", line):
                 return True
-    if THIRD_PARTY.search(line) or GO_MODULE.search(line) or THIRD_PARTY_PATH.search(line):
+    if (
+        THIRD_PARTY.search(line)
+        or GO_MODULE.search(line)
+        or THIRD_PARTY_PATH.search(line)
+        or EXTERNAL_PROVIDER_PATH.search(line)
+    ):
         return True
     if SCHEMA_IDENTITY.search(line):
         return True
@@ -122,6 +132,8 @@ def line_is_excluded(line: str) -> bool:
     if "assertNotIn" in line and "/v1/" in line:
         return True
     if 'pathTemplate: "/v1/' in line and "assertNotIn" in line:
+        return True
+    if "/v1/" in line and "StatusNotFound" in line:
         return True
     return False
 

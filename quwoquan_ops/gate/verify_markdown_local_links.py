@@ -10,10 +10,12 @@ from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parents[2]
+FEATURE_TREE_TEMPLATE_ROOT = ROOT / "specs/templates/feature-tree"
 MARKDOWN_LINK_PATTERN = re.compile(r"(?<!!)\[[^\]]*]\(([^)\n]+)\)")
 FENCED_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
 SCHEMES = ("http://", "https://", "mailto:", "tel:", "data:")
 URI_SCHEME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+TEMPLATE_PLACEHOLDER_PATTERN = re.compile(r"<[^>\n]+>")
 
 
 def _tracked_markdown_paths() -> list[Path]:
@@ -45,6 +47,8 @@ def markdown_link_issues() -> list[str]:
         if (
             not source.is_file()
             or source.is_relative_to(ROOT / "quwoquan_app/vendor")
+            # 模板中的相对链接以未来生成的 feature 目录为基准，不能以模板目录解析。
+            or source.is_relative_to(FEATURE_TREE_TEMPLATE_ROOT)
         ):
             continue
         raw_text = source.read_text(encoding="utf-8")
@@ -58,7 +62,8 @@ def markdown_link_issues() -> list[str]:
                 not target
                 or target.startswith(("#", "/", *SCHEMES))
                 or URI_SCHEME_PATTERN.match(target)
-                or any(marker in target for marker in ("${", "{{", "<path>"))
+                or any(marker in target for marker in ("${", "{{"))
+                or TEMPLATE_PLACEHOLDER_PATTERN.search(target)
             ):
                 continue
             destination = (source.parent / target).resolve()

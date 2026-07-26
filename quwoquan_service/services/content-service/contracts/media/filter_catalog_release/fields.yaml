@@ -1,0 +1,612 @@
+description: 图片编辑滤镜目录的一次不可变发布及其激活状态。
+fields:
+- name: releaseId
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: version
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_1
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: sourceOwner
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: canonicalDigest
+  type: string
+  constraints:
+  - NOT_NULL
+  - UNIQUE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: status
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: categoryCount
+  type: int
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: presetCount
+  type: int
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: categories
+  type: '[]FilterCategoryDefinition'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: owned_value
+- name: presets
+  type: '[]FilterPresetDefinition'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: owned_value
+- name: recommendedFallbackPresetIds
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: owned_value
+- name: importedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: activatedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+members:
+  FilterCategoryDefinition:
+    kind: owned_entity
+    fields:
+    - name: categoryId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: displayNameZhHans
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: displayNameEn
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: sort
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: enabled
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    description: FilterCatalogRelease 内的有界分类成员，只能随聚合写入。
+  FilterPresetDefinition:
+    kind: owned_entity
+    fields:
+    - name: presetId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: categoryId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: displayNameZhHans
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: displayNameEn
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: sort
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: enabled
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: defaultStrength
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: adjustments
+      type: FilterAdjustmentValues
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: read
+      role: owned_value
+    description: FilterCatalogRelease 内的有界滤镜预设，参数只能使用 FilterAdjustmentValues。
+  FilterAdjustmentValues:
+    kind: value_object
+    fields:
+    - name: lightSense
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: brightness
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: exposure
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: contrast
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: saturation
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: vibrance
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: texture
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: sharpen
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: structure
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: highlight
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: shadow
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: temperature
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: tint
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: grain
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    - name: fade
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      role: authoritative_state
+    description: 滤镜预设可表达的完整强类型调整参数；所有字段范围为 -100..100。
+types:
+  FilterCategoryDefinition:
+    description: FilterCatalogRelease 内的有界分类成员，只能随聚合写入。
+    fields:
+    - name: categoryId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: displayNameZhHans
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: displayNameEn
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: sort
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: enabled
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  FilterPresetDefinition:
+    description: FilterCatalogRelease 内的有界滤镜预设，参数只能使用 FilterAdjustmentValues。
+    fields:
+    - name: presetId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: categoryId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: displayNameZhHans
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: displayNameEn
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: sort
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: enabled
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: defaultStrength
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: adjustments
+      type: FilterAdjustmentValues
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: read
+  FilterAdjustmentValues:
+    description: 滤镜预设可表达的完整强类型调整参数；所有字段范围为 -100..100。
+    fields:
+    - name: lightSense
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: brightness
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: exposure
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: contrast
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: saturation
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: vibrance
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: texture
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: sharpen
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: structure
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: highlight
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: shadow
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: temperature
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: tint
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: grain
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: fade
+      type: float64
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read

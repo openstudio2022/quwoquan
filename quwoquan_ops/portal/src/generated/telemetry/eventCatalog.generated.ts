@@ -229,6 +229,7 @@ export const eventCatalog = {
         "durationMs",
         "failReasonCode",
         "correlationHash",
+        "backgroundRetryTerminal",
         "recoveryAction",
         "requestId",
         "traceId"
@@ -238,6 +239,19 @@ export const eventCatalog = {
         "contentType",
         "objectState",
         "surfaceId",
+        "result"
+      ]
+    },
+    {
+      "event_type": "video_preview_track_load",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "durationMs",
+        "failReasonCode"
+      ],
+      "required_extensions": [
         "result"
       ]
     },
@@ -425,6 +439,18 @@ export const eventCatalog = {
     "audioUnderrunCount": {
       "minimum": 0,
       "type": "int"
+    },
+    "backgroundRetryTerminal": {
+      "enum": [
+        "not_applicable",
+        "retry_scheduled",
+        "retry_exhausted",
+        "published",
+        "pending_review",
+        "rejected",
+        "cancelled"
+      ],
+      "type": "string"
     },
     "cacheAgeBucket": {
       "enum": [
@@ -652,8 +678,10 @@ export const eventCatalog = {
         "draft",
         "submitting",
         "retry_wait",
+        "pending_review",
         "blocked",
-        "published"
+        "published",
+        "cancelled"
       ],
       "type": "string"
     },
@@ -688,6 +716,10 @@ export const eventCatalog = {
         "draft_restored",
         "submit_started",
         "queued",
+        "retry_scheduled",
+        "retry_exhausted",
+        "pending_review",
+        "cancelled",
         "blocked",
         "published"
       ],

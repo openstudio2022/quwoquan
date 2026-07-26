@@ -1,0 +1,14 @@
+events:
+- name: NotificationPushRequested
+  description: AppMessage aggregate 创建后请求可靠外部投递；由同库 outbox 发布。
+  producer: notification-service
+  consumers:
+  - notification-delivery-worker
+  channel: internal
+  payload_fields:
+  - _id
+  - userId
+  - messageType
+  - title
+  - summary
+  - target

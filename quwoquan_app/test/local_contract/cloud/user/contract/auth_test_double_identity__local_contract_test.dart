@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/user/generated/prefab_user_metadata.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
     show
         accountSessionCommandWriterProvider,
@@ -10,13 +9,15 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
         authenticationChallengeCommandWriterProvider,
         credentialBindingQueryProvider;
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_identity.dart';
 import '../../../../support/fakes/test_auth_facets.dart';
 
 void main() {
   test('测试专用对象 Facet 可逐一 override 且五种登录返回 metadata 当前身份', () async {
     final originalDirectory = Directory.current;
-    const expectedUserId = PrefabUserMetadata.currentUserId;
-    const expectedSubAccountId = PrefabUserMetadata.currentSubAccountId;
+    final expectedUserId = AlphaFixtureUserResolver.currentUserVariantUserId;
+    final expectedSubAccountId =
+        AlphaFixtureUserResolver.currentUserVariantSubAccountId;
     final isolatedDirectory = await Directory.systemTemp.createTemp(
       'qwq_auth_test_double_',
     );

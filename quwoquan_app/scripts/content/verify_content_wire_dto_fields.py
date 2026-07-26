@@ -4,9 +4,9 @@
 Run from repo root:
   python3 quwoquan_app/scripts/content/verify_content_wire_dto_fields.py
 
-新端点或新 JSON 响应：先在 contracts/metadata/content/post/projections/ 补 client_projection
-YAML，再执行 quwoquan_service 下 make codegen-app，最后改 ContentRepository；门禁盘点见
-specs/gates/content_domain_dynamic_map_inventory.yaml。
+新端点或新 JSON 响应：先在 quwoquan_service/services/content-service/contracts/content/post/projections/ 补 client_projection
+YAML，再执行 quwoquan_service 下 make codegen-app，最后改 ContentRepository；开放缺口记录在
+metadata-driven-client-data-contract Story，本脚本直接校验代码与 metadata。
 """
 from __future__ import annotations
 

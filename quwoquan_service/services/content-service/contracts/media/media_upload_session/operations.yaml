@@ -1,0 +1,257 @@
+commercial_defaults:
+  status: blocked
+  block_reason: media upload requires object-storage adapter and Gamma environment evidence before commercial
+    enablement
+  gap_id: CONTENT_MEDIA_UPLOAD_COMMERCIAL_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+description: MediaUploadSession 对象命令操作包。
+api_routes:
+- method: POST
+  path: /content/media/uploads:init
+  operation: InitMediaUpload
+  actor: persona
+  application:
+    kind: command
+    facet: MediaUploadSessionCommandFacet
+    method: initMediaUpload
+    aggregate_owner: MediaUploadSession
+    mutation_target: MediaUploadSession
+    invariant_target: MediaUploadSession
+  authorization:
+    principal: persona
+    ownership_policy: session_owner
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 5000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.invalid_argument
+  - CONTENT.USER.media_file_too_large
+  - CONTENT.USER.media_type_unsupported
+  - CONTENT.USER.idempotency_conflict
+  - CONTENT.SYSTEM.storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_media_upload_init
+    trace: true
+    attributes:
+    - outcome
+    - media_type
+  slo:
+    latency_p95_ms: 800
+    availability_percent: 99.9
+  request_fields:
+  - mediaType
+  - contentType
+  - fileSize
+  - expectedSha256
+  response_fields:
+  - sessionId
+  - status
+  - uploadUrl
+  - expiresAt
+  - replayed
+  client_contract:
+    dart_import: ../content/media_contracts.dart
+    request_type: InitContentMediaUploadCommand
+    response_type: ContentMediaUploadSessionCommandResult
+    request_encoder: encodeInitContentMediaUploadCommand
+    response_decoder: decodeContentMediaUploadSessionCommandResult
+  security:
+    auth_mode: required
+    token_transport: bearer
+    visibility: private
+  description: 初始化媒体上传会话；owner Persona、objectKey、期望 SHA-256 和 expiresAt 一次固化。
+- method: POST
+  path: /content/media/uploads/{sessionId}:complete
+  operation: CompleteMediaUpload
+  actor: persona
+  application:
+    kind: command
+    facet: MediaUploadSessionCommandFacet
+    method: completeMediaUpload
+    aggregate_owner: MediaUploadSession
+    mutation_target: MediaUploadSession
+    invariant_target: MediaUploadSession
+  authorization:
+    principal: persona
+    ownership_policy: session_owner
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 8000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.media_not_found
+  - CONTENT.USER.invalid_argument
+  - CONTENT.USER.media_upload_session_expired
+  - CONTENT.USER.idempotency_conflict
+  - CONTENT.USER.version_conflict
+  - CONTENT.SYSTEM.storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_media_upload_complete
+    trace: true
+    attributes:
+    - outcome
+    - session_status
+  slo:
+    latency_p95_ms: 1200
+    availability_percent: 99.9
+  request_fields:
+  - accessPolicy
+  response_fields:
+  - sessionId
+  - assetId
+  - status
+  - expiresAt
+  - replayed
+  client_contract:
+    dart_import: ../content/media_contracts.dart
+    request_type: CompleteContentMediaUploadCommand
+    response_type: ContentMediaUploadSessionCommandResult
+    request_encoder: encodeCompleteContentMediaUploadCommand
+    response_decoder: decodeContentMediaUploadSessionCommandResult
+  security:
+    auth_mode: required
+    token_transport: bearer
+    visibility: private
+  description: 校验 owner、过期时间和 SHA-256 后，原子完成会话并物化独立 MediaAsset。
+- method: POST
+  path: /content/media/uploads/{sessionId}:abort
+  operation: AbortMediaUpload
+  actor: persona
+  application:
+    kind: command
+    facet: MediaUploadSessionCommandFacet
+    method: abortMediaUpload
+    aggregate_owner: MediaUploadSession
+    mutation_target: MediaUploadSession
+    invariant_target: MediaUploadSession
+  authorization:
+    principal: persona
+    ownership_policy: session_owner
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 5000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.media_not_found
+  - CONTENT.USER.invalid_argument
+  - CONTENT.USER.idempotency_conflict
+  - CONTENT.USER.version_conflict
+  - CONTENT.SYSTEM.storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_media_upload_abort
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 800
+    availability_percent: 99.9
+  request_fields: []
+  response_fields:
+  - sessionId
+  - status
+  - expiresAt
+  - replayed
+  client_contract:
+    dart_import: ../content/media_contracts.dart
+    request_type: AbortContentMediaUploadCommand
+    response_type: ContentMediaUploadSessionCommandResult
+    request_encoder: encodeAbortContentMediaUploadCommand
+    response_decoder: decodeContentMediaUploadSessionCommandResult
+  security:
+    auth_mode: required
+    token_transport: bearer
+    visibility: private
+  description: owner 中止待上传会话；已完成或已中止的会话拒绝新的状态迁移。
+- method: GET
+  path: /content/media/uploads/{sessionId}
+  operation: GetMediaUploadSession
+  actor: persona
+  application:
+    kind: query
+    facet: MediaUploadSessionQueryFacet
+    method: getMediaUploadSession
+    reader: MediaUploadSessionOwnerReader
+    slice: MediaUploadSessionSlice
+  authorization:
+    principal: persona
+    ownership_policy: session_owner
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.media_not_found
+  - CONTENT.SYSTEM.storage_read_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_media_upload_session_get
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  response_fields:
+  - sessionId
+  - version
+  - assetId
+  - mediaType
+  - contentType
+  - fileSize
+  - status
+  - createdAt
+  - updatedAt
+  - expiresAt
+  client_contract:
+    dart_import: ../content/media_contracts.dart
+    request_type: GetContentMediaUploadSessionQuery
+    response_type: ContentMediaUploadSessionSlice
+    request_encoder: encodeGetContentMediaUploadSessionQuery
+    response_decoder: decodeContentMediaUploadSessionSlice
+  security:
+    auth_mode: required
+    token_transport: bearer
+    visibility: private
+  description: owner 只读获取上传会话，不能以 sessionId 跨 Persona 枚举会话。
+consumers:
+- name: app
+  capabilities:
+  - init_media_upload
+  - complete_media_upload
+  - abort_media_upload

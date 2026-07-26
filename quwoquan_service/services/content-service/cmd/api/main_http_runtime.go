@@ -14,7 +14,7 @@ import (
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
-	httpadapter "quwoquan_service/services/content-service/internal/adapters/http"
+	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 )
 
 // buildContentHTTPServer 装配内容服务的认证、操作授权、观测、跨域与限流中间件。
@@ -24,16 +24,12 @@ func buildContentHTTPServer(
 	instanceID string,
 	handler http.Handler,
 	healthChecker *rthealth.Checker,
+	accessTokenConfig rtauth.TokenConfig,
+	accountSecurityAuthority rtauth.AccountSecurityAuthority,
 	ioLogger *robs.IOAccessLogger,
 	processLogger *robs.ProcessTraceLogger,
 	exceptionLogger *robs.ExceptionLogger,
 ) *http.Server {
-	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
-		runtimeconfig.EnvRuntimeConfigProvider{},
-	)
-	if err != nil {
-		log.Fatalf("access token config invalid: %v", err)
-	}
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
 		log.Fatalf("access token verifier invalid: %v", err)
@@ -86,8 +82,9 @@ func buildContentHTTPServer(
 	return &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
-			AccessTokenVerifier:  accessVerifier,
-			DeviceTicketVerifier: deviceTicketVerifier,
+			AccessTokenVerifier:      accessVerifier,
+			DeviceTicketVerifier:     deviceTicketVerifier,
+			AccountSecurityAuthority: accountSecurityAuthority,
 		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,

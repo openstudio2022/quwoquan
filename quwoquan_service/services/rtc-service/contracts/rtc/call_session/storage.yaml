@@ -1,0 +1,131 @@
+backend: mongodb
+collections:
+  call_sessions:
+    entity: CallSession
+    indexes:
+    - name: idx_cs_initiator_created
+      keys:
+        initiatorId: 1
+        createdAt: -1
+    - name: idx_cs_status
+      keys:
+        status: 1
+        maxParticipants: 1
+        createdAt: 1
+    - name: idx_cs_conv_created
+      keys:
+        conversationId: 1
+        createdAt: -1
+      sparse: true
+    - name: idx_cs_circle_created
+      keys:
+        circleId: 1
+        createdAt: -1
+      sparse: true
+    - name: idx_cs_room
+      keys:
+        roomId: 1
+      unique: true
+    - name: idx_cs_participant_user
+      keys:
+        participants.userId: 1
+        createdAt: -1
+    - name: idx_cs_active_participant
+      keys:
+        participants.userId: 1
+        status: 1
+        createdAt: 1
+    - name: idx_cs_ended_reason
+      keys:
+        status: 1
+        endReason: 1
+        createdAt: -1
+    - name: idx_cs_version
+      keys:
+        _id: 1
+        version: 1
+      unique: true
+    description: 'CallSession 文档内嵌 participants 数组（≤32人，无需独立 collection）。
+
+      MongoDB 是聚合权威存储（state/version CAS），Redis 仅作活跃通话读缓存。
+
+      ListCalls 的 status/missed 条件在 MongoDB 内执行；cursor 以 createdAt DESC、
+
+      _id DESC 的最后一项 callId 定位锚点，只有仍有下一页时才返回 nextCursor。
+
+      '
+  call_session_command_receipts:
+    indexes:
+    - name: idx_cs_receipts_aggregate
+      keys:
+        aggregateId: 1
+        aggregateVersion: -1
+    - name: idx_cs_receipts_expire
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
+    description: 'actor-scoped 命令幂等回执（24h TTL 窗口）。同一 Idempotency-Key 重放返回首次结果；
+
+      目标状态已满足的命名意图写 no-op receipt，不递增 aggregate version。
+
+      '
+  call_session_outbox:
+    indexes:
+    - name: idx_cs_outbox_replay
+      keys:
+        occurredAt: 1
+        _id: 1
+    - name: idx_cs_outbox_aggregate_version
+      keys:
+        aggregateId: 1
+        aggregateVersion: 1
+        eventType: 1
+        deliveryKey: 1
+    description: '与聚合 state/receipt 同一 Mongo transaction 提交的事实 outbox；
+
+      CallRinging relay 只追加 durable events.rtc.call_ringing，不直接 Pub/Sub；
+
+      CallAnswered/CallEnded 同步追加 durable cancellation stream；账号 closed/suspended
+      收口同样通过 CallEnded 发出 terminal fact。其余在线信令只发布
+
+      persona 单轨通道 rt:rtc:persona:{personaId}，不存在 user/account channel alias。
+
+      '
+redis_cache:
+- key: cache:rtc:call:{callId}
+  ttl_seconds: 60
+  entity: CallSession
+  invalidate_on:
+  - CallAnswered
+  - CallConnected
+  - ParticipantJoined
+  - ParticipantLeft
+  - CallEnded
+  description: 活跃通话状态缓存（通话中高频读取）
+- key: cache:rtc:account-security:failure:{sourceDigest}
+  ttl_seconds: 604800
+  entity: AccountSecurityConsumerFailure
+  description: events.user.account consumer 的重试/DLQ 状态；只存 source stream/message
+    reference、event/error digest、attempt 和 dead-letter marker，禁止存储账号、Persona 或
+    payload 原文。ttl_seconds 只约束普通重试；terminal marker 必须无 TTL 持有原 Stream PEL，
+    直到显式 recovery。
+lifecycle_timers:
+  ring_timeout:
+    owner: rtc-service
+    mechanism: in_process_sweeper
+    interval_seconds: 5
+    thresholds:
+      one_to_one_seconds: 30
+      group_seconds: 60
+    description: '振铃超时由 rtc-service 进程内 sweeper 承担：定期用 idx_cs_status 扫描
+
+      status ∈ [initiated, ringing] 且 createdAt 超期的会话，经领域 HandleTimeout
+
+      迁移到 ended/no_answer 并经 outbox 下发 call.ended 信令（撤来电面板/记未接）。
+
+      系统命令使用确定性幂等 key（callId+version），不依赖 Redis KeyExpiry。
+
+      "already_in_call" 冲突检测由 MongoDB FindActiveCallForUser 承担（权威存储查询）。
+
+      '
+role: authoritative

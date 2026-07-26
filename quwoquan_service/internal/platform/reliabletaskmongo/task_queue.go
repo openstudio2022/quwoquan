@@ -137,6 +137,41 @@ func (s *Store) DispatchDueTasksForShard(
 	if shardID >= 0 {
 		filter["shardId"] = shardID
 	}
+	return s.dispatchDueTaskFilter(ctx, now, limit, filter)
+}
+
+// DispatchDataContentExecution dispatches only the immutable execution named
+// by the Data worker. Global due-task dispatch is unsafe here because two
+// content executions may share the same Mongo outbox collection.
+func (s *Store) DispatchDataContentExecution(
+	ctx context.Context,
+	executionID string,
+	now time.Time,
+	limit int,
+) ([]reliabletask.ReliableAsyncTask, error) {
+	if strings.TrimSpace(executionID) == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	return s.dispatchDueTaskFilter(ctx, now, limit, bson.M{
+		"taskType":            reliabletask.DataContentTaskType,
+		"payload.executionId": strings.TrimSpace(executionID),
+		"status": bson.M{"$in": bson.A{
+			reliabletask.TaskOutboxStatusPending,
+			reliabletask.TaskOutboxStatusFailed,
+		}},
+		"startAt": bson.M{"$lte": now.UTC()},
+	})
+}
+
+func (s *Store) dispatchDueTaskFilter(
+	ctx context.Context,
+	now time.Time,
+	limit int,
+	filter bson.M,
+) ([]reliabletask.ReliableAsyncTask, error) {
 	cursor, err := s.outboxes.Find(
 		ctx,
 		filter,
@@ -280,12 +315,81 @@ func (s *Store) ListReadyTasks(
 	limit int,
 	now time.Time,
 ) ([]reliabletask.ReliableAsyncTask, error) {
+	return s.listReadyTaskFilter(ctx, readyTaskFilter(taskTypes, "", now), limit)
+}
+
+// ListReadyDataContentExecution returns ready tasks for one immutable Data
+// execution only; it is the Mongo truth used to rebuild its Redis stream.
+func (s *Store) ListReadyDataContentExecution(
+	ctx context.Context,
+	executionID string,
+	limit int,
+	now time.Time,
+) ([]reliabletask.ReliableAsyncTask, error) {
+	if strings.TrimSpace(executionID) == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	filter := readyTaskFilter([]string{reliabletask.DataContentTaskType}, "", now)
+	filter["payload.executionId"] = strings.TrimSpace(executionID)
+	return s.listReadyTaskFilter(ctx, filter, limit)
+}
+
+// PurgeDataContentExecution removes every task and outbox owned by a discarded
+// Data execution. The caller must have already proved no worker owns it.
+func (s *Store) PurgeDataContentExecution(
+	ctx context.Context,
+	executionID string,
+) (reliabletask.DataContentExecutionPurgeResult, error) {
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return reliabletask.DataContentExecutionPurgeResult{}, errors.New("data content executionId is required")
+	}
+	filter := bson.M{
+		"taskType":            reliabletask.DataContentTaskType,
+		"payload.executionId": executionID,
+	}
+	cursor, err := s.tasks.Find(ctx, filter, options.Find().SetProjection(bson.M{"_id": 1}))
+	if err != nil {
+		return reliabletask.DataContentExecutionPurgeResult{}, err
+	}
+	defer cursor.Close(ctx)
+	result := reliabletask.DataContentExecutionPurgeResult{}
+	for cursor.Next(ctx) {
+		var row struct {
+			TaskID string `bson:"_id"`
+		}
+		if err := cursor.Decode(&row); err != nil {
+			return result, err
+		}
+		result.TaskIDs = append(result.TaskIDs, row.TaskID)
+	}
+	if err := cursor.Err(); err != nil {
+		return result, err
+	}
+	deletedTasks, err := s.tasks.DeleteMany(ctx, filter)
+	if err != nil {
+		return result, err
+	}
+	result.TasksDeleted = deletedTasks.DeletedCount
+	deletedOutboxes, err := s.outboxes.DeleteMany(ctx, filter)
+	if err != nil {
+		return result, err
+	}
+	result.OutboxesDeleted = deletedOutboxes.DeletedCount
+	return result, nil
+}
+
+func (s *Store) listReadyTaskFilter(
+	ctx context.Context,
+	filter bson.M,
+	limit int,
+) ([]reliabletask.ReliableAsyncTask, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 	cursor, err := s.tasks.Find(
 		ctx,
-		readyTaskFilter(taskTypes, "", now),
+		filter,
 		options.Find().
 			SetSort(bson.D{
 				{Key: "nextAttemptAt", Value: 1},

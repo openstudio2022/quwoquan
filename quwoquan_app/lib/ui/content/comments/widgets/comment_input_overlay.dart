@@ -118,10 +118,12 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   bool _continuationResumeScheduled = false;
   bool _draftCleared = false;
   Timer? _draftSaveTimer;
+  late final String _draftActorScope;
 
   @override
   void initState() {
     super.initState();
+    _draftActorScope = ref.read(currentUserIdProvider).trim();
     _effectiveConfig = _resolveComposerConfig(
       ref.read(commentRemoteConfigProvider),
       widget.config,
@@ -149,6 +151,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   Future<void> _restoreDraft() async {
     final draft = await CommentDraftStore.load(
       widget.postId,
+      actorScope: _draftActorScope,
       replyToCommentId: widget.replyTo?.id,
     );
     if (draft == null || !mounted) return;
@@ -184,6 +187,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     unawaited(
       CommentDraftStore.save(
         widget.postId,
+        actorScope: _draftActorScope,
         replyToCommentId: widget.replyTo?.id,
         draft: CommentDraft(
           content: _controller.text,
@@ -202,6 +206,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     unawaited(
       CommentDraftStore.clear(
         widget.postId,
+        actorScope: _draftActorScope,
         replyToCommentId: widget.replyTo?.id,
       ),
     );

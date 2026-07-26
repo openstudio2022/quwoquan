@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 from typing import Iterable, Sequence
+from core.public_contacts import iter_phone_numbers, normalize_number
 from core.quality_gates import (
     SKELETON_ENDING_SIMILARITY, SKELETON_HEADING_SIMILARITY,
     SKELETON_NGRAM_SIMILARITY, SKELETON_NGRAM_SIZE, _WS_RE, _char_jaccard,
@@ -62,22 +63,11 @@ def source_reject_block_issues(
         return [f"sourceRejectBlock: cited source(s) were screened as reject: {', '.join(hits)}"]
     return []
 
-_DIGITS_ONLY_RE = re.compile(r"\D+")
-
-_PHONE_RES = [
-    re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)"),          # 手机号 11 位
-    re.compile(r"(?<!\d)0\d{2,3}[-\s]?\d{7,8}(?!\d)"),  # 座机 区号-号码
-    re.compile(r"(?<!\d)(?:400|800)[-\s]?\d{3,4}[-\s]?\d{3,4}(?!\d)"),  # 400/800
-]
-
 _WECHAT_RE = re.compile(r"(?:微信|wechat|weixin|加微|vx|VX)\s*[:：]?\s*[A-Za-z0-9_-]{4,}", re.IGNORECASE)
 
 _QQ_RE = re.compile(r"(?:QQ|qq)\s*[:：]?\s*\d{5,12}")
 
 _SHORT_NUM_RE = re.compile(r"(?<!\d)(?:1\d{2,4})(?!\d)")
-
-def _normalize_number(raw: str) -> str:
-    return _DIGITS_ONLY_RE.sub("", str(raw or ""))
 
 def contact_info_issues(
     article: str,
@@ -92,7 +82,7 @@ def contact_info_issues(
     """
     body = _strip_figures(article or "")
     issues: list[str] = []
-    allowed = {_normalize_number(n) for n in allowed_numbers if _normalize_number(n)}
+    allowed = {normalize_number(n) for n in allowed_numbers if normalize_number(n)}
 
     if _WECHAT_RE.search(body):
         issues.append("contactInfo: 正文出现微信号（私人联系方式），禁止出现在编辑内容")
@@ -100,11 +90,10 @@ def contact_info_issues(
         issues.append("contactInfo: 正文出现 QQ 号（私人联系方式），禁止出现在编辑内容")
 
     blocked: set[str] = set()
-    for rex in _PHONE_RES:
-        for m in rex.finditer(body):
-            num = _normalize_number(m.group(0))
-            if num and num not in allowed:
-                blocked.add(m.group(0).strip())
+    for match in iter_phone_numbers(body):
+        num = normalize_number(match.group(0))
+        if num and num not in allowed:
+            blocked.add(match.group(0).strip())
     if blocked:
         issues.append(
             "contactInfo: 正文出现非公开电话 " + ", ".join(sorted(blocked))

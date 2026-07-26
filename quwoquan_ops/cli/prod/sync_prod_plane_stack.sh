@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 
-ACCESS_MANIFEST="quwoquan_ops/environments/prod_plane_access_isolation.yaml"
-TOPOLOGY_MANIFEST="quwoquan_ops/environments/environment_topology_manifest.yaml"
+ACCESS_MANIFEST="quwoquan_ops/environments/prod/access-isolation.yaml"
+TOPOLOGY_MANIFEST="quwoquan_ops/environments/prod/runtime.yaml"
 PROD_SSH_KEY_DIR="${PROD_SSH_KEY_DIR:-$HOME/.ssh/quwoquan-prod}"
 
 plane="service"

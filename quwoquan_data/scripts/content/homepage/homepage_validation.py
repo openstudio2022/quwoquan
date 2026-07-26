@@ -9,6 +9,7 @@ from typing import Any
 import yaml
 
 from core.asset_identity import parse_post_asset_id
+from governance.coverage.license import rights_proof_required
 
 _ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
 
@@ -30,14 +31,16 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
     """
     page_path = entity_dir / "page.md"
     refs = _page_asset_refs(page_path)
-    assets = manifest_payload.get("assets") or []
-    if not assets:
-        return [f"{label}: 实体主页须配 ≥1 真实图片（manifest.assets 登记）"]
+    assets = manifest_payload.get("assets")
     if not isinstance(assets, list):
         return [f"{label}: manifest.assets 须为数组"]
     id_to_file: dict[str, str] = {}
     file_names: set[str] = set()
     issues: list[str] = []
+    vertical = str(manifest_payload.get("vertical") or "").strip()
+    if not vertical:
+        return [f"{label}: manifest missing vertical policy owner"]
+    require_rights_proof = rights_proof_required(vertical)
     for raw in assets:
         if not isinstance(raw, dict):
             continue
@@ -61,8 +64,17 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
             issues.append(f"{label}: asset {asset_id or file_name} sourceRef must point to source.md")
         elif not source_asset_ref.startswith(source_ref.rsplit("/", 1)[0] + "/assets/"):
             issues.append(f"{label}: asset {asset_id or file_name} sourceAssetRef does not belong to sourceRef")
-        if not (str(raw.get("authorizationProof") or "").strip() or str(raw.get("termsUrl") or "").strip()):
+        if require_rights_proof and not (
+            str(raw.get("authorizationProof") or "").strip()
+            or str(raw.get("termsUrl") or "").strip()
+        ):
             issues.append(f"{label}: asset {asset_id or file_name or '<unknown>'} missing image rights proof")
+        if not require_rights_proof and str(
+            raw.get("rightsAuditStatus") or ""
+        ) not in {"verified", "unverified"}:
+            issues.append(
+                f"{label}: asset {asset_id or file_name or '<unknown>'} missing rights audit status"
+            )
     assets_dir = entity_dir / "assets"
     text_refs = manifest_payload.get("textSourceRefs") or []
     image_refs = manifest_payload.get("imageSourceRefs") or []
@@ -124,17 +136,24 @@ def homepage_structure_issues(entity_dir: Path, manifest_payload: dict[str, Any]
     text = page_path.read_text(encoding="utf-8")
     issues: list[str] = []
 
-    # frontmatter 封面唯一。
+    assets = manifest_payload.get("assets")
+    if not isinstance(assets, list):
+        return [f"{label}: manifest.assets 须为数组"]
+
+    # 有媒体时必须有唯一封面；无媒体主页不得伪造封面。
     cover_asset_id = ""
+    covers: list[str] = []
     if text.startswith("---\n"):
         end = text.find("\n---\n", 4)
         head = text[:end] if end != -1 else ""
         covers = re.findall(r"^coverImage:\s*asset://(\S+)\s*$", head, re.M)
-        if len(covers) != 1:
+        if assets and len(covers) != 1:
             issues.append(f"{label}: frontmatter 必须声明唯一 coverImage（实得 {len(covers)}）")
-        else:
+        elif not assets and covers:
+            issues.append(f"{label}: 无媒体主页不得声明 coverImage")
+        elif covers:
             cover_asset_id = covers[0].split("/")[-1]
-    else:
+    elif assets:
         issues.append(f"{label}: page.md 缺 frontmatter（coverImage 必须在 frontmatter 声明）")
 
     body = text[text.find("\n---\n", 4) + 5 :] if text.startswith("---\n") and "\n---\n" in text[4:] else text
@@ -171,15 +190,13 @@ def homepage_structure_issues(entity_dir: Path, manifest_payload: dict[str, Any]
             issues.append(f"{label}: '{_RELATED_HEADING}' 必须是文末最后一个章节")
 
     # manifest roles 收敛。
-    assets = manifest_payload.get("assets") or []
-    if isinstance(assets, list):
-        roles = [str(a.get("role") or "") for a in assets if isinstance(a, dict)]
-        cover_count = sum(1 for r in roles if r == "cover")
-        if assets and cover_count != 1:
-            issues.append(f"{label}: manifest.assets 必须恰好一个 role=cover（实得 {cover_count}）")
-        for role in roles:
-            if role and role not in _ALLOWED_MANIFEST_ROLES:
-                issues.append(f"{label}: manifest.assets.role 非法值 {role}（允许 cover/inline/related）")
+    roles = [str(a.get("role") or "") for a in assets if isinstance(a, dict)]
+    cover_count = sum(1 for r in roles if r == "cover")
+    if assets and cover_count != 1:
+        issues.append(f"{label}: manifest.assets 必须恰好一个 role=cover（实得 {cover_count}）")
+    for role in roles:
+        if role and role not in _ALLOWED_MANIFEST_ROLES:
+            issues.append(f"{label}: manifest.assets.role 非法值 {role}（允许 cover/inline/related）")
     return issues
 
 

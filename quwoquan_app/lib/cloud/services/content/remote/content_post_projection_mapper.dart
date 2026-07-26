@@ -13,6 +13,14 @@ final class ContentPostProjectionMapper {
   }
 
   Map<String, dynamic> toWire(ContentPostProjection projection) {
+    final mediaUrls = projection.mediaUrls
+        .where((url) => url.trim().isNotEmpty)
+        .toList(growable: false);
+    final isVideo = projection.contentType == 'video';
+    final explicitVideoUrl = projection.videoUrl?.trim() ?? '';
+    final videoUrl = explicitVideoUrl.isNotEmpty
+        ? explicitVideoUrl
+        : (isVideo && mediaUrls.isNotEmpty ? mediaUrls.first : null);
     return <String, dynamic>{
       'id': projection.postId,
       'type': projection.contentType,
@@ -38,8 +46,8 @@ final class ContentPostProjectionMapper {
         'articleTemplate': projection.articleTemplate,
       if (projection.articleFontPreset != null)
         'articleFontPreset': projection.articleFontPreset,
-      'imageUrls': projection.imageUrls,
-      if (projection.videoUrl != null) 'videoUrl': projection.videoUrl,
+      'imageUrls': isVideo ? const <String>[] : mediaUrls,
+      'videoUrl': ?videoUrl,
       if (projection.thumbnailUrl != null)
         'thumbnailUrl': projection.thumbnailUrl,
       if (projection.width != null) 'width': projection.width,

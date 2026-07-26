@@ -1,63 +1,164 @@
-# L2 特性：publish-comment-reaction
+# L2 Business Capability：发布评论互动状态 (`publish-comment-reaction`)
 
-## 功能说明
+> 所属领域：[`discovery-content`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-内容发布、评论互动、反应计数与行为上报的端云协同能力。
+## 1. 能力目标
 
-### 子特性
+让用户创建和更新文字、照片或视频内容，完成本地图片编辑、评论、回复与反应，并让发布结果和互动状态在端云一致回流。
 
-| 子特性 (L3) | 说明 | 状态 |
-|-------------|------|------|
-| **comment-thread** | 商用级评论系统：2 级层级、多入口统一评论面、hot/latest 两档服务端排序、评论赞踩、图片与 @ 输入、置顶、举报与治理状态机、IP 属地与作者赞过/关系标签投影、个人主页评论管理、Persona 身份、10 万+容量承载、端云配置统一 | V4 规格已冻结（2026-07-20） |
-| post-create-update | 发布/更新/删除帖子 | 已实现 |
-| **text-post-commercial-publication** | 写文字从正文优先编辑、显式 micro/article 确认、发布前安全准入、可靠意图队列到发布结果回流、交集事实和运营漏斗 | 商用收口中（2026-07-20） |
-| **image-editing** | 照片发布前的纯端侧像素编辑：零占位工具、统一像素引擎、文件快照撤销/重做、放弃保护与页面观测；完成后仅把本地结果交回 MediaUploadSession 链路 | 本地商用基线已实现（2026-07-20） |
-| **filter-catalog-release** | 不可变滤镜目录发布：Data publish Stage/Activate/Rollback、public typed Reader、App verified cache 与同源 bootstrap replica | 端云实现与本地契约已完成；四环境发布/UAT 证据收集中（2026-07-21） |
-| reaction-state-counter | 点赞/收藏/分享计数与一致性 | 已实现 |
-| 行为上报 | ReportBehaviors（impression/click/dwell/dislike/report/share/comment） | 已实现 |
+## 2. 范围与非目标
 
-### 评论端云一体化（V4 2026-07-20）
+### In Scope
 
-comment-thread 为端云一体的完整评论体验，覆盖：
+- 照片选择/拍摄、纯端侧像素编辑、MediaAsset 上传与发布回流。
+- 内容详情、沉浸式内容和个人主页评论入口组合验证。
+- 评论提交、回复、展开、赞踩与 post interaction 计数最终一致。
+- Comment metadata、App Config、Mock/Remote、content-service contract 和 seed manifest 对齐。
 
-- **核心交互**：2 级层级、多入口打通（feed 卡片弹窗/沉浸式上压/个人互动）、游标分页、hot/latest 两档服务端排序、回复分页、评论赞踩、删除审计、长评论折叠、作者标识、相对时间
-- **治理合规**：`active/hidden/deleted/tombstoned` 状态机、评论级举报（Report target=comment）、operator 治理命令与审计事实、CreateComment 频控、IP 属地快照展示
-- **展示投影**：作者赞过（`authorLiked`）、viewer 关系标签（`viewerRelation`：following/friend 事实投影）——趣我圈交集差异化在评论区的落点
-- **扩展功能**：Persona 身份切换、个人主页"我发出的/收到的评论"、字数限制端云一致、评论/回复/@/置顶通知、图片附件、emoji 与 @ 输入（关注候选选择器）、登录续接、评论深链定位
-- **行为回流**：评论创建成功经 `trackComment` 回流推荐 HotPath（weight 2.5）
-- **非功能规格**：首屏 P95 < 800ms、提交 P95 < 500ms、10 万+评论容量、乐观更新 + 最终一致、弱网降级、hotScore 投影收敛 SLI
+### Out of Scope
+
+- 推荐排序模型训练。
+- 评论搜索、置顶、翻译。
+
+## 3. Journey / Scenario 贡献
+
+- [`JNY-003 / SCN-008`](../../spec.md#scn-008)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：publish-comment-reaction 能力级 SIT，验证文字/照片发布、图片本地编辑、评论、回复、反应计数、行为上报和端云状态协同，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-004 / SCN-001`](../../spec.md#scn-001)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：publish-comment-reaction 能力级 SIT，验证文字/照片发布、图片本地编辑、评论、回复、反应计数、行为上报和端云状态协同，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-004 / SCN-002`](../../spec.md#scn-002)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：publish-comment-reaction 能力级 SIT，验证文字/照片发布、图片本地编辑、评论、回复、反应计数、行为上报和端云状态协同，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-004 / SCN-003`](../../spec.md#scn-003)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：publish-comment-reaction 能力级 SIT，验证文字/照片发布、图片本地编辑、评论、回复、反应计数、行为上报和端云状态协同，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+
+## 4. Story
+
+
+
+- [`comment-thread`](./comment-thread/spec.md)：Gamma 真机完成打开、评论、返回和二次进入。
+- [`filter-catalog-release`](./filter-catalog-release/spec.md)：Mongo 真实引擎 contract 覆盖 digest 幂等、状态机和单 active CAS。
+- [`image-editing`](./image-editing/spec.md)：全仓无占位符号；工具确认路径全部经 ImageEditorExportEngine 烘焙。
+- [`post-create-update`](./post-create-update/spec.md)：从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布。
+- [`reaction-state-counter`](./reaction-state-counter/spec.md)：定义“互动状态状态计数”的可观察主路径、失败语义及父能力交接。
+- [`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)：micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 评论 V2 与内容互动能力端云组合 SIT
+
+- 平铺文章入口完成内联定位，沉浸式入口完成上压分屏，个人主页评论可跳回原内容评论区。
+- 评论创建、回复创建、回复分页、赞踩切换、删除/举报权限态都由云端契约驱动。
+- postInteractionStateProvider 与 Comment state 在乐观更新和云端确认后保持最终一致。
+- alpha/beta/gamma seed 与 verifiedEndpoints 覆盖 comments、replies、reaction、attachment、mentions。
+
+<a id="req-002"></a>
+### REQ-002 写文字发布、安全准入、分发回流与运营观测组合 SIT
+
+- LocalPostDraft 和 immutable PublishIntent 在断网、重启、限流与鉴权失效后保持可恢复。
+- micro/article 由用户显式确认，发布命令经过长度、Persona 频控与安全门后才原子创建 Post。
+- published receipt 只创建一个 Post，并立即回流详情或作品浏览器以及 feed/Persona 作品投影。
+- tag/entity/location/circle 关联只来自可证实事实，circle placement 失败不重复发布。
+- App 产品遥测、服务 RED、dashboard 和 alert 能对账三项黄金指标。
+
+<a id="req-003"></a>
+### REQ-003 照片选择、像素编辑、MediaAsset 上传与发布回流组合 SIT
+
+- 图片编辑器全部可见工具为真实像素实现；裁剪、旋转/翻转、颜色矩阵、局部径向调整、曲线、马赛克和文字共用 ImageEditorExportEngine。
+- 滤镜目录只消费 active FilterCatalogRelease；在线更新、verified cache 离线重启和同源 bootstrap replica 均可验证。
+- 编辑确认生成文件快照，撤销/重做/放弃保护可执行；完成后才把本地路径交给 MediaUploadSession。
+- 发布 payload 只携带 MediaAsset ID，保持用户排序；失败不产生半成品 Post。
+- gamma-local 用户可从选择/拍照进入编辑器，完成编辑、上传、发布并回读真实内容。
+
+<a id="req-004"></a>
+### REQ-004 配置统一：业务规则参数（字数限制/回复预览/回复展开/默认排序/附件上限/频控窗口）统一由 config.yaml 管理，端侧通过 App Config 同步
+
 - **配置统一**：业务规则参数（字数限制/回复预览/回复展开/默认排序/附件上限/频控窗口）统一由 config.yaml 管理，端侧通过 App Config 同步
-- **灰度发布**：Canary → 1% → 50% → 100% 四阶段，SLO + 回滚条件
-
-详见 `comment-thread/spec.md`（V4）与 `comment-thread/acceptance.yaml`。
-
-## 约束
-
-- 契约与字段策略必须与 OpenAPI、service.yaml、metadata 保持一致。
+- 契约与字段策略必须引用所属服务 `contracts/`，不得复制 OpenAPI 或中心 metadata 作为第二真相源。
 - 写文字创作漏斗属于产品遥测，不得伪装成推荐行为写入 `ReportBehaviors`。
-- Post 远端提交态只允许 `pending_review/published/rejected/deleted`；安全准入不确定时
-  只能进入不可公开 pending_review 和人工 Case，禁止绕过安全门。
 - micro/article 可以由系统建议，但最终类型必须由用户在发布确认页显式确认。
 - 评论域业务参数不允许硬编码，必须走 config.yaml 统一管理。
-- 图片编辑会话是 App runtime session，不创建远端草稿聚合；编辑完成前不调用云端，
-  完成后只经 `MediaUploadSession → MediaAsset → Post` 单轨交接。
-- 图片编辑器所有对用户可见的变换必须经 `ImageEditorExportEngine`；预览、导出、诊断
-  和像素测试不得维护第二套几何或局部效果近似。
-- Comment 是独立聚合（`content/comment/entity.yaml`），仅通过 postId 引用 Post；Post 删除通过 PostDeleted 事实驱动评论批量 tombstone 级联，不存在同事务 cascade_delete。
+- 图片编辑器所有对用户可见的变换必须经 `ImageEditorExportEngine`；预览、导出与诊断必须读取同一编辑快照。
 - 排序真相源唯一在服务端（hotScore 投影 + 复合索引）；禁止端侧重排、禁止旧三档 `recommended/latest/most_liked` 回归、禁止 Redis 排行第二真相源。
 
-## 验收标准
+## 6. 契约与依赖
 
-- A1：发布、评论、互动、行为上报功能路径可执行且输出稳定。
-- A7：契约一致性校验通过（metadata ↔ OpenAPI ↔ service.yaml ↔ 端侧 typed Facet）。
-- A8：对应自动化测试映射完整。
-- 评论详细验收标准见 `comment-thread/acceptance.yaml`。
-- 写文字商用验收见 `text-post-commercial-publication/acceptance.yaml`。
-- 图片编辑本地 GWT 与图片创作组合 SIT 见 `image-editing/acceptance.yaml` 和本能力
-  `acceptance.yaml#SIT3`。
-- 滤镜目录发布、离线副本与回滚验收见 `filter-catalog-release/acceptance.yaml`。
+- 上游能力：[`discovery-content`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-## 适用范围与约束
+## 7. 集成验收
 
-- 适用：所有内容类型（微趣/图片/视频/文章）的社交互动能力
-- 不适用：内容推荐算法（归属 feed-orchestration-recommendation）、社交关系写模型（归属 user-identity-profile-relationship；本能力只消费 persona_follow_projection 事实投影）
+<a id="sit-001"></a>
+### SIT-001 评论 V2 与内容互动能力端云组合 SIT
+
+- GIVEN 执行“评论 V2 与内容互动能力端云组合”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“评论 V2 与内容互动能力端云组合”对应动作。
+- THEN 平铺文章入口完成内联定位，沉浸式入口完成上压分屏，个人主页评论可跳回原内容评论区。
+- THEN 评论创建、回复创建、回复分页、赞踩切换、删除/举报权限态都由云端契约驱动。
+- THEN postInteractionStateProvider 与 Comment state 在乐观更新和云端确认后保持最终一致。
+- THEN alpha/beta/gamma seed 与 verifiedEndpoints 覆盖 comments、replies、reaction、attachment、mentions。
+
+<a id="sit-002"></a>
+### SIT-002 写文字发布、安全准入、分发回流与运营观测组合 SIT
+
+- GIVEN 执行“写文字发布、安全准入、分发回流与运营观测组合”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“写文字发布、安全准入、分发回流与运营观测组合”对应动作。
+- THEN LocalPostDraft 和 immutable PublishIntent 在断网、重启、限流与鉴权失效后保持可恢复。
+- THEN micro/article 由用户显式确认，发布命令经过长度、Persona 频控与安全门后才原子创建 Post。
+- THEN published receipt 只创建一个 Post，并立即回流详情或作品浏览器以及 feed/Persona 作品投影。
+- THEN tag/entity/location/circle 关联只来自可证实事实，circle placement 失败不重复发布。
+- THEN App 产品遥测、服务 RED、dashboard 和 alert 能对账三项黄金指标。
+
+<a id="sit-003"></a>
+### SIT-003 照片选择、像素编辑、MediaAsset 上传与发布回流组合 SIT
+
+- GIVEN 执行“照片选择、像素编辑、MediaAsset 上传与发布回流组合”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“照片选择、像素编辑、MediaAsset 上传与发布回流组合”对应动作。
+- THEN 图片编辑器全部可见工具为真实像素实现；裁剪、旋转/翻转、颜色矩阵、局部径向调整、曲线、马赛克和文字共用 ImageEditorExportEngine。
+- THEN 滤镜目录只消费 active FilterCatalogRelease；在线更新、verified cache 离线重启和同源 bootstrap replica 均可验证。
+- THEN 编辑确认生成文件快照，撤销/重做/放弃保护可执行；完成后才把本地路径交给 MediaUploadSession。
+- THEN 发布 payload 只携带 MediaAsset ID，保持用户排序；失败不产生半成品 Post。
+- THEN gamma-local 用户可从选择/拍照进入编辑器，完成编辑、上传、发布并回读真实内容。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 评论 V2 与内容互动能力端云组合 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：平铺文章入口完成内联定位，沉浸式入口完成上压分屏，个人主页评论可跳回原内容评论区。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 写文字发布、安全准入、分发回流与运营观测组合 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：LocalPostDraft 和 immutable PublishIntent 在断网、重启、限流与鉴权失效后保持可恢复。
+- 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 照片选择、像素编辑、MediaAsset 上传与发布回流组合 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：图片编辑器全部可见工具为真实像素实现；裁剪、旋转/翻转、颜色矩阵、局部径向调整、曲线、马赛克和文字共用 ImageEditorExportEngine。
+- 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效

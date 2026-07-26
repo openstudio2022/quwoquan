@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "全国地点静态覆盖身份（discovery_seed/2）— quwoquan_data/verticals/travel/coverage/中国/{省}/{市州}.yaml。目录即行政层级，消费方直接 walk 目录。文件只保存稳定地理、实体与发现身份；来源、权利、执行、发布结论必须在 execution 工作包中产生。文件内 country/province/city 与路径一致，跨省地点只在主归属省登记一次，次归属经 geoTagRefs 表达。",
+  "description": "全国地点静态覆盖身份（discovery_seed/2）— quwoquan_data/reference/travel/entities/china/{省}/{市州}.yaml。目录即行政层级，消费方直接 walk 目录。文件只保存稳定地理、实体与发现身份；来源、权利、执行、发布结论必须在 execution 工作包中产生。文件内 country/province/city 与路径一致，跨省地点只在主归属省登记一次，次归属经 geoTagRefs 表达。",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -10,7 +10,7 @@
     },
     "province": {
       "type": "string",
-      "description": "省级行政区名，与省目录名一致，如 四川省"
+      "description": "一级行政区名，与 reference 实体目录名一致"
     },
     "city": {
       "type": "string",
@@ -57,7 +57,7 @@
                 },
                 "geoTagRef": {
                   "type": "string",
-                  "description": "区县级主归属行政区标签（单值，分片/推荐特征/geo_bucket 消费），如 Topic/地理/行政区/中国/四川省/成都市/都江堰市"
+                  "description": "区县级主归属行政区标签（单值，分片/推荐特征/geo_bucket 消费）"
                 },
                 "geoTagRefs": {
                   "type": "array",

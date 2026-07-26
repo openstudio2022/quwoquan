@@ -1,0 +1,52 @@
+kind: aggregate_root
+description: '具有 TTL 的上传会话聚合。初始化后只允许 pending -> completed|aborted；
+
+  完成命令校验 OSS 对象摘要并按 CAS digest 产生 MediaAsset。
+
+  '
+identity:
+  fields:
+  - id
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: owner
+  on_delete: restrict
+  reference_fields:
+  - ownerId
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: completedAsset
+  on_delete: retain
+  reference_fields:
+  - assetId
+  target_object: content.MediaAsset
+capabilities:
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- objectKey 只能由 Media Facade 分配且在会话生命周期内不可变
+- CompleteMediaUpload 必须在 expiresAt 前验证对象存在、大小与 expectedSha256
+- pending 之外不得重复完成或中止；重复相同命令只返回幂等回执
+- 完成后通过同事务 outbox 产生 MediaAsset 创建事件，不直接写其他上下文
+- Chat、Profile 与 Content 只能调用本 Facade，不得建立第二套上传会话
+lifecycle:
+  states:
+  - pending
+  - completed
+  - aborted
+  optimistic_concurrency: version
+  idempotency: command_key
+  ttl_field: expiresAt

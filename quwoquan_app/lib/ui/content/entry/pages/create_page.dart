@@ -58,8 +58,8 @@ part 'create_page_state_draft_helpers.dart';
 part 'create_page_state_media_helpers.dart';
 part 'create_page_state_surface_helpers.dart';
 
-final RouteObserver<ModalRoute<dynamic>> createDraftRouteObserver =
-    RouteObserver<ModalRoute<dynamic>>();
+final RouteObserver<ModalRoute<Object?>> createDraftRouteObserver =
+    RouteObserver<ModalRoute<Object?>>();
 
 typedef CreateMediaPickerLauncher =
     Future<CreateMediaPickerResult?> Function(

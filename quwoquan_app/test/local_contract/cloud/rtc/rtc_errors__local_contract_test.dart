@@ -101,8 +101,8 @@ void main() {
       expect(code, isNull);
     });
 
-    test('enum 总数 = 16（含 media_transport_unavailable）', () {
-      expect(RtcErrorCode.values.length, 16);
+    test('enum 总数 = 18（含 media_transport_unavailable 与 account_security_*）', () {
+      expect(RtcErrorCode.values.length, 18);
     });
 
     test('关系门禁错误码已贯通端侧', () {
@@ -117,6 +117,17 @@ void main() {
       );
     });
 
+    test('账号安全错误码已贯通端侧', () {
+      expect(
+        RtcErrorCode.fromCode('RTC.USER.account_security_denied'),
+        RtcErrorCode.accountSecurityDenied,
+      );
+      expect(
+        RtcErrorCode.fromCode('RTC.SYSTEM.account_security_unavailable'),
+        RtcErrorCode.accountSecurityUnavailable,
+      );
+    });
+
     test('每个 code round-trip：fromCode(code) == self', () {
       for (final value in RtcErrorCode.values) {
         final parsed = RtcErrorCode.fromCode(value.code);
@@ -127,14 +138,17 @@ void main() {
     test('isUserError 分类正确', () {
       expect(RtcErrorCode.callNotFound.isUserError, isTrue);
       expect(RtcErrorCode.unauthorized.isUserError, isTrue);
+      expect(RtcErrorCode.accountSecurityDenied.isUserError, isTrue);
       expect(RtcErrorCode.alreadyInCall.isUserError, isTrue);
       expect(RtcErrorCode.rateLimited.isUserError, isTrue);
       expect(RtcErrorCode.internalError.isUserError, isFalse);
       expect(RtcErrorCode.mediaTransportUnavailable.isUserError, isFalse);
+      expect(RtcErrorCode.accountSecurityUnavailable.isUserError, isFalse);
     });
 
     test('isSystemError 分类正确', () {
       expect(RtcErrorCode.mediaTransportUnavailable.isSystemError, isTrue);
+      expect(RtcErrorCode.accountSecurityUnavailable.isSystemError, isTrue);
       expect(RtcErrorCode.internalError.isSystemError, isTrue);
       expect(RtcErrorCode.callNotFound.isSystemError, isFalse);
       expect(RtcErrorCode.rateLimited.isSystemError, isFalse);

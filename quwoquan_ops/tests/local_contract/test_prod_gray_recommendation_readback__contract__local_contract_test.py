@@ -74,7 +74,7 @@ class ProdGrayRecommendationReadbackContractTest(unittest.TestCase):
 
     def test_release_profiles_include_recommendation_journey(self) -> None:
         suites = json.loads(
-            (ROOT / "quwoquan_ops/environments/gamma_validation_suites.json").read_text(
+            (ROOT / "quwoquan_ops/environments/gamma/validation_suites.json").read_text(
                 encoding="utf-8"
             )
         )

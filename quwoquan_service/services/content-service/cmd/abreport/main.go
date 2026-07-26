@@ -8,7 +8,7 @@
 //
 //	go run ./services/content-service/cmd/abreport \
 //	  --mongo-uri mongodb://127.0.0.1:27017 --db quwoquan_content \
-//	  [--experiment rec_model_vs_rule] [--policy contracts/metadata/recommendation/rec_model/policy.yaml]
+//	  [--experiment rec_model_vs_rule] [--policy services/content-service/resources/policies/content/post/recommendation_policy.yaml]
 //
 // 输出：每个实验一份 JSON 报告（stdout），CI 周报把输出归档为 artifact。
 package main
@@ -26,7 +26,7 @@ import (
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
 func main() {

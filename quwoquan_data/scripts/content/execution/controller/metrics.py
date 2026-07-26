@@ -1,11 +1,6 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from core.runtime_policy import active_runtime_policy
-from content.execution.support import Any, ExecutionContext, ExecutionStateTransition, Mapping, Path, datetime, execution_root, load_execution_state, re, read_json, store, write_json
-from content.execution.controller.token_ledger import (
-    build_token_ledger_payload,
-    required_creator_profile_id,
-)
+from content.execution.support import Any, ExecutionContext, ExecutionStateTransition, Mapping, Path, datetime, execution_root, load_execution_state, re, read_json, store
 
 def _parse_iso_seconds(value: object) -> float | None:
     text = str(value or "").strip()
@@ -17,21 +12,6 @@ def _parse_iso_seconds(value: object) -> float | None:
         return datetime.fromisoformat(text).timestamp()
     except ValueError:
         return None
-
-def _estimate_tokens(*parts: object) -> int:
-    text = "\n".join(str(part or "") for part in parts if part is not None)
-    compact_len = len(re.sub(r"\s+", "", text))
-    # Chinese-heavy prompts average below one token per visible character, but
-    # use a conservative integer estimate so scale reports are not optimistic.
-    return max(1, int((compact_len + 1) / 1.5))
-
-def _read_text_if_file(path: Path) -> str:
-    if not path.is_file():
-        return ""
-    try:
-        return path.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return ""
 
 def _batch_file_elapsed_seconds(root: Path) -> float | None:
     mtimes: list[float] = []
@@ -244,109 +224,14 @@ def _homepage_agent_review_stats(
 def _write_execution_metrics(ctx: ExecutionContext, state: ExecutionStateTransition) -> None:
     """Persist production-readiness metrics derived from batch artifacts and real usage."""
     from content.post import object_index as content_object
-    from content.post.article.draft_io import (
-        draft_article_path,
-        draft_package_dir,
-        is_placeholder,
-        prompt_path,
-        read_writing_pack,
-        writing_pack_path,
-    )
     from content.release.canonical.runtime_integrity import scan_runtime_batch_integrity
-    from content.execution.production_contracts import build_token_ledger_entry
     from content.execution.agent.history import state_managed_agent_runs
 
     state.agent_run_history = [
         run.to_document() for run in state_managed_agent_runs(state)[-20:]
     ]
     root = execution_root(ctx.execution_id)
-    shared = root / "_shared"
-    shared.mkdir(parents=True, exist_ok=True)
     refs = content_object.iter_content_refs(ctx.execution_id)
-    entries: list[dict[str, Any]] = []
-    default_budget = active_runtime_policy().default_object_token_budget
-    for ref in refs:
-        coords = content_object.content_coords(ctx.execution_id, ref) or {}
-        prompt = _read_text_if_file(prompt_path(ctx.execution_id, ref))
-        author_packet_path = draft_package_dir(ctx.execution_id, ref) / "author_job_packet.json"
-        author_packet = _read_text_if_file(author_packet_path)
-        pack = author_packet or _read_text_if_file(writing_pack_path(ctx.execution_id, ref))
-        draft = _read_text_if_file(draft_article_path(ctx.execution_id, ref))
-        content_type = str(coords.get("contentType") or "article")
-        writing_pack = read_writing_pack(ctx.execution_id, ref) or {}
-        deterministic_image = (
-            content_type == "image"
-            and str(writing_pack.get("carrier") or "") == "image"
-            and not author_packet
-            and is_placeholder(draft)
-        )
-        used = 0 if deterministic_image else _estimate_tokens(prompt, pack, draft)
-        entries.append(
-            build_token_ledger_entry(
-                execution_id=ctx.execution_id,
-                job_id=f"artifact:{ref}",
-                run_id=f"artifact:{ref}",
-                creator_profile_id=required_creator_profile_id(
-                    writing_pack,
-                    ref=ref,
-                ),
-                content_type=content_type,
-                budget_tokens=default_budget,
-                used_tokens=used,
-                cache_hits={
-                    "sopSummary": False,
-                    "creatorProfileSummary": False,
-                    "evidencePackSummary": bool(author_packet),
-                },
-                cost_usd=None,
-                provider="estimated",
-                model=ctx.model,
-                content_object_ref=ref,
-            )
-        )
-    # homepage 实体对象不在 content refs 索引里；当前 Cursor SDK 本地 bridge
-    # 不回传 usage（result 无 usage 字段、事件流无 turn-ended usage），若不按
-    # 实体 draft 产物估算，homepage-only 批次会落出 entries=0 的空账本。
-    from core.entity_object import collect_execution_entity_objects
-    for row in collect_execution_entity_objects(ctx.execution_id):
-        entity_dir = Path(row["entityDir"])
-        # collect 的 page.md marker 会把 4.draft/ 等 stage 子目录误判为实体根；
-        # 计量只认真实实体对象（有 _entity.json），避免同一实体重复入账。
-        if not (entity_dir / "_entity.json").is_file():
-            continue
-        prompt = _read_text_if_file(entity_dir / "4.draft" / "prompt.md")
-        draft = _read_text_if_file(entity_dir / "4.draft" / "page.md") or _read_text_if_file(
-            entity_dir / "page.md"
-        )
-        if not prompt and not draft:
-            continue
-        entity_payload = read_json(entity_dir / "_entity.json")
-        used = _estimate_tokens(prompt, draft)
-        entries.append(
-            build_token_ledger_entry(
-                execution_id=ctx.execution_id,
-                job_id=f"artifact:{row['entityRel']}",
-                run_id=f"artifact:{row['entityRel']}",
-                creator_profile_id=required_creator_profile_id(
-                    entity_payload,
-                    ref=str(row["entityRel"]),
-                ),
-                content_type="homepage",
-                budget_tokens=default_budget,
-                used_tokens=used,
-                cost_usd=None,
-                provider="estimated",
-                model=ctx.model,
-                content_object_ref=str(row["entityRel"]),
-            )
-        )
-    ledger = build_token_ledger_payload(
-        ctx,
-        state,
-        estimated_entries=entries,
-        default_budget=default_budget,
-    )
-    write_json(shared / "token_ledger.json", ledger)
     runtime_report = scan_runtime_batch_integrity(ctx.execution_id)
     stats = runtime_report.get("stats") if isinstance(runtime_report, Mapping) else {}
     post_count = int((stats or {}).get("postCount") or 0)

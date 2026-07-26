@@ -1,6 +1,6 @@
 # test/support — 共享夹具根目录
 
-与 [`specs/gates/mock_data_cloud_integration_policy.md`](../../../specs/gates/mock_data_cloud_integration_policy.md) **§9.2** 对齐。
+与 [`app-cloud-business-object-commercial-closure`](../../../specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#req-004) 对齐。
 
 ## 子目录
 

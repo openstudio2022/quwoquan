@@ -18,7 +18,7 @@ final class RemoteAccountLifecycleCommandWriter
 
   @override
   Future<CloseAccountResult> closeAccount(CloseAccountCommand command) =>
-      client.userUserProfileCloseAccount(
+      client.userUserAccountCloseAccount(
         command,
         context: invocationContext(UserRequestPageIds.closeAccount),
       );

@@ -18,9 +18,17 @@ import yaml
 from core.io import write_json
 from core.paths import PUBLISH_ROOT, RELEASE_ROOT, REPO_ROOT
 
-# content_sampling_manifest.yaml 是受版本控制的跨工程部署契约，必须挂 code-anchored 的
-# REPO_ROOT；禁止用 DATA_ROOT.parent 推导（隔离根/沙箱下会漂移到 $HOME/deploy 而丢失契约）。
-SAMPLING_MANIFEST = REPO_ROOT / "quwoquan_ops" / "environments" / "content_sampling_manifest.yaml"
+# content_sampling_manifest.yaml 由 content-service 自治，数据流水线只读该业务契约。
+SAMPLING_MANIFEST = (
+    REPO_ROOT
+    / "quwoquan_service"
+    / "services"
+    / "content-service"
+    / "resources"
+    / "policies"
+    / "content"
+    / "sampling.yaml"
+)
 
 
 def load_sampling_manifest(path: Path | None = None) -> dict[str, Any]:

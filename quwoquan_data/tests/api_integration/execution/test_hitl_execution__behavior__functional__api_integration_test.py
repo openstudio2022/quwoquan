@@ -54,7 +54,7 @@ from support.helpers.agent_draft_kit import route_article  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 from governance.creators.candidates.store import CandidateRepository  # noqa: E402
 
-TASK = "20260711--travel-article-hitl-execution--cn-sichuan--canary-001"
+TASK = "20260711--travel-article-hitl-execution--test-region-b--pilot-001"
 REF = "川西大环线慢游_跟团_夏"
 ENTITIES = ["九寨沟", "稻城亚丁", "色达", "新都桥"]
 MINED = "洛绒牛场"

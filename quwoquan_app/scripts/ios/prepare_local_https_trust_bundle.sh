@@ -4,8 +4,8 @@ set -euo pipefail
 # Dart HttpClient maintains its own TLS trust store on iOS Simulator.  The
 # Simulator keychain alone therefore cannot establish the local Gamma/Alpha
 # HTTPS plane for Remote composition.  This build phase packages the canonical
-# local target root CA only for Debug/Profile simulator builds that explicitly
-# use a localhost authority.
+# local target trust bundle only for Debug/Profile simulator builds that
+# explicitly use a localhost authority.
 
 case "${CONFIGURATION:-Debug}" in
   Debug|Profile) ;;
@@ -71,14 +71,14 @@ certificate_path="$(
     python3 - "$local_target" <<'PY'
 import sys
 
-from quwoquan_ops.cli.lib.local_target_tls import resolve_local_target_root_ca
+from quwoquan_ops.cli.lib.local_target_tls import materialize_local_target_trust_bundle
 
-print(resolve_local_target_root_ca(sys.argv[1]))
+print(materialize_local_target_trust_bundle(sys.argv[1]))
 PY
 )"
 
-if ! openssl x509 -in "$certificate_path" -noout >/dev/null 2>&1; then
-  echo "[ios-local-https] GATE_BLOCK: canonical local root CA is invalid: $certificate_path" >&2
+if ! openssl crl2pkcs7 -nocrl -certfile "$certificate_path" -outform DER >/dev/null 2>&1; then
+  echo "[ios-local-https] GATE_BLOCK: canonical local trust bundle is invalid: $certificate_path" >&2
   exit 2
 fi
 
@@ -86,4 +86,4 @@ resource_dir="${TARGET_BUILD_DIR:?TARGET_BUILD_DIR is required}/${UNLOCALIZED_RE
 destination="$resource_dir/local_env_debug_root.crt"
 mkdir -p "$resource_dir"
 install -m 0644 "$certificate_path" "$destination"
-echo "[ios-local-https] bundled trusted root for $local_target"
+echo "[ios-local-https] bundled trusted roots for $local_target"

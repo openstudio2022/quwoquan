@@ -3,7 +3,7 @@ package main
 import "strings"
 
 // writeContentAppConfigClientDart emits typed parsing for GET /config/app `content` subtree.
-// SSOT description: contracts/metadata/content/post/projections/content_app_config_client.yaml
+// SSOT description: services/content-service/contracts/content/post/projections/content_app_config_client.yaml
 func writeContentAppConfigClientDart(path string) {
 	writeFile(path, renderContentAppConfigClientDart())
 }
@@ -12,7 +12,7 @@ func renderContentAppConfigClientDart() string {
 	return strings.TrimLeft(`
 // GENERATED FILE — DO NOT EDIT BY HAND.
 // Source: tools/codegen_app_metadata/content_app_config_client_codegen.go
-// Metadata: contracts/metadata/content/post/projections/content_app_config_client.yaml
+// Metadata: services/content-service/contracts/content/post/projections/content_app_config_client.yaml
 // Regenerate: make codegen-app (from quwoquan_service)
 
 /// 灰度阶段矩阵中的单行（wire 与 [ContentCanaryStage] 字段对齐）。

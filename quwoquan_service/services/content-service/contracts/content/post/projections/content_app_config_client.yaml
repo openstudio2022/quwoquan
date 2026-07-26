@@ -1,0 +1,24 @@
+description: "feature_flags: Map<string, bool>，与本地 ContentUIConfig 合并。\ngray_release: experiment_bucket\
+  \ / current_stage / canary_matrix（行内 stage + rolloutPercent）。\nclient_state_sync: 透传至 ClientStateSyncConfig.fromMap（snake_case\
+  \ only）。\nhome_channels: 首页频道运营覆盖列表（与 ui_config.home_channels 同 schema：\n  id/label_key/template/feed_query/mood_copy_key/order）；端按\
+  \ order 排序、\n  远程整体覆盖本地默认，缺失/解析失败回退 ContentUIConfig.homeChannels。\n"
+documented_keys:
+- feature_flags
+- gray_release
+- client_state_sync
+- home_channels
+- comment
+- comment.max_length
+- comment.reply_preview_count
+- comment.reply_first_expand_page_size
+- comment.reply_expand_page_size
+- comment.fold_line_count
+- comment.attachment.max_images
+comment_defaults:
+  max_length: 500
+  reply_preview_count: 1
+  reply_first_expand_page_size: 5
+  reply_expand_page_size: 10
+  fold_line_count: 3
+  attachment:
+    max_images: 1

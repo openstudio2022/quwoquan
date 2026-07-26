@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
@@ -68,7 +69,7 @@ void main() {
         ).read(personalAssistantStreamControllerProvider);
         final durationMs = DateTime.now().difference(started).inMilliseconds;
         final eventTypes = state.events
-            .map((event) => event.eventType)
+            .map((event) => event.eventType.wireName)
             .toList(growable: false);
         final selectedSkillIds = <String>{
           for (final event in state.events)

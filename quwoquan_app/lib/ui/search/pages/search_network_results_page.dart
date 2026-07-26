@@ -21,7 +21,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.da
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
-import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
+import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';

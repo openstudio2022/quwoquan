@@ -1,8 +1,13 @@
+// spec_ref: specs/feature-tree/global-search-experience/spec.md#dom-001
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/spec.md#sit-001
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md#sit-001
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-002
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/io_client.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/remote/search/search_feedback_remote.dart';
 import 'package:quwoquan_app/cloud/remote/search/search_query_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
@@ -99,10 +104,38 @@ void main() {
         ),
         isTrue,
       );
-      expect(telemetry.events, hasLength(1));
-      expect(telemetry.events.single.succeeded, isTrue);
-      expect(telemetry.events.single.requestId, isNotEmpty);
-      expect(telemetry.events.single.traceId, isNotEmpty);
+      final feedback = RemoteSearchFeedbackAdapter(
+        client: client,
+        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
+          routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
+          clientPageId: clientPageId,
+          actor: const CloudOperationActorContext(
+            deviceActorId: 'gamma-search-device',
+          ),
+        ),
+      );
+      final feedbackAck = await feedback.reportSearchFeedback(
+        ReportSearchFeedbackCommand(
+          searchRequestId: response.searchRequestId!,
+          eventType: 'impression',
+          objectId: response.hits.first.objectId,
+          rankPosition: response.hits.first.rankPosition,
+          referralSource: 'api_integration',
+        ),
+      );
+
+      expect(feedbackAck.accepted, isTrue);
+      expect(telemetry.events, hasLength(2));
+      expect(telemetry.events.every((event) => event.succeeded), isTrue);
+      expect(
+        telemetry.events.every(
+          (event) =>
+              (event.requestId?.isNotEmpty ?? false) &&
+              (event.traceId?.isNotEmpty ?? false),
+        ),
+        isTrue,
+      );
     },
   );
 }

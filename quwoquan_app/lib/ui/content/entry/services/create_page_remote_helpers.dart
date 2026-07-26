@@ -1,9 +1,19 @@
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/application/content/media/content_media_cover_selection.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/ui/content/entry/services/create_page_article_media_projection.dart';
+import 'package:quwoquan_app/ui/content/entry/services/create_page_article_media_uploader.dart';
+import 'package:quwoquan_app/ui/content/entry/services/prepared_post_publication_payload.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/article_render/markdown/qwq_markdown.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+export 'package:quwoquan_app/ui/content/entry/services/prepared_post_publication_payload.dart';
+export 'package:quwoquan_app/ui/content/entry/services/create_page_article_media_projection.dart'
+    show
+        buildArticleAssetManifestForPayload,
+        buildArticleRenderProfileForPayload;
 
 int paragraphCountForPayload(String text) {
   return text
@@ -15,13 +25,13 @@ int paragraphCountForPayload(String text) {
 
 bool shouldPublishAsArticleForPayload(CreateEditorState state) {
   return state.title.trim().isNotEmpty ||
-      state.imagePaths.isNotEmpty ||
       state.body.trim().length >= 140 ||
       paragraphCountForPayload(state.body) >= 2;
 }
 
 String articleSummaryForPayload(CreateEditorState state) {
-  final plainText = state.body.trim();
+  final documentText = state.articleDocument.body.trim();
+  final plainText = documentText.isNotEmpty ? documentText : state.body.trim();
   if (plainText.isEmpty) {
     return state.imagePaths.isNotEmpty ? '图文内容' : '';
   }
@@ -156,7 +166,7 @@ List<Map<String, dynamic>> semanticMentionsForPayload(CreateEditorState state) {
 }
 
 /// 防御性镜像服务端 `semantic.ValidTargetRef`（唯一权威：
-/// `quwoquan_service/services/content-service/internal/domain/post/semantic/mentions.go`）。
+/// `quwoquan_service/services/content-service/internal/content/post/domain/semantic/mentions.go`）。
 /// 仅用于发布前过滤必然非法 / candidate 的 targetRef；服务端仍为最终校验权威。
 bool isSemanticTargetRefValid(String kind, String ref) {
   final value = ref.trim();
@@ -192,75 +202,6 @@ bool isSemanticTargetRefValid(String kind, String ref) {
     default:
       return false;
   }
-}
-
-Map<String, dynamic> buildArticleAssetManifestForPayload(
-  CreateEditorState state,
-) {
-  final assets = <Map<String, Object?>>[];
-  final cover = coverAssetPathForPayload(state);
-  if (cover.trim().isNotEmpty) {
-    assets.add(_assetManifestRow('cover', cover.trim(), role: 'cover'));
-  }
-  for (final asset in state.articleDocument.assets) {
-    final imagePath = asset.imageUrl.trim();
-    if (imagePath.isEmpty) {
-      continue;
-    }
-    final assetId = asset.id.trim().isNotEmpty
-        ? asset.id.trim()
-        : _assetIdForPath(imagePath, 'inline');
-    assets.add(_assetManifestRow(assetId, imagePath, role: 'figure'));
-  }
-  return <String, dynamic>{
-    'schema': 'article-asset-manifest',
-    'markdownVersion': qwqRichMarkdownVersion,
-    'assets': assets,
-  };
-}
-
-Map<String, dynamic> buildArticleRenderProfileForPayload(
-  CreateEditorState state,
-) {
-  return <String, dynamic>{
-    'template': state.articleTemplate.name,
-    'fontPreset': state.articleFontPreset.name,
-    'layoutPolicy': <String, Object?>{
-      'wrapDowngrade': 'compactWidthToFullWidth',
-      'galleryDowngrade': 'singleColumn',
-    },
-  };
-}
-
-String _assetIdForPath(String path, String prefix) {
-  final normalized = path.trim().replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
-  final suffix = normalized.length > 40
-      ? normalized.substring(normalized.length - 40)
-      : normalized;
-  return '${prefix}_${suffix.isEmpty ? 'asset' : suffix}';
-}
-
-Map<String, Object?> _assetManifestRow(
-  String assetId,
-  String path, {
-  required String role,
-}) {
-  return <String, Object?>{
-    'assetId': assetId,
-    'kind': 'image',
-    'role': role,
-    'scope': 'draft',
-    'variantGeneration': <String, Object?>{
-      'required': true,
-      'profiles': <String>['thumbnail', 'display', 'cover', 'full', 'original'],
-      'source': 'server',
-    },
-    'localPath': path,
-    'objectKey': path.startsWith('asset://')
-        ? path.substring('asset://'.length)
-        : path,
-    'sha256': '',
-  };
 }
 
 /// 创作编辑器到原子发布命令的唯一 payload 出口。
@@ -366,16 +307,6 @@ Map<String, Object?> buildPostPublicationPayloadMap(CreateEditorState state) {
 
 typedef PostMediaUploadProgressCallback = void Function(double progress);
 
-class PreparedPostPublicationPayload {
-  const PreparedPostPublicationPayload({
-    required this.payload,
-    required this.mediaAssetIds,
-  });
-
-  final Map<String, Object?> payload;
-  final List<String> mediaAssetIds;
-}
-
 /// 返回首次点击发布时可持久化的媒体准备意图。
 ///
 /// 本地路径仅属于草稿和本次流式读取，不能进入持久发布命令；MediaAsset 尚未产生时，
@@ -418,20 +349,66 @@ buildPostPublicationPayloadWithRemoteMedia({
       mediaPreparationIdentity?.trim().isNotEmpty == true
       ? mediaPreparationIdentity!.trim()
       : state.draftId?.trim() ?? '';
-  if (preparationIdentity.isEmpty &&
-      state.editorKind == CreateEditorKind.media) {
+  final publishesArticle =
+      state.editorKind == CreateEditorKind.text &&
+      shouldPublishAsArticleForPayload(state);
+  final hasMediaSource =
+      state.hasVideo ||
+      state.imagePaths.isNotEmpty ||
+      (publishesArticle &&
+          (state.articleCoverImagePath.trim().isNotEmpty ||
+              state.articleDocument.assets.isNotEmpty));
+  if (preparationIdentity.isEmpty && hasMediaSource) {
     throw StateError('media publication requires a durable draft identity');
   }
   final basePayload = Map<String, Object?>.from(
     buildPostPublicationPayloadMap(state),
   );
-  if (state.editorKind != CreateEditorKind.media) {
+  if (publishesArticle) {
+    return uploadArticleMediaForPublication(
+      state: state,
+      basePayload: basePayload,
+      coverSource: coverAssetPathForPayload(state),
+      summary: state.settings.summary.trim().isNotEmpty
+          ? state.settings.summary.trim()
+          : articleSummaryForPayload(state),
+      tagRefs: tagRefsForPayload(state),
+      entityRefs: entityRefsForPayload(state),
+      resolve:
+          ({
+            required source,
+            required slot,
+            required index,
+            required total,
+          }) async {
+            final resolved = await _resolveMediaReference(
+              media: media,
+              localOrRemotePath: source,
+              mediaType: ContentMediaType.image,
+              sourceReader: sourceReader,
+              uploadStream: uploadStream,
+              telemetry: telemetry,
+              onProgress: (uploaded, length) {
+                final progress = length == 0 ? 0 : uploaded / length;
+                onUploadProgress?.call((index + progress) / total);
+              },
+              cancellationSignal: cancellationSignal,
+              preparationIdentity: preparationIdentity,
+              slot: slot,
+              preparedAssetsBySlot: preparedAssetsBySlot,
+              onMediaPrepared: onMediaPrepared,
+            );
+            return resolved.assetId;
+          },
+    );
+  }
+  if (state.editorKind != CreateEditorKind.media && state.imagePaths.isEmpty) {
     return PreparedPostPublicationPayload(
       payload: basePayload,
       mediaAssetIds: const <String>[],
     );
   }
-  // 上传服务的 cdnUrl 只用于本次上传协议，绝不能进入 Post 写入 payload。
+  // 上传完成后的 publicSliceKey 只服务交付解析，Post 写入只携带 assetId。
   // 发布时由 SubmitPostPublication 原子绑定并投影 canonical publicSliceKey。
   basePayload
     ..remove('mediaUrls')
@@ -552,16 +529,26 @@ _buildPostPublicationPayloadWithRemoteVideoMedia({
   if (cover.assetId.isNotEmpty) {
     assetIds.add(cover.assetId);
   }
-  final selectedCover = cover.assetId.isNotEmpty
-      ? await media.selectManualCover(
-          SelectManualContentMediaCoverCommand(
-            mediaId: video.assetId,
-            coverAssetId: cover.assetId,
+  final selectedCover = await selectContentMediaCoverWhenReady(
+    cancellationSignal: cancellationSignal,
+    command: () => cover.assetId.isNotEmpty
+        ? media.selectManualCover(
+            SelectManualContentMediaCoverCommand(
+              mediaId: video.assetId,
+              coverAssetId: cover.assetId,
+            ),
+            ContentMediaAssetCommandContext(
+              idempotencyKey:
+                  'content.media.cover.manual:${video.assetId}:${cover.assetId}',
+            ),
+          )
+        : media.selectAutoCover(
+            SelectAutoContentMediaCoverCommand(mediaId: video.assetId),
+            ContentMediaAssetCommandContext(
+              idempotencyKey: 'content.media.cover.auto:${video.assetId}',
+            ),
           ),
-        )
-      : await media.selectAutoCover(
-          SelectAutoContentMediaCoverCommand(mediaId: video.assetId),
-        );
+  );
 
   basePayload['coverStrategy'] = selectedCover.coverStrategy;
   basePayload['coverFrameTimeMs'] = state.videoCoverTimeMs;
@@ -664,6 +651,7 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
     uploadStream: uploadStream,
     onProgress: onProgress,
     cancellationSignal: cancellationSignal,
+    accessPolicy: ContentMediaAccessPolicy.referencedPost,
     checkpoint: durableCheckpoint,
     onCheckpoint: (updated) async {
       await onMediaPrepared?.call(updated);

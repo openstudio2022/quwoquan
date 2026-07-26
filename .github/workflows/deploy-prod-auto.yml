@@ -142,7 +142,7 @@ jobs:
             --manifest-digest "${{ steps.release_context.outputs.manifest_digest }}" \
             --minimum-approvals 1 \
             --output "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/governance-receipt.json"
-      - name: Unpack generated release snapshots
+      - name: Unpack service package config evidence
         if: ${{ hashFiles(format('{0}/env/repo/local/ci-packages/process/service/mainline/manifest.json', env.QWQ_OUTPUT_ROOT)) != '' }}
         run: |
           python3 - <<'PY'
@@ -213,7 +213,7 @@ jobs:
           import yaml
           from pathlib import Path
           payload = yaml.safe_load(
-              Path("quwoquan_ops/environments/gray_rollout_stages.yaml").read_text(
+              Path("quwoquan_ops/environments/prod/rollout/stages.yaml").read_text(
                   encoding="utf-8"
               )
           )
@@ -338,7 +338,7 @@ jobs:
             echo "::error::resolved release artifact is required; local regeneration is forbidden"
             exit 1
           }
-      - name: Unpack generated release snapshots
+      - name: Unpack service package config evidence
         if: ${{ hashFiles(format('{0}/env/repo/local/ci-packages/process/service/mainline/manifest.json', env.QWQ_OUTPUT_ROOT)) != '' }}
         run: |
           python3 - <<'PY'
@@ -431,7 +431,7 @@ jobs:
         with:
           name: resolved-mainline-release-artifact
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
-      - name: Unpack generated release snapshots
+      - name: Unpack service package config evidence
         run: |
           python3 - <<'PY'
           import json
@@ -520,7 +520,7 @@ jobs:
             echo "::error::resolved release artifact is required; local regeneration is forbidden"
             exit 1
           }
-      - name: Unpack generated release snapshots
+      - name: Unpack service package config evidence
         if: ${{ hashFiles(format('{0}/env/repo/local/ci-packages/process/service/mainline/manifest.json', env.QWQ_OUTPUT_ROOT)) != '' }}
         run: |
           python3 - <<'PY'

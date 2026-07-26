@@ -1,73 +1,99 @@
-# L3 Scenario: search-object-taxonomy-and-provider-registry
+# L3 Story：搜索对象分类体系与 ProviderREGISTRY (`search-object-taxonomy-and-provider-registry`)
 
-## 节点定位
+> 所属能力：[`search-provider-routing-and-storage-topology`](../spec.md)
+>
+> Journey / Scenario：[`JNY-005 / SCN-011`](../../../spec.md#scn-011)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-- `L1_domain_service`: `global-search-experience`
-- `L2_business_capability`: `search-provider-routing-and-storage-topology`
-- `L3_story`: `search-object-taxonomy-and-provider-registry`
+## 1. 用户价值
 
-## 背景与动机
+作为执行搜索的用户，我希望联系人、内容、圈子、主页与地点使用统一对象分类和 Provider 注册返回强类型结果，从而在不同入口获得可理解、可路由且权限安全的搜索结果。
 
-如果 searchable object 继续以页面、仓库或服务内部名字存在，统一搜索接口很快会退化为一个壳。该 Scenario 用来冻结 object taxonomy 与 provider registry。
+## 2. 范围与非目标
 
-## 功能范围
+### In Scope
+
+- searchable object 统一命名与 provider 注册。
+- location.place 作为复用 geo 维度的第一方对象 target 的 taxonomy 注册与检索路由。
+- location.place 与 entity.homepage 的单一真相源边界（互斥、不重复）。
+- 第一方地点快照存储的身份/去重与灌数源。
+- `location.place` 命中的临时落地卡与“提升为实体主页” CTA；复用搜索 payload，不新建后端 operation。
+
+### Out of Scope
+
+- 排序策略与存储弹性拓扑（归 search-storage-topology-and-elasticity）。
+- 完整地点 detail 页与独立后端 detail/写 operation（落地层仅复用搜索结果 payload + suggestHomepage 既有 surface）。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 location 作为第一方对象 target 注册进统一 taxonomy 与 retrieve 契约
+
+- location 成为 canonical search 可召回的一类对象，且 geo 维度机制仅一套。
+
+<a id="req-002"></a>
+### REQ-002 第一方地点快照存储按地名去重、对绑定实体的地点单源排除
+
+- 同一地点在统一索引中只出现一次（未提升=location.place，已提升=entity.homepage）。
+
+<a id="req-003"></a>
+### REQ-003 location.place 命中落地为临时地点卡并引导提升为 entity.homepage
+
+- location.place 点击落地体验定义并验证；未提升=location.place、已提升=entity.homepage 单一真相源在落地层一致。
+
+<a id="req-004"></a>
+### REQ-004 searchable object 的统一命名
 
 - searchable object 的统一命名。
-- object -> provider -> execution mode 的注册表。
-- objectType 与展示语义、跳转语义的绑定边界。
-- 外部网页对象与趣我圈内部对象共用同一 taxonomy。
-
-## Out of Scope
-
-- 排序策略。
-- 存储实现。
-
-## 约束
-
 - objectType 必须是统一枚举或 metadata 注册项。
 - 页面层不得自定义新的搜索对象字符串。
 - taxonomy 必须覆盖 `web.document`，使 AI 能通过同一接口同时检索网页与站内对象。
-
-## 第一方地点对象 location.place（R-S05e，force_target）
-
-在跨对象 geo/地点维度（`runtime/search.Document.Geo` + `Fields[placeName/placeId]` + `filters.near`）之上，新增一类**复用该维度的第一方对象 target**：`location.place`（`ai_targets.location`）。
-
-### 对象定义
-
-- `object_type = location.place`，`ai_target = location`，`domain = content`，`provider = content_remote`，`execution_strategy = remote_only`。
 - 它是被内容引用的「自由文本地点」聚合去重后的第一方快照对象，进入统一 `quwoquan_objects` 索引，与其它对象一起被 canonical `search(request)` 召回、排序、引用。
-- 复用既有 geo 维度字段承载坐标与地名：`Document.Geo`（真实坐标，缺失则为空）+ `Fields[placeName]`（人类可读地名，同时作为 `Title` 供 term 命中）。不新造平行字段。
-
-### 与 entity.homepage 的边界（单一真相源）
-
-- `location.place` **仅覆盖**「被内容引用、但尚未绑定 `canonicalEntityId` / `primaryHomepageId` 的自由文本地点」。
-- 一旦某地点被提升为 canonicalEntity（成为 `entity.homepage`），其 `location.place` 对象即被删除，由 `entity.homepage` 承载。
 - 因此同一地点在统一索引中**只出现一次**：未提升 → `location.place`；已提升 → `entity.homepage`。geo 维度只有一套机制，二者互斥不重复。
-
-### 身份与去重
-
-- canonical 身份 = `place_` + `sha1(normalize(locationName) + "|" + 粗 geohash(lat,lng,precision=5))` 前 16 hex。
-- 规范化地名做大小写折叠 + 去空白；坐标缺失时 geohash 段为空。
-- **不使用第三方 POI id 作主键**，身份完全第一方自有，保证多篇内容引用同一地点时稳定收敛为一条快照。
-
-### 灌数源与归属
-
-- 数据源是 content 域的已发布、公开帖子（`post.locationName` + `post.location`）。归属 `content-service`（发布写路径最自然）。
-- 写时投影器（`placeindex.PlaceProjector`）在帖子生命周期事件上增量维护第一方地点快照存储（`place_snapshots` 派生读模型，按引用集去重）并同步 ES；冷启动/对账由 `placeindex.Backfill` 从全量帖子重建。
-- 地点快照是派生读模型，posts 仍是唯一写真相源；删除最后一篇引用或绑定 canonicalEntity 后，对应快照与索引文档随之删除。
-
-### 点击落地页归属（R-S05e-1，已定义 / WP-D 落地）
-
-- `location.place` 命中后点击进入**临时地点卡** + 「提升为 `entity.homepage`」引导 CTA，符合上文单一真相源（未提升 = `location.place`、已提升 = `entity.homepage`）。
 - route / surface 已 metadata-first 定义，禁止 UI 硬编码：
-  - route：`_shared/app_routes.yaml` `locationPlaceLanding` → `/locations/{placeId}`（codegen 产出 `AppRoutePaths.locationPlaceLanding`）。
-  - surface：`_shared/ui_surfaces.yaml` `locationPlaceLanding`（owner=`search`、`operation_ids: []`，落地页无独立后端 operation；命中详情来自搜索结果 payload 经 route extra 透传）。
-  - 提升动作复用 `suggestHomepage` surface（不新造写路径）。
-- 消费：`lib/ui/search/pages/location_place_landing_page.dart` + router wiring；`search_network_results_page` 交集「已连接地点」改走 `locationPlaceLanding`（不再误导 `entity.homepage` 详情）。
-- 不阻塞召回主链路：当前 `location.place` 可被 canonical `search(request)` 检索召回；落地体验已定义并通过 widget 测试。
 
-## 验收重点
+## 4. 契约引用
 
-1. searchable object 是否有统一注册表。
-2. provider routing 是否基于 registry，而不是页面 if/switch。
-3. `location.place` 是否与 `entity.homepage` 严格互斥（同一地点只出现一次），geo 维度是否只有一套机制。
+- canonical：`contracts/metadata/_shared/search_objects.yaml`
+- canonical：`contracts/metadata/_shared/search_contract.yaml`
+- canonical：`contracts/metadata/_shared/app_routes.yaml`
+- canonical：`contracts/metadata/_shared/ui_surfaces.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 location 作为第一方对象 target 注册进统一 taxonomy 与 retrieve 契约
+
+- GIVEN search_objects.yaml 已登记 object_type=location.place 与 ai_target=location（object_type=location.place）。
+- GIVEN runtime/search 已加性新增 ObjectTypeLocation 与 TargetLocation。
+- WHEN 校验 metadata ai_targets 与 runtime AllTargets 一一对应，并把 location.place 文档解析为 target。
+- THEN len(ai_targets)==len(AllTargets) 且 location→location.place 双向映射成立。
+- THEN TargetForDocument(location.place)==location，ObjectTypesForTargets([location])==[location.place]。
+- THEN 既有 geo 跨对象维度符号（GeoNear/Near/Document.Geo/nearMatch/hit geo|distanceKm|placeName）保持不变。
+
+<a id="gwt-002"></a>
+### GWT-002 第一方地点快照存储按地名去重、对绑定实体的地点单源排除
+
+- GIVEN 多篇已发布公开帖子引用同一自由文本地名（无 canonicalEntityId/primaryHomepageId）。
+- GIVEN 另有帖子的地点已绑定 canonicalEntityId。
+- WHEN 写时投影器与 backfill 从帖子聚合 location.place 快照并投影到统一索引。
+- THEN 同一规范化地名(+粗 geohash)收敛为一条 location.place 快照，popularity 反映引用计数。
+- THEN 绑定 canonicalEntity 的帖子不产生 location.place；其曾引用的地点在失去最后一篇自由文本引用后被删除。
+- THEN 帖子转私有/删除/解绑后，对应快照与 ES 文档被移除（无残留）。
+
+<a id="gwt-003"></a>
+### GWT-003 location.place 命中落地为临时地点卡并引导提升为 entity.homepage
+
+- GIVEN search 结果页交集「已连接地点」承载 location.place 命中（未绑定 canonicalEntity）。
+- GIVEN route locationPlaceLanding 与 surface locationPlaceLanding 已 metadata-first 定义并 codegen。
+- WHEN 点击 location.place 命中，进入 /locations/{placeId} 落地页；点击「提升为实体主页」CTA。
+- THEN 落地页渲染临时地点卡（地名 + 地址 + 临时徽标），命中详情来自搜索结果 payload（route extra），无独立后端 operation。
+- THEN CTA 跳转 suggestHomepage（复用既有 surface），携带地名作为 query，不新造写路径。
+- THEN 进入上报 location_place_landing.enter 曝光、CTA 上报 promote_click（JourneyEventTracker）。
+
+## 6. 依赖
+
+- 前置要求：[`search-provider-routing-and-storage-topology`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

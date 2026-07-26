@@ -22,13 +22,12 @@ from content.execution.workspace import (
 
 # 默认基线文档锚定 core.paths 的唯一仓库根，不依赖进程 cwd、隔离 data root，
 # 也不重复用 __file__.parents 推导目录层级。
-DEFAULT_SPEC_DOC = REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/spec.md"
-DEFAULT_DESIGN_DOC = REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/design.md"
-DEFAULT_ACCEPTANCE_DOC = REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/acceptance.yaml"
-DEFAULT_EXECUTION_GUIDE = REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md"
-DEFAULT_COMMAND_MATRIX_DOC = (
-    REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/command-matrix.md"
+_CAPABILITY_SPEC_ROOT = (
+    REPO_ROOT
+    / "specs/feature-tree/discovery-content/object-homepage-coverage-scaling"
 )
+DEFAULT_SPEC_DOC = _CAPABILITY_SPEC_ROOT / "spec.md"
+DEFAULT_DESIGN_DOC = _CAPABILITY_SPEC_ROOT / "design.md"
 
 
 def _file_snapshot(path: Path) -> dict[str, Any]:
@@ -118,9 +117,6 @@ def _input_paths(
     catalog: Path,
     spec_doc: Path,
     design_doc: Path,
-    acceptance_doc: Path,
-    execution_guide: Path,
-    command_matrix_doc: Path,
 ) -> dict[str, str]:
     return {
         "executionSpecPath": str(execution_spec),
@@ -128,9 +124,6 @@ def _input_paths(
         "catalogPath": str(catalog),
         "specDocPath": str(spec_doc),
         "designDocPath": str(design_doc),
-        "acceptanceDocPath": str(acceptance_doc),
-        "executionGuidePath": str(execution_guide),
-        "commandMatrixDocPath": str(command_matrix_doc),
     }
 
 
@@ -171,9 +164,6 @@ def handle_baseline(args: argparse.Namespace) -> None:
     )
     spec_doc = _optional_path(getattr(args, "spec_doc", None)) or DEFAULT_SPEC_DOC
     design_doc = _optional_path(getattr(args, "design_doc", None)) or DEFAULT_DESIGN_DOC
-    acceptance_doc = _optional_path(getattr(args, "acceptance_doc", None)) or DEFAULT_ACCEPTANCE_DOC
-    execution_guide = _optional_path(getattr(args, "execution_guide", None)) or DEFAULT_EXECUTION_GUIDE
-    command_matrix_doc = _optional_path(getattr(args, "command_matrix_doc", None)) or DEFAULT_COMMAND_MATRIX_DOC
     catalog_config = _optional_path(getattr(args, "catalog_config", None))
     naming_rules = _optional_path(getattr(args, "naming_rules", None))
     geo_band_rules = _optional_path(getattr(args, "geo_band_rules", None))
@@ -185,9 +175,6 @@ def handle_baseline(args: argparse.Namespace) -> None:
         "progress": progress_path,
         "spec-doc": spec_doc,
         "design-doc": design_doc,
-        "acceptance-doc": acceptance_doc,
-        "execution-guide": execution_guide,
-        "command-matrix-doc": command_matrix_doc,
     }
     for label, path in required_files.items():
         _ensure_exists(path, label, issues)
@@ -253,9 +240,6 @@ def handle_baseline(args: argparse.Namespace) -> None:
         catalog=catalog_path,
         spec_doc=spec_doc,
         design_doc=design_doc,
-        acceptance_doc=acceptance_doc,
-        execution_guide=execution_guide,
-        command_matrix_doc=command_matrix_doc,
     )
     if issues:
         _write_failed_baseline_report(
@@ -279,9 +263,6 @@ def handle_baseline(args: argparse.Namespace) -> None:
         "catalogPath": str(catalog_path),
         "specDoc": _file_snapshot(spec_doc),
         "designDoc": _file_snapshot(design_doc),
-        "acceptanceDoc": _file_snapshot(acceptance_doc),
-        "executionGuide": _file_snapshot(execution_guide),
-        "commandMatrixDoc": _file_snapshot(command_matrix_doc),
         "schemaFiles": [_file_snapshot(path) for path in schema_files],
         "configFiles": [_file_snapshot(path) for path in config_files],
     }
@@ -304,9 +285,6 @@ def handle_baseline(args: argparse.Namespace) -> None:
             "catalog.ndjson",
             "spec.md",
             "design.md",
-            "acceptance.yaml",
-            "execution.md",
-            "command-matrix.md",
             "schema/config list",
         ],
         stop_if=[

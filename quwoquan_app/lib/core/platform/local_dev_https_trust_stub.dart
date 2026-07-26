@@ -11,6 +11,7 @@ class LocalDevHttpsTrust {
   static bool shouldInstallForRuntime({
     required bool isReleaseMode,
     required bool isAndroid,
+    bool isIos = false,
     required Iterable<String> runtimeBases,
     String? appRuntimeEnv,
   }) {
@@ -28,6 +29,15 @@ class LocalDevHttpsTrust {
         host == '::1' ||
         host == '10.0.2.2' ||
         host.endsWith('.localhost');
+  }
+
+  static bool shouldResolveThroughLocalLoopback(String raw) {
+    final uri = Uri.tryParse(raw.trim());
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      return false;
+    }
+    return isLocalHttpsTransportBase(raw) ||
+        uri.host.toLowerCase().endsWith('.quwoquan-env.test');
   }
 
   static bool isPlaceholderLocalEnvCertificate(Uint8List certBytes) {

@@ -1,30 +1,19 @@
 # /dev
 
-目标：实现已冻结 Story，并闭环验证。
+目标：实现已冻结 Story/能力并闭环验证。
 
-准入：
-- Story `spec.md` 与 `acceptance.yaml` 已稳定。
-- 所属业务能力 `design.md` 覆盖实现约束。
-- 当前工作能指出 UAT/SIT/GWT/contract 与 三层测试。
+准入：`make feature-context TARGET=<target>` 可得到唯一父链；L3 REQ/GWT 与设计归属稳定；父 L2 SIT、L1 DOM 和受影响 AppRoot UAT 可追踪；相关 `OPEN block` 已明确处置。
 
 执行：
-1. 读取相关 spec/design/acceptance、registry、CR。
-2. 按 `docs/agent_context_contract.md` 做正向规格理解与执行前自检反思。
-3. 对照 `docs/agent_command_simulation_matrix.md` 确认自然语言输入对应的命令阶段、禁止事项和出口证据。
-4. 审视 metadata/codegen、seed、mock、权限、生命周期、观测、回滚。
-5. 从 Story acceptance 与当前会话计划派生 todo；每个 todo 必须绑定测试对象、测试层和 `quality_facet`。
-6. Red → Green → Refactor。
-7. 回填测试证据并运行触发范围门禁；异常、性能、安全、可观测、可靠性/可用性、数据一致性适用时必须有证据。
-8. 完成后按测试、E2E、产品/UX、非功能质量、运营观测、自动化/门禁、剩余风险复盘，不得只列改动文件。
 
-出口：
-- 输出 `Exit Review`：规格达成、测试证据、E2E、产品/UX、运营观测、自动化/门禁、剩余风险。
-- `Exit Review` 必须说明异常/恢复、性能、安全/隐私、可观测、可靠性/可用性、数据一致性是否适用；适用但无证据即 `GATE_BLOCK`。
-- 明确未跑验证的原因。
-- 若发现规格/验收缺口，停止并退回 `/prd`、`/design` 或 `/plan-review`。
+1. 按根 `AGENTS.md` 完成 Spec Entry 与 Pre-work Reflection。
+2. 读取父链、相关 DEC、metadata 和对应测试，不扫描整棵树。
+3. 从 REQ/GWT/SIT/UAT 与当前会话计划派生 todo；不创建 tracked task/plan。
+4. metadata-first → verify/codegen → Red → Green → Refactor。
+5. Remote/API 断言必须在 local_contract 的 Mock/Provider/Widget/领域规则中有对应覆盖；用户旅程变化补 user_acceptance。
+6. 若实现发现规格或设计冲突，停止并回到 `/prd` 或 `/design`，不得让代码反向定义规格。
+7. 运行影响面测试、`make verify-feature-tree` 和 `make feature-tree-change-report`。
 
-阻断：不得以部分端、部分测试或无证据状态停止。
+出口按 Exit Review 报告规格达成、测试、E2E、产品/UX、质量与观测、门禁和剩余 OPEN。未运行的验证必须说明原因；失败不得包装为通过。
 
-自然语言等价触发：用户说“实现一下”“修这个问题”“开始写代码”时，也按 `/dev` 语义执行；若规格或验收不清，先退回 `/explore`、`/prd` 或 `/plan-review`。
-
-协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。
+自然语言等价触发：“实现”“修复”“开始写代码”。

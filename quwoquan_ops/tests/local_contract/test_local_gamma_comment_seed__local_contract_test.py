@@ -132,7 +132,7 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
         self.assertEqual(len(calls), 4)
         self.assertEqual(
             calls[0][0],
-            "https://gamma.example/content/posts/fixture_photo_001/comments",
+            "https://gamma.example/content/content/posts/fixture_photo_001/comments",
         )
         self.assertEqual(calls[0][1]["body"], {"content": "主评论示例"})
         self.assertEqual(

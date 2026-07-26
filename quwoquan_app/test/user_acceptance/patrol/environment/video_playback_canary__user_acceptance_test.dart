@@ -7,8 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
+
+import '../../../support/patrol/patrol_environment_harness.dart';
 
 const _videoWorkId = String.fromEnvironment('VIDEO_PLAYBACK_CANARY_WORK_ID');
 const _hourVideoWorkId = String.fromEnvironment(
@@ -41,7 +44,7 @@ void main() {
       printLogs: true,
     ),
     ($) async {
-      await launchPatrolAppOnce($);
+      await launchEnvironmentPatrolApp($);
       expect(
         _videoWorkId.trim(),
         isNotEmpty,
@@ -93,6 +96,7 @@ void main() {
         isNotEmpty,
         reason: '播放器必须读取服务端权威 125 秒时长',
       );
+      _expectTimelineSemantics(valueSuffix: '/ 2:05');
       await _requireNativeFirstFrameEvidence($);
       await _expectBottomStackGeometryAndExpiry($);
 
@@ -131,7 +135,7 @@ void main() {
       printLogs: true,
     ),
     ($) async {
-      await launchPatrolAppOnce($);
+      await launchEnvironmentPatrolApp($);
       await patrolGoTo(
         $,
         AppRoutePaths.workBrowser(
@@ -274,11 +278,13 @@ Future<void> _scrubTimeline(
   );
   await $.pump(const Duration(milliseconds: 120));
   expect(find.text(startLabel).evaluate(), isNotEmpty);
+  _expectTimelineSemantics(value: startLabel);
   await gesture.moveTo(
     Offset(rect.left + rect.width * endFraction, rect.center.dy),
   );
   await $.pump(const Duration(milliseconds: 180));
   expect(find.text(endLabel).evaluate(), isNotEmpty);
+  _expectTimelineSemantics(value: endLabel);
   await gesture.up();
   await $.pump(const Duration(seconds: 2));
   if (_requireNativePlaybackSignals) {
@@ -297,6 +303,24 @@ Future<void> _scrubTimeline(
     find.byKey(const ValueKey<String>('video-player-error')).evaluate(),
     isEmpty,
     reason: 'release-only seek 不得把播放器推进失败态',
+  );
+}
+
+void _expectTimelineSemantics({String? value, String? valueSuffix}) {
+  final semantics = find.byWidgetPredicate(
+    (widget) =>
+        widget is Semantics &&
+        widget.properties.label == UITextConstants.videoPlaybackProgressLabel &&
+        widget.properties.onIncrease != null &&
+        widget.properties.onDecrease != null &&
+        (value == null || widget.properties.value == value) &&
+        (valueSuffix == null ||
+            (widget.properties.value ?? '').endsWith(valueSuffix)),
+  );
+  expect(
+    semantics.evaluate(),
+    isNotEmpty,
+    reason: '125 秒 canary 时间轴必须暴露当前值与增减 seek 的无障碍语义',
   );
 }
 

@@ -147,12 +147,12 @@ export function PlatformConfigPage() {
           description="比较发布包 desired hash 与实例 ACK effective hash。"
         />
         <KpiCard
-          label="release 版本保留"
-          value="2"
+          label="有效配置快照"
+          value="1"
           icon={<span className="badge badge--neutral">retention</span>}
-          trendLabel="当前灰度 + 上一版本"
+          trendLabel="每个 service package 唯一"
           trendTone="positive"
-          description="门禁 prune_config_releases.py --check 阻断超限。"
+          description="config version 由 package 内 config.yaml 的 sha256 派生。"
         />
       </div>
 
@@ -218,7 +218,7 @@ export function PlatformConfigPage() {
                 domain={snapshot.domain} · source={snapshot.snapshotSource} · mergedSha256=
                 {snapshot.mergedSha256 ?? 'n/a'}
                 {snapshot.releaseVersions.length > 0
-                  ? ` · release=${snapshot.releaseVersions.join(' / ')}`
+                  ? ` · configVersion=${snapshot.releaseVersions.join(' / ')}`
                   : null}
               </div>
               <table className="table">

@@ -1,0 +1,85 @@
+{
+  "dashboard": {
+    "title": "L2 — 小趣运行时与主动订阅",
+    "uid": "qwq-l2-assistant-runtime",
+    "tags": ["quwoquan", "l2", "assistant", "commercial"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "description": "监控小趣订阅调度、外部投递、业务抑制、错发防线、@小趣 DLQ 与公开订阅操作 SLO。",
+    "panels": [
+      {
+        "title": "订阅 scheduler tick",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(assistant_subscription_cron_tick_total[5m])) by (outcome)",
+            "legendFormat": "{{ outcome }}"
+          }
+        ]
+      },
+      {
+        "title": "主动订阅外部投递",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(assistant_subscription_delivery_attempt_total[5m])) by (outcome, attempt_kind)",
+            "legendFormat": "{{ outcome }} / {{ attempt_kind }}"
+          }
+        ]
+      },
+      {
+        "title": "投递前业务抑制",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(assistant_subscription_delivery_suppressed_total[5m])) by (reason)",
+            "legendFormat": "{{ reason }}"
+          }
+        ]
+      },
+      {
+        "title": "错发防线与 @小趣 DLQ",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(assistant_wrong_destination_incidents_total[5m]))",
+            "legendFormat": "wrong destination"
+          },
+          {
+            "expr": "sum(increase(assistant_mentioned_consumer_dlq_total[5m]))",
+            "legendFormat": "mentioned DLQ"
+          }
+        ]
+      },
+      {
+        "title": "订阅 API 错误率",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_requests_total{service=\"assistant-service\",route=~\"/assistant/skill-subscriptions.*\",status=~\"5..\"}[5m])) by (route) / clamp_min(sum(rate(http_server_requests_total{service=\"assistant-service\",route=~\"/assistant/skill-subscriptions.*\"}[5m])) by (route), 0.001)",
+            "legendFormat": "{{ route }}"
+          }
+        ]
+      },
+      {
+        "title": "订阅 API P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"assistant-service\",route=~\"/assistant/skill-subscriptions.*\"}[5m])) by (le, route))",
+            "legendFormat": "{{ route }}"
+          }
+        ]
+      }
+    ],
+    "schemaVersion": 39,
+    "version": 1
+  },
+  "overwrite": true
+}

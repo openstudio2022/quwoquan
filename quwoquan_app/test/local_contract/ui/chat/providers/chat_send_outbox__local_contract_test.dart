@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -114,7 +116,10 @@ void main() {
     );
     addTearDown(outbox.dispose);
     await outbox.init();
-    await outbox.enqueueVoice(conversationId: 'conv_001', result: recordResult());
+    await outbox.enqueueVoice(
+      conversationId: 'conv_001',
+      result: recordResult(),
+    );
 
     await outbox.drainQueue();
     expect(outbox.queueLength, 1);
@@ -139,7 +144,10 @@ void main() {
     addTearDown(outbox.dispose);
     await outbox.init();
     await outbox.enqueueCommand(textCommand('client-msg-a'));
-    await outbox.enqueueVoice(conversationId: 'conv_001', result: recordResult());
+    await outbox.enqueueVoice(
+      conversationId: 'conv_001',
+      result: recordResult(),
+    );
     await outbox.enqueueCommand(textCommand('client-msg-b'));
 
     await outbox.drainQueue();
@@ -173,5 +181,47 @@ void main() {
     );
     expect(await outbox.enqueueCommand(cardCommand), isFalse);
     expect(outbox.queueLength, 0);
+  });
+
+  test('账号 closed 终态物理清空待发队列并永久停止旧实例重放', () async {
+    final delivered = <String>[];
+    final deletedTemporaryFiles = <String>[];
+    final outbox = ChatSendOutbox(
+      maxQueueSize: 10,
+      sendCommand: (command) async {
+        delivered.add(command.clientMsgId);
+      },
+      sendQueuedVoice: (_, _) async => VoiceSendStatus.completed,
+      deleteTemporaryFile: (path) async {
+        deletedTemporaryFiles.add(path);
+      },
+    );
+    await outbox.init();
+    await outbox.enqueueCommand(textCommand('client-msg-closed'));
+    await outbox.enqueueVoice(
+      conversationId: 'conv-closed',
+      result: recordResult(),
+    );
+
+    await outbox.purgeForTerminalAccountClosure();
+
+    expect(outbox.queueLength, 0);
+    expect(deletedTemporaryFiles, <String>['/tmp/voice.m4a']);
+    expect(
+      await outbox.enqueueCommand(textCommand('client-msg-after-closed')),
+      isFalse,
+    );
+    await outbox.drainQueue();
+    expect(delivered, isEmpty);
+    await outbox.dispose();
+
+    final reopened = ChatSendOutbox(
+      maxQueueSize: 10,
+      sendCommand: (_) async {},
+      sendQueuedVoice: (_, _) async => VoiceSendStatus.completed,
+    );
+    addTearDown(reopened.dispose);
+    await reopened.init();
+    expect(reopened.queueLength, 0);
   });
 }

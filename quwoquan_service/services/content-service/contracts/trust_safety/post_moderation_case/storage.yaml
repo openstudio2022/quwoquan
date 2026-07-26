@@ -1,0 +1,79 @@
+backend: mongodb
+collections:
+  post_moderation_cases:
+    entity: PostModerationCase
+    description: 绑定 postId、postVersion 和 contentDigest 的审核权威聚合；先前 revision 的 approval 不可作为当前发布资格。
+    indexes:
+    - name: idx_post_moderation_cases_post_revision
+      keys:
+        postId: 1
+        postVersion: 1
+        contentDigest: 1
+      unique: true
+    - name: idx_post_moderation_cases_queue
+      keys:
+        status: 1
+        createdAt: 1
+    - name: idx_post_moderation_cases_reviewer
+      keys:
+        reviewerId: 1
+        updatedAt: -1
+      sparse: true
+    - name: idx_post_moderation_cases_eligibility
+      keys:
+        postId: 1
+        postVersion: 1
+        contentDigest: 1
+        status: 1
+    - name: idx_post_moderation_cases_version
+      keys:
+        _id: 1
+        version: 1
+      unique: true
+  post_moderation_case_command_receipts:
+    entity: PostModerationCase
+    description: 审核命令幂等结果；与 case 版本、审计记录和 outbox 同一 Mongo transaction 提交。
+    indexes:
+    - name: idx_post_moderation_case_receipts_key
+      keys:
+        _id: 1
+      unique: true
+    - name: idx_post_moderation_case_receipts_aggregate
+      keys:
+        aggregateId: 1
+        aggregateVersion: -1
+    - name: idx_post_moderation_case_receipts_expire
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
+  post_moderation_case_outbox:
+    entity: PostModerationCase
+    description: 审核生命周期领域事实；审核 relay 只能在事务提交后投递。
+    indexes:
+    - name: idx_post_moderation_case_outbox_event
+      keys:
+        _id: 1
+      unique: true
+    - name: idx_post_moderation_case_outbox_replay
+      keys:
+        occurredAt: 1
+        _id: 1
+    - name: idx_post_moderation_case_outbox_aggregate_version
+      keys:
+        aggregateId: 1
+        aggregateVersion: 1
+      unique: true
+  post_moderation_case_audit:
+    entity: PostModerationCase
+    description: reviewer 行为审计；reviewed、approved、rejected 和 superseded 各自产生不可变审计行。
+    indexes:
+    - name: idx_post_moderation_case_audit_case_time
+      keys:
+        caseId: 1
+        occurredAt: 1
+    - name: idx_post_moderation_case_audit_reviewer_time
+      keys:
+        reviewerId: 1
+        occurredAt: -1
+      sparse: true
+role: authoritative

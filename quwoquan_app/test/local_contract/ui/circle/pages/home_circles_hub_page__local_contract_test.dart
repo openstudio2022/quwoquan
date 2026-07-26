@@ -207,7 +207,7 @@ CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
           authorDisplayName: '校园作者',
           body: '校园记录',
           coverUrl: 'media/image/circle_post_campus_1.jpg',
-          imageUrls: const <String>['media/image/circle_post_campus_1.jpg'],
+          mediaUrls: const <String>['media/image/circle_post_campus_1.jpg'],
         ),
       ),
       CircleFeedPostProjection(
@@ -221,7 +221,7 @@ CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
           authorDisplayName: '摄影作者',
           body: '山谷晨光',
           coverUrl: 'media/image/circle_post_image_1.jpg',
-          imageUrls: const <String>['media/image/circle_post_image_1.jpg'],
+          mediaUrls: const <String>['media/image/circle_post_image_1.jpg'],
         ),
       ),
       CircleFeedPostProjection(
@@ -582,7 +582,7 @@ void main() {
               ownerUserId: 'fixture-user',
               displayName: '圈子测试用户',
               avatarUrl: '',
-              personaContextVersion: 'circle-hub-scope-test',
+              contextVersion: 1,
             ),
           ),
         ],

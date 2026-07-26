@@ -1,0 +1,54 @@
+backend: mongodb
+collections:
+  circle_memberships:
+    entity: CircleMembership
+    role: authoritative
+    indexes:
+    - name: idx_circle_membership_identity
+      keys:
+        circleId: 1
+        personaId: 1
+      unique: true
+    - name: idx_circle_membership_roster
+      keys:
+        circleId: 1
+        state: 1
+        joinedAt: 1
+        _id: 1
+    - name: idx_circle_membership_persona
+      keys:
+        personaId: 1
+        state: 1
+        joinedAt: -1
+        _id: 1
+  circle_membership_command_receipts:
+    entity: CircleMembershipCommandReceipt
+    role: authoritative
+    indexes:
+    - name: idx_circle_membership_receipt_expiry
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
+  circle_membership_outbox:
+    entity: CircleMembershipOutbox
+    role: append_only
+    indexes:
+    - name: idx_circle_membership_outbox_version
+      keys:
+        aggregateId: 1
+        aggregateVersion: 1
+      unique: true
+    - name: idx_circle_membership_outbox_sequence
+      keys:
+        outboxSequence: 1
+      unique: true
+  circle_membership_outbox_sequences:
+    entity: CircleMembershipOutboxSequence
+    role: authoritative
+  circle_membership_projection_checkpoints:
+    entity: CircleMembershipProjectionCheckpoint
+    role: projection
+  circle_membership_projection_inbox:
+    entity: CircleMembershipProjectionInbox
+    role: append_only
+role: authoritative

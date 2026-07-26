@@ -6,7 +6,7 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	chatgenerated "quwoquan_service/services/chat-service/internal/generated"
+	bindingdescriptor "quwoquan_service/services/chat-service/generated/chat/conversation"
 )
 
 func requireChatMessageTransport(
@@ -14,34 +14,34 @@ func requireChatMessageTransport(
 	environment string,
 	router *rtredis.Router,
 	sceneModes map[string]string,
-) (runtimemessaging.ResolvedMessageTransport, error) {
-	binding, bindingFound := chatgenerated.ExternalProviderBindingFor(
+) (*runtimemessaging.RedisMessageTransport, error) {
+	binding, found := bindingdescriptor.ExternalProviderBindingFor(
 		environment,
 		runtimemessaging.RuntimeMessageTransportCapability,
 	)
-	root, rootFound := chatgenerated.ExternalProviderBindingRootFor(
-		runtimemessaging.RuntimeMessageTransportCapability,
-		"chat-service-api",
-	)
-	if !rootFound {
-		return runtimemessaging.ResolvedMessageTransport{}, fmt.Errorf(
-			"generated message transport root chat-service-api is missing",
-		)
+	messageBinding := runtimemessaging.MessageTransportBinding{
+		State: binding.State, AdapterID: binding.AdapterID,
+		TimeoutMilliseconds: binding.TimeoutMilliseconds,
 	}
-	return runtimemessaging.RequireConfiguredRedisMessageTransport(
-		ctx,
-		environment,
-		bindingFound,
-		runtimemessaging.MessageTransportBinding{
-			State:               binding.State,
-			AdapterID:           binding.AdapterID,
-			TimeoutMilliseconds: binding.TimeoutMilliseconds,
-		},
+	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
+		ctx, environment, found, messageBinding,
 		runtimemessaging.MessageTransportRoot{
-			RootID:              root.RootID,
-			RequiredRedisScenes: root.RequiredRedisScenes,
+			RootID: "chat-service-api", RequiredRedisScenes: binding.RequiredRedisScenes,
 		},
-		router,
-		sceneModes,
+		router, sceneModes,
+	)
+	if err != nil {
+		return nil, err
+	}
+	realtime, ok := resolved.Scene("realtime")
+	if !ok {
+		return nil, fmt.Errorf("message transport root chat-service-api is missing realtime scene")
+	}
+	durable, ok := resolved.Scene("general")
+	if !ok {
+		return nil, fmt.Errorf("message transport root chat-service-api is missing general scene")
+	}
+	return runtimemessaging.NewRedisMessageTransportForRoot(
+		"chat-service-api", messageBinding.AdapterID, realtime, durable,
 	)
 }

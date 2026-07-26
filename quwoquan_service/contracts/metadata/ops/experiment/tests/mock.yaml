@@ -1,9 +1,0 @@
-entity: Experiment
-layer: app_side
-
-description: |
-  Experiment 是 operator/服务端对象：App 端零消费（分桶在服务端，见
-  experiment_assignment_fact 的 V1 deferred 决策），无 App mock fixture 场景。
-  Portal 消费面的契约由 generated control-plane 契约与 api_integration 承载。
-
-scenarios: []

@@ -1,73 +1,97 @@
-# L2 特性：onboarding-and-identity-entry
+# L2 Business Capability：引导与身份入口 (`onboarding-and-identity-entry`)
 
-## 功能说明
-- 负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路。
+> 所属领域：[`user-identity-profile-relationship`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
+
+## 1. 能力目标
+
+负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- 由本目录 Story 组合交付“onboarding-and-identity-entry”的独立业务结果。
+
+### Out of Scope
+
+- 其他 L2 的事实所有权、metadata schema 与实现施工步骤。
+
+## 3. Journey / Scenario 贡献
+
+- [`JNY-001 / SCN-004`](../../spec.md#scn-004)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+
+## 4. Story
+
+
+
+- [`four-environment-commercial-login-maturity`](./four-environment-commercial-login-maturity/spec.md)：application contract 覆盖 provider 失败、正常排队和错误验证码拒绝。
+- [`onboarding-consent-flow`](./onboarding-consent-flow/spec.md)：定义“引导同意流程”的可观察主路径、失败语义及父能力交接。
+- [`post-login-landing`](./post-login-landing/spec.md)：定义“内容登录落点”的可观察主路径、失败语义及父能力交接。
+- [`two-state-one-tap-login-commercial-login-entry`](./two-state-one-tap-login-commercial-login-entry/spec.md)：本机号码首次登录在服务端完成账号、persona、credential、device 与 consent 持久化。
+- [`welcome-entry-routing`](./welcome-entry-routing/spec.md)：定义“欢迎入口路由”的可观察主路径、失败语义及父能力交接。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 onboarding and identity entry 能力 SIT
+
+- 本能力必须组合直属 Story 与公开契约，交付“负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路”所定义的业务结果；失败终态必须可区分且不得伪造成功。
+- 微信 / 支付宝 / QQ 原生登录入口、三网本机号一键入口、系统凭据入口的显隐和降级由 PlatformCapabilities 驱动，不依赖 UI 层平台判断。
+- Android `Credential Manager` 与 iOS `AuthenticationServices / Password AutoFill` 的客户端接口与产品语义已预留，未开通时统一降级到手机号 OTP。
+
+<a id="req-002"></a>
+### REQ-002 支持手机号验证码、三网本机号一键、微信、支付宝和 QQ 并行登录，并统一归入 `OwnerAccount` 创建或恢复流程
+
 - 支持手机号验证码、三网本机号一键、微信、支付宝和 QQ 并行登录，并统一归入 `OwnerAccount` 创建或恢复流程。
-- 预留系统凭据登录路径：Android 侧经 `Credential Manager` 承接 passkey / 密码管理器入口，iOS 侧经 `AuthenticationServices / Password AutoFill` 承接 passkey 与系统凭据建议。
-- 在登录成功后，负责完成 `OwnerAccount` 初始化、默认 `SubAccount` 建立或已有 `SubAccount` 选择，并把用户送入正确的应用落点。
-
-## 目标用户
-- 首次安装的新用户。
-- 换机、重装、弱网中断后回来的老用户。
-- 同一主控账号下需要在多个子账号之间切换的重度用户。
-
-## 关键用户故事
-- 新用户可以通过手机号验证码、三网本机号一键、微信、支付宝或 QQ 快速建立主控账号并进入应用。
-- 已有主控账号的用户可以无缝恢复登录态，并进入上次使用的子账号或被明确要求选择子账号。
-- 长期回访用户在个人设备上优先沿用上次登录方式；App 记住的是登录方式与掩码账号，不自存明文密码。
-- Android 用户在服务端开通后可经 `Credential Manager` 直接使用 passkey / 密码管理器登录；iOS 用户可经系统凭据建议与 passkey 进入同一路径。
-- 仅有一个子账号的用户不会被复杂切换流程打扰；拥有多个子账号的用户可以在登录后有明确、安全、可恢复的选择与创建流程。
-
-## 范围
-- 欢迎页入口策略。
-- 登录方式选择与失败恢复。
 - 微信 / 支付宝 / QQ 原生授权入口、三网本机号一键与手机号 OTP 的统一收口。
-- passkey / 系统凭据登录的产品、能力位与客户端接口预留。
-- 新用户首次建立 `OwnerAccount` 与默认 `SubAccount`。
-- 老用户登录后恢复已有 `SubAccount` 或进入子账号选择器。
-- 登录后首屏落点、同意流程、基础 onboarding 与冷启动恢复。
-
-## 约束
-- 契约与字段策略必须与 OpenAPI 与 metadata 保持一致。
+- 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
 - 欢迎页是身份入口，不只是品牌 splash；必须知道“未登录 / 已登录 / 登录失效 / 多子账号待选择”四种状态。
 - 手机号验证码、三网本机号一键、微信、支付宝、QQ 必须是并行入口，而不是单一路径的补充按钮。
 - `Credential Manager` / `AuthenticationServices` / 微信 OpenSDK 等平台差异必须收口到 `PlatformCapabilities + NativeBridge`，UI 不得直接调用原生 SDK。
 - App 侧只记住登录方式、掩码账号与可续期会话凭据；明文密码、第三方密钥、WebAuthn 私钥不得落盘到业务层。
-- passkey 相关接口只允许消费服务端下发的 challenge / request JSON，并把 assertion / attestation 回传服务端；客户端不维护第二套认证真相源。
 - 登录成功后不能直接把 `OwnerAccount` 暴露给应用世界；必须进入某个具体 `SubAccount` 上下文。
 - 仅有一个 `SubAccount` 时，默认自动进入该子账号；拥有多个 `SubAccount` 时，必须支持安全、显式、可恢复的选择或新建。
-- 通讯录授权与匹配不阻塞首次登录成功，但要在 onboarding 适当阶段可引导并可跳过。
-
-## 体验要求
 - 登录入口必须清晰解释当前启用方式的差异、失败后的兜底与恢复路径。
-- 系统凭据入口必须遵守平台习惯：Android 使用统一底部凭据面板，iOS 优先让系统自动建议 passkey / Password AutoFill，而不是自造密码管理 UI。
-- 新用户首次进入应用的操作步骤尽量少，单账号用户的默认路径应优先简单。
-- 多子账号用户的选择器必须明确展示用途、最近使用、可切换、可新建与安全提示。
-- 弱网、登录中断、第三方授权取消时，用户不能丢失上下文或被送入错误落点。
 
-## 对标输入
-- 微信：手机号/微信登录、换机恢复、通讯录引导。
-- 小红书：新用户 onboarding 与兴趣建立。
-- 微博：身份入口与公开社交落点的快速进入。
+## 6. 契约与依赖
 
-## 非功能目标
-- 登录成功到进入正确落点的首屏耗时：P95 小于 2 秒（不含第三方授权页停留）。
-- 第三方登录取消、验证码超时、弱网重试必须可恢复，不重复创建主控账号或子账号。
-- 系统凭据 / passkey 入口未接好平台实现或服务端 challenge 时，必须结构化降级回手机号 OTP，不得出现空白按钮、死转圈或 crash。
-- 欢迎页路由、登录方式显隐、通讯录引导策略必须可灰度与回滚。
+- 上游能力：[`user-identity-profile-relationship`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-## 不做什么（Out of Scope）
-- 不在本节点细化子账号主页与关系网络内部结构。
-- 不在本节点设计完整增长奖励策略。
-- 不在本节点展开恢复工单与客服处置细节。
-- Apple 与 Passkey 仅保留未来扩展的防腐接口，当前不提供 App 入口、Remote Repository 方法或公开 HTTP 登录路由。
+## 7. 集成验收
 
-## 验收标准
-- A1：欢迎页能够按登录态、会话状态、子账号状态将用户送入正确入口与落点。
-- A2：手机号验证码、三网本机号一键、微信、支付宝、QQ 并行登录建立到同一 `OwnerAccount` 世界观中；系统凭据 / passkey 客户端能力位仅预留，Apple 不对外开放。
-- A3：新用户首次登录时可完成 `OwnerAccount` 与默认 `SubAccount` 建立；老用户可恢复已有子账号。
-- A4：多子账号用户登录后可以安全地选择、创建或恢复目标子账号。
-- A5：单子账号用户默认无感进入应用，多子账号用户不会误入错误子账号。
-- A6：通讯录授权属于可选 onboarding 步骤，不阻塞登录成功，但可在恰当时机引导并恢复。
-- A7：入口路由、登录态判断、请求上下文与 metadata 契约一致。
-- A8：对应自动化测试覆盖欢迎页、并行登录、子账号选择、弱网恢复与落点一致性。
+<a id="sit-001"></a>
+### SIT-001 onboarding and identity entry 能力 SIT
+
+- GIVEN 执行“onboarding and identity entry 能力”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“onboarding and identity entry 能力”对应动作。
+- THEN 直属 Story 共同交付“负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路”，失败终态可区分且不产生伪成功事实。
+- THEN 微信 / 支付宝 / QQ 原生登录入口、三网本机号一键入口、系统凭据入口的显隐和降级由 PlatformCapabilities 驱动，不依赖 UI 层平台判断。
+- THEN Android `Credential Manager` 与 iOS `AuthenticationServices / Password AutoFill` 的客户端接口与产品语义已预留，未开通时统一降级到手机号 OTP。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 商用登录正式凭据与受控 SDK 尚未注入发布密钥系统
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`track`
+- 影响或价值：仓库已经具备 fail-closed provider 契约与客户端入口，但微信、QQ、支付宝和三网本机号的生产凭据、受控 SDK 与供应商后台仍需外部主体开通；本地协议测试不能替代真实登录。
+- 完成判定：生产发布密钥系统注入四类正式 provider 凭据与受控 SDK，`prod-hosted` 真实网络真机完成登录、首登资料同步、失败恢复与回滚验证，并由 [`four-environment-commercial-login-maturity`](./four-environment-commercial-login-maturity/spec.md#gwt-001) 的直接 `spec_ref` 留证。
+- 依赖：微信/QQ/支付宝/运营商开发者主体、生产应用配置、受控 SDK、签名包与真机测试账号。
+
+<a id="open-002"></a>
+### OPEN-002 onboarding and identity entry 能力 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

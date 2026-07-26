@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"net/http"
@@ -19,16 +20,22 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
-	httpadapter "quwoquan_service/services/assistant-service/internal/adapters/http"
-	"quwoquan_service/services/assistant-service/internal/application"
-	preferencefact "quwoquan_service/services/assistant-service/internal/application/assistant/preference_fact"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/chatclient"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/creationgrounding"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/intersectionclient"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/messaging"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/notificationclient"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/searchclient"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/userprofile"
+	httpadapter "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/adapters/inbound/http"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/chatclient"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/creationgrounding"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/intersectionclient"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/messaging"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/notificationclient"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/scheduling"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/searchclient"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/userprofile"
+	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/application"
+)
+
+const (
+	dependencyHealthResponseDrainLimitBytes = 4 << 10
+	skillSubscriptionCronInterval           = time.Minute
 )
 
 func main() {
@@ -66,6 +73,28 @@ func run() error {
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
 		return fmt.Errorf("access token verifier invalid: %w", err)
+	}
+	accountSecurityAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"assistant-service",
+		[]string{"user.account.security.read"},
+	)
+	if err != nil {
+		return fmt.Errorf("account security authority credential init failed: %w", err)
+	}
+	accountSecurityAuthorityTimeout := time.Duration(
+		cfg.AccountSecurityAuthority.TimeoutMs,
+	) * time.Millisecond
+	accountSecurityAuthority, err := rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL:     cfg.AccountSecurityAuthority.BaseURL,
+			HTTPClient:  &http.Client{Timeout: accountSecurityAuthorityTimeout},
+			Credentials: accountSecurityAuthorityCredentials,
+			Timeout:     accountSecurityAuthorityTimeout,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("account security authority config invalid: %w", err)
 	}
 	addr := getenvOrDefault("ASSISTANT_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if addr == "" {
@@ -127,6 +156,9 @@ func run() error {
 	defer otelShutdown()
 
 	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("account_security_authority", func(hctx context.Context) error {
+		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
+	})
 	healthChecker.Register("redis", func(ctx context.Context) error {
 		return router.PingAll(ctx)
 	})
@@ -193,6 +225,13 @@ func run() error {
 	if err != nil {
 		return dependencyError("notification-service", "initialization", err)
 	}
+	healthChecker.Register("notification_service", func(ctx context.Context) error {
+		return checkServiceHealth(
+			ctx,
+			notificationObservedClient,
+			cfg.NotificationService.BaseURL,
+		)
+	})
 
 	newObservedEgressClient := func(sourceID string, timeoutMs int) *http.Client {
 		httpConfig := rthttp.DefaultHTTPClientFactoryConfig()
@@ -218,6 +257,34 @@ func run() error {
 			rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default()),
 		)
 	}
+	deliveryPolicyAuthorization, err :=
+		rtauth.NewHS256ServiceAuthorizationProvider(
+			accessTokenConfig,
+			"assistant-service",
+			[]string{"user.assistant_delivery_policy.read"},
+		)
+	if err != nil {
+		return dependencyError("user-service", "credentials", err)
+	}
+	deliveryPolicyHTTPClient := newObservedEgressClient(
+		"assistant-service.user-delivery-policy",
+		cfg.UserService.TimeoutMs,
+	)
+	deliveryPolicyReader, err := application.NewUserDeliveryPolicyClient(
+		cfg.UserService.BaseURL,
+		deliveryPolicyAuthorization,
+		deliveryPolicyHTTPClient,
+	)
+	if err != nil {
+		return dependencyError("user-service", "delivery-policy-reader", err)
+	}
+	healthChecker.Register("user_service", func(ctx context.Context) error {
+		return checkServiceHealth(
+			ctx,
+			deliveryPolicyHTTPClient,
+			cfg.UserService.BaseURL,
+		)
+	})
 	canonicalSearch, err := searchclient.New(
 		cfg.SearchService.BaseURL,
 		newObservedEgressClient(
@@ -294,6 +361,7 @@ func run() error {
 		application.WithEventPublisher(publisher),
 		application.WithNotificationAppMessageCommandWriter(notificationWriter),
 		application.WithSkillSubscriptionStore(deps.subscriptionStore),
+		application.WithAssistantDeliveryPolicyReader(deliveryPolicyReader),
 		application.WithConversationRunStore(deps.conversationRunStore),
 		application.WithPreferenceSnapshotReader(preferenceQueries),
 		application.WithCreationSuggestGrounding(creationGroundingClient),
@@ -302,7 +370,6 @@ func run() error {
 		application.WithIntersectionEvidenceReader(intersectionInbox),
 		application.WithAgentLoop(agentLoop),
 	}
-	chatGroundingEnabled := false
 	if userProfileBase := strings.TrimSpace(cfg.UserProfile.BaseURL); userProfileBase != "" {
 		interestReader := userprofile.NewClient(searchHTTPClient(cfg.UserProfile.TimeoutMs), userProfileBase)
 		assistantOpts = append(assistantOpts, application.WithProactiveInterestReader(interestReader))
@@ -310,13 +377,48 @@ func run() error {
 	} else {
 		log.Printf("assistant-service proactive interest profile reader disabled (no user_profile.base_url)")
 	}
-	if chatBase := strings.TrimSpace(cfg.ChatService.BaseURL); chatBase != "" {
-		assistantOpts = append(assistantOpts, application.WithChatGroundingClient(chatclient.NewClient(searchHTTPClient(cfg.ChatService.TimeoutMs), chatBase)))
-		chatGroundingEnabled = true
-		log.Printf("assistant-service chat grounding client enabled base=%s", chatBase)
-	} else {
-		log.Printf("assistant-service chat grounding client disabled (no chat_service.base_url)")
+	chatBase := strings.TrimSpace(cfg.ChatService.BaseURL)
+	if chatBase == "" {
+		return dependencyError(
+			"chat-service",
+			"configuration",
+			errors.New("chat_service.base_url is required"),
+		)
 	}
+	chatHTTPClient := newObservedEgressClient(
+		"assistant-service.chat-grounding",
+		cfg.ChatService.TimeoutMs,
+	)
+	chatAuthorization, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"assistant-service",
+		[]string{
+			"chat.assistant_delivery_membership.read",
+			"chat.assistant_grounding.read",
+			"chat.assistant_delivery_message.send",
+		},
+	)
+	if err != nil {
+		return dependencyError("chat-service", "credentials", err)
+	}
+	chatGroundingClient, err := chatclient.NewClient(
+		chatHTTPClient,
+		chatBase,
+		chatAuthorization,
+	)
+	if err != nil {
+		return dependencyError("chat-service", "initialization", err)
+	}
+	assistantOpts = append(
+		assistantOpts,
+		application.WithChatGroundingClient(
+			chatGroundingClient,
+		),
+	)
+	healthChecker.Register("chat_service", func(ctx context.Context) error {
+		return checkServiceHealth(ctx, chatHTTPClient, chatBase)
+	})
+	log.Printf("assistant-service chat grounding client enabled base=%s", chatBase)
 	service := application.NewAssistantService(
 		deps.eventStore,
 		deps.consentStore,
@@ -325,16 +427,31 @@ func run() error {
 	)
 	serviceCtx, serviceCancel := context.WithCancel(context.Background())
 	defer serviceCancel()
-	if chatGroundingEnabled {
-		consumer := messaging.NewAssistantMentionedConsumerWithTransport(
-			messageTransport,
-			service,
-			instanceID,
-			slog.Default(),
+	subscriptionScheduler, err := scheduling.NewSkillSubscriptionScheduler(
+		service,
+		skillSubscriptionCronInterval,
+		slog.Default(),
+	)
+	if err != nil {
+		return dependencyError(
+			"skill-subscription-scheduler",
+			"initialization",
+			err,
 		)
-		go consumer.Run(serviceCtx, 500*time.Millisecond)
-		log.Printf("assistant-service assistant mentioned consumer enabled stream=%s group=%s", messaging.AssistantMentionedStream, messaging.AssistantMentionedConsumerGroup)
 	}
+	go subscriptionScheduler.Run(serviceCtx)
+	log.Printf(
+		"assistant-service skill subscription scheduler enabled interval=%s",
+		skillSubscriptionCronInterval,
+	)
+	consumer := messaging.NewAssistantMentionedConsumerWithTransport(
+		messageTransport,
+		service,
+		instanceID,
+		slog.Default(),
+	)
+	go consumer.Run(serviceCtx, 500*time.Millisecond)
+	log.Printf("assistant-service assistant mentioned consumer enabled stream=%s group=%s", messaging.AssistantMentionedStream, messaging.AssistantMentionedConsumerGroup)
 	baseHandler := httpadapter.NewHandler(
 		service,
 		httpadapter.WithPreferenceFacades(
@@ -361,7 +478,8 @@ func run() error {
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
-			AccessTokenVerifier: accessVerifier,
+			AccessTokenVerifier:      accessVerifier,
+			AccountSecurityAuthority: accountSecurityAuthority,
 		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      assistantHTTPWriteTimeout(),
@@ -370,6 +488,40 @@ func run() error {
 	log.Printf("assistant-service listening on %s env=%s (rate_limit=1000/s)", addr, appEnv)
 	if err := rthttp.ListenAndServeGraceful(server, assistantShutdownTimeout()); err != nil {
 		return fmt.Errorf("listen failed: %w", err)
+	}
+	return nil
+}
+
+func checkServiceHealth(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+) error {
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		strings.TrimRight(strings.TrimSpace(baseURL), "/")+"/healthz",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if _, err := io.Copy(
+		io.Discard,
+		io.LimitReader(response.Body, dependencyHealthResponseDrainLimitBytes),
+	); err != nil {
+		return fmt.Errorf("read dependency health response: %w", err)
+	}
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf(
+			"dependency health status=%d",
+			response.StatusCode,
+		)
 	}
 	return nil
 }

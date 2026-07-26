@@ -103,8 +103,8 @@ def test_baidu_baike_html_adapter_fetches_public_entry_text(monkeypatch):
     body = (
         "<html><head><title>嵊州越剧小镇_百度百科</title></head>"
         "<body><h1>嵊州越剧小镇</h1>"
-        "<p>嵊州越剧小镇位于浙江省嵊州市，是越剧文化旅游目的地。</p>"
-        "<dl><dt>位置</dt><dd>浙江省嵊州市</dd></dl></body></html>"
+        "<p>嵊州越剧小镇位于test-region-a嵊州市，是越剧文化旅游目的地。</p>"
+        "<dl><dt>位置</dt><dd>test-region-a嵊州市</dd></dl></body></html>"
     ).encode("utf-8")
     requested_urls: list[str] = []
 
@@ -125,8 +125,8 @@ def test_baidu_baike_html_adapter_fetches_public_entry_text(monkeypatch):
     )
 
     assert result["runtime"]["rawFormat"] == "baidu_baike_html"
-    assert "嵊州越剧小镇位于浙江省嵊州市" in result["text"]
-    assert "位置" in result["text"] and "浙江省嵊州市" in result["text"]
+    assert "嵊州越剧小镇位于test-region-a嵊州市" in result["text"]
+    assert "位置" in result["text"] and "test-region-a嵊州市" in result["text"]
     assert len(requested_urls) == 1
     assert requested_urls[0].startswith("https://baike.baidu.com/item/")
 
@@ -330,7 +330,7 @@ def test_fetch_source_payload_uses_source_extractor_override():
         payload_mod._http_get_bytes = lambda url, timeout=20, max_bytes=0: (_ for _ in ()).throw(
             AssertionError("wikipedia_api should fetch API evidence directly")
         )
-        payload_mod.fetch_mediawiki_page_bundle_for_url = lambda _url: _mediawiki_bundle(
+        payload_mod.fetch_mediawiki_page_bundle_for_url = lambda _url, **_kwargs: _mediawiki_bundle(
             "维基导游专用正文",
             requested_title="雅安",
         )
@@ -387,10 +387,48 @@ def test_mediawiki_page_bundle_follows_image_continuation_without_silent_cap():
     assert len(seen) == 2
 
 
+def test_mediawiki_source_qualification_omits_image_inventory() -> None:
+    seen: list[dict] = []
+
+    def fake_api(_host: str, params: dict) -> dict:
+        seen.append(dict(params))
+        return {
+            "query": {
+                "pages": {
+                    "1": {
+                        "pageid": 1,
+                        "title": "测试景区",
+                        "extract": "测试景区稳定百科正文",
+                        "revisions": [
+                            {"revid": 2, "slots": {"main": {"*": "测试景区稳定百科正文"}}}
+                        ],
+                    }
+                }
+            }
+        }
+
+    original = mediawiki_mod.network_io.wiki_api
+    try:
+        mediawiki_mod.network_io.wiki_api = fake_api
+        bundle = mediawiki_mod.fetch_mediawiki_page_bundle(
+            "zh.wikipedia.org",
+            "测试景区",
+            include_images=False,
+        )
+    finally:
+        mediawiki_mod.network_io.wiki_api = original
+
+    assert bundle is not None
+    assert bundle.rendered_image_titles == ()
+    assert len(seen) == 1
+    assert seen[0]["prop"] == "extracts|revisions"
+    assert "imlimit" not in seen[0]
+
+
 def test_wikipedia_api_payload_only_carries_text_layout_not_second_image_path():
     orig_bundle = payload_mod.fetch_mediawiki_page_bundle_for_url
     try:
-        payload_mod.fetch_mediawiki_page_bundle_for_url = lambda _url: _mediawiki_bundle(
+        payload_mod.fetch_mediawiki_page_bundle_for_url = lambda _url, **_kwargs: _mediawiki_bundle(
             "== 概述 ==\n九寨沟正文段落。",
             wikitext="== 概述 ==\n九寨沟正文段落。\n[[File:Jiuzhaigou.jpg|thumb|五花海]]\n",
         )
@@ -496,7 +534,7 @@ def test_static_official_plaintext_reads_public_spa_bundle_copy():
 def test_static_official_plaintext_reads_commented_meta_description():
     shell = """
     <html><head>
-    <!-- <meta name="description" content="金华双龙风景旅游区位于浙江省金华市北郊的金华山麓，是国家首批AAAA级旅游景区、国家级风景名胜区和国家森林公园。"> -->
+    <!-- <meta name="description" content="金华双龙风景旅游区位于test-region-a金华市北郊的金华山麓，是国家首批AAAA级旅游景区、国家级风景名胜区和国家森林公园。"> -->
     </head><body>景区公告</body></html>
     """
 
@@ -506,7 +544,7 @@ def test_static_official_plaintext_reads_commented_meta_description():
         text = fetch_mod._static_official_plaintext("http://www.shuanglongdong.com/")
     finally:
         fetch_mod._curl_get_text = orig_curl
-    assert "金华双龙风景旅游区位于浙江省金华市北郊" in text
+    assert "金华双龙风景旅游区位于test-region-a金华市北郊" in text
     assert "国家级风景名胜区" in text
 
 

@@ -15,7 +15,7 @@ func main() {
 	var metadataDir string
 	var outputDir string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
-	flag.StringVar(&outputDir, "output-dir", "services/platform-ops-service/internal", "platform-ops internal output directory")
+	flag.StringVar(&outputDir, "output-dir", "control-plane/platform-ops/generated/platform_ops/config_snapshot", "platform-ops generated object directory")
 	flag.Parse()
 
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
@@ -23,7 +23,7 @@ func main() {
 		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
 	}
 	var errorsFile contractcodegen.ErrorsFile
-	const sourcePath = "ops/config_layer/errors.yaml"
+	const sourcePath = "ops/platform_ops/config_snapshot/errors.yaml"
 	if err := source.Decode(sourcePath, &errorsFile); err != nil {
 		exitErr(fmt.Errorf("load %s: %w", sourcePath, err))
 	}
@@ -36,7 +36,7 @@ func main() {
 	if err != nil {
 		exitErr(fmt.Errorf("gofmt generated errors: %w", err))
 	}
-	outPath := filepath.Join(outputDir, "generated", "errors.go")
+	outPath := filepath.Join(outputDir, "errors.go")
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		exitErr(err)
 	}

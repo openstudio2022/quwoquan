@@ -1,0 +1,59 @@
+api_routes:
+- method: POST
+  path: /ops/recovery-failures
+  operation: ReportRecoveryFailure
+  actor: device
+  application:
+    kind: command
+    facet: RecoveryFailureCommandFacade
+    method: reportRecoveryFailure
+    writer: ExistingRuntimeLogStore
+    slice: RecoveryFailure
+  authorization:
+    principal: public
+    ownership_policy: anonymous_recovery_write
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 1
+    idempotency: payload_digest_server_side
+  error_codes:
+  - OPS.USER.recovery_failure_invalid
+  - OPS.SYSTEM.recovery_failure_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: PUBLIC
+    log_policy: redacted
+  telemetry:
+    metric: ops_recovery_failure_ingest
+    trace: false
+    attributes: [platform, errorSource, outcome]
+  slo:
+    latency_p95_ms: 800
+    availability_percent: 99.9
+  description: 严格接收单条十字段恢复异常；匿名限流，服务端计算幂等摘要并复用现有 runtime log store。
+  security:
+    auth_mode: optional
+    principal: public
+    token_transport: none
+    anonymous_policy: allow
+    visibility: public
+consumers:
+- name: app
+  capabilities: [report_recovery_failure]
+contract_test:
+  mock_strategy:
+    app_side:
+      scenarios:
+      - name: offline_queue
+        route: POST /ops/recovery-failures
+        assertions: [non_blocking, retry_on_next_opportunity]
+    service_side:
+      description: 严格十字段、未知字段拒绝、敏感信息二次脱敏并复用现有日志存储。
+      scenarios:
+      - name: exact_recovery_failure
+        command: ReportRecoveryFailure
+        assertions: [status_2xx, exact_input_fields, existing_runtime_log_store]

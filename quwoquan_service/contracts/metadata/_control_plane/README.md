@@ -4,8 +4,8 @@
 
 ## 与 `_shared` 的关系
 
-- `_shared/portal_shell.yaml`
-- `_shared/portal_menu.yaml`
+- `_control_plane/portal_shell.yaml`
+- `_control_plane/portal_menu.yaml`
 - `_shared/control_plane.yaml`
 - `_shared/config_schema.yaml`
 - `_shared/workflow.yaml`
@@ -36,7 +36,7 @@
 - 内容可抽象为跨域公共语义，而不是某个控制面的具体业务对象
 - 字段、枚举、命名与 codegen 目标已冻结
 - 不依赖某个具体门户页面、路由实现或当前部署拓扑
-- 对应 `spec.md / design.md / acceptance.yaml` 已明确引用和验收
+- 对应 `spec.md / design.md` 已通过 REQ/SIT/GWT 明确引用和验收
 
 ## 当前建议
 

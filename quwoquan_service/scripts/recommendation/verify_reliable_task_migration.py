@@ -14,8 +14,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-CURRENT_CHAT_SCHEDULER = ROOT / "quwoquan_service/services/chat-service/internal/application/group_avatar_recompute_scheduler.go"
-CATALOG = ROOT / "quwoquan_ops/environments/reliable_task_module_catalog.yaml"
+CURRENT_CHAT_SCHEDULER = ROOT / "quwoquan_service/services/chat-service/internal/chat/conversation/application/group_avatar_recompute_scheduler.go"
+CATALOG = ROOT / "quwoquan_service/runtime/reliabletask/resources/module_catalog.yaml"
 CHAT_SERVICE = ROOT / "quwoquan_service/services/chat-service"
 
 

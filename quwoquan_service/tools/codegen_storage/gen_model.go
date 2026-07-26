@@ -78,7 +78,7 @@ func generateModels(ctx *genContext) error {
 }
 
 func generatePGModel(ctx *genContext, entityName string, table TableDef) error {
-	dir := filepath.Join(ctx.outputDir(), "domain", ctx.source.domainPath(), "model")
+	dir := filepath.Join(ctx.outputDir(), "contract", ctx.source.domainPath())
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func generatePGModel(ctx *genContext, entityName string, table TableDef) error {
 }
 
 func generateMongoModel(ctx *genContext, entityName string) error {
-	dir := filepath.Join(ctx.outputDir(), "domain", ctx.source.domainPath(), "model")
+	dir := filepath.Join(ctx.outputDir(), "contract", ctx.source.domainPath())
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}

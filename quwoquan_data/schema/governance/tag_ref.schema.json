@@ -6,8 +6,8 @@
   "type": "string",
   "pattern": "^(Topic|Audience|Format|Entity)/[\\w\\u4e00-\\u9fa5\\-\\.]+(/[\\w\\u4e00-\\u9fa5\\-\\.]+)*$",
   "examples": [
-    "Topic/地理/行政区/中国/四川省/成都市",
-    "Topic/主题/美食餐饮/菜系/中国菜系/川菜",
+    "Topic/地理/行政区/国家/一级行政区/城市",
+    "Topic/主题/美食餐饮/菜系/国家菜系/示例菜系",
     "Audience/用户/兴趣偏好/美食",
     "Format/内容角度/攻略",
     "Format/内容载体/视频/短视频",

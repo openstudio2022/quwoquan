@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"quwoquan_service/internal/testsupport/contractsview"
 )
 
 func TestValidateAssistantEnumDefaultsRejectsMissingParserDefault(t *testing.T) {
@@ -54,8 +56,8 @@ func TestGenerateAssistantRuntimeEnumsGoWritesAndChecksExplicitServiceOutput(
 	t *testing.T,
 ) {
 	output := filepath.Join(t.TempDir(), "assistant_runtime_enums.g.go")
-	metadataDir := filepath.Join("..", "..", "contracts", "metadata")
-	if err := initializeContractGraph(metadataDir); err != nil {
+	metadataDir := contractsview.Build(t)
+	if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
 		t.Fatalf("initialize ContractGraph metadata source: %v", err)
 	}
 	if err := generateAssistantRuntimeEnumsGo(metadataDir, output, false); err != nil {

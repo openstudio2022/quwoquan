@@ -25,21 +25,23 @@ SMOKE_TEST = (
     "test/api_integration/ui/intersection/"
     "intersection_remote_smoke__api_integration_test.dart"
 )
-SEED_BOX_ROOT = REPO_ROOT / "quwoquan_service" / "services" / "seed-box" / "scripts"
+CONTENT_JOBS_ROOT = (
+    REPO_ROOT / "quwoquan_service" / "services" / "content-service" / "cmd" / "jobs"
+)
 REQUIRED_SEEDS = (
     (
         "content-social-graph-seed-report.json",
-        SEED_BOX_ROOT / "apply_content_social_graph_seed.py",
+        CONTENT_JOBS_ROOT / "seed-social-graph" / "main.py",
         True,
     ),
     (
         "content-object-cards-seed-report.json",
-        SEED_BOX_ROOT / "apply_content_object_cards_seed.py",
+        CONTENT_JOBS_ROOT / "seed-object-cards" / "main.py",
         True,
     ),
     (
         "content-moment-channel-seed-report.json",
-        SEED_BOX_ROOT / "apply_content_moment_channel_seed.py",
+        CONTENT_JOBS_ROOT / "seed-moment-channel" / "main.py",
         False,
     ),
 )

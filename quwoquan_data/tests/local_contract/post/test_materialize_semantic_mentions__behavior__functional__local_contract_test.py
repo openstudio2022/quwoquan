@@ -12,7 +12,7 @@ from core.io import write_json  # noqa: E402
 import content.post.materialize_contract as materialize  # noqa: E402
 
 
-EXECUTION_ID = "20260711--travel-article-semantic-mentions--cn-sichuan--canary-001"
+EXECUTION_ID = "20260711--travel-article-semantic-mentions--test-region-b--pilot-001"
 
 
 def test_resolve_semantic_mentions_merges_sidecar_into_manifest(tmp_path: Path, monkeypatch) -> None:

@@ -1,0 +1,15 @@
+backend: mongodb
+role: append_only
+collections:
+  external_provider_attempt_ledger:
+    entity: ExternalInteractionAttempt
+    indexes:
+    - name: idx_ext_attempt_request_created
+      keys:
+        requestId: 1
+        createdAt: 1
+    - name: idx_ext_attempt_operation_provider_status
+      keys:
+        operation: 1
+        provider: 1
+        status: 1

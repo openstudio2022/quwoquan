@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md#gwt-001
+
 import 'dart:async';
 
 import 'package:crypto/crypto.dart';
@@ -207,7 +209,6 @@ void main() {
 
         expect(uploaded.sessionId, 'session_1');
         expect(uploaded.assetId, 'video_asset_1');
-        expect(uploaded.cdnUrl, isNull);
         expect(media.completedSessions, <String>['session_1']);
         expect(media.abortedSessions, isEmpty);
       },
@@ -274,6 +275,60 @@ void main() {
     );
 
     test(
+      'expired durable grant aborts once and starts a new attempt',
+      () async {
+        final media = RecordingContentMediaFacet(
+          uploadExpirations: <DateTime>[DateTime.utc(2000), DateTime.utc(2030)],
+        );
+        final coordinator = ContentMediaUploadCoordinator(media: media);
+        const bytes = <int>[4, 3, 2, 1];
+        final digest = sha256.convert(bytes).toString();
+        final initial = ContentMediaPreparationCheckpoint.forSource(
+          preparationIdentity: 'draft-expired-recovery',
+          slot: 'video:0',
+          mediaType: ContentMediaType.video,
+          sha256Digest: digest,
+        );
+        final expired = await media.initUpload(
+          InitContentMediaUploadCommand(
+            mediaType: ContentMediaType.video,
+            contentType: 'video/mp4',
+            fileSize: bytes.length,
+            expectedSha256: digest,
+          ),
+          ContentMediaUploadCommandContext(
+            idempotencyKey: initial.initIdempotencyKey,
+          ),
+        );
+        var durable = initial.copyWith(
+          sessionId: expired.sessionId,
+          expiresAt: expired.expiresAt,
+          phase: ContentMediaPreparationPhase.uploading,
+        );
+
+        final uploaded = await coordinator.uploadPreparedSource(
+          source: PreparedContentMediaSource(
+            fileSize: bytes.length,
+            sha256Digest: digest,
+            openRead: () => Stream<List<int>>.value(bytes),
+          ),
+          mediaType: ContentMediaType.video,
+          contentType: 'video/mp4',
+          uploadStream: _drainUpload,
+          checkpoint: durable,
+          onCheckpoint: (updated) async => durable = updated,
+        );
+
+        expect(media.abortedSessions, <String>['session_1']);
+        expect(media.completedSessions, <String>['session_2']);
+        expect(uploaded.sessionId, 'session_2');
+        expect(durable.attempt, 1);
+        expect(durable.isCompleted, isTrue);
+        expect(media.initIdempotencyKeys.toSet(), hasLength(2));
+      },
+    );
+
+    test(
       'unreconciled complete failure requests authoritative session cleanup',
       () async {
         final media = RecordingContentMediaFacet(
@@ -334,6 +389,52 @@ void main() {
 
         expect(media.completedSessions, <String>['session_1', 'session_1']);
         expect(media.abortedSessions, <String>['session_1']);
+      },
+    );
+
+    test(
+      'lost discard response resumes from deleting with the same key',
+      () async {
+        final media = RecordingContentMediaFacet(
+          loseFirstDiscardResponse: true,
+        );
+        final coordinator = ContentMediaUploadCoordinator(media: media);
+        var durable =
+            ContentMediaPreparationCheckpoint.forSource(
+              preparationIdentity: 'draft-discard',
+              slot: 'image:0',
+              mediaType: ContentMediaType.image,
+              sha256Digest: sha256.convert(const <int>[1]).toString(),
+            ).copyWith(
+              sessionId: 'session-discard',
+              assetId: 'asset-discard',
+              phase: ContentMediaPreparationPhase.completed,
+            );
+
+        await expectLater(
+          coordinator.cancelPreparedCheckpoint(
+            durable,
+            onCheckpoint: (checkpoint) async {
+              durable = checkpoint;
+            },
+          ),
+          throwsA(isA<StateError>()),
+        );
+        expect(durable.phase, ContentMediaPreparationPhase.deleting);
+
+        final recovered = await coordinator.cancelPreparedCheckpoint(
+          durable,
+          onCheckpoint: (checkpoint) async {
+            durable = checkpoint;
+          },
+        );
+
+        expect(recovered.phase, ContentMediaPreparationPhase.deleted);
+        expect(durable.phase, ContentMediaPreparationPhase.deleted);
+        expect(media.discardCommands, hasLength(2));
+        expect(media.discardIdempotencyKeys.toSet(), <String>{
+          durable.discardIdempotencyKey,
+        });
       },
     );
   });

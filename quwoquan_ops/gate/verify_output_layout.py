@@ -41,7 +41,7 @@ OPAQUE_DISPOSABLE_CACHE_DIRS = frozenset(
 )
 FORBIDDEN_LOCAL_TARGETS = frozenset({"python-envs", "python-test-deps", "toolchains"})
 FORBIDDEN_OUTPUT_FILE_NAME = re.compile(
-    r"(?i)(?:^\.env(?:\.|$)|(?:^|[._-])(?:config|configuration|secret|credential|certificate|tls|pki)(?:[._-]|$)|caddyfile$|(?:\.pem|\.key|\.crt|\.p12|\.pfx)$)"
+    r"(?i)(?:(?:^|\.)env(?:\.|$)|(?:^|[._-])(?:config|configuration|secret|credential|certificate|tls|pki)(?:[._-]|$)|caddyfile$|(?:\.pem|\.key|\.crt|\.p12|\.pfx)$)"
 )
 SECRET_ASSIGNMENT = re.compile(
     r"(?i)\b(?:api[_-]?key|secret|password|token|private[_-]?key|credential)s?\b"
@@ -66,6 +66,18 @@ EXPECTED_OUTPUT_CONSUMPTION = {
     "same_execution_stage",
     "verification_evidence",
 }
+PROCESS_STATE_RECORD_KEYS = frozenset(
+    {
+        "name",
+        "pid",
+        "pgid",
+        "wrapper_pid",
+        "owner_id",
+        "log",
+        "cwd",
+        "started_at",
+    }
+)
 
 
 def _rel(path: Path) -> str:
@@ -169,6 +181,43 @@ def output_layout_issues(root: Path | None = None) -> list[str]:
     return issues
 
 
+def _is_runtime_process_state_record(candidate: Path, output_root: Path) -> bool:
+    """Accept only the supervisor's fixed-schema, non-secret process records."""
+    try:
+        relative = candidate.relative_to(output_root)
+    except ValueError:
+        return False
+    if (
+        len(relative.parts) != 7
+        or relative.parts[0] != "env"
+        or relative.parts[1] not in {"alpha", "beta", "gamma", "prod", "repo"}
+        or relative.parts[2] != "local"
+        or relative.parts[4:6] != ("process", "processes")
+        or candidate.suffix != ".env"
+    ):
+        return False
+
+    try:
+        pairs = [
+            line.split("=", maxsplit=1)
+            for line in candidate.read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+    except (OSError, ValueError):
+        return False
+    if any(len(pair) != 2 for pair in pairs):
+        return False
+    records = {key: value for key, value in pairs}
+    if len(records) != len(pairs):
+        return False
+    if set(records) != PROCESS_STATE_RECORD_KEYS:
+        return False
+    return (
+        records["name"] == candidate.stem
+        and all(records[key].isdigit() for key in ("pid", "pgid", "wrapper_pid", "started_at"))
+    )
+
+
 def output_source_truth_issues(root: Path) -> list[str]:
     """Reject reusable configuration, certificate and unredacted secret material."""
     issues: list[str] = []
@@ -190,12 +239,14 @@ def output_source_truth_issues(root: Path) -> list[str]:
         dirnames[:] = retained
         for filename in filenames:
             candidate = current_path / filename
-            if FORBIDDEN_OUTPUT_FILE_NAME.search(filename):
+            if FORBIDDEN_OUTPUT_FILE_NAME.search(filename) and not _is_runtime_process_state_record(
+                candidate,
+                root,
+            ):
                 issues.append(
                     f"{_rel(candidate)}: deployment configuration, TLS or secret material "
                     "is forbidden under disposable output"
                 )
-                continue
             if candidate.suffix.lower() not in INSPECTED_OUTPUT_TEXT_SUFFIXES:
                 continue
             try:

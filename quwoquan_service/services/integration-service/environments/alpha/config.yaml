@@ -1,0 +1,38 @@
+overrides:
+  sys.integration-service.account_security_authority.base_url: http://127.0.0.1:18081
+  sys.integration-service.account_security_authority.timeout_ms: 300
+  sys.integration-service.redis.rec.addr: 127.0.0.1:6379
+secretRefs:
+  sys.integration-service.integration.external_interaction.callback_secret: INTEGRATION_CALLBACK_SECRET
+  sys.integration-service.integration.external_interaction.push.apns.key_file: INTEGRATION_PUSH_APNS_KEY_FILE
+  sys.integration-service.integration.external_interaction.push.fcm.service_account_file: INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE
+  sys.integration-service.integration.external_interaction.sms.token: INTEGRATION_SMS_TOKEN
+  sys.integration-service.mongodb.uri: INTEGRATION_MONGO_URI
+externalBindings:
+  identity.sms.otp:
+    state: enabled
+    adapter: ext.sms.local_capture
+    endpointRef: environment_binding:integration.sms_fixture
+    endpointEnvs:
+      endpoint: INTEGRATION_SMS_FIXTURE_ENDPOINT
+    secretRefs:
+    - INTEGRATION_SMS_FIXTURE_TOKEN
+    timeoutMs: 1000
+  integration.push.delivery:
+    state: enabled
+    adapter: ext.push.local_recorder
+    endpointRef: environment_binding:integration.push_fixture
+    endpointEnvs:
+      user_service_base_url: INTEGRATION_PUSH_FIXTURE_USER_SERVICE_BASE_URL
+    secretRefs:
+    - INTEGRATION_PUSH_FIXTURE_HMAC_KEY
+    timeoutMs: 1000
+  integration.location.lookup:
+    state: enabled
+    adapter: ext.map.protocol_fixture
+    endpointRef: environment_binding:integration.location_fixture
+    endpointEnvs:
+      base: INTEGRATION_LOCATION_FIXTURE_BASE_URL
+    secretRefs:
+    - INTEGRATION_LOCATION_FIXTURE_AK
+    timeoutMs: 1000

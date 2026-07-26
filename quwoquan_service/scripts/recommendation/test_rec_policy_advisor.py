@@ -101,7 +101,14 @@ def test_guardrail_rejects_non_suggest_only_action(tmp_path):
 def test_real_policy_yaml_loads_suggest_only():
     repo_root = os.path.abspath(os.path.join(_HERE, "..", ".."))
     policy_path = os.path.join(
-        repo_root, "contracts", "metadata", "recommendation", "rec_model", "policy.yaml"
+        repo_root,
+        "services",
+        "content-service",
+        "resources",
+        "policies",
+        "content",
+        "post",
+        "recommendation_policy.yaml",
     )
     version, default_preset, guardrails = advisor.load_guardrails(policy_path)
     assert version

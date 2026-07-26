@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
 
@@ -33,12 +34,12 @@ abstract final class CitationDestinationResolver {
   CitationDestinationResolver._();
 
   static ResolvedCitationDestination? resolve(CitationDestination destination) {
-    switch (destination.kind?.trim()) {
-      case 'internal':
+    switch (destination.kind) {
+      case CitationDestinationKind.internal:
         return _resolveInternal(destination);
-      case 'external':
+      case CitationDestinationKind.external:
         return _resolveExternal(destination);
-      default:
+      case CitationDestinationKind.unknown:
         return null;
     }
   }
@@ -75,11 +76,57 @@ abstract final class CitationDestinationResolver {
   ) {
     final uri = Uri.tryParse(destination.url?.trim() ?? '');
     if (uri == null ||
-        !uri.isAbsolute ||
+        !uri.hasScheme ||
         uri.host.isEmpty ||
         uri.scheme.toLowerCase() != 'https') {
       return null;
     }
-    return ExternalCitationDestination(uri.replace(fragment: ''));
+    return ExternalCitationDestination(uri.removeFragment());
   }
+}
+
+/// 把未定型 transport object 收口为 canonical citation destination。
+CitationDestination citationDestinationFromWireObject(Object? raw) {
+  if (raw is! Map) {
+    throw const FormatException('citation destination must be an object');
+  }
+  final object = <String, Object?>{};
+  for (final entry in raw.entries) {
+    if (entry.key is! String) {
+      throw const FormatException('citation destination keys must be strings');
+    }
+    object[entry.key as String] = entry.value;
+  }
+  return CitationDestination(
+    kind: parseCitationDestinationKindStrict((object['kind'] ?? '').toString()),
+    objectTypeRef: object['objectTypeRef']?.toString(),
+    objectId: object['objectId']?.toString(),
+    url: object['url']?.toString(),
+  );
+}
+
+/// 引用去重 key 的唯一入口。非法 destination 返回空字符串，调用方必须丢弃，
+/// 不得退回 title/source 形成不可导航的第二引用契约。
+String citationReferenceKey(
+  CitationDestination destination, {
+  String source = '',
+  String title = '',
+}) {
+  final resolved = CitationDestinationResolver.resolve(destination);
+  if (resolved is ExternalCitationDestination) {
+    return resolved.uri.toString();
+  }
+  if (resolved is InternalCitationDestination) {
+    return '${resolved.objectTypeRef}:${resolved.objectId}';
+  }
+  return '';
+}
+
+/// 只有 destination 可解析时才允许展示或交互。
+bool hasUsableCitationDestination(
+  CitationDestination destination, {
+  String title = '',
+  String source = '',
+}) {
+  return CitationDestinationResolver.resolve(destination) != null;
 }

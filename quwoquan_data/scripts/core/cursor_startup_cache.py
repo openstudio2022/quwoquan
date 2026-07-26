@@ -5,6 +5,7 @@ import json
 import time
 from pathlib import Path
 
+from core.cursor_model import CursorModelSelection
 from core.cursor_startup_probe import cursor_startup_probe
 from core.paths import DATA_LOCAL_ROOT
 from core.runtime_policy import active_runtime_policy
@@ -19,13 +20,14 @@ def cursor_startup_probe_cache_path() -> Path:
 
 def cached_cursor_startup_probe(
     *,
-    model: str,
+    model: str | CursorModelSelection,
     runtime: str,
     timeout_seconds: float,
 ) -> dict:
     """Reuse only a recent successful probe from the disposable repo cache."""
     ttl = active_runtime_policy().cursor_startup_probe_cache_ttl_seconds
-    cache_key = f"{model}::{runtime}"
+    selection = CursorModelSelection.from_value(model)
+    cache_key = f"{selection.cache_key()}::{runtime}"
     cache_path = cursor_startup_probe_cache_path()
     if ttl > 0 and cache_path.is_file():
         try:
@@ -43,7 +45,7 @@ def cached_cursor_startup_probe(
         except (OSError, ValueError, TypeError):
             pass
     report = cursor_startup_probe(
-        model=model,
+        model=selection,
         runtime=runtime,
         timeout_seconds=timeout_seconds,
     )

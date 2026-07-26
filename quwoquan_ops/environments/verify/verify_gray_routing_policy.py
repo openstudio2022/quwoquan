@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """灰度路由策略门禁。
 
-校验 quwoquan_ops/environments/gray_routing_policy.yaml：
+校验 quwoquan_ops/environments/prod/rollout/routing_policy.yaml：
 - schema 完整（enabled/grayUpstream/stageDimensions 四维列表）；
 - carriers 只允许四大运营商枚举；provinces 必须是 GB/T 2260 六位省级码；
 - appVersions 必须是 semver 形式；userIds 非空字符串；
@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-POLICY_PATH = ROOT / "quwoquan_ops/environments/gray_routing_policy.yaml"
+POLICY_PATH = ROOT / "quwoquan_ops/environments/prod/rollout/routing_policy.yaml"
 
 ALLOWED_CARRIERS = {"chinamobile", "chinaunicom", "chinatelecom", "chinabroadnet"}
 PROVINCE_PATTERN = re.compile(r"^[1-9][0-9]{5}$")

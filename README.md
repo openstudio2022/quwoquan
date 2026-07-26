@@ -9,8 +9,8 @@ quwoquan_app/       Flutter App 工程，拥有 App 配置、发布规则、App 
 quwoquan_service/   服务端工程，拥有服务契约、服务配置、服务部署模板和服务观测片段。
 quwoquan_data/      数据工程，拥有可复用的内容家族、模板、提示词、发布真相源和数据发布规则。
 quwoquan_ops/       Ops 横切控制面，拥有 stackctl、gate、CI、环境拓扑、策略、全局可观测和 Ops Portal。
-specs/              当前产品、架构、特性树、验收与 changelog 的唯一规格体系。
-docs/               长期工程说明、Codex 工作流、外部依赖登记和正式风险 backlog；不承载功能规格真相源。
+specs/              当前产品、架构、特性树与验收的唯一规格体系；不维护 changelog、registry 或 backlog。
+docs/               少量长期工程说明；不承载命令协议、功能规格、状态台账或风险清单。
 .github/            CI 工作流入口。
 .qwq_output/        gitignored；唯一运行输出根，不是配置或状态真相源。
 ```
@@ -58,4 +58,4 @@ bash quwoquan_ops/gate/gate_repo.sh
 - 未经明确批准，不允许创建、提交或推送其他分支。
 - 本地执行 `bash quwoquan_ops/gate/scaffold/install-hooks.sh` 后，`pre-commit` 和 `pre-push` 会阻断非白名单分支；repo gate 也会对本地/远端分支做同样校验。
 
-规格入口见 `specs/README.md`，文档边界见 `docs/README.md`，Codex 执行约束见 `AGENTS.md` 与 `docs/codex_workflow.md`。
+规格入口见 `specs/feature-tree/README.md`，Codex/Cursor 执行约束见 `AGENTS.md` 与 `.cursor/commands/*.md`。

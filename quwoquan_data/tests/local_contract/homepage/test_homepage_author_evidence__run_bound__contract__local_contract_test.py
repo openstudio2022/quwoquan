@@ -21,7 +21,7 @@ from governance.coverage.entity_extract import entity_ref  # noqa: E402
 
 
 def test_homepage_author_evidence_binds_real_cursor_run_and_page(tmp_path: Path) -> None:
-    execution_id = "20260715--travel-homepage-stage-evidence--cn-zhejiang--canary-001"
+    execution_id = "20260715--travel-homepage-stage-evidence--test-region-a--pilot-001"
     object_ref = entity_ref("地点", "景区", "测试景区")
     draft_dir = tmp_path / "4.draft"
     draft_dir.mkdir(parents=True)

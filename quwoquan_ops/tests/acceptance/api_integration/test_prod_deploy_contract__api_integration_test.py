@@ -12,7 +12,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[4]
-ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
+ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 
 PLANE_KEY_HINTS = (
     "PROD_SSH_KEY_DIR",

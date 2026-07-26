@@ -12,7 +12,18 @@ import pytest
 
 from core import prompt_render as pr
 
-FAMILIES = ("article_author", "entity_homepage", "image_curation", "review_repair")
+FAMILIES = pr.declared_prompt_names()
+
+
+def test_declared_prompt_contract_matches_template_triplets():
+    discovered: set[str] = set()
+    for path in pr.PROMPTS_ROOT.glob("*/*.system.md"):
+        name = path.name.removesuffix(".system.md")
+        if (path.parent / f"{name}.task.md").is_file() and (
+            path.parent / f"{name}.vars.yaml"
+        ).is_file():
+            discovered.add(name)
+    assert discovered == set(FAMILIES)
 
 
 def _required_dummy(name: str) -> tuple[dict, dict]:

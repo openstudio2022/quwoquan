@@ -1,131 +1,274 @@
-# L3 特性：post-create-update
+# L3 Story：内容创建更新 (`post-create-update`)
 
-## 功能说明
+> 所属能力：[`publish-comment-reaction`](../spec.md)
+
+> Journey / Scenario：[`JNY-003 / SCN-008`](../../../spec.md#scn-008)
+
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
+
+## 1. 用户价值
+
+作为内容创作者或浏览者，
+我希望从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布，
+从而完成可恢复的内容创作、发现或互动。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- “内容创建更新”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 图片作品从相册选择、拍摄、编辑、排序、完成回填到发布的端侧主链路。
+- 图片发布远端媒体上传、完成、绑定、发布与展示回读契约。
+- 全局照片/视频入口按发布目标进入图片或视频发布子流程，最终 payload 语义互斥。
+- 视频作品从相册选择、拍摄、选封面、完成回填到发布的端侧主链路。
+- 视频封面字段、封面策略、远端发布 payload 与发布后 feed 回读契约。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 内容创建更新
+
+- 从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布。
+
+<a id="req-002"></a>
+### REQ-002 图片拍摄为高保黑色拍照确认流并统一进图片编辑页
+
+- 从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布。
+
+<a id="req-003"></a>
+### REQ-003 图片发布以本地草稿和一次性 PublishIntent 可靠提交
+
+- 草稿必须自动保存；显式放弃后不得恢复，崩溃重启后可恢复未放弃草稿。
+- 同一 `PublishIntent` 在并发重复或响应丢失后最多创建一个 Post，并返回原回执。
+- 发布恢复成功后无需用户再次点击，页面直接进入发布结果并可回读内容。
+- 尚未被服务端接受的发布意图被取消时，未完成上传必须先完成权威 abort 对账，已完成且未被 Post 引用的 MediaAsset 必须经 owner 命令逻辑删除并由耐久 worker 回收对象；任一步未确认都必须保留本地任务继续恢复。
+
+<a id="req-004"></a>
+### REQ-004 视频选择与拍摄进入深色视频选封面主链路
+
+- 相册视频与拍摄视频均能进入统一视频编辑状态，包含 `videoPath`、`durationMs` 和默认封面候选。
+
+<a id="req-005"></a>
+### REQ-005 视频选封面与一次性 PublishIntent 使用同源远端封面契约
+
+- Mock 与 Remote 必须使用同一视频 payload；远端创建与回读必须保留同一视频与封面身份。
+
+<a id="req-006"></a>
+### REQ-006 数据工程视频导入与用户上传视频使用同一封面展示契约
+
+- 数据工程导入视频与用户上传视频必须生成同一展示契约，App 不得按来源维护第二套字段。
+
+<a id="req-007"></a>
+### REQ-007 建立四类内容（微趣/美图/视频/文章）统一创作与发布契约，补齐端云发布链路
+
 - 建立四类内容（微趣/美图/视频/文章）统一创作与发布契约，补齐端云发布链路。
-- 完成权限语义简化：仅 `public/private`；圈子只作为分发关系，不再作为可见性维度。
 - 支持作者在发布后变更圈子分发关系（追加/移除），但内容本体不可修改（仅允许删除）。
-- 明确作者主动分发与用户转发分离建模，并在删除时做级联下架。
-- 引入已删除墓碑库，确保 URL 访问可区分“已删除”与“内容不存在”。
-
-## 范围
-- `content/post` 元数据（aggregate/fields/storage/service/events/errors）补齐。
-- 文章摘要与插图能力补齐（标题必填、summary 生成后可编辑、插图可选）。
-- 媒体上传与处理契约补齐（上传会话、首帧封面、手工封面、元数据提取）。
-- 端侧 codegen 契约同步（writable fields、路由、错误码）。
-- 子节点 `create-entry-location-visibility-circle` 负责补齐创作页“位置/公开/圈子选择”入口交互与 payload 映射。
-- 本节点当前不包含“更多功能按钮反馈”闭环能力（明确排除）。
-
-## 图片作品商用创作链路（2026-06-22 冻结）
-
-本节点承接“用户从手机相册或相机创建图片作品”的端到端商用主链路。图片作品发布不只是 `CreatePost` API 成功，而必须覆盖用户可感知的选图、拍摄、编辑、完成回填、上传绑定、发布和展示回读。
-
-### 入口与路由
-
-- 图片作品入口使用现有 `create-entry` / `create` 路由体系，不新增第二套路由真相源。
-- 全局 `/create?type=gallery` 为照片发布入口，打开图片选择器，允许从相册选照片或拍照后进入图片发布子流程；图片专用追加/深链仍使用 `MediaPickerEntryMode.image`。
-- 全局 `/create?type=capture` 仅作为旧相机/深链兼容入口，拍照后进入图片发布子流程；图片专用调用仍使用 `CameraCaptureModePolicy.photoOnly`；`/create/edit-image` 继续作为图片编辑深链。
 - 图片与视频必须在选择结果、编辑页和发布 payload 上保持互斥：一键成片属于图片路径，完成后仍进入图片创作壳；视频路径不得展示一键成片或复用图片下一步按钮语义。
 - 用户可见文案必须来自 `UITextConstants` 或 l10n；新增中文不得散落在页面实现中。
-
-### 图片选择器
-
-- 页面为深色 iOS 全屏选择态，顶部工具栏包含返回按钮与居中“图片选择”标题；标题可下拉打开相册目录。
-- 相册目录展示手机相册图片目录，包含封面、名称、数量和选中态；切换目录后宫格只展示该目录图片。
-- 宫格首项固定为“拍摄”；其余图片按最近添加优先三列展示，网格选择态为右上角空心圆，选中后显示蓝色顺序编号。
-- 宫格图片再次点击可取消；取消后底部缩略条、宫格编号和最终顺序同步更新。
-- 底部缩略条仅在有选中图片时出现，按添加顺序展示；内容不足一屏时也必须从左起始，不得呈现视觉居中；每张缩略图可点叉删除，也可拖动调整顺序。
-- 拖动底部缩略图时，目标槽位在悬停阶段就要即时空出：当前拖拽图保持跟手，其余缩略图按区间一次性前移/后移；松手前不提前提交最终顺序。
+- 底部缩略条仅在有选中图片时出现，按添加顺序展示。
+- 内容不足一屏时也必须从左起始，不得呈现视觉居中。
+- 每张缩略图可点叉删除，也可拖动调整顺序。
 - 顶部右侧提供“草稿箱”，点击进入本地草稿恢复列表；恢复后的图片顺序、编辑后路径和创作状态必须回到当前图片发布子流程。
-- 底部操作固定为“一键成片”和“下一步(n)”；“一键成片”至少选择 2 张图片后可用，点击进入一键成片页；“下一步(n)”打开图片编辑页，不再直接回填到创作编辑器。
-
-### 图片编辑与创作页语义
-
-- 图片编辑器底部缩略条与图片选择器已选条共用同一拖拽重排组件；缩略条不足一屏时保持左对齐，切换当前图时只滚动到“可见”而不是强制停靠到视觉居中。
-- 图片编辑器保持黑色沉浸式布局，底部工具栏使用当前已有图片编辑工具，工具栏下方增加紧凑蓝色 `下一步` 主按钮；不新增音乐、图集、AI 等当前不支持入口。
 - 图片编辑页返回图片选择器时，必须携带完整图片顺序和编辑后路径；图片编辑页点击 `下一步` 时，必须把同一份最新顺序和编辑状态传入图片创作页。
-- 一键成片页从图片选择页进入，默认使用原片和基础本地效果；完成后进入图片创作页并设置单素材锁定，隐藏或禁用继续添加入口，并展示 `一键成片作品，仅支持 1 个素材` 语义提示。
 - 创作页进入图片 flow 时，顶部主标题固定为 `图片创作`，并使用浅色页面统一主导航标题语义；首屏标题不再以 34% 透明度弱化显示。
 - 创作页图片网格、图片选择器底部缩略条、图片编辑器底部缩略条必须共用同一拖拽几何真相源：拖到第 N 位时，目标区间内图片在悬停阶段即时移位并空出目标槽位，松手后才提交最终顺序。
 - 图片 flow 触达的标题/提示文案优先收口到 `CreatePageText` / `UITextConstants`，不得在页面实现里继续散落硬编码中文。
 
-### 图片拍摄
+<a id="req-008"></a>
+### REQ-008 Alpha 包只包含远端单轨发布链路
 
-- 图片入口打开的相机页为纯拍照流程，隐藏拍视频/录像模式切换。
-- 拍照页保留取消、摄像头翻转和动图入口；动图入口只作为图片能力入口，不改变视频发布契约。
-- 点击拍摄后进入确认态，展示拍摄结果，并提供“重新拍摄”和“使用照片”。
-- “重新拍摄”回到同一相机预览；“使用照片”把该照片以 `CreateMediaSource.camera`、`CreateMediaType.image` 加入当前图片创作位置。
+- Alpha 包不得包含发布 Mock、内存仓储或绕过 canonical API 的备用入口。
 
-### 发布与展示
+<a id="req-009"></a>
+### REQ-009 权限、错误、主题与断点不改变位置选择业务语义
 
-- 发布前内容只存在于 App 本地 `LocalPostDraft`，默认自动保存；返回、切后台、杀进程和重启不得删除。只有用户显式选择“放弃草稿”才删除草稿及未提交本地媒体。
-- 用户首次点击发布时冻结不可变 `PostPublicationIntent`。同一 intent 的 `publishIntentId`、`localDraftId`、payload digest、媒体槽位及发布设置保持稳定；后续网络重试、前台恢复和进程重启不得生成第二个 intent。
-- 远端模式下，图片发布不得把本地文件路径或客户端 URL 写入 Post；媒体上传子步骤使用稳定幂等身份，最终 publication request 只提交服务端 `MediaAsset` 引用。
-- 对外只暴露一次性 `SubmitPostPublication`。它不接收 `expectedVersion`，以 `Idempotency-Key=publishIntentId` 提交并返回稳定 `PostPublicationReceipt`；App 不再执行 `CreatePost → BindMediaAssetsToPost → PublishPost` 三段远端状态机。
-- 首次 acceptance 必须在一个权威存储事务内创建 Post、永久 publication receipt 与 outbox；相同 actor + intent 重放返回首个 receipt，相同 actor + localDraftId 的后续发布不得创建第二个 Post。
-- 服务暂不可用或响应不确定时，UI 展示“正在安全提交”并自动重试同一 intent；用户无需再次点击发布。receipt 已本地持久化后才能清理草稿。
-- 图片媒体顺序以用户冻结 intent 时的底部缩略条顺序为准；发布后发现流、个人主页作品列表和详情页按同一顺序展示。
-- alpha mock 模式可以保留本地/fixture 语义，但 Mock/Remote 的 payload 形态必须在 local contract 中对齐，不得让 UI 直连 mock。
+- 发布成功后必须进入明确结果面；失败时保留用户输入，并提供与错误语义一致的恢复动作。
 
-## 视频作品商用创作与封面闭环（2026-06-22 冻结）
+<a id="req-010"></a>
+### REQ-010 该能力需被微趣、图片、视频、文章四类发布流程统一复用
 
-本节点同时承接“用户从手机相册或相机创建视频作品”的商用主链路。视频发布的完成定义不是生成一个可播放 URL，而是创作者能在深色 iOS 创作流中选择视频封面，服务端能保存同源封面契约，发现流未播放态能稳定展示该封面，点击后再进入真实播放。
+- 该能力需被微趣、图片、视频、文章四类发布流程统一复用。
+- 位置选择统一通过云侧 `integration-service` 获取（不直连地图 SDK），支持默认附近位置与地名搜索。
+- 若地图服务不可用，必须允许用户回退为“不显示位置”继续发布；限流场景端侧静默保持最近成功结果。
+- 圈子列表是公开发布的可选分发设置；查询不可用时发布确认页必须明确显示
+  “圈子暂不可用”，记录结构化异常并允许用户不选圈子继续发布，禁止未捕获异常或伪造圈子。
+- 图标与高品质内容创作定位匹配：是否公开、发布到圈子入口采用统一风格的图标。
+- **iOS 交互语义**：选择器页面统一 `CupertinoPageScaffold + CupertinoNavigationBar`，Modal 一律使用 `xmark` 关闭语义；Cupertino 页面禁止混用 Material 交互组件（如 Checkbox、SnackBar）。
 
-### 入口与路由
+<a id="req-011"></a>
+### REQ-011 内容创建、媒体发布与发布后回读保持同一结果语义
 
-- 视频作品入口使用现有 `create-entry` / `create` 路由体系，不新增第二套路由真相源。
-- 全局 `/create?type=video` 为视频发布入口，打开视频选择器，允许从相册选视频或拍视频后进入视频编辑/选封面页。
-- 全局 `/create?type=capture` 仅作为旧相机/深链兼容入口，录像后进入视频编辑/选封面页；视频专用调用仍使用 `CameraCaptureModePolicy.videoOnly`。
-- 图片与视频必须在选择结果、编辑页和发布 payload 上保持互斥：视频路径不得复用图片 `一键成片` / `下一步(n)` 语义，图片路径不得展示视频封面时间轴。
-- 视频创作页全链路使用深色 iOS 沉浸体验，不跟随系统浅色退化；新增文案必须来自 `UITextConstants` 或 l10n。
+- 图片与视频作品必须经同一内容创建、媒体发布和发布后回读链路；全局照片入口、视频入口与相机兼容入口必须返回同构结果，失败时不得写入成功事实。
 
-### 视频选择与拍摄
+<a id="req-012"></a>
+### REQ-012 服务本地契约引用边界
 
-- 视频选择器为全屏深色态，布局与图片选择器保持一致：顶部左侧取消、居中 `全部视频` 下拉标题，主体为三列宫格。
-- 宫格第 1 格固定为 `拍视频`，点击后进入视频专用拍摄；其余格展示 `全部视频` 资源，不展示图片资源，不展示 `一键成片`。
-- 视频缩略图必须显示时长，选中态有明确描边或勾选；选择单个视频后进入视频编辑/选封面页，不直接回写发布状态。
-- 视频拍摄页从发视频入口进入时默认前置摄像头，只展示“拍视频”主操作，保留取消和翻转镜头；拍摄完成后进入视频编辑/选封面页。
-- 相册、相机、媒体能力不可用时展示深色语义错误/权限态和恢复动作，不回到浅色图片选择或通用不可用页。
+- 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
 
-### 视频编辑、封面与发布
+## 4. 契约引用
 
-- 视频编辑页为全屏深色态，中央预览默认展示首帧封面；底部时间轴用于选择封面帧，默认 `coverFrameTimeMs=0`。
-- 用户未手工选封面时，`thumbnailUrl` / `coverUrl` 默认来自视频首帧或首帧派生的远端可访问资源；用户手工选帧时，`coverStrategy=manual` 且 `coverFrameTimeMs` 可追溯。
-- 发布 payload 必须显式携带 `videoUrl`、`thumbnailUrl`、`coverUrl`、`durationMs`、可得的 `width/height` 与封面策略字段；远端模式不得把本地文件路径写入最终媒体 URL。
-- 若服务端尚无真实转码/抽帧 worker，本轮必须通过 App 本地选帧封面上传或媒体资产封面 URL 形成远端可访问封面，不允许首页临时抽帧或使用无关 seed 图。
+- canonical：`quwoquan_app/lib/components/media/picker/create_media_picker_page.dart`
+- canonical：`quwoquan_app/lib/core/services/media_picker_service.dart`
+- canonical：`quwoquan_app/lib/ui/content/entry/pages/create_page.dart`
+- canonical：`quwoquan_app/lib/components/media/camera/camera_capture_page.dart`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/operations.yaml`
+- canonical：`quwoquan_app/lib/cloud/services/content/content_repository.dart`
+- canonical：`quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart`
+- canonical：`quwoquan_app/lib/ui/content/entry/pages/video_editor_page.dart`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml`
+- canonical：`quwoquan_app/lib/ui/content/entry/providers/create_editor_provider.dart`
+- canonical：`quwoquan_data/schema/content/post_manifest.schema.json`
+- canonical：`quwoquan_data/scripts/content/release/canonical/gate.py`
+- canonical：`quwoquan_service/services/content-service/cmd/import/main.go`
+- canonical：`quwoquan_service/services/integration-service/contracts/external_integration/location/operations.yaml`
+- canonical：`quwoquan_service/services/integration-service/contracts/external_integration/location/errors.yaml`
+- canonical：`quwoquan_service/contracts/metadata/_shared/ui_surfaces.yaml`
+- 协作规格：[`error-permission-display-semantics`](../../../runtime/runtime-client-foundation/error-permission-display-semantics/spec.md)
+- canonical：`quwoquan_service/contracts/metadata/_shared/page_object_contract.yaml`
 
-## 适用范围与约束
-- 适用于 discovery-content 下的内容创作与发布主链路（create -> post -> discovery feed）。
-- 适用于服务侧可见性与分发语义治理，以及端侧发布参数对齐。
-- 不适用于创作后反馈行为（不感兴趣/屏蔽/投诉）策略收敛，该部分在后续节点处理。
+## 5. 验收场景
 
-## 关键约束
-- `moment`：`body` 非必填，但 `body/image/video` 至少一项存在。
-- `photo`：可不指定封面，展示可退化到首图。
-- `video`：默认首帧封面，可手工指定封面覆盖。
-- `article`：标题必填，`summary` 可编辑，`illustrationAssetId` 最多一张可选插图。
-- 发布到任一圈子前提：内容为 `public`。
-- 内容 `published` 后禁止更新正文/标题/媒体，仅允许删除与圈子分发关系变更。
-- Post 发布是单作者、单 intent 的一次性提交，不使用调用方 `expectedVersion`。服务端可使用内部 CAS/唯一约束吸收竞态，但内部技术冲突不得直接暴露给用户。
-- 真正需要调用方 `If-Match` 的能力必须证明存在多写者快照覆盖且无法由领域状态机、唯一约束、服务端重载重试或 set/append 语义安全解决；不得把 `expectedVersion` 作为 aggregate command 的默认参数。
+<a id="gwt-001"></a>
+### GWT-001 内容创建更新
 
-## 对象级缓存规格
+- GIVEN 内容创作者或浏览者具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“内容创建更新”对应的公开行为。
+- THEN 从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
 
-- 本节点的读侧缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 [`object-cache-policy.yaml`](../../../runtime/runtime-client-foundation/local-cache-architecture/object-cache-policy.yaml) 中 `Post` 为准。
-- `Post` 对象缓存字段至少包括：`postId`、`contentType`、`title`、`summary`、详情正文/blocks、`authorId`、作者快照、`visibility`、`updatedAt`、媒体引用、互动计数与当前用户互动状态。
-- feed 卡片只缓存摘要/投影视图；详情页缓存完整详情 wire，支持最近打开内容离线回看。
-- 图片、视频、封面只在 post 对象中保存 `resourceRefs`，大图/视频字节交由资源缓存层淘汰，不能把字节混入 post JSON。
-- 点赞、收藏、转发、评论新增/删除通过本地 overlay/outbox 展示 desired state，云端确认或 sync patch 返回后合并。
-- 用户清理临时图片和视频时只能删除资源字节；清理离线内容时可删除非收藏、非最近阅读、非待同步的 post 详情；创作草稿不属于读侧对象缓存。
+<a id="gwt-003"></a>
+### GWT-003 图片发布以本地草稿和一次性 PublishIntent 可靠提交
 
-## 验收标准（概要）
-- A1：四类内容校验规则在服务侧一致生效。
-- A2：`public/private` 权限模型生效，圈子分发与权限解耦。
-- A3：作者分发与用户转发可区分存储与查询。
-- A4：删除触发分发与转发级联下架。
-- A5：墓碑库命中时返回“已删除”，否则返回“找不到”。
-- A6：媒体元数据与设备/地点信息可入库并可回读。
-- A7：metadata、OpenAPI 与 codegen 一致通过。
-- A8：mock/unit/contract/integration/uat 测试映射完整并通过门禁。
-- A9：post 对象缓存可离线回显最近详情，`updatedAt/postReadVersion` 变化后后台刷新，用户分层清理不误删草稿与待同步互动。
-- A10：图片创作从相册/拍摄/编辑/完成/发布/展示回读形成无断点链路；图片选择器与编辑器缩略条左对齐、拖拽悬停即时让位，创作页图片模式标题固定为 `图片创作`，且图片路径不再暴露视频成片语义。
-- A11：视频创作从相册/拍摄/选封面/下一步/发布/首页封面/点击播放形成无断点链路，且 `thumbnailUrl` / `coverUrl` 与视频首帧或用户选帧同源。
+- GIVEN 用户编辑图片并产生可恢复的本地草稿。
+- WHEN 用户提交、重放提交或在响应丢失后恢复发布。
+- THEN 同一 PublishIntent 至多创建一个 Post，放弃的草稿不恢复，成功结果可直接回读。
+- AND 取消未受理意图时，上传 session 与已完成 MediaAsset 均到达权威 aborted/discarded 终态后才移除本地任务，重复或丢响应不泄漏对象。
+
+<a id="gwt-004"></a>
+### GWT-004 视频选择与拍摄进入深色视频选封面主链路
+
+- GIVEN 用户从相册选择或拍摄视频。
+- WHEN 视频进入创作编辑流程。
+- THEN 页面使用统一视频编辑状态，包含 videoPath、durationMs 与默认封面候选。
+
+<a id="gwt-005"></a>
+### GWT-005 视频选封面与一次性 PublishIntent 使用同源远端封面契约
+
+- GIVEN 用户为视频选择封面并发起发布。
+- WHEN Mock 或 Remote 创建并回读内容。
+- THEN 两条路径使用同形 payload，且回读保留同一视频与封面身份。
+
+<a id="gwt-006"></a>
+### GWT-006 数据工程视频导入与用户上传视频使用同一封面展示契约
+
+- GIVEN 数据工程导入视频和用户上传视频进入展示链路。
+- WHEN App 读取两类内容。
+- THEN 两者使用同一封面展示契约，且页面不按来源维护第二套字段。
+
+<a id="gwt-007"></a>
+### GWT-007 App 只经 generated operation client 读取附近位置与搜索结果
+
+- GIVEN 用户在创作页读取附近位置或搜索结果。
+- WHEN App 发起位置查询。
+- THEN 请求仅经生成的 operation client 访问云侧 integration-service，并在不可用时保留可继续发布的恢复路径。
+
+<a id="gwt-008"></a>
+### GWT-008 可选圈子查询不可用不阻断公开发布
+
+- GIVEN 用户发布公开内容，且圈子列表 query 暂时不可用。
+- WHEN 用户打开发布确认页并不选择圈子。
+- THEN 页面显示明确的圈子不可用状态，仍可确认发布且提交空 circleIds。
+- AND 失败被结构化记录，不出现未捕获异常、空白页或本地伪造圈子。
+
+## 6. 依赖
+
+- 前置要求：[`publish-comment-reaction`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 图片选择器达到商用品质的深色 iOS 图片发布体验
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：图片选择器可把当前顺序图片带入图片编辑页；图片编辑页返回选择器或点击底部“下一步”进入创作页时，该顺序与底部缩略条悬停后的最终顺序一致。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-008"></a>
+### OPEN-008 场景化创作模板与提示词
+
+- 类型：`future_plan`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：校园经验、路线记录、住宿反馈、地点打卡、对象评价和圈内问答缺少可选择模板，首次创作者仍需从空白页开始。
+- 完成判定：6 类模板通过 metadata/config 单源下发，选择率与发布转化事件可观测，未选择模板仍可正常创作。
+- 依赖：content config metadata 与 event catalog。
+
+<a id="open-002"></a>
+### OPEN-002 图片发布以本地草稿和一次性 PublishIntent 可靠提交
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：local_contract 证明自动保存、显式放弃、单 intent 和崩溃恢复。
+- api_integration 证明并发重复/响应丢失均只创建一个 Post。
+- user_acceptance 证明用户无需再次点击即可完成发布与回读。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-003"></a>
+### OPEN-003 视频选择与拍摄进入深色视频选封面主链路
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：相册视频与拍摄视频均能进入统一视频编辑状态，包含 `videoPath`、`durationMs` 和默认封面候选。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-004"></a>
+### OPEN-004 视频选封面与一次性 PublishIntent 使用同源远端封面契约
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：Mock/Remote 的视频 payload 形态在 local contract 对齐，Remote/API 在 api_integration 证明创建与回读闭环。
+- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-005"></a>
+### OPEN-005 数据工程视频导入与用户上传视频使用同一封面展示契约
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：数据工程 schema/gate、服务 importer local contract 与端云 api_integration 能证明导入视频和用户上传视频使用同一展示契约。
+- 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-006"></a>
+### OPEN-006 App 只经 generated operation client 读取附近位置与搜索结果
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：local_contract、api_integration 与 alpha package contract 均通过。
+- 完成判定：`GWT-007` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-007"></a>
+### OPEN-007 内容创建更新 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“内容创建更新”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

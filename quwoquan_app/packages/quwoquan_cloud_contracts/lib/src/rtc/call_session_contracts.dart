@@ -2,7 +2,7 @@ import '../operation_request_payload.dart';
 
 /// RTC CallSession 对象的 pure Dart contracts。
 ///
-/// 真相源：contracts/metadata/rtc/call_session/{fields,service}.yaml。
+/// 真相源：quwoquan_service/services/rtc-service/contracts/rtc/call_session/{fields,service}.yaml。
 /// 命令不携带 aggregate version；服务端以内部 CAS、命令回执与 outbox
 /// 保证并发安全和幂等。
 

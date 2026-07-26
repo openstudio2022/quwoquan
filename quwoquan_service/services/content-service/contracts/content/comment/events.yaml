@@ -1,0 +1,94 @@
+events:
+- name: CommentCreated
+  description: 独立 Comment 聚合创建完成；Post.commentCount 投影只可由此事实异步递增或重建。payload 自包含通知接收者（postAuthorId、replyToUserId、mentionedUserIds），消费者不得跨服务反查写模型。
+  producer: content-service
+  consumers:
+  - content-post-projection
+  - content-comment-hot-score-projector
+  - notification-service
+  - profile-interaction-activity-projector
+  channel: outbox
+  payload_fields:
+  - commentId
+  - version
+  - postId
+  - postAuthorId
+  - authorId
+  - replyToCommentId
+  - replyToUserId
+  - parentCommentId
+  - mentionedUserIds
+  - createdAt
+  recommend_impact: engagement_signal
+- name: CommentDeleted
+  description: 独立 Comment 聚合软删完成；Post.commentCount 投影只可由此事实异步递减或重建。
+  producer: content-service
+  consumers:
+  - content-post-projection
+  - content-comment-hot-score-projector
+  - profile-interaction-activity-projector
+  channel: outbox
+  payload_fields:
+  - commentId
+  - version
+  - postId
+  - authorId
+  - parentCommentId
+  - deletedAt
+  recommend_impact: engagement_signal
+- name: CommentPinChanged
+  description: Post 作者变更一级 Comment 的置顶状态；不改变 Post 聚合。isPinned=true 时通知评论作者。
+  producer: content-service
+  consumers:
+  - content-comment-page-projector
+  - notification-service
+  channel: outbox
+  payload_fields:
+  - commentId
+  - version
+  - postId
+  - commentAuthorId
+  - operatorId
+  - isPinned
+  - pinnedAt
+- name: CommentAttachmentsBound
+  description: Comment 作者绑定已验证的附件引用。
+  producer: content-service
+  consumers:
+  - content-comment-page-projector
+  channel: outbox
+  payload_fields:
+  - commentId
+  - version
+  - postId
+  - authorId
+  - attachmentMediaIds
+- name: CommentModerated
+  description: operator 对 Comment 执行治理动作（hide/restore）的审计事实；Post.commentCount 与父评论 hotScore 投影据此收敛 active
+    计数。
+  producer: content-service
+  consumers:
+  - content-post-projection
+  - content-comment-page-projector
+  - content-comment-hot-score-projector
+  channel: outbox
+  payload_fields:
+  - commentId
+  - version
+  - postId
+  - parentCommentId
+  - operatorId
+  - action
+  - reason
+  - occurredAt
+- name: CommentsTombstoned
+  description: 宿主 Post 删除后，该 Post 全部评论批量级联 tombstoned 的事实（按 postId 聚合一条，附带受影响 commentIds 计数）。
+  producer: content-service
+  consumers:
+  - content-post-projection
+  - profile-interaction-activity-projector
+  channel: outbox
+  payload_fields:
+  - postId
+  - tombstonedCount
+  - occurredAt

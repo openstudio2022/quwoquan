@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,9 +14,9 @@ import (
 	robs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
-	"quwoquan_service/services/integration-service/internal/application"
-	"quwoquan_service/services/integration-service/internal/infrastructure/provider"
-	"quwoquan_service/services/integration-service/internal/infrastructure/providerbinding"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
+	integrationconfig "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig"
 )
 
 func newExternalObservedHTTPClient(
@@ -73,33 +72,7 @@ func newExternalObservedHTTPClient(
 }
 
 func externalProviderLogEndpoint(request *http.Request) string {
-	path := request.URL.Path
-	switch {
-	case strings.HasPrefix(path, "/3/device/"):
-		return "/3/device/{token}"
-	case matchesEndpointPathTemplate(
-		path,
-		serviceclients.UserPushEndpointSecretPathTemplate,
-	):
-		return serviceclients.UserPushEndpointSecretPathTemplate
-	case matchesEndpointPathTemplate(
-		path,
-		serviceclients.UserPushEndpointInvalidatePathTemplate,
-	):
-		return serviceclients.UserPushEndpointInvalidatePathTemplate
-	case strings.HasPrefix(path, "/v1/projects/") &&
-		strings.HasSuffix(path, "/messages:send"):
-		return "/v1/projects/{projectId}/messages:send"
-	default:
-		return path
-	}
-}
-
-func matchesEndpointPathTemplate(path string, template string) bool {
-	parts := strings.Split(template, "{endpointRef}")
-	return len(parts) == 2 &&
-		strings.HasPrefix(path, parts[0]) &&
-		strings.HasSuffix(path, parts[1])
+	return provider.ObservedEndpoint(request)
 }
 
 func buildExternalProviders(
@@ -113,41 +86,43 @@ func buildExternalProviders(
 	map[string]reliabletask.ProviderPolicy,
 	error,
 ) {
-	if cfg.Environment != "alpha" {
-		var err error
-		cfg, err = materializeReleaseExternalInteractionBindings(
-			cfg,
-			runtimeconfig.EnvRuntimeConfigProvider{},
-		)
-		if err != nil {
-			return nil, nil, err
-		}
+	var err error
+	cfg, err = materializeReleaseExternalInteractionBindings(
+		cfg,
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		return nil, nil, err
 	}
 	providers := map[string]reliabletask.ExternalProvider{}
 	policies := map[string]reliabletask.ProviderPolicy{}
 	smsCfg := cfg.Integration.ExternalInteraction.SMS
 	if smsCfg.Enabled {
 		timeout := time.Duration(smsCfg.TimeoutMs) * time.Millisecond
-		smsProvider, err := provider.NewHTTPExternalProvider(
-			provider.HTTPExternalProviderConfig{
-				Name:              smsCfg.Provider,
-				Operation:         reliabletask.ExternalInteractionOperationSmsOTP,
-				Endpoint:          smsCfg.Endpoint,
-				BearerToken:       smsCfg.Token,
-				Timeout:           timeout,
-				OTPCodeSealer:     otpCodeSealer,
-				OTPCodeReferences: otpCodeReferences,
-			},
-			client,
-		)
-		if err != nil {
-			return nil, nil, fmt.Errorf(
-				"external provider init failed for %s: %w",
-				reliabletask.ExternalInteractionOperationSmsOTP,
-				err,
+		if strings.TrimSpace(smsCfg.Provider) == "ext.sms.local_capture" {
+			providers[smsCfg.Provider] = application.LocalCaptureSMSProvider{}
+		} else {
+			smsProvider, err := provider.NewHTTPExternalProvider(
+				provider.HTTPExternalProviderConfig{
+					Name:              smsCfg.Provider,
+					Operation:         reliabletask.ExternalInteractionOperationSmsOTP,
+					Endpoint:          smsCfg.Endpoint,
+					BearerToken:       smsCfg.Token,
+					Timeout:           timeout,
+					OTPCodeSealer:     otpCodeSealer,
+					OTPCodeReferences: otpCodeReferences,
+				},
+				client,
 			)
+			if err != nil {
+				return nil, nil, fmt.Errorf(
+					"external provider init failed for %s: %w",
+					reliabletask.ExternalInteractionOperationSmsOTP,
+					err,
+				)
+			}
+			providers[smsCfg.Provider] = smsProvider
 		}
-		providers[smsCfg.Provider] = smsProvider
 		policies[reliabletask.ExternalInteractionOperationSmsOTP] = reliabletask.ProviderPolicy{
 			Providers:   []string{smsCfg.Provider},
 			Timeout:     timeout,
@@ -161,8 +136,8 @@ func buildExternalProviders(
 	}
 	pushTimeout := time.Duration(pushCfg.TimeoutMs) * time.Millisecond
 	const pushDispatchProviderName = "push_dispatch"
-	if strings.TrimSpace(pushCfg.Mode) == "fake" {
-		providers[pushDispatchProviderName] = application.AlphaFakePushProvider{}
+	if mode := strings.TrimSpace(pushCfg.Mode); mode == "local_recorder" {
+		providers[pushDispatchProviderName] = application.LocalRecorderPushProvider{}
 		policies[reliabletask.ExternalInteractionOperationPush] = reliabletask.ProviderPolicy{
 			Providers:   []string{pushDispatchProviderName},
 			Timeout:     pushTimeout,
@@ -241,89 +216,5 @@ func materializeReleaseExternalInteractionBindings(
 	cfg config,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 ) (config, error) {
-	smsBinding, err := providerbinding.ResolveSMSBinding(cfg.Environment, configProvider)
-	switch {
-	case err == nil:
-		smsEndpoint, ok := smsBinding.Endpoint("endpoint")
-		if !ok {
-			return config{}, fmt.Errorf("SMS provider binding has no endpoint")
-		}
-		smsToken, ok := smsBinding.Secret("INTEGRATION_SMS_TOKEN")
-		if !ok {
-			return config{}, fmt.Errorf("SMS provider binding has no bearer token")
-		}
-		cfg.Integration.ExternalInteraction.SMS = externalProviderConfig{
-			Enabled:   true,
-			Provider:  smsBinding.AdapterID,
-			Endpoint:  smsEndpoint,
-			Token:     smsToken,
-			TimeoutMs: int(smsBinding.Timeout.Milliseconds()),
-		}
-	case errors.Is(err, providerbinding.ErrExternalInteractionCapabilityBlocked):
-		cfg.Integration.ExternalInteraction.SMS = externalProviderConfig{}
-	default:
-		return config{}, fmt.Errorf("SMS provider binding invalid: %w", err)
-	}
-
-	pushBinding, err := providerbinding.ResolvePushBinding(cfg.Environment, configProvider)
-	if errors.Is(err, providerbinding.ErrExternalInteractionCapabilityBlocked) {
-		cfg.Integration.ExternalInteraction.Push = pushDeliveryProviderConfig{}
-		return cfg, nil
-	}
-	if err != nil {
-		return config{}, fmt.Errorf("Push provider binding invalid: %w", err)
-	}
-	apnsKeyFile, ok := pushBinding.Secret("INTEGRATION_PUSH_APNS_KEY_FILE")
-	if !ok {
-		return config{}, fmt.Errorf("Push provider binding has no APNs key material")
-	}
-	fcmServiceAccountFile, ok := pushBinding.Secret("INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE")
-	if !ok {
-		return config{}, fmt.Errorf("Push provider binding has no FCM credential material")
-	}
-	requiredEndpoint := func(role string) (string, error) {
-		value, found := pushBinding.Endpoint(role)
-		if !found {
-			return "", fmt.Errorf("Push provider binding has no %s material", role)
-		}
-		return value, nil
-	}
-	userServiceBaseURL, err := requiredEndpoint("user_service_base_url")
-	if err != nil {
-		return config{}, err
-	}
-	apnsEnvironment, err := requiredEndpoint("apns_environment")
-	if err != nil {
-		return config{}, err
-	}
-	apnsKeyID, err := requiredEndpoint("apns_key_id")
-	if err != nil {
-		return config{}, err
-	}
-	apnsTeamID, err := requiredEndpoint("apns_team_id")
-	if err != nil {
-		return config{}, err
-	}
-	apnsTopic, err := requiredEndpoint("apns_topic")
-	if err != nil {
-		return config{}, err
-	}
-	fcmProjectID, err := requiredEndpoint("fcm_project_id")
-	if err != nil {
-		return config{}, err
-	}
-	cfg.Integration.ExternalInteraction.Push = pushDeliveryProviderConfig{
-		Enabled:            true,
-		Mode:               "remote",
-		TimeoutMs:          int(pushBinding.Timeout.Milliseconds()),
-		UserServiceBaseURL: userServiceBaseURL,
-	}
-	cfg.Integration.ExternalInteraction.Push.APNs.Environment = apnsEnvironment
-	cfg.Integration.ExternalInteraction.Push.APNs.KeyFile = apnsKeyFile
-	cfg.Integration.ExternalInteraction.Push.APNs.KeyID = apnsKeyID
-	cfg.Integration.ExternalInteraction.Push.APNs.TeamID = apnsTeamID
-	cfg.Integration.ExternalInteraction.Push.APNs.Topic = apnsTopic
-	cfg.Integration.ExternalInteraction.Push.FCM.ServiceAccountFile = fcmServiceAccountFile
-	cfg.Integration.ExternalInteraction.Push.FCM.ProjectID = fcmProjectID
-	return cfg, nil
+	return integrationconfig.MaterializeReleaseExternalInteractionBindings(cfg, configProvider)
 }

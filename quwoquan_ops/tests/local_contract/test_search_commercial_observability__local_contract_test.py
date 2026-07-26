@@ -15,7 +15,7 @@ class SearchCommercialObservabilityContractTest(unittest.TestCase):
         catalog = yaml.safe_load(
             (
                 ROOT
-                / "quwoquan_service/contracts/metadata/ops/event_record/event_catalog.yaml"
+                / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/event_catalog.yaml"
             ).read_text(encoding="utf-8")
         )
         events = {item["event_type"]: item for item in catalog["events"]}
@@ -93,7 +93,7 @@ class SearchCommercialObservabilityContractTest(unittest.TestCase):
         )
         self.assertIn("search_contract_smoke:", delivery)
         self.assertIn(
-            "go test ./services/search-service/tests/api_integration -count=1",
+            "go test ./services/search-service/tests/api_integration/search/search/search_query -count=1",
             delivery,
         )
         self.assertIn(

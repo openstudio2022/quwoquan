@@ -7,10 +7,14 @@ import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
-from PIL import Image
-
 from core.control_types import SourcePolicyRevision
+from core.paths import now_iso
 from core.source_digest import SourceDigest, SourceDigestError
+from governance.coverage.license import (
+    RightsAuditStatus,
+    parse_rights_audit_status,
+    rights_proof_required,
+)
 from content.release.canonical.creator_projection import project_creator_object
 from content.release.canonical.object_transaction_contract import (
     EXPECTED_OBJECT_SCHEMAS,
@@ -50,20 +54,19 @@ def _media_dimensions(path: Path, raw: Mapping[str, Any]) -> tuple[int, int, str
         if width < 1 or height < 1:
             raise ObjectTransactionError(f"video asset 缺有效尺寸：{path}")
         return width, height, mime
-    try:
-        with Image.open(path) as image:
-            width, height = image.size
-            resolved_mime = str(Image.MIME.get(image.format or "") or mime)
-    except (OSError, ValueError) as exc:
-        raise ObjectTransactionError(f"post image asset 不可解析：{path}: {exc}") from exc
-    if width < 1 or height < 1 or not resolved_mime.startswith("image/"):
+    from core.image_decode import probe_image_path
+
+    probe = probe_image_path(path)
+    if not probe.succeeded:
+        raise ObjectTransactionError(f"post image asset 不可解析：{path}: {probe.failure.value}")
+    resolved_mime = probe.mime_type or mime
+    if probe.width < 1 or probe.height < 1 or not resolved_mime.startswith("image/"):
         raise ObjectTransactionError(f"post image asset 缺有效尺寸或 MIME：{path}")
-    return width, height, resolved_mime
+    return probe.width, probe.height, resolved_mime
 
 
 def _source_assets(execution_root: Path) -> dict[str, dict[str, Any]]:
     rows: dict[str, dict[str, Any]] = {}
-    ambiguous_ids: set[str] = set()
     for index_path in sorted(execution_root.rglob("assets/index.json")):
         relative_index = index_path.relative_to(execution_root)
         if "sources" not in relative_index.parts:
@@ -77,23 +80,27 @@ def _source_assets(execution_root: Path) -> dict[str, dict[str, Any]]:
                     file_name,
                     label=f"{relative_index}.assets.fileName",
                 )
-                rows[source_path.relative_to(execution_root).as_posix()] = raw
-            source_asset_id = str(raw.get("sourceAssetId") or "").strip()
-            if source_asset_id and source_asset_id not in ambiguous_ids:
-                if source_asset_id in rows and rows[source_asset_id] != raw:
-                    rows.pop(source_asset_id, None)
-                    ambiguous_ids.add(source_asset_id)
-                    continue
-                rows[source_asset_id] = raw
+                source_ref = source_path.relative_to(execution_root).as_posix()
+                if source_ref in rows:
+                    raise ObjectTransactionError(f"sourceAssetRef 重复：{source_ref}")
+                rows[source_ref] = raw
     return rows
 
 
 def _asset_sources(
     raw: Mapping[str, Any], source_assets: Mapping[str, dict[str, Any]]
 ) -> tuple[dict[str, Any], ...]:
-    refs = [str(raw.get("sourceAssetId") or "").strip()]
+    refs = [str(raw.get("sourceAssetRef") or "").strip()]
     refs.extend(str(item).strip() for item in raw.get("sourceAssetRefs") or [])
-    return tuple(source_assets[ref] for ref in refs if ref in source_assets)
+    refs = [ref for ref in refs if ref]
+    if not refs:
+        raise ObjectTransactionError("post asset 缺 sourceAssetRef 或 sourceAssetRefs")
+    missing = [ref for ref in refs if ref not in source_assets]
+    if missing:
+        raise ObjectTransactionError(
+            "post asset sourceAssetRef 未指向来源资产：" + ", ".join(missing)
+        )
+    return tuple(source_assets[ref] for ref in refs)
 
 
 def _https(*values: object) -> str:
@@ -210,6 +217,10 @@ def build_post_object_transaction_package(
         asset_refs: list[dict[str, Any]] = []
         rights_rows: list[dict[str, Any]] = []
         canonical_assets: list[dict[str, Any]] = []
+        vertical = str(source_manifest.get("vertical") or "").strip()
+        if not vertical:
+            raise ObjectTransactionError("post manifest 缺 vertical policy owner")
+        require_rights_proof = rights_proof_required(vertical)
         for index, raw_value in enumerate(source_manifest.get("assets") or []):
             if not isinstance(raw_value, Mapping):
                 raise ObjectTransactionError("post manifest.assets item 必须为 object")
@@ -230,29 +241,73 @@ def build_post_object_transaction_package(
             related_sources = _asset_sources(raw, source_assets)
             primary_source = related_sources[0] if related_sources else {}
             source_url = _https(
+                raw.get("authorizationProof"),
+                raw.get("collectionPageUrl"),
+                raw.get("sourceUrl"),
                 primary_source.get("authorizationProof"),
                 primary_source.get("collectionPageUrl"),
                 primary_source.get("url"),
-                raw.get("authorizationProof"),
                 *(source_manifest.get("sourceUrls") or []),
             )
-            license_url = _https(primary_source.get("termsUrl"), raw.get("termsUrl"))
+            authorization_proof = _https(
+                raw.get("authorizationProof"),
+                primary_source.get("authorizationProof"),
+            )
+            license_url = _https(raw.get("termsUrl"), primary_source.get("termsUrl"))
             author = str(
-                primary_source.get("creator")
-                or primary_source.get("credit")
-                or raw.get("creator")
+                raw.get("creator")
                 or raw.get("credit")
+                or primary_source.get("creator")
+                or primary_source.get("credit")
                 or ""
             ).strip()
             license_name = str(
-                primary_source.get("license") or raw.get("license") or ""
+                raw.get("license") or primary_source.get("license") or ""
             ).strip()
             fetched_at = str(
-                primary_source.get("fetchedAt") or manifest.get("createdAt") or ""
+                primary_source.get("fetchedAt")
+                or source_manifest.get("createdAt")
+                or manifest.get("createdAt")
+                or ""
             ).strip()
             asset_id = str(raw.get("assetId") or f"asset-{index + 1}").strip()
-            if not all((source_url, license_url, author, license_name, fetched_at)):
+            try:
+                rights_audit_status = parse_rights_audit_status(
+                    raw,
+                    primary_source,
+                )
+            except ValueError as exc:
+                raise ObjectTransactionError(
+                    f"post asset 缺有效 rightsAuditStatus：{asset_id}"
+                ) from exc
+            if require_rights_proof and not all(
+                (
+                    source_url,
+                    authorization_proof,
+                    license_url,
+                    author,
+                    license_name,
+                    fetched_at,
+                )
+            ):
                 raise ObjectTransactionError(f"post asset 权利字段不完整：{asset_id}")
+            if require_rights_proof and rights_audit_status is not RightsAuditStatus.VERIFIED:
+                raise ObjectTransactionError(f"post asset 权利状态未经核实：{asset_id}")
+            if not require_rights_proof and not all((source_url, fetched_at)):
+                raise ObjectTransactionError(f"post asset 权利审计字段不完整：{asset_id}")
+            effective_license_name = license_name or "unknown"
+            rights_audit_issues = [
+                str(issue)
+                for issue in (raw.get("rightsAuditIssues") or [])
+                if str(issue).strip()
+            ]
+            if (
+                rights_audit_status is RightsAuditStatus.UNVERIFIED
+                and not rights_audit_issues
+            ):
+                raise ObjectTransactionError(
+                    f"post asset 未核实权利状态缺审计问题：{asset_id}"
+                )
             snapshot_payload = {
                 "schema": "quwoquan_data.asset_rights_snapshot",
                 "executionId": execution_id,
@@ -267,18 +322,29 @@ def build_post_object_transaction_package(
                 {
                     "assetId": asset_id,
                     "sourceKind": str(primary_source.get("platform") or "source_catalog"),
-                    "sourceUseMode": "licensed_adaptation",
+                    "sourceUseMode": (
+                        "licensed_adaptation"
+                        if rights_audit_status is RightsAuditStatus.VERIFIED
+                        else "rights_audit_only"
+                    ),
                     "canonicalFilePage": source_url,
                     "snapshotUrl": source_url,
                     "pageRevision": _digest_file(snapshot_path),
                     "originalAssetUrl": _https(primary_source.get("url"), source_url),
                     "author": author,
-                    "source": _https(primary_source.get("collectionPageUrl"), source_url),
-                    "licenseName": license_name,
-                    "licenseShortName": license_name,
+                    "source": _https(raw.get("collectionPageUrl"), primary_source.get("collectionPageUrl"), source_url),
+                    "licenseName": effective_license_name,
+                    "licenseShortName": effective_license_name,
                     "licenseUrl": license_url,
                     "usageScope": "app_publish",
-                    "attribution": f"{str(raw.get('caption') or asset_id)}，作者：{author}，{license_name}",
+                    "attribution": (
+                        f"{str(raw.get('caption') or asset_id)}，"
+                        + (
+                            f"作者：{author}，许可：{effective_license_name}"
+                            if rights_audit_status is RightsAuditStatus.VERIFIED
+                            else "来源已记录，作者与许可尚未核实"
+                        )
+                    ),
                     "caption": str(raw.get("caption") or ""),
                     "captionSource": "captured source asset metadata",
                     "modifications": "post composition and delivery encoding when applicable",
@@ -296,9 +362,13 @@ def build_post_object_transaction_package(
                         "width": width,
                         "height": height,
                     },
-                    "authorizationProof": source_url,
+                    "authorizationProof": authorization_proof,
+                    "rightsAuditStatus": rights_audit_status.value,
+                    "rightsAuditIssues": rights_audit_issues,
                     "modelReleaseStatus": str(
-                        primary_source.get("modelReleaseStatus") or "not_required"
+                        raw.get("modelReleaseStatus")
+                        or primary_source.get("modelReleaseStatus")
+                        or "not_required"
                     ),
                 }
             )
@@ -347,6 +417,9 @@ def build_post_object_transaction_package(
             **source_manifest,
             "schema": EXPECTED_OBJECT_SCHEMAS["posts"],
             "executionId": execution_id,
+            "sourceTaskId": execution_id,
+            "publishedAt": str(source_manifest.get("publishedAt") or "").strip()
+            or now_iso(),
             "sourceDigest": source_digest.to_document(),
             "finalContentRef": final_content_ref,
             "sourceCatalogRef": "source_catalog.json",

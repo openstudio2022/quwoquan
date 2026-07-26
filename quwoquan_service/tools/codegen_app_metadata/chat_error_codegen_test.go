@@ -8,7 +8,7 @@ import (
 
 func TestChatErrorGeneration_matchesFormalDirectMessagingContract(t *testing.T) {
 	metadataDir := initializeTestContractGraph(t)
-	errorsPath := filepath.Join(metadataDir, "messages", "conversation", "errors.yaml")
+	errorsPath := filepath.Join(metadataDir, "chat", "chat", "conversation", "errors.yaml")
 	ef, err := readErrors(errorsPath)
 	if err != nil {
 		t.Fatalf("read errors: %v", err)

@@ -14,11 +14,13 @@ from content.post.video.package_common import (
     subtitles,
 )
 from content.post.video.source_video import SourcedVideoAsset
+from content.execution.identity import parse_execution_id
 from core.asset_identity import compute_post_asset_id
 from core.io import write_json
 from core.runtime_policy import active_runtime_policy
 from core.schema import validate_result
-from governance.coverage.cold_start_supply import VideoDeliveryPolicy
+from governance.content_supply_policy import VideoDeliveryPolicy
+from governance.coverage.license import RightsAuditStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +131,7 @@ def render_sourced_video_package(
     *,
     policy: VideoDeliveryPolicy,
 ) -> Path:
+    identity = parse_execution_id(request.execution_id)
     evidence = request.source.evidence
     issues = evidence.admission_issues()
     if issues:
@@ -212,6 +215,7 @@ def render_sourced_video_package(
     )
     manifest = {
         "schema": "quwoquan_data.post_manifest",
+        "vertical": identity.vertical,
         "topicId": request.topic_id,
         "contentType": "video",
         "carrier": "video",
@@ -251,6 +255,8 @@ def render_sourced_video_package(
                 "provenanceRef": "provenance.json",
                 "sourceAssetRefs": [evidence.asset_ref],
                 "rightsRefs": [evidence.rights_ref],
+                "rightsAuditStatus": RightsAuditStatus.VERIFIED.value,
+                "rightsAuditIssues": [],
                 "coverStrategy": "manual",
             },
             {
@@ -266,6 +272,8 @@ def render_sourced_video_package(
                 "caption": request.caption,
                 "sourceAssetRefs": [evidence.asset_ref],
                 "rightsRefs": [evidence.rights_ref],
+                "rightsAuditStatus": RightsAuditStatus.VERIFIED.value,
+                "rightsAuditIssues": [],
             },
         ],
         "videoBindings": [{"assetId": asset_id, "role": "shortVideo"}],

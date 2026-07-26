@@ -12,6 +12,7 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
@@ -278,22 +279,18 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircleAvatar(
-            radius: AppSpacing.oneHundred / 2,
+          AppCircularAvatar(
+            imageUrl: participant.avatarUrl,
+            size: AppSpacing.oneHundred,
             backgroundColor: AppColors.primaryColor.withValues(alpha: 0.3),
-            backgroundImage: participant.avatarUrl == null
-                ? null
-                : NetworkImage(participant.avatarUrl!),
-            child: participant.avatarUrl == null
-                ? Text(
-                    displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      color: onAccent,
-                      fontSize: AppTypography.xxxl,
-                      fontWeight: AppTypography.semiBold,
-                    ),
-                  )
-                : null,
+            fallback: Text(
+              displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+              style: TextStyle(
+                color: onAccent,
+                fontSize: AppTypography.xxxl,
+                fontWeight: AppTypography.semiBold,
+              ),
+            ),
           ),
           SizedBox(height: AppSpacing.md),
           Text(
@@ -318,24 +315,20 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
       runSpacing: AppSpacing.sm,
       children: <Widget>[
         ...visibleParticipants.map((participant) {
-          return CircleAvatar(
-            radius: AppSpacing.xl,
+          return AppCircularAvatar(
+            imageUrl: participant.avatarUrl,
+            size: AppSpacing.xl * 2,
             backgroundColor: AppColors.primaryColor.withValues(alpha: 0.3),
-            backgroundImage: participant.avatarUrl == null
-                ? null
-                : NetworkImage(participant.avatarUrl!),
-            child: participant.avatarUrl == null
-                ? Text(
-                    participant.displayName.isNotEmpty
-                        ? participant.displayName[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      color: onAccent,
-                      fontSize: AppTypography.lg,
-                      fontWeight: AppTypography.semiBold,
-                    ),
-                  )
-                : null,
+            fallback: Text(
+              participant.displayName.isNotEmpty
+                  ? participant.displayName[0].toUpperCase()
+                  : '?',
+              style: TextStyle(
+                color: onAccent,
+                fontSize: AppTypography.lg,
+                fontWeight: AppTypography.semiBold,
+              ),
+            ),
           );
         }),
         if (overflow > 0)

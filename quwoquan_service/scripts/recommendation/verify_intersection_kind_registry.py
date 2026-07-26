@@ -2,7 +2,7 @@
 """交集 kind 注册表单一真相源门禁（Phase 0 漂移收口 §20d + §23 去桥接闭集校验）。
 
 唯一真相源:
-  contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml
+  services/recommendation-service/contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml
 
 校验项:
   1. 顶层四闭集结构完整：dimensions / lifecycleStates / verticals / objectKinds 均非空，且包含
@@ -31,19 +31,19 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REGISTRY = (
     REPO_ROOT
-    / "quwoquan_service/contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml"
+    / "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml"
 )
 GENERATED_TABLE = (
     REPO_ROOT
-    / "quwoquan_service/services/content-service/internal/generated/intersection_kind_table.go"
+    / "quwoquan_service/services/content-service/generated/content/post/intersection_kind_table.go"
 )
 SERVICE_GO = (
     REPO_ROOT
-    / "quwoquan_service/services/content-service/internal/application/intersection/intersection_service.go"
+    / "quwoquan_service/services/content-service/internal/content/post/application/intersection/intersection_service.go"
 )
 HYDRATION_PACKAGE = (
     REPO_ROOT
-    / "quwoquan_service/services/content-service/internal/application/intersection"
+    / "quwoquan_service/services/content-service/internal/content/post/application/intersection"
 )
 
 VALUE_TIERS = {"T1", "T2", "T3", "T4"}

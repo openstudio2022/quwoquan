@@ -331,12 +331,31 @@ export function EntityHomepageGovernancePage() {
 }
 
 function EvidenceLink({ href, label }: { href?: string; label: string }) {
-  if (!href) return null;
+  const safeHref = safeExternalEvidenceURL(href);
+  if (!safeHref) return null;
   return (
-    <a className="badge badge--neutral" href={href} rel="noreferrer" target="_blank">
+    <a className="badge badge--neutral" href={safeHref} rel="noreferrer" target="_blank">
       {label}
     </a>
   );
+}
+
+function safeExternalEvidenceURL(value?: string): string | null {
+  if (!value || value.trim() !== value) return null;
+  try {
+    const parsed = new URL(value);
+    if (
+      parsed.protocol !== 'https:' ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return null;
+    }
+    return parsed.href;
+  } catch {
+    return null;
+  }
 }
 
 function ReviewActions({

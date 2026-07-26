@@ -180,11 +180,12 @@ def main() -> int:
         sys.executable,
         str(
             REPO_ROOT
-            / "quwoquan_service"
-            / "services"
-            / "assistant-service"
+            / "quwoquan_ops"
             / "tests"
-            / "ops"
+            / "acceptance"
+            / "user_acceptance"
+            / "service_ops"
+            / "assistant-service"
             / "ci"
             / "run_assistant_device_matrix.py"
         ),

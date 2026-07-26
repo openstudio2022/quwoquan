@@ -39,6 +39,17 @@ def rel(path: Path) -> str:
     return str(path.relative_to(ROOT))
 
 
+def resolve_fixture_path(raw: str) -> Path:
+    fixture_ref = Path(raw)
+    if fixture_ref.is_absolute() or ".." in fixture_ref.parts:
+        fail(f"fixturePath must be a safe repository or metadata relative path: {raw}")
+    base = ROOT if fixture_ref.parts and fixture_ref.parts[0].startswith("quwoquan_") else METADATA
+    resolved = (base / fixture_ref).resolve()
+    if not resolved.is_relative_to(ROOT.resolve()):
+        fail(f"fixturePath escapes repository: {raw}")
+    return resolved
+
+
 def verify_manifest(env: str, path: Path) -> None:
     manifest = load_json(path)
     if manifest.get("schema") != "app-seed-manifest":
@@ -59,7 +70,7 @@ def verify_manifest(env: str, path: Path) -> None:
         seen_domains.add(domain)
         domain_items[domain] = item
 
-        fixture_path = METADATA / fixture_rel
+        fixture_path = resolve_fixture_path(fixture_rel)
         fixture = load_json(fixture_path)
         seed_sets = fixture.get("seedSets", {})
         scenarios = fixture.get("scenarios", [])
@@ -112,7 +123,7 @@ def verify_prod_isolation() -> None:
     for root in candidate_roots:
         if root.exists():
             candidate_files.extend([p for p in root.rglob("*") if p.is_file()])
-    for service_cfg in (ROOT / "quwoquan_service" / "services").glob("*/configs/prod*/config.yaml"):
+    for service_cfg in (ROOT / "quwoquan_service" / "services").glob("*/environments/prod/config.yaml"):
         candidate_files.append(service_cfg)
     for path in candidate_files:
         text = path.read_text(encoding="utf-8", errors="ignore")

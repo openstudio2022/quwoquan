@@ -87,7 +87,7 @@ def test_configurable_auto_approve_disabled():
 
 def test_post_publishability_discard_image_not_blocking():
     ledger = ReviewLedger(
-        execution_id="20260711--travel-article-review--cn-sichuan--canary-001", ref="稻城亚丁_体验",
+        execution_id="20260711--travel-article-review--test-region-b--pilot-001", ref="稻城亚丁_体验",
         article=ReviewVerdict(kind=ReviewItemKind.ARTICLE, target="article", agent_judgment=ReviewJudgment.CREDIBLE, agent_score=4),
         images=(
             _item(target="img_ok", agent_judgment=ReviewJudgment.CREDIBLE, agent_score=4),
@@ -102,7 +102,7 @@ def test_post_publishability_discard_image_not_blocking():
 
 def test_post_publishability_blocked_by_fix_image():
     ledger = ReviewLedger(
-        execution_id="20260711--travel-article-review--cn-sichuan--canary-002", ref="r",
+        execution_id="20260711--travel-article-review--test-region-b--pilot-002", ref="r",
         article=ReviewVerdict(kind=ReviewItemKind.ARTICLE, target="article", agent_judgment=ReviewJudgment.CREDIBLE, agent_score=4),
         images=(_item(target="img_doubt", agent_judgment=ReviewJudgment.DOUBTFUL, agent_score=2),),
     )
@@ -113,7 +113,7 @@ def test_post_publishability_blocked_by_fix_image():
 
 def test_roundtrip_serialization():
     led = ReviewLedger(
-        execution_id="20260711--travel-article-review--cn-sichuan--canary-003", ref="r",
+        execution_id="20260711--travel-article-review--test-region-b--pilot-003", ref="r",
         article=ReviewVerdict(kind=ReviewItemKind.ARTICLE, target="article", agent_judgment=ReviewJudgment.CREDIBLE, agent_score=3),
         images=(_item(target="i1"),),
         facts=(ReviewVerdict(kind=ReviewItemKind.FACT, target="海拔4500米", agent_judgment=ReviewJudgment.DOUBTFUL, agent_score=2),),

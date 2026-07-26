@@ -46,7 +46,7 @@ DEFAULT_OUT_DIR = str(
     / "search-load"
 )
 SLO_REL = (
-    "quwoquan_service/services/search-service/configs/observability/search_slo.yaml"
+    "quwoquan_service/services/search-service/observability/slo/search_slo.yaml"
 )
 
 # 热点 query（warm）+ 长尾池（cold）。中文按真实索引内容选取，便于命中/不命中。

@@ -57,6 +57,38 @@ def homepage_media_review_dispositions(manifest: Mapping[str, Any]) -> list[dict
         )
     return rows
 
+
+def homepage_asset_file_evidence(
+    object_dir: Path,
+    manifest: Mapping[str, Any],
+) -> list[dict[str, object]]:
+    """Project deterministic asset existence into the semantic review packet."""
+    raw_assets = manifest.get("assets") or []
+    if not isinstance(raw_assets, list):
+        return []
+    assets_dir = (object_dir / "assets").resolve()
+    rows: list[dict[str, object]] = []
+    for raw in raw_assets:
+        if not isinstance(raw, Mapping):
+            continue
+        asset_id = str(raw.get("assetId") or "").strip()
+        file_name = str(raw.get("fileName") or "").strip()
+        if not asset_id or not file_name:
+            continue
+        candidate = (assets_dir / file_name).resolve()
+        inside_assets = candidate.is_relative_to(assets_dir)
+        exists = inside_assets and candidate.is_file()
+        rows.append(
+            {
+                "assetId": asset_id,
+                "fileName": file_name,
+                "relativePath": f"assets/{file_name}",
+                "exists": exists,
+                "sha256": sha256_file(candidate) if exists else "",
+            }
+        )
+    return rows
+
 def _entity_draft_dir(execution_id: str, domain: str, etype: str, name: str) -> Path:
     return execution_entity_stage_dir(execution_id, domain, etype, name, STAGE_DRAFT)
 def _entity_draft_path(execution_id: str, domain: str, etype: str, name: str) -> Path:
@@ -356,6 +388,7 @@ def _write_entity_review_sidecars(
         "schema": "quwoquan_data.evidence_index",
         "stage": "5.review",
         "executionId": execution["executionId"],
+        "executionBinding": execution["executionBinding"],
         "objectRef": object_ref,
         "evidence": [
             {

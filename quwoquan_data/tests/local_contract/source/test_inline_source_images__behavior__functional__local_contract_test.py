@@ -167,7 +167,6 @@ def test_inline_candidate_flows_through_gates_with_placeholder():
                 "sha256": "z",
             },
         )
-        patch("image_dimensions", lambda b: (800, 600))
         patch("pixel_size_issue", lambda w, h, asset_id: None)
         patch(
             "_write_image_check_temp_file",
@@ -185,7 +184,7 @@ def test_inline_candidate_flows_through_gates_with_placeholder():
                 "credit": "qunar",
                 "url": "https://travel.qunar.com/youji/7870084",
             },
-            execution_id="旅行/地域/四川省/景区/x",
+            execution_id="旅行/地域/test-region-b/景区/x",
             entity_id="九寨沟",
             object_dir=Path(tempfile.mkdtemp(prefix="inline_obj_")),
             ordinal=1,

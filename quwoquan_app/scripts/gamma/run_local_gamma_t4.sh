@@ -2,6 +2,39 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
+runtime_topology="$ROOT/quwoquan_ops/environments/gamma/runtime.yaml"
+if [[ ! -f "$runtime_topology" ]]; then
+  echo "[local-gamma:t4] GATE_BLOCK: gamma runtime topology is missing" >&2
+  exit 2
+fi
+
+topology_public_bases="$(python3 - "$runtime_topology" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    bases = payload["publicBases"]
+    values = [
+        bases["api"],
+        bases["productOps"],
+        bases["mediaAvatar"],
+        bases["mediaImage"],
+        bases["mediaVideo"],
+        bases["mediaUpload"],
+        bases["rtc"],
+    ]
+except (KeyError, OSError, json.JSONDecodeError, TypeError) as exc:
+    raise SystemExit(f"invalid gamma runtime topology: {exc}")
+if any(not isinstance(value, str) or not value.strip() for value in values):
+    raise SystemExit("invalid gamma runtime topology: publicBases contains an empty value")
+print("\t".join(values))
+PY
+)"
+IFS=$'\t' read -r topology_gateway_base_url topology_product_ops_base_url topology_media_avatar_base_url topology_media_image_base_url topology_media_video_base_url topology_media_upload_base_url topology_rtc_media_connection_url <<< "$topology_public_bases"
+
 if [[ -z "${QWQ_RUN_ROOT:-}" ]]; then
   QWQ_RUN_ROOT="$(PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
 from quwoquan_ops.cli.lib.output_paths import env_run_dir
@@ -12,17 +45,19 @@ PY
 fi
 GAMMA_RUN_ROOT="$QWQ_RUN_ROOT"
 REPORT="${LOCAL_GAMMA_T4_REPORT:-$GAMMA_RUN_ROOT/t4_report.json}"
-GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-https://gamma-api.quwoquan-env.test:19000}"
-PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-ops.quwoquan-env.test:19010}"
-MEDIA_AVATAR_BASE_URL="${LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL:-https://gamma-avatar.quwoquan-env.test:19100}"
-MEDIA_IMAGE_BASE_URL="${LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test:19100}}"
-MEDIA_VIDEO_BASE_URL="${LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL:-https://gamma-video.quwoquan-env.test:19100}"
-MEDIA_UPLOAD_BASE_URL="${LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL:-https://gamma-upload.quwoquan-env.test:19130}"
+GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-$topology_gateway_base_url}"
+PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-$topology_product_ops_base_url}"
+MEDIA_AVATAR_BASE_URL="${LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL:-$topology_media_avatar_base_url}"
+MEDIA_IMAGE_BASE_URL="${LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-$topology_media_image_base_url}}"
+MEDIA_VIDEO_BASE_URL="${LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL:-$topology_media_video_base_url}"
+MEDIA_UPLOAD_BASE_URL="${LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL:-$topology_media_upload_base_url}"
+RTC_MEDIA_CONNECTION_URL="${LOCAL_GAMMA_RTC_MEDIA_CONNECTION_URL:-$topology_rtc_media_connection_url}"
 # Local Gamma owns its anonymous session inside the device runtime through the
 # public user-service boundary. Never inherit host credentials: Flutter expands
 # Dart defines into child process arguments, which would expose a bearer token.
 unset TEST_AUTH_TOKEN TEST_REFRESH_TOKEN APP_CURRENT_OWNER_ID APP_CURRENT_SUB_ACCOUNT_ID
 PATROL_TARGET="${LOCAL_GAMMA_T4_TARGET:-test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart}"
+PATROL_INSTALL_ID="${QWQ_PATROL_INSTALL_ID:-}"
 RELEASE_UAT_CASES=""
 TARGET_EXPLICIT=0
 DEVICE_ID="${LOCAL_GAMMA_T4_DEVICE_ID:-}"
@@ -37,6 +72,7 @@ Options:
   --device-id <id>          Run Patrol on a specific Flutter device.
   --platform <name>         android / ios / all (default: all).
   --target <path>           Patrol target file or directory.
+  --patrol-install-id <tpl> One-run install identity template; account closure requires {device}.
   --release-uat-cases <path> Gamma data-release generated homepage_verification_cases.json.
   --report <path>           Write the Patrol report to this runtime evidence path.
   --gateway-base-url <url>  Mirror gateway URL.
@@ -45,6 +81,7 @@ Options:
   --media-image-base-url <url>
   --media-video-base-url <url>
   --media-upload-base-url <url>
+  --rtc-media-connection-url <url>
   --dry-run                 Validate command construction only.
   --help                    Show this help.
 USAGE
@@ -55,6 +92,7 @@ while [[ $# -gt 0 ]]; do
     --device-id) DEVICE_ID="${2:-}"; shift 2 ;;
     --platform) PLATFORM="${2:-}"; shift 2 ;;
     --target) PATROL_TARGET="${2:-}"; TARGET_EXPLICIT=1; shift 2 ;;
+    --patrol-install-id) PATROL_INSTALL_ID="${2:-}"; shift 2 ;;
     --release-uat-cases) RELEASE_UAT_CASES="${2:-}"; shift 2 ;;
     --report) REPORT="${2:-}"; shift 2 ;;
     --gateway-base-url) GATEWAY_BASE_URL="${2:-}"; shift 2 ;;
@@ -63,6 +101,7 @@ while [[ $# -gt 0 ]]; do
     --media-image-base-url) MEDIA_IMAGE_BASE_URL="${2:-}"; shift 2 ;;
     --media-video-base-url) MEDIA_VIDEO_BASE_URL="${2:-}"; shift 2 ;;
     --media-upload-base-url) MEDIA_UPLOAD_BASE_URL="${2:-}"; shift 2 ;;
+    --rtc-media-connection-url) RTC_MEDIA_CONNECTION_URL="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -70,12 +109,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -n "$RELEASE_UAT_CASES" ]]; then
-  two_province_target="test/user_acceptance/patrol/entity/two_province_homepage__rollout_render__functional__user_acceptance_test.dart"
-  if [[ "$TARGET_EXPLICIT" == "1" && "$PATROL_TARGET" != "$two_province_target" ]]; then
-    echo "[local-gamma:t4] GATE_BLOCK: --release-uat-cases requires $two_province_target" >&2
+  release_homepage_target="test/user_acceptance/patrol/entity/release_homepage__consumer_render__functional__user_acceptance_test.dart"
+  if [[ "$TARGET_EXPLICIT" == "1" && "$PATROL_TARGET" != "$release_homepage_target" ]]; then
+    echo "[local-gamma:t4] GATE_BLOCK: --release-uat-cases requires $release_homepage_target" >&2
     exit 2
   fi
-  PATROL_TARGET="$two_province_target"
+  PATROL_TARGET="$release_homepage_target"
 fi
 
 _flutter_bin="$(command -v flutter || true)"
@@ -123,12 +162,16 @@ cmd=(
   --media-image-base-url "$MEDIA_IMAGE_BASE_URL"
   --media-video-base-url "$MEDIA_VIDEO_BASE_URL"
   --media-upload-base-url "$MEDIA_UPLOAD_BASE_URL"
+  --rtc-media-connection-url "$RTC_MEDIA_CONNECTION_URL"
 )
 if [[ -n "$DEVICE_ID" ]]; then
   cmd+=(--device-id "$DEVICE_ID")
 fi
 if [[ -n "$RELEASE_UAT_CASES" ]]; then
   cmd+=(--release-uat-cases "$RELEASE_UAT_CASES")
+fi
+if [[ -n "$PATROL_INSTALL_ID" ]]; then
+  cmd+=(--patrol-install-id "$PATROL_INSTALL_ID")
 fi
 if [[ "$DRY_RUN" == "1" ]]; then
   cmd+=(--dry-run)

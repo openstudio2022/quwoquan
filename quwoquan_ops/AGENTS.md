@@ -2,9 +2,10 @@
 
 在 `quwoquan_ops/` 工作时，除仓库根 `AGENTS.md` 外，先阅读：
 
-1. `docs/agent_context_contract.md`
-2. `.cursor/skills/environment-ops/SKILL.md`
-3. `quwoquan_ops/gate/gate_repo.sh`
+1. `specs/feature-tree/README.md`
+2. 目标特性父链，或运行 `make feature-context TARGET=<path>`
+3. `.cursor/skills/environment-ops/SKILL.md`
+4. `quwoquan_ops/gate/gate_repo.sh`
 
 ## 运维与门禁硬约束
 
@@ -15,7 +16,7 @@
 - `.qwq_output` 一级只允许 `env/` 与 `data/`。环境输出统一放 `.qwq_output/env/<env>/{runs,observability,local}/`，repo 级证据与临时状态放 `.qwq_output/env/repo/{runs,observability,local}/`，数据执行输出放 `.qwq_output/data/{tasks,releases,local}/`。
 - `local/` 下每个 target 只允许 `process/` 与 `cache/`；`process/` 只保存 pid、进程状态、stdout/stderr 等可删除运行记录，`cache/` 只保存可重建缓存。渲染配置、`.env`、Caddyfile、Caddy data/config、TLS/证书和临时部署卷一律放仓外受限的 `QWQ_DEPLOY_WORK_ROOT`；配置、网络拓扑、证书生成规则与部署约束的真相源必须留在领域 `deploy/` 或 `quwoquan_ops/environments/`，不得写入 `.qwq_output`。
 - App、Service、Legal-static 与 Portal 的可发布包统一写入 `QWQ_DEPLOY_WORK_ROOT/<target>/packages/{app,service,legal-static,ops-portal}/`；禁止将 deployment payload 写回 `.qwq_output`，也禁止重新引入 `packages/runtime/cache/tmp` 环境类别、根 `artifacts/`、`state/` 或环境特例目录。
-- 远端唯一托管目标为 `prod-hosted`（ssh-hosted；远端 gamma 已退役，仅保留 `gamma-local`）。prod 远端访问按 `edge/media/service/data` 四平面去 root 隔离，凭据为按平面 SSH 私钥 `PROD_<PLANE>_SSH_KEY`，单一真相源 `quwoquan_ops/environments/prod_plane_access_isolation.yaml`；已退役单一全权 `PROD_KUBECONFIG`，禁止任何 prod 路径再依赖它或 `kubectl`。
+- 远端唯一托管目标为 `prod-hosted`（ssh-hosted；远端 gamma 已退役，仅保留 `gamma-local`）。prod 远端访问按 `edge/media/service/data` 四平面去 root 隔离，凭据为按平面 SSH 私钥 `PROD_<PLANE>_SSH_KEY`，单一真相源 `quwoquan_ops/environments/prod/access-isolation.yaml`；已退役单一全权 `PROD_KUBECONFIG`，禁止任何 prod 路径再依赖它或 `kubectl`。
 - `repair` 只允许白名单修复；涉及 prod-hosted 放量、回滚版本、密钥、hosted URL 或破坏性动作时必须停下请求人工确认。
 - 门禁脚本应可重复、可解释、失败信息能指向修复路径；禁止用 allowlist 掩盖新债。
 

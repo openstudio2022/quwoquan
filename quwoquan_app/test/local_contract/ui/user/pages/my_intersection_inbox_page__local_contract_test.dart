@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-001
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -15,6 +16,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
@@ -40,6 +42,41 @@ TextSpan _spanByText(RichText richText, String text) {
     return true;
   });
   return result!;
+}
+
+const _authorImpactFixtureId = 'impact_fixture_content_share';
+const _authorImpactFixtureEvidenceSnapshotId = 'impact_evidence_snapshot_001';
+const _authorImpactFixtureFreshAt = '2026-07-23T00:00:00.000Z';
+
+AuthorImpactItem _authorImpactFixture({required String primaryText}) {
+  return AuthorImpactItem(
+    helpType: 'content',
+    action: 'share',
+    intersectionDimension: 'content',
+    tagRef: 'tag/content/share',
+    source: 'content_share',
+    count: 8,
+    primaryText: primaryText,
+    subtitleText: '',
+    impactId: _authorImpactFixtureId,
+    primarySpans: <IntersectionTextSpan>[
+      IntersectionTextSpan(text: primaryText, role: 'plain'),
+    ],
+    sampleVisuals: const <IntersectionVisual>[],
+    actionHints: const <IntersectionActionHint>[],
+    countTarget: _targetFor(
+      objectKind: 'content',
+      objectId: 'fixture_post_impact',
+    ),
+    evidenceSnapshotId: _authorImpactFixtureEvidenceSnapshotId,
+    countObjectKind: 'content',
+    iconKey: 'impact',
+    freshAt: _authorImpactFixtureFreshAt,
+    timeBucket: 'today',
+    lifecycleState: 'active',
+    previousStrength: 0.0,
+    strengthDelta: 0.0,
+  );
 }
 
 IntersectionReason _displayableInboxReason({
@@ -399,17 +436,12 @@ void main() {
       ProviderScope(
         overrides: [
           authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
-          authorImpactProvider.overrideWith((ref, userId) async {
+          authorImpactProvider.overrideWith((ref, request) async {
             return AuthorImpactSummary(
-              authorId: userId,
+              authorId: request.subAccountId,
               total: 1,
               items: <AuthorImpactItem>[
-                AuthorImpactItem(
-                  intersectionDimension: 'content',
-                  source: 'content_share',
-                  count: 8,
-                  primaryText: '8人因为你的记录收藏了路线',
-                ),
+                _authorImpactFixture(primaryText: '8人因为你的记录收藏了路线'),
               ],
             );
           }),

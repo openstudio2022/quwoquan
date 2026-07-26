@@ -16,7 +16,7 @@ from core.schema import assert_valid  # noqa: E402
 
 
 def test_homepage_review_evidence_uses_canonical_schema(tmp_path: Path, monkeypatch) -> None:
-    execution_id = "20260715--travel-homepage-review-evidence--cn-zhejiang--canary-001"
+    execution_id = "20260715--travel-homepage-review-evidence--test-region-a--pilot-001"
     object_dir = tmp_path / "entity"
     draft_dir = object_dir / "4.draft"
     draft_dir.mkdir(parents=True)

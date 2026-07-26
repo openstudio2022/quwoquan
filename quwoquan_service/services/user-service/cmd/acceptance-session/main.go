@@ -5,19 +5,14 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"strings"
 
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	accountsession "quwoquan_service/services/user-service/internal/account/account_session/application"
 )
-
-var localAcceptanceTargets = map[string]string{
-	"beta":  "beta-local",
-	"gamma": "gamma-local",
-}
 
 type response struct {
 	OwnerID     string `json:"ownerId"`
@@ -28,12 +23,12 @@ type response struct {
 func main() {
 	environment := strings.TrimSpace(os.Getenv("APP_ENV"))
 	target := strings.TrimSpace(os.Getenv("QWQ_LOCAL_ACCEPTANCE_TARGET"))
-	if localAcceptanceTargets[environment] != target {
+	if accountsession.LocalAcceptanceTargets[environment] != target {
 		log.Fatal("acceptance session issuer is restricted to declared local integration targets")
 	}
 	ownerID := requiredEnv("QWQ_ACCEPTANCE_OWNER_ID")
 	personaID := requiredEnv("QWQ_ACCEPTANCE_PERSONA_ID")
-	subject, err := acceptanceSubject(
+	subject, err := accountsession.Subject(
 		strings.TrimSpace(os.Getenv("QWQ_ACCEPTANCE_PROFILE")),
 		ownerID,
 		personaID,
@@ -57,49 +52,6 @@ func main() {
 		OwnerID: ownerID, PersonaID: personaID, AccessToken: token,
 	}); err != nil {
 		log.Fatal("encode acceptance session")
-	}
-}
-
-func acceptanceSubject(
-	profile string,
-	ownerID string,
-	personaID string,
-) (rtauth.TokenSubject, error) {
-	switch profile {
-	case "", "persona":
-		return rtauth.TokenSubject{
-			AccountID: ownerID,
-			PersonaID: personaID,
-		}, nil
-	case "content-report-operator":
-		return rtauth.TokenSubject{
-			AccountID: ownerID,
-			PersonaID: personaID,
-			Scopes: []string{
-				"ops.case.read",
-				"ops.case.write",
-			},
-			Permissions: []string{
-				"content.report.read",
-				"content.report.review",
-				"content.report.resolve",
-			},
-			Roles: []string{"operator"},
-		}, nil
-	case "content-filter-catalog-publisher":
-		return rtauth.TokenSubject{
-			AccountID: ownerID,
-			PersonaID: personaID,
-			Scopes: []string{
-				"content.filter_catalog.manage",
-			},
-			Roles: []string{"service"},
-		}, nil
-	default:
-		return rtauth.TokenSubject{}, fmt.Errorf(
-			"unsupported local acceptance profile %q",
-			profile,
-		)
 	}
 }
 

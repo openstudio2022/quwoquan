@@ -11,6 +11,7 @@ from enum import StrEnum
 from typing import Any, Mapping
 
 from core.control_types import AgentProvider
+from core.cursor_model import CursorModelParameter, CursorModelSelection
 from core.runtime_policy import active_runtime_policy
 
 
@@ -27,6 +28,14 @@ class ExecutionModel:
     provider: AgentProvider
     model_id: str
     family: ModelFamily
+    parameters: tuple[CursorModelParameter, ...] = ()
+
+    @property
+    def selection(self) -> CursorModelSelection:
+        return CursorModelSelection(
+            model_id=self.model_id,
+            parameters=self.parameters,
+        )
 
     @classmethod
     def from_execution(
@@ -37,9 +46,17 @@ class ExecutionModel:
         provider: AgentProvider,
     ) -> "ExecutionModel":
         if role == "author":
-            model_key, family_key = "model", "modelFamily"
+            model_key, family_key, parameters_key = (
+                "model",
+                "modelFamily",
+                "modelParameters",
+            )
         elif role == "reviewer":
-            model_key, family_key = "reviewModel", "reviewModelFamily"
+            model_key, family_key, parameters_key = (
+                "reviewModel",
+                "reviewModelFamily",
+                "reviewModelParameters",
+            )
         else:
             raise ValueError(f"unsupported execution model role: {role}")
         model_id = str(execution.get(model_key) or "").strip()
@@ -55,7 +72,17 @@ class ExecutionModel:
             raise ValueError(
                 f"execution.{family_key} must be one of: {allowed}"
             ) from exc
-        return cls(provider=provider, model_id=model_id, family=family)
+        selection = CursorModelSelection.from_config(
+            model_id,
+            execution.get(parameters_key),
+            label=f"recipe.execution.{role}",
+        )
+        return cls(
+            provider=provider,
+            model_id=selection.model_id,
+            family=family,
+            parameters=selection.parameters,
+        )
 
 
 @dataclass(frozen=True, slots=True)

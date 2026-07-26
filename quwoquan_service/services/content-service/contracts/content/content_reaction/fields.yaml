@@ -1,0 +1,108 @@
+fields:
+- name: id
+  source: id
+  type: string
+  constraints:
+  - PK
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: version
+  source: version
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_1
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: targetKind
+  source: targetKind
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 封闭目标类型，当前只允许 post 或 comment。
+  role: authoritative_state
+  reference: true
+- name: targetId
+  source: targetId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: actorDimension
+  source: actorDimension
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: actorId
+  source: actorId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: reaction
+  source: reaction
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: none/like/dislike；post 目标禁止 dislike。
+  role: authoritative_state
+- name: reactedAt
+  source: reactedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: createdAt
+  source: createdAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: updatedAt
+  source: updatedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state

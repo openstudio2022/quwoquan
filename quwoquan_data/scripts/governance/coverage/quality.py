@@ -9,26 +9,26 @@ import yaml
 from core.paths import _REPO_DATA_ROOT
 from core.source_catalog import known_category_ids
 from content.source.fetch_text import SUPPORTED_TEXT_EXTRACTORS
-from governance.coverage.coverage import list_verticals, load_registry
+from governance.coverage.vertical_inventory import list_verticals, load_vertical_inventory
 from governance.coverage.license import load_photography_license_policy, load_travel_license_policy
 from governance.coverage.source_registry import verify_travel_source_registry
 
 
 def _samples_path(vertical: str) -> Path:
-    return _REPO_DATA_ROOT / "verticals" / vertical / "tests" / "golden_samples.yaml"
+    return _REPO_DATA_ROOT / "tests" / "support" / "vertical_quality" / f"{vertical}.yaml"
 
 
 def verify_vertical_quality() -> list[str]:
     issues: list[str] = []
     categories = known_category_ids()
     for vertical in list_verticals():
-        registry = load_registry(vertical)
-        units = registry.get("units") or []
-        if not units:
-            issues.append(f"{vertical}: coverage registry has no units")
+        inventory = load_vertical_inventory(vertical)
+        carriers = inventory.get("carriers") or []
+        if not carriers:
+            issues.append(f"{vertical}: content policy has no carriers")
         samples_path = _samples_path(vertical)
         if not samples_path.is_file():
-            issues.append(f"{vertical}: missing golden_samples.yaml")
+            issues.append(f"{vertical}: missing reusable quality sample fixture")
             continue
         data: dict[str, Any] = yaml.safe_load(samples_path.read_text(encoding="utf-8")) or {}
         if data.get("schema") != "quwoquan.vertical_quality_samples":

@@ -1,0 +1,32 @@
+version: 1
+service: notification-service
+domain: notification
+capability: account-security-authority
+
+# 同步账号安全校验 fail-closed；指标只允许固定 outcome 标签，
+# 禁止记录 account、persona、token、authorization 或请求路径。
+metrics:
+  authority_checks_total: runtime_auth_account_security_authority_checks_total # labels: outcome
+  authority_check_duration_seconds: runtime_auth_account_security_authority_check_duration_seconds # labels: outcome
+
+privacy:
+  permitted_labels: [outcome]
+  prohibited_labels: [account_id, persona_id, token, authorization, request_path]
+
+slis:
+  - id: account_security_authority_latency
+    sli: histogram_quantile(0.95, sum(rate(runtime_auth_account_security_authority_check_duration_seconds_bucket[5m])) by (le))
+    objective:
+      p95_ms: 150
+      timeout_ms: 300
+  - id: account_security_authority_availability
+    sli: 1 - sum(rate(runtime_auth_account_security_authority_checks_total{outcome="unavailable"}[5m])) / sum(rate(runtime_auth_account_security_authority_checks_total[5m]))
+    objective: 0.999
+
+readiness:
+  endpoint: /readyz
+  dependency: scoped_account_security_authority_health
+  failure_semantics: return_503_and_remove_instance_from_ready_pool
+
+failure_semantics:
+  authority_unavailable: deny_end_user_request

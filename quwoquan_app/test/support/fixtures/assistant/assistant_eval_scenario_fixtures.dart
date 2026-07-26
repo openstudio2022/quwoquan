@@ -205,6 +205,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
   @override
   Future<AssistantConversationWire> createAssistantConversation({
     String summary = '',
+    required String clientRequestId,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
     return AssistantConversationWire(
@@ -220,6 +221,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
   Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
+    required String clientRequestId,
     String turnType = 'user',
     String skillId = '',
     String domainId = '',
@@ -235,8 +237,8 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       turnType: turnType,
       skillId: skillId.isEmpty ? scenario.skillId : skillId,
       domainId: domainId.isEmpty ? scenario.domainId : domainId,
-      input: <String, dynamic>{'text': text},
-      trigger: const <String, dynamic>{'type': 'user_message'},
+      input: AssistantTurnInputWire(text: text),
+      trigger: const AssistantTurnTriggerWire(type: 'user_message'),
       traceId: 'trace_eval_${scenario.id}',
       createdAt: DateTime.now().toUtc().toIso8601String(),
     );
@@ -258,7 +260,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 1,
-      eventType: 'run_started',
+      eventType: AssistantStreamEventType.runStarted,
       payload: const <String, dynamic>{'status': 'running', 'restarted': false},
       createdAt: createdAt,
     );
@@ -268,7 +270,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 2,
-      eventType: 'process_replace',
+      eventType: AssistantStreamEventType.processReplace,
       payload: const <String, dynamic>{'processes': <Object?>[]},
       createdAt: createdAt,
     );
@@ -278,7 +280,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 3,
-      eventType: 'process_append',
+      eventType: AssistantStreamEventType.processAppend,
       payload: <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'skill_selection',
@@ -299,7 +301,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 4,
-      eventType: 'process_append',
+      eventType: AssistantStreamEventType.processAppend,
       payload: <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'tool_execution',
@@ -321,7 +323,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 5,
-      eventType: 'process_commit',
+      eventType: AssistantStreamEventType.processCommit,
       payload: <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'evidence_review',
@@ -364,7 +366,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 6,
-      eventType: 'process_append',
+      eventType: AssistantStreamEventType.processAppend,
       payload: const <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'answer_generation',
@@ -382,7 +384,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 7,
-      eventType: 'answer_delta',
+      eventType: AssistantStreamEventType.answerDelta,
       payload: <String, dynamic>{'text': scenario.alphaMockStream.finalAnswer},
       createdAt: createdAt,
     );
@@ -392,7 +394,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 8,
-      eventType: 'process_commit',
+      eventType: AssistantStreamEventType.processCommit,
       payload: const <String, dynamic>{
         'process': <String, dynamic>{
           'processId': 'answer_generation',
@@ -410,7 +412,7 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 9,
-      eventType: 'completed',
+      eventType: AssistantStreamEventType.completed,
       payload: <String, dynamic>{
         'status': 'completed',
         'finalAnswer': scenario.alphaMockStream.finalAnswer,

@@ -40,7 +40,7 @@ def test_stage_gate_requires_complete_five_stage_object_and_blocks_process_relea
     release_root = tmp_path / "release"
 
     report = stage_artifacts.verify_stage_artifacts(
-        execution_id="20260711--travel-homepage-stage-gate--cn-zhejiang--canary-001",
+        execution_id="20260711--travel-homepage-stage-gate--test-region-a--pilot-001",
         publish_root=publish_root,
         release_root=release_root,
         commercial=False,
@@ -51,7 +51,7 @@ def test_stage_gate_requires_complete_five_stage_object_and_blocks_process_relea
     (release_root / "rel-1").mkdir(parents=True)
     (release_root / "rel-1/prompt.md").write_text("forbidden", encoding="utf-8")
     report = stage_artifacts.verify_stage_artifacts(
-        execution_id="20260711--travel-homepage-stage-gate--cn-zhejiang--canary-001",
+        execution_id="20260711--travel-homepage-stage-gate--test-region-a--pilot-001",
         publish_root=publish_root,
         release_root=release_root,
         commercial=False,
@@ -77,13 +77,13 @@ def test_prompt_snapshot_is_replayable_and_rejects_secret_vars(
         prompt_snapshot,
         "stage_execution_context",
         lambda *_args: {
-            "executionId": "20260711--travel-article-prompt-audit--cn-zhejiang--canary-001",
+            "executionId": "20260711--travel-article-prompt-audit--test-region-a--pilot-001",
             "executionBinding": "frozen",
         },
     )
     prompt = "<role>作者</role>\n只依据证据。\n\n---\n\n对象：西湖\n"
     snapshot = prompt_snapshot.build_prompt_snapshot(
-        execution_id="20260711--travel-article-prompt-audit--cn-zhejiang--canary-001",
+        execution_id="20260711--travel-article-prompt-audit--test-region-a--pilot-001",
         stage="4.draft",
         template_family="demo",
         variables={"name": "西湖"},
@@ -101,7 +101,7 @@ def test_prompt_snapshot_is_replayable_and_rejects_secret_vars(
 
     with pytest.raises(ValueError, match="secret-like"):
         prompt_snapshot.build_prompt_snapshot(
-            execution_id="20260711--travel-article-prompt-audit--cn-zhejiang--canary-001",
+            execution_id="20260711--travel-article-prompt-audit--test-region-a--pilot-001",
             stage="4.draft",
             template_family="demo",
             variables={"apiToken": "do-not-store"},

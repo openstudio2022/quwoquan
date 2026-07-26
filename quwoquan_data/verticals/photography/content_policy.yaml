@@ -1,0 +1,42 @@
+policyId: photography-content-supply
+feedMinimumPosts: 20
+contentPerEntity:
+  article: 1
+  image: 1
+  video: 1
+quality:
+  nonEmptyRateMinimum: 0.999
+  duplicateExposureRateMaximum: 0.01
+  homepageMaxSourceFidelity: 0.92
+mediaSubject:
+  representativeIndicators:
+    - photograph
+    - photography
+    - portrait
+    - landscape
+    - 摄影
+    - 照片
+    - 影像
+  prohibitedIndicators:
+    - screenshot
+    - watermark
+    - interface
+    - 截图
+    - 水印
+    - 界面
+videoDelivery:
+  container: mp4
+  codec: h264
+  width: 1080
+  height: 1920
+  aspectRatio: "9:16"
+  pixelFormat: yuv420p
+  framesPerSecond: 24
+  segmentDurationSeconds: 2
+  minimumSourceFrames: 2
+  minimumDurationSeconds: 6
+  maximumDurationSeconds: 30
+  posterRequired: true
+  subtitlesRequired: true
+  checksumRequired: true
+  rightsProvenanceRequired: true

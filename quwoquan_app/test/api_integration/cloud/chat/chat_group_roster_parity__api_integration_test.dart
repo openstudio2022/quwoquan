@@ -14,9 +14,10 @@ import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/cloud/services/chat/remote/chat_repository_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../support/recording_cloud_operation_telemetry_sink.dart';
 
 const _runSmoke = bool.fromEnvironment('RUN_LOCAL_GAMMA_REMOTE_SMOKE');
 const _baseUrl = String.fromEnvironment(
@@ -31,7 +32,19 @@ const _viewerId = String.fromEnvironment(
   'APP_CURRENT_USER_ID',
   defaultValue: 'fixture_user_current',
 );
+final _acceptanceToken =
+    Platform.environment['LOCAL_GAMMA_ACCEPTANCE_TOKEN'] ?? '';
 const _photoGroupId = 'fixture_conv_photo_group';
+
+final class _AcceptanceTokenProvider implements CloudAuthTokenProvider {
+  const _AcceptanceTokenProvider(this.token);
+
+  final String token;
+
+  @override
+  Future<String?> getAccessToken() async =>
+      token.trim().isEmpty ? null : token;
+}
 
 Future<void> _ensureChatFixtureSeeded() async {
   final chatServiceDir = Directory(
@@ -71,13 +84,19 @@ void main() {
       if (!_runSmoke) {
         return markTestSkipped('Set RUN_LOCAL_GAMMA_REMOTE_SMOKE=true.');
       }
+      expect(
+        _acceptanceToken,
+        isNotEmpty,
+        reason: 'LOCAL_GAMMA_ACCEPTANCE_TOKEN is required for remote smoke.',
+      );
 
+      final telemetry = RecordingCloudOperationTelemetrySink();
       final client = buildGeneratedCloudOperationClient(
         httpClient: CloudHttpClient(
-          authTokenProvider: const StubCloudAuthTokenProvider(),
+          authTokenProvider: _AcceptanceTokenProvider(_acceptanceToken),
         ),
         clientContextProvider: const _GammaClientContextProvider(),
-        telemetrySink: const _NoopTelemetrySink(),
+        telemetrySink: telemetry,
         environment: CloudRuntimeEnvironment(
           environment: CloudEnvironment.gamma,
           gatewayBaseUri: Uri.parse(_baseUrl),
@@ -178,6 +197,8 @@ void main() {
         members.map((member) => member.userId).toSet().length,
         members.length,
       );
+      expect(telemetry.events, isNotEmpty);
+      expect(telemetry.events.every((event) => event.succeeded), isTrue);
     },
   );
 }
@@ -194,11 +215,4 @@ final class _GammaClientContextProvider implements CloudClientContextProvider {
       locale: 'zh-CN',
     );
   }
-}
-
-final class _NoopTelemetrySink implements CloudOperationTelemetrySink {
-  const _NoopTelemetrySink();
-
-  @override
-  void record(CloudOperationTelemetryEvent event) {}
 }

@@ -16,6 +16,7 @@ class AppRequestPageIds {
     'homepageMaintenance': 'entity.homepage.maintenance.page',
     'homepagePicker': 'entity.homepage.picker',
     'homepageStatusReport': 'entity.homepage.status_report.page',
+    'interestOnboarding': 'content.interest_onboarding',
     'mediaUploadComplete': 'media.upload.complete',
     'mediaUploadInit': 'media.upload.init',
     'profileCareerInterests': 'user.profile.career_interests',
@@ -34,6 +35,7 @@ class AppRequestPageIds {
   static const String homepageMaintenance = 'entity.homepage.maintenance.page';
   static const String homepagePicker = 'entity.homepage.picker';
   static const String homepageStatusReport = 'entity.homepage.status_report.page';
+  static const String interestOnboarding = 'content.interest_onboarding';
   static const String mediaUploadComplete = 'media.upload.complete';
   static const String mediaUploadInit = 'media.upload.init';
   static const String profileCareerInterests = 'user.profile.career_interests';

@@ -1,123 +1,194 @@
-# L1 规格：对象主页网络升级
+# L1 Domain Service：对象主页网络 (`object-homepage-network`)
 
-## 定位
+> 一句话定位：`object-homepage-network` 是用户主页、圈子/群组主页、共享主页三类对象页的跨域体验与契约收口层。
+
+## 1. 目标与用户价值
 
 `object-homepage-network` 是用户主页、圈子/群组主页、共享主页三类对象页的跨域体验与契约收口层。
 
-它不替代 `user-identity-profile-relationship`、`circle-community`、`shared-homepage-network` 的领域主档职责，而是定义三类主页在同一套对象网络中的用户价值、信息架构、内容归属、交集解释、灰度运营、推荐回流与小艺主动服务合同。
+## 2. 领域边界
 
-用户前台不看到“对象主页网络”这个术语。前台只看到：
+### 本领域拥有
 
-- 用户主页：这个人是谁、在创造什么、我和 TA 有什么关系、我能如何关注或协作。
-- 圈子/群组主页：这群人围绕什么正在发生、我该加入哪里、有哪些内容和成员。
-- 共享主页：这个学校、地点、景点、餐厅、酒店、车型等具体对象是什么、大家围绕它说了什么、有哪些相关内容和圈子。
+- 拥有跨用户主页、圈子主页与共享主页的对象页呈现合同、交集解释、行动入口和跨页状态交接；底层对象事实仍由来源领域拥有。
+- 只能通过本领域公开 command 修改其拥有事实。
 
-## 背景与动机
+### 本领域不拥有
 
-当前三类主页已经具备共享壳层基础，但还没有达到一流商用上线标准：
+- 不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
+- 不复制 metadata 中的字段、path、错误码和 wire 语义。
 
-1. 三类主页已有 `ObjectPageShell`，但用户、圈子、共享主页的 header、看点区、交集卡和行动入口视觉不统一。
-2. 内容仍主要按首页、精品、圈子列表分发，缺少按用户、圈子、共享主页三种对象维度自然归属和回流的统一合同。
-3. 交集理由、小艺解释、推荐排序、行为回流尚未完全消费同一套 `IntersectionReason + ObjectRelationEdge`。
-4. 共享主页存在上线硬债：`HomepageType` 枚举漂移、entity-service 内存态、评论缺少实体关联、离线实体与运行时主页双 ID。
-5. 商用上线需要运营灰度、埋点、实时推荐、小艺主动服务和回滚看板闭环，不能只做 UI 改版。
+### 上下游协作
 
-## 商用目标
+- 上游：AppRoot Journey 与公开输入事实。
+- 下游：直接 L2 能力以及协作 L1 的公开结果。
+- 跨域写入：目标领域公开 command；禁止直写目标存储。
+- 跨域读取：目标领域公开 query/projection。
 
-本节点目标是达到“小红书级内容看点 + 微信级关系导航”的商用水准：
+## 3. Journey / Scenario 职责
 
-- 简洁美观：三类主页同源设计系统，首屏不堆砌，视觉重心明确。
-- 有看点：每个对象页首屏都有精选内容、口碑或关系证据，而不是纯资料页。
-- 有深度：交集理由来自真实标签、实体和关系边，不拼接假文案。
-- 有关系：用户、圈子、共享主页可以互相跳转，且用户不迷路。
-- 可运营：支持按地域、版本、白名单、分桶、对象类型灰度。
-- 可学习：对象页事件实时回流推荐和小艺，形成曝光、理解、行动、反馈闭环。
+- [`JNY-011 / SCN-026`](../spec.md#scn-026)
+  - 本领域负责：在“对象页交集行动深化（同趣围观到破冰升级）”中，组合对象关系与交集解释投影，向对象页交付可理解、可行动的交集结果。
+  - 进入条件：用户发起“对象页交集行动深化（同趣围观到破冰升级）”且身份、输入与权限前置成立。
+  - 交付给下游的结果：组合对象关系与交集解释投影，向对象页交付可理解、可行动的交集结果，供 `recommendation-platform` 继续处理。
+  - 不负责：不写入账号、内容、圈子或会话 owner 事实。
 
-## 能力范围
+## 4. 业务能力
 
-### R1：统一对象页信息架构
+- [`intersection-unified-experience`](./intersection-unified-experience/spec.md)：以统一的交集事实、置信度、保鲜期和展示契约驱动发现、对象主页、圈子、聊天、个人主页与助理场景
+
+## 5. 领域要求
+
+<a id="req-001"></a>
+### REQ-001 三类对象页统一体验验收
+
+- 用户主页、圈子/群组主页、共享主页均使用统一四段式信息架构。
+- 任一对象页首屏能在 3 秒内讲清对象身份、与我的关系和可行动作。
+- 三类对象页共享视觉组件，但按 user/circle/homepage 保留自然差异。
+
+<a id="req-002"></a>
+### REQ-002 对象关系契约与硬债验收
+
+- ObjectRelationEdge、ObjectPageBundle、ObjectPageContext 完成 metadata 与 codegen。
+- HomepageType 与 fixture 不再漂移，首发校园和旅游出行对象有明确模板。
+- entity-service 主页读模型具备持久化、内容聚合、口碑、相关圈子和关系边。
+- 评论可关联 canonicalEntityId 或 homepageId，并能形成 comment_about_entity 关系边。
+- canonicalEntityId 与 homepageId 有单一映射合同。
+
+<a id="req-003"></a>
+### REQ-003 运营灰度与回滚验收
+
+- 对象页升级可按地域、版本、白名单、experimentBucket、对象类型和环境灰度。
+- 生产 App 仍只有一个 prod 包，不出现 app-prod-gray 或 release mock 入口。
+- 每个灰度 cohort 可观测曝光、转化、异常率、接口 RT、小艺触发和 dismiss。
+- 可按层级关闭小艺主动提示、关系证据可视化、新对象页模板、推荐策略变体。
+
+<a id="req-004"></a>
+### REQ-004 埋点到实时推荐闭环验收
+
+- 对象页曝光、交集曝光/点击、关系边点击、Tab 切换、行动、小艺反馈均进入统一行为管道。
+- 事件携带 objectType、objectId、canonicalEntityId、tagRefs、entityRefs、relationEdgeIds、intersectionReasonIds、referralSource、feedRequestId、recommendationTraceId、experimentBucket、rolloutCohort。
+- 推荐服务能消费对象关系反馈并形成 relation-aware ranking 输入。
+
+<a id="req-005"></a>
+### REQ-005 小艺主动服务验收
+
+- 小艺主动提示消费 ObjectPageContext、IntersectionReason、ObjectRelationEdge 和 rollout 策略。
+- 主动提示具备置信度、触发原因、冷却时间、可关闭状态。
+- impression、click、accept、dismiss 全部回流行为管道。
+- 小艺提示不遮挡对象页主操作，不在同一首屏出现多个主动提示。
+
+<a id="req-006"></a>
+### REQ-006 三类主页统一采用 身份区 / 交集与小艺区 / 看点区 / 导航区 四段式
 
 - 三类主页统一采用 `身份区 / 交集与小艺区 / 看点区 / 导航区` 四段式。
-- 身份区包含封面、头像或对象图、类型徽章、可信状态、核心统计和主操作。
-- 交集与小艺区展示 1 到 3 条真实交集证据，并提供小艺轻入口。
-- 看点区展示 2 到 4 张高质量内容卡，承接精选作品、口碑、热议、相关圈子或共同关注。
-- 导航区为吸顶 Tab，文案随对象类型自然变化，底层 section id 同源。
-
-### R2：三类对象页定位
-
-- 用户主页 Tab 冻结为 `看点 / 作品 / 圈子 / 互动`。
-- 圈子/群组主页 Tab 冻结为 `首页 / 内容 / 群或组织 / 成员`。
-- 共享主页 Tab 冻结为 `首页 / 内容 / 口碑 / 关联`。
 - 前台文案必须使用用户语言，不向用户暴露 `entity`、`object graph`、`relation edge` 等工程术语。
-
-### R3：对象关系契约
-
-- 新增 `ObjectRelationEdge`，表达 `author_of / posted_to_circle / reshared_to_circle / mentions_entity / comment_about_entity / circle_under_entity / member_of / co_tagged / review_of`。
 - 新增 `ObjectPageBundle`，统一返回 `identity / stats / intersectionReasons / highlightItems / contentSections / relatedObjects / assistantContext / rolloutContext`。
-- 新增 `ObjectPageContext`，小艺和推荐共同消费 `objectType / objectId / canonicalEntityId / tagRefs / entityRefs / relationEdges / referralSource / feedRequestId / recommendationTraceId`。
 - 端侧不得在 UI 拼装关系文案或维护第二套路由、surface、operation、tagRef、entityRef 表。
-
-### R4：四项上线硬债清算
-
-- `HomepageType` 与模板体系收口，支持首发校园与旅游出行对象，不再出现 fixture 与 enum 漂移。
-- entity-service 主页读模型产品化，具备持久化、聚合内容、相关圈子、口碑和关系边能力。
-- 评论支持关联共享主页或规范实体引用，评论可进入对象页口碑或讨论证据链。
-- 数据工程实体归一 ID 与运行时 Homepage ID 建立单一对象键映射，避免 `/entity/...` 与 `/homepages/{id}` 双真相源。
-
-### R5：运营灰度与回滚
-
 - 全量功能一次性开发完成，但发布必须可按 `region / city / campus / appVersion / buildNumber / userWhitelist / experimentBucket / objectType / runtimeEnv` 灰度。
-- 生产 App 仍只有一个 `prod` 包；灰度由应用市场分发、端侧上下文和云侧策略协同完成。
 - 每个灰度 cohort 必须能独立观测曝光、交集理解、行动转化、异常率、接口 RT、小艺触发率和 dismiss 率。
-- 任一 cohort 指标跌破阈值，可关闭对象页新模板、关系证据区、小艺主动提示或推荐策略变体。
-
-### R6：埋点到实时推荐闭环
-
 - 对象页事件统一进入行为管道，至少包括：
-  - `object_page_exposed`
-  - `intersection_reason_impression`
-  - `intersection_reason_click`
-  - `relation_edge_click`
-  - `highlight_item_click`
-  - `object_tab_switch`
-  - `assistant_suggestion_impression`
-  - `assistant_suggestion_click`
-  - `assistant_suggestion_accept`
-  - `assistant_suggestion_dismiss`
-  - `object_action_follow`
-  - `object_action_join`
-  - `object_action_comment_about_entity`
-  - `object_action_claim`
 - 事件必须携带 `objectType/objectId/canonicalEntityId/tagRefs/entityRefs/relationEdgeIds/intersectionReasonIds/referralSource/feedRequestId/recommendationTraceId/experimentBucket/rolloutCohort`。
-- 推荐系统按对象关系和交集反馈更新排序，不允许只消费普通点击事件。
-
-### R7：小艺主动服务闭环
-
-- 小艺主动提示由 `ObjectPageContext`、`IntersectionReason`、`ObjectRelationEdge` 和 rollout 策略共同决定。
 - 主动提示必须有置信度、触发原因、冷却时间和可 dismiss 状态。
-- 小艺主动入口形态为轻 dock 或证据旁提示，不允许覆盖核心内容或制造打扰。
 - 用户接受、点击、忽略、关闭都必须回流行为管道，供推荐和小艺策略学习。
 
-### R8：视觉与交互基线
+## 6. 领域验收
 
-- 三类主页共享 `ObjectIdentityHeader / ObjectRelationRibbon / ObjectHighlightSection / ObjectContextTabBar / ObjectAssistantActionDock`。
-- 人、群组、共享主页使用同源组件内的差异化形态：圆形头像、群像卡、场景封面。
-- 多列瀑布流中插入横向运营流时，横向流整行独占并保持统一上下留白，避免列错位。
-- 空态、加载、弱网、无交集、数据稀疏必须有专门设计，不能展示空白或假交集。
-- 跨对象跳转必须带来源面包屑、`referralSource`、返回栈语义和一致转场，避免用户迷路。
+<a id="dom-001"></a>
+### DOM-001 三类对象页统一体验验收
 
-## Out of Scope
+- 条件：本领域收到有效输入且前置领域事实成立。
+- 可观察结果：用户主页、圈子/群组主页、共享主页均使用统一四段式信息架构。
+- 任一对象页首屏能在 3 秒内讲清对象身份、与我的关系和可行动作。
+- 三类对象页共享视觉组件，但按 user/circle/homepage 保留自然差异。
+- 禁止结果：前台不暴露 entity、object graph、relation edge 等工程词。；UI 不维护第二套对象关系文案或路由表。
 
-- 不在本节点内新增交易、预约、支付、团购闭环。
-- 不以本节点替代 user/circle/entity 各自的主档、权限、治理和生命周期归属。
-- 不新增第二套标签枚举；标签真相源为数据工程 `control_plane/governance/taxonomy`，metadata 只声明 `tagRef` 契约，App/Service 消费发布后的 serving projection。
-- 不允许为了兼容旧 UI 保留并行主页分支；本轮按新架构替换。
+<a id="dom-002"></a>
+### DOM-002 对象关系契约与硬债验收
 
-## 验收重点
+- 条件：本领域收到有效输入且前置领域事实成立。
+- 可观察结果：ObjectRelationEdge、ObjectPageBundle、ObjectPageContext 完成 metadata 与 codegen。
+- HomepageType 与 fixture 不再漂移，首发校园和旅游出行对象有明确模板。
+- entity-service 主页读模型具备持久化、内容聚合、口碑、相关圈子和关系边。
+- 评论可关联 canonicalEntityId 或 homepageId，并能形成 comment_about_entity 关系边。
+- canonicalEntityId 与 homepageId 有单一映射合同。
+- 禁止结果：关系事实只来自 metadata/codegen/后端投影，端侧不得编造。；不恢复旧扁平 tag taxonomy 或旧 resonance 链路。
 
-- A1：三类主页 3 秒内讲清“它是谁/是什么”“我和它有什么关系”“我能做什么”。
-- A2：内容可按用户、圈子、共享主页三维自然归属和流转。
-- A3：交集卡、推荐理由、小艺解释、行为回流消费同一对象关系契约。
-- A4：四项上线硬债关闭，且 metadata/codegen/fixture 不漂移。
-- A5：灰度、埋点、实时推荐、小艺主动服务和回滚看板形成闭环。
-- A6：页面横向质量 P1-P8、Mock 隔离、语义 token、弱类型预算、runtime error、local_contract-user_acceptance 全部满足。
+<a id="dom-003"></a>
+### DOM-003 运营灰度与回滚验收
+
+- 条件：本领域收到有效输入且前置领域事实成立。
+- 可观察结果：对象页升级可按地域、版本、白名单、experimentBucket、对象类型和环境灰度。
+- 生产 App 仍只有一个 prod 包，不出现 app-prod-gray 或 release mock 入口。
+- 每个灰度 cohort 可观测曝光、转化、异常率、接口 RT、小艺触发和 dismiss。
+- 可按层级关闭小艺主动提示、关系证据可视化、新对象页模板、推荐策略变体。
+- 禁止结果：灰度不改变数据真相源。；回滚不得恢复旧对象页并行数据链路。
+
+<a id="dom-004"></a>
+### DOM-004 埋点到实时推荐闭环验收
+
+- 条件：本领域收到有效输入且前置领域事实成立。
+- 可观察结果：对象页曝光、交集曝光/点击、关系边点击、Tab 切换、行动、小艺反馈均进入统一行为管道。
+- 事件携带 objectType、objectId、canonicalEntityId、tagRefs、entityRefs、relationEdgeIds、intersectionReasonIds、referralSource、feedRequestId、recommendationTraceId、experimentBucket、rolloutCohort。
+- 推荐服务能消费对象关系反馈并形成 relation-aware ranking 输入。
+- 禁止结果：不允许只上报普通点击而丢失对象关系字段。；api_integration 中每个真实行为断言必须在 local_contract mock 行为测试中有对应断言。
+
+<a id="dom-005"></a>
+### DOM-005 小艺主动服务验收
+
+- 条件：本领域收到有效输入且前置领域事实成立。
+- 可观察结果：小艺主动提示消费 ObjectPageContext、IntersectionReason、ObjectRelationEdge 和 rollout 策略。
+- 主动提示具备置信度、触发原因、冷却时间、可关闭状态。
+- impression、click、accept、dismiss 全部回流行为管道。
+- 小艺提示不遮挡对象页主操作，不在同一首屏出现多个主动提示。
+- 禁止结果：小艺不得基于端侧临时拼装上下文生成事实解释。；用户关闭或忽略必须影响后续触发策略。
+
+## 7. 工程归属
+
+- App：`quwoquan_app/lib/ui/intersection`、`quwoquan_app/lib/components/object_page`
+- App（协作引用，不用于代码归属）：`quwoquan_app/lib/ui/entity`
+- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/entity-service/contracts`
+- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/content-service/contracts`、`quwoquan_service/services/user-service/contracts`
+- Service（协作引用，不用于代码归属）：`quwoquan_service/services/recommendation-service`、`quwoquan_service/services/entity-service`、`quwoquan_service/services/content-service`、`quwoquan_service/services/user-service`
+- 测试：
+  - `local_contract`：`quwoquan_app/test`
+  - `api_integration`：`quwoquan_service/services/entity-service/tests`
+  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 三类对象页统一体验验收
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：用户主页、圈子/群组主页、共享主页均使用统一四段式信息架构。
+- 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 运营灰度与回滚验收
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：对象页升级可按地域、版本、白名单、experimentBucket、对象类型和环境灰度。
+- 完成判定：`DOM-003` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 埋点到实时推荐闭环验收
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：对象页曝光、交集曝光/点击、关系边点击、Tab 切换、行动、小艺反馈均进入统一行为管道。
+- 完成判定：`DOM-004` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 小艺主动服务验收
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：小艺主动提示消费 ObjectPageContext、IntersectionReason、ObjectRelationEdge 和 rollout 策略。
+- 完成判定：`DOM-005` 对应行为满足且真实测试 `spec_ref` 有效

@@ -1,0 +1,100 @@
+kind: aggregate_root
+description: '单条评论的独立生命周期聚合。评论仅通过 postId 引用 Post，绝不作为 Post 的无界成员；
+
+  创建、回复、删除、置顶与附件绑定均通过 CommentCommandFacade 提交自己的版本变更和 Mongo outbox。
+
+  '
+identity:
+  fields:
+  - id
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: post
+  on_delete: tombstone
+  reference_fields:
+  - postId
+  target_object: content.Post
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: author
+  on_delete: retain
+  reference_fields:
+  - authorId
+  - replyToUserId
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: commentThread
+  on_delete: retain
+  reference_fields:
+  - replyToCommentId
+  - parentCommentId
+  target_object: content.Comment
+- access: named_reader
+  cardinality: N:N
+  consistency: eventual
+  kind: reference
+  name: attachments
+  on_delete: restrict
+  reference_fields:
+  - attachmentMediaIds
+  target_object: content.MediaAsset
+capabilities:
+- commandable
+- queryable
+- evented
+taggable: false
+vector_enabled: false
+relation_signal: true
+business_rules:
+- Comment 只持有自身权威状态；Post.commentCount 是由 CommentCreated/CommentDeleted/CommentModerated/CommentsTombstoned
+  事实异步重建的投影，count 只统计 active。
+- replyToCommentId 必须引用同一 postId 的 active Comment；parentCommentId 永远归一为一级评论。
+- Comment 删除与附件绑定仅允许 authorId；置顶仅允许被引用 Post 的作者，且一级评论之外禁止置顶。
+- HideComment/RestoreComment 仅允许具备 content.moderation 权限的 operator；deleted/tombstoned 为终态，禁止任何恢复。
+- hotScore 是可重算投影字段，不属于 Comment 写模型不变量；排序真相源唯一在服务端复合索引。
+- authorIpLocation 仅在创建时快照，读路径透传；解析失败落空串，禁止臆造。
+- CreateComment 受 authorId 滑动窗口频控（配置驱动），超限返回 comment_rate_limited。
+- 读端只返回 named typed slices，禁止返回 Comment aggregate 或解码完整 Post。
+lifecycle:
+  states:
+  - active
+  - hidden
+  - deleted
+  - tombstoned
+  transitions:
+  - from: active
+    to: deleted
+    trigger: DeleteComment
+    actor: comment_author
+  - from: active
+    to: hidden
+    trigger: HideComment
+    actor: operator
+  - from: hidden
+    to: active
+    trigger: RestoreComment
+    actor: operator
+  - from: active
+    to: tombstoned
+    trigger: PostDeleted_cascade
+    actor: system
+  - from: hidden
+    to: tombstoned
+    trigger: PostDeleted_cascade
+    actor: system
+  optimistic_concurrency: version
+  idempotency: command_key

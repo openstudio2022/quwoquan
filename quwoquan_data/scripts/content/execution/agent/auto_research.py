@@ -85,6 +85,7 @@ def _write_auto_research_report(
             "candidates",
             "imageCollections",
             "homepageMediaCollections",
+            "homepageMediaAdvisories",
             "sourceUnavailable",
         ):
             aggregate[key] = list(aggregate.get(key) or []) + list(wave_report.get(key) or [])
@@ -116,22 +117,6 @@ def _write_auto_research_report(
     aggregate["updatedAt"] = store.now_iso()
     write_json(path, aggregate)
     return aggregate
-
-def _sync_auto_research_availability(ctx: ExecutionContext, availability: Mapping[str, Any]) -> None:
-    from content.execution.recovery.download_unresolved import _auto_research_plan_path
-    path = _auto_research_plan_path(ctx)
-    if not path.is_file():
-        return
-    try:
-        report = read_json(path)
-    except (OSError, ValueError, TypeError):
-        return
-    # Fetch/screen is stronger evidence than plan-time discovery. A real
-    # source fetch may resolve a preliminary media warning, so the synced
-    # download verdict intentionally replaces the plan-time availability.
-    report["sourceAvailability"] = dict(availability)
-    report["sourceAvailabilitySyncedAt"] = store.now_iso()
-    write_json(path, report)
 
 def _entity_ids_grouped_by_type(
     ctx: ExecutionContext,
@@ -179,50 +164,14 @@ def _refresh_stale_source_plans_for_fetch(
             for entity_id in stale_ids
         ],
     )
-    for group_type, group_ids in _entity_ids_grouped_by_type(
+    _run_download_auto_research(
         ctx,
         stale_ids,
-        fallback_type=fallback_type,
-    ).items():
-        _run_download_auto_research(
-            ctx,
-            group_ids,
-            entity_type=group_type,
-            force=True,
-            scope="download_fetch_stale_source_plan",
-        )
-    return entity_ids
-
-def _merge_auto_research_reports(*reports: Mapping[str, Any]) -> dict[str, Any]:
-    merged: dict[str, Any] = {}
-    list_keys = (
-        "updated",
-        "issues",
-        "candidates",
-        "imageCollections",
-        "homepageMediaCollections",
-        "sourceUnavailable",
+        entity_type=fallback_type,
+        force=True,
+        scope="download_fetch_stale_source_plan",
     )
-    for report in reports:
-        if not isinstance(report, Mapping):
-            continue
-        if not merged:
-            merged = dict(report)
-            for key in list_keys:
-                merged[key] = list(merged.get(key) or [])
-            continue
-        for key in list_keys:
-            merged.setdefault(key, [])
-            merged[key].extend(list(report.get(key) or []))
-        outage = report.get("networkOutage")
-        if isinstance(outage, Mapping) and not merged.get("networkOutage"):
-            merged["networkOutage"] = dict(outage)
-        if report.get("partialRun"):
-            merged["partialRun"] = True
-            merged["partialReason"] = report.get("partialReason") or merged.get("partialReason")
-            merged["remainingEntityIds"] = list(report.get("remainingEntityIds") or [])
-            merged["remainingEntityCount"] = int(report.get("remainingEntityCount") or 0)
-    return merged
+    return entity_ids
 
 def _run_download_auto_research(
     ctx: ExecutionContext,
@@ -244,6 +193,7 @@ def _run_download_auto_research(
             "issues": [],
             "candidates": [],
             "imageCollections": [],
+            "homepageMediaAdvisories": [],
             "sourceUnavailable": [],
             "sourceAvailability": {
                 "readyTargets": [],
@@ -294,23 +244,17 @@ def _run_download_auto_research(
                 previous_aggregate = read_json(aggregate_path)
             except (OSError, ValueError, TypeError):
                 previous_aggregate = None
-        auto_report = _merge_auto_research_reports(
-            *[
-                write_auto_research_plans(
-                    ctx.execution_id,
-                    group_ids,
-                    entity_type=group_type,
-                    force=force,
-                    lanes=selected_lanes,
-                    max_workers=worker_count,
-                    progress_callback=_download_auto_research_progress_callback(ctx),
-                )
-                for group_type, group_ids in _entity_ids_grouped_by_type(
-                    ctx,
-                    wave_ids,
-                    fallback_type=entity_type,
-                ).items()
-            ]
+        # The research writer resolves the canonical type for each entity from the
+        # frozen target set. Splitting heterogeneous targets here serializes small
+        # groups and defeats the configured research worker pool.
+        auto_report = write_auto_research_plans(
+            ctx.execution_id,
+            wave_ids,
+            entity_type=entity_type,
+            force=force,
+            lanes=selected_lanes,
+            max_workers=worker_count,
+            progress_callback=_download_auto_research_progress_callback(ctx),
         )
         if previous_aggregate is not None:
             write_json(aggregate_path, previous_aggregate)

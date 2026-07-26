@@ -1,0 +1,383 @@
+fields:
+- name: creatorId
+  source: creatorId
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: subAccountId
+  source: subAccountId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+  reference: true
+- name: handle
+  source: handle
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: displayName
+  source: displayName
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: headline
+  source: headline
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: bio
+  source: bio
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: slogan
+  source: slogan
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: avatarUrl
+  source: avatarUrl
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: avatarObjectKey
+  source: avatarObjectKey
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: redact
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: avatarSha256
+  source: avatarSha256
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: coverUrl
+  source: coverUrl
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: coverObjectKey
+  source: coverObjectKey
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: redact
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: coverSha256
+  source: coverSha256
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: tagRefs
+  source: tagRefs
+  type: '[]tag_ref'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: publicProfileTagRefs
+  source: publicProfileTagRefs
+  type: '[]tag_ref'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: roles
+  source: roles
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: verticals
+  source: verticals
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: segment
+  source: segment
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: preferredContentTypes
+  source: preferredContentTypes
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: creatorArchetype
+  source: creatorArchetype
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: carrierAffinity
+  source: carrierAffinity
+  type: object
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: redact
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: preferredBlueprintIds
+  source: preferredBlueprintIds
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: redact
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: coverageScope
+  source: coverageScope
+  type: object
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: redact
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: claimPolicy
+  source: claimPolicy
+  type: object
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: redact
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: expertiseClaims
+  source: expertiseClaims
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: mustNotClaim
+  source: mustNotClaim
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: redact
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: disclosure
+  source: disclosure
+  type: object
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: entityRefs
+  source: entityRefs
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: circleRefs
+  source: circleRefs
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: sourceStatus
+  source: sourceStatus
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: works
+  source: works
+  type: '[]object'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: redact
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: packageDigest
+  source: packageDigest
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: releaseId
+  source: releaseId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: status
+  source: status
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: managedBy
+  source: managedBy
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: importedAt
+  source: importedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: updatedAt
+  source: updatedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: tombstonedAt
+  source: tombstonedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection

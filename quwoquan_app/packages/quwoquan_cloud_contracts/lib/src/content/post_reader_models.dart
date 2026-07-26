@@ -18,7 +18,7 @@ final class ContentPostProjection {
     this.coverUrl,
     this.articleTemplate,
     this.articleFontPreset,
-    Iterable<String> imageUrls = const <String>[],
+    Iterable<String> mediaUrls = const <String>[],
     this.videoUrl,
     this.thumbnailUrl,
     this.width,
@@ -35,7 +35,7 @@ final class ContentPostProjection {
     this.supplySource,
     Iterable<ContentPostIntersectionReason>? intersectionReasons,
   }) : authorIdentityTags = List<String>.unmodifiable(authorIdentityTags),
-       imageUrls = List<String>.unmodifiable(imageUrls),
+       mediaUrls = List<String>.unmodifiable(mediaUrls),
        intersectionReasons = intersectionReasons == null
            ? null
            : List<ContentPostIntersectionReason>.unmodifiable(
@@ -59,7 +59,7 @@ final class ContentPostProjection {
   final String? coverUrl;
   final String? articleTemplate;
   final String? articleFontPreset;
-  final List<String> imageUrls;
+  final List<String> mediaUrls;
   final String? videoUrl;
   final String? thumbnailUrl;
   final int? width;

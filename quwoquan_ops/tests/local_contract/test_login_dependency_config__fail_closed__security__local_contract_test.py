@@ -15,17 +15,19 @@ from quwoquan_service.scripts.verify.verify_login_dependency_config import (
 )
 
 
+NONPROD_DEFAULTS = {
+    "sys.user-service.integration.external_interaction_base_url": (
+        "https://integration-service.local"
+    ),
+    "sys.user-service.integration.otp.mode": "fixed_test",
+}
+
+
 def test_login_dependency_config__repository_matrix__security__local_contract() -> None:
     assert verify_config(
         "gamma",
-        {
-            "integration": {
-                "external_interaction_base_url": "https://integration-service.local",
-                "otp": {"mode": "fixed_test"},
-                "social": {"providers": {}},
-                "one_tap": {"resolver": "aliyun"},
-            }
-        },
+        {},
+        NONPROD_DEFAULTS,
     ) == []
 
 
@@ -44,7 +46,7 @@ def test_login_dependency_config__retired_bypass__security__local_contract() -> 
         "integration.sms_otp.sandbox_allowlist",
         "integration.one_tap.sandbox_phones",
     ]
-    assert verify_config("gamma", config) == [
+    assert verify_config("gamma", config, NONPROD_DEFAULTS) == [
         "gamma: retired login config key integration.sms_otp.sandbox_allowlist",
         "gamma: retired login config key integration.one_tap.sandbox_phones",
     ]
@@ -54,15 +56,18 @@ def test_login_dependency_config__prod_rejects_fixed_otp__security__local_contra
     failures = verify_config(
         "prod",
         {
-            "integration": {
-                "external_interaction_base_url": "https://integration-service.prod",
-                "otp": {"mode": "fixed_test"},
-                "social": {"providers": {}},
-                "one_tap": {"resolver": "aliyun"},
+            "overrides": {
+                "sys.user-service.integration.external_interaction_base_url": (
+                    "https://integration-service.prod"
+                ),
+                "sys.user-service.integration.otp.mode": "fixed_test",
             }
         },
+        NONPROD_DEFAULTS,
     )
-    assert failures == ["prod: integration.otp.mode must be provider"]
+    assert failures == [
+        "prod: sys.user-service.integration.otp.mode must be provider"
+    ]
 
 
 def test_login_dependency_config__nonprod_adapter_excluded_from_prod__security__local_contract() -> None:

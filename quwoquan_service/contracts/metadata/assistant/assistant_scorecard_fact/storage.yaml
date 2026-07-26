@@ -1,7 +1,0 @@
-aggregate: AssistantScorecardFact
-backend: mongodb
-collections:
-  assistant_scorecard_facts:
-    entity: Scorecard
-    role: append_only
-    unique_constraints: [[scoreId]]

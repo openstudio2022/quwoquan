@@ -494,7 +494,7 @@ func TestGeneratedOperationEnforcerFailsClosedForBlockedObjects(t *testing.T) {
 			CanonicalOperationID: "integration.location.SearchLocations",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodGet,
-			PathTemplate:         "/integration/location/search",
+			PathTemplate:         "/integration/external_integration/location/search",
 			OperationKind:        "query",
 			AuthMode:             "optional",
 			ActorRequirement:     "none",
@@ -519,7 +519,7 @@ func TestGeneratedOperationEnforcerFailsClosedForBlockedObjects(t *testing.T) {
 
 	readyRequest := httptest.NewRequest(
 		http.MethodGet,
-		"/integration/location/search",
+		"/integration/external_integration/location/search",
 		nil,
 	)
 	readyResponse := httptest.NewRecorder()

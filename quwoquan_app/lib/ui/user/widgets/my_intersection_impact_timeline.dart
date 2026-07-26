@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
@@ -56,7 +57,10 @@ class ImpactTimeline extends ConsumerWidget {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               ref.invalidate(
-                authorImpactProvider(ref.read(currentUserIdProvider)),
+                authorImpactProvider((
+                  subAccountId: ref.read(currentUserIdProvider),
+                  surface: AppUiSurfaces.myIntersections,
+                )),
               );
             }
           },
@@ -162,7 +166,7 @@ class ImpactTimeline extends ConsumerWidget {
     String subAccountId,
   ) {
     return ({String cursor = ''}) => ref
-        .read(authorImpactQueryProvider)
+        .read(authorImpactQueryProvider(AppUiSurfaces.myIntersections))
         .listAuthorImpactEvidence(
           subAccountId: subAccountId,
           impactId: item.impactId,

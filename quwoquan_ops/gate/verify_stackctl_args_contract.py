@@ -29,14 +29,15 @@ def main() -> int:
     required_commands = (
         "package",
         "content-readiness",
+        "data-execution-fleet",
         "filter-catalog",
         "deploy",
         "roll",
     )
     if help_result.returncode != 0 or any(command not in help_result.stdout for command in required_commands):
         issues.append(
-            "stackctl --help must list package, content-readiness, filter-catalog, "
-            "roll and deploy commands"
+            "stackctl --help must list package, content-readiness, data-execution-fleet, "
+            "filter-catalog, roll and deploy commands"
         )
 
     readiness_help = run(["python3", str(STACKCTL), "content-readiness", "--help"])
@@ -47,6 +48,20 @@ def main() -> int:
         or "--env" not in readiness_help.stdout
     ):
         issues.append("stackctl content-readiness must require phase/env and forbid target override")
+
+    fleet_result = run(
+        ["python3", str(STACKCTL), "--output-format", "json", "data-execution-fleet"]
+    )
+    if fleet_result.returncode != 0:
+        issues.append("stackctl data-execution-fleet failed")
+    else:
+        try:
+            fleet_payload = json.loads(fleet_result.stdout)
+            fleet = fleet_payload.get("fleet") or {}
+            if set(fleet) != {"target", "mongoUri", "redisAddr"}:
+                issues.append("stackctl data-execution-fleet must return the exact fleet endpoint contract")
+        except json.JSONDecodeError:
+            issues.append("stackctl data-execution-fleet must return JSON with --output-format json")
 
     verify_help = run(["python3", str(STACKCTL), "verify", "--help"])
     if (

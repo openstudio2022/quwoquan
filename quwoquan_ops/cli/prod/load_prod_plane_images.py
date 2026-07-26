@@ -14,7 +14,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
+ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh/quwoquan-prod"
 DEFAULT_HOST = "118.31.239.122"
 OCI_DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")

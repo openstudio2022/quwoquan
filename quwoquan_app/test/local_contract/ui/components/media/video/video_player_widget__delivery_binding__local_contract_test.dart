@@ -276,6 +276,12 @@ void main() {
         ).readAsStringSync() +
         File(
           'lib/ui/discovery/widgets/works_immersive_viewer_canvas.dart',
+        ).readAsStringSync() +
+        File(
+          'lib/ui/discovery/widgets/works_immersive_viewer_build.dart',
+        ).readAsStringSync() +
+        File(
+          'lib/ui/discovery/widgets/works_immersive_viewer_lifecycle.dart',
         ).readAsStringSync();
 
     expect(source, contains('isVisible: index == _currentPage'));

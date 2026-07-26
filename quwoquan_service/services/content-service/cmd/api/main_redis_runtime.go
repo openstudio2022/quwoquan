@@ -8,7 +8,7 @@ import (
 
 	platformredis "quwoquan_service/internal/platform/redis"
 	rtredis "quwoquan_service/runtime/redis"
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
 // 每日 affinity 衰减调度 + Redis Router 构建，自 main.go 拆出

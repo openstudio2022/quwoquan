@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine/spec.md#gwt-001
 package recommendation
 
 import (
@@ -48,6 +50,12 @@ func (m *mockRedisClient) Get(_ context.Context, key string) (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.data[key], nil
+}
+func (m *mockRedisClient) HasKey(_ context.Context, key string) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, exists := m.data[key]
+	return exists, nil
 }
 func (m *mockRedisClient) Set(_ context.Context, key, value string, _ time.Duration) error {
 	m.mu.Lock()

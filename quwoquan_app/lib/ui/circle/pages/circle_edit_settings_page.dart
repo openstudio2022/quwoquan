@@ -16,6 +16,7 @@ import 'package:quwoquan_app/ui/circle/models/circle_edit_submit_payload.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 part 'circle_edit_settings_page_state.dart';
 part 'circle_edit_settings_page_state_helpers.dart';
+part 'circle_edit_settings_page_controls.dart';
 
 enum CircleEditSettingsTab { info, settings }
 

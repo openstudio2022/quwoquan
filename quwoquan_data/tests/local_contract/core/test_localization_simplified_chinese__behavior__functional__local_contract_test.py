@@ -25,6 +25,7 @@ from core.localization import (  # noqa: E402
 def test_fold_to_simplified_folds_common_traditional_place_chars():
     assert fold_to_simplified("臺灣國家公園") == "台湾国家公园"
     assert fold_to_simplified("雲峽風景區") == "云峡风景区"
+    assert fold_to_simplified("峨眉山，亦作峨嵋山") == "峨眉山，亦作峨嵋山"
     # 已是简体则原样返回。
     assert fold_to_simplified("九寨沟") == "九寨沟"
     assert fold_to_simplified("") == ""

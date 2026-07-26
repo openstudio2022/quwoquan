@@ -1,5 +1,5 @@
 /// Typed DTO for the MessageReceipt entity.
-/// Maps to contracts/metadata/messages/conversation/fields.yaml → MessageReceipt.
+/// Maps to quwoquan_service/services/chat-service/contracts/chat/conversation/fields.yaml → MessageReceipt.
 class ReceiptDto {
   final String id;
   final String messageId;

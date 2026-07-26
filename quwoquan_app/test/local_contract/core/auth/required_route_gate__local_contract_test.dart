@@ -127,6 +127,37 @@ void main() {
       expect(copy.subtitle, contains('限制'));
     });
 
+    test('账号 closed 原因使用注销文案且关闭登录必回安全首页', () {
+      final location = buildLoginRouteLocation(
+        reasonName: AuthPromptReason.accountClosed.name,
+        redirect: AppRoutePaths.chat,
+        dismissFallback: AppRoutePaths.home,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      );
+      final uri = Uri.parse(location);
+      expect(
+        uri.queryParameters['reason'],
+        AuthPromptReason.accountClosed.name,
+      );
+      expect(
+        loginDismissPolicyFromQuery(
+          uri.queryParameters[loginGuestDismissPopQueryParam],
+        ),
+        LoginDismissPolicy.safeFallback,
+      );
+      expect(
+        safeLoginDismissFallback(
+          redirect: AppRoutePaths.chat,
+          dismissFallback: AppRoutePaths.home,
+        ),
+        AppRoutePaths.home,
+      );
+      expect(
+        loginReasonCopyForPromptReason(AuthPromptReason.accountClosed).subtitle,
+        contains('注销'),
+      );
+    });
+
     test('行内动作门默认允许 guest pop（登录关闭原路返回可浏览页）', () {
       final loc = buildLoginRouteLocation(
         reasonName: AuthGateReason.comment.name,

@@ -40,10 +40,12 @@ from quwoquan_ops.cli.lib.common import (
     write_json,
     write_markdown,
 )
+from quwoquan_ops.cli.lib.compose_layout import compose_file_args, gamma_compose_files
 from quwoquan_ops.cli import provider_conformance_runner
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENTS,
     TARGETS,
+    get_environment,
     get_target,
     load_environment_topology,
 )
@@ -52,11 +54,21 @@ from quwoquan_ops.cli.lib.media_delivery_manifest import (
     load_media_delivery_manifest,
 )
 from quwoquan_ops.cli.lib.local_environment_auth import (
+    LocalAcceptanceSession,
+    LocalEnvironmentHTTPError,
     open_local_acceptance_session,
     prepare_local_environment_auth,
+    request_local_environment_json,
 )
-from quwoquan_ops.cli.lib.local_gamma_object_storage import prepare_local_gamma_object_storage
-from quwoquan_ops.cli.lib.product_telemetry_sls import load_product_telemetry_sls
+from quwoquan_ops.cli.lib.local_gamma_object_storage import (
+    prepare_local_gamma_object_storage,
+)
+from quwoquan_ops.cli.lib.product_telemetry_log_sink import (
+    load_product_telemetry_log_sink,
+)
+from quwoquan_ops.cli.lib.local_provider_credentials import (
+    prepare_local_provider_credentials,
+)
 from quwoquan_ops.cli.lib.video_playback_evidence import (
     read_native_video_playback_evidence,
 )
@@ -67,6 +79,9 @@ from quwoquan_ops.cli.lib.content_release_readiness import (
     ShipReadinessReceipt,
     VerificationProfile,
     load_content_release_readiness_policy,
+)
+from quwoquan_ops.cli.lib.data_execution_fleet import (
+    resolve_data_execution_fleet_endpoint,
 )
 from quwoquan_ops.cli.lib.local_gamma_media import (
     LocalGammaMediaError,
@@ -97,13 +112,15 @@ from quwoquan_ops.cli.lib.observability import (
 )
 from quwoquan_ops.cli.lib.output_paths import (
     app_deployment_package_dir,
-    deployment_package_root,
-    deployment_work_root,
+    deployment_target_for_env,
+    deployment_target_path,
     env_observability_run_dir,
     env_runs_root,
     legal_static_deployment_package_dir,
+    portal_deployment_package_dir,
     repo_local_dir,
     repo_run_dir,
+    remove_deployment_tree,
     runtime_shared_deployment_package_dir,
     service_deployment_package_dir,
     target_cache_dir,
@@ -114,9 +131,8 @@ from quwoquan_ops.cli.lib.output_paths import (
 VERIFY_COMMAND_GROUPS = {
     "topology": [
         ["python3", "quwoquan_ops/gate/verify_stackctl_args_contract.py"],
-        ["python3", "quwoquan_ops/gate/verify_environment_topology_manifest.py"],
+        ["python3", "quwoquan_ops/gate/verify_environment_assembly.py"],
         ["python3", "quwoquan_ops/gate/verify_local_env_port_manifest.py"],
-        ["bash", "quwoquan_ops/environments/verify/verify_deployment_domain_mapping.sh"],
     ],
     "config": [
         ["python3", "quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py"],
@@ -142,6 +158,12 @@ DEFAULT_TARGET_BY_ENV = {
     "prod": "prod-hosted",
 }
 
+GAMMA_CONTENT_UAT_TARGET = "gamma-local"
+RELEASE_HOMEPAGE_UAT_TEST_TARGET = (
+    "test/user_acceptance/patrol/entity/"
+    "release_homepage__consumer_render__functional__user_acceptance_test.dart"
+)
+
 # CLI summaries should retain every concise prerequisite failure while keeping
 # the terminal surface bounded. Full child-process output remains in report.json.
 COMMAND_SUMMARY_DETAIL_LIMIT = 12
@@ -155,7 +177,7 @@ _PROVIDER_CAPABILITY_ID_PATTERN = re.compile(
     r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]+)+$"
 )
 GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS: tuple[tuple[str, str], ...] = (
-    ("rec-model-service", "LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE"),
+    ("recommendation-service", "LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE"),
     ("content-service", "LOCAL_GAMMA_CONTENT_SERVICE_IMAGE"),
     ("chat-service", "LOCAL_GAMMA_CHAT_SERVICE_IMAGE"),
     ("user-service", "LOCAL_GAMMA_USER_SERVICE_IMAGE"),
@@ -171,14 +193,6 @@ GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS: tuple[tuple[str, str], ...] = (
     ("rtc-service", "LOCAL_GAMMA_RTC_SERVICE_IMAGE"),
     ("realtime-gateway", "LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE"),
 )
-GAMMA_REQUIRED_EXTERNAL_PROVIDER_ENVIRONMENTS = (
-    "LOCAL_GAMMA_EMBEDDING_ENDPOINT",
-    "LOCAL_GAMMA_EMBEDDING_API_KEY",
-)
-BETA_REQUIRED_EXTERNAL_PROVIDER_ENVIRONMENTS = (
-    "CONTENT_EMBEDDING_ENDPOINT",
-    "CONTENT_EMBEDDING_API_KEY",
-)
 
 
 def _sha256_file(path: Path) -> str:
@@ -189,14 +203,26 @@ def _sha256_file(path: Path) -> str:
     return f"sha256:{digest.hexdigest()}"
 
 
+def _sha256_tree(directory: Path) -> str:
+    """生成目录的路径敏感内容摘要，作为静态包可复算的供应链证据。"""
+    digest = hashlib.sha256()
+    for path in sorted(directory.rglob("*")):
+        if not path.is_file():
+            continue
+        digest.update(path.relative_to(directory).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(_sha256_file(path).encode("ascii"))
+        digest.update(b"\0")
+    return f"sha256:{digest.hexdigest()}"
+
+
 def _packaged_service_source_image_ref(env_name: str, service: str) -> str:
-    report_path = service_deployment_package_dir(env_name, service) / "report.json"
+    report_path = service_deployment_package_dir(env_name, service) / "provenance.json"
     if not report_path.is_file():
-        raise FileNotFoundError(f"service package report missing: {report_path}")
+        raise FileNotFoundError(f"service package provenance missing: {report_path}")
     report = json.loads(report_path.read_text(encoding="utf-8"))
     try:
-        source = report["provenance"]["source"]
-        source_digest = str(source["sourceTreeSha256"])
+        source_digest = str(report["digests"]["sourceTree"])
     except (KeyError, TypeError) as exc:
         raise ValueError(
             f"service source provenance missing: {report_path}"
@@ -223,39 +249,160 @@ def _bind_gamma_packaged_service_image_refs(
 def _bind_gamma_external_provider_environment(
     environment: dict[str, str],
 ) -> str | None:
-    """仅透传受控环境密钥；缺商用 provider 绑定时在构建前阻断。"""
+    """Materialize Gamma-local Port-equivalent provider substitutes."""
+    for key in (
+        "PRODUCT_OPS_SLS_REGION",
+        "PRODUCT_OPS_SLS_ENDPOINT",
+        "PRODUCT_OPS_SLS_PROJECT",
+        "PRODUCT_OPS_SLS_RAW_LOGSTORE",
+        "PRODUCT_OPS_SLS_STARTUP_DIAGNOSTIC_LOGSTORE",
+        "PRODUCT_OPS_SLS_RUNTIME_LOGSTORE",
+        "PRODUCT_OPS_SLS_AGGREGATE_LOGSTORE",
+        "PRODUCT_OPS_SLS_TIMEOUT_MS",
+        "PRODUCT_OPS_LOCAL_LOG_SINK_ENDPOINT",
+        "PRODUCT_OPS_LOCAL_LOG_SINK_ACCESS_KEY",
+        "ALIBABA_CLOUD_ACCESS_KEY_ID",
+        "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
+        "ALIBABA_CLOUD_SECURITY_TOKEN",
+    ):
+        environment[key] = ""
+    storage_error = _bind_gamma_object_storage_environment(environment)
+    if storage_error is not None:
+        return storage_error
+    return _bind_local_external_provider_environment(
+        environment,
+        environment_name="gamma",
+        target_name="gamma-local",
+        storage_prefix="LOCAL_GAMMA",
+    )
 
-    values = {
-        name: os.environ.get(name, "").strip()
-        for name in GAMMA_REQUIRED_EXTERNAL_PROVIDER_ENVIRONMENTS
-    }
-    missing = [name for name, value in values.items() if not value]
-    if missing:
-        return (
-            "gamma-local external provider prerequisite is missing: "
-            + ", ".join(missing)
+
+def _bind_gamma_object_storage_environment(
+    environment: dict[str, str],
+) -> str | None:
+    """Materialize only the platform-owned Gamma object-storage binding."""
+    try:
+        storage = prepare_local_gamma_object_storage(
+            edge_port=profile_ports(
+                load_port_manifest(),
+                "gamma-local",
+            )["object-storage-edge"],
         )
-    environment.update(values)
+    except (RuntimeError, ValueError) as exc:
+        return f"gamma-local object storage materialization failed: {exc}"
+    environment.update(storage.environment)
+    environment.setdefault(
+        "LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL",
+        storage.host_endpoint,
+    )
+    _sync_object_storage_binding_aliases(environment, prefix="LOCAL_GAMMA")
     return None
+
+
+def _bind_gamma_down_compose_placeholders(environment: dict[str, str]) -> None:
+    """Satisfy Compose interpolation for teardown without runtime credentials."""
+
+    placeholders = {
+        "QWQ_COMPOSE_OBJECT_STORAGE_ENDPOINT": "https://unused.invalid",
+        "QWQ_COMPOSE_OBJECT_STORAGE_BUCKET": "unused",
+        "QWQ_COMPOSE_OBJECT_STORAGE_REGION": "unused",
+        "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID": "unused",
+        "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET": "unused",
+        "QWQ_COMPOSE_OBJECT_STORAGE_CDN_DOMAIN": "unused.invalid",
+        "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY": "unused",
+        "QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE": "/dev/null",
+    }
+    for key, value in placeholders.items():
+        environment.setdefault(key, value)
 
 
 def _bind_beta_external_provider_environment(
     environment: dict[str, str],
 ) -> str | None:
-    """透传 Beta 内容 Provider Binding，并在启动后台进程前失败。"""
+    """Materialize Beta-local Port-equivalent provider substitutes."""
 
-    values = {
-        name: os.environ.get(name, "").strip()
-        for name in BETA_REQUIRED_EXTERNAL_PROVIDER_ENVIRONMENTS
-    }
-    missing = [name for name, value in values.items() if not value]
-    if missing:
-        return (
-            "beta-local external provider prerequisite is missing: "
-            + ", ".join(missing)
+    return _bind_local_external_provider_environment(
+        environment,
+        environment_name="beta",
+        target_name="beta-local",
+        storage_prefix="BETA",
+    )
+
+
+def _bind_local_external_provider_environment(
+    environment: dict[str, str],
+    *,
+    environment_name: str,
+    target_name: str,
+    storage_prefix: str,
+) -> str | None:
+    """Materialize one non-prod environment's local Provider credentials."""
+
+    try:
+        values = prepare_local_provider_credentials(
+            environment=environment_name,
+            target_name=target_name,
         )
+    except (RuntimeError, ValueError) as exc:
+        return f"{target_name} external provider materialization failed: {exc}"
     environment.update(values)
+    _sync_object_storage_binding_aliases(environment, prefix=storage_prefix)
+    if values.get("CONTENT_EMBEDDING_FIXTURE_ENDPOINT"):
+        environment.setdefault(
+            "CONTENT_EMBEDDING_ENDPOINT",
+            values["CONTENT_EMBEDDING_FIXTURE_ENDPOINT"],
+        )
+        environment.setdefault(
+            "QWQ_COMPOSE_EMBEDDING_ENDPOINT",
+            values["CONTENT_EMBEDDING_FIXTURE_ENDPOINT"],
+        )
+    if values.get("CONTENT_EMBEDDING_FIXTURE_API_KEY"):
+        environment.setdefault(
+            "CONTENT_EMBEDDING_API_KEY",
+            values["CONTENT_EMBEDDING_FIXTURE_API_KEY"],
+        )
+        environment.setdefault(
+            "QWQ_COMPOSE_EMBEDDING_API_KEY",
+            values["CONTENT_EMBEDDING_FIXTURE_API_KEY"],
+        )
     return None
+
+
+def _sync_object_storage_binding_aliases(
+    environment: dict[str, str],
+    *,
+    prefix: str,
+) -> None:
+    """Align CONTENT_OSS_* / QWQ_COMPOSE_OBJECT_STORAGE_* with MinIO materializer."""
+
+    storage_to_content = {
+        f"{prefix}_OBJECT_STORAGE_ENDPOINT": "CONTENT_OSS_ENDPOINT",
+        f"{prefix}_OBJECT_STORAGE_BUCKET": "CONTENT_OSS_BUCKET",
+        f"{prefix}_OBJECT_STORAGE_REGION": "CONTENT_OSS_REGION",
+        f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_ID": "CONTENT_OSS_ACCESS_KEY_ID",
+        f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_SECRET": "CONTENT_OSS_ACCESS_KEY_SECRET",
+        f"{prefix}_OBJECT_STORAGE_CDN_DOMAIN": "CONTENT_CDN_DOMAIN",
+        f"{prefix}_OBJECT_STORAGE_CDN_SIGN_KEY": "CONTENT_CDN_SIGN_KEY",
+        f"{prefix}_OBJECT_STORAGE_CA_FILE": "CONTENT_OSS_CA_FILE",
+    }
+    storage_to_compose = {
+        f"{prefix}_OBJECT_STORAGE_ENDPOINT": "QWQ_COMPOSE_OBJECT_STORAGE_ENDPOINT",
+        f"{prefix}_OBJECT_STORAGE_BUCKET": "QWQ_COMPOSE_OBJECT_STORAGE_BUCKET",
+        f"{prefix}_OBJECT_STORAGE_REGION": "QWQ_COMPOSE_OBJECT_STORAGE_REGION",
+        f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_ID": "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID",
+        f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_SECRET": "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET",
+        f"{prefix}_OBJECT_STORAGE_CDN_DOMAIN": "QWQ_COMPOSE_OBJECT_STORAGE_CDN_DOMAIN",
+        f"{prefix}_OBJECT_STORAGE_CDN_SIGN_KEY": "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY",
+        f"{prefix}_OBJECT_STORAGE_CA_FILE": "QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE",
+    }
+    for storage_key, content_key in storage_to_content.items():
+        value = environment.get(storage_key)
+        if value:
+            environment[content_key] = value
+    for storage_key, compose_key in storage_to_compose.items():
+        value = environment.get(storage_key)
+        if value:
+            environment[compose_key] = value
 
 
 def _gamma_start_command(args: argparse.Namespace) -> list[str]:
@@ -272,13 +419,21 @@ def _gamma_start_command(args: argparse.Namespace) -> list[str]:
 
 def _build_runtime_shared_package(env_name: str, *, target: str = "") -> Path:
     """将运行栈共享静态配置封装为环境 package，禁止启动期直读仓内源文件。"""
-    package_dir = runtime_shared_deployment_package_dir(env_name, target=target)
+    target_name = deployment_target_for_env(env_name, target=target)
+    package_dir = runtime_shared_deployment_package_dir(
+        env_name,
+        target=target_name,
+    )
     if package_dir.exists():
-        shutil.rmtree(package_dir)
+        remove_deployment_tree(
+            target_name,
+            "packages",
+            "runtime-shared",
+        )
     package_dir.mkdir(parents=True, exist_ok=True)
     sources = (
-        ROOT / "quwoquan_ops" / "environments" / "reliable_task_module_catalog.yaml",
-        ROOT / "quwoquan_ops" / "environments" / "reliable_task_retention_policy.yaml",
+        ROOT / "quwoquan_service" / "runtime" / "reliabletask" / "resources" / "module_catalog.yaml",
+        ROOT / "quwoquan_service" / "runtime" / "reliabletask" / "resources" / "retention_policy.yaml",
     )
     files: dict[str, dict[str, str]] = {}
     for source in sources:
@@ -296,14 +451,18 @@ def _build_runtime_shared_package(env_name: str, *, target: str = "") -> Path:
             "schema": "qwq.runtime_shared_package",
             "environment": env_name,
             "createdAt": utc_now(),
-            "files": files,
+            "provenance": {"files": files},
         },
     )
     return package_dir
 
 
 def _materialize_prod_release_artifact(*, target: str = "") -> str:
-    """把 CI 已验证的不可变 release artifact 物化进 prod 环境包。"""
+    """校验 CI release artifact 与服务自治 prod 包一致，并记录供应链证据。
+
+    release artifact 是可删除的发布证据，不再成为第二份运行配置。运行时始终只消费
+    服务包中的 config/config.yaml，其 CONFIG_VERSION 为内容摘要。
+    """
     artifact_root_value = os.environ.get("QWQ_PROD_RELEASE_ARTIFACT_ROOT", "").strip()
     if not artifact_root_value:
         return ""
@@ -318,37 +477,39 @@ def _materialize_prod_release_artifact(*, target: str = "") -> str:
     release_files = manifest.get("releaseFiles")
     if not config_version or not isinstance(release_files, dict):
         raise ValueError(f"invalid prod release artifact manifest: {manifest_path}")
-    package_root = deployment_package_root("prod", target=target) / "service"
+    package_root = deployment_target_path(
+        deployment_target_for_env("prod", target=target),
+        "packages",
+        "services",
+    )
     artifact_digest = _sha256_file(manifest_path)
     for service, relative_path in release_files.items():
         source = artifact_root / str(relative_path)
         if not source.is_file():
             raise FileNotFoundError(f"prod release artifact file missing: {source}")
-        destinations = [package_root / str(service)]
-        if service == "recommendation-service":
-            destinations.append(package_root / "rec-model-service")
-        for destination_dir in destinations:
-            report_path = destination_dir / "report.json"
-            if not report_path.is_file():
-                raise FileNotFoundError(f"prod service package missing: {destination_dir}")
-            release_dir = destination_dir / "releases"
-            release_dir.mkdir(parents=True, exist_ok=True)
-            destination = release_dir / f"{config_version}.yaml"
-            shutil.copy2(source, destination)
-            report = json.loads(report_path.read_text(encoding="utf-8"))
-            provenance = report.get("provenance")
-            if not isinstance(provenance, dict):
-                raise ValueError(f"service package provenance missing: {report_path}")
-            release_digests = provenance.setdefault("releaseFiles", {})
-            if not isinstance(release_digests, dict):
-                raise ValueError(f"service package release provenance invalid: {report_path}")
-            release_digests[destination.name] = _sha256_file(destination)
-            provenance["releaseArtifact"] = {
-                "manifest": relpath(manifest_path),
-                "manifestSha256": artifact_digest,
-                "configVersion": config_version,
-            }
-            write_json(report_path, report)
+        destination_dir = package_root / str(service)
+        report_path = destination_dir / "provenance.json"
+        effective_config = destination_dir / "config/config.yaml"
+        if not report_path.is_file() or not effective_config.is_file():
+            raise FileNotFoundError(f"prod service package missing: {destination_dir}")
+        source_digest = _sha256_file(source)
+        effective_digest = _sha256_file(effective_config)
+        if source_digest != effective_digest:
+            raise ValueError(
+                f"release artifact config differs from autonomous package: {service}"
+            )
+        provenance = json.loads(report_path.read_text(encoding="utf-8"))
+        if not isinstance(provenance, dict):
+            raise ValueError(f"service package provenance missing: {report_path}")
+        if (provenance.get("digests") or {}).get("config") != effective_digest:
+            raise ValueError(f"service package config provenance invalid: {report_path}")
+        provenance["releaseArtifact"] = {
+            "manifest": relpath(manifest_path),
+            "manifestSha256": artifact_digest,
+            "releaseId": config_version,
+            "verifiedConfigDigest": effective_digest,
+        }
+        write_json(report_path, provenance)
     return config_version
 
 
@@ -363,50 +524,67 @@ def build_parser() -> argparse.ArgumentParser:
     package_parser = subparsers.add_parser("package")
     package_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     package_parser.add_argument("--env", choices=ENVIRONMENTS, required=True)
-    package_parser.add_argument("--kind", choices=["runtime", "legal-static"], default="runtime")
+    package_parser.add_argument(
+        "--kind",
+        choices=["runtime", "legal-static", "ops-portal"],
+        default="runtime",
+    )
     package_parser.add_argument("--service", default="")
     package_parser.add_argument("--include-services", action="store_true")
     package_parser.add_argument("--target", choices=TARGETS, default="")
+    package_parser.add_argument("--version", default="")
+    package_parser.add_argument("--ops-base-url", default="")
+    package_parser.add_argument("--content-base-url", default="")
+    package_parser.add_argument("--entity-base-url", default="")
+    package_parser.add_argument("--oidc-issuer", default="")
+    package_parser.add_argument("--oidc-client-id", default="")
+    package_parser.add_argument("--oidc-audience", default="")
+    package_parser.add_argument("--oidc-scope", default="")
+    package_parser.add_argument("--skip-install", action="store_true")
 
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     verify_parser.add_argument("--env", choices=ENVIRONMENTS, default="")
     verify_parser.add_argument("--target", choices=TARGETS, default="")
+    verify_parser.add_argument("--service", default="")
     verify_parser.add_argument(
         "--kind",
-        choices=["topology", "config", "packaging", "legal-static", "all"],
+        choices=["topology", "config", "packaging", "legal-static", "config-slo", "all"],
         default="all",
     )
     verify_parser.add_argument(
         "--profile",
         choices=[profile.value for profile in VerificationProfile],
-        required=True,
+        default=VerificationProfile.BASELINE.value,
     )
+    verify_parser.add_argument("--error-rate", default="")
+    verify_parser.add_argument("--p95-ms", default="")
+    verify_parser.add_argument("--redis-error-rate", default="")
 
     provider_conformance_parser = subparsers.add_parser(
         "provider-conformance",
         help="执行一个 Provider Conformance 九格单元并写入受证明证据",
     )
     provider_conformance_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
-    provider_conformance_parser.add_argument("--adapter-id", required=True)
+    provider_conformance_parser.add_argument("--adapter-id", default="")
+    provider_conformance_parser.add_argument("--capability-id", default="")
     provider_conformance_parser.add_argument(
         "--env",
-        required=True,
-        choices=provider_conformance_runner.provider_conformance.ENVIRONMENTS,
+        default="",
+        choices=(
+            "",
+            *provider_conformance_runner.provider_conformance.EVIDENCE_ENVIRONMENTS,
+        ),
     )
     provider_conformance_parser.add_argument(
         "--layer",
-        required=True,
-        choices=provider_conformance_runner.provider_conformance.LAYERS,
+        default="",
+        choices=("", *provider_conformance_runner.provider_conformance.LAYERS),
     )
+    provider_conformance_parser.add_argument("--matrix", action="store_true")
     provider_conformance_parser.add_argument("--execute", action="store_true")
     provider_conformance_parser.add_argument("--image-digest", default="")
     provider_conformance_parser.add_argument("--data-digest", default="")
-    provider_conformance_parser.add_argument("--switch-compatibility-receipt-ref", default="")
-    provider_conformance_parser.add_argument("--callback-drain-receipt-ref", default="")
-    provider_conformance_parser.add_argument("--last-good-receipt-ref", default="")
-    provider_conformance_parser.add_argument("--rollback-receipt-ref", default="")
-    provider_conformance_parser.add_argument("--prod-binding-preflight-receipt-ref", default="")
 
     up_parser = subparsers.add_parser("up")
     up_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
@@ -431,6 +609,22 @@ def build_parser() -> argparse.ArgumentParser:
         default="full",
     )
     up_parser.add_argument("--rollout-mode", choices=["gray-initial", "carry-on", "full"], default="")
+
+    log_sink_control_parser = subparsers.add_parser(
+        "product-telemetry-log-sink",
+        help="在 beta/gamma 本地目标受控执行产品遥测日志端口验证。",
+    )
+    log_sink_control_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
+    log_sink_control_parser.add_argument(
+        "--target",
+        choices=("beta-local", "gamma-local"),
+        required=True,
+    )
+    log_sink_control_parser.add_argument(
+        "--action",
+        choices=("all", "cold-start", "health", "send-query", "permission-failure"),
+        default="all",
+    )
 
     down_parser = subparsers.add_parser("down")
     down_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
@@ -482,6 +676,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     content_readiness_parser.add_argument("--env", choices=ENVIRONMENTS, required=True)
 
+    subparsers.add_parser(
+        "data-execution-fleet",
+        help="解析 Data ReliableTask 唯一的本地 Mongo+Redis 运行端点。",
+    )
+
+    content_uat_parser = subparsers.add_parser(
+        "content-uat",
+        help="以当前 Gamma data-release 的运行案例执行实体主页真实端侧消费验收",
+    )
+    content_uat_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
+    content_uat_parser.add_argument(
+        "--target",
+        choices=(GAMMA_CONTENT_UAT_TARGET,),
+        default=GAMMA_CONTENT_UAT_TARGET,
+    )
+    content_uat_parser.add_argument("--release-uat-cases", required=True)
+    content_uat_parser.add_argument(
+        "--platform",
+        choices=("android", "ios", "all"),
+        default="all",
+    )
+    content_uat_parser.add_argument("--device-id", action="append", default=[])
+
     filter_catalog_parser = subparsers.add_parser(
         "filter-catalog",
         help="按环境绑定的受信发布身份发布或复核 FilterCatalogRelease",
@@ -515,6 +732,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--fix",
         choices=[
             "rebuild-packages",
+            "reclaim-build-cache",
             "restart-stack",
             "reclaim-ports",
             "materialize-media",
@@ -544,8 +762,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     deploy_parser = subparsers.add_parser("deploy")
     deploy_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
-    deploy_parser.add_argument("--target", choices=("prod-hosted",), required=True)
-    deploy_parser.add_argument("--mode", choices=("restart", "rollout", "cold-build"), default="")
+    deploy_parser.add_argument("--target", choices=TARGETS, default="")
+    deploy_parser.add_argument("--env", choices=ENVIRONMENTS, default="")
+    deploy_parser.add_argument(
+        "--mode",
+        choices=(
+            "restart",
+            "rollout",
+            "cold-build",
+            "config-gray",
+            "config-rollback",
+            "environment-assembly",
+        ),
+        default="",
+    )
     deploy_parser.add_argument(
         "--stage",
         choices=("gray-initial", "carry-on", "full"),
@@ -567,6 +797,7 @@ def build_parser() -> argparse.ArgumentParser:
     deploy_parser.add_argument("--to-image", default="")
     deploy_parser.add_argument("--from-config", default="")
     deploy_parser.add_argument("--to-config", default="")
+    deploy_parser.add_argument("--rollback-config", default="")
     deploy_parser.add_argument("--step", default="")
     deploy_parser.add_argument("--cloud-provider", choices=["aliyun", "volcengine", "huaweicloud"], default="aliyun")
     deploy_parser.add_argument("--dry-run", choices=["true", "false"], default="false")
@@ -623,12 +854,33 @@ def _format_stage_header(index: int, total: int, name: str) -> str:
     return f"[step {index}/{total}] {name}"
 
 
+def _redact_controlled_values(text: str, values: tuple[str, ...]) -> str:
+    redacted = text
+    for value in sorted({item for item in values if len(item) >= 4}, key=len, reverse=True):
+        redacted = redacted.replace(value, "<redacted>")
+    return redacted
+
+
+def _redact_controlled_payload(value: Any, values: tuple[str, ...]) -> Any:
+    if isinstance(value, str):
+        return _redact_controlled_values(value, values)
+    if isinstance(value, list):
+        return [_redact_controlled_payload(item, values) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _redact_controlled_payload(item, values)
+            for key, item in value.items()
+        }
+    return value
+
+
 def _run_with_live_output(
     argv: list[str],
     *,
     cwd: Path | None = None,
     env: dict[str, str] | None = None,
     prefix: str = "",
+    redaction_values: tuple[str, ...] = (),
 ) -> subprocess.CompletedProcess[str]:
     merged_env = os.environ.copy()
     merged_env["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -665,11 +917,13 @@ def _run_with_live_output(
                 break
             line = pending[: newline_index + 1]
             pending = pending[newline_index + 1 :]
+            line = _redact_controlled_values(line, redaction_values)
             if prefix:
                 print(f"{prefix}{line}", end="", flush=True)
             else:
                 print(line, end="", flush=True)
         if flush_partial and pending:
+            pending = _redact_controlled_values(pending, redaction_values)
             if prefix:
                 print(f"{prefix}{pending}", end="", flush=True)
             else:
@@ -711,7 +965,10 @@ def _run_with_live_output(
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=1)
-    stdout = b"".join(chunks).decode("utf-8", errors="replace")
+    stdout = _redact_controlled_values(
+        b"".join(chunks).decode("utf-8", errors="replace"),
+        redaction_values,
+    )
     return subprocess.CompletedProcess(
         argv,
         process.returncode,
@@ -902,8 +1159,8 @@ def _tail_gamma_container_logs() -> dict[str, Any]:
     if not _is_interactive_terminal():
         return {"followed": False, "reason": "non-interactive", "backend": ""}
 
-    compose_file = ROOT / "quwoquan_ops" / "environments" / "compose" / "docker-compose.gamma-local.yaml"
-    if not compose_file.exists():
+    compose_files = gamma_compose_files(ROOT)
+    if any(not compose_file.exists() for compose_file in compose_files):
         return {"followed": False, "reason": "compose-file-missing", "backend": ""}
 
     docker_result = subprocess.run(
@@ -984,7 +1241,16 @@ def _tail_gamma_container_logs() -> dict[str, Any]:
         log_paths = [(f"gamma-{service}", tmp_root / f"{service}.log") for service in services]
         handles = {label: path.open("w", encoding="utf-8") for label, path in log_paths}
         process = subprocess.Popen(
-            ["docker", "compose", "-f", str(compose_file), "logs", "-f", "--tail", "40", *services],
+            [
+                "docker",
+                "compose",
+                *compose_file_args(compose_files),
+                "logs",
+                "-f",
+                "--tail",
+                "40",
+                *services,
+            ],
             cwd=str(ROOT),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -1073,11 +1339,11 @@ def _write_summary_bundle(
     append_log_line(
         obs_dir / "logs" / "ci" / "stackctl" / "deploy.log",
         {
-            "ts": payload["generatedAt"],
-            "level": "ERROR" if status in {"failed", "gate_block"} else "INFO",
+            "occurredAt": payload["generatedAt"],
+            "severity": "ERROR" if status in {"failed", "gate_block"} else "INFO",
             "step": command,
             "result": status,
-            "msg": summary,
+            "message": summary,
         },
     )
     write_stackctl_links(
@@ -1346,7 +1612,11 @@ def _local_target_edge_ready(target_name: str) -> bool:
     return True
 
 
-def _local_target_runtime_ready(target_name: str) -> bool:
+def _local_target_runtime_ready(
+    target_name: str,
+    *,
+    workload: str = "full",
+) -> bool:
     try:
         topology = load_environment_topology()
         target = get_target(topology, target_name)
@@ -1356,7 +1626,7 @@ def _local_target_runtime_ready(target_name: str) -> bool:
         return False
     if not profile_name:
         return _local_target_edge_ready(target_name)
-    for role_name in _expected_local_roles(target_name):
+    for role_name in _expected_local_roles(target_name, workload=workload):
         if role_name not in manifest.get("roles", {}):
             return False
         try:
@@ -1381,7 +1651,15 @@ def _selected_profile_commands(
         "gamma-local",
         "prod-sim",
     }:
-        if _local_target_runtime_ready(target_name):
+        workload = (
+            "content-release"
+            if profile in {
+                VerificationProfile.SMOKE,
+                VerificationProfile.INTEGRATION,
+            }
+            else "full"
+        )
+        if _local_target_runtime_ready(target_name, workload=workload):
             commands.append(
                 {
                     "name": f"{target_name}-health-preflight",
@@ -1407,12 +1685,7 @@ def _selected_profile_commands(
                         "--target",
                         target_name,
                         "--workload",
-                        "content-release"
-                        if profile in {
-                            VerificationProfile.SMOKE,
-                            VerificationProfile.INTEGRATION,
-                        }
-                        else "full",
+                        workload,
                         "--skip-app",
                     ],
                     "cwd": ROOT,
@@ -1650,6 +1923,14 @@ def _media_publication_lifecycle_profile_command(
         raise ValueError(
             f"{target_name} lacks publicBases.api for media publication lifecycle probe"
         )
+    moderation_base_url = ""
+    if mode == "lifecycle":
+        origins = target.get("origins") or {}
+        moderation_base_url = str(origins.get("contentService") or "").strip()
+        if not moderation_base_url:
+            raise ValueError(
+                f"{target_name} lacks origins.contentService for media moderation lifecycle"
+            )
     probe_report = (
         report_dir / "media-publication-lifecycle.json"
         if report_dir is not None
@@ -1673,6 +1954,8 @@ def _media_publication_lifecycle_profile_command(
         "--report",
         str(probe_report),
     ]
+    if moderation_base_url:
+        argv.extend(["--moderation-base-url", moderation_base_url])
     resolve_host = _local_public_connect_host(
         topology,
         target_name,
@@ -1869,7 +2152,14 @@ def _local_video_canary_slice_key() -> str:
 
 
 def _video_canary_identity(target_name: str) -> dict[str, Any]:
-    if target_name == "prod-hosted":
+    target = get_target(load_environment_topology(), target_name)
+    playback_canary = target.get("playbackCanary")
+    published_release = (
+        isinstance(playback_canary, dict)
+        and str(playback_canary.get("source") or "").strip()
+        == "published-release"
+    )
+    if published_release:
         try:
             asset_version = int(
                 os.environ.get("VIDEO_PLAYBACK_CANARY_ASSET_VERSION", "0").strip(),
@@ -1910,6 +2200,20 @@ def _video_canary_identity(target_name: str) -> dict[str, Any]:
         "assetVersion": int(descriptor.get("assetVersion") or 1),
         "probeHash": str(descriptor.get("probeHash") or "").strip(),
     }
+
+
+def _video_canary_public_slice_key(target_name: str) -> str:
+    target = get_target(load_environment_topology(), target_name)
+    playback_canary = target.get("playbackCanary")
+    if not isinstance(playback_canary, dict):
+        return ""
+    configured = str(playback_canary.get("publicSliceKey") or "").strip()
+    if configured:
+        return configured.lstrip("/")
+    env_name = str(playback_canary.get("publicSliceKeyEnv") or "").strip()
+    if env_name:
+        return os.environ.get(env_name, "").strip().lstrip("/")
+    return _local_video_canary_slice_key()
 
 
 def _video_canary_post_id(target_name: str) -> str:
@@ -2122,11 +2426,7 @@ def _runtime_media_t4_evidence(
     env_name = str(target.get("env") or "").strip()
     public_bases = target.get("publicBases")
     public_bases = public_bases if isinstance(public_bases, dict) else {}
-    public_slice_key = (
-        os.environ.get("VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY", "").strip().lstrip("/")
-        if target_name == "prod-hosted"
-        else _local_video_canary_slice_key()
-    )
+    public_slice_key = _video_canary_public_slice_key(target_name)
     service_evidence = {
         "videoRange": _video_range_evidence_from_preflight(steps, target_name),
     }
@@ -2142,6 +2442,9 @@ def _runtime_media_t4_evidence(
     is_passed = (
         bool(public_slice_key)
         and bool(post_id)
+        and bool(media_identity.get("assetId"))
+        and int(media_identity.get("assetVersion") or 0) > 0
+        and bool(media_identity.get("probeHash"))
         and not dry_run
         and video_range.get("statusCode") == 206
         and str(video_range.get("mimeType") or "").lower().startswith("video/")
@@ -2243,7 +2546,11 @@ def _environment_page_smoke_profile_command(
     runtime_env = str(target.get("env") or env_name or "alpha")
     if target_name in {"prod-sim", "prod-hosted"}:
         runtime_env = "prod"
-    data_source = "mock" if target_name == "alpha-local" else "remote"
+    data_source = str(
+        (get_environment(topology, runtime_env).get("artifactPolicy") or {})
+        .get("app", {})
+        .get("dataSource", "")
+    ).strip()
     playback_canary = target.get("playbackCanary")
     configured_canary_work_id = (
         str(playback_canary.get("workId") or "").strip()
@@ -2290,6 +2597,8 @@ def _environment_page_smoke_profile_command(
         str(public_bases["mediaVideo"]),
         "--media-upload-base-url",
         str(public_bases["mediaUpload"]),
+        "--rtc-media-connection-url",
+        str(public_bases["rtc"]),
         "--video-playback-canary-work-id",
         video_playback_canary_work_id,
         "--target",
@@ -2319,11 +2628,38 @@ def _environment_page_smoke_profile_command(
         "name": f"{target_name}-environment-page-smoke",
         "argv": argv,
         "cwd": ROOT,
-        "blocking": target_name != "alpha-local",
+        "blocking": True,
         "reportPath": relpath(smoke_report),
     }
     if command_env:
         command["env"] = command_env
+    return command
+
+
+def _content_release_uat_command(
+    *,
+    target_name: str,
+    release_uat_cases: Path,
+    platform: str,
+    device_ids: list[str],
+    report_dir: Path,
+) -> dict[str, Any]:
+    """Build the release-bound Patrol command from the canonical environment topology."""
+    command = _environment_page_smoke_profile_command(
+        "gamma",
+        target_name,
+        report_dir,
+    )
+    if command is None:
+        raise ValueError(f"content UAT topology is incomplete for {target_name}")
+    argv = list(command["argv"])
+    target_index = argv.index("--target") + 1
+    argv[target_index] = RELEASE_HOMEPAGE_UAT_TEST_TARGET
+    argv.extend(("--release-uat-cases", str(release_uat_cases), "--platform", platform))
+    for device_id in device_ids:
+        argv.extend(("--device-id", device_id))
+    command["name"] = f"{target_name}-content-release-uat"
+    command["argv"] = argv
     return command
 
 
@@ -2341,6 +2677,8 @@ def fetch_url(
         "Remote end closed connection without response",
         "Connection reset",
         "Connection closed",
+        "UNEXPECTED_EOF_WHILE_READING",
+        "EOF occurred in violation of protocol",
     )
     total_attempts = max(1, retry_attempts)
     for attempt in range(1, total_attempts + 1):
@@ -2371,11 +2709,38 @@ def fetch_url(
             body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
             return False, int(exc.code), body[:500], str(exc.headers.get("Content-Type") or "")
         except Exception as exc:
-            message = str(exc)
-            if attempt >= total_attempts or not any(marker in message for marker in retry_markers):
-                return False, None, message, ""
+            if attempt >= total_attempts or not _is_retryable_fetch_error(
+                exc, retry_markers
+            ):
+                return False, None, str(exc), ""
             time.sleep(max(0.0, retry_sleep_seconds) * attempt)
     return False, None, "unknown fetch failure", ""
+
+
+def _is_retryable_fetch_error(exc: Exception, retry_markers: tuple[str, ...]) -> bool:
+    if isinstance(
+        exc,
+        (
+            TimeoutError,
+            ConnectionAbortedError,
+            ConnectionRefusedError,
+            ConnectionResetError,
+        ),
+    ):
+        return True
+    if isinstance(exc, urllib.error.URLError):
+        reason = exc.reason
+        if isinstance(
+            reason,
+            (
+                TimeoutError,
+                ConnectionAbortedError,
+                ConnectionRefusedError,
+                ConnectionResetError,
+            ),
+        ):
+            return True
+    return any(marker in str(exc) for marker in retry_markers)
 
 
 @contextlib.contextmanager
@@ -2416,6 +2781,18 @@ def _local_public_connect_host(
         if urllib.parse.urlparse(str(base)).hostname
     }
     return "127.0.0.1" if hostname in public_hosts else ""
+
+
+def _content_release_public_ready_attempts(target: dict[str, Any]) -> int:
+    data_release = target.get("dataRelease")
+    if not isinstance(data_release, dict):
+        raise RuntimeError("GATE_BLOCK: content release target has no dataRelease policy")
+    value = data_release.get("publicReadyTimeoutSeconds")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise RuntimeError(
+            "GATE_BLOCK: dataRelease.publicReadyTimeoutSeconds must be a positive integer"
+        )
+    return value
 
 
 def _read_json_payload(path: Path) -> Any | None:
@@ -2792,7 +3169,7 @@ def _prod_release_lock() -> Any:
     owner = f"{os.getpid()}-{time.time_ns()}"
     if lock_path.is_dir():
         raise RuntimeError(
-            "legacy release lock directory must be removed after operator inspection: "
+            "release lock path must be a file; inspect and remove the directory: "
             f"{lock_path}"
         )
     with lock_path.open("a+", encoding="utf-8") as handle:
@@ -3132,9 +3509,191 @@ def _command_package_legal_static(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _command_package_ops_portal(args: argparse.Namespace) -> dict[str, Any]:
+    """通过 stackctl 构建 Portal 包，并补齐可复算的 package provenance。"""
+    env_name = args.env
+    target_name = args.target or DEFAULT_TARGET_BY_ENV[env_name]
+    report_dir = resolve_report_dir(args, env_name, target_name)
+    started_monotonic, started_at = _start_timing()
+    details: list[str] = []
+    if env_name != "prod" or target_name != "prod-hosted":
+        details.append("ops-portal package is supported only for prod/prod-hosted")
+    if args.service or args.include_services:
+        details.append("ops-portal packages cannot include service packages")
+    version = str(getattr(args, "version", "") or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", version):
+        details.append("ops-portal package requires a safe --version")
+    oidc_values = {
+        "issuer": str(
+            getattr(args, "oidc_issuer", "") or os.environ.get("PROD_OPS_OIDC_ISSUER", "")
+        ).strip(),
+        "clientId": str(
+            getattr(args, "oidc_client_id", "")
+            or os.environ.get("PROD_OPS_OIDC_CLIENT_ID", "")
+        ).strip(),
+        "audience": str(
+            getattr(args, "oidc_audience", "")
+            or os.environ.get("PROD_OPS_OIDC_AUDIENCE", "")
+        ).strip(),
+        "scope": str(
+            getattr(args, "oidc_scope", "") or os.environ.get("PROD_OPS_OIDC_SCOPE", "")
+        ).strip(),
+    }
+    missing_oidc = [name for name, value in oidc_values.items() if not value]
+    if missing_oidc:
+        details.append(
+            "ops-portal package requires OIDC values: " + ", ".join(missing_oidc)
+        )
+    if details:
+        timing = _finish_timing(started_monotonic, started_at)
+        _write_summary_bundle(
+            report_dir,
+            command="package",
+            target=target_name,
+            status="failed",
+            summary=f"stackctl ops-portal package failed for {env_name}",
+            details=details,
+            extra={"env": env_name, "kind": "ops-portal"},
+            timing=timing,
+        )
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl ops-portal package failed for {env_name}",
+            "details": details,
+            "reportDir": relpath(report_dir),
+            **timing,
+        }
+
+    command = [
+        "python3",
+        "quwoquan_ops/cli/prod/build_portal_release.py",
+        "--version",
+        version,
+        "--oidc-issuer",
+        oidc_values["issuer"],
+        "--oidc-client-id",
+        oidc_values["clientId"],
+        "--oidc-audience",
+        oidc_values["audience"],
+        "--oidc-scope",
+        oidc_values["scope"],
+        "--target",
+        target_name,
+    ]
+    for flag, attribute in (
+        ("--ops-base-url", "ops_base_url"),
+        ("--content-base-url", "content_base_url"),
+        ("--entity-base-url", "entity_base_url"),
+    ):
+        value = str(getattr(args, attribute, "") or "").strip()
+        if value:
+            command.extend((flag, value))
+    if getattr(args, "skip_install", False):
+        command.append("--skip-install")
+
+    result = run(command, env={"QWQ_DEPLOY_TARGET": target_name})
+    package_dir = portal_deployment_package_dir(env_name, target=target_name) / version
+    if result.returncode == 0:
+        manifest_path = package_dir / "manifest.json"
+        dist_dir = package_dir / "dist"
+        if not manifest_path.is_file() or not dist_dir.is_dir():
+            result = subprocess.CompletedProcess(
+                command,
+                1,
+                stdout=result.stdout,
+                stderr=(
+                    "ops-portal builder did not produce manifest.json and dist/: "
+                    f"{package_dir}"
+                ),
+            )
+        else:
+            revision_result = run(["git", "rev-parse", "HEAD"])
+            revision = revision_result.stdout.strip()
+            if (
+                revision_result.returncode != 0
+                or not re.fullmatch(r"[0-9a-f]{40}", revision)
+            ):
+                result = subprocess.CompletedProcess(
+                    command,
+                    1,
+                    stdout=result.stdout,
+                    stderr=(
+                        "ops-portal package provenance requires git revision: "
+                        + (revision_result.stderr.strip() or revision_result.stdout.strip())
+                    ),
+                )
+            else:
+                provenance = {
+                    "schema": "qwq.ops_portal_package.v1",
+                    "packageKind": "ops-portal",
+                    "environment": env_name,
+                    "target": target_name,
+                    "version": version,
+                    "gitRevision": revision,
+                    "digests": {
+                        "manifest": _sha256_file(manifest_path),
+                        "distTree": _sha256_tree(dist_dir),
+                    },
+                }
+                write_json(package_dir / "provenance.json", provenance)
+                details.append(f"ops-portal package ready: {relpath(package_dir)}")
+    if result.returncode != 0:
+        details.extend(_command_details(result))
+    timing = _finish_timing(started_monotonic, started_at)
+    status = "ok" if result.returncode == 0 else "failed"
+    write_json(
+        report_dir / "report.json",
+        {
+            "status": status,
+            "command": "package",
+            "kind": "ops-portal",
+            "env": env_name,
+            "target": target_name,
+            "step": {
+                "argv": command,
+                "exitCode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            },
+            **timing,
+        },
+    )
+    _write_summary_bundle(
+        report_dir,
+        command="package",
+        target=target_name,
+        status=status,
+        summary=(
+            f"stackctl ops-portal package completed for {env_name}"
+            if status == "ok"
+            else f"stackctl ops-portal package failed for {env_name}"
+        ),
+        details=details,
+        extra={"env": env_name, "kind": "ops-portal"},
+        timing=timing,
+    )
+    _write_stdout_markdown(
+        report_dir,
+        [("ops-portal-package", "\n".join(filter(None, [result.stdout, result.stderr])))],
+    )
+    return {
+        "exitCode": result.returncode,
+        "summary": (
+            f"stackctl ops-portal package completed for {env_name}"
+            if status == "ok"
+            else f"stackctl ops-portal package failed for {env_name}"
+        ),
+        "details": details,
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
 def command_package(args: argparse.Namespace) -> dict[str, Any]:
     if getattr(args, "kind", "runtime") == "legal-static":
         return _command_package_legal_static(args)
+    if getattr(args, "kind", "runtime") == "ops-portal":
+        return _command_package_ops_portal(args)
 
     topology = load_environment_topology()
     env_name = args.env
@@ -3145,41 +3704,42 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
     reports: list[dict[str, Any]] = []
     package_environment = {"QWQ_DEPLOY_TARGET": target_name}
 
-    app_cmd = ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", env_name]
-    app_result = run(app_cmd, env=package_environment)
-    reports.append(
-        {
-            "name": "app-package",
-            "argv": app_cmd,
-            "exitCode": app_result.returncode,
-            "stdout": app_result.stdout,
-            "stderr": app_result.stderr,
-        }
-    )
-    if app_result.returncode != 0:
-        timing = _finish_timing(started_monotonic, started_at)
-        write_json(report_dir / "report.json", {"status": "failed", "steps": reports, **timing})
-        _write_summary_bundle(
-            report_dir,
-            command="package",
-            target=target_name,
-            status="failed",
-            summary=f"stackctl package failed for {env_name}",
-            details=[app_result.stderr.strip() or app_result.stdout.strip()],
-            extra={"env": env_name},
-            timing=timing,
+    if not args.service:
+        app_cmd = ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", env_name]
+        app_result = run(app_cmd, env=package_environment)
+        reports.append(
+            {
+                "name": "app-package",
+                "argv": app_cmd,
+                "exitCode": app_result.returncode,
+                "stdout": app_result.stdout,
+                "stderr": app_result.stderr,
+            }
         )
-        _write_stdout_markdown(report_dir, [("app-package", "\n".join(filter(None, [app_result.stdout, app_result.stderr])))])
-        return {
-            "exitCode": app_result.returncode,
-            "summary": f"stackctl package failed for {env_name}",
-            "details": [app_result.stderr.strip() or app_result.stdout.strip()],
-            "reportDir": relpath(report_dir),
-            **timing,
-        }
-    details.append(
-        f"app package ready: {relpath(app_deployment_package_dir(env_name, target=target_name))}"
-    )
+        if app_result.returncode != 0:
+            timing = _finish_timing(started_monotonic, started_at)
+            write_json(report_dir / "report.json", {"status": "failed", "steps": reports, **timing})
+            _write_summary_bundle(
+                report_dir,
+                command="package",
+                target=target_name,
+                status="failed",
+                summary=f"stackctl package failed for {env_name}",
+                details=[app_result.stderr.strip() or app_result.stdout.strip()],
+                extra={"env": env_name},
+                timing=timing,
+            )
+            _write_stdout_markdown(report_dir, [("app-package", "\n".join(filter(None, [app_result.stdout, app_result.stderr])))])
+            return {
+                "exitCode": app_result.returncode,
+                "summary": f"stackctl package failed for {env_name}",
+                "details": [app_result.stderr.strip() or app_result.stdout.strip()],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        details.append(
+            f"app package ready: {relpath(app_deployment_package_dir(env_name, target=target_name))}"
+        )
 
     if args.include_services or args.service:
         services = [args.service] if args.service else _all_services()
@@ -3231,7 +3791,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 f"{relpath(service_deployment_package_dir(env_name, service, target=target_name))}"
             )
 
-    if env_name == "prod":
+    if env_name == "prod" and not args.service:
         try:
             materialized_config_version = _materialize_prod_release_artifact(
                 target=target_name
@@ -3261,32 +3821,33 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 f"prod release artifact materialized: configVersion={materialized_config_version}"
             )
 
-    try:
-        shared_package_dir = _build_runtime_shared_package(
-            env_name,
-            target=target_name,
-        )
-    except (OSError, FileNotFoundError) as exc:
-        timing = _finish_timing(started_monotonic, started_at)
-        write_json(report_dir / "report.json", {"status": "failed", "steps": reports, **timing})
-        _write_summary_bundle(
-            report_dir,
-            command="package",
-            target=target_name,
-            status="failed",
-            summary=f"stackctl package failed while building shared runtime package for {env_name}",
-            details=[str(exc)],
-            extra={"env": env_name},
-            timing=timing,
-        )
-        return {
-            "exitCode": 1,
-            "summary": f"stackctl package failed while building shared runtime package for {env_name}",
-            "details": [str(exc)],
-            "reportDir": relpath(report_dir),
-            **timing,
-        }
-    details.append(f"runtime shared package ready: {relpath(shared_package_dir)}")
+    if not args.service:
+        try:
+            shared_package_dir = _build_runtime_shared_package(
+                env_name,
+                target=target_name,
+            )
+        except (OSError, FileNotFoundError) as exc:
+            timing = _finish_timing(started_monotonic, started_at)
+            write_json(report_dir / "report.json", {"status": "failed", "steps": reports, **timing})
+            _write_summary_bundle(
+                report_dir,
+                command="package",
+                target=target_name,
+                status="failed",
+                summary=f"stackctl package failed while building shared runtime package for {env_name}",
+                details=[str(exc)],
+                extra={"env": env_name},
+                timing=timing,
+            )
+            return {
+                "exitCode": 1,
+                "summary": f"stackctl package failed while building shared runtime package for {env_name}",
+                "details": [str(exc)],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        details.append(f"runtime shared package ready: {relpath(shared_package_dir)}")
 
     timing = _finish_timing(started_monotonic, started_at)
     payload = {
@@ -3296,10 +3857,11 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         "target": target_name,
         "timestamp": utc_now(),
         "reportDir": relpath(report_dir),
-        "topologyTarget": get_target(topology, target_name),
         "steps": reports,
         **timing,
     }
+    if topology is not None:
+        payload["topologyTarget"] = get_target(topology, target_name)
     write_json(report_dir / "report.json", payload)
     _write_summary_bundle(
         report_dir,
@@ -3424,7 +3986,162 @@ def _command_verify_legal_static(
     }
 
 
+def _command_verify_config_slo(args: argparse.Namespace) -> dict[str, Any]:
+    """以 stackctl 作为配置灰度 SLO 决策的唯一公开入口。"""
+    report_dir = resolve_report_dir(args, "prod", "prod-hosted")
+    started_monotonic, started_at = _start_timing()
+    values = {
+        "--error-rate": str(getattr(args, "error_rate", "") or "").strip(),
+        "--p95-ms": str(getattr(args, "p95_ms", "") or "").strip(),
+        "--redis-error-rate": str(
+            getattr(args, "redis_error_rate", "") or ""
+        ).strip(),
+    }
+    missing = [flag for flag, value in values.items() if not value]
+    if missing:
+        timing = _finish_timing(started_monotonic, started_at)
+        details = ["config-slo requires " + ", ".join(missing)]
+        _write_summary_bundle(
+            report_dir,
+            command="verify",
+            target="prod-hosted",
+            status="failed",
+            summary="stackctl config-slo verification failed",
+            details=details,
+            extra={"kind": "config-slo"},
+            timing=timing,
+        )
+        return {
+            "exitCode": 2,
+            "summary": "stackctl config-slo verification failed",
+            "details": details,
+            "reportDir": relpath(report_dir),
+            **timing,
+        }
+    command = ["bash", "quwoquan_ops/cli/prod/config_release_slo_gate.sh"]
+    for flag, value in values.items():
+        command.extend((flag, value))
+    result = run(command)
+    timing = _finish_timing(started_monotonic, started_at)
+    details = _command_details(result)
+    status = "ok" if result.returncode == 0 else "failed"
+    write_json(
+        report_dir / "report.json",
+        {
+            "status": status,
+            "command": "verify",
+            "kind": "config-slo",
+            "target": "prod-hosted",
+            "argv": command,
+            "exitCode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            **timing,
+        },
+    )
+    _write_summary_bundle(
+        report_dir,
+        command="verify",
+        target="prod-hosted",
+        status=status,
+        summary=(
+            "stackctl config-slo verification passed"
+            if status == "ok"
+            else "stackctl config-slo verification failed"
+        ),
+        details=details,
+        extra={"kind": "config-slo"},
+        timing=timing,
+    )
+    _write_stdout_markdown(
+        report_dir,
+        [("config-slo", "\n".join(filter(None, [result.stdout, result.stderr])))],
+    )
+    return {
+        "exitCode": result.returncode,
+        "summary": (
+            "stackctl config-slo verification passed"
+            if status == "ok"
+            else "stackctl config-slo verification failed"
+        ),
+        "details": details,
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
+def _command_verify_service_environment(args: argparse.Namespace) -> dict[str, Any]:
+    if not args.env:
+        return {
+            "exitCode": 2,
+            "summary": "stackctl verify --service requires --env",
+            "details": [],
+        }
+    env_name = args.env
+    target_name = args.target or DEFAULT_TARGET_BY_ENV[env_name]
+    report_dir = resolve_report_dir(args, env_name, target_name)
+    started_monotonic, started_at = _start_timing()
+    command = [
+        "bash",
+        "quwoquan_service/scripts/runtime/build_service_env_package.sh",
+        "--service",
+        args.service,
+        "--env",
+        env_name,
+    ]
+    result = run(command, env={"QWQ_DEPLOY_TARGET": target_name})
+    issues: list[str] = []
+    package_dir = service_deployment_package_dir(env_name, args.service, target=target_name)
+    required = (
+        package_dir / "image.lock",
+        package_dir / "config/config.yaml",
+        package_dir / "manifests/all.yaml",
+        package_dir / "provenance.json",
+    )
+    if result.returncode != 0:
+        issues.append(result.stderr.strip() or result.stdout.strip())
+    for path in required:
+        if not path.is_file():
+            issues.append(f"missing service package artifact: {path}")
+    if not issues:
+        try:
+            provenance = json.loads((package_dir / "provenance.json").read_text(encoding="utf-8"))
+            if provenance.get("service") != args.service or provenance.get("environment") != env_name:
+                issues.append("service package provenance identity mismatch")
+            for value in (provenance.get("digests") or {}).values():
+                if not re.fullmatch(r"sha256:[0-9a-f]{64}", str(value)):
+                    issues.append(f"invalid package digest: {value}")
+        except (OSError, json.JSONDecodeError, TypeError) as error:
+            issues.append(f"invalid service package provenance: {error}")
+    timing = _finish_timing(started_monotonic, started_at)
+    payload = {
+        "status": "ok" if not issues else "failed",
+        "command": "verify",
+        "service": args.service,
+        "environment": env_name,
+        "packageDir": str(package_dir),
+        "issues": issues,
+        **timing,
+    }
+    write_json(report_dir / "report.json", payload)
+    return {
+        "exitCode": 0 if not issues else 1,
+        "summary": (
+            f"stackctl verify passed for {args.service}/{env_name}"
+            if not issues
+            else f"stackctl verify failed for {args.service}/{env_name}"
+        ),
+        "details": issues or [f"package verified: {package_dir}"],
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
 def command_verify(args: argparse.Namespace) -> dict[str, Any]:
+    if getattr(args, "service", ""):
+        return _command_verify_service_environment(args)
+    if args.kind == "config-slo":
+        return _command_verify_config_slo(args)
     profile = VerificationProfile(args.profile)
     if args.kind == "legal-static":
         if profile is VerificationProfile.BASELINE:
@@ -3704,13 +4421,348 @@ def _optional_product_telemetry_environment(
     target_name: str,
 ) -> tuple[dict[str, str], str]:
     try:
-        bundle = load_product_telemetry_sls(environment, target_name)
-    except RuntimeError as exc:
+        bundle = load_product_telemetry_log_sink(environment, target_name)
+    except (RuntimeError, ValueError) as exc:
         return {"QWQ_PRODUCT_TELEMETRY_AVAILABLE": "0"}, str(exc)
     return {
         **bundle.environment,
         "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "1",
     }, ""
+
+
+def _log_sink_gate_block_receipt() -> dict[str, str]:
+    return {
+        "source": "unavailable",
+        "status": "gate_block",
+        "redactedDigest": "",
+    }
+
+
+def _write_full_workload_log_sink_gate_block(
+    *,
+    report_dir: Path,
+    report_target: str,
+    resolved_target: str,
+    timing: dict[str, Any],
+) -> dict[str, Any]:
+    receipt = _log_sink_gate_block_receipt()
+    details = [
+        "commercial full workload requires product telemetry log-sink binding",
+        "ensure the selected local topology exposes the declared log-sink endpoint",
+        "use --workload content-release only for import/API/media validation",
+    ]
+    write_json(
+        report_dir / "report.json",
+        {
+            "command": "up",
+            "target": report_target,
+            "resolvedTarget": resolved_target,
+            "workload": "full",
+            "commercialClaim": True,
+            "status": "gate_block",
+            "logSink": receipt,
+            "steps": [],
+            **timing,
+        },
+    )
+    write_json(report_dir / "findings.json", {"issues": details})
+    _write_summary_bundle(
+        report_dir,
+        command="up",
+        target=report_target,
+        status="gate_block",
+        summary=f"stackctl up is GATE_BLOCK for {report_target}",
+        details=details,
+        extra={
+            "workload": "full",
+            "commercialClaim": True,
+            "logSink": receipt,
+        },
+        timing=timing,
+    )
+    return {
+        "exitCode": 2,
+        "summary": f"stackctl up is GATE_BLOCK for {report_target}",
+        "details": details,
+        "reportDir": relpath(report_dir),
+        "status": "gate_block",
+        "workload": "full",
+        "commercialClaim": True,
+        "logSink": receipt,
+        **timing,
+    }
+
+
+def _write_product_telemetry_log_sink_control_report(
+    *,
+    report_dir: Path,
+    target_name: str,
+    action: str,
+    receipt: dict[str, str],
+    action_statuses: list[dict[str, str]],
+    gate_blocked: bool,
+    timing: dict[str, Any],
+) -> dict[str, Any]:
+    """Persist only redacted log-sink binding evidence and outcome names."""
+    status = "gate_block" if gate_blocked else "ok"
+    summary = (
+        f"product telemetry log-sink control is GATE_BLOCK for {target_name}"
+        if gate_blocked
+        else f"product telemetry log-sink control completed for {target_name}"
+    )
+    details = (
+        [
+            "commercial full workload requires product telemetry log-sink binding",
+        ]
+        if gate_blocked
+        else [f"{item['action']}: {item['status']}" for item in action_statuses]
+    )
+    payload = {
+        "command": "product-telemetry-log-sink",
+        "target": target_name,
+        "workload": "full",
+        "commercialClaim": True,
+        "action": action,
+        "status": status,
+        "logSink": receipt,
+        "actions": action_statuses,
+        **timing,
+    }
+    write_json(report_dir / "report.json", payload)
+    write_json(
+        report_dir / "findings.json",
+        {"issues": details if gate_blocked else []},
+    )
+    _write_summary_bundle(
+        report_dir,
+        command="product-telemetry-log-sink",
+        target=target_name,
+        status=status,
+        summary=summary,
+        details=details,
+        extra={
+            "workload": "full",
+            "commercialClaim": True,
+            "logSink": receipt,
+        },
+        timing=timing,
+    )
+    return {
+        "exitCode": 2 if gate_blocked else 0,
+        "summary": summary,
+        "details": details,
+        "reportDir": relpath(report_dir),
+        "workload": "full",
+        "commercialClaim": True,
+        "logSink": receipt,
+        "actions": action_statuses,
+        **timing,
+    }
+
+
+def _log_sink_control_actions(action: str) -> tuple[str, ...]:
+    if action == "all":
+        return ("cold-start", "health", "send-query", "permission-failure")
+    return (action,)
+
+
+def _log_sink_control_query_token() -> str:
+    """Read the operator-only query credential without ever serializing it."""
+    return os.environ.get("PRODUCT_TELEMETRY_QUERY_TOKEN", "").strip()
+
+
+def _run_product_telemetry_log_sink_control_action(
+    *,
+    action: str,
+    target_name: str,
+    environment: str,
+    report_dir: Path,
+    query_token: str,
+) -> None:
+    if action == "cold-start":
+        result = command_up(
+            argparse.Namespace(
+                command="up",
+                env="",
+                target=target_name,
+                device_id="",
+                skip_app=True,
+                skip_build=False,
+                build_only=False,
+                build_services="",
+                workload="full",
+                rollout_mode="",
+                output_format="json",
+                report_dir=str(report_dir / "cold-start"),
+            )
+        )
+        if int(result.get("exitCode", 1)) != 0:
+            raise RuntimeError("cold-start failed")
+        return
+
+    if action == "health":
+        result = command_health(
+            argparse.Namespace(
+                command="health",
+                target=target_name,
+                scope="full",
+                output_format="json",
+                report_dir=str(report_dir / "health"),
+            )
+        )
+        if int(result.get("exitCode", 1)) != 0:
+            raise RuntimeError("health failed")
+        return
+
+    topology = load_environment_topology()
+    target = get_target(topology, target_name)
+    public_bases = target.get("publicBases") or {}
+    api_base = str(public_bases.get("api") or "").strip()
+    product_ops_base = str(public_bases.get("productOps") or "").strip()
+    if not api_base or not product_ops_base:
+        raise RuntimeError("product-ops public base is unavailable")
+    resolve_host = _local_public_connect_host(topology, target_name, api_base)
+
+    session = open_local_acceptance_session(
+        api_base,
+        environment=environment,
+        target_name=target_name,
+        resolve_host=resolve_host,
+    )
+    if action == "permission-failure":
+        try:
+            request_local_environment_json(
+                product_ops_base,
+                path="/ops/events/summary",
+                session=session,
+                resolve_host=resolve_host,
+            )
+        except LocalEnvironmentHTTPError as exc:
+            if exc.status == 403:
+                return
+            raise RuntimeError("permission probe returned unexpected status") from exc
+        raise RuntimeError("permission probe unexpectedly succeeded")
+
+    if action != "send-query":
+        raise ValueError(f"unsupported product telemetry log-sink action: {action}")
+    if not query_token:
+        raise RuntimeError("product telemetry query authorization is unavailable")
+
+    probe_record = {
+        "logType": "event",
+        "eventType": "chat_interaction_outcome",
+        "sessionId": "s.c2xzX2NvbnRyb2w.1",
+        "pageName": "chat_detail",
+        "occurredAt": utc_now(),
+        "deviceManufacturer": "LogSinkControl",
+        "deviceModel": "LogSinkControl",
+        "appVersion": "0.0.0-log-sink-control",
+        "networkClass": "other",
+        "devicePlatform": "web",
+        "chatAction": "mention_send",
+        "chatOutcome": "succeeded",
+        "mentionScope": "member",
+    }
+    body = {"events": [probe_record]}
+    canonical_body = json.dumps(
+        body,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    idempotency_key = hashlib.sha256(canonical_body).hexdigest()
+    request_local_environment_json(
+        product_ops_base,
+        path="/ops/events",
+        session=session,
+        method="POST",
+        body=body,
+        headers={"Idempotency-Key": idempotency_key},
+        resolve_host=resolve_host,
+    )
+    query_session = LocalAcceptanceSession(
+        owner_id="log-sink-control",
+        persona_id="log-sink-control",
+        access_token=query_token,
+    )
+    request_local_environment_json(
+        product_ops_base,
+        path="/ops/events/summary",
+        session=query_session,
+        resolve_host=resolve_host,
+    )
+
+
+def command_product_telemetry_log_sink(args: argparse.Namespace) -> dict[str, Any]:
+    """Execute product telemetry probes through product-ops, never direct Provider."""
+    topology = load_environment_topology()
+    target = get_target(topology, args.target)
+    environment = str(target["env"])
+    report_dir = resolve_report_dir(args, environment, args.target)
+    started_monotonic, started_at = _start_timing()
+    actions = _log_sink_control_actions(args.action)
+    try:
+        bundle = load_product_telemetry_log_sink(environment, args.target)
+        receipt = bundle.redacted_receipt()
+    except (RuntimeError, ValueError):
+        timing = _finish_timing(started_monotonic, started_at)
+        return _write_product_telemetry_log_sink_control_report(
+            report_dir=report_dir,
+            target_name=args.target,
+            action=args.action,
+            receipt=_log_sink_gate_block_receipt(),
+            action_statuses=[],
+            gate_blocked=True,
+            timing=timing,
+        )
+
+    query_token = _log_sink_control_query_token() if "send-query" in actions else ""
+    if "send-query" in actions and not query_token:
+        timing = _finish_timing(started_monotonic, started_at)
+        return _write_product_telemetry_log_sink_control_report(
+            report_dir=report_dir,
+            target_name=args.target,
+            action=args.action,
+            receipt=receipt,
+            action_statuses=[],
+            gate_blocked=True,
+            timing=timing,
+        )
+
+    action_statuses: list[dict[str, str]] = []
+    for action in actions:
+        try:
+            _run_product_telemetry_log_sink_control_action(
+                action=action,
+                target_name=args.target,
+                environment=environment,
+                report_dir=report_dir,
+                query_token=query_token,
+            )
+        except (RuntimeError, ValueError, LocalEnvironmentHTTPError):
+            action_statuses.append({"action": action, "status": "failed"})
+            timing = _finish_timing(started_monotonic, started_at)
+            return _write_product_telemetry_log_sink_control_report(
+                report_dir=report_dir,
+                target_name=args.target,
+                action=args.action,
+                receipt=receipt,
+                action_statuses=action_statuses,
+                gate_blocked=True,
+                timing=timing,
+            )
+        action_statuses.append({"action": action, "status": "passed"})
+
+    timing = _finish_timing(started_monotonic, started_at)
+    return _write_product_telemetry_log_sink_control_report(
+        report_dir=report_dir,
+        target_name=args.target,
+        action=args.action,
+        receipt=receipt,
+        action_statuses=action_statuses,
+        gate_blocked=False,
+        timing=timing,
+    )
 
 
 def command_up(args: argparse.Namespace) -> dict[str, Any]:
@@ -3774,22 +4826,33 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     env_name = str(target["env"])
     report_target = args.env or requested_target
     report_dir = resolve_report_dir(args, env_name, report_target)
+    # A content release starts only the import/consumer data plane. Device
+    # selection belongs to a separate App UAT command, never to server startup.
+    if args.workload == "content-release":
+        args.skip_app = True
+    commercial_claim = args.workload == "full"
+    log_sink_receipt = {
+        "source": "not-required",
+        "status": "not-claimed",
+        "redactedDigest": "",
+    }
+    log_sink_redaction_values: tuple[str, ...] = ()
     if args.workload == "full" and requested_target in {"beta-local", "gamma-local"}:
         try:
-            load_product_telemetry_sls(env_name, requested_target)
-        except (RuntimeError, ValueError) as exc:
+            log_sink_bundle = load_product_telemetry_log_sink(
+                env_name,
+                requested_target,
+            )
+            log_sink_receipt = log_sink_bundle.redacted_receipt()
+            log_sink_redaction_values = tuple(log_sink_bundle.environment.values())
+        except (RuntimeError, ValueError):
             timing = _finish_timing(started_monotonic, started_at)
-            return {
-                "exitCode": 2,
-                "summary": f"stackctl up {requested_target} is GATE_BLOCK",
-                "details": [
-                    "full workload requires commercial telemetry",
-                    str(exc),
-                    "use --workload content-release for import/API/media validation",
-                ],
-                "reportDir": relpath(report_dir),
-                **timing,
-            }
+            return _write_full_workload_log_sink_gate_block(
+                report_dir=report_dir,
+                report_target=report_target,
+                resolved_target=requested_target,
+                timing=timing,
+            )
     local_operation_lock: Any | None = None
     if requested_target in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
         try:
@@ -3808,6 +4871,8 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     "target": report_target,
                     "resolvedTarget": requested_target,
                     "workload": args.workload,
+                    "commercialClaim": commercial_claim,
+                    "logSink": log_sink_receipt,
                     "steps": [
                         {
                             "name": f"{requested_target}-operation-lock",
@@ -3868,7 +4933,12 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         stage_header = _format_stage_header(stage_index, expected_stage_total, stage)
         announce(stage_header, "started", numbered=True)
         stage_started = time.monotonic()
-        result = _run_with_live_output(argv, env=env, prefix=live_prefix)
+        result = _run_with_live_output(
+            argv,
+            env=env,
+            prefix=live_prefix,
+            redaction_values=log_sink_redaction_values,
+        )
         duration = _format_duration_ms(int((time.monotonic() - stage_started) * 1000))
         status = "completed" if result.returncode == 0 else f"failed (exit={result.returncode})"
         announce(stage_header, f"{status} in {duration}", numbered=True)
@@ -3931,10 +5001,10 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         alpha_log_dir = _local_runtime_log_root("alpha-local")
         return _tail_multiple_logs_for_startup(
             [
-                ("alpha-api-edge", alpha_log_dir / "api-edge" / "local" / "runtime.log"),
-                ("alpha-product-ops", alpha_log_dir / "product-ops" / "local" / "runtime.log"),
-                ("alpha-media-edge", alpha_log_dir / "media-edge" / "local" / "runtime.log"),
-                ("alpha-media-origin", alpha_log_dir / "media-origin" / "local" / "runtime.log"),
+                ("alpha-content", alpha_log_dir / "content-service" / "local" / "runtime.log"),
+                ("alpha-user", alpha_log_dir / "user-service" / "local" / "runtime.log"),
+                ("alpha-entity", alpha_log_dir / "entity-service" / "local" / "runtime.log"),
+                ("alpha-media", alpha_log_dir / "media-origin" / "local" / "runtime.log"),
             ],
             idle_timeout_seconds=4.0,
             max_follow_seconds=20.0,
@@ -3958,18 +5028,18 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         if not args.skip_app:
             args.device_id = maybe_resolve_device_id(include_web=True)
         cmd = ["bash", "quwoquan_ops/cli/beta/start_beta_stack.sh", "up"]
-        env = _beta_env_from_port_manifest()
+        if args.skip_build:
+            cmd.append("--skip-build")
+        env = _beta_env_from_port_manifest(topology, requested_target)
         env["START_APP"] = "0"
         telemetry_env, telemetry_advisory = _optional_product_telemetry_environment(
             "beta", "beta-local"
         )
         env.update(telemetry_env)
         env["QWQ_WORKLOAD"] = args.workload
-        external_provider_error = (
-            None
-            if args.workload == "content-release"
-            else _bind_beta_external_provider_environment(env)
-        )
+        # Beta 的自治配置明确启用内容向量能力；content-release 只缩小
+        # workload/观测面，不得暗中改写服务配置或绕过 provider binding。
+        external_provider_error = _bind_beta_external_provider_environment(env)
         if external_provider_error:
             steps.append(
                 {
@@ -4038,6 +5108,54 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     stdout="",
                     stderr=f"beta backend health check failed: {beta_health_url}",
                 )
+        if result.returncode == 0 and args.workload == "content-release":
+            public_ready_attempts = _content_release_public_ready_attempts(target)
+            public_bases = target.get("publicBases") or {}
+            release_surfaces = (
+                ("api", "/healthz"),
+                ("mediaImage", "/healthz"),
+            )
+            for base_key, path in release_surfaces:
+                base_url = str(public_bases.get(base_key) or "").rstrip("/")
+                if not base_url:
+                    result = subprocess.CompletedProcess(
+                        cmd,
+                        1,
+                        stdout="",
+                        stderr=f"beta content release has no public base: {base_key}",
+                    )
+                    break
+                public_url = f"{base_url}{path}"
+                public_ready, public_status, public_body, public_content_type = fetch_url(
+                    public_url,
+                    retry_attempts=public_ready_attempts,
+                    retry_sleep_seconds=1.0,
+                    resolve_host=_local_public_connect_host(
+                        topology,
+                        requested_target,
+                        public_url,
+                    ),
+                )
+                steps.append(
+                    {
+                        "kind": "beta-content-release-public-health",
+                        "surface": base_key,
+                        "exitCode": 0 if public_ready else 1,
+                        "stdout": "checked beta content release public health",
+                        "stderr": "" if public_ready else public_body,
+                        "url": public_url,
+                        "statusCode": public_status,
+                        "contentType": public_content_type,
+                    }
+                )
+                if not public_ready:
+                    result = subprocess.CompletedProcess(
+                        cmd,
+                        1,
+                        stdout="",
+                        stderr=f"beta content release public health failed: {public_url}",
+                    )
+                    break
         if result.returncode == 0 and not args.skip_app:
             try:
                 app_launch = start_app_process("beta", args.device_id)
@@ -4114,10 +5232,11 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
         env.update(telemetry_env)
         env["QWQ_WORKLOAD"] = args.workload
+        # Gamma 的自治配置明确启用内容向量能力；content-release 只缩小
+        # workload/观测面，不得绕过 content-service 的必需 provider binding。
+        # build-only 不启动运行时，可继续使用启动脚本限定在构建子进程内的惰性值。
         external_provider_error = (
-            None
-            if build_only or args.workload == "content-release"
-            else _bind_gamma_external_provider_environment(env)
+            None if build_only else _bind_gamma_external_provider_environment(env)
         )
         if external_provider_error:
             steps.append(
@@ -4267,8 +5386,33 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                         stderr=f"log={relpath(app_launch['log_path'])}",
                     )
     elif requested_target == "alpha-local":
-        cmd = ["bash", "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh", "up"]
-        result = run_stage("alpha-local", cmd, live_prefix="[alpha] ")
+        cmd = [
+            "bash",
+            "quwoquan_ops/cli/alpha/start_alpha_content_release_stack.sh",
+            "up",
+        ]
+        alpha_env = os.environ.copy()
+        alpha_env["QWQ_RUN_ROOT"] = str(report_dir.resolve())
+        alpha_env["QWQ_OBSERVABILITY_RUN_ROOT"] = str(
+            env_observability_run_dir(env_name, report_dir.name).resolve()
+        )
+        if args.workload != "content-release":
+            result = subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="",
+                stderr=(
+                    "alpha-local only provides the real content-release workload; "
+                    "commercial planes belong to beta/gamma release verification"
+                ),
+            )
+        else:
+            result = run_stage(
+                "alpha-local",
+                cmd,
+                env=alpha_env,
+                live_prefix="[alpha] ",
+            )
         background_tail = tail_alpha_background_logs()
         steps.append(
             {
@@ -4279,6 +5423,80 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                 "tail": background_tail,
             }
         )
+        if result.returncode == 0:
+            alpha_content_port = canonical_port(
+                load_port_manifest(),
+                str(target["portProfile"]),
+                "content-service",
+            )
+            alpha_health_url = f"http://127.0.0.1:{alpha_content_port}/healthz"
+            alpha_ready, alpha_status, alpha_body, alpha_content_type = fetch_url(
+                alpha_health_url,
+                retry_attempts=5,
+                retry_sleep_seconds=1.0,
+            )
+            steps.append(
+                {
+                    "kind": "alpha-backend-health-check",
+                    "exitCode": 0 if alpha_ready else 1,
+                    "stdout": "checked alpha backend health endpoint",
+                    "stderr": "" if alpha_ready else alpha_body,
+                    "url": alpha_health_url,
+                    "statusCode": alpha_status,
+                    "contentType": alpha_content_type,
+                }
+            )
+            if not alpha_ready:
+                result = subprocess.CompletedProcess(
+                    cmd,
+                    1,
+                    stdout="",
+                    stderr=f"alpha backend health check failed: {alpha_health_url}",
+                )
+        if result.returncode == 0:
+            public_ready_attempts = _content_release_public_ready_attempts(target)
+            public_bases = target.get("publicBases") or {}
+            for base_key, path in (("api", "/healthz"), ("mediaImage", "/healthz")):
+                base_url = str(public_bases.get(base_key) or "").rstrip("/")
+                if not base_url:
+                    result = subprocess.CompletedProcess(
+                        cmd,
+                        1,
+                        stdout="",
+                        stderr=f"alpha content release has no public base: {base_key}",
+                    )
+                    break
+                public_url = f"{base_url}{path}"
+                public_ready, public_status, public_body, public_content_type = fetch_url(
+                    public_url,
+                    retry_attempts=public_ready_attempts,
+                    retry_sleep_seconds=1.0,
+                    resolve_host=_local_public_connect_host(
+                        topology,
+                        requested_target,
+                        public_url,
+                    ),
+                )
+                steps.append(
+                    {
+                        "kind": "alpha-content-release-public-health",
+                        "surface": base_key,
+                        "exitCode": 0 if public_ready else 1,
+                        "stdout": "checked alpha content release public health",
+                        "stderr": "" if public_ready else public_body,
+                        "url": public_url,
+                        "statusCode": public_status,
+                        "contentType": public_content_type,
+                    }
+                )
+                if not public_ready:
+                    result = subprocess.CompletedProcess(
+                        cmd,
+                        1,
+                        stdout="",
+                        stderr=f"alpha content release public health failed: {public_url}",
+                    )
+                    break
         if result.returncode == 0 and not args.skip_app:
             args.device_id = maybe_resolve_device_id(include_web=True)
             try:
@@ -4522,6 +5740,20 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             **timing,
         }
 
+    if log_sink_redaction_values:
+        steps = _redact_controlled_payload(steps, log_sink_redaction_values)
+        result = subprocess.CompletedProcess(
+            result.args,
+            result.returncode,
+            stdout=_redact_controlled_values(
+                str(result.stdout or ""),
+                log_sink_redaction_values,
+            ),
+            stderr=_redact_controlled_values(
+                str(result.stderr or ""),
+                log_sink_redaction_values,
+            ),
+        )
     timing = _finish_timing(started_monotonic, started_at)
     steps.append(
         {
@@ -4538,24 +5770,43 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             "target": report_target,
             "resolvedTarget": requested_target,
             "workload": args.workload,
+            "commercialClaim": commercial_claim,
+            "logSink": log_sink_receipt,
             "steps": steps,
             **timing,
         },
+    )
+    terminal_status = (
+        "ok" if result.returncode == 0 else "gate_block" if result.returncode == 2 else "failed"
+    )
+    terminal_summary = (
+        f"stackctl up completed for {report_target}"
+        if result.returncode == 0
+        else f"stackctl up is GATE_BLOCK for {report_target}"
+        if result.returncode == 2
+        else f"stackctl up failed for {report_target}"
     )
     _write_summary_bundle(
         report_dir,
         command="up",
         target=report_target,
-        status="ok" if result.returncode == 0 else "failed",
-        summary=f"stackctl up {'completed' if result.returncode == 0 else 'failed'} for {report_target}",
+        status=terminal_status,
+        summary=terminal_summary,
         details=_command_details(result),
+        extra={
+            "workload": args.workload,
+            "commercialClaim": commercial_claim,
+            "logSink": log_sink_receipt,
+        },
         timing=timing,
     )
     payload = {
         "exitCode": result.returncode,
-        "summary": f"stackctl up {'completed' if result.returncode == 0 else 'failed'} for {report_target}",
+        "summary": terminal_summary,
         "details": _command_details(result),
         "reportDir": relpath(report_dir),
+        "commercialClaim": commercial_claim,
+        "logSink": log_sink_receipt,
         **timing,
     }
     if local_operation_lock is not None:
@@ -4574,9 +5825,15 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
         result = run(cmd)
     elif args.target == "gamma-local":
         cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh", "--down"]
-        result = run(cmd, env=_gamma_env_from_port_manifest(topology, args.target))
+        env = _gamma_env_from_port_manifest(topology, args.target)
+        _bind_gamma_down_compose_placeholders(env)
+        result = run(cmd, env=env)
     elif args.target == "alpha-local":
-        cmd = ["bash", "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh", "down"]
+        cmd = [
+            "bash",
+            "quwoquan_ops/cli/alpha/start_alpha_content_release_stack.sh",
+            "down",
+        ]
         result = run(cmd)
         app_result = run(
             [
@@ -4635,11 +5892,85 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _current_runtime_health_scope(target_name: str) -> str:
+    """Return the health scope promised by the most recent local runtime start.
+
+    A content-release stack intentionally does not start the commercial Ops and
+    assistant planes.  Its runtime receipt is the authority for status; a
+    missing or malformed receipt remains fail-closed to the full scope.
+    """
+    if target_name not in {"alpha-local", "beta-local", "gamma-local"}:
+        return "full"
+    process_dir = target_process_dir(target_name)
+    alpha_release_state = process_dir / "content-release.json"
+    if target_name == "alpha-local":
+        try:
+            alpha_release = json.loads(alpha_release_state.read_text(encoding="utf-8"))
+            if alpha_release.get("workload") == "content-release":
+                return "content-import"
+        except (OSError, TypeError, json.JSONDecodeError):
+            return "full"
+        return "full"
+    stack_state_path = process_dir / "stack.state"
+    try:
+        for line in stack_state_path.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key == "workload":
+                workload = value.strip().strip("'\"")
+                if workload == "content-release":
+                    return "content-consumer"
+                if workload == "full":
+                    return "full"
+    except OSError:
+        pass
+
+    try:
+        gamma_status = json.loads(
+            (process_dir / "stack_status.json").read_text(encoding="utf-8")
+        )
+        if gamma_status.get("status") == "passed":
+            workload = str(gamma_status.get("workload") or "").strip()
+            if workload == "content-release":
+                return "content-consumer"
+            if workload == "full":
+                return "full"
+    except (OSError, TypeError, json.JSONDecodeError):
+        pass
+
+    # Managed stacks may predate the explicit workload field. Their
+    # most recent parent receipt remains a best-effort fallback until restart.
+    state_path = process_dir / "local_run.json"
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        run_root = Path(str(state["runRoot"]))
+        receipt = json.loads((run_root / "report.json").read_text(encoding="utf-8"))
+    except (KeyError, OSError, TypeError, json.JSONDecodeError):
+        return "full"
+    if (
+        receipt.get("command") == "up"
+        and receipt.get("resolvedTarget") == target_name
+        and receipt.get("workload") == "content-release"
+    ):
+        return "content-consumer"
+    return "full"
+
+
+def command_data_execution_fleet(_args: argparse.Namespace) -> dict[str, Any]:
+    endpoint = resolve_data_execution_fleet_endpoint()
+    return {
+        "exitCode": 0,
+        "summary": "stackctl data execution fleet resolved",
+        "details": [f"target={endpoint.target}"],
+        "fleet": endpoint.document(),
+    }
+
+
 def command_status(args: argparse.Namespace) -> dict[str, Any]:
+    scope = _current_runtime_health_scope(args.target)
     health_args = argparse.Namespace(
         command="health",
         target=args.target,
-        scope="full",
+        scope=scope,
         output_format=getattr(args, "output_format", "text"),
         report_dir=str(resolve_report_dir(args, str(get_target(load_environment_topology(), args.target)["env"]), args.target)),
     )
@@ -4824,10 +6155,10 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         inspection["security"] = _security_report(topology, args.target)
     output_inspection = dict(inspection)
     if "config" in inspection:
-        config_workspace = (
-            deployment_work_root(args.target)
-            / "inspection"
-            / report_dir.name
+        config_workspace = deployment_target_path(
+            args.target,
+            "inspection",
+            report_dir.name,
         )
         config_workspace.mkdir(parents=True, exist_ok=True)
         write_json(config_workspace / "config.json", inspection["config"])
@@ -4893,7 +6224,7 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
     deployment_prerequisite_failed = False
     if args.target in {"beta-local", "gamma-local"}:
         try:
-            load_product_telemetry_sls(env_name, args.target)
+            load_product_telemetry_log_sink(env_name, args.target)
         except (RuntimeError, ValueError) as exc:
             deployment_prerequisite_failed = True
             findings.append(f"deployment prerequisite failed: {exc}")
@@ -4961,7 +6292,8 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
     if findings:
         if deployment_prerequisite_failed:
             repair_plan.append(
-                "provision the external product telemetry SLS deployment secret and rerun `stackctl doctor`"
+                "ensure the declared local Provider topology and any required "
+                "QWQ_DEPLOY_WORK_ROOT material are available, then rerun `stackctl doctor`"
             )
             if args.target in {"prod-sim", "prod-hosted"}:
                 repair_plan.append(
@@ -5049,6 +6381,9 @@ def command_filter_catalog(args: argparse.Namespace) -> dict[str, Any]:
             rollback_release_id=args.rollback_release_id,
             token_env=args.token_env,
             prod_gray_activation=bool(args.prod_gray_activation),
+            diagnostic_log_path=(
+                target_process_dir(args.target) / "stdout" / "filter-catalog.log"
+            ),
         )
     except (RuntimeError, ValueError) as exc:
         detail = str(exc)
@@ -5264,12 +6599,189 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
+    """Run the release-bound homepage Patrol suite against Gamma consumer APIs."""
+    report_dir = resolve_report_dir(args, "gamma", args.target)
+    started_monotonic, started_at = _start_timing()
+    cases_path = Path(args.release_uat_cases).expanduser()
+    allowed_root = env_runs_root("gamma") / "data-release"
+    try:
+        resolved_cases = cases_path.resolve(strict=True)
+        resolved_cases.relative_to(allowed_root.resolve(strict=True))
+        command = _content_release_uat_command(
+            target_name=args.target,
+            release_uat_cases=resolved_cases,
+            platform=args.platform,
+            device_ids=list(args.device_id),
+            report_dir=report_dir,
+        )
+    except (OSError, ValueError) as exc:
+        timing = _finish_timing(started_monotonic, started_at)
+        details = [str(exc)]
+        payload = {
+            "command": "content-uat",
+            "target": args.target,
+            "status": ProbeOutcome.GATE_BLOCK.value,
+            "releaseUatCases": str(cases_path),
+            "details": details,
+            **timing,
+        }
+        write_json(report_dir / "report.json", payload)
+        write_json(report_dir / "findings.json", {"issues": details})
+        _write_summary_bundle(
+            report_dir,
+            command="content-uat",
+            target=args.target,
+            status="gate_block",
+            summary="content UAT is GATE_BLOCK",
+            details=details,
+            timing=timing,
+        )
+        return {
+            "exitCode": 2,
+            "summary": "content UAT is GATE_BLOCK",
+            "details": details,
+            "reportDir": relpath(report_dir),
+            **timing,
+        }
+
+    result = run(
+        command["argv"],
+        cwd=command["cwd"],
+        env=command.get("env"),
+    )
+    runner_report = _read_json_object(str(ROOT / str(command["reportPath"])))
+    runner_status = str(runner_report.get("status") or "failed")
+    status = "ok" if result.returncode == 0 and runner_status == "passed" else (
+        "gate_block" if result.returncode == 2 or runner_status == "gate_block" else "failed"
+    )
+    details = _command_details(result)
+    timing = _finish_timing(started_monotonic, started_at)
+    payload = {
+        "command": "content-uat",
+        "target": args.target,
+        "status": status,
+        "releaseUatCases": relpath(resolved_cases),
+        "runnerReport": command["reportPath"],
+        "runnerStatus": runner_status,
+        "details": details,
+        **timing,
+    }
+    write_json(report_dir / "report.json", payload)
+    write_json(report_dir / "findings.json", {"issues": details if status != "ok" else []})
+    _write_summary_bundle(
+        report_dir,
+        command="content-uat",
+        target=args.target,
+        status=status,
+        summary=(
+            "content UAT passed"
+            if status == "ok"
+            else "content UAT is GATE_BLOCK" if status == "gate_block" else "content UAT failed"
+        ),
+        details=details,
+        extra={
+            "releaseUatCases": relpath(resolved_cases),
+            "runnerReport": command["reportPath"],
+            "runnerStatus": runner_status,
+        },
+        timing=timing,
+    )
+    return {
+        "exitCode": 0 if status == "ok" else 2 if status == "gate_block" else 1,
+        "summary": (
+            "content UAT passed"
+            if status == "ok"
+            else "content UAT is GATE_BLOCK" if status == "gate_block" else "content UAT failed"
+        ),
+        "details": details,
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
 def command_repair(args: argparse.Namespace) -> dict[str, Any]:
     topology = load_environment_topology()
     target = get_target(topology, args.target)
     env_name = str(target["env"])
     report_dir = resolve_report_dir(args, env_name, args.target)
     steps: list[dict[str, Any]] = []
+    if args.fix == "reclaim-build-cache":
+        if args.target != "gamma-local":
+            summary = "reclaim-build-cache is only available for gamma-local"
+            _write_summary_bundle(
+                report_dir,
+                command="repair",
+                target=args.target,
+                status="failed",
+                summary=summary,
+                details=[summary],
+            )
+            return {
+                "exitCode": 2,
+                "summary": summary,
+                "details": [summary],
+                "reportDir": relpath(report_dir),
+            }
+        before = run(["docker", "system", "df"])
+        reclaim = run(["docker", "builder", "prune", "--all", "--force"])
+        after = run(["docker", "system", "df"])
+        steps = [
+            {
+                "name": "docker-storage-before",
+                "exitCode": before.returncode,
+                "stdout": before.stdout,
+                "stderr": before.stderr,
+            },
+            {
+                "name": "docker-unused-build-cache-prune",
+                "exitCode": reclaim.returncode,
+                "stdout": reclaim.stdout,
+                "stderr": reclaim.stderr,
+            },
+            {
+                "name": "docker-storage-after",
+                "exitCode": after.returncode,
+                "stdout": after.stdout,
+                "stderr": after.stderr,
+            },
+        ]
+        succeeded = all(step["exitCode"] == 0 for step in steps)
+        summary = (
+            "gamma-local unused Docker build cache reclaimed"
+            if succeeded
+            else "gamma-local Docker build cache reclaim failed"
+        )
+        write_json(
+            report_dir / "report.json",
+            {"command": "repair", "target": args.target, "fix": args.fix, "steps": steps},
+        )
+        write_json(
+            report_dir / "repair_plan.json",
+            {
+                "target": args.target,
+                "fix": args.fix,
+                "actions": ["remove unused Docker build cache only"],
+            },
+        )
+        _write_summary_bundle(
+            report_dir,
+            command="repair",
+            target=args.target,
+            status="ok" if succeeded else "failed",
+            summary=summary,
+            details=[
+                "only unused Docker builder cache is eligible; containers, images, volumes, and release data are preserved"
+            ],
+        )
+        return {
+            "exitCode": 0 if succeeded else 1,
+            "summary": summary,
+            "details": [
+                "only unused Docker builder cache is eligible; containers, images, volumes, and release data are preserved"
+            ],
+            "reportDir": relpath(report_dir),
+        }
     if args.fix == "rebuild-packages":
         package_args = argparse.Namespace(
             command="package",
@@ -5370,7 +6882,7 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
         # otherwise a failed `up` would turn a partial outage into a full one.
         if args.target in {"beta-local", "gamma-local"}:
             try:
-                load_product_telemetry_sls(env_name, args.target)
+                load_product_telemetry_log_sink(env_name, args.target)
             except (RuntimeError, ValueError) as exc:
                 summary = (
                     "stackctl repair restart-stack blocked before stop: "
@@ -5393,7 +6905,7 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
                         "target": args.target,
                         "fix": args.fix,
                         "actions": [
-                            "provision the external product telemetry SLS deployment secret",
+                            "ensure the declared local Provider topology is available and QWQ_DEPLOY_WORK_ROOT is writable when materialization is required",
                             "rerun stackctl doctor before restart-stack",
                         ],
                     },
@@ -5601,7 +7113,7 @@ def _verify_release_registry_attestations(manifest: dict[str, Any]) -> None:
 
 
 def _prod_gray_canary_contract(rollout_stage: str) -> dict[str, Any]:
-    policy_path = ROOT / "quwoquan_ops" / "environments" / "gray_routing_policy.yaml"
+    policy_path = ROOT / "quwoquan_ops" / "environments" / "prod" / "rollout" / "routing_policy.yaml"
     payload = load_json_yaml(policy_path)
     policy = payload.get("policy") if isinstance(payload, dict) else None
     if not isinstance(policy, dict) or not policy.get("enabled"):
@@ -5661,9 +7173,7 @@ def _prod_gray_canary_contract(rollout_stage: str) -> dict[str, Any]:
 
 
 def _emit_prod_gray_canary_traffic(canary: dict[str, Any]) -> dict[str, Any]:
-    topology = load_json_yaml(
-        ROOT / "quwoquan_ops" / "environments" / "environment_topology_manifest.yaml"
-    )
+    topology = load_environment_topology()
     api_base = str(
         ((((topology or {}).get("targets") or {}).get("prod-hosted") or {}).get("publicBases") or {}).get("api")
         or ""
@@ -6463,7 +7973,277 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _command_deploy_service_environment(args: argparse.Namespace) -> dict[str, Any]:
+    env_name = args.env
+    target_name = args.target or DEFAULT_TARGET_BY_ENV[env_name]
+    report_dir = resolve_report_dir(args, env_name, target_name)
+    started_monotonic, started_at = _start_timing()
+    package_command = [
+        "bash",
+        "quwoquan_service/scripts/runtime/build_service_env_package.sh",
+        "--service",
+        args.service,
+        "--env",
+        env_name,
+    ]
+    package_result = run(package_command, env={"QWQ_DEPLOY_TARGET": target_name})
+    if package_result.returncode != 0:
+        timing = _finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": package_result.returncode,
+            "summary": f"stackctl deploy packaging failed for {args.service}/{env_name}",
+            "details": [package_result.stderr.strip() or package_result.stdout.strip()],
+            **timing,
+        }
+    manifest = service_deployment_package_dir(
+        env_name,
+        args.service,
+        target=target_name,
+    ) / "manifests/all.yaml"
+    dry_run = str(getattr(args, "dry_run", "false")).strip().lower() == "true"
+    if env_name == "prod" and not dry_run:
+        timing = _finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": "stackctl service deploy blocked: prod requires the rollout transaction command",
+            "details": ["use --target prod-hosted with release manifest and SLO readback"],
+            **timing,
+        }
+    apply_command = ["kubectl", "apply", "-f", str(manifest)]
+    if dry_run:
+        apply_command.extend(["--dry-run=client"])
+    apply_result = run(apply_command)
+    timing = _finish_timing(started_monotonic, started_at)
+    payload = {
+        "status": "ok" if apply_result.returncode == 0 else "failed",
+        "command": "deploy",
+        "service": args.service,
+        "environment": env_name,
+        "dryRun": dry_run,
+        "manifest": str(manifest),
+        "apply": {
+            "argv": apply_command,
+            "exitCode": apply_result.returncode,
+            "stdout": apply_result.stdout,
+            "stderr": apply_result.stderr,
+        },
+        **timing,
+    }
+    write_json(report_dir / "report.json", payload)
+    return {
+        "exitCode": apply_result.returncode,
+        "summary": (
+            f"stackctl deploy completed for {args.service}/{env_name}"
+            if apply_result.returncode == 0
+            else f"stackctl deploy failed for {args.service}/{env_name}"
+        ),
+        "details": _command_details(apply_result),
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
+def _command_private_deploy_operation(
+    args: argparse.Namespace,
+    *,
+    operation: str,
+    command: list[str],
+) -> dict[str, Any]:
+    """执行已收口到 stackctl 的私有 Bash 实现，并留下统一报告。"""
+    report_dir = resolve_report_dir(args, "prod", "prod-hosted")
+    started_monotonic, started_at = _start_timing()
+    result = run(command, env={"QWQ_DEPLOY_TARGET": "prod-hosted"})
+    timing = _finish_timing(started_monotonic, started_at)
+    details = _command_details(result)
+    status = "ok" if result.returncode == 0 else "failed"
+    write_json(
+        report_dir / "report.json",
+        {
+            "status": status,
+            "command": "deploy",
+            "operation": operation,
+            "target": "prod-hosted",
+            "argv": command,
+            "exitCode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            **timing,
+        },
+    )
+    _write_summary_bundle(
+        report_dir,
+        command="deploy",
+        target="prod-hosted",
+        status=status,
+        summary=(
+            f"stackctl {operation} completed"
+            if status == "ok"
+            else f"stackctl {operation} failed"
+        ),
+        details=details,
+        extra={"operation": operation},
+        timing=timing,
+    )
+    _write_stdout_markdown(
+        report_dir,
+        [(operation, "\n".join(filter(None, [result.stdout, result.stderr])))],
+    )
+    return {
+        "exitCode": result.returncode,
+        "summary": (
+            f"stackctl {operation} completed"
+            if status == "ok"
+            else f"stackctl {operation} failed"
+        ),
+        "details": details,
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
+def _command_config_gray_rollout(args: argparse.Namespace) -> dict[str, Any]:
+    required = (
+        ("--service", str(args.service or "").strip()),
+        ("--from-image", str(args.from_image or "").strip()),
+        ("--to-image", str(args.to_image or "").strip()),
+        ("--from-config", str(args.from_config or "").strip()),
+        ("--to-config", str(args.to_config or "").strip()),
+        ("--step", str(args.step or "").strip()),
+    )
+    missing = [flag for flag, value in required if not value]
+    if missing:
+        return {
+            "exitCode": 2,
+            "summary": "stackctl config-gray rollout failed",
+            "details": ["config-gray requires " + ", ".join(missing)],
+        }
+    command = ["bash", "quwoquan_ops/cli/prod/config_release_gray_rollout.sh"]
+    for flag, value in required:
+        command.extend((flag, value))
+    return _command_private_deploy_operation(
+        args,
+        operation="config-gray rollout",
+        command=command,
+    )
+
+
+def _command_config_rollback(args: argparse.Namespace) -> dict[str, Any]:
+    service = str(args.service or "").strip()
+    target_config = str(getattr(args, "rollback_config", "") or "").strip()
+    missing = [
+        flag
+        for flag, value in (("--service", service), ("--rollback-config", target_config))
+        if not value
+    ]
+    if missing:
+        return {
+            "exitCode": 2,
+            "summary": "stackctl config rollback failed",
+            "details": ["config-rollback requires " + ", ".join(missing)],
+        }
+    return _command_private_deploy_operation(
+        args,
+        operation="config rollback",
+        command=[
+            "bash",
+            "quwoquan_ops/cli/prod/config_release_rollback.sh",
+            "--service",
+            service,
+            "--to-config-version",
+            target_config,
+        ],
+    )
+
+
+def _command_environment_assembly(args: argparse.Namespace) -> dict[str, Any]:
+    env_name = str(getattr(args, "env", "") or "").strip()
+    if env_name not in {"beta", "gamma"} or getattr(args, "target", ""):
+        return {
+            "exitCode": 2,
+            "summary": "stackctl environment assembly failed",
+            "details": [
+                "environment-assembly requires --env beta|gamma and no --target"
+            ],
+        }
+    target_name = DEFAULT_TARGET_BY_ENV[env_name]
+    report_dir = resolve_report_dir(args, env_name, target_name)
+    started_monotonic, started_at = _start_timing()
+    command = ["bash", "quwoquan_ops/cli/shared/deploy_integration_k8s.sh"]
+    result = run(command, env={"DEPLOY_ENV": env_name})
+    timing = _finish_timing(started_monotonic, started_at)
+    details = _command_details(result)
+    status = "ok" if result.returncode == 0 else "failed"
+    write_json(
+        report_dir / "report.json",
+        {
+            "status": status,
+            "command": "deploy",
+            "operation": "environment-assembly",
+            "env": env_name,
+            "target": target_name,
+            "argv": command,
+            "exitCode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            **timing,
+        },
+    )
+    _write_summary_bundle(
+        report_dir,
+        command="deploy",
+        target=target_name,
+        status=status,
+        summary=(
+            f"stackctl environment assembly completed for {env_name}"
+            if status == "ok"
+            else f"stackctl environment assembly failed for {env_name}"
+        ),
+        details=details,
+        extra={"env": env_name, "operation": "environment-assembly"},
+        timing=timing,
+    )
+    return {
+        "exitCode": result.returncode,
+        "summary": (
+            f"stackctl environment assembly completed for {env_name}"
+            if status == "ok"
+            else f"stackctl environment assembly failed for {env_name}"
+        ),
+        "details": details,
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
 def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
+    if args.mode == "environment-assembly":
+        return _command_environment_assembly(args)
+    if args.mode in {"config-gray", "config-rollback"}:
+        if args.target != "prod-hosted" or args.env:
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl {args.mode} failed",
+                "details": [f"{args.mode} requires --target prod-hosted"],
+            }
+        try:
+            with _prod_release_lock():
+                if args.mode == "config-gray":
+                    return _command_config_gray_rollout(args)
+                return _command_config_rollback(args)
+        except RuntimeError as error:
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl {args.mode} blocked by prod release transaction",
+                "details": [str(error)],
+            }
+    if getattr(args, "service", "") and getattr(args, "env", ""):
+        return _command_deploy_service_environment(args)
+    if not args.target:
+        return {
+            "exitCode": 2,
+            "summary": "stackctl deploy requires --service/--env or --target",
+            "details": [],
+        }
     dry_run = str(getattr(args, "dry_run", "false")).strip().lower() == "true"
     if args.target != "prod-hosted" or dry_run:
         return _command_deploy_with_lock(args)
@@ -6514,14 +8294,37 @@ def command_roll(args: argparse.Namespace) -> dict[str, Any]:
 
 def _all_services() -> list[str]:
     services: list[str] = []
-    for path in ROOT.glob("quwoquan_service/services/*/configs/default/config.yaml"):
-        services.append(path.parents[2].name)
+    for path in ROOT.glob("quwoquan_service/services/*/config/schema.yaml"):
+        services.append(path.parents[1].name)
+    if (ROOT / "quwoquan_service/control-plane/platform-ops/config/schema.yaml").is_file():
+        services.append("platform-ops-service")
     return sorted(set(services))
 
 
-def _beta_env_from_port_manifest() -> dict[str, str]:
+def _beta_env_from_port_manifest(
+    topology: dict[str, Any],
+    target_name: str,
+) -> dict[str, str]:
     manifest = load_port_manifest()
-    ports = profile_ports(manifest, "beta-local")
+    target = get_target(topology, target_name)
+    port_profile = str(target.get("portProfile") or "")
+    if not port_profile:
+        raise RuntimeError(f"GATE_BLOCK: {target_name} lacks a port profile")
+    build_images = target.get("buildImages")
+    if not isinstance(build_images, dict):
+        raise RuntimeError(
+            f"GATE_BLOCK: {target_name}.buildImages policy must be an object"
+        )
+
+    def required_build_image(name: str) -> str:
+        value = build_images.get(name)
+        if not isinstance(value, str) or not value.strip():
+            raise RuntimeError(
+                f"GATE_BLOCK: {target_name}.buildImages.{name} must be a non-empty string"
+            )
+        return value.strip()
+
+    ports = profile_ports(manifest, port_profile)
     return {
         "GATEWAY_PORT": str(ports["api-edge"]),
         "PRODUCT_OPS_PORT": str(ports["product-ops-edge"]),
@@ -6530,6 +8333,8 @@ def _beta_env_from_port_manifest() -> dict[str, str]:
         "MEDIA_PORT": str(ports["media-edge"]),
         "ASSISTANT_PORT": str(ports["assistant-service"]),
         "CHAT_PORT": str(ports["chat-service"]),
+        "QWQ_COMPOSE_GO_BASE_IMAGE": required_build_image("goBaseImage"),
+        "QWQ_COMPOSE_ALPINE_BASE_IMAGE": required_build_image("alpineBaseImage"),
     }
 
 
@@ -6539,12 +8344,38 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
     ports = profile_ports(manifest, profile_name)
     target = get_target(topology, target_name)
     public_bases = target.get("publicBases") or {}
+    startup = target.get("startup")
+    if not isinstance(startup, dict):
+        raise RuntimeError(
+            f"GATE_BLOCK: {target_name} startup policy must be an object"
+        )
+    build_images = target.get("buildImages")
+    if not isinstance(build_images, dict):
+        raise RuntimeError(
+            f"GATE_BLOCK: {target_name} buildImages policy must be an object"
+        )
+
+    def required_positive_seconds(name: str) -> str:
+        value = startup.get(name)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise RuntimeError(
+                f"GATE_BLOCK: {target_name}.startup.{name} must be a positive integer"
+            )
+        return str(value)
+
+    def required_build_image(name: str) -> str:
+        value = build_images.get(name)
+        if not isinstance(value, str) or not value.strip():
+            raise RuntimeError(
+                f"GATE_BLOCK: {target_name}.buildImages.{name} must be a non-empty string"
+            )
+        return value.strip()
+
     environment = {
         "LOCAL_GAMMA_HTTP_PORT": str(ports["api-edge"]),
         "LOCAL_GAMMA_PRODUCT_OPS_PORT": str(ports["product-ops-edge"]),
         "LOCAL_GAMMA_PLATFORM_OPS_PORT": str(ports["platform-ops-edge"]),
         "LOCAL_GAMMA_MEDIA_EDGE_PORT": str(ports["media-edge"]),
-        "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT": str(ports["object-storage-edge"]),
         "LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL": str(public_bases["mediaImage"]),
         "LOCAL_GAMMA_MEDIA_BASE_URL": str(public_bases["mediaImage"]),
         "LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL": str(public_bases["mediaAvatar"]),
@@ -6552,12 +8383,6 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL": str(public_bases["mediaVideo"]),
         "LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL": str(public_bases["mediaUpload"]),
         "LOCAL_GAMMA_RTC_MEDIA_CONNECTION_URL": str(public_bases["rtc"]),
-        "LOCAL_GAMMA_LIVEKIT_HTTP_PORT": str(ports["livekit-http"]),
-        "LOCAL_GAMMA_LIVEKIT_RTC_TCP_PORT": str(ports["livekit-rtc-tcp"]),
-        "LOCAL_GAMMA_LIVEKIT_RTC_UDP_PORT": str(ports["livekit-rtc-udp"]),
-        "LOCAL_GAMMA_LIVEKIT_METRICS_PORT": str(ports["livekit-metrics"]),
-        "LOCAL_GAMMA_TURN_TCP_PORT": str(ports["coturn"]),
-        "LOCAL_GAMMA_TURN_UDP_PORT": str(ports["coturn"]),
         "LOCAL_GAMMA_CONTENT_PORT": str(ports["content-service"]),
         "LOCAL_GAMMA_CHAT_PORT": str(ports["chat-service"]),
         "LOCAL_GAMMA_USER_PORT": str(ports["user-service"]),
@@ -6566,7 +8391,7 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_NOTIFICATION_PORT": str(ports["notification-service"]),
         "LOCAL_GAMMA_REALTIME_PORT": str(ports["realtime-gateway"]),
         "LOCAL_GAMMA_RTC_PORT": str(ports["rtc-service"]),
-        "LOCAL_GAMMA_REC_MODEL_PORT": str(ports["rec-model-service"]),
+        "LOCAL_GAMMA_REC_MODEL_PORT": str(ports["recommendation-service"]),
         "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT": str(ports["product-ops-service"]),
         "LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT": str(ports["platform-ops-service"]),
         "LOCAL_GAMMA_TAG_PORT": str(ports["tag-service"]),
@@ -6575,14 +8400,23 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_REDIS_PORT": str(ports["redis"]),
         "LOCAL_GAMMA_POSTGRES_PORT": str(ports["postgres"]),
         "LOCAL_GAMMA_ES_PORT": str(ports["elasticsearch"]),
+        "LOCAL_GAMMA_DOCKER_PROBE_TIMEOUT_SECONDS": required_positive_seconds(
+            "dockerProbeTimeoutSeconds"
+        ),
+        "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": required_positive_seconds(
+            "composeBuildTimeoutSeconds"
+        ),
+        "LOCAL_GAMMA_COMPOSE_BUILD_NO_PROGRESS_TIMEOUT_SECONDS": required_positive_seconds(
+            "composeBuildNoProgressTimeoutSeconds"
+        ),
+        "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": required_positive_seconds(
+            "composeUpTimeoutSeconds"
+        ),
+        "LOCAL_GAMMA_GO_BASE_IMAGE": required_build_image("goBaseImage"),
+        "LOCAL_GAMMA_ALPINE_BASE_IMAGE": required_build_image("alpineBaseImage"),
     }
     environment.update(
         prepare_local_environment_auth("gamma", "gamma-local").environment
-    )
-    environment.update(
-        prepare_local_gamma_object_storage(
-            edge_port=ports["object-storage-edge"],
-        ).environment
     )
     return environment
 
@@ -6691,11 +8525,6 @@ def _content_data_plane_health_checks(target_name: str) -> list[dict[str, Any]]:
         for role_name in _expected_local_roles(target_name)
         if role_name in _CONTENT_DATA_PLANE_ROLES
     ]
-    # ship apply 依赖 topology 声明的 entity reload 角色；即使目标（如 beta）不运行完整
-    # 内容数据面，该角色也属于内容导入平面，必须纳入 content-import 探针。
-    reload_role = str(((target.get("dataRelease") or {}).get("entityReloadPortRole")) or "")
-    if reload_role and reload_role not in role_names:
-        role_names.append(reload_role)
     checks: list[dict[str, Any]] = []
     for role_name in role_names:
         port = canonical_port(manifest, str(profile_name), role_name)
@@ -6754,7 +8583,7 @@ def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
             continue
         port = canonical_port(manifest, str(profile_name), role_name)
         path = non_service_paths.get(role_name, "/healthz")
-        if role_name == "rec-model-service":
+        if role_name == "recommendation-service":
             path = "/health"
         checks.append(
             {
@@ -6884,13 +8713,31 @@ def _network_report(target_name: str) -> dict[str, Any]:
     }
 
 
-def _expected_local_roles(target_name: str) -> list[str]:
+def _expected_local_roles(
+    target_name: str,
+    *,
+    workload: str = "full",
+) -> list[str]:
+    if workload == "content-release" and target_name == "beta-local":
+        # content-release 启动的就是这条 consumer data plane；不能要求
+        # assistant/chat/Ops 等 full workload 才会启动的端口，否则集成验证
+        # 会错误重启已经健康的发布环境。
+        return [
+            "api-edge",
+            "media-edge",
+            "media-origin",
+            "content-service",
+            "user-service",
+            "entity-service",
+        ]
     role_map = {
         "alpha-local": [
             "api-edge",
-            "product-ops-edge",
             "media-edge",
             "media-origin",
+            "content-service",
+            "user-service",
+            "entity-service",
         ],
         "beta-local": [
             "api-edge",
@@ -6913,7 +8760,7 @@ def _expected_local_roles(target_name: str) -> list[str]:
             "user-service",
             "content-service",
             "assistant-service",
-            "rec-model-service",
+            "recommendation-service",
             "product-ops-service",
             "platform-ops-service",
             "tag-service",
@@ -6924,10 +8771,6 @@ def _expected_local_roles(target_name: str) -> list[str]:
             "notification-service",
             "realtime-gateway",
             "rtc-service",
-            "livekit-http",
-            "livekit-rtc-tcp",
-            "livekit-metrics",
-            "coturn",
             "postgres",
             "mongodb",
             "redis",
@@ -6967,27 +8810,21 @@ def _resolve_prod_rollout_stage(step: str, requested_stage: str = "") -> str:
 
 
 def _prod_rollout_workloads() -> list[dict[str, Any]]:
-    """读三态 inventory 中已 wired 进 prod root 的 workload。
-
-    与 deploy_to_prod.sh 同源（quwoquan_ops/environments/workload_topology_inventory.yaml），
-    Modular Monolith 单元（seed-box）与按 Strangler Fig 拆分后新增的独立 workload
-    一旦 wired_to_prod_root=true 即自动出现，无需改 stackctl。
-    """
+    """Derive prod rollout workloads from service and external environment entries."""
     try:
-        inv = load_json_yaml(ROOT / "quwoquan_ops" / "environments" / "workload_topology_inventory.yaml")
+        topology = load_environment_topology()
     except Exception:
         return []
     out: list[dict[str, Any]] = []
-    for w in (inv or {}).get("workloads", []) or []:
-        if not w.get("wired_to_prod_root"):
-            continue
-        kind = str(w.get("workload_resource", "Deployment")).lower()
+    prod = ((topology or {}).get("environments") or {}).get("prod") or {}
+    for workload in prod.get("workloads") or []:
+        deployment_ref = str(workload.get("deploymentRef") or "")
         out.append(
             {
-                "name": w.get("name"),
-                "deployKind": w.get("deploy_kind"),
-                "workloadResource": w.get("workload_resource", "Deployment"),
-                "rolloutRef": f"{kind}/{w.get('name')}",
+                "name": workload.get("id"),
+                "plane": workload.get("plane"),
+                "deploymentRef": deployment_ref,
+                "rolloutRef": deployment_ref,
             }
         )
     return out
@@ -7121,24 +8958,25 @@ def _command_details(result: Any) -> list[str]:
 
 
 def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
-    runner_args = [
-        "--adapter-id",
-        args.adapter_id,
-        "--environment",
-        args.env,
-        "--layer",
-        args.layer,
-    ]
+    runner_args: list[str] = []
+    if args.matrix:
+        runner_args.extend(("--matrix", "--capability-id", args.capability_id))
+    else:
+        runner_args.extend(
+            (
+                "--adapter-id",
+                args.adapter_id,
+                "--environment",
+                args.env,
+                "--layer",
+                args.layer,
+            )
+        )
     if args.execute:
         runner_args.append("--execute")
     for option, value in (
         ("--image-digest", args.image_digest),
         ("--data-digest", args.data_digest),
-        ("--switch-compatibility-receipt-ref", args.switch_compatibility_receipt_ref),
-        ("--callback-drain-receipt-ref", args.callback_drain_receipt_ref),
-        ("--last-good-receipt-ref", args.last_good_receipt_ref),
-        ("--rollback-receipt-ref", args.rollback_receipt_ref),
-        ("--prod-binding-preflight-receipt-ref", args.prod_binding_preflight_receipt_ref),
     ):
         if value:
             runner_args.extend((option, value))
@@ -7151,9 +8989,11 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
             else "stackctl provider-conformance failed"
         ),
         "details": [
-            f"adapter={args.adapter_id}",
-            f"environment={args.env}",
-            f"layer={args.layer}",
+            f"adapter={args.adapter_id or '<binding-derived>'}",
+            f"capability={args.capability_id or '<single-cell>'}",
+            f"environment={args.env or '<matrix>'}",
+            f"layer={args.layer or '<matrix>'}",
+            f"matrix={args.matrix}",
             f"executed={args.execute}",
         ],
     }
@@ -7167,12 +9007,15 @@ def main() -> int:
         "verify": command_verify,
         "provider-conformance": command_provider_conformance,
         "up": command_up,
+        "product-telemetry-log-sink": command_product_telemetry_log_sink,
         "down": command_down,
         "status": command_status,
         "health": command_health,
         "inspect": command_inspect,
         "doctor": command_doctor,
         "content-readiness": command_content_readiness,
+        "data-execution-fleet": command_data_execution_fleet,
+        "content-uat": command_content_uat,
         "filter-catalog": command_filter_catalog,
         "repair": command_repair,
         "roll": command_roll,

@@ -45,7 +45,24 @@ on:
         required: false
         default: ''
       matrix_kind:
-        description: assistant / chat-avatar / environment-smoke / JSON 数组（留空则按 profile 决定）
+        description: assistant / chat-avatar / environment-smoke / media-publication / user-profile / account-closure / JSON 数组（留空则按 profile 决定）
+        required: false
+        default: ''
+      account_closure_disposable_ack:
+        description: '仅 Prod 一次性账号注销：确认凭据对应账号允许永久注销'
+        required: false
+        default: false
+        type: boolean
+      account_closure_prod_platform:
+        description: 'Prod 一次性注销证据设备平台（每次只允许一个设备）'
+        required: false
+        default: ios
+        type: choice
+        options:
+          - ios
+          - android
+      account_closure_prod_device_id:
+        description: 'Prod 一次性注销证据的唯一 Flutter device id'
         required: false
         default: ''
   workflow_call:
@@ -81,7 +98,22 @@ on:
         type: string
         default: ''
       matrix_kind:
-        description: 'assistant / chat-avatar / environment-smoke / JSON array (overrides profile default)'
+        description: 'assistant / chat-avatar / environment-smoke / media-publication / user-profile / account-closure / JSON array (overrides profile default)'
+        required: false
+        type: string
+        default: ''
+      account_closure_disposable_ack:
+        description: 'Acknowledge irreversible closure of the injected disposable Prod account'
+        required: false
+        type: boolean
+        default: false
+      account_closure_prod_platform:
+        description: 'Single mobile platform for destructive Prod account closure evidence'
+        required: false
+        type: string
+        default: ios
+      account_closure_prod_device_id:
+        description: 'Single Flutter device id for destructive Prod account closure evidence'
         required: false
         type: string
         default: ''
@@ -367,6 +399,8 @@ jobs:
     needs: [discover_devices]
     if: ${{ needs.discover_devices.outputs.has_android == 'true' || needs.discover_devices.outputs.has_ios == 'true' }}
     runs-on: [self-hosted, macOS]
+    environment:
+      name: ${{ contains(needs.discover_devices.outputs.env_json, '"prod"') && 'production' || 'device-matrix' }}
     timeout-minutes: 120
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
@@ -379,6 +413,11 @@ jobs:
       BETA_TEST_AUTH_TOKEN: ${{ secrets.BETA_TEST_AUTH_TOKEN }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
+      PROD_ACCOUNT_CLOSURE_TEST_AUTH_TOKEN: ${{ secrets.PROD_ACCOUNT_CLOSURE_TEST_AUTH_TOKEN }}
+      PROD_ACCOUNT_CLOSURE_TEST_REFRESH_TOKEN: ${{ secrets.PROD_ACCOUNT_CLOSURE_TEST_REFRESH_TOKEN }}
+      PROD_ACCOUNT_CLOSURE_OWNER_ID: ${{ secrets.PROD_ACCOUNT_CLOSURE_OWNER_ID }}
+      PROD_ACCOUNT_CLOSURE_PERSONA_ID: ${{ secrets.PROD_ACCOUNT_CLOSURE_PERSONA_ID }}
+      VIDEO_PLAYBACK_CANARY_WORK_ID: ${{ vars.VIDEO_PLAYBACK_CANARY_WORK_ID }}
       ASSISTANT_MODEL_PROVIDER: deterministic
       ALLOW_DETERMINISTIC_BETA: "1"
       ASSISTANT_MATRIX_ALL_DEVICES: "1"
@@ -487,6 +526,10 @@ jobs:
           ASSISTANT_MATRIX_GATEWAY_BASE_URL: http://127.0.0.1:18000
           ASSISTANT_MATRIX_GATEWAY_HEALTH_URL: http://127.0.0.1:18000
           CHAT_AVATAR_GATEWAY_BASE_URL: http://127.0.0.1:18000
+          EVENT_NAME: ${{ github.event_name }}
+          ACCOUNT_CLOSURE_DISPOSABLE_ACK: ${{ inputs.account_closure_disposable_ack }}
+          ACCOUNT_CLOSURE_PROD_PLATFORM: ${{ inputs.account_closure_prod_platform }}
+          ACCOUNT_CLOSURE_PROD_DEVICE_ID: ${{ inputs.account_closure_prod_device_id }}
         run: |
           ENV_NAMES="$(python3 - <<'PY'
           import json
@@ -505,9 +548,64 @@ jobs:
           print("\n".join(items or ["assistant"]))
           PY
           )"
+          resolve_patrol_target() {
+            python3 - "$1" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          journey_id = sys.argv[1]
+          suites = json.loads(
+              Path("quwoquan_ops/environments/gamma/validation_suites.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          journey = suites["uiJourneys"].get(journey_id)
+          if not isinstance(journey, dict):
+              raise SystemExit(f"{journey_id} is not registered")
+          if journey.get("runner") != "patrol":
+              raise SystemExit(f"{journey_id} must use patrol")
+          target = str(journey.get("target") or "").strip()
+          if not target:
+              raise SystemExit(f"{journey_id} target is missing")
+          print(target)
+          PY
+          }
+          resolve_topology_public_bases() {
+            python3 - "$1" <<'PY'
+          import sys
+          from quwoquan_ops.cli import stackctl
+
+          target_name = sys.argv[1]
+          topology = stackctl.load_environment_topology()
+          target = stackctl.get_target(topology, target_name)
+          bases = target.get("publicBases") or {}
+          keys = (
+              "api",
+              "productOps",
+              "mediaAvatar",
+              "mediaImage",
+              "mediaVideo",
+              "mediaUpload",
+              "rtc",
+          )
+          missing = [key for key in keys if not str(bases.get(key) or "").strip()]
+          if missing:
+              raise SystemExit(
+                  f"{target_name} publicBases missing: " + ", ".join(missing)
+              )
+          print("\t".join(str(bases[key]).strip() for key in keys))
+          PY
+          }
           failures=0
           android_result="skipped"
           ios_result="skipped"
+          prod_closure_requested=0
+          prod_closure_selected_platform_seen=0
+          if [[ $'\n'"${ENV_NAMES}"$'\n' == *$'\nprod\n'* ]] &&
+             [[ $'\n'"${MATRIX_KINDS}"$'\n' == *$'\naccount-closure\n'* ]]; then
+            prod_closure_requested=1
+          fi
           run_platform_envs() {
             local platform="$1"
             local result_var="$2"
@@ -528,26 +626,7 @@ jobs:
                     echo "::error::user-profile device journey is only defined for gamma; received env=${env_name}"
                     matrix_exit_code=2
                   else
-                    profile_target="$(python3 - <<'PY'
-                    import json
-                    from pathlib import Path
-
-                    suites = json.loads(
-                        Path("quwoquan_ops/environments/gamma_validation_suites.json").read_text(
-                            encoding="utf-8"
-                        )
-                    )
-                    journey = suites["uiJourneys"].get("user_profile_journey_patrol")
-                    if not isinstance(journey, dict):
-                        raise SystemExit("user_profile_journey_patrol is not registered")
-                    if journey.get("runner") != "patrol":
-                        raise SystemExit("user_profile_journey_patrol must use patrol")
-                    target = str(journey.get("target") or "").strip()
-                    if not target:
-                        raise SystemExit("user_profile_journey_patrol target is missing")
-                    print(target)
-                    PY
-                    )"
+                    profile_target="$(resolve_patrol_target user_profile_journey_patrol)"
                     bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh \
                       --platform "${platform}" \
                       --target "${profile_target}" \
@@ -556,44 +635,108 @@ jobs:
                       --report "$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix/user-profile-${platform}.json"
                     matrix_exit_code=$?
                   fi
+                elif [ "${matrix_kind}" = "account-closure" ]; then
+                  closure_target="$(resolve_patrol_target account_closure_patrol)"
+                  closure_install_id="account-closure-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${platform}-$(date +%s)-{device}"
+                  if [ "${env_name}" = "gamma" ]; then
+                    bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh \
+                      --platform "${platform}" \
+                      --target "${closure_target}" \
+                      --patrol-install-id "${closure_install_id}" \
+                      --gateway-base-url "${GAMMA_BASE_URL}" \
+                      --media-avatar-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
+                      --report "$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix/account-closure-${platform}.json"
+                    matrix_exit_code=$?
+                  elif [ "${env_name}" = "prod" ]; then
+                    if [ "${platform}" != "${ACCOUNT_CLOSURE_PROD_PLATFORM:-ios}" ]; then
+                      echo "::notice::Skip destructive Prod account closure on ${platform}; selected platform=${ACCOUNT_CLOSURE_PROD_PLATFORM:-ios}"
+                      matrix_exit_code=0
+                    else
+                      prod_closure_selected_platform_seen=1
+                      if [ "${EVENT_NAME}" != "workflow_dispatch" ] || [ "${ACCOUNT_CLOSURE_DISPOSABLE_ACK}" != "true" ]; then
+                        echo "::error::Prod account closure requires workflow_dispatch and account_closure_disposable_ack=true"
+                        matrix_exit_code=2
+                      elif [ -z "${ACCOUNT_CLOSURE_PROD_DEVICE_ID:-}" ]; then
+                        echo "::error::Prod account closure requires one explicit account_closure_prod_device_id"
+                        matrix_exit_code=2
+                      else
+                        missing_prod_secret=0
+                        for required_name in \
+                          PROD_ACCOUNT_CLOSURE_TEST_AUTH_TOKEN \
+                          PROD_ACCOUNT_CLOSURE_TEST_REFRESH_TOKEN \
+                          PROD_ACCOUNT_CLOSURE_OWNER_ID \
+                          PROD_ACCOUNT_CLOSURE_PERSONA_ID; do
+                          if [ -z "${!required_name:-}" ]; then
+                            echo "::error::Production environment secret ${required_name} is required"
+                            missing_prod_secret=1
+                          fi
+                        done
+                        if [ "${missing_prod_secret}" -ne 0 ]; then
+                          matrix_exit_code=2
+                        else
+                          IFS=$'\t' read -r \
+                            prod_api_base \
+                            prod_product_ops_base \
+                            prod_media_avatar_base \
+                            prod_media_image_base \
+                            prod_media_video_base \
+                            prod_media_upload_base \
+                            prod_rtc_base < <(resolve_topology_public_bases prod-hosted)
+                          TEST_AUTH_TOKEN="${PROD_ACCOUNT_CLOSURE_TEST_AUTH_TOKEN}" \
+                          TEST_REFRESH_TOKEN="${PROD_ACCOUNT_CLOSURE_TEST_REFRESH_TOKEN}" \
+                          APP_CURRENT_OWNER_ID="${PROD_ACCOUNT_CLOSURE_OWNER_ID}" \
+                          APP_CURRENT_SUB_ACCOUNT_ID="${PROD_ACCOUNT_CLOSURE_PERSONA_ID}" \
+                          python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py \
+                            --env-name prod-hosted \
+                            --runtime-env prod \
+                            --api-contract-env prod \
+                            --data-source remote \
+                            --target "${closure_target}" \
+                            --patrol-install-id "${closure_install_id}" \
+                            --account-closure-disposable-ack \
+                            --platform "${platform}" \
+                            --device-id "${ACCOUNT_CLOSURE_PROD_DEVICE_ID}" \
+                            --gateway-base-url "${prod_api_base}" \
+                            --product-ops-base-url "${prod_product_ops_base}" \
+                            --media-avatar-base-url "${prod_media_avatar_base}" \
+                            --media-image-base-url "${prod_media_image_base}" \
+                            --media-video-base-url "${prod_media_video_base}" \
+                            --media-upload-base-url "${prod_media_upload_base}" \
+                            --rtc-media-connection-url "${prod_rtc_base}" \
+                            --report "$QWQ_OUTPUT_ROOT/env/prod/runs/device-matrix/account-closure-${platform}.json"
+                          matrix_exit_code=$?
+                        fi
+                      fi
+                    fi
+                  else
+                    echo "::error::account-closure device journey supports gamma or protected prod only; received env=${env_name}"
+                    matrix_exit_code=2
+                  fi
+                elif [ "${matrix_kind}" = "media-publication" ]; then
+                  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/ci/run_media_publication_device_matrix_ci.py \
+                    --environment "${env_name}" \
+                    --platform "${platform}"
+                  matrix_exit_code=$?
                 elif [ "${matrix_kind}" = "environment-smoke" ]; then
                   smoke_supported=1
                   case "${env_name}" in
-                    alpha)
-                      smoke_env_alias="alpha-local"
-                      smoke_runtime_env="alpha"
-                      smoke_data_source="mock"
-                      smoke_gateway_base_url="http://127.0.0.1:17000"
-                      smoke_product_ops_base_url="http://127.0.0.1:17010"
-                      smoke_media_base_url="http://127.0.0.1:17100"
-                      smoke_test_auth_token="${ALPHA_TEST_AUTH_TOKEN:-local-alpha-token}"
-                      ;;
                     beta)
-                      smoke_env_alias="beta-local"
+                      smoke_target_name="beta-local"
+                      smoke_env_alias="local-beta"
                       smoke_runtime_env="beta"
                       smoke_data_source="remote"
-                      smoke_gateway_base_url="http://127.0.0.1:18000"
-                      smoke_product_ops_base_url="http://127.0.0.1:18010"
-                      smoke_media_base_url="http://127.0.0.1:18100"
-                      smoke_test_auth_token="${BETA_TEST_AUTH_TOKEN:-local-beta-token}"
                       ;;
                     gamma)
+                      smoke_target_name="gamma-local"
                       smoke_env_alias="gamma-local"
                       smoke_runtime_env="gamma"
                       smoke_data_source="remote"
-                      smoke_gateway_base_url="${GAMMA_BASE_URL:-http://127.0.0.1:19000}"
-                      smoke_product_ops_base_url="http://127.0.0.1:19010"
-                      smoke_media_base_url="${MEDIA_AVATAR_CDN_BASE_URL:-http://127.0.0.1:19100}"
-                      smoke_test_auth_token="${GAMMA_TEST_AUTH_TOKEN:-local-gamma-token}"
                       ;;
                     prod-sim)
+                      smoke_target_name="prod-sim"
                       smoke_env_alias="prod-sim"
                       smoke_runtime_env="prod"
-                      smoke_data_source="mock"
-                      smoke_gateway_base_url="http://127.0.0.1:20000"
-                      smoke_product_ops_base_url="http://127.0.0.1:20010"
-                      smoke_media_base_url="http://127.0.0.1:20100"
-                      smoke_test_auth_token="${PROD_TEST_AUTH_TOKEN:-local-prod-sim-token}"
+                      smoke_data_source="remote"
                       ;;
                     *)
                       echo "::error::environment-smoke does not support env=${env_name}"
@@ -601,18 +744,35 @@ jobs:
                       ;;
                   esac
                   if [ "${smoke_supported}" = "1" ]; then
-                    python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py \
-                      --env-name "${smoke_env_alias}" \
-                      --runtime-env "${smoke_runtime_env}" \
-                      --api-contract-env "${smoke_runtime_env}" \
-                      --data-source "${smoke_data_source}" \
-                      --gateway-base-url "${smoke_gateway_base_url}" \
-                      --product-ops-base-url "${smoke_product_ops_base_url}" \
-                      --media-base-url "${smoke_media_base_url}" \
-                      --test-auth-token "${smoke_test_auth_token}" \
-                      --platform "${platform}" \
-                      --report "$QWQ_OUTPUT_ROOT/env/${env_name}/runs/device-matrix/environment-smoke-${platform}.json"
-                    matrix_exit_code=$?
+                    if [ -z "${VIDEO_PLAYBACK_CANARY_WORK_ID:-}" ]; then
+                      echo "::error::VIDEO_PLAYBACK_CANARY_WORK_ID is required for environment-smoke"
+                      matrix_exit_code=2
+                    else
+                      IFS=$'\t' read -r \
+                        smoke_gateway_base_url \
+                        smoke_product_ops_base_url \
+                        smoke_media_avatar_base_url \
+                        smoke_media_image_base_url \
+                        smoke_media_video_base_url \
+                        smoke_media_upload_base_url \
+                        smoke_rtc_base_url < <(resolve_topology_public_bases "${smoke_target_name}")
+                      python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py \
+                        --env-name "${smoke_env_alias}" \
+                        --runtime-env "${smoke_runtime_env}" \
+                        --api-contract-env "${smoke_runtime_env}" \
+                        --data-source "${smoke_data_source}" \
+                        --gateway-base-url "${smoke_gateway_base_url}" \
+                        --product-ops-base-url "${smoke_product_ops_base_url}" \
+                        --media-avatar-base-url "${smoke_media_avatar_base_url}" \
+                        --media-image-base-url "${smoke_media_image_base_url}" \
+                        --media-video-base-url "${smoke_media_video_base_url}" \
+                        --media-upload-base-url "${smoke_media_upload_base_url}" \
+                        --rtc-media-connection-url "${smoke_rtc_base_url}" \
+                        --video-playback-canary-work-id "${VIDEO_PLAYBACK_CANARY_WORK_ID}" \
+                        --platform "${platform}" \
+                        --report "$QWQ_OUTPUT_ROOT/env/${env_name}/runs/device-matrix/environment-smoke-${platform}.json"
+                      matrix_exit_code=$?
+                    fi
                   else
                     matrix_exit_code=2
                   fi
@@ -657,6 +817,11 @@ jobs:
             run_platform_envs ios ios_result
           else
             echo "::notice::No iOS device discovered for this run; iOS matrix skipped."
+          fi
+          if [ "${prod_closure_requested}" -eq 1 ] &&
+             [ "${prod_closure_selected_platform_seen}" -ne 1 ]; then
+            echo "::error::Selected Prod account closure platform ${ACCOUNT_CLOSURE_PROD_PLATFORM:-ios} is unavailable"
+            failures=$((failures + 1))
           fi
           echo "android_result=${android_result}" >> "$GITHUB_OUTPUT"
           echo "ios_result=${ios_result}" >> "$GITHUB_OUTPUT"

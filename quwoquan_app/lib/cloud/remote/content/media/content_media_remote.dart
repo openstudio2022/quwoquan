@@ -77,6 +77,18 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   );
 
   @override
+  Future<ContentMediaAssetDiscardResult> discardMediaAsset(
+    DiscardContentMediaAssetCommand command,
+    ContentMediaAssetCommandContext context,
+  ) => client.contentMediaAssetDiscardMediaAsset(
+    command,
+    context: _commandContext(
+      ContentRequestPageIds.discardMediaAsset,
+      idempotencyKey: context.idempotencyKey,
+    ),
+  );
+
+  @override
   Future<ContentMediaOriginalAccessGrant> requestOriginalAccess(
     RequestContentMediaOriginalAccessCommand command,
   ) => client.contentMediaOriginalAccessFactRequestOriginalImageAccess(
@@ -90,22 +102,24 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaCoverSelectionResult> selectAutoCover(
     SelectAutoContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
   ) => client.contentMediaAssetSelectAutoVideoCover(
     command,
-    context: invocationContext(
+    context: _commandContext(
       ContentRequestPageIds.selectAutoVideoCover,
-      command: true,
+      idempotencyKey: context.idempotencyKey,
     ),
   );
 
   @override
   Future<ContentMediaCoverSelectionResult> selectManualCover(
     SelectManualContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
   ) => client.contentMediaAssetSelectManualVideoCover(
     command,
-    context: invocationContext(
+    context: _commandContext(
       ContentRequestPageIds.selectManualVideoCover,
-      command: true,
+      idempotencyKey: context.idempotencyKey,
     ),
   );
 
@@ -113,6 +127,18 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
     String clientPageId,
     ContentMediaUploadCommandContext upload,
   ) {
+    return _commandContext(
+      clientPageId,
+      idempotencyKey: upload.idempotencyKey,
+      cancellation: upload.cancellation,
+    );
+  }
+
+  CloudOperationInvocationContext _commandContext(
+    String clientPageId, {
+    required String idempotencyKey,
+    CloudOperationCancellationSignal? cancellation,
+  }) {
     final base = invocationContext(clientPageId, command: true);
     return CloudOperationInvocationContext(
       surfaceId: base.surfaceId,
@@ -124,9 +150,9 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
       modelId: base.modelId,
       experimentBucket: base.experimentBucket,
       actor: base.actor,
-      idempotencyKey: upload.idempotencyKey,
+      idempotencyKey: idempotencyKey,
       deadlineAt: base.deadlineAt,
-      cancellation: upload.cancellation,
+      cancellation: cancellation,
     );
   }
 }

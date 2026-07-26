@@ -36,9 +36,9 @@ from content.execution import store  # noqa: E402
 from content.execution.selection import build_execution_spec  # noqa: E402
 
 _EXECUTIONS = {
-    "未物化": "20260711--travel-homepage-entity-type--cn-zhejiang--canary-001",
-    "双物化": "20260711--travel-homepage-entity-type--cn-zhejiang--canary-002",
-    "审计": "20260711--travel-homepage-entity-type--cn-zhejiang--canary-003",
+    "未物化": "20260711--travel-homepage-entity-type--test-region-a--pilot-001",
+    "双物化": "20260711--travel-homepage-entity-type--test-region-a--pilot-002",
+    "审计": "20260711--travel-homepage-entity-type--test-region-a--pilot-003",
 }
 
 
@@ -48,7 +48,7 @@ def _mixed_type_task(name: str = "类型冲突读路径批") -> str:
         execution_id=execution_id,
         name=name,
         title=name,
-        region="中国/浙江省/舟山市/嵊泗县",
+        region="中国/test-region-a/舟山市/嵊泗县",
         category="景区",
         targets=[
             {"entityType": "地点/景区", "name": "嵊泗列岛", "aliases": ["嵊泗列岛风景名胜区"]},

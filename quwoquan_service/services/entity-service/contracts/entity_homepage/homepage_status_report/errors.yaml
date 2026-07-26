@@ -1,0 +1,26 @@
+aggregate: HomepageStatusReport
+domain: ENTITY
+description: 'HomepageStatusReport 聚合专属错误码。通用命令错误复用 entity/entity_homepage/homepage/errors.yaml。
+
+  '
+errors:
+- code: ENTITY.USER.status_report_not_found
+  kind: USER
+  reason: not_found
+  http_status: 404
+  recovery_action: surface
+  dart_const: statusReportNotFound
+  go_const: ErrStatusReportNotFound
+  user_message:
+    zh: 上报记录不存在
+    en: Status report not found
+- code: ENTITY.USER.invalid_status_report_evidence_url
+  kind: USER
+  reason: invalid_argument
+  http_status: 400
+  recovery_action: surface
+  dart_const: invalidStatusReportEvidenceUrl
+  go_const: ErrInvalidStatusReportEvidenceURL
+  user_message:
+    zh: 上报证据链接必须是安全的 HTTPS 地址
+    en: Status report evidence links must use secure HTTPS URLs

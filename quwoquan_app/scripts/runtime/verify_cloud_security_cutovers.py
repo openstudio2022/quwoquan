@@ -153,15 +153,15 @@ def main() -> int:
         "upsert(fallback)",
     )
     require_package(
-        "quwoquan_service/services/assistant-service/internal/application",
+        "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/application",
         "assistant consent store is not configured",
-        "return nil, assistantConsentStoreUnavailable()",
-        "return assistant.SkillConsent{}, assistantConsentStoreUnavailable()",
-        "return assistantConsentStoreUnavailable()",
+        "return nil, StoreUnavailable()",
+        "return assistant.SkillConsent{}, StoreUnavailable()",
+        "return StoreUnavailable()",
         "return rterr.NewUnavailable(",
     )
     require(
-        "quwoquan_service/services/assistant-service/internal/application/consent_fail_closed__security__local_contract_test.go",
+        "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_conversation/consent_fail_closed__security__local_contract_test.go",
         "TestAssistantConsentFailsClosedWithoutStore",
         "TestAssistantConsentLifecycleUsesAuthoritativeStore",
     )

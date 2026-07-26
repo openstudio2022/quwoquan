@@ -17,18 +17,27 @@ from quwoquan_ops.gate.verify_alpha_media_fixture_surface import _resolve_local_
 
 
 class SeededMediaCAPathContractTest(unittest.TestCase):
-    def test_app_mock_group_avatar_refs_match_the_versioned_materialized_paths(
+    def test_chat_scenario_avatar_refs_match_materialized_paths(
         self,
     ) -> None:
-        refs = media_surface._collect_app_mock_group_avatar_refs()
+        refs, origins = media_surface._collect_all_seeded_media_refs()
 
         self.assertIn(
-            "media/avatar/s/archived-avatar/conversation/conv_002/v1/mock.png",
+            "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
             refs,
         )
         self.assertIn(
-            "media/avatar/s/archived-avatar/conversation/conv_grid_16/v1/mock.png",
+            "media/avatar/s/archived-avatar/group/fixture_conv_group/composite.png",
             refs,
+        )
+        fixture_origin = media_surface.CHAT_SCENARIO_FIXTURE_PATH.relative_to(
+            media_surface.ROOT,
+        ).as_posix()
+        self.assertIn(
+            fixture_origin,
+            origins[
+                "media/avatar/s/archived-avatar/group/fixture_conv_group/composite.png"
+            ],
         )
         self.assertTrue(
             all((media_surface.MEDIA_ROOT / reference).is_file() for reference in refs),
@@ -119,12 +128,12 @@ class SeededMediaCAPathContractTest(unittest.TestCase):
                 clear=False,
             ):
                 self.assertEqual(
-                    _resolve_local_root_ca("alpha-local", ""),
-                    alpha_root,
+                    _resolve_local_root_ca("alpha-local", "").resolve(),
+                    alpha_root.resolve(),
                 )
                 self.assertEqual(
-                    _resolve_local_root_ca("gamma-local", ""),
-                    gamma_root,
+                    _resolve_local_root_ca("gamma-local", "").resolve(),
+                    gamma_root.resolve(),
                 )
 
 

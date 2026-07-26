@@ -5,8 +5,7 @@
 /// 在真实环境上与 local_contract 的 Mock/Facade 行为一致（R12 一体性）。
 ///
 /// 驱动文件：
-///   contracts/metadata/social/circle/tests/contract.yaml
-///   contracts/metadata/social/circle_membership/tests/contract.yaml
+/// 用例身份由 acceptance 稳定 case ID 绑定，测试路径由 runner 扫描生成。
 ///
 /// 执行方式：
 ///   ```

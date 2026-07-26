@@ -1,180 +1,103 @@
-# L2 Journey：group-creation-member-management
+# L2 Business Capability：群聊创建与成员管理 (`group-creation-member-management`)
 
-## 节点定位
+> 所属领域：[`chat-conversation`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-- `L1_domain_service`: `chat-conversation`
-- `L2_business_capability`: `group-creation-member-management`
+## 1. 能力目标
 
-该 Journey 冻结从全局添加入口发起群聊、按真实群聊/圈子/互相关注联系人选人、创建成功回流消息列表、再到后续加人和解散边界的完整生命周期。
+私建群创建、后续成员增删、角色治理与群设置在同一 Conversation/ConversationMembership 聚合边界内形成可商用闭环。
 
-## 背景与动机
-
-当前群聊创建与成员治理存在四个断点：
-
-1. 全局加号入口复用了 `chatAddMembers` 语义，路由和 surface 边界错误。
-2. 发起群聊页仍依赖独立 mock，群聊来源、圈子来源、候选成员与消息页/我的圈子不一致。
-3. 选人规则没有冻结“仅互关可入群”，也没有定义跨来源去重、1000 人上限与圈子群特殊边界。
-4. 私建群解散、圈子群不可解散、解散后消息列表消失这条生命周期仍未形成端云一致 contract。
-
-进入 `/dev` 前必须先把这条 Journey 的对象边界、页面 IA、元数据真相源、权限与生命周期合同一次冻结。
-
-## 目标用户
-
-- 从聊天页、圈子页或任意一级页面全局加号入口快速拉群的高频聊天用户
-- 需要从已有群聊、已加入圈子中继续扩展多人沟通的用户
-- 在群聊信息页持续做成员扩充、治理与解散操作的群主/普通成员
-
-## 核心旅程
-
-1. 用户从全局添加入口点击“发起群聊”。
-2. App 进入独立的发起群聊页，顶部为正式导航页，主体包含搜索、来源入口与互相关注联系人列表。
-3. 用户可从三个来源选择成员：
-   - 单独选互关联系人
-   - 从已有群聊中选互关成员
-   - 从已加入且已绑定会话的圈子中选互关成员
-4. 所有来源都只返回“与当前用户互关”的候选成员；跨来源重复用户按 `userId` 去重。
-5. 已选成员在搜索框下方以头像列表展示，最多显示三行，超过折叠，可展开并支持逐个删除。
-6. 用户点击“完成”后，端云原子创建私建群并带上初始成员，成功后回到消息页并可立即看到新群。
-7. 进入群聊信息页后，用户可继续添加互关成员；私建群允许群主解散，圈子群不允许解散并与圈子生命周期绑定。
-
-## 特性树拆分
-
-本 Journey 以 4 个 `L3_story` 收口：
-
-| L3 Scenario | 负责的问题 | 说明 |
-|---|---|---|
-| `group-create-flow` | 发起入口、三类选人来源、已选区、原子建群 | 本次 baseline 主场景 |
-| `member-add-remove-policy` | 建群后继续加人、互关筛选、私建群/圈子群危险操作边界 | 生命周期收口 |
-| `group-settings` | 聊天信息页成员区、资料区与退出群聊基础边界 | 复用既有冻结规格 |
-| `group-member-roster-version-sync` | 成员展示名端云一致、`ListMembers` 排序、revision/时间戳、合并推送与拉取、建群事务与并发更新分离 | `/baseline` 2026-03-29 冻结 |
-
-额外依赖但不在本 Journey 内重写：
-
-- `chat-experience-optimization/chat-group-admin-govern`
-- `circle-community/circle-collaboration-tools`
-- `user-identity-profile-relationship/persona-follow-graph`
-
-## 功能范围
+## 2. 范围与非目标
 
 ### In Scope
 
-- 全局添加入口的独立“发起群聊”正式页面
-- 单独选互关联系人页：搜索、A-Z 字母索引、列表定位、互关过滤
-- 群聊来源 sheet：真实群会话列表、群内可选互关人数
-- 圈子来源 sheet：真实已加入圈子列表、圈内可选互关人数
-- 成员选择 sheet：群/圈成员互关过滤、全选、底部按钮数量态
-- 已选成员去重、三行折叠/展开、逐个删除
-- 私建群原子创建、成功回流消息列表、消息页可见
-- 聊天信息页继续加人时复用同一互关准入规则
-- 私建群可解散；圈子群不可解散，生命周期绑定圈子
-- 浅色/深色双模式、蓝色主题、iOS 原画质体验
-- **成员 roster 同步**：`ListMembers` 默认按加入顺序、可选按展示名排序；成员展示名为用户展示名（`userId` 为唯一键）；`membersRosterRevision` 与 `updatedAt` **仅云端**在事务内更新；实时 **`ConversationRosterUpdated` 合并推送**，客户端按 revision/时间戳定点拉取；**创建群单事务**与**建群后多端并发更新**在云侧代码路径上分离（详见 `group-member-roster-version-sync`）
+- 三来源选人、原子建群、成员添加/移除/主动退出
+- owner/admin/member 权限矩阵、群主转让、管理员与公告设置
+- 1000 user 成员上限、relationship gate、结构化错误与 Inbox 回流
 
 ### Out of Scope
 
-- 进群二维码/分享邀请链接
-- 企业联系人独立来源
-- 记录兼容、灰度双轨和会读回滚语义
-- 超过 1000 人的群扩容策略
-- 圈子群多频道、多会话形态
+- 圈子与 CircleGroup 自身生命周期
+- 企业组织通讯录、邀请链接、二维码入群与入群审批；当前发布不展示相应入口或治理开关，也不创建无调用方的 `JoinRequest` 对象。
 
-## 约束
+## 3. Journey / Scenario 贡献
 
+- [`JNY-007 / SCN-013`](../../spec.md#scn-013)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：私建群创建、后续成员增删、角色治理与群设置在同一 Conversation/ConversationMembership 聚合边界内形成可商用闭环，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-008 / SCN-014`](../../spec.md#scn-014)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：私建群创建、后续成员增删、角色治理与群设置在同一 Conversation/ConversationMembership 聚合边界内形成可商用闭环，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+
+## 4. Story
+
+
+
+- [`group-candidate-source-orchestration`](./group-candidate-source-orchestration/spec.md)：Mock 与 Remote 候选行为一致且有端云证据。
+- [`group-create-flow`](./group-create-flow/spec.md)：api_integration 覆盖成功、非互关、屏蔽、重复请求、边界容量与 outbox。
+- [`group-member-roster-version-sync`](./group-member-roster-version-sync/spec.md)：`membersRosterRevision` 与 `updatedAt` 只能由 chat-service 在成员表成功变更后更新。
+- [`group-settings`](./group-settings/spec.md)：群设置中显示的成员入口必须可追溯到具体用户对象，方便后续举报/拉黑下沉。
+- [`member-add-remove-policy`](./member-add-remove-policy/spec.md)：圈子绑定默认群（`group + circleId`）：跟随圈子绑定关系，不能单独进入 `dissolved`。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 群创建与成员治理能力 SIT
+
+- 三来源候选只经 chat-service 权威 Reader 输出，App 不自行拼装 Inbox、Circle 和关系数据。
+- CreateConversation/AddMembers/RemoveMember/LeaveConversation/TransferOwnership 权限与生命周期组合可验证。
+- 创建或治理成功后 Conversation、Membership、GroupHome/Inbox 投影与 outbox 一致，失败无部分提交。
+- beta/gamma API 与 gamma_local UAT 均有可重复执行证据；prod 只执行只读与受控 smoke。
+
+<a id="req-002"></a>
+### REQ-002 私建群可解散；圈子群不可解散，生命周期绑定圈子
+
+- 私建群可解散；圈子群不可解散，生命周期绑定圈子
 - 群聊最大人数统一冻结为 `1000`
-- 任何人都可以发起群聊
-- 只允许选择互关联系人，或群/圈中与当前用户互关的成员
 - 圈子来源必须来自“消息列表可达且我的圈子中存在、并已有 `conversationId` 绑定”的真实圈子
 - 所有群会话统一使用 `group` 类型；圈子发起/绑定的默认群通过 `circleId` 标识，而不是独立 `circle` 会话类型
 - 私建群允许解散；圈子群禁止解散，危险操作入口必须隐藏
 - `route / surface / operation / request context` 必须来自 metadata，禁止继续复用 `chatAddMembers` 旧语义
-- 不做兼容迁移，不保留记录交互分支，按新模型一把升级
-
-## 对标输入与吸收结论
-
-| 对标 | 借鉴点 | 本次吸收 |
-|---|---|---|
-| 微信图一“发起群聊”页 | 搜索框、来源入口、联系人列表、A-Z 索引 | 吸收页面骨架与操作路径 |
-| 微信图二群来源弹层 | 贴底群选择 sheet、搜索、行式列表 | 吸收结构，但升级为蓝色主题与更轻线条 |
-| 微信图三成员选择弹层 | 多选、全选、底部数量按钮、单群内选人 | 吸收交互主路径 |
-
-明确不直接照搬的部分：
-
-- 不引入企业联系人来源
-- 候选成员不按“全部联系人”展示，而是严格收敛为互关集合
-- 在图一新增已选成员头像折叠区，优于微信默认反馈
-
-## 角色分工
-
-| 角色 | 职责 |
-|---|---|
-| `chat-service` | 私建群创建、成员校验、成员增删、私建群解散、消息列表一致性 |
-| `circle-service` | 圈子列表、圈成员读取、圈群生命周期绑定、圈子群不可解散边界 |
-| `user-service` | 互关/关系能力真相源 |
-| `app/chat` | 页面 IA、sheet 编排、已选成员状态、消息页回流 |
-| `app/circle` | 圈子来源列表与圈群入口一致性 |
-
-## 既有 Story 覆盖矩阵
-
-| 既有节点 / 旧实现 | 当前处理 |
-|---|---|
-| `group-create-flow` 模板文档 | 本次 baseline 正式冻结 |
-| `member-add-remove-policy` 模板文档 | 本次 baseline 正式冻结 |
-| `group-settings/spec.md` | 继续作为聊天信息页基础边界，不重复定义 |
-| `chatAddMembers` 旧路由语义 | 不再承载“发起群聊”主入口，仅保留后续加人语义或在实施期重定向 |
-| `StartGroupChatPage` 当前 mock 实现 | 视为待替换原型，不作为真相源 |
-
-## 数据生命周期合同
-
-- 发起页中的已选成员是临时 UI 状态，离开页面即销毁，不做本地持久化。
-- 私建群创建成功后立即进入正式 `Conversation` 生命周期：`active -> dissolved`。
-- 私建群解散后，会话从消息列表消失，不再可进入普通聊天列表。
-- 圈子群不进入“可解散私有群”生命周期，其存亡由圈子绑定关系决定。
-- 圈子成员自动同步到圈子群时，仍需遵守“只有互关成员可被当前用户主动拉入私建群”的规则；圈群自身成员同步不等价于私建群选人来源扩权。
-
-## 权限与分享边界
-
-- 发起权限：所有登录用户均可发起
-- 选人权限：仅互关对象可被加入
-- 解散权限：
-  - 私建群：仅群主
-  - 圈子群：无此能力
-- 本 Journey 不提供群分享、群海报、群二维码传播
-
-## 非功能目标
-
-### SLO
-
-- 发起群聊页首屏壳层即时可见，候选列表首批结果 P95 `< 1.0s`
-- 群来源/成员来源 sheet 打开动画与首批数据 P95 `< 1.2s`
-- 点击“完成”到私建群出现在消息列表 P95 `< 1.5s`
-
-### KPI
-
-- 发起群聊主路径完成率 `> 95%`
-- 建群成功后消息列表可见率 `> 99%`
-- 私建群解散后消息列表移除成功率 `> 99%`
-
-### 弱网与恢复
-
-- 弱网下先渲染页面壳层与本地已知来源骨架，不允许整页白屏
-- 单个来源超时只降级该来源，不阻塞其它来源和已选区操作
 - 建群失败必须停留在当前页并保留已选成员，便于用户重试
-
-### 容量假设
-
-- 单群上限 `1000`
-- 单次候选列表不要求加载全部对象到首屏，可分页或分批返回
-- A-Z 索引和搜索优先在已拉回的候选集合上即时过滤
-
-## 迁移、灰度与回滚要求
-
-- 本次按新模型一把升级，不保留旧 UI、旧交互和旧 contract 双轨
-- 不设计 feature flag，不做运行时回滚路径
-- 若未达到门禁，不进入 `/dev` 与发布
 - 发布层仅允许整版发布回退，不在产品内保留“旧发起群聊页”兼容入口
 
-## 验收重点
+## 6. 契约与依赖
 
-1. 全局加号发起群聊的三页结构、互关筛选、去重与已选区反馈正式冻结。
-2. 私建群创建、消息列表可见、聊天信息页继续加人与私建群解散形成完整生命周期闭环。
-3. 圈子群与私建群的危险操作边界明确，后续可直接进入 `/dev`。
+- 上游能力：[`chat-conversation`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 群创建与成员治理能力 SIT
+
+- GIVEN 执行“群创建与成员治理能力”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“群创建与成员治理能力”对应动作。
+- THEN 三来源候选只经 chat-service 权威 Reader 输出，App 不自行拼装 Inbox、Circle 和关系数据。
+- THEN CreateConversation/AddMembers/RemoveMember/LeaveConversation/TransferOwnership 权限与生命周期组合可验证。
+- THEN 创建或治理成功后 Conversation、Membership、GroupHome/Inbox 投影与 outbox 一致，失败无部分提交。
+- THEN beta/gamma API 与 gamma_local UAT 均有可重复执行证据；prod 只执行只读与受控 smoke。
+
+## 8. 开放事项
+
+<a id="open-002"></a>
+### OPEN-002 群聊四环境端到端证据未闭环（metadata blocked 未解除）
+
+- 类型：`risk`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：群聊四环境端到端证据未闭环（metadata blocked 未解除）
+- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+
+<a id="open-003"></a>
+### OPEN-003 群创建与成员治理能力 SIT
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：三来源候选只经 chat-service 权威 Reader 输出，App 不自行拼装 Inbox、Circle 和关系数据。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

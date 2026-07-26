@@ -1,56 +1,90 @@
-# L2 特性：feedback-optimization-loop（反馈优化大循环）
+# L2 Business Capability：反馈优化闭环 (`feedback-optimization-loop`)
 
-## 功能说明
+> 所属领域：[`product-ops-growth`](../spec.md)
+>
+> 设计归属：[L1 DEC-001](../design.md#dec-001)
 
-把"行为反馈 → 兴趣/人群画像 → 推荐策略自调建议 → 人审发布"串成一个**大循环**，
-实现「内容飞轮」的算法侧闭环。能力边界覆盖：
+## 1. 能力目标
 
-1. **反馈采集与统一**（L3 `feedback-collection-unification`）
-   - 端侧行为信号经 `content-service` HotPath 归一，投影到 `rm_recommend_feature`
-     的 `userFeatures`（四维 affinities / ENER / 深度等）。
-   - `InterestProfileAggregator` 基于四维 affinities 派生 `interestProfile`
-     （topN 兴趣 + 生命周期分层 + 半衰期新鲜度衰减），并按
-     `recommendation/rec_model/segments.yaml` 规则匹配人群 `segments`。
-   - 派生结果经 `UserInterestRecomputed` 事件投影到 user 域
-     `rm_user_profile_view.interestProfile/segments`（user 域单一真相源，供小艺主动）；
-     `segments` 同步 `$set` 回 `rm_recommend_feature` 顶层供推荐引擎定向。
+反馈优化大循环：行为反馈 → 兴趣/人群画像派生 → 元数据驱动的推荐策略解析与自调建议 → 人审发布。算法侧闭环（content 派生 + user 投影 + recpolicy 热加载引擎 + 顾问 suggest-only）。
 
-2. **优化评估与发布**（L3 `optimization-evaluation-and-release`）
-   - 推荐评分策略全部元数据化于
-     `contracts/metadata/recommendation/rec_model/policy.yaml`：12 维权重预设、
-     二级系数、AB 实验、segment 定向、护栏。
-   - `runtime/recpolicy.Store` 热加载该 YAML（`atomic.Pointer` + validate-before-swap
-     + last-good 保留）；`codegen_rec_policy` 生成强类型 baseline 仅作 fail-safe。
-   - 推荐引擎按解析后的 `ResolvedPolicy` 取权重/系数/实验分桶/segment 定向打分与重排，
-     `PipelineMetrics` 落 `policyVersion / scoringPreset / segment / bucket` 作效果归因。
-   - `scripts/recommendation/rec_policy_advisor.py` 对照 policy 护栏（`suggest_only`）
-     评估 cohort KPI，**只产建议**并至多把候选推进到 product-ops 控制面 `:simulate`
-     （停在 `simulated` 态）；**绝不** `:activate`，发布由人在 ops-portal 走双审。
+## 2. 范围与非目标
 
-## 约束
+### In Scope
 
-- **metadata-first / single-source**：评分权重、二级系数、实验、segment 定向、护栏的
-  唯一真相源是 `policy.yaml`；人群规则唯一真相源是 `segments.yaml`；引擎/脚本禁止
-  硬编码第二套权重或人群判定。改行为先改 metadata，再 `make codegen-rec-policy`。
-- **画像单一真相源**：对外兴趣画像落在 user 域 `rm_user_profile_view`；
-  `rm_recommend_feature.segments` 与事件投影均为同一 `MatchSegments` 计算的 CQRS
-  投影，非第二真相源。
-- **suggest-only 护栏**：`policy.yaml` 所有 `guardrails.action` 必须为 `suggest_only`；
-  顾问脚本无任何 `:activate` 代码路径，护栏命中只产 `reject/hold` 建议，不自动回滚/切换。
-- **热更不失稳**：坏 YAML 经 `Validate` 拒绝并保留 last-good，绝不"坏 YAML 置零打分"
-  或导致引擎崩溃；启动前用 codegen baseline 兜底。
-- **跨服务事件**：`UserInterestRecomputed` 走 `repository.DomainEvent` + Redis Pub/Sub，
-  content 生产、user 消费；payload 字段以 `events.yaml` 为准。
+- 行为反馈归一到 rm_recommend_feature + 派生 interestProfile/segments（content-service）
+- UserInterestRecomputed 事件投影到 user 域 rm_user_profile_view（单一真相源）
+- policy.yaml 元数据化评分权重/二级系数/实验/segment 定向/护栏
+- runtime/recpolicy Store 热加载（atomic + validate-before-swap + last-good）+ codegen baseline fail-safe
+- 推荐引擎从 ResolvedPolicy 取权重/系数/分桶/定向；PipelineMetrics 归因 policyVersion/preset/segment
+- rec_policy_advisor 只产建议 + 至多 :simulate（绝不 :activate）
 
-## 验收标准（A1~A8 重点组）
+### Out of Scope
 
-- A1 功能闭环：行为反馈→画像/人群→策略解析→引擎打分→归因指标全链路可执行。
-- A2 元数据驱动：权重/系数/实验/定向/护栏改 `policy.yaml` 即生效（热更），无需改代码。
-- A3 容错：坏 policy 被拒并保留 last-good；缺实验/缺 baseline 走声明式 fallback。
-- A4 人群定向：命中 segment 的用户按 `segmentTargeting` 解析出 preset 覆盖 / 权重增量。
-- A5 顾问只产建议：护栏评估输出 `recommend_review/hold/reject`，至多调 `:simulate`，无 activate。
-- A6 可观测归因：`PipelineMetrics` 与 `rec_requests_by_policy_total` 按
-  `policyVersion × preset × segment` 切分。
-- A7 契约一致：`policy.yaml` / `events.yaml` / `recommend_feature.yaml` /
-  `user_profile_view.yaml` 通过 `make verify-metadata`。
-- A8 自动化测试映射完整：见下方两个 L3 story 的 `tests.recorded`。
+- 策略激活/灰度/回滚的实际执行（由 product-ops 控制面 + ops-portal 人审双签完成）
+- 模型训练与离线特征工程（属 recommendation-service / ML 管线）
+
+## 3. Journey / Scenario 贡献
+
+- [`JNY-002 / SCN-005`](../../spec.md#scn-005)
+  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
+  - 本能力处理：反馈优化大循环：行为反馈 → 兴趣/人群画像派生 → 元数据驱动的推荐策略解析与自调建议 → 人审发布。算法侧闭环（content 派生 + user 投影 + recpolicy 热加载引擎 + 顾问 suggest-only）。
+  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
+  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
+
+## 4. Story
+
+
+
+- [`feedback-collection-unification`](./feedback-collection-unification/spec.md)：从行为反馈派生画像与人群，并向推荐域和用户域双路投影。
+- [`optimization-evaluation-and-release`](./optimization-evaluation-and-release/spec.md)：策略只从 metadata 加载，坏配置拒绝生效并保留 last-good。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 反馈优化闭环能力组合结果
+
+- 行为反馈→派生 interestProfile/segments→事件投影 user 域→segments 回写宽表 全链路可验证。
+- policy.yaml 改权重/系数/实验/定向即热生效（Store.Apply 校验通过即原子切换），坏 YAML 保留 last-good。
+- 引擎按 ResolvedPolicy 打分/重排，命中 segment 的用户按 segmentTargeting 取 preset 覆盖/权重增量。
+- PipelineMetrics 与 rec_requests_by_policy_total 按 policyVersion×preset×segment 归因。
+- rec_policy_advisor 评估护栏后只产 recommend_review/hold/reject 建议，至多调 :simulate，无 activate 路径。
+- 大循环实证脚本跨 content/user 两库断言行为→派生→双路 CQRS 投影→引擎可定向闭合，且宽表与画像两路 segments 一致（单一 MatchSegments 源）。
+- 飞轮评估 dashboard（l2_content_flywheel）按派生/投影/引擎归因/互动/主动个性化各环节可视化，配套告警覆盖派生失败率、投影失败与新鲜度滞后。
+
+<a id="req-002"></a>
+### REQ-002 suggest-only 护栏：`policy.yaml` 所有 `guardrails.action` 必须为 `suggest_only`
+
+- **suggest-only 护栏**：`policy.yaml` 所有 `guardrails.action` 必须为 `suggest_only`。
+
+## 6. 契约与依赖
+
+- 上游能力：[`product-ops-growth`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 反馈优化大循环能力 SIT（端云协同 + 元数据驱动 + 顾问 suggest-only）
+
+- GIVEN 执行“反馈优化大循环能力 （端云协同 + 元数据驱动 + 顾问 suggest only）”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“反馈优化大循环能力 （端云协同 + 元数据驱动 + 顾问 suggest only）”对应动作。
+- THEN 行为反馈→派生 interestProfile/segments→事件投影 user 域→segments 回写宽表 全链路可验证。
+- THEN policy.yaml 改权重/系数/实验/定向即热生效（Store.Apply 校验通过即原子切换），坏 YAML 保留 last-good。
+- THEN 引擎按 ResolvedPolicy 打分/重排，命中 segment 的用户按 segmentTargeting 取 preset 覆盖/权重增量。
+- THEN PipelineMetrics 与 rec_requests_by_policy_total 按 policyVersion×preset×segment 归因。
+- THEN rec_policy_advisor 评估护栏后只产 recommend_review/hold/reject 建议，至多调 :simulate，无 activate 路径。
+- THEN 大循环实证脚本跨 content/user 两库断言行为→派生→双路 CQRS 投影→引擎可定向闭合，且宽表与画像两路 segments 一致（单一 MatchSegments 源）。
+- THEN 飞轮评估 dashboard（l2_content_flywheel）按派生/投影/引擎归因/互动/主动个性化各环节可视化，配套告警覆盖派生失败率、投影失败与新鲜度滞后。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 反馈优化大循环能力 SIT（端云协同 + 元数据驱动 + 顾问 suggest-only）
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：行为反馈→派生 interestProfile/segments→事件投影 user 域→segments 回写宽表 全链路可验证。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

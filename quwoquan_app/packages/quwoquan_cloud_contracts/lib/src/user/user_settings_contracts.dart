@@ -1,7 +1,7 @@
 import '../operation_request_payload.dart';
 
 /// UserSettings 聚合命令的 pure contracts。
-/// 真相源：contracts/metadata/user/user_settings/{service,fields}.yaml。
+/// 真相源：quwoquan_service/services/user-service/contracts/account/user_settings/{service,fields}.yaml。
 /// 单聚合 4 场景命名 set；服务端内部 version CAS，公开请求不接收调用方版本字段。
 /// PATCH 语义：仅编码非 null 字段。
 

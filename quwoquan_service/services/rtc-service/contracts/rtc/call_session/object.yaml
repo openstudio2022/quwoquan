@@ -1,0 +1,99 @@
+kind: aggregate_root
+description: '实时通话会话聚合。支持 1v1 和多人（≤32人）音视频通话。
+
+  CallSession 为聚合根，管理通话生命周期（状态机）和参与者列表。
+
+  媒体传输由注册的房间传输 Provider 转发，rtc-service 负责信令编排。
+
+  MongoDB 存储通话记录，Redis 缓存活跃通话状态。
+
+  '
+identity:
+  fields:
+  - _id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: aggregate_root
+  cardinality: 1:N
+  consistency: strong
+  kind: owned
+  name: participants
+  on_delete: cascade
+  reference_fields: []
+  target_object: rtc.CallParticipant
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: circle
+  on_delete: detach
+  reference_fields:
+  - circleId
+  target_object: circle.Circle
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: conversation
+  on_delete: detach
+  reference_fields:
+  - conversationId
+  target_object: chat.Conversation
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: initiatorPersona
+  on_delete: retain
+  reference_fields:
+  - initiatorId
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: initiatorRingtone
+  on_delete: detach
+  reference_fields:
+  - initiatorRingtoneId
+  target_object: content.MediaAsset
+local_identity_reasons:
+  roomId: external RTC provider room key governed by the CallSession external port
+  screenShareUserId: CallSession-owned participant selector validated against the bounded participants
+    collection; no child Store or Facade exists
+capabilities:
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- initiator 必须是 trusted persona 且满足 Relationship capability
+- participants 只能由 CallSession 行为修改且最多 32 个
+- 媒体访问凭据必须短期有效并绑定 roomId、participantId 与授予权限
+- 所有命令由服务端加载当前 version 执行内部 CAS 并对纯竞态做有限重放；公开请求不携带版本字段
+- InitiateCall 是一次创建命令，同一 actor 的活跃通话由存储唯一约束防止并发双呼
+- ReportMediaConnected 只允许 connecting 参与者进入 connected；至少两人 connected 时首次进入 in_call 并写 startedAt
+- ringing 超时为 1v1 30 秒、群通话 60 秒，由确定性 system command 经同一 CAS/receipt/outbox 管道迁移 ended/no_answer
+- ended 为终态；重复 answer、join、leave 与 hangup 按 actor-scoped command receipt 幂等，目标状态已满足时持久化 no-op receipt
+  且不递增版本
+- 参与者展示信息（昵称/头像/信任标签）不是聚合状态；来电提示经 CallRinging 事件负载快照，通话中列表由端侧组合 user 域数据
+- 通话记录的商用主形态是 CallEnded 事实投影到关联 chat Conversation 的 system_call_log Message；独立 ListCalls 页面 deferred，operation
+  仅保留对象查询合同
+lifecycle:
+  states:
+  - initiated
+  - ringing
+  - connecting
+  - in_call
+  - ended
+  optimistic_concurrency: version
+  idempotency: command_receipt
+members:
+  CallParticipant:
+    kind: owned_entity
+    cardinality: 1:N
+    max_cardinality: 32
+    description: 通话参与者（嵌入 CallSession 文档，≤32人无需独立 collection）

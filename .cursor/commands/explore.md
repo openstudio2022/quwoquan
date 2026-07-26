@@ -1,32 +1,17 @@
 # /explore
 
-目标：只读澄清增量归属，不写代码。
-
-准入：
-- 用户需求尚未明确一棵树归属、验收意图、三层测试证据或触发规则。
-- 只读探索，不改代码、不改文档、不运行破坏性命令。
+目标：只读确认增量的产品归属、父链、边界与风险；不写代码和规格。
 
 执行：
-- 读取 `AGENTS.md`、`docs/agent_context_contract.md` 和相关 spec/registry。
-- 形成 `Spec Entry`，但不进入实现。
-- 标注需要继续 `/prd`、`/design`、`/baseline`、`/extend` 或 `/dev` 的条件。
 
-必须输出：
-- AppRoot Journey/Scenario：`<id 或无影响>`
-- `L1_domain_service`：`<domain>`
-- `L2_business_capability`：`<capability>`
-- `L3_story`：`<story 或需新建>`
-- 验收意图：UAT / SIT / GWT / contract
-- 测试证据：local_contract / api_integration / user_acceptance
-- metadata、seed、mock、页面质量、runtime error、发布风险
+1. 读取最近 `AGENTS.md` 与 `specs/feature-tree/README.md`。
+2. 已知路径时运行 `make feature-context TARGET=<path>`；否则从 AppRoot Journey 和 L1 边界逐层定位。
+3. 明确 AppRoot Journey/Scenario、L1、L2、L3、In/Out of Scope、验收意图和三层测试。
+4. 检查 metadata、runtime error、Mock、页面质量、Data/Service/App、观测、环境与回滚是否被触发。
+5. 读取目标父链的 OPEN；不扫描中央台账，因为中央台账不存在。
 
-出口：
-- 给出通过/阻断结论。
-- 若阻断，列出缺失的规格、验收、设计或测试证据。
-- 若可继续，明确下一阶段命令。
+必须输出：目标与用户价值、完整父链、验收意图 `UAT/DOM/SIT/GWT/contract`、证据层 `local_contract/api_integration/user_acceptance`、直接依赖、OPEN、通过/阻断结论和下一阶段。
 
-阻断：无法定位树归属、验收或测试证据时返回 `GATE_BLOCK`。
+无法唯一定位代码 owner、父子规格冲突或验收不可观察时返回 `GATE_BLOCK`，建议进入 `/prd` 或 `/design`。
 
-自然语言等价触发：用户说“先看看”“帮我分析归属”“这个需求怎么拆”“风险是什么”时，也按 `/explore` 语义执行。
-
-协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。
+自然语言等价触发：“先分析”“看归属”“怎么拆”“有哪些风险”。

@@ -86,4 +86,12 @@ class AssistantConsentStore {
         .toList(growable: false);
     await save(next);
   }
+
+  Future<void> clearForTerminalAccountClosure() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_key);
+    if (preferences.containsKey(_key)) {
+      throw StateError('assistant consent cleanup verification failed');
+    }
+  }
 }

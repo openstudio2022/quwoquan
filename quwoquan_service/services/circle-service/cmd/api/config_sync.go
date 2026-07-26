@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"quwoquan_service/runtime/controlplane"
+	circleconfig "quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/runtimeconfig"
 )
 
 func startConfigSyncLoop(
@@ -27,7 +28,7 @@ func startConfigSyncLoop(
 		BaseURL:       baseURL,
 		ServiceName:   serviceName,
 		AppEnv:        appEnv,
-		ClusterName:   defaultClusterName(appEnv),
+		ClusterName:   circleconfig.DefaultClusterName(appEnv),
 		ConfigRoot:    configRoot,
 		ConfigVersion: configVersion,
 		ImageVersion:  imageVersion,
@@ -35,17 +36,4 @@ func startConfigSyncLoop(
 		HotStore:      hotStore,
 		RateLimiter:   rateLimiter,
 	})
-}
-
-func defaultClusterName(appEnv string) string {
-	switch appEnv {
-	case "beta":
-		return "beta-control-a"
-	case "gamma":
-		return "gamma-control-a"
-	case "prod":
-		return "prod-control-a"
-	default:
-		return appEnv + "-control-a"
-	}
 }

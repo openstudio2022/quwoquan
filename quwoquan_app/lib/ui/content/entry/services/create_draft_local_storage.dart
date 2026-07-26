@@ -280,6 +280,41 @@ class CreateDraftLocalStorage {
     await _requirePersisted(prefs.remove(currentDraftIdKey), currentDraftIdKey);
   }
 
+  static Future<void> clearForTerminalAccountClosure(
+    String currentActorId,
+  ) async {
+    final preferences = await SharedPreferences.getInstance();
+    final scopeKey = scopeKeyForUser(currentActorId);
+    final scopedPrefix = '$_v2Prefix:$scopeKey:';
+    final corruptScopedPrefix = '$corruptSidelinePrefix:$scopedPrefix';
+    final keys = preferences
+        .getKeys()
+        .where(
+          (key) =>
+              key == draftsKey ||
+              key == currentDraftIdKey ||
+              key == corruptSidelineKey(draftsKey) ||
+              key == corruptSidelineKey(currentDraftIdKey) ||
+              key.startsWith(scopedPrefix) ||
+              key.startsWith(corruptScopedPrefix),
+        )
+        .toList(growable: false);
+    for (final key in keys) {
+      await _requirePersisted(preferences.remove(key), key);
+    }
+    if (preferences.getKeys().any(
+      (key) =>
+          key == draftsKey ||
+          key == currentDraftIdKey ||
+          key == corruptSidelineKey(draftsKey) ||
+          key == corruptSidelineKey(currentDraftIdKey) ||
+          key.startsWith(scopedPrefix) ||
+          key.startsWith(corruptScopedPrefix),
+    )) {
+      throw StateError('create draft cleanup verification failed');
+    }
+  }
+
   static List<String> _decodeIdList(String? raw) {
     if (raw == null || raw.isEmpty) {
       return <String>[];

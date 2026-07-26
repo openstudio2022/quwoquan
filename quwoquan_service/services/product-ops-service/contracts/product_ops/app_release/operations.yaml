@@ -1,0 +1,65 @@
+api_routes:
+- method: GET
+  path: /ops/app-recovery/version
+  operation: GetAppRecoveryVersion
+  actor: device
+  application:
+    kind: query
+    facet: AppReleaseRecoveryQueryFacade
+    method: getRecoveryVersion
+    reader: AppReleaseRecoveryReader
+    slice: AppReleaseRecoveryView
+  authorization:
+    principal: public
+    ownership_policy: public_recovery_read
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - OPS.USER.app_release_query_invalid
+  - OPS.SYSTEM.app_release_unavailable
+  privacy:
+    request_classification: PUBLIC
+    response_classification: PUBLIC
+    log_policy: metadata_only
+  telemetry:
+    metric: ops_app_recovery_version_query
+    trace: true
+    attributes: [platform, outcome]
+  slo:
+    latency_p95_ms: 800
+    availability_percent: 99.9
+  query_params: [platform, appVersion, buildNumber]
+  description: 按平台读取当前已发布版本；客户端只以 latestBuild 与当前 Build 比较，不从缓存或失败响应推断版本状态。
+  security:
+    auth_mode: optional
+    principal: public
+    token_transport: none
+    anonymous_policy: allow
+    visibility: public
+consumers:
+- name: app
+  capabilities: [get_app_recovery_version]
+- name: public-web
+  capabilities: [get_app_recovery_version]
+contract_test:
+  mock_strategy:
+    app_side:
+      scenarios:
+      - name: version_update_available
+        route: GET /ops/app-recovery/version
+        assertions: [status_200, exact_four_field_response]
+    service_side:
+      description: 使用环境 release 配置验证平台分流、Build 比较与受信 URL，不使用数据库或第三方商店替身。
+      scenarios:
+      - name: android_official_download
+        command: GetAppRecoveryVersion platform=android
+        assertions: [official_https_download_page, current_release_build]
+      - name: ios_app_store
+        command: GetAppRecoveryVersion platform=ios
+        assertions: [official_app_store_url, current_release_build]

@@ -92,8 +92,7 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
     return _items
         .where(
           (item) =>
-              item.status == status.wireName &&
-              (scope == null || item.scope == scope.wireName),
+              item.status == status && (scope == null || item.scope == scope),
         )
         .toList(growable: false);
   }
@@ -109,12 +108,12 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
     final fact = AssistantPreferenceFact(
       preferenceId: 'preference_${_items.length + 1}',
       userId: 'owner',
-      scope: scope.wireName,
+      scope: scope,
       conversationId: conversationId.isEmpty ? null : conversationId,
-      kind: kind.wireName,
+      kind: kind,
       value: value,
-      sourceType: sourceType.wireName,
-      status: AssistantPreferenceStatus.active.wireName,
+      sourceType: sourceType,
+      status: AssistantPreferenceStatus.active,
       createdAt: '2026-07-20T08:00:00Z',
       updatedAt: '2026-07-20T08:00:00Z',
       version: 1,
@@ -146,7 +145,7 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
       kind: current.kind,
       value: current.value,
       sourceType: current.sourceType,
-      status: AssistantPreferenceStatus.revoked.wireName,
+      status: AssistantPreferenceStatus.revoked,
       revokedAt: '2026-07-20T08:01:00Z',
       revocationDeadline: '2099-07-20T08:11:00Z',
       createdAt: current.createdAt,
@@ -173,7 +172,7 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
       kind: current.kind,
       value: current.value,
       sourceType: current.sourceType,
-      status: AssistantPreferenceStatus.active.wireName,
+      status: AssistantPreferenceStatus.active,
       createdAt: current.createdAt,
       updatedAt: '2026-07-20T08:02:00Z',
       version: current.version + 1,
@@ -257,11 +256,11 @@ void main() {
             AssistantPreferenceFact(
               preferenceId: 'preference_1',
               userId: 'owner',
-              scope: 'long_term',
-              kind: 'tone',
+              scope: AssistantPreferenceScope.longTerm,
+              kind: AssistantPreferenceKind.tone,
               value: 'warm',
-              sourceType: 'management',
-              status: 'active',
+              sourceType: AssistantPreferenceSourceType.management,
+              status: AssistantPreferenceStatus.active,
               createdAt: '2026-07-20T08:00:00Z',
               updatedAt: '2026-07-20T08:00:00Z',
               version: 1,
@@ -346,11 +345,11 @@ void main() {
         AssistantPreferenceFact(
           preferenceId: 'preference_undo',
           userId: 'owner',
-          scope: 'long_term',
-          kind: 'reply_length',
+          scope: AssistantPreferenceScope.longTerm,
+          kind: AssistantPreferenceKind.replyLength,
           value: 'concise',
-          sourceType: 'management',
-          status: 'active',
+          sourceType: AssistantPreferenceSourceType.management,
+          status: AssistantPreferenceStatus.active,
           createdAt: '2026-07-20T08:00:00Z',
           updatedAt: '2026-07-20T08:00:00Z',
           version: 1,
@@ -374,7 +373,10 @@ void main() {
     await tester.pumpAndSettle();
     // 已撤销的事实不进入管理列表；仅当前操作保留临时恢复入口。
     expect(find.text(AssistantText.assistantPreferenceConcise), findsOneWidget);
-    expect(find.text(AssistantText.assistantPreferenceForgot), findsOneWidget);
+    expect(
+      find.textContaining(AssistantText.assistantPreferenceForgot),
+      findsOneWidget,
+    );
     expect(find.text(AssistantText.assistantPreferenceUndo), findsOneWidget);
     expect(find.text(AssistantText.assistantPreferenceForget), findsNothing);
     expect(

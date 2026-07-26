@@ -519,7 +519,7 @@ def test_content_plan_allows_text_only_article_base_source_without_source_assets
     issues = cp.validate_content_plan(EXECUTION_ID, spec)
     assert issues == []
 
-def test_content_plan_blocks_declared_article_asset_missing_rights_fields():
+def test_content_plan_accepts_audited_travel_asset_without_license_fields():
     entity = "九寨沟"
     ref = f"{entity}_planning_consultation"
     title = "九寨沟行前怎么安排"
@@ -552,7 +552,16 @@ def test_content_plan_blocks_declared_article_asset_missing_rights_fields():
     )
     write_json(
         asset_dir / "index.json",
-        {"assets": [{"fileName": asset_path.name, "sha256": "sha256:test"}]},
+        {
+            "assets": [
+                {
+                    "fileName": asset_path.name,
+                    "sha256": "sha256:test",
+                    "rightsAuditStatus": "unverified",
+                    "rightsAuditIssues": ["license evidence unavailable"],
+                }
+            ]
+        },
     )
     content_object.register_content_object(EXECUTION_ID, ref,
         content_type="article",
@@ -576,7 +585,7 @@ def test_content_plan_blocks_declared_article_asset_missing_rights_fields():
                     "title": title,
                     "entityRefs": [f"/entity/地点/景区/{entity}"],
                     "evidenceRefs": [source_ref],
-                    "rationale": "声明源图必须权利完整",
+                    "rationale": "来源配图已记录权利审计状态",
                     "writingIntent": "planning_consultation",
                     "baseSourceRef": source_ref,
                     "assetRefs": [asset_ref],
@@ -600,7 +609,7 @@ def test_content_plan_blocks_declared_article_asset_missing_rights_fields():
 
     issues = cp.validate_content_plan(EXECUTION_ID, spec)
 
-    assert any("missing rights fields" in issue for issue in issues), issues
+    assert not any("missing rights fields" in issue for issue in issues), issues
 
 def test_content_plan_allows_asset_over_assessment_budget_below_publish_budget():
     entity = "九寨沟"

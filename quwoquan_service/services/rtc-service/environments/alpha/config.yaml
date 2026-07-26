@@ -1,0 +1,18 @@
+overrides:
+  sys.rtc-service.user_account_security_authority.base_url: http://127.0.0.1:18081
+  sys.rtc-service.user_account_security_authority.timeout_ms: 500
+secretRefs:
+  sys.rtc-service.mongodb.uri: MONGO_URI
+externalBindings:
+  runtime.message.transport:
+    state: enabled
+  rtc.room.transport:
+    state: enabled
+    adapter: infra.livekit_protocol_fixture
+    endpointRef: environment_binding:rtc.livekit_fixture
+    endpointEnvs:
+      connection: RTC_MEDIA_FIXTURE_CONNECTION_URL
+    secretRefs:
+    - RTC_MEDIA_FIXTURE_API_KEY
+    - RTC_MEDIA_FIXTURE_API_SECRET
+    timeoutMs: 1000

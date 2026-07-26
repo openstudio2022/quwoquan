@@ -1,38 +1,93 @@
-# L3 Story：圈子主页交集重做
+# L3 Story：圈子主页交集重做 (`circle-homepage-intersection-redesign`)
 
-## 节点定位
+> 所属能力：[`intersection-unified-experience`](../spec.md)
 
-- `L1_domain_service`: `object-homepage-network`
-- `L2_business_capability`: `intersection-unified-experience`
-- `L3_story`: `circle-homepage-intersection-redesign`
+> Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
 
-## 功能说明
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-圈子主页（`CircleShell`）与「我的主页/他人主页」同壳同语义 token 重做，统一结构为「身份 → 我的交集 → 圈子打动的人 → 记录·讨论·成员」。规格真相源见 [intersection-definition-and-application.md](../../../../product/intersection-definition-and-application.md) §17.7 与 §17.8（双模块口径）。两个核心维度：
+## 1. 用户价值
 
-- **我的交集 = 我与这个圈子客观存在、可枚举、可解释、可行动的真实连接点**（圈子里你认识的人、你已加入/讨论过、你关注的话题在这里）。
-- **圈子打动的人 = 这个圈子帮助他人产生连接、内容传播、讨论沉淀的能力**，同样可证、可枚举、可解释、可行动；`impact` 仅保留为内部机器名。
+作为浏览对象主页的用户，
+我希望标题统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致，
+从而理解对象并继续探索其关系与内容。
 
-## 范围
+## 2. 范围与非目标
+
+### In Scope
+
+- “圈子主页交集重做”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 我的交集卡标题统一为「我的交集」，渲染共享 ObjectIntersectionPreviewCard（objectBType=circle、objectSharedReasonsProvider）：单列预览句 + 蓝锚点 + 查看全部。
+- 打动卡标题统一为「圈子打动的人」，AuthorImpactCard 同构、去好友化/去收藏，circleImpactProvider 单一真相源。
+- 移除头部成员头像簇（你认识的人收敛进我的交集模块）；次按钮由私信改「进入讨论」（切讨论 tab）。
+- 一级 tab 内容改记录；记录流去胶囊改右侧过滤、双列瀑布、卡内交集句。
+- 头部 N 成员单计数；圈子独立头像字段契约预留 + alpha mock。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 圈子主页交集重做
+
+- 标题统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致。
+
+<a id="req-002"></a>
+### REQ-002 统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致
+
+- 标题统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致。
+
+<a id="req-003"></a>
+### REQ-003 过滤与用户主页同一实现模式
+
+- 二级过滤与用户主页同一实现模式。
+
+<a id="req-004"></a>
+### REQ-004 不挂 4 列统计行、不挂成员头像簇
+
+- 头部不挂 4 列统计行、不挂成员头像簇。
+
+<a id="req-005"></a>
+### REQ-005 圈子主页复用统一交集卡与可下钻事实
 
 - 我的交集卡：标题统一为「我的交集」，与我的主页同壳，渲染共享 `ObjectIntersectionPreviewCard`（objectBType=circle、`objectSharedReasonsProvider` 单一真相源）：单列预览句（蓝色可点击锚点）+ 弱入口「查看全部」；可见结论只读 `IntersectionReason.primaryText/primarySpans`，禁止用 `EvidenceGroup` 或 `intersectionPoints` 本地拼主句。
-- 打动卡：标题统一为「圈子打动的人」，`AuthorImpactCard` 同构（`IntersectionStatementCard` + `circleImpactProvider`），去好友化/去收藏；句内数字可下钻来源明细；无可枚举影响事实不展示。
-- 头部：移除成员头像簇（你认识的人收敛进我的交集模块）；保留圈子独立头像（缺省回退封面）+「N 成员」单计数 + 认证标识。
-- 核心动作：主按钮「加入圈子」，次按钮由「私信」改为「进入讨论」（切换到讨论 tab）。
-- 一级 tab：`记录/讨论/成员`（metadata-first label_key）。
-- 记录流：二级过滤（全部/图片/视频/长文）去胶囊改最右侧过滤图标；网格改双列瀑布；卡内唯一交集句（封面→交集句→标题→作者→赞）。
+- 打动卡：标题统一为「圈子打动的人」，`AuthorImpactCard` 同构（`IntersectionStatementCard` + `circleImpactProvider`），去好友化/去收藏。
+- 句内数字可下钻来源明细。
+- 无可枚举影响事实不展示。
 - 清理：删除 `section_interaction`/`circle_stats_row` 死代码与硬编码中文字面量（统一语义 token）。
-- 用户语言禁词：移除「实体/Entity/Circle/为什么推荐」，`42个实体正在被讨论` → `42个话题正在被讨论`。
 
-## Out of Scope
+## 4. 契约引用
 
-- 云侧 Circle 服务/排序/图谱实现（仅 metadata 契约预留 + alpha mock）。
-- 圈子「私信」1v1 链路改造（保留现默认公共群聊入口）。
+- canonical：`recommendation/recommendation/recommendation_model_release/projections/intersection_reason.yaml`
+- canonical：`content/content/post/projections/author_impact_item.yaml`
+- canonical：`circle/circle_management/circle/ui_config.yaml`
+- canonical：`circle/circle_management/circle/fields.yaml`
 
-## 验收标准概要
+## 5. 验收场景
 
-- A1：我的交集卡走共享 `ObjectIntersectionPreviewCard`（objectBType=circle）单一真相源，标题「我的交集」，单列预览句（蓝锚点）+「查看全部」；无交集三态降级不占位。
-- A2：打动卡标题「圈子打动的人」，与 `AuthorImpactCard` 同构，文案去好友化/去收藏，无影响事实不展示。
-- A3：头部移除成员头像簇、保留圈子独立头像（缺省回退封面）+「N 成员」单计数；次按钮「进入讨论」。
-- A4：一级 tab 显示「记录」；记录流二级过滤在最右侧、非胶囊；双列瀑布；卡内有且仅一条交集句。
-- A5：删除 `section_interaction`/`circle_stats_row` 死代码与中文字面量；无禁用术语外露（为什么推荐/影响力泛词→我的交集/圈子打动的人模块标题）。
+<a id="gwt-001"></a>
+### GWT-001 圈子主页交集重做
+
+- GIVEN 浏览对象主页的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“圈子主页交集重做”对应的公开行为。
+- THEN 标题统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`intersection-unified-experience`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 圈子主页交集重做 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“圈子主页交集重做”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

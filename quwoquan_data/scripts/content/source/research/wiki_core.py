@@ -7,7 +7,7 @@ from typing import Any
 
 from core.runtime_policy import active_runtime_policy
 from content.source.research import network_io
-from content.source.research.homepage_text_quality import _homepage_text_quality_issue
+from content.source.research.homepage_text_quality import assess_homepage_text_quality
 from content.source.research.text_match import (
     _dedupe_terms,
     _entity_name_variants,
@@ -40,11 +40,11 @@ def _wiki_title(host: str, entity_id: str) -> str:
             if not isinstance(page, dict):
                 continue
             extract_text = str(page.get("extract") or "").strip()
-            if extract_text and not _homepage_text_quality_issue(
+            if extract_text and assess_homepage_text_quality(
                 extract_text,
                 entity_id,
                 require_fact_ready=False,
-            ):
+            ).accepted:
                 return str(page.get("title") or title)
         return ""
 

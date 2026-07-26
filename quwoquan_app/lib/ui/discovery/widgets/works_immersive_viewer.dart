@@ -25,6 +25,8 @@ import 'package:quwoquan_app/application/content/media/video_preview_track_query
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
+    show contentPostDeleteIdempotencyKey;
 import 'package:quwoquan_app/components/media/image/book/image_book_canvas.dart';
 import 'package:quwoquan_app/components/media/shared/gesture/immersive_gesture_intent_controller.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';

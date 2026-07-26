@@ -16,6 +16,17 @@ from quwoquan_ops.cli.lib import local_target_tls
 
 
 class LocalTargetTlsContractTest(unittest.TestCase):
+    def _valid_test_certificate(self) -> bytes:
+        return (
+            ROOT
+            / "quwoquan_app"
+            / "android"
+            / "app"
+            / "src"
+            / "debug-res-templates"
+            / "local_env_debug_root_placeholder.crt"
+        ).read_bytes()
+
     def test_aliases_resolve_to_one_local_target_set(self) -> None:
         self.assertEqual(
             local_target_tls.normalize_local_tls_target("local-gamma"),
@@ -62,7 +73,7 @@ class LocalTargetTlsContractTest(unittest.TestCase):
                 return_value=cert_dir,
             ):
                 result = local_target_tls.install_ios_simulator_root_ca(
-                    "alpha-local",
+                    "prod-sim",
                     "SIMULATOR-UDID",
                     xcrun_path="/usr/bin/xcrun",
                     command_runner=runner,
@@ -82,11 +93,97 @@ class LocalTargetTlsContractTest(unittest.TestCase):
         )
         self.assertNotIn("booted", recorded[0])
 
-    def test_ios_install_fails_closed_on_simctl_error(self) -> None:
+    def test_local_app_trust_bundle_contains_gateway_and_object_storage_roots(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            cert_dir = Path(temporary_dir) / "certificates"
+            object_storage_dir = cert_dir / "object-storage"
+            object_storage_dir.mkdir(parents=True)
+            certificate = self._valid_test_certificate()
+            gateway_root = cert_dir / "root.crt"
+            object_storage_root = object_storage_dir / "ca.crt"
+            gateway_root.write_bytes(certificate)
+            object_storage_root.write_bytes(certificate)
+            with mock.patch.object(
+                local_target_tls,
+                "certificate_export_dir",
+                return_value=cert_dir,
+            ):
+                first = local_target_tls.materialize_local_target_trust_bundle(
+                    "beta-local",
+                )
+                first_mtime_ns = first.stat().st_mtime_ns
+                second = local_target_tls.materialize_local_target_trust_bundle(
+                    "beta-local",
+                )
+                second_mtime_ns = second.stat().st_mtime_ns
+                bundle_bytes = second.read_bytes()
+
+        self.assertEqual(first, second)
+        self.assertEqual(first_mtime_ns, second_mtime_ns)
+        self.assertEqual(bundle_bytes.count(b"-----BEGIN CERTIFICATE-----"), 2)
+
+    def test_ios_install_adds_every_local_data_plane_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            cert_dir = Path(temporary_dir) / "certificates"
+            object_storage_dir = cert_dir / "object-storage"
+            object_storage_dir.mkdir(parents=True)
+            gateway_root = cert_dir / "root.crt"
+            object_storage_root = object_storage_dir / "ca.crt"
+            gateway_root.write_text("gateway", encoding="utf-8")
+            object_storage_root.write_text("object-storage", encoding="utf-8")
+            recorded: list[list[str]] = []
+
+            def runner(argv: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+                recorded.append(argv)
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            with mock.patch.object(
+                local_target_tls,
+                "certificate_export_dir",
+                return_value=cert_dir,
+            ):
+                result = local_target_tls.install_ios_simulator_root_ca(
+                    "beta-local",
+                    "SIMULATOR-UDID",
+                    xcrun_path="/usr/bin/xcrun",
+                    command_runner=runner,
+                )
+
+        self.assertEqual(
+            result["certPaths"],
+            [str(gateway_root), str(object_storage_root)],
+        )
+        self.assertEqual([command[-1] for command in recorded], result["certPaths"])
+
+    def test_media_target_fails_closed_without_object_storage_ca(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             cert_dir = Path(temporary_dir) / "certificates"
             cert_dir.mkdir()
+            (cert_dir / "root.crt").write_text("gateway", encoding="utf-8")
+            with (
+                mock.patch.object(
+                    local_target_tls,
+                    "certificate_export_dir",
+                    return_value=cert_dir,
+                ),
+                self.assertRaisesRegex(
+                    local_target_tls.LocalTargetTlsError,
+                    "local object-storage CA missing",
+                ),
+            ):
+                local_target_tls.resolve_local_target_trust_roots("gamma-local")
+
+    def test_ios_install_fails_closed_on_simctl_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            cert_dir = Path(temporary_dir) / "certificates"
+            (cert_dir / "object-storage").mkdir(parents=True)
             (cert_dir / "root.crt").write_text("certificate", encoding="utf-8")
+            (cert_dir / "object-storage" / "ca.crt").write_text(
+                "object-storage",
+                encoding="utf-8",
+            )
             with (
                 mock.patch.object(
                     local_target_tls,

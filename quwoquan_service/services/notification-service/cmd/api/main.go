@@ -21,18 +21,23 @@ import (
 	runtimeconfig "quwoquan_service/runtime/config"
 	rterr "quwoquan_service/runtime/errors"
 	rthttp "quwoquan_service/runtime/http"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
-	httpadapter "quwoquan_service/services/notification-service/internal/adapters/http"
-	streamadapter "quwoquan_service/services/notification-service/internal/adapters/stream"
-	"quwoquan_service/services/notification-service/internal/application"
-	integrationclient "quwoquan_service/services/notification-service/internal/infrastructure/integration"
-	"quwoquan_service/services/notification-service/internal/infrastructure/persistence"
-	realtimeclient "quwoquan_service/services/notification-service/internal/infrastructure/realtime"
-	userclient "quwoquan_service/services/notification-service/internal/infrastructure/user"
+	httpadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/http"
+	streamadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/stream"
+	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
+	accountsecurity "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/accountsecurity"
+	integrationclient "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/integration"
+	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/persistence"
+	realtimeclient "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/realtime"
+	userclient "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/user"
+	deliveryhttp "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/adapters/inbound/http"
+	deliveryapplication "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
+	deliverypersistence "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/infrastructure/persistence"
 )
 
 func main() {
@@ -42,6 +47,19 @@ func main() {
 }
 
 func run() error {
+	serviceName := getenvOrDefault("SERVICE_NAME", "notification-service")
+	appEnv := getenvOrDefault("APP_ENV", "alpha")
+	runtimeConfig, err := loadNotificationRuntimeConfig(
+		serviceName,
+		appEnv,
+		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
+	)
+	if err != nil {
+		return fmt.Errorf("runtime config invalid: %w", err)
+	}
+	if err := applyNotificationRuntimeConfig(runtimeConfig); err != nil {
+		return fmt.Errorf("runtime config environment adapter failed: %w", err)
+	}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
@@ -51,6 +69,16 @@ func run() error {
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
 		return fmt.Errorf("access token verifier invalid: %w", err)
+	}
+	accountSecurityAuthority, err := accountsecurity.NewAuthority(
+		accessTokenConfig,
+		accountsecurity.Config{
+			BaseURL:   runtimeConfig.AccountSecurityAuthority.BaseURL,
+			TimeoutMS: runtimeConfig.AccountSecurityAuthority.TimeoutMS,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("account security authority config invalid: %w", err)
 	}
 	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
@@ -298,7 +326,7 @@ func run() error {
 			log.Printf("notification-service MongoDB disconnect failed: %v", err)
 		}
 	}()
-	store := persistence.NewMongoNotificationDeliveryJobStore(mongoClient.Database(mongoDatabase))
+	store := deliverypersistence.NewMongoNotificationDeliveryJobStore(mongoClient.Database(mongoDatabase))
 	appMessageStore := persistence.NewMongoAppMessageStore(mongoClient.Database(mongoDatabase))
 	accountClosureProjection, err := persistence.NewMongoUserAccountClosedProjection(
 		mongoClient.Database(mongoDatabase),
@@ -481,23 +509,25 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("app message query facade init failed: %w", err)
 	}
-	deliveryQueries, err := application.NewNotificationDeliveryJobQueryFacade(store, store)
+	deliveryQueries, err := deliveryapplication.NewNotificationDeliveryJobQueryFacade(store, store)
 	if err != nil {
 		return fmt.Errorf("notification delivery query facade init failed: %w", err)
 	}
-	deliveryCommands, err := application.NewNotificationDeliveryJobCommandFacade(store)
+	deliveryCommands, err := deliveryapplication.NewNotificationDeliveryJobCommandFacade(store)
 	if err != nil {
 		return fmt.Errorf("notification delivery command facade init failed: %w", err)
 	}
 	handler, err := httpadapter.NewHandler(httpadapter.HandlerDependencies{
 		AppMessageCommands: appMessageCommands,
 		AppMessageQueries:  appMessageQueries,
-		DeliveryCommands:   deliveryCommands,
-		DeliveryQueries:    deliveryQueries,
 		IncomingCalls:      incomingCoordinator,
 	})
 	if err != nil {
 		return fmt.Errorf("notification http handler init failed: %w", err)
+	}
+	deliveryHandler, err := deliveryhttp.NewHandler(deliveryCommands, deliveryQueries)
+	if err != nil {
+		return fmt.Errorf("notification delivery http handler init failed: %w", err)
 	}
 	workerDone := make(chan struct{})
 	go func() {
@@ -531,6 +561,10 @@ func run() error {
 			writeNotificationReadinessError(w, r, "general redis unavailable")
 			return
 		}
+		if err := accountSecurityAuthority.CheckAccountSecurityAuthority(readyCtx); err != nil {
+			writeNotificationReadinessError(w, r, "account security authority unavailable")
+			return
+		}
 		if err := interactionConsumer.Healthy(10 * time.Second); err != nil {
 			writeNotificationReadinessError(w, r, "interaction consumer unavailable")
 			return
@@ -552,11 +586,25 @@ func run() error {
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	})
 	rootMux.Handle("/metrics", rtmetrics.Handler())
+	serviceMux := http.NewServeMux()
+	handler.RegisterRoutes(serviceMux)
+	deliveryHandler.RegisterRoutes(serviceMux)
+	serviceHandler, err := runtimemessaging.WithDeadLetterRecoveryRoute(
+		serviceMux,
+		runtimemessaging.DeadLetterRecoveryRouteConfig{
+			Path:     "/internal/notification/account-closure/dead-letters:recover",
+			Module:   rterr.ModuleNotification,
+			Releaser: accountClosureConsumer,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("account-closure recovery route: %w", err)
+	}
 	rootMux.Handle(
 		"/",
 		rtauth.RequireGeneratedOperationAuthorization(
 			operationsecurity.ForDomain("notification"),
-		)(handler.Routes()),
+		)(serviceHandler),
 	)
 	withObservability := rthttp.NewHTTPServerMiddleware(
 		rootMux,
@@ -577,8 +625,9 @@ func run() error {
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
-			AccessTokenVerifier:  accessVerifier,
-			DeviceTicketVerifier: deviceVerifier,
+			AccessTokenVerifier:      accessVerifier,
+			DeviceTicketVerifier:     deviceVerifier,
+			AccountSecurityAuthority: accountSecurityAuthority,
 		})(withObservability),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,

@@ -1,0 +1,117 @@
+kind: projection
+description: '个人主页互动活动只读投影。每条 ContentReaction、Comment 与 OutboundShareFact
+
+  durable outbox 事实分别物化 received/sent 行；查询只读取本投影，不在请求期扫描、
+
+  关联或合成源对象。
+
+  '
+identity:
+  fields:
+  - ownerPersonaId
+  - direction
+  - activityId
+  version_source: checkpoint
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: ownerPersona
+  on_delete: retain
+  reference_fields:
+  - ownerPersonaId
+  target_object: user.Persona
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: actorPersona
+  on_delete: retain
+  reference_fields:
+  - actorSubAccountId
+  target_object: user.Persona
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: counterpartPersona
+  on_delete: retain
+  reference_fields:
+  - counterpartSubAccountId
+  target_object: user.Persona
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: displayPersona
+  on_delete: retain
+  reference_fields:
+  - displaySubAccountId
+  target_object: user.Persona
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: targetPersona
+  on_delete: retain
+  reference_fields:
+  - targetSubAccountId
+  target_object: user.Persona
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: targetContent
+  on_delete: tombstone
+  reference_fields:
+  - targetContentId
+  target_object: content.Post
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: previewObject
+  on_delete: tombstone
+  reference_fields:
+  - previewObjectId
+  target_objects:
+  - content.Post
+  - content.Comment
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: comment
+  on_delete: tombstone
+  reference_fields:
+  - commentId
+  target_object: content.Comment
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: parentComment
+  on_delete: tombstone
+  reference_fields:
+  - parentCommentId
+  target_object: content.Comment
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: outboundShare
+  on_delete: retain
+  reference_fields:
+  - outboundShareEventId
+  target_object: content.OutboundShareFact
+local_identity_reasons:
+  displayUserRouteId: generated route, surface, or operation registry key used only for navigation or
+    telemetry attribution
+  previewRouteId: generated route, surface, or operation registry key used only for navigation or telemetry
+    attribution
+  sourceEventId: immutable source outbox identity used only for projector dedupe and replay traceability

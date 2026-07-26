@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/core/platform/push_endpoint_gateway.dart';
 
-/// `user/device_registration` 对象级写端口。
+/// `user/account/device_registration` 对象级写端口。
 ///
 /// Remote adapter 只调用 generated operation client；本接口不接收 path / operationId。
 abstract interface class DevicePushEndpointWriter {

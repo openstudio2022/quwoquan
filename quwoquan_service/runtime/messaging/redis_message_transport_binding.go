@@ -669,11 +669,11 @@ func RequireRedisMessageTransport(
 			rootID,
 		)
 	}
-	if binding.AdapterID != RedisMessageTransportAdapter {
+	if binding.AdapterID != RedisMessageTransportAdapter &&
+		binding.AdapterID != RedisMessageTransportFixture {
 		return ResolvedMessageTransport{}, fmt.Errorf(
-			"message transport root %s requires adapter %s, got %s",
+			"message transport root %s has an unregistered Redis adapter %s",
 			rootID,
-			RedisMessageTransportAdapter,
 			binding.AdapterID,
 		)
 	}
@@ -735,8 +735,9 @@ func RequireRedisMessageTransport(
 }
 
 // RequireConfiguredRedisMessageTransport is the shared composition helper for
-// generated descriptor bindings. Alpha may use the registered offline fixture;
-// every other environment requires a real standalone or cluster Redis scene.
+// generated descriptor bindings. It validates the selected binding before any
+// publisher or consumer is constructed; only an Alpha descriptor may select the
+// isolated local fixture.
 func RequireConfiguredRedisMessageTransport(
 	ctx context.Context,
 	environment string,
@@ -753,19 +754,27 @@ func RequireConfiguredRedisMessageTransport(
 			environment,
 		)
 	}
-	alphaFixture := strings.TrimSpace(environment) == "alpha" &&
-		binding.State == "enabled" &&
-		binding.AdapterID == RedisMessageTransportFixture
-	if alphaFixture {
-		// The isolated Alpha fixture shares the transport contract but does not
-		// represent a remote provider selection.
-		binding.AdapterID = RedisMessageTransportAdapter
+	environment = strings.TrimSpace(environment)
+	switch environment {
+	case "alpha", "beta", "gamma", "prod":
+	default:
+		return ResolvedMessageTransport{}, fmt.Errorf(
+			"message transport has unknown environment=%s",
+			environment,
+		)
+	}
+	fixture := binding.AdapterID == RedisMessageTransportFixture
+	if fixture && environment != "alpha" {
+		return ResolvedMessageTransport{}, fmt.Errorf(
+			"message transport root %s may select the Redis fixture only in alpha",
+			root.RootID,
+		)
 	}
 	transport, err := RequireRedisMessageTransport(ctx, binding, root, router)
 	if err != nil {
 		return ResolvedMessageTransport{}, err
 	}
-	if alphaFixture {
+	if fixture {
 		return transport, nil
 	}
 	for _, scene := range root.RequiredRedisScenes {

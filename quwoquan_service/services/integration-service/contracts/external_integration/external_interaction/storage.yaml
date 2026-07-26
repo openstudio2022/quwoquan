@@ -1,0 +1,32 @@
+backend: mongodb
+collections:
+  reliable_task_outbox:
+    entity: ExternalInteractionRequest
+    indexes:
+    - name: idx_ext_outbox_dedupe_status
+      keys:
+        dedupeKey: 1
+        status: 1
+    - name: idx_ext_outbox_start_status
+      keys:
+        startAt: 1
+        status: 1
+  reliable_async_task:
+    entity: ExternalInteractionRequest
+    indexes:
+    - name: idx_ext_task_dedupe_status
+      keys:
+        dedupeKey: 1
+        status: 1
+    - name: idx_ext_task_next_status
+      keys:
+        nextAttemptAt: 1
+        status: 1
+redis_cache:
+- key: ready:integration:external_interaction:{taskType}
+  ttl_seconds: 60
+  entity: ExternalInteractionRequest
+  invalidate_on:
+  - ExternalInteractionResultReported
+  - ExternalInteractionDeadLettered
+role: authoritative

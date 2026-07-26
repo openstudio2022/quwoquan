@@ -87,7 +87,7 @@
       "plane": "service",
       "slotOffset": 230
     },
-    "rec-model-service": {
+    "recommendation-service": {
       "plane": "service",
       "slotOffset": 240
     },
@@ -122,10 +122,6 @@
     "notification-service": {
       "plane": "service",
       "slotOffset": 320
-    },
-    "recommendation-service": {
-      "plane": "service",
-      "slotOffset": 330
     },
     "realtime-gateway": {
       "plane": "service",

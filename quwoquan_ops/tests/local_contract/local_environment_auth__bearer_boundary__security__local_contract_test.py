@@ -130,13 +130,13 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
                 headers={"Authorization": "Bearer attacker-controlled"},
             )
 
-    def test_operation_path_with_colon_preserves_base_host(self) -> None:
+    def test_operation_path_preserves_base_host(self) -> None:
         session = local_environment_auth.LocalAcceptanceSession(
             owner_id="data-release-operator",
             persona_id="data-release-operator",
             access_token="local-test-bearer",
         )
-        response = _Response(200, {"homepagesAfter": 3})
+        response = _Response(200, {"items": []})
         opener = mock.Mock()
         opener.open.return_value = response
         with mock.patch.object(
@@ -146,14 +146,14 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
         ):
             payload = local_environment_auth.request_local_environment_json(
                 "http://127.0.0.1:18290",
-                path="/homepages:reload",
+                path="/homepages/candidates",
                 session=session,
                 method="POST",
             )
 
         request_obj = opener.open.call_args.args[0]
-        self.assertEqual(payload, {"homepagesAfter": 3})
-        self.assertEqual(request_obj.full_url, "http://127.0.0.1:18290/homepages:reload")
+        self.assertEqual(payload, {"items": []})
+        self.assertEqual(request_obj.full_url, "http://127.0.0.1:18290/homepages/candidates")
 
     def test_beta_and_gamma_use_isolated_secret_roots_and_issuers(self) -> None:
         with mock.patch.object(

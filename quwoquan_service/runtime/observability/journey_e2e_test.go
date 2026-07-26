@@ -41,7 +41,7 @@ func TestContentConsumptionJourneyMetrics(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.Handle("/content/feed", feedHandler)
-	mux.Handle("/content/posts/post-1", detailHandler)
+	mux.Handle("/content/content/posts/post-1", detailHandler)
 	mux.Handle("/content/interactions/like", interactionHandler)
 	mux.Handle("/metrics", promhttp.Handler())
 
@@ -53,7 +53,7 @@ func TestContentConsumptionJourneyMetrics(t *testing.T) {
 		path   string
 	}{
 		{"GET", "/content/feed"},
-		{"GET", "/content/posts/post-1"},
+		{"GET", "/content/content/posts/post-1"},
 		{"POST", "/content/interactions/like"},
 	}
 
@@ -85,7 +85,7 @@ func TestContentConsumptionJourneyMetrics(t *testing.T) {
 
 	journeyEndpoints := []string{
 		"/content/feed",
-		"/content/posts/post-1",
+		"/content/content/posts/post-1",
 		"/content/interactions/like",
 	}
 	for _, ep := range journeyEndpoints {

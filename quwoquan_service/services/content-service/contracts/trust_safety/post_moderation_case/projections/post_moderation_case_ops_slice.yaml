@@ -1,0 +1,18 @@
+read_model: PostModerationCaseOpsSlice
+description: 运营人员按 Post 查看当前审核 Case 的只读详情。
+source_entities:
+- PostModerationCase
+consumers:
+- platform-ops
+fields:
+- id
+- version
+- postId
+- postVersion
+- contentDigest
+- status
+- reviewerId
+- decisionReason
+- createdAt
+- updatedAt
+- decidedAt

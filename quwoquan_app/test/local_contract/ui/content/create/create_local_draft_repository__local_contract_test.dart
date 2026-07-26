@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,12 +29,30 @@ CreateDraft _buildDraft({
       imagePaths.isEmpty ? CreateMediaKind.none : CreateMediaKind.images,
     CreateDraftFlowKind.video => CreateMediaKind.video,
   };
+  final articleDocument = flowKind == CreateDraftFlowKind.article
+      ? ArticleDocumentData(
+          nodes: <ArticleDocumentNode>[
+            if (title.trim().isNotEmpty)
+              ArticleDocumentNode(
+                id: 'title',
+                type: ArticleDocumentNodeType.documentTitle,
+                text: title,
+              ),
+            ArticleDocumentNode(
+              id: 'paragraph_0',
+              type: ArticleDocumentNodeType.paragraph,
+              text: body,
+            ),
+          ],
+        )
+      : baseState.articleDocument;
   final state = baseState.copyWith(
     draftId: id,
     mediaKind: mediaKind,
     imagePaths: imagePaths,
     title: title,
     body: body,
+    articleDocument: articleDocument,
     videoPath: videoPath,
     originalVideoPath: videoPath,
     videoThumbnail: videoThumbnail,

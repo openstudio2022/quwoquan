@@ -1,5 +1,5 @@
 /// alpha 设备运行时的 content 域薄实现：只回放 contract fixture bundle
-/// （ContractFixtureRuntimeLoader 的 immutable typed seed），不携带第二套
+/// （AlphaFixtureSeedReader 的 immutable typed seed），不携带第二套
 /// 静态业务数据；生产组合根为 Remote-only，本文件仅由 alpha runner 装配。
 library;
 
@@ -16,11 +16,11 @@ import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.da
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
-import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
 /// contract fixture bundle 的 content 聚合回放实现。
 final class AlphaContentRepository
@@ -34,7 +34,7 @@ final class AlphaContentRepository
   final Set<String> _deletedPostIds = <String>{};
 
   List<PostBaseDto> _seedPosts() {
-    final raw = ContractFixtureRuntimeLoader.contentSeedSet()?['posts'];
+    final raw = alphaFixtureSeedReader.contentSeedSet()?['posts'];
     if (raw is! List) {
       return const <PostBaseDto>[];
     }
@@ -52,7 +52,7 @@ final class AlphaContentRepository
     if (trimmed.isEmpty) {
       return null;
     }
-    final raw = ContractFixtureRuntimeLoader.contentSeedSet()?['posts'];
+    final raw = alphaFixtureSeedReader.contentSeedSet()?['posts'];
     if (raw is! List) {
       return null;
     }
@@ -75,8 +75,9 @@ final class AlphaContentRepository
   }
 
   /// home_feed_core seed（following/premium 池 id 与对象卡种子）。
-  Map<String, dynamic>? _homeFeedSeed() =>
-      ContractFixtureRuntimeLoader.contentSeedSet('home_feed_core');
+  Map<String, dynamic>? _homeFeedSeed() => alphaFixtureSeedReader
+      .contentSeedSet('home_feed_core')
+      ?.cast<String, dynamic>();
 
   List<String> _homeFeedIdList(String key) {
     final raw = _homeFeedSeed()?[key];
@@ -287,9 +288,14 @@ final class AlphaContentRepository
   }
 
   @override
-  Future<void> deletePost({required String postId}) async {
-    if (postId.trim().isEmpty) {
-      return;
+  Future<void> deletePost({
+    required String postId,
+    required String idempotencyKey,
+  }) async {
+    if (postId.trim().isEmpty || idempotencyKey.trim().isEmpty) {
+      throw ArgumentError(
+        'DeletePost requires postId and caller-owned idempotencyKey',
+      );
     }
     _deletedPostIds.add(postId);
   }
@@ -378,7 +384,7 @@ final class AlphaFootprintRepository implements FootprintRepository {
     String? cursor,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
   }) async {
-    final seed = ContractFixtureRuntimeLoader.contentSeedSet('footprint_core');
+    final seed = alphaFixtureSeedReader.contentSeedSet('footprint_core');
     final rawItems = seed?['items'];
     if (rawItems is! List) {
       return const CursorPage<FootprintEntry>(items: <FootprintEntry>[]);
@@ -415,7 +421,7 @@ final class AlphaFootprintRepository implements FootprintRepository {
   }
 
   static Map<String, Map<String, dynamic>> _discoveryPostsById() {
-    final seed = ContractFixtureRuntimeLoader.contentSeedSet();
+    final seed = alphaFixtureSeedReader.contentSeedSet();
     final rawPosts = seed?['posts'];
     final byId = <String, Map<String, dynamic>>{};
     if (rawPosts is List) {

@@ -50,7 +50,7 @@ Widget _wrap({
           ownerUserId: 'fixture_user_current',
           displayName: '转发测试分身',
           avatarUrl: '',
-          personaContextVersion: 'ctx_forward',
+          contextVersion: 1,
         ),
       ),
     ],

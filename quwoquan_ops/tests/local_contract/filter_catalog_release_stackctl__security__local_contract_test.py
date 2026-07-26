@@ -1,8 +1,11 @@
+# spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-004
+
 from __future__ import annotations
 
 import argparse
 import json
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -67,6 +70,54 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
             process_env["QWQ_FILTER_CATALOG_PUBLISH_TOKEN"],
             "gamma-local-service-bearer",
         )
+
+    def test_failed_local_publish_writes_private_redacted_diagnostic(self) -> None:
+        session = LocalAcceptanceSession(
+            owner_id="filter-catalog-beta-publisher",
+            persona_id="filter-catalog-beta-publisher",
+            access_token="beta-local-secret-bearer",
+        )
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="publish failed beta-local-secret-bearer\n",
+            stderr="CONTENT.USER.filter_catalog_invalid_transition\n",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            diagnostic_path = Path(temporary) / "stdout" / "filter-catalog.log"
+            with (
+                mock.patch.object(
+                    filter_catalog_release,
+                    "open_local_acceptance_session",
+                    return_value=session,
+                ),
+                mock.patch.object(
+                    filter_catalog_release.subprocess,
+                    "run",
+                    return_value=completed,
+                ),
+            ):
+                execution = filter_catalog_release.execute_filter_catalog_command(
+                    repo_root=ROOT,
+                    target_name="beta-local",
+                    environment="beta",
+                    api_base_url="https://beta-api.quwoquan-env.test:18000",
+                    action="stage-and-activate",
+                    rollback_release_id="",
+                    token_env="QWQ_FILTER_CATALOG_PUBLISH_TOKEN",
+                    prod_gray_activation=False,
+                    diagnostic_log_path=diagnostic_path,
+                )
+
+            self.assertEqual(execution.return_code, 1)
+            diagnostic = diagnostic_path.read_text(encoding="utf-8")
+            self.assertNotIn("beta-local-secret-bearer", diagnostic)
+            self.assertIn("***", diagnostic)
+            self.assertIn(
+                "CONTENT.USER.filter_catalog_invalid_transition",
+                diagnostic,
+            )
+            self.assertEqual(diagnostic_path.stat().st_mode & 0o777, 0o600)
 
     def test_prod_mutation_requires_pre_provisioned_service_token(self) -> None:
         with mock.patch.dict(filter_catalog_release.os.environ, {}, clear=True):

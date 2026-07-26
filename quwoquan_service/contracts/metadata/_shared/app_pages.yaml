@@ -47,6 +47,7 @@ pages:
   - { page_name: blocked_keywords, route_id: blockedKeywords, collect_page_access: true }
   - { page_name: my_reports, route_id: myReports, collect_page_access: true }
   - { page_name: settings_about, route_id: settingsAbout, collect_page_access: true }
+  - { page_name: interest_onboarding, route_id: interestOnboarding, collect_page_access: true }
   - { page_name: profile_edit, route_id: profileEdit, collect_page_access: true }
   - { page_name: profile_career_interests, route_id: profileCareerInterests, collect_page_access: true }
   - { page_name: profile_personas, route_id: profilePersonas, collect_page_access: true }

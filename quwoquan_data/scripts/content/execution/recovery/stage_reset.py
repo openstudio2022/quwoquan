@@ -4,6 +4,34 @@ from core.control_types import ExecutionStage, ExecutionStateStatus, ModalityCon
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueLane, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, Sequence, _planned_pixel_issue, data_issue, execution_root, execution_state_status, image_count_is_hard_quota, image_strategy_allows_ai_generated, image_strategy_requires_publishable_images, issue_messages, load_execution_state, minimum_publishable_images_per_target, read_json, save_execution_state, store
 
+
+def _requeue_dead_homepage_author_jobs(
+    execution_id: str,
+    *,
+    stage_name: str,
+    reason: str,
+) -> list[str]:
+    """Reopen only failed homepage author objects during an audited recovery."""
+    if stage_name not in {
+        ExecutionStage.BUILD_HOMEPAGE.value,
+        ExecutionStage.BUILD_VALIDATE.value,
+    }:
+        return []
+    from content.execution.queue.management import dead_jobs, requeue_refs
+
+    refs = [
+        str(row.get("ref") or "")
+        for row in dead_jobs(execution_id)
+        if str(row.get("stage") or "") == "author"
+        and str(row.get("ref") or "").startswith("/entity/")
+    ]
+    return requeue_refs(
+        execution_id,
+        refs,
+        "author",
+        reason=f"retry-stage->{stage_name}: {reason}",
+    ) if refs else []
+
 def reset_stage_retries(
     execution_id: str,
     *,
@@ -61,6 +89,11 @@ def reset_stage_retries(
     state.react_rewinds = react_rewinds
     rewound_completed = _rewind_to(completed_before, stage_name)
     state.completed = [name for name in STAGE_NAMES if name in rewound_completed]
+    requeued_homepage_refs = _requeue_dead_homepage_author_jobs(
+        execution_id,
+        stage_name=stage_name,
+        reason=str(reason or "operator requested retry"),
+    )
     invalidated_content_refs: list[str] = []
     if stage_name in {"download_plan", "download_fetch", "build_prepare", "build_homepage", "build_validate", "content_plan", "post_plan", "post_compose"}:
         try:
@@ -108,6 +141,7 @@ def reset_stage_retries(
             "reason": str(reason or "operator requested retry"),
             "previous": previous,
             "invalidatedContentRefs": sorted(invalidated_content_refs),
+            "requeuedHomepageRefs": sorted(requeued_homepage_refs),
             "resetReactRewinds": sorted(reset_react_keys),
             "recoveredAt": recovered_at,
         }
@@ -118,6 +152,7 @@ def reset_stage_retries(
         "stage": stage_name,
         "previous": previous,
         "invalidatedContentRefs": sorted(invalidated_content_refs),
+        "requeuedHomepageRefs": sorted(requeued_homepage_refs),
         "resetReactRewinds": sorted(reset_react_keys),
         "retryCounts": state.retry_counts or {},
         "infrastructureRetryCounts": state.infrastructure_retry_counts or {},

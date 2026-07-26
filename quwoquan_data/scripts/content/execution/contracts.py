@@ -14,7 +14,7 @@ class ExecutionRuntimeState:
 
     schema: str
     execution_id: str
-    target_set_sha256: str
+    target_set_digest: str
     command_chain: tuple[str, ...]
     created_at: str
     updated_at: str
@@ -25,7 +25,7 @@ class ExecutionRuntimeState:
         required = {
             "schema",
             "executionId",
-            "targetSetSha256",
+            "targetSetDigest",
             "commandChain",
             "createdAt",
             "updatedAt",
@@ -51,7 +51,7 @@ class ExecutionRuntimeState:
         return cls(
             schema=strings["schema"],
             execution_id=strings["executionId"],
-            target_set_sha256=strings["targetSetSha256"],
+            target_set_digest=strings["targetSetDigest"],
             command_chain=tuple(command_chain),
             created_at=strings["createdAt"],
             updated_at=strings["updatedAt"],
@@ -62,7 +62,7 @@ class ExecutionRuntimeState:
         return {
             "schema": self.schema,
             "executionId": self.execution_id,
-            "targetSetSha256": self.target_set_sha256,
+            "targetSetDigest": self.target_set_digest,
             "commandChain": list(self.command_chain),
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,

@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/rtc/call_session/incoming_call_presentation_acknowledger.dart';
@@ -226,7 +227,6 @@ class IncomingCallCoordinator {
       _reportAsyncFailure(
         error,
         stack,
-        context: 'while syncing incoming-call push endpoints',
         operationId:
             AppCloudOperationIds.userDeviceRegistrationUpsertDevicePushEndpoint,
       );
@@ -240,7 +240,6 @@ class IncomingCallCoordinator {
       _reportAsyncFailure(
         error,
         stack,
-        context: 'while removing incoming-call push endpoints',
         operationId:
             AppCloudOperationIds.userDeviceRegistrationRemoveDevicePushEndpoint,
       );
@@ -340,7 +339,6 @@ class IncomingCallCoordinator {
       _reportAsyncFailure(
         error,
         stack,
-        context: 'while validating incoming-call presentation state',
         operationId: AppCloudOperationIds.rtcCallSessionGetCall,
       );
       return true;
@@ -366,7 +364,6 @@ class IncomingCallCoordinator {
       _reportAsyncFailure(
         error,
         stack,
-        context: 'while acknowledging incoming-call presentation',
         operationId: AppCloudOperationIds
             .notificationNotificationDeliveryJobAckIncomingCallPresentation,
       );
@@ -449,7 +446,6 @@ class IncomingCallCoordinator {
   void _reportAsyncFailure(
     Object error,
     StackTrace stackTrace, {
-    required String context,
     required String operationId,
   }) {
     const surface = AppUiSurfaces.rtcIncoming;
@@ -459,7 +455,7 @@ class IncomingCallCoordinator {
         error: error,
         stackTrace: stackTrace,
         pageId: surface.id,
-        pageName: context,
+        pageName: PageNames.rtcIncoming,
         surfaceId: surface.id,
         routeId: surface.routeId,
         operationId: operationId,

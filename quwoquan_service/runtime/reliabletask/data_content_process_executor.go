@@ -8,10 +8,13 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 )
 
 const defaultDataContentProcessOutputBytes int64 = 1024 * 1024
 const maxDataContentWorkerDiagnosticBytes = 4 * 1024
+const dataContentProcessTerminationGrace = 5 * time.Second
 
 // DataContentProcessExecutor is the process boundary between the Go
 // Mongo+Redis fleet and the Python qwq-data object worker. The command is
@@ -54,6 +57,12 @@ func (e DataContentProcessExecutor) ExecuteDataContentObject(
 		)
 	}
 	command := exec.CommandContext(ctx, e.Command[0], e.Command[1:]...)
+	// The Python worker receives SIGTERM, clears its isolated Cursor child, and
+	// then exits. CommandContext's default SIGKILL bypasses that cleanup.
+	command.Cancel = func() error {
+		return command.Process.Signal(syscall.SIGTERM)
+	}
+	command.WaitDelay = dataContentProcessTerminationGrace
 	command.Dir = strings.TrimSpace(e.WorkDir)
 	if e.Environment != nil {
 		command.Env = append([]string(nil), e.Environment...)

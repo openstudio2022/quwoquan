@@ -100,7 +100,7 @@ class GreetingRequestDto {
 
 /// 打招呼 Repository（三层模式）
 ///
-/// 对应云侧路由（contracts/metadata/user/greeting_request/service.yaml）：
+/// 对应云侧路由（quwoquan_service/services/user-service/contracts/relationship/greeting_request/operations.yaml）：
 ///   POST   /user/greeting-request
 ///   GET    /user/greeting-request/inbox
 ///   GET    /user/greeting-request/outbox

@@ -1,20 +1,38 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-002
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
+import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger.dart';
+import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger_provider.dart';
+import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
+import 'package:quwoquan_app/components/comment_system/comment_draft_store.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/assistant_chat_store.dart';
+import 'package:quwoquan_app/core/services/search_recent_history_store.dart';
+import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
+import 'package:quwoquan_app/ui/content/entry/services/post_publication_intent_local_storage.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_account_security_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_calls_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_notifications_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_privacy_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_identity.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
+  });
+
   Widget host(Widget page) {
     final settings = AlphaUserSettingsFacet();
     final credentials = AlphaCredentialBindingWriter();
@@ -30,6 +48,140 @@ void main() {
       child: CupertinoApp(home: page),
     );
   }
+
+  test('终态本地清理单面失败时仍启动其余隐私清理面', () async {
+    final calls = <String>[];
+    final purger = AccountClosureLocalDataPurger(
+      clearBehaviorQueue: () {
+        calls.add('behavior');
+        throw StateError('queue cleanup failed');
+      },
+      clearTelemetryQueue: () async {
+        calls.add('telemetry');
+      },
+      clearRebuildableUserData: () async {
+        calls.add('cache');
+      },
+      purgePushAndIncomingCallState: () async {
+        calls.add('push');
+      },
+      clearDraftsAndAccountPreferences: () async {
+        calls.add('drafts');
+      },
+    );
+
+    await expectLater(purger.purge(), throwsStateError);
+    expect(
+      calls,
+      containsAll(<String>['behavior', 'telemetry', 'cache', 'push', 'drafts']),
+    );
+  });
+
+  test('终态清理删除当前 actor 草稿与偏好但不误删其他 actor 草稿', () async {
+    const actorA = 'user-terminal-a';
+    const actorB = 'user-surviving-b';
+    final preferences = await SharedPreferences.getInstance();
+    final scopeA = CreateDraftLocalStorage.scopeKeyForUser(actorA);
+    final scopeB = CreateDraftLocalStorage.scopeKeyForUser(actorB);
+    await preferences.setString(
+      CreateDraftLocalStorage.scopedIndexKey(scopeA),
+      '[]',
+    );
+    await preferences.setString(
+      CreateDraftLocalStorage.scopedIndexKey(scopeB),
+      '[]',
+    );
+    await preferences.setString(
+      CreateDraftLocalStorage.corruptSidelineKey(
+        CreateDraftLocalStorage.scopedIndexKey(scopeA),
+      ),
+      'corrupt-a',
+    );
+    await preferences.setString(
+      PostPublicationIntentLocalStorage.scopeKey(actorA),
+      '[]',
+    );
+    await preferences.setString(
+      PostPublicationIntentLocalStorage.scopeKey(actorB),
+      '[]',
+    );
+    await CommentDraftStore.save(
+      'post-a',
+      actorScope: actorA,
+      draft: const CommentDraft(content: '账号 A 未发评论'),
+    );
+    await CommentDraftStore.save(
+      'post-b',
+      actorScope: actorB,
+      draft: const CommentDraft(content: '账号 B 未发评论'),
+    );
+    await AssistantConsentStore(
+      actorScope: actorA,
+    ).save(const <AssistantSkillConsent>[]);
+    await AssistantConsentStore(
+      actorScope: actorB,
+    ).save(const <AssistantSkillConsent>[]);
+    final emoji = EmojiRepository(preferences);
+    await emoji.setLastReportDate('2026-07-24');
+    AssistantChatStore.addUserMessage('账号 A 本地消息');
+
+    final purger = AccountClosureLocalDataPurger(
+      clearBehaviorQueue: () async {},
+      clearTelemetryQueue: () async {},
+      clearRebuildableUserData: () async {},
+      purgePushAndIncomingCallState: () async {},
+      clearDraftsAndAccountPreferences: () async {
+        AssistantChatStore.clearForTerminalAccountClosure();
+        await Future.wait<void>(<Future<void>>[
+          CreateDraftLocalStorage.clearForTerminalAccountClosure(actorA),
+          PostPublicationIntentLocalStorage.clearForTerminalAccountClosure(
+            actorA,
+          ),
+          CommentDraftStore.clearForTerminalAccountClosure(actorA),
+          AssistantConsentStore(
+            actorScope: actorA,
+          ).clearForTerminalAccountClosure(),
+          emoji.clearForTerminalAccountClosure(),
+        ]);
+      },
+    );
+
+    await purger.purge();
+
+    expect(
+      preferences.containsKey(CreateDraftLocalStorage.scopedIndexKey(scopeA)),
+      isFalse,
+    );
+    expect(
+      preferences.containsKey(CreateDraftLocalStorage.scopedIndexKey(scopeB)),
+      isTrue,
+    );
+    expect(
+      preferences.containsKey(
+        PostPublicationIntentLocalStorage.scopeKey(actorA),
+      ),
+      isFalse,
+    );
+    expect(
+      preferences.containsKey(
+        PostPublicationIntentLocalStorage.scopeKey(actorB),
+      ),
+      isTrue,
+    );
+    expect(await CommentDraftStore.load('post-a', actorScope: actorA), isNull);
+    expect(
+      (await CommentDraftStore.load('post-b', actorScope: actorB))?.content,
+      '账号 B 未发评论',
+    );
+    expect(
+      preferences.getKeys().where(
+        (key) => key.startsWith('assistant_skill_consents:'),
+      ),
+      hasLength(1),
+    );
+    expect(AssistantChatStore.messages.value, isEmpty);
+    expect(emoji.getLastReportDate(), isNull);
+  });
 
   testWidgets('通知设置加载 typed 投影并可切换', (tester) async {
     await tester.pumpWidget(host(const SettingsNotificationsPage()));
@@ -145,6 +297,13 @@ void main() {
     expect(lifecycle.closeCalls, 1);
     expect(find.byType(SettingsAccountSecurityPage), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+    expect(find.text(UITextConstants.submitNotCompleted), findsOneWidget);
+    expect(find.text(UITextConstants.operationFailedRetry), findsOneWidget);
+
+    await tester.tap(find.text(UITextConstants.cancel));
+    await tester.pumpAndSettle();
+    expect(find.byType(CupertinoAlertDialog), findsNothing);
 
     await tester.tap(closeEntry);
     await tester.pumpAndSettle();
@@ -152,12 +311,14 @@ void main() {
       find.text(UITextConstants.settingsCloseAccountConfirmTitle),
       findsOneWidget,
     );
-    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('注销成功只提交一次命令、清除本地会话并回到首页游客态', (tester) async {
     final lifecycle = _RecordingAccountLifecycleWriter();
     final sessionStore = _TestAuthSessionStore();
+    final purgeProbe = _ClosurePurgeProbe();
+    final cleanupReceiptStore = _MemoryTerminalCleanupReceiptStore();
+    await _seedRecentSearchCacheResidue();
     final container = ProviderContainer(
       overrides: [
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
@@ -166,6 +327,12 @@ void main() {
           AlphaCredentialBindingWriter(),
         ),
         accountLifecycleCommandWriterProvider.overrideWithValue(lifecycle),
+        accountClosureLocalDataPurgerProvider.overrideWithValue(
+          purgeProbe.purger,
+        ),
+        terminalAccountCleanupReceiptStoreProvider.overrideWithValue(
+          cleanupReceiptStore,
+        ),
       ],
     );
     final router = _accountSecurityRouter();
@@ -191,6 +358,11 @@ void main() {
     expect(lifecycle.closeCalls, 1);
     expect(sessionStore.clearCalls, 1);
     expect(sessionStore.lastManualLogout, isTrue);
+    expect(purgeProbe.operationCalls, 5);
+    expect(cleanupReceiptStore.saveCalls, 1);
+    expect(cleanupReceiptStore.clearCalls, 1);
+    expect(await cleanupReceiptStore.read(), isNull);
+    expect(await _recentSearchResidualKeys(), isEmpty);
     expect(
       container.read(authSessionControllerProvider).status,
       AuthSessionStatus.guest,
@@ -203,6 +375,9 @@ void main() {
   testWidgets('云端已注销而本地存储清理失败时仍 fail-closed 到游客安全态', (tester) async {
     final lifecycle = _RecordingAccountLifecycleWriter();
     final sessionStore = _TestAuthSessionStore(failClear: true);
+    final purgeProbe = _ClosurePurgeProbe();
+    final cleanupReceiptStore = _MemoryTerminalCleanupReceiptStore();
+    await _seedRecentSearchCacheResidue();
     final container = ProviderContainer(
       overrides: [
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
@@ -211,6 +386,12 @@ void main() {
           AlphaCredentialBindingWriter(),
         ),
         accountLifecycleCommandWriterProvider.overrideWithValue(lifecycle),
+        accountClosureLocalDataPurgerProvider.overrideWithValue(
+          purgeProbe.purger,
+        ),
+        terminalAccountCleanupReceiptStoreProvider.overrideWithValue(
+          cleanupReceiptStore,
+        ),
       ],
     );
     final router = _accountSecurityRouter();
@@ -235,6 +416,10 @@ void main() {
 
     expect(lifecycle.closeCalls, 1);
     expect(sessionStore.clearCalls, 1);
+    expect(purgeProbe.operationCalls, 5);
+    expect(cleanupReceiptStore.saveCalls, 1);
+    expect(cleanupReceiptStore.clearCalls, 1);
+    expect(await _recentSearchResidualKeys(), isEmpty);
     final session = container.read(authSessionControllerProvider);
     expect(session.status, AuthSessionStatus.guest);
     expect(session.accessToken, isEmpty);
@@ -242,6 +427,69 @@ void main() {
     expect(router.routeInformationProvider.value.uri.path, AppRoutePaths.home);
     await tester.pump(const Duration(seconds: 4));
   });
+}
+
+final class _ClosurePurgeProbe {
+  _ClosurePurgeProbe() {
+    purger = AccountClosureLocalDataPurger(
+      clearBehaviorQueue: _record,
+      clearTelemetryQueue: _record,
+      clearRebuildableUserData: () async {
+        operationCalls += 1;
+        await SearchRecentHistoryStore.clearAllNamespaces();
+      },
+      purgePushAndIncomingCallState: _record,
+      clearDraftsAndAccountPreferences: _record,
+    );
+  }
+
+  late final AccountClosureLocalDataPurger purger;
+  int operationCalls = 0;
+
+  Future<void> _record() async {
+    operationCalls += 1;
+  }
+}
+
+final class _MemoryTerminalCleanupReceiptStore
+    implements TerminalAccountCleanupReceiptStore {
+  TerminalAccountCleanupReceipt? receipt;
+  int saveCalls = 0;
+  int clearCalls = 0;
+
+  @override
+  Future<TerminalAccountCleanupReceipt?> read() async => receipt;
+
+  @override
+  Future<void> save(TerminalAccountCleanupReceipt receipt) async {
+    saveCalls += 1;
+    this.receipt = receipt;
+  }
+
+  @override
+  Future<void> clear() async {
+    clearCalls += 1;
+    receipt = null;
+  }
+}
+
+Future<void> _seedRecentSearchCacheResidue() async {
+  await SearchRecentHistoryStore(
+    actorNamespace: 'owner-a::persona-a',
+  ).save(const SearchRecentHistoryCacheSnapshot());
+  await SearchRecentHistoryStore(
+    actorNamespace: 'owner-b::persona-b',
+  ).save(const SearchRecentHistoryCacheSnapshot());
+  final preferences = await SharedPreferences.getInstance();
+  await preferences.setString('global_search_recent_entries_v1', 'legacy');
+}
+
+Future<Set<String>> _recentSearchResidualKeys() async {
+  final preferences = await SharedPreferences.getInstance();
+  return preferences.getKeys().where((key) {
+    return key == 'global_search_recent_entries_v1' ||
+        key.startsWith(SearchRecentHistoryStore.storageKeyPrefix);
+  }).toSet();
 }
 
 Finder _closeAccountConfirmAction() => find.descendant(

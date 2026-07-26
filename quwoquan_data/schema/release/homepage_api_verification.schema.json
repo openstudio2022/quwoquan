@@ -19,6 +19,7 @@
   "properties": {
     "environment": {
       "enum": [
+        "alpha",
         "beta",
         "gamma",
         "prod"
@@ -34,7 +35,7 @@
     },
     "sourceCasesRef": {
       "type": "string",
-      "pattern": "^env/(beta|gamma|prod)/runs/data-release/"
+      "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"
     },
     "apiBaseUrl": {
       "type": "string",

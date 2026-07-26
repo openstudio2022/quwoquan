@@ -1,61 +1,43 @@
-# Design: runtime-recommendation
+# L2 Design：运行时推荐 (`runtime-recommendation`)
 
-## 定位
+> 对应规格：[L2 spec](./spec.md)
 
-`runtime-recommendation` 是推荐运行时基础能力，不直接拥有首页 feed 业务 IA。业务编排归属 `discovery-content/feed-orchestration-recommendation`；本能力提供可复用的 HotPath、Engine、Scorer、Rerank、缓存、降级和可观测组件。
+> 设计触发原因：“推荐运行时基础能力验收，覆盖 HotPath、SessionCache、Engine、Scorer、Rerank、降级与可观测”需要 `dual-channel-recommendation-engine` 共享状态 owner、契约或质量边界。
 
-## 架构
+## 1. 背景、目标与非目标
 
-```mermaid
-flowchart LR
-  Behavior["BehaviorSignal"] --> HotPath["HotPath Redis State"]
-  HotPath --> SessionCache["SessionCache L1"]
-  SessionCache --> Engine["Engine GetFeed"]
-  Engine --> Recall["CandidateSource Fanout"]
-  Recall --> PreRank["QualityPreRanker"]
-  PreRank --> Filter["Filter Exposed Negative Dedup"]
-  Filter --> Features["FeatureProvider"]
-  Features --> Scorer["Rule Remote Cascade Scorer"]
-  Scorer --> Rerank["MMR UCB Diversity Rerank"]
-  Rerank --> Response["FeedResponse"]
-```
+- 设计目标：推荐运行时基础能力验收，覆盖 HotPath、SessionCache、Engine、Scorer、Rerank、降级与可观测。
+- 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
-### 状态与接口
+## 2. Story 协作与状态流
 
-- `SessionReader`：读 session state，允许 HotPath 与 SessionCache 替换。
-- `SignalProcessor`：写行为信号，允许 HotPath 与 BufferedHotPath 替换。
-- `CandidateSource`：召回源接口，Engine 并行 fanout 且每源 deadline。
-- `FeatureProvider`：离线特征读取接口，读路径禁止同步打分或跨服务重计算。
-- `ModelScorer`：RuleScorer、RemoteModelScorer、CascadeScorer 统一打分接口。
-- `ExposureMemory`：曝光记忆读写边界（served/impressed/negative/freq/near_dup），按 `user+day` 分桶，封装 TTL、cardinality budget 与近似结构选择；Engine 不直接持有曝光集合的 Redis 客户端。
-- `ExposureFilter`：候选过滤边界，对召回候选做 membership 点查（`SISMEMBER` 批量）或短 Bloom，禁止长窗口全量 `SMembers` 回读后转 map。
-- `FeedbackIngestor`：行为入口抗冲击边界，封装批量上限、`clientEventId` 幂等、按 user/IP 分级限流、`InflightLimiter` 背压、低价值降采样、drop 可观测与同步写异步化。
+- [`dual-channel-recommendation-engine`](./dual-channel-recommendation-engine/spec.md)：**SessionReader** 接口：统一读路径，HotPath / SessionCache 均实现。
 
-### 7 阶段管线
+## 3. 端云与数据流
 
-1. Session 加载：读 `exposed`、`negative`、tag weights、实时兴趣。
-2. 多路召回：每个 `CandidateSource` 独立超时，慢源不阻塞。
-3. 预排：时效过滤、互动密度粗排、候选截断。
-4. 过滤：经 `ExposureFilter` 做曝光去重、负反馈、候选全局去重；只对召回候选点查 served/impressed/negative，禁止把长窗口集合全量 `SMembers` 拉回内存转 map。
-5. 特征组装：用户画像、兴趣、交集、搜索意图、分群等进入 `ScoringFeatures`。
-6. 打分：RuleScorer 或 RemoteModelScorer，经 CascadeScorer 超时 fallback。
-7. 重排：作者频控、标签多样性、MMR、多样性信号、UCB1 探索与冷启动保底。
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
 
-## 降级与可靠性
+## 4. 关键决策
 
-- 模型不可用：CascadeScorer 在超时或错误时回退 RuleScorer。
-- 召回源超时：仅丢弃慢源，其他源继续出结果。
-- HotPath 写入：BufferedHotPath 异步刷写，避免行为上报阻塞用户路径。
-- 行为入口：`FeedbackIngestor` 对行为批量设上限、`clientEventId` 幂等去重、分级限流与背压；HotPath buffer 丢弃必须暴露 `rec_hotpath_dropped_total`，不静默丢；同步写（Mongo/metrics/authorImpact/feedback）异步化或合并批写。
+<a id="dec-001"></a>
+### DEC-001 推荐特征读取、策略解析和排序执行使用显式 Port
+- 决策：推荐特征读取、策略解析和排序执行使用显式 Port。
+- 理由：推荐运行时基础能力验收，覆盖 HotPath、SessionCache、Engine、Scorer、Rerank、降级与可观测。
+- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 关联要求：`REQ-001`
+- 影响 Story：[`dual-channel-recommendation-engine`](./dual-channel-recommendation-engine/spec.md)
+- 关联验收：`SIT-001`
+
+## 5. 失败与恢复
+
+- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
+- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
+- 恢复动作：调用方按 canonical recovery action 重试、刷新或停止；不得自行合成成功结果。
+- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
+
+## 6. 质量与观测
+
 - 曝光记忆容量：`ExposureMemory` 按 `user+day` 分桶 + cardinality budget，海量阶段切 rolling bloom/CMS/分桶 ZSET，过滤开销不随会话曝光量线性放大。
-- Session 缓存：SessionCache + singleflight 降低 Redis 读放大。
-
-## 策略真相源
-
-- 字段、API、错误码、policy、Redis key 先进入 metadata，再 codegen/实现。
-- runtime 不维护页面 route、surface、UI 文案或业务 IA。
-- intersection 信号只能作为 feature/fusion 输入，不允许建立第二套 intersection-only ranker。
-
-## 初期一流边界
-
-当前阶段以规则排序、LightGBM/RemoteModelScorer、HotPath 实时反馈、MMR/UCB1 探索作为生产安全底座。深度排序模型平台轨（MMoE/PLE/双塔 ANN/IPS）是长期上限，不进入本能力本轮实现。

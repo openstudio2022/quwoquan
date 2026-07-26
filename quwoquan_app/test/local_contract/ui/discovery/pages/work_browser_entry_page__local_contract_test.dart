@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
+    show contentPostDeleteIdempotencyKey;
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
@@ -73,7 +75,10 @@ void main() {
   testWidgets('直达入口：软删除内容按 410 墓碑展示删除态', (tester) async {
     final repo = MockContentRepository();
     final postId = await firstReadablePostId(repo);
-    await repo.deletePost(postId: postId);
+    await repo.deletePost(
+      postId: postId,
+      idempotencyKey: contentPostDeleteIdempotencyKey(postId),
+    );
 
     await tester.pumpWidget(
       ProviderScope(

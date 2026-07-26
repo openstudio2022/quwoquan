@@ -1,10 +1,17 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger.dart';
+import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
     show accountSessionLifecycleCommandWriterProvider;
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -16,6 +23,72 @@ AccountSessionLifecycleCommandWriter _lifecycleWriter(
 ) => _StubAccountSessionLifecycleWriter(refresh);
 
 void main() {
+  test('账号注销本地清理回执加密持久化并在成功后物理删除', () async {
+    FlutterSecureStorage.setMockInitialValues(<String, String>{});
+    const store = SecureTerminalAccountCleanupReceiptStore();
+    const receipt = TerminalAccountCleanupReceipt(
+      accountId: 'owner-recovery',
+      personaId: 'persona-recovery',
+      installId: 'install-recovery',
+    );
+
+    await store.save(receipt);
+    final restored = await store.read();
+    expect(restored?.accountId, receipt.accountId);
+    expect(restored?.personaId, receipt.personaId);
+
+    await store.clear();
+    expect(await store.read(), isNull);
+  });
+
+  test('终态本地清理三次失败保留回执，后续恢复成功才删除', () async {
+    final receiptStore = _MemoryTerminalCleanupReceiptStore()
+      ..receipt = const TerminalAccountCleanupReceipt(
+        accountId: 'owner-recovery',
+        personaId: 'persona-recovery',
+        installId: 'install-recovery',
+      );
+    var shouldFail = true;
+    var purgeCalls = 0;
+    final container = ProviderContainer(
+      overrides: [
+        terminalAccountCleanupReceiptStoreProvider.overrideWithValue(
+          receiptStore,
+        ),
+        accountClosureLocalDataPurgerForActorProvider.overrideWith((
+          ref,
+          actor,
+        ) {
+          return AccountClosureLocalDataPurger(
+            clearBehaviorQueue: () async {
+              purgeCalls += 1;
+              if (shouldFail) {
+                throw StateError('transient cleanup failure');
+              }
+            },
+            clearTelemetryQueue: () async {},
+            clearRebuildableUserData: () async {},
+            purgePushAndIncomingCallState: () async {},
+            clearDraftsAndAccountPreferences: () async {},
+          );
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+    final recover = container.read(accountClosureLocalCleanupRecoveryProvider);
+
+    await recover();
+    expect(purgeCalls, 3);
+    expect(await receiptStore.read(), isNotNull);
+    expect(receiptStore.clearCalls, 0);
+
+    shouldFail = false;
+    await recover();
+    expect(purgeCalls, 4);
+    expect(await receiptStore.read(), isNull);
+    expect(receiptStore.clearCalls, 1);
+  });
+
   test('restore 遇到陈旧会话时静默 refresh 成功并保留 owner/sub 快照', () async {
     final store = _MemoryAuthSessionStore(
       stored: const StoredAuthSession(
@@ -134,6 +207,75 @@ void main() {
     final persisted = await store.read();
     expect(persisted.accessToken, isEmpty);
     expect(persisted.refreshToken, isEmpty);
+  });
+
+  test('静默 refresh 返回 account_deleted 410 时清除本地可换发凭证', () async {
+    final store = _MemoryAuthSessionStore.authenticated();
+    final cleanupReceiptStore = _MemoryTerminalCleanupReceiptStore();
+    var localPurgeCalls = 0;
+    AccountClosureLocalActorContext? purgedActor;
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        terminalAccountCleanupReceiptStoreProvider.overrideWithValue(
+          cleanupReceiptStore,
+        ),
+        accountClosureLocalDataPurgerForActorProvider.overrideWith((
+          ref,
+          actor,
+        ) {
+          purgedActor = actor;
+          return AccountClosureLocalDataPurger(
+            clearBehaviorQueue: () async {
+              localPurgeCalls += 1;
+            },
+            clearTelemetryQueue: () async {},
+            clearRebuildableUserData: () async {},
+            purgePushAndIncomingCallState: () async {},
+            clearDraftsAndAccountPreferences: () async {},
+          );
+        }),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async {
+            throw CloudException(
+              type: CloudErrorType.unknown,
+              message: 'account deleted',
+              code: UserErrorCode.accountDeleted.code,
+              statusCode: 410,
+              runtimeFailure: testRuntimeFailure(
+                code: UserErrorCode.accountDeleted.code,
+                kind: RuntimeFailureKind.auth,
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    container.read(accountClosureLocalCleanupLifecycleProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final refreshed = await container
+        .read(authSessionControllerProvider.notifier)
+        .refreshSessionIfNeeded(force: true);
+
+    expect(refreshed, isFalse);
+    final state = container.read(authSessionControllerProvider);
+    expect(state.isAuthenticated, isFalse);
+    expect(state.promptReason, AuthPromptReason.accountClosed);
+    final persisted = await store.read();
+    expect(persisted.accessToken, isEmpty);
+    expect(persisted.refreshToken, isEmpty);
+    expect(persisted.manualLoggedOut, isTrue);
+    await Future<void>.delayed(Duration.zero);
+    expect(localPurgeCalls, 1);
+    expect(purgedActor?.accountId, 'owner-1');
+    expect(purgedActor?.personaId, 'sub-1');
+    expect(cleanupReceiptStore.saveCalls, 1);
+    expect(cleanupReceiptStore.clearCalls, 1);
+    expect(await cleanupReceiptStore.read(), isNull);
   });
 
   test('静默 refresh 网络失败时保留登录态，避免误登出', () async {
@@ -363,6 +505,28 @@ final class _StubAccountSessionLifecycleWriter
   @override
   Future<LogoutAck> logout(LogoutCommand command) async {
     return const LogoutAck(revoked: true);
+  }
+}
+
+final class _MemoryTerminalCleanupReceiptStore
+    implements TerminalAccountCleanupReceiptStore {
+  TerminalAccountCleanupReceipt? receipt;
+  int saveCalls = 0;
+  int clearCalls = 0;
+
+  @override
+  Future<TerminalAccountCleanupReceipt?> read() async => receipt;
+
+  @override
+  Future<void> save(TerminalAccountCleanupReceipt receipt) async {
+    saveCalls += 1;
+    this.receipt = receipt;
+  }
+
+  @override
+  Future<void> clear() async {
+    clearCalls += 1;
+    receipt = null;
   }
 }
 

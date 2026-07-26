@@ -16,6 +16,7 @@ import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.dart';
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
@@ -47,14 +48,15 @@ import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 
 part 'chat_conversation_page_actions.dart';
+part 'chat_conversation_page_selection_actions.dart';
 
 String formatChatTime(String? raw) {
   if (raw == null || raw.isEmpty) return '';
   return raw;
 }
 
-final RouteObserver<ModalRoute<dynamic>> chatRouteObserver =
-    RouteObserver<ModalRoute<dynamic>>();
+final RouteObserver<ModalRoute<Object?>> chatRouteObserver =
+    RouteObserver<ModalRoute<Object?>>();
 
 class ChatConversationPage extends ConsumerStatefulWidget {
   const ChatConversationPage({

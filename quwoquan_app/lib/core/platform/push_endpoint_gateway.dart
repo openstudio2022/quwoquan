@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 enum PushEndpointKind {
@@ -132,6 +131,9 @@ abstract interface class PushEndpointGateway {
 
   /// 登出前把全部当前 endpoint 转为 remove mutation；远端成功前不得丢弃。
   Future<void> queueActiveEndpointRemovals();
+
+  /// 云侧账号 closed 后物理清除本地与原生 push/来电身份残留。
+  Future<void> purgeForTerminalAccountClosure();
 }
 
 abstract interface class PushEndpointSecretStore {
@@ -164,22 +166,14 @@ final class FlutterSecurePushEndpointSecretStore
 /// FCM token 与待同步 mutation 只进入平台安全存储；iOS VoIP token mutation
 /// 由同一 MethodChannel 从原生 Keychain 合并读取。两侧都只在远端 writer 成功后 ack。
 final class PersistentPushEndpointGateway implements PushEndpointGateway {
-  factory PersistentPushEndpointGateway({
+  PersistentPushEndpointGateway({
     PushEndpointSecretStore secretStore =
         const FlutterSecurePushEndpointSecretStore(),
-    Future<void> Function()? legacyPlaintextMigrator,
     MethodChannel channel = const MethodChannel('quwoquan/rtc/incoming_call'),
-  }) {
-    return PersistentPushEndpointGateway._(
-      secretStore,
-      legacyPlaintextMigrator,
-      channel,
-    );
-  }
+  }) : this._withDependencies(secretStore, channel);
 
-  PersistentPushEndpointGateway._(
+  PersistentPushEndpointGateway._withDependencies(
     this._secretStore,
-    this._legacyPlaintextMigrator,
     this.channel,
   );
 
@@ -188,10 +182,8 @@ final class PersistentPushEndpointGateway implements PushEndpointGateway {
   static const _maxPendingMutations = 32;
 
   final PushEndpointSecretStore _secretStore;
-  final Future<void> Function()? _legacyPlaintextMigrator;
   final MethodChannel channel;
   Future<void> _operationTail = Future<void>.value();
-  bool _legacyPlaintextMigrated = false;
 
   @override
   Future<void> recordUpsert(DevicePushEndpoint endpoint) =>
@@ -291,6 +283,26 @@ final class PersistentPushEndpointGateway implements PushEndpointGateway {
     }
   });
 
+  @override
+  Future<void> purgeForTerminalAccountClosure() => _serial<void>(() async {
+    await _secretStore.delete(_pendingKey);
+    await _secretStore.delete(_activeKey);
+    try {
+      final purged = await channel.invokeMethod<bool>(
+        'purgePushEndpointStateForTerminalAccountClosure',
+      );
+      if (purged != true) {
+        throw StateError('native push endpoint cleanup was not acknowledged');
+      }
+    } on MissingPluginException {
+      // 当前平台没有原生来电状态；安全存储仍必须完成清理。
+    }
+    if (await _secretStore.read(_pendingKey) != null ||
+        await _secretStore.read(_activeKey) != null) {
+      throw StateError('push endpoint cleanup verification failed');
+    }
+  });
+
   Future<void> _appendLocalMutation(PushEndpointMutation mutation) async {
     final pending = (await _readLocalMutations())
       ..removeWhere(
@@ -365,13 +377,7 @@ final class PersistentPushEndpointGateway implements PushEndpointGateway {
   }
 
   Future<T> _serial<T>(Future<T> Function() action) {
-    final operation = _operationTail.then<T>((_) async {
-      if (!_legacyPlaintextMigrated) {
-        await (_legacyPlaintextMigrator ?? _migrateLegacyPlaintextStorage)();
-        _legacyPlaintextMigrated = true;
-      }
-      return action();
-    });
+    final operation = _operationTail.then<T>((_) => action());
     _operationTail = operation.then<void>(
       (_) {},
       onError: (Object error, StackTrace stackTrace) {
@@ -388,59 +394,5 @@ final class PersistentPushEndpointGateway implements PushEndpointGateway {
       },
     );
     return operation;
-  }
-
-  Future<void> _migrateLegacyPlaintextStorage() async {
-    final preferences = await SharedPreferences.getInstance();
-    final legacyPending = preferences.getString(_pendingKey);
-    final legacyActive = preferences.getString(_activeKey);
-    if (legacyPending == null && legacyActive == null) {
-      return;
-    }
-
-    Object? migrationError;
-    StackTrace? migrationStack;
-    try {
-      final pendingById = <String, PushEndpointMutation>{};
-      for (final mutation in _decodeMutations(legacyPending)) {
-        pendingById[mutation.mutationId] = mutation;
-      }
-      for (final mutation in await _readLocalMutations()) {
-        // 安全存储中的记录更新，发生冲突时优先保留安全存储版本。
-        pendingById[mutation.mutationId] = mutation;
-      }
-      final pending = pendingById.values.toList(growable: true)
-        ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
-      if (pending.length > _maxPendingMutations) {
-        pending.removeRange(0, pending.length - _maxPendingMutations);
-      }
-      await _writeLocalMutations(pending);
-
-      final active = <String, String>{
-        ..._decodeActive(legacyActive),
-        // 安全存储中的 active token 更新，冲突时不得被旧明文覆盖。
-        ...await _readActive(),
-      };
-      if (active.isEmpty) {
-        await _secretStore.delete(_activeKey);
-      } else {
-        await _secretStore.write(_activeKey, jsonEncode(active));
-      }
-    } catch (error, stack) {
-      migrationError = error;
-      migrationStack = stack;
-    }
-
-    // 即使平台安全存储暂时失败，也不能继续保留 push token 明文。
-    final removed = await Future.wait(<Future<bool>>[
-      preferences.remove(_pendingKey),
-      preferences.remove(_activeKey),
-    ]);
-    if (removed.any((success) => !success)) {
-      throw StateError('failed to purge legacy plaintext push endpoint data');
-    }
-    if (migrationError != null && migrationStack != null) {
-      Error.throwWithStackTrace(migrationError, migrationStack);
-    }
   }
 }

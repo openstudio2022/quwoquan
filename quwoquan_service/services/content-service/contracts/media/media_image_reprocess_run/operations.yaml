@@ -1,0 +1,254 @@
+description: 仅供受控运维平面调用的图片 descriptor 重处理 run；App 不可直连。
+commercial_defaults:
+  status: blocked
+  block_reason: 默认拒绝未声明运维授权、回滚与审计语义的图片重处理操作。
+  gap_id: CONTENT_MEDIA_IMAGE_REPROCESS_UNDECLARED_OPERATION
+  target_story: image-delivery-variants
+api_routes:
+- method: POST
+  path: /internal/content/media-image-reprocess-runs
+  operation: StartMediaImageReprocessRun
+  actor: account
+  application:
+    kind: command
+    facet: MediaImageReprocessRunCommandFacet
+    method: start
+    aggregate_owner: MediaImageReprocessRun
+    mutation_target: MediaImageReprocessRun
+    invariant_target: MediaImageReprocessRun
+  authorization:
+    principal: service
+    scopes:
+    - content.media_reprocess.manage
+    ownership_policy: internal_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.media_image_reprocess_invalid_argument
+  - CONTENT.USER.media_image_reprocess_version_conflict
+  - CONTENT.SYSTEM.media_image_reprocess_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_media_image_reprocess_start
+    trace: true
+    attributes:
+    - outcome
+    - target_policy_version
+    - asset_count
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  description: 对显式 ready image assetIds 创建可审计 run；目标 policy version 由服务端当前 metadata 固化。
+  request_entity: MediaImageReprocessRun
+  request_fields:
+  - runId
+  - assetIds
+  response_entity: MediaImageReprocessRun
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+- method: POST
+  path: /internal/content/media-image-reprocess-runs/{runId}:pause
+  operation: PauseMediaImageReprocessRun
+  actor: account
+  application:
+    kind: command
+    facet: MediaImageReprocessRunCommandFacet
+    method: pause
+    aggregate_owner: MediaImageReprocessRun
+    mutation_target: MediaImageReprocessRun
+    invariant_target: MediaImageReprocessRun
+  authorization:
+    principal: service
+    scopes:
+    - content.media_reprocess.manage
+    ownership_policy: internal_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.media_image_reprocess_run_not_found
+  - CONTENT.USER.media_image_reprocess_invalid_transition
+  - CONTENT.USER.media_image_reprocess_version_conflict
+  - CONTENT.SYSTEM.media_image_reprocess_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_media_image_reprocess_pause
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  response_entity: MediaImageReprocessRun
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+- method: POST
+  path: /internal/content/media-image-reprocess-runs/{runId}:resume
+  operation: ResumeMediaImageReprocessRun
+  actor: account
+  application:
+    kind: command
+    facet: MediaImageReprocessRunCommandFacet
+    method: resume
+    aggregate_owner: MediaImageReprocessRun
+    mutation_target: MediaImageReprocessRun
+    invariant_target: MediaImageReprocessRun
+  authorization:
+    principal: service
+    scopes:
+    - content.media_reprocess.manage
+    ownership_policy: internal_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.media_image_reprocess_run_not_found
+  - CONTENT.USER.media_image_reprocess_invalid_transition
+  - CONTENT.USER.media_image_reprocess_version_conflict
+  - CONTENT.SYSTEM.media_image_reprocess_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_media_image_reprocess_resume
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  response_entity: MediaImageReprocessRun
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+- method: POST
+  path: /internal/content/media-image-reprocess-runs/{runId}:rollback
+  operation: RollbackMediaImageReprocessRun
+  actor: account
+  application:
+    kind: command
+    facet: MediaImageReprocessRunCommandFacet
+    method: rollback
+    aggregate_owner: MediaImageReprocessRun
+    mutation_target: MediaImageReprocessRun
+    invariant_target: MediaImageReprocessRun
+  authorization:
+    principal: service
+    scopes:
+    - content.media_reprocess.manage
+    ownership_policy: internal_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 10000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.media_image_reprocess_run_not_found
+  - CONTENT.USER.media_image_reprocess_invalid_transition
+  - CONTENT.USER.media_image_reprocess_version_conflict
+  - CONTENT.SYSTEM.media_image_reprocess_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_media_image_reprocess_rollback
+    trace: true
+    attributes:
+    - outcome
+    - activated_asset_count
+  slo:
+    latency_p95_ms: 5000
+    availability_percent: 99.9
+  response_entity: MediaImageReprocessRun
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+- method: GET
+  path: /internal/content/media-image-reprocess-runs/{runId}
+  operation: GetMediaImageReprocessRun
+  actor: account
+  application:
+    kind: query
+    facet: MediaImageReprocessRunQueryFacet
+    method: get
+    reader: MediaImageReprocessRunReader
+    slice: MediaImageReprocessRunSlice
+  authorization:
+    principal: service
+    scopes:
+    - content.media_reprocess.manage
+    ownership_policy: internal_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CONTENT.USER.media_image_reprocess_run_not_found
+  - CONTENT.SYSTEM.media_image_reprocess_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_media_image_reprocess_get
+    trace: true
+    attributes:
+    - outcome
+    - status
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  response_entity: MediaImageReprocessRunDetail
+  response_body: MediaImageReprocessRunDetail
+  response_body_kind: object
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal

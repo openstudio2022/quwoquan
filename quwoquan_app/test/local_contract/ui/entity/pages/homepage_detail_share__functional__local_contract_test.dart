@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
+import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_share_sheet.dart';
@@ -38,6 +41,17 @@ void main() {
   Widget buildApp() {
     return ProviderScope(
       overrides: [
+        authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+        behaviorRepositoryProvider.overrideWithValue(MockBehaviorRepository()),
+        intersectionRepositoryProvider.overrideWithValue(
+          AlphaIntersectionRepository(),
+        ),
+        chatRepositoryCompositionProvider.overrideWithValue(
+          MockChatRepository(),
+        ),
+        contentRuntimeConfigProvider.overrideWithValue(
+          buildProductionContentRuntimeConfigDefaults(),
+        ),
         homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
         homepageIntroductionRepositoryProvider.overrideWithValue(
           const MockHomepageIntroductionRepository(),
@@ -83,3 +97,9 @@ void main() {
 }
 
 class _NoNetworkHttpOverrides extends HttpOverrides {}
+
+final class _GuestHomepageSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
+}

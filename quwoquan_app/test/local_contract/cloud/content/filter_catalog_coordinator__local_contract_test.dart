@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-003
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/filter_catalog/filter_catalog_coordinator.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';

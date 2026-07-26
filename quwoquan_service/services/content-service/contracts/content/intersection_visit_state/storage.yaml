@@ -1,0 +1,9 @@
+backend: mongodb
+collections:
+  rm_intersection_watermark:
+    entity: IntersectionVisitState
+    role: authoritative
+    description: 一 user 一文档的交集已读水位（_id=userId，wm.{dimension} 为 unix 秒， $max 逐维度合并保证单调推进）；Redis ix:watermark
+      hash 只是加速缓存。
+    indexes: []
+role: authoritative

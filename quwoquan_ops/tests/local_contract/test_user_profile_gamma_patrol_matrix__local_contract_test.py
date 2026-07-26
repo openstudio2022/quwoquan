@@ -13,7 +13,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
-SUITES_PATH = ROOT / "quwoquan_ops/environments/gamma_validation_suites.json"
+SUITES_PATH = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
 WORKFLOW_PATH = (
     ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
 )
@@ -56,7 +56,7 @@ class UserProfileGammaPatrolMatrixContractTest(unittest.TestCase):
             "self-hosted workflow 必须识别 user-profile matrix kind",
         )
         self.assertIn(
-            'suites["uiJourneys"].get("user_profile_journey_patrol")',
+            "resolve_patrol_target user_profile_journey_patrol",
             workflow,
             "workflow 必须从 gamma registry 解析用户主页 Patrol target",
         )

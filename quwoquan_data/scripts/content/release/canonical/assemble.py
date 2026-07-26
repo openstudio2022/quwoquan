@@ -9,20 +9,17 @@ from core.entity_object import collect_execution_entity_objects
 from core.paths import release_root
 from core.io import read_json, write_json
 from content.review.publish_filter import apply_publish_filter
-from content.execution.workspace import execution_root
+from content.execution.workspace import execution_root, load_frozen_target_set
 
 _RELEASE_EVIDENCE = ("attestation.json", "evidence_index.json")
 
 
 def _execution_is_homepage_only(execution_id: str) -> bool:
     """homepage-only 任务：仅主页配额，实体主页即发布面（无 posts 篇目）。"""
-    try:
-        from content.execution import store
-        from core.execution_branch import is_homepage_only_spec
+    from content.execution import store
+    from core.execution_branch import is_homepage_only_spec
 
-        return is_homepage_only_spec(store.load_spec(execution_id))
-    except Exception:  # noqa: BLE001
-        return False
+    return is_homepage_only_spec(store.load_spec(execution_id))
 
 
 def assemble_release(execution_id: str, release_id: str) -> Path:
@@ -60,7 +57,9 @@ def assemble_release(execution_id: str, release_id: str) -> Path:
             execution_id,
             root,
             allowed_entity_rels=(
-                None if _execution_is_homepage_only(execution_id) else _primary_entity_rels_from_posts(posts_dst)
+                _target_entity_rels_from_execution(execution_id)
+                if _execution_is_homepage_only(execution_id)
+                else _primary_entity_rels_from_posts(posts_dst)
             ),
         )
         for runtime_post, release_post in post_pairs:
@@ -192,11 +191,27 @@ def _primary_entity_rels_from_posts(posts_root: Path) -> set[str]:
     return allowed
 
 
+def _target_entity_rels_from_execution(execution_id: str) -> set[str]:
+    target_set = load_frozen_target_set(execution_id)
+    refs = target_set.get("targetRefs")
+    if not isinstance(refs, list) or not refs:
+        raise ValueError(f"execution frozen target set has no targetRefs: {execution_id}")
+    allowed: set[str] = set()
+    for raw in refs:
+        parts = Path(str(raw or "").strip().strip("/")).parts
+        if len(parts) < 3 or any(part in {"", ".", ".."} for part in parts):
+            raise ValueError(
+                f"execution frozen target set contains an invalid entity ref: {execution_id}"
+            )
+        allowed.add((Path("entities") / Path(*parts)).as_posix())
+    return allowed
+
+
 def _copy_release_entities(
     execution_id: str,
     release_dir: Path,
     *,
-    allowed_entity_rels: set[str] | None = None,
+    allowed_entity_rels: set[str],
 ) -> None:
     entities_dst = release_dir / "entities"
     rows = collect_execution_entity_objects(
@@ -207,7 +222,7 @@ def _copy_release_entities(
     for row in rows:
         src_dir = Path(row["entityDir"])
         rel = Path(str(row["entityRel"]))
-        if allowed_entity_rels is not None and rel.as_posix() not in allowed_entity_rels:
+        if rel.as_posix() not in allowed_entity_rels:
             continue
         dst_dir = release_dir / rel
         _copy_entity_surface(src_dir, dst_dir)

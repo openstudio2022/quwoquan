@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
-import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 
 void main() {
@@ -224,6 +226,7 @@ void main() {
     Widget hostWith(
       void Function(BuildContext) capture, {
       void Function(Object? extra)? onStartGroupExtra,
+      void Function(Object? extra)? onAssistantExtra,
     }) {
       final router = GoRouter(
         initialLocation: '/',
@@ -248,6 +251,13 @@ void main() {
             },
           ),
           GoRoute(
+            path: AppRoutePaths.assistantPersonal,
+            builder: (_, state) {
+              onAssistantExtra?.call(state.extra);
+              return const Text('ASSISTANT_PERSONAL');
+            },
+          ),
+          GoRoute(
             path: '/chat/:id',
             builder: (_, state) => Text('CHAT:${state.pathParameters['id']}'),
           ),
@@ -258,7 +268,13 @@ void main() {
 
     testWidgets('assistant dispatch → 打开小艺会话真实路由', (tester) async {
       late BuildContext homeContext;
-      await tester.pumpWidget(hostWith((c) => homeContext = c));
+      Object? assistantExtra;
+      await tester.pumpWidget(
+        hostWith(
+          (c) => homeContext = c,
+          onAssistantExtra: (extra) => assistantExtra = extra,
+        ),
+      );
       await tester.pumpAndSettle();
 
       final result = const IntersectionTargetNavigator().openActionHint(
@@ -268,14 +284,23 @@ void main() {
           dispatch: 'assistant',
           targetAvailability: 'available',
         ),
+        evidenceReason: IntersectionReason(
+          kind: 'shared_followees',
+          intersectionId: 'intersection-1',
+          pointSummarySnapshotId: 'evidence-1',
+        ),
+        contextObjectTarget: IntersectionTarget(
+          objectType: 'user',
+          objectId: 'u_lin',
+          objectKind: 'person',
+          routeId: 'userProfile',
+        ),
       );
       await tester.pumpAndSettle();
 
       expect(result.didOpen, isTrue);
-      expect(
-        find.text('CHAT:${AppConceptConstants.assistantConversationId}'),
-        findsOneWidget,
-      );
+      expect(find.text('ASSISTANT_PERSONAL'), findsOneWidget);
+      expect(assistantExtra, isA<AssistantOpenContext>());
     });
 
     testWidgets('navigate dispatch + 无 gates → 按 target 真实导航并上报', (

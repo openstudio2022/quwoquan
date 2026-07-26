@@ -70,7 +70,10 @@ SearchFeedbackAck decodeSearchFeedbackAck(Object? value) {
     throw const FormatException('SearchFeedbackAck must be an object');
   }
   final accepted = value['accepted'];
-  return SearchFeedbackAck(accepted: accepted == true);
+  if (accepted is! bool) {
+    throw const FormatException('SearchFeedbackAck.accepted must be a bool');
+  }
+  return SearchFeedbackAck(accepted: accepted);
 }
 
 String _required(String value, String name) {

@@ -1,97 +1,77 @@
-# L3 规格：member-add-remove-policy — 群成员增减与解散边界
+# L3 Story：member-add-remove-policy — 群成员增减与解散边界 (`member-add-remove-policy`)
 
-> **层级**：L3_story（隶属 L2 `group-creation-member-management`）
-> **状态**：specified
+> 所属能力：[`group-creation-member-management`](../spec.md)
 
-## 0. 一句话定义
+> Journey / Scenario：[`JNY-007 / SCN-013`](../../../spec.md#scn-013)
 
-群聊创建完成后，聊天信息页继续加人必须复用“仅互关可加入”的成员资格规则，同时明确私建群可解散、圈子群不可解散，并保证解散后消息列表同步移除。
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 1. 背景与动机
+## 1. 用户价值
 
-当前问题不只在“如何建群”，还在“建完以后怎么继续管理成员”：
+作为发起或接收消息的用户，
+我希望圈子绑定默认群（`group + circleId`）：跟随圈子绑定关系，不能单独进入 `dissolved`，
+从而稳定完成会话、消息或通话协作。
 
-1. 后续加人与初始建群没有冻结成同一资格规则。
-2. 继续加人页还可能沿用假数据或仅按联系人筛，不保证互关。
-3. 私建群解散按钮已在 UI 占位，但未冻结服务端 contract。
-4. 圈子群与私建群没有形成明确危险操作分叉。
+## 2. 范围与非目标
 
-## 2. 功能范围
+### In Scope
 
-### 2.1 In Scope
+- “member-add-remove-policy — 群成员增减与解散边界”的输入、可观察主路径、失败语义以及与父能力的交接。
+- AddMembers 操作者须为活跃成员。
+- 新成员互关/拉黑 gate（圈子绑定群跳过）
+- 上限 group_full。
+- RemoveMember 仅 owner/admin。
+- owner 不可被移出。
 
-| 编号 | 功能 | 说明 |
-|---|---|---|
-| MP1 | 聊天信息页继续加人 | 仅对可加人会话可见 |
-| MP2 | 候选成员互关准入 | 后续加人时仍只允许加入与当前用户互关的对象 |
-| MP3 | 来源成员去重 | 从多个来源选择成员时按 `userId` 去重 |
-| MP4 | 1000 人上限 | 加人前与加人时都要校验 |
-| MP5 | 私建群解散 | 仅群主可见、可执行 |
-| MP6 | 圈子群不可解散 | UI 隐藏入口，服务端拒绝危险操作 |
-| MP7 | 解散后消息列表清理 | 私建群解散后从消息列表消失 |
+### Out of Scope
 
-### 2.2 Out-of-Scope
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-- 群主转让、管理员设置、二维码进群
-- 圈子群成员自动同步实现细节
-- 黑名单、禁言、审核流
+## 3. 行为要求
 
-## 3. 权限模型
+<a id="req-001"></a>
+### REQ-001 member-add-remove-policy — 群成员增减与解散边界
 
-| 操作 | 私建群群主 | 私建群普通成员 | 圈子群成员 |
-|---|---|---|---|
-| 进入加人页 | 可以（若产品允许） | 可以/按产品既有策略 | 取决于群治理规则 |
-| 选择成员 | 仅互关对象 | 仅互关对象 | 仅互关对象 |
-| 解散群聊 | 可以 | 不可见 | 不可见且服务端拒绝 |
+- 圈子绑定默认群（`group + circleId`）：跟随圈子绑定关系，不能单独进入 `dissolved`。
 
-## 4. 生命周期合同
+<a id="req-002"></a>
+### REQ-002 圈子绑定默认群（group + circleId）：跟随圈子绑定关系，不能单独进入 dissolved
 
-- 私建群：`active -> dissolved`
 - 圈子绑定默认群（`group + circleId`）：跟随圈子绑定关系，不能单独进入 `dissolved`
-- 私建群解散成功后：
-  - 消息列表移除该会话
-  - 会话详情不再作为普通群聊进入
-- 圈子绑定默认群即使圈成员变化，也不意味着当前用户对该默认群获得“解散权限”
+- 端侧候选页不得展示“不可加入但可点选”的成员。
+- 不接受对来源与成员资格的模糊容忍，成员添加必须严格执行互关准入。
+- 加人失败不得清空当前已选成员。
+- 危险操作入口隐藏与服务端拒绝必须同时存在，避免单端绕过。
 
-## 5. 端云一致性要求
+<a id="req-003"></a>
+### REQ-003 必须群成员进出治理策略：加人授权与关系 gate、移出角色矩阵、自愿退群语义、离群收件箱清理与解散终态，且失败时不得写入成功事实
 
-### 5.1 后续加人
+- 系统必须群成员进出治理策略：加人授权与关系 gate、移出角色矩阵、自愿退群语义、离群收件箱清理与解散终态，且失败时不得写入成功事实。
 
-- 与建群初始成员使用同一互关判定来源
-- 服务端对新增成员再次校验去重与人数上限
-- 端侧候选页不得展示“不可加入但可点选”的成员
+<a id="req-004"></a>
+### REQ-004 服务本地契约引用边界
 
-### 5.2 解散
+- 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
 
-- `DissolveConversation` 只对 `type=group` 私建群生效
-- 对 `type=circle` 调用时返回明确错误
-- 解散成功后，端侧消息列表与缓存同步删除该会话
+## 4. 契约引用
 
-## 6. 对标吸收
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation_membership/operations.yaml#AddMembers`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation_membership/operations.yaml#RemoveMember`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation_membership/operations.yaml#LeaveConversation`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/errors.yaml`
 
-- 借鉴微信“危险操作入口只在特定群形态可见”的治理方式
-- 不借鉴微信对来源与成员资格的模糊容忍，本次必须严格互关准入
+## 5. 验收场景
 
-## 7. 非功能要求
+<a id="gwt-001"></a>
+### GWT-001 member-add-remove-policy — 群成员增减与解散边界
 
-- 加人失败不得清空当前已选成员
-- 解散成功后消息列表移除应为用户可感知的即时结果
-- 危险操作入口隐藏与服务端拒绝必须同时存在，避免单端绕过
+- GIVEN 发起或接收消息的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“member-add-remove-policy — 群成员增减与解散边界”对应的公开行为。
+- THEN 圈子绑定默认群（`group + circleId`）：跟随圈子绑定关系，不能单独进入 `dissolved`。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
 
-## 8. 验收重点
+## 6. 依赖
 
-### local_contract
-
-- 加人 contract、解散 contract、错误码语义冻结
-
-### local_contract
-
-- 聊天信息页继续加人、互关筛选、圈子群隐藏解散入口
-
-### api_integration
-
-- 私建群解散后消息列表移除；圈子群解散请求被服务端拒绝
-
-### user_acceptance
-
-- 真机完成“创建群 -> 继续加人 -> 返回 -> 解散私建群”的闭环旅程
+- 前置要求：[`group-creation-member-management`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

@@ -1,3 +1,5 @@
+# spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-004
+
 from __future__ import annotations
 
 import argparse
@@ -16,25 +18,78 @@ from quwoquan_ops.cli import legal_static
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.common import load_json_yaml
 from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
+from quwoquan_ops.cli.lib.output_paths import (
+    deployment_target_for_env,
+    deployment_target_path,
+    legal_static_deployment_package_dir,
+)
 from quwoquan_ops.cli.probes import run_environment_integration_probe as integration_probe
 from quwoquan_app.scripts.gamma import run_local_gamma_t3 as local_gamma_t3
 
 
 class StackctlUpRuntimeTest(unittest.TestCase):
     def test_beta_content_release_starts_all_declared_readiness_dependencies(self) -> None:
+        root = Path(__file__).resolve().parents[4]
         script = (
-            Path(__file__).resolve().parents[4]
+            root
             / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
         ).read_text(encoding="utf-8")
+        beta_stack_script = (
+            root / "quwoquan_ops/cli/beta/start_beta_stack.sh"
+        ).read_text(encoding="utf-8")
+        stackctl_script = (root / "quwoquan_ops/cli/stackctl.py").read_text(
+            encoding="utf-8"
+        )
         release_body = script.split(
             "beta_manual_start_content_release_stack() {", 1
         )[1].split("\n}\n\ncleanup()", 1)[0]
+        release_media_body = script.split(
+            "beta_manual_start_release_media_runtime() {", 1
+        )[1].split("\n}\n\nbeta_manual_start_entity_service", 1)[0]
         release_branch = script.split(
             'if [[ "$CONTENT_RELEASE_ONLY" == "1" ]]; then', 1
         )[1].split("\nfi\n\nif [[ \"$START_ASSISTANT\"", 1)[0]
+        content_release_caddy = script.split(
+            "beta_manual_prepare_tls_caddyfile() {", 1
+        )[1].split("    return 0\n  fi", 1)[0]
 
-        self.assertIn("beta_manual_start_media_runtime || return 1", release_body)
+        self.assertIn("beta_manual_start_release_media_runtime || return 1", release_body)
         self.assertIn("beta_manual_start_entity_service || return 1", release_body)
+        self.assertIn(
+            'beta_manual_wait_http_ok "http://127.0.0.1:${USER_PORT}/healthz" "user-service"',
+            script,
+        )
+        self.assertIn(
+            '"$ROOT_DIR/quwoquan_service/services/user-service/deploy/compose.yaml"',
+            script,
+        )
+        self.assertIn('user-service) export USER_CONFIG_VERSION="$config_version"', script)
+        self.assertIn("recommendation-service content-service user-service", script)
+        self.assertNotIn("beta_manual_ensure_compose_service_image", script)
+        self.assertIn(
+            "local compose_up_args=(up -d --remove-orphans)",
+            script,
+        )
+        self.assertIn("COMPOSE_PARALLEL_LIMIT=1 docker compose", script)
+        self.assertIn("compose_up_args+=(--no-build)", script)
+        self.assertIn("compose_up_args+=(--build)", script)
+        self.assertIn('APP_BETA_CMD+=(--skip-build)', beta_stack_script)
+        self.assertIn('cmd.append("--skip-build")', stackctl_script)
+        self.assertIn(
+            "beta_manual_ensure_port_available \"$USER_PORT\" \"user-service\"",
+            release_branch,
+        )
+        self.assertIn(
+            "@creator_profile_release path /auth /auth/* /user /user/* /users /users/*",
+            script,
+        )
+        self.assertIn("@content_release path /content /content/* /config/app", script)
+        self.assertIn(
+            "@content_filter_catalog_release path "
+            "/internal/content/filter-catalog-releases "
+            "/internal/content/filter-catalog-releases/*",
+            content_release_caddy,
+        )
         self.assertIn(
             "beta_manual_wait_https_ok \\\n"
             '    "$PUBLIC_IMAGE_HOST" \\\n'
@@ -49,6 +104,46 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "beta_manual_ensure_port_available \"$MEDIA_ORIGIN_PORT\" \"media-origin\"",
             release_branch,
         )
+        self.assertNotIn("beta_manual_start_fixture_gateway", release_body)
+        self.assertNotIn("beta_manual_start_notification_service", release_body)
+        self.assertNotIn("fixture_", release_body)
+        self.assertIn('ENTITY_SERVICE_ADDR="${listen_host}:${ENTITY_PORT}"', script)
+        self.assertIn(
+            'ENTITY_USER_ACCOUNT_SECURITY_AUTHORITY_BASE_URL="http://127.0.0.1:${USER_PORT}"',
+            script,
+        )
+        self.assertIn(
+            'beta_manual_wait_http_ok "http://127.0.0.1:${ENTITY_PORT}/healthz" "entity-service" 180',
+            script,
+        )
+        self.assertIn("--listen-host 0.0.0.0", release_media_body)
+        lifecycle = (
+            Path(__file__).resolve().parents[4]
+            / "quwoquan_ops/cli/lib/beta_manual_lifecycle.sh"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("kill -KILL $pids", lifecycle)
+        self.assertIn("will not be stopped automatically", lifecycle)
+        self.assertIn(
+            'local diagnostic_log="$BETA_MANUAL_STATE_DIR/stdout/${name}.log"',
+            lifecycle,
+        )
+        self.assertIn('"--diagnostic-log"', lifecycle)
+        self.assertIn(
+            'f"diagnostic_log={shlex.quote(str(diagnostic_log))}"',
+            lifecycle,
+        )
+        self.assertIn("TLS_PROXY_PORT_RELEASE_TIMEOUT_SECONDS", script)
+        self.assertIn("Caddy port :$port did not release", script)
+        self.assertIn('logs --tail 80 "$TLS_PROXY_NAME"', release_body)
+        tls_proxy_body = script.split("beta_manual_start_tls_proxy() {", 1)[1].split(
+            "\n}\n\nbeta_manual_export_tls_root_ca", 1
+        )[0]
+        self.assertIn('if [[ "$CONTENT_RELEASE_ONLY" != "1" ]]; then', tls_proxy_body)
+        self.assertIn('publish_args+=( -p "${PRODUCT_OPS_PORT}:${PRODUCT_OPS_PORT}" )', tls_proxy_body)
+        self.assertIn("Caddy configuration preparation failed", tls_proxy_body)
+        self.assertIn("Caddy previous deployment did not stop cleanly", tls_proxy_body)
+        self.assertIn("beta Caddy deployment failed", tls_proxy_body)
+        self.assertIn("deployment exited before readiness", tls_proxy_body)
         self.assertIn(
             "NOTIFICATION_REDIS_GENERAL_DB=1",
             script,
@@ -69,21 +164,18 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}",
             script,
         )
-        self.assertIn(
-            "beta_manual_ensure_filter_catalog_release || return 1",
-            release_body,
-        )
-        self.assertIn(
-            "filter-catalog \\\n"
-            "    --target beta-local \\\n"
-            "    --action stage-and-activate",
-            script,
-        )
+        self.assertNotIn("filter-catalog", release_body)
+        stackctl_source = (
+            Path(__file__).resolve().parents[4] / "quwoquan_ops/cli/stackctl.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('args.workload == "content-release"', stackctl_source)
+        self.assertIn('"beta-content-release-public-health"', stackctl_source)
+        self.assertIn("args.skip_app = True", stackctl_source)
 
     def test_gamma_content_release_routes_and_activates_filter_catalog(self) -> None:
         root = Path(__file__).resolve().parents[4]
         caddyfile = (
-            root / "quwoquan_ops/environments/local-gamma/Caddyfile"
+            root / "quwoquan_ops/environments/gamma/local/Caddyfile"
         ).read_text(encoding="utf-8")
         startup_script = (
             root / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
@@ -178,11 +270,48 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         )
         self.assertEqual(args.report_dir, ".qwq_output/env/alpha/runs/global")
 
-    def test_app_startup_treats_missing_sls_as_non_blocking_advisory(self) -> None:
+    def test_status_uses_content_consumer_scope_for_current_content_release(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            process_dir = Path(tmp_dir) / "process"
+            process_dir.mkdir()
+            (process_dir / "stack.state").write_text(
+                "stack=beta-local\nworkload=content-release\n", encoding="utf-8"
+            )
+            health_payload = {"exitCode": 0, "summary": "content release ready"}
+            with (
+                mock.patch.object(stackctl, "target_process_dir", return_value=process_dir),
+                mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+                mock.patch.object(stackctl, "get_target", return_value={"env": "beta"}),
+                mock.patch.object(stackctl, "resolve_report_dir", return_value=Path(tmp_dir) / "report"),
+                mock.patch.object(stackctl, "command_health", return_value=health_payload) as health,
+            ):
+                result = stackctl.command_status(
+                    argparse.Namespace(target="beta-local", output_format="text", report_dir="")
+                )
+
+        self.assertEqual(result, health_payload)
+        self.assertEqual(health.call_args.args[0].scope, "content-consumer")
+
+    def test_gamma_status_uses_completed_workload_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            process_dir = Path(tmp_dir) / "process"
+            process_dir.mkdir()
+            (process_dir / "stack_status.json").write_text(
+                json.dumps({"status": "passed", "workload": "content-release"}),
+                encoding="utf-8",
+            )
+            with mock.patch.object(stackctl, "target_process_dir", return_value=process_dir):
+                scope = stackctl._current_runtime_health_scope("gamma-local")
+
+        self.assertEqual(scope, "content-consumer")
+
+    def test_app_startup_treats_missing_log_sink_as_non_blocking_advisory(self) -> None:
         with mock.patch.object(
             stackctl,
-            "load_product_telemetry_sls",
-            side_effect=RuntimeError("product telemetry SLS deployment secret is missing"),
+            "load_product_telemetry_log_sink",
+            side_effect=RuntimeError(
+                "local provider credentials must not be written into the repository or .qwq_output"
+            ),
         ):
             environment, advisory = stackctl._optional_product_telemetry_environment(
                 "beta",
@@ -190,13 +319,17 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             )
 
         self.assertEqual(environment, {"QWQ_PRODUCT_TELEMETRY_AVAILABLE": "0"})
-        self.assertIn("deployment secret is missing", advisory)
+        self.assertIn("must not be written into the repository", advisory)
 
-    def test_app_startup_injects_sls_when_observability_is_available(self) -> None:
+    def test_app_startup_injects_log_sink_when_observability_is_available(self) -> None:
         with mock.patch.object(
             stackctl,
-            "load_product_telemetry_sls",
-            return_value=mock.Mock(environment={"PRODUCT_OPS_SLS_PROJECT": "project"}),
+            "load_product_telemetry_log_sink",
+            return_value=mock.Mock(
+                environment={
+                    "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": "http://elasticsearch:9200",
+                }
+            ),
         ):
             environment, advisory = stackctl._optional_product_telemetry_environment(
                 "gamma",
@@ -204,7 +337,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             )
 
         self.assertEqual(environment["QWQ_PRODUCT_TELEMETRY_AVAILABLE"], "1")
-        self.assertEqual(environment["PRODUCT_OPS_SLS_PROJECT"], "project")
+        self.assertEqual(
+            environment["PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"],
+            "http://elasticsearch:9200",
+        )
         self.assertEqual(advisory, "")
 
     def test_beta_cold_start_uses_configurable_backend_readiness_timeout(self) -> None:
@@ -236,7 +372,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             mock.patch.object(stackctl, "load_environment_topology", return_value={}),
             mock.patch.object(stackctl, "get_target", return_value={"env": "gamma"}),
             mock.patch.object(stackctl, "resolve_report_dir", return_value=Path(tmp_dir)),
-            mock.patch.object(stackctl, "load_product_telemetry_sls"),
+            mock.patch.object(stackctl, "load_product_telemetry_log_sink"),
             mock.patch.object(
                 stackctl,
                 "command_down",
@@ -264,67 +400,108 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertTrue(up_args.skip_app)
         self.assertEqual(up_args.rollout_mode, "")
 
-    def test_repair_restart_stack_blocks_before_down_when_deployment_secret_is_missing(self) -> None:
-        with (
-            tempfile.TemporaryDirectory() as tmp_dir,
-            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
-            mock.patch.object(stackctl, "get_target", return_value={"env": "beta"}),
-            mock.patch.object(stackctl, "resolve_report_dir", return_value=Path(tmp_dir)),
-            mock.patch.object(
-                stackctl,
-                "load_product_telemetry_sls",
-                side_effect=RuntimeError("product telemetry SLS deployment secret is missing"),
-            ),
-            mock.patch.object(stackctl, "command_down") as command_down,
-            mock.patch.object(stackctl, "command_up") as command_up,
-        ):
-            result = stackctl.command_repair(
-                argparse.Namespace(
-                    command="repair",
-                    target="beta-local",
-                    fix="restart-stack",
-                    report_dir="",
+    def test_repair_restart_stack_blocks_before_down_when_materialization_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            report_dir = Path(tmp_dir)
+            with (
+                mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+                mock.patch.object(stackctl, "get_target", return_value={"env": "beta"}),
+                mock.patch.object(stackctl, "resolve_report_dir", return_value=report_dir),
+                mock.patch.object(
+                    stackctl,
+                    "load_product_telemetry_log_sink",
+                    side_effect=RuntimeError(
+                        "local provider credentials must not be written into the repository or .qwq_output"
+                    ),
+                ),
+                mock.patch.object(stackctl, "command_down") as command_down,
+                mock.patch.object(stackctl, "command_up") as command_up,
+            ):
+                result = stackctl.command_repair(
+                    argparse.Namespace(
+                        command="repair",
+                        target="beta-local",
+                        fix="restart-stack",
+                        report_dir="",
+                    )
                 )
-            )
 
-        self.assertEqual(result["exitCode"], 2)
-        self.assertIn("blocked before stop", result["summary"])
-        command_down.assert_not_called()
-        command_up.assert_not_called()
+            self.assertEqual(result["exitCode"], 2)
+            self.assertIn("blocked before stop", result["summary"])
+            command_down.assert_not_called()
+            command_up.assert_not_called()
+            repair_plan = json.loads(
+                (report_dir / "repair_plan.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(
+                any("QWQ_DEPLOY_WORK_ROOT" in item for item in repair_plan["actions"])
+            )
 
     def test_format_stage_header(self) -> None:
         self.assertEqual(stackctl._format_stage_header(2, 3, "app-launch"), "[step 2/3] app-launch")
 
     def test_legal_static_packages_preserve_utf8_documents_and_current_pointers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            output_root = Path(tmp_dir)
-            for env_name in ("alpha", "beta", "gamma"):
-                with self.subTest(env=env_name):
-                    payload = legal_static.build_package(env_name, output_root=output_root)
-                    self.assertEqual(payload["status"], "ok")
-                    package_dir = output_root / "2026-07"
-                    self.assertTrue((package_dir / "checksums.json").is_file())
-                    self.assertTrue(
-                        (
-                            output_root / "current"
-                        ).exists()
-                    )
-
-                    for document in payload["documents"]:
-                        stable_document = (
-                            package_dir / "public" / "legal" / document["slug"]
+            deploy_root = Path(tmp_dir) / "deploy"
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "QWQ_OUTPUT_ROOT": str(Path(tmp_dir) / ".qwq_output"),
+                    "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
+                },
+                clear=False,
+            ):
+                for env_name in ("alpha", "beta", "gamma"):
+                    with self.subTest(env=env_name):
+                        target_name = deployment_target_for_env(env_name)
+                        output_root = legal_static_deployment_package_dir(env_name)
+                        payload = legal_static.build_package(
+                            env_name,
+                            output_root=output_root,
                         )
-                        self.assertTrue(stable_document.is_file())
-                        self.assertIn(
-                            document["title"],
-                            stable_document.read_text(encoding="utf-8"),
+                        self.assertEqual(payload["status"], "ok")
+                        package_dir = deployment_target_path(
+                            target_name,
+                            "packages",
+                            "legal-static",
+                            "2026-07",
                         )
+                        self.assertTrue((package_dir / "checksums.json").is_file())
+                        self.assertTrue((output_root / "current").exists())
 
-                    verified = legal_static.verify_package(
-                        env_name,
-                        output_root=output_root,
+                        for document in payload["documents"]:
+                            stable_document = (
+                                package_dir / "public" / "legal" / document["slug"]
+                            )
+                            self.assertTrue(stable_document.is_file())
+                            self.assertIn(
+                                document["title"],
+                                stable_document.read_text(encoding="utf-8"),
+                            )
+
+                        verified = legal_static.verify_package(
+                            env_name,
+                            output_root=output_root,
+                        )
+                        self.assertEqual(verified["status"], "ok")
+
+    def test_legal_static_rejects_unscoped_package_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            rejected_output = Path(tmp_dir) / "outside-legal-package"
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "QWQ_OUTPUT_ROOT": str(Path(tmp_dir) / ".qwq_output"),
+                    "QWQ_DEPLOY_WORK_ROOT": str(Path(tmp_dir) / "deploy"),
+                },
+                clear=False,
+            ):
+                with self.assertRaisesRegex(ValueError, "target-scoped"):
+                    legal_static.build_package(
+                        "alpha",
+                        output_root=rejected_output,
                     )
-                    self.assertEqual(verified["status"], "ok")
+            self.assertFalse(rejected_output.exists())
 
     def test_legal_static_html_validation_requires_utf8_document_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -401,7 +578,19 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp_dir,
         ):
             manifest = load_json_yaml(legal_static.DEFAULT_MANIFEST)
-            payload = legal_static.build_package("alpha", output_root=Path(tmp_dir))
+            deploy_root = Path(tmp_dir) / "deploy"
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "QWQ_OUTPUT_ROOT": str(Path(tmp_dir) / ".qwq_output"),
+                    "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
+                },
+                clear=False,
+            ):
+                payload = legal_static.build_package(
+                    "alpha",
+                    output_root=legal_static_deployment_package_dir("alpha"),
+                )
 
         self.assertEqual(manifest["schema"], "legal-static")
         self.assertEqual(manifest["owner"]["appName"], "趣我圈")
@@ -873,6 +1062,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 report["domainSeeds"]["user"],
                 {"status": "passed", "refs": ["user_profile_core"]},
             )
+            self.assertNotIn("authorImpact", report["domainSeeds"])
 
     def test_local_gamma_seed_failures_block_startup(self) -> None:
         script = (
@@ -889,6 +1079,28 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("X-Client-User-Id", script)
         self.assertNotIn("X-Test-Auth-Token", script)
 
+    def test_local_gamma_content_release_never_injects_fixture_seeds(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[4]
+            / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'if [[ "$WORKLOAD" == "content-release" ]]; then\n'
+            "  ENABLE_FIXTURE_SEEDS=0",
+            script,
+        )
+        self.assertIn(
+            'if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then\n'
+            "  seed_gamma_content_data",
+            script,
+        )
+        self.assertIn(
+            'if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then\n'
+            "  seed_gamma_premium_pool_data",
+            script,
+        )
+
     def test_local_gamma_retries_created_only_compose_runtime_once(self) -> None:
         script = (
             Path(__file__).resolve().parents[4]
@@ -900,10 +1112,36 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertIn('--filter status=running', script)
         self.assertIn('retry_args+=(--no-build)', script)
         self.assertIn("compose created-only retry recovered startup", script)
+        self.assertIn("run_compose_build_with_timeout", script)
+        self.assertIn(': >"$build_log"', script)
+        self.assertIn("LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS", script)
+        self.assertIn("LOCAL_GAMMA_COMPOSE_BUILD_NO_PROGRESS_TIMEOUT_SECONDS", script)
+        self.assertIn("LOCAL_GAMMA_COMPOSE_BUILD_PARALLEL_LIMIT", script)
+        self.assertIn('COMPOSE_PARALLEL_LIMIT="$compose_parallel_limit"', script)
+        self.assertIn("compose build produced no log progress", script)
+        self.assertIn("LOCAL_GAMMA_DOCKER_PROBE_TIMEOUT_SECONDS", script)
+        self.assertIn("Docker daemon did not answer readiness probe", script)
+        self.assertIn(
+            "docker info --format '{{.ServerVersion}} {{.Driver}}' >/dev/null 2>&1 &",
+            script,
+        )
+        self.assertNotIn("docker system df &", script)
+        self.assertIn("trap cleanup_active_child EXIT INT TERM HUP", script)
+        self.assertIn("LOCAL_GAMMA_ACTIVE_CHILD_PID=\"$compose_pid\"", script)
+        self.assertIn("stopping active child before exit", script)
+        self.assertIn("preserving build log for inspection", script)
+        self.assertIn(
+            'if [[ "$build_status" -eq 0 ]]; then\n    return 0',
+            script,
+        )
+        self.assertNotIn(
+            'if [[ "$build_status" -eq 0 ]]; then\n    rm -f "$build_log"',
+            script,
+        )
         self.assertIn("run_compose_up_with_timeout", script)
         self.assertIn("LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS", script)
         self.assertIn("preserving the partial runtime for inspection", script)
-        self.assertIn('LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS:-900', script)
+        self.assertNotIn('LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS:-900', script)
         self.assertIn("compose_up_timed_out=1", script)
         self.assertIn("run stackctl inspect before an explicit restart", script)
 
@@ -942,20 +1180,21 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         script = (
             root / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
         ).read_text(encoding="utf-8")
+        assistant = (
+            root
+            / "quwoquan_service/services/assistant-service/deploy/compose.yaml"
+        ).read_text(encoding="utf-8")
         compose = (
             root
             / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
         ).read_text(encoding="utf-8")
-        assistant = compose.split("\n  assistant-service:\n", 1)[1].split(
-            "\n  product-ops-service:\n", 1
-        )[0]
         proxy = compose.split("\n  gamma-proxy:\n", 1)[1].split(
             "\n  # ── edge-media", 1
         )[0]
 
         self.assertIn('profiles: ["assistant-runtime"]', assistant)
         self.assertIn(
-            "commercial-observability,assistant-runtime",
+            "commercial-observability,assistant-runtime,edge-media",
             script,
         )
         self.assertIn('if [[ "$WORKLOAD" == "content-release" ]]; then', script)
@@ -963,6 +1202,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             '[[ "$service_name" == "assistant-service" ]] ||',
             script,
         )
+        self.assertIn('"workload": workload', script)
+        self.assertIn("prepare_down_compose_environment()", script)
+        self.assertIn("prepare_down_compose_environment\n  docker compose", script)
+        self.assertIn("LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE:=", script)
+        self.assertIn("LOCAL_GAMMA_RTC_SERVICE_IMAGE:=", script)
         self.assertIn(
             "assistant-service:\n        condition: service_healthy\n"
             "        required: false",
@@ -976,6 +1220,17 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         env.pop("COMPOSE_PROFILES", None)
         env.pop("LOCAL_GAMMA_RTC_SERVICE_IMAGE", None)
         env["QWQ_WORKLOAD"] = "content-release"
+        env["LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL"] = (
+            "https://gamma-upload.quwoquan-env.test:19100"
+        )
+        runtime = json.loads(
+            (root / "quwoquan_ops/environments/gamma/runtime.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        build_images = runtime["targets"]["gamma-local"]["buildImages"]
+        env["LOCAL_GAMMA_GO_BASE_IMAGE"] = build_images["goBaseImage"]
+        env["LOCAL_GAMMA_ALPINE_BASE_IMAGE"] = build_images["alpineBaseImage"]
 
         result = subprocess.run(
             ["bash", str(script), "--print-env"],
@@ -996,14 +1251,34 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             script.read_text(encoding="utf-8"),
         )
 
+    def test_local_gamma_missing_upload_authority_is_a_real_gate_block(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        script = root / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        env = dict(os.environ)
+        env["QWQ_WORKLOAD"] = "content-release"
+        env.pop("LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL", None)
+
+        result = subprocess.run(
+            ["bash", str(script), "--print-env"],
+            cwd=root,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL must provide the canonical media upload base URL",
+            result.stderr,
+        )
+
     def test_local_gamma_product_ops_uses_required_runtime_auth(self) -> None:
-        compose = (
+        product_ops = (
             Path(__file__).resolve().parents[4]
-            / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+            / "quwoquan_service/services/product-ops-service/deploy/compose.yaml"
         ).read_text(encoding="utf-8")
-        product_ops = compose.split("\n  product-ops-service:\n", 1)[1].split(
-            "\n  platform-ops-service:\n", 1
-        )[0]
 
         for name in (
             "AUTH_JWT_SECRET",
@@ -1149,7 +1424,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[4]
         script_path = (
             root
-            / "quwoquan_service/services/seed-box/scripts/apply_content_social_graph_seed.py"
+            / "quwoquan_service/services/content-service/cmd/jobs/seed-social-graph/main.py"
         )
         fixture_path = (
             root
@@ -1389,6 +1664,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             expected_mode,
             expects_local_resolution,
         ) in cases:
+            moderation_base_url = {
+                "beta-local": "http://127.0.0.1:18220",
+                "gamma-local": "http://127.0.0.1:19220",
+                "prod-sim": "http://127.0.0.1:20220",
+            }.get(target_name, "")
             with (
                 self.subTest(target=target_name),
                 tempfile.TemporaryDirectory() as tmp_dir,
@@ -1404,6 +1684,9 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                         "env": env_name,
                         "backend": backend,
                         "publicBases": {"api": api_base_url},
+                        "origins": {"contentService": moderation_base_url}
+                        if moderation_base_url
+                        else {},
                     },
                 ),
             ):
@@ -1438,6 +1721,17 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "--resolve-host" in command["argv"],
                 expects_local_resolution,
             )
+            self.assertEqual(
+                "--moderation-base-url" in command["argv"],
+                expected_mode == "lifecycle",
+            )
+            if moderation_base_url:
+                self.assertEqual(
+                    command["argv"][
+                        command["argv"].index("--moderation-base-url") + 1
+                    ],
+                    moderation_base_url,
+                )
             self.assertTrue(command["stopOnFailure"])
             self.assertNotIn("AUTH_TOKEN", " ".join(command["argv"]))
 
@@ -1570,6 +1864,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "env": "beta",
             "backend": "local",
             "publicBases": {"api": "https://beta-api.quwoquan-env.test:18000"},
+            "origins": {"contentService": "http://127.0.0.1:18220"},
         }
         with (
             mock.patch.object(
@@ -1604,7 +1899,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             stackctl.ROOT
             / "quwoquan_ops"
             / "environments"
-            / "gamma_validation_suites.json"
+            / "gamma"
+            / "validation_suites.json"
         )
         registry = json.loads(registry_path.read_text(encoding="utf-8"))
         case_id = "media_publication_lifecycle_api_probe"
@@ -1763,7 +2059,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertEqual(cmd[:4], ["docker", "compose", "-p", "quwoquan_service"])
         self.assertEqual(cmd[4], "-f")
         self.assertTrue(cmd[5].endswith("quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"))
-        self.assertEqual(cmd[6:], ["exec", "-T", "mongodb", "mongosh"])
+        self.assertEqual(cmd[-4:], ["exec", "-T", "mongodb", "mongosh"])
+        self.assertTrue(
+            any(value.endswith("quwoquan_service/services/content-service/deploy/compose.yaml") for value in cmd)
+        )
 
     def test_local_gamma_t3_endpoint_checks_marks_scope_externals_out_of_scope(self) -> None:
         manifest = {
@@ -1977,9 +2276,9 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     return_value=topology["targets"]["beta-local"],
                 ),
                 mock.patch(
-                    "quwoquan_ops.cli.stackctl.load_product_telemetry_sls",
+                    "quwoquan_ops.cli.stackctl.load_product_telemetry_log_sink",
                     side_effect=RuntimeError(
-                        "product telemetry SLS deployment secret is missing: /external/beta.env"
+                        "local provider credentials must not be written into the repository or .qwq_output"
                     ),
                 ),
                 mock.patch(
@@ -1997,7 +2296,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 (Path(tmp_dir) / "repair_plan.json").read_text(encoding="utf-8")
             )
             self.assertTrue(
-                any("external product telemetry SLS" in item for item in repair_plan["actions"])
+                any("QWQ_DEPLOY_WORK_ROOT" in item for item in repair_plan["actions"])
             )
             self.assertFalse(
                 any("restart-stack" in item for item in repair_plan["actions"])

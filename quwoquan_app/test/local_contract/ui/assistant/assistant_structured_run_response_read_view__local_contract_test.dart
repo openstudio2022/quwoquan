@@ -8,7 +8,12 @@ void main() {
       'activeTopicTitle': ' T ',
       'dialogueRuntime': <String, dynamic>{'k': 1},
       'uiReferences': <dynamic>[
-        <String, dynamic>{'url': 'https://a'},
+        <String, dynamic>{
+          'destination': <String, dynamic>{
+            'kind': 'external',
+            'url': 'https://a.example',
+          },
+        },
       ],
       'uiActions': <dynamic>[
         <String, dynamic>{'id': 'x'},

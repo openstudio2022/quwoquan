@@ -28,7 +28,7 @@ quwoquan_data/schema/
 ```
 
 - family recipe 只声明可复用规模、runtime 和质量参数，不包含省份、日期、实体、executionId 或输出路径。
-- 省市范围、discovery、limit、milestone 和 executionId 只通过 CLI 参数进入执行。
+- 区域范围、discovery、count、execution phase 和 executionId 只通过 CLI 参数进入执行。
 - 实体类型只读 taxonomy/schema；内容结构和语言规则只读 template/prompt。
 - 默认凭证源是仓外且权限为 `0600` 的 `~/.config/quwoquan/cursor_api_key`；
   `QWQ_CURSOR_API_KEY_FILE` 只允许受控测试或显式替换该位置。任何输出不得包含
@@ -53,7 +53,7 @@ quwoquan_data/schema/
 `executionId` 必须符合：
 
 ```text
-YYYYMMDD--<vertical>-<contentType>-<intent>--<scope>--<canary|m1|m2|m3|h10k>-<sequence>
+YYYYMMDD--<vertical>-<contentType>-<intent>--<scope>--<pilot|scale|full>-<sequence>
 ```
 
 同一 ID 只允许 resume。新尝试递增 sequence，并在根 manifest 中声明 `retryOf`。不允许 taskId、batchId、planId、workerId 或其它平行身份。
@@ -93,13 +93,11 @@ canonical 只含最终业务对象，不得包含 raw source、草稿、prompt�
 python3 quwoquan_data/scripts/cli.py task execute --execution-id <id> ...
 ```
 
-`geo-homepages` 是唯一任务门面，聚合 target selection、执行、readiness、publish 与 ship，不建立独立 schema、runner 或输出根。
+`task execute` 是唯一任务门面。它组合 family、运行 request、target selection、执行、review、publish 与 ship，不建立独立 schema、runner 或输出根。
 
-## 浙江四川准出
+## 通用准出
 
-顺序固定：浙江金丝雀、四川金丝雀、M1、M2、M3 两省全覆盖。任何前序未绿不得启动后序。
-
-每个金丝雀必须完成：真实百科 source v2、逐图权利、Agent 主页、review、canonical 原子发布、Gamma 幂等导入、服务 API 核验、动态 App UAT、回滚与重放。
+每次运行由 `0.plan/request.json` 冻结目标、数量和阶段。任一运行先完成真实来源、逐图权利、Agent 创作、独立 review、canonical 原子发布、目标环境幂等导入、服务 API 核验、消费者 UAT、回滚与重放，才能创建下一次运行。
 
 最终执行：
 
@@ -107,7 +105,7 @@ python3 quwoquan_data/scripts/cli.py task execute --execution-id <id> ...
 python3 quwoquan_data/scripts/cli.py task preflight --json
 python3 quwoquan_data/scripts/cli.py verify content-execution-layout
 python3 quwoquan_data/scripts/cli.py verify publish-purity
-python3 quwoquan_data/scripts/cli.py verify two-province-coverage-release --release <releaseId>
+python3 quwoquan_data/scripts/cli.py verify release-lifecycle --release <releaseId>
 python3 quwoquan_data/scripts/cli.py verify all
 python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile integration
 ```

@@ -1,0 +1,83 @@
+read_model: FollowingSubjectItemView
+description: '首页关注频道顶部“关注动态”列表项。
+
+  '
+source_entities:
+- FollowingSubject
+consumers:
+- app
+client_projection:
+  dart_class: FollowingSubjectItemViewDto
+  base_class: ''
+  output_path: cloud/runtime/generated/user/profile_projection/following_subject_item_view_dto.g.dart
+  fields:
+  - name: subjectId
+    dart_type: String
+    nullable: false
+    source: subjectId
+    default: ''''''
+  - name: subjectType
+    dart_type: String
+    nullable: false
+    source: subjectType
+    default: ''''''
+  - name: displayName
+    dart_type: String
+    nullable: false
+    source: displayName
+    default: ''''''
+  - name: avatarUrl
+    dart_type: String
+    nullable: false
+    source: avatarUrl
+    default: ''''''
+  - name: coverUrl
+    dart_type: String
+    nullable: false
+    source: coverUrl
+    default: ''''''
+  - name: subtitle
+    dart_type: String
+    nullable: false
+    source: subtitle
+    default: ''''''
+  - name: targetRouteId
+    dart_type: String
+    nullable: false
+    source: targetRouteId
+    default: ''''''
+  - name: targetObjectId
+    dart_type: String
+    nullable: false
+    source: targetObjectId
+    default: ''''''
+  - name: followedAt
+    dart_type: String
+    nullable: false
+    source: followedAt
+    default: ''''''
+  - name: lastVisitedAt
+    dart_type: String
+    nullable: false
+    source: lastVisitedAt
+    default: ''''''
+  - name: latestChangedAt
+    dart_type: String
+    nullable: false
+    source: latestChangedAt
+    default: ''''''
+  - name: unreadChangeCount
+    dart_type: int
+    nullable: false
+    source: unreadChangeCount
+    default: '0'
+  - name: hasUnreadChanges
+    dart_type: bool
+    nullable: false
+    source: hasUnreadChanges
+    default: 'false'
+  - name: latestChangeReason
+    dart_type: String
+    nullable: false
+    source: latestChangeReason
+    default: ''''''

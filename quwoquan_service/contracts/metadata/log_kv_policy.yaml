@@ -1,7 +1,7 @@
 # Log KV Policy — root aggregator for cross-cutting log field strategies
 policies:
   - model: content-service
-    operation: POST /content/posts
+    operation: POST /content/content/posts
     input:
       - key: contentType
         strategy: plain
@@ -36,7 +36,7 @@ policies:
         strategy: plain
 
   - model: integration-service
-    operation: GET /integration/location/nearby
+    operation: GET /integration/external_integration/location/nearby
     input:
       - key: lat
         strategy: plain
@@ -49,7 +49,7 @@ policies:
         strategy: plain
 
   - model: integration-service
-    operation: GET /integration/location/search
+    operation: GET /integration/external_integration/location/search
     input:
       - key: q
         strategy: plain

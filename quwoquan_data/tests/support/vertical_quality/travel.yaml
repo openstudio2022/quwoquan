@@ -1,0 +1,11 @@
+schema: quwoquan.vertical_quality_samples
+vertical: travel
+samples:
+  - id: travel.sample.test-entity-a
+    entityRef: /entity/地点/景区/test-entity-a
+    requiredEvidenceCategories: [encyclopedia, official, travelogue, map_geo]
+    requiredChecks: [fact_traceability, season_window, route_safety, lodging_transport]
+  - id: travel.sample.test-entity-b
+    entityRef: /entity/地点/城市/test-entity-b
+    requiredEvidenceCategories: [official, guidebook, transport, lodging, review]
+    requiredChecks: [visa_entry, payment_connectivity, safety_medical, route_plan]

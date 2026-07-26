@@ -49,12 +49,47 @@ func TestAssistantPreferenceMetadataGeneratesTypedWire(t *testing.T) {
 	}
 	output := string(payload)
 	for _, required := range []string{
+		"import 'assistant_runtime_enums.g.dart';",
 		"class AssistantPreferenceFact {",
 		"class AssistantPreferenceFactListView {",
 		"final List<AssistantPreferenceFact> items;",
+		"class AssistantStartRunRequest {",
+		"final AssistantRunTextInput input;",
+		"final AssistantRunTrigger trigger;",
+		"class AssistantCreateConversationRequest {",
+		"final String clientRequestId;",
 	} {
 		if !strings.Contains(output, required) {
 			t.Fatalf("generated assistant wire missing %q", required)
 		}
+	}
+	if strings.Contains(output, "enum AssistantPreferenceScope") ||
+		strings.Contains(output, "class AssistantWireEnumParseFailure") {
+		t.Fatal("cloud wire must reuse the canonical Assistant runtime enum source")
+	}
+}
+
+func TestAssistantWireDatetimeRemainsStronglyTyped(t *testing.T) {
+	fields := &fieldsFile{Entities: map[string]entityDef{}}
+	field := fieldDef{
+		Name:        "capturedAt",
+		Type:        "datetime",
+		Constraints: []string{"NULLABLE"},
+	}
+
+	if got := assistantWireDartType(fields, nil, field, true); got != "DateTime?" {
+		t.Fatalf("datetime Dart type = %q, want DateTime?", got)
+	}
+	if got := assistantWireFromJsonExpr(
+		fields,
+		nil,
+		"AssistantContextSnapshot",
+		field,
+	); !strings.Contains(got, "DateTime.tryParse") {
+		t.Fatalf("datetime parser = %q", got)
+	}
+	if got := assistantWireToJsonExpr(fields, nil, field); got !=
+		"capturedAt?.toUtc().toIso8601String()" {
+		t.Fatalf("datetime serializer = %q", got)
 	}
 }

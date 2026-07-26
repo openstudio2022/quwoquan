@@ -6,6 +6,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   final Map<String, _AlphaUpload> _uploads = <String, _AlphaUpload>{};
   final Map<String, ContentMediaAssetSlice> _assets =
       <String, ContentMediaAssetSlice>{};
+  final Set<String> _discardedAssetIds = <String>{};
   int _sequence = 0;
 
   @override
@@ -20,9 +21,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       sessionId: id,
       assetId: null,
       status: ContentMediaUploadStatus.pending,
-      objectKey: 'alpha/uploads/$id',
       uploadUrl: Uri.parse('https://alpha-upload.invalid/$id'),
-      cdnUrl: null,
       expiresAt: expiresAt,
       replayed: false,
     );
@@ -55,9 +54,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       sessionId: command.sessionId,
       assetId: assetId,
       status: ContentMediaUploadStatus.completed,
-      objectKey: 'alpha/media/$assetId',
       uploadUrl: null,
-      cdnUrl: cdnUrl,
       expiresAt: upload.expiresAt,
       replayed: false,
     );
@@ -75,9 +72,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       sessionId: command.sessionId,
       assetId: null,
       status: ContentMediaUploadStatus.aborted,
-      objectKey: 'alpha/uploads/${command.sessionId}',
       uploadUrl: null,
-      cdnUrl: null,
       expiresAt: upload.expiresAt,
       replayed: false,
     );
@@ -94,7 +89,6 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       sessionId: query.sessionId,
       version: upload.status == ContentMediaUploadStatus.completed ? 2 : 1,
       assetId: upload.assetId,
-      objectKey: 'alpha/uploads/${query.sessionId}',
       mediaType: upload.command.mediaType,
       contentType: upload.command.contentType,
       fileSize: upload.command.fileSize,
@@ -112,6 +106,29 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
     final asset = _assets[query.mediaId];
     if (asset == null) throw StateError('alpha media asset not found');
     return asset;
+  }
+
+  @override
+  Future<ContentMediaAssetDiscardResult> discardMediaAsset(
+    DiscardContentMediaAssetCommand command,
+    ContentMediaAssetCommandContext context,
+  ) async {
+    if (_discardedAssetIds.contains(command.mediaId)) {
+      return ContentMediaAssetDiscardResult(
+        mediaId: command.mediaId,
+        status: ContentMediaProcessingStatus.deleted,
+        replayed: true,
+      );
+    }
+    if (_assets.remove(command.mediaId) == null) {
+      throw StateError('alpha media asset not found');
+    }
+    _discardedAssetIds.add(command.mediaId);
+    return ContentMediaAssetDiscardResult(
+      mediaId: command.mediaId,
+      status: ContentMediaProcessingStatus.deleted,
+      replayed: false,
+    );
   }
 
   @override
@@ -136,11 +153,13 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaCoverSelectionResult> selectAutoCover(
     SelectAutoContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
   ) async => _cover(command.mediaId, 'first_frame');
 
   @override
   Future<ContentMediaCoverSelectionResult> selectManualCover(
     SelectManualContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
   ) async => _cover(command.mediaId, 'manual', command.coverAssetId);
 
   ContentMediaCoverSelectionResult _cover(

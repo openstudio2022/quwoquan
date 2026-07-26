@@ -8,7 +8,7 @@
     },
     "executionId": {
       "type": "string",
-      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3|h10k)-[0-9]{3,}$"
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
     "executionBinding": {
       "enum": [
@@ -48,6 +48,9 @@
     },
     "carrier": {
       "type": "string"
+    },
+    "vertical": {
+      "type": ["string", "null"]
     },
     "publishLayout": {
       "type": "string"
@@ -106,6 +109,15 @@
         "null"
       ],
       "description": "主底稿来源 ref（风格与事实锚点）"
+    },
+    "allowedContactNumbers": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]+$"
+      },
+      "description": "仅从主底稿中带官方场馆语境的联系方式派生，用于 review 放行"
     },
     "bannedRegisterTerms": {
       "type": "array",

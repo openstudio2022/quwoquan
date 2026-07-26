@@ -1,10 +1,8 @@
 """Review gates and human-review ledger persistence for route production."""
 from __future__ import annotations
-
 from pathlib import Path
 import re
 from typing import Any, Mapping, Sequence
-
 from core.data_issue import DataIssueCode, DataRecoveryAction, data_issues
 from content.post.article.evidence_bundle import gate_route_evidence_bundle
 from content.post.content_review import (
@@ -25,6 +23,7 @@ from content.post.article.draft_io import (
     repair_creative_meta,
 )
 from governance.coverage.entity_extract import build_entities_sidecar
+from governance.coverage.license import rights_proof_required
 from core.image_safety import assess_asset_sources
 from content.execution.stage_reports import write_gate_report, write_repair_report, write_stage_result
 from core.style_catalog import detect_opening_strategy, family_allowed_openings
@@ -257,7 +256,12 @@ def _check_image_fidelity(compose_payload: Mapping[str, Any]) -> dict[str, Any]:
     if carrier != "image":
         return {"passed": True, "issues": [], "suggestions": []}
     assets = [asset for asset in (compose_payload.get("assets") or []) if isinstance(asset, Mapping)]
+    vertical = str(compose_payload.get("vertical") or "").strip()
     issues: list[str] = []
+    if not vertical:
+        issues.append("image carrier missing vertical policy owner")
+        return {"passed": False, "issues": issues, "suggestions": []}
+    require_rights_proof = rights_proof_required(vertical)
     creators = {
         _image_fact(asset, "creator", "credit", "sourceAuthor")
         for asset in assets
@@ -273,10 +277,17 @@ def _check_image_fidelity(compose_payload: Mapping[str, Any]) -> dict[str, Any]:
             missing.append("sourceCollectionId")
         if not _image_fact(asset, "collectionPageUrl", "sourceUrl", "pinUrl"):
             missing.append("collectionPageUrl/sourceUrl/pinUrl")
-        if not _image_fact(asset, "license"):
+        if require_rights_proof and not _image_fact(asset, "license"):
             missing.append("license")
-        if not (_image_fact(asset, "termsUrl") or _image_fact(asset, "authorizationProof")):
+        if require_rights_proof and not (
+            _image_fact(asset, "termsUrl")
+            or _image_fact(asset, "authorizationProof")
+        ):
             missing.append("termsUrl|authorizationProof")
+        if not require_rights_proof and _image_fact(
+            asset, "rightsAuditStatus"
+        ) not in {"verified", "unverified"}:
+            missing.append("rightsAuditStatus")
         if not _image_fact(asset, "creator", "credit", "sourceAuthor"):
             missing.append("creator|credit|sourceAuthor")
         if missing:

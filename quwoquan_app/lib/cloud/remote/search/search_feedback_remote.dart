@@ -18,7 +18,7 @@ final class RemoteSearchFeedbackAdapter implements SearchFeedbackCommandWriter {
   Future<SearchFeedbackAck> reportSearchFeedback(
     ReportSearchFeedbackCommand command,
   ) {
-    return client.searchQueryReportSearchFeedback(
+    return client.searchFeedbackFactReportSearchFeedback(
       command,
       context: invocationContext(SearchRequestPageIds.reportSearchFeedback),
     );

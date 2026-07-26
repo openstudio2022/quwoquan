@@ -1,0 +1,60 @@
+read_model: CircleFeed
+description: '圈子动态流 ReadModel。服务端联合已发布 Post 本地投影与
+
+  CirclePostPlacement 聚合读集合；成员关系不直接改变 Feed，
+
+  禁止从 Post.circleIds 或成员行为反推放置关系，也禁止把圈子级
+
+  pin/feature 状态回写到跨圈共享的 Post 文档。
+
+  '
+storage_backend: mongodb
+collections:
+- posts
+- circle_post_placements
+source_entities:
+- Post
+- CirclePostPlacement
+source_events:
+- PostPublished
+- CirclePostPlaced
+- CirclePostPlacementPresentationChanged
+- CirclePostPlacementRemoved
+consumers:
+- app (circle feed)
+fields:
+- name: circleId
+  type: string
+- name: placementId
+  type: string
+- name: postId
+  type: string
+- name: contentType
+  type: enum
+- name: authorId
+  type: string
+- name: title
+  type: string
+- name: publishedAt
+  type: timestamp
+- name: likeCount
+  type: int
+- name: commentCount
+  type: int
+- name: pinned
+  type: boolean
+- name: featured
+  type: boolean
+- name: pinnedAt
+  type: timestamp
+- name: featuredAt
+  type: timestamp
+indexes:
+- name: idx_circle_post_placement_feed
+  collection: circle_post_placements
+  keys:
+    circleId: 1
+    state: 1
+    pinned: -1
+    featured: -1
+    lastActiveAt: -1

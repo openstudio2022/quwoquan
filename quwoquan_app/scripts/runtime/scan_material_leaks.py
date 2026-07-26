@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Inventory Material API surface usage under quwoquan_app/lib/ui and lib/components.
+Report Material API surface usage under quwoquan_app/lib/ui and lib/components.
 
 Outputs (repo root):
-  - specs/inventories/material_leak_lib_ui_components.yaml
-  - specs/inventories/material_leak_lib_ui_components.md
+  - .qwq_output/env/repo/runs/feature-tree/material_leaks.yaml
+  - .qwq_output/env/repo/runs/feature-tree/material_leaks.md
 
-This is documentation / debt tracking only — not a CI gate.
+This is a disposable runtime report, not a tracked debt inventory or CI gate.
 Re-run: python3 quwoquan_app/scripts/runtime/scan_material_leaks.py
 """
 from __future__ import annotations
@@ -19,8 +19,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_LIB = ROOT / "quwoquan_app" / "lib"
-OUT_YAML = ROOT / "specs" / "inventories" / "material_leak_lib_ui_components.yaml"
-OUT_MD = ROOT / "specs" / "inventories" / "material_leak_lib_ui_components.md"
+OUT_DIR = ROOT / ".qwq_output" / "env" / "repo" / "runs" / "feature-tree"
+OUT_YAML = OUT_DIR / "material_leaks.yaml"
+OUT_MD = OUT_DIR / "material_leaks.md"
 
 SCOPES: tuple[tuple[str, Path], ...] = (
     ("ui", APP_LIB / "ui"),

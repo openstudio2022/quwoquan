@@ -1,0 +1,264 @@
+commercial_defaults:
+  status: blocked
+  block_reason: canonical operation 尚待对象中心化商用迁移
+  gap_id: CONTENT_CONTENT_REACTION_COMMERCIAL_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+description: ContentReaction 以封闭目标类型承载 Post 点赞与 Comment 赞踩三态的独立聚合命令和只读切片。
+api_routes:
+- method: POST
+  path: /content/posts/{postId}/like
+  operation: LikePost
+  actor: persona_or_device
+  application:
+    kind: command
+    facet: ContentReactionCommandFacet
+    method: like
+    aggregate_owner: ContentReaction
+    mutation_target: ContentReaction
+    invariant_target: ContentReaction
+  authorization:
+    principal: public
+    ownership_policy: authenticated_persona_or_derived_device_actor
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.invalid_argument
+  - CONTENT.USER.idempotency_conflict
+  - CONTENT.USER.version_conflict
+  - CONTENT.SYSTEM.storage_write_failed
+  privacy:
+    request_classification: PII
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_reaction_like
+    trace: true
+    attributes:
+    - actor_dimension
+    - outcome
+  slo:
+    latency_p95_ms: 800
+    availability_percent: 99.9
+  description: persona 或派生 device actor 对 Post 建立 like 关系；重复请求回放 receipt，关系变化写同一 Mongo transaction 的 outbox
+  client_contract:
+    dart_import: ../content/content_reaction_contracts.dart
+    request_type: LikeContentPostCommand
+    response_type: ContentReactionCommandResult
+    request_encoder: encodeLikeContentPostCommand
+    response_decoder: decodeContentReactionCommandResult
+  security:
+    auth_mode: optional
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+- method: DELETE
+  path: /content/posts/{postId}/like
+  operation: UnlikePost
+  actor: persona_or_device
+  application:
+    kind: command
+    facet: ContentReactionCommandFacet
+    method: unlike
+    aggregate_owner: ContentReaction
+    mutation_target: ContentReaction
+    invariant_target: ContentReaction
+  authorization:
+    principal: public
+    ownership_policy: authenticated_persona_or_derived_device_actor
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.invalid_argument
+  - CONTENT.USER.idempotency_conflict
+  - CONTENT.USER.version_conflict
+  - CONTENT.SYSTEM.storage_write_failed
+  privacy:
+    request_classification: PII
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_reaction_unlike
+    trace: true
+    attributes:
+    - actor_dimension
+    - outcome
+  slo:
+    latency_p95_ms: 800
+    availability_percent: 99.9
+  description: persona 或派生 device actor 将自身 Post 点赞关系迁移为 none；重复请求不产生第二个事实
+  client_contract:
+    dart_import: ../content/content_reaction_contracts.dart
+    request_type: UnlikeContentPostCommand
+    response_type: ContentReactionCommandResult
+    request_encoder: encodeUnlikeContentPostCommand
+    response_decoder: decodeContentReactionCommandResult
+  security:
+    auth_mode: optional
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+- method: POST
+  path: /content/comments/{commentId}/reaction
+  operation: ReactToComment
+  actor: persona
+  application:
+    kind: command
+    facet: ContentReactionCommandFacet
+    method: reactToComment
+    aggregate_owner: ContentReaction
+    mutation_target: ContentReaction
+    invariant_target: ContentReaction
+  authorization:
+    principal: persona
+    ownership_policy: authenticated_persona
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 5000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.invalid_argument
+  - CONTENT.USER.comment_not_found
+  - CONTENT.USER.comment_reaction_forbidden
+  - CONTENT.USER.idempotency_conflict
+  - CONTENT.SYSTEM.storage_write_failed
+  privacy:
+    request_classification: PII
+    response_classification: PUBLIC
+    log_policy: metadata_only
+  telemetry:
+    metric: content_comment_reaction_update
+    trace: true
+    attributes:
+    - reaction
+    - outcome
+  slo:
+    latency_p95_ms: 800
+    availability_percent: 99.9
+  description: 评论赞踩三态反应；reaction 为 like、dislike 或 none，ContentReaction 成员关系为唯一真相源，Comment 仅消费计数与 viewer
+    projection。
+  writable_fields:
+  - reaction
+  client_contract:
+    dart_import: ../content/content_reaction_contracts.dart
+    request_type: ReactToContentCommentCommand
+    response_type: ContentCommentReactionCommandResult
+    request_encoder: encodeReactToContentCommentCommand
+    response_decoder: decodeContentCommentReactionCommandResult
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+- method: GET
+  path: /content/posts/{postId}/reactions
+  operation: GetContentReactionState
+  actor: persona_or_device
+  application:
+    kind: query
+    facet: ContentReactionQueryFacet
+    method: getState
+    reader: ContentReactionStateReader
+    slice: ContentReactionStateSlice
+  authorization:
+    principal: public
+    ownership_policy: authenticated_persona_or_derived_device_actor
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 800
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CONTENT.USER.invalid_argument
+  - CONTENT.SYSTEM.storage_read_failed
+  privacy:
+    request_classification: PII
+    response_classification: PUBLIC
+    log_policy: metadata_only
+  telemetry:
+    metric: content_reaction_state_get
+    trace: true
+    attributes:
+    - actor_dimension
+    - found
+    - outcome
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+  description: 读取当前已验证 persona 或派生 device actor 的 ContentReaction 状态 Slice；不混入站外分享事实或 Report 状态。
+  response_entity: ContentReaction
+  client_contract:
+    dart_import: ../content/content_reaction_contracts.dart
+    request_type: GetContentPostReactionStateQuery
+    response_type: ContentPostReactionStateSlice
+    request_encoder: encodeGetContentPostReactionStateQuery
+    response_decoder: decodeContentPostReactionStateSlice
+  security:
+    auth_mode: optional
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+consumers:
+- name: app
+  capabilities:
+  - like_post
+  - unlike_post
+  - react_to_comment
+  - get_reaction_state
+contract_test:
+  mock_strategy:
+    service_side:
+      description: Mongo replica set transaction 同时写入关系、command receipt 与 outbox fact
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+      scenarios:
+      - name: unique_actor_dimension_relation
+        commands:
+        - LikePost persona
+        - LikePost device
+        assertions:
+        - 同值 personaId 与 deviceActorId 生成两条独立关系
+        - 同 targetKind + targetId + actorDimension + actorId 只保留一条聚合
+      - name: idempotent_like_and_unlike
+        commands:
+        - LikePost x2
+        - UnlikePost x2
+        assertions:
+        - 同 idempotency key 只写一条 outbox fact
+        - receipt 回放返回原 aggregate version
+      - name: comment_three_state_membership
+        commands:
+        - ReactToComment like
+        - ReactToComment dislike
+        - ReactToComment none
+        assertions:
+        - 同一 actor 对同一 Comment 只保留一条成员关系
+        - like/dislike 计数只从 ContentReaction 权威集合派生
+        - Post 目标拒绝 dislike
+      - name: server_owned_cas_and_projection_read
+        assertions:
+        - 调用方不提交版本前置条件，服务端以当前聚合版本执行 CAS
+        - Reader 使用 BSON projection 返回 ContentReactionStateSlice

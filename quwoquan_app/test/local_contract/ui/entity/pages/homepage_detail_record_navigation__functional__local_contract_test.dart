@@ -6,12 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
+import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show CloudOperationCancellationSignal;
@@ -40,6 +42,11 @@ void main() {
   testWidgets('实体记录卡进入 generated workBrowser 并透传来源与 feed trace', (
     tester,
   ) async {
+    final behaviorTracker = ContentBehaviorTracker(
+      reporter: MockBehaviorRepository(),
+      enablePeriodicFlush: false,
+    );
+    addTearDown(behaviorTracker.dispose);
     // 本用例只验证记录卡路由语义；使用足够高的 viewport 让折叠头部后的首张记录卡
     // 可命中。折叠滚动几何由 homepage_detail_page_widget 的独立用例覆盖。
     tester.view.physicalSize = const Size(800, 1200);
@@ -81,6 +88,17 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            AlphaIntersectionRepository(),
+          ),
+          contentBehaviorTrackerProvider.overrideWithValue(behaviorTracker),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             const _EmptyIntroductionRepository(),
@@ -120,3 +138,9 @@ class _EmptyIntroductionRepository implements HomepageIntroductionRepository {
 }
 
 class _NoNetworkHttpOverrides extends HttpOverrides {}
+
+final class _GuestHomepageSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
+}

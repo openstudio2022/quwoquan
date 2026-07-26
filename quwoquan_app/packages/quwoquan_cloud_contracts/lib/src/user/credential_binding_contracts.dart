@@ -1,7 +1,7 @@
 import '../operation_request_payload.dart';
 
 /// CredentialBinding 聚合查询/命令的 pure contracts。
-/// 真相源：contracts/metadata/user/credential_binding/{service,fields}.yaml。
+/// 真相源：quwoquan_service/services/user-service/contracts/account/credential_binding/{service,fields}.yaml。
 /// 唯一性由 DB 约束保证；冲突映射 USER.AUTH.credential_conflict，
 /// 解绑最后一个凭证映射 USER.AUTH.last_credential。
 

@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -196,7 +197,10 @@ void main() {
     final references = <Map<String, dynamic>>[
       <String, dynamic>{
         'title': '中国气象局',
-        'url': 'https://weather.cma.cn/shenzhen',
+        'destination': <String, dynamic>{
+          'kind': 'external',
+          'url': 'https://weather.cma.cn/shenzhen',
+        },
         'source': 'weather.cma.cn',
       },
     ];

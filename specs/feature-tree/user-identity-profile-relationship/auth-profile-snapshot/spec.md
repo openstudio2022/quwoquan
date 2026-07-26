@@ -1,76 +1,88 @@
-# L2 特性：auth-profile-snapshot
+# L2 Business Capability：认证资料快照 (`auth-profile-snapshot`)
 
-## 功能说明
-- 负责 `OwnerAccount` 的认证、会话、凭证绑定、恢复与子账号快照读取。
-- 负责登录后把 `OwnerAccount` 安全映射到目标 `SubAccount`，并返回应用可消费的身份快照。
+> 所属领域：[`user-identity-profile-relationship`](../spec.md)
+>
+> 设计归属：[L1 DEC-001](../design.md#dec-001)
+
+## 1. 能力目标
+
+提供认证、refresh token、owner/Persona 资料快照与凭证管理，使登录主体在刷新、切换和资料更新后保持一致且安全。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- OTP/手机号登录、一键登录、匿名登录、refresh token、logout
+- owner 级凭证列表、绑定/解绑、最后一个凭证保护
+- ownerId / activeSub / accountState / identityOrigin 等登录结果快照一致性
+
+### Out of Scope
+
+- 账号注销、恢复申诉、数据导出
+- Web 宽屏登录门 UI 细节
+
+## 3. Journey / Scenario 贡献
+
+- [`JNY-001 / SCN-004`](../../spec.md#scn-004)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：认证、refresh token、owner/subAccount 快照与凭证管理的能力级 SIT 验收，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+
+## 4. Story
+
+
+
+- [`auth-token-lifecycle`](./auth-token-lifecycle/spec.md)：定义“认证 Token 生命周期”的可观察主路径、失败语义及父能力交接。
+- [`profile-read-update`](./profile-read-update/spec.md)：读取与更新资料时保持公开字段、私有凭证和聊天快照边界一致。
+- [`profile-snapshot-versioning`](./profile-snapshot-versioning/spec.md)：定义“资料快照版本控制”的可观察主路径、失败语义及父能力交接。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 登录结果快照、凭证管理与会话状态机端云一致
+
+- LoginWithPhone / LoginOneTap / LoginAnonymous / RefreshToken / Logout 的 request/response 字段与 metadata、App DTO、服务端行为一致。
+- accessToken、refreshToken、ownerId、activeSub、accountState、identityOrigin 在 App Session 与服务端 contract 中同源。
+- ListCredentials / BindCredential / UnbindCredential 的鉴权模式、错误码与“最后一个凭证禁止解绑”约束可验证。
+
+<a id="req-002"></a>
+### REQ-002 负责资料读取、资料更新提案、会话刷新、设备 token、恢复与安全风控的统一边界
+
 - 负责资料读取、资料更新提案、会话刷新、设备 token、恢复与安全风控的统一边界。
 - 预留第三方授权票据与 passkey challenge/assertion 的统一认证边界，确保 App 只透传短期票据或 WebAuthn 结果，不在客户端持有高价值密钥。
-
-## 目标用户
-- 需要安全登录、长期会话与多设备同步的普通用户。
-- 需要在多个子账号之间切换，同时又不希望外界感知这些账号有关联的重度用户。
-- 需要做账号恢复、申诉、风控与设备治理的客服/治理侧角色。
-
-## 关键用户故事
-- 用户可以用手机号、微信、Apple 绑定到同一个主控账号。
-- 用户可以在服务端开通后使用系统凭据 / passkey 登录，并继续收口到同一 `OwnerAccount`。
-- 用户可以刷新登录态、查看最近设备、主动退出或在高风险场景下触发保护。
-- 用户可以读取主控账号可见的子账号清单与最近使用上下文，但应用侧始终基于某个子账号快照运行。
-- 用户丢失登录方式或遭遇风险锁定时，可以进入恢复链路并保持资料、子账号和记录行为的安全边界。
-
-## 范围
-- 主控账号认证与会话生命周期。
-- 多登录方式绑定与去重策略。
-- passkey 注册 / 登录 challenge、assertion、upgrade 的 metadata 与客户端接口预留。
-- 子账号快照读取与上下文装配。
-- 资料读写、资料提案、版本冲突与缓存失效。
-- 推送 token 注册、设备登记、风控锁定、恢复入口。
-
-## 约束
-- 契约与字段策略必须与 OpenAPI 与 metadata 保持一致。
-- `OwnerAccount` 是认证与安全边界，不是应用内默认展示对象。
+- 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
 - `SubAccount` 快照必须可独立装配，不能把其他子账号的私有资料、关系与上下文混入当前会话。
 - 登录刷新、设备注册、提案确认/应用/拒绝、恢复与锁定必须具备幂等、版本控制和回滚语义。
 - 微信 / Apple / passkey 登录都必须遵守“App 只传短期凭据，服务端负责换取长期会话”的原则；任何 provider secret、WebAuthn 验签私密逻辑不得落在客户端。
-- refresh token 轮换仍是移动端长期登录主路径；passkey 预留用于首登/回访快捷再认证，不替代会话续期状态机。
 - 电话号码、第三方 union 标识、设备指纹、风险字段与审计字段必须严格按 metadata 分级与屏蔽。
-- 支持单个 `OwnerAccount` 下多 `SubAccount`，但默认 API 响应与应用上下文只返回当前目标子账号所需视图。
-
-## 设计边界
-- `service.yaml`
-  - 用户面登录、刷新、资料读写、设备注册、子账号列表与切换上下文相关契约。
-  - 微信 / Apple 票据登录与 passkey challenge/assertion/upgrade 路由真相源。
-- `errors.yaml`
-  - 登录失败、风控锁定、恢复受限、版本冲突等错误码。
-- `fields.yaml`
-  - `OwnerAccount`、`SubAccount`、凭证、设备、恢复对象的分级字段与暴露边界。
-- `workflow.yaml` / `control_plane.yaml`
-  - 恢复 case、双签、客服协同与治理动作留给增长/控制面侧扩展。
-
-## 对标输入
-- 微信：多设备安全、会话刷新、风控锁定、恢复与设备管理。
-- Apple/微信登录生态：第三方授权失败恢复与重新绑定。
-- 微博/小红书：资料快照、昵称头像更新、主页上下文刷新。
-
-## 非功能目标
-- Token 刷新与当前子账号快照恢复在常规网络下 P95 小于 500ms。
-- 资料更新后的快照缓存与主页数据在 3 秒内完成失效或刷新。
 - 风控锁定、异常登录、恢复发起与设备变更必须可审计。
 - passkey / 第三方登录入口未开通时必须降级清晰，不得破坏手机号 OTP 与 refresh 主路径。
 - 恢复链路与登录链路必须支持灰度与回滚，不可影响正常登录主路径。
 
-## 不做什么（Out of Scope）
-- 不在本节点定义完整的邀请奖励、通讯录增长与分群经营。
-- 不在本节点细化群、圈子、好友关系建立本身。
-- 不在本节点展开客服工作台与恢复 case 字段级 schema。
+## 6. 契约与依赖
 
-## 验收标准
-- A1：手机号、微信、Apple 三种登录方式可绑定到同一 `OwnerAccount`，并能恢复到正确会话。
-- A1.1：passkey / 系统凭据登录相关 challenge/assertion/upgrade 的 metadata、客户端 repository 接口与错误码已预留，且不引入第二真相源。
-- A2：应用启动后总能拿到当前 `SubAccount` 所需的最小身份快照，而不会泄露其他子账号上下文。
-- A3：token 刷新、设备注册、资料提案、恢复与风控锁定状态机具备幂等与版本控制。
-- A4：主控账号与子账号的资料边界清晰，应用侧读取的是子账号视图而非主控全量视图。
-- A5：高风险登录、登录失败、恢复申请与设备变更可被审计、追踪与回滚。
-- A6：PII/SENSITIVE/SECRET 字段的分级、脱敏、缓存与日志策略生效。
-- A7：登录、刷新、资料、设备、恢复相关契约与 metadata / OpenAPI / codegen 一致。
-- A8：对应自动化测试覆盖多方式登录、会话恢复、子账号快照读取、资料更新、设备注册与恢复入口。
+- 上游能力：[`user-identity-profile-relationship`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 登录结果快照、凭证管理与会话状态机端云一致
+
+- GIVEN 执行“登录结果快照、凭证管理与会话状态机端云一致”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“登录结果快照、凭证管理与会话状态机端云一致”对应动作。
+- THEN LoginWithPhone / LoginOneTap / LoginAnonymous / RefreshToken / Logout 的 request/response 字段与 metadata、App DTO、服务端行为一致。
+- THEN accessToken、refreshToken、ownerId、activeSub、accountState、identityOrigin 在 App Session 与服务端 contract 中同源。
+- THEN ListCredentials / BindCredential / UnbindCredential 的鉴权模式、错误码与“最后一个凭证禁止解绑”约束可验证。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 登录结果快照、凭证管理与会话状态机端云一致
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：LoginWithPhone / LoginOneTap / LoginAnonymous / RefreshToken / Logout 的 request/response 字段与 metadata、App DTO、服务端行为一致。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

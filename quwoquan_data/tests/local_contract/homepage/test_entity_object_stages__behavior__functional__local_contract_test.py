@@ -24,7 +24,7 @@ from core.paths import (  # noqa: E402
 from content.homepage.homepage_prepare import prepare_entity_pages  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
-_EXECUTION_ID = "20260712--travel-homepage-coverage--cn-sichuan--canary-999"
+_EXECUTION_ID = "20260712--travel-homepage-coverage--test-region-b--pilot-999"
 _DOMAIN, _ETYPE, _NAME = "地点", "景区", "稻城亚丁"
 
 
@@ -65,3 +65,4 @@ def test_entity_page_input__uses_execution_object_root_without_retired_sop__cont
     assert payload["executionId"] == _EXECUTION_ID
     assert not {"sopDir", "sopTemplate", "sopGuide", "sopExample"} & payload.keys()
     assert "SOP" not in payload["editingInstruction"]
+    assert "改写约 20%-30%" in payload["editingInstruction"]

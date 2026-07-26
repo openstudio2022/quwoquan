@@ -147,6 +147,26 @@ class _ProbeHandler(BaseHTTPRequestHandler):
 
 
 class ReportFeedbackEnvironmentEvidenceTest(unittest.TestCase):
+    def test_lifecycle_probe_uses_generated_report_route_namespace(self) -> None:
+        probe_source = PROBE_PATH.read_text(encoding="utf-8")
+        generated_routes = (
+            ROOT
+            / "quwoquan_service/services/content-service/generated/"
+            "trust_safety/report/transport/routes.g.go"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'pathTemplate: "/content/reports"',
+            generated_routes,
+            "ContractGraph generated route must own the report namespace",
+        )
+        self.assertIn('"/content/reports"', probe_source)
+        self.assertNotIn(
+            "/content/trust_safety/reports",
+            probe_source,
+            "验收探针不得调用已退役的非合同路由",
+        )
+
     def test_local_operator_session_reuses_canonical_acceptance_issuer(self) -> None:
         support = _load_probe_support_module()
         session = support.LocalAcceptanceSession(

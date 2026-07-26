@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.control_types import ExecutionStage, ExecutionStateStatus
+from core.control_types import ContentType, ExecutionStage, ExecutionStateStatus
 from core.data_issue import (
     DataIssueCode,
     DataIssueLane,
@@ -20,8 +20,8 @@ from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 
 def _context(*, entity_ids: list[str] | None = None) -> ExecutionContext:
-    resolved_entity_ids = entity_ids or ["东钱湖"]
-    execution_id = "20260716--travel-homepage-coverage--cn-zhejiang--canary-099"
+    resolved_entity_ids = entity_ids or ["测试实体乙"]
+    execution_id = "20260716--travel-homepage-coverage--test-region-a--pilot-099"
     return ExecutionContext(
         execution_id=execution_id,
         entity_ids=resolved_entity_ids,
@@ -50,7 +50,12 @@ def test_homepage_only_completion_ignores_disabled_article_and_image_lanes(monke
         "audit_execution_readiness",
         lambda *_args, **_kwargs: {
             "failedLaneCount": 0,
-            "lanePassed": {"homepage": 1, "article": 0, "image": 0},
+            "lanePassed": {
+                ContentType.HOMEPAGE.value: 1,
+                ContentType.ARTICLE.value: 0,
+                ContentType.IMAGE.value: 0,
+                ContentType.VIDEO.value: 0,
+            },
             "targetCount": 1,
         },
     )
@@ -61,8 +66,56 @@ def test_homepage_only_completion_ignores_disabled_article_and_image_lanes(monke
     ) == []
 
 
+def test_video_completion_accepts_video_lane_readiness(monkeypatch):
+    execution_id = "20260716--travel-video-coverage--test-region-a--pilot-099"
+    ctx = ExecutionContext(
+        execution_id=execution_id,
+        entity_ids=["测试实体乙"],
+        spec=ExecutionFixtureBuilder(execution_id).spec(),
+        managed=True,
+    )
+    monkeypatch.setattr(
+        "content.execution.workspace.load_execution_manifest",
+        lambda _execution_id: {"selectionPolicy": "frozen"},
+    )
+    monkeypatch.setattr(
+        auto_research,
+        "_download_auto_research_lanes",
+        lambda _ctx: {ContentType.VIDEO.value},
+    )
+    from content.execution import readiness_audit
+
+    monkeypatch.setattr(
+        readiness_audit,
+        "audit_execution_readiness",
+        lambda *_args, **_kwargs: {
+            "failedLaneCount": 0,
+            "lanePassed": {ContentType.VIDEO.value: 1},
+            "targetCount": 1,
+        },
+    )
+
+    assert execution_completion.execution_completion_issues(
+        ctx,
+        ExecutionFixtureBuilder(execution_id).state(),
+    ) == []
+
+
+def test_readiness_quota_projection_covers_every_content_type():
+    from content.execution.readiness_audit import _quota_by_lane
+
+    execution_id = "20260716--travel-video-coverage--test-region-a--pilot-100"
+    spec = ExecutionFixtureBuilder(execution_id).spec()
+
+    assert _quota_by_lane(spec) == {
+        content_type.value: spec.content.quotas.for_type(content_type)
+        for content_type in ContentType
+    }
+    assert _quota_by_lane(spec)[ContentType.VIDEO.value] == 1
+
+
 def test_download_plan_availability_persists_frozen_target_failure(monkeypatch, tmp_path):
-    ctx = _context(entity_ids=["普陀山"])
+    ctx = _context(entity_ids=["测试实体甲"])
     persisted: dict[str, object] = {}
     monkeypatch.setattr(download_unresolved, "load_execution_state", lambda *_args: {})
     monkeypatch.setattr(download_unresolved, "_pending_download_repair_unresolved", lambda _ctx: {})
@@ -74,17 +127,15 @@ def test_download_plan_availability_persists_frozen_target_failure(monkeypatch, 
         "write_json",
         lambda path, data: persisted.update({"path": path, "data": data}),
     )
-    monkeypatch.setattr(auto_research, "_sync_auto_research_availability", lambda *_args: None)
-
     report = download_unresolved._write_download_availability(
         ctx,
-        {"普陀山": {"homepage": ["homepage source needs repair"]}},
+        {"测试实体甲": {"homepage": ["homepage source needs repair"]}},
     )
 
     assert persisted["path"] == tmp_path / "_shared" / "source_unavailable_targets.json"
     assert persisted["data"] == report
     assert report["readyTargets"] == []
-    assert report["ineligibleTargets"][0]["entityId"] == "普陀山"
+    assert report["ineligibleTargets"][0]["entityId"] == "测试实体甲"
 
 
 def test_download_availability_never_promotes_plan_only_target(monkeypatch, tmp_path):
@@ -122,8 +173,6 @@ def test_download_availability_never_promotes_plan_only_target(monkeypatch, tmp_
         "write_json",
         lambda path, data: persisted.update({"path": path, "data": data}),
     )
-    monkeypatch.setattr(auto_research, "_sync_auto_research_availability", lambda *_args: None)
-
     report = download_unresolved._write_download_availability(ctx, {})
 
     assert report["readyTargets"] == ["已抓取景区"]
@@ -135,10 +184,36 @@ def test_download_availability_never_promotes_plan_only_target(monkeypatch, tmp_
     assert report["ineligibleTargets"][0]["blockers"] == [artifact_issue.as_dict()]
 
 
+def test_download_availability_does_not_overwrite_research_plan(monkeypatch, tmp_path):
+    ctx = _context(entity_ids=["测试实体甲"])
+    plan_path = tmp_path / "_shared" / "auto_research_plan.json"
+    plan_path.parent.mkdir(parents=True)
+    research_plan = {
+        "sourceAvailability": {
+            "readyTargets": ["测试实体甲"],
+            "readyTargetCount": 1,
+            "ineligibleTargets": [],
+            "ineligibleTargetCount": 0,
+        }
+    }
+    from core.io import read_json, write_json
+
+    write_json(plan_path, research_plan)
+    monkeypatch.setattr(download_unresolved, "_pending_download_repair_unresolved", lambda _ctx: {})
+    monkeypatch.setattr(download_unresolved, "_download_plan_repair_exhausted_unresolved", lambda *_args: {})
+    monkeypatch.setattr(download_unresolved, "_download_artifact_issues", lambda _ctx: {})
+    monkeypatch.setattr(download_unresolved, "execution_root", lambda _execution_id: tmp_path)
+
+    report = download_unresolved._write_download_availability(ctx, {})
+
+    assert read_json(plan_path) == research_plan
+    assert read_json(tmp_path / "_shared" / "source_unavailable_targets.json") == report
+
+
 def test_inactive_homepage_artifact_prune_uses_frozen_execution_targets(monkeypatch, tmp_path):
     from core import entity_artifacts
 
-    ctx = _context(entity_ids=["普陀山"])
+    ctx = _context(entity_ids=["测试实体甲"])
     calls: list[tuple[str, object]] = []
     monkeypatch.setattr(
         entity_artifacts,
@@ -153,7 +228,7 @@ def test_inactive_homepage_artifact_prune_uses_frozen_execution_targets(monkeypa
         reason="contract test",
     )
 
-    assert calls == [(ctx.execution_id, ["普陀山"])]
+    assert calls == [(ctx.execution_id, ["测试实体甲"])]
     assert result[0]["entity"] == "历史对象"
 
 
@@ -162,7 +237,7 @@ def test_audited_stage_recovery_clears_retry_and_react_ledgers(monkeypatch):
     state = ExecutionFixtureBuilder(ctx.execution_id).state(
         status=ExecutionStateStatus.MANUAL_REQUIRED,
         completed=(ExecutionStage.DOWNLOAD_PLAN,),
-        failed_objects=("东钱湖: image gates failed",),
+        failed_objects=("测试实体乙: image gates failed",),
         retry_counts={ExecutionStage.DOWNLOAD_FETCH: 2},
         infrastructure_retry_counts={ExecutionStage.DOWNLOAD_FETCH: 1},
         react_rewinds={ExecutionStage.DOWNLOAD_FETCH: 2},
@@ -188,3 +263,48 @@ def test_audited_stage_recovery_clears_retry_and_react_ledgers(monkeypatch):
     assert result["infrastructureRetryCounts"] == {}
     assert result["reactRewinds"] == {}
     assert state.failed_objects == []
+
+
+def test_audited_homepage_recovery_requeues_only_dead_entity_author_jobs(monkeypatch):
+    from content.execution.queue import management as queue_management
+    from content.post import object_index as content_object
+
+    ctx = _context(entity_ids=["测试实体甲", "测试实体乙"])
+    state = ExecutionFixtureBuilder(ctx.execution_id).state(
+        status=ExecutionStateStatus.MANUAL_REQUIRED,
+        completed=(ExecutionStage.BUILD_PREPARE,),
+        failed_objects=("测试实体乙: fidelity gate failed",),
+    )
+    monkeypatch.setattr(stage_reset, "load_execution_state", lambda *_args: state)
+    monkeypatch.setattr(stage_reset, "save_execution_state", lambda updated: updated.freeze())
+    monkeypatch.setattr(
+        stage_reset.store,
+        "load_spec",
+        lambda _execution_id: ctx.spec.to_dict(),
+    )
+    monkeypatch.setattr(content_object, "iter_content_refs", lambda *_args: [])
+    monkeypatch.setattr(post_recovery, "_purge_stale_author_queue", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        queue_management,
+        "dead_jobs",
+        lambda _execution_id: [
+            {"ref": "/entity/地点/景区/测试实体乙", "stage": "author"},
+            {"ref": "/post/article/测试帖子", "stage": "author"},
+            {"ref": "/entity/地点/景区/测试实体甲", "stage": "publish"},
+        ],
+    )
+    requeued: list[str] = []
+    monkeypatch.setattr(
+        queue_management,
+        "requeue_refs",
+        lambda _execution_id, refs, _stage, *, reason: requeued.extend(refs) or list(refs),
+    )
+
+    result = stage_reset.reset_stage_retries(
+        ctx.execution_id,
+        stage=ExecutionStage.BUILD_HOMEPAGE.value,
+        reason="homepage fidelity guidance fixed",
+    )
+
+    assert requeued == ["/entity/地点/景区/测试实体乙"]
+    assert result["requeuedHomepageRefs"] == ["/entity/地点/景区/测试实体乙"]

@@ -1,57 +1,158 @@
 """`qwq-data task execute` 的单 execution 工作包编排器。
 
-替代旧 quwoquan_ops/runners 家族 shell：
-配方（control_plane/families/<ref>.recipe.yaml）声明选择策略、契约门、执行主体与
-放量验收；本执行器按固定四段主干执行，禁止任何脚本级第二编排真相源：
+配方声明选择策略、契约门、执行主体与放量验收；本执行器按固定四段主干执行，禁止任何脚本级第二编排真相源：
 
     execution manifest → target selection → contract-gate → execute → readiness
 
-- executionId 是唯一运行实例标识，由 CLI 显式注入，不进配方；
-- 子步骤统一经 `_invoke_cli`（当前解释器 + cli.py 子进程）执行，测试可注入；
-- execution 终态只写当前 execution 工作包，不建立第二个批次根。
+- executionId 由 CLI 显式注入；子步骤统一经 `_invoke_cli` 执行，终态只写当前工作包。
 """
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from core.paths import (
-    CONTROL_PLANE_SHARED_ROOT,
-    REPO_ROOT,
-    recipe_path,
-)
+from core.codec import JsonObject, JsonObjectDecodeError
+from core.paths import CONTROL_PLANE_SHARED_ROOT, REPO_ROOT, recipe_path
 from core.runtime_policy import apply_runtime_policy, load_runtime_policy
+from core.control_types import TargetSelector
 from content.execution import store
-from content.execution.workspace import (
-    execution_manifest_path,
-    execution_root,
-    load_execution_manifest,
-)
+from governance.provider_policy import load_provider_policy
+from content.execution.workspace import execution_manifest_path, execution_root, load_execution_manifest
 
 _CLI_PATH = Path(__file__).resolve().parents[2] / "cli.py"
-
-# 跨批去重账本默认维度（单一真相源 content.execution.selection.DEFAULT_SOURCE_TASK_ID；
-# 模块导入期取值避免循环依赖延迟到调用点）。
-
-# 可注入执行点（测试 mock；生产即默认实现）。
 InvokeCli = Callable[[list[str]], int]
-HOMEPAGE_RECIPE = "content/travel/homepage/homepage"
-HOMEPAGE_ROLLOUT = "travel-homepage-coverage"
-COLD_START_RECIPES = {
-    "article": "content/travel/article/article",
-    "image": "content/travel/image/image",
-    "video": "content/travel/video/video",
-}
 SELECTION_QUOTA_FIELDS = (
     "entityArticlesPerTarget",
     "entityHomepagesPerTarget",
     "imageWorksPerTarget",
     "videoWorksPerTarget",
 )
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeExecutionRequest:
+    """The public, immutable request recorded in ``0.plan/request.json``."""
+
+    family_ref: str
+    region_ref: str
+    selector: TargetSelector
+    count: int
+    topic: str | None
+    source_providers: tuple[str, ...]
+    homepage_execution_id: str | None
+    target_names: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.family_ref or not self.region_ref:
+            raise ValueError("familyRef and regionRef must be non-empty")
+        if not isinstance(self.selector, TargetSelector):
+            raise ValueError("selector must be TargetSelector")
+        if isinstance(self.count, bool) or self.count < 1:
+            raise ValueError("count must be a positive integer")
+        if any(not provider.strip() for provider in self.source_providers):
+            raise ValueError("sourceProviders must contain non-empty provider IDs")
+        if tuple(sorted(set(self.source_providers))) != self.source_providers:
+            raise ValueError("sourceProviders must be deduplicated and sorted")
+        if len(set(self.target_names)) != len(self.target_names):
+            raise ValueError("targetNames must be deduplicated")
+        if any(not name.strip() for name in self.target_names):
+            raise ValueError("targetNames must contain non-empty values")
+        if self.target_names and self.count != len(self.target_names):
+            raise ValueError("targetNames count must equal count")
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> "RuntimeExecutionRequest":
+        count = getattr(args, "count", None)
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+            raise SystemExit("[task execute] GATE_BLOCK --count must be a positive integer")
+        family_ref = str(getattr(args, "family", "") or "").strip()
+        region_ref = str(getattr(args, "region_ref", "") or "").strip().strip("/")
+        selector_raw = str(getattr(args, "selector", "") or "").strip()
+        if not family_ref or not region_ref:
+            raise SystemExit("[task execute] GATE_BLOCK --family and --region-ref are required")
+        try:
+            selector = TargetSelector(selector_raw)
+        except ValueError as exc:
+            choices = ", ".join(item.value for item in TargetSelector)
+            raise SystemExit(
+                f"[task execute] GATE_BLOCK --selector must be one of: {choices}"
+            ) from exc
+        topic = str(getattr(args, "topic", "") or "").strip() or None
+        homepage_execution_id = str(
+            getattr(args, "homepage_execution_id", "") or ""
+        ).strip() or None
+        providers = tuple(
+            sorted(
+                {
+                    str(value).strip()
+                    for value in (getattr(args, "source_providers", ()) or ())
+                    if str(value).strip()
+                }
+            )
+        )
+        target_names = tuple(
+            str(value).strip()
+            for value in (getattr(args, "target_names", ()) or ())
+            if str(value).strip()
+        )
+        return cls(
+            family_ref=family_ref,
+            region_ref=region_ref,
+            selector=selector,
+            count=count,
+            topic=topic,
+            source_providers=providers,
+            homepage_execution_id=homepage_execution_id,
+            target_names=target_names,
+        )
+
+    @classmethod
+    def from_document(cls, value: object) -> "RuntimeExecutionRequest":
+        try:
+            document = JsonObject.from_value(value, label="execution request")
+            expected = {
+                "familyRef",
+                "regionRef",
+                "selector",
+                "count",
+                "topic",
+                "sourceProviders",
+                "homepageExecutionId",
+                "targetNames",
+            }
+            if set(document.to_document()) != expected:
+                raise JsonObjectDecodeError(
+                    "execution request keys must be exactly "
+                    + ", ".join(sorted(expected))
+                )
+            return cls(
+                family_ref=document.string("familyRef"),
+                region_ref=document.string("regionRef").strip().strip("/"),
+                selector=TargetSelector(document.string("selector")),
+                count=document.integer("count"),
+                topic=document.optional_string("topic"),
+                source_providers=document.string_list("sourceProviders"),
+                homepage_execution_id=document.optional_string("homepageExecutionId"),
+                target_names=document.string_list("targetNames"),
+            )
+        except (JsonObjectDecodeError, ValueError) as exc:
+            raise SystemExit(f"[task execute] GATE_BLOCK invalid frozen request: {exc}") from exc
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "familyRef": self.family_ref,
+            "regionRef": self.region_ref,
+            "selector": self.selector.value,
+            "count": self.count,
+            "topic": self.topic,
+            "sourceProviders": list(self.source_providers),
+            "homepageExecutionId": self.homepage_execution_id,
+            "targetNames": list(self.target_names),
+        }
 
 
 def _default_invoke_cli(argv: list[str]) -> int:
@@ -114,84 +215,35 @@ def _apply_runtime_env(recipe: dict[str, Any]) -> None:
     apply_runtime_policy(load_runtime_policy(profile))
 
 
-def _geo_label(region: str, profile: str) -> str:
-    tail = region.split("/")[-1] if region else "中国"
-    return f"{tail}景区主页{profile}".replace("_", "").replace("-", "")
-
-
-_INSTANCE_PARAM_ATTRS = {
-    "region": "region",
-    "discovery": "discovery",
-    "name": "name",
-    "title": "title",
-    "intentLabel": "intent_label",
-    "homepageExecutionId": "homepage_execution_id",
-    "mandatory": "mandatory",
-    "limit": "limit",
-}
-
-
-def _resolve_selection(recipe: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
-    """Freeze rollout-derived instance values into the reusable selection policy."""
-    selection = dict(recipe.get("selection") or {})
-    for field, attr in _INSTANCE_PARAM_ATTRS.items():
-        if not hasattr(args, attr):
-            continue
-        value = getattr(args, attr)
-        if value is not None:
-            selection[field] = value
-    required = tuple((recipe.get("instanceParams") or {}).get("required") or ())
-    missing = [field for field in required if selection.get(field) in (None, "")]
-    if missing:
-        raise SystemExit(
-            "[task execute] GATE_BLOCK missing rollout instance parameters: "
-            + ", ".join(missing)
-        )
-    limit = selection.get("limit")
-    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
-        raise SystemExit("[task execute] GATE_BLOCK rollout limit must be a positive integer")
-    return selection
-
-
-def _ensure_execution_spec(
+def _resolve_selection(
     recipe: dict[str, Any],
-    selection: dict[str, Any],
+    request: RuntimeExecutionRequest,
     *,
-    execution_id: str,
-    rollout_excluded: tuple[str, ...] = (),
-) -> str:
-    generate = selection
-    if not generate:
-        raise SystemExit("[task execute] recipe.selection is required for an execution work package")
-    if store.spec_exists(execution_id):
-        return execution_id
-    from content.execution.identity import SelectionPolicy
-    from content.execution.selection import SelectionRequest, create_execution_selection
+    vertical: str,
+    content_type: str,
+    intent: str,
+) -> dict[str, Any]:
+    """Derive the frozen selection from the single runtime request.
 
-    mandatory = str(generate.get("mandatory") or "")
-    create_execution_selection(
-        SelectionRequest(
-            execution_id=execution_id,
-            discovery_path=REPO_ROOT / str(generate.get("discovery")),
-            limit=int(generate.get("limit")),
-            mandatory=tuple(item.strip() for item in mandatory.split(",") if item.strip()),
-            excluded=frozenset(rollout_excluded),
-            region=str(generate["region"]),
-            category=str(generate["category"]),
-            name=str(generate["name"]),
-            title=str(generate["title"]),
-            intent_label=str(generate["intentLabel"]),
-            preset_ref=str(recipe.get("presetRef")),
-            entity_articles_per_target=int(generate["entityArticlesPerTarget"]),
-            entity_homepages_per_target=int(generate["entityHomepagesPerTarget"]),
-            image_works_per_target=int(generate["imageWorksPerTarget"]),
-            video_works_per_target=int(generate["videoWorksPerTarget"]),
-            created_by="task execute",
-            selection_policy=SelectionPolicy.FROZEN,
-            force=False,
-        )
+    The selection object is written only to the execution work package.  A
+    reusable family never carries a region, discovery path, title, count, or
+    mandatory target list.
+    """
+    selection = dict(recipe.get("selection") or {})
+    discovery = REPO_ROOT / "quwoquan_data/reference" / vertical / "entities" / request.region_ref
+    name = request.topic or f"{request.region_ref.rsplit('/', 1)[-1]}-{content_type}"
+    selection.update(
+        {
+            "region": request.region_ref,
+            "discovery": discovery.relative_to(REPO_ROOT).as_posix(),
+            "name": name,
+            "title": name,
+            "intentLabel": intent,
+            "homepageExecutionId": request.homepage_execution_id or "",
+            "limit": request.count,
+        }
     )
-    return execution_id
+    return selection
 
 
 def _contract_gate(recipe: dict[str, Any], execution_id: str) -> None:
@@ -213,26 +265,8 @@ def _contract_gate(recipe: dict[str, Any], execution_id: str) -> None:
     from core.execution_branch import execution_branch_issues
 
     errors.extend(execution_branch_issues(spec, cwd=REPO_ROOT))
-    target = int(contract.get("targetObjectCount") or 0)
-    if target:
-        execution = spec.get("executionPolicy") or {}
-        actual = int(execution.get("targetObjectCount") or 0)
-        if actual != target:
-            errors.append(f"executionPolicy.targetObjectCount={actual} != {target}")
-        selected = _selected_count(execution_id, spec)
-        if selected < target:
-            errors.append(f"selection shortfall: selected={selected} < target={target}")
     if errors:
         raise SystemExit("[task execute] 契约门 BLOCK: " + "; ".join(errors))
-
-
-def _selected_count(execution_id: str, spec: dict[str, Any]) -> int:
-    selection_path = execution_root(execution_id) / "_shared" / "target_selection.json"
-    if selection_path.is_file():
-        payload = json.loads(selection_path.read_text(encoding="utf-8"))
-        return int(payload.get("selectedCount") or 0)
-    scope = spec.get("scope") or {}
-    return len(scope.get("coverageTargets") or [])
 
 
 def _execute(
@@ -267,20 +301,23 @@ def _readiness(
         "execution-readiness",
         "--execution-id",
         execution_id,
-        "--min-pass-rate",
-        str(float(readiness.get("minPassRate", 1.0))),
-        "--mode",
-        str(readiness.get("mode") or "commercial"),
     ]
     if bool(readiness.get("requireReviewed", False)):
         argv.append("--require-reviewed")
-    if bool(readiness.get("failOnNoGo", False)):
+    argv.extend(
+        [
+            "--min-pass-rate",
+            str(float(readiness.get("minPassRate", 1.0))),
+            "--mode",
+            str(readiness.get("mode") or "commercial"),
+        ]
+    )
+    if bool(readiness.get("failOnNoGo", True)):
         argv.append("--fail-on-no-go")
     rc = invoke(argv)
     if rc != 0:
         raise SystemExit(f"[task execute] execution-readiness rc={rc}")
     return
-
 
 def _runtime_preflight_argv(execution_id: str) -> list[str]:
     evidence = execution_root(execution_id) / "evidence" / "runtime_preflight.json"
@@ -288,10 +325,10 @@ def _runtime_preflight_argv(execution_id: str) -> list[str]:
         "task",
         "preflight",
         "--cursor-startup",
+        "--require-reliabletask-fleet",
         "--report-out",
         str(evidence),
     ]
-
 
 def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) -> None:
     invoke = invoke or _default_invoke_cli
@@ -301,32 +338,50 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         raise SystemExit(
             "[task execute] --recover-stage and --recovery-reason must be provided together"
         )
-    rollout_id = str(args.rollout)
-    from governance.coverage.cold_start_supply import load_cold_start_supply_policy
     from content.execution.identity import parse_execution_id
 
-    cold_start_rollout = load_cold_start_supply_policy().policy_id
     identity = parse_execution_id(str(getattr(args, "execution_id", "") or ""))
-    if rollout_id == HOMEPAGE_ROLLOUT:
-        recipe_ref = HOMEPAGE_RECIPE
-    elif rollout_id == cold_start_rollout:
-        try:
-            recipe_ref = COLD_START_RECIPES[identity.content_type.value]
-        except KeyError as exc:
-            raise SystemExit(
-                f"[task execute] GATE_BLOCK execution={identity.execution_id}: "
-                "cold-start rollout only accepts article, image, or video"
-            ) from exc
-    else:
-        raise SystemExit(f"[task execute] GATE_BLOCK unknown rollout: {rollout_id}")
+    runtime_request = RuntimeExecutionRequest.from_args(args)
+    recipe_ref = runtime_request.family_ref
+    if not recipe_ref:
+        raise SystemExit("[task execute] GATE_BLOCK --family is required")
+    if f"/{identity.content_type.value}/" not in f"/{recipe_ref}/":
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK execution={identity.execution_id}: "
+            "execution content type does not match --family"
+        )
     recipe = load_recipe(recipe_ref)
+    stage = str(getattr(args, "stage", "run") or "run")
+    try:
+        load_provider_policy(identity.vertical).require_declared(
+            runtime_request.source_providers
+        )
+    except ValueError as exc:
+        raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
+    # Every facade stage reads or writes the same immutable work package.
+    # A task-output purge between plan-only and run destroys its frozen input,
+    # so conflict admission must happen before *any* stage materializes it.
+    from content.execution.agent.agent_conflicts import (
+        ManagedWorkspaceConflictError,
+        assert_managed_workspace_available,
+    )
+    from core.runtime_policy import active_runtime_policy
+
+    try:
+        assert_managed_workspace_available(
+            Path.cwd(),
+            provider=active_runtime_policy().cursor_provider.value,
+            execution_id=identity.execution_id,
+        )
+    except ManagedWorkspaceConflictError as exc:
+        raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
     execution_id = str(getattr(args, "execution_id", "") or "").strip()
     _apply_runtime_env(recipe)
     manifest_path = execution_manifest_path(execution_id)
     manifest_retry_of = str(getattr(args, "retry_of", "") or "") or None
     if manifest_path.is_file():
         existing_manifest = load_execution_manifest(execution_id)
-        existing_recipe = existing_manifest.get("recipe")
+        existing_recipe = existing_manifest.get("familyRef")
         existing_recipe_ref = (
             str(existing_recipe.get("ref") or "").strip()
             if isinstance(existing_recipe, dict)
@@ -336,7 +391,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             raise SystemExit(
                 f"[task execute] GATE_BLOCK execution={execution_id}: "
                 f"manifest recipe.ref={existing_recipe_ref!r} does not match "
-                f"rollout recipe {recipe_ref!r}"
+                f"family {recipe_ref!r}"
             )
         existing_retry_of = str(existing_manifest.get("retryOf") or "") or None
         if manifest_retry_of is not None and manifest_retry_of != existing_retry_of:
@@ -344,31 +399,43 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
                 f"[task execute] GATE_BLOCK execution={execution_id}: "
                 "resume may not change retryOf"
             )
-        frozen_params = existing_manifest.get("resolvedParams")
-        if not isinstance(frozen_params, dict):
+        from content.execution.workspace import execution_request_path
+
+        frozen_request = RuntimeExecutionRequest.from_document(
+            store.read_json(execution_request_path(execution_id))
+        )
+        if frozen_request != runtime_request:
             raise SystemExit(
                 f"[task execute] GATE_BLOCK execution={execution_id}: "
-                "manifest resolvedParams must be an object"
+                "resume may not change the frozen runtime request"
             )
-        resolved_selection = dict(frozen_params)
+        resolved_selection = _resolve_selection(
+            recipe,
+            frozen_request,
+            vertical=identity.vertical,
+            content_type=identity.content_type.value,
+            intent=identity.intent,
+        )
         manifest_retry_of = existing_retry_of
     else:
-        resolved_selection = _resolve_selection(recipe, args)
+        from content.execution.workspace import require_clean_transaction_workspace
+
+        require_clean_transaction_workspace(execution_id)
+        resolved_selection = _resolve_selection(
+            recipe,
+            runtime_request,
+            vertical=identity.vertical,
+            content_type=identity.content_type.value,
+            intent=identity.intent,
+        )
     from content.execution import create_execution_manifest
     from content.execution.identity import SelectionPolicy
-    from content.execution.workspace import TARGET_SET_REF, frozen_target_set_sha256
+    from content.execution.workspace import TARGET_SET_REF, frozen_target_set_digest
     from content.execution.runner import (
         preflight_execution_models,
         write_execution_model_readiness,
     )
 
-    from content.release.canonical.rollout_milestone import RolloutMilestoneError, assert_rollout_start
-
-    try:
-        assert_rollout_start(execution_id)
-    except RolloutMilestoneError as exc:
-        raise SystemExit(f"[task execute] GATE_BLOCK execution={execution_id}: {exc}") from exc
-    stage = str(getattr(args, "stage", "run") or "run")
     # plan-only 只验证可复用输入和工作包形状；它不得冒充 Agent/来源/发布成功，
     # 因此不读取凭证也不探测模型。其余阶段必须先通过真实双模型启动证明。
     if stage != "plan-only":
@@ -379,19 +446,29 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
                 f"[task execute] GATE_BLOCK execution={execution_id}: {exc}"
             ) from exc
 
-    execution_spec_id = _ensure_execution_spec(
-        recipe,
-        resolved_selection,
-        execution_id=execution_id,
-        rollout_excluded=tuple(getattr(args, "rollout_excluded", ()) or ()),
-    )
+    from content.execution.materialization import ensure_execution_spec
+    from core.data_issue import DataIssueError
+
+    try:
+        execution_spec_id = ensure_execution_spec(
+            recipe,
+            resolved_selection,
+            execution_id=execution_id,
+            target_selector=runtime_request.selector,
+            content_type=identity.content_type.value,
+            target_names=runtime_request.target_names,
+        )
+    except DataIssueError as exc:
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK execution={execution_id}: {exc}"
+        ) from exc
     create_execution_manifest(
         execution_id=execution_id,
         recipe_ref=recipe_ref,
-        resolved_params=resolved_selection,
+        request=runtime_request.to_document(),
         selection_policy=SelectionPolicy.FROZEN,
         target_set_ref=TARGET_SET_REF,
-        target_set_sha256=frozen_target_set_sha256(execution_id),
+        target_set_digest=frozen_target_set_digest(execution_id),
         retry_of=manifest_retry_of,
     )
     if stage != "plan-only":
@@ -422,43 +499,35 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
 def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) -> None:
     execution_id = str(getattr(args, "execution_id", "") or "").strip()
     from content.execution.identity import parse_execution_id
+
     identity = parse_execution_id(execution_id)
-    rollout_id = str(getattr(args, "rollout", "") or "").strip()
-    from content.release.canonical.rollout_milestone import RolloutMilestoneError, geo_rollout_parameters
-    from governance.coverage.cold_start_supply import (
-        cold_start_execution_parameters,
-        load_cold_start_supply_policy,
-    )
-    cold_start_rollout = load_cold_start_supply_policy().policy_id
+    region_ref = str(getattr(args, "region_ref", "") or "").strip().strip("/")
+    if not region_ref:
+        raise SystemExit("[task execute] GATE_BLOCK --region-ref is required")
+    discovery_path = REPO_ROOT / "quwoquan_data/reference" / identity.vertical / "entities" / region_ref
+    if not discovery_path.is_dir():
+        raise SystemExit(f"[task execute] GATE_BLOCK region reference does not exist: {region_ref}")
+    count = getattr(args, "count", None)
+    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+        raise SystemExit("[task execute] GATE_BLOCK --count must be a positive integer")
+    selector = str(getattr(args, "selector", "") or "").strip()
     try:
-        if rollout_id == HOMEPAGE_ROLLOUT:
-            province, limit, mandatory, rollout_excluded = geo_rollout_parameters(
-                execution_id=execution_id,
-                retry_of=getattr(args, "retry_of", None),
-            )
-        elif rollout_id == cold_start_rollout:
-            parameters = cold_start_execution_parameters(
-                execution_id=execution_id,
-                retry_of=getattr(args, "retry_of", None),
-                homepage_execution_id=getattr(args, "homepage_execution_id", None),
-            )
-            province = parameters.province
-            limit = parameters.limit
-            mandatory = parameters.mandatory
-            rollout_excluded = ()
-        else:
-            raise ValueError(f"unknown rollout: {rollout_id}")
-    except (RolloutMilestoneError, ValueError) as exc:
-        raise SystemExit(f"[task execute] GATE_BLOCK execution={execution_id}: {exc}") from exc
-    region = f"中国/{province}"
-    discovery = f"quwoquan_data/verticals/travel/coverage/中国/{province}"
-    if rollout_id == cold_start_rollout:
-        kind = identity.content_type.value
-        name = f"{province}冷启动{kind}{identity.milestone.value}"
-        label = name.replace("_", "").replace("-", "")
-    else:
-        label = _geo_label(region, identity.milestone.value)
-        name = f"{province}主页{identity.milestone.value}"
+        target_selector = TargetSelector(selector)
+    except ValueError as exc:
+        choices = ", ".join(item.value for item in TargetSelector)
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK --selector must be one of: {choices}"
+        ) from exc
+    if (
+        identity.content_type.value == "homepage"
+        and target_selector is not TargetSelector.SOURCE_READY_PRIORITY
+    ):
+        raise SystemExit(
+            "[task execute] GATE_BLOCK homepage carrier requires --selector source-ready-priority"
+        )
+    homepage_execution_id = str(getattr(args, "homepage_execution_id", "") or "").strip()
+    if identity.content_type.value != "homepage" and not homepage_execution_id:
+        raise SystemExit("[task execute] GATE_BLOCK post families require --homepage-execution-id")
     _run_execution(
         argparse.Namespace(
             execution_id=execution_id,
@@ -466,16 +535,17 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             stage=getattr(args, "stage", "run"),
             recover_stage=getattr(args, "recover_stage", None),
             recovery_reason=getattr(args, "recovery_reason", None),
-            rollout=rollout_id,
-            homepage_execution_id=getattr(args, "homepage_execution_id", None),
-            discovery=discovery,
-            limit=limit,
-            region=region,
-            name=name,
-            title=name,
-            intent_label=label,
-            mandatory=mandatory,
-            rollout_excluded=rollout_excluded,
+            family=getattr(args, "family", None),
+            homepage_execution_id=homepage_execution_id or None,
+            region_ref=region_ref,
+            selector=target_selector.value,
+            target_names=tuple(getattr(args, "target_names", ()) or ()),
+            topic=getattr(args, "topic", None),
+            source_providers=tuple(getattr(args, "source_providers", ()) or ()),
+            vertical=identity.vertical,
+            content_type=identity.content_type.value,
+            intent=identity.intent,
+            count=count,
         ),
         invoke=invoke,
     )
@@ -484,20 +554,30 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
 def register_recipe_parser(sub: argparse._SubParsersAction) -> None:
     pg = sub.add_parser(
         "execute",
-        help="按 rollout 合同执行内容工作包（选择→准入→执行→readiness）",
+        help="按 family 与运行 request 执行内容工作包（选择→准入→执行→readiness）",
     )
     pg.add_argument("--execution-id", required=True, help="唯一 executionId")
     pg.add_argument("--retry-of", help="新 sequence 重试时指向原 executionId")
     pg.add_argument(
         "--homepage-execution-id",
-        help="文章/图片/视频执行必须绑定同省同档已 canonical 的 homepage executionId",
+        help="文章、图片、视频必须绑定已 canonical 的主页 executionId",
     )
-    from governance.coverage.cold_start_supply import load_cold_start_supply_policy
-
+    pg.add_argument("--family", required=True, help="control_plane family recipe reference")
+    pg.add_argument("--region-ref", required=True, help="reference/<vertical>/entities 下的区域引用")
     pg.add_argument(
-        "--rollout",
+        "--selector",
         required=True,
-        choices=sorted((HOMEPAGE_ROLLOUT, load_cold_start_supply_policy().policy_id)),
+        choices=tuple(item.value for item in TargetSelector),
+    )
+    pg.add_argument("--count", required=True, type=int, help="本次冻结目标数，仅写入运行 request")
+    pg.add_argument("--target", dest="target_names", action="append", default=[], help="仅在本次运行请求中限定候选实体；可重复，数量必须等于 --count")
+    pg.add_argument("--topic", help="文章、图片或视频的主题")
+    pg.add_argument(
+        "--source-provider",
+        dest="source_providers",
+        action="append",
+        default=[],
+        help="限制到已声明 provider，可重复",
     )
     pg.add_argument(
         "--stage",

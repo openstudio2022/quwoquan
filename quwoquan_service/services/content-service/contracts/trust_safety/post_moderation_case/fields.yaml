@@ -1,0 +1,133 @@
+fields:
+- name: id
+  source: id
+  type: string
+  constraints:
+  - PK
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: version
+  source: version
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_1
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: postId
+  source: postId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: postVersion
+  source: postVersion
+  type: int
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: contentDigest
+  source: contentDigest
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: status
+  source: status
+  type: enum
+  enum_ref: PostModerationCaseStatus
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read_write
+  role: authoritative_state
+- name: reviewerId
+  source: reviewerId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: decisionReason
+  source: decisionReason
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: redact
+  api_exposure: drop
+  ops_exposure: read_write
+  role: authoritative_state
+- name: createdAt
+  source: createdAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: updatedAt
+  source: updatedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: decidedAt
+  source: decidedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+state_machine:
+  field: status
+  transitions:
+  - from: pending
+    to:
+    - reviewed
+    - superseded
+  - from: reviewed
+    to:
+    - approved
+    - rejected
+    - superseded
+  - from: approved
+    to:
+    - superseded
+  - from: rejected
+    to:
+    - superseded

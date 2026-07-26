@@ -1,0 +1,18 @@
+backend: mongodb
+collections:
+  rec_model_registry:
+    entity: RecommendationModelRelease
+    role: authoritative
+    description: 场景模型发布登记与 production 激活标记；写入方为 model_registry_cli 与 CI 训练管线，读取方为 recommendation-service 推理热加载。
+    indexes:
+    - name: uq_model_registry_scenario_digest
+      keys:
+        scenario: 1
+        modelDigest: 1
+      unique: true
+    - name: idx_model_registry_scenario_production
+      keys:
+        scenario: 1
+        production: 1
+        updatedAt: -1
+role: authoritative

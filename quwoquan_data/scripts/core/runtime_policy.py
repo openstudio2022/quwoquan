@@ -10,6 +10,7 @@ import yaml
 
 from core.paths import CONTROL_PLANE_SHARED_ROOT
 from core.control_types import AgentProvider, RuntimeEnvironment
+from core.cursor_model import CursorModelParameter, CursorModelSelection
 
 
 DEFAULT_RUNTIME_PROFILE_ID = "cursor_local_calibrated"
@@ -50,21 +51,20 @@ class RuntimePolicy:
     profile_id: str
     cursor_provider: AgentProvider
     cursor_model: str
+    cursor_model_parameters: tuple[CursorModelParameter, ...]
     cursor_runtime: RuntimeEnvironment
     author_workers: int
     reviewer_workers: int
     research_workers: int
     research_wave_size: int
     research_max_waves_per_run: int
+    source_plan_recovery_passes: int
+    source_plan_recovery_workers: int
     download_concurrency: int
     cursor_bridge_instances: int
     startup_timeout_seconds: int
     preflight_network_timeout_seconds: int
     agent_timeout_seconds: int
-    default_object_token_budget: int
-    default_object_cost_budget_usd: float
-    max_batch_cost_usd: float
-    max_daily_cost_usd: float
     auth_retry_limit: int
     auth_retry_delay_seconds: int
     no_progress_round_limit: int
@@ -96,7 +96,6 @@ class RuntimePolicy:
     process_termination_timeout_seconds: int
     agent_future_poll_timeout_seconds: int
     api_request_timeout_seconds: int
-    entity_reload_timeout_seconds: int
     direct_fetch_timeout_seconds: int
     source_fetch_timeout_seconds: int
     source_fetch_max_retries: int
@@ -128,6 +127,13 @@ class RuntimePolicy:
     curl_retry_delay_seconds: int
     provider_timeouts: ProviderTimeouts
     coverage_discovery: CoverageDiscoveryPolicy
+
+    @property
+    def cursor_model_selection(self) -> CursorModelSelection:
+        return CursorModelSelection(
+            model_id=self.cursor_model,
+            parameters=self.cursor_model_parameters,
+        )
 
     def process_environment(self) -> dict[str, str]:
         """Translate typed policy to SDK/process variables at the process boundary."""
@@ -223,6 +229,11 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         raise ValueError("runtime policy profileId does not match its file name")
     policy = _mapping(doc.get("policy"), label="policy")
     cursor = _mapping(policy.get("cursor"), label="policy.cursor")
+    cursor_model_selection = CursorModelSelection.from_config(
+        cursor.get("model"),
+        cursor.get("modelParameters"),
+        label="policy.cursor",
+    )
     workers = _mapping(policy.get("workers"), label="policy.workers")
     budgets = _mapping(policy.get("budgets"), label="policy.budgets")
     network = _mapping(policy.get("network"), label="policy.network")
@@ -236,7 +247,8 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         cursor_provider=AgentProvider(
             _non_empty_string(cursor.get("provider"), label="cursor.provider")
         ),
-        cursor_model=_non_empty_string(cursor.get("model"), label="cursor.model"),
+        cursor_model=cursor_model_selection.model_id,
+        cursor_model_parameters=cursor_model_selection.parameters,
         cursor_runtime=RuntimeEnvironment(
             _non_empty_string(cursor.get("runtime"), label="cursor.runtime")
         ),
@@ -247,6 +259,14 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         research_max_waves_per_run=_non_negative_int(
             budgets.get("researchMaxWavesPerRun"),
             label="budgets.researchMaxWavesPerRun",
+        ),
+        source_plan_recovery_passes=_non_negative_int(
+            budgets.get("sourcePlanRecoveryPasses"),
+            label="budgets.sourcePlanRecoveryPasses",
+        ),
+        source_plan_recovery_workers=_positive_int(
+            budgets.get("sourcePlanRecoveryWorkers"),
+            label="budgets.sourcePlanRecoveryWorkers",
         ),
         download_concurrency=_positive_int(workers.get("download"), label="workers.download"),
         cursor_bridge_instances=_positive_int(
@@ -259,22 +279,6 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
             label="budgets.preflightNetworkTimeoutSeconds",
         ),
         agent_timeout_seconds=_positive_int(budgets.get("agentTimeoutSeconds"), label="budgets.agentTimeoutSeconds"),
-        default_object_token_budget=_positive_int(
-            budgets.get("defaultObjectTokenBudget"),
-            label="budgets.defaultObjectTokenBudget",
-        ),
-        default_object_cost_budget_usd=_non_negative_float(
-            budgets.get("defaultObjectCostBudgetUsd"),
-            label="budgets.defaultObjectCostBudgetUsd",
-        ),
-        max_batch_cost_usd=_positive_float(
-            budgets.get("maxBatchCostUsd"),
-            label="budgets.maxBatchCostUsd",
-        ),
-        max_daily_cost_usd=_positive_float(
-            budgets.get("maxDailyCostUsd"),
-            label="budgets.maxDailyCostUsd",
-        ),
         auth_retry_limit=_positive_int(budgets.get("authRetryLimit"), label="budgets.authRetryLimit"),
         auth_retry_delay_seconds=_positive_int(budgets.get("authRetryDelaySeconds"), label="budgets.authRetryDelaySeconds"),
         no_progress_round_limit=_positive_int(budgets.get("noProgressRoundLimit"), label="budgets.noProgressRoundLimit"),
@@ -312,7 +316,6 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         process_termination_timeout_seconds=_positive_int(budgets.get("processTerminationTimeoutSeconds"), label="budgets.processTerminationTimeoutSeconds"),
         agent_future_poll_timeout_seconds=_positive_int(budgets.get("agentFuturePollTimeoutSeconds"), label="budgets.agentFuturePollTimeoutSeconds"),
         api_request_timeout_seconds=_positive_int(budgets.get("apiRequestTimeoutSeconds"), label="budgets.apiRequestTimeoutSeconds"),
-        entity_reload_timeout_seconds=_positive_int(budgets.get("entityReloadTimeoutSeconds"), label="budgets.entityReloadTimeoutSeconds"),
         direct_fetch_timeout_seconds=_positive_int(budgets.get("directFetchTimeoutSeconds"), label="budgets.directFetchTimeoutSeconds"),
         source_fetch_timeout_seconds=_positive_int(budgets.get("sourceFetchTimeoutSeconds"), label="budgets.sourceFetchTimeoutSeconds"),
         source_fetch_max_retries=_positive_int(budgets.get("sourceFetchMaxRetries"), label="budgets.sourceFetchMaxRetries"),

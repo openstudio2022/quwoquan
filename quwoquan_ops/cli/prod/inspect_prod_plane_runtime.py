@@ -15,8 +15,12 @@ except ImportError:  # pragma: no cover
     raise SystemExit("FAIL: PyYAML required")
 
 ROOT = Path(__file__).resolve().parents[3]
-ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
-TOPOLOGY_MANIFEST = ROOT / "quwoquan_ops/environments/environment_topology_manifest.yaml"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
+
+ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh" / "quwoquan-prod"
 
 
@@ -47,7 +51,7 @@ def _resolve_plane_spec(plane_name: str) -> dict:
 def _resolve_host(override: str) -> str:
     if override:
         return override
-    topology = _load_yaml(TOPOLOGY_MANIFEST)
+    topology = load_environment_topology()
     api = (((topology.get("targets") or {}).get("prod-hosted") or {}).get("publicBases") or {}).get("api", "")
     host = urlparse(str(api)).hostname or ""
     if not host:

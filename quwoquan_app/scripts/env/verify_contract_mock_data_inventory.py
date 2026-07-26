@@ -9,8 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-BASELINE = ROOT / "specs" / "gates" / "contract_mock_data_baseline.json"
-INVENTORY = ROOT / "specs" / "gates" / "contract_mock_data_inventory.md"
+BASELINE = ROOT / "quwoquan_ops" / "policies" / "gates" / "contract_mock_data_baseline.json"
 TEST_ROOT = ROOT / "quwoquan_app" / "test"
 
 
@@ -37,9 +36,6 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write-baseline", action="store_true")
     args = parser.parse_args()
-    if not INVENTORY.is_file():
-        print(f"BLOCK: inventory missing: {INVENTORY}", file=sys.stderr)
-        return 1
     data = json.loads(BASELINE.read_text(encoding="utf-8"))
     tokens = data.get("tokens", {})
     current = _scan(set(tokens))
@@ -52,7 +48,7 @@ def main() -> int:
             json.dumps(data, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        print(f"contract_mock_data_inventory: wrote baseline tokens={len(current)}")
+        print(f"contract_mock_data_ratchet: wrote baseline tokens={len(current)}")
         return 0
 
     failures: list[str] = []
@@ -61,18 +57,18 @@ def main() -> int:
         file_count = current[token]["maxFiles"]
         max_occurrences = int(limits.get("maxOccurrences", 0))
         max_files = int(limits.get("maxFiles", 0))
-        if occurrences != max_occurrences or file_count != max_files:
+        if occurrences > max_occurrences or file_count > max_files:
             failures.append(
                 f"{token}: occurrences={occurrences}/{max_occurrences}, "
                 f"files={file_count}/{max_files}"
             )
     if failures:
-        print("contract_mock_data_inventory 校验失败:", file=sys.stderr)
+        print("contract_mock_data_ratchet 校验失败:", file=sys.stderr)
         for failure in failures:
             print(f"  - {failure}", file=sys.stderr)
         print("请将新增测试数据迁入 contracts/metadata/**/test_fixtures。", file=sys.stderr)
         return 1
-    print("contract_mock_data_inventory: OK")
+    print("contract_mock_data_ratchet: OK")
     return 0
 
 

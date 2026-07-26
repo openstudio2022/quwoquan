@@ -204,13 +204,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                   : null,
               bio: _signature != snapshot.bio ? _signature : null,
               avatarAssetId: avatarUpload?.assetId,
-              avatarUrl: avatarUpload?.cdnUrl.isEmpty == true
-                  ? null
-                  : avatarUpload?.cdnUrl,
               backgroundAssetId: coverUpload?.assetId,
-              backgroundUrl: coverUpload?.cdnUrl.isEmpty == true
-                  ? null
-                  : coverUpload?.cdnUrl,
               gender: _gender != _normalizeGender(snapshot.gender)
                   ? _gender
                   : null,

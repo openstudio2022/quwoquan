@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 /// User 身份账号域 API Contract Runner。
 ///
 /// 覆盖真实 gamma 环境的登录 → UserSettings 20 字段读写 → 登出主链路，
@@ -69,6 +70,7 @@ late RemoteAccountLifecycleCommandWriter _accountLifecycle;
 late RemoteUserSettingsQueryReader _settingsReader;
 late RemoteUserSettingsCommandWriter _settingsCommands;
 late AuthSessionGrant _session;
+var _httpClientInitialized = false;
 String? _ownerId;
 String? _personaId;
 
@@ -136,13 +138,19 @@ void main() {
     }
     _tokenProvider = _MutableAccessTokenProvider();
     _httpClient = CloudHttpClient(authTokenProvider: _tokenProvider);
+    _httpClientInitialized = true;
     _telemetry = RecordingCloudOperationTelemetrySink();
     final client = buildGeneratedCloudOperationClient(
       httpClient: _httpClient,
       clientContextProvider: const _UserApiClientContext(),
       telemetrySink: _telemetry,
       environment: CloudRuntimeEnvironment(
-        environment: CloudEnvironment.gamma,
+        environment: CloudEnvironment.values.firstWhere(
+          (candidate) => candidate.name == _apiContractEnv,
+          orElse: () => throw StateError(
+            'Unsupported API_CONTRACT_ENV: $_apiContractEnv',
+          ),
+        ),
         gatewayBaseUri: Uri.parse(_apiBase),
       ),
     );
@@ -166,7 +174,7 @@ void main() {
   });
 
   tearDownAll(() {
-    _httpClient.close();
+    if (_httpClientInitialized) _httpClient.close();
     restoreLocalApiContractBadCertificateOverride();
   });
 
@@ -226,7 +234,7 @@ void main() {
     expect(ack.revoked, true);
   });
 
-  test('CloseAccount 返回不可逆终态并吊销全部 refresh session', () async {
+  test('CloseAccount 返回不可逆终态并拒绝 refresh 与旧 access', () async {
     final closingSession = await _loginDisposableAccount('close');
     final result = await _accountLifecycle.closeAccount(
       CloseAccountCommand(
@@ -243,6 +251,16 @@ void main() {
         RefreshTokenCommand(refreshToken: closingSession.refreshToken),
       ),
       throwsA(isA<CloudException>()),
+    );
+    await expectLater(
+      _settingsReader.getNotificationSettings(),
+      throwsA(
+        isA<CloudException>().having(
+          (error) => error.code,
+          'canonical account security error',
+          anyOf('USER.AUTH.account_deleted', 'USER.AUTH.token_stale'),
+        ),
+      ),
     );
     expect(_telemetry.events.every((event) => event.succeeded), isFalse);
   });

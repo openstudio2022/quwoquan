@@ -1,0 +1,18 @@
+[project]
+name = "quwoquan-recommendation-service"
+version = "0.1.0"
+requires-python = ">=3.11"
+dynamic = ["dependencies"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+python_files = ["test_*.py", "*_test.py"]
+testpaths = ["tests"]
+pythonpath = [
+  ".",
+  "tests",
+  "cmd/api",
+  "internal/recommendation/recommendation_model_release/infrastructure/model_runtime",
+  "internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts",
+]
+cache_dir = "../../../.qwq_output/env/repo/local/tests/cache/pytest/recommendation-service"

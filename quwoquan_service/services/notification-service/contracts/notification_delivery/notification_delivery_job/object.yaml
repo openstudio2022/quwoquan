@@ -1,0 +1,101 @@
+kind: aggregate_root
+description: 具有独立租约、重试预算、频控与 DLQ 生命周期的通知投递作业。
+identity:
+  fields:
+  - id
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: notification
+  on_delete: retain
+  reference_fields:
+  - notificationId
+  target_object: notification.Notification
+- access: command_facade
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: externalDelivery
+  on_delete: retain
+  reference_fields:
+  - externalInteractionId
+  target_object: integration.ExternalInteraction
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: callSession
+  on_delete: retain
+  reference_fields:
+  - callId
+  target_object: rtc.CallSession
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: targetPersona
+  on_delete: retain
+  reference_fields:
+  - targetPersonaId
+  target_object: user.Persona
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: cancellationActor
+  on_delete: retain
+  reference_fields:
+  - cancellationActorId
+  target_object: user.Persona
+- access: command_facade
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: cancellationExternalDelivery
+  on_delete: retain
+  reference_fields:
+  - cancellationExternalInteractionId
+  target_object: integration.ExternalInteraction
+local_identity_reasons:
+  cancellationEventId: immutable RTC terminal-event correlation key, not a standalone aggregate identity
+  deviceId: delivery routing key scoped to one NotificationDeliveryJob; authoritative device lifecycle
+    remains in user.DeviceRegistration
+  eventId: immutable source-event correlation key, not a standalone aggregate identity
+capabilities:
+- commandable
+- queryable
+- leased
+- attempt_budgeted
+business_rules:
+- notificationId、channel 与 destinationRef 创建后不可变
+- 同一 delivery identity 只存在一个活动 Job
+- lease 只能由一个 worker 持有且必须在 expiresAt 前提交结果
+- provider 发送只创建 Integration ExternalInteraction，不重复维护 provider ledger
+- 超过 attempt budget 或 recovery.action 非 retry 的错误进入 dead_letter，恢复创建新 attempt epoch
+- Incoming Call 每 targetPersonaId+endpointRef 只有一个幂等 Job，deliveryKey 在 realtime/push 全程不变
+- 在线设备只先投 realtime，750ms presentation ACK grace 内禁止同时入 push
+- realtime 未 ACK 或设备离线才进入 push_queued；202 Accepted 只迁移 sent_unconfirmed，不声明 delivered
+- CallAnswered/CallEnded 将同 callId 其它未完成 Job CAS 为 cancelled；过期 Job 不再外送
+lifecycle:
+  states:
+  - pending
+  - leased
+  - dispatched
+  - realtime_dispatched
+  - realtime_presented
+  - push_queued
+  - sent_unconfirmed
+  - delivered
+  - retry_wait
+  - dead_letter
+  - cancelled
+  - expired
+  optimistic_concurrency: version
+  idempotency: command_receipt

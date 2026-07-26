@@ -65,20 +65,15 @@ class CloudRequestHeaders {
     Map<String, String> headers, {
     String? ownerUserId,
     String? subAccountId,
-    String? subAccountContextVersion,
   }) {
     final next = Map<String, String>.from(headers);
     final resolvedOwnerUserId = (ownerUserId ?? '').trim();
     final resolvedSubAccountId = (subAccountId ?? '').trim();
-    final resolvedContextVersion = (subAccountContextVersion ?? '').trim();
     if (resolvedOwnerUserId.isNotEmpty) {
       next['X-Client-User-Id'] = resolvedOwnerUserId;
     }
     if (resolvedSubAccountId.isNotEmpty) {
       next['X-Client-Sub-Account-Id'] = resolvedSubAccountId;
-    }
-    if (resolvedContextVersion.isNotEmpty) {
-      next['X-Client-Sub-Account-Context-Version'] = resolvedContextVersion;
     }
     return next;
   }

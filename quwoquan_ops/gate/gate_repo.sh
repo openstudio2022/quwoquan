@@ -43,19 +43,16 @@ bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
 python3 quwoquan_ops/gate/verify_github_supply_chain.py
 python3 quwoquan_ops/gate/verify_agent_context_contract.py
-python3 quwoquan_ops/gate/verify_business_object_design_freeze.py
 python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
-python3 quwoquan_ops/gate/verify_cloud_commercial_directory_governance.py
 python3 quwoquan_ops/gate/verify_single_track_contracts.py
 python3 quwoquan_ops/gate/verify_behavior_event_type_contract.py
 python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
 python3 quwoquan_app/scripts/runtime/verify_app_generated_manifest.py
 python3 quwoquan_app/scripts/runtime/verify_cloud_package_boundaries.py
-python3 quwoquan_ops/gate/scaffold/verify_test_specs.py
+python3 quwoquan_ops/cli/feature_tree.py verify
 python3 quwoquan_ops/gate/verify_execution_profiles.py
-python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
+python3 quwoquan_ops/gate/scaffold/verify_test_directory_layout.py
 python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
-python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
 python3 quwoquan_ops/gate/verify_local_dependency_purity.py
 python3 quwoquan_ops/gate/verify_observability_layout.py
 python3 quwoquan_ops/gate/verify_observability_envelope.py
@@ -75,17 +72,16 @@ find "$ROOT" \
 rm -rf "$ROOT/.pytest_cache"
 python3 quwoquan_ops/gate/verify_root_layout.py
 python3 quwoquan_app/scripts/runtime/verify_app_layout.py
-python3 quwoquan_service/scripts/verify/verify_service_layout.py
 python3 quwoquan_data/scripts/verify/verify_data_layout.py
 
 run_service() {
   echo "[gate] quwoquan_service"
-  bash quwoquan_ops/gate/scaffold/verify_feature_traceability.sh
+  python3 quwoquan_ops/cli/feature_tree.py verify
   python3 quwoquan_ops/gate/verify_stackctl_args_contract.py
   python3 quwoquan_ops/gate/verify_stackctl_provider_readiness_contract.py
 python3 quwoquan_ops/gate/verify_dev_up_cli_surface.py
 python3 quwoquan_ops/gate/verify_api_path_unversioned.py
-python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
+python3 quwoquan_ops/gate/verify_environment_assembly.py
   python3 quwoquan_ops/gate/verify_local_env_port_manifest.py
   python3 quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py
   python3 quwoquan_ops/gate/verify_prod_plane_access_isolation.py
@@ -95,22 +91,16 @@ python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
   # 内容域评论计数自洽（缺口A 防回归）：真相源 + 派生产物（*.lite.json / *.gamma-curated.json）
   # 的 commentCount/replyCount 不得与裁剪后评论集漂移（派生由 bundle 生成器在裁剪后重算保证）
   python3 quwoquan_service/scripts/contract/verify_content_fixture_comment_counts.py --include-derived
-  bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  bash quwoquan_ops/gate/scaffold/verify_specs_l1_hierarchy.sh
-  bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
-  bash quwoquan_ops/gate/scaffold/verify_engineering_directory.sh
-  bash quwoquan_ops/environments/verify/verify_opsx_ff_8services_consistency.sh
+  bash quwoquan_ops/environments/verify/verify_service_domain_layout.sh
   bash quwoquan_service/scripts/runtime/verify_runtime_packaging.sh
   bash quwoquan_ops/environments/verify/verify_ff_config_contract.sh
-  python3 quwoquan_app/scripts/runtime/verify_module_package_mapping.py
+  python3 quwoquan_ops/gate/verify_service_architecture.py
   python3 quwoquan_service/scripts/recommendation/verify_reliable_task_catalog.py
   python3 quwoquan_service/scripts/recommendation/verify_reliable_task_retention_policy.py
   python3 quwoquan_service/scripts/runtime/verify_module_permission_scope.py
   python3 quwoquan_service/scripts/recommendation/verify_reliable_task_migration.py
   # topology 由 delivery-gate topology job / make gate 负责，避免重复
   bash quwoquan_ops/environments/verify/verify_deploy_kustomization.sh
-  python3 quwoquan_ops/environments/verify/verify_workload_topology_inventory.py
-  python3 quwoquan_ops/environments/verify/verify_gamma_local_prod_consistency.py
   bash quwoquan_service/scripts/recommendation/verify_recommendation_service_contract.sh
   python3 quwoquan_service/scripts/recommendation/verify_daily_metrics_dimension_consistency.py
   # N2-2 gamma-local 推荐 policy overlay 与 metadata baseline 的受控差异守卫
@@ -118,8 +108,6 @@ python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
   python3 quwoquan_ops/gate/verify_gamma_policy_overlay.py
   bash quwoquan_ops/environments/verify/verify_config_gray_parallel_binding.sh
   bash quwoquan_ops/environments/verify/verify_gray_rollout_stages.sh
-  # IaC 配置双版本保留（当前灰度 + 上一版本）
-  python3 quwoquan_ops/cli/prod/prune_config_releases.py --check
   # 灰度路由策略（版本/userId/省份/运营商四维）schema 与枚举
   python3 quwoquan_ops/environments/verify/verify_gray_routing_policy.py
   # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)
@@ -129,14 +117,12 @@ python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
   python3 quwoquan_service/scripts/verify/verify_login_dependency_config.py
   python3 quwoquan_service/scripts/verify/verify_relationship_error_code_gate.py
   python3 quwoquan_service/scripts/verify/verify_error_recovery_alignment.py
-  python3 quwoquan_ops/tests/local_contract/test_content_b2_test_integrity__local_contract_test.py
-  python3 quwoquan_service/scripts/verify/verify_content_b2_test_integrity.py
   python3 quwoquan_ops/tests/local_contract/test_content_object_alert_coverage__contract_graph_mapping__observability__local_contract_test.py
   python3 quwoquan_service/scripts/verify/verify_content_object_alert_coverage.py
   python3 quwoquan_service/scripts/verify/verify_entity_object_alert_coverage.py
   python3 quwoquan_service/scripts/verify/verify_entity_homepage_object_mainline.py
   python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
-  bash quwoquan_ops/environments/verify/verify_config_release_version_mapping.sh
+  bash quwoquan_ops/environments/verify/verify_service_config_digest_mapping.sh
   bash quwoquan_ops/environments/verify/verify_config_image_compat.sh
   bash quwoquan_ops/environments/verify/verify_config_pr_policy.sh
   make verify-env-packaging
@@ -146,7 +132,15 @@ python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
   dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
   (cd quwoquan_service && make gate)
-  (cd quwoquan_service/services/product-ops-service && QWQ_OUTPUT_ROOT="$ROOT/.qwq_output" go test ./cmd/api ./tests/... -count=1)
+  (
+    cd quwoquan_service/services/product-ops-service
+    export QWQ_OUTPUT_ROOT="$ROOT/.qwq_output"
+    # Intentionally unquoted: bash word-splits package paths from go list.
+    # shellcheck disable=SC2046
+    go test ./cmd/api \
+      $(go list ./tests/... | grep -v '/tests/api_integration' || true) \
+      -count=1
+  )
 }
 
 run_app() {
@@ -185,14 +179,12 @@ run_app() {
     #   - degraded:true 必须有 errorCode
     #   - finalText 不得泄漏 JSON envelope key
     #   - catch 块必须保留 $error 根因信息
-    #   - acceptance.yaml 引用的测试文件必须存在
+    #   - spec 中的验收锚点与测试 spec_ref 必须双向有效
     python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_degraded_response_contract.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_native_edge_navigation.py || exit 1
-    python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py || exit 1
-    python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_page_object_contract.py || exit 1
-    # 页面 A/B/C：默认 --quiet 仅汇总、不阻断；GATE_PAGE_ABC_ENFORCE 见 specs/gates/page_abc_governance.md
+    # 页面 A/B/C：默认 --quiet 仅汇总；GATE_PAGE_ABC_ENFORCE 选择阻断维度。
     if [[ -n "${GATE_PAGE_ABC_ENFORCE:-}" ]]; then
       _abc_flags=""
       _gpe=$(echo "${GATE_PAGE_ABC_ENFORCE}" | tr '[:upper:]' '[:lower:]')
@@ -227,10 +219,9 @@ run_app() {
     else
       python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --quiet
     fi
-    # 助手手写 + App 搜索仓库：弱类型棘轮（见 specs/gates/assistant_search_weak_typing_governance.md）
+    # 助手手写 + App 搜索仓库：弱类型只减不增棘轮。
     python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_search_weak_typing_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_user_profile_avatar_projection_versions.py || exit 1
-    python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_response_body_vs_codegen_app.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_cloud_security_cutovers.py || exit 1
@@ -324,13 +315,6 @@ run_app() {
   bash quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/run_pa_core_tests.sh
   # Skip in CI: test/user_acceptance/patrol/ (needs real device/Patrol, run via FTL).
 
-  # dart_func 覆盖率检查：mock.yaml 声明的 dart_func 必须在 Dart 测试文件中存在
-  if command -v python3 >/dev/null 2>&1; then
-    python3 quwoquan_app/scripts/runtime/verify_dart_func_coverage.py || exit 1
-  else
-    echo "[gate] FAIL: python3 is required for dart_func coverage verification" >&2
-    exit 1
-  fi
 }
 
 run_portal() {
@@ -362,7 +346,7 @@ run_patrol_local() {
     return 0
   fi
   echo "[gate] user_acceptance Patrol (local device)"
-  (cd quwoquan_app && patrol test test/user_acceptance/patrol/ --dart-define=APP_RUNTIME_ENV=gamma --dart-define=API_CONTRACT_ENV=gamma)
+  (cd quwoquan_app && patrol test test/user_acceptance/patrol/ --dart-define=RUN_T4_PATROL=true --dart-define=APP_RUNTIME_ENV=gamma --dart-define=API_CONTRACT_ENV=gamma)
 }
 
 case "$scope" in

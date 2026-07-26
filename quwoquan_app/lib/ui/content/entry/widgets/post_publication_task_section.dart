@@ -184,14 +184,16 @@ class _PublicationTaskActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final publicationState = intent.publicationState;
     final requiresMediaPreparation = intent.requiresMediaPreparation;
+    final requiresMediaCancellation = intent.requiresMediaCancellation;
     final isRejected = publicationState == ContentPostPublicationState.rejected;
-    final canRetry =
-        !requiresMediaPreparation &&
-        publicationState != ContentPostPublicationState.rejected &&
-        publicationState != ContentPostPublicationState.published;
+    final canRetry = requiresMediaCancellation
+        ? intent.blocked || intent.retryCount > 0
+        : !requiresMediaPreparation &&
+              publicationState != ContentPostPublicationState.rejected &&
+              publicationState != ContentPostPublicationState.published;
     final canRemove =
         publicationState == ContentPostPublicationState.rejected ||
-        publicationState == null;
+        (publicationState == null && !requiresMediaCancellation);
     final draftId = intent.command.localDraftId;
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
@@ -244,6 +246,9 @@ String _statusForIntent(LocalPostPublicationIntent intent) {
     case ContentPostPublicationState.rejected:
       return UITextConstants.publishTaskRejectedStatus;
     case null:
+      if (intent.requiresMediaCancellation) {
+        return UITextConstants.publishTaskCancellingMediaStatus;
+      }
       if (intent.requiresMediaPreparation) {
         return UITextConstants.publishTaskPreparingMediaStatus;
       }
@@ -265,6 +270,8 @@ String _descriptionForIntent(LocalPostPublicationIntent intent) {
       UITextConstants.publishTaskRejectedDescription,
     ContentPostPublicationState.published =>
       UITextConstants.publishTaskFinalizingDescription,
+    null when intent.requiresMediaCancellation =>
+      UITextConstants.publishTaskCancellingMediaDescription,
     null when intent.requiresMediaPreparation =>
       UITextConstants.publishTaskPreparingMediaDescription,
     null when intent.blocked => switch (intent.blockReason) {

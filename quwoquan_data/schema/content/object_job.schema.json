@@ -18,9 +18,6 @@
     "maxWallClockSeconds",
     "stuckThreshold",
     "permissions",
-    "tokenBudget",
-    "costBudgetUsd",
-    "usage",
     "failureFingerprints",
     "mutexKey",
     "lease",
@@ -34,7 +31,6 @@
     "resultEnvelopeRequired",
     "resultEnvelopeRef",
     "gateVerdicts",
-    "tokenLedger",
     "timings",
     "meta",
     "createdAt",
@@ -47,7 +43,7 @@
     },
     "executionId": {
       "type": "string",
-      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3|h10k)-[0-9]{3,}$"
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
     "ref": {
       "type": "string",
@@ -123,7 +119,7 @@
             "jobId": {"type": "string", "minLength": 1},
             "executionId": {
               "type": "string",
-              "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3|h10k)-[0-9]{3,}$"
+              "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
             },
             "ref": {"type": "string", "minLength": 1},
             "stage": {"enum": ["download", "author", "publish"]},
@@ -201,22 +197,6 @@
       "type": "array",
       "items": {"type": "string", "minLength": 1}
     },
-    "tokenBudget": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "costBudgetUsd": {
-      "type": "number",
-      "minimum": 0
-    },
-    "usage": {
-      "type": "object",
-      "required": ["tokens", "costUsd"],
-      "properties": {
-        "tokens": {"type": "integer", "minimum": 0},
-        "costUsd": {"type": "number", "minimum": 0}
-      }
-    },
     "failureFingerprints": {
       "type": "array",
       "items": {"type": "string", "minLength": 1}
@@ -266,9 +246,6 @@
       ]
     },
     "gateVerdicts": {
-      "type": "array"
-    },
-    "tokenLedger": {
       "type": "array"
     },
     "timings": {

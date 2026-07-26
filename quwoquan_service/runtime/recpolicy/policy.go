@@ -3,7 +3,7 @@
 // coefficients, AB experiment definitions, segment targeting, and guardrails.
 //
 // The canonical data lives in metadata
-// (contracts/metadata/recommendation/rec_model/policy.yaml). codegen_rec_policy
+// (services/recommendation-service/contracts/recommendation/recommendation_model_release/policy.yaml). codegen_rec_policy
 // captures a compile-time snapshot as the fail-safe Baseline (rec_policy_baseline.gen.go),
 // and Store hot-loads the live YAML at runtime with validate-before-swap and
 // last-good retention. No scoring weight / coefficient / experiment is ever

@@ -1,0 +1,53 @@
+kind: aggregate_root
+description: Persona 与助手连续交互的会话身份、摘要和当前执行策略聚合。
+identity:
+  fields:
+  - conversationId
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: accountOwner
+  on_delete: cascade
+  reference_fields:
+  - userId
+  target_object: user.UserAccount
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: activeTurn
+  on_delete: retain
+  reference_fields:
+  - activeTurnId
+  target_object: assistant.AssistantTurnView
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: lastTurn
+  on_delete: retain
+  reference_fields:
+  - lastTurnId
+  target_object: assistant.AssistantTurnView
+capabilities:
+- commandable
+- queryable
+- idempotent_commands
+business_rules:
+- conversation 创建后 owner persona 不可变
+- 同一 conversation 最多一个 active run
+- summary 只由完成 run 的事件按 source sequence 与服务端内部 version CAS 推进
+- archived conversation 不接受新 run
+lifecycle:
+  states:
+  - active
+  - archived
+  optimistic_concurrency: version
+  idempotency: command_receipt

@@ -17,7 +17,7 @@ final class AlphaFollowingSubjectFacet
     final rawItems = seed['items'];
     if (rawItems is! List<Object?>) {
       throw const FormatException(
-        'user/following_subject_core.items must be an array',
+        'user/profile_projection/following_subject_core.items must be an array',
       );
     }
     return decodeFollowingSubjectSlice(

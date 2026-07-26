@@ -114,13 +114,11 @@ def build_lease_packet(job: QueueJob) -> dict[str, Any]:
                 "2.quality/*（证据/source）",
                 "5.review/repair_report.json",
             ],
-            "budget": {
+            "limits": {
                 "maxWallClockSeconds": job.max_wall_clock_seconds,
                 "maxAttempts": job.max_attempts,
                 "maxStartupFailures": job.max_startup_failures,
                 "stuckThreshold": job.stuck_threshold,
-                "tokenBudget": job.token_budget,
-                "costBudgetUsd": job.cost_budget_usd,
             },
             "permissions": list(job.permissions or DEFAULT_TOOL_PERMISSIONS),
             "completionConditions": completion_conditions,

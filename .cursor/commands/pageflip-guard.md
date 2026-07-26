@@ -56,6 +56,6 @@ description: 前后翻组件几何/视觉变更前的强制审视入口，防止
 - visual test 不得为了稳定性关闭关键像素断言；若 `toImage()` 慢，只能缩小画布、减少采样点或拆单帧测试。
 - 完成后必须说明真实 paint、diagnostics、测试是否仍共用同一 geometry 输出。
 
-自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/pageflip-guard` 语义执行；执行前仍需按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。
+自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/pageflip-guard` 语义执行；执行前仍需按 `根 AGENTS.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。
 
-协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。
+协议补充：执行前按 `根 AGENTS.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

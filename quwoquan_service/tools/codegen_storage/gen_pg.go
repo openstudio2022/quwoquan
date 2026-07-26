@@ -57,7 +57,7 @@ func generatePGStore(ctx *genContext, tableName string, table TableDef) error {
 		TableName:   tableName,
 		EntityName:  entity,
 		ShortName:   shortName,
-		BaseName:    "pg" + shortName + "StoreBase",
+		BaseName:    "PG" + shortName + "StoreBase",
 		DomainPkg:   ctx.domainPkg(),
 		ModelImport: ctx.source.modelImport(ctx.modulePath()),
 	}
@@ -181,9 +181,14 @@ type {{.BaseName}} struct {
 	pool *pgxpool.Pool
 }
 
-const {{lowerFirst .EntityName}}Cols = ` + "`" + `{{colNames .Columns}}` + "`" + `
+// New{{.BaseName}} wires the generated base to its connection pool.
+func New{{.BaseName}}(pool *pgxpool.Pool) *{{.BaseName}} {
+	return &{{.BaseName}}{pool: pool}
+}
 
-func scan{{.EntityName}}(row pgx.Row) (*model.{{.EntityName}}, error) {
+const {{.EntityName}}Cols = ` + "`" + `{{colNames .Columns}}` + "`" + `
+
+func Scan{{.EntityName}}(row pgx.Row) (*model.{{.EntityName}}, error) {
 	e := &model.{{.EntityName}}{}
 	err := row.Scan({{scanFields .Columns "e"}})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -197,8 +202,8 @@ func scan{{.EntityName}}(row pgx.Row) (*model.{{.EntityName}}, error) {
 
 // FindByID retrieves a {{.EntityName}} by primary key.
 func (s *{{.BaseName}}) FindByID(ctx context.Context, id string) (*model.{{.EntityName}}, error) {
-	row := s.pool.QueryRow(ctx, ` + "`" + `SELECT ` + "`" + `+{{lowerFirst .EntityName}}Cols+` + "`" + ` FROM {{.TableName}} WHERE {{.PKColumn}} = $1` + "`" + `, id)
-	return scan{{.EntityName}}(row)
+	row := s.pool.QueryRow(ctx, ` + "`" + `SELECT ` + "`" + `+{{.EntityName}}Cols+` + "`" + ` FROM {{.TableName}} WHERE {{.PKColumn}} = $1` + "`" + `, id)
+	return Scan{{.EntityName}}(row)
 }
 
 // Create inserts a new {{.EntityName}} record.
@@ -244,7 +249,7 @@ func (s *{{.BaseName}}) Delete(ctx context.Context, id string) error {
 // ListBy{{.FKGoName}} returns all {{.EntityName}} records for the given foreign key.
 func (s *{{.BaseName}}) ListBy{{.FKGoName}}(ctx context.Context, fkID string) ([]model.{{.EntityName}}, error) {
 	rows, err := s.pool.Query(ctx,
-		` + "`" + `SELECT ` + "`" + `+{{lowerFirst .EntityName}}Cols+` + "`" + ` FROM {{.TableName}} WHERE {{.FKColumn}} = $1 ORDER BY created_at DESC` + "`" + `, fkID)
+		` + "`" + `SELECT ` + "`" + `+{{.EntityName}}Cols+` + "`" + ` FROM {{.TableName}} WHERE {{.FKColumn}} = $1 ORDER BY created_at DESC` + "`" + `, fkID)
 	if err != nil {
 		return nil, err
 	}

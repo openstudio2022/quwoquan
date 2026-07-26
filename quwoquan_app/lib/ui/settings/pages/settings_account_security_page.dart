@@ -4,8 +4,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger_provider.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
+import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -181,11 +183,48 @@ class _SettingsAccountSecurityPageState
       setState(() {
         _closingAccount = false;
       });
-      AppToast.show(context, runtimeErrorDisplayMessage(error));
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.dialog,
+          allowRetry: false,
+          presentation: UiErrorPresentation.actionDialog,
+        ),
+      );
       return;
     }
 
+    final closureActor = AccountClosureLocalActorContext.fromSession(
+      ref.read(authSessionControllerProvider),
+    );
+    final cleanupReceiptStore = ref.read(
+      terminalAccountCleanupReceiptStoreProvider,
+    );
+    var cleanupReceiptPersisted = false;
+    try {
+      await cleanupReceiptStore.save(
+        TerminalAccountCleanupReceipt(
+          accountId: closureActor.accountId,
+          personaId: closureActor.personaId,
+          installId: closureActor.installId,
+        ),
+      );
+      cleanupReceiptPersisted = true;
+    } catch (error, stackTrace) {
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'account_closure_local_cleanup_receipt',
+          error: error,
+          stackTrace: stackTrace,
+          operationId: AppCloudOperationIds.userUserAccountCloseAccount,
+        ),
+      );
+    }
     final sessionController = ref.read(authSessionControllerProvider.notifier);
+    final localDataPurger = ref.read(accountClosureLocalDataPurgerProvider);
     try {
       await sessionController.hardLogout();
     } catch (error, stackTrace) {
@@ -195,9 +234,27 @@ class _SettingsAccountSecurityPageState
           source: 'account_closure_local_session_cleanup',
           error: error,
           stackTrace: stackTrace,
-          operationId: AppCloudOperationIds.userUserProfileCloseAccount,
+          operationId: AppCloudOperationIds.userUserAccountCloseAccount,
         ),
       );
+    }
+    try {
+      await localDataPurger.purge();
+      if (cleanupReceiptPersisted) {
+        await cleanupReceiptStore.clear();
+      }
+    } catch (error, stackTrace) {
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'account_closure_local_privacy_cleanup',
+          error: error,
+          stackTrace: stackTrace,
+          operationId: AppCloudOperationIds.userUserAccountCloseAccount,
+        ),
+      );
+      if (cleanupReceiptPersisted) {
+        unawaited(ref.read(accountClosureLocalCleanupRecoveryProvider)());
+      }
     }
 
     if (!mounted) return;
@@ -237,7 +294,17 @@ class _SettingsAccountSecurityPageState
       setState(_reload);
     } catch (error) {
       if (!mounted) return;
-      AppToast.show(context, runtimeErrorDisplayMessage(error));
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.backgroundAction,
+          scope: UiErrorScope.dialog,
+          allowRetry: false,
+          presentation: UiErrorPresentation.actionDialog,
+        ),
+      );
     }
   }
 

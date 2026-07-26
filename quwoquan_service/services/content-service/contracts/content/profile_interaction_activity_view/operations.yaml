@@ -1,0 +1,134 @@
+commercial_defaults:
+  status: blocked
+  block_reason: Profile interaction projection awaits gamma environment replay and page UAT evidence
+  gap_id: CONTENT_PROFILE_INTERACTION_ENV_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+api_routes:
+- method: GET
+  path: /content/sub-accounts/{subAccountId}/interactions/received
+  operation: ListProfileInteractionActivitiesReceived
+  actor: persona
+  application:
+    kind: query
+    facet: ProfileInteractionActivityQueryFacet
+    method: listReceived
+    reader: ReceivedProfileInteractionActivityReader
+    slice: ProfileInteractionActivityPageSlice
+  authorization:
+    principal: persona
+    ownership_policy: active_persona_for_private_share_filter
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.interaction_type_invalid
+  - CONTENT.USER.interaction_cursor_invalid
+  - CONTENT.USER.interaction_owner_forbidden
+  - CONTENT.SYSTEM.interaction_read_model_unavailable
+  privacy:
+    request_classification: PII
+    response_classification: PII
+    log_policy: metadata_only
+  telemetry:
+    metric: content_profile_interaction_received_list
+    trace: true
+    attributes:
+    - activity_type
+    - outcome
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../content/profile_interaction_contracts.dart
+    request_type: ContentProfileInteractionPageQuery
+    response_type: ContentProfileInteractionPage
+    request_encoder: encodeContentProfileInteractionPageQuery
+    response_decoder: decodeContentProfileInteractionPage
+  description: '个人主页收到的点赞、评论与站外转发活动。type 仅允许 like/comment/share；
+
+    列表从 ProfileInteractionActivityView projection 做 keyset 分页，不请求期 join。
+
+    '
+  query_params:
+  - type
+  - cursor
+  - limit
+  response_entity: ProfileInteractionActivityView
+  response_body: ProfileInteractionActivityView
+  response_body_kind: page
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+- method: GET
+  path: /content/sub-accounts/{subAccountId}/interactions/sent
+  operation: ListProfileInteractionActivitiesSent
+  actor: persona
+  application:
+    kind: query
+    facet: ProfileInteractionActivityQueryFacet
+    method: listSent
+    reader: SentProfileInteractionActivityReader
+    slice: ProfileInteractionActivityPageSlice
+  authorization:
+    principal: persona
+    ownership_policy: active_persona_for_private_share_filter
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.interaction_type_invalid
+  - CONTENT.USER.interaction_cursor_invalid
+  - CONTENT.USER.interaction_owner_forbidden
+  - CONTENT.SYSTEM.interaction_read_model_unavailable
+  privacy:
+    request_classification: PII
+    response_classification: PII
+    log_policy: metadata_only
+  telemetry:
+    metric: content_profile_interaction_sent_list
+    trace: true
+    attributes:
+    - activity_type
+    - outcome
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../content/profile_interaction_contracts.dart
+    request_type: ContentProfileInteractionPageQuery
+    response_type: ContentProfileInteractionPage
+    request_encoder: encodeContentProfileInteractionPageQuery
+    response_decoder: decodeContentProfileInteractionPage
+  description: '个人主页发出的点赞、评论与站外转发活动。type 仅允许 like/comment/share；
+
+    列表从 ProfileInteractionActivityView projection 做 keyset 分页，不请求期 join。
+
+    '
+  query_params:
+  - type
+  - cursor
+  - limit
+  response_entity: ProfileInteractionActivityView
+  response_body: ProfileInteractionActivityView
+  response_body_kind: page
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+consumers:
+- name: app
+  capabilities:
+  - list_profile_interaction_activities

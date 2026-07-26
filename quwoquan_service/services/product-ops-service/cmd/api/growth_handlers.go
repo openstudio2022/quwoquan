@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"quwoquan_service/services/product-ops-service/internal/application"
-	productopsgenerated "quwoquan_service/services/product-ops-service/internal/generated"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
+	productopsgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
 )
 
 // handleGetPageExperience 返回按 pageName 聚合的页面体验矩阵（热力图数据源）：

@@ -26,7 +26,6 @@ final class IncomingCallPushCoordinator {
   ) {
     self.defaults = defaults
     self.secretStore = secretStore
-    migrateLegacyPlaintextSecrets()
   }
 
   var backgroundPushConfigured: Bool {
@@ -196,6 +195,19 @@ final class IncomingCallPushCoordinator {
     }
   }
 
+  func purgeForTerminalAccountClosure() -> Bool {
+    secretStore.remove(StoreKey.voipToken)
+    secretStore.remove(StoreKey.endpointMutations)
+    defaults.removeObject(forKey: StoreKey.pendingCalls)
+    defaults.removeObject(forKey: StoreKey.pendingActions)
+    defaults.removeObject(forKey: StoreKey.seenDeliveries)
+    return secretStore.string(forKey: StoreKey.voipToken) == nil
+      && secretStore.data(forKey: StoreKey.endpointMutations) == nil
+      && defaults.object(forKey: StoreKey.pendingCalls) == nil
+      && defaults.object(forKey: StoreKey.pendingActions) == nil
+      && defaults.object(forKey: StoreKey.seenDeliveries) == nil
+  }
+
   private func makeCallKitData(
     _ envelope: IncomingNativeEnvelope
   ) -> flutter_callkit_incoming.Data {
@@ -282,25 +294,6 @@ final class IncomingCallPushCoordinator {
       return
     }
     _ = secretStore.set(encoded, forKey: StoreKey.endpointMutations)
-  }
-
-  private func migrateLegacyPlaintextSecrets() {
-    if let token = defaults.string(forKey: StoreKey.voipToken),
-       !token.isEmpty,
-       secretStore.string(forKey: StoreKey.voipToken) == nil
-    {
-      _ = secretStore.set(token, forKey: StoreKey.voipToken)
-    }
-    if let mutations = defaults.array(forKey: StoreKey.endpointMutations),
-       !mutations.isEmpty,
-       secretStore.data(forKey: StoreKey.endpointMutations) == nil,
-       let encoded = try? JSONSerialization.data(withJSONObject: mutations)
-    {
-      _ = secretStore.set(encoded, forKey: StoreKey.endpointMutations)
-    }
-    // 迁移失败也必须 fail closed，禁止继续保留明文 token。
-    defaults.removeObject(forKey: StoreKey.voipToken)
-    defaults.removeObject(forKey: StoreKey.endpointMutations)
   }
 
   private func makeEndpointMutation(

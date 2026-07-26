@@ -1,11 +1,11 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_support.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 
@@ -238,24 +238,19 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                             width: AppSpacing.two,
                           ),
                         ),
-                        child: CircleAvatar(
-                          radius: (AppSpacing.avatarSize / 2).w,
+                        child: AppCircularAvatar(
+                          imageUrl: currentPost['avatar'],
+                          size: AppSpacing.avatarSize.w,
                           backgroundColor: isDark
                               ? AppColors.dark.backgroundTertiary
                               : AppColors.light.backgroundTertiary,
-                          backgroundImage:
-                              currentPost['avatar']?.isNotEmpty == true
-                              ? NetworkImage(currentPost['avatar'])
-                              : null,
-                          child: currentPost['avatar']?.isEmpty != false
-                              ? Icon(
-                                  CupertinoIcons.person_fill,
-                                  color: isDark
-                                      ? AppColors.dark.foregroundTertiary
-                                      : AppColors.light.foregroundTertiary,
-                                  size: AppSpacing.iconMedium.sp,
-                                )
-                              : null,
+                          fallback: Icon(
+                            CupertinoIcons.person_fill,
+                            color: isDark
+                                ? AppColors.dark.foregroundTertiary
+                                : AppColors.light.foregroundTertiary,
+                            size: AppSpacing.iconMedium.sp,
+                          ),
                         ),
                       ),
                     ),

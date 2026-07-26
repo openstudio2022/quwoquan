@@ -1,6 +1,6 @@
 // codegen_realtime_gateway 从 realtime metadata 生成 realtime-gateway 的
-// 服务端错误产物 internal/generated/errors.go。
-// 唯一真相源：contracts/metadata/realtime/connection/errors.yaml。
+// 服务端错误产物 generated/realtime/connection/errors.go。
+// 唯一真相源：services/realtime-gateway/contracts/realtime/connection/errors.yaml。
 package main
 
 import (
@@ -27,7 +27,7 @@ func main() {
 	var outputDir string
 	var sharedDir string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
-	flag.StringVar(&outputDir, "output-dir", "services/realtime-gateway/internal", "realtime-gateway internal output directory")
+	flag.StringVar(&outputDir, "output-dir", "services/realtime-gateway/generated/realtime/connection", "realtime-gateway generated object directory")
 	flag.StringVar(&sharedDir, "shared-dir", "generated/serviceclients", "cross-service client constants output directory")
 	flag.Parse()
 
@@ -36,7 +36,7 @@ func main() {
 		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
 	}
 	var errorsFile contractcodegen.ErrorsFile
-	const errorsSource = "realtime/connection/errors.yaml"
+	const errorsSource = "realtime/realtime/connection/errors.yaml"
 	if err := source.Decode(errorsSource, &errorsFile); err != nil {
 		exitErr(fmt.Errorf("load %s: %w", errorsSource, err))
 	}
@@ -45,10 +45,10 @@ func main() {
 		SourcePath:   errorsSource,
 		CommentLines: []string{"Realtime error sentinels and helpers. user_message from errors.yaml user_message.zh."},
 	})
-	writeGoFile(filepath.Join(outputDir, "generated", "errors.go"), rendered)
+	writeGoFile(filepath.Join(outputDir, "errors.go"), rendered)
 
 	var routes serviceRoutesFile
-	const routesSource = "realtime/connection/service.yaml"
+	const routesSource = "realtime/realtime/connection/operations.yaml"
 	if err := source.Decode(routesSource, &routes); err != nil {
 		exitErr(fmt.Errorf("load %s: %w", routesSource, err))
 	}

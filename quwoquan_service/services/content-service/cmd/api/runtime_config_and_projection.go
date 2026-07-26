@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
+	configrelease "quwoquan_service/runtime/configrelease"
 	"strconv"
 	"strings"
 	"time"
@@ -12,12 +12,13 @@ import (
 	"gopkg.in/yaml.v3"
 
 	runtimeconfig "quwoquan_service/runtime/config"
-	"quwoquan_service/services/content-service/internal/application/ports"
-	postapp "quwoquan_service/services/content-service/internal/application/post"
-	embeddinginfra "quwoquan_service/services/content-service/internal/infrastructure/embedding"
-	"quwoquan_service/services/content-service/internal/infrastructure/placeindex"
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
-	"quwoquan_service/services/content-service/internal/infrastructure/searchindex"
+	postapp "quwoquan_service/services/content-service/internal/content/post/application"
+	embeddingapp "quwoquan_service/services/content-service/internal/content/post/application/embedding"
+	"quwoquan_service/services/content-service/internal/content/post/application/ports"
+	embeddinginfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/embedding"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/placeindex"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
 )
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
@@ -75,45 +76,12 @@ func mergeConfigFile(cfg *config, path string) error {
 
 func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
 	cfg := config{}
-
-	// External mounted config root mode:
-	//   <root>/configs/<service>/default/config.yaml
-	//   <root>/configs/<service>/<env>/config.yaml
-	//   <root>/releases/config/<service>/<version>.yaml
-	if strings.TrimSpace(configRoot) != "" {
-		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
-		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-
-		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
-			return config{}, fmt.Errorf("read default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, envFile); err != nil {
-			return config{}, fmt.Errorf("read env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
-			if err := mergeConfigFile(&cfg, versionFile); err != nil {
-				return config{}, fmt.Errorf("read version config: %w", err)
-			}
-		}
-		return cfg, nil
+	path, err := configrelease.File(configRoot, serviceName, appEnv)
+	if err != nil {
+		return config{}, err
 	}
-
-	// Workspace local mode (service-relative):
-	//   configs/default/config.yaml + configs/<env>/config.yaml (+ optional version under releases/)
-	localDefault := filepath.Join("configs", "default", "config.yaml")
-	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	if err := mergeConfigFile(&cfg, localDefault); err != nil {
-		return config{}, fmt.Errorf("read local default config: %w", err)
-	}
-	if err := mergeConfigFile(&cfg, localEnv); err != nil {
-		return config{}, fmt.Errorf("read local env config: %w", err)
-	}
-	if strings.TrimSpace(configVersion) != "" {
-		versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
-		if err := mergeConfigFile(&cfg, versionFile); err != nil {
-			return config{}, fmt.Errorf("read local version config: %w", err)
-		}
+	if err := mergeConfigFile(&cfg, path); err != nil {
+		return config{}, fmt.Errorf("read generated runtime config: %w", err)
 	}
 	return cfg, nil
 }
@@ -151,6 +119,12 @@ func preflightConfig(cfg config, appEnv string) error {
 	if resolveMongoURI(cfg) == "" {
 		return fmt.Errorf("%s content runtime requires mongo.uri/MONGO_URI", appEnv)
 	}
+	if err := validateAccountSecurityAuthorityConfig(cfg, appEnv); err != nil {
+		return err
+	}
+	if err := validateTagServiceConfig(cfg, appEnv); err != nil {
+		return err
+	}
 	if resolveReportDSN(cfg) == "" {
 		return fmt.Errorf("%s content runtime requires postgres.report_dsn/REPORT_DATABASE_URL", appEnv)
 	}
@@ -187,20 +161,52 @@ func preflightConfig(cfg config, appEnv string) error {
 		return fmt.Errorf("%s content runtime enables search projection but has no es.endpoints/SEARCH_ES_ENDPOINTS", appEnv)
 	}
 	if appEnv != "alpha" && cfg.Embedding.Enabled {
-		if _, err := resolveContentEmbeddingBinding(appEnv); err != nil {
+		if _, err := resolveContentEmbeddingGateway(appEnv); err != nil {
 			return fmt.Errorf("%s content runtime embedding binding: %w", appEnv, err)
 		}
 	}
 	return nil
 }
 
-func resolveContentEmbeddingBinding(
+func resolveContentEmbeddingGateway(
 	appEnv string,
-) (embeddinginfra.OpenAICompatibleBinding, error) {
-	return embeddinginfra.LoadOpenAICompatibleBinding(
+) (embeddingapp.EmbeddingGateway, error) {
+	return embeddinginfra.LoadEmbeddingGateway(
 		appEnv,
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
+}
+
+func validateAccountSecurityAuthorityConfig(cfg config, appEnv string) error {
+	if strings.TrimSpace(cfg.AccountSecurityAuthority.BaseURL) == "" {
+		return fmt.Errorf(
+			"%s content runtime requires accountSecurityAuthority.baseUrl",
+			appEnv,
+		)
+	}
+	if cfg.AccountSecurityAuthority.TimeoutMS <= 0 {
+		return fmt.Errorf(
+			"%s content runtime requires positive accountSecurityAuthority.timeoutMs",
+			appEnv,
+		)
+	}
+	return nil
+}
+
+func validateTagServiceConfig(cfg config, appEnv string) error {
+	if strings.TrimSpace(cfg.TagService.URL) == "" {
+		return fmt.Errorf(
+			"%s content runtime requires tag_service.url",
+			appEnv,
+		)
+	}
+	if cfg.TagService.TimeoutMs <= 0 {
+		return fmt.Errorf(
+			"%s content runtime requires positive tag_service.timeout_ms",
+			appEnv,
+		)
+	}
+	return nil
 }
 
 func validateCommentRateLimitConfig(cfg config, appEnv string) error {
@@ -351,6 +357,10 @@ func compareSemver(a, b string) int {
 //
 //	REC_MODEL_SERVICE_URL, REC_MODEL_SERVICE_ENABLED, REC_MODEL_SERVICE_TIMEOUT_MS
 //
+// Tag taxonomy endpoint material:
+//
+//	TAG_SERVICE_URL, TAG_SERVICE_TIMEOUT_MS
+//
 // IP location overrides:
 //
 //	CONTENT_IP_LOCATION_PROVIDER, CONTENT_IP_LOCATION_IPV4_DATABASE_PATH,
@@ -390,6 +400,14 @@ func applyEnvOverrides(cfg *config) {
 	if v := os.Getenv("REC_MODEL_SERVICE_TIMEOUT_MS"); v != "" {
 		if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
 			cfg.RecModelService.TimeoutMs = ms
+		}
+	}
+	if v := os.Getenv("TAG_SERVICE_URL"); v != "" {
+		cfg.TagService.URL = v
+	}
+	if v := os.Getenv("TAG_SERVICE_TIMEOUT_MS"); v != "" {
+		if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
+			cfg.TagService.TimeoutMs = ms
 		}
 	}
 

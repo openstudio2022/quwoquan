@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/message-home-commercial-ia/spec.md#gwt-001
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';

@@ -31,34 +31,34 @@ from core.paths import (  # noqa: E402
     relative_execution_ref,
 )
 
-EXECUTION_ID = "20260711--travel-homepage-object-paths--cn-sichuan--canary-001"
+EXECUTION_ID = "20260711--travel-homepage-object-paths--test-region-b--pilot-001"
 
 
 def test_entity_and_post_paths_are_publish_isomorphic():
-    entity = execution_entity_object_dir(EXECUTION_ID, "地点", "景区", "海螺沟")
-    post = execution_post_object_dir(EXECUTION_ID, "article", "攻略", "海螺沟两天", 2)
+    entity = execution_entity_object_dir(EXECUTION_ID, "地点", "景区", "测试实体丙")
+    post = execution_post_object_dir(EXECUTION_ID, "article", "攻略", "测试实体丙两天", 2)
     root = execution_root(EXECUTION_ID)
-    assert entity.relative_to(root).as_posix() == "entities/地点/景区/海螺沟"
-    assert post.relative_to(root).as_posix() == "posts/article/攻略/海螺沟两天/2"
-    published = publish_data().entity_dir("地点", "景区", "海螺沟")
-    assert published.relative_to(published.parents[3]).as_posix() == "entities/地点/景区/海螺沟"
+    assert entity.relative_to(root).as_posix() == "entities/地点/景区/测试实体丙"
+    assert post.relative_to(root).as_posix() == "posts/article/攻略/测试实体丙两天/2"
+    published = publish_data().entity_dir("地点", "景区", "测试实体丙")
+    assert published.relative_to(published.parents[3]).as_posix() == "entities/地点/景区/测试实体丙"
 
 
 def test_object_stage_and_source_paths_are_stable():
     assert OBJECT_STAGES == ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
     root = execution_root(EXECUTION_ID)
     assert execution_entity_stage_dir(
-        EXECUTION_ID, "地点", "景区", "海螺沟", STAGE_DOWNLOAD
+        EXECUTION_ID, "地点", "景区", "测试实体丙", STAGE_DOWNLOAD
     ).name == "1.download"
     assert execution_entity_stage_dir(
-        EXECUTION_ID, "地点", "景区", "海螺沟", STAGE_COMPOSE
+        EXECUTION_ID, "地点", "景区", "测试实体丙", STAGE_COMPOSE
     ).name == "3.compose"
     assert execution_post_stage_dir(
-        EXECUTION_ID, "article", "攻略", "海螺沟两天", 1, STAGE_REVIEW
+        EXECUTION_ID, "article", "攻略", "测试实体丙两天", 1, STAGE_REVIEW
     ).name == "5.review"
     assert execution_entity_page_input_path(
-        EXECUTION_ID, "地点", "景区", "海螺沟"
-    ).relative_to(root).as_posix() == "entities/地点/景区/海螺沟/3.compose/entity_page_input.json"
+        EXECUTION_ID, "地点", "景区", "测试实体丙"
+    ).relative_to(root).as_posix() == "entities/地点/景区/测试实体丙/3.compose/entity_page_input.json"
     source = execution_source_unit_dir(EXECUTION_ID, "su_fixture") / "source.md"
     assert relative_execution_ref(source, EXECUTION_ID) == "sources/su_fixture/source.md"
 

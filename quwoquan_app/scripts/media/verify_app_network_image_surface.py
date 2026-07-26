@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-002
+
 import argparse
 from pathlib import Path
 import re
@@ -10,7 +12,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_LIB = ROOT / "quwoquan_app/lib"
-ALLOWLIST = ROOT / "specs/gates/app_network_image_policy_allowlist.yaml"
+ALLOWLIST = ROOT / "quwoquan_ops/policies/gates/app_network_image_policy_allowlist.yaml"
 EXEMPT_PATHS = {
     "core/widgets/app_image.dart",
     "core/widgets/app_cached_network_image.dart",
@@ -33,6 +35,8 @@ def _scan() -> dict[str, int]:
 
 
 def _load() -> dict[str, int]:
+    if not ALLOWLIST.is_file():
+        return {}
     data = yaml.safe_load(ALLOWLIST.read_text(encoding="utf-8")) or {}
     return {
         str(item["path"]): int(item.get("maxCount", 0))
@@ -41,6 +45,10 @@ def _load() -> dict[str, int]:
 
 
 def _write(current: dict[str, int]) -> None:
+    if not current:
+        if ALLOWLIST.is_file():
+            ALLOWLIST.unlink()
+        return
     lines = [
         "version: 1",
         "description: Transitional baseline for pre-AppImage direct image APIs. Counts may only decrease.",

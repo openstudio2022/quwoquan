@@ -4,24 +4,25 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FULL_MODE="${1:-}"
 
-required_docs=(
-  "specs/feature-tree/runtime/runtime-media/video-end-to-end-commercial-matrix.md"
-  "specs/feature-tree/runtime/runtime-media/image-end-to-end-commercial-matrix.md"
-  "specs/feature-tree/runtime/runtime-media/t4-release-rehearsal.md"
-  "specs/feature-tree/runtime/runtime-media/observability-and-rollback.md"
-  "specs/feature-tree/runtime/runtime-media/capacity-validation.md"
-  "specs/feature-tree/runtime/runtime-media/automation-gates.md"
+required_specs=(
+  "specs/feature-tree/runtime/runtime-media/spec.md"
+  "specs/feature-tree/runtime/runtime-media/design.md"
+  "specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md"
+  "specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/spec.md"
+  "specs/feature-tree/discovery-content/media-processing-helper-read/spec.md"
+  "specs/feature-tree/discovery-content/media-processing-helper-read/design.md"
   "specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md"
-  "specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/object-cache-policy.yaml"
-  "specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/cache-management-runbook.md"
 )
 
-for relative_path in "${required_docs[@]}"; do
+for relative_path in "${required_specs[@]}"; do
   if [[ ! -f "${ROOT_DIR}/${relative_path}" ]]; then
-    echo "[runtime-media] FAIL: missing required artifact: ${relative_path}"
+    echo "[runtime-media] FAIL: missing current feature spec/design: ${relative_path}"
     exit 2
   fi
 done
+
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  "${ROOT_DIR}/quwoquan_ops/cli/feature_tree.py" verify
 
 if [[ "${FULL_MODE}" == "--full" ]]; then
   evidence_path="${RUNTIME_MEDIA_T4_EVIDENCE:-}"
@@ -41,13 +42,13 @@ fi
 echo "[runtime-media] go test runtime/sync internal/application chat-service/tests/local_contract"
 (
   cd "${ROOT_DIR}/quwoquan_service"
-  go test ./runtime/sync ./services/chat-service/internal/application ./services/chat-service/tests/local_contract
+  go test ./runtime/sync ./services/chat-service/internal/chat/conversation/application ./services/chat-service/tests/local_contract/chat/conversation
 )
 
 echo "[runtime-media] go test user-service avatar sync contract"
 (
   cd "${ROOT_DIR}/quwoquan_service"
-  go test ./services/user-service/tests/api_integration -run TestUpdateProfile_AvatarVersionAndSyncPatch
+  go test ./services/user-service/tests/api_integration/account/user_account -run TestUpdateProfile_AvatarVersionAndSyncPatch
 )
 
 
@@ -95,9 +96,9 @@ echo "[runtime-media] Android native first-frame / seek-settle / safe-dispose co
 )
 (
   cd "${ROOT_DIR}/quwoquan_service"
-  go test ./services/content-service/internal/application/post
-  go test ./services/content-service/internal/application/behavior
-  go test ./services/content-service/tests/api_integration \
+  go test ./services/content-service/internal/content/post/application
+  go test ./services/content-service/internal/content/post/application/behavior
+  go test ./services/content-service/tests/api_integration/content/post \
     -run 'TestVideoPostProjectionCarriesAuthoritativeTimelineDescriptor|TestEffectivePlayRejectsScrubAndAcceptsForegroundEvidence'
 )
 DATA_PYTHON="${QWQ_PYTHON_CACHE_ROOT:-$HOME/.cache/quwoquan/python-envs}/quwoquan-data/bin/python"
@@ -106,7 +107,7 @@ if [[ ! -x "${DATA_PYTHON}" ]]; then
 fi
 "${DATA_PYTHON}" -B -m pytest \
   -o "cache_dir=${ROOT_DIR}/.qwq_output/env/repo/local/tests/cache/pytest" \
-  "${ROOT_DIR}/quwoquan_data/tests/local_contract/governance/test_media_canary__video_playback__functional__local_contract_test.py" \
+  "${ROOT_DIR}/quwoquan_data/tests/local_contract/governance/test_media_probe__video_playback__functional__local_contract_test.py" \
   -q
 
 echo "[runtime-media] fixture media reverse reachability gate"

@@ -253,7 +253,9 @@ final class SecureRuntimeLogBuffer implements ReliableRuntimeLogBuffer {
   void _trimToCapacity(DateTime now) {
     while (_entries.length > capacity) {
       _entries.sort((left, right) {
-        final severity = compareRuntimeLogPriority(right.record, left.record);
+        final severity = left.record.severity.index.compareTo(
+          right.record.severity.index,
+        );
         if (severity != 0) return severity;
         return left.record.occurredAt.compareTo(right.record.occurredAt);
       });

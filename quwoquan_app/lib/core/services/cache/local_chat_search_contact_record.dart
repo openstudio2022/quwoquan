@@ -39,7 +39,7 @@ class LocalChatSearchContactRecord {
     );
   }
 
-  factory LocalChatSearchContactRecord.fromWireMap(Map<String, dynamic> map) {
+  factory LocalChatSearchContactRecord.fromWireMap(Map<String, Object?> map) {
     final contactId = _string(map['contactId']);
     return LocalChatSearchContactRecord(
       contactId: contactId,
@@ -56,8 +56,8 @@ class LocalChatSearchContactRecord {
     );
   }
 
-  Map<String, dynamic> toWireMap() {
-    return <String, dynamic>{
+  Map<String, Object?> toWireMap() {
+    return <String, Object?>{
       'contactId': contactId,
       'displayName': displayName,
       if (nickname.isNotEmpty) 'nickname': nickname,

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/controlplane"
-	"quwoquan_service/services/product-ops-service/internal/application"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 )
 
 type productProjectionSummaryResponse struct {

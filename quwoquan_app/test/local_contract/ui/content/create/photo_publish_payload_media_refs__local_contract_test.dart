@@ -72,6 +72,10 @@ void main() {
         'image_asset_1',
         'image_asset_2',
       ]);
+      expect(
+        media.completeCommands.map((command) => command.accessPolicy),
+        everyElement(ContentMediaAccessPolicy.referencedPost),
+      );
       expect(prepared.payload, isNot(contains('mediaUrls')));
       expect(prepared.payload, isNot(contains('coverUrl')));
       expect(prepared.payload, isNot(contains('mediaItems')));

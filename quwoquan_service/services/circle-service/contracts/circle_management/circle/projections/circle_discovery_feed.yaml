@@ -1,0 +1,130 @@
+read_model: CircleDiscoveryFeed
+description: '圈子频道聚合读切片。服务端在一次请求中完成分类、二级分类、成员范围和游标分页，
+
+  返回圈子卡片与 CircleFeedItemView；App 禁止再执行 listCircles → 逐圈 getCircleFeed。
+
+  '
+storage_backend: mongodb
+collections:
+- circles
+- circle_memberships
+- posts
+- circle_post_placements
+source_entities:
+- Circle
+- CircleMembership
+- Post
+- CirclePostPlacement
+source_events:
+- CircleCreated
+- CircleUpdated
+- CircleArchived
+- CircleMembershipJoined
+- CircleMembershipApproved
+- CircleMembershipLeft
+- PostPublished
+- PostDeleted
+- CirclePostPlaced
+- CirclePostPlacementPresentationChanged
+- CirclePostPlacementRemoved
+read_contract:
+  actor_scope:
+    recommended:
+      anonymous: public_active_circles_only
+      persona: public_active_circles_excluding_active_memberships
+    mine:
+      anonymous: empty_slice
+      persona: active_memberships_only
+  filters:
+    category: optional_exact_or_all
+    subCategory: optional_exact_or_all
+    scope:
+    - recommended
+    - mine
+    sort:
+    - recommended
+    - active
+    - latest
+    limit:
+      minimum: 1
+      maximum: 50
+      default: 20
+  pagination:
+    strategy: keyset
+    cursor: opaque_base64url_json
+    stable_total_order:
+      recommended:
+      - memberCount_desc
+      - weeklyActiveCount_desc
+      - circleId_desc
+      - placementRank_desc
+      - postPublishedAt_desc
+      - placementId_desc
+      active:
+      - weeklyActiveCount_desc
+      - memberCount_desc
+      - circleId_desc
+      - placementRank_desc
+      - postPublishedAt_desc
+      - placementId_desc
+      latest:
+      - circleCreatedAt_desc
+      - circleId_desc
+      - placementRank_desc
+      - postPublishedAt_desc
+      - placementId_desc
+    invalid_cursor: fail_closed_invalid_argument
+consumers:
+- app (circlesList)
+fields:
+- name: circles
+  type: '[]Circle'
+- name: items
+  type: '[]CircleFeedItemView'
+- name: cursor
+  type: string
+indexes:
+- name: idx_circle_discovery_recommended_page
+  collection: circles
+  keys:
+    status: 1
+    visibility: 1
+    category: 1
+    subCategory: 1
+    memberCount: -1
+    weeklyActiveCount: -1
+    _id: -1
+- name: idx_circle_discovery_active_page
+  collection: circles
+  keys:
+    status: 1
+    visibility: 1
+    category: 1
+    subCategory: 1
+    weeklyActiveCount: -1
+    memberCount: -1
+    _id: -1
+- name: idx_circle_discovery_latest_page
+  collection: circles
+  keys:
+    status: 1
+    visibility: 1
+    category: 1
+    subCategory: 1
+    createdAt: -1
+    _id: -1
+- name: idx_circle_discovery_membership
+  collection: circle_memberships
+  keys:
+    personaId: 1
+    state: 1
+    circleId: 1
+- name: idx_circle_post_placement_feed
+  collection: circle_post_placements
+  keys:
+    circleId: 1
+    state: 1
+    pinned: -1
+    featured: -1
+    lastActiveAt: -1
+    placementId: -1

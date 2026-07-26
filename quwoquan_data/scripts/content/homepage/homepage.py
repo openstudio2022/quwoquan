@@ -102,7 +102,6 @@ from content.homepage.homepage_prompt import (
     _write_entity_page_prompt_and_placeholder,
 )
 MIN_PAGE_CHARS = 350
-HOMEPAGE_FIDELITY_MAX = 0.92
 # 实体主页底稿下发上限：取消旧的 4000 截断（旧值会把维基百科页在中段截断，
 # Agent 看不到「技术变革 / 相关古迹」等后段章节，导致多级目录与章节缺失）。
 # 放宽到覆盖绝大多数百科页全文，仅兜底极端超长源避免 token 失控。
@@ -451,20 +450,6 @@ def validate_entity_page_inputs(execution_id: str, spec: dict[str, Any]) -> list
                     DataIssueCode.SOURCE_RETAINED_SHORTFALL,
                     name,
                     f"{label}: homepage baseDraft 可用事实不足",
-                )
-        if source_ref and text:
-            selection = select_homepage_assets(
-                execution_id,
-                domain,
-                etype,
-                name,
-                primary_ref=source_ref,
-            )
-            if not selection.publishable:
-                add_issue(
-                    DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-                    name,
-                    f"{label}: homepage lane 无可发布图片资产",
                 )
         for message in _homepage_base_source_issues(execution_id, domain, etype, name):
             add_issue(DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING, name, message)

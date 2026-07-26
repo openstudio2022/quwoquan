@@ -1,5 +1,6 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart';
@@ -265,12 +266,8 @@ void main() {
     });
     addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
     final secretStore = _MemoryPushEndpointSecretStore();
-    var legacyPurgeCount = 0;
     final gateway = PersistentPushEndpointGateway(
       secretStore: secretStore,
-      legacyPlaintextMigrator: () async {
-        legacyPurgeCount += 1;
-      },
       channel: channel,
     );
     final endpoint = DevicePushEndpoint(
@@ -302,51 +299,56 @@ void main() {
       await gateway.acknowledgeMutation(mutation.mutationId);
     }
     expect(await gateway.readPendingMutations(), isEmpty);
-    expect(legacyPurgeCount, 1);
     expect(
       secretStore.values.containsKey('rtc.push_endpoint.pending_mutations'),
       isFalse,
     );
   });
 
-  test('旧版 SharedPreferences token 与待同步 mutation 先迁入安全存储再删除明文', () async {
-    const pendingKey = 'rtc.push_endpoint.pending_mutations';
-    const activeKey = 'rtc.push_endpoint.active_tokens';
-    final occurredAt = DateTime.utc(2026, 7, 20, 9);
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      pendingKey: jsonEncode(<Object>[
-        <String, Object>{
-          'mutationId': 'legacy-mutation-1',
-          'action': 'upsert',
-          'endpointKind': 'fcm',
-          'token': 'legacy-fcm-token',
-          'occurredAt': occurredAt.toIso8601String(),
-        },
-      ]),
-      activeKey: jsonEncode(<String, String>{'fcm': 'legacy-fcm-token'}),
+  test('账号 closed 终态清除安全存储与原生 push/来电残留', () async {
+    const channel = MethodChannel('test/quwoquan/rtc/push_endpoint_purge');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    var nativePurgeCalls = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'purgePushEndpointStateForTerminalAccountClosure') {
+        nativePurgeCalls += 1;
+        return true;
+      }
+      if (call.method == 'readPushEndpointMutations') {
+        return const <Object>[];
+      }
+      return null;
     });
-    addTearDown(
-      () => SharedPreferences.setMockInitialValues(<String, Object>{}),
-    );
-
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
     final secretStore = _MemoryPushEndpointSecretStore();
     final gateway = PersistentPushEndpointGateway(
       secretStore: secretStore,
-      channel: const MethodChannel(
-        'test/quwoquan/rtc/push_endpoint_legacy_migration',
-      ),
+      channel: channel,
+    );
+    await gateway.recordUpsert(
+      DevicePushEndpoint(kind: PushEndpointKind.fcm, token: 'terminal-token'),
     );
 
-    final pending = await gateway.readPendingMutations();
+    await gateway.purgeForTerminalAccountClosure();
 
-    expect(pending, hasLength(1));
-    expect(pending.single.mutationId, 'legacy-mutation-1');
-    expect(pending.single.endpoint.token, 'legacy-fcm-token');
-    expect(secretStore.values[pendingKey], contains('legacy-fcm-token'));
-    expect(secretStore.values[activeKey], contains('legacy-fcm-token'));
+    expect(nativePurgeCalls, 1);
+    expect(secretStore.values, isEmpty);
+    expect(await gateway.readPendingMutations(), isEmpty);
+  });
+
+  test('账号 closed 终态清除 Android FCM 来电去重残留', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'rtc.incoming.fcm_seen_deliveries': '[{"callId":"$callId"}]',
+    });
+
+    await clearFirebaseIncomingCallStateForTerminalAccountClosure();
+
     final preferences = await SharedPreferences.getInstance();
-    expect(preferences.containsKey(pendingKey), isFalse);
-    expect(preferences.containsKey(activeKey), isFalse);
+    expect(
+      preferences.containsKey('rtc.incoming.fcm_seen_deliveries'),
+      isFalse,
+    );
   });
 
   test('设备 endpoint 与展示 ACK 均经 generated operation client', () async {
@@ -487,6 +489,11 @@ final class _RecordingPushEndpointGateway implements PushEndpointGateway {
   @override
   Future<void> queueActiveEndpointRemovals() async {
     removalsQueued = true;
+  }
+
+  @override
+  Future<void> purgeForTerminalAccountClosure() async {
+    pending.clear();
   }
 }
 

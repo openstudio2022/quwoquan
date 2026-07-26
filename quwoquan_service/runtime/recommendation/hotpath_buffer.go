@@ -157,6 +157,13 @@ func (b *BufferedHotPath) AcceptEvent(ctx context.Context, signal BehaviorSignal
 	return b.inner.AcceptEvent(ctx, signal)
 }
 
+func (b *BufferedHotPath) HasAcceptedEvent(
+	ctx context.Context,
+	userID, clientEventID string,
+) (bool, error) {
+	return b.inner.HasAcceptedEvent(ctx, userID, clientEventID)
+}
+
 func (b *BufferedHotPath) FilterCandidates(ctx context.Context, userID string, candidates []ContentCandidate, at time.Time) ([]ContentCandidate, error) {
 	return b.inner.FilterCandidates(ctx, userID, candidates, at)
 }

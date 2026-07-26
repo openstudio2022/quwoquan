@@ -7,6 +7,7 @@
 不得在质量矩阵或 typing inventory 维护第二套对象绑定。脚本已接入 ``make
 verify-app-page-horizontal-quality`` 与仓库 App gate。
 """
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md#gwt-001
 
 from __future__ import annotations
 
@@ -26,13 +27,10 @@ from page_disk_scan_paths import matrix_disk_scan_paths
 ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "quwoquan_app"
 METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata"
+SERVICES = ROOT / "quwoquan_service" / "services"
 CONTRACT = METADATA / "_shared" / "page_object_contract.yaml"
 ROUTES = METADATA / "_shared" / "app_routes.yaml"
 SURFACES = METADATA / "_shared" / "ui_surfaces.yaml"
-MATRIX = ROOT / (
-    "specs/feature-tree/runtime/runtime-client-foundation/"
-    "page-horizontal-quality-matrix.md"
-)
 ROUTER_DIR = APP / "lib" / "app" / "navigation"
 GENERATED_ROUTES = ROUTER_DIR / "generated" / "app_route_paths.g.dart"
 GENERATED_SURFACES = ROUTER_DIR / "generated" / "app_ui_surfaces.g.dart"
@@ -109,61 +107,52 @@ def _dart_library_text(source: Path, errors: list[str], page_id: str) -> str:
 
 def _metadata_objects_and_slices(
     errors: list[str],
-) -> tuple[dict[str, str], dict[str, str]]:
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], set[str]]:
     objects: dict[str, str] = {}
     slices: dict[str, str] = {}
-    definition_files = sorted(METADATA.glob("**/aggregate.yaml")) + sorted(
-        METADATA.glob("**/entity.yaml")
-    )
-    for definition in definition_files:
-        relative_parts = definition.relative_to(METADATA).parts
-        if any(part.startswith("_") for part in relative_parts):
-            continue
+    object_domains: dict[str, str] = {}
+    service_domains: set[str] = set()
+    for domain_file in sorted(SERVICES.glob("*/contracts/domain.yaml")):
+        contracts_root = domain_file.parent
         try:
-            data = _load_yaml(definition)
+            domain_doc = _load_yaml(domain_file)
         except (OSError, ValueError, RuntimeError) as exc:
-            errors.append(f"无法读取业务对象定义 {definition.relative_to(ROOT)}: {exc}")
+            errors.append(f"无法读取服务 domain 定义 {domain_file.relative_to(ROOT)}: {exc}")
             continue
-        domain = data.get("domain")
+        domain = domain_doc.get("domain")
         if not _nonempty_string(domain):
-            errors.append(f"{definition.relative_to(ROOT)}: domain 缺失")
+            errors.append(f"{domain_file.relative_to(ROOT)}: domain 缺失")
             continue
-        raw_name = data.get("aggregate_root") or data.get("entity")
-        if not _nonempty_string(raw_name):
+        domain = str(domain).strip()
+        service_domains.add(domain)
+        definition_files = sorted(contracts_root.glob("*/*/object.yaml"))
+        for definition in definition_files:
+            relative_parts = definition.relative_to(contracts_root).parts
+            if any(part.startswith("_") for part in relative_parts):
+                continue
+            try:
+                data = _load_yaml(definition)
+            except (OSError, ValueError, RuntimeError) as exc:
+                errors.append(f"无法读取业务对象定义 {definition.relative_to(ROOT)}: {exc}")
+                continue
             raw_name = definition.parent.name
-        object_id = f"{str(domain).strip()}.{_snake_case(str(raw_name))}"
-        if object_id in objects:
-            errors.append(
-                f"业务 object_id 重复推导: {object_id} "
-                f"({objects[object_id]}, {definition.relative_to(ROOT)})"
-            )
-            continue
-        rel = definition.relative_to(METADATA).as_posix()
-        objects[object_id] = rel
-        kind = "aggregate" if definition.name == "aggregate.yaml" else "entity"
-        slices[f"{object_id}.{kind}"] = rel
-        projection_dir = definition.parent / "projections"
-        if projection_dir.is_dir():
-            for projection in sorted(projection_dir.glob("*.yaml")):
-                ref = f"{object_id}.projection.{projection.stem}"
-                slices[ref] = projection.relative_to(METADATA).as_posix()
-    return objects, slices
-
-
-def _matrix_types() -> dict[str, str]:
-    out: dict[str, str] = {}
-    if not MATRIX.is_file():
-        return out
-    for line in MATRIX.read_text(encoding="utf-8").splitlines():
-        if not line.lstrip().startswith("|") or "`lib/" not in line:
-            continue
-        cells = [cell.strip() for cell in line.split("|")[1:-1]]
-        if len(cells) < 2:
-            continue
-        match = re.fullmatch(r"`(lib/[^`]+\.dart)`", cells[0])
-        if match:
-            out[match.group(1)] = cells[1]
-    return out
+            object_id = f"{domain}.{_snake_case(raw_name)}"
+            if object_id in objects:
+                errors.append(
+                    f"业务 object_id 重复推导: {object_id} "
+                    f"({objects[object_id]}, {definition.relative_to(ROOT)})"
+                )
+                continue
+            rel = definition.relative_to(ROOT).as_posix()
+            objects[object_id] = rel
+            object_domains[object_id] = domain
+            slices[object_id] = rel
+            projection_dir = definition.parent / "projections"
+            if projection_dir.is_dir():
+                for projection in sorted(projection_dir.glob("*.yaml")):
+                    ref = f"{object_id}.projection.{projection.stem}"
+                    slices[ref] = projection.relative_to(ROOT).as_posix()
+    return objects, slices, object_domains, service_domains
 
 
 def _router_sources() -> tuple[str, dict[str, str]]:
@@ -285,6 +274,71 @@ def _effective_route_ids(
     return out
 
 
+def _source_experience_owners(source_path: object) -> set[str]:
+    if not _nonempty_string(source_path):
+        return set()
+    parts = Path(str(source_path)).parts
+    if len(parts) >= 3 and parts[:2] == ("lib", "ui"):
+        return {parts[2]}
+    return set()
+
+
+def _validate_owner_bindings(
+    pages_by_id: dict[str, dict[str, Any]],
+    object_domains: dict[str, str],
+    service_domains: set[str],
+    errors: list[str],
+) -> None:
+    """让页面 experience/data owner 可由本地契约、页面树或 UI 源路径反推。"""
+
+    for page_id, page in pages_by_id.items():
+        data_owners = _string_list(page.get("data_owners"))
+        if data_owners is None:
+            continue
+        if len(data_owners) != len(set(data_owners)):
+            errors.append(f"{page_id}: data_owners 不得重复")
+        for owner in data_owners:
+            if owner != "app" and owner not in service_domains:
+                errors.append(
+                    f"{page_id}: data_owner {owner!r} 无服务 contracts/domain.yaml 佐证"
+                )
+
+        object_ids = _string_list(page.get("object_ids"), allow_empty=True) or []
+        required_data_owners = {
+            object_domains[object_id]
+            for object_id in object_ids
+            if object_id in object_domains
+        }
+        missing = sorted(required_data_owners - set(data_owners))
+        if missing:
+            errors.append(
+                f"{page_id}: object_ids 所属服务未列入 data_owners: {missing}"
+            )
+
+        experience_owner = page.get("experience_owner")
+        if not _nonempty_string(experience_owner):
+            continue
+        parent_owners = {
+            str(pages_by_id[parent].get("experience_owner")).strip()
+            for parent in (
+                page.get("parent_page_id"),
+                *(page.get("additional_parent_page_ids") or []),
+            )
+            if _nonempty_string(parent) and parent in pages_by_id
+            and _nonempty_string(pages_by_id[parent].get("experience_owner"))
+        }
+        derivable_owners = (
+            {"app"}
+            | service_domains
+            | _source_experience_owners(page.get("source_path"))
+            | parent_owners
+        )
+        if str(experience_owner).strip() not in derivable_owners:
+            errors.append(
+                f"{page_id}: experience_owner {experience_owner!r} 无 UI 路径、父页面或服务领域佐证"
+            )
+
+
 def main() -> int:
     if yaml is None:
         print("page_object_contract: BLOCK: PyYAML required", file=sys.stderr)
@@ -350,10 +404,6 @@ def main() -> int:
     for source in sorted(contract_paths - disk_paths):
         errors.append(f"canonical source 不在页面扫描集: {source}")
 
-    matrix_types = _matrix_types()
-    for source in sorted(disk_paths - set(matrix_types)):
-        errors.append(f"页面扫描路径未在质量矩阵登记: {source}")
-
     raw_routes = routes_doc.get("routes")
     raw_surfaces = surfaces_doc.get("surfaces")
     if not isinstance(raw_routes, list):
@@ -410,7 +460,12 @@ def main() -> int:
                 f"与 route {route_id} 的 {routes[route_id]!r} 不一致"
             )
 
-    metadata_objects, valid_query_slices = _metadata_objects_and_slices(errors)
+    (
+        metadata_objects,
+        valid_query_slices,
+        object_domains,
+        service_domains,
+    ) = _metadata_objects_and_slices(errors)
     dart_tokens = _all_dart_type_tokens()
     capability_text = (
         PLATFORM_CAPABILITIES.read_text(encoding="utf-8")
@@ -451,6 +506,12 @@ def main() -> int:
                 )
 
     _validate_parent_graph(pages_by_id, errors)
+    _validate_owner_bindings(
+        pages_by_id,
+        object_domains,
+        service_domains,
+        errors,
+    )
     effective_route_cache: dict[str, set[str]] = {}
     telemetry_namespaces: dict[str, str] = {}
 
@@ -460,12 +521,6 @@ def main() -> int:
         if kind not in PAGE_KINDS:
             errors.append(f"{page_id}: page_kind 非法: {kind!r}")
             continue
-
-        matrix_type = matrix_types.get(source)
-        if kind == "helper" and matrix_type != "T0":
-            errors.append(f"{page_id}: helper 必须在质量矩阵标为 T0，实际 {matrix_type!r}")
-        if matrix_type == "T0" and kind != "helper":
-            errors.append(f"{page_id}: 质量矩阵 T0 只能声明为 helper")
 
         parent = page.get("parent_page_id")
         if kind in {"embedded", "component", "helper"} and not _nonempty_string(parent):
@@ -492,7 +547,7 @@ def main() -> int:
             errors.append(f"{page_id}: object_ids 不得重复")
         for object_id in object_ids:
             if object_id not in metadata_objects:
-                errors.append(f"{page_id}: object_id 无 aggregate/entity 定义: {object_id}")
+                errors.append(f"{page_id}: object_id 无 object.yaml 定义: {object_id}")
 
         query_slices = page.get("query_slices")
         typed = page.get("typed_presentation")
@@ -525,7 +580,7 @@ def main() -> int:
                 if query_slice not in valid_query_slices:
                     errors.append(f"{page_id}: Query Slice 引用不存在: {query_slice}")
                     continue
-                owning_object = query_slice.rsplit(".", 1)[0]
+                owning_object = query_slice
                 if ".projection." in query_slice:
                     owning_object = query_slice.split(".projection.", 1)[0]
                 if owning_object not in object_ids:

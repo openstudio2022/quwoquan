@@ -19,18 +19,17 @@ _CAS_RE = re.compile(
 _IMAGE_VARIANT_POLICY = (
     REPO_ROOT
     / "quwoquan_service"
+    / "services"
+    / "content-service"
     / "contracts"
-    / "metadata"
-    / "content"
+    / "media"
     / "media_asset"
     / "image_variant_policy.yaml"
 )
 _REQUIRED_IMAGE_VARIANT_PROFILES = frozenset(
     {"thumbnail", "display", "cover", "full"}
 )
-ENVIRONMENT_TOPOLOGY_MANIFEST = (
-    REPO_ROOT / "quwoquan_ops" / "environments" / "environment_topology_manifest.yaml"
-)
+ENVIRONMENTS_ROOT = REPO_ROOT / "quwoquan_ops" / "environments"
 
 
 def _load_image_variant_policy() -> tuple[int, dict[str, dict[str, Any]]]:
@@ -74,10 +73,18 @@ def resolve_media_cdn_bases(
     topology_manifest: Path | None = None,
 ) -> tuple[str, str]:
     """从环境拓扑真相源解析图片与视频 CDN 基址。"""
-    manifest = topology_manifest or ENVIRONMENT_TOPOLOGY_MANIFEST
-    document = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
-    environments = document.get("environments") or {}
-    node = environments.get(environment) or {}
+    if topology_manifest is not None:
+        document = yaml.safe_load(topology_manifest.read_text(encoding="utf-8")) or {}
+        node = (document.get("environments") or {}).get(environment) or {}
+    else:
+        runtime_path = ENVIRONMENTS_ROOT / environment / "runtime.yaml"
+        document = yaml.safe_load(runtime_path.read_text(encoding="utf-8")) or {}
+        if (
+            document.get("schema") != "environment-runtime"
+            or document.get("environment") != environment
+        ):
+            raise ValueError(f"environment runtime identity mismatch: {runtime_path}")
+        node = document
     public_bases = node.get("publicBases") or {}
     image_base = str(public_bases.get("mediaImage") or "").strip().rstrip("/")
     video_base = str(public_bases.get("mediaVideo") or "").strip().rstrip("/")

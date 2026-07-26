@@ -25,7 +25,7 @@ Future<void> showCommentItemActionsSheet(
             AppActionSheetItem(
               value: _CommentItemAction.report,
               label: UITextConstants.commentReportAction,
-              icon: CupertinoIcons.exclamationmark_bubble,
+              icon: CupertinoIcons.flag,
             ),
           if (comment.canDelete)
             AppActionSheetItem(

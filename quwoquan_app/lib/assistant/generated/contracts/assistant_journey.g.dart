@@ -3,6 +3,7 @@
 // ignore_for_file: avoid_classes_with_only_static_members
 
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
 class AssistantJourneyEntry {
   const AssistantJourneyEntry({
@@ -70,32 +71,33 @@ class AssistantJourneyEntryFields {
 class AssistantJourneyReference {
   const AssistantJourneyReference({
     this.title = "",
-    this.url = "",
+    required this.destination,
     this.source = "",
   });
 
   final String title;
-  final String url;
+  final CitationDestination destination;
   final String source;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'title': title,
-        'url': url,
+        'destination': destination.toJson(),
         'source': source,
       };
 
   factory AssistantJourneyReference.fromJson(Map<String, dynamic> json) {
     return AssistantJourneyReference(
       title: (json['title'] as String?)?.trim() ?? "",
-      url: (json['url'] as String?)?.trim() ?? "",
+      destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
       source: (json['source'] as String?)?.trim() ?? "",
     );
   }
+
 }
 
 class AssistantJourneyReferenceFields {
   static const String title = 'title';
-  static const String url = 'url';
+  static const String destination = 'destination';
   static const String source = 'source';
 }
 

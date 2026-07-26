@@ -69,7 +69,7 @@ class _HomePageState extends ConsumerState<HomePage>
         journey: 'home',
         action: 'enter',
         pageName: 'HomePage',
-        payload: <String, dynamic>{'channelId': _activeChannelId},
+        payload: <String, Object?>{'channelId': _activeChannelId},
       );
     });
   }
@@ -82,7 +82,7 @@ class _HomePageState extends ConsumerState<HomePage>
       journey: 'home',
       action: 'exit',
       pageName: 'HomePage',
-      payload: <String, dynamic>{
+      payload: <String, Object?>{
         'channelId': _activeChannelId,
         'durationMs': DateTime.now().difference(_enteredAt).inMilliseconds,
       },

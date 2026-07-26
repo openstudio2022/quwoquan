@@ -1,116 +1,60 @@
-# L3 特性：个人主页商用就绪（我的 + 他人主页）
+# L3 Story：个人主页商用就绪（我的 + 他人主页） (`profile-commercial-readiness`)
 
-> **历史口径（已被 V5 取代，不可作为冲突权威引用）**：本 Story 为 `profile-homepage-redesign` 早期**已上线收窄子集**的历史记录。其一级 Tab 口径（`创作 | 圈子 | 互动`、创作含「微趣」宫格）**已在 V5 全量口径中废止**。
-> 当前唯一冻结口径见父能力 `profile-homepage-redesign/spec.md`（V5）：一级 Tab = `记录 | 互动 | 足迹`、圈子降为统计数字、创作仅 文章/图片/视频（无微趣）、足迹=浏览历史（mine-only）。本文件仅作历史追溯，禁止据此实现。
+> 所属能力：[`profile-homepage-redesign`](../spec.md)
+>
+> Journey / Scenario：[`JNY-003 / SCN-009`](../../../spec.md#scn-009)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-## 背景与动机
+## 1. 用户价值
 
-探索阶段识别的个人主页商用上线主要 gap，需在现有 ProfileShell 基础上补齐：
+作为管理账号、Persona 或关系的用户，我希望个人主页商用就绪 Story——我的主页数据加载、统计行、名字可设置等上线 gap 的最小价值闭环（V5 全量口径下保留并对齐），从而安全地维持身份、画像与关系状态。
 
-1. **我的主页数据未加载**：进入我的主页时 `userDataProvider` 从未触发 `loadUser`，导致 displayName 显示 "me"、背景图空白（debug 与发布态均受影响）。
-2. **背景图与拉伸**：默认高度 1/4 屏、可拉伸至 1/2、不超过图片底部、松手回弹；当前存在硬编码与边界未校验。
-3. **统计行与列表脱节**：统计行顺序与语义不符合产品定义；统计详情页使用硬编码数据，未对接 Repository；圈子点击进入列表应展示圈子而非用户。
-4. **一级 Tab 与子内容**：需去掉生活 Tab；创作改为宫格卡片（微趣/图片/视频/文章），去掉 SubTab 与可见性过滤；圈子改为紧凑布局（头像+名称+创作数）；互动 Tab 无 mock、无云端接口。
-5. **用户可设置名字**：用户名字不应固定为 "me"，应支持编辑并展示真实昵称。
+## 2. 范围与非目标
 
-## 目标用户
+### In Scope
 
-- 所有趣我圈用户（查看自己的主页、管理创作内容、查看已加入圈子、设置昵称）
-- 其他用户（浏览他人主页、关注互动、查看共同交集）
+- 我的主页进入时加载当前用户档案（displayName/avatar/background 非 me 占位）
+- 统计行（圈子/关注/粉丝）与列表数据同源
+- 用户名字可设置并即时刷新
 
-## 功能范围
+### Out of Scope
 
-### F1: 我的主页数据加载
+- 一级 Tab 收窄（历史去掉生活 Tab 的口径已被 V5 全量口径覆盖反转）
+- 创作可见性过滤去除（历史去除口径已被 V5 恢复）
 
-- 进入我的主页时，自动调用 `userDataProvider.loadUser(currentUserId)` 或等价逻辑，加载当前用户档案。
-- 确保 displayName、avatar、backgroundImage 从 `getUserProfile` 获取并展示，非 "me" 占位。
-- `currentUserId` 来源：auth 登录态或 app 初始化时注入的当前用户 ID；Mock 模式下使用 canonical 测试用 ID。
+## 3. 行为要求
 
-### F2: 背景图与拉伸交互
+<a id="req-001"></a>
+### REQ-001 我的主页数据加载与统计行同源
 
-- 背景默认占据屏幕高度 1/4（含状态栏）。
-- 下拉拉伸：可拉伸至最多 1/2 屏高，且不超过图片底部（图片按比例放大，不裁切超出部分）。
-- 拉伸时图片跟随放大；松手后弹簧阻尼回弹（≤300ms）。
-- Debug 模式：Mock 提供默认背景 URL；发布态：从 `getUserProfile` 获取 `backgroundUrl`。
-- 头像侵入背景 1/3 的布局保持不变（继承 ProfileShell 设计）。
+- 我的主页首屏展示真实档案与一致统计。production composition 只能通过
+  `ProfileQuery` 的 generated Remote Facet 读取；alpha/test 的 adapter 只能由
+  `runners/alpha` 或测试 override 注入，App 业务代码不得读取或切换数据源模式。
 
-### F3: 统计行（圈子、关注、粉丝）
-
-- 顺序：**圈子 | 关注 | 粉丝**（去掉获赞，因创作列表中已有获赞展示）。
-- 统计数字与进入详情列表的数据一致，均通过 `UserProfileRepository` 获取。
-- 点击跳转：
-  - 圈子 → 圈子列表页（展示圈子卡片：头像、名称、创作数；点击进入圈子详情）。
-  - 关注 → 关注列表页（展示用户卡片；点击进入用户主页）。
-  - 粉丝 → 粉丝列表页（粉丝 = 关注了我的人；展示用户卡片；点击进入用户主页）。
-- Mock 与 Remote 均通过 `appDataSourceModeProvider` 切换，统计数字与列表数据来源一致。
-
-### F4: 一级 Tab 精简
-
-- 一级 Tab：**创作 | 圈子 | 互动**（去掉生活 Tab）。
-- 默认选中「创作」。
-
-### F5: 创作 Tab（宫格卡片）
-
-- 去掉 SubTab（全部/微趣/图片/视频/文字）和可见性过滤（全部/公开/私密）。
-- 展示方式：宫格卡片，按类型分块展示 **微趣、图片、视频、文章**。
-- 布局：不等高宫格，与圈子列表中的创作展示布局保持一致（非 `childAspectRatio` 等高）。
-- 每种创作格式支持宫格卡片展示。
-
-### F6: 圈子 Tab（紧凑布局）
-
-- 展示用户已加入的圈子列表。
-- 卡片形式：**圈子头像 + 名称 + 圈子内创作数**（非 16:9 大图）。
-- 点击卡片跳转 `circle_detail_page`。
-- 空态：mine「还没加入圈子」/ other「Ta 还没加入圈子」。
-
-### F7: 互动 Tab（发送/收到）
-
-- 子维度：**收到 | 发出**（我的主页双向；他人主页仅「Ta 收到」）。
-- 展示互动列表（赞/评论）：头像、用户名、互动内容摘要、时间。
-- 数据源：Repository 新增 `listUserInteractionReceived` / `listUserInteractionSent` 或等价接口。
-- Mock 数据补齐；Remote 对接云端 API。
-- 当前无 mock、无云端 → 需补齐。
-
-### F8: 用户名字可设置
-
-- 用户可通过编辑资料页设置昵称。
-- 我的主页、他人主页均展示真实昵称，非 "me" 或 userId 占位。
-- 编辑后返回主页，昵称即时更新（依赖 userData 刷新）。
-
-## 不做什么（Out of Scope）
-
-- **O1**: 生活 Tab 保留或迁移到其他入口（本 Story 明确去掉）。
-- **O2**: 创作可见性过滤（全部/公开/私密）恢复（本 Story 明确去掉）。
-- **O3**: 圈子推荐算法或发现圈子入口（仅展示已加入列表）。
-- **O4**: Go 云侧新增 API 的完整实现（本 Story 可先 Mock，接口契约先行）。
-
-## 约束
+<a id="req-002"></a>
+### REQ-002 技术：UI 通过 Provider 访问 Repository，禁止硬编码数据
 
 - 技术：UI 通过 Provider 访问 Repository，禁止硬编码数据；统计与列表必须使用同一 Repository 方法保证一致性。
-- 设计：背景高度、间距使用语义 Token；可交互热区 ≥44×44。
-- metadata：涉及新 API 的需在 `service.yaml` 声明，经 codegen 生成。
 
-## 对标输入与吸收结论
+## 4. 契约引用
 
-- **抖音**：一级 Tab 极简、公开/私密过滤 → 本 Story 不借鉴（去掉创作 SubTab 与可见性过滤，采用宫格分块展示）。
-- **内部**：圈子列表布局参照 `circles_page` 中的创作列表；统计列表与 `UserProfileRepository` 现有 `listFollowing/listFollowers/listUserCircles` 对齐。
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/operations.yaml`
 
-## 角色分工
+## 5. 验收场景
 
-- 产品：需求与验收标准确认。
-- 开发：TDD 落地、Repository 对接、UI 调整。
-- 测试：local_contract/api_integration 证据收集。
+<a id="gwt-001"></a>
+### GWT-001 我的主页数据加载与统计行同源
 
-## 非功能目标
+- GIVEN 已登录用户进入 /profile（ProfileMode.mine）。
+- WHEN MyProfilePage 首帧触发 userDataProvider.loadUser(currentUserId)。
+- THEN displayName/avatar/background 来自 ProfileQuery 的公开资料投影，非 me 占位；
+  读取失败时不合成用户快照，ProfileShell 呈现同源可恢复失败态。
+- THEN 统计行顺序圈子/关注/粉丝，数值来自 UserHomepageBundle 的 profileWithStats，
+  与主页身份投影同一服务端聚合快照。
 
-- 背景拉伸回弹 ≤300ms，无卡顿。
-- 统计数字与列表条数一致，无数据漂移。
-- Mock/Remote 切换透明，测试可覆盖两种模式。
+## 6. 依赖
 
-## 验收重点
-
-1. 我的主页进入时 displayName、背景正确展示，非 "me"。
-2. 背景默认 1/4 屏高，拉伸至 1/2 且不超图底，松手回弹。
-3. 统计行顺序为圈子/关注/粉丝，无获赞；点击进入对应列表，列表与 Repository 对接。
-4. 一级 Tab 为创作/圈子/互动，无生活；创作为宫格分块（微趣/图片/视频/文章），圈子为紧凑卡片。
-5. 互动 Tab 有 mock 数据，可切换收到/发出；Remote 对接就绪后可切换。
+- 前置要求：[`profile-homepage-redesign`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

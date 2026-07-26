@@ -83,19 +83,6 @@ export const portalMenu = {
       ]
     },
     {
-      "menu_id": "platform-onboarding",
-      "parent_menu_id": "platform-ops",
-      "label": "领域接入矩阵",
-      "domain": "platform-ops",
-      "route_path": "/platform/onboarding",
-      "icon": "boxes",
-      "order": 22,
-      "permission_scope": "ops.platform.catalog.read",
-      "object_types": [
-        "plane_binding"
-      ]
-    },
-    {
       "menu_id": "platform-rollout",
       "parent_menu_id": "platform-ops",
       "label": "灰度与回滚",

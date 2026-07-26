@@ -5,6 +5,9 @@ import android.app.ApplicationExitInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -16,7 +19,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import io.flutter.embedding.android.FlutterFragmentActivity;
 import io.flutter.embedding.engine.FlutterEngine;
@@ -25,6 +30,10 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +61,10 @@ public class MainActivity extends FlutterFragmentActivity {
       "previous_native_crash_kind";
   private static final String RUNTIME_ANR_CONSUMED_TIMESTAMP_KEY =
       "previous_native_anr_consumed_timestamp";
+  private static final String STARTUP_HEALTH_BUILD_KEY = "startup_health_build";
+  private static final String STARTUP_HEALTH_SAFE_SHELL_KEY = "startup_health_safe_shell";
+  private static final String STARTUP_HEALTH_FATAL_BUILD_KEY = "startup_health_fatal_build";
+  private static final String STARTUP_HEALTH_FATAL_AT_KEY = "startup_health_fatal_at";
   private static final long RUNTIME_ANR_MAX_AGE_MS = TimeUnit.HOURS.toMillis(72);
   private static volatile boolean nativeCrashMarkerInstalled;
   private static final Pattern STARTUP_EVENT_NAME_PATTERN =
@@ -88,6 +101,8 @@ public class MainActivity extends FlutterFragmentActivity {
   private volatile boolean appInForeground;
   private volatile boolean nativeRecoveryShown;
   private volatile boolean nativeRecoveryDeadlineReached;
+  private volatile boolean confirmedPreviousBuildFatal;
+  private volatile boolean recoveryExternalOpenInFlight;
   private volatile boolean dartStartupAttemptStarted;
   private volatile String currentDartAttemptId = "";
   private volatile String currentLaunchMode = "unknown";
@@ -97,6 +112,8 @@ public class MainActivity extends FlutterFragmentActivity {
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     installNativeCrashMarker();
+    confirmedPreviousBuildFatal = shouldRecoverConfirmedStartupFatal();
+    markCurrentBuildStarting();
     activityOnCreateElapsedMs = SystemClock.elapsedRealtime() - processStartElapsedMs;
     Log.i(STARTUP_TAG, "android_activity_on_create elapsedMs=" + activityOnCreateElapsedMs);
     initializeDartJniClassLoader();
@@ -113,7 +130,12 @@ public class MainActivity extends FlutterFragmentActivity {
     appInForeground = true;
     // 首帧预算必须从进程最早可得的 monotonic 时钟开始，而不是 onResume 后重新给 6 秒。
     foregroundStartedElapsedMs = processStartElapsedMs;
-    armFlutterFirstFrameWatchdog();
+    if (confirmedPreviousBuildFatal) {
+      startupSafeTerminalConfirmed = true;
+      showNativeStartupRecovery();
+    } else {
+      armFlutterFirstFrameWatchdog();
+    }
   }
 
   /**
@@ -215,6 +237,31 @@ public class MainActivity extends FlutterFragmentActivity {
             });
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
+            "quwoquan/app_recovery")
+        .setMethodCallHandler(
+            (MethodCall call, MethodChannel.Result result) -> {
+              switch (call.method) {
+                case "getRecoveryContext":
+                  Map<String, Object> context = new HashMap<>();
+                  context.put("platform", "android");
+                  context.put("appVersion", BuildConfig.VERSION_NAME);
+                  context.put("buildNumber", BuildConfig.VERSION_CODE);
+                  result.success(context);
+                  break;
+                case "openTrustedExternalUrl":
+                  result.success(openTrustedRecoveryUrl(stringArgument(call, "url")));
+                  break;
+                case "recordFatalStartup":
+                  markCurrentBuildFatal();
+                  result.success(null);
+                  break;
+                default:
+                  result.notImplemented();
+                  break;
+              }
+            });
+    new MethodChannel(
+            flutterEngine.getDartExecutor().getBinaryMessenger(),
             "quwoquan/startup/deferred_plugins")
         .setMethodCallHandler(
             (MethodCall call, MethodChannel.Result result) -> {
@@ -260,6 +307,34 @@ public class MainActivity extends FlutterFragmentActivity {
         "startup_deferred_plugin_unavailable",
         "Deferred plugin group is not attached: " + group,
         null);
+  }
+
+  private boolean openTrustedRecoveryUrl(String rawUrl) {
+    try {
+      Uri uri = Uri.parse(rawUrl == null ? "" : rawUrl.trim());
+      if (!"https".equalsIgnoreCase(uri.getScheme())
+          || uri.getHost() == null
+          || uri.getHost().isEmpty()
+          || uri.getUserInfo() != null
+          || !isTrustedRecoveryHost(uri.getHost())) {
+        return false;
+      }
+      Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+      intent.addCategory(Intent.CATEGORY_BROWSABLE);
+      startActivity(intent);
+      return true;
+    } catch (RuntimeException error) {
+      Log.w(STARTUP_TAG, "android_recovery_external_open_failed", error);
+      return false;
+    }
+  }
+
+  private boolean isTrustedRecoveryHost(String rawHost) {
+    String host = rawHost.toLowerCase(java.util.Locale.ROOT);
+    return host.equals("quwoquan.com")
+        || host.endsWith(".quwoquan.com")
+        || host.equals("quwoquan-env.test")
+        || host.endsWith(".quwoquan-env.test");
   }
 
   private WechatSdkCoordinator wechatSdkCoordinator() {
@@ -317,6 +392,54 @@ public class MainActivity extends FlutterFragmentActivity {
     }
   }
 
+  private boolean shouldRecoverConfirmedStartupFatal() {
+    String fatalBuild =
+        getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+            .getString(STARTUP_HEALTH_FATAL_BUILD_KEY, "");
+    String currentBuild = String.valueOf(BuildConfig.VERSION_CODE);
+    if (fatalBuild == null || fatalBuild.isEmpty()) {
+      return false;
+    }
+    if (!currentBuild.equals(fatalBuild)) {
+      getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+          .edit()
+          .remove(STARTUP_HEALTH_FATAL_BUILD_KEY)
+          .remove(STARTUP_HEALTH_FATAL_AT_KEY)
+          .apply();
+      return false;
+    }
+    return true;
+  }
+
+  private void markCurrentBuildStarting() {
+    getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+        .edit()
+        .putString(STARTUP_HEALTH_BUILD_KEY, String.valueOf(BuildConfig.VERSION_CODE))
+        .putBoolean(STARTUP_HEALTH_SAFE_SHELL_KEY, false)
+        .apply();
+  }
+
+  private void markCurrentBuildFatal() {
+    getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+        .edit()
+        .putString(STARTUP_HEALTH_FATAL_BUILD_KEY, String.valueOf(BuildConfig.VERSION_CODE))
+        .putLong(STARTUP_HEALTH_FATAL_AT_KEY, System.currentTimeMillis())
+        .commit();
+  }
+
+  private void markCurrentBuildSafeShell() {
+    if (confirmedPreviousBuildFatal) {
+      return;
+    }
+    getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+        .edit()
+        .putString(STARTUP_HEALTH_BUILD_KEY, String.valueOf(BuildConfig.VERSION_CODE))
+        .putBoolean(STARTUP_HEALTH_SAFE_SHELL_KEY, true)
+        .remove(STARTUP_HEALTH_FATAL_BUILD_KEY)
+        .remove(STARTUP_HEALTH_FATAL_AT_KEY)
+        .apply();
+  }
+
   private void persistPreviousNativeCrashMarker(Throwable error) {
     try {
       String kind = error == null ? "UnknownNativeError" : error.getClass().getSimpleName();
@@ -332,6 +455,12 @@ public class MainActivity extends FlutterFragmentActivity {
           .edit()
           .putString(RUNTIME_CRASH_MARKER_KIND_KEY, kind)
           .commit();
+      boolean safeShell =
+          getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+              .getBoolean(STARTUP_HEALTH_SAFE_SHELL_KEY, false);
+      if (!safeShell) {
+        markCurrentBuildFatal();
+      }
     } catch (RuntimeException ignored) {
       // Never replace the platform's crash handling path with observability work.
     }
@@ -765,6 +894,7 @@ public class MainActivity extends FlutterFragmentActivity {
     boolean firstNativeSafeTerminal = !startupSafeTerminalConfirmed;
     if (firstNativeSafeTerminal) {
       startupSafeTerminalConfirmed = true;
+      markCurrentBuildSafeShell();
       cancelFlutterFirstFrameWatchdog();
       cancelNativeRecoveryTerminalReconciliation();
       dismissNativeStartupRecoveryForSafeTerminalRace();
@@ -917,13 +1047,12 @@ public class MainActivity extends FlutterFragmentActivity {
           }
           nativeRecoveryDeadlineReached = true;
           recordNativeStartupDeadline(elapsedMs, true);
-          showNativeStartupRecovery(elapsedMs, false);
         });
   }
 
   private void recordNativeStartupDeadline(long elapsedMs, boolean firstFrameMissing) {
     if (!firstFrameMissing) return;
-    Log.e(
+    Log.w(
         STARTUP_TAG,
         "android_native_first_frame_timeout elapsedMs="
             + elapsedMs
@@ -932,16 +1061,13 @@ public class MainActivity extends FlutterFragmentActivity {
       return;
     }
     startupTelemetryJournal.record(
-        "recovery",
+        "performance",
         elapsedMs,
         "native_first_frame_timeout",
-        "native_recovery",
-        "OPS.SYSTEM.startup_native_first_frame_timeout",
+        "",
+        "",
         "native_watchdog",
         "android_process");
-    // 先展示 native recovery；同一帧队列中若 safe_terminal 到达，不得留下
-    // nativeRecovery 与 Flutter success 两个 terminal。
-    scheduleNativeRecoveryTerminal(elapsedMs, firstFrameMissing);
   }
 
   private void recordNativeStartupTerminal(long elapsedMs, boolean firstFrameMissing) {
@@ -978,93 +1104,231 @@ public class MainActivity extends FlutterFragmentActivity {
   }
 
   private void showNativeStartupRecovery() {
-    final long elapsedMs = SystemClock.elapsedRealtime() - processStartElapsedMs;
-    showNativeStartupRecovery(elapsedMs, true);
-  }
-
-  private void showNativeStartupRecovery(long elapsedMs, boolean recordDeadline) {
-    if (flutterFirstFrameConfirmed
-        || startupSafeTerminalConfirmed
+    if ((flutterFirstFrameConfirmed && !confirmedPreviousBuildFatal)
+        || (startupSafeTerminalConfirmed && !confirmedPreviousBuildFatal)
         || nativeRecoveryShown
         || isFinishing()
         || isDestroyed()) {
       return;
     }
     nativeRecoveryShown = true;
-    if (recordDeadline) {
-      nativeRecoveryDeadlineReached = true;
-      recordNativeStartupDeadline(elapsedMs, !flutterFirstFrameConfirmed);
-    }
 
     ViewGroup root = (ViewGroup) getWindow().getDecorView();
     if (root.findViewWithTag(NATIVE_RECOVERY_VIEW_TAG) != null) {
       return;
     }
+    final int backgroundColor = Color.rgb(247, 247, 252);
+    getWindow().setStatusBarColor(backgroundColor);
+    getWindow().setNavigationBarColor(backgroundColor);
+    getWindow()
+        .getDecorView()
+        .setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+
     FrameLayout recovery = new FrameLayout(this);
     recovery.setTag(NATIVE_RECOVERY_VIEW_TAG);
-    recovery.setBackgroundColor(Color.rgb(10, 132, 255));
+    recovery.setBackgroundColor(backgroundColor);
+
+    LinearLayout content = new LinearLayout(this);
+    content.setOrientation(LinearLayout.VERTICAL);
+    content.setGravity(Gravity.CENTER_HORIZONTAL);
+    content.setPadding(dp(24), 0, dp(24), 0);
+    content.setTranslationY(getResources().getDisplayMetrics().heightPixels * 0.05f);
 
     TextView title = new TextView(this);
-    title.setText("应用启动遇到问题");
-    title.setTextColor(Color.WHITE);
-    title.setTextSize(22);
+    title.setText("应用暂时无法启动");
+    title.setTextColor(Color.rgb(17, 19, 24));
+    title.setTextSize(28);
+    title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
     title.setGravity(Gravity.CENTER);
-    FrameLayout.LayoutParams titleLayout =
-        new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    titleLayout.gravity = Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL;
-    titleLayout.bottomMargin = 84;
-    recovery.addView(title, titleLayout);
+    content.addView(
+        title,
+        new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
 
     TextView message = new TextView(this);
-    message.setText("暂未显示应用界面，请重试或重新打开应用。");
-    message.setTextColor(Color.WHITE);
-    message.setTextSize(15);
+    message.setText("正在检查可用版本");
+    message.setTextColor(Color.rgb(107, 112, 124));
+    message.setTextSize(17);
     message.setGravity(Gravity.CENTER);
-    FrameLayout.LayoutParams messageLayout =
-        new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    messageLayout.gravity = Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL;
-    messageLayout.topMargin = 8;
-    recovery.addView(message, messageLayout);
+    LinearLayout.LayoutParams messageLayout =
+        new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+    messageLayout.topMargin = dp(16);
+    content.addView(message, messageLayout);
 
-    Button retry = new Button(this);
-    retry.setText("重新打开应用");
-    retry.setOnClickListener(
-        ignored -> {
-          requestNewStartupAttempt();
-        });
-    FrameLayout.LayoutParams retryLayout =
-        new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    retryLayout.gravity = Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL;
-    retryLayout.topMargin = 104;
-    recovery.addView(retry, retryLayout);
+    Button primary = new Button(this);
+    configureRecoveryButton(primary, "正在检查…", true, false);
+    LinearLayout.LayoutParams primaryLayout =
+        new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+    primaryLayout.topMargin = dp(28);
+    content.addView(primary, primaryLayout);
+
+    Button web = new Button(this);
+    configureRecoveryButton(web, "使用网页版", false, true);
+    web.setOnClickListener(
+        ignored -> openRecoveryTarget(BuildConfig.QWQ_PUBLIC_WEB_URL, "", "网页暂时无法打开，请稍后再试"));
+    LinearLayout.LayoutParams webLayout =
+        new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+    webLayout.topMargin = dp(12);
+    content.addView(web, webLayout);
+
+    FrameLayout.LayoutParams contentLayout =
+        new FrameLayout.LayoutParams(dp(328), ViewGroup.LayoutParams.WRAP_CONTENT);
+    contentLayout.gravity = Gravity.CENTER;
+    recovery.addView(content, contentLayout);
     root.addView(
         recovery,
         new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    checkNativeRecoveryVersion(title, message, primary, web);
   }
 
-  private void requestNewStartupAttempt() {
-    long elapsedMs = SystemClock.elapsedRealtime() - processStartElapsedMs;
-    if (startupTelemetryJournal != null) {
-      startupTelemetryJournal.record(
-          "terminal",
-          elapsedMs,
-          "restart_requested",
-          "native_recovery",
-          "OPS.SYSTEM.startup_native_first_frame_timeout",
-          "native_retry",
-          "android_process");
+  private void checkNativeRecoveryVersion(
+      TextView title, TextView message, Button primary, Button web) {
+    startupWatchdogExecutor.execute(
+        () -> {
+          HttpURLConnection connection = null;
+          try {
+            String base = BuildConfig.QWQ_RECOVERY_BASE_URL.replaceAll("/+$", "");
+            URL endpoint =
+                new URL(
+                    base
+                        + "/ops/app-recovery/version?platform=android&appVersion="
+                        + URLEncoder.encode(BuildConfig.VERSION_NAME, StandardCharsets.UTF_8.name())
+                        + "&buildNumber="
+                        + BuildConfig.VERSION_CODE);
+            connection = (HttpURLConnection) endpoint.openConnection();
+            connection.setConnectTimeout(1500);
+            connection.setReadTimeout(1500);
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setUseCaches(false);
+            if (connection.getResponseCode() < 200 || connection.getResponseCode() >= 300) {
+              throw new IllegalStateException("version service unavailable");
+            }
+            JSONObject payload = new JSONObject(readLimitedResponse(connection));
+            if (payload.length() != 4) {
+              throw new IllegalStateException("version response field mismatch");
+            }
+            int latestBuild = Integer.parseInt(payload.getString("latestBuild"));
+            String updateUrl = payload.getString("updateUrl");
+            String recoveryUrl = payload.getString("recoveryUrl");
+            if (!isTrustedRecoveryUrl(updateUrl) || !isTrustedRecoveryUrl(recoveryUrl)) {
+              throw new IllegalStateException("version response url rejected");
+            }
+            startupHandler.post(
+                () -> {
+                  if (latestBuild > BuildConfig.VERSION_CODE) {
+                    title.setText("当前版本需要更新");
+                    message.setText("更新后即可正常启动");
+                    configureRecoveryButton(primary, "前往更新", true, true);
+                    primary.setOnClickListener(
+                        ignored ->
+                            openRecoveryTarget(
+                                updateUrl,
+                                recoveryUrl,
+                                "暂时无法打开更新页面，请稍后再试"));
+                    web.setVisibility(View.VISIBLE);
+                    return;
+                  }
+                  title.setText("当前已是最新版本");
+                  message.setText("请使用网页版继续");
+                  configureRecoveryButton(primary, "使用网页版", true, true);
+                  primary.setOnClickListener(
+                      ignored ->
+                          openRecoveryTarget(
+                              BuildConfig.QWQ_PUBLIC_WEB_URL,
+                              recoveryUrl,
+                              "网页暂时无法打开，请稍后再试"));
+                  web.setVisibility(View.GONE);
+                });
+          } catch (Exception ignored) {
+            startupHandler.post(
+                () -> {
+                  title.setText("应用暂时无法启动");
+                  message.setText("请使用网页版继续");
+                  configureRecoveryButton(primary, "使用网页版", true, true);
+                  primary.setOnClickListener(
+                      view ->
+                          openRecoveryTarget(
+                              BuildConfig.QWQ_PUBLIC_WEB_URL,
+                              "",
+                              "网页暂时无法打开，请稍后再试"));
+                  web.setVisibility(View.GONE);
+                });
+          } finally {
+            if (connection != null) {
+              connection.disconnect();
+            }
+          }
+        });
+  }
+
+  private String readLimitedResponse(HttpURLConnection connection) throws Exception {
+    try (InputStream input = connection.getInputStream();
+        ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+      byte[] buffer = new byte[4096];
+      int read;
+      while ((read = input.read(buffer)) >= 0) {
+        if (output.size() + read > 65536) {
+          throw new IllegalStateException("version response too large");
+        }
+        output.write(buffer, 0, read);
+      }
+      return output.toString(StandardCharsets.UTF_8.name());
     }
-    Intent launchIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
-    if (launchIntent == null) {
+  }
+
+  private void configureRecoveryButton(
+      Button button, String label, boolean filled, boolean enabled) {
+    button.setText(label);
+    button.setTextSize(17);
+    button.setAllCaps(false);
+    button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    button.setEnabled(enabled);
+    button.setTextColor(
+        enabled ? (filled ? Color.WHITE : Color.rgb(8, 123, 255)) : Color.rgb(107, 112, 124));
+    GradientDrawable background = new GradientDrawable();
+    background.setCornerRadius(dp(24));
+    if (filled) {
+      background.setColor(enabled ? Color.rgb(8, 123, 255) : Color.rgb(233, 237, 245));
+    } else {
+      background.setColor(Color.TRANSPARENT);
+      background.setStroke(dp(1), Color.rgb(8, 123, 255));
+    }
+    button.setBackground(background);
+  }
+
+  private void openRecoveryTarget(String target, String fallback, String failureMessage) {
+    if (recoveryExternalOpenInFlight) {
       return;
     }
-    launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-    startActivity(launchIntent);
-    finish();
+    recoveryExternalOpenInFlight = true;
+    boolean opened = openTrustedRecoveryUrl(target);
+    if (!opened && fallback != null && !fallback.isEmpty()) {
+      opened = openTrustedRecoveryUrl(fallback);
+    }
+    if (!opened) {
+      Toast.makeText(this, failureMessage, Toast.LENGTH_SHORT).show();
+    }
+    recoveryExternalOpenInFlight = false;
+  }
+
+  private boolean isTrustedRecoveryUrl(String rawUrl) {
+    try {
+      Uri uri = Uri.parse(rawUrl == null ? "" : rawUrl.trim());
+      return "https".equalsIgnoreCase(uri.getScheme())
+          && uri.getHost() != null
+          && !uri.getHost().isEmpty()
+          && uri.getUserInfo() == null
+          && isTrustedRecoveryHost(uri.getHost());
+    } catch (RuntimeException ignored) {
+      return false;
+    }
+  }
+
+  private int dp(int value) {
+    return Math.round(value * getResources().getDisplayMetrics().density);
   }
 
   @Override

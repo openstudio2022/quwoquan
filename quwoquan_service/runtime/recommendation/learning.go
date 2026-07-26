@@ -160,7 +160,7 @@ func (f *FeedbackRecorder) lookupImpressionScore(ctx context.Context, userID, co
 }
 
 // deterministicEventID 从稳定归因输入派生 learning 事件 id（作为 Mongo _id 承载
-// dedupe，见 recommendation/rec_model/storage.yaml）。禁止时间戳参与派生。
+// dedupe，见 recommendation/recommendation/recommendation_model_release/storage.yaml）。禁止时间戳参与派生。
 func deterministicEventID(prefix string, parts ...string) string {
 	digest := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return prefix + "_" + hex.EncodeToString(digest[:16])

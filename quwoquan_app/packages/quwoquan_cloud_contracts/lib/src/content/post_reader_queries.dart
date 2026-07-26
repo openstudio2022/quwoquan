@@ -157,8 +157,8 @@ ContentPostProjection _decodeContentPostProjection(Map<Object?, Object?> item) {
     coverUrl: _optionalText(item['coverUrl']),
     articleTemplate: _optionalText(item['articleTemplate']),
     articleFontPreset: _optionalText(item['articleFontPreset']),
-    imageUrls:
-        _optionalStringList(item['imageUrls'], 'content post image URLs') ??
+    mediaUrls:
+        _optionalStringList(item['mediaUrls'], 'content post media URLs') ??
         const <String>[],
     videoUrl: _optionalText(item['videoUrl']),
     thumbnailUrl: _optionalText(item['thumbnailUrl']),

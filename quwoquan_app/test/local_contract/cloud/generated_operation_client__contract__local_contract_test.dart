@@ -120,7 +120,7 @@ void main() {
       );
       final client = GeneratedCloudOperationClient(executor);
 
-      final result = await client.searchQuerySearchQuery(
+      final result = await client.searchSearchQuerySearchQuery(
         CanonicalSearchQuery(
           query: '西湖',
           objectTypes: const <String>['article'],
@@ -135,7 +135,7 @@ void main() {
 
       expect(
         executor.operation?.canonicalOperationId,
-        AppCloudOperationIds.searchQuerySearchQuery,
+        AppCloudOperationIds.searchSearchQuerySearchQuery,
       );
       expect(executor.body, <String, Object?>{
         'query': '西湖',

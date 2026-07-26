@@ -1,0 +1,37 @@
+kind: aggregate_root
+description: persona 的有界最近搜索状态，只经 Search Command Facade 修改。
+identity:
+  fields:
+  - id
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: '1:1'
+  consistency: eventual
+  kind: reference
+  name: persona
+  on_delete: cascade
+  reference_fields:
+  - personaId
+  target_object: user.Persona
+capabilities:
+- commandable
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- 每个 persona 只有一个 RecentSearchState
+- entries 按 normalized query 去重并保持最近使用顺序
+- entries 数量不得超过配置的固定上限
+- 清除与新增只经 Search Command Facade，并使用服务端内部 version CAS
+lifecycle:
+  states:
+  - active
+  - cleared
+  optimistic_concurrency: version
+  idempotency: command_receipt

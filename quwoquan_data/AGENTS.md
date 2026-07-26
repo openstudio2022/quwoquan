@@ -1,9 +1,8 @@
 # quwoquan_data Codex Guide
 
-在 `quwoquan_data/` 工作时，除仓库根 `AGENTS.md` 外，先阅读仓库根 `.cursor/rules/` 与数据工程入口：
+在 `quwoquan_data/` 工作时，除仓库根 `AGENTS.md` 外，先阅读数据工程入口：
 
 1. `quwoquan_data/README.md`
-2. `.cursor/rules/01-arch-constraints.mdc` 中关于 `quwoquan_data` 的 CLI-first 约束
 
 ## 数据工程硬约束
 
@@ -15,6 +14,7 @@
 - 当前阶段未上线：旧模板拼文、区域硬编码、版本化 publish 路径、孤立脚本、不可追溯素材、弱事实证据一律直接清理，不做兼容。
 - `.qwq_output/` 只允许可删除重建的运行产物、部署快照、证据与缓存；禁止把 `control_plane/prompts/templates/schema/specs/policies/reference` 等可复用真相源放入 output。Python venv 只是由仓内 `requirements.txt` 临时重建的 disposable cache，不是可复用测试环境、工程配置或发布资产；任何任务都不得要求该缓存预先存在。
 - Python bytecode、pytest cache 只能写入 `.qwq_output/env/repo/local/**` 或测试隔离临时根；解释器工具缓存只能写入仓外的用户缓存目录（默认 `~/.cache/quwoquan/python-envs`），两者都不得进入 `quwoquan_data/**`。所有 Make/gate/pytest 入口必须以解释器 `-B` 启动、显式重定向 pytest cache，并在执行后运行 Data layout gate。
+- 当前不保存或门控模型 token、价格、成本、预算或消费账本；Agent 运行证据只保留 provider、model、runId、promptSha256、结果与产物摘要。任何此类已退休字段或模块由 `verify reusable-data-contract` 阻断回潮。
 
 ## 内容供给端到端闭环
 
@@ -45,7 +45,7 @@
 - **法务法律专家**：来源权利、授权快照、blocked 来源、反抄袭、长句复现、人脸/肖像/商用风险可审计。
 - **消费者视角**：标题兑现、信息密度、图文节奏、可读性、feed/search/detail 可消费。
 - **内容运营专家**：SLO/KPI、人审 SLA、发布节奏、反馈修复、内容供给优化闭环。
-- **无人值守自动化**：object queue、fanout、budget、hook-check、repair report、失败回退能自动闭环。
+- **无人值守自动化**：object queue、fanout、resource limits、hook-check、repair report、失败回退能自动闭环。
 
 缺任一角色证据，先补 `specs/tests/gates` 或 repair stage，不要把离线文件生成当成完成。
 
@@ -58,9 +58,8 @@
 ## 推荐验证
 
 - 优先使用 `python3 quwoquan_data/scripts/cli.py ...` 执行对应流程
-- 启动托管工作流前先跑一键环境门：`python3 quwoquan_data/scripts/cli.py task preflight`；它会检查 `cursor_sdk`、CV/OCR 依赖、仓外 `$HOME/.config/quwoquan/cursor_api_key`（显式 `QWQ_CURSOR_API_KEY_FILE` 仅用于受控替换）和网络可达性。
+- 启动托管工作流前先跑唯一环境门：`python3 quwoquan_data/scripts/cli.py task preflight`；它会检查 `cursor_sdk`、CV/OCR 依赖、仓外 `$HOME/.config/quwoquan/cursor_api_key`（显式 `QWQ_CURSOR_API_KEY_FILE` 仅用于受控替换）和网络可达性。
 - 数据工程校验优先跑 `python3 quwoquan_data/scripts/cli.py verify all`
 - 若触及 CLI 入口约束，再补跑 `python3 quwoquan_data/scripts/verify/verify_cli_first.py`
-- 多角色准出清单：`python3 quwoquan_data/scripts/cli.py verify data-role-gate`
-- 两省最终准出：`python3 quwoquan_data/scripts/cli.py verify two-province-coverage-release --release <releaseId>`
+- 发布准出：`python3 quwoquan_data/scripts/cli.py verify release-lifecycle --release <releaseId>`
 - 发布、采样、导入或环境数据变化后，补跑对应 `ship`、服务侧 importer 测试和与环境职责匹配的 `stackctl verify --env <env> --kind all --profile integration|release`。

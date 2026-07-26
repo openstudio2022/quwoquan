@@ -30,7 +30,7 @@ CircleFeedPageSlice _defaultCircleFeedFixture(CircleFeedQuery query) {
           authorDisplayName: '契约摄影师',
           body: '山路晨雾',
           coverUrl: 'media/image/fixture_photo_1.jpg',
-          imageUrls: const <String>['media/image/fixture_photo_1.jpg'],
+          mediaUrls: const <String>['media/image/fixture_photo_1.jpg'],
           likeCount: 12,
         ),
       ),

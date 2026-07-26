@@ -12,9 +12,6 @@ from content.source.research import network_breaker
 
 
 _USER_AGENT = "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@quwoquan.example)"
-_RUNTIME_POLICY = active_runtime_policy()
-_CURL_RETRIES = _RUNTIME_POLICY.curl_retries
-_CURL_RETRY_DELAY_SECONDS = _RUNTIME_POLICY.curl_retry_delay_seconds
 _HTTP_METADATA_MARKER = b"\n__QWQ_HTTP_META__"
 _HTTP_METADATA_FORMAT = "\n__QWQ_HTTP_META__%{http_code}\t%{url_effective}"
 
@@ -35,6 +32,7 @@ def fetch_http(url: str, *, timeout: int) -> HttpFetchResult:
     if network_breaker.BREAKER.is_open(url) or network_breaker.wave_budget_exceeded():
         return HttpFetchResult(returncode=-1, status_code=0, final_url="", body=b"")
     effective_timeout = max(1, int(timeout))
+    policy = active_runtime_policy()
     proc = subprocess.run(
         [
             "curl",
@@ -43,9 +41,9 @@ def fetch_http(url: str, *, timeout: int) -> HttpFetchResult:
             "-A",
             _USER_AGENT,
             "--retry",
-            str(max(1, int(_CURL_RETRIES))),
+            str(max(1, int(policy.curl_retries))),
             "--retry-delay",
-            str(_CURL_RETRY_DELAY_SECONDS),
+            str(policy.curl_retry_delay_seconds),
             "--retry-all-errors",
             "--max-time",
             str(effective_timeout),
@@ -104,6 +102,7 @@ def post_form_json(
     """POST form fields once and decode JSON; the source adapter owns retries."""
     if network_breaker.BREAKER.is_open(url) or network_breaker.wave_budget_exceeded():
         return {}
+    policy = active_runtime_policy()
     command = [
         "curl",
         "-sS",
@@ -114,7 +113,7 @@ def post_form_json(
         "--retry",
         "0",
         "--retry-delay",
-        str(_CURL_RETRY_DELAY_SECONDS),
+        str(policy.curl_retry_delay_seconds),
         "--retry-all-errors",
         "--max-time",
         str(max(1, int(timeout))),
@@ -147,5 +146,5 @@ def wiki_api(host: str, params: dict[str, str | int]) -> dict[str, Any]:
     query = urllib.parse.urlencode(params)
     return curl_json(
         f"https://{host}/w/api.php?{query}",
-        timeout=_RUNTIME_POLICY.provider_timeouts.mediawiki_seconds,
+        timeout=active_runtime_policy().provider_timeouts.mediawiki_seconds,
     )

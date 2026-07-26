@@ -1,0 +1,38 @@
+overrides:
+  sys.user-service.redis.general.addr: 127.0.0.1:6379
+secretRefs:
+  sys.user-service.mongodb.uri: MONGODB_URI
+  sys.user-service.postgres.dsn: POSTGRES_DSN
+  sys.user-service.redis.general.password: REDIS_PASSWORD
+externalBindings:
+  runtime.message.transport:
+    state: enabled
+  identity.carrier.one_tap:
+    state: enabled
+    adapter: ext.auth.carrier_one_tap_protocol_fixture
+    endpointRef: environment_binding:identity.one_tap_fixture
+    endpointEnvs:
+      endpoint: IDENTITY_ONE_TAP_FIXTURE_ENDPOINT
+    secretRefs:
+    - IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_ID
+    - IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET
+    timeoutMs: 1000
+  identity.social.login:
+    state: enabled
+    adapter: ext.auth.federated_identity_protocol_fixture
+    endpointRef: environment_binding:identity.social_fixture
+    endpointEnvs:
+      wechat_token: IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL
+      wechat_user_info: IDENTITY_SOCIAL_FIXTURE_WECHAT_USER_INFO_URL
+      alipay_token: IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL
+      alipay_user_info: IDENTITY_SOCIAL_FIXTURE_ALIPAY_USER_INFO_URL
+      qq_user_info: IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL
+    secretRefs:
+    - IDENTITY_SOCIAL_FIXTURE_WECHAT_APP_ID
+    - IDENTITY_SOCIAL_FIXTURE_WECHAT_APP_SECRET
+    - IDENTITY_SOCIAL_FIXTURE_ALIPAY_APP_ID
+    - IDENTITY_SOCIAL_FIXTURE_ALIPAY_APP_PRIVATE_KEY_PEM
+    - IDENTITY_SOCIAL_FIXTURE_ALIPAY_PLATFORM_PUBLIC_KEY_PEM
+    - IDENTITY_SOCIAL_FIXTURE_ALIPAY_MERCHANT_PID
+    - IDENTITY_SOCIAL_FIXTURE_QQ_APP_ID
+    timeoutMs: 1000

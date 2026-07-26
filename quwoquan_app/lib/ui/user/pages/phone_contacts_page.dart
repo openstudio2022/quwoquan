@@ -170,7 +170,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
               pageName: 'PhoneContactsPage',
               targetType: 'contact_discovery',
               targetKey: result.id,
-              payload: <String, dynamic>{
+              payload: <String, Object?>{
                 'result': 'success',
                 'resultCount': result.matchCount,
               },

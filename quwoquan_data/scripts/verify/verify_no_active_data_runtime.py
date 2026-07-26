@@ -8,6 +8,7 @@ blocks early and asks the operator to rerun after the active runtime exits.
 from __future__ import annotations
 
 import subprocess
+import shlex
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -40,9 +41,20 @@ def active_runtime_processes(process_lines: list[str] | None = None) -> list[str
     for line in lines:
         if "verify_no_active_data_runtime.py" in line:
             continue
-        if not any(marker in line for marker in ACTIVE_CLI_MARKERS):
+        _pid, _separator, command = line.partition(" ")
+        try:
+            argv = shlex.split(command)
+        except ValueError:
             continue
-        if not any(marker in line for marker in ACTIVE_COMMAND_MARKERS):
+        if not argv or not Path(argv[0]).name.lower().startswith("python"):
+            continue
+        if not any(argument.endswith("scripts/cli.py") for argument in argv[1:]):
+            continue
+        if not any(
+            tuple(argv[index : index + 2]) == ("task", "execute")
+            or tuple(argv[index : index + 3]) == ("task", "scaled-e2e", "run")
+            for index in range(len(argv))
+        ):
             continue
         active.append(line)
     return active

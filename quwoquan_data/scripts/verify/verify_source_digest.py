@@ -67,7 +67,7 @@ def source_digest_issues(
     if release_root.is_dir():
         for release_dir in sorted(path for path in release_root.iterdir() if path.is_dir()):
             header_path = payload_file(release_dir, "release.json")
-            aggregate_path = attestation_root(release_dir) / "aggregate.json"
+            aggregate_path = attestation_root(release_dir) / "release.json"
             if not header_path.is_file() and not aggregate_path.is_file():
                 continue
             header = _read_object(header_path, issues=issues)

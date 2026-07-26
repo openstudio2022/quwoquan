@@ -1,138 +1,294 @@
-# L2 特性：system-architecture-and-engineering-guide
+# L2 Business Capability：系统架构与工程规范 (`system-architecture-and-engineering-guide`)
 
-## 功能说明
+> 所属领域：[`runtime`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-本节点冻结端云系统架构与工程阅读导引，作为研发、Agent、部署与验收进入云侧工作的统一入口。它不复制部署拓扑数据，而是链接现有唯一真相源，并补齐“服务目录、部署进程、能力现状、gap 与可拆分边界”之间的解释层。
+## 1. 能力目标
 
-## 背景问题
+领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理。
 
-当前仓库存在多套相近但语义不同的清单：
-
-- `quwoquan_service/services/*` 表示源码服务目录。
-- `cmd/*/main.go` 表示可执行入口，一个服务可能有多个入口。
-- `quwoquan_ops/environments/process_domain_mapping.yaml` 表示部署进程到 domain 的归属。
-- `quwoquan_ops/environments/workload_topology_inventory.yaml` 表示 workload 三态与 prod wiring。
-- `quwoquan_ops/environments/module_package_mapping.yaml` 表示部署包承载哪些 runtime module。
-
-缺少“先读这个”的统一导引时，很容易把上述清单混数为“29+ 个服务”，或把部署进程名误认为源码目录名。本节点将这种漂移收口为可校验的工程契约。
-
-## 产品目标
-
-- 让端云闭环（内容工程生产 → App 展示 → 交集 → 行动 → 回流）在商业化冷启动阶段有一条可读、可验证、可部署的主路径。
-- 让冷启动部署优先采用 `seed-box` 模块化单体，降低早期复杂度与成本，同时让管理/运营/运维面独立发布，保留 Strangler Fig 按域拆分能力。
-- 让任何研发或 Agent 能从本节点快速定位：服务在哪里、职责是什么、当前能力做到哪里、gap 在哪里、该跑哪些门禁。
-
-## 范围
+## 2. 范围与非目标
 
 ### In Scope
 
-- 端云服务目录、部署进程、runtime module、存储依赖与平面归属的解释导引。
-- `seed-box` one-box 与 standalone workload 的边界说明。
-- `Data -> Service -> App -> Behavior -> Recommendation -> Observability -> Environment` 闭环能力现状与 gap 矩阵。
-- 与本节点相关的现有文档收编：陈旧服务层文档改为历史参考，权威入口指向本节点。
-- 验收和门禁：feature-tree schema、部署拓扑门禁、Strangler 不变量、gamma-local/prod 同构。
-- D0 业务对象边界、Object Facade、统一 URL、Data Ports、页面 Slice、错误与测试合同。
-- F1 唯一 ContractGraph compiler、最小 Runtime/App 公共底座和 Actor/Operation attribution。
-- G1 metadata/codegen、DDD、页面、测试、生产纯净、覆盖与零兼容清理硬门禁。
-- 首个 `content-service` Post+Report 样板及样板后 scaffold 反证顺序。
-- App Cloud 只消费 ContractGraph 的 generated client/typed contract，按
-  runtime、remote adapter、application、local infrastructure、platform 与 composition
-  root 分层；Mock/fixture 与 production 物理隔离。
-- 服务目录按源码、部署包、外部工作负载和静态发布物分类，并验证
-  domain/source/module/package/process/workload/capability 的双向闭包。
+- service-local contracts 与 context/object/layer 物理路径唯一反向映射
+- 从服务本地契约扫描发现全部 context、独立对象根、聚合成员及五类 object kind，不维护冻结数量清单
+- 服务源码、metadata 和服务测试目录统一
+- 服务自治 config/resources/deploy、四环境差异、secret reference 与 release package 边界
+- 服务四环境 Kustomize 入口与 Ops 可执行装配闭环
+- 外部 capability、environment binding、adapter/workload 与 conformance evidence 闭环
+- coturn、LiveKit、seed-box、legal、platform-ops、rec-model 归位
+- 唯一 new-service 脚手架和 verify-service-architecture 门面
 
-### Out Of Scope
+### Out of Scope
 
-- 替代 `quwoquan_ops/environments/*.yaml` 成为第二套拓扑真相源。
-- 替代 `quwoquan_service/contracts/metadata/**` 成为 API path / operation / surface / route 真相源。
-- 具体业务功能实现（交集算法、推荐策略、数据工程内容生产等）本身；本节点只描述其端到端承载路径和 gap。
-- edge-media 的详细 RTC/SFU/TURN 实现。
-- 为各领域生成万能 Repository/BaseFacade/Page，或在首个样板前预先提炼业务 scaffold。
-- 在 App Cloud 或服务目录治理中重新裁决 aggregate、Facade、Reader/Slice、业务 operation
-  或 store 语义；这些仍由业务对象 metadata 与对应领域会话唯一负责。
+- 改变公开 wire 字段、HTTP/WS route 或稳定错误码语义
+- 兼容旧 path/schema/registry
+- 第五环境、prod-gray 环境或第二治理平台
+- 以静态门禁代替 gamma/prod 当前证据
 
-## 商用工程准入顺序
+## 3. Journey / Scenario 贡献
 
-```text
-D0 设计冻结
-  -> F1 ContractGraph + 最小公共底座
-  -> G1 硬门禁与旧模式冻结
-  -> content-service Post + Report 样板
-  -> Mongo + PostgreSQL 双 adapter 反证
-  -> scaffold / 对象会话模板
-  -> 其余业务对象波次
-  -> 十条 AppRoot Journey + Data/Deploy SIT
-```
+- [`JNY-001 / SCN-004`](../../spec.md#scn-004)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-004 / SCN-001`](../../spec.md#scn-001)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-004 / SCN-002`](../../spec.md#scn-002)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-006 / SCN-006`](../../spec.md#scn-006)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-007 / SCN-012`](../../spec.md#scn-012)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-009 / SCN-017`](../../spec.md#scn-017)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-010 / SCN-023`](../../spec.md#scn-023)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
 
-- D0 未通过不得写样板业务代码。
-- 样板未通过不得向其他对象复制 Facade/Store 模式。
-- 双 adapter 与第二真实对象未反证前不得发布 scaffold。
-- 当前阶段允许全面重构，禁止以兼容、Deprecated、allowlist、动态 skip 或 Memory/Noop 路径延长旧实现。
+## 4. Story
 
-## 权威真相源
 
-本节点只链接和解释以下真相源，不复制其内容：
 
-- `quwoquan_ops/environments/process_domain_mapping.yaml`：domain 归属唯一真相源。
-- `quwoquan_ops/environments/process_domain_plane_mapping.yaml`：domain-plane 归属。
-- `quwoquan_ops/environments/workload_topology_inventory.yaml`：workload 三态、prod wiring、split candidates。
-- `quwoquan_ops/environments/module_package_mapping.yaml`：部署包到 runtime module 的映射。
-- `quwoquan_ops/environments/reliable_task_module_catalog.yaml`：runtime module 能力、队列、store 与 one-box/standalone 约束。
-- `quwoquan_service/contracts/metadata/**/service.yaml`：API path、operation、domain 的唯一真相源。HTTP 资源路径不得携带 `/vN`、`/internal/vN`、`/callbacks/vN` 协议版本段；平面（可选）+ 域 + 资源 + 操作即为完整 path。
-- `specs/feature-tree/tree_index.yaml`：特性树索引。
+- [`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md)：ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
+- [`domain-service-directory-ownership`](./domain-service-directory-ownership/spec.md)：从每个服务的 `contracts/domain.yaml` 和 L1 工程归属直接定位唯一责任领域。
+- [`repository-layout-hygiene-and-retirement`](./repository-layout-hygiene-and-retirement/spec.md)：报告包含固定九类分类、WIP 清单、候选引用证据和最小验证命令。
 
-## 运行输出边界
+## 5. 能力要求
 
-- `.qwq_output/` 是 disposable output root，只保存运行过程、派生发布包、观测证据和可重建缓存，不保存静态配置或可复用工程输入。
-- App、Service、Data、Ops 的配置、schema、prompt、template、policy、reference、依赖声明和构建规则必须由各自领域源码目录拥有。
-- 删除 `.qwq_output/` 不得破坏仓库的构建定义；后续执行只能从版本控制真相源或显式外部系统重建，不能把前一次 output 当成唯一输入。
-- 部署可以消费本次构建产生的 release package，验证可以消费本次运行证据；这种阶段间派生消费不改变 output 的可删除属性。
+<a id="req-001"></a>
+### REQ-001 metadata 对象单轨与反向映射
 
-## 当前服务目录与部署进程口径
+- context、独立对象根和 aggregate member 数量全部由服务本地契约扫描派生，不在规格、门禁或注册表重复登记
+- 每个独立对象的 kind 必须是 aggregate_root、append_only_fact、projection、external_reference、runtime_session 之一，实际分布由门禁报告计算
+- 任意 object root 只有一个 object.yaml.kind，domain/context/object 不在文件中重复声明
+- owned_entity/value_object 只作为聚合成员，不存在独立对象根
+- business_object_map、对象 readiness、aggregate/entity/service 文件及全局对象 catalog 数量为零
+- ContractGraph、OpenAPI 和派生对象索引可由受版本控制的 metadata 重建
 
-服务数量和成员不得在本文复制。机器真相来自 ContractGraph、process/module/workload
-清单与源码目录扫描；本文只冻结资产类型：
+<a id="req-002"></a>
+### REQ-002 服务目录、DDD 依赖与 CQRS 规则
 
-- `go-domain-source`：第一方 Go 领域源码与编译边界。
-- `go-control-plane-source`：第一方 Go 控制面源码。
-- `python-domain-source`：Python 模型/领域源码与 build context。
-- `deployment-package`：只组合 runtime module，例如 `seed-box`。
-- `external-workload`：受控外部镜像能力，例如 SFU/TURN。
-- `static-artifact`：静态发布物，例如 legal-static。
+- 任意服务文件符合 services/<service>/internal/<context>/<object>/<layer>/file，domain 唯一来自服务 contracts/domain.yaml
+- 任意声明 api_routes 的对象必须有同 context/object 源码 owner，禁止将实现集中到同服务“主对象”目录或用空占位冒充实现
+- 每个源码对象有唯一 service owner，不存在跨服务 internal import
+- domain 对 HTTP、数据库、MQ、配置框架和 generated transport DTO 的依赖数量为零
+- infrastructure 不被 domain/application/adapters 反向依赖
+- 对象 adapters/infrastructure 不被兄弟对象导入；跨对象仅经 domain/application port 或事件协作，adapter 组合只发生在 cmd
+- command 写 projection/external_reference/append_only_fact update-delete 的违规数量为零
+- query 使用 named reader/slice，runtime session 绑定同 packet session owner
+- generated 只存在于服务根 generated/<context>/<object>，internal 下生成产物数量为零
+- 启用 errors codegen 的服务逐对象一一生成，禁止 domain wildcard 或多对象错误聚合到主对象包
+- local_contract/api_integration 文件均位于自身 context/object 测试路径，共享启动支持仅位于 tests/support；`internal/**`、`cmd/**` 和 production package 不得含业务测试文件
+- 服务目录下旧 configs、deploy/overlays 和 release snapshot 数量为零
+- Go 服务共享唯一 `quwoquan_service/go.mod` 且无嵌套 module/go.work；Python 服务在自身目录拥有 `pyproject.toml`
 
-必须区分 domain、source service、runtime module、deployment package、OS process、
-workload 与 external capability。部署进程名不等于源码目录名；缺 source/build
-provenance 的 workload 必须阻断，不能靠目录名推断。
+<a id="req-003"></a>
+### REQ-003 配置、四环境与唯一运行拓扑
 
-## one-box 冷启动目标
+- 每个服务配置键只在本服务 config/schema.yaml 定义，四环境 config.yaml 只保存 override、secret reference 与 external binding
+- 环境集合精确等于 alpha/beta/gamma/prod，不存在 dev 或 prod-gray
+- prod gray 仅是 rollout stage
+- 每个服务以 environments/<env> 作为该环境唯一入口，四环境只依赖公共 config/resources/deploy 基线，环境之间不继承
+- 公共资源与环境 seed/release/artifact 引用职责分离；gamma 只消费环境自治的不可变测试 seed 且不注入 App Mock，prod 不含 fixture 或测试 seed
+- 第一方服务部署归服务 deploy/base 与 environments/<env>/deploy；Ops 环境目录只做可执行装配，不维护第一方 workload/topology 注册表
+- 14×4 个服务环境入口和4个 Ops 环境装配均可独立构建
+- 删除 .qwq_output 后仍可从版本控制真相源重建配置、资源与部署包；`.qwq_output` 只保存可再生运行证据、过程记录和缓存，渲染配置、临时 `.env`、TLS 与 secret 仅能位于受控仓外 `QWQ_DEPLOY_WORK_ROOT`
+- `QWQ_DEPLOY_WORK_ROOT` 解析后必须是仓库和 `QWQ_OUTPUT_ROOT` 之外的绝对 target-scoped 目录，符号链接逃逸和对根目录的 destructive cleanup 均 fail-closed
 
-商业化冷启动阶段默认采用：
+<a id="req-004"></a>
+### REQ-004 外部 capability 与特殊资产归位
 
-- application plane：`seed-box` 是 deployment package/workload；实际成员只能从
-  `process_domain_mapping` 与 `module_package_mapping` 推导，并必须与 Docker build
-  列表和 supervisor `SERVICE_SPECS` 完全一致。
-- management / product-ops plane：`product-ops-service` 独立 workload/package，承载 `ops` domain、`/ops*` 与 `/control-plane/product*`，不再作为 `seed-box` 子进程。
-- recommendation：保留独立 `recommendation-service`（Python 打分），但可在冷启动关闭；规则推荐与交集在 `content-service` 进程内运行。
-- search：保留独立 `search-service` 作为 ES 读模型与 `/search*` 上游；冷启动可按 ES 是否可用决定启用。
-- edge-media：`realtime-gateway`、`rtc-service`、`livekit-sfu`、`coturn` 从第一天独立，不并入 `seed-box`。
-- 数据面：MongoDB、Redis scenes、Postgres、ES/OpenSearch 外置，通过 env/config 注入，允许共享或按域拆分。
-- prod-hosted 运行时四平面继续以 `edge`、`media`、`service`、`data` 为访问隔离真相源；其中 `service` 平面内的发布工作负载必须至少包含 `seed-box`、`recommendation-service`、`product-ops-service` 三个独立 release unit。
+- 每个真实外部调用形成 operations capability 到环境 Binding、adapter/workload 和 conformance evidence 的闭环；共享 capability 由唯一 owner 的 `externalDependencies` 与 consumer object 的显式 capability-use 派生，禁止外置 consumer/root 清单
+- 不存在外部服务总注册表、provider assertion 清单或 registered_only 运行项
+- gamma 外部 Provider 只选择 typed Port 对等本地替身且不使用 UI Mock/Provider override；prod 不选择 mock、fixture、本地替身、明文 secret 或无 conformance adapter
+- coturn 和 livekit 位于 Ops external workload；seed-box 数量为零，seed 由各领域服务 job 自治执行
+- legal 位于 static/legal，platform-ops 位于 control-plane，rec-model 归 recommendation-service
+- 上述特殊资产均不被扫描为领域服务或业务对象 owner
 
-## 闭环能力现状与 gap 矩阵
+<a id="req-005"></a>
+### REQ-005 唯一脚手架与治理门面
 
-| 闭环阶段 | 当前承载 | 状态 | 主要 gap | 验收证据 |
-|---|---|---|---|---|
-| 内容工程冷启动生产 | `quwoquan_data` + metadata fixtures + seed manifests | 部分 | 数据工程脚本实现深度需继续按真实文件与产物核验；锚点到内容/实体/用户的灌数链需完整 T3 证据 | data CLI gate、content seed manifest、gamma seed 报告 |
-| 内容入库与展示 | `content-service`、App content/discovery UI | 部分 | 大规模内容入库、媒体安全、search/location/tag 回填需持续验证 | content local_contract/api_integration、App user_acceptance |
-| 标签/实体锚点 | `tag-service`、`entity-service`、`search-service` | 部分 | 需在 one-box 中真实承载 tag/entity，并保证 `/homepages`、`/tag` 路由可达 | tag/entity contract、search projection tests |
-| 推荐与交集生成 | `content-service` 进程内 `runtime/recommendation` + `IntersectionService` | 部分 | 交集到行动闭环需持续补行为回流与行动完成证据 | intersection local_contract + content-service tests |
-| 行动承接 | App object page / companion action / chat/user/circle | 部分 | 约伴、关注、私信、群/圈加入等行动链路需按 CDE 分批补 UAT | App widget/user_acceptance |
-| 回流与观测 | behavior、recommend feature、`product-ops-service` metrics | 部分 | 行动完成数/关系形成数 North Star 的统一指标与 dashboard 仍需接 product-ops | runtime/ops acceptance + metrics gate |
-| 环境与部署 | `seed-box` + `product-ops-service` + standalone workloads + stackctl | 部分 | 拓扑 SSOT 与运行体曾漂移；本节点要求用门禁收口 | deployment topology gates + gamma-local/prod isomorphism |
+- new-service 只接受已存在且无 source owner 的 metadata object
+- 脚手架生成首个对象纵切、api entry、build Dockerfile、服务配置定义、公共部署基线、四环境入口与对象路径测试
+- 脚手架不生成 registry、release snapshot、README、无能力空目录或重复环境默认值
+- make verify-service-architecture 是唯一人工服务架构治理入口
+- 旧 module/process/workload/onboarding/asset profile 验证入口不再被 Make、stackctl 或 CI 调用
+- 源码树 __pycache__、pyc、pyo、pytest cache 与手工生成物数量为零
 
-## 验收意图
+<a id="req-006"></a>
+### REQ-006 三层证据与 readiness 计算
 
-- SIT：端云架构导引与 one-box 拓扑解释必须与部署真相源、metadata、feature-tree 保持一致。
-- local_contract：静态门禁验证 feature-tree、拓扑、Strangler 不变量、module mapping、entrypoint 实际承载。
-- api_integration：gamma-local 启动后验证 seed-box 关键业务路由与 product-ops 独立入口均可达。
-- user_acceptance：交集闭环主路径按后续 CDE UAT 承接，本节点仅声明路径与证据索引。
+- UAT/DOM/SIT/GWT 仅在所属节点定义，真实测试直接写稳定 `spec_ref`，不登记测试文件路径清单
+- runner 可由 `spec_ref` 定位实际测试、结果、环境和 commit/config/image 摘要
+- local_contract 覆盖对象规则、kind、mapper/provider/widget 本地行为
+- api_integration 覆盖真实 HTTP/WS、字段、错误、鉴权、存储与 adapter 边界
+- user_acceptance 覆盖 Journey/Scenario、环境行为和用户可见恢复动作
+- readiness 由 runner 结果计算，metadata 不声明 implemented/commercial-ready
+- gamma/prod 当前证据缺失时结论保持 structure-governance-complete 或更低
+
+<a id="req-007"></a>
+### REQ-007 脚手架、三层测试目录、case ID 和统一架构门禁
+
+- 脚手架、三层测试目录、case ID 和统一架构门禁。
+- 缺 gamma/prod 当前证据时，禁止声明商业就绪。
+
+## 6. 契约与依赖
+
+- 上游能力：[`runtime`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- canonical 引用：`quwoquan_service/contracts/metadata/_schemas`、`quwoquan_service/services/*/contracts`、`quwoquan_service/services/*/config/schema.yaml`、`quwoquan_service/services/*/resources`、`quwoquan_service/services/*/deploy/base`、`quwoquan_service/services/*/environments`、`quwoquan_ops/environments/{alpha,beta,gamma,prod}`、`quwoquan_ops/external`、`quwoquan_ops/environments/local_env_port_manifest.yaml`、`quwoquan_ops/environments/prod/access-isolation.yaml`、`quwoquan_service/static/legal`、`quwoquan_service/control-plane/platform-ops`、`quwoquan_ops/gate/verify_service_architecture.py`、`quwoquan_ops/gate/scaffold/new_service.py`
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 metadata 对象单轨与反向映射
+
+- GIVEN 执行“metadata 对象单轨与反向映射”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“metadata 对象单轨与反向映射”对应动作。
+- THEN context、独立对象根和 aggregate member 数量全部由服务本地契约扫描派生，不存在冻结数量注册
+- THEN 每个独立对象的 kind 均属于五类合法治理语义，实际分布由门禁报告计算
+- THEN 任意 object root 只有一个 object.yaml.kind，domain/context/object 不在文件中重复声明
+- THEN owned_entity/value_object 只作为聚合成员，不存在独立对象根
+- THEN business_object_map、对象 readiness、aggregate/entity/service 文件及全局对象 catalog 数量为零
+- THEN ContractGraph、OpenAPI 和派生对象索引可由受版本控制的 metadata 重建
+
+<a id="sit-002"></a>
+### SIT-002 服务目录、DDD 依赖与 CQRS 规则
+
+- GIVEN 执行“服务目录、DDD 依赖与 CQRS 规则”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“服务目录、DDD 依赖与 CQRS 规则”对应动作。
+- THEN 任意服务文件符合 services/<service>/internal/<context>/<object>/<layer>/file，domain 唯一来自服务 contracts/domain.yaml
+- THEN 任意声明 api_routes 的对象均有同 context/object 源码 owner，且不存在借住主对象目录或空占位的实现
+- THEN 每个源码对象有唯一 service owner，不存在跨服务 internal import
+- THEN domain 对 HTTP、数据库、MQ、配置框架和 generated transport DTO 的依赖数量为零
+- THEN infrastructure 不被 domain/application/adapters 反向依赖
+- THEN 对象 adapters/infrastructure 不被兄弟对象导入；跨对象仅经 domain/application port 或事件协作，adapter 组合只发生在 cmd
+- THEN command 写 projection/external_reference/append_only_fact update-delete 的违规数量为零
+- THEN query 使用 named reader/slice，runtime session 绑定同 packet session owner
+- THEN generated 只存在于服务根 generated/<context>/<object>，internal 下生成产物数量为零
+- THEN 启用 errors codegen 的服务逐对象一一生成，禁止 domain wildcard 或多对象错误聚合到主对象包
+- THEN local_contract/api_integration 文件均位于自身 context/object 测试路径，共享启动支持仅位于 tests/support，且 `internal/**`、`cmd/**` 和 production package 不含业务测试文件
+- THEN 服务目录下旧 configs、deploy/overlays 和 release snapshot 数量为零
+- THEN Go 服务共享唯一 `quwoquan_service/go.mod` 且无嵌套 module/go.work；Python 服务在自身目录拥有 `pyproject.toml`
+
+<a id="sit-003"></a>
+### SIT-003 配置、四环境与唯一运行拓扑
+
+- GIVEN 执行“配置、四环境与唯一运行拓扑”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“配置、四环境与唯一运行拓扑”对应动作。
+- THEN 每个服务配置键只在本服务 config/schema.yaml 定义，四环境 config.yaml 只保存 override、secret reference 与 external binding
+- THEN 环境集合精确等于 alpha/beta/gamma/prod，不存在 dev 或 prod-gray
+- THEN prod gray 仅是 rollout stage
+- THEN 每个服务以 environments/<env> 作为该环境唯一入口，环境之间不存在引用或继承
+- THEN 公共资源与环境 seed/release/artifact 引用职责分离；gamma 只消费环境自治的不可变测试 seed 且不注入 App Mock，prod 不含 fixture 或测试 seed
+- THEN 14×4 个服务环境入口和4个 Ops 环境装配均可独立构建
+- THEN 删除 .qwq_output 后仍可从版本控制真相源重建配置、资源与部署包，`.qwq_output` 只保存可再生运行证据、过程记录和缓存，渲染配置、临时 `.env`、TLS 与 secret 位于受控仓外 `QWQ_DEPLOY_WORK_ROOT`
+- THEN `QWQ_DEPLOY_WORK_ROOT` 解析后为仓库和 `QWQ_OUTPUT_ROOT` 外的绝对 target-scoped 目录，符号链接逃逸和对根目录的 destructive cleanup 均 fail-closed
+
+<a id="sit-004"></a>
+### SIT-004 外部 capability 与特殊资产归位
+
+- GIVEN 执行“外部 capability 与特殊资产归位”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“外部 capability 与特殊资产归位”对应动作。
+- THEN 每个真实外部调用形成 operations capability 到环境 Binding、adapter/workload 和 conformance evidence 的闭环，且共享 capability 仅由唯一 owner 的 `externalDependencies` 与 consumer object 的显式 capability-use 派生
+- THEN 不存在外部服务总注册表、provider assertion 清单或 registered_only 运行项
+- THEN gamma 外部 Provider 只选择 typed Port 对等本地替身且不使用 UI Mock/Provider override；prod 不选择 mock、fixture、本地替身、明文 secret 或无 conformance adapter
+- THEN coturn 和 livekit 位于 Ops external workload，seed-box 不存在且 seed 由服务 job 自治执行
+- THEN legal 位于 static/legal，platform-ops 位于 control-plane，rec-model 归 recommendation-service
+- THEN 上述特殊资产均不被扫描为领域服务或业务对象 owner
+
+<a id="sit-005"></a>
+### SIT-005 唯一脚手架与治理门面
+
+- GIVEN 执行“唯一脚手架与治理门面”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“唯一脚手架与治理门面”对应动作。
+- THEN new-service 只接受已存在且无 source owner 的 metadata object
+- THEN 脚手架生成首个对象纵切、api entry、build Dockerfile、配置定义、部署基线、四环境入口与对象路径测试
+- THEN 脚手架不生成 registry、release snapshot、README、无能力空目录或重复环境默认值
+- THEN make verify-service-architecture 是唯一人工服务架构治理入口
+- THEN 旧 module/process/workload/onboarding/asset profile 验证入口不再被 Make、stackctl 或 CI 调用
+- THEN 源码树 __pycache__、pyc、pyo、pytest cache 与手工生成物数量为零
+
+<a id="sit-006"></a>
+### SIT-006 三层证据与 readiness 计算
+
+- GIVEN 执行“三层证据与 readiness 计算”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“三层证据与 readiness 计算”对应动作。
+- THEN UAT/DOM/SIT/GWT 仅在所属节点定义，真实测试直接写稳定 `spec_ref`，不登记测试文件路径清单
+- THEN runner 可由 `spec_ref` 定位实际测试、结果、环境和 commit/config/image 摘要
+- THEN local_contract 覆盖对象规则、kind、mapper/provider/widget 本地行为
+- THEN api_integration 覆盖真实 HTTP/WS、字段、错误、鉴权、存储与 adapter 边界
+- THEN user_acceptance 覆盖 Journey/Scenario、环境行为和用户可见恢复动作
+- THEN readiness 由 runner 结果计算，metadata 不声明 implemented/commercial-ready
+- THEN gamma/prod 当前证据缺失时结论保持 structure-governance-complete 或更低
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 metadata 对象单轨与反向映射
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：对象身份、kind 与聚合成员从服务本地契约唯一发现且可反向映射
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 服务目录、DDD 依赖与 CQRS 规则
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：任意服务文件符合 services/<service>/internal/<context>/<object>/<layer>/file，domain 唯一来自服务 contracts/domain.yaml
+- 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 配置、四环境与唯一运行拓扑
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：每个服务的配置键只在本服务 config/schema.yaml 定义，四环境文件只保存 override、secret reference 与 external binding
+- 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 外部 capability 与特殊资产归位
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：每个真实外部调用形成 operations capability 到 environment binding、adapter/workload 和 conformance evidence 的闭环
+- 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-005"></a>
+### OPEN-005 唯一脚手架与治理门面
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：new-service 只接受已存在且无 source owner 的 metadata object
+- 完成判定：`SIT-005` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-006"></a>
+### OPEN-006 三层证据与 readiness 计算
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：acceptance 仅登记稳定 case ID，不登记测试文件路径
+- 完成判定：`SIT-006` 对应行为满足且真实测试 `spec_ref` 有效

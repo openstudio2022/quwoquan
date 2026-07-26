@@ -22,7 +22,7 @@ VERSIONED_INLINE = re.compile(
     r"\b(?:quwoquan_(?:data|service)|quwoquan\.[A-Za-z0-9_.-]+|"
     r"environment-topology|media-delivery-manifest|local-env-port-manifest|"
     r"prod-plane-access-isolation|legal-static|qwq\.runtime_shared_package|"
-    r"app_remote_config|prefab_user_provenance|feed_patch|assistant_stream_event|"
+    r"app_remote_config|feed_patch|assistant_stream_event|"
     r"qwq-rich-md|release_desired_state|"
     r"content_import_report|homepage_import_report)"
     r"[A-Za-z0-9_.-]*(?:/[0-9]+|\.v[0-9]+|\.m[0-9]+)\b"

@@ -73,7 +73,10 @@ class UrllibFilterCatalogHttpTransport:
             else ssl.create_default_context()
         )
         original_getaddrinfo = socket.getaddrinfo
-        if self._insecure_local_tls and host.endswith(_LOCAL_TLS_HOST_SUFFIX):
+        resolve_local_public_host = (
+            self._insecure_local_tls and host.endswith(_LOCAL_TLS_HOST_SUFFIX)
+        )
+        if resolve_local_public_host:
             socket.getaddrinfo = _loopback_getaddrinfo(original_getaddrinfo)
         try:
             response_request = request.Request(
@@ -83,11 +86,22 @@ class UrllibFilterCatalogHttpTransport:
                 method=method,
             )
             try:
-                with request.urlopen(
-                    response_request,
-                    timeout=PUBLISH_REQUEST_TIMEOUT_SECONDS,
-                    context=context,
-                ) as response:
+                if resolve_local_public_host:
+                    opener = request.build_opener(
+                        request.ProxyHandler({}),
+                        request.HTTPSHandler(context=context),
+                    )
+                    response = opener.open(
+                        response_request,
+                        timeout=PUBLISH_REQUEST_TIMEOUT_SECONDS,
+                    )
+                else:
+                    response = request.urlopen(
+                        response_request,
+                        timeout=PUBLISH_REQUEST_TIMEOUT_SECONDS,
+                        context=context,
+                    )
+                with response:
                     return FilterCatalogHttpResponse(
                         status=response.status,
                         body=_decode_json_object(response.read(), response.status),

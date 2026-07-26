@@ -1,0 +1,259 @@
+description: 'FilterCatalogRelease 的 Data publish 命令面与 App public active Reader。
+
+  目录以不可变 release 单轨发布，Stage/Activate/Rollback 不接受 App 调用。
+
+  '
+commercial_defaults:
+  status: blocked
+  block_reason: 默认阻断未显式携带 FilterCatalogRelease 商业证据的新增操作；本 packet 四条路由逐条声明 ready。
+  gap_id: CONTENT_FILTER_CATALOG_UNDECLARED_OPERATION
+  target_story: filter-catalog-release
+api_routes:
+- method: POST
+  path: /internal/content/filter-catalog-releases
+  operation: StageFilterCatalogRelease
+  actor: account
+  application:
+    kind: command
+    facet: FilterCatalogReleaseCommandFacet
+    method: stage
+    aggregate_owner: FilterCatalogRelease
+    mutation_target: FilterCatalogRelease
+    invariant_target: FilterCatalogRelease
+  authorization:
+    principal: service
+    scopes:
+    - content.filter_catalog.manage
+    ownership_policy: internal_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.filter_catalog_invalid_argument
+  - CONTENT.USER.filter_catalog_digest_mismatch
+  - CONTENT.USER.filter_catalog_idempotency_conflict
+  - CONTENT.SYSTEM.filter_catalog_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_filter_catalog_stage
+    trace: true
+    attributes:
+    - outcome
+    - replayed
+    - category_count
+    - preset_count
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  description: '校验并落一条不可变 staged release；服务端重算 canonicalDigest。
+
+    同 digest 重放返回首次 release，同 Idempotency-Key 不同 payload 返回冲突。
+
+    '
+  request_entity: FilterCatalogRelease
+  request_fields:
+  - releaseId
+  - sourceOwner
+  - canonicalDigest
+  - categories
+  - presets
+  - recommendedFallbackPresetIds
+  response_entity: FilterCatalogRelease
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+- method: POST
+  path: /internal/content/filter-catalog-releases/{releaseId}:activate
+  operation: ActivateFilterCatalogRelease
+  actor: account
+  application:
+    kind: command
+    facet: FilterCatalogReleaseCommandFacet
+    method: activate
+    aggregate_owner: FilterCatalogRelease
+    mutation_target: FilterCatalogRelease
+    invariant_target: FilterCatalogRelease
+  authorization:
+    principal: service
+    scopes:
+    - content.filter_catalog.manage
+    ownership_policy: internal_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.filter_catalog_release_not_found
+  - CONTENT.USER.filter_catalog_invalid_transition
+  - CONTENT.USER.filter_catalog_idempotency_conflict
+  - CONTENT.SYSTEM.filter_catalog_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_filter_catalog_activate
+    trace: true
+    attributes:
+    - outcome
+    - replayed
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  description: staged release 激活；旧 active 与目标 release 在同一事务完成单 active 切换。
+  response_entity: FilterCatalogRelease
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+- method: POST
+  path: /internal/content/filter-catalog-releases/{releaseId}:rollback
+  operation: RollbackFilterCatalogRelease
+  actor: account
+  application:
+    kind: command
+    facet: FilterCatalogReleaseCommandFacet
+    method: rollback
+    aggregate_owner: FilterCatalogRelease
+    mutation_target: FilterCatalogRelease
+    invariant_target: FilterCatalogRelease
+  authorization:
+    principal: service
+    scopes:
+    - content.filter_catalog.manage
+    ownership_policy: internal_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.filter_catalog_release_not_found
+  - CONTENT.USER.filter_catalog_invalid_transition
+  - CONTENT.USER.filter_catalog_idempotency_conflict
+  - CONTENT.SYSTEM.filter_catalog_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_filter_catalog_rollback
+    trace: true
+    attributes:
+    - outcome
+    - replayed
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  description: retired release 回滚为 active；当前 active 在同一事务进入 retired。
+  response_entity: FilterCatalogRelease
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+- method: GET
+  path: /content/filter-catalog
+  operation: GetActiveFilterCatalog
+  actor: none
+  application:
+    kind: query
+    facet: FilterCatalogQueryFacet
+    method: getActiveFilterCatalog
+    reader: ActiveFilterCatalogReader
+    slice: FilterCatalogSlice
+  authorization:
+    principal: public
+    ownership_policy: active_filter_catalog
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 800
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CONTENT.SYSTEM.filter_catalog_unavailable
+  - CONTENT.SYSTEM.filter_catalog_storage_unavailable
+  privacy:
+    request_classification: PUBLIC
+    response_classification: PUBLIC
+    log_policy: metadata_only
+  telemetry:
+    metric: content_filter_catalog_get
+    trace: true
+    attributes:
+    - outcome
+    - release_id_hash
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+  client_contract:
+    dart_import: ../content/filter_catalog_facets.dart
+    request_type: FilterCatalogQuery
+    response_type: FilterCatalogSnapshot
+    request_encoder: encodeFilterCatalogQuery
+    response_decoder: decodeFilterCatalogSnapshot
+  description: 公开读取当前完整 active release；内部字段由字段策略删除。
+  response_entity: FilterCatalogSlice
+  response_body: FilterCatalogSlice
+  response_body_kind: object
+  security:
+    auth_mode: public
+    principal: public
+    token_transport: none
+    anonymous_policy: allow
+    visibility: public
+consumers:
+- name: quwoquan-app
+  capabilities:
+  - get_active_filter_catalog
+- name: data-publish-pipeline
+  capabilities:
+  - stage_filter_catalog_release
+  - activate_filter_catalog_release
+  - rollback_filter_catalog_release
+contract_test:
+  mock_strategy:
+    service_side:
+      description: 真实 Mongo 验证目录不变量、digest 幂等、单 active 切换与 rollback。
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+      scenarios:
+      - name: stage_digest_idempotent
+        route: POST /internal/content/filter-catalog-releases
+        assertions:
+        - 同 canonicalDigest 重复 Stage 返回首次 release
+        - 非法分类引用、重复 ID、越界参数和 digest 不匹配全部拒绝
+      - name: activate_and_rollback_single_active
+        route: POST /internal/content/filter-catalog-releases/{releaseId}:activate
+        assertions:
+        - 任一时刻只有一个 active release
+        - rollback 只激活 retired release
+      - name: public_active_reader
+        route: GET /content/filter-catalog
+        assertions:
+        - 只返回完整 active release
+        - 不暴露 sourceOwner、version 或 receipt

@@ -17,10 +17,10 @@ from content.release.canonical.baseline_release import build_empty_baseline_rele
 from verify import verify_release_lifecycle as lifecycle
 
 
-RELEASE_ID = "20260715--travel-homepage-coverage--cn-zhejiang-sichuan--canary-003"
+RELEASE_ID = "20260715--travel-homepage-coverage--test-release-a--003"
 EXECUTION_IDS = [
-    "20260715--travel-homepage-coverage--cn-sichuan--canary-007",
-    "20260715--travel-homepage-coverage--cn-zhejiang--canary-004",
+    "20260715--travel-homepage-coverage--test-region-b--pilot-007",
+    "20260715--travel-homepage-coverage--test-region-a--pilot-004",
 ]
 
 
@@ -39,7 +39,6 @@ def _fixture(tmp_path: Path) -> Path:
             "releaseKind": "content",
             "canonicalMerkle": "sha256:" + "a" * 64,
             "executionIds": EXECUTION_IDS,
-            "rolloutMilestone": "canary",
             "sourceDigests": [current_source_digest().to_document()],
         },
     )
@@ -50,20 +49,19 @@ def _fixture(tmp_path: Path) -> Path:
             "releaseId": RELEASE_ID,
             "desiredRefs": {
                 "creators": [],
-                "entities": ["地点/景区/普陀山"],
+                "entities": ["地点/景区/测试实体甲"],
                 "posts": [],
                 "tags": ["Topic/旅行"],
             },
         },
     )
     _write_json(
-        release / "attestations/aggregate.json",
+        release / "attestations/release.json",
         {
-            "schema": "quwoquan_data.aggregate_release_attestation",
+            "schema": "quwoquan_data.release_attestation",
             "releaseId": RELEASE_ID,
             "releaseKind": "content",
             "executionIds": EXECUTION_IDS,
-            "rolloutMilestone": "canary",
             "entityCount": 1,
             "postCount": 0,
             "creatorCount": 0,
@@ -91,7 +89,7 @@ def test_release_lifecycle__rejects_attestation_payload_drift__local_contract(
 ) -> None:
     release = _fixture(tmp_path)
     monkeypatch.setattr(lifecycle, "RELEASE_ROOT", tmp_path)
-    path = release / "attestations/aggregate.json"
+    path = release / "attestations/release.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["payloadSha256"] = "sha256:" + "0" * 64
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
@@ -107,7 +105,7 @@ def test_release_lifecycle__accepts_create_once_empty_baseline__local_contract(
     publish_root = tmp_path / "publish"
     publish_root.mkdir()
     release_root = tmp_path / "releases"
-    baseline_id = "20260715--travel-homepage-coverage--cn-zhejiang-sichuan--baseline-001"
+    baseline_id = "20260715--travel-homepage-coverage--test-baseline-a--001"
 
     created = build_empty_baseline_release(
         publish_root=publish_root,

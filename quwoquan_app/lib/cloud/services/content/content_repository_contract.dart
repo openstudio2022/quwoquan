@@ -11,6 +11,14 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const String kFeedSortRecommend = 'recommend';
 
+String contentPostDeleteIdempotencyKey(String postId) {
+  final normalized = postId.trim();
+  if (normalized.isEmpty) {
+    throw ArgumentError.value(postId, 'postId', 'must not be empty');
+  }
+  return 'content.post.delete:$normalized';
+}
+
 /// DiscoveryFeed named query：只暴露发现/首页分页 Slice。
 abstract interface class ContentDiscoveryFeedQuery {
   /// [channelId] 首页频道路由标识（home_channels.feed_query.channel 真相源）。
@@ -81,7 +89,10 @@ abstract interface class ContentAuthorPostsReader {
 }
 
 abstract interface class ContentWriteRepository {
-  Future<void> deletePost({required String postId});
+  Future<void> deletePost({
+    required String postId,
+    required String idempotencyKey,
+  });
 
   Future<PostBaseDto> updatePostSettings({
     required String postId,

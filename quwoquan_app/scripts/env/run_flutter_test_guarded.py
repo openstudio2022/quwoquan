@@ -27,7 +27,6 @@ RETRY_MARKERS = (
   "Waiting for another flutter command to release the startup lock",
   "Building native assets failed",
   "Connection closed while receiving data",
-  "HttpException",
   "release-assets.githubusercontent.com",
   "PathNotFoundException",
 )

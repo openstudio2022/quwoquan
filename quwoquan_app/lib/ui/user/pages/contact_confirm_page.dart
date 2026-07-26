@@ -95,7 +95,7 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
               pageName: 'ContactConfirmPage',
               targetType: 'user',
               targetKey: widget.targetUserId,
-              payload: <String, dynamic>{'source': widget.source},
+              payload: <String, Object?>{'source': widget.source},
             ),
       );
     } catch (error) {

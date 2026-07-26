@@ -101,7 +101,7 @@ void main() {
 
   test('四个已达标原文件不再进入 file_line_budget allowlist', () {
     final allowlist = _readRepoFile(
-      'specs/gates/file_line_budget_allowlist.yaml',
+      'quwoquan_ops/policies/gates/file_line_budget_allowlist.yaml',
     );
     for (final files in groups.values) {
       expect(

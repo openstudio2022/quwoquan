@@ -54,9 +54,9 @@ type Coverage struct {
 
 func Build(catalog *ast.Catalog) *ContractGraph {
 	result := &ContractGraph{
-		Objects:     append([]ast.Object(nil), catalog.Objects...),
-		Operations:  append([]ast.Operation(nil), catalog.Operations...),
-		Projections: append([]ast.Projection(nil), catalog.Projections...),
+		Objects:     append([]ast.Object{}, catalog.Objects...),
+		Operations:  append([]ast.Operation{}, catalog.Operations...),
+		Projections: append([]ast.Projection{}, catalog.Projections...),
 		BusinessObjectMaps: append(
 			[]ast.BusinessObjectMap{},
 			catalog.BusinessObjectMaps...,
@@ -65,8 +65,8 @@ func Build(catalog *ast.Catalog) *ContractGraph {
 			[]ast.ObjectReadinessEvidence{},
 			catalog.ReadinessEvidence...,
 		),
-		Sources:   append([]ast.SourceDigest(nil), catalog.Sources...),
-		Documents: append([]ast.SourceDocument(nil), catalog.Documents...),
+		Sources:   append([]ast.SourceDigest{}, catalog.Sources...),
+		Documents: append([]ast.SourceDocument{}, catalog.Documents...),
 	}
 	sort.Slice(result.Objects, func(i, j int) bool {
 		return result.Objects[i].ID < result.Objects[j].ID
@@ -224,8 +224,8 @@ func objectContractReady(
 ) bool {
 	if len(operations) == 0 {
 		// append_only_fact 允许零公开 operation：服务端内生事实（如已读回执、
-		// 投递 attempt）由所属聚合命令在事务内追加，写入语义经 business_object_map
-		// 的 append_only_sink access 与 event_source 关系表达。
+		// 投递 attempt）由所属聚合命令在事务内追加，写入语义由
+		// 对象本地 events/operations 的 append-only 关系表达。
 		if object.Kind == ast.ObjectKindProjection ||
 			object.Kind == ast.ObjectKindExternalReference ||
 			object.Kind == ast.ObjectKindAppendOnlyFact {

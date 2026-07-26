@@ -220,7 +220,7 @@ def main() -> int:
     args = parser.parse_args()
 
     service_dir = SERVICE_ROOT / args.service
-    dockerfile = service_dir / "deploy" / "Dockerfile"
+    dockerfile = service_dir / "build" / "Dockerfile"
     report_path = args.package_dir / "report.json"
     if not service_dir.is_dir() or not dockerfile.is_file():
         raise SystemExit(

@@ -13,17 +13,20 @@ void main() {
       tester,
       ContactProfileQueryFake(
         searchItems: <SocialRelationSearchItemView>[
-          SocialRelationSearchItemView.fromMap(<String, dynamic>{
-            'subAccountId': 'persona-alice',
-            'username': 'alice',
-            'displayName': 'Alice',
-            'relationshipCapability': <String, dynamic>{
-              'relationState': 'not_following',
-              'canFollow': true,
-              'canUnfollow': false,
-              'canOpenConversation': false,
-            },
-          }),
+          const SocialRelationSearchItemView(
+            subAccountId: 'persona-alice',
+            username: 'alice',
+            displayName: 'Alice',
+            chatAvailable: false,
+            relationshipCapability: SocialRelationshipCapabilityView(
+              relationState: 'not_following',
+              canFollow: true,
+              canUnfollow: false,
+              canOpenConversation: false,
+              canStartVoiceCall: false,
+              canStartVideoCall: false,
+            ),
+          ),
         ],
       ),
     );

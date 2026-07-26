@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
 import '../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../support/fixtures/author_impact_fixtures.dart';
 
 Widget _host(AuthorImpactSummary summary, {required bool isMine}) {
   return ProviderScope(
@@ -26,8 +28,8 @@ Widget _host(AuthorImpactSummary summary, {required bool isMine}) {
       profileQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),
-      authorImpactQueryProvider.overrideWithValue(
-        const MockUserProfileRepository(),
+      authorImpactQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
       ),
     ],
     child: MaterialApp(
@@ -92,7 +94,14 @@ void main() {
   group('AuthorImpactCard', () {
     testWidgets('mine 空摘要展示「我打动的人」鼓励发布空态，无事实行', (tester) async {
       await tester.pumpWidget(
-        _host(AuthorImpactSummary(authorId: 'u1'), isMine: true),
+        _host(
+          AuthorImpactSummary(
+            authorId: 'u1',
+            total: 0,
+            items: const <AuthorImpactItem>[],
+          ),
+          isMine: true,
+        ),
       );
 
       expect(find.text(UITextConstants.profileImpactTitleMine), findsOneWidget);
@@ -102,7 +111,14 @@ void main() {
 
     testWidgets('other 空摘要展示稳定空态，不再整卡消失', (tester) async {
       await tester.pumpWidget(
-        _host(AuthorImpactSummary(authorId: 'u2'), isMine: false),
+        _host(
+          AuthorImpactSummary(
+            authorId: 'u2',
+            total: 0,
+            items: const <AuthorImpactItem>[],
+          ),
+          isMine: false,
+        ),
       );
 
       expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
@@ -118,19 +134,23 @@ void main() {
         authorId: 'u2',
         total: 35,
         items: <AuthorImpactItem>[
-          AuthorImpactItem(
+          authorImpactItemFixture(
             helpType: 'community',
             action: 'join',
             intersectionDimension: 'interest',
+            tagRef: 'interest/ai-product',
             source: 'source:circle_join',
             count: 23,
             primaryText: '23人加入相关圈子',
             subtitleText: '来自 AI 产品圈',
           ),
-          AuthorImpactItem(
+          authorImpactItemFixture(
+            impactId: 'impact-content-share-001',
             helpType: 'decision',
             action: 'share',
             intersectionDimension: 'content',
+            tagRef: 'content/ai-product-guide',
+            source: 'source:content_share',
             count: 12,
             primaryText: '12人转发了TA的内容',
             subtitleText: '来自内容转发',
@@ -156,10 +176,11 @@ void main() {
         authorId: 'u2',
         total: 23,
         items: <AuthorImpactItem>[
-          AuthorImpactItem(
+          authorImpactItemFixture(
             helpType: 'community',
             action: 'join',
             intersectionDimension: 'interest',
+            tagRef: 'interest/ai-product',
             source: 'source:circle_join',
             count: 23,
             primaryText: '23人加入相关圈子',
@@ -186,12 +207,18 @@ void main() {
         total: 40,
         items: <AuthorImpactItem>[
           for (var i = 0; i < 5; i++)
-            AuthorImpactItem(
-              helpType: 'kind$i',
-              action: 'a',
-              intersectionDimension: 'content',
+            authorImpactItemFixture(
+              impactId: 'impact-preview-$i',
+              helpType: i.isEven ? 'community' : 'decision',
+              action: i.isEven ? 'join' : 'share',
+              intersectionDimension: i.isEven ? 'interest' : 'content',
+              tagRef: i.isEven
+                  ? 'interest/photography'
+                  : 'content/city-cycling-guide',
+              source: i.isEven ? 'source:circle_join' : 'source:content_share',
               count: 10 - i,
               primaryText: '事实行 $i',
+              subtitleText: '来自已验证影响事实 $i',
             ),
         ],
       );
@@ -211,10 +238,11 @@ void main() {
         authorId: 'u2',
         total: 23,
         items: <AuthorImpactItem>[
-          AuthorImpactItem(
+          authorImpactItemFixture(
             helpType: 'community',
             action: 'join',
             intersectionDimension: 'interest',
+            tagRef: 'interest/ai-product',
             source: 'source:circle_join',
             count: 23,
             primaryText: '23人加入相关圈子',
@@ -267,10 +295,11 @@ void main() {
         authorId: 'u2',
         total: 23,
         items: <AuthorImpactItem>[
-          AuthorImpactItem(
+          authorImpactItemFixture(
             helpType: 'community',
             action: 'join',
             intersectionDimension: 'interest',
+            tagRef: 'interest/ai-product',
             source: 'source:circle_join',
             count: 23,
             primaryText: '23人加入相关圈子',
@@ -298,8 +327,8 @@ void main() {
             profileQueryProvider.overrideWith(
               (ref, surface) => const MockUserProfileRepository(),
             ),
-            authorImpactQueryProvider.overrideWithValue(
-              const MockUserProfileRepository(),
+            authorImpactQueryProvider.overrideWith(
+              (ref, surface) => const MockUserProfileRepository(),
             ),
           ],
           child: MaterialApp.router(
@@ -346,10 +375,12 @@ void main() {
         authorId: 'u2',
         total: 12,
         items: <AuthorImpactItem>[
-          AuthorImpactItem(
+          authorImpactItemFixture(
+            impactId: 'impact-content-share-001',
             helpType: 'decision',
             action: 'share',
             intersectionDimension: 'content',
+            tagRef: 'content/ai-product-guide',
             source: 'source:repost',
             count: 12,
             primaryText: '12人转发了TA的内容',
@@ -364,8 +395,8 @@ void main() {
             profileQueryProvider.overrideWith(
               (ref, surface) => const MockUserProfileRepository(),
             ),
-            authorImpactQueryProvider.overrideWithValue(
-              const MockUserProfileRepository(),
+            authorImpactQueryProvider.overrideWith(
+              (ref, surface) => const MockUserProfileRepository(),
             ),
           ],
           child: _host(summary, isMine: false),

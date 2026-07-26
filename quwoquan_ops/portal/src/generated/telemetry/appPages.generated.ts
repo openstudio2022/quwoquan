@@ -402,6 +402,11 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
+      "page_name": "interest_onboarding",
+      "route_id": "interestOnboarding"
+    },
+    {
+      "collect_page_access": true,
       "page_name": "profile_edit",
       "route_id": "profileEdit"
     },

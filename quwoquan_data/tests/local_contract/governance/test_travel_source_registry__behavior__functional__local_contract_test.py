@@ -20,6 +20,7 @@ from governance.coverage.source_registry import (  # noqa: E402
     resolve_travel_source_runtime,
     verify_travel_source_registry,
 )
+from content.source.fetch_text import SUPPORTED_TEXT_EXTRACTORS  # noqa: E402
 
 
 def test_repository_travel_source_registry_is_valid():
@@ -27,14 +28,7 @@ def test_repository_travel_source_registry_is_valid():
     assert data["schema"] == "quwoquan.travel_source_registry"
     assert data["vertical"] == "travel"
     assert verify_travel_source_registry(
-        allowed_extractors={
-            "wikipedia_api",
-            "baidu_baike_html",
-            "toutiao_baike_html",
-            "qunar_html",
-            "static_official_html",
-            "generic_html",
-        }
+        allowed_extractors=set(SUPPORTED_TEXT_EXTRACTORS)
     ) == []
 
 
@@ -56,9 +50,9 @@ sites:
     qualityTier: A
 """
     tmp = Path(tempfile.mkdtemp(prefix="travel_source_registry_"))
-    registry = tmp / "quwoquan_data" / "verticals" / "travel" / "sources"
+    registry = tmp / "quwoquan_data" / "verticals" / "travel"
     registry.mkdir(parents=True, exist_ok=True)
-    path = registry / "source_registry.yaml"
+    path = registry / "providers.yaml"
     path.write_text(text, encoding="utf-8")
 
     from governance.coverage import source_registry as sr
@@ -145,6 +139,7 @@ def test_discovery_strategy_is_content_first_not_author_first():
         "pinterest_travel_reference": "content_search",
         "qunar_guide": "site_listing_scan",
         "ctrip_travelogue": "site_listing_scan",
+        "ctrip_sight_guide": "content_search",
         "mafengwo_travelogue": "site_listing_scan",
         "tuchong_community_reference": "site_listing_scan",
         "tuchong_stock_authorized": "licensed_asset_manifest",
@@ -170,12 +165,16 @@ def test_discovery_strategy_is_content_first_not_author_first():
 def test_article_commercial_onboarding_summary_is_explicit():
     summary = build_article_commercial_onboarding_summary()
     counts = summary["admissionCounts"]
-    assert summary["siteCount"] == 7, summary
-    assert counts["commercial_release"] == 2, summary
+    assert summary["siteCount"] == 8, summary
+    assert counts["commercial_release"] == 3, summary
     assert counts["controlled_trial"] == 2, summary
     assert counts["reference_only"] == 3, summary
     assert counts["blocked"] == 0, summary
-    assert set(summary["sharedCommercialPoolSites"]) == {"wikivoyage_zh", "qunar_guide"}, summary
+    assert set(summary["sharedCommercialPoolSites"]) == {
+        "wikivoyage_zh",
+        "qunar_guide",
+        "ctrip_sight_guide",
+    }, summary
 
 
 def _run_all() -> None:

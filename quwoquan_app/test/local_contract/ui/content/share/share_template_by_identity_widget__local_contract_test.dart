@@ -588,7 +588,7 @@ void main() {
               ownerUserId: 'owner_share',
               displayName: '分享测试分身',
               avatarUrl: '',
-              personaContextVersion: 'ctx_share',
+              contextVersion: 1,
             ),
           ),
         ],

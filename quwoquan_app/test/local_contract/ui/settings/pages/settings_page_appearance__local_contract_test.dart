@@ -468,11 +468,12 @@ void main() {
             .first,
       );
       expect(pushSwitchAfter.value, isTrue);
-      expect(
-        find.text(UITextConstants.settingsUpdateFailedToast),
-        findsOneWidget,
-      );
-      await tester.pump(const Duration(seconds: 4));
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.text(UITextConstants.operationFailed), findsOneWidget);
+      expect(find.text(UITextConstants.operationFailedRetry), findsOneWidget);
+      await tester.tap(find.text(UITextConstants.cancel));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
     });
 
     testWidgets('远端吊销失败仍清除本机凭证，并写入结构化异常记录', (tester) async {
@@ -865,6 +866,9 @@ final class _EmptyPushEndpointGateway implements PushEndpointGateway {
 
   @override
   Future<void> queueActiveEndpointRemovals() async {}
+
+  @override
+  Future<void> purgeForTerminalAccountClosure() async {}
 
   @override
   Future<List<PushEndpointMutation>> readPendingMutations() async =>

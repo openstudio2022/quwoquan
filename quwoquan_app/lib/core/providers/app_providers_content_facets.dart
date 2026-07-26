@@ -29,24 +29,19 @@ final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
     });
   }
 
-  final adapter = RemoteContentRepository(
+  final facets = AppProductionComposition.contentFacets(
     httpClient: ref.watch(cloudHttpClientProvider),
     blockedKeywordsLoader: loadBlockedKeywords,
-  );
-  final cached = CachedContentRepository(
-    readDelegate: adapter,
-    writeDelegate: adapter,
     postCache: ref.watch(postObjectCacheProvider),
     querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
-    blockedKeywordsLoader: loadBlockedKeywords,
     userProfileCache: ref.watch(userProfileCacheProvider),
     telemetrySink: ref.watch(cacheTelemetrySinkProvider),
   );
   return _ContentFacets(
-    read: cached,
-    write: cached,
-    engagement: adapter,
-    config: adapter,
+    read: facets.read,
+    write: facets.write,
+    engagement: facets.engagement,
+    config: facets.config,
   );
 });
 
@@ -75,7 +70,8 @@ final contentEngagementRepositoryProvider =
     );
 
 ContentPostReactionFacet _productionPostReactionFacet(Ref ref) {
-  return RemoteContentPostReactionFacet(
+  return AppProductionComposition.generatedAdapter<ContentPostReactionFacet>(
+    AppProductionAdapter.contentPostReaction,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, {required command}) {
       if (command) {
@@ -99,7 +95,10 @@ final contentPostReactionFacetProvider = Provider<ContentPostReactionFacet>(
 
 final createContentPostPublicationWriterProvider =
     Provider<ContentPostPublicationWriter>((ref) {
-      return RemoteContentPostPublicationWriter(
+      return AppProductionComposition.generatedAdapter<
+        ContentPostPublicationWriter
+      >(
+        AppProductionAdapter.contentPostPublication,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, idempotencyKey) =>
             _contentCommandInvocationContext(
@@ -110,11 +109,9 @@ final createContentPostPublicationWriterProvider =
       );
     });
 
-RemoteContentCommentFacet _remoteContentCommentFacet(
-  Ref ref,
-  AppUiSurface surface,
-) {
-  return RemoteContentCommentFacet(
+ContentCommentFacet _remoteContentCommentFacet(Ref ref, AppUiSurface surface) {
+  return AppProductionComposition.generatedAdapter<ContentCommentFacet>(
+    AppProductionAdapter.contentComment,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, {required command}) {
       if (!command) {
@@ -157,7 +154,10 @@ final contentConfigRepositoryProvider = Provider<ContentConfigRepository>(
 
 final _imageEditorFilterCatalogQueryProvider =
     Provider<ContentFilterCatalogQuery>((ref) {
-      return RemoteFilterCatalogQuery(
+      return AppProductionComposition.generatedAdapter<
+        ContentFilterCatalogQuery
+      >(
+        AppProductionAdapter.filterCatalog,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId) => _contentQueryInvocationContext(
           ref,
@@ -254,27 +254,26 @@ final class _AppTelemetryFilterCatalogResolutionObserver
   }
 }
 
-RemoteContentMediaFacet _remoteContentMediaFacet(
-  Ref ref,
-  AppUiSurface surface,
-) => RemoteContentMediaFacet(
-  client: ref.watch(generatedCloudOperationClientProvider),
-  invocationContext: (clientPageId, {required command}) {
-    final base = _contentQueryInvocationContext(
-      ref,
-      surface: surface,
-      clientPageId: clientPageId,
+ContentMediaFacet _remoteContentMediaFacet(Ref ref, AppUiSurface surface) =>
+    AppProductionComposition.generatedAdapter<ContentMediaFacet>(
+      AppProductionAdapter.contentMedia,
+      client: ref.watch(generatedCloudOperationClientProvider),
+      invocationContext: (clientPageId, {required command}) {
+        final base = _contentQueryInvocationContext(
+          ref,
+          surface: surface,
+          clientPageId: clientPageId,
+        );
+        if (!command) return base;
+        return CloudOperationInvocationContext(
+          surfaceId: base.surfaceId,
+          clientPageId: base.clientPageId,
+          routeId: base.routeId,
+          actor: base.actor,
+          idempotencyKey: AppTraceContextStore.instance.newRequestId(),
+        );
+      },
     );
-    if (!command) return base;
-    return CloudOperationInvocationContext(
-      surfaceId: base.surfaceId,
-      clientPageId: base.clientPageId,
-      routeId: base.routeId,
-      actor: base.actor,
-      idempotencyKey: AppTraceContextStore.instance.newRequestId(),
-    );
-  },
-);
 
 ContentMediaFacet _productionContentMediaFacet(Ref ref, AppUiSurface surface) {
   return _remoteContentMediaFacet(ref, surface);
@@ -301,9 +300,9 @@ final circleDetailContentMediaFacetProvider = Provider<ContentMediaFacet>(
 
 final contentMediaStreamObjectUploadProvider =
     Provider<ContentMediaStreamObjectUpload>((ref) {
-      final uploader = RemoteContentMediaObjectUploader();
-      ref.onDispose(uploader.dispose);
-      return uploader.uploadStream;
+      return AppProductionComposition.contentMediaObjectUpload(
+        onDispose: ref.onDispose,
+      );
     });
 
 final contentMediaSourceReaderProvider = Provider<ContentMediaSourceReader>((
@@ -332,7 +331,10 @@ ContentOutboundShareAppendWriter _productionOutboundShareWriter(
   Ref ref,
   AppUiSurface surface,
 ) {
-  return RemoteContentOutboundShareAppendWriter(
+  return AppProductionComposition.generatedAdapter<
+    ContentOutboundShareAppendWriter
+  >(
+    AppProductionAdapter.contentOutboundShare,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, command) {
       final base = _contentQueryInvocationContext(
@@ -364,7 +366,10 @@ CirclePostPlacementCommandWriter _productionCirclePostPlacementWriter(
   Ref ref,
   AppUiSurface surface,
 ) {
-  return RemoteCirclePostPlacementCommandWriter(
+  return AppProductionComposition.generatedAdapter<
+    CirclePostPlacementCommandWriter
+  >(
+    AppProductionAdapter.circlePostPlacement,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, idempotencyKey) {
       final base = _contentQueryInvocationContext(

@@ -77,8 +77,8 @@ groups:
       # Persona 生命周期命令（创建/更新/激活/退役/删除/同步）失败率。
       - alert: PersonaCommandFailureRateHigh
         expr: |
-          sum(rate(http_server_requests_total{service="user-service", method!="GET", route=~"/user/personas.*", status=~"5.."}[10m]))
-          / clamp_min(sum(rate(http_server_requests_total{service="user-service", method!="GET", route=~"/user/personas.*"}[10m])), 1e-9) > 0.02
+          sum(rate(http_server_requests_total{service="user-service", method!="GET", route=~"/user/persona/personas.*", status=~"5.."}[10m]))
+          / clamp_min(sum(rate(http_server_requests_total{service="user-service", method!="GET", route=~"/user/persona/personas.*"}[10m])), 1e-9) > 0.02
         for: 10m
         labels:
           severity: warning
@@ -101,6 +101,62 @@ groups:
           summary: "账号注销终态事件投递失败率 > 1%"
           description: "UserAccountClosed durable outbox 未能推进；核查 PostgreSQL 租约、events.user.account Redis Stream 与下游匿名化消费者。"
 
+      - alert: AccountSecurityAuthorityUnavailable
+        expr: |
+          sum by (job, instance) (
+            increase(runtime_auth_account_security_authority_checks_total{outcome="unavailable"}[5m])
+          ) > 0
+        for: 1m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user-identity
+        annotations:
+          summary: "账号安全同步权威出现不可用拒绝"
+          description: "资源服务已按 fail-closed 拒绝请求；核查 user-service scoped health、服务凭据、网络与 PostgreSQL，禁止通过缓存或跳过校验恢复流量。"
+
+      - alert: AccountSecurityAuthorityDeniedSpike
+        expr: |
+          (
+            sum by (job, instance) (
+              rate(runtime_auth_account_security_authority_checks_total{outcome=~"denied_deleted|denied_suspended|denied_token_stale"}[5m])
+            )
+            / clamp_min(
+              sum by (job, instance) (
+                rate(runtime_auth_account_security_authority_checks_total[5m])
+              ),
+              1e-9
+            )
+          ) > 0.05
+          and sum by (job, instance) (
+            rate(runtime_auth_account_security_authority_checks_total[5m])
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-identity
+        annotations:
+          summary: "账号安全权威拒绝比例超过 5%"
+          description: "检查注销/停用是否异常增长、客户端是否持续重放旧 access token，以及 auth_epoch 签发与读取是否漂移；指标不含主体标识。"
+
+      - alert: AccountSecurityAuthorityLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, job, instance) (
+              rate(runtime_auth_account_security_authority_check_duration_seconds_bucket[5m])
+            )
+          ) > 0.15
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-identity
+        annotations:
+          summary: "账号安全同步权威 P95 超过 150ms"
+          description: "延迟正在侵蚀 250–500ms 的 fail-closed 超时预算；核查 user-service 查询、连接池与服务网络，禁止引入可放行的本地缓存。"
+
       - alert: UserAccountClosedConsumerRetrying
         expr: |
           sum(increase({__name__=~"(content|chat|circle|notification|search)_user_account_closed_consumer_total", result="retry"}[10m])) > 0
@@ -115,15 +171,21 @@ groups:
 
       - alert: UserAccountClosedDeadLetterPresent
         expr: |
-          sum(increase({__name__=~"(content|chat|circle|notification|search)_user_account_closed_consumer_total", result="dlq"}[10m])) > 0
+          (
+            sum(increase({__name__=~"(content|chat|circle|notification|search)_user_account_closed_consumer_total", result="dlq"}[10m])) > 0
+          )
+          or
+          (
+            sum(increase({__name__=~"(content|chat|circle|notification|search)_user_account_closed_consumer_total", result="held_for_recovery"}[10m])) > 0
+          )
         for: 0m
         labels:
           severity: critical
           layer: l2
           domain: user-identity
         annotations:
-          summary: "账号注销清理事件进入 DLQ"
-          description: "UserAccountClosed 已达到有限重试上限；必须按 canonical event 修复后重放并验证各域清理探针，不得仅清空 DLQ。"
+          summary: "账号注销清理事件存在待恢复 DLQ"
+          description: "UserAccountClosed 已达到有限重试上限或仍被 terminal marker 持有；修复后只能释放原 source PEL 重新消费并验证各域清理探针，禁止仅清空 DLQ 或用脱敏 DLQ 重建事件。"
 
       - alert: UserAccountClosedCleanupP95High
         expr: |
@@ -169,9 +231,9 @@ groups:
           domain: product-telemetry
         annotations:
           summary: "产品遥测不可用批次比例超过 1%"
-          description: "检查 product-ops SLS health、VPC endpoint、RAM 与 1200ms 写入超时；App 会保留加密 outbox。"
+          description: "检查 product-ops runtime.log.sink health、网络与写入超时；App 会保留加密 outbox。Gamma 检查 ES，Prod 检查 SLS/VPC/RAM。"
 
-      - alert: ProductTelemetrySLSWriteErrors
+      - alert: ProductTelemetryLogSinkWriteErrors
         expr: sum(increase(ops_telemetry_logstore_operation_duration_seconds_count{operation=~"put_event_batch|put_startup_diagnostic",result="error"}[10m])) > 0
         for: 2m
         labels:
@@ -179,10 +241,10 @@ groups:
           layer: l1
           domain: product-telemetry
         annotations:
-          summary: "SLS 产品遥测写入出现错误"
-          description: "按 operation 检查 raw/startup Logstore；指标不携带 session、batch 或用户标识。"
+          summary: "产品遥测日志端口写入出现错误"
+          description: "按 operation 检查 raw/startup 分区；指标不携带 session、batch 或用户标识。"
 
-      - alert: ProductTelemetrySLSWriteP95High
+      - alert: ProductTelemetryLogSinkWriteP95High
         expr: |
           histogram_quantile(0.95,
             sum(rate(ops_telemetry_logstore_operation_duration_seconds_bucket{operation="put_event_batch",result="success"}[10m])) by (le)
@@ -193,8 +255,8 @@ groups:
           layer: l1
           domain: product-telemetry
         annotations:
-          summary: "SLS 产品遥测写入 P95 超过 1 秒"
-          description: "接近 1200ms 服务端超时预算；检查 VPC 网络、SLS 配额与批量大小。"
+          summary: "产品遥测日志端口写入 P95 超过 1 秒"
+          description: "接近服务端超时预算；检查 Gamma ES 或 Prod SLS 网络、配额与批量大小。"
 
       - alert: RuntimeLogSpoolBacklogHigh
         expr: runtime_log_export_spool_pending > 100
@@ -502,7 +564,7 @@ groups:
           summary: "事件发布失败: topic={{ $labels.topic }}"
 
   - name: quwoquan_rec_model
-    # SLI/SLO 真相源：quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml。
+    # SLI/SLO 真相源：quwoquan_service/services/content-service/observability/slo/recommendation_slo.yaml。
     # emitter 状态：
     # - P0 已激活：recommendation_feed_served/impressed/visible/dwell/interaction/negative、
     #   recommendation_behavior_ingest(_dropped)、rec_hotpath_dropped、
@@ -549,7 +611,7 @@ groups:
           layer: l2
         annotations:
           summary: "推荐模型超时率 > 10%"
-          description: "rec-model-service 响应超时 {{ $value | humanizePercentage }}"
+          description: "recommendation-service 响应超时 {{ $value | humanizePercentage }}"
 
       - alert: RecEmptyFeedRateHigh
         expr: |
@@ -735,7 +797,7 @@ groups:
 
   - name: quwoquan_search
     # 搜索 SLO 告警（SLI/SLO 真相源：quwoquan_service/services/search-service/
-    # configs/observability/search_slo.yaml）。延迟用 histogram 取分位数，按 AB
+    # quwoquan_service/services/search-service/observability/slo/search_slo.yaml）。延迟用 histogram 取分位数，按 AB
     # bucket label 可切分；通用 HighErrorRate/HighP95Latency 已按 service 覆盖可用性，
     # 这里补搜索特有的检索延迟、零结果率与降级率。
     rules:
@@ -1105,7 +1167,7 @@ groups:
 
   - name: quwoquan_entity_homepage
     # 实体主页 introduction 读路径 + homepage-import 导入观测（SLI/SLO 真相源：
-    # quwoquan_service/services/entity-service/configs/observability/homepage_introduction_slo.yaml）。
+    # quwoquan_service/services/entity-service/observability/slo/homepage_introduction_slo.yaml）。
     # HTTP 延迟/可用性走 http_server_* 中间件按 route 过滤；导入观测走 homepage-import
     # --metrics-textfile 落的 node_exporter textfile 指标（离线批任务标准通道）。
     rules:
@@ -1183,11 +1245,11 @@ groups:
           summary: "homepage-import 超过 7 天未成功（env={{ $labels.env }}）"
           description: "环境主页读模型快照可能过期；数据发布链（promote→ship→homepage-import）停摆或 textfile collector 未接入。"
 
-  # B8 助手域对象级告警：消费 assistant service.yaml 声明的 operation SLO
+  # 助手域对象级告警：消费 assistant-service 本地 contracts 声明的 operation SLO
   # （run 1.5s/99.9%、conversation 500ms/99.9%、SSE 首事件 2s、consent/subscription 500ms）。
   - name: quwoquan_l2_assistant_recordings
-    # recording rules：从 assistant_grounding_total counter 对派生 spec 声明的
-    # assistant_grounding_success_rate（specs/.../commercial_slo_observability.md）。
+    # recording rules：从 assistant_grounding_total 派生 context-grounded-answering
+    # 规格所需的 assistant_grounding_success_rate。
     rules:
       - record: assistant_grounding_success_rate
         expr: |
@@ -1237,7 +1299,7 @@ groups:
 
       - alert: AssistantSubscriptionCronStalled
         expr: |
-          sum(increase(http_server_requests_total{service="assistant-service", route="/internal/assistant/skill-subscriptions:tick", status=~"2.."}[30m])) == 0
+          sum(increase(assistant_subscription_cron_tick_total{outcome="succeeded"}[30m])) == 0
         for: 30m
         labels:
           severity: warning
@@ -1245,11 +1307,23 @@ groups:
           domain: assistant
         annotations:
           summary: "订阅调度 tick 30 分钟内无成功执行"
-          description: "主动订阅投递停摆；检查外部调度器与 Redis 租约（assistant:cron:lease:*）。"
+          description: "主动订阅投递停摆；检查 assistant-service 内置 scheduler、Mongo deliveryState 与 Redis 租约（assistant:subscription:lease:*）。"
 
-      # ---- 小趣商用业务级告警（真相源：specs/feature-tree/assistant-run-learning/
-      # commercial_slo_observability.md §告警）。指标由 assistant-service 业务
-      # metrics 产出；所有规则均有对应 emit 接线与 local_contract 覆盖。
+      - alert: AssistantSubscriptionDeliveryFailureRateHigh
+        expr: |
+          sum(rate(assistant_subscription_delivery_attempt_total{outcome="failed"}[15m]))
+          / (sum(rate(assistant_subscription_delivery_attempt_total[15m])) + 0.001) > 0.05
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "主动订阅外部投递失败率连续 15 分钟 > 5%"
+          description: "检查 user-service 投递策略、notification/chat 下游、模型执行与 Mongo deliveryState；失败会保留 deliveryId 并按退避补偿。"
+
+      # 小趣业务级告警对应 runtime-assistant 的 grounding、mentioned consumer
+      # 与 proactive subscription 规格；指标由 assistant-service 业务链路产出。
       - alert: AssistantMentionedConsumerDLQBacklog
         expr: |
           sum(increase(assistant_mentioned_consumer_dlq_total[15m])) > 0
@@ -1297,7 +1371,7 @@ groups:
           domain: assistant
         annotations:
           summary: "小趣主动投递出现错发（P0）"
-          description: "投递目的地校验失败计数非零：可能把订阅产出发给了错误用户/会话。立即停用 proactive 投递（独立灰度开关）并审计 SkillSubscription destination 校验链。"
+          description: "投递目的地校验失败计数非零：可能把订阅产出发给了错误用户/会话。立即暂停内部 tick 调度并审计 SkillSubscription destination 与 user/chat 授权链。"
 
   - name: quwoquan_l2_chat_objects
     rules:
@@ -1647,6 +1721,24 @@ groups:
           summary: "InitiateCall 错误率连续两个窗口 > 2%"
           description: "发起通话退化（metric rtc_call_lifecycle_command）；检查关系门禁、活跃通话去重与 LiveKit token 签发。"
 
+      - alert: RtcAccountSecurityConsumerDeadLettered
+        expr: |
+          (
+            sum(increase(rtc_account_security_consumer_total{outcome="dlq"}[5m])) > 0
+          )
+          or
+          (
+            sum(increase(rtc_account_security_consumer_total{outcome="held_for_recovery"}[5m])) > 0
+          )
+        for: 1m
+        labels:
+          severity: critical
+          layer: l2
+          domain: rtc
+        annotations:
+          summary: "RTC 账号安全终态存在待恢复 DLQ"
+          description: "原 events.user.account PEL 被 terminal marker 持有；修复依赖后只能释放原 stream 坐标重试，并验证 CallSession、ticket 与 media room access 均已撤销。"
+
       - alert: LiveKitMetricsUnavailable
         expr: up{job="livekit-sfu"} == 0
         for: 2m
@@ -1715,6 +1807,39 @@ groups:
         annotations:
           summary: "实时连接升级/轮询错误率连续两个窗口 > 5%"
           description: "metric realtime_connection_session；ticket 消费失败或 Redis 订阅不可用会阻断 chat 实时推送与 rtc 来电信令。"
+
+      - alert: RealtimeAccountSecurityConsumerDeadLettered
+        expr: |
+          (
+            sum(increase(realtime_account_security_consumer_total{outcome="dlq"}[5m])) > 0
+          )
+          or
+          (
+            sum(increase(realtime_account_security_consumer_total{outcome="held_for_recovery"}[5m])) > 0
+          )
+        for: 1m
+        labels:
+          severity: critical
+          layer: l2
+          domain: realtime
+        annotations:
+          summary: "UserAccount 安全终态 consumer 存在待恢复 DLQ"
+          description: "事件只以摘要进入 DLQ，原 events.user.account PEL 保持待恢复；立即修复 authority/Redis 依赖后从原 stream 坐标恢复，并验证 ticket、lease 与 presence 已清理。"
+
+      - alert: RealtimeAccountSecurityEvictionPathUnhealthy
+        expr: |
+          runtime_health_check_status{
+            instance=~"realtime-gateway(:[0-9]+)?",
+            check=~"account_security_authority|account_security_relay|user_account_security_consumer"
+          } == 0
+        for: 1m
+        labels:
+          severity: critical
+          layer: l2
+          domain: realtime
+        annotations:
+          summary: "实时账户安全即时断连链路不健康"
+          description: "authority、跨节点 relay 或 durable consumer 不健康时，该节点不得继续承接新连接；修复 Redis/authority 后确认 relay 重订阅，并从原 PEL 恢复未完成终态事件。"
 
   - name: quwoquan_l2_relationship_objects
     rules:

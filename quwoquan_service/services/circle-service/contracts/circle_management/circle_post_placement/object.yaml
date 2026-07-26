@@ -1,0 +1,72 @@
+kind: aggregate_root
+description: Post 到 Circle 或其 Group 的唯一放置、下架和运营状态聚合。
+identity:
+  fields:
+  - _id
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: post
+  on_delete: tombstone
+  reference_fields:
+  - postId
+  target_object: content.Post
+- access: command_facade
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: circle
+  on_delete: tombstone
+  reference_fields:
+  - circleId
+  target_object: circle.Circle
+- access: command_facade
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: group
+  on_delete: detach
+  reference_fields:
+  - groupId
+  target_object: circle.CircleGroup
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: owner
+  on_delete: tombstone
+  reference_fields:
+  - ownerPersonaId
+  target_object: user.Persona
+capabilities:
+- commandable
+- queryable
+- idempotent_commands
+- transactional_outbox
+business_rules:
+- postId + circleId + groupId 在 active 生命周期内唯一
+- groupId 非空时必须属于同一 circleId
+- 只有 post owner 或 circle moderator 可以创建和移除放置
+- pinned 与 featured 只能作用于 active placement
+- 所有命令使用服务端内部 CAS 与 idempotency receipt，公开接口不接收调用方版本字段
+lifecycle:
+  states:
+  - active
+  - removed
+  transitions:
+  - from: none
+    command: PlacePostInCircle
+    to: active
+  - from: active
+    command: RemovePostFromCircle
+    to: removed
+  optimistic_concurrency: version
+  idempotency: command_receipt

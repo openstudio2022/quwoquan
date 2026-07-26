@@ -40,10 +40,11 @@ from content.source.inline_images import build_inline_image_candidates
 from core.source_fidelity import assess_source_content_fidelity
 from content.source.handler_fetch_contract import (
     canonicalize_source_url as _canonicalize_source_url,
+    homepage_base_draft_admission,
     is_non_open_baike_source as _is_non_open_baike_source,
     publishable_homepage_source_image_count as _publishable_homepage_source_image_count,
     requires_factual_compression as _requires_factual_compression,
-    resolved_source_title_matches_entity as _resolved_source_title_matches_entity,
+    require_source_candidate_admission,
     source_fetch_failure_issue as _source_fetch_failure_issue,
 )
 
@@ -166,6 +167,25 @@ def _fetch_download_entity(
     kept_source_homepage_images = 0
 
     for ordinal, source in enumerate(sources, start=1):
+        try:
+            require_source_candidate_admission(source)
+        except ValueError as exc:
+            raise DataIssueError(
+                (
+                    data_issue(
+                        DataIssueCode.SOURCE_ENTITY_MISMATCH,
+                        stage=DataIssueStage.DOWNLOAD_FETCH,
+                        ref=entity_id,
+                        lane=DataIssueLane(str(source.get("researchLane") or DataIssueLane.ALL.value)),
+                        recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
+                        message="source candidate failed its frozen match admission",
+                        attributes={
+                            "sourceId": str(source.get("source_id") or ""),
+                            "reason": str(exc),
+                        },
+                    ),
+                )
+            ) from exc
         _write_download_progress(
             execution_id,
             status="running",
@@ -275,40 +295,27 @@ def _fetch_download_entity(
         elif canonical_url:
             seen_canonical_urls.add(canonical_url)
 
-        # homepage 底稿事实门：通用 UGC 打分不足以保底稿，主页 lane 叠加事实密度/
-        # 消歧义/重定向检查（西岭雪山类弱源、消歧义页在此打回，触发候选补源）。
-        source_identity_issue = ""
+        # Homepage fetch and source gates share one base-draft admission rule.
+        # A frozen source must never pass planning then be rejected by a second,
+        # divergent fact-count or title-matching implementation here.
+        homepage_fact_count: int | None = None
         if (
             quality_value != "Reject"
             and str(source.get("researchLane") or "") == "homepage"
             and str(source.get("sourceRole") or "") != "support"
         ):
-            from content.source.research.homepage_text_quality import homepage_text_quality_issue
             resolved_title = str(fetch_runtime.get("resolvedTitle") or "").strip()
-            if (
-                str(source.get("sourceKind") or "")
-                in {"wikipedia", "baidu_baike", "toutiao_baike"}
-                and resolved_title
-                and not _resolved_source_title_matches_entity(
-                    source,
-                    resolved_title=resolved_title,
-                    entity_id=entity_id,
-                )
-            ):
-                source_identity_issue = (
-                    "resolved_source_title_mismatch: "
-                    f"requested={fetch_runtime.get('requestedTitle') or entity_id}; "
-                    f"resolved={resolved_title}; entity={entity_id}"
-                )
-
-            homepage_issue = source_identity_issue or homepage_text_quality_issue(
-                fetched_text or source_md,
-                entity_id,
+            homepage_admission = homepage_base_draft_admission(
+                source,
+                source_text=fetched_text or clean_md,
+                entity_id=entity_id,
+                resolved_title=resolved_title,
             )
-            if homepage_issue:
+            homepage_fact_count = homepage_admission.fact_count
+            if not homepage_admission.accepted:
                 quality_value = "Reject"
                 quality_score = 0
-                quality_reasons.append(homepage_issue)
+                quality_reasons.append(homepage_admission.issue_code.value)
 
         # factual_reference_only 来源（百度/搜狗/今日头条百科）事实化压缩：
         # >2000 字压至约 50%，1000-2000 轻度，<=1000 不压；
@@ -339,6 +346,8 @@ def _fetch_download_entity(
             "fetchSucceeded": bool(fetched_text),
             "taskProvidedBodyPresent": bool(str(source.get("body") or "").strip()),
         }
+        if homepage_fact_count is not None:
+            quality["homepageBaseDraftFactCount"] = homepage_fact_count
         if compression_note:
             quality["factualCompression"] = compression_note
         if source_fetch_issue is not None:
@@ -350,7 +359,7 @@ def _fetch_download_entity(
             url=source["url"],
             candidate_quality=quality,
         )
-        if cached_quality is not None and not source_identity_issue:
+        if cached_quality is not None:
             unit = _find_source_unit_by_plan_key(
                 object_dir,
                 ordinal=ordinal,

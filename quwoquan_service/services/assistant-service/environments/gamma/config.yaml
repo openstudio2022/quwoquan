@@ -1,0 +1,48 @@
+overrides:
+  sys.assistant-service.account_security_authority.base_url: http://user-service:18081
+  sys.assistant-service.account_security_authority.timeout_ms: 300
+  sys.assistant-service.chat_service.base_url: http://chat-service:18081
+  sys.assistant-service.notification_service.base_url: http://notification-service:18087
+  sys.assistant-service.user_service.base_url: http://user-service:18081
+secretRefs:
+  sys.assistant-service.mongodb.uri: MONGODB_URI
+  sys.assistant-service.postgres.dsn: POSTGRES_DSN
+  sys.assistant-service.redis.general.password: REDIS_GENERAL_PASSWORD
+  sys.assistant-service.redis.rec.password: REDIS_REC_PASSWORD
+externalBindings:
+  runtime.message.transport:
+    state: enabled
+  assistant.model.generation:
+    state: enabled
+    adapter: ext.llm.protocol_fixture
+    endpointRef: environment_binding:assistant.model_fixture
+    endpointEnvs:
+      completion: ASSISTANT_MODEL_FIXTURE_ENDPOINT
+    secretRefs:
+    - ASSISTANT_MODEL_API_KEY
+    timeoutMs: 1000
+  assistant.public.search:
+    state: enabled
+    adapter: ext.search.protocol_fixture
+    endpointRef: environment_binding:assistant.search_fixture
+    endpointEnvs:
+      search: ASSISTANT_PUBLIC_SEARCH_FIXTURE_URL
+    secretRefs: []
+    timeoutMs: 1000
+  assistant.weather.forecast:
+    state: enabled
+    adapter: ext.weather.protocol_fixture
+    endpointRef: environment_binding:assistant.weather_fixture
+    endpointEnvs:
+      geocoding: ASSISTANT_WEATHER_FIXTURE_GEOCODING_URL
+      forecast: ASSISTANT_WEATHER_FIXTURE_FORECAST_URL
+    secretRefs: []
+    timeoutMs: 1000
+  assistant.finance.quote:
+    state: enabled
+    adapter: ext.finance.protocol_fixture
+    endpointRef: environment_binding:assistant.finance_fixture
+    endpointEnvs:
+      chart: ASSISTANT_FINANCE_FIXTURE_CHART_URL
+    secretRefs: []
+    timeoutMs: 1000

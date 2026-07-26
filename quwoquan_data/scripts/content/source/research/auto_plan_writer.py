@@ -1,7 +1,13 @@
 """Per-entity auto research plan implementation."""
 from __future__ import annotations
 from typing import Any
-from core.data_issue import DataIssueCode, DataRecoveryAction
+from core.data_issue import (
+    DataIssueCode,
+    DataIssueError,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issue,
+)
 from core.article_commercial_policy import article_commercial_closure_enabled
 from core.image_asset_strategy import (
     image_count_is_hard_quota,
@@ -23,6 +29,7 @@ from content.source.research.auto_plan_article import write_article_lane
 from content.source.research.image_provider_compliance import (
     professional_library_compliance_summary,
 )
+from governance.coverage.license import rights_proof_required
 from content.source.research.auto_plan_report import (
     _source_availability_summary,
     _write_auto_report_artifacts,
@@ -50,13 +57,12 @@ from content.source.research.reject_memory import (
 from content.source.research.plan_reuse import (
     _homepage_urls_from_current_plan,
     _verified_article_sources_from_prior_plans,
-    _verified_homepage_sources_from_source_units,
 )
 from content.source.research.source_quality import (
     _ARTICLE_BASE_CATEGORIES,
     _article_base_candidate_limit,
     _collection_gate,
-    _collection_publishable_image_urls,
+    _collection_admissible_image_urls,
     _evidence_reason,
     _select_article_plan_sources,
 )
@@ -92,11 +98,13 @@ from content.source.research.qunar_sources import (
     _qunar_travelogue_sources,
 )
 from content.source.research.auto_plan_homepage import HomepageResearchInput, write_homepage_lane
-from content.source.research.baike_com import (
-    geo_context_terms_from_ref,
-    resolve_toutiao_baike_page,
+from content.source.research.baike_com import geo_context_terms_from_ref
+from content.source.research.homepage_authority import discover_homepage_authority
+from content.source.contracts import (
+    HomepageAuthorityProvider,
+    QualifiedHomepageSource,
 )
-from content.source.research.baidu_baike import resolve_baidu_baike_page
+from content.execution.workspace import frozen_target_by_name
 
 
 
@@ -110,7 +118,6 @@ def _write_auto_research_plans_impl(
     lanes: set[str] | None = None,
     write_shared_report: bool = True,
 ) -> dict[str, Any]:
-    selected_lanes = lanes or {"homepage", "article", "image", "video"}
     vertical = vertical_from_task_id(execution_id)
     # 单值 entity_type 只作 fallback；每个实体目录类型以 task spec coverageTargets 为准。
     from content.source.prepare import resolve_research_entity_types
@@ -122,6 +129,15 @@ def _write_auto_research_plans_impl(
     prepare_source_plan(execution_id, entities)
     updated: list[dict[str, Any]] = []
     issues: list[str] = []
+    strategy_spec = _task_spec(execution_id)
+    declared_lanes = {
+        str(lane).strip()
+        for lane in ((strategy_spec.get("content") or {}).get("research") or {}).get("lanes") or []
+        if str(lane).strip()
+    }
+    selected_lanes = lanes or declared_lanes
+    if not selected_lanes:
+        raise ValueError("execution must declare at least one research lane")
     report: dict[str, Any] = {
         "schema": "quwoquan.content.source.auto_research_plan",
         "executionId": execution_id,
@@ -137,7 +153,6 @@ def _write_auto_research_plans_impl(
         "rescueEvents": [],
     }
     quotas = _task_content_quotas(execution_id)
-    strategy_spec = _task_spec(execution_id)
     target_by_name = {
         str(row.get("name") or "").strip(): row
         for row in ((strategy_spec.get("scope") or {}).get("coverageTargets") or [])
@@ -178,6 +193,25 @@ def _write_auto_research_plans_impl(
         dl = obj / STAGE_DOWNLOAD
         target_source = target_by_name.get(entity_id) or {}
         needs_homepage_media = "homepage" in selected_lanes
+        qualified_homepage_source: QualifiedHomepageSource | None = None
+        if needs_homepage_media:
+            frozen_target = frozen_target_by_name(execution_id, entity_id)
+            qualified_homepage_source = (
+                frozen_target.qualified_homepage_source
+                if frozen_target is not None
+                else None
+            )
+            if qualified_homepage_source is None:
+                raise DataIssueError(
+                    (
+                        data_issue(
+                            DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
+                            stage=DataIssueStage.SOURCE_GATE,
+                            ref=entity_id,
+                            message="homepage target has no frozen qualified authority source",
+                        ),
+                    )
+                )
         configured_aliases = [
             str(value).strip()
             for value in (target_source.get("aliases") or [])
@@ -190,14 +224,32 @@ def _write_auto_research_plans_impl(
             [*_entity_name_variants(entity_id), *configured_aliases],
             limit=24,
         )
-        wiki_title = (
-            _wiki_title_for_entity(
-                "zh.wikipedia.org",
+        geo_context_terms = geo_context_terms_from_ref(
+            str(target_source.get("geoTagRef") or "")
+        )
+        initial_authority = (
+            discover_homepage_authority(
                 entity_id,
-                entity_aliases=configured_aliases,
+                entity_aliases=tuple(initial_aliases),
+                geo_context_terms=geo_context_terms,
+                include_external=False,
             )
-            if needs_source_discovery_context
-            else ""
+            if (
+                needs_source_discovery_context
+                and not (
+                    qualified_homepage_source is not None
+                    and qualified_homepage_source.provider is HomepageAuthorityProvider.WIKIPEDIA
+                )
+            )
+            else None
+        )
+        wiki_title = (
+            qualified_homepage_source.title
+            if (
+                qualified_homepage_source is not None
+                and qualified_homepage_source.provider is HomepageAuthorityProvider.WIKIPEDIA
+            )
+            else (initial_authority.wikipedia_title if initial_authority else "")
         )
         qid = (
             _wikidata_item_for_zhwiki(wiki_title) or _wikidata_item_for_entity_search(entity_id)
@@ -214,33 +266,18 @@ def _write_auto_research_plans_impl(
             ],
             limit=24,
         )
-        if needs_source_discovery_context and not wiki_title:
-            wiki_title = _wiki_title_for_entity(
-                "zh.wikipedia.org",
-                entity_id,
-                entity_aliases=configured_aliases,
-            )
-        geo_context_terms = geo_context_terms_from_ref(
-            str(target_source.get("geoTagRef") or "")
-        )
-        baidu_baike = (
-            resolve_baidu_baike_page(
+        authority = (
+            discover_homepage_authority(
                 entity_id,
                 entity_aliases=tuple(entity_aliases),
                 geo_context_terms=geo_context_terms,
+                wikipedia_title=wiki_title,
+                include_external=bool(selected_lanes & {"article", "image", "video"}),
             )
-            if "homepage" in selected_lanes
+            if needs_source_discovery_context
             else None
         )
-        toutiao_baike = (
-            resolve_toutiao_baike_page(
-                entity_id,
-                entity_aliases=tuple(entity_aliases),
-                geo_context_terms=geo_context_terms,
-            )
-            if "homepage" in selected_lanes
-            else None
-        )
+        wiki_title = authority.wikipedia_title if authority else ""
         related_wiki_titles = [
             title for title in _wiki_related_titles_for_entity(
                 "zh.wikipedia.org",
@@ -262,7 +299,6 @@ def _write_auto_research_plans_impl(
             and (needs_visual_pool or needs_homepage_media)
             else ""
         )
-        wiki_url = _wiki_url("zh.wikipedia.org", wiki_title)
         voyage_url = _wiki_url("zh.wikivoyage.org", voyage_title)
         registry_official_url = _known_official_website(entity_id) if needs_source_discovery_context else ""
         official_url = (
@@ -284,6 +320,7 @@ def _write_auto_research_plans_impl(
                 execution_id,
                 entity_id,
                 entity_type=entity_type,
+                vertical=vertical,
                 entity_aliases=entity_aliases,
                 rejected_image_urls=rejected_image_urls,
                 limit=max(image_bonus_saturation_count, 8),
@@ -297,21 +334,12 @@ def _write_auto_research_plans_impl(
                 execution_id,
                 entity_id,
                 entity_type=entity_type,
+                vertical=vertical,
                 entity_aliases=entity_aliases,
                 rejected_source_urls=rejected_source_urls,
                 limit=_article_base_candidate_limit(required_article_bases),
             )
             if "article" in selected_lanes and not article_commercial_mode
-            else []
-        )
-        prior_homepage_sources = (
-            _verified_homepage_sources_from_source_units(
-                execution_id,
-                entity_id,
-                entity_type=entity_type,
-                rejected_source_urls=rejected_source_urls,
-            )
-            if "homepage" in selected_lanes
             else []
         )
         image_pools = (
@@ -409,7 +437,12 @@ def _write_auto_research_plans_impl(
                 "professionalImageLibraryCompliance",
                 professional_library_compliance_summary(),
             )
-        if "image" in selected_lanes and requires_publishable_images and not open_license_image_pool:
+        if (
+            "image" in selected_lanes
+            and requires_publishable_images
+            and rights_proof_required(vertical)
+            and not open_license_image_pool
+        ):
             issues.append(f"{entity_id}: no rights-compatible open-license images discovered")
             if "image" in selected_lanes:
                 _record_unavailable(
@@ -430,13 +463,8 @@ def _write_auto_research_plans_impl(
                 plan_dir=dl,
                 report=report,
                 updated=updated,
-                prior_homepage_sources=tuple(prior_homepage_sources),
-                wiki_url=wiki_url,
-                wiki_title=wiki_title or "",
+                qualified_homepage_source=qualified_homepage_source,
                 wiki_page_images=tuple(wiki_page_images),
-                related_wiki_titles=tuple(related_wiki_titles),
-                baidu_baike=baidu_baike,
-                toutiao_baike=toutiao_baike,
                 prior_image_pool=tuple(prior_image_pool),
                 voyage_page_images=tuple(voyage_page_images),
                 commons=tuple(commons),
@@ -445,7 +473,6 @@ def _write_auto_research_plans_impl(
                 openverse=tuple(openverse),
                 rejected_source_urls=frozenset(rejected_source_urls),
                 force=force,
-                related_page_images=_mediawiki_page_images,
             ))
             if "homepage" in selected_lanes
             else []
@@ -455,6 +482,7 @@ def _write_auto_research_plans_impl(
             execution_id=execution_id,
             entity_id=entity_id,
             entity_type=entity_type,
+            vertical=vertical,
             selected_lanes=selected_lanes,
             report=report,
             issues=issues,

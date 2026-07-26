@@ -14,7 +14,7 @@
   "seedRefs": [
     {
       "domain": "assistant",
-      "fixturePath": "assistant/test_fixtures/scenarios/assistant_scenarios.json",
+      "fixturePath": "quwoquan_service/services/assistant-service/tests/support/contract_fixtures/scenarios/assistant_scenarios.json",
       "refs": [
         "assistant_p0_core",
         "skill_management_core"
@@ -28,7 +28,7 @@
     },
     {
       "domain": "content",
-      "fixturePath": "content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
+      "fixturePath": "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.gamma-curated.json",
       "refs": [
         "content_discovery_core",
         "comment_thread_core",
@@ -43,18 +43,19 @@
       "targetStore": "content-service:gamma_test_namespace",
       "verifiedEndpoints": [
         "/content/feed",
-        "/content/posts/fixture_photo_001",
-        "/content/posts/fixture_photo_001/comments",
-        "/content/posts/fixture_photo_001/comments?sort=hot",
-        "/content/posts/fixture_photo_001/comments?sort=latest",
-        "/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
+        "/content/content/posts/fixture_photo_001",
+        "/content/content/posts/fixture_photo_001/comments",
+        "/content/content/posts/fixture_photo_001/comments?sort=hot",
+        "/content/content/posts/fixture_photo_001/comments?sort=latest",
+        "/content/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
         "/content/sub-accounts/{activePersonaId}/interactions/received?type=share",
-        "/content/sub-accounts/{activePersonaId}/interactions/sent?type=share"
+        "/content/sub-accounts/{activePersonaId}/interactions/sent?type=share",
+        "/content/sub-accounts/{activePersonaId}/author-impact"
       ]
     },
     {
       "domain": "circle",
-      "fixturePath": "social/circle/test_fixtures/scenarios/circle_scenarios.gamma-curated.json",
+      "fixturePath": "quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.gamma-curated.json",
       "refs": [
         "circle_core",
         "circle_group_chat_link_core"
@@ -71,7 +72,7 @@
     },
     {
       "domain": "chat",
-      "fixturePath": "messages/chat/test_fixtures/scenarios/chat_scenarios.gamma-curated.json",
+      "fixturePath": "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.gamma-curated.json",
       "refs": [
         "chat_core",
         "chat_contacts_core",
@@ -86,7 +87,7 @@
     },
     {
       "domain": "user",
-      "fixturePath": "user/test_fixtures/scenarios/user_scenarios.gamma-curated.json",
+      "fixturePath": "quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.gamma-curated.json",
       "refs": [
         "user_profile_core",
         "persona_core",
@@ -112,7 +113,7 @@
     },
     {
       "domain": "entity",
-      "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.gamma-curated.json",
+      "fixturePath": "quwoquan_service/services/entity-service/tests/support/contract_fixtures/scenarios/entity_scenarios.gamma-curated.json",
       "refs": [
         "entity_homepage_core",
         "entity_claim_core",
@@ -132,19 +133,38 @@
     },
     {
       "domain": "integration",
-      "fixturePath": "integration/test_fixtures/scenarios/integration_scenarios.json",
+      "fixturePath": "quwoquan_service/services/integration-service/tests/support/contract_fixtures/scenarios/integration_scenarios.json",
       "refs": [
         "location_poi_core"
       ],
       "resetScope": "fixture_integration_*",
       "targetStore": "integration-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/integration/locations/pois"
+        "/integration/external_integration/locations/pois"
+      ]
+    },
+    {
+      "domain": "tag",
+      "fixturePath": "quwoquan_service/services/tag-service/tests/support/contract_fixtures/scenarios/tag_scenarios.json",
+      "refs": [
+        "tag_launch_subset",
+        "tag_catalog_core"
+      ],
+      "resetScope": "declared object_tag_index seed refs in quwoquan_tag",
+      "targetStore": "mongodb:quwoquan_tag.tag_nodes+object_tag_index",
+      "verifiedEndpoints": [
+        "/tag/resolve?tagRef=Topic%2F摄影",
+        "/tag/children?parentTagRef=Audience%2F用户%2F职业&limit=20",
+        "/tag/shared-tags?objectAId=fixture_user_current&objectAType=user&objectBId=fixture_user_photo&objectBType=user&limit=20"
+      ],
+      "deliveryChannels": [
+        "control_plane/governance/taxonomy import",
+        "declared object_tag_index projection seed"
       ]
     },
     {
       "domain": "search",
-      "fixturePath": "search/test_fixtures/scenarios/search_scenarios.json",
+      "fixturePath": "quwoquan_service/services/search-service/tests/support/contract_fixtures/scenarios/search_scenarios.json",
       "refs": [
         "search_remote_acceptance"
       ],
@@ -162,7 +182,7 @@
     },
     {
       "domain": "notification",
-      "fixturePath": "notification/test_fixtures/scenarios/notification_scenarios.json",
+      "fixturePath": "quwoquan_service/services/notification-service/tests/support/contract_fixtures/scenarios/notification_scenarios.json",
       "refs": [
         "notification_core"
       ],
@@ -174,7 +194,7 @@
     },
     {
       "domain": "rtc",
-      "fixturePath": "rtc/test_fixtures/scenarios/rtc_scenarios.json",
+      "fixturePath": "quwoquan_service/services/rtc-service/tests/support/contract_fixtures/scenarios/rtc_scenarios.json",
       "refs": [
         "rtc_core"
       ],
@@ -186,11 +206,11 @@
     },
     {
       "domain": "recommendation",
-      "fixturePath": "_shared/test_fixtures/content_recommendation_object_cards.gamma_seed.json",
+      "fixturePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/content_recommendation_object_cards.gamma_seed.json",
       "refs": [
         "object_cards_gamma_acceptance"
       ],
-      "applyScript": "quwoquan_service/services/seed-box/scripts/apply_content_object_cards_seed.py",
+      "applyScript": "quwoquan_service/services/content-service/cmd/jobs/seed-object-cards/main.py",
       "resetScope": "gamma_object_cards_seed",
       "targetStore": "content-service:quwoquan_content",
       "verifiedEndpoints": [
@@ -342,7 +362,7 @@
       }
     ]
   },
-  "mediaSeedRef": "quwoquan_ops/environments/media_delivery_manifest.json",
+  "mediaSeedRef": "quwoquan_service/services/content-service/resources/static/media/media_delivery_manifest.json",
   "mediaCanary": {
     "profileRef": "quwoquan_data/reference/media_canary/video_playback.yaml",
     "readyAssetIds": [

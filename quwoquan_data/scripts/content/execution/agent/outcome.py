@@ -39,12 +39,6 @@ def _non_negative_int(value: object, *, field_name: str) -> int:
     return value
 
 
-def _non_negative_float(value: object, *, field_name: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise ValueError(f"agent outcome {field_name} must be a non-negative number")
-    return float(value)
-
-
 def _value_or_default(value: object, default: object) -> object:
     return default if value is None else value
 
@@ -60,7 +54,7 @@ def _boolean_or_default(value: object, *, field_name: str, default: bool = False
 def _failure_code(kind: AgentFailureKind) -> DataIssueCode:
     return {
         AgentFailureKind.CREDENTIAL_INVALID: DataIssueCode.AGENT_CREDENTIAL_INVALID,
-        AgentFailureKind.BUDGET_EXCEEDED: DataIssueCode.QUEUE_BUDGET_EXCEEDED,
+        AgentFailureKind.PROVIDER_REJECTED: DataIssueCode.AGENT_PROVIDER_REJECTED,
         AgentFailureKind.SUBPROCESS_TIMEOUT: DataIssueCode.AGENT_TIMEOUT,
         AgentFailureKind.FUTURE_TIMEOUT: DataIssueCode.AGENT_TIMEOUT,
         AgentFailureKind.SUBPROCESS_OUTPUT_INVALID: DataIssueCode.AGENT_RESULT_INVALID,
@@ -92,19 +86,6 @@ class AgentRunOutcome:
     agent_id: str = ""
     run_id: str = ""
     duration_ms: int = 0
-    used_tokens: int = 0
-    cost_usd: float = 0.0
-    retry_cost_usd: float = 0.0
-    input_tokens: int = 0
-    output_tokens: int = 0
-    cache_read_tokens: int = 0
-    cache_write_tokens: int = 0
-    cost_known: bool = False
-    cost_source: str = ""
-    cost_issue: str = ""
-    resolved_model_id: str = ""
-    pricing_revision: str = ""
-    usage_measurement_mode: str = ""
     completion_mode: str = ""
     stdout_tail: str = ""
     stderr_tail: str = ""
@@ -135,11 +116,6 @@ class AgentRunOutcome:
             "result_text",
             "agent_id",
             "run_id",
-            "cost_source",
-            "cost_issue",
-            "resolved_model_id",
-            "pricing_revision",
-            "usage_measurement_mode",
             "completion_mode",
             "stdout_tail",
             "stderr_tail",
@@ -150,17 +126,8 @@ class AgentRunOutcome:
             "attempts",
             "warm_attempts",
             "duration_ms",
-            "used_tokens",
-            "input_tokens",
-            "output_tokens",
-            "cache_read_tokens",
-            "cache_write_tokens",
         ):
             _non_negative_int(getattr(self, field_name), field_name=field_name)
-        _non_negative_float(self.cost_usd, field_name="cost_usd")
-        _non_negative_float(self.retry_cost_usd, field_name="retry_cost_usd")
-        if not isinstance(self.cost_known, bool):
-            raise TypeError("agent outcome cost_known must be a boolean")
         if self.status is AgentRunStatus.ERROR and not self.message:
             raise ValueError("an error agent outcome requires a message")
 
@@ -177,19 +144,6 @@ class AgentRunOutcome:
         agent_id: str = "",
         run_id: str = "",
         duration_ms: int = 0,
-        used_tokens: int = 0,
-        cost_usd: float = 0.0,
-        retry_cost_usd: float = 0.0,
-        input_tokens: int = 0,
-        output_tokens: int = 0,
-        cache_read_tokens: int = 0,
-        cache_write_tokens: int = 0,
-        cost_known: bool = False,
-        cost_source: str = "",
-        cost_issue: str = "",
-        resolved_model_id: str = "",
-        pricing_revision: str = "",
-        usage_measurement_mode: str = "",
         completion_mode: str = "",
         stdout_tail: str = "",
         stderr_tail: str = "",
@@ -205,19 +159,6 @@ class AgentRunOutcome:
             agent_id=agent_id,
             run_id=run_id,
             duration_ms=duration_ms,
-            used_tokens=used_tokens,
-            cost_usd=cost_usd,
-            retry_cost_usd=retry_cost_usd,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cache_read_tokens=cache_read_tokens,
-            cache_write_tokens=cache_write_tokens,
-            cost_known=cost_known,
-            cost_source=cost_source,
-            cost_issue=cost_issue,
-            resolved_model_id=resolved_model_id,
-            pricing_revision=pricing_revision,
-            usage_measurement_mode=usage_measurement_mode,
             completion_mode=completion_mode,
             stdout_tail=stdout_tail,
             stderr_tail=stderr_tail,
@@ -240,19 +181,6 @@ class AgentRunOutcome:
         attempts: int = 0,
         warm_attempts: int = 0,
         duration_ms: int = 0,
-        used_tokens: int = 0,
-        cost_usd: float = 0.0,
-        retry_cost_usd: float = 0.0,
-        input_tokens: int = 0,
-        output_tokens: int = 0,
-        cache_read_tokens: int = 0,
-        cache_write_tokens: int = 0,
-        cost_known: bool = False,
-        cost_source: str = "",
-        cost_issue: str = "",
-        resolved_model_id: str = "",
-        pricing_revision: str = "",
-        usage_measurement_mode: str = "",
         stdout_tail: str = "",
         stderr_tail: str = "",
     ) -> "AgentRunOutcome":
@@ -269,19 +197,6 @@ class AgentRunOutcome:
             attempts=attempts,
             warm_attempts=warm_attempts,
             duration_ms=duration_ms,
-            used_tokens=used_tokens,
-            cost_usd=cost_usd,
-            retry_cost_usd=retry_cost_usd,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cache_read_tokens=cache_read_tokens,
-            cache_write_tokens=cache_write_tokens,
-            cost_known=cost_known,
-            cost_source=cost_source,
-            cost_issue=cost_issue,
-            resolved_model_id=resolved_model_id,
-            pricing_revision=pricing_revision,
-            usage_measurement_mode=usage_measurement_mode,
             stdout_tail=stdout_tail,
             stderr_tail=stderr_tail,
         )
@@ -300,19 +215,6 @@ class AgentRunOutcome:
             attempts=self.attempts,
             warm_attempts=self.warm_attempts,
             duration_ms=self.duration_ms,
-            used_tokens=self.used_tokens,
-            cost_usd=self.cost_usd,
-            retry_cost_usd=self.retry_cost_usd,
-            input_tokens=self.input_tokens,
-            output_tokens=self.output_tokens,
-            cache_read_tokens=self.cache_read_tokens,
-            cache_write_tokens=self.cache_write_tokens,
-            cost_known=self.cost_known,
-            cost_source=self.cost_source,
-            cost_issue=self.cost_issue,
-            resolved_model_id=self.resolved_model_id,
-            pricing_revision=self.pricing_revision,
-            usage_measurement_mode=self.usage_measurement_mode,
             stdout_tail=self.stdout_tail,
             stderr_tail=self.stderr_tail,
         )
@@ -355,19 +257,6 @@ class AgentRunOutcome:
             "agentId": self.agent_id or None,
             "runId": self.run_id or None,
             "durationMs": self.duration_ms,
-            "usedTokens": self.used_tokens,
-            "inputTokens": self.input_tokens,
-            "outputTokens": self.output_tokens,
-            "cacheReadTokens": self.cache_read_tokens,
-            "cacheWriteTokens": self.cache_write_tokens,
-            "costUsd": self.cost_usd if self.cost_known else None,
-            "retryCostUsd": self.retry_cost_usd if self.cost_known else None,
-            "costKnown": self.cost_known,
-            "costSource": self.cost_source or None,
-            "costIssue": self.cost_issue or None,
-            "resolvedModelId": self.resolved_model_id or None,
-            "pricingRevision": self.pricing_revision or None,
-            "usageMeasurementMode": self.usage_measurement_mode or None,
             "completionMode": self.completion_mode or None,
             "stdoutTail": self.stdout_tail or None,
             "stderrTail": self.stderr_tail or None,
@@ -394,34 +283,6 @@ class AgentRunOutcome:
                 _value_or_default(doc.value("durationMs"), 0),
                 field_name="durationMs",
             )
-            used_tokens = _non_negative_int(
-                _value_or_default(doc.value("usedTokens"), 0),
-                field_name="usedTokens",
-            )
-            input_tokens = _non_negative_int(
-                _value_or_default(doc.value("inputTokens"), 0),
-                field_name="inputTokens",
-            )
-            output_tokens = _non_negative_int(
-                _value_or_default(doc.value("outputTokens"), 0),
-                field_name="outputTokens",
-            )
-            cache_read_tokens = _non_negative_int(
-                _value_or_default(doc.value("cacheReadTokens"), 0),
-                field_name="cacheReadTokens",
-            )
-            cache_write_tokens = _non_negative_int(
-                _value_or_default(doc.value("cacheWriteTokens"), 0),
-                field_name="cacheWriteTokens",
-            )
-            cost_usd = _non_negative_float(
-                _value_or_default(doc.value("costUsd"), 0.0),
-                field_name="costUsd",
-            )
-            retry_cost_usd = _non_negative_float(
-                _value_or_default(doc.value("retryCostUsd"), 0.0),
-                field_name="retryCostUsd",
-            )
         except (JsonObjectDecodeError, ValueError) as exc:
             raise ValueError(f"{label} is invalid: {exc}") from exc
         message = _optional_text(doc.value("error"), field_name="error")
@@ -443,34 +304,6 @@ class AgentRunOutcome:
             agent_id=_optional_text(doc.value("agentId"), field_name="agentId"),
             run_id=_optional_text(doc.value("runId"), field_name="runId"),
             duration_ms=duration_ms,
-            used_tokens=used_tokens,
-            cost_usd=cost_usd,
-            retry_cost_usd=retry_cost_usd,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cache_read_tokens=cache_read_tokens,
-            cache_write_tokens=cache_write_tokens,
-            cost_known=_boolean_or_default(
-                doc.value("costKnown"),
-                field_name="costKnown",
-            ),
-            cost_source=_optional_text(
-                doc.value("costSource"),
-                field_name="costSource",
-            ),
-            cost_issue=_optional_text(
-                doc.value("costIssue"),
-                field_name="costIssue",
-            ),
-            resolved_model_id=_optional_text(
-                doc.value("resolvedModelId"),
-                field_name="resolvedModelId",
-            ),
-            pricing_revision=_optional_text(
-                doc.value("pricingRevision"),
-                field_name="pricingRevision",
-            ),
-            usage_measurement_mode=_optional_text(doc.value("usageMeasurementMode"), field_name="usageMeasurementMode"),
             completion_mode=_optional_text(doc.value("completionMode"), field_name="completionMode"),
             stdout_tail=_optional_text(doc.value("stdoutTail"), field_name="stdoutTail"),
             stderr_tail=_optional_text(doc.value("stderrTail"), field_name="stderrTail"),

@@ -7,12 +7,11 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
+	configrelease "quwoquan_service/runtime/configrelease"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
-	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
@@ -22,20 +21,22 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
-	httpadapter "quwoquan_service/services/entity-service/internal/adapters/http"
-	"quwoquan_service/services/entity-service/internal/application"
-	homepageapp "quwoquan_service/services/entity-service/internal/application/homepage"
-	claimapp "quwoquan_service/services/entity-service/internal/application/homepage_claim_request"
-	reviewapp "quwoquan_service/services/entity-service/internal/application/homepage_review"
-	statusapp "quwoquan_service/services/entity-service/internal/application/homepage_status_report"
-	"quwoquan_service/services/entity-service/internal/infrastructure/followconsumer"
-	homepageexternal "quwoquan_service/services/entity-service/internal/infrastructure/homepage/external"
-	homepagepersistence "quwoquan_service/services/entity-service/internal/infrastructure/homepage/persistence"
-	claimpersistence "quwoquan_service/services/entity-service/internal/infrastructure/homepage_claim_request/persistence"
-	reviewpersistence "quwoquan_service/services/entity-service/internal/infrastructure/homepage_review/persistence"
-	statuspersistence "quwoquan_service/services/entity-service/internal/infrastructure/homepage_status_report/persistence"
-	entitymessaging "quwoquan_service/services/entity-service/internal/infrastructure/messaging"
-	"quwoquan_service/services/entity-service/internal/infrastructure/searchindex"
+	httpadapter "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/adapters/inbound/http"
+	homepageapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application"
+	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
+	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/accountsecurity"
+	homepageexternal "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/external"
+	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/followconsumer"
+	entitymessaging "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/messaging"
+	entityguard "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/operationguard"
+	homepagepersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence"
+	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/searchindex"
+	claimapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/application"
+	claimpersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/infrastructure/persistence"
+	reviewapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/application"
+	reviewpersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/infrastructure/persistence"
+	statusapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/application"
+	statuspersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/infrastructure/persistence"
 )
 
 type config struct {
@@ -63,6 +64,11 @@ type config struct {
 		BaseURL                 string `yaml:"base_url"`
 		ObjectIntersectionsPath string `yaml:"object_intersections_path"`
 	} `yaml:"content_service"`
+
+	UserAccountSecurityAuthority struct {
+		BaseURL   string `yaml:"base_url"`
+		TimeoutMS int    `yaml:"timeout_ms"`
+	} `yaml:"user_account_security_authority"`
 }
 
 func main() {
@@ -184,6 +190,20 @@ func main() {
 	)
 	if err != nil {
 		log.Fatalf("entity-service access token config invalid: %v", err)
+	}
+	accountSecurityAuthorityBaseURL := getenvOrDefault(
+		"ENTITY_USER_ACCOUNT_SECURITY_AUTHORITY_BASE_URL",
+		cfg.UserAccountSecurityAuthority.BaseURL,
+	)
+	accountSecurityAuthority, err := accountsecurity.NewAuthority(
+		accessTokenConfig,
+		accountsecurity.Config{
+			BaseURL:   accountSecurityAuthorityBaseURL,
+			TimeoutMS: cfg.UserAccountSecurityAuthority.TimeoutMS,
+		},
+	)
+	if err != nil {
+		log.Fatalf("entity-service account security authority init failed: %v", err)
 	}
 
 	var serviceOpts []application.HomepageServiceOption
@@ -360,9 +380,13 @@ func main() {
 	if mongoPing != nil {
 		healthChecker.Register("mongodb", mongoPing)
 	}
+	healthChecker.Register(
+		"account_security_authority",
+		accountSecurityAuthority.CheckAccountSecurityAuthority,
+	)
 	rootMux.HandleFunc("/healthz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
-	rootMux.Handle("/", generatedEntityOperationHandler(handler))
+	rootMux.Handle("/", entityguard.Handler(handler))
 	serverCfg := rthttp.HTTPServerMiddlewareConfig{
 		Service:           "entity-service",
 		Origin:            "cloud",
@@ -381,7 +405,8 @@ func main() {
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
-			AccessTokenVerifier: accessVerifier,
+			AccessTokenVerifier:      accessVerifier,
+			AccountSecurityAuthority: accountSecurityAuthority,
 		})(rateLimited),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
@@ -392,12 +417,6 @@ func main() {
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("entity-service: %v", err)
 	}
-}
-
-func generatedEntityOperationHandler(next http.Handler) http.Handler {
-	return rtauth.RequireGeneratedOperationAuthorization(
-		operationsecurity.ForDomain("entity"),
-	)(next)
 }
 
 type projectionRunner interface {
@@ -444,35 +463,12 @@ func loadRuntimeConfig() (config, error) {
 	if requiresConfigVersion(appEnv) && configVersion == "" {
 		return config{}, fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
 	}
-
-	if configRoot != "" {
-		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
-		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
-			return config{}, err
-		}
-		if err := mergeConfigFile(&cfg, envFile); err != nil {
-			return config{}, err
-		}
-		if configVersion != "" {
-			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
-			if err := mergeConfigFile(&cfg, versionFile); err != nil {
-				return config{}, err
-			}
-		}
-		return cfg, nil
+	path, err := configrelease.File(configRoot, serviceName, appEnv)
+	if err != nil {
+		return config{}, err
 	}
-
-	if err := mergeConfigFile(&cfg, filepath.Join("configs", "default", "config.yaml")); err != nil {
-		return config{}, fmt.Errorf("read local default config: %w", err)
-	}
-	if err := mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml")); err != nil {
-		return config{}, fmt.Errorf("read local env config: %w", err)
-	}
-	if configVersion != "" {
-		if err := mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml")); err != nil {
-			return config{}, fmt.Errorf("read local version config: %w", err)
-		}
+	if err := mergeConfigFile(&cfg, path); err != nil {
+		return config{}, fmt.Errorf("read generated runtime config: %w", err)
 	}
 	return cfg, nil
 }

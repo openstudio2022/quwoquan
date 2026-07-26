@@ -6,7 +6,7 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	realtimegenerated "quwoquan_service/services/realtime-gateway/internal/generated"
+	bindingdescriptor "quwoquan_service/services/realtime-gateway/generated/realtime/connection"
 )
 
 const realtimeGatewayAPIMessageTransportRoot = "realtime-gateway-api"
@@ -17,50 +17,30 @@ func requireMessageTransport(
 	router *rtredis.Router,
 	sceneModes map[string]string,
 ) (runtimemessaging.MessageTransport, error) {
-	descriptor, found := realtimegenerated.ExternalProviderBindingFor(
+	binding, found := bindingdescriptor.ExternalProviderBindingFor(
 		environment,
 		runtimemessaging.RuntimeMessageTransportCapability,
 	)
-	rootDescriptor, rootFound := realtimegenerated.ExternalProviderBindingRootFor(
-		runtimemessaging.RuntimeMessageTransportCapability,
-		realtimeGatewayAPIMessageTransportRoot,
-	)
-	if !rootFound {
-		return nil, fmt.Errorf(
-			"generated message transport root %s is missing",
-			realtimeGatewayAPIMessageTransportRoot,
-		)
-	}
 	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
-		ctx,
-		environment,
-		found,
+		ctx, environment, found,
 		runtimemessaging.MessageTransportBinding{
-			State:               descriptor.State,
-			AdapterID:           descriptor.AdapterID,
-			TimeoutMilliseconds: descriptor.TimeoutMilliseconds,
+			State: binding.State, AdapterID: binding.AdapterID,
+			TimeoutMilliseconds: binding.TimeoutMilliseconds,
 		},
 		runtimemessaging.MessageTransportRoot{
-			RootID:              rootDescriptor.RootID,
-			RequiredRedisScenes: rootDescriptor.RequiredRedisScenes,
+			RootID:              realtimeGatewayAPIMessageTransportRoot,
+			RequiredRedisScenes: binding.RequiredRedisScenes,
 		},
-		router,
-		sceneModes,
+		router, sceneModes,
 	)
 	if err != nil {
 		return nil, err
 	}
 	realtime, ok := resolved.Scene("realtime")
 	if !ok {
-		return nil, fmt.Errorf(
-			"message transport root %s is missing realtime scene",
-			rootDescriptor.RootID,
-		)
+		return nil, fmt.Errorf("message transport root %s is missing realtime scene", realtimeGatewayAPIMessageTransportRoot)
 	}
 	return runtimemessaging.NewRedisMessageTransportForRoot(
-		rootDescriptor.RootID,
-		descriptor.AdapterID,
-		realtime,
-		realtime,
+		realtimeGatewayAPIMessageTransportRoot, binding.AdapterID, realtime, realtime,
 	)
 }

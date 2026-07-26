@@ -6,10 +6,12 @@ import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/core/widgets/conversation_sheet.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 
 /// 历史会话抽屉（surface `assistantHistory`：私助记录抽屉与分页）。
@@ -140,24 +142,20 @@ class _AssistantHistorySheetState
     }
     final error = _error;
     if (error != null) {
-      return Padding(
-        padding: EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              runtimeErrorDisplayMessage(error),
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: AppTypography.sm, color: secondary),
-            ),
-            SizedBox(height: AppSpacing.sm),
-            CupertinoButton(
-              minimumSize: const Size.square(AppSpacing.minInteractiveSize),
-              onPressed: _loadFirstPage,
-              child: Text(l10n.retry),
-            ),
-          ],
+      return AppSectionErrorCard(
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.sectionLoad,
+          scope: UiErrorScope.section,
+          presentation: UiErrorPresentation.sectionSoftCard,
         ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _loadFirstPage();
+          }
+        },
       );
     }
     if (_conversations.isEmpty) {

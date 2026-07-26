@@ -1,141 +1,198 @@
-# L2 特性：event-ingestion-and-analytics
+# L2 Business Capability：事件摄入与分析 (`event-ingestion-and-analytics`)
 
-## 目标与用户价值
+> 所属领域：[`product-ops-growth`](../spec.md)
+>
+> 设计归属：[本层 design.md](./design.md)
 
-把 App 产品事件和异常从采集、批量上报、云端明细、小时聚合到 Portal 查询收敛为一条
-可验证的单轨链路；推荐反馈继续走 `/content/behaviors`，启动阶段诊断继续走受限
-`/ops/startup-events`。产品、运营和运维由此获得一致口径，用户获得可定位、可恢复且不会
-泄露身份的体验。
+## 1. 能力目标
 
-AppRoot Journey/Scenario：
+统一采集 App 产品事件、异常和受限启动诊断，经同一 `ObservabilityLogSinkPort` 形成可查询明细与聚合，并将推荐反馈保持在唯一行为事实边界；Gamma 使用 Elasticsearch 本地替身验证完整端云语义，Prod 使用真实 SLS。
 
-- `cold-start-safe-handoff-and-telemetry`
+## 2. 范围与非目标
+
+### In Scope
+
+- 九字段事件目录、页面目录、App 加密 outbox、product-ops 日志端口单轨与 Portal 查询。
+- 启动与运行时不可恢复异常的十字段匿名接收与 app_startup 产品投影隔离。
+- BehaviorReporter 到 HotPath/投影/推荐/指标单出口。
+- Gamma Elasticsearch 替身与 Prod SLS 共用写入、幂等、查询、脱敏和错误合同；调用方不得感知供应商。
+
+### Out of Scope
+
+- ClickHouse、消息队列、对象存储归档、Assistant 学习并入 Ops。
+- App、Portal 或领域服务直连 Elasticsearch/SLS，以及任一 Provider 失败后回退到另一存储。
+
+## 3. Journey / Scenario 贡献
+
+- [`JNY-002 / SCN-005`](../../spec.md#scn-005)
+  - 本能力处理：组合本目录 Story 的可观察行为。
+  - 本能力输出：App 产品事件/异常、受限启动诊断、日志明细/聚合、Portal 查询和推荐反馈边界的端到端验收，并将可观察结果交给下游。
+  - 失败时终态：可解释、可恢复且不伪造成功。
+
+## 4. Story
+
+
+
+- [`analytics-metric-dictionary`](./analytics-metric-dictionary/spec.md)：指标字典必须与 `event_catalog.yaml` 和各领域业务 metadata 同源；不得把 BehaviorSignal 伪装成 Ops 事件。
+- [`event-schema-governance`](./event-schema-governance/spec.md)：`page_error_outcome`：统一阻塞错误面依次记录 `shown/recovery_started/recovered/recovery_failed`。
+
+## 5. 能力要求
+
+<a id="req-001"></a>
+### REQ-001 九字段目录与 App 可靠交付
+
+- App/Go/Portal 生成目录一致，未知事件/字段/枚举本地和服务端均拒绝。
+- networkClass 固定为 wifi/ethernet/5g/4g/mobile/other/none；VPN 叠加时上报底层 接入，单独 vpn/lte/nr/offline 均被服务端拒绝。
+- session 状态机、页面映射、10s/50条/128KiB、单飞密封批次、重试/死信/actor 隔离可验证。
+- app_anr_outcome、page_first_usable、page_error_outcome 全量进入同一 Reporter
+- 原生 ANR 仅在产品 outbox accepted 后确认，入队失败保留重试
+- Dart ANR 必须去重，TTI 必须收敛到成功、超时或失败终态，恢复动作记录对应 outcome。
+- App 体验三项一级黄金指标的 source、SLO、freshness、低基数下钻与每业务最多三项规则 由机器目录和负例门禁共同锁定。
+
+<a id="req-002"></a>
+### REQ-002 Provider 中立写入幂等、聚合与查询门面
+
+- 写入必须校验 canonical digest 与整批 payload；重复 ACK、超时后已写入确认和重复查询不得产生第二份事实。
+- Gamma 的 `ext.obs.elasticsearch_local` 必须覆盖产品事件、启动诊断、运行日志与小时聚合四个逻辑分区，并通过同一 product-ops 查询门面证明写入、批次确认、明细、汇总、页面体验、活跃会话和 RTC QoE 语义。
+- Prod 的 `ext.obs.aliyun_sls` 继续使用真实 SLS 资源、TTL 与 Scheduled SQL；Gamma ES 证据不得冒充 Prod SLS 的鉴权、限流、索引、告警或回滚证据。
+- Portal 只经 product-ops 查询；任何环境都禁止调用方直连 Provider、双写、自动 fallback 或暴露后端身份。
+
+<a id="req-003"></a>
+### REQ-003 不可恢复异常与产品启动事件隔离
+
+- `/ops/recovery-failures` 是唯一匿名恢复异常入口，只接收 `occurredAt`、`appVersion`、`buildNumber`、`platform`、`osVersion`、`deviceModel`、`errorSource`、`errorType`、`errorMessage`、`stackTrace` 十个脱敏字段；未知字段整条拒绝。
+- 正常和缓慢启动在安全 Shell 后经普通 Reporter 写产品事件；不得生成启动尝试 ID、检查点、诊断编号或异常指纹，也不得向恢复异常接口复制产品/身份字段。
+- 恢复异常继续使用同一 `ObservabilityLogSinkPort` 和环境日志 Provider；客户端本地加密队列只负责失败补报，不形成第二远端链路。
+
+<a id="req-004"></a>
+### REQ-004 推荐反馈单出口与一次生效
+
+- ContentBehaviorTracker 和 ContentEngagementTracker 只调用 BehaviorReporter，BehaviorRepository 不调用 Ops。
+- /content/behaviors 或专用命令只产生一次 BehaviorSignal，并经 BehaviorBatchReported 驱动推荐投影。
+- Portal behavior 卡读取 recommendation Prometheus 真实指标。
+
+<a id="req-005"></a>
+### REQ-005 统一页面访问旅程
+
 - 统一页面访问旅程
-- 内容发现、消费、反馈、推荐生效旅程
-
-## In Scope
-
-- 九字段公共事件信封、严格事件目录和强类型扩展。
-- 会话、页面、设备、版本和网络上下文；actor-scoped 加密 outbox。
-- `/ops/events` 的 canonical-body SHA-256 幂等批次与全有或全无 ACK。
-- 产品事件/异常与启动诊断分别写入三天 SLS Logstore；无身份小时聚合保留 90 天。
-- product-ops 的 summary/drilldown 查询门面及 Portal 应用。
-- `/content/behaviors`、内容业务命令、Redis HotPath、`rm_behavior_events`、推荐投影与指标的独立闭环。
-- `local_contract / api_integration / user_acceptance` 三层证据及 alpha/beta/gamma/prod 发布门。
-
-## Out of Scope
-
-- ClickHouse、Elasticsearch、Kafka/RocketMQ、对象存储日志归档。
-- Assistant 学习协议并入运营日志。
-- 修改 `visit_record` 业务事实及 Mongo 存储。
-- 将推荐热状态迁移出 Redis。
-
-## 公共事件契约
-
-公共 wire 信封固定为九个必填字段：
-
-```text
-logType,eventType,sessionId,pageName,occurredAt,
-deviceManufacturer,deviceModel,appVersion,networkClass
-```
-
 - `logType` 仅允许 `event | error`；`eventType` 是唯一语义键，不存在 `eventName`。
-- `networkClass` 仅允许 `wifi | ethernet | 5g | 4g | mobile | other | none`；不得上报 `vpn`、
-  `lte`、`nr`、`offline` 或其他别名。
-- `connectivity_plus` 负责识别 Wi‑Fi、有线、蜂窝、无网络和其他底层接入；VPN 只是覆盖层，
-  必须忽略并上报同批可见的底层接入。仅有 VPN 而无法识别底层时上报 `other`。
-- 已确认蜂窝接入时，平台防腐层可将 Android/iOS 原生蜂窝代际细化为 `5g` 或 `4g`；
-  无授权、未知、2G/3G 或不支持平台必须诚实降级为 `mobile`，不得推断 5G。
-- `ops/event_record/event_catalog.yaml` 是事件、强类型扩展、采样率、慢阈值和内部优先级唯一真相源。
-- `_shared/app_pages.yaml` 是 pageName、GoRouter、内部 Navigator 页面和采集开关唯一真相源。
-- 不允许自由 `properties/payload/metrics`。通用扩展为 `durationMs/result/failReasonCode`；
-  `app_startup` 固定四段耗时和 `hasError`；异常至少含 `errorCode`。
-- `callStack` 只保存脱敏方法名，最多十层、单层最多 256 字符，不建全文索引。
-- `occurredAt` 只接受当前时间前 72 小时至未来 5 分钟。
-
-## 会话与页面身份
-
-```text
-sessionId = s.{base64urlWithoutPadding(reversibleUserKey)}.{sessionStartMs}
-```
-
+- `networkClass` 仅允许 `wifi | ethernet | 5g | 4g | mobile | other | none`；不得上报 `vpn` 或未声明的自由文本值。
 - 登录主体使用真实账号用户键做可逆 URL-safe 编码；游客使用安全持久化的 `guest_<ULID>`，禁止硬件标识。
-- 从最后一个 `.` 拆分时间戳；同毫秒重建以单调 `+1ms` 校正。
-- `inactive` 不结束会话；`paused/hidden/detached` 结束；下一次 `resumed` 新建。
-- 登录、登出、账号切换立即结束旧会话。旧 actor outbox 只允许限时刷新后删除，绝不重绑新账号。
-- `sessionId` 为 `SENSITIVE`：原始明细三天、Portal 默认掩码、完整值查询需高权限与审计，
-  且不得进入 Prometheus label。
-- 导航 observer、底栏和全屏模态统一写 `AppPageContextStore`；无页面异常使用
-  `app_bootstrap` 或 `app_background`。
-
-## 入口、ACK 与失败语义
-
-### `POST /ops/events`
-
-- 要求已验证 persona 或 device actor；匿名请求拒绝。
-- 每批最多 50 条、canonical JSON 最大 128 KiB。
+- 导航 observer、底栏和全屏模态统一写 `AppPageContextStore`；无法解析页面上下文的异常使用 canonical unknown surface，不上传自由文本页面名。
 - `Idempotency-Key` 必须等于 canonical 请求体 SHA-256；无逐事件 `eventId`。
-- 服务端重算摘要；同一密封批次重试返回相同 acceptedCount 与 `duplicateBatch=true`。
-- SLS 内部写 `_batchKey/_batchIndex/ingestedAt`，不进入公共 API；明细/聚合按
-  `_batchKey + _batchIndex` 去重。
-- 当前官方 Go SDK 不暴露 PutLogs sequence-id 参数，因此生产实现不虚构该能力；
-  API 幂等由 Redis 批次状态、`_batchKey` 查询确认和查询/聚合去重共同保证，协议测试必须覆盖
-  “超时但已写入”。
-- `400/422` 进入本地加密死信；`401/403` 保留到主体变化；`429/5xx/网络错误` 重试。
-
-### `POST /ops/startup-events`
-
-- 唯一匿名 Ops 入口；只接受现有固定 phase、脱敏字段与 startup proof。
 - 禁止 `sessionId/userId/pageName/callStack` 等产品或身份字段。
-- 阶段 journal 只用于可靠性诊断；内容可交互后由普通 Reporter 另发 `app_startup`。
-
-### Portal 查询门面
-
-- `/ops/events/summary` 读取闭合小时聚合。
-- `/ops/events/drilldown` 读取三天内原始明细；时间范围必填，最多 100 条。
-- 响应携带 `source=sls_aggregate|sls_raw`、freshness 与实际窗口。
-- 浏览器不持有 SLS 凭据，也不直接访问阿里云接口。
-
-## App 采集与交付策略
-
-- `AppTelemetrySessionStore`：actor、生命周期状态机和会话广播。
-- `AppTelemetryContextProvider`：静态设备上下文、网络监听和当前页面。
-- `CellularNetworkProbe`：只在网络 transport 为 mobile 时读取 Android Telephony / iOS
-  CoreTelephony 代际；缺 `READ_PHONE_STATE` 授权不弹启动权限框，返回 unknown 并由
-  ContextProvider 降级为 `mobile`。
-- `AppTelemetryOutbox`：actor-scoped 加密队列、密封批次、单飞、ACK 删除与死信。
-- `AppTelemetryReporter`：目录校验、上下文组装、稳定采样、限流和入队。
-- 事件每 10 秒或 50 条刷新，异常最多等待 1 秒；单一 in-flight，重试期间 body/digest 不变。
-- outbox 上限 1000 条或 2 MiB；event TTL 24h、error TTL 72h。
-- event 120/min burst 50；error 20/min burst 10；full-jitter 1s 起、5min 封顶，网络恢复立即尝试。
 - 队列满先删最旧普通采样事件；异常仅在普通事件清完后进入加密死信，禁止静默丢弃。
-- `app_startup`、页面、关键转化和异常全量；启动的 `hasError` 与 3000ms 阈值只用于聚合分析和告警，不参与端侧采样。其他正常性能事件按 session 稳定采样 10%，慢/失败全量。
-- cache/debug、成功 HTTP 明细、正常资源快照、成功重试细节和 AppLog 不自动上云。
-
-## 存储、聚合与应用
-
-- `app-product-telemetry-raw`：产品事件/异常，TTL 3 天。
-- `app-startup-diagnostic-raw`：受限启动阶段事实，TTL 3 天。
-- `app-product-telemetry-hourly`：无身份小时增量聚合，TTL 90 天。
-- SLS `__time__` 使用服务端 `ingestedAt`，业务时间保存在 `occurredAt`。
-- 小时 Scheduled SQL 延迟 120 秒，按接收窗口处理并按业务小时输出增量；Portal 汇总迟到增量。
 - 页面/事件、性能分位数/启动错误率、异常 TopN 三类聚合均不得包含 session/user。
-
-## 推荐反馈边界
-
-- `behaviors.yaml` 与 `/content/behaviors` 是推荐信号唯一入口，绝不占用 `logType`。
 - App 网络出口统一为 `BehaviorReporter`；Engagement tracker 只做计算并调用该端口。
-- like/comment/report 等专用命令成功后由 content-service 事务 outbox 投影一次
-  canonical `BehaviorSignal`，App 不补发第二条。
-- content-service 只发布 `BehaviorBatchReported`；推荐、曝光和搜索投影只消费该事件。
-- `rm_behavior_events` 保留 30 天作为足迹/推荐业务投影，不迁移 SLS。
 
-## SLI/SLO、环境与回滚
+## 6. 契约与依赖
 
-- ingest 成功/拒绝/重复/限流，SLS 写入耗时/错误率，raw/aggregate 查询耗时，
-  Scheduled SQL failure/freshness 均有低基数指标和告警。
-- Portal summary P95 ≤ 2s，drilldown P95 ≤ 3s；异常 1min 内可见，小时聚合整点后 10min 内可见。
-- alpha 用协议模拟器；beta 验证真实 SLS；gamma 做端到端 UAT；prod 采用 5%→25%→50%→100%，
-  不存在 `prod-gray`。
-- 不双写、不保留 Mongo/ES fallback。回滚只回退 App/服务制品；SLS 资源保留，App 继续加密排队。
-- 缺真实 SLS、gamma 或真机证据时 acceptance 必须保持 `partial/GATE_BLOCK`。
+- 上游能力：[`product-ops-growth`](../spec.md) 声明的领域入口。
+- 下游能力：本目录直接 Story 及其公开结果。
+- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+
+## 7. 集成验收
+
+<a id="sit-001"></a>
+### SIT-001 九字段目录与 App 可靠交付
+
+- GIVEN 执行“九字段目录与 App 可靠交付”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“九字段目录与 App 可靠交付”对应动作。
+- THEN App/Go/Portal 生成目录一致，未知事件/字段/枚举本地和服务端均拒绝。
+- THEN networkClass 固定为 wifi/ethernet/5g/4g/mobile/other/none；VPN 叠加时上报底层 接入，单独 vpn/lte/nr/offline 均被服务端拒绝。
+- THEN session 状态机、页面映射、10s/50条/128KiB、单飞密封批次、重试/死信/actor 隔离可验证。
+- THEN app_anr_outcome、page_first_usable、page_error_outcome 全量进入同一 Reporter
+- AND 原生 ANR 仅在产品 outbox accepted 后确认，入队失败保留重试
+- AND Dart ANR 不重复，TTI 收敛到成功、超时或失败终态，恢复动作记录对应 outcome。
+- THEN App 体验三项一级黄金指标的 source、SLO、freshness、低基数下钻与每业务最多三项规则 由机器目录和负例门禁共同锁定。
+
+<a id="sit-002"></a>
+### SIT-002 Provider 中立写入幂等、聚合与查询门面
+
+- GIVEN 执行“Provider 中立写入幂等、聚合与查询门面”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“Provider 中立写入幂等、聚合与查询门面”对应动作。
+- THEN canonical digest 与整批 payload 通过校验；重复 ACK、超时后已写入确认和重复查询只返回原事实。
+- THEN Gamma 经 Elasticsearch 替身返回与公开合同一致的 raw、hourly、页面体验、活跃会话和 RTC QoE 结果，且无 SLS 凭据、后端身份或敏感标识泄露。
+- THEN Prod 独立证明真实 SLS 的资源、TTL、Scheduled SQL、鉴权、告警和回滚；Gamma receipt 不能替代 Prod receipt。
+
+<a id="sit-003"></a>
+### SIT-003 不可恢复异常与产品启动事件隔离
+
+- GIVEN 原生、Flutter 启动或运行时根级异常已经在客户端脱敏并保存。
+- WHEN 客户端匿名提交恢复异常，或正常启动在安全 Shell 后提交产品事件。
+- THEN `/ops/recovery-failures` 只接受规定十字段并写入同一日志端口，匿名 `/ops/events` 保持 401，正常/缓慢启动不进入恢复异常接口。
+- THEN 上传失败、重复捕获或损坏队列不会产生第二条远端链路、用户阻塞或重复崩溃。
+
+<a id="sit-004"></a>
+### SIT-004 推荐反馈单出口与一次生效
+
+- GIVEN 执行“推荐反馈单出口与一次生效”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“推荐反馈单出口与一次生效”对应动作。
+- THEN ContentBehaviorTracker 和 ContentEngagementTracker 只调用 BehaviorReporter，BehaviorRepository 不调用 Ops。
+- THEN /content/behaviors 或专用命令只产生一次 BehaviorSignal，并经 BehaviorBatchReported 驱动推荐投影。
+- THEN Portal behavior 卡读取 recommendation Prometheus 真实指标。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 产品遥测的 Gamma ES、Prod SLS 与真机证据未闭合
+
+- 类型：`risk`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：Gamma Elasticsearch 替身的完整 Port 证据、Prod 真实 SLS 资源/回滚证据与真机旅程尚未共同闭合。
+- 完成判定：`SIT-002`、Prod hosted receipt 与对应 AppRoot 真机 UAT 均通过。
+
+<a id="open-002"></a>
+### OPEN-002 九字段目录与 App 可靠交付
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：App/Go/Portal 生成目录一致，未知事件/字段/枚举本地和服务端均拒绝。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 Provider 中立写入幂等、聚合与查询门面
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Gamma Elasticsearch 与 Prod SLS 通过同一端口完成 canonical digest、全批校验、重复 ACK、超时后已写入确认和查询去重验证。
+- 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 不可恢复异常与产品启动事件隔离
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：Prod 真实 SLS 接收、Android/iPhone 本地加密队列和真机补报证据尚未闭合；目标：恢复异常严格十字段且与产品事件、身份事实完全隔离。
+- 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-005"></a>
+### OPEN-005 推荐反馈单出口与一次生效
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：ContentBehaviorTracker 和 ContentEngagementTracker 只调用 BehaviorReporter，BehaviorRepository 不调用 Ops。
+- 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-006"></a>
+### OPEN-006 业务对象指标到告警和看板闭环
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：关键业务对象缺指标、告警或看板绑定时，无法按对象判断错误、延迟和转化异常。
+- 完成判定：关键对象 operation/event 的 metric、告警和 dashboard 可由 metadata 与运行证据双向定位。
+
+<a id="open-007"></a>
+### OPEN-007 多领域行为漏斗与推荐归因完整性
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺失端侧行为事件会使 Journey 漏斗和推荐反馈无法归因。
+- 完成判定：AppRoot 关键 Journey 的行为事件、公共归因字段和推荐反馈均通过目录、代码与真实事件证据校验。

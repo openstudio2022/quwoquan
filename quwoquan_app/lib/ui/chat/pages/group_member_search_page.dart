@@ -1,4 +1,4 @@
-// settings-canonical-shell: search_embedded — 见 scripts/settings_canonical_manifest.yaml、specs/ux/page-layout-semantics.md §4.3。
+// settings-canonical-shell: search_embedded — 见 scripts/settings_canonical_manifest.yaml 与 page-layout-semantics L3 spec。
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';

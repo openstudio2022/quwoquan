@@ -15,8 +15,10 @@ enum EntityErrorCode {
   internalError('ENTITY.SYSTEM.internal_error', '共享主页暂时不可用，请稍后再试', 500),
   claimNotFound('ENTITY.USER.claim_not_found', '认领申请不存在', 404),
   duplicatePendingClaim('ENTITY.USER.duplicate_pending_claim', '你已提交过认领申请，请等待审核', 409),
+  invalidClaimMaterialUrl('ENTITY.USER.invalid_claim_material_url', '认领材料链接必须是安全的 HTTPS 地址', 400),
   reviewNotFound('ENTITY.USER.review_not_found', '评价不存在或已删除', 404),
   statusReportNotFound('ENTITY.USER.status_report_not_found', '上报记录不存在', 404),
+  invalidStatusReportEvidenceUrl('ENTITY.USER.invalid_status_report_evidence_url', '上报证据链接必须是安全的 HTTPS 地址', 400),
   unknown('', '主页服务异常，请稍后重试', 500);
 
   final String code;
@@ -51,8 +53,10 @@ class EntityErrorMessages {
     EntityErrorCode.internalError: '共享主页暂时不可用，请稍后再试',
     EntityErrorCode.claimNotFound: '认领申请不存在',
     EntityErrorCode.duplicatePendingClaim: '你已提交过认领申请，请等待审核',
+    EntityErrorCode.invalidClaimMaterialUrl: '认领材料链接必须是安全的 HTTPS 地址',
     EntityErrorCode.reviewNotFound: '评价不存在或已删除',
     EntityErrorCode.statusReportNotFound: '上报记录不存在',
+    EntityErrorCode.invalidStatusReportEvidenceUrl: '上报证据链接必须是安全的 HTTPS 地址',
   };
 
   static const Map<EntityErrorCode, String> en = <EntityErrorCode, String>{
@@ -69,7 +73,9 @@ class EntityErrorMessages {
     EntityErrorCode.internalError: 'Homepage service is temporarily unavailable',
     EntityErrorCode.claimNotFound: 'Claim request not found',
     EntityErrorCode.duplicatePendingClaim: 'You already have a pending claim request',
+    EntityErrorCode.invalidClaimMaterialUrl: 'Claim material links must use secure HTTPS URLs',
     EntityErrorCode.reviewNotFound: 'Review not found or deleted',
     EntityErrorCode.statusReportNotFound: 'Status report not found',
+    EntityErrorCode.invalidStatusReportEvidenceUrl: 'Status report evidence links must use secure HTTPS URLs',
   };
 }

@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/voice-message/spec.md#gwt-001
 import 'dart:async';
 import 'dart:io';
 
@@ -8,6 +9,7 @@ import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -35,7 +37,6 @@ void main() {
   group('VoiceSendNotifier', () {
     test('上传完成后只用 MediaAsset identity 发送 audio 消息', () async {
       final uploadManager = _ImmediateUploadManager(
-        cdnUrl: 'https://cdn.example.com/voice.m4a',
         assetId: 'media_001',
       );
       final analytics = _FakeAnalyticsService();
@@ -51,6 +52,14 @@ void main() {
             MockContentRepository(),
           ),
           currentUserIdProvider.overrideWithValue('user_001'),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'user_001',
+              ownerUserId: 'user_001',
+              displayName: '语音发送测试用户',
+              avatarUrl: '',
+            ),
+          ),
           analyticsProvider.overrideWithValue(analytics),
         ],
       );
@@ -92,7 +101,6 @@ void main() {
 
     test('无效录音文件不会上传或发送', () async {
       final uploadManager = _ImmediateUploadManager(
-        cdnUrl: 'https://cdn.example.com/voice.m4a',
         assetId: 'media_001',
       );
       final analytics = _FakeAnalyticsService();
@@ -106,6 +114,14 @@ void main() {
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           contentConfigRepositoryProvider.overrideWithValue(
             MockContentRepository(),
+          ),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'voice_invalid_user',
+              ownerUserId: 'voice_invalid_user',
+              displayName: '无效录音测试用户',
+              avatarUrl: '',
+            ),
           ),
           analyticsProvider.overrideWithValue(analytics),
         ],
@@ -152,6 +168,14 @@ void main() {
           contentConfigRepositoryProvider.overrideWithValue(
             MockContentRepository(),
           ),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'voice_upload_failure_user',
+              ownerUserId: 'voice_upload_failure_user',
+              displayName: '上传失败测试用户',
+              avatarUrl: '',
+            ),
+          ),
           analyticsProvider.overrideWithValue(analytics),
         ],
       );
@@ -181,7 +205,6 @@ void main() {
 
     test('消息发送失败不会误判为完成', () async {
       final uploadManager = _ImmediateUploadManager(
-        cdnUrl: 'https://cdn.example.com/voice.m4a',
         assetId: 'media_001',
       );
       final analytics = _FakeAnalyticsService();
@@ -195,6 +218,14 @@ void main() {
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           contentConfigRepositoryProvider.overrideWithValue(
             MockContentRepository(),
+          ),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'voice_send_failure_user',
+              ownerUserId: 'voice_send_failure_user',
+              displayName: '发送失败测试用户',
+              avatarUrl: '',
+            ),
           ),
           analyticsProvider.overrideWithValue(analytics),
         ],
@@ -238,7 +269,6 @@ class _FakeAnalyticsService extends AnalyticsService {
 class _ImmediateUploadManager extends MediaUploadManager {
   _ImmediateUploadManager({
     this.status = UploadStatus.completed,
-    this.cdnUrl,
     this.assetId,
     this.error,
   }) : super(
@@ -258,7 +288,6 @@ class _ImmediateUploadManager extends MediaUploadManager {
        );
 
   final UploadStatus status;
-  final String? cdnUrl;
   final String? assetId;
   final String? error;
   int enqueueCount = 0;
@@ -268,7 +297,6 @@ class _ImmediateUploadManager extends MediaUploadManager {
     enqueueCount++;
     task
       ..status = status
-      ..cdnUrl = cdnUrl
       ..assetId = assetId
       ..error = error;
     return task;

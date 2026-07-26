@@ -1,11 +1,16 @@
 """Reusable input, execution output, and publish ownership contract."""
 from __future__ import annotations
 
+import json
+
 from core import paths
+from core.control_types import TargetSelector
 from content.execution import workspace
+from content.execution.recipe import RuntimeExecutionRequest
+from verify import verify_runtime_input_ownership
 
 
-EXECUTION_ID = "20260711--travel-homepage-ownership--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260711--travel-homepage-ownership--test-region-a--pilot-001"
 
 
 def test_execution_plan_is_runtime_output_not_control_plane_state():
@@ -76,3 +81,27 @@ def test_execution_publish_ref_binds_only_canonical_objects(tmp_path, monkeypatc
         },
     }
     assert "releaseId" not in payload
+
+
+def test_runtime_input_gate_uses_the_typed_execution_request_contract(tmp_path, monkeypatch):
+    execution_root = tmp_path / EXECUTION_ID
+    plan_root = execution_root / "0.plan"
+    plan_root.mkdir(parents=True)
+    request = RuntimeExecutionRequest(
+        family_ref="content/travel/homepage/homepage",
+        region_ref="test-region-a",
+        selector=TargetSelector.SOURCE_READY_PRIORITY,
+        count=1,
+        topic=None,
+        source_providers=(),
+        homepage_execution_id=None,
+        target_names=("测试实体甲",),
+    )
+    (plan_root / "request.json").write_text(
+        json.dumps(request.to_document(), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (plan_root / "target_set.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(verify_runtime_input_ownership, "DATA_EXECUTIONS_ROOT", tmp_path)
+
+    assert verify_runtime_input_ownership._request_issues() == []

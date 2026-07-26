@@ -69,7 +69,11 @@ func dataPublishJob(i int) DataContentJob {
 func TestDataContentFleetIdempotencySurvivesCompletion(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
-	fleet := DataContentFleet{Store: store, WorkerID: "worker-1"}
+	fleet := DataContentFleet{
+		Store:       store,
+		ExecutionID: dataJob(1).ExecutionID,
+		WorkerID:    "worker-1",
+	}
 	first, err := fleet.Declare(ctx, dataJob(1))
 	if err != nil {
 		t.Fatal(err)
@@ -100,10 +104,13 @@ func TestDataContentFleetIdempotencySurvivesCompletion(t *testing.T) {
 func TestDataContentFleetRetryExecutionDoesNotReusePriorTask(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
-	fleet := DataContentFleet{Store: store, WorkerID: "worker-retry"}
-
 	original := dataJob(1)
-	first, err := fleet.Declare(ctx, original)
+	originalFleet := DataContentFleet{
+		Store:       store,
+		ExecutionID: original.ExecutionID,
+		WorkerID:    "worker-retry-original",
+	}
+	first, err := originalFleet.Declare(ctx, original)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +118,12 @@ func TestDataContentFleetRetryExecutionDoesNotReusePriorTask(t *testing.T) {
 	retry.ExecutionID = "20260720--travel-homepage-coverage--cn-zhejiang--canary-002"
 	retry.JobID = "job-001-retry"
 	retry = bindDataJob(retry)
-	second, err := fleet.Declare(ctx, retry)
+	retryFleet := DataContentFleet{
+		Store:       store,
+		ExecutionID: retry.ExecutionID,
+		WorkerID:    "worker-retry-next",
+	}
+	second, err := retryFleet.Declare(ctx, retry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,12 +134,13 @@ func TestDataContentFleetRetryExecutionDoesNotReusePriorTask(t *testing.T) {
 		)
 	}
 
-	tasks, err := fleet.Dispatch(ctx, 10)
-	if err != nil {
-		t.Fatal(err)
+	originalTasks, err := originalFleet.Dispatch(ctx, 10)
+	if err != nil || len(originalTasks) != 1 {
+		t.Fatalf("original execution dispatch=%d err=%v", len(originalTasks), err)
 	}
-	if len(tasks) != 2 {
-		t.Fatalf("execution-scoped declarations dispatched=%d want=2", len(tasks))
+	retryTasks, err := retryFleet.Dispatch(ctx, 10)
+	if err != nil || len(retryTasks) != 1 {
+		t.Fatalf("retry execution dispatch=%d err=%v", len(retryTasks), err)
 	}
 }
 
@@ -135,9 +148,10 @@ func TestDataContentFleetAuditedRecoveryReleasesNewLease(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
 	fleet := DataContentFleet{
-		Store:    store,
-		WorkerID: "worker-recovery",
-		Retry:    RetryPolicy{MaxAttempts: 1},
+		Store:       store,
+		ExecutionID: dataPublishJob(3).ExecutionID,
+		WorkerID:    "worker-recovery",
+		Retry:       RetryPolicy{MaxAttempts: 1},
 	}
 	job := dataPublishJob(3)
 	if _, err := fleet.Declare(ctx, job); err != nil {
@@ -178,11 +192,12 @@ func TestDataContentFleetLoadRecoveryAndDeadLetter(t *testing.T) {
 		mu.Unlock()
 	}
 	fleet := DataContentFleet{
-		Store:    store,
-		WorkerID: "worker-load",
-		LeaseTTL: 20 * time.Millisecond,
-		Retry:    RetryPolicy{MaxAttempts: 3, Backoff: []time.Duration{time.Millisecond}},
-		Now:      clock,
+		Store:       store,
+		ExecutionID: dataJob(1).ExecutionID,
+		WorkerID:    "worker-load",
+		LeaseTTL:    20 * time.Millisecond,
+		Retry:       RetryPolicy{MaxAttempts: 3, Backoff: []time.Duration{time.Millisecond}},
+		Now:         clock,
 	}
 	const total = 100
 	for i := 0; i < total; i++ {
@@ -288,9 +303,10 @@ func TestDataContentFleetRenewsLeaseWhileObjectWorkerRuns(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
 	fleet := DataContentFleet{
-		Store:    store,
-		WorkerID: "worker-long-running",
-		LeaseTTL: 30 * time.Millisecond,
+		Store:       store,
+		ExecutionID: dataJob(1).ExecutionID,
+		WorkerID:    "worker-long-running",
+		LeaseTTL:    30 * time.Millisecond,
 	}
 	if _, err := fleet.Declare(ctx, dataJob(1)); err != nil {
 		t.Fatal(err)
@@ -340,7 +356,7 @@ func TestDataContentFleetRenewsLeaseWhileObjectWorkerRuns(t *testing.T) {
 func TestDataContentFleetRejectsStaleLeaseFence(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
-	fleet := DataContentFleet{Store: store}
+	fleet := DataContentFleet{Store: store, ExecutionID: dataJob(1).ExecutionID}
 	if _, err := fleet.Declare(ctx, dataJob(1)); err != nil {
 		t.Fatal(err)
 	}
@@ -388,7 +404,7 @@ func TestDataContentFleetRejectsStaleLeaseFence(t *testing.T) {
 func TestDataContentFleetReconcilesLostReadyIndexFromStoreTruth(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
-	fleet := DataContentFleet{Store: store}
+	fleet := DataContentFleet{Store: store, ExecutionID: dataJob(1).ExecutionID}
 	if _, err := fleet.Declare(ctx, dataJob(1)); err != nil {
 		t.Fatal(err)
 	}
@@ -409,15 +425,59 @@ func TestDataContentFleetReconcilesLostReadyIndexFromStoreTruth(t *testing.T) {
 	}
 }
 
+func TestDataContentFleetScopesDispatchAndReadyRebuildToExecution(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	current := dataJob(1)
+	foreign := dataJob(2)
+	foreign.ExecutionID = "20260720--travel-homepage-coverage--cn-sichuan--scale-001"
+	foreign.JobID = "job-foreign"
+	foreign = bindDataJob(foreign)
+	ready := &captureReadyIndex{}
+	currentFleet := DataContentFleet{
+		Store:       store,
+		ExecutionID: current.ExecutionID,
+		Ready:       ready,
+	}
+	foreignFleet := DataContentFleet{
+		Store:       store,
+		ExecutionID: foreign.ExecutionID,
+	}
+	if _, err := currentFleet.Declare(ctx, current); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := foreignFleet.Declare(ctx, foreign); err != nil {
+		t.Fatal(err)
+	}
+	if tasks, err := currentFleet.Dispatch(ctx, 10); err != nil || len(tasks) != 1 {
+		t.Fatalf("current execution dispatch=%d err=%v", len(tasks), err)
+	}
+	if count, err := currentFleet.ReconcileReadyIndex(ctx, 10); err != nil || count != 1 {
+		t.Fatalf("current execution reconcile=%d err=%v", count, err)
+	}
+	for _, task := range ready.tasks {
+		if task.Payload["executionId"] != current.ExecutionID {
+			t.Fatalf("ready index leaked foreign execution task: %#v", task.Payload)
+		}
+	}
+	if foreignOutbox := store.outboxByDedupe[foreign.IdempotencyKey]; store.outboxes[foreignOutbox].Status != TaskOutboxStatusPending {
+		t.Fatalf("foreign execution outbox status=%s want=%s", store.outboxes[foreignOutbox].Status, TaskOutboxStatusPending)
+	}
+	if tasks, err := foreignFleet.Dispatch(ctx, 10); err != nil || len(tasks) != 1 {
+		t.Fatalf("foreign execution dispatch=%d err=%v", len(tasks), err)
+	}
+}
+
 func TestDataContentFleetWritesAcceptedObjectTransactionResultBeforeCompletion(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
 	publishJob := dataPublishJob(1)
 	verified := false
 	fleet := DataContentFleet{
-		Store:    store,
-		WorkerID: "content-object-worker",
-		LeaseTTL: time.Second,
+		Store:       store,
+		ExecutionID: publishJob.ExecutionID,
+		WorkerID:    "content-object-worker",
+		LeaseTTL:    time.Second,
 		ResultVerifier: DataContentResultVerifierFunc(func(
 			_ context.Context,
 			item DataContentWorkItem,
@@ -480,9 +540,10 @@ func TestDataContentFleetRejectsCommercialResultWithoutEvidenceVerifier(t *testi
 	store := NewMemoryStore()
 	job := dataPublishJob(1)
 	fleet := DataContentFleet{
-		Store:    store,
-		WorkerID: "content-object-worker",
-		Retry:    RetryPolicy{MaxAttempts: 1},
+		Store:       store,
+		ExecutionID: job.ExecutionID,
+		WorkerID:    "content-object-worker",
+		Retry:       RetryPolicy{MaxAttempts: 1},
 	}
 	if _, err := fleet.Declare(ctx, job); err != nil {
 		t.Fatal(err)
@@ -525,9 +586,10 @@ func TestDataContentFleetRecordsAuthorStageWithoutCommercialAcceptance(t *testin
 	store := NewMemoryStore()
 	job := dataJob(1)
 	fleet := DataContentFleet{
-		Store:    store,
-		WorkerID: "content-author-worker",
-		LeaseTTL: time.Second,
+		Store:       store,
+		ExecutionID: job.ExecutionID,
+		WorkerID:    "content-author-worker",
+		LeaseTTL:    time.Second,
 	}
 	if _, err := fleet.Declare(ctx, job); err != nil {
 		t.Fatal(err)
@@ -603,9 +665,10 @@ func TestDataContentFleetRejectsControlPlaneOnlySuccess(t *testing.T) {
 	store := NewMemoryStore()
 	publishJob := dataPublishJob(1)
 	fleet := DataContentFleet{
-		Store:    store,
-		WorkerID: "content-object-worker",
-		Retry:    RetryPolicy{MaxAttempts: 1},
+		Store:       store,
+		ExecutionID: publishJob.ExecutionID,
+		WorkerID:    "content-object-worker",
+		Retry:       RetryPolicy{MaxAttempts: 1},
 	}
 	if _, err := fleet.Declare(ctx, publishJob); err != nil {
 		t.Fatal(err)

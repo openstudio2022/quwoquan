@@ -10,7 +10,7 @@ import 'package:quwoquan_app/core/platform/platform_providers.dart';
 /// 否则原样透传（移动端 / 窄屏不改变任何布局与背景）。
 ///
 /// 单一抽象：所有需要桌面最大宽度的认证态页面都复用本组件，避免每页各自
-/// 拼 `ConstrainedBox` 造成第二套尺寸来源（见 13-coding-discipline R25）。
+/// 拼 `ConstrainedBox` 造成第二套尺寸来源。
 class WebPageMaxWidthFrame extends ConsumerWidget {
   const WebPageMaxWidthFrame({
     super.key,

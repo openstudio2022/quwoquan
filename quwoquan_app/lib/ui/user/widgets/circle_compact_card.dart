@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 
 /// 圈子紧凑卡片：头像（或封面）+ 名称 + 创作数，横向布局。
@@ -26,6 +26,11 @@ class CircleCompactCard extends StatelessWidget {
     final fgSecondary = AppColors.iosSecondaryLabel(context);
     final separator =
         SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
+    final coverFallback = ColoredBox(
+      color: AppColors.iosFill(context),
+      child: Center(child: Icon(CupertinoIcons.group, color: fgSecondary)),
+    );
+    final coverSize = AppSpacing.avatarSize + AppSpacing.sm;
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
@@ -41,16 +46,19 @@ class CircleCompactCard extends StatelessWidget {
         borderColor: separator,
         child: Row(
           children: <Widget>[
-            CircleAvatar(
-              radius: 24,
-              backgroundImage: coverUrl.isNotEmpty
-                  ? NetworkImage(coverUrl)
-                  : null,
-              backgroundColor: AppColors.iosFill(context),
-              onBackgroundImageError: (error, stackTrace) {},
-              child: coverUrl.isEmpty
-                  ? Icon(CupertinoIcons.group, color: fgSecondary)
-                  : null,
+            ClipOval(
+              child: SizedBox.square(
+                dimension: coverSize,
+                child: coverUrl.trim().isEmpty
+                    ? coverFallback
+                    : AppCachedNetworkImage(
+                        imageUrl: coverUrl,
+                        fit: BoxFit.cover,
+                        cdnPreset: CdnImagePreset.cover,
+                        placeholder: coverFallback,
+                        errorWidget: coverFallback,
+                      ),
+              ),
             ),
             SizedBox(width: AppSpacing.containerSm),
             Expanded(

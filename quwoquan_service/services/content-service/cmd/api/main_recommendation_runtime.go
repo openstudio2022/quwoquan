@@ -9,7 +9,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	rtrec "quwoquan_service/runtime/recommendation"
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
 // composeRecommendationModelScorer 校验商用环境的模型依赖并装配生产 scorer。
@@ -51,7 +51,7 @@ func composeRecommendationModelScorer(
 			log.Fatalf("recommendation service client invalid: %v", err)
 		}
 		recOpts = append(recOpts, rtrec.WithScorer(newProductionScorer(client, timeout, logger)))
-		log.Printf("content-service rec-model-service enabled url=%s timeout=%v scorer=cascade(remote->rule)", cfg.RecModelService.URL, timeout)
+		log.Printf("content-service recommendation-service enabled url=%s timeout=%v scorer=cascade(remote->rule)", cfg.RecModelService.URL, timeout)
 	}
 	return recOpts
 }

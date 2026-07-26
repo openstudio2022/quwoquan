@@ -144,5 +144,29 @@ void main() {
         isFalse,
       );
     });
+
+    test(
+      'projects canonical signed target URLs to loopback without reclassifying install plane',
+      () {
+        const signedUploadUrl =
+            'https://beta-upload.quwoquan-env.test:18100/upload/session';
+        expect(
+          LocalDevHttpsTrust.shouldResolveThroughLocalLoopback(signedUploadUrl),
+          isTrue,
+        );
+        expect(
+          LocalDevHttpsTrust.isLocalHttpsTransportBase(signedUploadUrl),
+          isFalse,
+          reason:
+              'canonical authority alone must not trigger local CA installation',
+        );
+        expect(
+          LocalDevHttpsTrust.shouldResolveThroughLocalLoopback(
+            'https://media.quwoquan.com/upload/session',
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 }

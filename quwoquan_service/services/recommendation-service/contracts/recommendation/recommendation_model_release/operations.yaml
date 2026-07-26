@@ -1,0 +1,120 @@
+commercial_defaults:
+  block_reason: 生命周期命令（Stage/Activate/Rollback）V1 deferred：模型晋升/回滚/灰度由 model_registry_cli + CI promotion
+    gate + AB policy 承载，零 API 调用方；恢复公开命令前须先建立 operator 消费面与 PG packet。评分 Reader 两条路由已按拓扑门禁与双侧契约测试放行。
+  gap_id: RECOMMENDATION_MODEL_RELEASE_LIFECYCLE_DEFERRED
+  status: blocked
+  target_story: app-cloud-business-object-commercial-closure
+description: RecommendationModelRelease 按已激活发布评分的 named Reader packet。生命周期命令 V1 deferred（见 aggregate.yaml
+  deferred 注记）。
+api_routes:
+- actor: none
+  application:
+    facet: RecommendationScoringQueryFacade
+    kind: query
+    method: score
+    reader: RecommendationModelScoringReader
+    slice: ModelScoreResponse
+  authorization:
+    ownership_policy: active_model_release_for_scenario
+    principal: service
+    scopes:
+    - recommendation.model.score
+  commercial:
+    status: ready
+  method: POST
+  operation: ScoreRecommendationCandidates
+  path: /internal/recommendation/model-releases:score
+  reliability:
+    cancellation: supported
+    idempotency: optional
+    max_attempts: 2
+    retry_mode: idempotent
+    timeout_ms: 800
+  request_entity: ModelScoreRequest
+  response_entity: ModelScoreResponse
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  error_codes:
+  - RECOMMENDATION.USER.unauthorized
+  - RECOMMENDATION.USER.forbidden
+  - RECOMMENDATION.USER.invalid_argument
+  - RECOMMENDATION.SYSTEM.scoring_failed
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    visibility: internal
+  telemetry:
+    metric: recommendation_model_score
+    trace: true
+    attributes:
+    - scenario
+    - outcome
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+- actor: none
+  application:
+    facet: RecommendationScoringQueryFacade
+    kind: query
+    method: batchScore
+    reader: RecommendationModelScoringReader
+    slice: BatchModelScoreResponse
+  authorization:
+    ownership_policy: active_model_release_for_scenario
+    principal: service
+    scopes:
+    - recommendation.model.score
+  commercial:
+    status: ready
+  method: POST
+  operation: BatchScoreRecommendationCandidates
+  path: /internal/recommendation/model-releases:batch-score
+  reliability:
+    cancellation: supported
+    idempotency: optional
+    max_attempts: 2
+    retry_mode: idempotent
+    timeout_ms: 800
+  request_entity: BatchModelScoreRequest
+  response_entity: BatchModelScoreResponse
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  error_codes:
+  - RECOMMENDATION.USER.unauthorized
+  - RECOMMENDATION.USER.forbidden
+  - RECOMMENDATION.USER.invalid_argument
+  - RECOMMENDATION.SYSTEM.scoring_failed
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    visibility: internal
+  telemetry:
+    metric: recommendation_model_batch_score
+    trace: true
+    attributes:
+    - scenario
+    - outcome
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+consumers:
+- capabilities:
+  - score
+  - batch_score
+  name: content-service
+- capabilities:
+  - score
+  - batch_score
+  name: circle-service
+- capabilities:
+  - score
+  - batch_score
+  name: search-service

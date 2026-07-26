@@ -30,7 +30,7 @@ from core.io import write_json  # noqa: E402
 from core.paths import execution_entity_object_dir, execution_root  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
-TASK = "20260711--travel-homepage-asset-registry--cn-sichuan--canary-001"
+TASK = "20260711--travel-homepage-asset-registry--test-region-b--pilot-001"
 BATCH = TASK
 
 

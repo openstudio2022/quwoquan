@@ -1,5 +1,9 @@
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md#gwt-001
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md#gwt-002
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md#gwt-003
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md#gwt-004
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -8,12 +12,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
@@ -22,6 +27,7 @@ import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
+import 'package:quwoquan_app/ui/search/providers/search_coordinator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
@@ -98,6 +104,8 @@ Widget _buildApp({
     entrySurfaceId: '/search',
   ),
   HomepageFacetSet? homepageRepository,
+  RecentSearchQuery? recentSearchQuery,
+  RecentSearchCommandWriter? recentSearchCommandWriter,
 }) {
   final recentSearches = AlphaRecentSearchFacet();
   return ProviderScope(
@@ -105,8 +113,12 @@ Widget _buildApp({
       appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
       searchRepositoryProvider.overrideWithValue(_FakeSearchRepository()),
       searchHotQueryReaderProvider.overrideWithValue(AlphaHotQueryReader()),
-      recentSearchQueryProvider.overrideWithValue(recentSearches),
-      recentSearchCommandWriterProvider.overrideWithValue(recentSearches),
+      recentSearchQueryProvider.overrideWithValue(
+        recentSearchQuery ?? recentSearches,
+      ),
+      recentSearchCommandWriterProvider.overrideWithValue(
+        recentSearchCommandWriter ?? recentSearches,
+      ),
       searchFeedbackCommandWriterProvider.overrideWithValue(
         AlphaSearchFeedbackWriter(),
       ),
@@ -207,25 +219,20 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'global_search_recent_entries_v1': jsonEncode(<Map<String, dynamic>>[
-        _historyEntry('摄影圈'),
-        _historyEntry('旅行手账'),
-        _historyEntry('李明'),
-        _historyEntry('周末登山'),
-        _historyEntry('咖啡俱乐部'),
-        _historyEntry('夜景延时'),
-        _historyEntry('圈子搭子'),
-        _historyEntry('厦门大学'),
-        _historyEntry('鼓浪屿'),
-        _historyEntry('九寨沟'),
-        _historyEntry('环岛路'),
-        _historyEntry('旅行'),
-        _historyEntry('武夷山'),
-        _historyEntry('黄山'),
-        _historyEntry('西湖'),
-      ]),
-    });
+    await _seedHistory(<String>[
+      '摄影圈',
+      '旅行手账',
+      '李明',
+      '周末登山',
+      '咖啡俱乐部',
+      '夜景延时',
+      '圈子搭子',
+      '厦门大学',
+      '鼓浪屿',
+      '九寨沟',
+      '环岛路',
+      '旅行',
+    ]);
 
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
@@ -233,27 +240,22 @@ void main() {
     expect(find.text('搜索历史'), findsOneWidget);
     expect(find.text('展开'), findsOneWidget);
     expect(find.byKey(TestKeys.searchHistoryExpandButton), findsOneWidget);
-    expect(find.text('黄山'), findsNothing);
+    expect(find.text('环岛路'), findsNothing);
 
     await tester.tap(find.byKey(TestKeys.searchHistoryExpandButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('黄山'), findsOneWidget);
+    expect(find.text('环岛路'), findsOneWidget);
     expect(find.text('收起'), findsOneWidget);
 
     await tester.tap(find.byKey(TestKeys.searchHistoryExpandButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('黄山'), findsNothing);
+    expect(find.text('环岛路'), findsNothing);
   });
 
   testWidgets('搜索历史删除态支持单条删除与全部删除', (tester) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'global_search_recent_entries_v1': jsonEncode(<Map<String, dynamic>>[
-        _historyEntry('摄影圈'),
-        _historyEntry('旅行手账'),
-      ]),
-    });
+    await _seedHistory(<String>['摄影圈', '旅行手账']);
 
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
@@ -287,6 +289,99 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('搜索历史'), findsNothing);
+  });
+
+  testWidgets('未完成远端 upsert 返回后不得复活已删除的本地搜索', (tester) async {
+    const launchContext = SearchLaunchContext(entrySurfaceId: '/search');
+    final recentSearches = _DelayedRecentSearchFacet();
+    await tester.pumpWidget(
+      _buildApp(
+        launchContext: launchContext,
+        recentSearchQuery: recentSearches,
+        recentSearchCommandWriter: recentSearches,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final pageContext = tester.element(find.byType(GlobalSearchPage));
+    final container = ProviderScope.containerOf(pageContext);
+    final provider = searchCoordinatorProvider(launchContext);
+    final coordinator = container.read(provider.notifier);
+    final upsert = coordinator.rememberCurrentQuery(query: '并发删除');
+    await recentSearches.upsertStarted.future;
+    await tester.pump();
+
+    final localEntry = container.read(provider).recentSearches.single;
+    await coordinator.removeRecentSearch(localEntry.entryId);
+    recentSearches.completeUpsert(
+      RecentSearchEntry(
+        entryId: 'recent-canonical-delete-race',
+        query: '并发删除',
+        scope: SearchScope.all.wireValue,
+        facet: null,
+        updatedAt: DateTime.utc(2026, 7, 24, 12),
+      ),
+    );
+    await upsert;
+    await tester.pumpAndSettle();
+
+    expect(container.read(provider).recentSearches, isEmpty);
+    expect(
+      recentSearches.deletedEntryIds,
+      contains('recent-canonical-delete-race'),
+    );
+    final cached = await SearchRecentHistoryStore(
+      actorNamespace: 'guest',
+    ).load();
+    expect(cached.entries, isEmpty);
+    expect(cached.pendingUpsertKeys, isEmpty);
+    expect(cached.pendingDeleteKeys, isEmpty);
+  });
+
+  testWidgets('重启后按语义删除回执清理 Remote canonical entryId', (tester) async {
+    final recentSearches = AlphaRecentSearchFacet();
+    final remoteEntry = await recentSearches.upsertRecentSearch(
+      UpsertRecentSearchCommand(
+        query: '待删除',
+        scope: SearchScope.all.wireValue,
+        facet: null,
+      ),
+    );
+    await SearchRecentHistoryStore(actorNamespace: 'guest').save(
+      const SearchRecentHistoryCacheSnapshot(
+        pendingDeleteKeys: <String>{'all||待删除'},
+      ),
+    );
+
+    await tester.pumpWidget(
+      _buildApp(
+        recentSearchQuery: recentSearches,
+        recentSearchCommandWriter: recentSearches,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      (await recentSearches.listRecentSearches(
+        ListRecentSearchesQuery(),
+      )).items,
+      isEmpty,
+      reason: '删除回执必须通过语义键解析服务端 canonical entryId',
+    );
+    expect(
+      remoteEntry.entryId,
+      isNot(
+        RecentSearchEntryView.buildEntryId(
+          query: '待删除',
+          scope: SearchScope.all,
+        ),
+      ),
+    );
+    final cached = await SearchRecentHistoryStore(
+      actorNamespace: 'guest',
+    ).load();
+    expect(cached.pendingDeleteKeys, isEmpty);
+    expect(cached.entries, isEmpty);
   });
 
   testWidgets('输入关键词后展示本地匹配与搜索网络结果', (tester) async {
@@ -899,13 +994,13 @@ class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
+    AssistantContextSnapshot? contextSnapshot,
   }) async {
     return AssistantSearchResultView(
       queryEcho: query,
       summary: '$query 的推荐结果',
       searchIntensity: searchIntensity,
-      citations: const <AssistantSearchCitationView>[
+      citations: <AssistantSearchCitationView>[
         AssistantSearchCitationView(
           citationId: 'citation_1',
           objectType: 'content.post',
@@ -913,17 +1008,86 @@ class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
           title: '冰雪旅行推荐',
           snippet: '适合冬季出行的内容推荐',
           sourceDomain: '小趣搜',
+          destination: CitationDestination(
+            kind: CitationDestinationKind.internal,
+            objectTypeRef: 'content.post',
+            objectId: 'post_1',
+          ),
         ),
       ],
     );
   }
 }
 
-Map<String, dynamic> _historyEntry(String query) {
-  return <String, dynamic>{
-    'entryId': query,
-    'query': query,
-    'scope': SearchScope.all.wireValue,
-    'updatedAt': DateTime(2026, 3, 22, 10).toIso8601String(),
-  };
+final class _DelayedRecentSearchFacet
+    implements RecentSearchQuery, RecentSearchCommandWriter {
+  final Completer<void> upsertStarted = Completer<void>();
+  final Completer<RecentSearchEntry> _upsertResult =
+      Completer<RecentSearchEntry>();
+  final List<String> deletedEntryIds = <String>[];
+  RecentSearchEntry? _entry;
+
+  void completeUpsert(RecentSearchEntry entry) {
+    _upsertResult.complete(entry);
+  }
+
+  @override
+  Future<RecentSearchEntrySlice> listRecentSearches(
+    ListRecentSearchesQuery query,
+  ) async {
+    final entry = _entry;
+    return RecentSearchEntrySlice(
+      items: entry == null
+          ? const <RecentSearchEntry>[]
+          : <RecentSearchEntry>[entry],
+    );
+  }
+
+  @override
+  Future<RecentSearchEntry> upsertRecentSearch(
+    UpsertRecentSearchCommand command,
+  ) async {
+    if (!upsertStarted.isCompleted) {
+      upsertStarted.complete();
+    }
+    final entry = await _upsertResult.future;
+    _entry = entry;
+    return entry;
+  }
+
+  @override
+  Future<void> deleteRecentSearch(DeleteRecentSearchCommand command) async {
+    deletedEntryIds.add(command.entryId);
+    if (_entry?.entryId == command.entryId) {
+      _entry = null;
+    }
+  }
+
+  @override
+  Future<void> clearRecentSearches(ClearRecentSearchesCommand command) async {
+    _entry = null;
+  }
+}
+
+Future<void> _seedHistory(List<String> queries) {
+  final updatedAt = DateTime(2026, 3, 22, 10);
+  final entries = queries
+      .map(
+        (query) => RecentSearchEntryView(
+          entryId: 'local-pending-$query',
+          query: query,
+          scope: SearchScope.all,
+          facet: null,
+          updatedAt: updatedAt,
+        ),
+      )
+      .toList(growable: false);
+  return SearchRecentHistoryStore(actorNamespace: 'guest').save(
+    SearchRecentHistoryCacheSnapshot(
+      entries: entries,
+      pendingUpsertKeys: queries
+          .map((query) => 'all||${query.toLowerCase()}')
+          .toSet(),
+    ),
+  );
 }

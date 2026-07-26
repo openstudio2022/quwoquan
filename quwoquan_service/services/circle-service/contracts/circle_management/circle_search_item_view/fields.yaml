@@ -1,0 +1,169 @@
+description: 群组搜索结果项视图，用于全局搜索结果分组
+fields:
+- name: circleId
+  source: circleId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+  reference: true
+- name: name
+  source: name
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: description
+  source: description
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: coverUrl
+  source: coverUrl
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: categoryId
+  source: categoryId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: subCategory
+  source: subCategory
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: domainId
+  source: domainId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: kind
+  source: kind
+  type: enum
+  enum_ref: CircleKind
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: displaySubjectType
+  source: displaySubjectType
+  type: enum
+  enum_ref: CircleDisplaySubjectType
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: memberCount
+  source: memberCount
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_0
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: postCount
+  source: postCount
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_0
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: highlightText
+  source: highlightText
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: matchedField
+  source: matchedField
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: linkedHomepageId
+  source: linkedHomepageId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+  reference: true
+- name: linkedHomepageType
+  source: linkedHomepageType
+  type: enum
+  enum_ref: HomepageType
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: linkedHomepageTitle
+  source: linkedHomepageTitle
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection

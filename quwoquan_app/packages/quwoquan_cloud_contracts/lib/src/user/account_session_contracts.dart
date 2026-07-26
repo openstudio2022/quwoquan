@@ -1,7 +1,7 @@
 import '../operation_request_payload.dart';
 
 /// AccountSession 聚合登录/刷新/登出命令的 pure contracts。
-/// 真相源：contracts/metadata/user/account_session/{service,fields}.yaml。
+/// 真相源：quwoquan_service/services/user-service/contracts/account/account_session/{service,fields}.yaml。
 /// 六路登录 bootstrap 无 bearer；refresh rotation 重放触发 lineage 吊销。
 
 /// Alpha/test 对齐 USER.AUTH.token_expired 的强类型边界信号。

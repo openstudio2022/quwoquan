@@ -17,6 +17,10 @@ from quwoquan_ops.cli import stackctl
 def test_content_release_readiness__maps_phase_to_environment_capabilities__local_contract() -> None:
     policy = load_content_release_readiness_policy()
 
+    alpha_import = policy.requirement_for(
+        phase=ReadinessPhase.IMPORT,
+        environment="alpha",
+    )
     beta_import = policy.requirement_for(
         phase=ReadinessPhase.IMPORT,
         environment="beta",
@@ -34,6 +38,7 @@ def test_content_release_readiness__maps_phase_to_environment_capabilities__loca
         environment="beta",
     )
 
+    assert alpha_import.workload == "content-release"
     assert beta_import.workload == "content-release"
     assert gamma_consumer.health_scope == "content-consumer"
     assert ReadinessCapability.TELEMETRY_SLS not in beta_import.capabilities
@@ -69,11 +74,22 @@ def test_content_release_readiness__doctor_bound_capabilities_are_commercial_onl
 def test_content_release_readiness__rejects_undefined_phase_environment__local_contract() -> None:
     policy = load_content_release_readiness_policy()
     try:
-        policy.requirement_for(phase=ReadinessPhase.IMPORT, environment="alpha")
+        policy.requirement_for(phase=ReadinessPhase.CONSUMER, environment="alpha")
     except ValueError as exc:
         assert "does not define" in str(exc)
     else:
         raise AssertionError("undefined phase/environment must be rejected")
+
+
+def test_alpha_content_release_runtime__uses_import_health_scope__local_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / "content-release.json"
+    state_path.write_text('{"workload":"content-release"}', encoding="utf-8")
+    monkeypatch.setattr(stackctl, "target_process_dir", lambda _target: tmp_path)
+
+    assert stackctl._current_runtime_health_scope("alpha-local") == "content-import"
 
 
 def test_baseline_verify__does_not_read_disposable_release_output__local_contract() -> None:

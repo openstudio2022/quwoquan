@@ -183,6 +183,7 @@ Map<String, dynamic> _getPostResponseFromAppProjection(
       'contentIdentity': projection['identity'],
       'authorDisplayName': projection['displayName'],
       'authorAvatarUrl': projection['avatarUrl'],
+      'status': projection['status'] ?? 'published',
     });
   return response;
 }

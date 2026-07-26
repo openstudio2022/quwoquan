@@ -124,7 +124,6 @@ def _issue_code(kind: QueueFailureKind) -> DataIssueCode:
         QueueFailureKind.GOVERNANCE: DataIssueCode.QUEUE_GOVERNANCE_INVALID,
         QueueFailureKind.STARTUP: DataIssueCode.QUEUE_STARTUP_FAILED,
         QueueFailureKind.RESULT_ENVELOPE: DataIssueCode.QUEUE_RESULT_ENVELOPE_INVALID,
-        QueueFailureKind.BUDGET: DataIssueCode.QUEUE_BUDGET_EXCEEDED,
         QueueFailureKind.TIMEOUT: DataIssueCode.QUEUE_TIMEOUT,
     }[kind]
 
@@ -140,19 +139,6 @@ class QueueLease:
 
     def to_document(self) -> tuple[str | None, float, float]:
         return self.holder, self.expires_epoch, self.deadline_epoch
-
-
-@dataclass(frozen=True, slots=True)
-class QueueUsage:
-    tokens: int = 0
-    cost_usd: float = 0.0
-
-    def __post_init__(self) -> None:
-        if self.tokens < 0 or self.cost_usd < 0:
-            raise ValueError("object queue usage must not be negative")
-
-    def to_document(self) -> dict[str, object]:
-        return {"tokens": self.tokens, "costUsd": self.cost_usd}
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,8 +187,6 @@ class QueueJob:
     max_startup_failures: int
     max_wall_clock_seconds: int
     stuck_threshold: int
-    token_budget: int
-    cost_budget_usd: float
     permissions: tuple[str, ...]
     result_envelope_required: bool
     result_envelope_ref: str | None
@@ -215,10 +199,8 @@ class QueueJob:
     stuck_detected: bool = False
     last_issue: DataIssue | None = None
     gate_verdicts_json: str = "[]"
-    token_ledger_json: str = "[]"
     reliable_task_ref_json: str = "null"
     meta_json: str = "{}"
-    usage: QueueUsage = field(default_factory=QueueUsage)
     timings: tuple[QueueTiming, ...] = ()
     controller_run_id: str = ""
     assignment_id: str = ""
@@ -251,12 +233,9 @@ class QueueJob:
         _array_json(self.gate_verdicts_json, field_name="gateVerdicts")
         _decode_document(self.meta_json, field_name="meta")
         try:
-            parsed_ledger = json.loads(self.token_ledger_json)
             parsed_ref = json.loads(self.reliable_task_ref_json)
         except json.JSONDecodeError as exc:
             raise ValueError("object queue JSON field is invalid") from exc
-        if not isinstance(parsed_ledger, list):
-            raise ValueError("object queue tokenLedger must be an array")
         if parsed_ref is not None and not isinstance(parsed_ref, dict):
             raise ValueError("object queue reliableTaskRef must be an object or null")
 
@@ -277,8 +256,6 @@ class QueueJob:
         max_wall_clock_seconds: int,
         stuck_threshold: int,
         permissions: tuple[str, ...],
-        token_budget: int,
-        cost_budget_usd: float,
         result_envelope_required: bool,
         reliable_task_ref: Mapping[str, object] | None,
         metadata: Mapping[str, object],
@@ -313,8 +290,6 @@ class QueueJob:
             max_startup_failures=max_startup_failures,
             max_wall_clock_seconds=max_wall_clock_seconds,
             stuck_threshold=stuck_threshold,
-            token_budget=token_budget,
-            cost_budget_usd=cost_budget_usd,
             permissions=permissions,
             result_envelope_required=result_envelope_required,
             result_envelope_ref=None,
@@ -354,9 +329,6 @@ class QueueJob:
         timing_value = document.get("timings") or []
         if not isinstance(timing_value, list):
             raise ValueError("object queue timings must be an array")
-        usage_value = document.get("usage") or {}
-        if not isinstance(usage_value, Mapping):
-            raise ValueError("object queue usage must be an object")
         last_issue_value = document.get("lastIssue")
         issue = DataIssue.from_dict(last_issue_value) if last_issue_value is not None else None
         metadata = document.get("meta") or {}
@@ -383,8 +355,6 @@ class QueueJob:
             max_startup_failures=_integer(document.get("maxStartupFailures"), field_name="maxStartupFailures", minimum=1),
             max_wall_clock_seconds=_integer(document.get("maxWallClockSeconds"), field_name="maxWallClockSeconds", minimum=1),
             stuck_threshold=_integer(document.get("stuckThreshold"), field_name="stuckThreshold", minimum=1),
-            token_budget=_integer(document.get("tokenBudget"), field_name="tokenBudget"),
-            cost_budget_usd=_number(document.get("costBudgetUsd"), field_name="costBudgetUsd"),
             permissions=_string_tuple(document.get("permissions"), field_name="permissions"),
             result_envelope_required=bool(document.get("resultEnvelopeRequired")),
             result_envelope_ref=_text(document.get("resultEnvelopeRef")) or None,
@@ -401,13 +371,8 @@ class QueueJob:
             stuck_detected=bool(document.get("stuckDetected")),
             last_issue=issue,
             gate_verdicts_json=json.dumps(document.get("gateVerdicts") or [], ensure_ascii=False, sort_keys=True, separators=(",", ":")),
-            token_ledger_json=json.dumps(document.get("tokenLedger") or [], ensure_ascii=False, sort_keys=True, separators=(",", ":")),
             reliable_task_ref_json=json.dumps(document.get("reliableTaskRef"), ensure_ascii=False, sort_keys=True, separators=(",", ":")),
             meta_json=_document_json(metadata, field_name="meta"),
-            usage=QueueUsage(
-                tokens=_integer(usage_value.get("tokens", 0), field_name="usage.tokens"),
-                cost_usd=_number(usage_value.get("costUsd", 0.0), field_name="usage.costUsd"),
-            ),
             timings=tuple(QueueTiming.from_document(item) for item in timing_value),
             controller_run_id=_text(document.get("controllerRunId")),
             assignment_id=_text(document.get("assignmentId")),
@@ -434,9 +399,6 @@ class QueueJob:
 
     def gate_verdicts_document(self) -> list[object]:
         return _array_json(self.gate_verdicts_json, field_name="gateVerdicts")
-
-    def token_ledger_document(self) -> list[object]:
-        return _array_json(self.token_ledger_json, field_name="tokenLedger")
 
     def reliable_task_ref_document(self) -> dict[str, object] | None:
         value = json.loads(self.reliable_task_ref_json)
@@ -518,7 +480,6 @@ class QueueJob:
             "resultEnvelopeRequired": self.result_envelope_required,
             "resultEnvelopeRef": self.result_envelope_ref,
             "gateVerdicts": self.gate_verdicts_document(),
-            "tokenLedger": self.token_ledger_document(),
             "creatorProfileId": self.creator_profile_id or None,
             "authorId": self.author_id or None,
             "creatorArchetype": self.creator_archetype or None,
@@ -533,9 +494,6 @@ class QueueJob:
             "maxWallClockSeconds": self.max_wall_clock_seconds,
             "stuckThreshold": self.stuck_threshold,
             "permissions": list(self.permissions),
-            "tokenBudget": self.token_budget,
-            "costBudgetUsd": self.cost_budget_usd,
-            "usage": self.usage.to_document(),
             "failureFingerprints": list(self.failure_fingerprints),
             "mutexKey": self.mutex_key,
             "lease": lease,
@@ -557,5 +515,4 @@ __all__ = [
     "QueueJob",
     "QueueLease",
     "QueueTiming",
-    "QueueUsage",
 ]

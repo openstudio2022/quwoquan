@@ -1,140 +1,154 @@
-# L3 特性：消息交互体验增强（Message Interaction Polish）
+# L3 Story：消息交互体验增强（Message Interaction Polish） (`message-interaction-polish`)
 
-> **层级**：L3_subfeature（隶属 L2 `list-detail-message-delivery`，L1 `chat-conversation`）
-> **状态**：specified
-> **依赖**：`voice-message`（已完成语音基础设施）、`rich-media-message`（气泡类型路由框架）
+> 所属能力：[`list-detail-message-delivery`](../spec.md)
 
-## 背景与动机
+> Journey / Scenario：[`JNY-007 / SCN-012`](../../../spec.md#scn-012)
 
-趣聊聊天的核心消息收发链路已基本实现，但与微信等商用产品对比，存在以下交互体验缺口：
+> 设计归属：[L1 DEC-001](../../design.md#dec-001)
 
-- **引用回复**：`Message` 已有 `replyToMessageId` 字段，`SendMessageRequest` 已支持该字段，但 ChatConversationPage 气泡中**无引用块渲染**，用户看不到回复上下文
-- **@提及**：`Message` 已有 `mentions` 数组字段，但消息文本中的 `@用户名` **无高亮渲染**，点击无响应
-- **语音听筒/扬声器**：当前语音消息始终从扬声器播放，公共场合体验差；微信默认贴耳切换听筒
-- **语音倍速播放**：当前仅支持 1x 播放速度，长语音（60~120s）收听效率低；Telegram 支持 0.5x/1x/1.5x/2x
-- **会话列表数据源**：ChatPage 混用 `ChatRepository` 和 `appContentRepository`，数据源不统一导致列表内容不一致
-- **InboxService 暴露 HTTP**：云侧 `InboxService` 已实现但未挂载 HTTP 路由，会话列表基于 `UserState` 查询，大量会话时性能差
+## 1. 用户价值
 
-## 目标用户
+作为发起或接收消息的用户，
+我希望ChatPage 混用 `ChatRepository` 和 `appContentRepository`，数据源不统一导致列表内容不一致，
+从而稳定完成会话、消息或通话协作。
 
-- **趣聊所有聊天用户**：改善日常消息交互体验
-- **群聊用户**：引用回复和 @提及在群聊中尤为关键
-- **通勤/公共场合用户**：语音听筒模式需求
+## 2. 范围与非目标
 
-## 功能范围
+### In Scope
 
-### F1 引用回复（Quote Reply）
+- “消息交互体验增强（Message Interaction Polish）”的输入、可观察主路径、失败语义以及与父能力的交接。
+- 输入 @ 打开成员选择器。
+- 服务端搜索最多返回 50 个结果。
+- 选择后插入 @显示名 与稳定 userId。
+- 普通成员提及、owner/admin @所有人、assistant 已入群时 @小趣的服务端校验。
+- Message/MessageSent/ListMessages/SyncMessages mentions 同源与 mentionUnreadCount 推进、已读归零。
 
-1. **回复触发**：长按消息 → 上下文菜单「回复」→ 输入栏上方出现引用预览块（显示被回复消息摘要 + 关闭按钮）
-2. **回复发送**：发送时携带 `replyToMessageId`，服务端存储并通过 MessageSent 事件推送
-3. **回复气泡**：气泡内顶部嵌入引用块（灰色背景、竖线左边距、被回复者名称 + 消息摘要截断 80 字）
-4. **点击引用块**：滚动到被引用消息并高亮闪烁 2 次
-5. **被引用消息已删除/撤回**：引用块显示「原消息已删除」灰色文案
-6. **跨类型引用**：文本/图片/语音/视频/文件消息均可被引用，引用块按类型展示缩略信息
+### Out of Scope
 
-### F2 @提及（Mention）
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-7. **触发输入**：输入框输入 `@` 字符 → 弹出群成员选择器（搜索/滚动选择）
-8. **选择成员**：选中后在输入框插入 `@用户名 `（含尾部空格），文本着色为主题蓝
-9. **发送携带**：发送时 `mentions` 数组填入被 @ 用户的 userId
-10. **气泡渲染**：消息文本中的 `@用户名` 渲染为蓝色高亮
-11. **点击 @**：点击蓝色 @用户名 → 导航到该用户主页
-12. **@所有人**：群主/管理员可选「@所有人」，`mentions` 含特殊标记 `__all__`
+## 3. 行为要求
 
-### F3 语音听筒/扬声器切换
+<a id="req-001"></a>
+### REQ-001 消息交互体验增强（Message Interaction Polish）
 
-13. **距离传感器**：播放语音消息时，检测手机贴耳 → 自动切换到听筒模式（`AudioSession.setCategory(playAndRecord, defaultToSpeaker: false)`）
-14. **远离耳朵**：检测手机远离 → 自动恢复扬声器模式
-15. **手动切换**：语音气泡长按菜单增加「听筒播放/扬声器播放」选项
-16. **状态记忆**：记住用户最后的播放模式偏好（扬声器/听筒），下次播放默认使用该模式
+- **会话列表数据源**：ChatPage 混用 `ChatRepository` 和 `appContentRepository`，数据源不统一导致列表内容不一致。
 
-### F4 语音倍速播放
+<a id="req-002"></a>
+### REQ-002 会话列表数据源：ChatPage 混用 ChatRepository 和 appContentRepository，数据源不统一导致列表内容不一致
 
-17. **倍速按钮**：语音气泡播放状态下显示倍速标签（1x），点击循环切换 1x → 1.5x → 2x → 0.5x → 1x
-18. **倍速应用**：`just_audio` 的 `setSpeed()` 实时变速，不改变音调
-19. **倍速记忆**：记住用户的倍速偏好，同一会话内所有语音使用相同倍速
-
-### F5 会话列表数据源统一
-
-20. **统一 ChatRepository**：ChatPage 的会话列表数据全部来自 `ChatRepository.listConversations()`，移除对 `appContentRepository` 的混合调用
-21. **InboxService HTTP 暴露**：云侧 `InboxService` 挂载 `GET /chat/inbox` HTTP 路由，返回 per-user inbox 投影结果
-22. **端侧接入 Inbox**：`ChatRepository.listConversations()` 切换到调用 `/chat/inbox`（替代当前基于 UserState 的查询），提升大量会话场景性能
-23. **排序一致性**：会话列表按 `lastMessage.timestamp` 降序排列，置顶会话优先
-
-## 不做什么（Out of Scope）
-
-- **消息反应（Emoji 回复/点赞）**：需新增消息反应模型，独立特性
-- **消息转发（单条/合并）**：需设计转发消息的显示和权限模型，独立特性
-- **连续语音播放**：播完自动播下一条语音，后续增强
-- **语音转文字（ASR）**：供应商提供，独立集成
-- **自定义表情包/贴纸**：需表情包管理系统，独立特性
-- **@提及推送增强**：被 @ 时的专属推送通道，由 notification-service 后续支持
-
-## 约束
-
-### 技术约束
-
-- 引用回复 UI 使用 `AppTypography`/`AppSpacing`/`AppColors`，禁止硬编码视觉字面量
-- @提及高亮使用 `TextSpan` 富文本渲染，禁止正则替换 HTML
-- 距离传感器使用 `proximity_sensor` 或 `sensors_plus` 包
-- 音频输出切换使用 `audio_session` 包的 `setCategory`
-- 倍速使用 `just_audio` 的 `setSpeed()`（已依赖）
-- InboxService HTTP 必须通过 `runtime/http` 标准路由注册
+- **会话列表数据源**：ChatPage 混用 `ChatRepository` 和 `appContentRepository`，数据源不统一导致列表内容不一致。
+- 引用回复 UI 使用 `AppTypography`/`AppSpacing`/`AppColors`，禁止硬编码视觉字面量。
+- @提及高亮使用 `TextSpan` 富文本渲染，禁止正则替换 HTML。
+- InboxService HTTP 必须通过 `runtime/http` 标准路由注册。
 - `ChatPage` 数据源必须统一为 `chatRepositoryProvider`，禁止直接调用 `appContentRepository`
 
-### 业务约束
+<a id="req-003"></a>
+### REQ-003 输入选择与发送 payload
 
-| 功能 | 限制 |
-|------|------|
-| 引用消息摘要 | 截断 80 字 + `...` |
-| @成员选择器 | 最多显示 50 个最近联系人 + 搜索 |
-| @所有人 | 仅群主/管理员可用 |
-| 语音倍速 | 0.5x / 1x / 1.5x / 2x |
-| Inbox 查询 | 单次返回 ≤50 个会话，支持分页 |
+- 输入、选择、删除与发送必须产生同一强类型 payload，Mock 与 Remote 不得使用不同参数语义。
 
-### 性能约束
+<a id="req-004"></a>
+### REQ-004 服务端目标校验与提及未读
 
-| 指标 | 要求 |
-|------|------|
-| 引用块渲染 | 不影响消息列表 60fps 滚动 |
-| @成员选择器弹出 | ≤200ms |
-| 听筒/扬声器切换 | ≤100ms |
-| 倍速切换 | 实时生效（无停顿） |
-| Inbox API 响应 | ≤200ms p95（50 个会话） |
+- HTTP command、Mongo Message、outbox 与 ConversationUserState 必须原子收敛，重放返回原结果。
 
-## 对标输入与吸收结论
+<a id="req-005"></a>
+### REQ-005 气泡高亮与主页跳转
 
-| 对标 | 借鉴点 | 不借鉴点 | 适用边界 |
-|------|--------|---------|---------|
-| **微信** | 引用回复气泡内引用块样式；@弹出成员选择器；贴耳自动切听筒 | 引用回复最多嵌套 1 层（我们同样） | 交互范式成熟，直接对标 |
-| **Telegram** | 引用块点击跳转到原消息；语音 0.5x/1x/1.5x/2x 倍速按钮 | 过于复杂的引用嵌套 | 倍速交互直接对标 |
-| **飞书** | @提及 + 卡片引用；引用块含消息类型图标 | 企业级引用链（多层） | 类型图标参考 |
-| **Discord** | 引用块含头像 + 用户名 + 消息预览；点击跳转 | 桌面端交互不适合移动端 | 引用块信息密度参考 |
+- 自己与他人的提及气泡在深浅模式下保持可读；点击合法目标进入对应主页，双账号提醒使用同一消息事实。
 
-## 验收重点
+<a id="req-006"></a>
+### REQ-006 非法目标与越权请求失败语义
 
-### local_contract 契约与静态层
+- 非成员目标、越权 `__all__`、超限或格式非法必须返回 chat-service contracts 声明的 canonical error。
+- 单次候选结果 `<= 50`；服务端搜索使用转义后的字面量匹配，禁止正则注入。
 
-- `replyToMessageId` 和 `mentions` 字段 codegen 一致性（已有，验证不回归）
-- InboxService HTTP 路由与 service.yaml 一致
-- 视觉语义检查无新增硬编码
+## 4. 契约引用
 
-### local_contract 模块与交互层
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation_membership/operations.yaml#ListMembers`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/message/operations.yaml#SendMessage`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/message/fields.yaml#mentions`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/message/events.yaml#MessageSent`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation_user_state/fields.yaml#mentionUnreadCount`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/projections/chat_message_client.yaml`
+- canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml#userProfile`
 
-- 引用回复 Widget 渲染正确（气泡内引用块、输入栏引用预览）
-- @提及选择器弹出/搜索/选择/插入
-- 语音听筒/扬声器切换 + 倍速按钮
+## 5. 验收场景
 
-### api_integration 端云集成层
+<a id="gwt-001"></a>
+### GWT-001 消息交互体验增强（Message Interaction Polish）
 
-- 引用回复发送→同步→接收→引用块展示端云联调
-- @提及发送→同步→接收→高亮展示端云联调
-- Inbox API → 会话列表端云联调
+- GIVEN 发起或接收消息的用户具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“消息交互体验增强（Message Interaction Polish）”对应的公开行为。
+- THEN **会话列表数据源**：ChatPage 混用 `ChatRepository` 和 `appContentRepository`，数据源不统一导致列表内容不一致。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
 
-### user_acceptance 端到端旅程层
+<a id="gwt-003"></a>
+### GWT-003 输入选择与发送 payload
 
-- 群聊中回复消息→其他成员看到引用块→点击跳转旅程
-- 群聊中 @成员→被 @ 方收到消息→@高亮可见旅程
-- 语音消息贴耳播放→远离恢复扬声器旅程
+- GIVEN 用户在会话中输入内容并选择提及目标。
+- WHEN 用户删除、保留或发送已编辑的输入。
+- THEN Mock 与 Remote 使用同一强类型 payload，并保留一致的提及语义。
 
-详细验收标准见 `acceptance.yaml`。
+<a id="gwt-004"></a>
+### GWT-004 服务端目标校验与提及未读
+
+- GIVEN 消息命令包含合法或非法的提及目标。
+- WHEN 服务端处理首次或重放的发送请求。
+- THEN Message、outbox 与 ConversationUserState 原子收敛，非法目标按 canonical error 拒绝。
+
+<a id="gwt-005"></a>
+### GWT-005 气泡高亮与主页跳转
+
+- GIVEN 会话中存在自己或他人的合法提及消息。
+- WHEN 用户查看提及气泡并点击目标。
+- THEN 深浅模式下高亮可读，且导航至对应主页或提供可恢复降级。
+
+## 6. 依赖
+
+- 前置要求：[`list-detail-message-delivery`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 消息交互体验增强（Message Interaction Polish） 验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少能够证明“消息交互体验增强（Message Interaction Polish）”已满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+<a id="open-003"></a>
+### OPEN-003 输入选择与发送 payload
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：输入、选择、删除与发送行为有 local_contract，Mock 与 Remote 参数一致。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-004"></a>
+### OPEN-004 服务端目标校验与提及未读
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：HTTP、Mongo Message、outbox 与 ConversationUserState 由 api_integration 证明一致且重放幂等。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-005"></a>
+### OPEN-005 气泡高亮与主页跳转
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 目标：气泡 local_contract 覆盖自己/他人消息、深浅模式和点击目标；双账号 UAT 覆盖提醒到主页旅程。
+- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效。

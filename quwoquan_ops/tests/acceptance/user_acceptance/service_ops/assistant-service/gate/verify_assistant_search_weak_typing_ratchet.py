@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-助手 / App 搜索 弱类型棘轮门禁（与 specs/gates/assistant_search_weak_typing_governance.md 一致）。
+助手 / App 搜索弱类型只减不增门禁。
 
 口径（手写助手，排除生成体目录）：
   - bucket assistant_handwritten: quwoquan_app/lib/assistant/**/*.dart
@@ -15,7 +15,7 @@
   - map_string_object_optional: 字面量 `Map<String, Object?>`（含空格变体）
 
 行为：
-  - 默认：与 specs/gates/assistant_search_weak_typing_baseline.json 比较，
+  - 默认：与 quwoquan_ops/policies/gates/assistant_search_weak_typing_baseline.json 比较，
     任一指标 **严格大于** 基线 → exit 1（回归）。
   - --write-baseline：用当前扫描覆盖基线文件（有意收口或 bump 基线时用）。
 
@@ -40,7 +40,7 @@ def _find_repo_root() -> Path:
 
 ROOT = _find_repo_root()
 LIB = ROOT / "quwoquan_app" / "lib"
-DEFAULT_BASELINE = ROOT / "specs" / "gates" / "assistant_search_weak_typing_baseline.json"
+DEFAULT_BASELINE = ROOT / "quwoquan_ops" / "policies" / "gates" / "assistant_search_weak_typing_baseline.json"
 
 MAP_RE = re.compile(r"Map<String,\s*dynamic>")
 MAP_OBJECT_OPT_RE = re.compile(r"Map<String,\s*Object\?>")
@@ -208,7 +208,23 @@ def main() -> int:
     current = current_snapshot()
 
     if args.write_baseline:
+        existing_governance: dict[str, object] | None = None
+        if baseline_path.is_file():
+            try:
+                existing = json.loads(baseline_path.read_text(encoding="utf-8"))
+                governance = existing.get("_governance")
+                if isinstance(governance, dict):
+                    existing_governance = governance
+            except (OSError, json.JSONDecodeError):
+                pass
+        if existing_governance is None:
+            print(
+                "ERROR: refusing to rewrite baseline without _governance",
+                file=sys.stderr,
+            )
+            return 1
         payload = {
+            "_governance": existing_governance,
             "version": 1,
             "buckets": current,
             "notes": "Ratchet: any increase in map_string_dynamic or dynamic_keyword per bucket fails CI until baseline is intentionally updated.",

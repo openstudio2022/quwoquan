@@ -26,13 +26,15 @@ from content.post.materialize_apply import materialize_posts  # noqa: E402
 from content.post.materialize_contract import _image_source_contract  # noqa: E402
 from content.release.canonical import assemble as publish_assemble  # noqa: E402
 from content.release.canonical import gate as publish_gate  # noqa: E402
+from support.image_fixture import jpeg_bytes  # noqa: E402
 
 
-EXECUTION_ID = "20260711--travel-image-post-contract--cn-zhejiang--canary-001"
+EXECUTION_ID = "20260711--travel-image-post-contract--test-region-a--pilot-001"
 REF = "空标题图片作品"
 
 
 def _seed_source_collection() -> list[dict]:
+    build_execution_fixture(EXECUTION_ID)
     object_dir = execution_root(EXECUTION_ID) / "download" / "objects" / "结构化组图"
     write_source_unit(
         object_dir,
@@ -50,7 +52,7 @@ def _seed_source_collection() -> list[dict]:
         title="结构化组图来源",
         images=[
             {
-                "bytes": b"first-image",
+                "bytes": jpeg_bytes(seed=1),
                 "slug": "alpine_01",
                 "caption": "",
                 "sourceCollectionId": "collection-alpine-001",
@@ -62,7 +64,7 @@ def _seed_source_collection() -> list[dict]:
                 "usageScope": "commercial",
             },
             {
-                "bytes": b"second-image",
+                "bytes": jpeg_bytes(seed=2),
                 "slug": "alpine_02",
                 "caption": "晨光",
                 "sourceCollectionId": "collection-alpine-001",
@@ -110,6 +112,7 @@ def _seed_image_post(*, public_title: str = "结构化组图") -> None:
             "topicId": REF,
             "contentType": "image",
             "carrier": "image",
+            "vertical": "travel",
             "generator": "image_evidence_pack",
             "title": "",
             "caption": "",
@@ -131,6 +134,7 @@ def _seed_image_post(*, public_title: str = "结构化组图") -> None:
                     "license": "CC-BY-4.0",
                     "termsUrl": "https://example.com/licenses/alpine",
                     "authorizationProof": "https://example.com/licenses/alpine",
+                    "rightsAuditStatus": "verified",
                 },
                 {
                     "assetId": "alpine_02",
@@ -145,6 +149,7 @@ def _seed_image_post(*, public_title: str = "结构化组图") -> None:
                     "license": "CC-BY-4.0",
                     "termsUrl": "https://example.com/licenses/alpine",
                     "authorizationProof": "https://example.com/licenses/alpine",
+                    "rightsAuditStatus": "verified",
                 },
             ],
             "publishLayout": "gallery",
@@ -235,6 +240,7 @@ def test_image_source_contract_rejects_mixed_pages():
                 {"collectionPageUrl": "https://example.com/page/2"},
             ],
             ref="mixed",
+            vertical="travel",
         )
     except RuntimeError as exc:
         assert "share one collectionPageUrl" in str(exc)
@@ -257,10 +263,11 @@ def test_image_source_contract_rejects_retired_alias_keys():
             },
             [],
             ref="retired-aliases",
+            vertical="travel",
         )
     except RuntimeError as exc:
         assert "sourceCollectionId" in str(exc)
-        assert "license proof" in str(exc)
+        assert "rightsAuditStatus" in str(exc)
     else:
         raise AssertionError("retired image source aliases must be rejected")
 
@@ -275,13 +282,10 @@ def test_release_assembles_image_without_markdown_and_article_with_article_only(
     import shutil
 
     shutil.copytree(image_dir, image_src)
-    (image_src / "article.md").write_text("legacy article", encoding="utf-8")
-    (image_src / "gallery.md").write_text("legacy gallery", encoding="utf-8")
 
     article_src = execution_posts / "article" / "攻略" / "文章作品" / "1"
     article_src.mkdir(parents=True, exist_ok=True)
     (article_src / "article.md").write_text("# 文章作品\n\n正文。", encoding="utf-8")
-    (article_src / "gallery.md").write_text("legacy gallery", encoding="utf-8")
     write_json(article_src / "5.review" / "attestation.json", {"decision": "approved"})
     write_json(
         article_src / "5.review" / "evidence_index.json",

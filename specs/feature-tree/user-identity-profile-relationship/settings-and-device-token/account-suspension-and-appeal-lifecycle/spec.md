@@ -1,64 +1,146 @@
-# L3 Story：账号封禁、恢复与申诉生命周期
+# L3 Story：账号封禁、恢复与申诉生命周期 (`account-suspension-and-appeal-lifecycle`)
 
-## 用户价值
+> 所属能力：[`settings-and-device-token`](../spec.md)
+>
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
+>
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-当账号因可信治理决策被限制时，用户得到不泄露审核证据的结构化受限说明和申诉续接；限制
-即时阻止旧凭证继续使用，并跨内容、聊天、圈子、通知、搜索和推荐一致生效。申诉获批后，
-用户以新会话安全恢复，不会误恢复已注销身份或旧 token。
+## 1. 用户价值
 
-## In Scope
+作为管理账号、Persona 或关系的用户，我希望验证受信运营决策驱动的可逆账号限制、认证拒绝、跨域 restriction projection 和申诉恢复，从而安全地维持身份、画像与关系状态。
 
-- `UserAccount` 的 `active → suspended → active` 唯一可逆状态机，及 `closed` 不可恢复
-  约束。
-- 由 `moderation_case_v1` 和 `appeal_case_v1` 受信审批链产出的 internal
-  `SuspendAccount` / `RestoreAccount` decision。
-- 原子 account state、auth epoch、session/refresh revoke receipt、outbox 与审计写入。
-- `UserSuspended/UserRestored` 最小化事件，以及 Content、Chat、Circle、Notification、
-  Search、Recommendation 的幂等可逆 restriction projection。
-- App 结构化 `account_suspended` 错误面、申诉/支持续接与安全落点；恢复后仅允许重新登录后
-  继续原目标。
+## 2. 范围与非目标
 
-## Out of Scope
+### In Scope
 
-- App、客服页面或下游服务直接变更 `accountState`，或客户端提交审核理由/证据。
-- 恢复 `closed` 账号、恢复注销后个人数据/凭证，或通过恢复决定规避注销清理。
-- 利用 `UserAccountClosed` 消费者匿名化或删除 suspended 账号的数据。
-- 自动化处罚模型、处罚策略阈值、人工审核证据采集产品细节；本 Story 只消费已批准的受信决策。
+- UserAccount active↔suspended 状态机、auth epoch、session/refresh revoke 与 durable outbox。
+- moderation_case_v1 / appeal_case_v1 审批 decision、审计链和 closed 不可恢复规则。
+- Content、Chat、Circle、Notification、Search、Recommendation 的可逆 restriction projection。
+- App 结构化受限说明、申诉续接、安全落点与恢复后新会话目标续接。
 
-## 业务规则
+### Out of Scope
 
-1. UserAccount 是 `accountState` 与 `authEpoch` 的唯一 owner。只允许受信 internal decision
-   在行锁事务中改变状态。
-2. `closed` 是终态；Suspend 不能作用于 closed，Restore 永远不能恢复 closed。只有
-   `active → suspended` 与 `suspended → active` 合法。
-3. Suspend 与 authEpoch 递增、全部 AccountSession/refresh binding 撤销、command receipt、
-   `UserSuspended` outbox 同一事务提交。Restore 不恢复旧 session/token，必须递增 epoch 并
-   发布 `UserRestored`。
-4. decision 必须有唯一 decision id/digest、不可伪造的 OIDC/服务主体、opaque case ref、
-   request/trace id 和符合 `workflow.yaml` 的审批状态；相同 decision 可幂等重放，冲突
-   digest fail-closed。
-5. 认证登录、refresh、服务认证和长连接续期必须验证 account state 与 authEpoch。reader
-   不可用、状态未知、epoch 不匹配或 suspended 一律拒绝，不能降级到旧 session。
-6. 下游只落可逆 restriction projection：隐藏可见性、拒绝写入或抑制投递；保留 canonical
-   数据与 event inbox。Restore 只恢复允许的后续行为，不补发过期通知、不恢复旧 token。
-7. 用户面只展示 metadata 定义的结构化错误和可执行的申诉/支持入口，不显示违规理由、证据、
-   case id、内部审计或原始异常。
+- 自动处罚策略、审核证据采集 UI、人工审核工作台信息架构。
+- 任何 closed 账号、注销数据或已吊销 token 的恢复。
 
-## 验收意图
+## 3. 行为要求
 
-- `contract`：metadata、typed internal decision、错误、event payload 与 audit fields 单轨一致。
-- `GWT`：状态转移、幂等/冲突、closed 拒绝恢复、session revoke、epoch 拒绝、投影重放与
-  fail-closed 均可复验。
-- `SIT`：真实 PostgreSQL/Redis/Mongo/ES 上 Suspend→旧 token 拒绝→跨域受限→Restore→
-  新会话恢复，覆盖 retry、DLQ、并发 decision 与延迟 SLO。
-- `UAT`：真实 Gamma 设备登录受限说明、安全落点、申诉状态与批准后目标续接；不以 widget
-  fake 或只读页面替代。
+<a id="req-001"></a>
+### REQ-001 受信 Suspend decision 原子限制账号并撤销旧凭证
 
-## 商业与运维
+- 受信 `Suspend` decision 必须在同一事务更新账号状态与 auth epoch、撤销 session/refresh 并写入单一 outbox；事件不得携带 PII 或审核证据。
 
-- Suspend/Restore p95 ≤ 1.5s；旧 token 拒绝目标 ≤ 30s；下游 restriction 收敛 ≤ 5min。
-- 每个 consumer group 记录 lag、pending claim、重试、DLQ、digest conflict、projection age；
-  账号、Persona、case ref 不得成为 metric label 或明文日志字段。
-- 发布前必须在 Alpha/Beta/Gamma/Prod 分层取得证据。Prod 仅可由具备审批、密钥、回滚版本和
-  SLO guardrail 的 `stackctl deploy --target prod-hosted` 触发；没有这些输入时保持
-  `GATE_BLOCK`。
+<a id="req-002"></a>
+### REQ-002 登录、refresh 与服务鉴权一致拒绝封禁或旧 epoch 凭证
+
+- 登录、refresh、owner/persona API 和长连接鉴权必须一致拒绝 suspended 账号或旧 auth epoch 凭证。
+
+<a id="req-003"></a>
+### REQ-003 申诉获批 Restore decision 仅恢复可逆受限态
+
+- `Restore` 只能恢复 suspended 账号并递增 auth epoch；下游 restriction projection 必须幂等重放并在目标窗口内收敛。
+
+<a id="req-004"></a>
+### REQ-004 受限用户获得安全解释、申诉续接与恢复后新会话目标续接
+
+- App 必须展示安全的 `account_suspended` 解释与申诉续接，不泄露审核详情；恢复后必须重新登录才能继续原目标。
+
+<a id="req-005"></a>
+### REQ-005 `UserAccount` 的 `active → suspended → active` 唯一可逆状态机，及 `closed` 不可恢复
+
+- `UserAccount` 仅允许 `active → suspended → active` 可逆迁移；`closed` 不可恢复。
+- 受限面关闭后必须回到安全首页；恢复后旧 token 保持失效，仅新会话可续接原目标。
+- 生产恢复操作只允许具备审批权限的受信 operator 执行，并必须绑定审计与可回滚发布版本。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account`
+- canonical：`quwoquan_service/contracts/metadata/_control_plane/product/workflow.yaml`
+- canonical：`quwoquan_service/contracts/metadata/_control_plane/product/audit_schema.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/account_session`
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/errors.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/events.yaml`
+- canonical：`specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 受信 Suspend decision 原子限制账号并撤销旧凭证
+
+- GIVEN UserAccount 处于 active，存在多个 active session/refresh binding。
+- GIVEN moderation_case_v1 已满足审批与审计要求，Product Ops 持有已签发的 Suspend decision。
+- WHEN User Service 接收同一 decision 的首次提交、重放或冲突 digest。
+- THEN 首次提交在同一事务写入 suspended、authEpoch、session revoke receipt 与单一 UserSuspended outbox。
+- THEN 同 decision 重放返回稳定 receipt；相同 decision id 不同 digest、非受信主体或 closed 目标均 fail-closed。
+
+<a id="gwt-002"></a>
+### GWT-002 登录、refresh 与服务鉴权一致拒绝封禁或旧 epoch 凭证
+
+- GIVEN Suspend transaction 已成功提交，攻击者持有提交前 access token、refresh token 或长连接凭证。
+- WHEN 攻击者尝试登录、refresh、请求 owner/persona API 或续期长连接。
+- THEN 所有入口返回 metadata 定义的 account_suspended 或 token epoch 结构化失败，绝不降级到旧 session。
+- THEN enforcement reader 不可用或读取状态未知时 fail-closed。
+
+<a id="gwt-003"></a>
+### GWT-003 申诉获批 Restore decision 仅恢复可逆受限态
+
+- GIVEN UserAccount 处于 suspended，下游 restriction projection 已收敛。
+- GIVEN appeal_case_v1 已批准且产生受信 Restore decision。
+- WHEN User Service 接收 Restore，消费者重放 UserRestored，用户重新登录。
+- THEN accountState 恢复 active、authEpoch 递增、旧 session 保持撤销；下游恢复后续可见性/写入/投递。
+- THEN 已删除或匿名化的 closed 数据不被恢复
+- AND 过期通知不补发
+- AND 所有 consumer 保持 inbox/digest 幂等。
+
+<a id="gwt-004"></a>
+### GWT-004 受限用户获得安全解释、申诉续接与恢复后新会话目标续接
+
+- GIVEN Gamma 真实设备上的账号已经由受信 decision 进入 suspended，且存在受保护目标 continuation。
+- WHEN 用户尝试进入 App、提交申诉并在批准后重新登录。
+- THEN App 展示结构化 account_suspended 解释与申诉/支持入口，不泄露 reason、evidence、case 或原始异常。
+- THEN 关闭受限面回安全首页；Restore 后旧 token 不可用，新会话继续原目标且主页/内容可见性一致恢复。
+
+## 6. 依赖
+
+- 前置要求：[`settings-and-device-token`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 受信 Suspend decision 原子限制账号并撤销旧凭证
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少真实存储事务对状态、epoch、session revoke、outbox 同提交和事件脱敏的直接证据。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 登录、refresh 与服务鉴权一致拒绝封禁或旧 epoch 凭证
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少覆盖全部认证入口和旧 token 拒绝窗口的同源直接证据。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 申诉获批 Restore decision 仅恢复可逆受限态
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少跨 Content、Chat、Circle、Notification、Search 与 Recommendation 的投影重放、冲突、retry、DLQ 和收敛证据。
+- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 受限用户获得安全解释、申诉续接与恢复后新会话目标续接
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺少 Gamma Android/iOS 的受限、申诉、恢复与可访问性 Journey 以及受保护 Prod 操作证据。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效

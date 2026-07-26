@@ -50,7 +50,7 @@ from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: 
 
 EXECUTION_ID = (
     "20260720--travel-article-reliabletask-evidence--"
-    "cn-sichuan--canary-901"
+    "test-region-b--pilot-901"
 )
 
 

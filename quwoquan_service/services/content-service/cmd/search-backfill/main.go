@@ -28,9 +28,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
-	"quwoquan_service/services/content-service/internal/infrastructure/placeindex"
-	"quwoquan_service/services/content-service/internal/infrastructure/searchindex"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/placeindex"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
 )
 
 func main() {

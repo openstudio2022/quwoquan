@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.control_types import ContentType, EXECUTION_MILESTONES, RolloutMilestone
+from core.control_types import ContentType
 from core.media_asset_url import build_release_media_manifest, copy_release_media_objects
 from core.release_layout import (
     attestation_root,
@@ -20,7 +19,6 @@ from core.release_layout import (
 from core.schema import assert_valid
 from core.source_digest import SourceDigest, SourceDigestError
 from core.tree_integrity import tree_integrity_stats
-from governance.coverage.cold_start_supply import load_cold_start_supply_policy
 from content.execution.identity import parse_execution_id
 from content.release.canonical.object_transaction_audit import validate_canonical_publish
 from content.release.canonical.release_attestation import ReleaseAttestation
@@ -36,15 +34,11 @@ from content.release.canonical.object_transaction_contract import (
     _write_json,
     assert_environment_neutral,
 )
-from content.release.canonical.two_province_closure import expected_entity_refs
 from content.release.environment.consistency import scan_release_contract
 from content.release.model import ReleaseKind
 
 
 OBJECT_KINDS = ("creators", "entities", "posts", "tags")
-CONTENT_MILESTONES = (*EXECUTION_MILESTONES, RolloutMilestone.LAUNCH)
-
-
 @dataclass(frozen=True, slots=True)
 class ExecutionPublishClosure:
     execution_id: str
@@ -100,11 +94,12 @@ def _execution_publish_closure(
     if identity.content_type is not ContentType.HOMEPAGE and entity_refs:
         raise ObjectTransactionError(f"{execution_id}: post execution has canonical entities")
     if identity.content_type is not ContentType.HOMEPAGE:
-        actual_mix = _post_content_mix(publish_root, set(post_refs))
-        if set(actual_mix) != {identity.content_type}:
-            raise ObjectTransactionError(
-                f"{execution_id}: canonical post contentType does not match execution identity"
-            )
+        for ref in post_refs:
+            manifest = _read_json(_object_root(publish_root, "posts", ref) / "manifest.json")
+            if str(manifest.get("contentType") or "") != identity.content_type.value:
+                raise ObjectTransactionError(
+                    f"{execution_id}: canonical post contentType does not match execution identity"
+                )
     if not entity_refs and not post_refs:
         raise ObjectTransactionError(
             f"{execution_id}: canonical publish has no objects bound to this execution"
@@ -184,90 +179,6 @@ def _reference_closure(
     return sorted(creator_refs), sorted(tag_refs)
 
 
-def _post_content_mix(publish_root: Path, post_refs: set[str]) -> Counter[ContentType]:
-    actual_mix: Counter[ContentType] = Counter()
-    for ref in sorted(post_refs):
-        manifest = _read_json(_object_root(publish_root, "posts", ref) / "manifest.json")
-        try:
-            actual_mix[ContentType(str(manifest.get("contentType") or ""))] += 1
-        except ValueError as exc:
-            raise ObjectTransactionError(f"post contentType invalid: {ref}") from exc
-    return actual_mix
-
-
-def _assert_launch_contract(
-    publish_root: Path,
-    *,
-    entity_refs: set[str],
-    post_refs: set[str],
-) -> None:
-    expected_entities = set().union(*expected_entity_refs().values())
-    if entity_refs != expected_entities:
-        raise ObjectTransactionError(
-            "launch entity closure must exactly equal Zhejiang/Sichuan master coverage: "
-            f"actual={len(entity_refs)} expected={len(expected_entities)}"
-        )
-    policy = load_cold_start_supply_policy()
-    if len(post_refs) != policy.expected_post_count:
-        raise ObjectTransactionError(
-            "launch post closure does not match cold-start policy: "
-            f"actual={len(post_refs)} expected={policy.expected_post_count}"
-        )
-    actual_mix = _post_content_mix(publish_root, post_refs)
-    target_count = len(policy.targets)
-    expected_mix = {
-        ContentType.ARTICLE: target_count * policy.content_mix.article,
-        ContentType.IMAGE: target_count * policy.content_mix.image,
-        ContentType.VIDEO: target_count * policy.content_mix.video,
-    }
-    if dict(actual_mix) != expected_mix:
-        raise ObjectTransactionError(
-            f"launch post content mix mismatch: actual={dict(actual_mix)} expected={expected_mix}"
-        )
-
-
-def _assert_canary_supply_contract(
-    publish_root: Path,
-    *,
-    entity_refs: set[str],
-    post_refs: set[str],
-) -> None:
-    """canary release = 全部金丝雀主页 + 每个金丝雀实体 article/image/video 各一篇。"""
-    from content.release.canonical.rollout_contract import load_rollout_contract
-
-    contract = load_rollout_contract()
-    expected_entities = {
-        ref
-        for province in contract.provinces
-        for ref in province.canary_entity_refs
-    }
-    if entity_refs != expected_entities:
-        raise ObjectTransactionError(
-            "canary entity closure must exactly equal the rollout canary targets: "
-            f"actual={sorted(entity_refs)} expected={sorted(expected_entities)}"
-        )
-    policy = load_cold_start_supply_policy()
-    canary_target_count = sum(
-        len(province.canary_targets) for province in contract.provinces
-    )
-    expected_total = canary_target_count * policy.content_mix.total_per_entity
-    if len(post_refs) != expected_total:
-        raise ObjectTransactionError(
-            "canary post closure does not match the canary cold-start supply: "
-            f"actual={len(post_refs)} expected={expected_total}"
-        )
-    actual_mix = _post_content_mix(publish_root, post_refs)
-    expected_mix = {
-        ContentType.ARTICLE: canary_target_count * policy.content_mix.article,
-        ContentType.IMAGE: canary_target_count * policy.content_mix.image,
-        ContentType.VIDEO: canary_target_count * policy.content_mix.video,
-    }
-    if dict(actual_mix) != expected_mix:
-        raise ObjectTransactionError(
-            f"canary post content mix mismatch: actual={dict(actual_mix)} expected={expected_mix}"
-        )
-
-
 def _existing_refs(release_root: Path) -> dict[str, list[str]]:
     desired = _read_json(payload_file(release_root, "desired_state.json"))
     refs = desired.get("desiredRefs")
@@ -282,16 +193,9 @@ def build_aggregate_release(
     release_root: Path,
     release_id: str,
     execution_ids: list[str],
-    rollout_milestone: str,
 ) -> dict[str, Any]:
     """Create one immutable release from canonical objects bound to execution IDs."""
     release_id = _safe_id(release_id, label="releaseId")
-    try:
-        milestone = RolloutMilestone(str(rollout_milestone or "").strip())
-    except ValueError as exc:
-        raise ObjectTransactionError("rolloutMilestone is invalid") from exc
-    if milestone not in CONTENT_MILESTONES:
-        raise ObjectTransactionError("rolloutMilestone is not a content milestone")
     closures = tuple(
         _execution_publish_closure(execution_id, publish_root=publish_root)
         for execution_id in execution_ids
@@ -312,13 +216,6 @@ def build_aggregate_release(
     post_refs = {ref for closure in closures for ref in closure.post_refs}
     if not entity_refs and not post_refs:
         raise ObjectTransactionError("aggregate release has no canonical object")
-    if milestone is RolloutMilestone.LAUNCH:
-        _assert_launch_contract(publish_root, entity_refs=entity_refs, post_refs=post_refs)
-    elif milestone is RolloutMilestone.CANARY:
-        _assert_canary_supply_contract(
-            publish_root, entity_refs=entity_refs, post_refs=post_refs
-        )
-
     canonical_closure = validate_canonical_publish(publish_root)
     if canonical_closure["status"] != "passed":
         raise ObjectTransactionError(
@@ -341,7 +238,7 @@ def build_aggregate_release(
     final_root = release_root / release_id
     if final_root.exists():
         header = _read_json(payload_file(final_root, "release.json"))
-        aggregate = _read_json(attestation_root(final_root) / "aggregate.json")
+        aggregate = _read_json(attestation_root(final_root) / "release.json")
         selected_merkle = object_closure_digest(final_root)
         if (
             header.get("releaseId") == release_id
@@ -349,7 +246,6 @@ def build_aggregate_release(
             and _existing_refs(final_root) == desired
             and header.get("canonicalMerkle") == selected_merkle
             and header.get("releaseKind") == ReleaseKind.CONTENT
-            and header.get("rolloutMilestone") == milestone.value
             and header.get("sourceDigests") == source_digest_documents
             and aggregate.get("sourceDigests") == source_digest_documents
             and aggregate.get("payloadSha256") == payload_digest(final_root)
@@ -363,7 +259,6 @@ def build_aggregate_release(
                 "postCount": len(post_refs),
                 "creatorCount": len(creator_refs),
                 "canonicalMerkle": selected_merkle,
-                "rolloutMilestone": milestone.value,
                 "idempotent": True,
             }
         raise ObjectTransactionError(f"aggregate release create-once conflict: {final_root}")
@@ -387,7 +282,6 @@ def build_aggregate_release(
                 "releaseKind": ReleaseKind.CONTENT,
                 "canonicalMerkle": selected_merkle,
                 "executionIds": execution_ids,
-                "rolloutMilestone": milestone.value,
                 "sourceDigests": source_digest_documents,
             },
         )
@@ -441,11 +335,10 @@ def build_aggregate_release(
                     for item in consistency["blockingIssues"][:5]
                 )
             )
-        aggregate_attestation = ReleaseAttestation(
+        release_attestation = ReleaseAttestation(
             release_id=release_id,
             release_kind=ReleaseKind.CONTENT,
             execution_ids=tuple(execution_ids),
-            rollout_milestone=milestone,
             entity_count=len(entity_refs),
             post_count=len(post_refs),
             creator_count=len(creator_refs),
@@ -456,12 +349,12 @@ def build_aggregate_release(
             recorded_at=_now(),
         ).to_document()
         assert_valid(
-            aggregate_attestation,
+            release_attestation,
             "release",
-            "aggregate_release_attestation",
-            label=f"aggregate_release_attestation:{release_id}",
+            "release_attestation",
+            label=f"release_attestation:{release_id}",
         )
-        _write_json(attestation_root(staging) / "aggregate.json", aggregate_attestation)
+        _write_json(attestation_root(staging) / "release.json", release_attestation)
         assert_environment_neutral(staging)
         staging.replace(final_root)
         return {
@@ -473,7 +366,6 @@ def build_aggregate_release(
             "postCount": len(post_refs),
             "creatorCount": len(creator_refs),
             "canonicalMerkle": selected_merkle,
-            "rolloutMilestone": milestone.value,
             "idempotent": False,
         }
     except Exception:

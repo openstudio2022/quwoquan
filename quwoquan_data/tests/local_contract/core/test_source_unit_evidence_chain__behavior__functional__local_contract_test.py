@@ -1,6 +1,6 @@
 """来源单元 → 文章资产 证据链契约 (T2)。
 
-证明 specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md §3/§4：
+证明 object-homepage-coverage-scaling 的来源单元与对象证据链合同：
 - download 写来源单元（编号 + assets/ + index + manifest），无对象级散 images/。
 - produce 选图消费来源单元，asset 携带相对 sourceAssetRef/sourceRef。
 - materialize 成品 assets 文件名 = assetId，可由 article.md 的 asset:// 直查；
@@ -50,9 +50,9 @@ from content.post.article.route_assets import _build_route_assets  # noqa: E402
 from verify.verify_directory_evidence_chain import scan_execution  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
-TASK = "20260711--travel-article-evidence--cn-sichuan--canary-001"
+TASK = "20260711--travel-article-evidence--test-region-b--pilot-001"
 BATCH = TASK
-ENTITIES = ["海螺沟", "稻城亚丁"]
+ENTITIES = ["测试实体丙", "稻城亚丁"]
 
 
 def _img(seed: int) -> bytes:
@@ -96,11 +96,11 @@ def _seed_source_units() -> None:
 
 def test_source_unit_layout_no_loose_images():
     _seed_source_units()
-    obj = execution_entity_object_dir(TASK, "地点", "景区", "海螺沟")
+    obj = execution_entity_object_dir(TASK, "地点", "景区", "测试实体丙")
     units = iter_source_units(obj)
     assert len(units) == 1, units
     unit = units[0]
-    assert re.match(r"^sources/海螺沟__[A-Za-z0-9_\-]+__[0-9a-f]{8}$", unit.resolve().relative_to(execution_root(TASK).resolve()).as_posix()), unit
+    assert re.match(r"^sources/测试实体丙__[A-Za-z0-9_\-]+__[0-9a-f]{8}$", unit.resolve().relative_to(execution_root(TASK).resolve()).as_posix()), unit
     assert (unit / "meta.json").is_file()
     assert (unit / "assets" / "index.json").is_file()
     assert (unit / "assets").is_dir()
@@ -113,12 +113,12 @@ def test_source_unit_layout_no_loose_images():
 
 def test_object_image_candidates_carry_relative_refs():
     _seed_source_units()
-    obj = execution_entity_object_dir(TASK, "地点", "景区", "海螺沟")
+    obj = execution_entity_object_dir(TASK, "地点", "景区", "测试实体丙")
     cands = object_image_candidates(obj, TASK)
     assert len(cands) == 2, cands
     for c in cands:
-        assert re.match(r"^sources/海螺沟__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", c["sourceRef"]), c
-        assert re.match(r"^sources/海螺沟__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", c["sourceAssetRef"]), c
+        assert re.match(r"^sources/测试实体丙__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", c["sourceRef"]), c
+        assert re.match(r"^sources/测试实体丙__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", c["sourceAssetRef"]), c
         assert not c["sourceAssetRef"].startswith("/")
         assert "/Users/" not in c["sourceAssetRef"]
 
@@ -126,7 +126,7 @@ def test_object_image_candidates_carry_relative_refs():
 def test_route_assets_to_post_assets_traceable():
     _seed_source_units()
     # RC4：文章 1:1 同源——证据链取自单一底稿来源（baseSourceRef）的 assets，不跨实体借图。
-    obj = execution_entity_object_dir(TASK, "地点", "景区", "海螺沟")
+    obj = execution_entity_object_dir(TASK, "地点", "景区", "测试实体丙")
     cands = object_image_candidates(obj, TASK)
     assert cands, "seeded base source should expose image candidates"
     brief = {
@@ -134,18 +134,18 @@ def test_route_assets_to_post_assets_traceable():
         "baseSourceRef": cands[0]["sourceRef"],
         "imagePlan": [{"slot": "封面", "imageLayout": "fullWidth"}, {"slot": "节点", "gallery": "masonry"}],
     }
-    evidence_bundle = {"routeNodes": [{"entityName": "海螺沟", "entityRef": "地点/景区/海螺沟"}]}
-    assets = _build_route_assets(TASK, "海螺沟环线", brief, evidence_bundle)
+    evidence_bundle = {"routeNodes": [{"entityName": "测试实体丙", "entityRef": "地点/景区/测试实体丙"}]}
+    assets = _build_route_assets(TASK, "测试实体丙环线", brief, evidence_bundle)
     assert assets, assets
     # 成品资产文件名 = assetId.ext，asset:// 可直查文件
     for a in assets:
         assert a["fileName"] == f"{a['assetId']}{Path(a['fileName']).suffix}", a
-        assert a["entityName"] in a["assetId"], a
+        assert a["entityName"].replace("-", "_") in a["assetId"], a
         assert not a["assetId"].startswith("data_asset_"), a
-        assert re.match(r"^sources/海螺沟__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", a["sourceAssetRef"]), a
+        assert re.match(r"^sources/测试实体丙__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", a["sourceAssetRef"]), a
         assert not a["sourceAssetRef"].startswith("/"), a
     # copy 到 post assets/，文件名即 assetId
-    post_assets = execution_root(TASK) / "posts" / "article" / "环线" / "海螺沟环线" / "1" / "assets"
+    post_assets = execution_root(TASK) / "posts" / "article" / "环线" / "测试实体丙环线" / "1" / "assets"
     copied = copy_asset_files(assets, post_assets)
     for a in copied:
         f = post_assets / a["fileName"]

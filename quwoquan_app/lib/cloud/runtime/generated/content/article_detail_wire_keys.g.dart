@@ -1,5 +1,5 @@
 // GENERATED FILE — DO NOT EDIT BY HAND.
-// Source: contracts/metadata/content/post/projections/article_detail_wire_keys.yaml
+// Source: services/content-service/contracts/content/post/projections/article_detail_wire_keys.yaml
 // Regenerate: make codegen-app
 
 /// 文章详情顶层 wire Map 扩展键名 SSOT

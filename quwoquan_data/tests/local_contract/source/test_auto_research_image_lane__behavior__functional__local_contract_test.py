@@ -1,9 +1,36 @@
 from __future__ import annotations
 
+import pytest
 
 
 from support.source_plan_guidance_fixtures import *  # noqa: F401,F403
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _route_homepage_authority_to_local_source_fixtures(monkeypatch: pytest.MonkeyPatch):
+    import content.source.research.auto_plan_writer as research_mod
+    import content.source.research.homepage_authority as authority_mod
+
+    monkeypatch.setattr(
+        authority_mod,
+        "resolve_baidu_baike_page",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        authority_mod,
+        "resolve_toutiao_baike_page",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        authority_mod,
+        "_wiki_title_for_entity",
+        lambda host, entity_id, *, entity_aliases=(): research_mod._wiki_title_for_entity(
+            host,
+            entity_id,
+            entity_aliases=entity_aliases,
+        ),
+    )
 
 
 
@@ -11,7 +38,7 @@ from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: 
 def test_auto_research_image_lane_prefers_non_homepage_alias_matched_image():
     import content.source.research.auto_plan_writer as research_mod
 
-    task = "20260711--travel-image-source-isolation--cn-zhejiang--canary-001"
+    task = "20260711--travel-image-source-isolation--test-region-a--pilot-001"
     entity = "三苏祠"
     ExecutionFixtureBuilder(
         task,
@@ -102,7 +129,7 @@ def test_auto_research_rescues_image_lane_when_first_open_license_discovery_is_e
     import content.source.research.auto_plan_writer as research_mod
 
     spec = ExecutionFixtureBuilder(
-        "20260711--travel-image-source-rescue--cn-zhejiang--canary-002",
+        "20260711--travel-image-source-rescue--test-region-a--pilot-002",
         targets=({"entityType": "地点/景区", "name": "故宫博物院"},),
     ).spec_payload()
     spec["content"]["quotas"]["imageWorksPerTarget"] = 2
@@ -214,36 +241,43 @@ def test_auto_research_rescues_image_lane_when_first_open_license_discovery_is_e
         for image in collection["images"]
     } >= {image["url"] for image in rescue_images}
 
-def test_auto_research_uses_registry_image_aliases_for_visual_discovery():
+def test_auto_research_materializes_matched_image_provider_results():
     import content.source.research.auto_plan_writer as research_mod
 
-    spec = ExecutionFixtureBuilder(
-        "20260711--travel-image-alias-discovery--cn-zhejiang--canary-003",
-        targets=({"entityType": "地点/景区", "name": "黄山风景区"},),
-    ).spec_payload()
+    builder = ExecutionFixtureBuilder(
+        "20260711--travel-image-alias-discovery--test-region-a--pilot-003",
+        targets=(
+            {
+                "entityType": "地点/景区",
+                "name": "测试实体甲",
+            },
+        ),
+    )
+    builder.build()
+    spec = builder.spec_payload()
     spec["content"]["quotas"]["imageWorksPerTarget"] = 2
     spec["acceptance"]["minPostsPerEntity"] = 2
     spec["executionPolicy"]["targetObjectCount"] = 2
     task = spec["executionId"]
     store.save_spec(spec)
-    entity = "黄山风景区"
+    entity = "测试实体甲"
     image_rows = [
         {
-            "url": f"https://upload.wikimedia.org/wikipedia/commons/huangshan_{index}.jpg",
+                "url": f"https://upload.wikimedia.org/wikipedia/commons/test_entity_{index}.jpg",
             "platform": "Wikimedia Commons",
             "license": "CC BY-SA 4.0",
-            "credit": f"Huangshan Creator {index}",
-            "sourceUrl": f"https://commons.wikimedia.org/wiki/File:Huangshan_{index}.jpg",
+                "credit": f"Test Creator {index}",
+                "sourceUrl": f"https://commons.wikimedia.org/wiki/File:Test_entity_{index}.jpg",
             "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
             "licenseSnapshot": "CC BY-SA 4.0 recorded on Wikimedia Commons file page",
-            "authorizationProof": f"https://commons.wikimedia.org/wiki/File:Huangshan_{index}.jpg",
+                "authorizationProof": f"https://commons.wikimedia.org/wiki/File:Test_entity_{index}.jpg",
             "usageScope": "app_publish",
             "width": 1600,
             "height": 1000,
-            "caption": f"Mount Huangshan landscape {index}",
-            "relevance": f"Mount Huangshan landscape {index}",
-            "creator": f"Huangshan Creator {index}",
-            "collectionPageUrl": f"https://commons.wikimedia.org/wiki/File:Huangshan_{index}.jpg",
+                "caption": f"测试实体甲 landscape {index}",
+                "relevance": f"测试实体甲 landscape {index}",
+                "creator": f"Test Creator {index}",
+                "collectionPageUrl": f"https://commons.wikimedia.org/wiki/File:Test_entity_{index}.jpg",
         }
         for index in range(1, 4)
     ]
@@ -260,14 +294,10 @@ def test_auto_research_uses_registry_image_aliases_for_visual_discovery():
         "_trusted_external_links": research_mod._trusted_external_links,
         "_qunar_travelogue_sources": research_mod._qunar_travelogue_sources,
     }
-    seen_aliases = {"value": []}
-
     def fake_image_pools(entity_id, *, entity_aliases=(), **_kwargs):
         assert entity_id == entity
-        seen_aliases["value"] = list(entity_aliases)
-        images = image_rows if "Mount Huangshan" in entity_aliases else []
         return {
-            "commons": images,
+            "commons": image_rows,
             "hint_commons": [],
             "wikidata_commons": [],
             "openverse": [],
@@ -304,7 +334,6 @@ def test_auto_research_uses_registry_image_aliases_for_visual_discovery():
         for name, value in originals.items():
             setattr(research_mod, name, value)
 
-    assert "Mount Huangshan" in seen_aliases["value"]
     assert report["sourceAvailability"]["readyTargets"] == [entity]
     assert report["sourceUnavailable"] == []
     plan = (

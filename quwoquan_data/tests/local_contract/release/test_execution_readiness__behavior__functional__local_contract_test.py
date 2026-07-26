@@ -12,12 +12,13 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from core.article_package import compute_document_sha256  # noqa: E402
+from core.control_types import ContentGenerator, ContentType  # noqa: E402
+from core.io import read_json  # noqa: E402
 from content.execution.runtime_contract import canonical_sha256  # noqa: E402
-from content.execution.production_contracts import build_token_ledger_entry  # noqa: E402
 from verify import verify_execution_readiness as gate  # noqa: E402
 
 
-EXECUTION_ID = "20260713--travel-homepage-coverage--cn-zhejiang--canary-901"
+EXECUTION_ID = "20260713--travel-homepage-coverage--test-region-a--pilot-901"
 OBJECT_REF = "/entity/地点/景区/验收景区"
 
 
@@ -29,7 +30,7 @@ def _write(path: Path, payload: dict) -> None:
 def _fixture(monkeypatch, tmp_path: Path) -> Path:
     root = tmp_path / EXECUTION_ID
     monkeypatch.setattr(gate, "DATA_EXECUTIONS_ROOT", tmp_path)
-    monkeypatch.setattr(gate, "content_execution_layout_issues", lambda: [])
+    monkeypatch.setattr(gate, "content_execution_layout_issues", lambda **_kwargs: [])
     monkeypatch.setattr(gate, "load_execution_manifest", lambda execution_id: {"executionId": execution_id})
     monkeypatch.setattr(
         gate,
@@ -55,8 +56,12 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
             "ready": True,
             "runtime": "local",
             "author": {
-                "model": "composer",
-                "modelFamily": "composer",
+                "model": "grok-4.5",
+                "modelFamily": "grok",
+                "modelParameters": [
+                    {"id": "effort", "value": "high"},
+                    {"id": "fast", "value": "false"},
+                ],
                 "startup": {
                     "ready": True,
                     "status": "finished",
@@ -64,13 +69,18 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
                     "errorCode": "",
                     "httpStatus": None,
                     "runtime": "local",
-                    "model": "composer",
+                    "model": "grok-4.5",
+                    "modelParameters": [
+                        {"id": "effort", "value": "high"},
+                        {"id": "fast", "value": "false"},
+                    ],
                     "cacheHit": False,
                 },
             },
             "reviewer": {
-                "model": "gpt-5.5",
-                "modelFamily": "gpt",
+                "model": "composer-2.5",
+                "modelFamily": "composer",
+                "modelParameters": [],
                 "startup": {
                     "ready": True,
                     "status": "finished",
@@ -78,64 +88,10 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
                     "errorCode": "",
                     "httpStatus": None,
                     "runtime": "local",
-                    "model": "gpt-5.5",
+                    "model": "composer-2.5",
+                    "modelParameters": [],
                     "cacheHit": False,
                 },
-            },
-        },
-    )
-    token_entries = [
-        build_token_ledger_entry(
-            execution_id=EXECUTION_ID,
-            job_id="author-run-001",
-            run_id="author-run-001",
-            creator_profile_id="creator-author",
-            content_type="homepage",
-            budget_tokens=100,
-            used_tokens=10,
-            input_tokens=8,
-            output_tokens=2,
-            cost_usd=0.01,
-            cost_budget_usd=1,
-            provider="cursor_sdk",
-            model="composer",
-            cost_source="sdk_billed",
-            pricing_revision="test-pricing",
-            content_object_ref=OBJECT_REF,
-            passed=True,
-        ),
-        build_token_ledger_entry(
-            execution_id=EXECUTION_ID,
-            job_id="review-run-001",
-            run_id="review-run-001",
-            creator_profile_id="creator-reviewer",
-            content_type="homepage",
-            budget_tokens=100,
-            used_tokens=10,
-            input_tokens=8,
-            output_tokens=2,
-            cost_usd=0.02,
-            cost_budget_usd=1,
-            provider="cursor_sdk",
-            model="gpt-5.5",
-            cost_source="sdk_billed",
-            pricing_revision="test-pricing",
-            content_object_ref=OBJECT_REF,
-            passed=True,
-        ),
-    ]
-    _write(
-        root / "_shared/token_ledger.json",
-        {
-            "schema": "quwoquan.token_ledger_batch",
-            "executionId": EXECUTION_ID,
-            "measurementMode": "cursor_sdk_result_usage",
-            "entries": token_entries,
-            "summary": {
-                "costUsd": 0.03,
-                "unitPassedCostUsd": 0.03,
-                "unknownCostEntryCount": 0,
-                "budgetExceededCount": 0,
             },
         },
     )
@@ -154,7 +110,7 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
             "objectRef": OBJECT_REF,
             "status": "completed",
             "provider": "cursor_sdk",
-            "model": "composer",
+            "model": "grok-4.5",
             "agentRunId": "author-run-001",
             "promptSha256": "sha256:" + "a" * 64,
             "draftSha256": compute_document_sha256(draft),
@@ -183,8 +139,8 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
             "executionBinding": "frozen",
             "objectRef": OBJECT_REF,
             "provider": "cursor_sdk",
-            "model": "gpt-5.5",
-            "modelFamily": "gpt",
+            "model": "composer-2.5",
+            "modelFamily": "composer",
             "runId": "review-run-001",
             "verdict": "passed",
             "issues": [],
@@ -205,8 +161,8 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
             "independentReviewer": {
                 "status": "passed",
                 "provider": "cursor_sdk",
-                "model": "gpt-5.5",
-                "modelFamily": "gpt",
+                "model": "composer-2.5",
+                "modelFamily": "composer",
                 "runId": "review-run-001",
                 "resultHash": result_hash,
             },
@@ -287,7 +243,7 @@ def test_execution_readiness__requires_homepage_media_closure__local_contract(
             "issues": [
                 {
                     "code": "DATA.MEDIA.DOWNLOAD_INCOMPLETE",
-                    "ref": "普陀山",
+                    "ref": "测试实体甲",
                     "message": "页面图片存在 rate_limited 下载缺口",
                 }
             ],
@@ -297,3 +253,215 @@ def test_execution_readiness__requires_homepage_media_closure__local_contract(
     issues = gate.execution_readiness_issues(EXECUTION_ID, require_reviewed=True)
 
     assert any("homepage media completeness: DATA.MEDIA.DOWNLOAD_INCOMPLETE" in issue for issue in issues)
+
+
+def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
+    execution_id = "20260722--travel-article-supply--test-region-a--pilot-902"
+    root = tmp_path / execution_id
+    monkeypatch.setattr(gate, "DATA_EXECUTIONS_ROOT", tmp_path)
+    monkeypatch.setattr(gate, "content_execution_layout_issues", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        gate,
+        "load_execution_manifest",
+        lambda value: {"executionId": value},
+    )
+    _write(
+        root / "_shared/execution_state.json",
+        {
+            "schema": "quwoquan.content.execution_state",
+            "executionId": execution_id,
+            "completed": ["post_author", "post_review", "publish"],
+            "status": "succeeded",
+            "updatedAt": "2026-07-22T00:00:00Z",
+            "failedObjects": [],
+        },
+    )
+    _write(
+        root / "evidence/model_readiness.json",
+        {
+            "schema": "quwoquan_data.execution_model_readiness",
+            "executionId": execution_id,
+            "ready": True,
+            "runtime": "local",
+            "author": {
+                "model": "grok-4.5",
+                "modelFamily": "grok",
+                "modelParameters": [
+                    {"id": "effort", "value": "high"},
+                    {"id": "fast", "value": "false"},
+                ],
+                "startup": {
+                    "ready": True,
+                    "status": "finished",
+                    "errorClass": "",
+                    "errorCode": "",
+                    "httpStatus": None,
+                    "runtime": "local",
+                    "model": "grok-4.5",
+                    "modelParameters": [
+                        {"id": "effort", "value": "high"},
+                        {"id": "fast", "value": "false"},
+                    ],
+                    "cacheHit": False,
+                },
+            },
+            "reviewer": {
+                "model": "composer-2.5",
+                "modelFamily": "composer",
+                "modelParameters": [],
+                "startup": {
+                    "ready": True,
+                    "status": "finished",
+                    "errorClass": "",
+                    "errorCode": "",
+                    "httpStatus": None,
+                    "runtime": "local",
+                    "model": "composer-2.5",
+                    "modelParameters": [],
+                    "cacheHit": False,
+                },
+            },
+        },
+    )
+    object_ref = "测试实体甲__article_source_a"
+    object_root = root / "posts/article/攻略/测试文章/1"
+    for stage in ("1.download", "2.quality", "3.compose", "4.draft", "5.review"):
+        (object_root / stage).mkdir(parents=True, exist_ok=True)
+    draft = "# 测试文章\n\n这是一篇基于来源证据创作的测试文章。\n"
+    (object_root / "4.draft/draft.article.md").write_text(draft, encoding="utf-8")
+    _write(
+        object_root / "4.draft/draft_meta.json",
+        {
+            "schema": "quwoquan_data.draft_meta",
+            "stage": "4.draft",
+            "executionId": execution_id,
+            "executionBinding": "frozen",
+            "objectRef": object_ref,
+            "ref": object_ref,
+            "generator": "agent",
+            "status": "completed",
+            "provider": "cursor_sdk",
+            "model": "grok-4.5",
+            "agentRunId": "author-run-902",
+            "promptSha256": "sha256:" + "a" * 64,
+            "draftSha256": compute_document_sha256(draft),
+            "selfCheck": {"status": "passed", "issues": []},
+        },
+    )
+    _write(
+        object_root / "manifest.json",
+        {
+            "generator": "agent",
+            "contentType": "article",
+            "generatorModel": "grok-4.5",
+        },
+    )
+    response = {
+        "schema": "quwoquan_data.post_reviewer_response",
+        "executionId": execution_id,
+        "objectRef": object_ref,
+        "decision": "approved",
+        "issues": [],
+        "findings": ["已核对正文、来源和实体绑定。"],
+    }
+    result_hash = canonical_sha256(response)
+    _write(
+        object_root / "5.review/reviewer_result.json",
+        {
+            "schema": "quwoquan_data.reviewer_result",
+            "stage": "5.review",
+            "executionId": execution_id,
+            "executionBinding": "frozen",
+            "objectRef": object_ref,
+            "provider": "cursor_sdk",
+            "model": "composer-2.5",
+            "modelFamily": "composer",
+            "runId": "review-run-902",
+            "verdict": "passed",
+            "issues": [],
+            "findings": response["findings"],
+            "resultHash": result_hash,
+        },
+    )
+    _write(
+        object_root / "5.review/attestation.json",
+        {
+            "schema": "quwoquan_data.review_attestation",
+            "stage": "5.review",
+            "executionId": execution_id,
+            "executionBinding": "frozen",
+            "objectRef": object_ref,
+            "decision": "approved",
+            "deterministicGate": {"status": "passed", "issues": []},
+            "independentReviewer": {
+                "status": "passed",
+                "provider": "cursor_sdk",
+                "model": "composer-2.5",
+                "modelFamily": "composer",
+                "runId": "review-run-902",
+                "resultHash": result_hash,
+            },
+            "mediaRefReview": {"status": "passed", "issues": []},
+            "repair": {"status": "not_required"},
+            "finalizationRef": "5.review/finalization_report.json",
+            "evidenceIndexRef": "5.review/evidence_index.json",
+        },
+    )
+    return execution_id, object_root
+
+
+def test_execution_readiness__uses_post_objects_for_article_execution__local_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    execution_id, _object_root = _article_fixture(monkeypatch, tmp_path)
+
+    assert gate.execution_readiness_issues(execution_id, require_reviewed=True) == []
+
+
+def test_execution_readiness__accepts_structured_image_generator__local_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    execution_id, object_root = _article_fixture(monkeypatch, tmp_path)
+    (object_root / "4.draft/draft.article.md").unlink()
+    draft_meta_path = object_root / "4.draft/draft_meta.json"
+    draft_meta = read_json(draft_meta_path)
+    draft_meta["generator"] = ContentGenerator.IMAGE_EVIDENCE_PACK.value
+    draft_meta["draftSha256"] = "sha256:" + "b" * 64
+    _write(draft_meta_path, draft_meta)
+    _write(
+        object_root / "manifest.json",
+        {
+            "generator": ContentGenerator.IMAGE_EVIDENCE_PACK.value,
+            "contentType": ContentType.IMAGE.value,
+        },
+    )
+    model_readiness = read_json(
+        tmp_path / execution_id / "evidence/model_readiness.json"
+    )
+
+    assert gate._reviewed_object_issues(
+        tmp_path / execution_id,
+        object_root,
+        execution_id,
+        model_readiness=model_readiness,
+        content_type=ContentType.IMAGE,
+    ) == []
+
+
+def test_execution_readiness__rejects_deterministic_post_reviewer__local_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    execution_id, object_root = _article_fixture(monkeypatch, tmp_path)
+    result_path = object_root / "5.review/reviewer_result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result["provider"] = "review_controller"
+    result["model"] = "deterministic"
+    result["modelFamily"] = "deterministic"
+    result_path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+
+    issues = gate.execution_readiness_issues(execution_id, require_reviewed=True)
+
+    assert any("reviewer model drift" in issue for issue in issues)

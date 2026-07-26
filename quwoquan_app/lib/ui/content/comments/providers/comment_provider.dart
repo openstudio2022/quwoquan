@@ -216,13 +216,9 @@ class CommentNotifier extends Notifier<CommentState>
     final parentCommentId = replyToCommentId == null
         ? null
         : _parentIdForReplyTarget(replyToCommentId);
-    final rawContextVersion = activeContext.contextVersion.trim();
-    final personaContextVersion = rawContextVersion.isEmpty
-        ? null
-        : int.tryParse(rawContextVersion);
-    if (rawContextVersion.isNotEmpty && personaContextVersion == null) {
-      throw StateError('active persona context version is not an integer');
-    }
+    final personaContextVersion = activeContext.contextVersion > 0
+        ? activeContext.contextVersion
+        : null;
     try {
       final result = await _repo.createComment(
         CreateContentCommentCommand(

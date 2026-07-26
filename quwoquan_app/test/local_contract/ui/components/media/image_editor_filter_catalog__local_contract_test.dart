@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-003
+
 import 'dart:async';
 import 'dart:io';
 
@@ -98,7 +100,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text(UITextConstants.retry));
+      await tester.tap(find.text(UITextConstants.tryAgain));
       await tester.pumpAndSettle();
 
       expect(attempts, 2);
@@ -108,12 +110,12 @@ void main() {
         ),
         findsNothing,
       );
-    expect(
-      find.byKey(
-        const ValueKey<String>('image_editor_filter_catalog_loading'),
-      ),
-      findsNothing,
-    );
+      expect(
+        find.byKey(
+          const ValueKey<String>('image_editor_filter_catalog_loading'),
+        ),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     },
   );

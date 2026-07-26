@@ -121,6 +121,25 @@ class LocalDevHttpsTrust {
         host.endsWith('.localhost');
   }
 
+  /// Whether an HTTPS request in an already-established local target runtime
+  /// must connect through the device loopback transport.
+  ///
+  /// Upload tickets are signed by the target with its canonical
+  /// `*.quwoquan-env.test` authority. Rewriting that URI would invalidate the
+  /// signature. The Simulator can nevertheless resolve the canonical host to
+  /// an unroutable host-side address, so the socket peer is projected to
+  /// loopback while [SecureSocket.secure] keeps the original host for SNI and
+  /// certificate verification.
+  @visibleForTesting
+  static bool shouldResolveThroughLocalLoopback(String raw) {
+    final uri = Uri.tryParse(raw.trim());
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      return false;
+    }
+    return isLocalHttpsTransportBase(raw) ||
+        uri.host.toLowerCase().endsWith('.quwoquan-env.test');
+  }
+
   @visibleForTesting
   static bool isPlaceholderLocalEnvCertificate(Uint8List certBytes) {
     final asLatin1 = latin1.decode(certBytes, allowInvalid: true);
@@ -155,7 +174,7 @@ final class _LocalLoopbackHttpOverrides extends HttpOverrides {
     client.connectionFactory = (uri, proxyHost, proxyPort) {
       final secure = uri.scheme == 'https';
       final socketTask = Socket.startConnect(
-        LocalDevHttpsTrust.isLocalHttpsTransportBase(uri.toString())
+        LocalDevHttpsTrust.shouldResolveThroughLocalLoopback(uri.toString())
             ? InternetAddress.loopbackIPv4.address
             : uri.host,
         uri.port,

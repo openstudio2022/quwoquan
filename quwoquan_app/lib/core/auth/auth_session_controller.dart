@@ -388,6 +388,21 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     );
   }
 
+  /// 服务端确认账号 closed 时清除全部凭据，并保留终态信号供本地隐私清理恢复器消费。
+  Future<void> clearForClosedAccount({required String errorMessage}) async {
+    await _store.clearSession(manualLogout: true);
+    final stored = await _store.read();
+    if (!ref.mounted) {
+      return;
+    }
+    state = AuthSessionState(
+      status: AuthSessionStatus.guest,
+      promptReason: AuthPromptReason.accountClosed,
+      installId: stored.installId,
+      errorMessage: errorMessage,
+    );
+  }
+
   Future<void> updateActiveSubAccount(String subAccountId) async {
     await _store.updateActiveSubAccount(subAccountId);
     state = state.copyWith(activeSubAccountId: subAccountId.trim());
@@ -411,6 +426,13 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     } catch (e) {
       if (e is http.RequestAbortedException ||
           e is CloudOperationCancelledException) {
+        return false;
+      }
+      if (_isAccountDeletedFailure(e)) {
+        await _saveTerminalCleanupReceipt(current);
+        await clearForClosedAccount(
+          errorMessage: runtimeErrorDisplayMessage(e),
+        );
         return false;
       }
       if (_isAccountSuspendedFailure(e)) {
@@ -471,7 +493,9 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       return true;
     }
     if (error is CloudException) {
-      return error.type == CloudErrorType.unauthorized ||
+      return error.code == UserErrorCode.accountDeleted.code ||
+          error.code == UserErrorCode.tokenStale.code ||
+          error.type == CloudErrorType.unauthorized ||
           error.type == CloudErrorType.forbidden;
     }
     if (error is StateError) {
@@ -482,7 +506,33 @@ class AuthSessionController extends Notifier<AuthSessionState> {
 
   bool _isAccountSuspendedFailure(Object error) {
     return error is CloudException &&
-        error.code == 'USER.AUTH.account_suspended';
+        error.code == UserErrorCode.accountSuspended.code;
+  }
+
+  bool _isAccountDeletedFailure(Object error) {
+    return error is CloudException &&
+        error.code == UserErrorCode.accountDeleted.code;
+  }
+
+  Future<void> _saveTerminalCleanupReceipt(AuthSessionState session) async {
+    try {
+      await ref
+          .read(terminalAccountCleanupReceiptStoreProvider)
+          .save(
+            TerminalAccountCleanupReceipt(
+              accountId: session.ownerId,
+              personaId: session.activeSubAccountId,
+              installId: session.installId,
+            ),
+          );
+    } catch (error, stackTrace) {
+      developer.log(
+        'terminal account cleanup receipt persistence failed',
+        name: 'AuthSessionController',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   bool _shouldRefreshDuringRestore(StoredAuthSession stored) {

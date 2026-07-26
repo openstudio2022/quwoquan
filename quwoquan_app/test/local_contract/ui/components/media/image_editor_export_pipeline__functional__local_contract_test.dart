@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-001
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 

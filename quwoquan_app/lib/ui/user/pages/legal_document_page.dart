@@ -173,7 +173,7 @@ class _LegalDocumentPageState extends ConsumerState<LegalDocumentPage> {
     }
     _lastTrackedFailureGeneration = generation;
     final slug = _legalDocumentSlug(widget.url);
-    final payload = <String, dynamic>{
+    final payload = <String, Object?>{
       'document': slug,
       'runtimeEnv': CloudRuntimeConfig.appRuntimeEnv,
       'failureReason': reason,

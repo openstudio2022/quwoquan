@@ -35,7 +35,7 @@ void main() {
     expect(secondState.processSummary.searchCount, greaterThanOrEqualTo(1));
     expect(secondState.processSummary.acceptedCount, greaterThanOrEqualTo(1));
     expect(
-      secondState.processSummary.acceptedReferences.first.url,
+      secondState.processSummary.acceptedReferences.first.destination.url,
       startsWith('https://'),
     );
 

@@ -36,7 +36,7 @@ from content.source.source_unit import (
 )
 from core.image_rules import MIN_ENTITY_IMAGES, pixel_size_issue, relevance_issue
 from core.image_safety import assess_image, assess_image_cached, dedupe_image_payloads
-from core.image_variants import image_dimensions
+from core.image_decode import probe_image_bytes
 from core.page_media import DownloadedPageAsset, PageImagePlacement, PageImagePlacementType
 from content.execution.stage_reports import write_gate_report, write_stage_result
 from content.source.gate import download_requirements, gate_download
@@ -50,7 +50,11 @@ from content.source.source_inputs import (
 from content.source.fetch_payload import fetch_source_payload
 from content.source.fetch_images import fetch_image_payload, fetch_page_image_payload
 from content.source.prepare import prepare_source_plan, prepare_source_screen
-from governance.coverage.license import normalize_rights_payload, validate_image_rights
+from governance.coverage.license import (
+    normalize_rights_payload,
+    validate_image_rights,
+)
+from content.source.contracts import MediaProvenance
 
 from content.source.handler_plan import SOURCE_UNIT_MAX_IMAGE_BYTES, _source_unit_lane_in_scope
 from content.source.source_asset_identity import (
@@ -128,6 +132,7 @@ def _download_source_unit_images(
                 "licenseSnapshot": source.get("licenseSnapshot") or "",
                 "authorizationProof": source.get("authorizationProof") or "",
                 "usageScope": source.get("usageScope") or "",
+                "modelReleaseStatus": source.get("modelReleaseStatus") or "not_required",
                 "sourceUrl": source.get("url") or "",
                 "platform": source.get("platform") or "",
                 "sourceCollectionId": "",
@@ -143,10 +148,22 @@ def _download_source_unit_images(
         )
         label = f"{entity_id}/{source_id}#{idx_img}"
         spec_url = str(spec.get("url") or "")
-        rights_issues = validate_image_rights(spec, vertical=vertical)
-        if rights_issues:
-            issues.extend(f"{label}: {issue}" for issue in rights_issues)
-            drops.append({"slug": label, "url": spec_url, "reason": f"rights: {rights_issues[0]}"})
+        provenance = MediaProvenance.from_mapping(spec, vertical=vertical)
+        rights_audit_issues = list(provenance.rights_audit_issues)
+        admission_spec = {
+            **spec,
+            "modelReleaseStatus": provenance.model_release_status.value,
+        }
+        blocking_rights_issues = validate_image_rights(admission_spec, vertical=vertical)
+        if blocking_rights_issues:
+            issues.extend(f"{label}: {issue}" for issue in blocking_rights_issues)
+            drops.append(
+                {
+                    "slug": label,
+                    "url": spec_url,
+                    "reason": f"rights: {blocking_rights_issues[0]}",
+                }
+            )
             continue
         payload = _cached_source_image_payload(
             object_dir,
@@ -201,8 +218,13 @@ def _download_source_unit_images(
             issues.append(f"{label}: imageFetch failed/non-image/too small{size_note} ({spec.get('url')})")
             drops.append({"slug": label, "url": spec_url, "reason": "fetch: 抓取失败/非图片/视频/过小或过大"})
             continue
-        dims = image_dimensions(payload["bytes"]) or (0, 0)
-        width, height = dims
+        image_probe = probe_image_bytes(payload["bytes"])
+        if not image_probe.succeeded:
+            reason = f"image_decode:{image_probe.failure.value}"
+            issues.append(f"{label}: {reason}")
+            drops.append({"slug": label, "url": spec_url, "reason": f"safety:{reason}"})
+            continue
+        width, height = image_probe.width, image_probe.height
         px_issue = pixel_size_issue(width, height, asset_id=label)
         if px_issue:
             issues.append(px_issue)
@@ -251,6 +273,7 @@ def _download_source_unit_images(
                 "creator": spec.get("creator") or spec.get("credit") or "",
                 "collectionPageUrl": spec.get("collectionPageUrl") or spec.get("sourceUrl") or "",
                 "authorizationProof": spec.get("authorizationProof") or "",
+                **provenance.audit_fields(),
                 "caption": str(spec.get("caption") or relevance),
                 "relevance": relevance,
                 "slug": f"{source_id}_{idx_img}",

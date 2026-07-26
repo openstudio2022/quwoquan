@@ -1,81 +1,80 @@
-# L3 特性：元数据驱动的客户端数据契约（metadata-driven-client-data-contract）
+# L3 Story：元数据驱动的客户端数据契约（metadata-driven-client-data-contract） (`metadata-driven-client-data-contract`)
 
-## 背景与动机
+> 所属能力：[`runtime-client-foundation`](../spec.md)
 
-端侧存在 **UI 直接使用 `Map<String, dynamic>` 承载云契约**、**Mock 与 Remote 返回结构口头对齐** 等记录债，与仓库主线 **metadata-first → verify → codegen → Repository** 不一致，易导致字段漂移、双实现分叉及门禁难以自动化。
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-## 目标用户与目标
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
-| 角色 | 目标 |
-|------|------|
-| 终端用户 | 与云侧字段、错误码一致的行为与展示，减少「Mock 正常、远端异常」类问题 |
-| 开发者 | 新业务 **必须** 经元数据扩展；页面消费 **codegen 类型** 或经 metadata 注册的 ViewModel；Mock/Remote **同源实体** |
-| 质量 / CI | 可通过 **缺口清单 + 后续门禁** 收敛存量面；新增违规可阻断 |
+## 1. 用户价值
 
-## 功能范围（In Scope）
+作为开发、测试或运维角色，
+我希望同一 **Repository 抽象接口** 的 `Mock*` 与 `Remote*` 实现：对同一业务操作返回 **同一 codegen 类型**（或经同一 `fromMap`/工厂解析到该类型），**禁止** Mock 返回「另一套 Map 键名」而 Remote 另一套，
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
-1. **元数据驱动定义（契约层）**  
-   - 领域字段、事件、错误码、API 路径与 operation 的 **唯一真相源** 为 `quwoquan_service/contracts/metadata/`（及 monorepo 内等价路径）。  
-   - 客户端 DTO/常量/错误枚举以 **`make codegen-app`** 产物为准：`lib/cloud/runtime/generated/**`（及 `field_policy`、`error_codes` 等）。
+## 2. 范围与非目标
 
-2. **同源实体（Mock + Remote）**  
-   - 同一 **Repository 抽象接口** 的 `Mock*` 与 `Remote*` 实现：对同一业务操作返回 **同一 codegen 类型**（或经同一 `fromMap`/工厂解析到该类型），**禁止** Mock 返回「另一套 Map 键名」而 Remote 另一套。  
-   - 过渡期允许在 Repository 内将 wire `Map` **仅作为反序列化输入**，边界外立即转为 codegen 类型再向上返回。
+### In Scope
 
-3. **页面消费约束（目标态）**  
-   - `lib/ui/{domain}/pages/**` 中，**领域实体行数据**（会话、帖子、成员、圈子卡片等）应以 **codegen DTO / 基于 metadata 的 ViewModel** 进入 `build`，**禁止**长期以裸 `Map` 作为列表模型类型（见 `specs/gates/metadata_driven_ui_gap_inventory.yaml` 登记存量）。
+- “元数据驱动的客户端数据契约（metadata-driven-client-data-contract）”的输入、可观察主路径、失败语义以及与父能力的交接。
 
-4. **本 baseline 交付**  
-   - 本 L3 的 **spec / acceptance**、**缺口清单**、**CR**、**tree_index** 登记。
-   - **不**在本 baseline 会话内完成全仓库逐页改码；迁移按领域 PR 独立执行并回写 acceptance 证据。
+### Out of Scope
 
-## Out of Scope
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
 
-- 不在此一次性替换所有记录 `Map` UI（由缺口清单 + 分域切片消化）。  
-- 不重新定义 Go 侧 ContractGraph compiler、Object Facade/Data Ports 或字段策略
-  （沿用 D0/F1 权威设计与 `quwoquan_service` 规则）。
-- **纯本地、无云契约** 的 UI 状态（如展开/折叠 flag）不要求 metadata。  
-- 助手内部模型协议与云 API 同样遵守各自 metadata/typed contract，不保留 App 内第二套 wire 契约。
+## 3. 行为要求
 
-## 约束与对标
+<a id="req-001"></a>
+### REQ-001 元数据驱动的客户端数据契约（metadata-driven-client-data-contract）
 
-- 仓库规则：`metadata-first`、`04-fullstack-metadata-consistency`、Dart 侧 `PostBaseDto` 多态消费约束。  
-- 与 `runtime-codegen` L2、`dart-semantic-gate` 互补：本 L3 强调 **UI↔Repository↔DTO↔metadata** 闭环与 **Mock/Remote 同源**。
+- 同一 **Repository 抽象接口** 的 `Mock*` 与 `Remote*` 实现：对同一业务操作返回 **同一 codegen 类型**（或经同一 `fromMap`/工厂解析到该类型），**禁止** Mock 返回「另一套 Map 键名」而 Remote 另一套。
 
-## 覆盖矩阵
+<a id="req-002"></a>
+### REQ-002 同一 Repository 抽象接口 的 Mock* 与 Remote* 实现：对同一业务操作返回 同一 codegen 类型（或经同一 fromMap/工厂解析到该类型），禁止 Mock 返回「另一套 Map 键名」而 Remote 另一套
 
-| 既有 Story | 关系 |
-|------------|------|
-| `entity-link-templates-metadata` | **可复制链接 / 深链** 结构以 `_shared/link_templates.yaml` 为单源，与 `app_routes` 显式绑定；详见同 L2 下该 L3 的 spec/design |
-| `dart-semantic-gate` | 字面量与 import；本 L3 强调 **类型与契约来源** |
-| `error-permission-display-semantics*` | 错误展示须消费 metadata 生成错误枚举 |
-| `struct-repo-handler-migration-generation*` | 云侧生成链；本 L3 对齐 **端侧消费** |
-| `page-horizontal-quality` | 横向维度 **P2** 与本 L3 同向；**逐页是否已收敛** 以 `specs/gates/metadata_driven_ui_gap_inventory.yaml` 的 `status` 为权威，横向矩阵 P2 列须与之对齐或可推导（见 `explore-baseline-readiness-20260329.md` §4-G1） |
-
-## Explore / baseline 就绪分析
-
-- **全页路径与清单对照、能否进入 baseline、Gap 与修改方案**：见同目录 [`explore-baseline-readiness-20260329.md`](./explore-baseline-readiness-20260329.md)。  
-- **摘要**：规格类 baseline **可冻结**；**全页 UI 元数据消费闭环** 按领域 PR 推进，当前须优先消除 **横向矩阵 P2=✓** 与清单 **`partial`** 的语义冲突。
-
-## 数据生命周期 / 权限
-
-随各域 `fields.yaml` / 权限策略；本 L3 不新增业务权限，仅约束 **类型与来源**。
-
-## 迁移与回滚
-
-- **迁移**：按域将页面列表模型替换为 codegen DTO，同步更新 Mock/Remote；在缺口清单中将对应项标为 `compliant`。  
-- **回滚**：若某域迁移失败，恢复代码并 **保留清单状态为 current_map**，不得删除 metadata 已存在字段。
-
-## 验收重点摘要
-
-- `spec.md` / `acceptance.yaml` / `CR` / `metadata_driven_ui_gap_inventory.yaml` 已合入。
-- `tree_index.yaml` 已登记本 L3。  
+- 同一 **Repository 抽象接口** 的 `Mock*` 与 `Remote*` 实现：对同一业务操作返回 **同一 codegen 类型**（或经同一 `fromMap`/工厂解析到该类型），**禁止** Mock 返回「另一套 Map 键名」而 Remote 另一套。
+- `lib/ui/{domain}/pages/**` 中，领域实体行数据应以 codegen DTO 或基于 metadata 的 ViewModel 进入 `build`，禁止以裸 `Map` 作为列表模型类型；存量由门禁直接扫描。
+- 若某域迁移失败，恢复代码但不得删除已经成立的 metadata 字段，也不得通过登记清单豁免回归。
 - 新增云接口或新页面数据模型：**须** 先改 metadata 再 codegen，**禁止** 仅端侧手写 DTO 作为长期方案。
 
-## L1 / L2 / L3 映射
+## 4. 契约引用
 
-| 层级 | 标识 |
-|------|------|
-| L1 capability | `runtime` |
-| L2 journey | `runtime-client-foundation` |
-| L3 scenario | `metadata-driven-client-data-contract` |
+- 父能力公开契约：[`L2 spec`](../spec.md)。
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 元数据驱动的客户端数据契约（metadata-driven-client-data-contract）
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“元数据驱动的客户端数据契约（metadata-driven-client-data-contract）”对应的公开行为。
+- THEN 同一 **Repository 抽象接口** 的 `Mock*` 与 `Remote*` 实现：对同一业务操作返回 **同一 codegen 类型**（或经同一 `fromMap`/工厂解析到该类型），**禁止** Mock 返回「另一套 Map 键名」而 Remote 另一套。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 页面与资料读模型仍含手写 Map 边界
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：`homepage_introduction_page.dart`、`profile_stats_page.dart` 与若干 profile read model 仍直接解析匿名 Map，metadata 字段变化可能绕过 codegen 校验。
+- 完成判定：上述页面与 profile read model 改为具名 projection/ViewModel；`page_object_contract` 的 typed presentation 与代码扫描均无匿名业务 Map。
+- 依赖：user profile 与 entity homepage projection metadata。
+
+<a id="open-002"></a>
+### OPEN-002 内容阅读与创作仍保留 raw wire 过渡边界
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：内容详情、沉浸阅读、圈子作品和创作 payload 仍存在 raw Map 过渡，容易形成 DTO 与手写键双轨。
+- 完成判定：UI 只消费 `PostReadPresentation`/generated DTO；raw Map 仅存在于 HTTP decoder 单点且由 wire key/codegen 门禁证明。
+- 依赖：content projection metadata 与创作 draft composite。

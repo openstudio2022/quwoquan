@@ -1,55 +1,73 @@
-# L3 子特性：dual-channel-recommendation-engine
+# L3 Story：双轨渠道推荐引擎 (`dual-channel-recommendation-engine`)
 
-## 功能说明
-- **双通道架构**：HotPath（Redis 实时信号）+ ColdPath（离线特征 + ML 模型）+ Engine（7 阶段管线）。
-- **HotPath**：session_signals、exposed_set、negative_set、realtime_interest；信号上报 < 50ms。
-- **ColdPath**：从 RecommendFeatureProjector 的 ReadModel 获取离线特征；FeatureStore 适配 FeatureProvider 接口。
-- **Engine**：7 阶段管线 → SessionState → Recall → PreRank → Filter → FeatureAssembly → Score → Rerank。
+> 所属能力：[`runtime-recommendation`](../spec.md)
 
-## 已实现架构
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-### 读写路径分离
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
+
+## 1. 用户价值
+
+作为开发、测试或运维角色，
+我希望**SessionReader** 接口：统一读路径，HotPath / SessionCache 均实现，
+从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- “双轨渠道推荐引擎”的输入、可观察主路径、失败语义以及与父能力的交接。
+- HotPath session 信号写入与读取。
+- 多源召回、预排、过滤、特征组装、Rule/Remote/CascadeScorer、重排。
+- 模型降级、召回源超时、负反馈过滤、多样性与冷启动。
+- 首页 feed 页面体验和频道 IA。
+- 深度排序模型平台轨、双塔 ANN、广告竞价。
+
+### Out of Scope
+
+- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 双轨渠道推荐引擎
+
+- **SessionReader** 接口：统一读路径，HotPath / SessionCache 均实现。
+
+<a id="req-002"></a>
+### REQ-002 SessionReader 接口：统一读路径，HotPath / SessionCache 均实现
+
 - **SessionReader** 接口：统一读路径，HotPath / SessionCache 均实现。
 - **SignalProcessor** 接口：统一写路径，HotPath / BufferedHotPath 均实现。
-
-### 7 阶段推荐管线
-```
-GetFeed(req) →
-  ① Session 加载 (SessionReader.GetSessionState)
-  ② 多路并行召回 (CandidateSource[].Fetch, per-source 150ms deadline)
-  ③ 预排 (PreRanker.PreRank → 时效过滤 + 互动密度粗排)
-  ④ 过滤 (曝光去重 + 负反馈 + 全局去重)
-  ⑤ 特征组装 (FeatureProvider.GetFeatures → ScoringFeatures)
-  ⑥ 模型打分 (ModelScorer.ScoreBatch)
-  ⑦ 重排 (作者去重 + 多样性 + 探索率)
-→ FeedResponse
-```
-
-### 性能保障层
-| 组件 | 作用 | 性能效果 |
-|------|------|----------|
-| SessionCache | L1 进程内缓存 + singleflight | 124ns/op vs 8931ns/op |
-| BufferedHotPath | 异步写入缓冲（channel + 批量刷写） | 写操作不阻塞请求路径 |
-| HotPath 并行读 | 3 Redis 读并行执行 | 3x 延迟降低 |
-| Recall 超时保护 | per-source 150ms deadline | 慢源不阻塞管线 |
-| Feedback 异步 | fire-and-forget goroutine | 不阻塞响应 |
-| Redis Pool 调优 | PoolSize=CPU×20, ReadTimeout=100ms | 高并发吞吐 |
-
-### 模型集成层
-| 组件 | 职责 | 实现 |
-|------|------|------|
-| ModelScorer | 统一打分接口 | RuleScorer / RemoteModelScorer / CascadeScorer |
-| FeatureProvider | 用户特征供给 | NullFeatureProvider / FeatureStore(MongoDB) |
-| PreRanker | 粗排截断 | NullPreRanker / QualityPreRanker |
-| EmbeddingService | 向量生成 | RemoteEmbeddingService(HTTP) |
-
-## 约束
-- 消费 recommend_impact 事件和 recommend_feature 字段。
-- 推荐策略参数可通过 experiments 灰度。
 - CascadeScorer 保证 ML 模型不可用时自动降级到 RuleScorer。
 
-## 验收标准
-- A1：Engine 端到端 7 阶段管线正确。
-- A3：CascadeScorer fallback 验证通过。
-- A7：消费 recommend_impact 和 recommend_feature。
-- A8：Engine 有端到端测试 + 基准测试 + 模型集成测试。
+<a id="req-003"></a>
+### REQ-003 必须HotPath + ColdPath + Engine 7 阶段管线的双通道推荐引擎验收，且失败时不得写入成功事实
+
+- 系统必须HotPath + ColdPath + Engine 7 阶段管线的双通道推荐引擎验收，且失败时不得写入成功事实。
+
+<a id="req-004"></a>
+### REQ-004 ML 模型集成：ModelScorer 抽象统一打分接口；支持 RuleScorer 基线 / RemoteModelScorer 远程 ML / CascadeScorer 容灾降级
+
+- **ML 模型集成**：ModelScorer 抽象统一打分接口；支持 RuleScorer 基线 / RemoteModelScorer 远程 ML / CascadeScorer 容灾降级。
+
+## 4. 契约引用
+
+- canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_model_release/operations.yaml`
+- canonical：`quwoquan_service/services/recommendation-service/config/schema.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 双轨渠道推荐引擎
+
+- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
+- WHEN 参与者执行“双轨渠道推荐引擎”对应的公开行为。
+- THEN **SessionReader** 接口：统一读路径，HotPath / SessionCache 均实现。
+- AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+## 6. 依赖
+
+- 前置要求：[`runtime-recommendation`](../spec.md) 的范围、要求与 SIT。
+- 下游结果：本 Story 声明的 GWT 可观察结果。
+- 父级设计：[L2 DEC-001](../design.md#dec-001)

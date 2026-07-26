@@ -523,12 +523,11 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
         : (source.isNotEmpty
               ? source
               : AssistantText.assistantReferenceIndexed(index + 1));
-    final url = reference.url.trim();
     return GestureDetector(
-      onTap: url.isNotEmpty
+      onTap: widget.onReferenceTap != null
           ? () => widget.onReferenceTap?.call(
-              AssistantCitation.external(
-                url: url,
+              AssistantCitation.fromDestination(
+                destination: reference.destination,
                 title: reference.title,
                 source: reference.source,
               ),
@@ -544,7 +543,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
             style: TextStyle(
               fontSize: AppTypography.base,
               fontWeight: FontWeight.w500,
-              color: url.isNotEmpty
+              color: widget.onReferenceTap != null
                   ? linkColor
                   : textColor.withValues(alpha: 0.88),
               height: AppTypography.lineHeightRelaxed,

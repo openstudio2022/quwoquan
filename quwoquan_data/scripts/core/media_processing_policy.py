@@ -18,6 +18,7 @@ class MediaProcessingPolicy:
     source_asset_max_bytes: int
     max_publishable_image_pixels: int
     max_assessment_image_pixels: int
+    assessment_jpeg_quality: int
     ocr_image_pixels: int
     base_draft_image_candidates: int
     image_fetch_target_surplus: int
@@ -53,6 +54,7 @@ def media_processing_policy() -> MediaProcessingPolicy:
         source_asset_max_bytes=_required_int(raw, "sourceAssetMaxBytes"),
         max_publishable_image_pixels=_required_int(raw, "maxPublishableImagePixels"),
         max_assessment_image_pixels=_required_int(raw, "maxAssessmentImagePixels"),
+        assessment_jpeg_quality=_required_int(raw, "assessmentJpegQuality"),
         ocr_image_pixels=_required_int(raw, "ocrImagePixels"),
         base_draft_image_candidates=_required_int(raw, "baseDraftImageCandidates"),
         image_fetch_target_surplus=_required_int(raw, "imageFetchTargetSurplus"),
