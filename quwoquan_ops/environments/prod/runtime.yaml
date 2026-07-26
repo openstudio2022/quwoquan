@@ -99,6 +99,11 @@
       "env": "prod",
       "backend": "ssh-hosted",
       "portProfile": null,
+      "buildImages": {
+        "goBaseImage": "docker.io/library/golang:1.24-bookworm@sha256:98d673f18a1aac43da744209873cb79323e11706f909251bcfb131828b95559d",
+        "alpineBaseImage": "docker.io/library/debian:bookworm-slim@sha256:63a496b5d3b99214b39f5ed70eb71a61e590a77979c79cbee4faf991f8c0783e",
+        "pythonBaseImage": "docker.io/library/python:3.11@sha256:143c7a1877acd77bd323d544cb7b39ba0a975288a7204f47586c2597130d80ad"
+      },
       "sharedClusterNote": "gray-initial and full share the same physical cluster because of current cost constraints; gamma is local-only and has no remote target",
       "publicBases": {
         "api": "https://api.quwoquan.com",

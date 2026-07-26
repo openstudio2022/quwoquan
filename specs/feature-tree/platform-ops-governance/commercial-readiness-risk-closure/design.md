@@ -56,6 +56,7 @@
   - 预验证不得进入 rollout lock、SLO、正式 release ledger 或 receipt。
   - 受限单机使用声明式容器内存和 PID 上限。空间门同时校验当前可用量、可回收量与回收后实测量。
   - Actions Artifact 只保存短生命周期失败诊断，且诊断上传不得影响原始门禁结论。
+  - SSH 管理 endpoint 只在 `access-isolation.yaml.management` 声明；`runtime.yaml` 及其 App package 投影只含 canonical HTTPS/WSS public base，禁止携带管理 IP。
 - 理由：在 Provider、SFU、真实数据和公网入口尚未就绪时，仍需验证第一方容器可部署性，但该结果不能被误用为生产准出。
 - 被否决方案：使用 `latest`、远端临时构建、旧容器、裸 IP public base，或把容器启动成功写成正式发布成功。
 - 约束与影响如下。
@@ -66,6 +67,7 @@
 - 制品生命周期约束如下。
   - Actions Artifact 只可保存有明确保留期的失败诊断。路径只能包含需要复验的 `summary.json`、`report.json` 或失败日志。
   - 取消运行不得上传。成功对象须由受控生命周期任务在完成后立即删除，失败对象超过诊断窗口后逐个删除。
+  - `docker/build-push-action` 的自动 build record 上传必须显式关闭；受控清理发现历史 `.dockerbuild` record 时必须立即删除。未声明容量与回收策略的 Buildx GHA layer cache 不得启用。它们都不是 release evidence，不能取代 GHCR digest。
   - 不可变发布包、SBOM、provenance 与回滚所需镜像保持 GHCR digest 引用，并按已引用 release manifest 保留。
 - 关联要求：`REQ-009`
 - 影响 Story：在 [`zero-risk-production-readiness`](./zero-risk-production-readiness/spec.md) 中约束预验证与正式准出分轨。

@@ -496,6 +496,25 @@ def validate_environment_topology(
             issues.append("prod-hosted target must map to prod environment")
         if target_name == "prod-hosted" and backend != "ssh-hosted":
             issues.append("prod-hosted target must use ssh-hosted backend")
+        if backend == "ssh-hosted":
+            if "sshHost" in target:
+                issues.append(
+                    f"{target_name}: sshHost belongs only in prod access-isolation management"
+                )
+            build_images = target.get("buildImages")
+            if not isinstance(build_images, dict):
+                issues.append(f"{target_name}: buildImages must be a mapping")
+            else:
+                for image_key in (
+                    "goBaseImage",
+                    "alpineBaseImage",
+                    "pythonBaseImage",
+                ):
+                    image = str(build_images.get(image_key) or "").strip()
+                    if not re.fullmatch(r"\S+@sha256:[0-9a-f]{64}", image):
+                        issues.append(
+                            f"{target_name}: buildImages.{image_key} must use an immutable sha256 digest"
+                        )
         if backend == "ssh-hosted" and isinstance(public_bases, dict):
             env_allowlist = {
                 str(item).strip()

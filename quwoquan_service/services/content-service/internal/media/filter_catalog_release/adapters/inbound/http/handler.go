@@ -20,19 +20,19 @@ func NewHandler(facades *filtercatalogapp.Facades) *Handler {
 }
 
 func (handler *Handler) Stage(writer http.ResponseWriter, request *http.Request) {
-	handler.handleStageFilterCatalogRelease(writer, request)
+	handler.dispatch("StageFilterCatalogRelease", writer, request)
 }
 
 func (handler *Handler) Activate(writer http.ResponseWriter, request *http.Request) {
-	handler.handleActivateFilterCatalogRelease(writer, request)
+	handler.dispatch("ActivateFilterCatalogRelease", writer, request)
 }
 
 func (handler *Handler) Rollback(writer http.ResponseWriter, request *http.Request) {
-	handler.handleRollbackFilterCatalogRelease(writer, request)
+	handler.dispatch("RollbackFilterCatalogRelease", writer, request)
 }
 
 func (handler *Handler) GetActive(writer http.ResponseWriter, request *http.Request) {
-	handler.handleGetActiveFilterCatalog(writer, request)
+	handler.dispatch("GetActiveFilterCatalog", writer, request)
 }
 
 // Route dispatches FilterCatalogRelease routes and delegates all other routes
@@ -47,10 +47,6 @@ func (handler *Handler) Route(next http.Handler) http.Handler {
 			next.ServeHTTP(writer, request)
 			return
 		}
-		request = request.WithContext(filtercatalogapp.WithIdempotencyKey(
-			request.Context(),
-			strings.TrimSpace(request.Header.Get("Idempotency-Key")),
-		))
 		handler.dispatch(operation, writer, request)
 	})
 }
@@ -60,6 +56,12 @@ func (handler *Handler) dispatch(
 	writer http.ResponseWriter,
 	request *http.Request,
 ) {
+	if operation != "GetActiveFilterCatalog" {
+		request = request.WithContext(filtercatalogapp.WithIdempotencyKey(
+			request.Context(),
+			strings.TrimSpace(request.Header.Get("Idempotency-Key")),
+		))
+	}
 	switch operation {
 	case "StageFilterCatalogRelease":
 		handler.handleStageFilterCatalogRelease(writer, request)

@@ -68,6 +68,7 @@
 ## 7. 工程归属
 
 - App：`quwoquan_ops`
+- CI：`.github/workflows`
 - Contracts：`quwoquan_service/control-plane/platform-ops/contracts`
 - Service：`quwoquan_service/control-plane/platform-ops`
 - 测试：
