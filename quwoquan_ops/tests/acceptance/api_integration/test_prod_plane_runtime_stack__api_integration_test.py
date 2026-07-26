@@ -344,6 +344,12 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 "elasticsearch",
             ):
                 self.assertRegex(services[name]["image"], r"@sha256:[0-9a-f]{64}$")
+                self.assertRegex(services[name]["mem_limit"], r"^[1-9][0-9]*m$")
+                self.assertGreater(services[name]["pids_limit"], 0)
+            self.assertEqual(
+                services["elasticsearch"]["environment"]["ES_JAVA_OPTS"],
+                "-Xms128m -Xmx128m",
+            )
             self.assertIn("integration-service", services)
             self.assertNotIn("livekit", services)
             self.assertNotIn("coturn", services)

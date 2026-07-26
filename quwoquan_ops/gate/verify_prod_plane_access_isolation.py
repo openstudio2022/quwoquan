@@ -14,7 +14,7 @@
   5. 读写平面：composeProjectRoot 非空 + governedWorkloads 非空；data 平面 read-only-audit、composeProjectRoot=null、
      governedWorkloads 空、appliesToStages 空。
   6. governedWorkloads ⊆ environment topology 的 prod workload，且 plane == 本平面 workloadDeployPlane。
-  7. prevalidation 必须不可提升、资源阈值充足、服务/端口归属唯一且隔离数据镜像全部 digest-pinned。
+  7. prevalidation 必须不可提升、受限单机资源/回收策略完整、服务/端口归属唯一且隔离数据镜像全部 digest-pinned。
   8. 退役断言：仓库不得在访问隔离层重新引入 PROD_KUBECONFIG 单一全权凭据或 gamma-hosted 远端目标。
 """
 from __future__ import annotations
@@ -232,11 +232,37 @@ def main() -> int:
         )
     minimum = prevalidation.get("minimumHostResources") or {}
     if (
-        int(minimum.get("cpuCores") or 0) < 4
-        or int(minimum.get("memoryBytes") or 0) < 16 * 1024**3
-        or int(minimum.get("containerFreeBytes") or 0) < 40 * 1024**3
+        prevalidation.get("capacityStrategy") != "constrained-single-host"
+        or int(minimum.get("cpuCores") or 0) < 2
+        or int(minimum.get("memoryBytes") or 0) < 1792 * 1024**2
+        or int(minimum.get("containerFreeBytes") or 0) < 2 * 1024**3
+        or int(minimum.get("containerEffectiveFreeBytes") or 0) < 6 * 1024**3
+        or int(minimum.get("postReclaimContainerFreeBytes") or 0) < 6 * 1024**3
     ):
-        errors.append("prevalidation 主机阈值不得低于 4C/16GiB/40GiB free")
+        errors.append(
+            "prevalidation 受限单机门不得低于 2C/1.75GiB/2GiB current/6GiB effective+post-reclaim"
+        )
+    reclaim = prevalidation.get("legacyReclaimPolicy") or {}
+    if not (
+        reclaim.get("enabled") is True
+        and reclaim.get("plane") == "service"
+        and reclaim.get("removeVolumes") is False
+        and reclaim.get("pruneUnusedImages") is True
+        and reclaim.get("containerNamePrefixes") == ["quwoquan-service-prod_"]
+        and set(reclaim.get("allowedStates") or []) == {"created", "exited"}
+        and "quwoquan-data-recovery-mongodb"
+        in set(reclaim.get("preservedContainers") or [])
+    ):
+        errors.append(
+            "prevalidation 旧运行面回收必须精确限定未运行容器、保留恢复容器且禁止删除 volume"
+        )
+    resource_limits = prevalidation.get("resourceLimits") or {}
+    defaults = resource_limits.get("defaults") or {}
+    if (
+        re.fullmatch(r"[1-9][0-9]*m", str(defaults.get("memLimit") or "")) is None
+        or int(defaults.get("pidsLimit") or 0) <= 0
+    ):
+        errors.append("prevalidation 受限单机必须声明默认内存与 PID 上限")
     prevalidation_planes = prevalidation.get("planes") or {}
     if set(prevalidation_planes) != {"service", "edge"}:
         errors.append("prevalidation 只允许 service/edge 两个运行平面")

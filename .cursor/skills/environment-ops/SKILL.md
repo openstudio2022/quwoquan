@@ -65,7 +65,7 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 
 1. 先取得 reviewed main 成功 Service Pipeline 生成的 deployable `manifest.json`、GHCR digest、SBOM 与 provenance；本地工作区必须 clean 且 HEAD 与 manifest source 一致。
 2. 执行 `stackctl deploy --target prod-hosted --mode prevalidate --ssh-host <ssh-host> --data-mode isolated --prevalidate-scope first-party --release-manifest <manifest.json>`。
-3. stackctl 在任何镜像传输前检查 service/edge 隔离账号、rootless Podman、user systemd/linger、架构、CPU、内存、容器空间和目标端口；不满足阈值即停止。
+3. stackctl 在任何镜像传输前检查 service/edge 隔离账号、rootless Podman、user systemd/linger、架构、CPU、内存、当前/可回收/回收后容器空间和目标端口；不满足 `access-isolation.yaml` 当前受控策略即停止。受限单机只允许清理声明匹配的未运行旧容器与未使用镜像，禁止删除 volume 和恢复容器。
 4. 报告分别读取 `containerDeployment` 与 `releaseEligibility`；即使前者 passed，后者在 Provider/SFU/真实数据/观测/灾备/灰度回滚证据齐全前仍为 `GATE_BLOCK`。
 
 ## Stop Conditions
@@ -75,7 +75,7 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 - 生产审批、受保护环境放量、回滚前版本选择不明确
 - 缺少密钥、token、SSH 凭据或 hosted base URL
 - `prod-hosted` 缺少 `service / image / config / step / SLO` 任一必填输入
-- prevalidate 缺不可变 manifest、工作区非 clean/reviewed main、主机低于 4C/16GiB/40GiB 可用空间，或目标端口冲突
+- prevalidate 缺 GHCR OCI digest manifest、工作区非 clean/reviewed main、主机低于 `access-isolation.yaml` 的当前/有效/回收后资源门，或目标端口冲突
 - 计划对 `prod-hosted` 执行 restart / rollout / cold-build 三模式，但当前实现并未开放对应命令面
 - `repair` 需要超出白名单的破坏性动作
 - 发现环境配置、artifact 或 host 污染与用户当前目标矛盾

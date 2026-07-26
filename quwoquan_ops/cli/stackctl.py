@@ -838,7 +838,10 @@ def build_parser() -> argparse.ArgumentParser:
     deploy_parser.add_argument(
         "--release-manifest",
         default="",
-        help="Service Pipeline 产出的 deployable manifest.json；真实生产发布必须提供",
+        help=(
+            "Service Pipeline 产出的 deployable manifest.json，或 "
+            "oci://ghcr.io/.../release-artifact@sha256:...；真实生产发布必须提供"
+        ),
     )
     deploy_parser.add_argument(
         "--prometheus-url",
@@ -7966,6 +7969,39 @@ def _deployable_release_manifest(
     return path, declared_digest, manifest
 
 
+def _materialize_prevalidation_release_manifest(path_value: str) -> Path:
+    if not path_value.startswith("oci://"):
+        return Path(path_value).expanduser().resolve()
+    image_ref = path_value.removeprefix("oci://").strip()
+    match = re.fullmatch(
+        r"ghcr\.io/[a-z0-9._/-]+/release-artifact@(sha256:([0-9a-f]{64}))",
+        image_ref,
+    )
+    if match is None:
+        raise RuntimeError(
+            "prevalidation OCI release artifact must be a GHCR digest ref"
+        )
+    destination = deployment_target_path(
+        "prod-hosted", "release-artifacts", match.group(2)
+    )
+    fetch = run(
+        [
+            "python3",
+            "quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py",
+            "--ref",
+            image_ref,
+            "--output-dir",
+            str(destination),
+        ]
+    )
+    if fetch.returncode != 0:
+        raise RuntimeError(
+            "immutable OCI release artifact fetch failed: "
+            + (fetch.stderr.strip() or fetch.stdout.strip())
+        )
+    return destination / "manifest.json"
+
+
 def _prevalidation_release_manifest(
     path_value: str,
 ) -> tuple[Path, str, dict[str, Any], str, str]:
@@ -7976,7 +8012,7 @@ def _prevalidation_release_manifest(
     the exact reviewed main source, a clean checkout, GHCR digest refs, SBOM/
     provenance references, and byte-identical config snapshots.
     """
-    path = Path(path_value).expanduser().resolve()
+    path = _materialize_prevalidation_release_manifest(path_value)
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -9367,7 +9403,11 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
         getattr(args, "release_manifest", "")
         or os.environ.get("RELEASE_MANIFEST", "")
     ).strip()
-    manifest_path = Path(manifest_value).expanduser().resolve() if manifest_value else ROOT
+    manifest_path = (
+        Path(manifest_value).expanduser().resolve()
+        if manifest_value and not manifest_value.startswith("oci://")
+        else ROOT
+    )
     manifest_digest = ""
     manifest_payload: dict[str, Any] = {}
     image_version = "unresolved"

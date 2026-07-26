@@ -43,11 +43,40 @@ prevalidation:
     requireHealthyExceptProviderBound: true
     providerBoundServices: [product-ops-service]
     providerReadinessStatus: GATE_BLOCK
+  capacityStrategy: constrained-single-host
   minimumHostResources:
-    cpuCores: 4
-    memoryBytes: 17179869184
-    containerFreeBytes: 42949672960
+    cpuCores: 2
+    memoryBytes: 1879048192
+    containerFreeBytes: 2147483648
+    containerEffectiveFreeBytes: 6442450944
+    postReclaimContainerFreeBytes: 6442450944
     architectures: [x86_64, amd64]
+  legacyReclaimPolicy:
+    enabled: true
+    plane: service
+    containerNamePrefixes: [quwoquan-service-prod_]
+    allowedStates: [created, exited]
+    preservedContainers: [quwoquan-data-recovery-mongodb]
+    pruneUnusedImages: true
+    removeVolumes: false
+  resourceLimits:
+    defaults:
+      memLimit: 96m
+      pidsLimit: 256
+    services:
+      recommendation-service: {memLimit: 384m, pidsLimit: 384}
+      product-ops-service: {memLimit: 128m, pidsLimit: 256}
+      platform-ops-service: {memLimit: 128m, pidsLimit: 256}
+      postgres: {memLimit: 128m, pidsLimit: 128}
+      mongodb: {memLimit: 256m, pidsLimit: 256}
+      mongo-init: {memLimit: 96m, pidsLimit: 128}
+      redis: {memLimit: 64m, pidsLimit: 128}
+      object-storage: {memLimit: 160m, pidsLimit: 256}
+      object-storage-init: {memLimit: 64m, pidsLimit: 128}
+      elasticsearch: {memLimit: 384m, pidsLimit: 512}
+      gamma-proxy: {memLimit: 96m, pidsLimit: 256}
+      realtime-gateway: {memLimit: 96m, pidsLimit: 256}
+      rtc-service: {memLimit: 96m, pidsLimit: 256}
   planes:
     service:
       startupServices:
