@@ -44,6 +44,7 @@ jobs:
   topology_regression:
     name: Delivery Gate — Topology
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
       service: ${{ steps.detect.outputs.service }}
@@ -82,6 +83,7 @@ jobs:
   quwoquan_service:
     name: Delivery Gate — Service (L2)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.service == 'true' }}
     outputs:
@@ -116,6 +118,7 @@ jobs:
   search_contract_smoke:
     name: Delivery Gate — Search /search Contract Smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: topology_regression
     if: >-
       ${{
@@ -153,6 +156,7 @@ jobs:
   quwoquan_app:
     name: Delivery Gate — App Static (L1)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     env:
@@ -175,15 +179,6 @@ jobs:
         run: |
           python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve \
             --version "$(tr -d '[:space:]' < quwoquan_app/.flutter-version)"
-      - name: Cache Flutter SDK
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            ${{ steps.flutter.outputs.cache_path }}
-            ~/.pub-cache
-          key: "flutter-${{ runner.os }}-${{ runner.arch }}-${{ steps.flutter.outputs.sha256 }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
-          restore-keys: |
-            flutter-${{ runner.os }}-${{ runner.arch }}-${{ steps.flutter.outputs.sha256 }}-
       - name: Install verified Flutter SDK
         env:
           FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
@@ -211,6 +206,7 @@ jobs:
     # UI 分片包含 iOS/macOS 渲染器生成的精确像素 golden；Linux Skia 的
     # 字体与抗锯齿结果不同，不能把跨平台像素漂移误报为产品视觉回归。
     runs-on: macos-latest
+    timeout-minutes: 45
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     env:
@@ -232,15 +228,6 @@ jobs:
         run: |
           python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve \
             --version "$(tr -d '[:space:]' < quwoquan_app/.flutter-version)"
-      - name: Cache Flutter SDK
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            ${{ steps.flutter.outputs.cache_path }}
-            ~/.pub-cache
-          key: "flutter-${{ runner.os }}-${{ runner.arch }}-${{ steps.flutter.outputs.sha256 }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
-          restore-keys: |
-            flutter-${{ runner.os }}-${{ runner.arch }}-${{ steps.flutter.outputs.sha256 }}-
       - name: Install verified Flutter SDK
         env:
           FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
@@ -265,6 +252,7 @@ jobs:
   quwoquan_app_tests_runtime:
     name: Delivery Gate — App Runtime Tests (L1)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     env:
@@ -286,15 +274,6 @@ jobs:
         run: |
           python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve \
             --version "$(tr -d '[:space:]' < quwoquan_app/.flutter-version)"
-      - name: Cache Flutter SDK
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            ${{ steps.flutter.outputs.cache_path }}
-            ~/.pub-cache
-          key: "flutter-${{ runner.os }}-${{ runner.arch }}-${{ steps.flutter.outputs.sha256 }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
-          restore-keys: |
-            flutter-${{ runner.os }}-${{ runner.arch }}-${{ steps.flutter.outputs.sha256 }}-
       - name: Install verified Flutter SDK
         env:
           FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
@@ -319,6 +298,7 @@ jobs:
   quwoquan_data:
     name: Delivery Gate — Data
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.data == 'true' }}
     outputs:
@@ -347,6 +327,7 @@ jobs:
   ops_portal:
     name: Delivery Gate — Ops Portal
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.portal == 'true' }}
     outputs:
@@ -388,6 +369,7 @@ jobs:
       - ops_portal
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
       summary_result: ${{ steps.summary.outputs.result }}
@@ -482,7 +464,7 @@ jobs:
           fi
           echo "result=success" >> "$GITHUB_OUTPUT"
       - name: Upload delivery gate timing summary
-        if: ${{ always() && !cancelled() }}
+        if: ${{ failure() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

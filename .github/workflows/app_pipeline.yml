@@ -51,17 +51,11 @@ jobs:
         working-directory: quwoquan_app
         run: flutter build macos -t lib/main_prod.dart --dart-define=APP_DATA_SOURCE=remote
 
-      - name: 上传 macOS 构建产物
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: macos-build-${{ github.ref_name }}
-          path: quwoquan_app/build/macos/Build/Products/Release/
-          retention-days: 14
-
       - name: 上传构建失败日志
         if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: macos-build-fail-logs
-          path: quwoquan_app/build/
+          path: quwoquan_app/build/macos/Build/Logs/
+          if-no-files-found: warn
           retention-days: 3

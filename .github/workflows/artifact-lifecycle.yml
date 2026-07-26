@@ -4,6 +4,18 @@ permissions:
   contents: read
 
 on:
+  workflow_run:
+    workflows:
+      - 01. App Pipeline
+      - 02. Service Pipeline
+      - 03. Delivery Gate
+      - 04. Pre-Release Gate
+      - 05. App Env Device Matrix
+      - 07. Deploy To Prod (Auto)
+      - ML Training Pipeline
+      - Recommendation API Integration
+    types:
+      - completed
   schedule:
     - cron: '17 2 * * *'
   workflow_dispatch:
@@ -17,6 +29,11 @@ on:
 jobs:
   cleanup:
     name: Reclaim invalid Actions artifacts
+    if: >-
+      ${{
+        github.event_name != 'workflow_run' ||
+        github.event.workflow_run.name != '00. Artifact Lifecycle'
+      }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,10 +47,12 @@ jobs:
           args=(
             --repository "${GITHUB_REPOSITORY}"
             --token-env GITHUB_TOKEN
-            --failed-retention-days 7
-            --success-retention-days 14
+            --failed-retention-days 3
             --output ".qwq_output/env/repo/runs/artifact-lifecycle/report.json"
           )
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            args+=(--run-id "${{ github.event.workflow_run.id }}")
+          fi
           if [[ "${{ github.event_name }}" != "workflow_dispatch" || "${{ inputs.apply }}" = "true" ]]; then
             args+=(--apply)
           fi

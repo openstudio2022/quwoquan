@@ -4,6 +4,7 @@ name: 07. Deploy To Prod (Auto)
 
 permissions:
   contents: read
+  actions: read
 
 env:
   QWQ_OUTPUT_ROOT: .qwq_output
@@ -71,6 +72,7 @@ jobs:
       has_release_artifact: ${{ steps.artifact.outputs.has_release_artifact }}
       release_artifact_ref: ${{ steps.artifact.outputs.release_artifact_ref }}
       service_pipeline_run_id: ${{ steps.context.outputs.release_run_id }}
+      service_pipeline_elapsed_seconds: ${{ steps.service_pipeline_timing.outputs.elapsed_seconds }}
     steps:
       - id: context
         name: Resolve workflow context
@@ -86,6 +88,45 @@ jobs:
             echo "head_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
             echo "release_run_id=${{ github.event.inputs.release_run_id }}" >> "$GITHUB_OUTPUT"
           fi
+      - id: service_pipeline_timing
+        name: Read completed Service Pipeline elapsed time
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ steps.context.outputs.release_run_id }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import urllib.request
+          from datetime import datetime
+
+          run_id = os.environ["RELEASE_RUN_ID"].strip()
+          token = os.environ["GITHUB_TOKEN"].strip()
+          if not run_id or not token:
+              raise SystemExit("missing service pipeline run id or Actions token")
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/${{ github.repository }}/actions/runs/{run_id}",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {token}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              payload = json.load(response)
+          if payload.get("status") != "completed" or payload.get("conclusion") != "success":
+              raise SystemExit(
+                  "Service Pipeline must be completed and successful before prod timing "
+                  f"can be recorded: {payload.get('status')}/{payload.get('conclusion')}"
+              )
+          start_raw = payload.get("run_started_at") or payload.get("created_at")
+          end_raw = payload.get("updated_at")
+          if not isinstance(start_raw, str) or not isinstance(end_raw, str):
+              raise SystemExit("Service Pipeline API response has no complete timing window")
+          start = datetime.fromisoformat(start_raw.replace("Z", "+00:00"))
+          end = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
+          print(f"elapsed_seconds={max(0, int((end - start).total_seconds()))}")
+          PY
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 2
@@ -276,7 +317,7 @@ jobs:
             --scope all \
             --report-dir "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-inspect"
       - name: Upload alpha stackctl artifacts
-        if: ${{ always() && !cancelled() }}
+        if: ${{ failure() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -286,7 +327,7 @@ jobs:
             ${{ env.QWQ_OUTPUT_ROOT }}/env/alpha/runs/**/report.json
           if-no-files-found: ignore
           compression-level: 0
-          retention-days: 7
+          retention-days: 3
       - id: finish
         if: always()
         name: Finish timer
@@ -415,7 +456,7 @@ jobs:
             --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" \
             --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-initial"
       - name: Upload prod initial artifacts
-        if: ${{ always() && !cancelled() }}
+        if: ${{ failure() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -425,7 +466,7 @@ jobs:
             ${{ env.QWQ_OUTPUT_ROOT }}/env/prod/runs/**/report.json
           if-no-files-found: ignore
           compression-level: 0
-          retention-days: 7
+          retention-days: 3
       - id: finish
         if: always()
         name: Finish timer
@@ -516,7 +557,7 @@ jobs:
             --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" \
             --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-carry-on"
       - name: Upload prod carry-on artifacts
-        if: ${{ always() && !cancelled() }}
+        if: ${{ failure() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -526,7 +567,7 @@ jobs:
             ${{ env.QWQ_OUTPUT_ROOT }}/env/prod/runs/**/report.json
           if-no-files-found: ignore
           compression-level: 0
-          retention-days: 7
+          retention-days: 3
       - id: finish
         if: always()
         name: Finish timer
@@ -626,7 +667,7 @@ jobs:
             --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" \
             --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-full"
       - name: Upload prod full artifacts
-        if: ${{ always() && !cancelled() }}
+        if: ${{ failure() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -636,7 +677,7 @@ jobs:
             ${{ env.QWQ_OUTPUT_ROOT }}/env/prod/runs/**/report.json
           if-no-files-found: ignore
           compression-level: 0
-          retention-days: 7
+          retention-days: 3
       - id: finish
         if: always()
         name: Finish timer
@@ -659,68 +700,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
-      - name: Download service pipeline timing summary
-        if: ${{ needs.prepare.outputs.service_pipeline_run_id != '' }}
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: service-pipeline-timing-summary
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/service-pipeline-timing
-          run-id: ${{ needs.prepare.outputs.service_pipeline_run_id }}
-          repository: ${{ github.repository }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Download delivery gate timing summary
-        if: ${{ always() }}
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: delivery-gate-timing-summary
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/delivery-gate-timing
-      - name: Download beta timing summary
-        if: ${{ always() }}
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: app-env-device-matrix-timing-summary
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/beta-device-timing
-      - name: Download alpha stackctl artifacts
-        if: ${{ always() }}
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: mainline-auto-prod-alpha
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/mainline-alpha
-      - name: Download beta stackctl artifacts
-        if: ${{ always() }}
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          pattern: app-env-device-matrix-*-mobile
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/mainline-beta
-          merge-multiple: true
-      - name: Download prod initial stackctl artifacts
-        if: ${{ always() }}
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: mainline-auto-prod-prod-initial
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/mainline-prod-initial
-      - name: Download prod full stackctl artifacts
-        if: ${{ always() }}
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: mainline-auto-prod-prod-full
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/mainline-prod-full
-      - name: Download prod carry-on stackctl artifacts
-        if: ${{ always() }}
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: mainline-auto-prod-carry-on
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/mainline-prod-carry-on
       - name: Render mainline timing summary
         env:
+          SERVICE_PIPELINE_SECONDS: ${{ needs.prepare.outputs.service_pipeline_elapsed_seconds }}
           DELIVERY_SECONDS: ${{ needs.delivery_gate.outputs.critical_path_seconds }}
           ALPHA_SECONDS: ${{ needs.alpha_local.outputs.duration_seconds }}
           BETA_SECONDS: ${{ needs.beta_device_matrix.outputs.critical_path_seconds }}
@@ -728,19 +710,7 @@ jobs:
           PROD_CARRY_ON_SECONDS: ${{ needs.prod_carry_on.outputs.duration_seconds }}
           PROD_FULL_SECONDS: ${{ needs.prod_full.outputs.duration_seconds }}
         run: |
-          SERVICE_PIPELINE=0
-          SERVICE_PIPELINE_SUMMARY="$QWQ_OUTPUT_ROOT/env/repo/local/ci/process/downloads/service-pipeline-timing/service-pipeline-summary.json"
-          if [ -f "$SERVICE_PIPELINE_SUMMARY" ]; then
-            SERVICE_PIPELINE="$(python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          summary_path = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "repo/tmp/ci-downloads/service-pipeline-timing/service-pipeline-summary.json"
-          payload = json.loads(summary_path.read_text(encoding="utf-8"))
-          print(int(payload.get("criticalPathSeconds", 0) or 0))
-          PY
-            )"
-          fi
+          SERVICE_PIPELINE="${SERVICE_PIPELINE_SECONDS:-0}"
           DELIVERY="${DELIVERY_SECONDS:-0}"
           ALPHA="${ALPHA_SECONDS:-0}"
           BETA="${BETA_SECONDS:-0}"
@@ -768,7 +738,7 @@ jobs:
             --critical-path-seconds "${COMMIT_TO_PROD_SECONDS}" \
             --phase "service_pipeline_02=${SERVICE_PIPELINE}" \
             --phase "mainline_auto_prod_07=${CRITICAL_PATH_SECONDS}" \
-            --note "真实 commit-to-prod = 02.service_pipeline + 07.mainline_auto_prod；15 分钟承诺以该总和为准。" \
+            --note "真实 commit-to-prod = 02 Service Pipeline 已完成运行耗时 + 07 mainline_auto_prod；15 分钟承诺以该总和为准。" \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/main-commit-to-prod-summary.json" \
             --write-step-summary
           if [ "${CRITICAL_PATH_SECONDS}" -gt 900 ]; then
@@ -783,21 +753,14 @@ jobs:
         if: always()
         run: |
           python3 quwoquan_ops/ci/render_environment_chain_timing_diagnostics.py \
-            --service-pipeline-root "$QWQ_OUTPUT_ROOT/env/repo/local/ci/process/downloads/service-pipeline-timing" \
-            --delivery-gate-root "$QWQ_OUTPUT_ROOT/env/repo/local/ci/process/downloads/delivery-gate-timing" \
-            --beta-summary-root "$QWQ_OUTPUT_ROOT/env/repo/local/ci/process/downloads/beta-device-timing" \
             --mainline-summary "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/mainline-auto-prod-summary.json" \
             --commit-summary "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/main-commit-to-prod-summary.json" \
-            --alpha-runs-root "$QWQ_OUTPUT_ROOT/env/repo/local/ci/process/downloads/mainline-alpha" \
-            --beta-stackctl-root "$QWQ_OUTPUT_ROOT/env/repo/local/ci/process/downloads/mainline-beta" \
-            --prod-initial-stackctl-root "$QWQ_OUTPUT_ROOT/env/repo/local/ci/process/downloads/mainline-prod-initial" \
-            --prod-full-stackctl-root "$QWQ_OUTPUT_ROOT/env/repo/local/ci/process/downloads/mainline-prod-full" \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/environment-chain-timing-diagnostics.json" \
             --write-markdown "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/environment-chain-timing-diagnostics.md" \
             --write-step-summary \
             --emit-annotations
       - name: Upload mainline timing summaries
-        if: ${{ always() && !cancelled() }}
+        if: ${{ failure() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

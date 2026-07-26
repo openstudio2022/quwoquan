@@ -190,13 +190,13 @@ jobs:
           fi
           make verify-ml-model-quality ML_DRY_RUN="$DRY_RUN_FLAG"
       - name: Upload report
-        if: ${{ always() && !cancelled() }}
+        if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: eval-report
           path: |
             .qwq_output/env/repo/runs/ml/eval_report_*.json
-          retention-days: 14
+          retention-days: 3
 
   promote:
     name: "4. Promote Models"
@@ -261,14 +261,14 @@ jobs:
             exit 1
           fi
       - name: Upload monitoring reports
-        if: ${{ always() && !cancelled() }}
+        if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: rec-monitoring-reports
           path: |
             quwoquan_service/guardrail_report.json
             quwoquan_service/drift_report.json
-          retention-days: 14
+          retention-days: 3
 
   notify:
     name: "6. Summary"
@@ -276,39 +276,14 @@ jobs:
     needs: [evaluate, promote, monitoring]
     runs-on: ubuntu-latest
     steps:
-      - name: Download report
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: eval-report
-          path: .
-        continue-on-error: true
-      - name: Download monitoring reports
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: rec-monitoring-reports
-          path: monitoring
-        continue-on-error: true
       - name: Print summary
+        env:
+          EVALUATE_RESULT: ${{ needs.evaluate.result }}
+          PROMOTE_RESULT: ${{ needs.promote.result }}
+          MONITORING_RESULT: ${{ needs.monitoring.result }}
         run: |
           echo "## ML Training Pipeline Results" >> "$GITHUB_STEP_SUMMARY"
-          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import glob
-          import json
-          import os
-          for path in sorted(glob.glob('eval_report_*.json')):
-              with open(path, encoding='utf-8') as f:
-                  r = json.load(f)
-              print(f'### {os.path.basename(path)}')
-              print(f"Status: **{r['status'].upper()}**")
-              print(f"Reason: {r['reason']}")
-              print(f"New metrics: {json.dumps(r['new_metrics'], indent=2)}")
-              print("")
-          for path in ['monitoring/guardrail_report.json', 'monitoring/drift_report.json']:
-              if os.path.exists(path):
-                  with open(path, encoding='utf-8') as f:
-                      r = json.load(f)
-                  print(f'### {os.path.basename(path)}')
-                  print(f"Status: **{r.get('status', r.get('overall_status', 'UNKNOWN')).upper()}**")
-                  print(f"Reason: {r.get('reason', r.get('overall_status', ''))}")
-                  print("")
-          PY
+          echo "- evaluate: **${EVALUATE_RESULT}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- promote: **${PROMOTE_RESULT}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- monitoring: **${MONITORING_RESULT}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "Detailed failures are retained only as 3-day diagnostics; promotion facts remain in the model registry." >> "$GITHUB_STEP_SUMMARY"

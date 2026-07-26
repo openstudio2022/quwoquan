@@ -15,6 +15,15 @@ UPLOAD_PATTERN = re.compile(
     r"^(?P<indent>\s*)uses:\s*actions/upload-artifact@[0-9a-f]{40}\s*$",
     re.MULTILINE,
 )
+DOWNLOAD_PATTERN = re.compile(
+    r"^\s*uses:\s*actions/download-artifact@[0-9a-f]{40}\s$",
+    re.MULTILINE,
+)
+CACHE_PATTERN = re.compile(
+    r"^(?P<indent>\s*)uses:\s*actions/cache@[0-9a-f]{40}\s$",
+    re.MULTILINE,
+)
+FAILURE_ONLY_CONDITION = "failure() && !cancelled()"
 
 
 def _upload_block(text: str, match: re.Match[str]) -> str:
@@ -34,18 +43,38 @@ def _upload_block(text: str, match: re.Match[str]) -> str:
 
 def verify() -> list[str]:
     issues: list[str] = []
+    uploaded_workflow_names: set[str] = set()
     for workflow in sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")]):
         text = workflow.read_text(encoding="utf-8")
+        name_match = re.search(r"^name:\s*(.+?)\s*$", text, re.MULTILINE)
+        workflow_name = name_match.group(1).strip().strip("\"'") if name_match else ""
         for match in UPLOAD_PATTERN.finditer(text):
+            uploaded_workflow_names.add(workflow_name)
             block = _upload_block(text, match)
             line = text.count("\n", 0, match.start()) + 1
             prefix = f"{workflow.relative_to(ROOT)}:{line}"
             if "retention-days:" not in block:
                 issues.append(f"{prefix}: artifact uploads require explicit retention-days")
-            if re.search(r"(?:^|\n)\s*if:\s*always\(\)", block):
-                issues.append(f"{prefix}: cancelled runs must not upload artifacts")
+            if FAILURE_ONLY_CONDITION not in block:
+                issues.append(
+                    f"{prefix}: Actions artifacts are failure diagnostics only; "
+                    f"require {FAILURE_ONLY_CONDITION}"
+                )
             if re.search(r"/runs/\*\*(?:\s|$)", block):
                 issues.append(f"{prefix}: broad runs/** upload is forbidden; select report.json/summary.json")
+        if DOWNLOAD_PATTERN.search(text):
+            issues.append(
+                f"{workflow.relative_to(ROOT)}: Actions Artifact job exchange is forbidden; "
+                "use OCI, canonical runtime evidence, or the producing job directly"
+            )
+        for match in CACHE_PATTERN.finditer(text):
+            block = _upload_block(text, match)
+            if "steps.flutter.outputs.cache_path" in block or "RUNNER_TOOL_CACHE" in block:
+                line = text.count("\n", 0, match.start()) + 1
+                issues.append(
+                    f"{workflow.relative_to(ROOT)}:{line}: Actions cache must not retain "
+                    "an SDK/toolchain tree; install the checksum-verified toolchain on the runner"
+                )
     if not LIFECYCLE_SCRIPT.is_file():
         issues.append("missing quwoquan_ops/ci/manage_actions_artifacts.py")
     if not LIFECYCLE_WORKFLOW.is_file():
@@ -56,11 +85,24 @@ def verify() -> list[str]:
             "actions: write",
             "manage_actions_artifacts.py",
             "--apply",
-            "--failed-retention-days 7",
-            "--success-retention-days 14",
+            "--failed-retention-days 3",
+            "workflow_run:",
+            "--run-id",
         ):
             if token not in lifecycle:
                 issues.append(f"artifact lifecycle workflow missing {token!r}")
+        triggered_names = {
+            item.strip()
+            for item in re.findall(r"^\s+-\s+(.+?)\s*$", lifecycle, re.MULTILINE)
+        }
+        for workflow_name in sorted(uploaded_workflow_names):
+            if not workflow_name:
+                issues.append("artifact-uploading workflow has no name")
+            elif workflow_name not in triggered_names:
+                issues.append(
+                    "artifact lifecycle workflow must observe every artifact-producing "
+                    f"workflow: {workflow_name!r}"
+                )
     return issues
 
 

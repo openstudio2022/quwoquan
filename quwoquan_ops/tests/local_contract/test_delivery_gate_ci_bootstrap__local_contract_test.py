@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 
 
@@ -16,11 +17,12 @@ def _load_setup_module():
     return module
 
 
-def test_delivery_gate_bootstrap_uses_pinned_cache_and_portal_lockfile() -> None:
+def test_delivery_gate_bootstrap_uses_verified_sdk_without_actions_toolchain_cache() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
 
     assert "subosito/flutter-action@" not in workflow
-    assert "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830" in workflow
+    assert "Cache Flutter SDK" not in workflow
+    assert "steps.flutter.outputs.cache_path }}\n            ~/.pub-cache" not in workflow
     assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve" in workflow
     assert "quwoquan_app/.flutter-version" in workflow
     assert "PUB_HOSTED_URL: https://pub.flutter-io.cn" in workflow
@@ -28,6 +30,32 @@ def test_delivery_gate_bootstrap_uses_pinned_cache_and_portal_lockfile() -> None
     assert "flutter pub get --enforce-lockfile" in workflow
     assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
     assert "QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy" in workflow
+
+
+def test_delivery_gate_has_bounded_jobs() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+
+    expected_timeouts = {
+        "topology_regression": 15,
+        "quwoquan_service": 45,
+        "search_contract_smoke": 20,
+        "quwoquan_app": 45,
+        "quwoquan_app_tests_ui": 45,
+        "quwoquan_app_tests_runtime": 45,
+        "quwoquan_data": 45,
+        "ops_portal": 25,
+        "delivery_gate_summary": 15,
+    }
+    for job, minutes in expected_timeouts.items():
+        job_start = workflow.index(f"  {job}:\n")
+        next_job = re.search(
+            r"^  [a-z_]+:\n", workflow[job_start + 1 :], flags=re.MULTILINE
+        )
+        job_end = job_start + 1 + next_job.start() if next_job else None
+        job_body = workflow[job_start:job_end]
+        assert f"    timeout-minutes: {minutes}" in job_body
 
 
 def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import sys
 from pathlib import Path
@@ -175,6 +176,66 @@ def test_open_item_details_are_searchable_without_a_registry(
             "dependency": "供应商凭据。",
         }
     ]
+
+
+def test_change_report_keeps_release_open_visible_without_blocking_remediation(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-008
+    root = build_tree(tmp_path)
+    tree = root / "specs" / "feature-tree"
+    (tree / "domain" / "spec.md").write_text(
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- App：`quwoquan_ops`\n",
+        encoding="utf-8",
+    )
+    (tree / "domain" / "capability" / "spec.md").write_text(
+        "# L2 Business Capability：能力 (`capability`)\n\n"
+        "## 8. 开放事项\n\n"
+        "### OPEN-001 外部 Provider 未就绪\n\n"
+        "- 类型：`external_blocker`\n"
+        "- 优先级：`P0`\n"
+        "- 准出影响：`block`\n"
+        "- 完成判定：真实 Provider 回执。\n",
+        encoding="utf-8",
+    )
+    write(tree / "domain" / "capability" / "design.md", "# L2 Design：能力\n")
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "TREE_ROOT", tree)
+    monkeypatch.setattr(
+        feature_tree,
+        "git_changed_paths",
+        lambda: ["specs/feature-tree/domain/capability/design.md"],
+    )
+    outputs: dict[str, str] = {}
+
+    def capture_output(name: str, content: str) -> Path:
+        outputs[name] = content
+        return root / name
+
+    monkeypatch.setattr(feature_tree, "write_output", capture_output)
+
+    assert feature_tree.command_change_report(argparse.Namespace()) == 0
+    assert "OPEN-001 外部 Provider 未就绪" in outputs["change-report.md"]
+    assert "RELEASE_GATES_BLOCKED" in capsys.readouterr().out
+
+
+def test_change_report_still_blocks_unowned_engineering_change(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = build_tree(tmp_path)
+    tree = root / "specs" / "feature-tree"
+    unowned = root / "quwoquan_ops" / "cli" / "orphan.py"
+    write(unowned, "# no owner\n")
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "TREE_ROOT", tree)
+    monkeypatch.setattr(
+        feature_tree, "git_changed_paths", lambda: ["quwoquan_ops/cli/orphan.py"]
+    )
+    monkeypatch.setattr(feature_tree, "write_output", lambda name, _content: root / name)
+
+    assert feature_tree.command_change_report(argparse.Namespace()) == 2
 
 
 def test_journey_scenario_requires_exact_l1_handoff_reference(

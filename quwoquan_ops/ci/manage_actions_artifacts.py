@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """审计并清理 GitHub Actions 的短生命周期制品。
 
-Actions artifact 只承载 job 间传递和短期诊断，不能作为 release
-输入或正式发布证据。该工具先解析每个 artifact 所属 workflow run，
+Actions artifact 只承载失败诊断，不能作为 release 输入、正式发布
+证据或成功 job 间传递。该工具先解析每个 artifact 所属 workflow run，
 再按运行结论和保留窗口生成精确删除清单；默认 dry-run，只有传入
-``--apply`` 才会逐个 DELETE 已判定为过期的 artifact ID。
+``--apply`` 才会逐个 DELETE 已判定为无效或过期的 artifact ID。
 """
 
 from __future__ import annotations
@@ -98,10 +98,12 @@ def classify_artifact(
         return CleanupDecision(reason="github-expired", **base)
     if conclusion in TERMINAL_RUN_CONCLUSIONS:
         return CleanupDecision(reason=f"invalid-run-{conclusion}", **base)
+    if conclusion == "success":
+        # 成功路径的可部署输入是 GHCR OCI digest；任何成功 artifact 都是
+        # 旧流程遗留或新回归，必须在 workflow_run completed 后立即回收。
+        return CleanupDecision(reason="invalid-success-artifact", **base)
     if conclusion == "failure" and created <= now - timedelta(days=failed_retention_days):
         return CleanupDecision(reason="failure-diagnostic-retention-expired", **base)
-    if conclusion == "success" and created <= now - timedelta(days=success_retention_days):
-        return CleanupDecision(reason="success-retention-expired", **base)
     return None
 
 
@@ -162,6 +164,24 @@ class GitHubApi:
             items = payload.get("artifacts")
             if not isinstance(items, list):
                 raise RuntimeError("GitHub artifact list has no artifacts array")
+            artifacts.extend(item for item in items if isinstance(item, dict))
+            if len(items) < 100:
+                return artifacts
+            page += 1
+
+    def list_run_artifacts(self, run_id: int) -> list[dict[str, Any]]:
+        artifacts: list[dict[str, Any]] = []
+        page = 1
+        while True:
+            payload = self.request(
+                "GET",
+                f"/repos/{self.repository}/actions/runs/{run_id}/artifacts?per_page=100&page={page}",
+            )
+            if not isinstance(payload, dict):
+                raise RuntimeError("GitHub workflow-run artifact response is invalid")
+            items = payload.get("artifacts")
+            if not isinstance(items, list):
+                raise RuntimeError("GitHub workflow-run artifact response has no artifacts array")
             artifacts.extend(item for item in items if isinstance(item, dict))
             if len(items) < 100:
                 return artifacts
@@ -270,7 +290,7 @@ def build_report(
         "generatedAt": now.isoformat().replace("+00:00", "Z"),
         "policy": {
             "failedRetentionDays": failed_retention_days,
-            "successRetentionDays": success_retention_days,
+            "successArtifacts": "invalid-immediately",
             "terminalConclusions": sorted(TERMINAL_RUN_CONCLUSIONS),
         },
         "inventory": {
@@ -289,12 +309,81 @@ def build_report(
     return report, decisions
 
 
+def build_run_report(
+    api: GitHubApi,
+    *,
+    run_id: int,
+    now: datetime,
+    failed_retention_days: int,
+    success_retention_days: int,
+) -> tuple[dict[str, Any], list[CleanupDecision]]:
+    """Classify one completed workflow run for immediate event-driven cleanup."""
+
+    run = api.workflow_run(run_id)
+    if run is None:
+        raise RuntimeError(f"workflow run {run_id} was not found")
+    artifacts = api.list_run_artifacts(run_id)
+    decisions = [
+        decision
+        for artifact in artifacts
+        if (
+            decision := classify_artifact(
+                artifact,
+                run,
+                now=now,
+                failed_retention_days=failed_retention_days,
+                success_retention_days=success_retention_days,
+            )
+        )
+        is not None
+    ]
+    decisions.sort(key=lambda item: item.artifact_id)
+    reasons: dict[str, dict[str, int]] = {}
+    for decision in decisions:
+        totals = reasons.setdefault(decision.reason, {"count": 0, "bytes": 0})
+        totals["count"] += 1
+        totals["bytes"] += decision.size_bytes
+    active = [item for item in artifacts if item.get("expired") is not True]
+    return (
+        {
+            "schema": "github-actions-artifact-lifecycle-report",
+            "repository": api.repository,
+            "generatedAt": now.isoformat().replace("+00:00", "Z"),
+            "scope": {"workflowRunId": run_id},
+            "policy": {
+                "failedRetentionDays": failed_retention_days,
+                "successArtifacts": "invalid-immediately",
+                "terminalConclusions": sorted(TERMINAL_RUN_CONCLUSIONS),
+            },
+            "inventory": {
+                "totalArtifacts": len(artifacts),
+                "activeArtifacts": len(active),
+                "activeBytes": sum(int(item.get("size_in_bytes") or 0) for item in active),
+                "workflowRunConclusion": str(run.get("conclusion") or "").lower() or None,
+            },
+            "cleanup": {
+                "candidateCount": len(decisions),
+                "candidateBytes": sum(item.size_bytes for item in decisions),
+                "byReason": reasons,
+                "candidates": [item.as_dict() for item in decisions],
+            },
+        },
+        decisions,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--token-env", default="GITHUB_TOKEN")
     parser.add_argument("--failed-retention-days", type=int, default=7)
     parser.add_argument("--success-retention-days", type=int, default=14)
+    parser.add_argument(
+        "--run-id",
+        type=int,
+        default=0,
+        help="only audit and reclaim invalid artifacts from one completed workflow run",
+    )
     parser.add_argument("--now", default="")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--apply", action="store_true")
@@ -323,12 +412,21 @@ def main() -> int:
     try:
         now = parse_timestamp(args.now) if args.now else datetime.now(UTC)
         api = GitHubApi(args.repository, token)
-        report, decisions = build_report(
-            api,
-            now=now,
-            failed_retention_days=args.failed_retention_days,
-            success_retention_days=args.success_retention_days,
-        )
+        if args.run_id:
+            report, decisions = build_run_report(
+                api,
+                run_id=args.run_id,
+                now=now,
+                failed_retention_days=args.failed_retention_days,
+                success_retention_days=args.success_retention_days,
+            )
+        else:
+            report, decisions = build_report(
+                api,
+                now=now,
+                failed_retention_days=args.failed_retention_days,
+                success_retention_days=args.success_retention_days,
+            )
         if args.apply:
             selected = decisions[: args.max_deletions or None]
             deleted_artifact_ids, delete_failures = api.delete_artifacts(
@@ -339,7 +437,11 @@ def main() -> int:
             report["cleanup"]["deferredCandidateCount"] = len(decisions) - len(selected)
             report["cleanup"]["deletedArtifactIds"] = deleted_artifact_ids
             report["cleanup"]["deleteFailures"] = delete_failures
-            remaining = api.list_artifacts()
+            remaining = (
+                api.list_run_artifacts(args.run_id)
+                if args.run_id
+                else api.list_artifacts()
+            )
             report["postApplyInventory"] = {
                 "totalArtifacts": len(remaining),
                 "activeArtifacts": sum(
