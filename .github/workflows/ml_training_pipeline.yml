@@ -41,7 +41,6 @@ jobs:
     env:
       MONGODB_URI: mongodb://127.0.0.1:27017/?directConnection=true
       QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
-      QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy
       MODEL_OUT_DIR: .qwq_output/env/repo/local/ml/models
       REC_MODEL_URL: http://127.0.0.1:18090
       AUTH_JWT_SECRET: ml-dry-run-jwt-secret
@@ -65,6 +64,8 @@ jobs:
         working-directory: quwoquan_service
         run: python3 services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/verify_feature_consistency.py
       - name: Prepare autonomous Recommendation package
+        env:
+          QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy
         run: |
           python3 quwoquan_ops/cli/stackctl.py package --service recommendation-service --env alpha
           PACKAGE_DIR="$QWQ_DEPLOY_WORK_ROOT/alpha-local/packages/services/recommendation-service"
