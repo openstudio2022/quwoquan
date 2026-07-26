@@ -142,3 +142,14 @@ def test_lifecycle_only_spends_a_runner_for_failures_or_service_build_record_aud
 
     assert "github.event.workflow_run.name == '02. Service Pipeline'" in lifecycle
     assert "github.event.workflow_run.conclusion != 'success'" in lifecycle
+
+
+def test_lifecycle_reclaims_isolated_cache_when_pull_request_closes() -> None:
+    lifecycle = (ROOT / ".github/workflows/artifact-lifecycle.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "pull_request:\n    types: [closed]" in lifecycle
+    assert "Reclaim closed pull-request caches" in lifecycle
+    assert "refs/pull/${{ github.event.pull_request.number }}/merge" in lifecycle
+    assert "actions/caches/${cache_id}" in lifecycle
