@@ -45,6 +45,8 @@ def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -
     assert "QWQ_APP_TEST_SHARD: runtime" in workflow
     assert 'local app_gate_phase="${QWQ_APP_GATE_PHASE:-all}"' in gate
     assert 'local app_test_shard="${QWQ_APP_TEST_SHARD:-all}"' in gate
+    assert 'if [[ "$scope" != "app" || "${QWQ_APP_GATE_PHASE:-all}" != "tests" ]]' in gate
+    assert "run_global" in gate
     assert 'flutter_test_targets=("test/local_contract/")' in gate
     assert "test/local_contract/ui/" in gate
     for runtime_root in ("app", "cloud", "core", "quality"):

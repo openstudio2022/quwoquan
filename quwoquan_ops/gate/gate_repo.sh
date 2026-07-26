@@ -39,41 +39,49 @@ if [ -d "$ROOT/scripts" ]; then
   exit 1
 fi
 
-bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
-python3 quwoquan_ops/gate/verify_git_branch_policy.py
-python3 quwoquan_ops/gate/verify_github_supply_chain.py
-python3 quwoquan_ops/gate/verify_github_artifact_lifecycle.py
-python3 quwoquan_ops/gate/verify_agent_context_contract.py
-python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
-python3 quwoquan_ops/gate/verify_single_track_contracts.py
-python3 quwoquan_ops/gate/verify_behavior_event_type_contract.py
-python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
-python3 quwoquan_app/scripts/runtime/verify_app_generated_manifest.py
-python3 quwoquan_app/scripts/runtime/verify_cloud_package_boundaries.py
-python3 quwoquan_ops/cli/feature_tree.py verify
-python3 quwoquan_ops/gate/verify_execution_profiles.py
-python3 quwoquan_ops/gate/scaffold/verify_test_directory_layout.py
-python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
-python3 quwoquan_ops/gate/verify_local_dependency_purity.py
-python3 quwoquan_ops/gate/verify_observability_layout.py
-python3 quwoquan_ops/gate/verify_observability_envelope.py
-python3 quwoquan_app/scripts/runtime/verify_content_page_funnel_coverage.py
-python3 quwoquan_ops/tests/local_contract/test_content_page_funnel_coverage__observability__local_contract_test.py
-python3 quwoquan_ops/gate/verify_runtime_log_governance.py
-python3 quwoquan_ops/gate/verify_output_layout.py
-python3 quwoquan_ops/gate/verify_output_path_source_contract.py
-python3 quwoquan_ops/gate/verify_external_provider_governance.py
-python3 quwoquan_ops/gate/verify_provider_conformance_evidence.py
-python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
-python3 quwoquan_ops/gate/verify_markdown_local_links.py
-# 丢弃误写入源码树的 Python 缓存，再跑 root layout（缓存只允许落在 .qwq_output）。
-find "$ROOT" \
-  \( -path "$ROOT/.git" -o -path "$ROOT/.qwq_output" \) -prune -o \
-  \( -type d \( -name '__pycache__' -o -name '.pytest_cache' \) -exec rm -rf {} + \)
-rm -rf "$ROOT/.pytest_cache"
-python3 quwoquan_ops/gate/verify_root_layout.py
-python3 quwoquan_app/scripts/runtime/verify_app_layout.py
-python3 quwoquan_data/scripts/verify/verify_data_layout.py
+run_global() {
+  bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
+  python3 quwoquan_ops/gate/verify_git_branch_policy.py
+  python3 quwoquan_ops/gate/verify_github_supply_chain.py
+  python3 quwoquan_ops/gate/verify_github_artifact_lifecycle.py
+  python3 quwoquan_ops/gate/verify_agent_context_contract.py
+  python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
+  python3 quwoquan_ops/gate/verify_single_track_contracts.py
+  python3 quwoquan_ops/gate/verify_behavior_event_type_contract.py
+  python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
+  python3 quwoquan_app/scripts/runtime/verify_app_generated_manifest.py
+  python3 quwoquan_app/scripts/runtime/verify_cloud_package_boundaries.py
+  python3 quwoquan_ops/cli/feature_tree.py verify
+  python3 quwoquan_ops/gate/verify_execution_profiles.py
+  python3 quwoquan_ops/gate/scaffold/verify_test_directory_layout.py
+  python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
+  python3 quwoquan_ops/gate/verify_local_dependency_purity.py
+  python3 quwoquan_ops/gate/verify_observability_layout.py
+  python3 quwoquan_ops/gate/verify_observability_envelope.py
+  python3 quwoquan_app/scripts/runtime/verify_content_page_funnel_coverage.py
+  python3 quwoquan_ops/tests/local_contract/test_content_page_funnel_coverage__observability__local_contract_test.py
+  python3 quwoquan_ops/gate/verify_runtime_log_governance.py
+  python3 quwoquan_ops/gate/verify_output_layout.py
+  python3 quwoquan_ops/gate/verify_output_path_source_contract.py
+  python3 quwoquan_ops/gate/verify_external_provider_governance.py
+  python3 quwoquan_ops/gate/verify_provider_conformance_evidence.py
+  python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
+  python3 quwoquan_ops/gate/verify_markdown_local_links.py
+  # 丢弃误写入源码树的 Python 缓存，再跑 root layout（缓存只允许落在 .qwq_output）。
+  find "$ROOT" \
+    \( -path "$ROOT/.git" -o -path "$ROOT/.qwq_output" \) -prune -o \
+    \( -type d \( -name '__pycache__' -o -name '.pytest_cache' \) -exec rm -rf {} + \)
+  rm -rf "$ROOT/.pytest_cache"
+  python3 quwoquan_ops/gate/verify_root_layout.py
+  python3 quwoquan_app/scripts/runtime/verify_app_layout.py
+  python3 quwoquan_data/scripts/verify/verify_data_layout.py
+}
+
+# App CI 的 static 作业唯一执行仓库级与静态门禁；tests 分片只执行互斥的
+# 测试集合。默认本地 all、其它 scope 与 static phase 仍完整执行全局门禁。
+if [[ "$scope" != "app" || "${QWQ_APP_GATE_PHASE:-all}" != "tests" ]]; then
+  run_global
+fi
 
 run_service() {
   echo "[gate] quwoquan_service"
