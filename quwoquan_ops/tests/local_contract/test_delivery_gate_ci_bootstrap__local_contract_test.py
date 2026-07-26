@@ -36,6 +36,10 @@ def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -
 
     assert "quwoquan_app_tests_ui:" in workflow
     assert "quwoquan_app_tests_runtime:" in workflow
+    ui_job = workflow.split("  quwoquan_app_tests_ui:", 1)[1].split(
+        "  quwoquan_app_tests_runtime:", 1
+    )[0]
+    assert "runs-on: macos-latest" in ui_job
     assert "QWQ_APP_GATE_PHASE: static" in workflow
     assert "QWQ_APP_TEST_SHARD: ui" in workflow
     assert "QWQ_APP_TEST_SHARD: runtime" in workflow

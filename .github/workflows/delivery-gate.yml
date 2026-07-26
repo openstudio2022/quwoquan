@@ -208,7 +208,9 @@ jobs:
 
   quwoquan_app_tests_ui:
     name: Delivery Gate — App UI Tests (L1)
-    runs-on: ubuntu-latest
+    # UI 分片包含 iOS/macOS 渲染器生成的精确像素 golden；Linux Skia 的
+    # 字体与抗锯齿结果不同，不能把跨平台像素漂移误报为产品视觉回归。
+    runs-on: macos-latest
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     env:
