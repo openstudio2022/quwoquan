@@ -156,6 +156,8 @@ jobs:
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     env:
+      # pubspec.lock 的 hosted URL 是发布输入的一部分；runner 默认 pub.dev
+      # 会让 --enforce-lockfile 试图重解 227 个依赖而失败。
       PUB_HOSTED_URL: https://pub.flutter-io.cn
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
     outputs:

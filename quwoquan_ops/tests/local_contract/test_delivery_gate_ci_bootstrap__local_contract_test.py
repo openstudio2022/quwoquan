@@ -40,6 +40,15 @@ def test_contract_metadata_bootstrap_creates_cache_parent_before_mktemp() -> Non
     assert mkdir_index < mktemp_index
 
 
+def test_ff_config_contract_uses_portable_grep() -> None:
+    script = (
+        ROOT / "quwoquan_ops/environments/verify/verify_ff_config_contract.sh"
+    ).read_text(encoding="utf-8")
+
+    assert 'grep -nF -- "$token" "$spec"' in script
+    assert "rg -n" not in script
+
+
 def test_flutter_release_resolution_requires_official_checksum_and_architecture() -> None:
     setup = _load_setup_module()
     manifest = {
