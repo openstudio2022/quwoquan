@@ -29,6 +29,7 @@ import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -113,10 +114,14 @@ void main() {
     );
 
     // 失败关闭：不得回落到本地静态欢迎语或 chips 伪造服务端成功。
-    expect(
-      find.text(AssistantErrorCode.skillConsentRequired.defaultMessage),
-      findsOneWidget,
+    final errorCard = tester.widget<AppSectionErrorCard>(
+      find.byType(AppSectionErrorCard),
     );
+    expect(
+      errorCard.semantic.sourceCode,
+      AssistantErrorCode.skillConsentRequired.code,
+    );
+    expect(errorCard.semantic.failureKind, RuntimeFailureKind.permission);
     expect(find.text('服务端欢迎语（UAT）'), findsNothing);
     expect(find.text('服务端找资料'), findsNothing);
     // 半弹层本体不崩溃，主 CTA 仍可用。

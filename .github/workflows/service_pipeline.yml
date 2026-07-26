@@ -34,7 +34,7 @@ env:
 
 jobs:
   prepare-release:
-    name: Prepare mainline release artifact
+    name: Prepare mainline release coordinates
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -61,24 +61,6 @@ jobs:
           print(f"image_version=1.{stamp.strftime('%Y%m%d')}.{run_number}")
           print(f"config_version=v{stamp.strftime('%Y.%m.%d')}.{run_number}")
           PY
-      - name: Generate mainline release artifact
-        run: |
-          rm -rf "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline"
-          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
-            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
-            --git-sha "${GITHUB_SHA}" \
-            --run-number "${{ github.run_number }}" \
-            --repository "${{ github.repository }}" \
-            --registry "${{ env.REGISTRY }}" \
-            --image-version "${{ steps.versions.outputs.image_version }}" \
-            --config-version "${{ steps.versions.outputs.config_version }}"
-      - name: Upload release inputs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: mainline-release-input
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline/**
-          if-no-files-found: error
-          compression-level: 0
       - id: finish
         if: always()
         name: Finish timer
@@ -104,6 +86,7 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: quwoquan_service/go.mod
+          cache: false
 
       - name: 缓存 Go 模块
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
@@ -202,17 +185,6 @@ jobs:
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - name: Download release inputs
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: mainline-release-input
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
-      - name: Require release input manifest
-        run: |
-          test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
-            echo "::error::release input manifest is required"
-            exit 1
-          }
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
       - name: 登录镜像仓库
@@ -234,55 +206,6 @@ jobs:
           provenance: mode=max
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Record immutable image descriptor
-        env:
-          SERVICE: ${{ matrix.service }}
-          REPOSITORY: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}
-          IMAGE_VERSION: ${{ needs.prepare-release.outputs.image_version }}
-          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
-          STARTED_AT: ${{ steps.start.outputs.started_at }}
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          import time
-          from pathlib import Path
-
-          service = os.environ["SERVICE"]
-          repository = os.environ["REPOSITORY"]
-          digest = os.environ["IMAGE_DIGEST"]
-          if not digest.startswith("sha256:") or len(digest) != 71:
-              raise SystemExit(f"invalid image digest: {digest!r}")
-          ref = f"{repository}@{digest}"
-          payload = {
-              "service": service,
-              "repository": repository,
-              "tag": os.environ["IMAGE_VERSION"],
-              "digest": digest,
-              "ref": ref,
-              "attestations": {
-                  "spdxSbom": f"oci://{ref}#spdxSbom",
-                  "slsaProvenance": f"oci://{ref}#slsaProvenance",
-              },
-              "buildDurationSeconds": max(
-                  0,
-                  int(time.time()) - int(os.environ["STARTED_AT"]),
-              ),
-          }
-          output = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/image-descriptors"
-          output.mkdir(parents=True, exist_ok=True)
-          (output / f"{service}.json").write_text(
-              json.dumps(payload, indent=2, sort_keys=True) + "\n",
-              encoding="utf-8",
-          )
-          PY
-      - name: Upload immutable image descriptor
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: mainline-image-${{ matrix.service }}
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/image-descriptors/${{ matrix.service }}.json
-          if-no-files-found: error
-          compression-level: 0
 
   validate-deploy:
     name: 校验 Kustomize 部署
@@ -292,25 +215,43 @@ jobs:
       - build-go
       - build-release-images
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
       image_build_max_seconds: ${{ steps.image_timing.outputs.max_seconds }}
+      release_artifact_ref: ${{ steps.release_bundle_ref.outputs.ref }}
     steps:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - name: Download release inputs
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: 登录镜像仓库
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
-          name: mainline-release-input
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
-      - name: Download immutable image descriptors
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          pattern: mainline-image-*
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/image-descriptors
-          merge-multiple: true
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Generate mainline release inputs
+        run: |
+          rm -rf "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline"
+          rm -rf "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/image-descriptors"
+          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
+            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
+            --git-sha "${GITHUB_SHA}" \
+            --run-number "${{ github.run_number }}" \
+            --repository "${{ github.repository }}" \
+            --registry "${{ env.REGISTRY }}" \
+            --image-version "${{ needs.prepare-release.outputs.image_version }}" \
+            --config-version "${{ needs.prepare-release.outputs.config_version }}"
+      - name: Resolve immutable image descriptors from GHCR
+        run: |
+          python3 quwoquan_ops/cli/prod/collect_mainline_image_descriptors.py \
+            --manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" \
+            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/image-descriptors"
       - name: Finalize deployable release artifact
         run: |
           python3 quwoquan_ops/cli/prod/finalize_mainline_release_artifact.py \
@@ -330,13 +271,6 @@ jobs:
           ]
           print(f"max_seconds={max(durations)}")
           PY
-      - name: Upload deployable release artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: mainline-release-artifact
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline/**
-          if-no-files-found: error
-          compression-level: 0
       - name: Require immutable release manifest
         run: |
           test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
@@ -375,6 +309,26 @@ jobs:
             kustomize build --load-restrictor LoadRestrictionsNone "quwoquan_ops/environments/$env" > /dev/null
             echo "$env autonomous assembly OK"
           done
+      - id: release_bundle
+        name: Publish deployable release artifact to GHCR
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
+          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:${{ needs.prepare-release.outputs.image_version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:sha-${{ github.sha }}
+          sbom: true
+          provenance: mode=max
+      - id: release_bundle_ref
+        name: Record immutable OCI release artifact
+        run: |
+          REF="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact@${{ steps.release_bundle.outputs.digest }}"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "release_artifact_ref=$REF"
+          echo "- OCI release artifact: \`$REF\`" >> "$GITHUB_STEP_SUMMARY"
       - id: finish
         if: always()
         name: Finish timer
@@ -434,12 +388,3 @@ jobs:
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/service-pipeline-summary.json" \
             --write-step-summary
           echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
-      - name: Upload service pipeline timing summary
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: service-pipeline-timing-summary
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/service-pipeline-summary.json
-          if-no-files-found: error
-          compression-level: 0

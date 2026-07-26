@@ -82,12 +82,13 @@ jobs:
             --only-check global_search \
             --report ".qwq_output/env/${SEARCH_ENV}/runs/pre-release/search-runtime-smoke.json"
       - name: Upload search runtime evidence
-        if: always()
+        if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: pre-release-search-runtime-smoke
           path: .qwq_output/env/*/runs/pre-release/search-runtime-smoke.json
           if-no-files-found: error
+          retention-days: 3
 
   release-evidence-summary:
     name: 04. Pre-Release Gate

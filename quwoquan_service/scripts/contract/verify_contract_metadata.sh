@@ -9,7 +9,9 @@ echo "[verify] contract metadata"
 
 BASE="${ROOT}/quwoquan_service/contracts/metadata"
 [[ -d "$BASE" ]] || { echo "[verify] FAIL: missing $BASE"; exit 1; }
-CONTRACT_VIEW="$(mktemp -d "${ROOT}/.qwq_output/env/repo/local/service-contract-view/cache-verify.XXXXXX")"
+CONTRACT_VIEW_PARENT="${ROOT}/.qwq_output/env/repo/local/service-contract-view"
+mkdir -p "$CONTRACT_VIEW_PARENT"
+CONTRACT_VIEW="$(mktemp -d "${CONTRACT_VIEW_PARENT}/cache-verify.XXXXXX")"
 rmdir "$CONTRACT_VIEW"
 trap 'rm -rf "$CONTRACT_VIEW"' EXIT
 YAML_ROOTS=("$BASE")

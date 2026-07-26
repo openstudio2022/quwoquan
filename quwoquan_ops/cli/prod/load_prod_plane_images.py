@@ -144,9 +144,14 @@ def _release_image_sources(
     return manifest_digest, sources
 
 
-def _pull_and_tag_release_image(source_ref: str, target_ref: str) -> None:
+def _pull_and_tag_release_image(
+    source_ref: str,
+    target_ref: str,
+    *,
+    platform: str,
+) -> None:
     pull = subprocess.run(
-        ["docker", "pull", source_ref],
+        ["docker", "pull", "--platform", platform, source_ref],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -254,7 +259,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--key-dir", type=Path, default=DEFAULT_KEY_DIR)
     parser.add_argument("--services", default="")
-    parser.add_argument("--platform", default="linux/amd64")
+    parser.add_argument(
+        "--platform",
+        choices=("linux/amd64",),
+        default="linux/amd64",
+    )
     parser.add_argument(
         "--image-version",
         default=os.environ.get("IMAGE_VERSION", ""),
@@ -299,7 +308,11 @@ def main() -> int:
             target_ref = image_refs.get(service)
             if not target_ref:
                 raise SystemExit(f"FAIL: rendered image target missing for {service}")
-            _pull_and_tag_release_image(source_ref, target_ref)
+            _pull_and_tag_release_image(
+                source_ref,
+                target_ref,
+                platform=args.platform,
+            )
     target_arch = _target_arch(args.platform)
     rebuild_services: list[str] = []
     missing: list[str] = []

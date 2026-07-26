@@ -170,7 +170,7 @@ void main() {
                 'postId': 'post-1',
                 'contentType': 'image',
                 'authorId': 'author-1',
-                'imageUrls': <String>['https://example.test/p.jpg'],
+                'mediaUrls': <String>['https://example.test/p.jpg'],
               },
             ],
             'nextCursor': 'cursor-2',

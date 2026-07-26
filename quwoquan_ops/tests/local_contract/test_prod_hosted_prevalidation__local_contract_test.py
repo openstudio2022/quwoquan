@@ -133,9 +133,10 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         spec, projections = prevalidate.load_projection()
         snapshot = {
             "architecture": "x86_64",
-            "cpuCores": 2,
-            "memoryBytes": 2 * 1024**3,
-            "containerFreeBytes": 3 * 1024**3,
+            "cpuCores": 1,
+            "memoryBytes": 1024**3,
+            "containerFreeBytes": 1024**3,
+            "containerEffectiveFreeBytes": 2 * 1024**3,
             "listeningPorts": [39000],
             "podmanRootless": True,
             "linger": True,
@@ -150,7 +151,44 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         self.assertTrue(any("CPU cores insufficient" in item for item in issues))
         self.assertTrue(any("memory bytes insufficient" in item for item in issues))
         self.assertTrue(any("container free bytes insufficient" in item for item in issues))
+        self.assertTrue(
+            any("effective container free bytes insufficient" in item for item in issues)
+        )
         self.assertTrue(any("target ports already occupied" in item for item in issues))
+
+    def test_constrained_host_policy_never_removes_volumes(self) -> None:
+        spec, _ = prevalidate.load_projection()
+        self.assertEqual(spec["capacityStrategy"], "constrained-single-host")
+        reclaim = spec["staleRuntimeReclaimPolicy"]
+        self.assertTrue(reclaim["enabled"])
+        self.assertFalse(reclaim["removeVolumes"])
+        self.assertIn("quwoquan-data-recovery-mongodb", reclaim["preservedContainers"])
+        self.assertGreaterEqual(
+            spec["minimumHostResources"]["containerEffectiveFreeBytes"],
+            spec["minimumHostResources"]["postReclaimContainerFreeBytes"],
+        )
+
+    def test_oci_release_artifact_is_materialized_by_digest_only(self) -> None:
+        digest = "d" * 64
+        expected = Path("/tmp/release-artifacts")
+        completed = subprocess.CompletedProcess(
+            ["fetch"], 0, stdout='{"manifest":"ok"}\n', stderr=""
+        )
+        with (
+            mock.patch.object(
+                stackctl, "deployment_target_path", return_value=expected
+            ),
+            mock.patch.object(stackctl, "run", return_value=completed) as invoked,
+        ):
+            manifest = stackctl._materialize_prevalidation_release_manifest(
+                "oci://ghcr.io/owner/repo/release-artifact@sha256:" + digest
+            )
+        self.assertEqual(manifest, expected / "manifest.json")
+        self.assertIn("--ref", invoked.call_args.args[0])
+        with self.assertRaisesRegex(RuntimeError, "GHCR digest ref"):
+            stackctl._materialize_prevalidation_release_manifest(
+                "oci://ghcr.io/owner/repo/release-artifact:latest"
+            )
 
     def test_external_data_mode_requires_real_listeners(self) -> None:
         spec, projections = prevalidate.load_projection()

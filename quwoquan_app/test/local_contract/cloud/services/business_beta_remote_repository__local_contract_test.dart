@@ -13,6 +13,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/cloud/remote/chat/conversation/contact_remote.dart';
 import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_membership_remote.dart';
 import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_remote.dart';
@@ -362,13 +363,20 @@ void main() {
     final userPosts = userPostsPage.items;
     expect(userPosts.length, greaterThanOrEqualTo(4));
     expect(userPosts.map((item) => item.id), contains('fixture_moment_001'));
-    expect(
+    final resolvedPostVisual = resolveContentMediaUrl(
       userPosts
           .firstWhere((item) => item.id == 'fixture_moment_001')
           .primaryVisualUrl,
-      isEmpty,
-      reason: '未注入媒体交付 endpoint 时，不得把 post object key 当作可加载 URL',
     );
+    if (imageBase.isEmpty) {
+      expect(
+        resolvedPostVisual,
+        isEmpty,
+        reason: '未注入媒体交付 endpoint 时，不得把 post object key 当作可加载 URL',
+      );
+    } else {
+      expect(resolvedPostVisual, startsWith('$imageBase/'));
+    }
     final userProfiles = await _getJsonList('$baseUrl/user/profile', 'items');
     expect(
       userProfiles.map((item) => item['userId']),

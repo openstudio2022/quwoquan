@@ -761,7 +761,15 @@ def command_change_report(_: argparse.Namespace) -> int:
         ),
     )
     print(f"{output.relative_to(REPO_ROOT)}\n{json_output.relative_to(REPO_ROOT)}")
-    return 2 if unowned or release_blockers else 0
+    if release_blockers:
+        print(
+            "RELEASE_GATES_BLOCKED: 当前变更关联的正式发布准出仍被 OPEN 阻断；"
+            "该事实已写入 change report，但不阻断非提升性修复的结构门禁。"
+        )
+    # `verify-feature-tree --changes` 校验的是目录归属和可追溯性。block OPEN
+    # 仍是正式发布门禁，但不能令其本身的非提升性修复无法提交；stackctl release
+    # profile 继续消费 change report 中的 release blockers 并如实阻断发布。
+    return 2 if unowned else 0
 
 
 def validate_links(path: Path) -> list[str]:

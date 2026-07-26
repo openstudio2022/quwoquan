@@ -44,7 +44,7 @@ class CommentDraft {
 class CommentDraftStore {
   CommentDraftStore._();
 
-  static const String _legacyKeyPrefix = 'comment_draft:v1:';
+  static const String _retiredKeyPrefix = 'comment_draft:v1:';
   static const String _keyPrefix = 'comment_draft:v2:';
 
   static String _actorPrefix(String actorScope) {
@@ -65,7 +65,7 @@ class CommentDraftStore {
     String? replyToCommentId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await _removeLegacyKeys(prefs);
+    await _removeRetiredKeys(prefs);
     final raw = prefs.getString(_key(actorScope, postId, replyToCommentId));
     if (raw == null || raw.isEmpty) {
       return null;
@@ -89,7 +89,7 @@ class CommentDraftStore {
     required CommentDraft draft,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await _removeLegacyKeys(prefs);
+    await _removeRetiredKeys(prefs);
     final key = _key(actorScope, postId, replyToCommentId);
     if (draft.isEmpty) {
       await prefs.remove(key);
@@ -114,25 +114,25 @@ class CommentDraftStore {
         .getKeys()
         .where((key) {
           return key.startsWith(actorPrefix) ||
-              key.startsWith(_legacyKeyPrefix);
+              key.startsWith(_retiredKeyPrefix);
         })
         .toList(growable: false);
     for (final key in keys) {
       await preferences.remove(key);
     }
     if (preferences.getKeys().any(
-      (key) => key.startsWith(actorPrefix) || key.startsWith(_legacyKeyPrefix),
+      (key) => key.startsWith(actorPrefix) || key.startsWith(_retiredKeyPrefix),
     )) {
       throw StateError('comment draft cleanup verification failed');
     }
   }
 
-  static Future<void> _removeLegacyKeys(SharedPreferences preferences) async {
-    final legacyKeys = preferences
+  static Future<void> _removeRetiredKeys(SharedPreferences preferences) async {
+    final retiredKeys = preferences
         .getKeys()
-        .where((key) => key.startsWith(_legacyKeyPrefix))
+        .where((key) => key.startsWith(_retiredKeyPrefix))
         .toList(growable: false);
-    for (final key in legacyKeys) {
+    for (final key in retiredKeys) {
       await preferences.remove(key);
     }
   }

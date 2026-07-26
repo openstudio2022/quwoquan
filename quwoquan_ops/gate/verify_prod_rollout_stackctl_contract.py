@@ -30,6 +30,8 @@ def main() -> int:
             issues.append(f"{rel} must deploy prod-hosted through stackctl")
         for token in (
             "--release-manifest",
+            "fetch_mainline_release_artifact.py",
+            "release_artifact_ref",
             "PROD_PROMETHEUS_URL",
             "PROD_RELEASE_STATE_DIR",
             "PROD_BACKUP_RECOVERY_RECEIPT",
@@ -51,6 +53,9 @@ def main() -> int:
                     f"{rel} permits caller-supplied SLO evidence instead of Prometheus readback: {token}"
                 )
         for forbidden in (
+            "name: mainline-release-artifact",
+            "name: resolved-mainline-release-artifact",
+            "name: governed-mainline-release-artifact",
             "make config-gray-rollout",
             "make config-slo-gate",
             "make config-rollback",
@@ -82,12 +87,22 @@ def main() -> int:
         "sbom: true",
         "provenance: mode=max",
         "finalize_mainline_release_artifact.py",
-        "mainline-release-input",
-        "mainline-release-artifact",
+        "collect_mainline_image_descriptors.py",
+        "/release-artifact:sha-${{ github.sha }}",
     ):
         if token not in pipeline_text:
             issues.append(
                 f"{SERVICE_PIPELINE.relative_to(ROOT)} missing release provenance token: {token}"
+            )
+    for forbidden in (
+        "actions/upload-artifact@",
+        "name: mainline-release-input",
+        "name: mainline-release-artifact",
+        "pattern: mainline-image-*",
+    ):
+        if forbidden in pipeline_text:
+            issues.append(
+                f"{SERVICE_PIPELINE.relative_to(ROOT)} still depends on Actions Artifact transport: {forbidden}"
             )
 
     if issues:

@@ -229,9 +229,7 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
         personalization?.suggestionLines ?? const <String>[];
     final suggestedActions =
         personalization?.suggestedActions ?? const <SuggestedAction>[];
-    final errorMessage = personalizationAsync.hasError
-        ? runtimeErrorDisplayMessage(personalizationAsync.error!).trim()
-        : '';
+    final personalizationError = personalizationAsync.error;
 
     return Container(
       decoration: BoxDecoration(
@@ -295,17 +293,27 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
                   ),
                 ),
               ),
-            if (errorMessage.isNotEmpty) ...[
+            if (personalizationError != null) ...[
               SizedBox(height: intraSm),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: containerMd),
-                child: Text(
-                  errorMessage,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: fgSecondary,
-                  ),
+              AppSectionErrorCard(
+                margin: EdgeInsets.symmetric(horizontal: containerMd),
+                semantic: runtimeErrorSemantic(
+                  context,
+                  error: personalizationError,
+                  category: UiErrorCategory.sectionLoad,
+                  scope: UiErrorScope.section,
+                  presentation: UiErrorPresentation.sectionSoftCard,
                 ),
+                onAction: (action) async {
+                  if (action.type == UiErrorActionType.retry ||
+                      action.type == UiErrorActionType.resubmit) {
+                    ref.invalidate(
+                      assistantHalfSheetPersonalizationProvider(
+                        widget.openContext,
+                      ),
+                    );
+                  }
+                },
               ),
             ],
             if (showLoadingSkeleton) ...[

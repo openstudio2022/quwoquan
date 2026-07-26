@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Ensure contracts/metadata/**/operations.yaml response_entity names resolve to
-an object fields type, shared schema, or projection read model.
+Ensure assistant-service operations.yaml response_entity names resolve to an
+object fields type, service-local shared schema, or projection read model.
 """
 from __future__ import annotations
 
@@ -15,8 +15,14 @@ except ImportError:
     sys.exit(2)
 
 ROOT = Path(__file__).resolve().parents[3]
-# Scope: assistant metadata bundles (F0 backlog); extend to other domains as fields.yaml catches up.
-ASSISTANT_METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata" / "assistant"
+# Scope: assistant-service object contracts (F0 backlog); extend to other
+# services as fields.yaml catches up.  Domain objects must stay owned by their
+# service; contracts/metadata is reserved for cross-service protocols.
+ASSISTANT_CONTRACTS = (
+    ROOT / "quwoquan_service" / "services" / "assistant-service" / "contracts"
+)
+ASSISTANT_OBJECTS = ASSISTANT_CONTRACTS / "assistant"
+ASSISTANT_SHARED = ASSISTANT_CONTRACTS / "_shared"
 
 
 def entity_names_from_fields_yaml(data: dict) -> set[str]:
@@ -39,7 +45,7 @@ def object_name_from_directory(bundle_dir: Path) -> str:
 
 def shared_schema_entity_names() -> set[str]:
     names: set[str] = set()
-    for schema_path in sorted(ASSISTANT_METADATA.glob("*/schema.yaml")):
+    for schema_path in sorted(ASSISTANT_SHARED.glob("*/schema.yaml")):
         raw = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
             continue
@@ -70,6 +76,18 @@ def entity_names_from_projections(bundle_dir: Path) -> set[str]:
     return out
 
 
+def service_object_entity_names() -> set[str]:
+    names: set[str] = set()
+    for fields_path in sorted(ASSISTANT_OBJECTS.rglob("fields.yaml")):
+        raw = yaml.safe_load(fields_path.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            names.update(entity_names_from_fields_yaml(raw))
+        bundle_dir = fields_path.parent
+        names.add(object_name_from_directory(bundle_dir))
+        names.update(entity_names_from_projections(bundle_dir))
+    return names
+
+
 def referenced_entities_from_operations_yaml(data: dict) -> set[str]:
     out: set[str] = set()
     routes = data.get("api_routes")
@@ -85,11 +103,12 @@ def referenced_entities_from_operations_yaml(data: dict) -> set[str]:
 
 def main() -> int:
     failures: list[str] = []
-    if not ASSISTANT_METADATA.is_dir():
-        print(f"FAIL: missing {ASSISTANT_METADATA}", file=sys.stderr)
+    if not ASSISTANT_OBJECTS.is_dir():
+        print(f"FAIL: missing {ASSISTANT_OBJECTS}", file=sys.stderr)
         return 1
-    shared_entities = shared_schema_entity_names()
-    for operations_path in sorted(ASSISTANT_METADATA.rglob("operations.yaml")):
+    available_entities = shared_schema_entity_names()
+    available_entities.update(service_object_entity_names())
+    for operations_path in sorted(ASSISTANT_OBJECTS.rglob("operations.yaml")):
         parent = operations_path.parent
         fields_path = parent / "fields.yaml"
         if not fields_path.is_file():
@@ -104,12 +123,12 @@ def main() -> int:
             continue
         have = entity_names_from_fields_yaml(fld_raw)
         have.add(object_name_from_directory(parent))
-        have.update(shared_entities)
+        have.update(available_entities)
         have.update(entity_names_from_projections(parent))
         missing = sorted(need - have)
         if missing:
             rel = operations_path.relative_to(ROOT)
-            failures.append(f"{rel}: entities missing in fields.yaml: {', '.join(missing)}")
+            failures.append(f"{rel}: unresolved response entities: {', '.join(missing)}")
 
     if failures:
         print(

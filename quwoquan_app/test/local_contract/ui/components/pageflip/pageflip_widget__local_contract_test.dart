@@ -1462,8 +1462,8 @@ void main() {
       expect(state.backwardMainline, equals('paperFoldBackMainline'));
       expect(state.backwardFlippingSheetCount, equals(1));
       if (state.backwardFrontPaintBounds != null) {
-        expect(state.backwardFrontSheetId, startsWith('laidFront:'));
-        expect(state.backwardBackSheetId, isNot(state.backwardFrontSheetId));
+        expect(state.backwardFrontSheetId, startsWith('mainlineLeaf:'));
+        expect(state.backwardBackSheetId, equals(state.backwardFrontSheetId));
         expect(state.frontBounds, equals(state.backwardFrontPaintBounds));
       } else {
         expect(state.backwardBackSheetId, startsWith('mainlineLeaf:'));
@@ -1581,10 +1581,11 @@ void main() {
           sample.latePoseFrontWidth,
           greaterThan(0),
           reason:
-              'when previous front is visible it must be the page-space reveal segment.',
+              'when previous front is visible it must remain the recto face '
+              'of the mainline moving sheet.',
         );
-        expect(sample.latePoseFrontSheetId, equals('laidFront:2'));
-        expect(sample.latePoseFrontSheetId, isNot(sample.latePoseBackSheetId));
+        expect(sample.latePoseFrontSheetId, equals('mainlineLeaf:2'));
+        expect(sample.latePoseFrontSheetId, equals(sample.latePoseBackSheetId));
       }
     },
   );
@@ -1680,7 +1681,6 @@ void main() {
         reason:
             'angled -> horizontal -> opposite-angle BACK replay must not red-screen in paint.',
       );
-
       _expectSourceBoundsTransitionIsContinuous(
         samples,
         label: 'sheetPaintedUnion',
@@ -1752,7 +1752,6 @@ void main() {
               .join(','),
         )
         .join(' | ');
-
     expect(
       qualifyingSamples,
       isNotEmpty,
@@ -1779,10 +1778,10 @@ void main() {
       ),
     ];
     expect(samples, isNotEmpty);
-    final pageWidth =
-        samples.first.staticCurrentFrontBounds?.width ??
-        samples.first.clipBounds?.width.abs() ??
-        376.0;
+    final pageBounds =
+        samples.first.staticCurrentFrontBounds ??
+        Offset.zero & Size(samples.first.clipBounds?.width.abs() ?? 376.0, 1);
+    final pageWidth = pageBounds.width;
 
     bool expectsVisibleVerso(_IPhone17ZeroAngleSample sample) {
       final trace = sample.trace;
@@ -1858,7 +1857,8 @@ void main() {
           if (backBounds == null) {
             return false;
           }
-          return backBounds.right <= 0 || backBounds.left >= pageWidth;
+          return backBounds.right <= pageBounds.left ||
+              backBounds.left >= pageBounds.right;
         })
         .toList(growable: false);
     final rectoExpectedSamples = samples
@@ -1890,7 +1890,6 @@ void main() {
         jumpSamples.add(samples[index]);
       }
     }
-
     expect(
       overWideSamples,
       isEmpty,
@@ -2903,8 +2902,10 @@ _collectBackwardAngleToHorizontalSamples(WidgetTester tester) async {
   await moveAndSample(const Offset(360, -36));
   await moveAndSample(const Offset(0, 36));
   await moveAndSample(const Offset(0, 36));
-  await moveAndSample(const Offset(60, 0));
-  await moveAndSample(const Offset(60, 0));
+  await moveAndSample(const Offset(30, 0));
+  await moveAndSample(const Offset(30, 0));
+  await moveAndSample(const Offset(30, 0));
+  await moveAndSample(const Offset(30, 0));
 
   await gesture.up();
   await tester.pump(const Duration(milliseconds: 16));
@@ -3082,6 +3083,8 @@ _BackwardPartitionTrace? _traceBackwardPartition(StPageFlipScene? scene) {
       sheetLocalFoldLine: sheetLocalFoldLine,
       sheetLocalFreeEdgeLine: sheetLocalFreeEdgeLine,
       currentResidualPagePolygon: frame.bottomClipArea,
+      rectoCoverageNormalized:
+          frame.backwardLeafFrame?.sheetRectoCoverageNormalized ?? 0.5,
     ),
   );
   return _BackwardPartitionTrace(

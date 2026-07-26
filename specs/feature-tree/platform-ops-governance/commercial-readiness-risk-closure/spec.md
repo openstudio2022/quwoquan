@@ -86,6 +86,8 @@
 ### REQ-009 第一方容器预验证不得提升生产资格
 
 - prod-hosted 第一方容器预验证只消费 reviewed main 的不可变 Service Pipeline 制品，并在镜像传输前执行主机硬门禁。
+- Service Pipeline 将 ReleaseManifest 配置包作为带 digest 的 GHCR OCI 制品交付；Actions Artifact 配额不得成为发布输入传递的单点依赖，也不得通过本地重生清单绕过。
+- 受限单机可把声明允许的旧 `Created/Exited` 容器和未使用镜像计入可回收空间，但必须在镜像传输前完成精确回收和二次实测；数据恢复容器与全部 volume 必须保留。
 - 预验证与正式 rollout transaction、ledger/receipt 和 Provider readiness 分轨；容器验证通过不能改变 release `GATE_BLOCK`。
 - 隔离数据模式使用重新摘要的不可提升配置投影与独立随机认证材料；不得继承正式 credentials 文件。Provider 绑定只能返回 unavailable，禁止切到 fixture/Mock。
 
@@ -127,6 +129,7 @@
 - WHEN service/app/portal/config 进入 pre-release 与生产 rollout。
 - THEN ReleaseManifest 绑定 git commit、OCI/config/portal/SBOM/provenance/signature/test evidence digest。
 - THEN gray-initial/carry-on/full 只消费同一 manifest，禁止 latest 与部署时重建。
+- THEN ReleaseManifest 配置包以 GHCR OCI digest 交付；Actions Artifact 无容量时仍 fail-closed 地消费同一 OCI 内容，不允许在部署 job 重生 manifest。
 
 <a id="sit-004"></a>
 ### SIT-004 灰度发布串行、真实 SLO 回读并可回滚
@@ -174,6 +177,7 @@
 - GIVEN deployable ReleaseManifest、GHCR digest、隔离 SSH key 与受控主机。
 - WHEN stackctl 在唯一 prevalidate namespace 执行 first-party scope。
 - THEN host 资源/端口、隔离空数据、integration image-only、service/edge systemd 和容器 digest 均可机读复验。
+- THEN 受限单机的当前可用空间与可回收空间分别报告；只可删除声明匹配且未运行的旧容器、清理未使用镜像，禁止删除 volume，并在任何镜像传输前复验回收后的实际空间。
 - THEN 容器进程存活与 Provider readiness 分开判定；SLS 等被排除能力可使对应服务 readiness 保持阻断，但不得伪装为容器未部署或正式健康。
 - THEN 报告分别给出容器部署与正式发布资格；不写 ledger/receipt，正式发布仍为 `GATE_BLOCK`。
 

@@ -765,6 +765,25 @@ def _rewrite_service(
             )
             for item in volumes
         ]
+    if instance == "prevalidate":
+        limits = _prevalidation_spec().get("resourceLimits") or {}
+        defaults = limits.get("defaults") or {}
+        service_limits = (limits.get("services") or {}).get(name) or {}
+        mem_limit = str(
+            service_limits.get("memLimit") or defaults.get("memLimit") or ""
+        ).strip()
+        pids_limit = int(
+            service_limits.get("pidsLimit") or defaults.get("pidsLimit") or 0
+        )
+        if not re.fullmatch(r"[1-9][0-9]*(?:m|g)", mem_limit) or pids_limit <= 0:
+            raise SystemExit(
+                f"FAIL: prevalidation resource limits are invalid for {name}"
+            )
+        updated["mem_limit"] = mem_limit
+        updated["pids_limit"] = pids_limit
+        if name == "elasticsearch":
+            environment = updated.setdefault("environment", {})
+            environment["ES_JAVA_OPTS"] = "-Xms128m -Xmx128m"
     return updated
 
 

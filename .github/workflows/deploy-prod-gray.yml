@@ -48,17 +48,46 @@ jobs:
     permissions:
       contents: read
       actions: read
+      packages: read
       pull-requests: read
+    outputs:
+      release_artifact_ref: ${{ steps.artifact.outputs.release_artifact_ref }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - name: Download immutable release artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - id: release_run
+        name: Resolve Service Pipeline source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          HEAD_SHA="$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.event.inputs.release_run_id }}" --jq .head_sha)"
+          test -n "$HEAD_SHA"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+      - name: Login OCI release artifact registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
-          name: mainline-release-artifact
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
-          run-id: ${{ github.event.inputs.release_run_id }}
-          repository: ${{ github.repository }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: artifact
+        name: Materialize immutable OCI release artifact
+        env:
+          SOURCE_SHA: ${{ steps.release_run.outputs.head_sha }}
+        run: |
+          REPORT="$QWQ_OUTPUT_ROOT/env/repo/local/ci/process/release-artifact-fetch.json"
+          mkdir -p "$(dirname "$REPORT")"
+          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
+            --source-sha "$SOURCE_SHA" \
+            --repository "${{ github.repository }}" \
+            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
+            > "$REPORT"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          from pathlib import Path
+          report = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci/process/release-artifact-fetch.json"
+          payload = json.loads(report.read_text(encoding="utf-8"))
+          print(f"release_artifact_ref={payload['ref']}")
+          PY
       - name: Require immutable release manifest
         run: |
           test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
@@ -97,13 +126,6 @@ jobs:
             --manifest-digest "$MANIFEST_DIGEST" \
             --minimum-approvals 1 \
             --output "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/governance-receipt.json"
-      - name: Upload governed immutable release artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: governed-mainline-release-artifact
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline/**
-          if-no-files-found: error
-          compression-level: 0
   stackctl-deploy:
     name: Stackctl deploy prod gray
     needs: [validate]
@@ -119,17 +141,43 @@ jobs:
     # 去 root · 按平面 SSH 凭据（退役单一全权 PROD_KUBECONFIG）。
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - name: Download immutable release artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - name: Login OCI release artifact registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
-          name: governed-mainline-release-artifact
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Materialize immutable OCI release artifact
+        run: |
+          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
+            --ref "${{ needs.validate.outputs.release_artifact_ref }}" \
+            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline"
       - name: Require immutable release manifest
         run: |
           test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
             echo "::error::release artifact is required; local regeneration is forbidden"
             exit 1
           }
+      - name: Rebind reviewed PR governance to materialized digest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          readarray -t RELEASE_CONTEXT < <(python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/mainline/manifest.json"
+          manifest = json.loads(path.read_text(encoding="utf-8"))
+          print(manifest["source"]["gitSha"])
+          print(manifest["manifestDigest"])
+          PY
+          )
+          python3 quwoquan_ops/ci/verify_release_governance.py \
+            --repository "${{ github.repository }}" \
+            --git-sha "${RELEASE_CONTEXT[0]}" \
+            --manifest-digest "${RELEASE_CONTEXT[1]}" \
+            --minimum-approvals 1 \
+            --output "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/governance-receipt.json"
       - name: Require fresh hosted backup and recovery receipt
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |

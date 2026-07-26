@@ -8,6 +8,7 @@ pulled, streamed, or started.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import platform
@@ -87,6 +88,20 @@ def load_projection() -> tuple[dict[str, Any], dict[str, PlaneProjection]]:
     ):
         raise PrevalidationError(
             "prevalidation must keep container runtime and Provider readiness separate"
+        )
+    if spec.get("capacityStrategy") != "constrained-single-host":
+        raise PrevalidationError("prevalidation capacity strategy must be explicit")
+    reclaim = spec.get("staleRuntimeReclaimPolicy") or {}
+    if not (
+        reclaim.get("enabled") is True
+        and reclaim.get("plane") == "service"
+        and reclaim.get("removeVolumes") is False
+        and reclaim.get("pruneUnusedImages") is True
+        and reclaim.get("containerNamePrefixes")
+        and reclaim.get("allowedStates")
+    ):
+        raise PrevalidationError(
+            "prevalidation stale runtime reclaim must be scoped and volume-preserving"
         )
     plane_specs = {
         str(item.get("plane")): item
@@ -210,12 +225,23 @@ if podman["returncode"] == 0:
         pass
 linger = run(["loginctl", "show-user", os.environ.get("USER", ""), "-p", "Linger", "--value"])
 user_systemd = run(["systemctl", "--user", "is-system-running"])
+storage = run(["podman", "system", "df", "--format", "json"])
+container_reclaimable = 0
+if storage["returncode"] == 0:
+    try:
+        for item in json.loads(storage["stdout"]):
+            if item.get("Type") in {"Images", "Containers"}:
+                container_reclaimable += int(item.get("RawReclaimable") or 0)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
 print(json.dumps({
     "account": run(["whoami"])["stdout"].strip(),
     "architecture": platform.machine(),
     "cpuCores": os.cpu_count() or 0,
     "memoryBytes": mem_total,
     "containerFreeBytes": stat.f_bavail * stat.f_frsize,
+    "containerReclaimableBytes": container_reclaimable,
+    "containerEffectiveFreeBytes": stat.f_bavail * stat.f_frsize + container_reclaimable,
     "listeningPorts": ports,
     "podmanRootless": rootless,
     "linger": linger["stdout"].strip() == "yes",
@@ -286,6 +312,11 @@ def evaluate_host_snapshots(
             int(minimum.get("containerFreeBytes") or 0),
             "container free bytes",
         ),
+        (
+            int(service.get("containerEffectiveFreeBytes") or 0),
+            int(minimum.get("containerEffectiveFreeBytes") or 0),
+            "effective container free bytes",
+        ),
     )
     for actual, required, label in checks:
         if actual < required:
@@ -318,6 +349,105 @@ def evaluate_host_snapshots(
         if str(snapshot.get("userSystemd") or "") not in {"running", "degraded"}:
             issues.append(f"{name} plane user systemd is unavailable")
     return issues
+
+
+def _reclaim_stale_runtime(
+    *,
+    host: str,
+    projection: PlaneProjection,
+    key_dir: Path,
+    policy: dict[str, Any],
+) -> dict[str, Any]:
+    if projection.name != str(policy.get("plane") or ""):
+        return {"plane": projection.name, "status": "not-required"}
+    key = _resolve_key(projection, key_dir)
+    encoded_policy = base64.b64encode(
+        json.dumps(policy, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    ).decode("ascii")
+    script = f'''
+import base64
+import json
+import os
+import pathlib
+import subprocess
+
+policy = json.loads(base64.b64decode("{encoded_policy}").decode("utf-8"))
+
+def run(argv):
+    return subprocess.run(argv, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+
+listed = run(["podman", "ps", "-a", "--format", "json"])
+if listed.returncode != 0:
+    raise SystemExit(listed.stderr or listed.stdout)
+containers = json.loads(listed.stdout)
+prefixes = tuple(str(item) for item in policy.get("containerNamePrefixes") or [])
+allowed = {{str(item).lower() for item in policy.get("allowedStates") or []}}
+preserved = {{str(item) for item in policy.get("preservedContainers") or []}}
+selected = []
+for item in containers:
+    names = item.get("Names") or []
+    if isinstance(names, str):
+        names = [names]
+    state = str(item.get("State") or "").lower()
+    for name in names:
+        if name in preserved:
+            continue
+        if name.startswith(prefixes) and state in allowed:
+            selected.append(name)
+if selected:
+    removed = run(["podman", "rm", *sorted(set(selected))])
+    if removed.returncode != 0:
+        raise SystemExit(removed.stderr or removed.stdout)
+prune = run(["podman", "image", "prune", "-a", "-f"])
+if prune.returncode != 0:
+    raise SystemExit(prune.stderr or prune.stdout)
+stat = os.statvfs(pathlib.Path.home())
+print(json.dumps({{
+    "plane": "{projection.name}",
+    "status": "completed",
+    "removedContainers": sorted(set(selected)),
+    "preservedContainers": sorted(preserved),
+    "volumesRemoved": False,
+    "containerFreeBytes": stat.f_bavail * stat.f_frsize,
+    "imagePrune": prune.stdout.strip(),
+}}))
+'''
+    result = subprocess.run(
+        [
+            "ssh",
+            "-i",
+            str(key),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            f"{projection.account}@{host}",
+            "python3 -",
+        ],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise PrevalidationError(
+            "scoped stale runtime reclaim failed: "
+            f"{result.stderr.strip() or result.stdout.strip()}"
+        )
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise PrevalidationError("stale runtime reclaim returned invalid JSON") from error
+    required = int(
+        ((policy.get("minimumHostResources") or {}).get("postReclaimContainerFreeBytes"))
+        or 0
+    )
+    if required and int(report.get("containerFreeBytes") or 0) < required:
+        raise PrevalidationError(
+            "container free bytes remain insufficient after scoped reclaim: "
+            f"{report.get('containerFreeBytes')} < {required}"
+        )
+    return report
 
 
 def _run(argv: list[str], *, env: dict[str, str] | None = None) -> dict[str, Any]:
@@ -399,6 +529,19 @@ def execute_deployment(
 ) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     image_reports: dict[str, Any] = {}
+    reclaim_policy = dict(spec.get("staleRuntimeReclaimPolicy") or {})
+    reclaim_policy["minimumHostResources"] = dict(
+        spec.get("minimumHostResources") or {}
+    )
+    reclaim_reports = [
+        _reclaim_stale_runtime(
+            host=args.host,
+            projection=projection,
+            key_dir=args.key_dir,
+            policy=reclaim_policy,
+        )
+        for projection in projections.values()
+    ]
     readiness_policy = spec.get("readinessPolicy") or {}
     provider_bound_services = set(
         str(item) for item in readiness_policy.get("providerBoundServices") or []
@@ -583,6 +726,7 @@ def execute_deployment(
             "mode": args.data_mode,
             "releaseEvidenceEligible": False,
         },
+        "staleRuntimeReclaim": reclaim_reports,
         "units": units,
         "runtime": runtime,
         "imageDelivery": image_reports,

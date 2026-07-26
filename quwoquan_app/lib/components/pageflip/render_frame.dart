@@ -187,6 +187,19 @@ class ArticlePageBackwardLeafFrame {
           .clamp(0.0, 1.0)
           .toDouble();
 
+  /// Material-space recto partition used by the single moving sheet.
+  ///
+  /// [totalRectoVisibleWidthNormalized] is a page-space extent and can advance
+  /// much faster than the lifted sheet's fold/free-edge interval near the
+  /// midpoint. Ease that extent into material space so the recto/verso seam
+  /// remains continuous while still converging to the full recto at settle.
+  double get sheetRectoCoverageNormalized {
+    final visibleRecto = totalRectoVisibleWidthNormalized;
+    return (visibleRecto * (1 - visibleRecto * (1 - visibleRecto)))
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
   double get currentRevealWidthNormalized =>
       (1.0 - bottomRevealStartNormalized).clamp(0.0, 1.0).toDouble();
 }
