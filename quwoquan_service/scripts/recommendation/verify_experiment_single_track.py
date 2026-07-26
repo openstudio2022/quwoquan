@@ -85,7 +85,8 @@ def _assert_canonical_runtime_track() -> None:
     )
     search_signal_path = (
         "quwoquan_service/services/search-service/"
-        "internal/search/search_query/infrastructure/searchsignals/stream_publisher.go"
+        "internal/search/recommendation_signal_fact/"
+        "infrastructure/searchsignals/stream_publisher.go"
     )
 
     runtime = _read(runtime_path)
