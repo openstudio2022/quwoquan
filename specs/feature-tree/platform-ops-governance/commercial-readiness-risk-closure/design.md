@@ -66,6 +66,7 @@
 - 制品生命周期约束如下。
   - Actions Artifact 只可保存有明确保留期的失败诊断。路径只能包含需要复验的 `summary.json`、`report.json` 或失败日志。
   - 取消运行不得上传。成功对象须由受控生命周期任务在完成后立即删除，失败对象超过诊断窗口后逐个删除。
+  - `docker/build-push-action` 的自动 build record 上传必须显式关闭；受控清理发现历史 `.dockerbuild` record 时必须立即删除。未声明容量与回收策略的 Buildx GHA layer cache 不得启用。它们都不是 release evidence，不能取代 GHCR digest。
   - 不可变发布包、SBOM、provenance 与回滚所需镜像保持 GHCR digest 引用，并按已引用 release manifest 保留。
 - 关联要求：`REQ-009`
 - 影响 Story：在 [`zero-risk-production-readiness`](./zero-risk-production-readiness/spec.md) 中约束预验证与正式准出分轨。

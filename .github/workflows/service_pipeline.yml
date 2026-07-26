@@ -31,6 +31,10 @@ env:
   QWQ_OUTPUT_ROOT: .qwq_output
   GOCACHE: ${{ github.workspace }}/.qwq_output/env/repo/local/ci/cache/go/build
   GOMODCACHE: ${{ github.workspace }}/.qwq_output/env/repo/local/ci/cache/go/mod
+  # docker/build-push-action otherwise uploads one .dockerbuild Actions Artifact
+  # for every matrix image. The immutable GHCR digest is the release input;
+  # Build records are neither a deploy dependency nor useful durable evidence.
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
 
 jobs:
   prepare-release:
@@ -122,7 +126,7 @@ jobs:
         include:
           - service: recommendation-service
             image_name: recommendation-service
-            context: .
+            context: quwoquan_service
             dockerfile: quwoquan_service/services/recommendation-service/build/Dockerfile
           - service: content-service
             image_name: content-service
@@ -185,6 +189,28 @@ jobs:
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - id: base_images
+        name: Resolve governed builder base images
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          runtime = json.loads(
+              Path("quwoquan_ops/environments/gamma/runtime.yaml").read_text(
+                  encoding="utf-8"
+              )
+          )
+          images = runtime["targets"]["gamma-local"]["buildImages"]
+          for output, key in (
+              ("go_base_image", "goBaseImage"),
+              ("alpine_base_image", "alpineBaseImage"),
+          ):
+              value = str(images.get(key) or "").strip()
+              if not value or value.endswith(":latest"):
+                  raise SystemExit(f"governed build image {key} must be an explicit version")
+              print(f"{output}={value}")
+          PY
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
       - name: 登录镜像仓库
@@ -202,10 +228,11 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare-release.outputs.image_version }}
+          build-args: |
+            GO_BASE_IMAGE=${{ steps.base_images.outputs.go_base_image }}
+            ALPINE_BASE_IMAGE=${{ steps.base_images.outputs.alpine_base_image }}
           sbom: true
           provenance: mode=max
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   validate-deploy:
     name: 校验 Kustomize 部署
