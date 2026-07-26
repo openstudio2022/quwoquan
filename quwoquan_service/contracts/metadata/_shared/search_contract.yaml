@@ -123,6 +123,10 @@ tool_contract:
   optional_fields:
     - mode
     - objectTypes
+    # Canonical read-by-id consumers (for example location.place deep-link
+    # recovery) use ids for an exact identity match. Query remains required for
+    # lexical ranking/observability and must never be inferred from the client.
+    - ids
     - limit
     - conversationType
     - contentTypes

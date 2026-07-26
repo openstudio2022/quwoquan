@@ -753,12 +753,29 @@ func (h *ChatHandler) handleListContacts(w http.ResponseWriter, r *http.Request)
 	cursor := r.URL.Query().Get("cursor")
 	limit := queryInt(r, "limit", 20)
 
-	contacts, err := h.memberService.ListContacts(r.Context(), resolveUserID(r), limit, cursor)
+	page, err := h.memberService.ListContacts(
+		r.Context(),
+		resolveUserID(r),
+		limit,
+		cursor,
+	)
 	if err != nil {
+		if errors.Is(err, application.ErrInvalidContactCursor) {
+			writeHTTPError(w, r, rterr.NewInvalidArgument(
+				rterr.ModuleChat,
+				"invalid contacts cursor",
+				"contacts cursor must be an opaque keyset token",
+			))
+			return
+		}
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": contacts})
+	response := map[string]any{"items": page.Items}
+	if page.NextCursor != "" {
+		response["nextCursor"] = page.NextCursor
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *ChatHandler) handleListContactHome(w http.ResponseWriter, r *http.Request) {
@@ -769,12 +786,17 @@ func (h *ChatHandler) handleListContactHome(w http.ResponseWriter, r *http.Reque
 
 	rows := make([]map[string]any, 0, limit)
 	if filter == "all" || filter == "mutual" {
-		contacts, err := h.memberService.ListContacts(r.Context(), userID, limit, cursor)
+		contacts, err := h.memberService.ListContacts(
+			r.Context(),
+			userID,
+			limit,
+			cursor,
+		)
 		if err != nil {
 			writeHTTPError(w, r, err)
 			return
 		}
-		for _, contact := range contacts {
+		for _, contact := range contacts.Items {
 			if filter == "mutual" && stringFromMap(contact, "relationState") != "mutual" {
 				continue
 			}

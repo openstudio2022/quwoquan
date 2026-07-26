@@ -97,6 +97,7 @@ api_routes:
   - ASSISTANT.USER.intersection_evidence_not_found
   - ASSISTANT.USER.unauthorized
   - ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable
+  - ASSISTANT.SYSTEM.run_policy_unavailable
   - ASSISTANT.SYSTEM.run_storage_unavailable
   privacy:
     request_classification: SENSITIVE
@@ -435,6 +436,7 @@ api_routes:
     idempotency: none
   error_codes:
   - ASSISTANT.USER.unauthorized
+  - ASSISTANT.USER.run_invalid_argument
   privacy:
     request_classification: INTERNAL
     response_classification: SENSITIVE
@@ -458,40 +460,6 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: private
-- method: GET
-  path: /assistant/policy
-  operation: GetPolicy
-  actor: none
-  application:
-    kind: query
-    facet: AssistantPolicyQueryFacade
-    method: getPolicy
-    reader: AssistantPolicyReader
-    slice: AssistantPolicyView
-  description: 策略拉取
-  response_entity: AssistantPolicyView
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - ASSISTANT.SYSTEM.run_storage_unavailable
-  privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: assistant_policy_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 300
-    availability_percent: 99.9
 - method: GET
   path: /assistant/skills
   operation: ListSkills
@@ -631,49 +599,6 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: private
-- method: GET
-  path: /assistant/ops/learning-summary
-  operation: GetLearningOpsSummary
-  actor: account
-  application:
-    kind: query
-    facet: AssistantLearningOpsQueryFacade
-    method: getLearningSummary
-    reader: AssistantLearningOpsReader
-    slice: AssistantLearningOpsSummaryView
-  description: 运营侧读取指定用户的学习画像摘要与低分指标下钻摘要
-  response_entity: AssistantLearningOpsSummaryView
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - ASSISTANT.USER.unauthorized
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: assistant_learning_ops_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 1000
-    availability_percent: 99.5
-  authorization:
-    principal: operator
-    ownership_policy: operator_scope
-  security:
-    auth_mode: required
-    principal: operator
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
 consumers:
 - name: app
   capabilities:
@@ -681,7 +606,6 @@ consumers:
   - report_page_context
   - get_entry_personalization
   - get_suggested_actions
-  - report_events
   - list_skills
   - list_assistant_tasks
   - list_assistant_memories
@@ -689,15 +613,11 @@ consumers:
 - name: platform-ops
   capabilities:
   - read_runs
-  - read_events
-  - read_scorecards
-  - read_learning_summary
   - manage_policy
   - manage_skills
 - name: recommendation-engine
   capabilities:
   - read_runs
-  - read_events
 contract_test:
   mock_strategy:
     app_side:
@@ -737,13 +657,13 @@ contract_test:
         mongodb: testcontainers (mongo:7)
         redis: miniredis/v2
       spy_targets:
-      - event_publisher
+      - learning_fact_outbox
       mock_targets:
       - llm_client
       - cross_service_clients
       data_management:
         seed: fixture 工厂预制到真实 MongoDB
-        cleanup: DeleteMany for assistant_runs, assistant_interaction_events
+        cleanup: DeleteMany for assistant_runs, assistant_learning_facts, rm_assistant_learning_projection
         redis_cleanup: miniredis.FlushAll()
       scenarios:
       - name: page_context_to_redis
@@ -761,13 +681,13 @@ contract_test:
         - replay same clientRequestId → same runId, no second run
         - restart service → GET /assistant/runs/{runId} still returns envelope
       - name: feedback_learning_loop
-        command: ReportInteractionEvent (feedback)
+        command: AppendAssistantLearningFact (feedback)
         seed:
         - fixture.NewAssistantRun()
         assertions:
-        - db.assistant_interaction_events.FindOne({runId}) → feedbackType + score correct
-        - learning profile projection updated
-        - eventSpy.AssertPublished('AssistantFeedbackReceived')
+        - db.assistant_learning_facts.FindOne({assistantTurnId}) → feedbackType + score correct
+        - rm_assistant_learning_projection updated from canonical append sequence
+        - learning_fact_outbox contains redacted AssistantLearningFactAppended payload
   coverage_requirements:
   - all page types covered in page_context scenarios
   - skill consent enforcement verified

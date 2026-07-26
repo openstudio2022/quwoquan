@@ -1,0 +1,75 @@
+kind: append_only_fact
+description: 助手用户反馈、交互结果与服务评分的唯一不可变学习事实。
+identity:
+  fields:
+  - eventId
+  - eventVersion
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: run
+  on_delete: retain
+  reference_fields:
+  - assistantTurnId
+  target_object: assistant.AssistantRun
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: accountOwner
+  on_delete: retain
+  reference_fields:
+  - userId
+  target_object: user.UserAccount
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: personaOwner
+  on_delete: retain
+  reference_fields:
+  - personaId
+  target_object: user.Persona
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: triggerMessage
+  on_delete: retain
+  reference_fields:
+  - triggerMessageId
+  target_object: chat.Message
+local_identity_reasons:
+  domainId: 策略发布固化的稳定域标识，不是独立聚合 Store identity
+  metricId: 评分指标注册表中的稳定标识，不是独立聚合 Store identity
+  operationId: 可信请求上下文中的操作标识，不是业务对象 identity
+  pageId: 可信请求上下文中的页面标识，不是业务对象 identity
+  pageVisitId: 可信请求上下文中的页面访问关联键，不是业务对象 identity
+  routeId: 可信请求上下文中的路由标识，不是业务对象 identity
+  sessionId: 可信请求上下文中的运行会话关联键，不是业务对象 identity
+  suggestedActionId: Run 冻结建议动作中的局部标识，不是独立聚合 identity
+  surfaceId: 可信请求上下文中的界面标识，不是业务对象 identity
+  traceId: 可信请求上下文中的可观测关联键，不是业务对象 identity
+capabilities:
+- append_only
+- deduplicated_append
+- transactional_outbox
+business_rules:
+- eventId 与 eventVersion 共同标识唯一事实；相同 identity 与 payload digest 重放返回同一 receipt
+- 相同 eventId 与 eventVersion 但 payload digest 不同必须冲突，不得静默吞掉或覆盖
+- userId、personaId 与页面上下文只能来自 verified principal 和可信请求上下文
+- assistantTurnId 必须属于当前 verified principal；triggerMessageId 若给出必须与该 turn 的可信触发消息一致
+- referralSource、eventType 与 feedbackType 只接受 metadata 枚举的 canonical wire 值
+- factType 是闭集 discriminated union：公开 command 只能写 user_feedback 或 interaction_outcome；非 service_scorecard 禁止 metric 字段，interaction_outcome 禁止 feedback 字段，service_scorecard 禁止交互、反馈和原始文本字段
+- 公开 outbox、投影和默认训练不得包含 queryText、answerText、feedbackText 或 correctionText 原文
+- trainingEligible 必须显式给出；敏感原文字段存在时默认不得训练
+lifecycle:
+  states:
+  - recorded

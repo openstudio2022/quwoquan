@@ -171,6 +171,39 @@ def test_select_targets_applies_priority_only_when_explicit(tmp_path: Path) -> N
     assert report["targetSelector"] == TargetSelector.PRIORITY.value
 
 
+def test_post_selection_preserves_parent_homepage_target_order(tmp_path: Path) -> None:
+    path = tmp_path / "父主页目标市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "测试区",
+                        "leaves": [
+                            {"name": "测试实体甲"},
+                            {"name": "测试实体乙"},
+                            {"name": "测试实体丙"},
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=2,
+        target_selector=TargetSelector.ALL,
+        target_names=("测试实体丙", "测试实体甲"),
+    )
+
+    assert [target["name"] for target in targets] == ["测试实体丙", "测试实体甲"]
+    assert report["requestedTargetNames"] == ["测试实体丙", "测试实体甲"]
+
+
 def test_source_ready_priority_qualifies_until_target_set_is_frozen(tmp_path: Path) -> None:
     path = tmp_path / "来源预选市.yaml"
     path.write_text(

@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import copy
 import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -67,13 +69,26 @@ RUNTIME_LOG_EXPORT_SERVICES = {
     "user-service",
 }
 
+PREVALIDATION_AUTH_SECRET_KEYS = (
+    "AUTH_JWT_SECRET",
+    "AUTH_DEVICE_TICKET_SECRET",
+    "OTP_CODE_REF_KEY",
+    "QWQ_PUSH_TOKEN_ENCRYPTION_KEY",
+    "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET",
+    "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY",
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Render prod plane rootless stack from truth sources.",
     )
     parser.add_argument("--plane", default="service", choices=["service", "edge"])
-    parser.add_argument("--instance", default="prod", choices=["gray", "prod"])
+    parser.add_argument(
+        "--instance",
+        default="prod",
+        choices=["gray", "prod", "prevalidate"],
+    )
     parser.add_argument(
         "--rollout-stage",
         default="full",
@@ -90,6 +105,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--host", default="")
+    parser.add_argument(
+        "--data-mode",
+        default="external",
+        choices=["isolated", "external"],
+    )
+    parser.add_argument(
+        "--prevalidate-scope",
+        default="",
+        choices=["", "first-party"],
+    )
     return parser.parse_args()
 
 
@@ -102,6 +127,101 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 def _sha256(path: Path) -> str:
     return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+
+
+def _prevalidation_secret_environment() -> dict[str, str]:
+    """Return target-local, non-release auth material shared by service/edge.
+
+    The file lives in the external deployment workspace, is never included in
+    provenance, and is intentionally separate from the formal prod credentials
+    directory.  Both planes must share the JWT/device-ticket keys so an edge
+    request can be authenticated by the first-party service plane.
+    """
+
+    secret_path = deployment_target_path(
+        "prod-hosted", "secrets", "prevalidation-auth.env"
+    )
+    values: dict[str, str] = {}
+    if secret_path.is_file():
+        if secret_path.stat().st_mode & 0o077:
+            raise SystemExit(
+                f"FAIL: prevalidation auth material must be mode 0600: {secret_path}"
+            )
+        for line in secret_path.read_text(encoding="utf-8").splitlines():
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key in PREVALIDATION_AUTH_SECRET_KEYS and value:
+                values[key] = value
+    if set(values) != set(PREVALIDATION_AUTH_SECRET_KEYS):
+        values = {
+            "AUTH_JWT_SECRET": secrets.token_urlsafe(48),
+            "AUTH_DEVICE_TICKET_SECRET": secrets.token_urlsafe(48),
+            "OTP_CODE_REF_KEY": base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
+            "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": base64.b64encode(
+                secrets.token_bytes(32)
+            ).decode("ascii"),
+            "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": secrets.token_urlsafe(48),
+            "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY": secrets.token_urlsafe(48),
+        }
+        secret_path.parent.mkdir(parents=True, exist_ok=True)
+        secret_path.write_text(
+            "\n".join(f"{key}={values[key]}" for key in PREVALIDATION_AUTH_SECRET_KEYS)
+            + "\n",
+            encoding="utf-8",
+        )
+        secret_path.chmod(0o600)
+    return values
+
+
+def _canonical_config_bytes(payload: dict[str, Any]) -> bytes:
+    return yaml.safe_dump(
+        payload,
+        allow_unicode=True,
+        sort_keys=True,
+        width=120,
+    ).encode("utf-8")
+
+
+def _project_isolated_prevalidation_config(
+    path: Path,
+) -> dict[str, Any]:
+    """Project prod config onto a single-node, empty Redis data plane.
+
+    This is a new immutable config snapshot with its own digest. It never
+    changes the package or claims to prove the formal prod data topology.
+    """
+
+    payload = _load_yaml(path)
+    changes: list[str] = []
+    redis = payload.get("redis")
+    if isinstance(redis, dict):
+        for role, role_config in redis.items():
+            if not isinstance(role_config, dict):
+                continue
+            if role_config.get("mode") != "standalone":
+                role_config["mode"] = "standalone"
+                changes.append(f"redis.{role}.mode=standalone")
+            if role_config.get("tls") is not False:
+                role_config["tls"] = False
+                changes.append(f"redis.{role}.tls=false")
+    config = payload.setdefault("config", {})
+    if not isinstance(config, dict):
+        raise SystemExit(f"FAIL: config section is not an object: {path}")
+    config.pop("version", None)
+    projected_version = "sha256:" + hashlib.sha256(
+        _canonical_config_bytes(payload)
+    ).hexdigest()
+    config["version"] = projected_version
+    path.write_text(
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False, width=120),
+        encoding="utf-8",
+    )
+    return {
+        "projectedConfigVersion": projected_version,
+        "projectedConfigDigest": _sha256(path),
+        "changes": changes,
+    }
 
 
 def _resolve_render_output_dir(
@@ -200,6 +320,14 @@ def _plane_spec(plane_name: str) -> dict[str, Any]:
     raise SystemExit(f"FAIL: plane missing from access manifest: {plane_name}")
 
 
+def _prevalidation_spec() -> dict[str, Any]:
+    access = _load_yaml(ACCESS_MANIFEST)
+    spec = access.get("prevalidation")
+    if not isinstance(spec, dict) or spec.get("promotable") is not False:
+        raise SystemExit("FAIL: non-promotable prod prevalidation projection is missing")
+    return spec
+
+
 def _rewrite_volume(raw: str) -> str:
     return raw
 
@@ -267,6 +395,9 @@ def _rewrite_service(
     model_cache_root: str,
     credentials_root: str = "",
     runtime_credentials: dict[str, Any] | None = None,
+    data_mode: str = "external",
+    prevalidation_images: dict[str, str] | None = None,
+    startup_services: set[str] | None = None,
 ) -> dict[str, Any]:
     updated = copy.deepcopy(spec)
     updated.pop("build", None)
@@ -274,30 +405,41 @@ def _rewrite_service(
         if not image_version or image_version == "latest":
             raise SystemExit(f"FAIL: immutable image version required for {name}")
         updated["image"] = f"localhost/quwoquan_service_{name}:{image_version}"
+    if name in (prevalidation_images or {}):
+        image = str((prevalidation_images or {})[name])
+        if re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", image) is None:
+            raise SystemExit(f"FAIL: prevalidation support image is not digest-pinned: {name}")
+        updated["image"] = image
     # prod 渲染面按 rootlessGovernedComposeServices 显式选择服务，
     # gamma-local 的 compose profile 开关不进入生产 compose。
     updated.pop("profiles", None)
     if name == "gamma-proxy":
         updated["image"] = PROD_CADDY_IMAGE
-        updated["ports"] = (
-            ["80:80", "443:443", "127.0.0.1:12019:2019"]
-            if instance == "prod"
-            else ["29000:80", "127.0.0.1:22019:2019"]
-        )
+        if instance == "prod":
+            updated["ports"] = ["80:80", "443:443", "127.0.0.1:12019:2019"]
+        elif instance == "prevalidate":
+            updated["ports"] = ["39000:80", "127.0.0.1:32019:2019"]
+        else:
+            updated["ports"] = ["29000:80", "127.0.0.1:22019:2019"]
     if isinstance(updated.get("depends_on"), dict):
         updated["depends_on"] = {
             dep: dep_spec
             for dep, dep_spec in updated["depends_on"].items()
-            if dep in selected
+            if dep in selected and (startup_services is None or dep in startup_services)
         }
         if not updated["depends_on"]:
             updated.pop("depends_on")
     environment = updated.get("environment")
-    if isinstance(environment, dict) and environment.get("APP_ENV") == "gamma":
+    if isinstance(environment, dict) and "APP_ENV" in environment:
+        # Compose fragments carry a gamma-default interpolation expression.
+        # A prod renderer must materialize prod explicitly instead of relying
+        # on a caller environment that systemd will not necessarily inherit.
         environment["APP_ENV"] = "prod"
     if isinstance(environment, dict):
         if config_version:
             environment["CONFIG_VERSION"] = config_version
+        if instance == "prevalidate":
+            environment["QWQ_NONPROMOTABLE_PREVALIDATION"] = "first-party"
         environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = (
             "${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-collector:4318}"
         )
@@ -322,37 +464,73 @@ def _rewrite_service(
             environment["RUNTIME_LOG_SPOOL_DIR"] = (
                 f"/var/lib/quwoquan/runtime-log-spool/{name}"
             )
+        edge_prevalidation = (
+            instance == "prevalidate"
+            and data_mode == "isolated"
+            and name in {"realtime-gateway", "rtc-service"}
+        )
+        isolated_local = data_mode == "isolated" and not edge_prevalidation
+        mongo_host = "mongodb" if isolated_local else EXTERNAL_DATA_HOST
+        mongo_port = (
+            27017
+            if isolated_local
+            else (39410 if edge_prevalidation else EXTERNAL_MONGO_PORT)
+        )
+        mongo_uri = f"mongodb://{mongo_host}:{mongo_port}/?directConnection=true"
+        redis_host = "redis" if isolated_local else EXTERNAL_DATA_HOST
+        redis_port = (
+            6379
+            if isolated_local
+            else (39420 if edge_prevalidation else EXTERNAL_REDIS_PORT)
+        )
+        postgres_host = "postgres" if isolated_local else EXTERNAL_DATA_HOST
+        postgres_port = (
+            5432
+            if isolated_local
+            else (39400 if edge_prevalidation else EXTERNAL_POSTGRES_PORT)
+        )
         if name == "recommendation-service":
-            environment["MONGODB_URI"] = EXTERNAL_MONGO_URI
+            environment["MONGODB_URI"] = mongo_uri
         if name == "content-service":
-            environment["MONGO_URI"] = EXTERNAL_MONGO_URI
-            environment["CONTENT_REDIS_REC_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
-            environment["CONTENT_REDIS_GENERAL_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+            environment["MONGO_URI"] = mongo_uri
+            environment["CONTENT_REDIS_REC_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["CONTENT_REDIS_GENERAL_ADDR"] = f"{redis_host}:{redis_port}"
         if name == "chat-service":
-            environment["MONGO_URI"] = EXTERNAL_MONGO_URI
-            environment["REDIS_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
-            environment["CHAT_REDIS_REALTIME_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
-            environment["CHAT_REDIS_GENERAL_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
-            environment["CHAT_REDIS_RELIABLE_TASK_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+            environment["MONGO_URI"] = mongo_uri
+            environment["REDIS_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["CHAT_REDIS_REALTIME_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["CHAT_REDIS_GENERAL_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["CHAT_REDIS_RELIABLE_TASK_ADDR"] = f"{redis_host}:{redis_port}"
         if name == "user-service":
             environment["POSTGRES_DSN"] = (
-                f"postgres://quwoquan:quwoquan@{EXTERNAL_DATA_HOST}:{EXTERNAL_POSTGRES_PORT}/"
+                f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
                 "quwoquan?sslmode=disable"
             )
-            environment["MONGODB_URI"] = EXTERNAL_MONGO_URI
-            environment["REDIS_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+            environment["MONGODB_URI"] = mongo_uri
+            environment["REDIS_ADDR"] = f"{redis_host}:{redis_port}"
         if name == "assistant-service":
-            environment["MONGODB_URI"] = EXTERNAL_MONGO_URI
-            environment["REDIS_GENERAL_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
-            environment["REDIS_REC_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+            environment["MONGODB_URI"] = mongo_uri
+            environment["REDIS_GENERAL_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["REDIS_REC_ADDR"] = f"{redis_host}:{redis_port}"
+            if instance == "prevalidate":
+                environment.update(
+                    {
+                        "ASSISTANT_MODEL_COMPLETION_URL": "https://model-provider-unavailable.invalid/v1/chat/completions",
+                        "ASSISTANT_MODEL_API_KEY": "provider-unavailable",
+                        "ASSISTANT_PUBLIC_SEARCH_URL": "https://search-provider-unavailable.invalid/",
+                        "ASSISTANT_WEATHER_GEOCODING_URL": "https://weather-provider-unavailable.invalid/geocode",
+                        "ASSISTANT_WEATHER_FORECAST_URL": "https://weather-provider-unavailable.invalid/forecast",
+                        "ASSISTANT_FINANCE_CHART_URL": "https://finance-provider-unavailable.invalid/chart",
+                    }
+                )
         if name == "product-ops-service":
             environment["POSTGRES_DSN"] = (
-                f"postgres://quwoquan:quwoquan@{EXTERNAL_DATA_HOST}:{EXTERNAL_POSTGRES_PORT}/"
+                f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
                 "quwoquan?sslmode=disable"
             )
-            environment["MONGO_URI"] = EXTERNAL_MONGO_URI
-            environment["PRODUCT_OPS_REDIS_REC_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
-            environment["PRODUCT_OPS_REDIS_GENERAL_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+            environment["MONGO_URI"] = mongo_uri
+            environment["PRODUCT_OPS_REDIS_REC_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["PRODUCT_OPS_REDIS_GENERAL_ADDR"] = f"{redis_host}:{redis_port}"
             environment["PROMETHEUS_URL"] = "${PRODUCT_OPS_PROMETHEUS_URL:-http://prometheus:9090}"
             # config_sync 循环从平台控制面拉取有效配置并回报 ACK；
             # prod 缺该地址时 config_sync 会 fail-fast，禁止静默跳过。
@@ -372,7 +550,7 @@ def _rewrite_service(
             )
         if name == "platform-ops-service":
             environment["POSTGRES_DSN"] = (
-                f"postgres://quwoquan:quwoquan@{EXTERNAL_DATA_HOST}:{EXTERNAL_POSTGRES_PORT}/"
+                f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
                 "quwoquan?sslmode=disable"
             )
             environment["PROMETHEUS_URL"] = "${PLATFORM_OPS_PROMETHEUS_URL:-http://prometheus:9090}"
@@ -388,16 +566,20 @@ def _rewrite_service(
                 "${OPS_OIDC_JWKS_URL:?OPS_OIDC_JWKS_URL is required}"
             )
         if name == "tag-service":
-            environment["REDIS_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
-            environment["TAG_MONGO_URI"] = EXTERNAL_MONGO_URI
+            environment["REDIS_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["TAG_MONGO_URI"] = mongo_uri
         if name == "entity-service":
-            environment["ENTITY_MONGO_URI"] = EXTERNAL_MONGO_URI
+            environment["ENTITY_MONGO_URI"] = mongo_uri
             # prod-hosted 首波 service plane 不含 elasticsearch（search-service 未迁入），
             # 关闭 write-time 索引投影；主页读写主链路（Mongo homepages 权威集合）不受影响。
-            environment["SEARCH_ES_ENABLED"] = "false"
-            environment.pop("SEARCH_ES_ENDPOINTS", None)
+            if data_mode == "isolated":
+                environment["SEARCH_ES_ENABLED"] = "true"
+                environment["SEARCH_ES_ENDPOINTS"] = "http://elasticsearch:9200"
+            else:
+                environment["SEARCH_ES_ENABLED"] = "false"
+                environment.pop("SEARCH_ES_ENDPOINTS", None)
         if name == "integration-service":
-            environment["INTEGRATION_MONGO_URI"] = EXTERNAL_MONGO_URI
+            environment["INTEGRATION_MONGO_URI"] = mongo_uri
             environment["INTEGRATION_PUSH_ENABLED"] = "true"
             environment["INTEGRATION_PUSH_MODE"] = "real"
             environment["INTEGRATION_PUSH_USER_SERVICE_BASE_URL"] = (
@@ -410,10 +592,35 @@ def _rewrite_service(
             environment["INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE"] = (
                 "/run/secrets/quwoquan/integration/fcm-service-account.json"
             )
+        if instance == "prevalidate" and name == "user-service":
+            environment.update(
+                {
+                    "ALIYUN_DYPNS_ENDPOINT": "provider-unavailable.invalid",
+                    "ALIYUN_DYPNS_ACCESS_KEY_ID": "provider-unavailable",
+                    "ALIYUN_DYPNS_ACCESS_KEY_SECRET": "provider-unavailable",
+                    "WECHAT_OAUTH_TOKEN_URL": "https://login-provider-unavailable.invalid/wechat/token",
+                    "WECHAT_OAUTH_USER_INFO_URL": "https://login-provider-unavailable.invalid/wechat/userinfo",
+                    "ALIPAY_OAUTH_TOKEN_URL": "https://login-provider-unavailable.invalid/alipay/token",
+                    "ALIPAY_OAUTH_USER_INFO_URL": "https://login-provider-unavailable.invalid/alipay/userinfo",
+                    "QQ_OAUTH_USER_INFO_URL": "https://login-provider-unavailable.invalid/qq/userinfo",
+                    "WECHAT_OAUTH_APP_ID": "provider-unavailable",
+                    "WECHAT_OAUTH_APP_SECRET": "provider-unavailable",
+                    "ALIPAY_OAUTH_APP_ID": "provider-unavailable",
+                    "ALIPAY_OAUTH_APP_PRIVATE_KEY_PEM": "provider-unavailable",
+                    "ALIPAY_OAUTH_PLATFORM_PUBLIC_KEY_PEM": "provider-unavailable",
+                    "ALIPAY_OAUTH_MERCHANT_PID": "provider-unavailable",
+                    "QQ_OAUTH_APP_ID": "provider-unavailable",
+                }
+            )
+        if instance == "prevalidate" and name == "content-service":
+            environment["CONTENT_EMBEDDING_ENDPOINT"] = (
+                "https://embedding-provider-unavailable.invalid/v1/embeddings"
+            )
+            environment["CONTENT_EMBEDDING_API_KEY"] = "provider-unavailable"
         if name == "notification-service":
-            environment["NOTIFICATION_MONGO_URI"] = EXTERNAL_MONGO_URI
+            environment["NOTIFICATION_MONGO_URI"] = mongo_uri
             environment["NOTIFICATION_REDIS_ADDR"] = (
-                f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+                f"{redis_host}:{redis_port}"
             )
             environment["NOTIFICATION_REDIS_GENERAL_DB"] = "1"
             environment["NOTIFICATION_REDIS_REALTIME_DB"] = "4"
@@ -423,12 +630,12 @@ def _rewrite_service(
             )
         if name == "realtime-gateway":
             environment["REALTIME_REDIS_ADDR"] = (
-                f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+                f"{redis_host}:{redis_port}"
             )
         if name == "rtc-service":
-            environment["MONGO_URI"] = EXTERNAL_MONGO_URI
+            environment["MONGO_URI"] = mongo_uri
             environment["REDIS_ADDR"] = (
-                f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+                f"{redis_host}:{redis_port}"
             )
             environment["RTC_MEDIA_CONNECTION_URL"] = (
                 "${PROD_RTC_MEDIA_CONNECTION_URL:?PROD_RTC_MEDIA_CONNECTION_URL is required}"
@@ -439,11 +646,31 @@ def _rewrite_service(
             environment["RTC_MEDIA_API_SECRET"] = (
                 "${PROD_RTC_MEDIA_API_SECRET:?PROD_RTC_MEDIA_API_SECRET is required}"
             )
-    if name != "gamma-proxy":
+    if name not in {"gamma-proxy", "postgres", "mongodb", "mongo-init", "redis", "object-storage", "object-storage-init", "elasticsearch"}:
         extra_hosts = list(updated.get("extra_hosts") or [])
         if f"{EXTERNAL_DATA_HOST}:host-gateway" not in extra_hosts:
             extra_hosts.append(f"{EXTERNAL_DATA_HOST}:host-gateway")
         updated["extra_hosts"] = extra_hosts
+    if instance == "prevalidate" and name == "object-storage":
+        environment = updated.setdefault("environment", {})
+        environment.pop("MINIO_CERTS_DIR", None)
+        updated["command"] = ["server", "/data", "--address", ":9000", "--console-address", ":9001"]
+        updated["ports"] = ["39440:9000"]
+        updated["volumes"] = ["local-gamma-object-storage:/data"]
+    if instance == "prevalidate" and name == "object-storage-init":
+        updated["volumes"] = []
+        updated["entrypoint"] = [
+            "/bin/sh",
+            "-ec",
+            (
+                "for attempt in $(seq 1 60); do "
+                "if mc alias set qwq http://object-storage:9000 "
+                "\"$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID\" "
+                "\"$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET\"; then "
+                "mc mb --ignore-existing qwq/$LOCAL_GAMMA_OBJECT_STORAGE_BUCKET; exit 0; "
+                "fi; sleep 2; done; exit 1"
+            ),
+        ]
     volumes = list(updated.get("volumes") or [])
     credential_spec = (runtime_credentials or {}).get(name)
     if credential_spec is not None:
@@ -487,14 +714,40 @@ def _rewrite_service(
         if spool_mount not in volumes:
             volumes.append(spool_mount)
     if name == "platform-ops-service":
-        environment["QWQ_PROD_RELEASE_STATE_DIR"] = (
-            "/var/lib/quwoquan/release-state"
-        )
-        ledger_mount = (
-            "./release-ledger:/var/lib/quwoquan/release-state:ro"
-        )
-        if ledger_mount not in volumes:
-            volumes.append(ledger_mount)
+        if instance == "prevalidate":
+            environment["QWQ_PROD_RELEASE_STATE_DIR"] = (
+                "/var/lib/quwoquan/prevalidation-release-state"
+            )
+        else:
+            environment["QWQ_PROD_RELEASE_STATE_DIR"] = (
+                "/var/lib/quwoquan/release-state"
+            )
+            ledger_mount = (
+                "./release-ledger:/var/lib/quwoquan/release-state:ro"
+            )
+            if ledger_mount not in volumes:
+                volumes.append(ledger_mount)
+    if instance == "prevalidate":
+        projected_volumes: list[Any] = []
+        for item in volumes:
+            if not isinstance(item, str):
+                projected_volumes.append(item)
+                continue
+            if ":/etc/ssl/local-ca/object-storage-ca.crt" in item:
+                continue
+            if ":/etc/qwq-rec-policy/policy.yaml" in item:
+                projected_volumes.append(
+                    "./runtime/rec-policy/policy.yaml:/etc/qwq-rec-policy/policy.yaml:ro"
+                )
+                continue
+            if ":/app/.qwq_output/env/repo/local/control-plane/process/platform-ops-service" in item:
+                projected_volumes.append(
+                    "platform-ops-prevalidation-state:"
+                    "/app/.qwq_output/env/repo/local/control-plane/process/platform-ops-service"
+                )
+                continue
+            projected_volumes.append(item)
+        volumes = projected_volumes
     if volumes:
         updated["volumes"] = [
             (
@@ -547,6 +800,7 @@ def _write_config_tree(
     config_services: list[str],
     config_version: str,
     output_root: Path,
+    isolated_prevalidation: bool = False,
 ) -> dict[str, Any]:
     config_root = output_root / "runtime" / "config-root"
     sources: dict[str, Any] = {}
@@ -575,6 +829,10 @@ def _write_config_tree(
         shutil.copy2(config_src, config_target)
         provenance = json.loads((package_dir / "provenance.json").read_text(encoding="utf-8"))
         sources[service]["configVersion"] = provenance["configVersion"]
+        if isolated_prevalidation:
+            projection = _project_isolated_prevalidation_config(config_target)
+            sources[service]["prevalidationProjection"] = projection
+            sources[service]["configVersion"] = projection["projectedConfigVersion"]
 
     # IaC 只读配置快照的另外两个域：端侧 App 发布配置与数据工程共享 catalog。
     # platform-ops 生产容器只挂 config-root，不含仓库树，必须在渲染期落盘。
@@ -610,6 +868,23 @@ def _write_config_tree(
         "package": str(routing_policy_src),
         "policyDigest": _sha256(routing_policy_src),
     }
+    if isolated_prevalidation:
+        policy_source = (
+            ROOT
+            / "quwoquan_service/services/content-service/resources/policies/content/post/"
+            "recommendation_policy_object_cards_v1.yaml"
+        )
+        if not policy_source.is_file():
+            raise SystemExit(f"FAIL: missing prevalidation recommendation policy: {policy_source}")
+        policy_target = output_root / "runtime" / "rec-policy" / "policy.yaml"
+        policy_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(policy_source, policy_target)
+        sources["prevalidationProjection"] = {
+            "promotable": False,
+            "releaseEvidenceEligible": False,
+            "reason": "single-node empty data projection",
+            "recommendationPolicyDigest": _sha256(policy_target),
+        }
     return sources
 
 
@@ -659,9 +934,13 @@ def _render_gray_routing_block(rollout_stage: str) -> str:
     header_by_dimension = {
         "appVersions": "X-Client-App-Version",
         "userIds": "X-Client-User-Id",
-        "provinces": "X-Client-Region-Code",
-        "carriers": "X-Client-Carrier",
     }
+    for dimension in ("provinces", "carriers"):
+        if any(str(item).strip() for item in (dimensions.get(dimension) or [])):
+            raise SystemExit(
+                "FAIL: province/carrier gray routing requires a trusted edge "
+                "attestation pipeline; client-supplied headers are forbidden"
+            )
     transport_lines = ""
     if upstream.startswith("https://") and skip_verify:
         transport_lines = (
@@ -904,7 +1183,7 @@ prod-upload.quwoquan-env.test {
 \t}
 }
 """
-    if instance == "gray":
+    if instance in {"gray", "prevalidate"}:
         direct_http = caddy_text.rfind("\n:80 {")
         if direct_http < 0:
             raise SystemExit("FAIL: gray Caddy HTTP route block is missing")
@@ -990,9 +1269,82 @@ def _write_env_file(
             "LOCAL_GAMMA_RTC_SERVICE_IMAGE="
             f"localhost/quwoquan_service_rtc-service:{image_version}"
         ),
-        f"LOCAL_GAMMA_TLS_MODE={'internal' if instance == 'gray' else 'automatic'}",
+        f"LOCAL_GAMMA_TLS_MODE={'internal' if instance in {'gray', 'prevalidate'} else 'automatic'}",
     ]
-    if instance == "gray":
+    if instance == "prevalidate":
+        auth = _prevalidation_secret_environment()
+        otp_key_version = "prod-hosted-prevalidation-k1"
+        lines.extend(
+            [
+                "LOCAL_GAMMA_HTTP_PORT=39000",
+                "LOCAL_GAMMA_PRODUCT_OPS_PORT=39010",
+                "LOCAL_GAMMA_MEDIA_EDGE_PORT=39100",
+                "LOCAL_GAMMA_HTTPS_PORT=38443",
+                "LOCAL_GAMMA_ADMIN_PORT=32019",
+                "LOCAL_GAMMA_CHAT_PORT=39200",
+                "LOCAL_GAMMA_USER_PORT=39210",
+                "LOCAL_GAMMA_CONTENT_PORT=39220",
+                "LOCAL_GAMMA_ASSISTANT_PORT=39230",
+                "LOCAL_GAMMA_REC_MODEL_PORT=39240",
+                "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT=39250",
+                "LOCAL_GAMMA_TAG_PORT=39270",
+                "LOCAL_GAMMA_ENTITY_PORT=39290",
+                "LOCAL_GAMMA_INTEGRATION_PORT=39310",
+                "LOCAL_GAMMA_NOTIFICATION_PORT=39320",
+                "LOCAL_GAMMA_REALTIME_PORT=39340",
+                "LOCAL_GAMMA_RTC_PORT=39350",
+                "LOCAL_GAMMA_POSTGRES_PORT=39400",
+                "LOCAL_GAMMA_MONGO_PORT=39410",
+                "LOCAL_GAMMA_REDIS_PORT=39420",
+                "LOCAL_GAMMA_ES_PORT=39430",
+                "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT=39440",
+                "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID=prevalidation-only",
+                "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET=prevalidation-only-not-production",
+                "LOCAL_GAMMA_OBJECT_STORAGE_BUCKET=prevalidation-empty",
+                "QWQ_COMPOSE_OBJECT_STORAGE_ENDPOINT=http://object-storage:9000",
+                "QWQ_COMPOSE_OBJECT_STORAGE_BUCKET=prevalidation-empty",
+                "QWQ_COMPOSE_OBJECT_STORAGE_REGION=prevalidation-local",
+                "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID=prevalidation-only",
+                "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET=prevalidation-only-not-production",
+                "QWQ_COMPOSE_OBJECT_STORAGE_CDN_DOMAIN=http://object-storage:9000/prevalidation-empty",
+                (
+                    "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY="
+                    + auth["QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY"]
+                ),
+                "AUTH_JWT_SECRET=" + auth["AUTH_JWT_SECRET"],
+                "AUTH_JWT_ISSUER=quwoquan.prod-hosted.prevalidation",
+                "AUTH_JWT_AUDIENCE=quwoquan-app",
+                "AUTH_JWT_TOKEN_VERSION=1",
+                "AUTH_DEVICE_TICKET_SECRET=" + auth["AUTH_DEVICE_TICKET_SECRET"],
+                "AUTH_DEVICE_TICKET_ISSUER=quwoquan.prod-hosted.prevalidation.device",
+                "AUTH_DEVICE_TICKET_AUDIENCE=quwoquan-app-device",
+                "AUTH_DEVICE_TICKET_TOKEN_VERSION=1",
+                "OTP_CODE_REF_ACTIVE_KEY_VERSION=" + otp_key_version,
+                "OTP_CODE_REF_KEYS_JSON="
+                + json.dumps(
+                    {otp_key_version: auth["OTP_CODE_REF_KEY"]},
+                    separators=(",", ":"),
+                ),
+                "QWQ_PUSH_TOKEN_ENCRYPTION_KEY="
+                + auth["QWQ_PUSH_TOKEN_ENCRYPTION_KEY"],
+                "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET="
+                + auth["CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET"],
+                "RUNTIME_LOG_INGEST_TOKEN=prevalidation-not-release-evidence",
+                "ALERT_INGEST_TOKEN=prevalidation-not-release-evidence",
+                "OPS_OIDC_ISSUER=https://provider-unavailable.invalid",
+                "OPS_OIDC_AUDIENCE=quwoquan-prevalidation",
+                "OPS_OIDC_JWKS_URL=https://provider-unavailable.invalid/jwks.json",
+                "PROD_RTC_MEDIA_CONNECTION_URL=wss://sfu-unavailable.invalid",
+                "PROD_RTC_MEDIA_API_KEY=provider-unavailable",
+                "PROD_RTC_MEDIA_API_SECRET=provider-unavailable",
+                "PRODUCT_OPS_SLS_ENDPOINT=https://sls-unavailable.invalid",
+                "PRODUCT_OPS_SLS_REGION=provider-unavailable",
+                "PRODUCT_OPS_SLS_PROJECT=provider-unavailable",
+                "ALIBABA_CLOUD_ACCESS_KEY_ID=provider-unavailable",
+                "ALIBABA_CLOUD_ACCESS_KEY_SECRET=provider-unavailable",
+            ]
+        )
+    elif instance == "gray":
         lines.extend(
             [
                 "LOCAL_GAMMA_HTTP_PORT=29000",
@@ -1042,7 +1394,70 @@ def _write_env_file(
                 "LOCAL_GAMMA_REDIS_PORT=19420",
             ]
         )
-    (output_root / "stack.env").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    env_path = output_root / "stack.env"
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if instance == "prevalidate":
+        env_path.chmod(0o600)
+
+
+def _write_runtime_systemd_unit(
+    output_root: Path,
+    *,
+    plane: dict[str, Any],
+    plane_name: str,
+    instance: str,
+    startup_services: list[str],
+) -> str:
+    compose_root = str(plane.get("composeProjectRoot") or "").strip()
+    credentials_root = str(plane.get("credentialsPath") or "").strip()
+    if not compose_root.startswith("/") or not credentials_root.startswith("/"):
+        raise SystemExit("FAIL: runtime systemd paths must be absolute")
+    if instance == "prevalidate":
+        compose_root = f"{compose_root.rstrip('/')}/prevalidate"
+    layout = plane.get("rootlessRuntimeLayout") or {}
+    compose_file = str(layout.get("composeFile") or "docker-compose.prod-hosted.yaml")
+    env_file = str(layout.get("envFile") or "stack.env")
+    unit_name = f"quwoquan-{plane_name}-{instance}.service"
+    project = f"quwoquan-{plane_name}-{instance}"
+    services = " ".join(startup_services)
+    unit_dir = output_root / "systemd"
+    unit_dir.mkdir(parents=True, exist_ok=True)
+    service_lines = [
+        "[Unit]",
+        f"Description=Quwoquan {plane_name} {instance} rootless stack",
+        "Wants=network-online.target",
+        "After=network-online.target",
+        "",
+        "[Service]",
+        "Type=oneshot",
+        "RemainAfterExit=yes",
+        f"WorkingDirectory={compose_root}",
+    ]
+    if instance != "prevalidate":
+        service_lines.append(
+            f"EnvironmentFile=-{credentials_root.rstrip('/')}/runtime.env"
+        )
+    service_lines.extend(
+        [
+            (
+                f"ExecStart=/usr/bin/podman compose --env-file {env_file} "
+                f"-f {compose_file} -p {project} up -d --remove-orphans {services}"
+            ),
+            (
+                f"ExecStop=/usr/bin/podman compose --env-file {env_file} "
+                f"-f {compose_file} -p {project} down"
+            ),
+            "",
+            "[Install]",
+            "WantedBy=default.target",
+            "",
+        ]
+    )
+    unit_dir.joinpath(unit_name).write_text(
+        "\n".join(service_lines),
+        encoding="utf-8",
+    )
+    return unit_name
 
 
 def _write_observability_tree(
@@ -1189,6 +1604,42 @@ def main() -> int:
     governed = [str(item) for item in plane.get("rootlessGovernedComposeServices") or []]
     support = [str(item) for item in plane.get("rootlessSupportComposeServices") or []]
     config_services = [str(item) for item in plane.get("rootlessConfigServices") or []]
+    startup_services = list(governed + support)
+    image_only_services: list[str] = []
+    prevalidation_images: dict[str, str] = {}
+    if args.instance == "prevalidate":
+        if args.prevalidate_scope != "first-party":
+            raise SystemExit("FAIL: prevalidate instance requires --prevalidate-scope first-party")
+        prevalidation = _prevalidation_spec()
+        if args.data_mode not in (prevalidation.get("allowedDataModes") or []):
+            raise SystemExit(f"FAIL: unsupported prevalidation data mode: {args.data_mode}")
+        plane_projection = (prevalidation.get("planes") or {}).get(args.plane)
+        if not isinstance(plane_projection, dict):
+            raise SystemExit(f"FAIL: prevalidation plane projection missing: {args.plane}")
+        startup_governed = [
+            str(item) for item in (plane_projection.get("startupServices") or [])
+        ]
+        image_only_services = [
+            str(item)
+            for item in (plane_projection.get("imageAndConfigOnlyServices") or [])
+        ]
+        governed = startup_governed + image_only_services
+        support = ["gamma-proxy"] if args.plane == "service" else []
+        if args.data_mode == "isolated" and args.plane == "service":
+            isolated = prevalidation.get("isolatedData") or {}
+            support = [str(item) for item in (isolated.get("services") or [])] + support
+            prevalidation_images = {
+                str(name): str(ref)
+                for name, ref in (isolated.get("images") or {}).items()
+            }
+        startup_services = support + startup_governed
+        allowed = set(plane.get("rootlessGovernedComposeServices") or [])
+        if not set(governed).issubset(allowed):
+            raise SystemExit(
+                f"FAIL: prevalidation services escape {args.plane} plane ownership"
+            )
+        if args.plane == "service" and "integration-service" not in image_only_services:
+            raise SystemExit("FAIL: integration-service must remain image/config-only")
     credentials_root = str(plane.get("credentialsPath") or "").strip()
     runtime_credentials = dict(plane.get("rootlessRuntimeCredentials") or {})
     selected = governed + support
@@ -1312,6 +1763,9 @@ def main() -> int:
         config_services=config_services,
         config_version=args.config_version,
         output_root=output_root,
+        isolated_prevalidation=(
+            args.instance == "prevalidate" and args.data_mode == "isolated"
+        ),
     )
     for service_name in selected:
         raw = services.get(service_name)
@@ -1336,7 +1790,12 @@ def main() -> int:
             caddyfile_path=caddyfile_path,
             model_cache_root=model_cache_root,
             credentials_root=credentials_root,
-            runtime_credentials=runtime_credentials,
+            runtime_credentials=(
+                {} if args.instance == "prevalidate" else runtime_credentials
+            ),
+            data_mode=args.data_mode,
+            prevalidation_images=prevalidation_images,
+            startup_services=set(startup_services),
         )
         if service_network_name:
             rendered["networks"] = ["service-plane"]
@@ -1350,6 +1809,8 @@ def main() -> int:
     top_level_volumes = dict(template.get("volumes") or {})
     if any(name in RUNTIME_LOG_EXPORT_SERVICES for name in rendered_services):
         top_level_volumes.setdefault("runtime-log-spool", {})
+    if args.instance == "prevalidate" and "platform-ops-service" in rendered_services:
+        top_level_volumes.setdefault("platform-ops-prevalidation-state", {})
     filtered = _filter_top_level_volumes(rendered_services, top_level_volumes)
     if filtered:
         compose_payload["volumes"] = filtered
@@ -1369,13 +1830,24 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    observability_runtime = _write_observability_tree(
-        output_root,
-        args.plane,
-        render_name=render_name,
+    observability_runtime = (
+        None
+        if args.instance == "prevalidate"
+        else _write_observability_tree(
+            output_root,
+            args.plane,
+            render_name=render_name,
+        )
     )
     _write_caddyfile(output_root, args.instance, args.rollout_stage)
     _write_env_file(output_root, args.config_version, args.image_version, args.instance)
+    systemd_unit_file = _write_runtime_systemd_unit(
+        output_root,
+        plane=plane,
+        plane_name=args.plane,
+        instance=args.instance,
+        startup_services=startup_services,
+    )
 
     report = {
         "plane": args.plane,
@@ -1385,6 +1857,9 @@ def main() -> int:
         "instance": args.instance,
         "governedComposeServices": governed,
         "supportComposeServices": support,
+        "startupServices": startup_services,
+        "imageAndConfigOnlyServices": image_only_services,
+        "dataMode": args.data_mode,
         "configServices": config_services,
         "configVersion": args.config_version,
         "outputDir": str(output_root),
@@ -1397,6 +1872,7 @@ def main() -> int:
         "portalStaticRoot": portal_root,
         "portalStaticSource": str(portal_release_dist),
         "observabilityRuntime": observability_runtime,
+        "systemdUnitFile": systemd_unit_file,
     }
     (output_root / "provenance.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",

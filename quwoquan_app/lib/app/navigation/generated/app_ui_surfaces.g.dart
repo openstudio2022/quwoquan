@@ -229,12 +229,10 @@ class AppUiSurfaces {
       'ReadAppMessage',
       'CreateProfileUpdateProposal',
       'GetAppMessageUnreadCount',
-      'ReportInteractionEvent',
-      'ReportScorecard',
+      'AppendAssistantLearningFact',
       'ReportPageContext',
       'GetEntryPersonalization',
       'GetSuggestedActions',
-      'GetPolicy',
       'ListSkills',
       'ListAssistantTasks',
       'SetAssistantPreference',
@@ -258,7 +256,6 @@ class AppUiSurfaces {
     pathTemplate: '/chat/{id}',
     description: '私助会话设置',
     operationIds: <String>[
-      'GetPolicy',
       'ListSkills',
       'ListAssistantTasks',
       'SetAssistantPreference',
@@ -290,8 +287,7 @@ class AppUiSurfaces {
     pathTemplate: '/chat/{id}',
     description: '私助反馈与纠错',
     operationIds: <String>[
-      'ReportInteractionEvent',
-      'ReportScorecard',
+      'AppendAssistantLearningFact',
     ],
   );
 
@@ -1081,6 +1077,7 @@ class AppUiSurfaces {
       'AbortMediaUpload',
       'ConfirmProposal',
       'ApplyProposal',
+      'RollbackProposal',
       'RejectProposal',
       'GetProfileUpdateProposal',
       'ListProfileUpdateProposals',

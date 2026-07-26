@@ -1,8 +1,10 @@
+// spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/spec.md#gwt-001
 package api_integration
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -36,6 +38,18 @@ func (g selectableMutualGate) GetCapability(
 		}, nil
 	}
 	return application.RelationshipCapability{}, nil
+}
+
+type unavailableSelectableGroupGate struct{}
+
+func (unavailableSelectableGroupGate) GetCapability(
+	context.Context,
+	string,
+	string,
+) (application.RelationshipCapability, error) {
+	return application.RelationshipCapability{}, errors.New(
+		"relationship capability dependency is unavailable",
+	)
 }
 
 // socialMutualServer 返回 following+followers，使指定用户成为「contact 候选」。
@@ -154,6 +168,20 @@ func bindSelectableGroupToCircle(
 }
 
 func newSelectableGroupHandler(t *testing.T, viewer string, mutual map[string]bool, contactIDs ...string) http.Handler {
+	return newSelectableGroupHandlerWithRelationshipGate(
+		t,
+		viewer,
+		selectableMutualGate{mutual: mutual},
+		contactIDs...,
+	)
+}
+
+func newSelectableGroupHandlerWithRelationshipGate(
+	t *testing.T,
+	viewer string,
+	relationshipGate application.RelationshipGate,
+	contactIDs ...string,
+) http.Handler {
 	t.Helper()
 	socialServer := socialMutualServer(viewer, contactIDs...)
 	t.Cleanup(socialServer.Close)
@@ -170,7 +198,7 @@ func newSelectableGroupHandler(t *testing.T, viewer string, mutual map[string]bo
 		nil,
 		nil,
 		groupAvatarSchedulerForContractTest(),
-		application.WithRelationshipGate(selectableMutualGate{mutual: mutual}),
+		application.WithRelationshipGate(relationshipGate),
 		application.WithSocialContactResolver(
 			chathttp.NewUserSocialContactResolver(socialServer.URL, socialServer.Client()),
 		),
@@ -193,6 +221,68 @@ func getSelectableJSON(t *testing.T, handler http.Handler, path, viewer string) 
 	var payload map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &payload)
 	return rec.Code, payload
+}
+
+func TestGroupCandidateReadersFailClosedWhenRelationshipGateUnavailable(
+	t *testing.T,
+) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	const (
+		viewer                = "viewer_unavailable_gate"
+		privateConversationID = "conv_private_unavailable_gate"
+		circleConversationID  = "conv_circle_unavailable_gate"
+		circleID              = "circle_unavailable_gate"
+		contactID             = "friend_unavailable_gate"
+	)
+	seedSelectableGroup(
+		t,
+		privateConversationID,
+		viewer,
+		"关系服务不可用验证群",
+		[]string{contactID},
+	)
+	seedSelectableGroup(
+		t,
+		circleConversationID,
+		viewer,
+		"关系服务不可用验证圈群",
+		[]string{contactID},
+	)
+	bindSelectableGroupToCircle(t, circleConversationID, circleID)
+	handler := newSelectableGroupHandlerWithRelationshipGate(
+		t,
+		viewer,
+		unavailableSelectableGroupGate{},
+		contactID,
+	)
+
+	for _, path := range []string{
+		"/chat/group-candidates?limit=20",
+		"/chat/selectable-group-conversations?source=group&limit=50",
+		"/chat/selectable-group-conversations?source=circle&limit=50",
+		"/chat/selectable-group-conversations/" + circleConversationID +
+			"/contact-members?limit=100",
+	} {
+		status, payload := getSelectableJSON(t, handler, path, viewer)
+		if status != http.StatusInternalServerError {
+			t.Fatalf(
+				"%s status=%d want=%d payload=%#v",
+				path,
+				status,
+				http.StatusInternalServerError,
+				payload,
+			)
+		}
+		if code := errorCodeOf(t, payload); code != "CHAT.SYSTEM.internal_error" {
+			t.Fatalf(
+				"%s code=%s want=CHAT.SYSTEM.internal_error payload=%#v",
+				path,
+				code,
+				payload,
+			)
+		}
+	}
 }
 
 // TestListSelectableGroupConversations_ReturnsGroupsWithFriendCount 验证图四群列表：

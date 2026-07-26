@@ -40,7 +40,10 @@ class SoftPageLayerGeometry {
     required this.surfaceOrigin,
     required this.pivotLocal,
     required this.positionViewport,
+    required this.contentPositionViewport,
     required this.surfaceViewportRect,
+    required this.paintBounds,
+    required this.paintOrigin,
     required this.localClipPolygon,
     required this.viewportClipPolygon,
     required this.clipLocalBounds,
@@ -50,8 +53,16 @@ class SoftPageLayerGeometry {
 
   final Offset surfaceOrigin;
   final Offset pivotLocal;
+
+  /// Native clip-area origin before the Flutter paint-bounds expansion.
   final Offset positionViewport;
+
+  /// Flutter child origin after paint-bounds expansion. Sheet-local recto/
+  /// verso intervals are projected from this origin.
+  final Offset contentPositionViewport;
   final Rect surfaceViewportRect;
+  final Rect paintBounds;
+  final Offset paintOrigin;
   final List<Offset> localClipPolygon;
   final List<Offset> viewportClipPolygon;
   final Rect? clipLocalBounds;
@@ -68,6 +79,22 @@ Offset rotatePointForCanvasTransform(Offset point, double angle) {
   return Offset(
     point.dx * cosAngle - point.dy * sinAngle,
     point.dx * sinAngle + point.dy * cosAngle,
+  );
+}
+
+Rect resolveSoftLayerPaintBounds({
+  required Size pageSize,
+  required List<Offset> polygon,
+}) {
+  final bounds = polygonBounds(polygon);
+  if (bounds == null) {
+    return Offset.zero & pageSize;
+  }
+  return Rect.fromLTRB(
+    math.min(0.0, bounds.left),
+    math.min(0.0, bounds.top),
+    math.max(pageSize.width, bounds.right),
+    math.max(pageSize.height, bounds.bottom),
   );
 }
 
@@ -97,6 +124,15 @@ Offset transformSoftLayerLocalPoint({
   return geometry.positionViewport + rotated;
 }
 
+Offset transformSoftLayerContentLocalPoint({
+  required Offset point,
+  required SoftPageLayerGeometry geometry,
+}) {
+  final angle = rotationZFromMatrix(geometry.transform);
+  return geometry.contentPositionViewport +
+      rotatePointForCanvasTransform(point, angle);
+}
+
 Offset inverseTransformSoftLayerLocalPoint({
   required Offset point,
   required SoftPageLayerGeometry geometry,
@@ -114,6 +150,20 @@ List<Offset> transformSoftLayerLocalPolygon({
       .map(
         (point) =>
             transformSoftLayerLocalPoint(point: point, geometry: geometry),
+      )
+      .toList(growable: false);
+}
+
+List<Offset> transformSoftLayerContentLocalPolygon({
+  required List<Offset> polygon,
+  required SoftPageLayerGeometry geometry,
+}) {
+  return polygon
+      .map(
+        (point) => transformSoftLayerContentLocalPoint(
+          point: point,
+          geometry: geometry,
+        ),
       )
       .toList(growable: false);
 }

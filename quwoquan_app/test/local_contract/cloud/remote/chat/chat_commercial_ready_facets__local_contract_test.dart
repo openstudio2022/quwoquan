@@ -37,7 +37,7 @@ void main() {
       ChatListContactHomeQuery(filter: 'mutual', limit: 30),
     );
     final contacts = await contact.listContacts(
-      ChatListContactsQuery(limit: 40),
+      ChatListContactsQuery(cursor: 'contacts-cursor', limit: 40),
     );
     final candidates = await contact.listGroupCandidates(
       ChatListGroupCandidatesQuery(conversationId: 'conversation-1', limit: 50),
@@ -82,6 +82,10 @@ void main() {
     expect(executor.payloads[1].queryParameters, <String, String>{
       'filter': 'mutual',
       'limit': '30',
+    });
+    expect(executor.payloads[2].queryParameters, <String, String>{
+      'limit': '40',
+      'cursor': 'contacts-cursor',
     });
     expect(executor.payloads[5].queryParameters, <String, String>{
       'limit': '20',

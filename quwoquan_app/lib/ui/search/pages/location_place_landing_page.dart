@@ -7,14 +7,16 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/location_place_read_query.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 /// 一方地点（`location.place`）落地页路由参数。
 ///
 /// `location.place` 是被内容引用、但尚未绑定实体主页的自由文本地点（spec 单一真相源：
 /// 未提升=location.place、已提升=entity.homepage）。命中详情来自搜索结果 payload，
-/// 落地页本身无独立后端 operation；提升动作复用 `suggestHomepage` surface。
+/// 冷启动、深链和进程恢复没有 route extra 时，必须按 `placeId` 重新读取。
 class LocationPlaceLandingPageRouteExtra {
   const LocationPlaceLandingPageRouteExtra({
     this.placeName = '',
@@ -38,6 +40,7 @@ class LocationPlaceLandingPage extends ConsumerStatefulWidget {
     this.address = '',
     this.snippet = '',
     this.referralSource = ReferralSource.search,
+    this.requiresCanonicalRead = false,
   });
 
   final String placeId;
@@ -45,6 +48,7 @@ class LocationPlaceLandingPage extends ConsumerStatefulWidget {
   final String address;
   final String snippet;
   final ReferralSource referralSource;
+  final bool requiresCanonicalRead;
 
   @override
   ConsumerState<LocationPlaceLandingPage> createState() =>
@@ -54,10 +58,36 @@ class LocationPlaceLandingPage extends ConsumerStatefulWidget {
 class _LocationPlaceLandingPageState
     extends ConsumerState<LocationPlaceLandingPage> {
   late final JourneyEventTracker _journeyTracker;
+  LocationPlaceReadResult? _resolved;
+  Object? _loadFailure;
+  bool _loading = false;
 
-  String get _displayName => widget.placeName.trim().isNotEmpty
-      ? widget.placeName.trim()
-      : UITextConstants.locationPlaceLandingTitle;
+  String get _displayName => switch (_resolved) {
+    LocationPlaceReadFound(:final place) => place.name.trim(),
+    _ =>
+      widget.placeName.trim().isNotEmpty
+          ? widget.placeName.trim()
+          : UITextConstants.locationPlaceLandingTitle,
+  };
+
+  String get _address => switch (_resolved) {
+    LocationPlaceReadFound(:final place) => place.address?.trim() ?? '',
+    _ =>
+      widget.address.trim().isNotEmpty
+          ? widget.address.trim()
+          : widget.snippet.trim(),
+  };
+
+  bool get _needsCanonicalRead => widget.requiresCanonicalRead;
+
+  @override
+  void didUpdateWidget(covariant LocationPlaceLandingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.placeId != widget.placeId ||
+        (!oldWidget.requiresCanonicalRead && _needsCanonicalRead)) {
+      _startCanonicalRead();
+    }
+  }
 
   @override
   void initState() {
@@ -65,7 +95,45 @@ class _LocationPlaceLandingPageState
     _journeyTracker = ref.read(journeyEventTrackerProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _trackJourney('enter');
+      if (_needsCanonicalRead) {
+        _startCanonicalRead();
+      }
     });
+  }
+
+  Future<void> _startCanonicalRead() async {
+    if (!_needsCanonicalRead || _loading) {
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _loadFailure = null;
+    });
+    try {
+      final result = await ref
+          .read(locationPlaceReadQueryProvider)
+          .readById(widget.placeId);
+      if (!mounted) {
+        return;
+      }
+      if (result case LocationPlaceReadHomepageRedirect(:final homepageId)) {
+        _trackJourney('promoted_redirect');
+        context.go(AppRoutePaths.homepageDetail(id: homepageId));
+        return;
+      }
+      setState(() {
+        _resolved = result;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadFailure = error;
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -77,10 +145,54 @@ class _LocationPlaceLandingPageState
 
   @override
   Widget build(BuildContext context) {
+    final readUnavailable = _resolved is LocationPlaceReadUnavailable;
+    if (_loading) {
+      return CupertinoPageScaffold(child: AppRequestFeedback.page());
+    }
+    if (_loadFailure != null || readUnavailable) {
+      final semantic = _loadFailure == null
+          ? const UiErrorSemantic(
+              category: UiErrorCategory.notFound,
+              scope: UiErrorScope.page,
+              title: UITextConstants.searchResultUnavailableTitle,
+              message: UITextConstants.searchResultUnavailableTitle,
+              primaryAction: UiErrorAction(
+                type: UiErrorActionType.dismiss,
+                label: UITextConstants.searchEditQuery,
+              ),
+              sourceSurfaceId: 'location_place_landing',
+            )
+          : runtimeErrorSemantic(
+              context,
+              error: _loadFailure!,
+              category: UiErrorCategory.pageLoad,
+              scope: UiErrorScope.page,
+            );
+      return CupertinoPageScaffold(
+        navigationBar: CupertinoNavigationBar(
+          middle: const Text(UITextConstants.locationPlaceLandingTitle),
+          leading: CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: _handleClose,
+            child: const Icon(CupertinoIcons.chevron_back),
+          ),
+        ),
+        child: SafeArea(
+          child: AppPageErrorState(
+            semantic: semantic,
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry) {
+                await _startCanonicalRead();
+                return;
+              }
+              _handleClose();
+            },
+          ),
+        ),
+      );
+    }
+
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final address = widget.address.trim().isNotEmpty
-        ? widget.address.trim()
-        : widget.snippet.trim();
     return CupertinoPageScaffold(
       key: TestKeys.locationPlaceLandingPage,
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
@@ -103,7 +215,7 @@ class _LocationPlaceLandingPageState
           children: <Widget>[
             _LocationPlaceCard(
               displayName: _displayName,
-              address: address,
+              address: _address,
               isDark: isDark,
             ),
             SizedBox(height: AppSpacing.interGroupMd),
@@ -129,7 +241,12 @@ class _LocationPlaceLandingPageState
 
   void _promoteToHomepage() {
     _trackJourney('promote_click');
-    context.push(AppRoutePaths.suggestHomepage(query: _displayName));
+    context.push(
+      AppRoutePaths.suggestHomepage(
+        query: _displayName,
+        sourcePlaceId: widget.placeId,
+      ),
+    );
   }
 
   void _handleClose() {

@@ -4,6 +4,37 @@ from __future__ import annotations
 import re
 import urllib.parse
 
+
+def _wikimedia_rendition_url(url: str, *, width: int) -> str:
+    parsed = urllib.parse.urlparse(url)
+    marker = "/wikipedia/commons/"
+    if parsed.hostname != "upload.wikimedia.org" or marker not in parsed.path:
+        return ""
+    if "/wikipedia/commons/thumb/" in parsed.path:
+        return ""
+    relative = parsed.path.split(marker, 1)[1]
+    parts = relative.split("/")
+    if len(parts) < 3:
+        return ""
+    file_name = parts[-1]
+    if not re.search(r"\.(?:jpe?g|png|webp)$", file_name, re.IGNORECASE):
+        return ""
+    thumb_path = f"{marker}thumb/{relative}/{width}px-{file_name}"
+    return urllib.parse.urlunparse(parsed._replace(path=thumb_path, query="", fragment=""))
+
+
+def page_image_candidate_urls(url: str, *, rendition_width: int) -> list[str]:
+    """Prefer a bounded same-file Commons rendition before the original."""
+
+    candidates: list[str] = []
+    rendition = _wikimedia_rendition_url(url, width=rendition_width)
+    if rendition:
+        candidates.append(rendition)
+    for candidate in candidate_image_urls(url):
+        if candidate not in candidates:
+            candidates.append(candidate)
+    return candidates
+
 def candidate_image_urls(url: str) -> list[str]:
     """Return deterministic same-source high-resolution candidates.
 
@@ -56,5 +87,4 @@ def candidate_image_urls(url: str) -> list[str]:
             pass
 
     return candidates
-
 

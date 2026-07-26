@@ -44,7 +44,7 @@
 ### REQ-002 启动致命异常采用闭集判定
 
 - Flutter Engine、根组件、必要数据库、核心资源或配置、无安全降级的必要依赖、根路由或主容器确认无法创建时停止后续初始化并进入 S0。
-- Android 只依据同 Build 的 Java 未处理异常或 `ApplicationExitInfo` crash/native crash，iOS 只依据同 Build 的未处理 NSException 或后来到达的 MetricKit crash diagnostic 判定上一进程启动崩溃。
+- Android 只依据同 Build 的 Java 未处理异常或 `ApplicationExitInfo` 最近一次退出明确为 crash/native crash；iOS 当前只依据同 Build 的未处理 NSException 判定上一进程启动崩溃。无法与上轮启动窗口可靠关联的 MetricKit signal/crash diagnostic 不得直接触发恢复，边界由 `OPEN-002` 持续跟踪。
 - 用户强制结束、系统回收、低内存终止、设备关机或只有未完成标记不得判为启动崩溃。
 
 <a id="req-003"></a>
@@ -78,7 +78,7 @@
 - 异常数据只包含 `occurredAt`、`appVersion`、`buildNumber`、`platform`、`osVersion`、`deviceModel`、`errorSource`、`errorType`、`errorMessage`、`stackTrace`。
 - 错误摘要和堆栈上传前脱敏；禁止诊断编号、启动尝试 ID、发布渠道、检查点、异常指纹、身份与业务内容、Token/Cookie/请求头、用户名路径和完整 URL 查询参数。
 - 异常先写入加密本地队列，再展示恢复页并异步上传；失败不改变页面、更新、下载或网页版状态。
-- 队列最多 20 条、最长 7 天、单条不超过 64KiB；消息最多 2KiB、堆栈最多 32KiB；损坏记录必须安全丢弃。
+- 队列最多保留 20 条、最长保留 7 天，且单条不超过 64KiB。消息最多 2KiB、堆栈最多 32KiB；损坏记录必须安全丢弃。
 
 ## 4. 契约引用
 
@@ -139,9 +139,9 @@
 <a id="open-003"></a>
 ### OPEN-003 静默异常队列端云闭环
 
-- 类型：`implementation_gap`
+- 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：旧启动遥测仍包含 attempt/checkpoint 语义，尚未切换为严格十字段的恢复异常、端侧加密队列与断网补报，不能证明日志失败不会影响恢复操作。
-- 完成判定：`GWT-003` 由端侧队列、服务接收、本地损坏负例和断网补报测试直接 `spec_ref` 证明，旧 `/ops/startup-events` 不再承载恢复异常。
-- 依赖：`product-ops-service` 的 `recovery_failure` 契约与 iOS/Android 安全存储实现。
+- 影响或价值：Prod 真实 SLS、Android/iPhone 受保护真机与可供销毁的账号尚未就绪，无法补齐恢复异常断网补报的真实环境证据。
+- 完成判定：`GWT-003` 在受保护真机上证明端侧加密队列、服务接收、损坏记录安全处置和断网补报；旧 `/ops/startup-events` 不承载恢复异常。
+- 依赖：Prod SLS 权限、受保护 Android/iPhone 设备与可销毁账号。

@@ -58,7 +58,9 @@ import (
 	usersettingspersistence "quwoquan_service/services/user-service/internal/account/user_settings/infrastructure/persistence"
 	personaapp "quwoquan_service/services/user-service/internal/persona_management/persona/application/persona"
 	personapersistence "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/persistence"
+	proposalhttp "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/adapters/inbound/http"
 	proposalapp "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/application"
+	proposalmessaging "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/infrastructure/messaging"
 	proposalpersistence "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/infrastructure/persistence"
 	followingapp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/application"
 	contacthttp "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/adapters/inbound/http"
@@ -261,13 +263,13 @@ func main() {
 
 	// 6. Caches
 	profileCache := usercache.NewProfileCache(redisClient)
-	// The domain MQ publisher stays the primary; when ES is enabled the search
-	// projector is composed onto the fan-out tail (best-effort, never blocks).
+	// The domain MQ publisher remains the immediate profile-event path. Ordinary
+	// profile search projection is relayed from its own durable PostgreSQL
+	// checkpoint below; it must never run in this write-path fan-out.
 	relationshipEventPublisher := mq.NewEventPublisher(messageTransport)
 	var userEventPublisher application.UserEventPublisher = relationshipEventPublisher
 	accountCloseProjections := searchindex.ComposePublisher()
 	if searchBuilt.Projector != nil {
-		userEventPublisher = searchindex.ComposePublisher(userEventPublisher, searchBuilt.Projector)
 		accountCloseProjections = searchindex.ComposePublisher(
 			accountCloseProjections,
 			searchBuilt.Projector,
@@ -539,10 +541,43 @@ func main() {
 	if err != nil {
 		log.Fatalf("ProfileUpdateProposal Facade init failed: %v", err)
 	}
+	profileProposalOutboxRelay, err := proposalapp.NewOutboxRelay(
+		profileProposalStore,
+		proposalmessaging.NewEventPublisher(messageTransport),
+	)
+	if err != nil {
+		log.Fatalf("ProfileUpdateProposal outbox relay init failed: %v", err)
+	}
 
 	healthChecker := rthealth.NewChecker()
 	if ping := searchBuilt.HealthPing(); ping != nil {
 		healthChecker.Register("elasticsearch", ping)
+	}
+	if searchBuilt.Projector != nil {
+		profileSearchOutboxStore, err :=
+			useraccountpersistence.NewUserProfileSearchOutboxStore(pgPool)
+		if err != nil {
+			log.Fatalf("UserProfile search outbox store init failed: %v", err)
+		}
+		profileSearchOutboxRelay, err :=
+			useraccountapp.NewUserProfileSearchOutboxRelay(
+				profileSearchOutboxStore,
+				searchBuilt.Projector,
+				fmt.Sprintf("user-service-search-%d", os.Getpid()),
+				useraccountapp.WithUserProfileSearchOutboxObserver(
+					useraccountobservability.ProfileSearchOutboxObserver{},
+				),
+			)
+		if err != nil {
+			log.Fatalf("UserProfile search outbox relay init failed: %v", err)
+		}
+		healthChecker.Register(
+			"user_profile_search_outbox_relay",
+			func(hctx context.Context) error {
+				return profileSearchOutboxRelay.Healthy(hctx, 15*time.Second)
+			},
+		)
+		go profileSearchOutboxRelay.Run(ctx)
 	}
 	healthChecker.Register("postgres", func(hctx context.Context) error {
 		return pgPool.Ping(hctx)
@@ -555,6 +590,18 @@ func main() {
 			return mongoClient.Ping(hctx, nil)
 		})
 	}
+	healthChecker.Register("profile_update_proposal_outbox_relay", func(hctx context.Context) error {
+		return profileProposalOutboxRelay.Healthy(hctx, 15*time.Second)
+	})
+	go func() {
+		if err := profileProposalOutboxRelay.Run(ctx, time.Second); err != nil &&
+			ctx.Err() == nil {
+			log.Printf(
+				"ERROR: ProfileUpdateProposal outbox relay stopped: %v",
+				err,
+			)
+		}
+	}()
 
 	// 8. Handler
 	var interestReader application.InterestProfileReader
@@ -606,13 +653,16 @@ func main() {
 		deviceRegistrationCommands, deviceRegistrationQueries,
 		subAccountService,
 		interestProfileService,
-		profileProposalFacade,
 		subjectFollowService,
 		followedSubjectVisitService,
 		followingSubjectQueryService,
 	)
 	if err != nil {
 		log.Fatalf("user-service HTTP composition failed: %v", err)
+	}
+	profileProposalHandler, err := proposalhttp.NewHandler(profileProposalFacade)
+	if err != nil {
+		log.Fatalf("ProfileUpdateProposal HTTP composition failed: %v", err)
 	}
 	greetingHandler, err := greetinghttp.NewHandler(greetingService)
 	if err != nil {
@@ -636,6 +686,7 @@ func main() {
 	)
 	serviceMux := http.NewServeMux()
 	userHandler.RegisterRoutes(serviceMux)
+	profileProposalHandler.RegisterRoutes(serviceMux)
 	invitationHandler.RegisterRoutes(serviceMux)
 	greetingHandler.RegisterRoutes(serviceMux)
 	contactDiscoveryHandler.RegisterRoutes(serviceMux)

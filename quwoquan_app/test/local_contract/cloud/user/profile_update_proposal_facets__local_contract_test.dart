@@ -21,6 +21,9 @@ void main() {
         personaId: 'persona-1',
         proposalId: 'proposal-1',
         source: ProfileUpdateProposalSource.assistant,
+        reason: 'assistant evidence',
+        evidenceRefs: const <String>['assistant-run:run-1'],
+        impactScope: const <String>['avatarMediaAssetId', 'displayName'],
         changes: ProfileChangeSet(
           displayName: 'new name',
           avatarMediaAssetId: 'asset-1',
@@ -37,6 +40,9 @@ void main() {
     expect(executor.body, <String, Object?>{
       'proposalId': 'proposal-1',
       'source': 'assistant',
+      'reason': 'assistant evidence',
+      'evidenceRefs': <String>['assistant-run:run-1'],
+      'impactScope': <String>['avatarMediaAssetId', 'displayName'],
       'displayName': 'new name',
       'avatarMediaAssetId': 'asset-1',
     });
@@ -72,6 +78,7 @@ void main() {
 
     expect(page.items.single.status, ProfileUpdateProposalStatus.pending);
     expect(page.items.single.changes.displayName, 'new name');
+    expect(page.items.single.reason, 'assistant evidence');
     expect(page.nextCursor, 'cursor-2');
     expect(executor.queryParameters, <String, String>{
       'cursor': 'cursor-1',
@@ -80,6 +87,38 @@ void main() {
     expect(
       executor.operation?.canonicalOperationId,
       AppCloudOperationIds.userProfileUpdateProposalListProfileUpdateProposals,
+    );
+  });
+
+  test('ProfileUpdateProposal rollback uses generated command ABI', () async {
+    final executor = _RecordingExecutor(
+      response: <String, Object?>{
+        ..._commandResult(),
+        'version': 4,
+        'status': 'rolled_back',
+      },
+    );
+    final remote = RemoteProfileUpdateProposalFacet(
+      client: GeneratedCloudOperationClient(executor),
+      invocationContext: (clientPageId, {required command}) =>
+          CloudOperationInvocationContext(
+            surfaceId: 'profileEdit',
+            clientPageId: clientPageId,
+            actor: const CloudOperationActorContext(personaId: 'persona-1'),
+            idempotencyKey: command ? 'rollback-proposal-1' : null,
+          ),
+    );
+
+    final result = await remote.rollback(
+      RollbackProfileUpdateProposalCommand(proposalId: 'proposal-1'),
+    );
+
+    expect(result.status, ProfileUpdateProposalStatus.rolledBack);
+    expect(executor.pathParameters, <String, String>{'id': 'proposal-1'});
+    expect(executor.body, isNull);
+    expect(
+      executor.operation?.canonicalOperationId,
+      AppCloudOperationIds.userProfileUpdateProposalRollbackProposal,
     );
   });
 
@@ -96,6 +135,13 @@ void main() {
           ..['subAccountId'] = 'legacy-persona',
       ),
       throwsFormatException,
+    );
+    expect(
+      decodeProfileUpdateProposalCommandResult(<String, Object?>{
+        ..._commandResult(),
+        'status': 'rolled_back',
+      }).status,
+      ProfileUpdateProposalStatus.rolledBack,
     );
     expect(
       () => decodeProfileUpdateProposalView(
@@ -144,6 +190,10 @@ Map<String, Object?> _proposalView() => <String, Object?>{
   'id': 'proposal-1',
   'personaId': 'persona-1',
   'source': 'assistant',
+  'reason': 'assistant evidence',
+  'evidenceRefs': <String>['assistant-run:run-1'],
+  'impactScope': <String>['displayName'],
+  'createdBy': 'persona-1',
   'status': 'pending',
   'displayName': 'new name',
   'bio': null,
@@ -153,6 +203,9 @@ Map<String, Object?> _proposalView() => <String, Object?>{
   'isolationLevel': null,
   'purposeHint': null,
   'reviewedBy': null,
+  'applyAuditId': null,
+  'rollbackDeadline': null,
+  'rollbackAuditId': null,
   'version': 1,
   'createdAt': '2026-07-16T01:00:00Z',
   'updatedAt': '2026-07-16T01:00:00Z',

@@ -106,16 +106,25 @@ void main() {
         ),
         isTrue,
       );
-      final anonymousLogin = executor.calls
-          .singleWhere(
-            (call) =>
-                call.operation.canonicalOperationId ==
-                AppCloudOperationIds.userAccountSessionLoginAnonymous,
-          )
-          .operation;
+      final anonymousLoginCall = executor.calls.singleWhere(
+        (call) =>
+            call.operation.canonicalOperationId ==
+            AppCloudOperationIds.userAccountSessionLoginAnonymous,
+      );
+      final anonymousLogin = anonymousLoginCall.operation;
       expect(
         anonymousLogin.timeoutMilliseconds,
         greaterThanOrEqualTo(anonymousLogin.latencyP95Milliseconds),
+      );
+      expect(
+        anonymousLoginCall.context.idempotencyKey,
+        allOf(
+          startsWith('login-anonymous-'),
+          hasLength('login-anonymous-'.length + 64),
+          isNot(contains('fingerprint-hash')),
+          isNot(contains('install-1')),
+        ),
+        reason: '匿名登录必须让 metadata 声明的第二次尝试真正 replay-safe，且不能把设备标识写入请求头。',
       );
     },
   );

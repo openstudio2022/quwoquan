@@ -2,6 +2,7 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -37,12 +38,17 @@ type Built struct {
 	Projector *Projector
 }
 
-// Build assembles the write-time search index from config. When ES is disabled or
-// has no endpoints it returns an empty (no-op) Built so the entity write path is
-// unchanged.
+// Build assembles the write-time search index from config. An explicitly
+// disabled projection returns an empty Built; an enabled configuration without
+// an endpoint fails fast.
 func Build(cfg ESConfig, opts ...Option) (Built, error) {
-	if !cfg.Enabled || len(cfg.Endpoints) == 0 {
+	if !cfg.Enabled {
 		return Built{}, nil
+	}
+	if len(cfg.Endpoints) == 0 {
+		return Built{}, fmt.Errorf(
+			"Homepage search projection requires endpoints",
+		)
 	}
 	client, err := es.NewClient(es.Config{
 		Endpoints:      cfg.Endpoints,

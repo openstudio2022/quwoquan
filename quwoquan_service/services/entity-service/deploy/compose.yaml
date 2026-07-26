@@ -24,8 +24,8 @@ services:
       AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
       # 共享 ES 召回索引（与 search-service / content backfill 同一 quwoquan_objects）：
       # 主页 write-time projection 走 SEARCH_ES_*，与 gamma config es.enabled=true 一致。
-      SEARCH_ES_ENABLED: "true"
-      SEARCH_ES_ENDPOINTS: "http://elasticsearch:9200"
+      SEARCH_ES_ENABLED: "${QWQ_COMPOSE_SEARCH_ES_ENABLED:-true}"
+      SEARCH_ES_ENDPOINTS: "${QWQ_COMPOSE_SEARCH_ES_ENDPOINTS:-http://elasticsearch:9200}"
     depends_on:
       mongodb:
         condition: service_healthy

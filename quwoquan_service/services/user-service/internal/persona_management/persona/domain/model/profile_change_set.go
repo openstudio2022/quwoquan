@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -52,4 +53,24 @@ func (c ProfileChangeSet) Validate() error {
 		return fmt.Errorf("%w: purposeHint cannot exceed 120 characters", ErrInvalidArgument)
 	}
 	return nil
+}
+
+// ChangedFields is the canonical, stable impact scope for this typed change.
+func (c ProfileChangeSet) ChangedFields() []string {
+	fields := make([]string, 0, 7)
+	for name, present := range map[string]bool{
+		"avatarMediaAssetId":     c.AvatarMediaAssetID != nil,
+		"backgroundMediaAssetId": c.BackgroundMediaAssetID != nil,
+		"bio":                    c.Bio != nil,
+		"displayName":            c.DisplayName != nil,
+		"isPrivate":              c.IsPrivate != nil,
+		"isolationLevel":         c.IsolationLevel != nil,
+		"purposeHint":            c.PurposeHint != nil,
+	} {
+		if present {
+			fields = append(fields, name)
+		}
+	}
+	sort.Strings(fields)
+	return fields
 }

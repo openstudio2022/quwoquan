@@ -337,10 +337,28 @@ func (s *ProfileService) UpdateProfile(
 		)
 		projection = &tagProjection
 	}
+	searchProjections := []userrepo.UserProfileSearchProjection{{
+		UserID:         profile.UserID,
+		ProfileVersion: int64(profile.ProfileVersion),
+		EventType:      event.UserProfileUpdated,
+		OccurredAt:     profile.UpdatedAt,
+	}}
+	if avatarChanged {
+		searchProjections = append(
+			searchProjections,
+			userrepo.UserProfileSearchProjection{
+				UserID:         profile.UserID,
+				ProfileVersion: int64(profile.ProfileVersion),
+				EventType:      event.UserAvatarUpdated,
+				OccurredAt:     profile.UpdatedAt,
+			},
+		)
+	}
 	commandResult, err := commandStore.CommitUserProfileCommand(
 		ctx,
 		profile,
 		projection,
+		searchProjections,
 		profileCommandMeta,
 	)
 	if err != nil {

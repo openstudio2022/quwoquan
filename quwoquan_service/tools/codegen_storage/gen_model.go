@@ -232,6 +232,8 @@ func fieldTypeToGoType(_ *genContext, _, fieldName, fieldType string, notNull bo
 			return "int64"
 		}
 		return "int"
+	case "int64":
+		return "int64"
 	case "timestamp":
 		if !notNull {
 			return "*time.Time"

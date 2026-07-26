@@ -25,9 +25,16 @@ final class AlphaProfileUpdateProposalFacet
       id: command.proposalId,
       personaId: command.personaId,
       source: command.source,
+      reason: command.reason,
+      evidenceRefs: command.evidenceRefs,
+      impactScope: command.impactScope,
+      createdBy: command.personaId,
       status: ProfileUpdateProposalStatus.pending,
       changes: command.changes,
       reviewedBy: null,
+      applyAuditId: null,
+      rollbackDeadline: null,
+      rollbackAuditId: null,
       version: 1,
       createdAt: now,
       updatedAt: now,
@@ -72,6 +79,27 @@ final class AlphaProfileUpdateProposalFacet
     final next = _copy(
       current,
       status: ProfileUpdateProposalStatus.applied,
+      applyAuditId: 'alpha-apply-audit-${current.id}',
+      rollbackDeadline: DateTime.now().toUtc().add(const Duration(days: 7)),
+      resolvedAt: DateTime.now().toUtc(),
+    );
+    _proposals[next.id] = next;
+    return _result(next, replayed: false);
+  }
+
+  @override
+  Future<ProfileUpdateProposalCommandResult> rollback(
+    RollbackProfileUpdateProposalCommand command,
+  ) async {
+    final current = _required(command.proposalId);
+    if (current.status == ProfileUpdateProposalStatus.rolledBack) {
+      return _result(current, replayed: true);
+    }
+    _requireStatus(current, ProfileUpdateProposalStatus.applied);
+    final next = _copy(
+      current,
+      status: ProfileUpdateProposalStatus.rolledBack,
+      rollbackAuditId: 'alpha-rollback-audit-${current.id}',
       resolvedAt: DateTime.now().toUtc(),
     );
     _proposals[next.id] = next;
@@ -140,6 +168,9 @@ final class AlphaProfileUpdateProposalFacet
     ProfileUpdateProposalView current, {
     required ProfileUpdateProposalStatus status,
     String? reviewedBy,
+    String? applyAuditId,
+    DateTime? rollbackDeadline,
+    String? rollbackAuditId,
     DateTime? resolvedAt,
   }) {
     final now = DateTime.now().toUtc();
@@ -147,9 +178,16 @@ final class AlphaProfileUpdateProposalFacet
       id: current.id,
       personaId: current.personaId,
       source: current.source,
+      reason: current.reason,
+      evidenceRefs: current.evidenceRefs,
+      impactScope: current.impactScope,
+      createdBy: current.createdBy,
       status: status,
       changes: current.changes,
       reviewedBy: reviewedBy ?? current.reviewedBy,
+      applyAuditId: applyAuditId ?? current.applyAuditId,
+      rollbackDeadline: rollbackDeadline ?? current.rollbackDeadline,
+      rollbackAuditId: rollbackAuditId ?? current.rollbackAuditId,
       version: current.version + 1,
       createdAt: current.createdAt,
       updatedAt: now,

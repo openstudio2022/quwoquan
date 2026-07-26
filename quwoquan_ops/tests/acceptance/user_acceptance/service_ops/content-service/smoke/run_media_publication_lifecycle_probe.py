@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-001
+# spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-003
+# spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-005
 """验证真实对象存储、媒体处理和原子发布的 Gamma/Beta 用户旅程。"""
 
 from __future__ import annotations
@@ -217,14 +220,16 @@ def _init_upload(
         "fileSize": len(payload),
         "expectedSha256": digest,
     }
-    _, initialized = client.request(
+    _, initialized = _request_with_transport_retry(
+        client,
         "POST",
         "/content/media/uploads:init",
         operation_id="InitMediaUpload",
         body=body,
         idempotency_key=idempotency_key,
     )
-    _, replayed = client.request(
+    _, replayed = _request_with_transport_retry(
+        client,
         "POST",
         "/content/media/uploads:init",
         operation_id="InitMediaUpload",
@@ -242,6 +247,41 @@ def _init_upload(
         "uploadUrl": _required_text(initialized, "uploadUrl", "presignUrl"),
         "sha256": digest,
     }
+
+
+def _request_with_transport_retry(
+    client: ProbeClient,
+    method: str,
+    path: str,
+    *,
+    operation_id: str,
+    expected_statuses: frozenset[int] = frozenset({200}),
+    body: dict[str, Any] | None = None,
+    idempotency_key: str = "",
+    max_attempts: int = 3,
+) -> tuple[int, dict[str, Any] | None]:
+    retryable_statuses = frozenset({502, 503, 504})
+    attempts = max(1, max_attempts)
+    last_status = 0
+    for attempt in range(1, attempts + 1):
+        status, response = client.request(
+            method,
+            path,
+            operation_id=operation_id,
+            expected_statuses=expected_statuses | retryable_statuses,
+            allow_non_json_statuses=retryable_statuses,
+            body=body,
+            idempotency_key=idempotency_key,
+        )
+        if status in expected_statuses:
+            return status, response
+        last_status = status
+        if attempt < attempts:
+            time.sleep(1.0)
+    raise ProbeFailure(
+        "gateway_unavailable",
+        f"{method} {path} remained HTTP {last_status} after {attempts} attempts",
+    )
 
 
 def _upload_complete_and_wait(
@@ -270,14 +310,16 @@ def _upload_complete_and_wait(
     complete_path = (
         f"/content/media/uploads/{urllib.parse.quote(initialized['sessionId'])}:complete"
     )
-    _, completed = client.request(
+    _, completed = _request_with_transport_retry(
+        client,
         "POST",
         complete_path,
         operation_id="CompleteMediaUpload",
         body={"accessPolicy": access_policy},
         idempotency_key=f"{idempotency_prefix}-complete",
     )
-    _, replayed = client.request(
+    _, replayed = _request_with_transport_retry(
+        client,
         "POST",
         complete_path,
         operation_id="CompleteMediaUpload",
@@ -323,19 +365,43 @@ def _upload_complete_lost_response_and_wait(
         f"/content/media/uploads/{urllib.parse.quote(initialized['sessionId'])}:complete"
     )
     # 模拟客户端在服务端已提交后丢失响应：请求确实完成，但调用方故意不用其 body。
-    client.request(
+    first_status, _ = client.request(
         "POST",
         complete_path,
         operation_id="CompleteMediaUpload",
+        expected_statuses=frozenset({200, 502, 503, 504}),
+        allow_non_json_statuses=frozenset({502, 503, 504}),
         body={"accessPolicy": access_policy},
         idempotency_key=f"{idempotency_prefix}-complete",
     )
-    _, authoritative = client.request(
+    _, authoritative = _request_with_transport_retry(
+        client,
         "GET",
         f"/content/media/uploads/{urllib.parse.quote(initialized['sessionId'])}",
         operation_id="GetMediaUploadSession",
     )
     session = _data(authoritative)
+    if str(session.get("status") or "").strip() != "completed":
+        if first_status == 200:
+            raise ProbeFailure(
+                "complete_reconciliation_failed",
+                "successful complete response did not commit the upload session",
+            )
+        _request_with_transport_retry(
+            client,
+            "POST",
+            complete_path,
+            operation_id="CompleteMediaUpload",
+            body={"accessPolicy": access_policy},
+            idempotency_key=f"{idempotency_prefix}-complete",
+        )
+        _, authoritative = _request_with_transport_retry(
+            client,
+            "GET",
+            f"/content/media/uploads/{urllib.parse.quote(initialized['sessionId'])}",
+            operation_id="GetMediaUploadSession",
+        )
+        session = _data(authoritative)
     if str(session.get("status") or "").strip() != "completed":
         raise ProbeFailure(
             "complete_reconciliation_failed",

@@ -567,7 +567,12 @@ func (t *RedisMessageTransport) SetDurableRetention(
 		return fmt.Errorf("Redis durable retention requires stream and positive TTL")
 	}
 	started := time.Now()
-	err := t.durable.Expire(ctx, stream, ttl)
+	err := t.durable.XTrimOlderThan(ctx, stream, ttl)
+	if err == nil {
+		// Key expiry bounds inactive streams; MINID trimming bounds entries in
+		// continuously active streams where EXPIRE alone would slide forever.
+		err = t.durable.Expire(ctx, stream, ttl)
+	}
 	t.recordOperation("durable_retention", started, err)
 	return err
 }

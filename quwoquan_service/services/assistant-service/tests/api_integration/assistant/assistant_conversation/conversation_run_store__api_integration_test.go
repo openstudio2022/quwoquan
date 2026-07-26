@@ -18,6 +18,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/generated/serviceclients"
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
 	"quwoquan_service/runtime/streaming"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/adapters/inbound/http"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
@@ -48,6 +50,15 @@ func assistantAPIRequest(
 	}
 	if userID != "" {
 		request.Header.Set("X-Client-User-Id", userID)
+		request = request.WithContext(rtauth.WithPrincipal(
+			request.Context(),
+			rtauth.Principal{
+				Actor: operation.ActorContext{
+					AccountID: userID,
+					PersonaID: userID + ":persona",
+				},
+			},
+		))
 	}
 	if body != nil {
 		var commandIdentity struct {
@@ -263,8 +274,11 @@ func awaitAssistantRunScorecard(
 	defer cancel()
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		count, err := integrationMongoDB.Collection("assistant_scorecard_facts").
-			CountDocuments(waitCtx, bson.M{"_id": "run:" + turnID})
+		count, err := integrationMongoDB.Collection("assistant_learning_facts").
+			CountDocuments(waitCtx, bson.M{
+				"eventId":  "turn:" + turnID + ":completion",
+				"factType": "service_scorecard",
+			})
 		if err != nil {
 			t.Fatalf("count run completion scorecard: %v", err)
 		}
@@ -481,6 +495,7 @@ func TestAssistantRunPersistsTrustedTransportContextWithoutEchoingIt(t *testing.
 		routeID     = "/assistant"
 		operationID = "StartAssistantRun"
 		traceID     = "trace-run-context"
+		personaID   = "run-context-persona"
 	)
 
 	create := assistantAPIRequest(
@@ -544,6 +559,7 @@ func TestAssistantRunPersistsTrustedTransportContextWithoutEchoingIt(t *testing.
 	request.Header.Set("X-Client-Surface-Id", surfaceID)
 	request.Header.Set("X-Client-Route-Id", routeID)
 	request.Header.Set("X-Client-Operation-Id", operationID)
+	request.Header.Set("X-Client-Sub-Account-Id", personaID)
 	request.Header.Set("X-Trace-Id", traceID)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
@@ -580,6 +596,7 @@ func TestAssistantRunPersistsTrustedTransportContextWithoutEchoingIt(t *testing.
 		RouteID:     routeID,
 		OperationID: operationID,
 		TraceID:     traceID,
+		PersonaID:   personaID,
 	}
 	if stored.RequestContext != wantContext {
 		t.Fatalf(
@@ -954,7 +971,7 @@ func TestAssistantRunStreamResumeSemantics(t *testing.T) {
 }
 
 // TestAssistantRunWritesScorecardOnCompletion 验证 run 终态时服务端自评
-// scorecard 落 assistant_scorecard_facts 且 scoreId dedupe。
+// scorecard 落唯一 AssistantLearningFact 且 eventId 幂等。
 func TestAssistantRunWritesScorecardOnCompletion(t *testing.T) {
 	resetIntegrationState(t)
 	ctx := context.Background()
@@ -989,8 +1006,11 @@ func TestAssistantRunWritesScorecardOnCompletion(t *testing.T) {
 	if replayStream.Code != http.StatusOK {
 		t.Fatalf("replay stream status=%d", replayStream.Code)
 	}
-	count, err := integrationMongoDB.Collection("assistant_scorecard_facts").
-		CountDocuments(ctx, bson.M{"_id": "run:" + run.TurnID})
+	count, err := integrationMongoDB.Collection("assistant_learning_facts").
+		CountDocuments(ctx, bson.M{
+			"eventId":  "turn:" + run.TurnID + ":completion",
+			"factType": "service_scorecard",
+		})
 	if err != nil || count != 1 {
 		t.Fatalf("scorecard must dedupe on replay: count=%d err=%v", count, err)
 	}

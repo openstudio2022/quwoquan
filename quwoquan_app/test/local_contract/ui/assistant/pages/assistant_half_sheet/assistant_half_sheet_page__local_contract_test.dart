@@ -7,7 +7,7 @@
 /// 四类必测 case：
 /// - load_success：真实弹出后核心结构出现（欢迎语 + 建议区标题 + 主 CTA 文案）；
 /// - empty_permission_error：personalization Facet 抛 CloudException →
-///   provider AsyncError → UI 回落静态默认欢迎区（3b 语义，禁止伪造个性化）；
+///   provider AsyncError → UI 展示结构化错误，不伪造本地个性化内容；
 /// - primary_cta：「进入完整对话」及输入提交都真实 push 完整对话路由；
 /// - trace_context：打开半弹层先上报页面上下文（reportPageContext，
 ///   userAction=open_assistant_entry），context snapshot 与来源一致。
@@ -29,7 +29,6 @@ import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/assistant/config/assistant_prompt_config.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -38,6 +37,7 @@ import '../../../../../support/runtime_failure_fixtures.dart';
 const _showEntryButtonKey = ValueKey<String>('uat_show_entry_button');
 const _destinationStubKey = ValueKey<String>('uat_assistant_personal_stub');
 const _initialQueryStubKey = ValueKey<String>('uat_assistant_initial_query');
+const _suggestedActionStubKey = ValueKey<String>('uat_suggested_action_id');
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -68,6 +68,7 @@ void main() {
       find.text(AssistantText.assistantHalfSheetSuggestionTitle),
       findsOneWidget,
     );
+    expect(find.text('服务端动作'), findsOneWidget);
     expect(
       find.text(AssistantText.assistantHalfSheetEnterFullChat),
       findsOneWidget,
@@ -76,7 +77,7 @@ void main() {
     await _disposeTree(tester);
   });
 
-  testWidgets('empty_permission_error：Facet 抛 CloudException 时回落静态默认欢迎区', (
+  testWidgets('empty_permission_error：Facet 抛 CloudException 时展示结构化错误', (
     tester,
   ) async {
     final facet = _RecordingPersonalizationFacet(
@@ -111,9 +112,9 @@ void main() {
       AssistantErrorCode.skillConsentRequired.code,
     );
 
-    // UI 回落静态默认欢迎区（3b 语义）：默认欢迎语出现，不伪造服务端个性化。
+    // 失败关闭：不得回落到本地静态欢迎语或 chips 伪造服务端成功。
     expect(
-      find.text(AssistantPromptConfig.getWelcomeMessage(openContext)),
+      find.text(AssistantErrorCode.skillConsentRequired.defaultMessage),
       findsOneWidget,
     );
     expect(find.text('服务端欢迎语（UAT）'), findsNothing);
@@ -167,6 +168,23 @@ void main() {
       router.routerDelegate.currentConfiguration.last.matchedLocation,
       AppRoutePaths.assistantPersonal,
     );
+
+    await _disposeTree(tester);
+  });
+
+  testWidgets('suggested_action：服务端建议动作将携带动作标识进入完整对话', (tester) async {
+    final facet = _RecordingPersonalizationFacet();
+    final openContext = _openContext();
+    await _pumpLauncher(tester, facet: facet, openContext: openContext);
+    await _openHalfSheet(tester);
+
+    await tester.tap(find.text('服务端动作'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(_destinationStubKey), findsOneWidget);
+    expect(find.text('服务端动作'), findsOneWidget);
+    expect(find.byKey(_suggestedActionStubKey), findsOneWidget);
+    expect(find.text('uat_action'), findsOneWidget);
 
     await _disposeTree(tester);
   });
@@ -227,11 +245,14 @@ Future<GoRouter> _pumpLauncher(
               : null;
           final initialQuery =
               extra?.hints['autoSendQuery']?.toString().trim() ?? '';
+          final suggestedActionID =
+              extra?.hints['suggestedActionId']?.toString().trim() ?? '';
           return Scaffold(
             body: Column(
               children: <Widget>[
                 const SizedBox(key: _destinationStubKey),
                 Text(initialQuery, key: _initialQueryStubKey),
+                Text(suggestedActionID, key: _suggestedActionStubKey),
               ],
             ),
           );
@@ -318,17 +339,6 @@ class _RecordingPersonalizationFacet implements AssistantPersonalizationFacet {
   final Object? entryError;
   final List<String> calls = <String>[];
   AssistantContextSnapshot? lastContextSnapshot;
-
-  @override
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  }) async {
-    calls.add('getPolicySnapshot');
-    return const AssistantPolicyView(
-      version: 'assistant_policy_uat',
-      values: <String, dynamic>{},
-    );
-  }
 
   @override
   Future<PageContextAck> reportPageContext({

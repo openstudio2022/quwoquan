@@ -10,13 +10,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/bootstrap_recovery.dart';
-import 'package:quwoquan_app/app/startup/startup_telemetry.dart';
+import 'package:quwoquan_app/app/recovery/recovery_failure_reporter.dart';
+import 'package:quwoquan_app/app/recovery/runtime_recovery_host.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/cloud/remote/ops/startup_telemetry_remote.dart';
-import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
 import 'package:quwoquan_app/core/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/core/platform/app_recovery_native_bridge.dart';
@@ -104,7 +102,6 @@ Future<void> _runQuwoquanAppInBootstrapZone({
   );
   _installBootstrapErrorBoundary();
   _installRootIsolateErrorListener();
-  _configureStartupTelemetry();
   AppStartupRuntime.instance.markBootstrapStarted();
   try {
     CloudRuntimeConfig.validateRequiredEndpoints();
@@ -146,14 +143,19 @@ Future<void> _runQuwoquanAppInBootstrapZone({
     }
     AppStartupRuntime.instance.markRunAppCalled();
     runApp(
-      ProviderScope(
-        overrides: providerScopeOverrides,
-        child: QuWoQuanAppRoot(
-          autoCompleteStartupWelcomeForTest: autoCompleteStartupWelcomeForTest,
-          postFirstFrameTasks: _hydratePostFirstFrameStartupState,
-          authNetworkPrerequisites: kReleaseMode
-              ? null
-              : _installLocalDevHttpsTrustBeforeMediaClients,
+      RuntimeRecoveryHost(
+        childBuilder: (generationKey, isRuntimeReentry) => ProviderScope(
+          key: generationKey,
+          overrides: providerScopeOverrides,
+          child: QuWoQuanAppRoot(
+            autoCompleteStartupWelcomeForTest:
+                autoCompleteStartupWelcomeForTest,
+            skipStartupWelcome: isRuntimeReentry,
+            postFirstFrameTasks: _hydratePostFirstFrameStartupState,
+            authNetworkPrerequisites: kReleaseMode
+                ? null
+                : _installLocalDevHttpsTrustBeforeMediaClients,
+          ),
         ),
       ),
     );
@@ -173,22 +175,6 @@ Future<void> _runQuwoquanAppInBootstrapZone({
 
 Future<void> _installLocalDevHttpsTrustBeforeMediaClients() {
   return LocalDevHttpsTrust.installForCurrentRuntime();
-}
-
-void _configureStartupTelemetry() {
-  StartupTelemetryRuntime.instance.configure(
-    StartupTelemetryReporter(
-      journal: StartupJournal(SharedPreferencesStartupJournalStore()),
-      transport: RemoteStartupTelemetryTransport.fromRuntimeConfig(
-        httpClient: CloudHttpClient(
-          authTokenProvider: const StubCloudAuthTokenProvider(),
-        ),
-      ),
-      platform: platformWireName(currentAppPlatform),
-      runtimeEnv: CloudRuntimeConfig.appRuntimeEnv,
-      appVersion: const String.fromEnvironment('APP_VERSION'),
-    ),
-  );
 }
 
 void _installBootstrapErrorBoundary() {
@@ -217,6 +203,13 @@ void _installBootstrapErrorBoundary() {
       exceptionText: message,
       stackText: details.stack?.toString() ?? '',
     );
+    if (details.exception is UnrecoverableRuntimeException) {
+      RuntimeRecoveryCoordinator.instance.enter(
+        error: details.exception,
+        stack: details.stack ?? StackTrace.current,
+        source: (details.exception as UnrecoverableRuntimeException).source,
+      );
+    }
     _scheduleBootstrapRecoveryBeforeFirstFrame(
       details.exception,
       details.stack ?? StackTrace.current,
@@ -230,6 +223,15 @@ void _installBootstrapErrorBoundary() {
       stackText: stack.toString(),
     );
     _scheduleBootstrapRecoveryBeforeFirstFrame(error, stack);
+    if (_bootstrapFirstFrameConfirmed &&
+        error is UnrecoverableRuntimeException) {
+      RuntimeRecoveryCoordinator.instance.enter(
+        error: error,
+        stack: stack,
+        source: error.source,
+      );
+      return true;
+    }
     if (!_bootstrapFirstFrameConfirmed) {
       return true;
     }
@@ -262,6 +264,13 @@ void _handleBootstrapZoneError({
     exceptionText: error.toString(),
     stackText: stack.toString(),
   );
+  if (error is UnrecoverableRuntimeException) {
+    RuntimeRecoveryCoordinator.instance.enter(
+      error: error,
+      stack: stack,
+      source: error.source,
+    );
+  }
 }
 
 void _scheduleBootstrapRecoveryBeforeFirstFrame(
@@ -311,6 +320,14 @@ void _showBootstrapRecovery({
   }
   _bootstrapRecoveryMounted = true;
   unawaited(AppRecoveryNativeBridge().recordFatalStartup());
+  unawaited(
+    RecoveryFailureReporter.instance.record(
+      errorSource: 'flutter',
+      errorType: error.runtimeType.toString(),
+      errorMessage: error.toString(),
+      stackTrace: stack.toString(),
+    ),
+  );
   final failure = BootstrapFailure.fromError(error);
   AppStartupRuntime.instance.recordBootstrapFailure(failure.runtimeFailure);
   _logBootstrapException(
@@ -332,6 +349,8 @@ void _showBootstrapRecovery({
 /// SecureStorage/PackageInfo/Connectivity 平台调用，足以挤爆原生首帧预算。
 Future<void> _hydratePostFirstFrameStartupState() {
   return Future.wait<void>(<Future<void>>[
+    RecoveryFailureReporter.instance.recordPendingNativeStartupFatal(),
+    RecoveryFailureReporter.instance.flush(),
     AppTelemetrySessionStore.instance.reconcilePersistedGuestKey(),
     AppTelemetryContextProvider.instance.initialize(),
   ]).then((_) {});
@@ -397,6 +416,7 @@ class _AppExceptionLifecycleObserver extends WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.resumed) {
       unawaited(AppExceptionTelemetryService.instance.flushPending());
+      unawaited(RecoveryFailureReporter.instance.flush());
     }
   }
 }

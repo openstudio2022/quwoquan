@@ -17,9 +17,6 @@ import (
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 )
 
-// ErrAggregateIdempotencyConflict 表示同一 Idempotency-Key 被复用于不同命令。
-var ErrAggregateIdempotencyConflict = errors.New("idempotency key was reused with a different chat command")
-
 // generateStateID 供 upsert-on-insert 场景生成 ConversationUserState 主键。
 func generateStateID() string {
 	raw := make([]byte, 12)
@@ -146,7 +143,7 @@ func (s *MongoAggregateCommandStore) FindAggregateCommandReceipt(
 		return nil, false, nil
 	}
 	if document.CommandName != commandName || document.CommandDigest != commandDigest {
-		return nil, false, ErrAggregateIdempotencyConflict
+		return nil, false, application.ErrAggregateIdempotencyKeyTaken
 	}
 	return document.ResultJSON, true, nil
 }
@@ -177,7 +174,7 @@ func (s *MongoAggregateCommandStore) CommitAggregateCommand(
 		ExpiresAt:     expiresAt,
 	}); err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			return ErrAggregateIdempotencyConflict
+			return application.ErrAggregateIdempotencyKeyTaken
 		}
 		return fmt.Errorf("insert %s receipt: %w", s.receipts.Name(), err)
 	}

@@ -8,8 +8,8 @@ import (
 	integrationconfig "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig"
 )
 
-func TestMaterializeGammaReleaseBindingsEnableRealProvidersWhenMaterialsPresent(t *testing.T) {
-	cfg := integrationconfig.Config{Environment: "gamma"}
+func TestMaterializeProdReleaseBindingsEnableRealProvidersWhenMaterialsPresent(t *testing.T) {
+	cfg := integrationconfig.Config{Environment: "prod"}
 	cfg.Integration.ExternalInteraction.SMS.Enabled = false
 	cfg.Integration.ExternalInteraction.Push.Enabled = false
 
@@ -30,7 +30,7 @@ func TestMaterializeGammaReleaseBindingsEnableRealProvidersWhenMaterialsPresent(
 			"INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE": "/run/secrets/sms-client.pem",
 			"INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE":  "/run/secrets/sms-client-key.pem",
 			"INTEGRATION_PUSH_USER_SERVICE_BASE_URL":    "http://user-service:18081",
-			"INTEGRATION_PUSH_APNS_ENVIRONMENT":         "sandbox",
+			"INTEGRATION_PUSH_APNS_ENVIRONMENT":         "production",
 			"INTEGRATION_PUSH_APNS_KEY_ID":              "APNSKEY01",
 			"INTEGRATION_PUSH_APNS_TEAM_ID":             "TEAM000001",
 			"INTEGRATION_PUSH_APNS_TOPIC":               "com.quwoquan.app.voip",

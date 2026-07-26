@@ -1,0 +1,126 @@
+description: AssistantPolicyRollout 内部激活与精确回滚命令。
+commercial_defaults:
+  status: blocked
+  block_reason: 未显式声明的策略 rollout 操作默认阻断。
+  gap_id: ASSISTANT_POLICY_ROLLOUT_UNDECLARED_OPERATION
+  target_story: policy-template-routing
+api_routes:
+- method: POST
+  path: /internal/assistant/policy-rollouts/{policyId}/activate
+  operation: ActivateAssistantPolicyRollout
+  actor: account
+  application:
+    kind: command
+    facet: AssistantPolicyRolloutCommandFacade
+    method: activate
+    aggregate_owner: AssistantPolicyRollout
+    mutation_target: AssistantPolicyRollout
+    invariant_target: AssistantPolicyRollout
+  authorization:
+    principal: service
+    scopes:
+    - assistant.policy.manage
+    ownership_policy: internal_policy_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.policy_rollout_invalid
+  - ASSISTANT.USER.policy_rollout_release_not_found
+  - ASSISTANT.USER.policy_rollout_revision_conflict
+  - ASSISTANT.USER.policy_rollout_idempotency_conflict
+  - ASSISTANT.SYSTEM.policy_rollout_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_policy_rollout_activate
+    trace: true
+    attributes:
+    - outcome
+    - replayed
+    - revision
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  description: 原子提交 cohort mapping 与 previous mapping；只改变后续 Run。
+  request_entity: AssistantPolicyRollout
+  request_fields:
+  - policyId
+  - revision
+  - bucketDefinitions
+  - assignments
+  response_entity: AssistantPolicyRollout
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+- method: POST
+  path: /internal/assistant/policy-rollouts/{policyId}/rollback
+  operation: RollbackAssistantPolicyRollout
+  actor: account
+  application:
+    kind: command
+    facet: AssistantPolicyRolloutCommandFacade
+    method: rollback
+    aggregate_owner: AssistantPolicyRollout
+    mutation_target: AssistantPolicyRollout
+    invariant_target: AssistantPolicyRollout
+  authorization:
+    principal: service
+    scopes:
+    - assistant.policy.manage
+    ownership_policy: internal_policy_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.policy_rollout_not_found
+  - ASSISTANT.USER.policy_rollout_no_previous_mapping
+  - ASSISTANT.USER.policy_rollout_revision_conflict
+  - ASSISTANT.USER.policy_rollout_idempotency_conflict
+  - ASSISTANT.SYSTEM.policy_rollout_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_policy_rollout_rollback
+    trace: true
+    attributes:
+    - outcome
+    - replayed
+    - revision
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  description: 精确恢复 previousAssignments 并保留被替换 mapping 供审计。
+  request_entity: AssistantPolicyRollout
+  request_fields:
+  - policyId
+  - revision
+  response_entity: AssistantPolicyRollout
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+consumers:
+- name: assistant-policy-publish-pipeline
+  capabilities:
+  - activate_assistant_policy_rollout
+  - rollback_assistant_policy_rollout

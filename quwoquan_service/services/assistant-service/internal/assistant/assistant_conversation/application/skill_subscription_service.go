@@ -898,6 +898,9 @@ func (s *AssistantService) createProactiveTurnMessage(
 			Type: "cron",
 		},
 		ClientRequestID: deliveryID + ":turn",
+		RequestContext: assistant.AssistantRunRequestContext{
+			PersonaID: strings.TrimSpace(subscription.CreatedByPersonaID),
+		},
 	})
 	if err != nil {
 		return assistant.AssistantTurn{}, NotificationAppMessageReceipt{}, err

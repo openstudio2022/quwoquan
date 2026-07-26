@@ -4,20 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"strings"
-)
 
-func (s *MemberService) ListContacts(
-	ctx context.Context,
-	userID string,
-	limit int,
-	_ string,
-) ([]map[string]any, error) {
-	hits, err := s.combinedContactHits(ctx, userID, "", limit)
-	if err != nil {
-		return nil, err
-	}
-	return contactHitsToMaps(hits), nil
-}
+	generated "quwoquan_service/services/chat-service/generated/chat/conversation"
+)
 
 func (s *MemberService) ListContactHomeCircles(
 	ctx context.Context,
@@ -73,7 +62,14 @@ func (s *MemberService) ListGroupCandidates(
 		if _, ok := seen[contactID]; ok {
 			continue
 		}
-		relationState, blocked := s.resolveCandidateRelation(ctx, userID, contactID, hit.RelationState)
+		relationState, blocked, err := s.resolveCandidateRelation(
+			ctx,
+			userID,
+			contactID,
+		)
+		if err != nil {
+			return nil, err
+		}
 		if blocked || relationState != "mutual" {
 			continue
 		}
@@ -108,35 +104,32 @@ func (s *MemberService) resolveCandidateRelation(
 	ctx context.Context,
 	viewerID string,
 	contactID string,
-	fallback string,
-) (string, bool) {
+) (string, bool, error) {
 	if s.relationships == nil {
-		return normalizeRelationState(fallback), false
+		return "", false, relationshipGateUnavailableError()
 	}
 	capability, err := s.relationships.GetCapability(ctx, viewerID, contactID)
 	if err != nil {
 		slog.Warn(
 			"relationship gate check failed for group candidates",
 			"err", err,
-			"viewerID", viewerID,
-			"contactID", contactID,
 		)
-		return normalizeRelationState(fallback), false
+		return "", false, relationshipGateUnavailableError()
 	}
 	if capability.IsBlocked || capability.IsBlockedBy {
-		return "blocked", true
+		return "blocked", true, nil
 	}
 	if capability.IsMutual {
-		return "mutual", false
+		return "mutual", false, nil
 	}
-	return "not_mutual", false
+	return "not_mutual", false, nil
 }
 
 func contactHitsToMaps(hits []ContactSearchHit) []map[string]any {
 	items := make([]map[string]any, 0, len(hits))
 	for _, hit := range hits {
 		items = append(items, map[string]any{
-			"contactId":        hit.ContactID,
+			"userId":           hit.ContactID,
 			"displayName":      hit.DisplayName,
 			"avatarUrl":        hit.AvatarURL,
 			"bio":              hit.Bio,
@@ -161,19 +154,22 @@ func (s *MemberService) combinedContactHits(
 	query string,
 	limit int,
 ) ([]ContactSearchHit, error) {
-	return s.combinedContactHitsWithMaxLimit(ctx, userID, query, limit, 100)
+	return s.combinedContactHitsWithMaxLimit(ctx, userID, query, limit, 100, true)
 }
 
 // combinedContactHitsWithMaxLimit is reserved for server-side intersection
 // evaluation. A group roster is bounded by the group-size policy, so its
 // mutual-contact lookup must not silently truncate at the interactive-search
-// page size.
+// page size. Mutual scans set verifyExposure=false because they immediately
+// resolve every candidate through the same authoritative gate; checking each
+// contact once here and again in the mutual scan wastes the request budget.
 func (s *MemberService) combinedContactHitsWithMaxLimit(
 	ctx context.Context,
 	userID string,
 	query string,
 	limit int,
 	maxLimit int,
+	verifyExposure bool,
 ) ([]ContactSearchHit, error) {
 	limit = clampLimit(limit, 20, maxLimit)
 	normalizedQuery := normalizeSearchQuery(query)
@@ -188,8 +184,14 @@ func (s *MemberService) combinedContactHitsWithMaxLimit(
 		if !matchesContactQuery(hit, normalizedQuery) {
 			continue
 		}
-		if !s.canExposeContact(ctx, userID, hit) {
-			continue
+		if verifyExposure {
+			exposable, err := s.canExposeContact(ctx, userID, hit)
+			if err != nil {
+				return nil, err
+			}
+			if !exposable {
+				continue
+			}
 		}
 		indexByID[hit.ContactID] = len(results)
 		results = append(results, hit)
@@ -207,8 +209,14 @@ func (s *MemberService) combinedContactHitsWithMaxLimit(
 		if !matchesContactQuery(hit, normalizedQuery) {
 			continue
 		}
-		if !s.canExposeContact(ctx, userID, hit) {
-			continue
+		if verifyExposure {
+			exposable, err := s.canExposeContact(ctx, userID, hit)
+			if err != nil {
+				return nil, err
+			}
+			if !exposable {
+				continue
+			}
 		}
 		if idx, ok := indexByID[hit.ContactID]; ok {
 			results[idx] = mergeContactSearchHit(results[idx], hit)
@@ -231,13 +239,13 @@ func (s *MemberService) canExposeContact(
 	ctx context.Context,
 	viewerID string,
 	hit ContactSearchHit,
-) bool {
+) (bool, error) {
 	if s.relationships == nil {
-		return true
+		return false, relationshipGateUnavailableError()
 	}
 	contactID := strings.TrimSpace(hit.ContactID)
 	if contactID == "" {
-		return true
+		return false, nil
 	}
 	capability, err := s.relationships.GetCapability(ctx, viewerID, contactID)
 	if err != nil {
@@ -245,14 +253,16 @@ func (s *MemberService) canExposeContact(
 			"relationship gate check failed for contacts",
 			"err",
 			err,
-			"viewerID",
-			viewerID,
-			"contactID",
-			contactID,
 		)
-		return true
+		return false, relationshipGateUnavailableError()
 	}
-	return !capability.IsBlocked && !capability.IsBlockedBy
+	return !capability.IsBlocked && !capability.IsBlockedBy, nil
+}
+
+func relationshipGateUnavailableError() error {
+	return generated.AppErrorFromInternalError(
+		"relationship gate is unavailable while resolving contact candidates",
+	)
 }
 
 func (s *MemberService) socialContactHits(
@@ -370,7 +380,9 @@ func mergeContactSearchHit(base, next ContactSearchHit) ContactSearchHit {
 		base.LastInteraction = next.LastInteraction
 	}
 	base.RelationState = mergeRelationState(base.RelationState, next.RelationState)
-	if base.Source == "" || contactSourcePriority(next.Source) < contactSourcePriority(base.Source) {
+	if base.RelationState == "mutual" {
+		base.Source = "mutual"
+	} else if base.Source == "" || contactSourcePriority(next.Source) < contactSourcePriority(base.Source) {
 		base.Source = next.Source
 	}
 	if base.Subtitle == "" {

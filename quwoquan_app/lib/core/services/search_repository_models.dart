@@ -5,6 +5,7 @@ class SearchRequest {
     required this.query,
     this.mode = SearchMode.suggest,
     this.objectTypes = const <SearchObjectType>{},
+    this.ids = const <String>[],
     this.limit = 0,
     this.conversationType,
     this.contentTypes = const <SearchContentTypeFilter>{},
@@ -15,6 +16,7 @@ class SearchRequest {
   final String query;
   final SearchMode mode;
   final Set<SearchObjectType> objectTypes;
+  final List<String> ids;
   final int limit;
   final String? conversationType;
   final Set<SearchContentTypeFilter> contentTypes;
@@ -33,6 +35,9 @@ class SearchRequest {
       query: trimmedQuery,
       mode: mode,
       objectTypes: objectTypes,
+      ids: List<String>.unmodifiable(
+        ids.map((item) => item.trim()).where((item) => item.isNotEmpty),
+      ),
       limit: normalizedLimit.clamp(1, 50).toInt(),
       conversationType: _normalizeConversationType(conversationType),
       contentTypes: contentTypes,

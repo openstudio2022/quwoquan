@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/search-intersection-consumption/spec.md#gwt-001
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -230,21 +231,46 @@ void main() {
       'tab:image',
     );
     expect(
-      feedback.recorded.any((event) => event.eventType == 'refine'),
+      feedback.recorded.any(
+        (event) => event.eventType == SearchFeedbackEventType.refine,
+      ),
       isTrue,
     );
 
+    await tester.pump(const Duration(milliseconds: 1));
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+    await _pumpUntil(
+      tester,
+      condition: () =>
+          feedback.recorded
+              .where(
+                (event) => event.eventType == SearchFeedbackEventType.dwell,
+              )
+              .length ==
+          1,
+    );
     final dwellEvents = telemetry.recorded.where(
       (event) => event.eventType == 'search_result_dwell',
     );
     expect(dwellEvents, isNotEmpty);
     expect(dwellEvents.last.extensions['resultCount'], 1);
+    final feedbackDwell = feedback.recorded.singleWhere(
+      (event) => event.eventType == SearchFeedbackEventType.dwell,
+    );
+    expect(feedbackDwell.searchRequestId, 'search-telemetry-2');
+    expect(feedbackDwell.dwellMs, isPositive);
+    await tester.pump();
+    expect(
+      feedback.recorded.where(
+        (event) => event.eventType == SearchFeedbackEventType.dwell,
+      ),
+      hasLength(1),
+    );
   });
 
   testWidgets('零结果只上报 zero_result 不得把空态停留计为有效行动', (tester) async {
     final telemetry = RecordingAppTelemetryRecorder();
+    final feedback = AlphaSearchFeedbackWriter();
     await pumpSearchResultsPage(
       tester,
       _buildAppWithSearchRepository(
@@ -254,14 +280,19 @@ void main() {
           initialNetworkTabId: 'all',
         ),
         repository: _TelemetrySearchRepository(empty: true),
+        feedbackWriter: feedback,
         telemetryRecorder: telemetry,
       ),
     );
     await _pumpUntil(
       tester,
-      condition: () => telemetry.recorded.any(
-        (event) => event.eventType == 'search_zero_result',
-      ),
+      condition: () =>
+          telemetry.recorded.any(
+            (event) => event.eventType == 'search_zero_result',
+          ) &&
+          feedback.recorded.any(
+            (event) => event.eventType == SearchFeedbackEventType.zeroResult,
+          ),
     );
 
     expect(
@@ -270,11 +301,29 @@ void main() {
       ),
       isEmpty,
     );
+    expect(
+      feedback.recorded.where(
+        (event) => event.eventType == SearchFeedbackEventType.zeroResult,
+      ),
+      hasLength(1),
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 4));
     expect(
       telemetry.recorded.where(
         (event) => event.eventType == 'search_result_dwell',
+      ),
+      isEmpty,
+    );
+    expect(
+      feedback.recorded.where(
+        (event) => event.eventType == SearchFeedbackEventType.zeroResult,
+      ),
+      hasLength(1),
+    );
+    expect(
+      feedback.recorded.where(
+        (event) => event.eventType == SearchFeedbackEventType.dwell,
       ),
       isEmpty,
     );
@@ -411,7 +460,7 @@ void main() {
     expect(find.textContaining('因为你'), findsNothing);
   });
 
-  testWidgets('全部 tab 顶卡只来自云侧 entity.homepage 单源', (tester) async {
+  testWidgets('全部 tab 优先展示云侧 entity.homepage', (tester) async {
     await pumpSearchResultsPage(
       tester,
       _buildAppWithSearchRepository(
@@ -434,6 +483,31 @@ void main() {
     expect(find.text('西湖'), findsWidgets);
     // 不再出现三方 POI 旁路（integration.location_poi 已下线于结果页）。
     expect(find.text('浙江省杭州市西湖区'), findsNothing);
+  });
+
+  testWidgets('全部 tab 将自由地点作为可点击主结果', (tester) async {
+    await pumpSearchResultsPage(
+      tester,
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '断桥',
+          initialNetworkTabId: 'all',
+        ),
+        repository: _FreeLocationOnlySearchRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('断桥小巷'), findsOneWidget);
+    expect(find.text('杭州 · 西湖区'), findsOneWidget);
+    expect(
+      find.ancestor(
+        of: find.text('断桥小巷'),
+        matching: find.byType(CupertinoButton),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('交集 tab 已连接地点来自云侧 location.place', (tester) async {
@@ -676,11 +750,13 @@ void main() {
       findsNothing,
     );
     expect(
-      feedbackWriter.recorded.where((event) => event.eventType == 'click'),
+      feedbackWriter.recorded.where(
+        (event) => event.eventType == SearchFeedbackEventType.click,
+      ),
       hasLength(1),
     );
     final degrade = feedbackWriter.recorded.singleWhere(
-      (event) => event.eventType == 'degrade',
+      (event) => event.eventType == SearchFeedbackEventType.degrade,
     );
     expect(
       degrade.searchRequestId,
@@ -1394,6 +1470,43 @@ class _EmptyNetworkSearchRepository implements SearchRepository {
       request: request.normalized(),
       sections: const <SearchSection>[],
       relatedTerms: const <String>['摄影', '旅行'],
+    );
+  }
+}
+
+class _FreeLocationOnlySearchRepository implements SearchRepository {
+  @override
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    final normalized = request.normalized();
+    return SearchResponse(
+      request: normalized,
+      sections: const <SearchSection>[
+        SearchSection(
+          id: 'locations',
+          title: '地点',
+          objectTypes: <SearchObjectType>[SearchObjectType.locationPlace],
+          resolvedFrom: SearchResolvedFrom.remote,
+          hits: <SearchHit>[
+            SearchHit(
+              objectType: SearchObjectType.locationPlace,
+              objectId: 'place_broken_bridge_lane',
+              title: '断桥小巷',
+              resolvedFrom: SearchResolvedFrom.remote,
+              payload: SearchHitPayloadLocationPlace(
+                SearchLocationPlaceHitView(
+                  placeId: 'place_broken_bridge_lane',
+                  name: '断桥小巷',
+                  address: '杭州 · 西湖区',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

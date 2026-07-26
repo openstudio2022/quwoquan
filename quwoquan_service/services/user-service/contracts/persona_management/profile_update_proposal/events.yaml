@@ -3,13 +3,20 @@ events:
   producer: user-service
   consumers:
   - projection-workers
-  channel: transactional_outbox
+  - assistant-service
+  channel: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
   - personaId
   - source
   - proposedChanges
+  - reason
+  - evidenceRefs
+  - impactScope
+  - createdBy
+  - createdRequestId
+  - createdTraceId
   - status
   - version
   - createdAt
@@ -17,7 +24,8 @@ events:
   producer: user-service
   consumers:
   - projection-workers
-  channel: transactional_outbox
+  - assistant-service
+  channel: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -30,18 +38,23 @@ events:
   producer: user-service
   consumers:
   - projection-workers
-  channel: transactional_outbox
+  - assistant-service
+  channel: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
   - personaId
   - status
   - version
+  - applyActorPersonaId
+  - applyRequestId
+  - applyTraceId
 - name: ProfileUpdateProposalApplied
   producer: user-service
   consumers:
   - projection-workers
-  channel: transactional_outbox
+  - assistant-service
+  channel: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -49,11 +62,58 @@ events:
   - status
   - version
   - resolvedAt
+  - applyAuditId
+  - rollbackDeadline
+- name: ProfileUpdateProposalRollbackStarted
+  producer: user-service
+  consumers:
+  - projection-workers
+  - assistant-service
+  channel: events.user.profile_update_proposal
+  payload_entity: ProfileUpdateProposal
+  payload_fields:
+  - id
+  - personaId
+  - status
+  - version
+  - applyAuditId
+  - rollbackActorPersonaId
+  - rollbackRequestId
+  - rollbackTraceId
+- name: ProfileUpdateProposalRollbackAborted
+  producer: user-service
+  consumers:
+  - projection-workers
+  - assistant-service
+  channel: events.user.profile_update_proposal
+  payload_entity: ProfileUpdateProposal
+  payload_fields:
+  - id
+  - personaId
+  - status
+  - version
+  - applyAuditId
+- name: ProfileUpdateProposalRolledBack
+  producer: user-service
+  consumers:
+  - projection-workers
+  - assistant-service
+  channel: events.user.profile_update_proposal
+  payload_entity: ProfileUpdateProposal
+  payload_fields:
+  - id
+  - personaId
+  - status
+  - version
+  - resolvedAt
+  - applyAuditId
+  - rollbackAuditId
 - name: ProfileUpdateProposalRejected
   producer: user-service
   consumers:
   - projection-workers
-  channel: transactional_outbox
+  - assistant-service
+  channel: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -66,7 +126,8 @@ events:
   producer: user-service
   consumers:
   - projection-workers
-  channel: transactional_outbox
+  - assistant-service
+  channel: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id

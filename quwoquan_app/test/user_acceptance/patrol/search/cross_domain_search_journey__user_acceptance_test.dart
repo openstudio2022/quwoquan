@@ -105,6 +105,13 @@ void main() {
         reason: '结果页必须渲染 Gamma ES 中的真实西湖内容，不得使用端侧假数据',
       );
 
+      // 有效行动漏斗必须由同一条真实 Remote 结果链产生：先保持超过
+      // 3 秒以满足 qualified dwell，再点击命中，让页面的 dispose 路径提交
+      // dwell feedback，同时由卡片点击提交 click feedback。
+      await $.pump(const Duration(seconds: 3));
+      await $(find.textContaining(_expectedResultTitle)).tap();
+      await $.pump(const Duration(seconds: 1));
+
       // 等待提交路径完成 RecentSearchState 远端 upsert，再销毁当前页面状态并
       // 清空本地表现层缓存。随后只能由 Remote hydrate 重新显示该查询。
       await $.pump(const Duration(seconds: 2));

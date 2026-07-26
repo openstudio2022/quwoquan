@@ -122,6 +122,7 @@ class HomepageFacetProjectionAdapter implements HomepageFacetSet {
           coverUrl: draft.coverUrl,
           address: draft.address,
           city: draft.city,
+          sourcePlaceId: draft.sourcePlaceId,
           location: _geoPointInput(draft.location),
         ),
       ),

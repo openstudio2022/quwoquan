@@ -1,0 +1,65 @@
+entity: AssistantLearningFact
+domain: ASSISTANT
+description: AssistantLearningFact 校验、主体、幂等与持久化错误。
+errors:
+- code: ASSISTANT.USER.learning_fact_invalid
+  kind: USER
+  reason: learning_fact_invalid
+  http_status: 400
+  recovery_action: surface
+  dart_const: learningFactInvalid
+  go_const: ErrLearningFactInvalid
+  user_message:
+    zh: 助手反馈内容不合法
+    en: Assistant learning fact is invalid
+- code: ASSISTANT.USER.learning_fact_unauthorized
+  kind: USER
+  reason: learning_fact_unauthorized
+  http_status: 401
+  recovery_action: reauth
+  dart_const: learningFactUnauthorized
+  go_const: ErrLearningFactUnauthorized
+  user_message:
+    zh: 请登录后再提交助手反馈
+    en: Authentication is required to append assistant learning facts
+- code: ASSISTANT.USER.learning_fact_owner_mismatch
+  kind: USER
+  reason: learning_fact_owner_mismatch
+  http_status: 403
+  recovery_action: surface
+  dart_const: learningFactOwnerMismatch
+  go_const: ErrLearningFactOwnerMismatch
+  user_message:
+    zh: 无法提交不属于当前用户的助手反馈
+    en: The assistant learning fact owner does not match the requester
+- code: ASSISTANT.USER.learning_fact_run_not_found
+  kind: USER
+  reason: learning_fact_run_not_found
+  http_status: 404
+  recovery_action: refresh
+  dart_const: learningFactRunNotFound
+  go_const: ErrLearningFactRunNotFound
+  user_message:
+    zh: 对应的助手运行不存在
+    en: The referenced assistant run was not found
+- code: ASSISTANT.USER.learning_fact_identity_conflict
+  kind: USER
+  reason: learning_fact_identity_conflict
+  http_status: 409
+  recovery_action: refresh
+  dart_const: learningFactIdentityConflict
+  go_const: ErrLearningFactIdentityConflict
+  user_message:
+    zh: 重复反馈与已确认内容不一致
+    en: Repeated assistant learning fact identity has different content
+- code: ASSISTANT.SYSTEM.learning_fact_sink_unavailable
+  kind: SYSTEM
+  reason: learning_fact_sink_unavailable
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: learningFactSinkUnavailable
+  go_const: ErrLearningFactSinkUnavailable
+  user_message:
+    zh: 助手反馈暂时无法保存，请稍后重试
+    en: Assistant learning fact storage is temporarily unavailable

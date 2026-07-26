@@ -29,25 +29,49 @@ func NewProfileProposalFacade(store personaports.ProfileProposalStore) (*Profile
 func (f *ProfileProposalFacade) ApplyProfileProposal(
 	ctx context.Context,
 	command personaports.ApplyProfileProposalCommand,
-) error {
+) (personaports.ProfileProposalMutationResult, error) {
 	command.ProposalID = strings.TrimSpace(command.ProposalID)
 	command.PersonaID = strings.TrimSpace(command.PersonaID)
 	if command.ProposalID == "" || len(command.ProposalID) > 64 ||
 		command.PersonaID == "" || len(command.PersonaID) > 96 {
-		return errors.New("proposalId and personaId are required within persistence limits")
+		return personaports.ProfileProposalMutationResult{},
+			errors.New("proposalId and personaId are required within persistence limits")
 	}
 	if command.ExpectedPersonaVersion <= 0 {
-		return personamodel.ErrVersionConflict
+		return personaports.ProfileProposalMutationResult{}, personamodel.ErrVersionConflict
 	}
 	if err := command.Changes.Validate(); err != nil {
-		return err
+		return personaports.ProfileProposalMutationResult{}, err
 	}
 	payload, err := json.Marshal(command)
 	if err != nil {
-		return err
+		return personaports.ProfileProposalMutationResult{}, err
 	}
 	digest := sha256.Sum256(payload)
 	return f.store.ApplyProfileProposal(ctx, command, fmt.Sprintf("%x", digest[:]))
+}
+
+func (f *ProfileProposalFacade) RollbackProfileProposal(
+	ctx context.Context,
+	command personaports.RollbackProfileProposalCommand,
+) (personaports.ProfileProposalMutationResult, error) {
+	command.ProposalID = strings.TrimSpace(command.ProposalID)
+	command.PersonaID = strings.TrimSpace(command.PersonaID)
+	if command.ProposalID == "" || len(command.ProposalID) > 64 ||
+		command.PersonaID == "" || len(command.PersonaID) > 96 {
+		return personaports.ProfileProposalMutationResult{},
+			errors.New("proposalId and personaId are required within persistence limits")
+	}
+	if command.ExpectedPersonaVersion <= 0 ||
+		command.Snapshot.Version != command.ExpectedPersonaVersion-1 {
+		return personaports.ProfileProposalMutationResult{}, personamodel.ErrVersionConflict
+	}
+	payload, err := json.Marshal(command)
+	if err != nil {
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	digest := sha256.Sum256(payload)
+	return f.store.RollbackProfileProposal(ctx, command, fmt.Sprintf("%x", digest[:]))
 }
 
 var _ personaports.ProfileProposalCommandFacade = (*ProfileProposalFacade)(nil)

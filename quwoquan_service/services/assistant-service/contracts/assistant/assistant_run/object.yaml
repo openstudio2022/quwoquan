@@ -1,11 +1,11 @@
 kind: aggregate_root
 description: '助手执行契约入口。记录每次小趣助手执行的上下文与输入输出。
 
-  会话、订阅、授权和画像提案均有独立生命周期，不属于 AssistantRun 聚合成员；
+  会话、订阅、授权和 AssistantLearningFact 均有独立生命周期，不属于 AssistantRun 聚合成员；
 
-  轮次是由执行事件投影出的 AssistantTurnView，交互事件与评分卡通过 typed
+  轮次是由执行事件投影出的 AssistantTurnView；所有反馈、交互结果与内部 metric 统一通过
 
-  append-only sink 写入，也不嵌入 AssistantRun 一致性边界。
+  AssistantLearningFact typed append-only sink 写入，也不嵌入 AssistantRun 一致性边界。
 
   MongoDB 存储，支撑高频写入和灵活 schema（LLM 输出多变）。
 
@@ -80,7 +80,7 @@ business_rules:
 - 同一 clientRequestId 只启动一个 run，重放返回同一 run identity
 - run 只能从 queued 进入 running，再进入 completed、failed 或 cancelled
 - tool 调用必须经过 operation allowlist 与目标上下文公开 Facade
-- 交互反馈、评分卡和 Turn 仅由事件产生，不嵌入 Run 聚合
+- AssistantLearningFact 与 Turn 均在 Run 聚合边界外独立产生和投影，不嵌入 Run 聚合
 lifecycle:
   states:
   - queued

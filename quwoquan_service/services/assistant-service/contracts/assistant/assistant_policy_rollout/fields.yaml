@@ -1,0 +1,121 @@
+description: AssistantPolicyRollout 当前与上一版 cohort release 映射。
+fields:
+- name: policyId
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: revision
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_1
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: status
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: bucketDefinitions
+  type: '[]AssistantPolicyBucketDefinition'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: owned_value
+- name: assignments
+  type: '[]AssistantPolicyCohortAssignment'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: owned_value
+- name: previousAssignments
+  type: '[]AssistantPolicyCohortAssignment'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: owned_value
+- name: activatedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: activatedBy
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+members:
+  AssistantPolicyBucketDefinition:
+    kind: owned_entity
+    fields:
+    - name: cohort
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: weightBasisPoints
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    description: policyId 稳定分桶定义，release 更新不得改变 hash identity。
+  AssistantPolicyCohortAssignment:
+    kind: owned_entity
+    fields:
+    - name: cohort
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: releaseVersion
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    description: cohort 到同 policy immutable release 的当前或上一映射。

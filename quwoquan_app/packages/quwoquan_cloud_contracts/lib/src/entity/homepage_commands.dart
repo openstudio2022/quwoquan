@@ -23,6 +23,7 @@ final class SuggestHomepageCandidateCommand {
     String? coverUrl,
     String? address,
     String? city,
+    String? sourcePlaceId,
     this.location,
   }) : title = _required(title, 'title'),
        homepageType = _required(homepageType, 'homepageType'),
@@ -32,7 +33,8 @@ final class SuggestHomepageCandidateCommand {
        ),
        coverUrl = _optional(coverUrl),
        address = _optional(address),
-       city = _optional(city);
+       city = _optional(city),
+       sourcePlaceId = _optional(sourcePlaceId);
 
   final String title;
   final String homepageType;
@@ -41,6 +43,7 @@ final class SuggestHomepageCandidateCommand {
   final String? coverUrl;
   final String? address;
   final String? city;
+  final String? sourcePlaceId;
   final HomepageGeoPointInput? location;
 }
 
@@ -56,6 +59,8 @@ CloudOperationRequestPayload encodeSuggestHomepageCandidateCommand(
       if (command.coverUrl case final coverUrl?) 'coverUrl': coverUrl,
       if (command.address case final address?) 'address': address,
       if (command.city case final city?) 'city': city,
+      if (command.sourcePlaceId case final sourcePlaceId?)
+        'sourcePlaceId': sourcePlaceId,
       if (command.location case final location?)
         'location': <String, Object?>{'lat': location.lat, 'lng': location.lng},
     },

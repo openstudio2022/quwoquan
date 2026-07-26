@@ -32,9 +32,9 @@ DOMAIN_TESTS = {
         "insertedCount": 7,
         "verifiedEndpoints": [
             "/content/feed",
-            "/content/content/posts/fixture_photo_001",
-            "/content/content/posts/fixture_photo_001/comments",
-            "/content/content/posts/fixture_photo_001/reactions",
+            "/content/posts/fixture_photo_001",
+            "/content/posts/fixture_photo_001/comments",
+            "/content/posts/fixture_photo_001/reactions",
         ],
     },
     "chat": {

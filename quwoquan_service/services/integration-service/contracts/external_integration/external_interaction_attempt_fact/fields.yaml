@@ -42,6 +42,17 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
+- name: providerRequestDigest
+  source: providerRequestDigest
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: read
+  ops_exposure: read
+  description: providerRequestId 的不可逆 SHA-256 摘要；跨服务事件只传递此字段。
+  role: append_only_fact
 - name: maskedRecipient
   source: maskedRecipient
   type: string
@@ -85,10 +96,10 @@ fields:
   role: append_only_fact
 - name: recoveryAction
   source: recoveryAction
-  type: bool
+  type: string
   constraints:
   - NOT_NULL
-  classification: PUBLIC
+  classification: INTERNAL
   log_policy: allow
   api_exposure: read
   ops_exposure: read

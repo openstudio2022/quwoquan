@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assistant-service
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: policy-publish
+          image: quwoquan/assistant-service:package-required
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/assistant-policy-publish"]
+          envFrom:
+            - secretRef:
+                name: assistant-service-runtime-secrets
+          env:
+            - name: SERVICE_NAME
+              value: assistant-service
+            - name: APP_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['quwoquan.io/environment']
+            - name: CONFIG_ROOT
+              value: /etc/qwq/config
+            - name: CONFIG_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['quwoquan.io/config-version']
+            - name: ASSISTANT_POLICY_RESOURCE_ROOT
+              value: /app/resources/policies
+          volumeMounts:
+            - name: runtime-config
+              mountPath: /etc/qwq/config/assistant-service.yaml
+              subPath: assistant-service.yaml
+              readOnly: true

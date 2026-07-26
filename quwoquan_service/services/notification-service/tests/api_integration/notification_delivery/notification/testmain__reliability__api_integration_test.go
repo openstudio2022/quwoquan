@@ -156,6 +156,7 @@ func resetNotificationCollections(t *testing.T) {
 		"notification_delivery_job_recipients",
 		"notification_delivery_jobs_command_receipts",
 		"notification_delivery_jobs_outbox",
+		"notification_external_interaction_result_inbox",
 		"app_messages",
 		"external_provider_attempt_ledger",
 		"reliable_task_leases",

@@ -20,8 +20,7 @@
 - 三来源服务端权威读取、搜索、互关过滤、跨来源 userId 去重与已选反馈。
 - CreateConversation 初始成员的互关/拉黑/去重/1000 人上限校验。
 - 建群成功后聊天详情可进入且 Inbox 可权威回读。
-- 圈子或圈子群创建。
-- 企业联系人、群二维码和邀请链接。
+- 圈子绑定群作为成员选择来源；Circle/CircleGroup 自身生命周期仍由圈子领域拥有。
 
 ### Out of Scope
 
@@ -118,15 +117,6 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：Remote、Alpha Mock、Provider 与页面 local_contract 对 source、circleId、计数和成员交集行为一致。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-002"></a>
-### OPEN-002 服务端原子建群与成员策略
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：api_integration 覆盖成功、非互关、屏蔽、重复请求、边界容量与 outbox。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-003"></a>
 ### OPEN-003 建群成功进入详情并回流消息列表

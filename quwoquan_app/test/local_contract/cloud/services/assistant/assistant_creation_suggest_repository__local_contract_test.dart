@@ -36,6 +36,7 @@ void main() {
         skillId: 'creation_assistant',
         domainId: 'content_creation',
         rawText: '发布前帮我整理标签和关联主页',
+        clientRequestId: 'create-creation-assistant',
       );
 
       final response = await repository.suggestCreationAssistance(

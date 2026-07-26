@@ -11,11 +11,15 @@
 // lifecycle events upsert vs delete and forwards to the indexer. Unlike the
 // content domain, entity-service has no Mongo change-stream / outbox bus, so the
 // homepage service emits the full post-mutation snapshot inside the event and the
-// projector never reads state back.
+// projector never reads state back. The same projector is consumed by the
+// durable homepage outbox relay; projection errors therefore propagate so its
+// checkpoint remains retryable. The synchronous post-commit observer
+// deliberately ignores that error and only shortens visibility latency.
 package searchindex
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -28,9 +32,10 @@ import (
 // implements application.Projector so the homepage service can call it directly
 // after a mutation that changes the searchable surface.
 //
-// Indexing failures are recorded structurally (logged with event/homepage
-// context) but never propagate: the search index is a derived read store, so a
-// transient ES outage must not block or fail the primary homepage write path.
+// Indexing failures are recorded structurally and returned to the caller. The
+// durable relay uses the error to retain its checkpoint, while the synchronous
+// post-commit observer ignores it so the primary homepage write remains
+// independent from this derived read store.
 type Projector struct {
 	indexer *es.Indexer
 	logger  *slog.Logger
@@ -62,49 +67,59 @@ func NewProjector(indexer *es.Indexer, opts ...Option) *Projector {
 
 // Project reconciles a homepage lifecycle event into the index. Upsert events
 // reconcile the carried snapshot against its current eligibility (upsert when
-// published, delete otherwise); remove events delete the doc. It always returns
-// nil so a failing index write cannot break the homepage write path.
+// published, delete otherwise); remove events delete the doc.
 func (p *Projector) Project(ctx context.Context, event application.ProjectorEvent) error {
 	if p == nil || p.indexer == nil {
-		return nil
+		return fmt.Errorf("Homepage search projector is not configured")
 	}
 	homepageID := strings.TrimSpace(event.HomepageID)
 	if homepageID == "" {
-		return nil
+		return fmt.Errorf("Homepage search event has no homepage id")
 	}
 	switch event.Type {
 	case application.ProjectorEventHomepageRemoved:
-		p.delete(ctx, homepageID, event.Type)
+		return p.delete(ctx, homepageID, event.Type)
 	case application.ProjectorEventHomepageUpserted:
-		p.reconcile(ctx, homepageID, event)
+		return p.reconcile(ctx, homepageID, event)
 	default:
 		// Unrelated events: nothing searchable changed.
+		return nil
 	}
-	return nil
 }
 
 // reconcile upserts the carried homepage snapshot when it is searchable, else
 // removes it (e.g. taken offline, or the snapshot is absent). Aligning the index
 // with the same eligibility SearchHomepages uses avoids a second discoverability
 // truth source.
-func (p *Projector) reconcile(ctx context.Context, homepageID string, event application.ProjectorEvent) {
+func (p *Projector) reconcile(
+	ctx context.Context,
+	homepageID string,
+	event application.ProjectorEvent,
+) error {
 	if event.Homepage == nil || !application.HomepageSearchEligible(*event.Homepage) {
-		p.delete(ctx, homepageID, event.Type)
-		return
+		return p.delete(ctx, homepageID, event.Type)
 	}
 	doc := application.ProjectHomepageToSearchDocument(*event.Homepage)
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: doc}); err != nil {
 		p.logger.Warn("search index upsert failed",
 			"event", event.Type, "homepageId", homepageID, "err", err)
+		return fmt.Errorf("index Homepage %s: %w", homepageID, err)
 	}
+	return nil
 }
 
 // delete removes the homepage's doc from the index. Replayed deletes are
 // idempotent.
-func (p *Projector) delete(ctx context.Context, homepageID, eventType string) {
+func (p *Projector) delete(
+	ctx context.Context,
+	homepageID string,
+	eventType string,
+) error {
 	doc := rtsearch.Document{ObjectType: rtsearch.ObjectTypeEntityHomepage, ObjectID: homepageID}
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpDelete, Doc: doc}); err != nil {
 		p.logger.Warn("search index delete failed",
 			"event", eventType, "homepageId", homepageID, "err", err)
+		return fmt.Errorf("delete Homepage %s from search index: %w", homepageID, err)
 	}
+	return nil
 }

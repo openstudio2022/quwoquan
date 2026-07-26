@@ -1,9 +1,8 @@
 // Package es implements the Elasticsearch RecallBackend for runtime/search.
 //
-// It is capability-complete but default-off: the launch backend is
-// search.NativeStoreBackend. ESBackend is selected only when ES is deployed and
-// SEARCH_BACKEND=es (or ES_ENDPOINT is injected). QueryBuilder is unit-tested by
-// asserting the produced DSL, without requiring a real ES cluster.
+// It is the single search-service production recall backend. NativeStoreBackend
+// remains available to domain-local retrieval code and deterministic tests, but
+// is never selected as an outage fallback for the unified search API.
 package es
 
 import (

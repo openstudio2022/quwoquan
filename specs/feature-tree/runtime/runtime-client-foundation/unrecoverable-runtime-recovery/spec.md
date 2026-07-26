@@ -92,5 +92,5 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：Android/iPhone 真机的一次性根容器重建、首页首帧、登录态恢复和失败转版本链尚需真实环境录像与日志证据。
+- 影响或价值：尚缺 Android/iPhone 真机的一次性根容器重建、首页首帧、登录态恢复和失败转版本链的真实环境录像与日志证据。
 - 完成判定：`GWT-001`、`GWT-002` 在 Beta 和 Gamma 的 production Remote composition 中通过，并完成 Prod 发布前真机验证。

@@ -375,6 +375,7 @@ api_routes:
   - from
   - to
   - limit
+  - revealSession
   application:
     kind: query
     facet: EventAnalyticsQueryFacade
@@ -414,6 +415,8 @@ api_routes:
   - OPS.USER.query_window_invalid
   - OPS.USER.event_drilldown_forbidden
   - OPS.SYSTEM.logstore_unavailable
+  response_body: EventDrilldownSlice
+  response_body_kind: object
   response_fields:
   - totalCount
   - items
@@ -423,7 +426,8 @@ api_routes:
   - lagSeconds
   - actualFrom
   - actualTo
-  description: 三天内原始明细受限查询；时间范围必填、最多 100 条，sessionId 默认掩码，禁止暴露后端身份。
+  description: 三天内原始明细受限查询；时间范围必填、最多 100 条。sessionId 默认掩码；精确 sessionId 查询和 revealSession=true
+    都要求 ops.event.drilldown.sensitive，并记录审计事件；禁止暴露后端身份或 RTC callId。
   security:
     auth_mode: required
     principal: admin

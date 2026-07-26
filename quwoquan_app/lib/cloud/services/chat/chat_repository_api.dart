@@ -72,6 +72,7 @@ abstract class ChatConversationRepository {
     String? title,
     int? maxGroupSize,
     List<String>? initialMemberIds,
+    String? idempotencyKey,
   });
 
   Future<ConversationDto> getConversation(String conversationId);
@@ -179,7 +180,7 @@ abstract class ChatMemberRepository {
 /// R02：单接口 ≤10 方法。
 abstract class ChatContactRepository {
   // ── 联系人 ──────────────────────────────────────────────────────────────
-  Future<List<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });

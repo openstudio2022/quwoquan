@@ -40,8 +40,14 @@ from quwoquan_ops.cli.lib.common import (
     write_json,
     write_markdown,
 )
+from quwoquan_ops.cli.lib.android_official_release import (
+    AndroidOfficialReleaseError,
+    package_android_official_release,
+)
 from quwoquan_ops.cli.lib.compose_layout import compose_file_args, gamma_compose_files
 from quwoquan_ops.cli import provider_conformance_runner
+from quwoquan_ops.cli.lib import external_provider_governance
+from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENTS,
     TARGETS,
@@ -59,6 +65,7 @@ from quwoquan_ops.cli.lib.local_environment_auth import (
     open_local_acceptance_session,
     prepare_local_environment_auth,
     request_local_environment_json,
+    resolve_running_local_deployment_work_root,
 )
 from quwoquan_ops.cli.lib.local_gamma_object_storage import (
     prepare_local_gamma_object_storage,
@@ -86,6 +93,10 @@ from quwoquan_ops.cli.lib.data_execution_fleet import (
 from quwoquan_ops.cli.lib.local_gamma_media import (
     LocalGammaMediaError,
     materialize_local_gamma_media,
+)
+from quwoquan_ops.cli.lib.local_runtime_reservation import (
+    assert_local_runtime_available,
+    local_runtime_operation_lock_path,
 )
 from quwoquan_ops.cli.lib.dev_up import (
     DEV_UP_ENVS,
@@ -163,6 +174,7 @@ RELEASE_HOMEPAGE_UAT_TEST_TARGET = (
     "test/user_acceptance/patrol/entity/"
     "release_homepage__consumer_render__functional__user_acceptance_test.dart"
 )
+VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET = "test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart"
 
 # CLI summaries should retain every concise prerequisite failure while keeping
 # the terminal surface bounded. Full child-process output remains in report.json.
@@ -302,18 +314,22 @@ def _bind_gamma_object_storage_environment(
 def _bind_gamma_down_compose_placeholders(environment: dict[str, str]) -> None:
     """Satisfy Compose interpolation for teardown without runtime credentials."""
 
-    placeholders = {
-        "QWQ_COMPOSE_OBJECT_STORAGE_ENDPOINT": "https://unused.invalid",
-        "QWQ_COMPOSE_OBJECT_STORAGE_BUCKET": "unused",
-        "QWQ_COMPOSE_OBJECT_STORAGE_REGION": "unused",
-        "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID": "unused",
-        "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET": "unused",
-        "QWQ_COMPOSE_OBJECT_STORAGE_CDN_DOMAIN": "unused.invalid",
-        "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY": "unused",
-        "QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE": "/dev/null",
+    storage_placeholders = {
+        "ENDPOINT": "https://unused.invalid",
+        "BUCKET": "unused",
+        "REGION": "unused",
+        "ACCESS_KEY_ID": "unused",
+        "ACCESS_KEY_SECRET": "unused",
+        "CDN_DOMAIN": "unused.invalid",
+        "CDN_SIGN_KEY": "unused",
+        "CA_FILE": "/dev/null",
+        "TLS_DIR": "/tmp",
     }
-    for key, value in placeholders.items():
-        environment.setdefault(key, value)
+    for suffix, value in storage_placeholders.items():
+        source_key = f"LOCAL_GAMMA_OBJECT_STORAGE_{suffix}"
+        compose_key = f"QWQ_COMPOSE_OBJECT_STORAGE_{suffix}"
+        environment.setdefault(source_key, value)
+        environment.setdefault(compose_key, environment[source_key])
 
 
 def _bind_beta_external_provider_environment(
@@ -526,7 +542,7 @@ def build_parser() -> argparse.ArgumentParser:
     package_parser.add_argument("--env", choices=ENVIRONMENTS, required=True)
     package_parser.add_argument(
         "--kind",
-        choices=["runtime", "legal-static", "ops-portal"],
+        choices=["runtime", "legal-static", "ops-portal", "app-release"],
         default="runtime",
     )
     package_parser.add_argument("--service", default="")
@@ -541,6 +557,8 @@ def build_parser() -> argparse.ArgumentParser:
     package_parser.add_argument("--oidc-audience", default="")
     package_parser.add_argument("--oidc-scope", default="")
     package_parser.add_argument("--skip-install", action="store_true")
+    package_parser.add_argument("--apk-path", default="")
+    package_parser.add_argument("--verify-remote-apk", action="store_true")
 
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
@@ -560,6 +578,11 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--error-rate", default="")
     verify_parser.add_argument("--p95-ms", default="")
     verify_parser.add_argument("--redis-error-rate", default="")
+    verify_parser.add_argument(
+        "--backup-recovery-receipt",
+        default="",
+        help="prod release 的 hosted 灾备隔离恢复 receipt；缺失即阻断",
+    )
 
     provider_conformance_parser = subparsers.add_parser(
         "provider-conformance",
@@ -650,6 +673,11 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     inspect_parser.add_argument("--target", choices=TARGETS, required=True)
     inspect_parser.add_argument(
+        "--ssh-host",
+        default="",
+        help="SSH-only host for prod-hosted runtime inspection; never an App public base",
+    )
+    inspect_parser.add_argument(
         "--scope",
         choices=["logs", "network", "data", "metrics", "config", "security", "all"],
         default="all",
@@ -663,6 +691,11 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser = subparsers.add_parser("doctor")
     doctor_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     doctor_parser.add_argument("--target", choices=TARGETS, required=True)
+    doctor_parser.add_argument(
+        "--ssh-host",
+        default="",
+        help="SSH-only host for prod-hosted runtime diagnosis; never an App public base",
+    )
 
     content_readiness_parser = subparsers.add_parser(
         "content-readiness",
@@ -773,6 +806,7 @@ def build_parser() -> argparse.ArgumentParser:
             "config-gray",
             "config-rollback",
             "environment-assembly",
+            "prevalidate",
         ),
         default="",
     )
@@ -811,6 +845,54 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="生产 SLO readback 的 Prometheus base URL；非 dry-run 必须提供",
     )
+    deploy_parser.add_argument(
+        "--release-image-digest",
+        default="",
+        help="候选 OCI image 的 sha256；hosted receipt 必须绑定",
+    )
+    deploy_parser.add_argument(
+        "--release-config-digest",
+        default="",
+        help="候选配置 bundle 的 sha256；hosted receipt 必须绑定",
+    )
+    deploy_parser.add_argument(
+        "--contract-graph-digest",
+        default="",
+        help="候选 ContractGraph 的 sha256；hosted receipt 必须绑定",
+    )
+    deploy_parser.add_argument(
+        "--adapter-digest",
+        default="",
+        help="候选 Provider adapter 的 sha256；hosted receipt 必须绑定",
+    )
+    deploy_parser.add_argument(
+        "--ssh-host",
+        default="",
+        help="prod-hosted SSH 地址；只用于管理面，禁止成为 App public base",
+    )
+    deploy_parser.add_argument(
+        "--data-mode",
+        choices=("isolated", "external"),
+        default="",
+    )
+    deploy_parser.add_argument(
+        "--prevalidate-scope",
+        choices=("first-party",),
+        default="",
+    )
+
+    receipt_parser = subparsers.add_parser("hosted-release-receipt")
+    receipt_parser.add_argument("--service", required=True)
+    receipt_parser.add_argument("--receipt-id", required=True)
+    receipt_parser.add_argument(
+        "--purpose",
+        choices=("last-good", "rollback"),
+        required=True,
+    )
+    receipt_parser.add_argument("--image-digest", required=True)
+    receipt_parser.add_argument("--config-digest", required=True)
+    receipt_parser.add_argument("--contract-graph-digest", required=True)
+    receipt_parser.add_argument("--adapter-digest", required=True)
     return parser
 
 
@@ -1050,8 +1132,17 @@ def _tail_file_for_startup(
     }
 
 
-def _prod_plane_runtime_report(plane: str, report_path: Path | None = None) -> dict[str, Any]:
+def _prod_plane_runtime_report(
+    plane: str,
+    report_path: Path | None = None,
+    *,
+    instance: str = "prod",
+    host: str = "",
+) -> dict[str, Any]:
     argv = ["python3", "quwoquan_ops/cli/prod/inspect_prod_plane_runtime.py", "--plane", plane]
+    argv.extend(["--instance", instance])
+    if host:
+        argv.extend(["--host", host])
     if report_path is not None:
         argv.extend(["--output", str(report_path)])
     result = run(argv)
@@ -1073,6 +1164,38 @@ def _prod_plane_runtime_report(plane: str, report_path: Path | None = None) -> d
             "stderr": result.stderr,
             "exitCode": result.returncode,
         }
+
+
+def _prod_plane_runtime_findings(
+    runtime: dict[str, Any],
+    *,
+    plane: str,
+) -> list[str]:
+    prefix = f"prod {plane} plane rootless runtime"
+    if runtime.get("error") or int(runtime.get("exitCode", 0) or 0) != 0:
+        return [f"{prefix} inspect failed"]
+    findings: list[str] = []
+    if not runtime.get("composeFileExists"):
+        findings.append(f"{prefix} compose file is missing")
+    if not runtime.get("envFileExists"):
+        findings.append(f"{prefix} env file is missing")
+    unit = runtime.get("unit") or {}
+    if unit.get("enabled") is not True:
+        findings.append(f"{prefix} systemd unit is not enabled")
+    if unit.get("active") is not True:
+        findings.append(f"{prefix} systemd unit is not active")
+    containers = runtime.get("containers") or []
+    if not containers:
+        findings.append(f"{prefix} has no project containers")
+    for container in containers:
+        name = str(container.get("name") or "unknown")
+        if container.get("running") is not True:
+            findings.append(f"{prefix} container is not running: {name}")
+        if container.get("health") in {"starting", "unhealthy"}:
+            findings.append(
+                f"{prefix} container health is {container.get('health')}: {name}"
+            )
+    return findings
 
 
 def _app_launch_failure_detail(
@@ -1643,6 +1766,7 @@ def _selected_profile_commands(
     target_name: str,
     profile: VerificationProfile,
     report_dir: Path | None = None,
+    service: str = "",
 ) -> list[dict[str, Any]]:
     commands: list[dict[str, Any]] = []
     if profile.requires_environment and target_name in {
@@ -1691,6 +1815,40 @@ def _selected_profile_commands(
                     "cwd": ROOT,
                 }
             )
+    if service:
+        if (
+            service == "assistant-service"
+            and target_name == "gamma-local"
+            and profile
+            in {
+                VerificationProfile.INTEGRATION,
+                VerificationProfile.RELEASE,
+            }
+        ):
+            command = _assistant_learning_gamma_api_integration_profile_command(
+                target_name,
+                profile,
+                report_dir,
+            )
+            if command is not None:
+                commands.append(command)
+        if (
+            service == "user-service"
+            and target_name == "gamma-local"
+            and profile
+            in {
+                VerificationProfile.INTEGRATION,
+                VerificationProfile.RELEASE,
+            }
+        ):
+            command = _profile_proposal_gamma_api_integration_profile_command(
+                target_name,
+                profile,
+                report_dir,
+            )
+            if command is not None:
+                commands.append(command)
+        return commands
     if profile is VerificationProfile.SMOKE:
         commands.extend(
             [
@@ -1781,6 +1939,29 @@ def _selected_profile_commands(
     )
     if chat_group_lifecycle_command is not None:
         commands.append(chat_group_lifecycle_command)
+    reliabletask_command = _reliabletask_gamma_api_integration_profile_command(
+        target_name,
+        profile,
+        report_dir,
+    )
+    if reliabletask_command is not None:
+        commands.append(reliabletask_command)
+    onboarding_author_impact_command = (
+        _onboarding_author_impact_gamma_api_integration_profile_command(
+            target_name,
+            profile,
+            report_dir,
+        )
+    )
+    if onboarding_author_impact_command is not None:
+        commands.append(onboarding_author_impact_command)
+    search_remote_api_command = _search_remote_api_integration_profile_command(
+        target_name,
+        profile,
+        report_dir,
+    )
+    if search_remote_api_command is not None:
+        commands.append(search_remote_api_command)
     if profile is VerificationProfile.RELEASE:
         if target_name == "prod-hosted":
             target = get_target(load_environment_topology(), target_name)
@@ -1819,6 +2000,30 @@ def _selected_profile_commands(
         )
         if smoke_command is not None:
             commands.append(smoke_command)
+        if env_name == "gamma" and target_name == "gamma-local":
+            search_api_report = (
+                report_dir
+                / "search-remote-api-integration"
+                / "search_remote_api_uat_report.json"
+                if report_dir is not None
+                else env_runs_root("gamma")
+                / "search-remote-api-integration"
+                / target_name
+                / "search_remote_api_uat_report.json"
+            )
+            search_smoke_command = _environment_page_smoke_profile_command(
+                env_name,
+                target_name,
+                report_dir,
+                suite_name="search-remote-patrol",
+                patrol_target=(
+                    "test/user_acceptance/patrol/search/"
+                    "cross_domain_search_journey__user_acceptance_test.dart"
+                ),
+                remote_api_evidence_report=search_api_report,
+            )
+            if search_smoke_command is not None:
+                commands.append(search_smoke_command)
         commands.append(
             {
                 "name": "prod-rollout-stackctl-contract",
@@ -1826,6 +2031,207 @@ def _selected_profile_commands(
             }
         )
     return commands
+
+
+def _reliabletask_gamma_api_integration_profile_command(
+    target_name: str,
+    profile: VerificationProfile,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    """Bind the real Gamma Mongo/Redis ReliableTask suite to release verification."""
+
+    if (
+        target_name != "gamma-local"
+        or profile is not VerificationProfile.RELEASE
+    ):
+        return None
+
+    evidence_root = (
+        report_dir / "reliabletask-gamma-api-integration"
+        if report_dir is not None
+        else env_runs_root("gamma")
+        / "reliabletask-gamma-api-integration"
+        / target_name
+    )
+    report_path = evidence_root / "reliabletask_api_integration_report.json"
+    return {
+        "name": "gamma-local-reliabletask-api-integration",
+        "argv": [
+            "bash",
+            "quwoquan_ops/cli/gamma/run_reliabletask_gamma_api_integration.sh",
+            "--reuse-stack",
+        ],
+        "cwd": ROOT,
+        "env": {
+            "QWQ_RUN_ROOT": str(evidence_root),
+            "GAMMA_RELIABLETASK_API_INTEGRATION_REPORT": str(report_path),
+        },
+        "stopOnFailure": True,
+        "reportPath": relpath(report_path),
+    }
+
+
+def _onboarding_author_impact_gamma_api_integration_profile_command(
+    target_name: str,
+    profile: VerificationProfile,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    """Bind production Remote onboarding/AuthorImpact API UAT to Gamma release."""
+
+    if (
+        target_name != "gamma-local"
+        or profile is not VerificationProfile.RELEASE
+    ):
+        return None
+
+    evidence_root = (
+        report_dir / "onboarding-author-impact-gamma-api-integration"
+        if report_dir is not None
+        else env_runs_root("gamma")
+        / "onboarding-author-impact-gamma-api-integration"
+        / target_name
+    )
+    report_path = evidence_root / "onboarding_author_impact_api_uat_report.json"
+    return {
+        "name": "gamma-local-onboarding-author-impact-api-integration",
+        "argv": [
+            "bash",
+            "quwoquan_app/scripts/gamma/"
+            "run_local_gamma_onboarding_author_impact_api_uat.sh",
+        ],
+        "cwd": ROOT,
+        "env": {
+            "QWQ_RUN_ROOT": str(evidence_root),
+            "LOCAL_GAMMA_ONBOARDING_AUTHOR_IMPACT_API_UAT_REPORT": str(
+                report_path
+            ),
+        },
+        "stopOnFailure": True,
+        "reportPath": relpath(report_path),
+    }
+
+
+def _search_remote_api_integration_profile_command(
+    target_name: str,
+    profile: VerificationProfile,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    """Bind Gamma search/query feedback Remote evidence to release verification."""
+
+    if (
+        target_name != "gamma-local"
+        or profile is not VerificationProfile.RELEASE
+    ):
+        return None
+
+    evidence_root = (
+        report_dir / "search-remote-api-integration"
+        if report_dir is not None
+        else env_runs_root("gamma")
+        / "search-remote-api-integration"
+        / target_name
+    )
+    report_path = evidence_root / "search_remote_api_uat_report.json"
+    return {
+        "name": "gamma-local-search-remote-api-integration",
+        "argv": [
+            "bash",
+            "quwoquan_app/scripts/gamma/run_local_gamma_search_api_uat.sh",
+        ],
+        "cwd": ROOT,
+        "env": {
+            "QWQ_RUN_ROOT": str(evidence_root),
+            "LOCAL_GAMMA_SEARCH_API_UAT_REPORT": str(report_path),
+        },
+        "stopOnFailure": True,
+        "reportPath": relpath(report_path),
+    }
+
+
+def _assistant_learning_gamma_api_integration_profile_command(
+    target_name: str,
+    profile: VerificationProfile,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    """Bind generated Assistant learning Remote evidence to Gamma verification."""
+
+    if (
+        target_name != "gamma-local"
+        or profile
+        not in {
+            VerificationProfile.INTEGRATION,
+            VerificationProfile.RELEASE,
+        }
+    ):
+        return None
+
+    evidence_root = (
+        report_dir / "assistant-learning-remote-api-integration"
+        if report_dir is not None
+        else env_runs_root("gamma")
+        / "assistant-learning-remote-api-integration"
+        / target_name
+    )
+    report_path = evidence_root / "assistant_learning_remote_api_uat_report.json"
+    return {
+        "name": "gamma-local-assistant-learning-remote-api-integration",
+        "argv": [
+            "bash",
+            "quwoquan_app/scripts/gamma/"
+            "run_local_gamma_assistant_learning_api_uat.sh",
+        ],
+        "cwd": ROOT,
+        "env": {
+            "QWQ_RUN_ROOT": str(evidence_root),
+            "LOCAL_GAMMA_ASSISTANT_LEARNING_API_UAT_REPORT": str(
+                report_path,
+            ),
+        },
+        "stopOnFailure": True,
+        "reportPath": relpath(report_path),
+    }
+
+
+def _profile_proposal_gamma_api_integration_profile_command(
+    target_name: str,
+    profile: VerificationProfile,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    """Bind generated ProfileUpdateProposal Remote evidence to Gamma verification."""
+
+    if (
+        target_name != "gamma-local"
+        or profile
+        not in {
+            VerificationProfile.INTEGRATION,
+            VerificationProfile.RELEASE,
+        }
+    ):
+        return None
+
+    evidence_root = (
+        report_dir / "profile-proposal-remote-api-integration"
+        if report_dir is not None
+        else env_runs_root("gamma")
+        / "profile-proposal-remote-api-integration"
+        / target_name
+    )
+    report_path = evidence_root / "profile_proposal_remote_api_uat_report.json"
+    return {
+        "name": "gamma-local-profile-proposal-remote-api-integration",
+        "argv": [
+            "bash",
+            "quwoquan_app/scripts/gamma/"
+            "run_local_gamma_profile_proposal_api_uat.sh",
+        ],
+        "cwd": ROOT,
+        "env": {
+            "QWQ_RUN_ROOT": str(evidence_root),
+            "LOCAL_GAMMA_PROFILE_PROPOSAL_API_UAT_REPORT": str(report_path),
+        },
+        "stopOnFailure": True,
+        "reportPath": relpath(report_path),
+    }
 
 
 def _report_feedback_lifecycle_profile_command(
@@ -2527,6 +2933,10 @@ def _environment_page_smoke_profile_command(
     env_name: str,
     target_name: str,
     report_dir: Path | None,
+    *,
+    suite_name: str = "environment-page-smoke",
+    patrol_target: str = VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
+    remote_api_evidence_report: Path | None = None,
 ) -> dict[str, Any] | None:
     if target_name not in {"alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"}:
         return None
@@ -2568,9 +2978,12 @@ def _environment_page_smoke_profile_command(
     )
     token = "" if target_name == "gamma-local" else _resolve_test_auth_token(runtime_env)
     smoke_report = (
-        report_dir / "environment-page-smoke" / "report.json"
+        report_dir / suite_name / "report.json"
         if report_dir is not None
-        else env_runs_root(env_name) / "device-matrix" / "environment-smoke" / f"{target_name}.json"
+        else env_runs_root(env_name)
+        / "device-matrix"
+        / suite_name
+        / f"{target_name}.json"
     )
     argv = [
         "python3",
@@ -2599,11 +3012,26 @@ def _environment_page_smoke_profile_command(
         str(public_bases["mediaUpload"]),
         "--rtc-media-connection-url",
         str(public_bases["rtc"]),
-        "--video-playback-canary-work-id",
-        video_playback_canary_work_id,
         "--target",
-        "test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart",
+        patrol_target,
     ]
+    if remote_api_evidence_report is not None:
+        argv.extend(
+            (
+                "--remote-api-evidence-report",
+                str(remote_api_evidence_report),
+            )
+        )
+    if patrol_target.endswith(
+        "test/user_acceptance/patrol/environment/"
+        "video_playback_canary__user_acceptance_test.dart"
+    ):
+        argv.extend(
+            (
+                "--video-playback-canary-work-id",
+                video_playback_canary_work_id,
+            )
+        )
     platform = os.environ.get("STACKCTL_PAGE_SMOKE_PLATFORM", "").strip()
     if platform:
         argv.extend(["--platform", platform])
@@ -2625,7 +3053,7 @@ def _environment_page_smoke_profile_command(
             if value:
                 command_env[key] = value
     command = {
-        "name": f"{target_name}-environment-page-smoke",
+        "name": f"{target_name}-{suite_name}",
         "argv": argv,
         "cwd": ROOT,
         "blocking": True,
@@ -2910,11 +3338,19 @@ def _run_environment_integration_probe(
     token = _resolve_test_auth_token(env_name)
     if env_name in {"beta", "gamma"} and not token:
         try:
+            session_kwargs: dict[str, Any] = {
+                "environment": env_name,
+                "target_name": target_name,
+                "resolve_host": resolve_host,
+            }
+            deployment_work_root = resolve_running_local_deployment_work_root(
+                target_name
+            )
+            if deployment_work_root is not None:
+                session_kwargs["deployment_work_root"] = deployment_work_root
             token = open_local_acceptance_session(
                 str(public_bases["api"]),
-                environment=env_name,
-                target_name=target_name,
-                resolve_host=resolve_host,
+                **session_kwargs,
             ).access_token
         except (RuntimeError, ValueError) as exc:
             finding = f"{target_name} integration auth failed: {exc}"
@@ -3014,7 +3450,8 @@ def _script_probes_for_target(
 
 
 def _release_state_dir() -> Path:
-    # release-state 唯一真相源：stackctl CAS ledger 与 platform-ops 只读投影共用。
+    # 这里只保存 hosted release ledger 的本机 readback cache；它绝不能作为发布真相。
+    # 真实 ledger/receipt 只能经 prod service-plane SSH projection 写入并读回。
     configured = os.environ.get("QWQ_PROD_RELEASE_STATE_DIR", "").strip()
     if configured:
         return Path(configured).expanduser().resolve()
@@ -3022,7 +3459,10 @@ def _release_state_dir() -> Path:
 
 
 def _load_release_state(service: str = PROD_RELEASE_UNIT) -> dict[str, str]:
-    state_path = _release_state_dir() / f"{service}.state"
+    return _load_release_state_path(_release_state_dir() / f"{service}.state")
+
+
+def _load_release_state_path(state_path: Path) -> dict[str, str]:
     payload: dict[str, str] = {}
     if not state_path.exists():
         return payload
@@ -3031,67 +3471,6 @@ def _load_release_state(service: str = PROD_RELEASE_UNIT) -> dict[str, str]:
             continue
         key, value = raw.split("=", 1)
         payload[key.strip()] = value.strip()
-    return payload
-
-
-def _update_release_state(
-    service: str,
-    *,
-    from_image: str,
-    to_image: str,
-    from_config: str,
-    to_config: str,
-    step: str,
-    stage: str,
-    decision: str,
-    manifest_digest: str,
-    expected_generation: int,
-    receipt_id: str,
-) -> dict[str, str]:
-    state_dir = _release_state_dir()
-    state_dir.mkdir(parents=True, exist_ok=True)
-    state_path = state_dir / f"{service}.state"
-    current = _load_release_state(service)
-    current_generation = int(current.get("generation") or 0)
-    if current_generation != expected_generation:
-        raise RuntimeError(
-            "release ledger CAS conflict: "
-            f"expected generation {expected_generation}, found {current_generation}"
-        )
-    payload = {
-        "schema": "prod-release-ledger",
-        "service": service,
-        "from_image": from_image,
-        "to_image": to_image,
-        "from_config": from_config,
-        "to_config": to_config,
-        "step": step,
-        "stage": stage,
-        "decision": decision,
-        "manifest_digest": manifest_digest,
-        "generation": str(expected_generation + 1),
-        "receipt_id": receipt_id,
-        "updated_at": utc_now(),
-    }
-    lines = [f"{key}={value}" for key, value in payload.items()]
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        dir=state_dir,
-        prefix=f".{service}.",
-        suffix=".state.tmp",
-        delete=False,
-    ) as handle:
-        handle.write("\n".join(lines) + "\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-        temporary_path = Path(handle.name)
-    os.replace(temporary_path, state_path)
-    directory_fd = os.open(state_dir, os.O_RDONLY)
-    try:
-        os.fsync(directory_fd)
-    finally:
-        os.close(directory_fd)
     return payload
 
 
@@ -3198,11 +3577,11 @@ def _prod_release_lock() -> Any:
 
 @contextlib.contextmanager
 def _local_stack_operation_lock(target_name: str) -> Any:
-    """为一个本地环境操作保留唯一的 Compose/package 临界区。"""
+    """为本机所有本地环境操作保留唯一的 Compose/package 临界区。"""
     target = str(target_name).strip()
     if target not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
         raise ValueError(f"local stack operation lock does not support {target!r}")
-    lock_path = target_process_dir(target) / ".stackctl-operation.lock"
+    lock_path = local_runtime_operation_lock_path()
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     owner = f"pid={os.getpid()} target={target} startedAt={utc_now()}"
     with lock_path.open("a+", encoding="utf-8") as handle:
@@ -3212,7 +3591,7 @@ def _local_stack_operation_lock(target_name: str) -> Any:
             handle.seek(0)
             holder = handle.read().strip() or "unknown"
             raise RuntimeError(
-                f"{target} stack operation is already running: {holder}"
+                f"local stack operation is already running: {holder}"
             ) from error
         handle.seek(0)
         handle.truncate()
@@ -3229,84 +3608,87 @@ def _local_stack_operation_lock(target_name: str) -> Any:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
-def _commit_release_transition(
-    *,
-    service: str,
-    from_image: str,
-    to_image: str,
-    from_config: str,
-    to_config: str,
-    step: str,
-    stage: str,
-    decision: str,
-    manifest_digest: str,
-    expected_generation: int,
-    receipt_id: str,
-    slo_readback: dict[str, Any] | None,
-) -> tuple[dict[str, str], Path]:
-    receipt_dir = _release_state_dir() / "receipts"
-    receipt_dir.mkdir(parents=True, exist_ok=True)
-    attempt_id = receipt_id
-    receipt = {
-        "schema": "prod-release-receipt",
-        "attemptId": attempt_id,
-        "service": service,
-        "fromImage": from_image,
-        "toImage": to_image,
-        "fromConfig": from_config,
-        "toConfig": to_config,
-        "step": step,
-        "stage": stage,
-        "decision": decision,
-        "manifestDigest": manifest_digest,
-        "expectedGeneration": expected_generation,
-        "committedGeneration": expected_generation + 1,
-        "sloReadback": slo_readback or {},
-    }
-    receipt_id = hashlib.sha256(
-        json.dumps(
-            receipt,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-    ).hexdigest()
-    receipt["receiptId"] = receipt_id
-    receipt_path = receipt_dir / f"{receipt_id}.json"
-    encoded = json.dumps(
-        receipt,
-        ensure_ascii=False,
-        indent=2,
-        sort_keys=True,
-    ) + "\n"
-    try:
-        with receipt_path.open("x", encoding="utf-8") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
-    except FileExistsError:
-        if receipt_path.read_text(encoding="utf-8") != encoded:
-            raise RuntimeError(f"release receipt collision: {receipt_path}")
-    directory_fd = os.open(receipt_dir, os.O_RDONLY)
-    try:
-        os.fsync(directory_fd)
-    finally:
-        os.close(directory_fd)
-
-    state = _update_release_state(
-        service,
-        from_image=from_image,
-        to_image=to_image,
-        from_config=from_config,
-        to_config=to_config,
-        step=step,
-        stage=stage,
-        decision=decision,
-        manifest_digest=manifest_digest,
-        expected_generation=expected_generation,
-        receipt_id=receipt_id,
+def _required_release_candidate_digests(
+    args: argparse.Namespace,
+    manifest: dict[str, Any],
+) -> dict[str, str]:
+    """Derive and validate the RTC candidate tuple attested by hosted receipts."""
+    graph_path = ROOT / "quwoquan_service/generated/contract_graph.json"
+    if not graph_path.is_file():
+        raise RuntimeError("hosted release receipt requires generated ContractGraph")
+    graph_digest = "sha256:" + hashlib.sha256(graph_path.read_bytes()).hexdigest()
+    images = manifest.get("images")
+    rtc_image = images.get("rtc-service") if isinstance(images, dict) else None
+    image_digest = str(rtc_image.get("digest") or "") if isinstance(rtc_image, dict) else ""
+    compiled, governance_issues = external_provider_governance.load_and_compile()
+    if governance_issues:
+        raise RuntimeError(
+            "hosted release receipt provider binding is invalid: "
+            + "; ".join(issue.render() for issue in governance_issues)
+        )
+    prod_bindings = (compiled.get("selectedBindings") or {}).get("prod") or {}
+    rtc_binding = prod_bindings.get("rtc.room.transport")
+    if not isinstance(rtc_binding, dict):
+        raise RuntimeError("hosted release receipt cannot resolve prod RTC binding")
+    binding_roots = provider_conformance.compiled_capability_binding_roots(
+        compiled,
+        capability_id="rtc.room.transport",
     )
-    return state, receipt_path
+    config_digest = provider_conformance.binding_config_digest(
+        rtc_binding,
+        binding_roots,
+    )
+    registry = external_provider_governance.load_registry()
+    livekit_adapter = next(
+        (
+            item
+            for item in registry.get("adapters", [])
+            if isinstance(item, dict)
+            and item.get("adapter_id") == "infra.livekit_sfu"
+        ),
+        None,
+    )
+    if not isinstance(livekit_adapter, dict) or not str(
+        livekit_adapter.get("implementation_path") or ""
+    ):
+        raise RuntimeError("hosted release receipt cannot resolve infra.livekit_sfu")
+    implementation_path = ROOT / str(livekit_adapter["implementation_path"])
+    adapter_digest = provider_conformance.implementation_digest(implementation_path)
+    fields = {
+        "imageDigest": image_digest,
+        "configDigest": config_digest,
+        "contractGraphDigest": graph_digest,
+        "adapterDigest": str(adapter_digest or ""),
+    }
+    invalid = [
+        name
+        for name, value in fields.items()
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None
+    ]
+    if invalid:
+        raise RuntimeError(
+            "hosted release receipt cannot derive sha256 candidate digests for "
+            + ", ".join(invalid)
+        )
+    requested = {
+        "imageDigest": str(getattr(args, "release_image_digest", "") or "").strip(),
+        "configDigest": str(getattr(args, "release_config_digest", "") or "").strip(),
+        "contractGraphDigest": str(
+            getattr(args, "contract_graph_digest", "") or ""
+        ).strip(),
+        "adapterDigest": str(getattr(args, "adapter_digest", "") or "").strip(),
+    }
+    mismatched = [
+        name
+        for name, value in requested.items()
+        if value and value != fields[name]
+    ]
+    if mismatched:
+        raise RuntimeError(
+            "hosted release receipt candidate digest mismatch for "
+            + ", ".join(mismatched)
+        )
+    return fields
 
 
 def _archive_release_artifact(manifest_path: Path, manifest_digest: str) -> Path:
@@ -3339,35 +3721,258 @@ def _archive_release_artifact(manifest_path: Path, manifest_digest: str) -> Path
     return target
 
 
+def _fetch_hosted_release_ledger_projection(
+    service: str,
+    *,
+    allow_uninitialized: bool,
+) -> tuple[dict[str, str], Path | None]:
+    """Fetch a digest-verified state/receipt pair from the hosted authority."""
+    readback = _run_hosted_release_ledger(service=service, action="fetch")
+    state = readback["state"]
+    receipt = readback["receipt"]
+    if not state:
+        if allow_uninitialized:
+            return {}, None
+        raise RuntimeError("hosted release ledger is uninitialized")
+    return _cache_hosted_release_readback(service, state, receipt)
+
+
 def _sync_release_ledger_projection(
     service: str,
     receipt_id: str,
-) -> None:
-    state_path = _release_state_dir() / f"{service}.state"
-    receipt_path = _release_state_dir() / "receipts" / f"{receipt_id}.json"
-    if not state_path.is_file() or not receipt_path.is_file():
-        raise RuntimeError("release ledger projection source is incomplete")
-    with tempfile.TemporaryDirectory(prefix="quwoquan-release-ledger-") as temporary:
+) -> Path:
+    """Read back an already committed hosted receipt; never publish local state."""
+    hosted_state, hosted_receipt_path = _fetch_hosted_release_ledger_projection(
+        service,
+        allow_uninitialized=False,
+    )
+    if hosted_receipt_path is None:
+        raise RuntimeError("hosted release receipt readback is missing")
+    if hosted_state.get("receipt_id") != receipt_id:
+        raise RuntimeError("hosted release ledger readback does not match committed transition")
+    return hosted_receipt_path
+
+
+def _hosted_receipt_id(receipt: dict[str, Any]) -> str:
+    unsigned = dict(receipt)
+    unsigned.pop("receiptId", None)
+    return hashlib.sha256(
+        json.dumps(
+            unsigned,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _validate_hosted_release_readback(
+    payload: object,
+    *,
+    service: str,
+) -> dict[str, Any]:
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"schema", "authority", "state", "receipt", "receiptRef"}
+        or payload.get("schema") != "prod-hosted-release-readback"
+        or payload.get("authority") != "prod-hosted-service-plane"
+        or not isinstance(payload.get("state"), dict)
+        or not isinstance(payload.get("receipt"), dict)
+    ):
+        raise RuntimeError("hosted release ledger returned an invalid readback")
+    state = payload["state"]
+    receipt = payload["receipt"]
+    if not state and not receipt and payload.get("receiptRef") == "":
+        return payload
+    receipt_id = str(receipt.get("receiptId") or "")
+    if (
+        state.get("schema") != "prod-release-ledger"
+        or state.get("authority") != "prod-hosted-service-plane"
+        or state.get("service") != service
+        or receipt.get("schema") != "prod-hosted-release-receipt"
+        or receipt.get("authority") != "prod-hosted-service-plane"
+        or receipt.get("service") != service
+        or re.fullmatch(r"[0-9a-f]{64}", receipt_id) is None
+        or receipt_id != _hosted_receipt_id(receipt)
+        or state.get("receipt_id") != receipt_id
+        or payload.get("receiptRef") != f"receipt:hosted:{receipt_id}"
+        or str(receipt.get("committedGeneration")) != state.get("generation")
+        or receipt.get("manifestDigest") != state.get("manifest_digest")
+        or receipt.get("imageDigest") != state.get("image_digest")
+        or receipt.get("configDigest") != state.get("config_digest")
+        or receipt.get("contractGraphDigest") != state.get("contract_graph_digest")
+        or receipt.get("adapterDigest") != state.get("adapter_digest")
+        or receipt.get("rollbackOutcome") != state.get("rollback_outcome")
+    ):
+        raise RuntimeError("hosted release ledger receipt digest or state binding is invalid")
+    return payload
+
+
+def _run_hosted_release_ledger(
+    *,
+    service: str,
+    action: str,
+    request: dict[str, Any] | None = None,
+    receipt_id: str = "",
+) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="quwoquan-hosted-release-ledger-") as temporary:
         root = Path(temporary)
-        projection = root / "release-ledger"
-        (projection / "receipts").mkdir(parents=True)
-        shutil.copy2(state_path, projection / state_path.name)
-        shutil.copy2(receipt_path, projection / "receipts" / receipt_path.name)
-        result = run(
-            [
-                "bash",
-                "quwoquan_ops/cli/prod/sync_prod_plane_stack.sh",
-                "--plane",
-                "service",
-                "--source-dir",
-                str(root),
-            ]
-        )
-    if result.returncode != 0:
-        raise RuntimeError(
-            "release ledger projection sync failed: "
-            f"{result.stderr.strip() or result.stdout.strip()}"
-        )
+        output_path = root / "readback.json"
+        command = [
+            "bash",
+            "quwoquan_ops/cli/prod/sync_prod_plane_stack.sh",
+            "--plane",
+            "service",
+            "--operation",
+            f"release-ledger-{action}",
+            "--service",
+            service,
+            "--output-path",
+            str(output_path),
+        ]
+        if action == "commit":
+            if request is None:
+                raise RuntimeError("hosted release ledger commit request is missing")
+            request_path = root / "request.json"
+            write_json(request_path, request)
+            command.extend(("--request-path", str(request_path)))
+        elif action == "receipt":
+            command.extend(("--receipt-id", receipt_id))
+        result = run(command)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"hosted release ledger {action} failed: "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
+        try:
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise RuntimeError("hosted release ledger readback is not valid JSON") from error
+    if action == "receipt":
+        if (
+            not isinstance(payload, dict)
+            or set(payload) != {"schema", "authority", "receipt", "receiptRef"}
+            or payload.get("schema") != "prod-hosted-release-receipt-readback"
+            or payload.get("authority") != "prod-hosted-service-plane"
+            or not isinstance(payload.get("receipt"), dict)
+        ):
+            raise RuntimeError("hosted release receipt returned an invalid readback")
+        receipt = payload["receipt"]
+        actual_id = str(receipt.get("receiptId") or "")
+        if (
+            actual_id != receipt_id
+            or actual_id != _hosted_receipt_id(receipt)
+            or payload.get("receiptRef") != f"receipt:hosted:{receipt_id}"
+            or receipt.get("schema") != "prod-hosted-release-receipt"
+            or receipt.get("authority") != "prod-hosted-service-plane"
+            or receipt.get("service") != service
+        ):
+            raise RuntimeError("hosted release receipt digest is invalid")
+        return payload
+    return _validate_hosted_release_readback(payload, service=service)
+
+
+def _cache_hosted_release_readback(
+    service: str,
+    state: dict[str, str],
+    receipt: dict[str, Any],
+) -> tuple[dict[str, str], Path]:
+    """Persist a disposable local copy after hosted digest verification."""
+    cache_dir = _release_state_dir()
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    state_path = cache_dir / f"{service}.state"
+    state_path.write_text(
+        "\n".join(f"{key}={value}" for key, value in state.items()) + "\n",
+        encoding="utf-8",
+    )
+    receipt_id = str(receipt["receiptId"])
+    receipt_path = cache_dir / "receipts" / f"{receipt_id}.json"
+    write_json(receipt_path, receipt)
+    return state, receipt_path
+
+
+def _release_check_receipts(
+    checks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": f"post-check-{index}",
+            "status": "passed"
+            if int(item.get("exitCode", 1) or 0) == 0
+            else "failed",
+            "receiptDigest": "sha256:"
+            + hashlib.sha256(
+                json.dumps(
+                    item,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ).encode("utf-8")
+            ).hexdigest(),
+        }
+        for index, item in enumerate(checks, start=1)
+    ]
+
+
+def _commit_hosted_release_transition(
+    *,
+    service: str,
+    from_image: str,
+    to_image: str,
+    from_config: str,
+    to_config: str,
+    step: str,
+    stage: str,
+    decision: str,
+    manifest_digest: str,
+    expected_generation: int,
+    receipt_id: str,
+    slo_readback: dict[str, Any] | None,
+    candidate_digests: dict[str, str],
+    last_good_target: dict[str, str],
+    post_deploy_checks: list[dict[str, Any]],
+    rollback_outcome: str,
+) -> tuple[dict[str, str], Path]:
+    del receipt_id
+    request = {
+        "schema": "prod-hosted-release-transition-request",
+        "service": service,
+        "fromImage": from_image,
+        "toImage": to_image,
+        "fromConfig": from_config,
+        "toConfig": to_config,
+        "step": step,
+        "stage": stage,
+        "decision": decision,
+        "rollbackOutcome": rollback_outcome,
+        "manifestDigest": manifest_digest,
+        "imageDigest": candidate_digests["imageDigest"],
+        "configDigest": candidate_digests["configDigest"],
+        "contractGraphDigest": candidate_digests["contractGraphDigest"],
+        "adapterDigest": candidate_digests["adapterDigest"],
+        "expectedGeneration": expected_generation,
+        "sloReadback": slo_readback or {},
+        "postChecks": _release_check_receipts(post_deploy_checks),
+        "lastGoodTarget": last_good_target,
+        "verifiedAt": utc_now(),
+    }
+    committed = _run_hosted_release_ledger(
+        service=service,
+        action="commit",
+        request=request,
+    )
+    fetched = _run_hosted_release_ledger(service=service, action="fetch")
+    if (
+        committed["receiptRef"] != fetched["receiptRef"]
+        or committed["receipt"] != fetched["receipt"]
+        or committed["state"] != fetched["state"]
+    ):
+        raise RuntimeError("hosted release ledger commit/readback mismatch")
+    return _cache_hosted_release_readback(
+        service,
+        fetched["state"],
+        fetched["receipt"],
+    )
 
 
 def socket_probe(port: int) -> bool:
@@ -3694,6 +4299,43 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         return _command_package_legal_static(args)
     if getattr(args, "kind", "runtime") == "ops-portal":
         return _command_package_ops_portal(args)
+    if getattr(args, "kind", "runtime") == "app-release":
+        topology = load_environment_topology()
+        env_name = args.env
+        target_name = args.target or DEFAULT_TARGET_BY_ENV[env_name]
+        target = get_target(topology, target_name)
+        public_bases = target.get("publicBases") or {}
+        package_root = app_deployment_package_dir(env_name, target=target_name)
+        if not args.apk_path:
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl app release package blocked for {env_name}",
+                "details": ["--apk-path must reference a signed release APK"],
+            }
+        try:
+            release = package_android_official_release(
+                apk_path=Path(args.apk_path),
+                package_root=package_root,
+                public_origin=str(public_bases.get("publicWeb") or ""),
+                download_origin=str(public_bases.get("appDownload") or ""),
+                expected_package="com.quwoquan.quwoquan_app",
+                verify_remote=bool(args.verify_remote_apk),
+            )
+        except AndroidOfficialReleaseError as error:
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl app release package failed for {env_name}",
+                "details": [str(error)],
+            }
+        return {
+            "exitCode": 0,
+            "summary": f"stackctl app release package completed for {env_name}",
+            "details": [
+                f"android {release['versionName']} build {release['buildNumber']}",
+                f"manifest: {relpath(Path(str(release['manifestPath'])))}",
+                f"remoteVerified: {release['remoteVerified']}",
+            ],
+        }
 
     topology = load_environment_topology()
     env_name = args.env
@@ -4079,7 +4721,20 @@ def _command_verify_service_environment(args: argparse.Namespace) -> dict[str, A
         }
     env_name = args.env
     target_name = args.target or DEFAULT_TARGET_BY_ENV[env_name]
-    report_dir = resolve_report_dir(args, env_name, target_name)
+    profile = VerificationProfile(args.profile)
+    report_dir = (
+        Path(args.report_dir)
+        if args.report_dir
+        else artifact_run_dir(
+            env_name,
+            _service_verify_report_action(
+                args.command,
+                args.service,
+                profile,
+            ),
+            target=target_name,
+        )
+    )
     started_monotonic, started_at = _start_timing()
     command = [
         "bash",
@@ -4091,6 +4746,15 @@ def _command_verify_service_environment(args: argparse.Namespace) -> dict[str, A
     ]
     result = run(command, env={"QWQ_DEPLOY_TARGET": target_name})
     issues: list[str] = []
+    steps: list[dict[str, Any]] = [
+        {
+            "kind": "package",
+            "argv": command,
+            "exitCode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+    ]
     package_dir = service_deployment_package_dir(env_name, args.service, target=target_name)
     required = (
         package_dir / "image.lock",
@@ -4113,13 +4777,74 @@ def _command_verify_service_environment(args: argparse.Namespace) -> dict[str, A
                     issues.append(f"invalid package digest: {value}")
         except (OSError, json.JSONDecodeError, TypeError) as error:
             issues.append(f"invalid service package provenance: {error}")
+    if (
+        not issues
+        and profile is VerificationProfile.RELEASE
+        and env_name in {"gamma", "prod"}
+    ):
+        provider_preflight = _run_provider_readiness_preflight(
+            env_name,
+            report_dir,
+        )
+        steps.append(
+            {
+                "kind": provider_preflight["kind"],
+                "environment": env_name,
+                "argv": provider_preflight["argv"],
+                "exitCode": provider_preflight["exitCode"],
+                "reportPath": provider_preflight["reportPath"],
+                "details": provider_preflight["details"],
+            }
+        )
+        if provider_preflight["exitCode"] != 0:
+            issues.extend(provider_preflight["details"])
+    if not issues:
+        for profile_command in _selected_profile_commands(
+            env_name,
+            target_name,
+            profile,
+            report_dir,
+            service=args.service,
+        ):
+            profile_result = run(
+                profile_command["argv"],
+                cwd=profile_command.get("cwd"),
+                env=profile_command.get("env"),
+            )
+            blocking = bool(profile_command.get("blocking", True))
+            steps.append(
+                {
+                    "kind": "profile",
+                    "profile": profile.value,
+                    "name": profile_command["name"],
+                    "argv": profile_command["argv"],
+                    "exitCode": profile_result.returncode,
+                    "blocking": blocking,
+                    "reportPath": profile_command.get("reportPath", ""),
+                    "stdout": profile_result.stdout,
+                    "stderr": profile_result.stderr,
+                }
+            )
+            if profile_result.returncode != 0 and blocking:
+                issues.append(
+                    f"{profile_command['name']} failed: "
+                    + (
+                        profile_result.stderr.strip()
+                        or profile_result.stdout.strip()
+                        or "unknown profile failure"
+                    )
+                )
+                if profile_command.get("stopOnFailure"):
+                    break
     timing = _finish_timing(started_monotonic, started_at)
     payload = {
         "status": "ok" if not issues else "failed",
         "command": "verify",
         "service": args.service,
         "environment": env_name,
+        "profile": profile.value,
         "packageDir": str(package_dir),
+        "steps": steps,
         "issues": issues,
         **timing,
     }
@@ -4131,14 +4856,24 @@ def _command_verify_service_environment(args: argparse.Namespace) -> dict[str, A
             if not issues
             else f"stackctl verify failed for {args.service}/{env_name}"
         ),
-        "details": issues or [f"package verified: {package_dir}"],
+        "details": issues
+        or [f"package and {profile.value} profile verified: {package_dir}"],
         "reportDir": relpath(report_dir),
         **timing,
     }
 
 
+def _service_verify_report_action(
+    command: str,
+    service: str,
+    profile: VerificationProfile,
+) -> str:
+    return f"{command}-{service}-{profile.value}"
+
+
 def command_verify(args: argparse.Namespace) -> dict[str, Any]:
-    if getattr(args, "service", ""):
+    service_name = str(getattr(args, "service", "") or "").strip()
+    if service_name:
         return _command_verify_service_environment(args)
     if args.kind == "config-slo":
         return _command_verify_config_slo(args)
@@ -4232,6 +4967,44 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                 "reportDir": relpath(report_dir),
                 **timing,
             }
+    if profile is VerificationProfile.RELEASE and target_name == "prod-hosted":
+        receipt = str(
+            getattr(args, "backup_recovery_receipt", "")
+            or os.environ.get("QWQ_PROD_BACKUP_RECOVERY_RECEIPT", "")
+        ).strip()
+        backup_report = report_dir / "backup-recovery.json"
+        command = [
+            "python3",
+            "quwoquan_ops/cli/prod/backup_recovery.py",
+            "--plan",
+            "quwoquan_ops/environments/prod/backup-recovery.yaml",
+            "--receipt",
+            receipt,
+            "--output",
+            str(backup_report),
+        ]
+        if not receipt:
+            steps.append(
+                {
+                    "kind": "backup-recovery",
+                    "exitCode": 2,
+                    "details": ["QWQ_PROD_BACKUP_RECOVERY_RECEIPT is required"],
+                }
+            )
+            issues.append("backup recovery hosted receipt is required for prod release")
+        else:
+            result = run(command, env={"QWQ_DEPLOY_TARGET": target_name})
+            steps.append(
+                {
+                    "kind": "backup-recovery",
+                    "argv": command,
+                    "exitCode": result.returncode,
+                    "reportPath": str(backup_report),
+                    "details": _command_details(result),
+                }
+            )
+            if result.returncode != 0:
+                issues.append("backup recovery receipt validation failed")
     package_envs = [env_name] if env_name in ENVIRONMENTS and profile.requires_environment else []
     for package_env in package_envs:
         package_args = argparse.Namespace(
@@ -4334,6 +5107,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         target_name,
         profile,
         report_dir,
+        service=service_name,
     ):
         result = run(
             profile_command["argv"],
@@ -4566,9 +5340,30 @@ def _log_sink_control_actions(action: str) -> tuple[str, ...]:
     return (action,)
 
 
-def _log_sink_control_query_token() -> str:
-    """Read the operator-only query credential without ever serializing it."""
-    return os.environ.get("PRODUCT_TELEMETRY_QUERY_TOKEN", "").strip()
+def _log_sink_control_query_session(
+    *,
+    api_base: str,
+    environment: str,
+    target_name: str,
+    resolve_host: str,
+) -> LocalAcceptanceSession:
+    """Resolve a query session without serializing a bearer token into evidence."""
+    query_token = os.environ.get("PRODUCT_TELEMETRY_QUERY_TOKEN", "").strip()
+    if query_token:
+        return LocalAcceptanceSession(
+            owner_id="log-sink-control",
+            persona_id="log-sink-control",
+            access_token=query_token,
+        )
+    if environment == "gamma" and target_name == "gamma-local":
+        return open_local_acceptance_session(
+            api_base,
+            environment=environment,
+            target_name=target_name,
+            profile="product-telemetry-query",
+            resolve_host=resolve_host,
+        )
+    raise RuntimeError("product telemetry query authorization is unavailable")
 
 
 def _run_product_telemetry_log_sink_control_action(
@@ -4577,9 +5372,11 @@ def _run_product_telemetry_log_sink_control_action(
     target_name: str,
     environment: str,
     report_dir: Path,
-    query_token: str,
 ) -> None:
     if action == "cold-start":
+        # The preceding package/up step has already produced provenance-bound
+        # images. Cold-start verifies their restart path without silently
+        # replacing that artifact with a new, unverified build.
         result = command_up(
             argparse.Namespace(
                 command="up",
@@ -4587,7 +5384,7 @@ def _run_product_telemetry_log_sink_control_action(
                 target=target_name,
                 device_id="",
                 skip_app=True,
-                skip_build=False,
+                skip_build=True,
                 build_only=False,
                 build_services="",
                 workload="full",
@@ -4645,8 +5442,6 @@ def _run_product_telemetry_log_sink_control_action(
 
     if action != "send-query":
         raise ValueError(f"unsupported product telemetry log-sink action: {action}")
-    if not query_token:
-        raise RuntimeError("product telemetry query authorization is unavailable")
 
     probe_record = {
         "logType": "event",
@@ -4680,10 +5475,11 @@ def _run_product_telemetry_log_sink_control_action(
         headers={"Idempotency-Key": idempotency_key},
         resolve_host=resolve_host,
     )
-    query_session = LocalAcceptanceSession(
-        owner_id="log-sink-control",
-        persona_id="log-sink-control",
-        access_token=query_token,
+    query_session = _log_sink_control_query_session(
+        api_base=api_base,
+        environment=environment,
+        target_name=target_name,
+        resolve_host=resolve_host,
     )
     request_local_environment_json(
         product_ops_base,
@@ -4716,19 +5512,6 @@ def command_product_telemetry_log_sink(args: argparse.Namespace) -> dict[str, An
             timing=timing,
         )
 
-    query_token = _log_sink_control_query_token() if "send-query" in actions else ""
-    if "send-query" in actions and not query_token:
-        timing = _finish_timing(started_monotonic, started_at)
-        return _write_product_telemetry_log_sink_control_report(
-            report_dir=report_dir,
-            target_name=args.target,
-            action=args.action,
-            receipt=receipt,
-            action_statuses=[],
-            gate_blocked=True,
-            timing=timing,
-        )
-
     action_statuses: list[dict[str, str]] = []
     for action in actions:
         try:
@@ -4737,7 +5520,6 @@ def command_product_telemetry_log_sink(args: argparse.Namespace) -> dict[str, An
                 target_name=args.target,
                 environment=environment,
                 report_dir=report_dir,
-                query_token=query_token,
             )
         except (RuntimeError, ValueError, LocalEnvironmentHTTPError):
             action_statuses.append({"action": action, "status": "failed"})
@@ -4855,14 +5637,20 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             )
     local_operation_lock: Any | None = None
     if requested_target in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
+        local_lock_entered = False
         try:
             local_operation_lock = _local_stack_operation_lock(requested_target)
             local_operation_lock.__enter__()
+            local_lock_entered = True
+            assert_local_runtime_available(topology, requested_target)
         except RuntimeError as exc:
+            if local_lock_entered and local_operation_lock is not None:
+                local_operation_lock.__exit__(None, None, None)
+                local_operation_lock = None
             timing = _finish_timing(started_monotonic, started_at)
             details = [
                 str(exc),
-                f"wait for the active {requested_target} operation to finish",
+                "wait for the active operation or stop the conflicting local runtime",
             ]
             write_json(
                 report_dir / "report.json",
@@ -5234,9 +6022,13 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         env["QWQ_WORKLOAD"] = args.workload
         # Gamma 的自治配置明确启用内容向量能力；content-release 只缩小
         # workload/观测面，不得绕过 content-service 的必需 provider binding。
-        # build-only 不启动运行时，可继续使用启动脚本限定在构建子进程内的惰性值。
+        # `docker compose build` 仍会插值 object-storage service，即使不会启动它；
+        # 因而 build-only 也必须材料化平台自有的对象存储 binding。其余三方
+        # Port 替身只在实际启动运行时材料化。
         external_provider_error = (
-            None if build_only else _bind_gamma_external_provider_environment(env)
+            _bind_gamma_object_storage_environment(env)
+            if build_only
+            else _bind_gamma_external_provider_environment(env)
         )
         if external_provider_error:
             steps.append(
@@ -5815,6 +6607,49 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_down(args: argparse.Namespace) -> dict[str, Any]:
+    if args.target not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
+        return _command_down_unlocked(args)
+    try:
+        with _local_stack_operation_lock(args.target):
+            return _command_down_unlocked(args)
+    except RuntimeError as exc:
+        topology = load_environment_topology()
+        target = get_target(topology, args.target)
+        report_dir = resolve_report_dir(
+            args,
+            str(target["env"]),
+            args.target,
+        )
+        details = [
+            str(exc),
+            "wait for the active Patrol/UAT runtime lease to finish",
+        ]
+        write_json(
+            report_dir / "report.json",
+            {
+                "command": "down",
+                "target": args.target,
+                "status": "gate_block",
+                "details": details,
+            },
+        )
+        _write_summary_bundle(
+            report_dir,
+            command="down",
+            target=args.target,
+            status="gate_block",
+            summary=f"stackctl down is blocked for {args.target}",
+            details=details,
+        )
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl down is GATE_BLOCK for {args.target}",
+            "details": details,
+            "reportDir": relpath(report_dir),
+        }
+
+
+def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     topology = load_environment_topology()
     target = get_target(topology, args.target)
     env_name = str(target["env"])
@@ -5829,23 +6664,35 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
         _bind_gamma_down_compose_placeholders(env)
         result = run(cmd, env=env)
     elif args.target == "alpha-local":
-        cmd = [
+        mock_cmd = [
+            "bash",
+            "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh",
+            "down",
+        ]
+        release_cmd = [
             "bash",
             "quwoquan_ops/cli/alpha/start_alpha_content_release_stack.sh",
             "down",
         ]
-        result = run(cmd)
-        app_result = run(
-            [
-                "bash",
-                "quwoquan_app/scripts/device/stop_app_instance.sh",
-                "--env",
-                "alpha",
-                "--quiet",
-            ]
+        app_cmd = [
+            "bash",
+            "quwoquan_app/scripts/device/stop_app_instance.sh",
+            "--env",
+            "alpha",
+            "--quiet",
+        ]
+        mock_result = run(mock_cmd)
+        release_result = run(release_cmd)
+        app_result = run(app_cmd)
+        cmd = [*mock_cmd, "&&", *release_cmd, "&&", *app_cmd]
+        result = next(
+            (
+                candidate
+                for candidate in (mock_result, release_result, app_result)
+                if candidate.returncode != 0
+            ),
+            release_result,
         )
-        if app_result.returncode != 0 and result.returncode == 0:
-            result = app_result
     elif args.target == "prod-sim":
         app_cmd = [
             "bash",
@@ -6141,10 +6988,17 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             runtime = _prod_plane_runtime_report(
                 "service",
                 report_dir / "prod_rootless_service_runtime.json",
+                host=str(getattr(args, "ssh_host", "") or ""),
             )
             inspection["config"]["rootlessRuntime"] = runtime
-            if runtime.get("error") or int(runtime.get("exitCode", 0) or 0) != 0:
-                findings.append("prod service plane rootless runtime inspect failed")
+            findings.extend(_prod_plane_runtime_findings(runtime, plane="service"))
+            edge_runtime = _prod_plane_runtime_report(
+                "edge",
+                report_dir / "prod_rootless_edge_runtime.json",
+                host=str(getattr(args, "ssh_host", "") or ""),
+            )
+            inspection["config"]["edgeRootlessRuntime"] = edge_runtime
+            findings.extend(_prod_plane_runtime_findings(edge_runtime, plane="edge"))
     if "logs" in scopes:
         inspection["logs"] = _local_log_report(args.target)
     if "data" in scopes:
@@ -6272,16 +7126,15 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
             runtime = _prod_plane_runtime_report(
                 "service",
                 report_dir / "prod_rootless_service_runtime.json",
+                host=str(getattr(args, "ssh_host", "") or ""),
             )
-            if runtime.get("error"):
-                findings.append("prod service plane rootless runtime inspect failed")
-            else:
-                if not runtime.get("composeFileExists"):
-                    findings.append("prod service plane rootless compose file is missing")
-                if not runtime.get("envFileExists"):
-                    findings.append("prod service plane rootless env file is missing")
-                if int(runtime.get("containerCount", 0) or 0) == 0:
-                    findings.append("prod service plane rootless runtime has no running containers")
+            findings.extend(_prod_plane_runtime_findings(runtime, plane="service"))
+            edge_runtime = _prod_plane_runtime_report(
+                "edge",
+                report_dir / "prod_rootless_edge_runtime.json",
+                host=str(getattr(args, "ssh_host", "") or ""),
+            )
+            findings.extend(_prod_plane_runtime_findings(edge_runtime, plane="edge"))
     packages = [
         app_deployment_package_dir(env_name, target=args.target) / "report.json"
     ]
@@ -6525,7 +7378,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         for item in _read_json_object(str(report_dir / "health" / "report.json")).get("checks", [])
         if isinstance(item, dict) and str(item.get("name") or "") and not item.get("skipped")
     ]
-    probes = tuple(str(item["name"]) for item in executed_checks)
+    probes = [str(item["name"]) for item in executed_checks]
     executed_scopes = {str(item.get("scope") or "") for item in executed_checks}
     for capability in requirement.capabilities:
         binding = policy.probe_binding_for(capability)
@@ -6534,6 +7387,28 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
                 f"capability {capability.value} declares probe scope "
                 f"{binding.health_scope} but no probe executed for {requirement.target}"
             )
+        if binding.source is ProbeSource.LOG_SINK_CONTROL:
+            action = binding.control_action
+            if not action:
+                details.append(
+                    f"capability {capability.value} has no log-sink control action"
+                )
+                continue
+            log_sink_result = command_product_telemetry_log_sink(
+                argparse.Namespace(
+                    command="product-telemetry-log-sink",
+                    target=requirement.target,
+                    action=action,
+                    output_format="json",
+                    report_dir=str(report_dir / "product-telemetry-log-sink"),
+                )
+            )
+            probes.append(f"product-telemetry-log-sink:{action}")
+            if int(log_sink_result["exitCode"]) != 0:
+                details.extend(
+                    f"capability {capability.value}: {item}"
+                    for item in log_sink_result.get("details", [])
+                )
     if phase is ReadinessPhase.COMMERCIAL:
         doctor = command_doctor(
             argparse.Namespace(
@@ -6555,7 +7430,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         workload=requirement.workload,
         outcome=outcome,
         capabilities=requirement.capabilities,
-        probes=probes,
+        probes=tuple(probes),
         report_dir=relpath(report_dir),
     )
     payload = {
@@ -7091,6 +7966,120 @@ def _deployable_release_manifest(
     return path, declared_digest, manifest
 
 
+def _prevalidation_release_manifest(
+    path_value: str,
+) -> tuple[Path, str, dict[str, Any], str, str]:
+    """Validate a Service Pipeline artifact without entering release governance.
+
+    Prevalidation deliberately does not require/read a governance receipt: it is
+    non-promotable and cannot write a hosted release receipt.  It still requires
+    the exact reviewed main source, a clean checkout, GHCR digest refs, SBOM/
+    provenance references, and byte-identical config snapshots.
+    """
+    path = Path(path_value).expanduser().resolve()
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"release manifest unreadable: {error}") from error
+    if not isinstance(manifest, dict):
+        raise RuntimeError("release manifest must be an object")
+    if (
+        manifest.get("schema") != "mainline-release-artifact"
+        or manifest.get("artifactName") != "mainline-release-artifact"
+        or manifest.get("status") != "deployable"
+    ):
+        raise RuntimeError("prevalidation requires a deployable Service Pipeline artifact")
+    unsigned = dict(manifest)
+    declared_digest = str(unsigned.pop("manifestDigest", ""))
+    actual_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            unsigned,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    if declared_digest != actual_digest:
+        raise RuntimeError("release manifest digest mismatch")
+    source = manifest.get("source")
+    source_sha = str(source.get("gitSha") or "") if isinstance(source, dict) else ""
+    repository = str(source.get("repository") or "") if isinstance(source, dict) else ""
+    run_number = source.get("runNumber") if isinstance(source, dict) else None
+    if re.fullmatch(r"[0-9a-f]{40}", source_sha) is None or not repository or not isinstance(run_number, int):
+        raise RuntimeError("release manifest source is not a Service Pipeline commit")
+    versions = manifest.get("versions")
+    image_version = str(versions.get("imageVersion") or "") if isinstance(versions, dict) else ""
+    config_version = str(versions.get("configVersion") or "") if isinstance(versions, dict) else ""
+    if not image_version or not config_version or image_version == "latest":
+        raise RuntimeError("release manifest versions must be immutable")
+    required_images = manifest.get("requiredImages")
+    images = manifest.get("images")
+    if (
+        not isinstance(required_images, list)
+        or not required_images
+        or not isinstance(images, dict)
+        or set(required_images) != set(images)
+    ):
+        raise RuntimeError("release manifest image set is incomplete")
+    access = load_json_yaml(
+        ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
+    )
+    prevalidation = access.get("prevalidation") if isinstance(access, dict) else None
+    projected = prevalidation.get("planes") if isinstance(prevalidation, dict) else None
+    required_prevalidation_images = {
+        str(service)
+        for plane in (projected or {}).values()
+        if isinstance(plane, dict)
+        for key in ("startupServices", "imageAndConfigOnlyServices")
+        for service in (plane.get(key) or [])
+    }
+    if not required_prevalidation_images.issubset(set(required_images)):
+        missing = sorted(required_prevalidation_images - set(required_images))
+        raise RuntimeError(f"release manifest misses prevalidation images: {missing}")
+    expected_prefix = f"ghcr.io/{repository.strip('/').lower()}/"
+    for service in required_images:
+        image = images.get(service)
+        if not isinstance(image, dict):
+            raise RuntimeError(f"release manifest image is invalid: {service}")
+        digest = str(image.get("digest") or "")
+        image_repository = str(image.get("repository") or "")
+        ref = str(image.get("ref") or "")
+        if (
+            not image_repository.lower().startswith(expected_prefix)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None
+            or ref != f"{image_repository}@{digest}"
+            or ":latest" in ref
+        ):
+            raise RuntimeError(f"release image is not a GHCR digest ref: {service}")
+        attestations = image.get("attestations")
+        if not isinstance(attestations, dict) or not all(
+            attestations.get(kind) == f"oci://{ref}#{kind}"
+            for kind in ("spdxSbom", "slsaProvenance")
+        ):
+            raise RuntimeError(f"release manifest attestations are incomplete: {service}")
+    release_files = manifest.get("releaseFiles")
+    release_digests = manifest.get("releaseFileDigests")
+    if not isinstance(release_files, dict) or not isinstance(release_digests, dict):
+        raise RuntimeError("release manifest config digests are missing")
+    for service, relative in release_files.items():
+        config_path = path.parent / str(relative)
+        if not config_path.is_file():
+            raise RuntimeError(f"release manifest config file is missing: {service}")
+        digest = "sha256:" + hashlib.sha256(config_path.read_bytes()).hexdigest()
+        if release_digests.get(service) != digest:
+            raise RuntimeError(f"release manifest config digest mismatch: {service}")
+    head = run(["git", "rev-parse", "HEAD"])
+    if head.returncode != 0 or head.stdout.strip() != source_sha:
+        raise RuntimeError("release manifest source SHA does not match checked-out code")
+    dirty = run(["git", "status", "--porcelain", "--untracked-files=normal"])
+    if dirty.returncode != 0 or dirty.stdout.strip():
+        raise RuntimeError("prod-hosted prevalidation refuses an uncommitted worktree")
+    reviewed_main = run(["git", "merge-base", "--is-ancestor", source_sha, "origin/main"])
+    if reviewed_main.returncode != 0:
+        raise RuntimeError("release manifest source is not present on reviewed origin/main")
+    return path, declared_digest, manifest, image_version, config_version
+
+
 def _verify_release_registry_attestations(manifest: dict[str, Any]) -> None:
     images = manifest.get("images")
     if not isinstance(images, dict):
@@ -7404,6 +8393,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     committed_release_state: dict[str, str] | None = None
     release_receipt_path: Path | None = None
     release_state_snapshot: dict[str, str] = {}
+    release_candidate_digests: dict[str, str] = {}
+    last_good_target: dict[str, str] = {}
     gray_canary_contract: dict[str, Any] | None = None
     gray_canary_traffic: dict[str, Any] | None = None
     provider_readiness: dict[str, Any] = {}
@@ -7474,17 +8465,6 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 "details": [],
                 **timing,
             }
-        shared_state_dir = os.environ.get("QWQ_PROD_RELEASE_STATE_DIR", "").strip()
-        if not dry_run_requested and (
-            not shared_state_dir or not Path(shared_state_dir).expanduser().is_absolute()
-        ):
-            timing = _finish_timing(started_monotonic, started_at)
-            return {
-                "exitCode": 2,
-                "summary": "stackctl deploy blocked: shared production release ledger is required",
-                "details": ["QWQ_PROD_RELEASE_STATE_DIR must be an absolute durable path"],
-                **timing,
-            }
         if not dry_run_requested:
             try:
                 gray_canary_contract = _prod_gray_canary_contract(rollout_stage)
@@ -7534,7 +8514,22 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 image_version=args.to_image,
                 config_version=args.to_config,
             )
-            release_state_snapshot = _load_release_state(args.service)
+            if not dry_run_requested:
+                release_candidate_digests = _required_release_candidate_digests(
+                    args,
+                    release_manifest_payload,
+                )
+            if dry_run_requested:
+                release_state_snapshot = _load_release_state(args.service)
+            else:
+                release_state_snapshot, _ = _fetch_hosted_release_ledger_projection(
+                    args.service,
+                    allow_uninitialized=rollout_stage == "gray-initial",
+                )
+            last_good_target = {
+                "image": release_state_snapshot.get("to_image", args.from_image),
+                "config": release_state_snapshot.get("to_config", args.from_config),
+            }
             transition_action, expected_generation = _validate_release_transition(
                 release_state_snapshot,
                 from_image=args.from_image,
@@ -7578,7 +8573,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     **timing,
                 }
             try:
-                _sync_release_ledger_projection(
+                release_receipt_path = _sync_release_ledger_projection(
                     args.service,
                     release_receipt_id,
                 )
@@ -7817,7 +8812,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 rollback_decision = (
                     "rollback_failed" if rollback_failures else "rolled_back"
                 )
-                rollback_state, release_receipt_path = _commit_release_transition(
+                rollback_state, release_receipt_path = _commit_hosted_release_transition(
                     service=args.service,
                     from_image=args.to_image,
                     to_image=args.from_image,
@@ -7830,12 +8825,16 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     expected_generation=expected_generation,
                     receipt_id=release_receipt_id,
                     slo_readback=slo_readback,
+                    candidate_digests=release_candidate_digests,
+                    last_good_target=last_good_target,
+                    post_deploy_checks=post_deploy_checks + rollback_post_checks,
+                    rollback_outcome=rollback_decision,
                 )
                 committed_release_state = rollback_state
             else:
                 findings.append("live rollback apply failed")
                 final_exit_code = rollback_result.returncode
-                committed_release_state, release_receipt_path = _commit_release_transition(
+                committed_release_state, release_receipt_path = _commit_hosted_release_transition(
                     service=args.service,
                     from_image=args.from_image,
                     to_image=args.to_image,
@@ -7848,11 +8847,15 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     expected_generation=expected_generation,
                     receipt_id=release_receipt_id,
                     slo_readback=slo_readback,
+                    candidate_digests=release_candidate_digests,
+                    last_good_target=last_good_target,
+                    post_deploy_checks=post_deploy_checks + rollback_post_checks,
+                    rollback_outcome="rollback_failed",
                 )
         elif rollout_decision == "pause" and final_exit_code == 10:
             final_exit_code = 10
             if not dry_run_requested:
-                committed_release_state, release_receipt_path = _commit_release_transition(
+                committed_release_state, release_receipt_path = _commit_hosted_release_transition(
                     service=args.service,
                     from_image=args.from_image,
                     to_image=args.to_image,
@@ -7865,9 +8868,18 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     expected_generation=expected_generation,
                     receipt_id=release_receipt_id,
                     slo_readback=slo_readback,
+                    candidate_digests=release_candidate_digests,
+                    last_good_target=last_good_target,
+                    post_deploy_checks=post_deploy_checks,
+                    rollback_outcome="not_triggered",
                 )
         elif final_exit_code == 0 and not dry_run_requested:
-            committed_release_state, release_receipt_path = _commit_release_transition(
+            committed_last_good_target = (
+                {"image": args.to_image, "config": args.to_config}
+                if rollout_stage == "full"
+                else last_good_target
+            )
+            committed_release_state, release_receipt_path = _commit_hosted_release_transition(
                 service=args.service,
                 from_image=args.from_image,
                 to_image=args.to_image,
@@ -7880,10 +8892,14 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 expected_generation=expected_generation,
                 receipt_id=release_receipt_id,
                 slo_readback=slo_readback,
+                candidate_digests=release_candidate_digests,
+                last_good_target=committed_last_good_target,
+                post_deploy_checks=post_deploy_checks,
+                rollback_outcome="not_triggered",
             )
         if committed_release_state is not None:
             release_receipt_id = committed_release_state["receipt_id"]
-            _sync_release_ledger_projection(
+            release_receipt_path = _sync_release_ledger_projection(
                 args.service,
                 release_receipt_id,
             )
@@ -7901,6 +8917,16 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             "rolloutDecision": rollout_decision,
             "releaseManifestDigest": release_manifest_digest,
             "releaseReceiptId": release_receipt_id,
+            "releaseReceiptRef": (
+                f"receipt:hosted:{release_receipt_id}"
+                if release_receipt_path is not None and release_receipt_id
+                else ""
+            ),
+            "releaseReceiptAuthority": (
+                "prod-hosted-service-plane"
+                if release_receipt_path is not None
+                else ""
+            ),
             "releaseReceiptPath": (
                 str(release_receipt_path) if release_receipt_path is not None else ""
             ),
@@ -8215,9 +9241,324 @@ def _command_environment_assembly(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _prod_prevalidation_executor(
+    args: argparse.Namespace,
+    *,
+    manifest_path: Path,
+    image_version: str,
+    config_version: str,
+    dry_run: bool,
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
+    argv = [
+        "python3",
+        "quwoquan_ops/cli/prod/prevalidate_prod_hosted.py",
+        "--host",
+        str(args.ssh_host),
+        "--release-manifest",
+        str(manifest_path),
+        "--image-version",
+        image_version,
+        "--config-version",
+        config_version,
+        "--data-mode",
+        str(args.data_mode),
+        "--scope",
+        str(args.prevalidate_scope),
+    ]
+    if dry_run:
+        argv.append("--dry-run")
+    result = run(argv)
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        payload = {
+            "containerDeployment": {
+                "status": "GATE_BLOCK",
+                "issues": [
+                    result.stderr.strip()
+                    or result.stdout.strip()
+                    or "prevalidation executor returned no JSON"
+                ],
+            },
+            "releaseEligibility": {
+                "status": "GATE_BLOCK",
+                "promotable": False,
+                "ledgerWritten": False,
+                "receiptWritten": False,
+            },
+        }
+    return result, payload
+
+
+def _validate_prod_prevalidation_public_bases() -> None:
+    topology = load_environment_topology()
+    target = get_target(topology, "prod-hosted")
+    public_bases = target.get("publicBases") or {}
+    for name, value in public_bases.items():
+        parsed = urllib.parse.urlparse(str(value))
+        host = parsed.hostname or ""
+        if (
+            parsed.scheme not in {"https", "wss"}
+            or not host
+            or re.fullmatch(r"\d+(?:\.\d+){3}", host)
+            or host.endswith((".test", ".example", ".localhost"))
+        ):
+            raise RuntimeError(
+                f"prod-hosted publicBases.{name} must remain canonical public HTTPS DNS"
+            )
+
+
+def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
+    report_dir = resolve_report_dir(args, "prod", "prod-hosted")
+    started_monotonic, started_at = _start_timing()
+    timing: dict[str, Any]
+    request_issues: list[str] = []
+    formal_fields = {
+        name: str(getattr(args, name, "") or "").strip()
+        for name in (
+            "stage",
+            "service",
+            "from_image",
+            "to_image",
+            "from_config",
+            "to_config",
+            "rollback_config",
+            "step",
+            "prometheus_url",
+            "release_image_digest",
+            "release_config_digest",
+            "contract_graph_digest",
+            "adapter_digest",
+            "previous_image_version",
+            "base_url",
+            "product_ops_base_url",
+            "media_base_url",
+            "media_origin_base_url",
+            "image_repository_root",
+            "image_registry",
+            "registry_username",
+            "registry_password",
+        )
+    }
+    if args.target != "prod-hosted" or args.env:
+        request_issues.append("prevalidate requires --target prod-hosted and no --env")
+    if args.prevalidate_scope != "first-party":
+        request_issues.append("prevalidate requires --prevalidate-scope first-party")
+    if args.data_mode not in {"isolated", "external"}:
+        request_issues.append("prevalidate requires --data-mode isolated|external")
+    if any(formal_fields.values()):
+        names = sorted(name.replace("_", "-") for name, value in formal_fields.items() if value)
+        request_issues.append(
+            "prevalidate rejects formal rollout/SLO/rollback arguments: " + ", ".join(names)
+        )
+    ssh_host = str(args.ssh_host or "").strip()
+    if (
+        not ssh_host
+        or "://" in ssh_host
+        or re.fullmatch(r"[A-Za-z0-9.-]+", ssh_host) is None
+    ):
+        request_issues.append("prevalidate requires a valid SSH-only --ssh-host")
+    try:
+        _validate_prod_prevalidation_public_bases()
+    except RuntimeError as error:
+        request_issues.append(str(error))
+
+    manifest_value = str(
+        getattr(args, "release_manifest", "")
+        or os.environ.get("RELEASE_MANIFEST", "")
+    ).strip()
+    manifest_path = Path(manifest_value).expanduser().resolve() if manifest_value else ROOT
+    manifest_digest = ""
+    manifest_payload: dict[str, Any] = {}
+    image_version = "unresolved"
+    config_version = "unresolved"
+    if not manifest_value:
+        request_issues.append("immutable Service Pipeline --release-manifest is required")
+    else:
+        try:
+            (
+                manifest_path,
+                manifest_digest,
+                manifest_payload,
+                image_version,
+                config_version,
+            ) = _prevalidation_release_manifest(manifest_value)
+        except RuntimeError as error:
+            request_issues.append(str(error))
+
+    host_payload: dict[str, Any] = {}
+    host_result: subprocess.CompletedProcess[str] | None = None
+    if ssh_host and args.data_mode and args.prevalidate_scope:
+        host_result, host_payload = _prod_prevalidation_executor(
+            args,
+            manifest_path=manifest_path,
+            image_version=image_version,
+            config_version=config_version,
+            dry_run=True,
+        )
+        host_issues = (
+            (host_payload.get("hostPreflight") or {}).get("issues")
+            or (host_payload.get("containerDeployment") or {}).get("issues")
+            or []
+        )
+        request_issues.extend(str(item) for item in host_issues if str(item) not in request_issues)
+
+    deployment_payload = host_payload.get("containerDeployment") or {
+        "status": "not-run"
+    }
+    package_step: dict[str, Any] | None = None
+    executor_step: dict[str, Any] | None = None
+    dry_run = str(getattr(args, "dry_run", "false")).strip().lower() == "true"
+    exit_code = 2 if request_issues else 0
+    if not request_issues:
+        package_result = run(
+            [
+                "python3",
+                "quwoquan_ops/cli/stackctl.py",
+                "package",
+                "--env",
+                "prod",
+                "--target",
+                "prod-hosted",
+                "--include-services",
+            ],
+            env={"QWQ_PROD_RELEASE_ARTIFACT_ROOT": str(manifest_path.parent)},
+        )
+        package_step = {
+            "exitCode": package_result.returncode,
+            "stdout": package_result.stdout,
+            "stderr": package_result.stderr,
+        }
+        if package_result.returncode != 0:
+            exit_code = package_result.returncode or 2
+            request_issues.append(
+                package_result.stderr.strip()
+                or package_result.stdout.strip()
+                or "prod package failed"
+            )
+            deployment_payload = {
+                "status": "GATE_BLOCK",
+                "issues": list(request_issues),
+            }
+        elif not dry_run:
+            executor_result, executor_payload = _prod_prevalidation_executor(
+                args,
+                manifest_path=manifest_path,
+                image_version=image_version,
+                config_version=config_version,
+                dry_run=False,
+            )
+            executor_step = {
+                "exitCode": executor_result.returncode,
+                "stderr": executor_result.stderr,
+            }
+            deployment_payload = executor_payload.get("containerDeployment") or {
+                "status": "GATE_BLOCK"
+            }
+            exit_code = executor_result.returncode
+            if exit_code != 0:
+                request_issues.extend(
+                    str(item)
+                    for item in deployment_payload.get("issues") or []
+                    if str(item) not in request_issues
+                )
+
+    release_eligibility = {
+        "status": "GATE_BLOCK",
+        "promotable": False,
+        "ledgerWritten": False,
+        "receiptWritten": False,
+        "reason": (
+            "first-party container prevalidation cannot satisfy Provider, SFU, "
+            "production data, observability, disaster recovery, or rollout evidence"
+        ),
+    }
+    access = load_json_yaml(
+        ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
+    )
+    prevalidation = access.get("prevalidation") if isinstance(access, dict) else {}
+    excluded = prevalidation.get("excluded") if isinstance(prevalidation, dict) else {}
+    provider_readiness = host_payload.get("providerReadiness") or {
+        "status": "GATE_BLOCK",
+        "excludedCapabilities": list(
+            (excluded.get("capabilities") or [])
+            if isinstance(excluded, dict)
+            else []
+        ),
+    }
+    timing = _finish_timing(started_monotonic, started_at)
+    report = {
+        "schema": "prod-hosted-first-party-prevalidation-report",
+        "command": "deploy",
+        "target": "prod-hosted",
+        "mode": "prevalidate",
+        "sshHost": ssh_host,
+        "dataMode": str(args.data_mode),
+        "scope": str(args.prevalidate_scope),
+        "dryRun": dry_run,
+        "releaseManifest": {
+            "path": str(manifest_path) if manifest_value else "",
+            "digest": manifest_digest,
+            "source": manifest_payload.get("source") or {},
+            "versions": manifest_payload.get("versions") or {},
+        },
+        "hostPreflight": host_payload.get("hostPreflight") or {},
+        "containerDeployment": deployment_payload,
+        "providerReadiness": provider_readiness,
+        "releaseEligibility": release_eligibility,
+        "issues": request_issues,
+        "package": package_step,
+        "executor": executor_step,
+        **timing,
+    }
+    write_json(report_dir / "report.json", report)
+    status = "ok" if exit_code == 0 else "gate_block"
+    details = [
+        f"containerDeployment={deployment_payload.get('status', 'unknown')}",
+        f"providerReadiness={provider_readiness.get('status', 'GATE_BLOCK')}",
+        "releaseEligibility=GATE_BLOCK",
+        *request_issues,
+    ]
+    _write_summary_bundle(
+        report_dir,
+        command="deploy",
+        target="prod-hosted",
+        status=status,
+        summary=(
+            "stackctl prod-hosted first-party prevalidation completed"
+            if exit_code == 0
+            else "stackctl prod-hosted first-party prevalidation is GATE_BLOCK"
+        ),
+        details=details,
+        extra={
+            "mode": "prevalidate",
+            "containerDeployment": deployment_payload.get("status"),
+            "providerReadiness": provider_readiness.get("status", "GATE_BLOCK"),
+            "releaseEligibility": "GATE_BLOCK",
+        },
+        timing=timing,
+    )
+    return {
+        "exitCode": exit_code,
+        "summary": (
+            "stackctl prod-hosted first-party prevalidation completed; release remains GATE_BLOCK"
+            if exit_code == 0
+            else "stackctl prod-hosted first-party prevalidation is GATE_BLOCK"
+        ),
+        "details": details,
+        "reportDir": relpath(report_dir),
+        "containerDeployment": deployment_payload.get("status"),
+        "providerReadiness": provider_readiness.get("status", "GATE_BLOCK"),
+        "releaseEligibility": "GATE_BLOCK",
+        **timing,
+    }
+
+
 def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
     if args.mode == "environment-assembly":
         return _command_environment_assembly(args)
+    if args.mode == "prevalidate":
+        return _command_prod_prevalidate(args)
     if args.mode in {"config-gray", "config-rollback"}:
         if args.target != "prod-hosted" or args.env:
             return {
@@ -8256,6 +9597,86 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
             "summary": "stackctl deploy blocked by prod release transaction",
             "details": [str(error)],
         }
+
+
+def command_hosted_release_receipt(args: argparse.Namespace) -> dict[str, Any]:
+    """Resolve a release receipt from the hosted service plane, never local output."""
+    receipt_id = str(args.receipt_id or "").strip()
+    if re.fullmatch(r"[0-9a-f]{64}", receipt_id) is None:
+        return {
+            "exitCode": 2,
+            "summary": "hosted release receipt readback failed",
+            "details": ["receipt id must be a lowercase SHA-256 value"],
+        }
+    expected_candidate = {
+        "imageDigest": str(args.image_digest or "").strip(),
+        "configDigest": str(args.config_digest or "").strip(),
+        "contractGraphDigest": str(args.contract_graph_digest or "").strip(),
+        "adapterDigest": str(args.adapter_digest or "").strip(),
+    }
+    if any(
+        re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None
+        for value in expected_candidate.values()
+    ):
+        return {
+            "exitCode": 2,
+            "summary": "hosted release receipt readback failed",
+            "details": ["candidate digests must all be canonical sha256 values"],
+        }
+    try:
+        readback = _run_hosted_release_ledger(
+            service=str(args.service).strip(),
+            action="receipt",
+            receipt_id=receipt_id,
+        )
+        receipt = readback["receipt"]
+        receipt_bytes = (
+            json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        if not isinstance(receipt, dict) or receipt.get("receiptId") != receipt_id:
+            raise RuntimeError("hosted receipt identity is invalid")
+        if receipt.get("service") != str(args.service).strip():
+            raise RuntimeError("hosted receipt service does not match request")
+        if any(receipt.get(field) != value for field, value in expected_candidate.items()):
+            raise RuntimeError("hosted receipt candidate binding does not match UAT")
+        purpose = str(args.purpose)
+        if purpose == "last-good" and not (
+            receipt.get("stage") == "full"
+            and receipt.get("decision") == "continue"
+            and receipt.get("rollbackOutcome") == "not_triggered"
+            and receipt.get("lastGoodTarget")
+            == {
+                "image": receipt.get("toImage"),
+                "config": receipt.get("toConfig"),
+            }
+        ):
+            raise RuntimeError("hosted receipt is not a stable full last-good release")
+        if purpose == "rollback" and not (
+            receipt.get("decision") == "rolled_back"
+            and receipt.get("rollbackOutcome") == "rolled_back"
+            and receipt.get("lastGoodTarget")
+            == {
+                "image": receipt.get("toImage"),
+                "config": receipt.get("toConfig"),
+            }
+        ):
+            raise RuntimeError("hosted receipt does not prove a successful rollback")
+    except (RuntimeError, json.JSONDecodeError) as error:
+        return {
+            "exitCode": 2,
+            "summary": "hosted release receipt readback failed",
+            "details": [str(error)],
+        }
+    digest = "sha256:" + hashlib.sha256(receipt_bytes).hexdigest()
+    return {
+        "exitCode": 0,
+        "summary": "hosted release receipt readback verified",
+        "details": [f"receipt: receipt:hosted:{receipt_id}"],
+        "receiptRef": f"receipt:hosted:{receipt_id}",
+        "receiptDigest": digest,
+        "candidate": expected_candidate,
+        "purpose": purpose,
+    }
 
 
 def command_roll(args: argparse.Namespace) -> dict[str, Any]:
@@ -8656,11 +10077,11 @@ def _full_scope_health_checks(
                     "url": f"{str(public_bases['api']).rstrip('/')}/content/feed?limit=1",
                 },
                 {
-                    "name": "tag-shared-tags-smoke",
+                    "name": "tag-public-catalog-smoke",
                     "scope": "full",
                     "url": (
                         f"{str(public_bases['api']).rstrip('/')}"
-                        "/tag/shared-tags?objectAId=u1&objectAType=user&objectBId=u2&objectBType=user"
+                        "/tag/resolve?tagRef=Topic%2F%E6%97%85%E8%A1%8C"
                     ),
                 },
             ]
@@ -9020,6 +10441,7 @@ def main() -> int:
         "repair": command_repair,
         "roll": command_roll,
         "deploy": command_deploy,
+        "hosted-release-receipt": command_hosted_release_receipt,
     }
     payload = dispatch[args.command](args)
     return print_result(args, payload)

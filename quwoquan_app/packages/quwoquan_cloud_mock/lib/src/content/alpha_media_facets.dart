@@ -3,10 +3,19 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// Alpha-only deterministic Media fixture. Production has no dependency on
 /// this package; alpha runner supplies it explicitly through provider override.
 final class AlphaContentMediaFacet implements ContentMediaFacet {
+  AlphaContentMediaFacet({
+    this.completedAssetStatus = ContentMediaProcessingStatus.ready,
+  });
+
   final Map<String, _AlphaUpload> _uploads = <String, _AlphaUpload>{};
   final Map<String, ContentMediaAssetSlice> _assets =
       <String, ContentMediaAssetSlice>{};
+  final Map<String, ContentMediaUploadSessionCommandResult> _initReceipts =
+      <String, ContentMediaUploadSessionCommandResult>{};
+  final Map<String, ContentMediaUploadSessionCommandResult> _completeReceipts =
+      <String, ContentMediaUploadSessionCommandResult>{};
   final Set<String> _discardedAssetIds = <String>{};
+  final ContentMediaProcessingStatus completedAssetStatus;
   int _sequence = 0;
 
   @override
@@ -14,10 +23,15 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
     InitContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) async {
+    final key = context.idempotencyKey.trim();
+    final replay = _initReceipts[key];
+    if (replay != null) {
+      return _replayed(replay);
+    }
     final id = 'alpha_media_upload_${++_sequence}';
     final expiresAt = DateTime.utc(2030, 1, 1, 0, 15);
     _uploads[id] = _AlphaUpload(command, expiresAt);
-    return ContentMediaUploadSessionCommandResult(
+    final result = ContentMediaUploadSessionCommandResult(
       sessionId: id,
       assetId: null,
       status: ContentMediaUploadStatus.pending,
@@ -25,6 +39,8 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       expiresAt: expiresAt,
       replayed: false,
     );
+    _initReceipts[key] = result;
+    return result;
   }
 
   @override
@@ -32,9 +48,18 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
     CompleteContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) async {
+    final key = context.idempotencyKey.trim();
+    final replay = _completeReceipts[key];
+    if (replay != null) {
+      if (replay.sessionId != command.sessionId) {
+        throw StateError('alpha media complete idempotency key mismatch');
+      }
+      return _replayed(replay);
+    }
     final upload = _uploads[command.sessionId];
-    if (upload == null)
+    if (upload == null) {
       throw StateError('alpha media upload session not found');
+    }
     final assetId = 'alpha_media_asset_${command.sessionId}';
     final cdnUrl = Uri.parse('https://alpha-cdn.invalid/$assetId');
     upload
@@ -46,18 +71,21 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       mediaType: upload.command.mediaType,
       contentType: upload.command.contentType,
       fileSize: upload.command.fileSize,
-      status: ContentMediaProcessingStatus.ready,
+      status: completedAssetStatus,
       accessPolicy: command.accessPolicy,
       cdnUrl: cdnUrl,
     );
-    return ContentMediaUploadSessionCommandResult(
+    final result = ContentMediaUploadSessionCommandResult(
       sessionId: command.sessionId,
       assetId: assetId,
       status: ContentMediaUploadStatus.completed,
       uploadUrl: null,
       expiresAt: upload.expiresAt,
       replayed: false,
+      assetProcessingStatus: completedAssetStatus,
     );
+    _completeReceipts[key] = result;
+    return result;
   }
 
   @override
@@ -177,6 +205,20 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       coverUrl: url,
     );
   }
+}
+
+ContentMediaUploadSessionCommandResult _replayed(
+  ContentMediaUploadSessionCommandResult result,
+) {
+  return ContentMediaUploadSessionCommandResult(
+    sessionId: result.sessionId,
+    assetId: result.assetId,
+    status: result.status,
+    uploadUrl: result.uploadUrl,
+    expiresAt: result.expiresAt,
+    replayed: true,
+    assetProcessingStatus: result.assetProcessingStatus,
+  );
 }
 
 final class _AlphaUpload {

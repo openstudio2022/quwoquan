@@ -30,6 +30,24 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 	if err := store.EnsureIndices(ctx); err != nil {
 		t.Fatalf("EnsureIndices() error = %v", err)
 	}
+	rawTemplateProperties := harness.indexTemplateProperties(
+		t,
+		"app-product-telemetry-raw-template",
+	)
+	for _, field := range []string{
+		"hasError",
+		"decoderFallbackEnabled",
+		"durationMismatch",
+		"mediaConnected",
+	} {
+		mapping, ok := rawTemplateProperties[field].(map[string]any)
+		if !ok || mapping["type"] != "boolean" {
+			t.Fatalf("raw template %s mapping = %#v; want boolean", field, mapping)
+		}
+		if _, exists := mapping["coerce"]; exists {
+			t.Fatalf("raw template %s must not set unsupported boolean coerce", field)
+		}
+	}
 
 	now := time.Now().UTC().Add(-time.Minute)
 	batchKey := strings.Repeat("a", 64)
@@ -45,6 +63,19 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 	}
 	if err := store.PutEventBatch(ctx, batchKey, []application.EventRecord{record}); err != nil {
 		t.Fatalf("PutEventBatch() replay error = %v", err)
+	}
+	rawIndex := "app-product-telemetry-raw-" + now.Format("2006.01.02")
+	aggregateIndex := "app-product-telemetry-hourly-" + now.Format("2006.01.02")
+	if !harness.hasExactIndex(rawIndex) || !harness.hasExactIndex(aggregateIndex) {
+		t.Fatalf(
+			"daily Elasticsearch indices missing raw=%s aggregate=%s",
+			rawIndex,
+			aggregateIndex,
+		)
+	}
+	if harness.hasExactIndex("app-product-telemetry-raw") ||
+		harness.hasExactIndex("app-product-telemetry-hourly") {
+		t.Fatal("telemetry writes must not target non-expiring base indices")
 	}
 	complete, err := store.HasEventBatch(ctx, batchKey, 1)
 	if err != nil || !complete {
@@ -374,6 +405,7 @@ type elasticsearchHarness struct {
 	mu               sync.Mutex
 	indices          map[string]bool
 	documentsByIndex map[string]map[string]map[string]any
+	indexTemplates   map[string]map[string]any
 	search           func(path string, body []byte) ([]byte, int)
 }
 
@@ -383,6 +415,7 @@ func newElasticsearchHarness(
 	return &elasticsearchHarness{
 		indices:          map[string]bool{},
 		documentsByIndex: map[string]map[string]map[string]any{},
+		indexTemplates:   map[string]map[string]any{},
 		search:           search,
 	}
 }
@@ -392,6 +425,19 @@ func (h *elasticsearchHarness) ServeHTTP(
 	request *http.Request,
 ) {
 	body, _ := io.ReadAll(request.Body)
+	if request.Method == http.MethodPut &&
+		strings.HasPrefix(request.URL.Path, "/_index_template/") {
+		var template map[string]any
+		if err := json.Unmarshal(body, &template); err != nil {
+			writeJSON(writer, http.StatusBadRequest, map[string]any{"error": "invalid template"})
+			return
+		}
+		h.mu.Lock()
+		h.indexTemplates[strings.TrimPrefix(request.URL.Path, "/_index_template/")] = template
+		h.mu.Unlock()
+		writeJSON(writer, http.StatusOK, map[string]any{"acknowledged": true})
+		return
+	}
 	if request.Method == http.MethodHead {
 		h.mu.Lock()
 		exists := h.indices[strings.Trim(request.URL.Path, "/")]
@@ -427,6 +473,32 @@ func (h *elasticsearchHarness) ServeHTTP(
 	default:
 		writeJSON(writer, http.StatusOK, map[string]any{"status": "yellow"})
 	}
+}
+
+func (h *elasticsearchHarness) indexTemplateProperties(
+	t *testing.T,
+	name string,
+) map[string]any {
+	t.Helper()
+	h.mu.Lock()
+	template, exists := h.indexTemplates[name]
+	h.mu.Unlock()
+	if !exists {
+		t.Fatalf("Elasticsearch index template %q was not recorded", name)
+	}
+	templateDefinition, ok := template["template"].(map[string]any)
+	if !ok {
+		t.Fatalf("Elasticsearch index template %q has no template body", name)
+	}
+	mappings, ok := templateDefinition["mappings"].(map[string]any)
+	if !ok {
+		t.Fatalf("Elasticsearch index template %q has no mappings", name)
+	}
+	properties, ok := mappings["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("Elasticsearch index template %q has no properties", name)
+	}
+	return properties
 }
 
 func (h *elasticsearchHarness) handleBulk(
@@ -576,6 +648,13 @@ func (h *elasticsearchHarness) documentCount(index string) int {
 		}
 	}
 	return count
+}
+
+func (h *elasticsearchHarness) hasExactIndex(index string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	_, found := h.documentsByIndex[index]
+	return found
 }
 
 func (h *elasticsearchHarness) deleteFirstDocument(index string) {

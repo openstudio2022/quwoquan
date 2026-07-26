@@ -95,6 +95,9 @@ func (s *PgProfileStore) FindByID(ctx context.Context, id string) (*model.UserPr
 
 // Create overrides the generated Create to apply business defaults.
 func (s *PgProfileStore) Create(ctx context.Context, p *model.UserProfile) error {
+	if p == nil || strings.TrimSpace(p.UserID) == "" {
+		return errors.New("invalid UserProfile creation state")
+	}
 	if p.AuthEpoch == 0 {
 		p.AuthEpoch = 1
 	}
@@ -110,7 +113,68 @@ func (s *PgProfileStore) Create(ctx context.Context, p *model.UserProfile) error
 	if p.AvatarURL != "" && p.AvatarVersion == 0 {
 		p.AvatarVersion = 1
 	}
-	return s.PGUserAccountStoreBase.Create(ctx, p)
+	now := time.Now().UTC()
+	p.CreatedAt = now
+	p.UpdatedAt = now
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin UserProfile creation transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := insertUserProfileRow(ctx, tx, p); err != nil {
+		return err
+	}
+	if err := appendUserProfileSearchProjections(
+		ctx,
+		tx,
+		[]repository.UserProfileSearchProjection{{
+			UserID:         p.UserID,
+			ProfileVersion: int64(p.ProfileVersion),
+			EventType:      userevent.UserRegistered,
+			OccurredAt:     p.CreatedAt,
+		}},
+	); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit UserProfile creation: %w", err)
+	}
+	return nil
+}
+
+func insertUserProfileRow(
+	ctx context.Context,
+	execer profileExecer,
+	p *model.UserProfile,
+) error {
+	_, err := execer.Exec(ctx, `
+		INSERT INTO user_profiles (
+			user_id, account_state, auth_epoch, suspension_case_ref, suspended_at,
+			identity_origin, logical_shard, anonymous_retention_policy, phone,
+			nickname, nickname_customized, avatar_url, avatar_asset_id,
+			avatar_version, background_url, background_asset_id, bio, identity_tags,
+			gender, birth_date, region, region_code, status, profile_version,
+			follower_count, following_count, post_count, circle_count, like_count,
+			owner_display_name, sub_account_count, created_at, updated_at
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+			$16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
+			$29, $30, $31, $32, $33
+		)`,
+		p.UserID, p.AccountState, p.AuthEpoch, p.SuspensionCaseRef, p.SuspendedAt,
+		p.IdentityOrigin, p.LogicalShard, p.AnonymousRetentionPolicy, p.Phone,
+		p.Nickname, p.NicknameCustomized, p.AvatarURL, p.AvatarAssetID,
+		p.AvatarVersion, p.BackgroundURL, p.BackgroundAssetID, p.Bio, p.IdentityTags,
+		p.Gender, p.BirthDate, p.Region, p.RegionCode, p.Status, p.ProfileVersion,
+		p.FollowerCount, p.FollowingCount, p.PostCount, p.CircleCount, p.LikeCount,
+		p.OwnerDisplayName, p.SubAccountCount, p.CreatedAt, p.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("insert UserProfile: %w", err)
+	}
+	return nil
 }
 
 // Update performs a selective update on editable profile fields and bumps version.
@@ -205,6 +269,7 @@ func (s *PgProfileStore) CommitUserProfileCommand(
 	ctx context.Context,
 	profile *model.UserProfile,
 	projection *repository.UserProfileTagProjection,
+	searchProjections []repository.UserProfileSearchProjection,
 	meta repository.UserProfileCommandMeta,
 ) (repository.UserProfileCommandResult, error) {
 	if profile == nil || strings.TrimSpace(profile.UserID) == "" ||
@@ -222,6 +287,19 @@ func (s *PgProfileStore) CommitUserProfileCommand(
 		projection.OccurredAt.IsZero()) {
 		return repository.UserProfileCommandResult{},
 			errors.New("invalid user profile tag projection")
+	}
+	if len(searchProjections) == 0 {
+		return repository.UserProfileCommandResult{},
+			errors.New("user profile search projection is required")
+	}
+	for _, searchProjection := range searchProjections {
+		if strings.TrimSpace(searchProjection.UserID) != profile.UserID ||
+			searchProjection.ProfileVersion != int64(profile.ProfileVersion) ||
+			searchProjection.OccurredAt.IsZero() ||
+			!isUserProfileSearchProjectionEvent(searchProjection.EventType) {
+			return repository.UserProfileCommandResult{},
+				errors.New("invalid user profile search projection")
+		}
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -255,6 +333,13 @@ func (s *PgProfileStore) CommitUserProfileCommand(
 		tx,
 		profile,
 		int64(profile.ProfileVersion-1),
+	); err != nil {
+		return repository.UserProfileCommandResult{}, err
+	}
+	if err := appendUserProfileSearchProjections(
+		ctx,
+		tx,
+		searchProjections,
 	); err != nil {
 		return repository.UserProfileCommandResult{}, err
 	}
@@ -376,6 +461,66 @@ func appendUserProfileTagProjection(
 		return fmt.Errorf("enqueue user profile tag projection: %w", err)
 	}
 	return nil
+}
+
+func appendUserProfileSearchProjections(
+	ctx context.Context,
+	tx pgx.Tx,
+	projections []repository.UserProfileSearchProjection,
+) error {
+	for _, projection := range projections {
+		if strings.TrimSpace(projection.UserID) == "" ||
+			projection.ProfileVersion <= 0 ||
+			projection.OccurredAt.IsZero() ||
+			!isUserProfileSearchProjectionEvent(projection.EventType) {
+			return errors.New("invalid user profile search projection")
+		}
+		if _, err := tx.Exec(
+			ctx,
+			`INSERT INTO user_profile_search_outbox (
+				event_id, user_id, profile_version, event_type, occurred_at,
+				next_attempt_at
+			) VALUES ($1, $2, $3, $4, $5, $5)
+			ON CONFLICT DO NOTHING`,
+			userProfileSearchProjectionEventID(
+				projection.UserID,
+				projection.ProfileVersion,
+				projection.EventType,
+			),
+			projection.UserID,
+			projection.ProfileVersion,
+			projection.EventType,
+			projection.OccurredAt.UTC(),
+		); err != nil {
+			return fmt.Errorf("enqueue user profile search projection: %w", err)
+		}
+	}
+	return nil
+}
+
+func userProfileSearchProjectionEventID(
+	userID string,
+	profileVersion int64,
+	eventType string,
+) string {
+	digest := sha256.Sum256([]byte(fmt.Sprintf(
+		"user-profile-search-projection\x00%s\x00%d\x00%s",
+		strings.TrimSpace(userID),
+		profileVersion,
+		eventType,
+	)))
+	return "ups_" + hex.EncodeToString(digest[:24])
+}
+
+func isUserProfileSearchProjectionEvent(eventType string) bool {
+	switch eventType {
+	case userevent.UserProfileUpdated,
+		userevent.UserAvatarUpdated,
+		userevent.UserRegistered:
+		return true
+	default:
+		return false
+	}
 }
 
 func userProfileCommandReceiptID(idempotencyKey string) string {

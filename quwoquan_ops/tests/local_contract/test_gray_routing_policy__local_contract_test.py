@@ -42,14 +42,14 @@ class GrayRoutingPolicyCompileTest(unittest.TestCase):
                 "gray-initial": {
                     "appVersions": ["1.2.1"],
                     "userIds": ["user-gray-1"],
-                    "provinces": ["330000"],
-                    "carriers": ["chinamobile"],
+                    "provinces": [],
+                    "carriers": [],
                 },
                 "carry-on": {
                     "appVersions": ["1.2.1"],
                     "userIds": ["user-gray-1"],
-                    "provinces": ["330000"],
-                    "carriers": ["chinamobile"],
+                    "provinces": [],
+                    "carriers": [],
                 },
                 "full": {
                     "appVersions": [],
@@ -62,17 +62,15 @@ class GrayRoutingPolicyCompileTest(unittest.TestCase):
         policy.update(overrides)
         return {"policy": policy}
 
-    def test_enabled_policy_compiles_matchers_for_all_dimensions(self) -> None:
+    def test_enabled_policy_compiles_only_client_safe_dimensions(self) -> None:
         with patch.object(self.render, "_load_yaml", return_value=self._policy()):
             block = self.render._render_gray_routing_block("gray-initial")
         self.assertIn("@gray_appversions", block)
         self.assertIn("header X-Client-App-Version 1.2.1", block)
         self.assertIn("@gray_userids", block)
         self.assertIn("header X-Client-User-Id user-gray-1", block)
-        self.assertIn("@gray_provinces", block)
-        self.assertIn("header X-Client-Region-Code 330000", block)
-        self.assertIn("@gray_carriers", block)
-        self.assertIn("header X-Client-Carrier chinamobile", block)
+        self.assertNotIn("@gray_provinces", block)
+        self.assertNotIn("@gray_carriers", block)
         self.assertIn("reverse_proxy https://host.containers.internal:28443", block)
         self.assertIn("tls_insecure_skip_verify", block)
         self.assertIn("header_up Host {host}", block)
@@ -93,6 +91,15 @@ class GrayRoutingPolicyCompileTest(unittest.TestCase):
         self.assertIn("@gray_appversions", block)
         self.assertNotIn("@gray_provinces", block)
         self.assertNotIn("@gray_carriers", block)
+
+    def test_client_supplied_province_or_carrier_is_refused(self) -> None:
+        policy = self._policy()
+        policy["policy"]["stageDimensions"]["gray-initial"]["provinces"] = [
+            "330000"
+        ]
+        with patch.object(self.render, "_load_yaml", return_value=policy):
+            with self.assertRaisesRegex(SystemExit, "trusted edge"):
+                self.render._render_gray_routing_block("gray-initial")
 
     def test_full_stage_compiles_no_gray_routing(self) -> None:
         with patch.object(self.render, "_load_yaml", return_value=self._policy()):

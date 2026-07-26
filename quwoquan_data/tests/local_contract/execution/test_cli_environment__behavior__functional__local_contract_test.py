@@ -40,7 +40,7 @@ def test_cli_exposes_only_durable_task_facades():
     )
     assert task.returncode == 0, task.stderr
     command_rows = [line.strip().split(maxsplit=1)[0] for line in task.stdout.splitlines() if line.startswith("    ")]
-    assert command_rows == ["preflight", "execute"]
+    assert command_rows == ["preflight", "execute", "discard"]
 
     preflight = subprocess.run(
         [sys.executable, str(CLI), "task", "preflight", "--help"],

@@ -4,6 +4,7 @@
   "properties": {
     "policyId": { "const": "media_processing" },
     "sourceAssetMaxBytes": { "type": "integer", "minimum": 1048576 },
+    "pageImageRenditionWidth": { "type": "integer", "minimum": 800 },
     "maxPublishableImagePixels": { "type": "integer", "minimum": 1000000 },
     "maxAssessmentImagePixels": { "type": "integer", "minimum": 1000000 },
     "assessmentJpegQuality": { "type": "integer", "minimum": 1, "maximum": 95 },
@@ -15,7 +16,7 @@
     "homepageBaseDraftMaxChars": { "type": "integer", "minimum": 4000 }
   },
   "required": [
-    "policyId", "sourceAssetMaxBytes", "maxPublishableImagePixels",
+    "policyId", "sourceAssetMaxBytes", "pageImageRenditionWidth", "maxPublishableImagePixels",
     "maxAssessmentImagePixels", "assessmentJpegQuality", "ocrImagePixels", "baseDraftImageCandidates",
     "imageFetchTargetSurplus", "imageCandidateSurplus", "webpMethod",
     "homepageBaseDraftMaxChars"

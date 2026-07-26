@@ -774,9 +774,19 @@ class RemoteBehaviorRepository extends BehaviorRepository
   Future<void> _postBehaviorBatch(Uri uri, Map<String, dynamic> body) async {
     if (_disposed) return;
     final jsonStr = jsonEncode(body);
-    final headers = Map<String, String>.from(
+    final headers = CloudRequestHeaders.withOwnerSubAccountContext(
       CloudRequestHeaders.forPage(ContentRequestPageIds.reportBehaviors),
+      ownerUserId: _queuePartition.accountId,
+      subAccountId: _queuePartition.personaId,
     );
+    if (_queuePartition.deviceId.isNotEmpty) {
+      headers['X-Client-Device-Actor-Id'] = _queuePartition.deviceId;
+    }
+    // ReportBehaviors is an idempotent command at the Gateway boundary. The
+    // event-level clientEventId remains the business deduplication identity;
+    // this deterministic batch key makes every transport retry satisfy the
+    // operation contract without introducing a second persisted receipt.
+    headers['Idempotency-Key'] = _behaviorBatchIdempotencyKey(body);
 
     final useGzip = jsonStr.length > _gzipThreshold;
     List<int> payload;
@@ -822,6 +832,22 @@ class RemoteBehaviorRepository extends BehaviorRepository
       final delayMs = math.min(1000 * math.pow(2, attempt).toInt(), 8000);
       await _waitBeforeRetry(Duration(milliseconds: delayMs));
     }
+  }
+
+  String _behaviorBatchIdempotencyKey(Map<String, dynamic> body) {
+    final eventIds = <String>[
+      for (final event in body['events'] as List? ?? const <Object?>[])
+        if (event is Map &&
+            (event['clientEventId'] ?? '').toString().trim().isNotEmpty)
+          (event['clientEventId'] ?? '').toString().trim(),
+    ];
+    // The internal callers construct valid events. Hash the full encoded body
+    // only as a defensive fallback for a malformed restored queue envelope, so
+    // the request still reaches the server's canonical validation boundary.
+    final material = eventIds.isEmpty
+        ? jsonEncode(body)
+        : eventIds.join('\u{001F}');
+    return 'behavior-batch-${sha256.convert(utf8.encode(material))}';
   }
 
   Future<void> _waitBeforeRetry(Duration duration) {

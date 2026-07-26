@@ -35,10 +35,23 @@ final class RemoteContentMediaObjectUploader {
           ..headers.addAll(uploadHeaders.toHttpHeaders())
           ..contentLength = contentLength;
     try {
-      final responseFuture = _client.send(request);
+      final responseFuture = _client
+          .send(request)
+          .then<(http.StreamedResponse?, Object?, StackTrace?)>(
+            (response) => (response, null, null),
+            onError: (Object error, StackTrace stackTrace) =>
+                (null, error, stackTrace),
+          );
       await request.sink.addStream(bytes);
       await request.sink.close();
-      final response = await responseFuture;
+      final (response, transportError, transportStackTrace) =
+          await responseFuture;
+      if (transportError != null) {
+        Error.throwWithStackTrace(transportError, transportStackTrace!);
+      }
+      if (response == null) {
+        throw StateError('object storage returned no response or error');
+      }
       await response.stream.drain<void>();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw ContentMediaObjectUploadException(

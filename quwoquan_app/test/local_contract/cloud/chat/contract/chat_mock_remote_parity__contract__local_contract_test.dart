@@ -10,9 +10,9 @@ void main() {
       'MockChatRepository contact rows only use media/avatar object keys',
       () async {
         final repo = MockChatRepository();
-        final contacts = await repo.listContacts(limit: 500);
-        expect(contacts, isNotEmpty);
-        for (final contact in contacts) {
+        final contacts = await repo.listContacts(limit: 100);
+        expect(contacts.items, isNotEmpty);
+        for (final contact in contacts.items) {
           expect(
             contact.avatarUrl.toLowerCase().startsWith('media/avatar/'),
             isTrue,

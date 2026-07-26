@@ -966,6 +966,64 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             ],
         )
 
+    def test_local_gamma_relationship_seed_uses_running_stack_workspace(self) -> None:
+        fixture_payload = {
+            "seedSets": {
+                "relationship_core": {
+                    "relationships": [
+                        {
+                            "sourceUserId": "fixture_source",
+                            "targetUserId": "fixture_target",
+                            "mutualFollow": False,
+                        }
+                    ]
+                }
+            }
+        }
+        session = local_gamma_t3.LocalGammaAcceptanceSession(
+            owner_id="fixture_source",
+            persona_id="fixture_source",
+            access_token="test-token",
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_path = Path(tmp_dir) / "fixture.json"
+            fixture_path.write_text(json.dumps(fixture_payload), encoding="utf-8")
+            running_workspace = Path(tmp_dir) / "running-deployment"
+            with (
+                mock.patch.object(
+                    local_gamma_t3,
+                    "gamma_domain_fixture_spec",
+                    return_value=(str(fixture_path), ["relationship_core"]),
+                ),
+                mock.patch.object(
+                    local_gamma_t3,
+                    "resolve_running_local_deployment_work_root",
+                    return_value=running_workspace,
+                ),
+                mock.patch.object(
+                    local_gamma_t3,
+                    "open_local_acceptance_session",
+                    return_value=session,
+                ) as open_session,
+                mock.patch.object(
+                    local_gamma_t3,
+                    "request_local_environment_json",
+                    return_value={},
+                ),
+            ):
+                result = local_gamma_t3.seed_relationships(
+                    "https://gamma-api.quwoquan-env.test:19000",
+                )
+
+        self.assertEqual(result["status"], "passed")
+        open_session.assert_called_once_with(
+            "https://gamma-api.quwoquan-env.test:19000",
+            environment="gamma",
+            target_name="gamma-local",
+            subject="fixture_source",
+            deployment_work_root=running_workspace,
+        )
+
     def test_local_gamma_t3_uses_shared_target_isolated_acceptance_session(
         self,
     ) -> None:
@@ -997,6 +1055,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     local_gamma_t3,
                     "strict_endpoint_checks",
                     return_value=[],
+                ),
+                mock.patch.object(
+                    local_gamma_t3,
+                    "resolve_running_local_deployment_work_root",
+                    return_value=None,
                 ),
                 mock.patch.object(local_gamma_t3, "_ACTIVE_SESSION", None),
                 mock.patch.object(
@@ -1044,6 +1107,24 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     return_value={"status": "passed", "refs": ["user_profile_core"]},
                 ) as seed_user,
                 mock.patch.object(
+                    local_gamma_t3,
+                    "seed_relationships",
+                    return_value={
+                        "status": "passed",
+                        "refs": ["relationship_core"],
+                    },
+                ) as seed_relationships,
+                mock.patch.object(
+                    local_gamma_t3,
+                    "seed_circle",
+                    return_value={"status": "passed", "refs": ["circle_core"]},
+                ) as seed_circle,
+                mock.patch.object(
+                    local_gamma_t3,
+                    "seed_chat",
+                    return_value={"status": "passed", "refs": ["chat_core"]},
+                ) as seed_chat,
+                mock.patch.object(
                     local_gamma_t3.sys,
                     "argv",
                     [
@@ -1057,10 +1138,27 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 self.assertEqual(local_gamma_t3.main(), 0)
 
             seed_user.assert_called_once_with()
+            seed_relationships.assert_called_once_with(
+                "https://gamma-api.quwoquan-env.test:19000",
+            )
+            seed_circle.assert_called_once_with()
+            seed_chat.assert_called_once_with()
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(
                 report["domainSeeds"]["user"],
                 {"status": "passed", "refs": ["user_profile_core"]},
+            )
+            self.assertEqual(
+                report["domainSeeds"]["relationship"],
+                {"status": "passed", "refs": ["relationship_core"]},
+            )
+            self.assertEqual(
+                report["domainSeeds"]["circle"],
+                {"status": "passed", "refs": ["circle_core"]},
+            )
+            self.assertEqual(
+                report["domainSeeds"]["chat"],
+                {"status": "passed", "refs": ["chat_core"]},
             )
             self.assertNotIn("authorImpact", report["domainSeeds"])
 
@@ -1161,19 +1259,17 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             script,
         )
 
-    def test_local_gamma_build_sentinel_does_not_escape_to_runtime(self) -> None:
+    def test_local_gamma_embedding_substitute_needs_no_runtime_material(self) -> None:
         script = (
             Path(__file__).resolve().parents[4]
             / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("Scope inert values to this build subprocess only", script)
-        self.assertIn('LOCAL_GAMMA_EMBEDDING_ENDPOINT="$build_embedding_endpoint"', script)
-        self.assertIn('LOCAL_GAMMA_EMBEDDING_API_KEY="$build_embedding_api_key"', script)
         self.assertNotIn(
-            'export LOCAL_GAMMA_EMBEDDING_API_KEY="${LOCAL_GAMMA_EMBEDDING_API_KEY:-build-only-not-a-runtime-secret}"',
+            "LOCAL_GAMMA_EMBEDDING_",
             script,
         )
+        self.assertNotIn("CONTENT_EMBEDDING_FIXTURE_", script)
 
     def test_local_gamma_content_release_excludes_secret_backed_assistant(self) -> None:
         root = Path(__file__).resolve().parents[4]
@@ -1974,6 +2070,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 return_value=session,
             ) as login,
             mock.patch(
+                "quwoquan_ops.cli.stackctl.resolve_running_local_deployment_work_root",
+                return_value=Path("/tmp/gamma-deploy-work"),
+            ),
+            mock.patch(
                 "quwoquan_ops.cli.stackctl._run_script_probe",
                 return_value=({}, "", []),
             ) as run_probe,
@@ -1989,6 +2089,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             environment="gamma",
             target_name="gamma-local",
             resolve_host="127.0.0.1",
+            deployment_work_root=Path("/tmp/gamma-deploy-work"),
         )
         kwargs = run_probe.call_args.kwargs
         self.assertNotIn("--test-auth-token", kwargs["argv"])
@@ -2182,6 +2283,14 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                         "composeFileExists": True,
                         "envFileExists": True,
                         "containerCount": 1,
+                        "unit": {"enabled": True, "active": True},
+                        "containers": [
+                            {
+                                "name": "quwoquan-plane-service",
+                                "running": True,
+                                "health": "healthy",
+                            }
+                        ],
                     },
                 ),
             ):

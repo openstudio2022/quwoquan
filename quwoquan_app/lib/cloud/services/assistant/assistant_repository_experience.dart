@@ -7,53 +7,6 @@ mixin _RemoteAssistantExperience on _RemoteAssistantRepositoryBase
         AssistantPersonalDataFacet,
         AssistantCreationSuggestFacet {
   @override
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  }) async {
-    // 失败关闭：policy 拉取失败不再合成 learningSyncEnabled=true 的本地
-    // fallback；调用方必须按"学习同步关闭"处理。
-    const path = AssistantApiMetadata.getPolicyPath;
-    try {
-      final uri = _assistantGetUri(path, {
-        if (policyVersionHint.trim().isNotEmpty)
-          'policyVersionHint': policyVersionHint.trim(),
-      });
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.getPolicyOperation,
-          clientPageId: AssistantRequestPageIds.getPolicy,
-        ),
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw CloudErrorMapper.fromStatusCode(
-          response.statusCode,
-          body: response.body,
-          requestPath: path,
-        );
-      }
-      final decoded = response.body.trim().isEmpty
-          ? <String, dynamic>{}
-          : CloudResponseDecoder.asObject(
-              jsonDecode(response.body),
-              context: _personalAssistantDialogContext(
-                operationId: AssistantApiMetadata.getPolicyOperation,
-              ),
-            );
-      if (decoded.isEmpty) {
-        throw const FormatException(
-          'assistant policy snapshot response is empty',
-        );
-      }
-      return AssistantPolicyView.fromJson(decoded);
-    } on CloudException {
-      rethrow;
-    } catch (error) {
-      throw CloudErrorMapper.fromException(error, requestPath: path);
-    }
-  }
-
-  @override
   Future<PageContextAck> reportPageContext({
     required AssistantOpenContext context,
     String? userAction,
@@ -119,7 +72,7 @@ mixin _RemoteAssistantExperience on _RemoteAssistantRepositoryBase
     try {
       final uri = _assistantGetUri(path, <String, String>{
         'source': context.source.name,
-        'pageType': assistantPageTypeForSource(context.source),
+        'pageType': assistantPageTypeForSource(context.source).wireName,
         if ((context.tab ?? '').trim().isNotEmpty) 'tab': context.tab!.trim(),
         if ((context.dimension ?? '').trim().isNotEmpty)
           'dimension': context.dimension!.trim(),
@@ -167,7 +120,7 @@ mixin _RemoteAssistantExperience on _RemoteAssistantRepositoryBase
     const path = AssistantApiMetadata.getSuggestedActionsPath;
     try {
       final uri = _assistantGetUri(path, <String, String>{
-        'pageType': assistantPageTypeForSource(context.source),
+        'pageType': assistantPageTypeForSource(context.source).wireName,
         if ((context.entityId ?? '').trim().isNotEmpty)
           'objectId': context.entityId!.trim(),
       });

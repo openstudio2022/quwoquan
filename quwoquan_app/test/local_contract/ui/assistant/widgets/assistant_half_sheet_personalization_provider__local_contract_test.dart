@@ -1,6 +1,7 @@
 // spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-001
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
@@ -102,8 +103,9 @@ void main() {
       ]);
       expect(value.welcomeMessage, '服务端欢迎语');
       expect(value.chips.single.label, '服务端找资料');
-      expect(value.suggestionLines, <String>['服务端动作']);
-      expect(repo.lastContextSnapshot?.pageType, 'home');
+      expect(value.suggestionLines, <String>['服务端建议']);
+      expect(value.suggestedActions.single.actionId, 'server_action');
+      expect(repo.lastContextSnapshot?.pageType, 'article');
       expect(repo.lastContextSnapshot?.pageObjects, hasLength(1));
       expect(
         repo.lastContextSnapshot?.userActions?.single.action,
@@ -113,6 +115,44 @@ void main() {
         repo.lastContextSnapshot?.intersectionEvidenceRefs,
         isEmpty,
         reason: '页面上下文上报不得代替 StartAssistantRun 提交交集证据引用',
+      );
+    },
+  );
+
+  test(
+    'assistant page context maps every product source to canonical type',
+    () {
+      expect(
+        assistantPageTypeForSource(AssistantSource.home),
+        AssistantPageContextType.home,
+      );
+      expect(
+        assistantPageTypeForSource(AssistantSource.discovery),
+        AssistantPageContextType.discovery,
+      );
+      expect(
+        assistantPageTypeForSource(AssistantSource.circles),
+        AssistantPageContextType.circles,
+      );
+      expect(
+        assistantPageTypeForSource(AssistantSource.article),
+        AssistantPageContextType.article,
+      );
+      expect(
+        assistantPageTypeForSource(AssistantSource.profile),
+        AssistantPageContextType.profile,
+      );
+      expect(
+        assistantPageTypeForSource(AssistantSource.chat),
+        AssistantPageContextType.chat,
+      );
+      expect(
+        assistantPageTypeForSource(AssistantSource.create),
+        AssistantPageContextType.create,
+      );
+      expect(
+        assistantPageTypeForSource(AssistantSource.search),
+        AssistantPageContextType.search,
       );
     },
   );

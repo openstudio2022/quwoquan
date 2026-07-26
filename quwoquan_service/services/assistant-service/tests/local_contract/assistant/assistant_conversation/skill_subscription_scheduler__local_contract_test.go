@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-assistant/proactive-subscription-delivery/spec.md#gwt-001
 package local_contract
 
 import (

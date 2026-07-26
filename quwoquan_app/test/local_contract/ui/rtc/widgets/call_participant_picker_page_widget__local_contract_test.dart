@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -139,32 +140,34 @@ class _PickerChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
-    return [
-      ChatContactRowDto(
-        userId: 'user_006',
-        displayName: '联系人小雨',
-        avatarUrl: '',
-        bio: '',
-        metFrom: '',
-        lastInteraction: '',
-        relationState: 'mutual',
-        isStarred: false,
-      ),
-      ChatContactRowDto(
-        userId: 'user_007',
-        displayName: '联系人阿青',
-        avatarUrl: '',
-        bio: '',
-        metFrom: '',
-        lastInteraction: '',
-        relationState: 'mutual',
-        isStarred: false,
-      ),
-    ];
+    return CursorPage<ChatContactRowDto>(
+      items: [
+        ChatContactRowDto(
+          userId: 'user_006',
+          displayName: '联系人小雨',
+          avatarUrl: '',
+          bio: '',
+          metFrom: '',
+          lastInteraction: '',
+          relationState: 'mutual',
+          isStarred: false,
+        ),
+        ChatContactRowDto(
+          userId: 'user_007',
+          displayName: '联系人阿青',
+          avatarUrl: '',
+          bio: '',
+          metFrom: '',
+          lastInteraction: '',
+          relationState: 'mutual',
+          isStarred: false,
+        ),
+      ],
+    );
   }
 }
 
@@ -175,7 +178,7 @@ class _FailingPickerChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {

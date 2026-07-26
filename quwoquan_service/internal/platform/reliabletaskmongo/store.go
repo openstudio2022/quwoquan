@@ -12,21 +12,23 @@ import (
 
 // Store 使用 MongoDB 持久化可靠任务事实、通知账本与租约。
 type Store struct {
-	db            *mongo.Database
-	outboxes      *mongo.Collection
-	tasks         *mongo.Collection
-	notifications *mongo.Collection
-	ledgers       *mongo.Collection
-	attempts      *mongo.Collection
-	leases        *mongo.Collection
+	db             *mongo.Database
+	outboxes       *mongo.Collection
+	tasks          *mongo.Collection
+	notifications  *mongo.Collection
+	ledgers        *mongo.Collection
+	attempts       *mongo.Collection
+	resultOutboxes *mongo.Collection
+	leases         *mongo.Collection
 }
 
 var (
-	_ reliabletask.Store                      = (*Store)(nil)
-	_ reliabletask.ProviderAttemptLedgerStore = (*Store)(nil)
-	_ reliabletask.DLQRecoveryStore           = (*Store)(nil)
-	_ reliabletask.RetentionCleanupStore      = (*Store)(nil)
-	_ reliabletask.MetricsStore               = (*Store)(nil)
+	_ reliabletask.Store                            = (*Store)(nil)
+	_ reliabletask.ProviderAttemptLedgerStore       = (*Store)(nil)
+	_ reliabletask.ProviderAttemptResultOutboxStore = (*Store)(nil)
+	_ reliabletask.DLQRecoveryStore                 = (*Store)(nil)
+	_ reliabletask.RetentionCleanupStore            = (*Store)(nil)
+	_ reliabletask.MetricsStore                     = (*Store)(nil)
 )
 
 // New 创建 MongoDB 可靠任务存储适配器。
@@ -43,13 +45,14 @@ func NewNotificationDeliveryJobs(db *mongo.Database) *Store {
 
 func newStore(db *mongo.Database, notificationCollection, ledgerCollection string) *Store {
 	return &Store{
-		db:            db,
-		outboxes:      db.Collection("reliable_task_outbox"),
-		tasks:         db.Collection("reliable_async_task"),
-		notifications: db.Collection(notificationCollection),
-		ledgers:       db.Collection(ledgerCollection),
-		attempts:      db.Collection("external_provider_attempt_ledger"),
-		leases:        db.Collection("reliable_task_leases"),
+		db:             db,
+		outboxes:       db.Collection("reliable_task_outbox"),
+		tasks:          db.Collection("reliable_async_task"),
+		notifications:  db.Collection(notificationCollection),
+		ledgers:        db.Collection(ledgerCollection),
+		attempts:       db.Collection("external_provider_attempt_ledger"),
+		resultOutboxes: db.Collection("external_interaction_result_outbox"),
+		leases:         db.Collection("reliable_task_leases"),
 	}
 }
 
@@ -121,6 +124,20 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 	_, err = s.attempts.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "requestId", Value: 1}, {Key: "createdAt", Value: 1}}},
 		{Keys: bson.D{{Key: "operation", Value: 1}, {Key: "provider", Value: 1}, {Key: "status", Value: 1}}},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = s.resultOutboxes.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "deliveryStatus", Value: 1},
+				{Key: "leaseExpiresAt", Value: 1},
+				{Key: "createdAt", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_ext_result_outbox_pending"),
+		},
 	})
 	if err != nil {
 		return err

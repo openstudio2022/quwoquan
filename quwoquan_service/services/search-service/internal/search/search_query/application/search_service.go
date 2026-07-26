@@ -101,6 +101,7 @@ type QueryInput struct {
 	Query       string
 	Mode        string
 	ObjectTypes []string
+	IDs         []string
 	Limit       int
 	Tags        []string
 	TimeRange   *rtsearch.TimeRange
@@ -125,6 +126,7 @@ func (s *SearchService) Search(ctx context.Context, in QueryInput, viewer rtsear
 	}
 	filters := rtsearch.RetrieveFilters{Tags: in.Tags, TimeRange: in.TimeRange, Near: in.Near}
 	req := rtsearch.BuildQueryFirstRequest(in.Query, in.ObjectTypes, limit, filters, DefaultResultTargets)
+	req.IDs = append([]string(nil), in.IDs...)
 	return rtsearch.Retrieve(ctx, req, s.backend, viewer)
 }
 
@@ -136,6 +138,8 @@ func validateCloudObjectTypes(objectTypes []string) error {
 			rtsearch.TargetVideo,
 			rtsearch.TargetUser,
 			rtsearch.TargetEntity,
+			rtsearch.TargetCircle,
+			rtsearch.TargetGroup,
 			rtsearch.TargetLocation:
 		default:
 			return fmt.Errorf("%w: unsupported cloud object type %q", ErrSearchInvalid, raw)

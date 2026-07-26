@@ -23,6 +23,17 @@ fields:
   ops_exposure: read
   description: 分组 Topic/Audience/Format/Entity
   role: projection
+- name: nodeKind
+  source: nodeKind
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: control-plane 节点种类 group | dimension | definition
+  role: projection
 - name: label
   source: label
   type: string
@@ -53,6 +64,17 @@ fields:
   log_policy: allow
   api_exposure: read
   ops_exposure: read
+  role: projection
+- name: description
+  source: description
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: control-plane definition description 或 group semantics
   role: projection
 - name: aliases
   source: aliases
@@ -97,6 +119,28 @@ fields:
   log_policy: allow
   api_exposure: read
   ops_exposure: read
+  role: projection
+- name: maxDepth
+  source: maxDepth
+  type: int
+  constraints:
+  - DEFAULT_0
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: dimension 节点声明的最大相对深度；非 dimension 为 0
+  role: projection
+- name: pathPolicy
+  source: pathPolicy
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: dimension 节点声明的选取策略
   role: projection
 - name: releaseId
   source: releaseId

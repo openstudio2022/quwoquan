@@ -43,6 +43,7 @@ func cleanFeedbackCollections(t *testing.T) {
 	for _, collection := range []string{
 		"search_feedback_events",
 		"search_feedback_command_receipts",
+		"search_feedback_signal_deliveries",
 	} {
 		if _, err := mongoDB.Collection(collection).DeleteMany(
 			context.Background(),

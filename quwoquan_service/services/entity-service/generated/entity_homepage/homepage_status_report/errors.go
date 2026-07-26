@@ -3,7 +3,6 @@ package generated
 
 import (
 	"errors"
-
 	rerrors "quwoquan_service/runtime/errors"
 )
 

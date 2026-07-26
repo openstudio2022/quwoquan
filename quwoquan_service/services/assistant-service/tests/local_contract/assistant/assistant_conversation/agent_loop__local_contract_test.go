@@ -45,6 +45,11 @@ func TestAgentLoopRunTurnPublishesACompletedAnswer(t *testing.T) {
 		UserID:         "user-local-contract-1",
 		Input:          assistant.AssistantTurnInput{Text: "请给我一个建议"},
 		TraceID:        "trace-local-contract-1",
+		FrozenPolicySelection: testFrozenPolicySelection(
+			"assistant-default",
+			"general_qa",
+			"assistant",
+		),
 	})
 	if err != nil || failure != nil {
 		t.Fatalf("RunTurn() err=%v failure=%+v", err, failure)

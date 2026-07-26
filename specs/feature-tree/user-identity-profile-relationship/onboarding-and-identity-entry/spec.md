@@ -82,7 +82,7 @@
 
 - 类型：`external_blocker`
 - 优先级：`P0`
-- 准出影响：`track`
+- 准出影响：`block`
 - 影响或价值：仓库已经具备 fail-closed provider 契约与客户端入口，但微信、QQ、支付宝和三网本机号的生产凭据、受控 SDK 与供应商后台仍需外部主体开通；本地协议测试不能替代真实登录。
 - 完成判定：生产发布密钥系统注入四类正式 provider 凭据与受控 SDK，`prod-hosted` 真实网络真机完成登录、首登资料同步、失败恢复与回滚验证，并由 [`four-environment-commercial-login-maturity`](./four-environment-commercial-login-maturity/spec.md#gwt-001) 的直接 `spec_ref` 留证。
 - 依赖：微信/QQ/支付宝/运营商开发者主体、生产应用配置、受控 SDK、签名包与真机测试账号。

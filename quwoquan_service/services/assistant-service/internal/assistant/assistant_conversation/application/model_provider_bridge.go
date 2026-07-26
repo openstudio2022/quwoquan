@@ -78,6 +78,7 @@ func modelCompletionRequestFrom(
 		req.SessionPreferenceFacts,
 		req.LongTermPreferenceFacts,
 	)
+	feedbackPrompt := FormatFeedbackContextForPrompt(req.FeedbackContext)
 	if stage == ModelStageFinal || stage == ModelStageEvidenceProcessing {
 		raw, err := json.Marshal(req.Observation)
 		if err != nil {
@@ -88,24 +89,26 @@ func modelCompletionRequestFrom(
 			label = "工具观察JSON"
 		}
 		prompt = fmt.Sprintf(
-			"%s%s%s%s%s\n用户问题：%s\n%s：%s",
+			"%s%s%s%s%s%s\n用户问题：%s\n%s：%s",
 			req.Prompt,
 			contextPrompt,
 			pageContextPrompt,
 			intersectionEvidencePrompt,
 			preferencePrompt,
+			feedbackPrompt,
 			req.UserQuestion,
 			label,
 			string(raw),
 		)
 	} else {
 		prompt = fmt.Sprintf(
-			"%s%s%s%s%s\n用户问题：%s",
+			"%s%s%s%s%s%s\n用户问题：%s",
 			req.Prompt,
 			contextPrompt,
 			pageContextPrompt,
 			intersectionEvidencePrompt,
 			preferencePrompt,
+			feedbackPrompt,
 			req.UserQuestion,
 		)
 	}

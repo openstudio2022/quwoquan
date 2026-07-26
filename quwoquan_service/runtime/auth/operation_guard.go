@@ -166,7 +166,7 @@ func mustCompileOperationDescriptors(
 			)
 		}
 		switch descriptor.Idempotency {
-		case "", "none", "optional", "required":
+		case "", "none", "optional", "required", "payload_digest_server_side":
 		default:
 			panic(
 				"generated operation descriptor has invalid idempotency policy: " +
@@ -453,6 +453,8 @@ func principalRequirementSatisfied(principal string, current Principal) bool {
 		return strings.TrimSpace(current.Actor.PersonaID) != ""
 	case "device":
 		return strings.TrimSpace(current.Actor.DeviceActorID) != ""
+	case "operator_or_service":
+		return containsAny(current.Roles, []string{"operator", "service"})
 	case "service", "admin", "operator":
 		return containsAll(current.Roles, []string{principal})
 	default:
@@ -482,6 +484,19 @@ func containsAll(availableValues []string, required []string) bool {
 		}
 	}
 	return true
+}
+
+func containsAny(availableValues []string, expectedValues []string) bool {
+	available := map[string]struct{}{}
+	for _, value := range availableValues {
+		available[value] = struct{}{}
+	}
+	for _, expected := range expectedValues {
+		if _, ok := available[expected]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func writeOperationGuardError(

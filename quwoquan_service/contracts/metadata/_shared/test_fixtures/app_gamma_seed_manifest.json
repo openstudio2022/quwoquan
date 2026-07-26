@@ -43,11 +43,11 @@
       "targetStore": "content-service:gamma_test_namespace",
       "verifiedEndpoints": [
         "/content/feed",
-        "/content/content/posts/fixture_photo_001",
-        "/content/content/posts/fixture_photo_001/comments",
-        "/content/content/posts/fixture_photo_001/comments?sort=hot",
-        "/content/content/posts/fixture_photo_001/comments?sort=latest",
-        "/content/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
+        "/content/posts/fixture_photo_001",
+        "/content/posts/fixture_photo_001/comments",
+        "/content/posts/fixture_photo_001/comments?sort=hot",
+        "/content/posts/fixture_photo_001/comments?sort=latest",
+        "/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
         "/content/sub-accounts/{activePersonaId}/interactions/received?type=share",
         "/content/sub-accounts/{activePersonaId}/interactions/sent?type=share",
         "/content/sub-accounts/{activePersonaId}/author-impact"
@@ -155,7 +155,7 @@
       "verifiedEndpoints": [
         "/tag/resolve?tagRef=Topic%2F摄影",
         "/tag/children?parentTagRef=Audience%2F用户%2F职业&limit=20",
-        "/tag/shared-tags?objectAId=fixture_user_current&objectAType=user&objectBId=fixture_user_photo&objectBType=user&limit=20"
+        "/tag/dimensions"
       ],
       "deliveryChannels": [
         "control_plane/governance/taxonomy import",

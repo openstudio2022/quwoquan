@@ -41,8 +41,8 @@ def test_content_release_readiness__maps_phase_to_environment_capabilities__loca
     assert alpha_import.workload == "content-release"
     assert beta_import.workload == "content-release"
     assert gamma_consumer.health_scope == "content-consumer"
-    assert ReadinessCapability.TELEMETRY_SLS not in beta_import.capabilities
-    assert ReadinessCapability.TELEMETRY_SLS in gamma_commercial.capabilities
+    assert ReadinessCapability.TELEMETRY_LOG_SINK not in beta_import.capabilities
+    assert ReadinessCapability.TELEMETRY_LOG_SINK in gamma_commercial.capabilities
     assert beta_commercial.workload == "full"
 
 
@@ -53,22 +53,28 @@ def test_content_release_readiness__binds_probe_for_every_capability__local_cont
         binding = policy.probe_binding_for(capability)
         if binding.source is ProbeSource.HEALTH_SCOPE:
             assert binding.health_scope
-        else:
+        elif binding.source is ProbeSource.COMMERCIAL_DOCTOR:
             assert binding.source is ProbeSource.COMMERCIAL_DOCTOR
             assert binding.health_scope is None
+        else:
+            assert binding.source is ProbeSource.LOG_SINK_CONTROL
+            assert binding.control_action == "all"
 
     assert policy.probe_binding_for(ReadinessCapability.CONTENT_SERVICES).health_scope == "content-import"
-    assert policy.probe_binding_for(ReadinessCapability.TELEMETRY_SLS).source is ProbeSource.COMMERCIAL_DOCTOR
+    assert policy.probe_binding_for(
+        ReadinessCapability.TELEMETRY_LOG_SINK
+    ).source is ProbeSource.LOG_SINK_CONTROL
 
 
 def test_content_release_readiness__doctor_bound_capabilities_are_commercial_only__local_contract() -> None:
     policy = load_content_release_readiness_policy()
 
     for requirement in policy.requirements:
-        if requirement.phase is ReadinessPhase.COMMERCIAL:
-            continue
         for capability in requirement.capabilities:
-            assert policy.probe_binding_for(capability).source is ProbeSource.HEALTH_SCOPE
+            binding = policy.probe_binding_for(capability)
+            if requirement.phase is ReadinessPhase.COMMERCIAL:
+                continue
+            assert binding.source is ProbeSource.HEALTH_SCOPE
 
 
 def test_content_release_readiness__rejects_undefined_phase_environment__local_contract() -> None:
@@ -240,6 +246,11 @@ def test_content_release_readiness__commercial_missing_capability_is_gate_block(
         "command_doctor",
         lambda _args: {"exitCode": 1, "details": ["SLS is unavailable"]},
     )
+    monkeypatch.setattr(
+        stackctl,
+        "command_product_telemetry_log_sink",
+        lambda _args: {"exitCode": 2, "details": ["Elasticsearch log sink is unavailable"]},
+    )
 
     result = stackctl.command_content_readiness(
         argparse.Namespace(
@@ -252,3 +263,50 @@ def test_content_release_readiness__commercial_missing_capability_is_gate_block(
 
     assert result["exitCode"] == 2
     assert result["outcome"] == "GATE_BLOCK"
+    assert any("telemetry_log_sink" in item for item in result["details"])
+
+
+def test_content_release_readiness__gamma_controls_elasticsearch_log_sink(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    control_calls: list[argparse.Namespace] = []
+    monkeypatch.setattr(
+        stackctl,
+        "command_health",
+        lambda _args: {"exitCode": 0, "details": [], "reportDir": "health"},
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_read_json_object",
+        lambda _path: {
+            "checks": list(_IMPORT_SCOPE_CHECKS)
+            + [{"name": "content-feed", "scope": "content-consumer"}]
+        },
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "command_product_telemetry_log_sink",
+        lambda args: control_calls.append(args) or {"exitCode": 0, "details": []},
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "command_doctor",
+        lambda _args: {"exitCode": 0, "details": []},
+    )
+
+    result = stackctl.command_content_readiness(
+        argparse.Namespace(
+            phase="commercial",
+            env="gamma",
+            report_dir=str(tmp_path),
+            output_format="json",
+        )
+    )
+
+    assert result["exitCode"] == 0
+    assert result["outcome"] == "PASS"
+    assert result["probes"][-1] == "product-telemetry-log-sink:all"
+    assert [(item.target, item.action) for item in control_calls] == [
+        ("gamma-local", "all")
+    ]

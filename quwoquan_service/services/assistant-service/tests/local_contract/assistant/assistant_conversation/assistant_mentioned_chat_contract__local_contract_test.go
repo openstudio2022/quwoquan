@@ -92,7 +92,6 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		t.Fatal(err)
 	}
 	service := application.NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		redis,
 		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
@@ -102,6 +101,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 			nil,
 		)),
 		application.WithChatGroundingClient(chatGrounding),
+		testFrozenPolicyOption(),
 	)
 	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
 		"assistant-service-local-contract",

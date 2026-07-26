@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -61,6 +62,16 @@ def test_named_execution_layout_ignores_other_disposable_work_packages(monkeypat
         layout,
         "load_frozen_target_set",
         lambda _value: {"selectionPolicy": "frozen", "targets": []},
+    )
+    monkeypatch.setattr(layout, "load_spec", lambda _value: {})
+    monkeypatch.setattr(
+        layout,
+        "ExecutionSpec",
+        SimpleNamespace(
+            from_mapping=lambda _value: SimpleNamespace(
+                scope=SimpleNamespace(coverage_targets=())
+            )
+        ),
     )
 
     assert layout.content_execution_layout_issues(execution_id=execution_id) == []

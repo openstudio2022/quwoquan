@@ -236,8 +236,29 @@ def select_targets(
 
     if target_selector is TargetSelector.SOURCE_READY_PRIORITY and source_qualifier is None:
         raise ValueError("source-ready-priority requires source_qualifier")
-    if target_names and target_selector is not TargetSelector.SOURCE_READY_PRIORITY:
-        raise ValueError("explicit targets require source-ready-priority")
+    if target_names:
+        missing = [name for name in target_names if name not in by_name]
+        if missing:
+            raise ValueError(
+                "requested targets are absent from the region reference: "
+                + ", ".join(missing)
+            )
+        if target_selector is not TargetSelector.SOURCE_READY_PRIORITY:
+            selected = [by_name[name] for name in target_names]
+            report = {
+                "schema": "quwoquan_data.target_selection",
+                "strategy": "explicit frozen target order",
+                "targetSelector": target_selector.value,
+                "discoveryPath": str(discovery_path),
+                "limit": limit,
+                "selectedCount": len(selected),
+                "selectionShortfall": max(0, limit - len(selected)),
+                "targets": selected,
+                "requestedTargetNames": list(target_names),
+            }
+            if len(selected) != limit:
+                raise ValueError(f"selected {len(selected)} targets, expected {limit}")
+            return selected, report
 
     def add(name: str) -> None:
         if name in seen or len(selected) >= limit:

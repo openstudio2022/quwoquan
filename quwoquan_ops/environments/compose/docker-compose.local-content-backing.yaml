@@ -26,7 +26,10 @@ services:
     volumes:
       - mongodb:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      # Keep liveness cheap. Replica-set readiness is owned by mongo-init below;
+      # spawning mongosh on every probe can create a timeout feedback loop on a
+      # busy local Docker runtime.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/27017"]
       interval: 5s
       timeout: 3s
       retries: 20

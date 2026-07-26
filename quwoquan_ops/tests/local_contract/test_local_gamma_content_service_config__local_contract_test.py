@@ -178,6 +178,40 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         for block in (search, entity, circle):
             self.assertIn(expected, block)
 
+    def test_gamma_redis_health_requires_ready_command_processing(self) -> None:
+        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'test: ["CMD-SHELL", "redis-cli --raw ping | grep -qx PONG"]',
+            compose,
+        )
+        self.assertNotIn('test: ["CMD", "redis-cli", "ping"]', compose)
+
+    def test_gamma_elasticsearch_uses_native_architecture_with_arm_sve_guard(self) -> None:
+        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        script = START_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertNotIn("platform: linux/amd64", compose)
+        self.assertIn(
+            "CLI_JAVA_OPTS: \"${LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:-}\"",
+            compose,
+        )
+        self.assertIn(
+            "ES_JAVA_OPTS: \"${LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}\"",
+            compose,
+        )
+        self.assertIn('case "$(uname -m)" in', script)
+        self.assertIn("arm64|aarch64)", script)
+        self.assertIn(
+            'LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:--XX:UseSVE=0',
+            script,
+        )
+        self.assertIn(
+            'LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--XX:UseSVE=0 -Xms512m -Xmx512m',
+            script,
+        )
+        self.assertNotIn("--platform=linux/amd64", script)
+
     def test_gamma_runtime_applies_service_owned_content_overlay_after_base(self) -> None:
         compose_files = gamma_compose_files(ROOT)
         content_base = (
@@ -449,6 +483,52 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
                 start_script,
             )
 
+    def test_tag_service_receives_the_shared_auth_contract_on_all_local_runtimes(self) -> None:
+        service_block = service_compose("tag-service")
+        start_script = START_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("TAG_REDIS_GENERAL_ADDR: redis:6379", service_block)
+        self.assertIn("-e TAG_REDIS_GENERAL_ADDR=redis:6379", start_script)
+        for key in (
+            "AUTH_JWT_SECRET",
+            "AUTH_JWT_ISSUER",
+            "AUTH_JWT_AUDIENCE",
+            "AUTH_JWT_TOKEN_VERSION",
+            "AUTH_DEVICE_TICKET_SECRET",
+            "AUTH_DEVICE_TICKET_ISSUER",
+            "AUTH_DEVICE_TICKET_AUDIENCE",
+            "AUTH_DEVICE_TICKET_TOKEN_VERSION",
+        ):
+            required = f'{key}: "${{{key}:?{key} is required}}"'
+            self.assertIn(required, service_block)
+            self.assertIn(
+                f'-e {key}="${{{key}:?{key} is required}}"',
+                start_script,
+            )
+
+    def test_gamma_fixture_bootstrap_waits_for_tag_projection_before_completion(self) -> None:
+        gamma_compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        start_script = START_SCRIPT.read_text(encoding="utf-8")
+        gamma_proxy = gamma_compose[
+            gamma_compose.index("  gamma-proxy:") :
+            gamma_compose.index("\n    environment:", gamma_compose.index("  gamma-proxy:"))
+        ]
+        tag_dependency = gamma_proxy[
+            gamma_proxy.index("      tag-service:") :
+            gamma_proxy.index("      search-service:")
+        ]
+        fixture_seed = start_script[
+            start_script.index('if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then', start_script.index("seed_tag_service_data()")) :
+            start_script.index(
+                'else\n  echo "[local-gamma] skip tag seed',
+                start_script.index("seed_tag_service_data()"),
+            )
+        ]
+
+        self.assertIn("condition: service_started", tag_dependency)
+        self.assertIn("wait_tag_service_taxonomy_ready()", start_script)
+        self.assertIn("seed_tag_service_data\n  wait_tag_service_taxonomy_ready", fixture_seed)
+
     def test_product_ops_receives_local_elasticsearch_endpoint(self) -> None:
         service_block = service_compose("product-ops-service")
         start_script = START_SCRIPT.read_text(encoding="utf-8")
@@ -459,14 +539,39 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertNotIn("PRODUCT_OPS_LOCAL_LOG_SINK", service_block)
         self.assertNotIn("PRODUCT_OPS_LOCAL_LOG_SINK", start_script)
 
-    def test_premium_pool_proof_uses_a_run_scoped_actor_without_erasing_exposure(self) -> None:
+    def test_gamma_startup_precreates_the_portal_mount_root(self) -> None:
         source = START_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn('run_id = Path(report_path).parent.name', source)
-        self.assertIn('subject=f"premium-pool-seed-{run_id}"', source)
-        self.assertNotIn('subject="premium-pool-seed",', source)
-        self.assertNotIn('premium-pool-seed-v1', source)
+        self.assertIn('"${LOCAL_GAMMA_PORTAL_ROOT}"', source)
+        self.assertIn(
+            '"${LOCAL_GAMMA_PORTAL_ROOT}" \\\n'
+            '  "${QWQ_OUTPUT_ROOT}/env/repo/local/control-plane/process/',
+            source,
+        )
+
+    def test_premium_pool_proof_uses_authoritative_fixture_actor(self) -> None:
+        source = START_SCRIPT.read_text(encoding="utf-8")
+
+        premium_pool_seed = source[
+            source.index("seed_gamma_premium_pool_data()"):
+            source.index("seed_search_index()", source.index("seed_gamma_premium_pool_data()"))
+        ]
+
+        self.assertIn(
+            'environment="gamma",\n'
+            '    target_name="gamma-local",\n'
+            ")",
+            premium_pool_seed,
+        )
+        self.assertNotIn("subject=", premium_pool_seed)
         self.assertNotIn("redis-cli --scan", source)
+        self.assertIn('acceptance_actor = "fixture_user_current"', premium_pool_seed)
+        self.assertIn('"SREM"', premium_pool_seed)
+        self.assertIn("from datetime import datetime, timedelta, timezone", premium_pool_seed)
+        self.assertIn("rec:served:", premium_pool_seed)
+        self.assertIn("rec:impressed:", premium_pool_seed)
+        self.assertIn("rec:negative:", premium_pool_seed)
+        self.assertNotIn('"DEL"', premium_pool_seed)
 
     def test_gamma_startup_removes_only_non_running_named_residue(self) -> None:
         source = START_SCRIPT.read_text(encoding="utf-8")

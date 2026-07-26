@@ -52,3 +52,24 @@ def test_search_capacity_uses_canonical_stackctl_release_profile():
     ).read_text(encoding="utf-8")
     assert '"--profile"' in source
     assert '"release"' in source
+
+
+def test_search_capacity_uses_canonical_cloud_target_aliases():
+    source = (
+        SCRIPTS_ROOT / "search" / "verify_search_local_gamma_capacity.py"
+    ).read_text(encoding="utf-8")
+    assert '"objectTypes": ["article", "entity", "location"]' in source
+    assert '.get("provider")' in source
+
+
+def test_local_gamma_seed_backfills_every_cloud_search_projection():
+    source = (
+        ROOT / "quwoquan_app" / "scripts" / "gamma" / "start_local_gamma_mirror.sh"
+    ).read_text(encoding="utf-8")
+    for command in (
+        "./services/content-service/cmd/search-backfill",
+        "./services/entity-service/cmd/search-backfill",
+        "./services/circle-service/cmd/search-backfill",
+        "./services/user-service/cmd/search-backfill",
+    ):
+        assert command in source

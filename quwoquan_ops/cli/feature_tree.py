@@ -798,6 +798,9 @@ def validate_journey_bidirection(nodes: list[Node]) -> list[str]:
     journeys = list(re.finditer(r"^###\s+(JNY-\d{3,})\b", root_text, re.MULTILINE))
     for index, match in enumerate(journeys):
         end = journeys[index + 1].start() if index + 1 < len(journeys) else len(root_text)
+        next_section = re.search(r"^##\s+", root_text[match.end() :], re.MULTILINE)
+        if next_section is not None:
+            end = min(end, match.end() + next_section.start())
         block = root_text[match.start() : end]
         participants = set(re.findall(r"\]\(\./([A-Za-z0-9_.-]+)/spec\.md\)", block))
         scenario_matches = list(re.finditer(r"^####\s+(SCN-\d{3,})\b", block, re.MULTILINE))

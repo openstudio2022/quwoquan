@@ -7,6 +7,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/core/services/hive_runtime.dart';
 
+const String kAssistantLearningFactOutboxName =
+    'assistant_learning_fact_outbox';
+
 abstract interface class ActorQueueEncryptionKeyStore {
   Future<String?> read(String key);
 
@@ -68,16 +71,43 @@ final class ActorQueueStorage {
   final ActorQueueEncryptionKeyStore _keyStore;
   final Random _random;
   final ActorQueueSignalObserver signalObserver;
+  final Map<String, Future<Box<String>?>> _openingBoxes =
+      <String, Future<Box<String>?>>{};
 
-  Future<Box<String>?> open(
-    ActorQueuePartition partition,
-    String queueName,
-  ) async {
-    if (!partition.canPersist) return null;
+  Future<Box<String>?> open(ActorQueuePartition partition, String queueName) {
+    if (!partition.canPersist) return Future<Box<String>?>.value();
+    final boxName = partition.boxName(queueName);
+    if (Hive.isBoxOpen(boxName)) {
+      return Future<Box<String>?>.value(Hive.box<String>(boxName));
+    }
+    final inFlight = _openingBoxes[boxName];
+    if (inFlight != null) {
+      return inFlight;
+    }
+    late final Future<Box<String>?> opening;
+    opening =
+        _openBox(
+          partition: partition,
+          queueName: queueName,
+          boxName: boxName,
+        ).whenComplete(() {
+          if (identical(_openingBoxes[boxName], opening)) {
+            _openingBoxes.remove(boxName);
+          }
+        });
+    _openingBoxes[boxName] = opening;
+    return opening;
+  }
+
+  Future<Box<String>?> _openBox({
+    required ActorQueuePartition partition,
+    required String queueName,
+    required String boxName,
+  }) async {
     final key = await _loadOrCreateKey(partition, queueName);
     if (key == null) return null;
     final box = await HiveRuntime.openEncryptedStringBoxOrNull(
-      partition.boxName(queueName),
+      boxName,
       encryptionKey: key,
     );
     if (box == null) {
@@ -150,6 +180,10 @@ final class ActorQueueStorage {
     String queueName,
   ) async {
     final boxName = partition.boxName(queueName);
+    final opening = _openingBoxes[boxName];
+    if (opening != null) {
+      await opening;
+    }
     if (Hive.isBoxOpen(boxName)) {
       await Hive.box<String>(boxName).close();
     }

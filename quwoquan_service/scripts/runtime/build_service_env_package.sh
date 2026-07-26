@@ -57,6 +57,13 @@ if [[ -d "$environment/resources" ]]; then
   cp -R "$environment/resources/." "$stage_dir/resources/environment/"
 fi
 
+if [[ "$service" == "assistant-service" && "$env_name" != "alpha" ]]; then
+  (
+    cd quwoquan_service
+    go test ./services/assistant-service/cmd/policy-publish
+  ) >/dev/null
+fi
+
 if command -v kustomize >/dev/null 2>&1; then
   kustomize build "$overlay" > "$stage_dir/manifests/all.yaml"
 elif command -v kubectl >/dev/null 2>&1; then
@@ -184,6 +191,31 @@ config_payload = yaml.safe_load(config_path.read_text()) or {}
 config_version = str(((config_payload.get("config") or {}).get("version") or "")).strip()
 if not config_version.startswith("sha256:"):
     raise SystemExit("FAIL: rendered CONFIG_VERSION must be a sha256 digest")
+requires_policy_publication = (
+    service == "assistant-service" and environment in {"beta", "gamma", "prod"}
+)
+if requires_policy_publication:
+    publication = config_payload.get("policy_publication") or {}
+    if not isinstance(publication, dict):
+        raise SystemExit("FAIL: assistant policy_publication config must be a mapping")
+    policy_resource_root = owner / "resources" / "policies"
+    for field in ("release_artifact_ref", "rollout_artifact_ref"):
+        reference = safe_relative_path(
+            publication.get(field),
+            field=f"policy_publication.{field}",
+            manifest=config_path,
+        )
+        artifact = (policy_resource_root / reference).resolve()
+        try:
+            artifact.relative_to(policy_resource_root.resolve())
+        except ValueError as exc:
+            raise SystemExit(
+                f"FAIL: policy publication {field} escapes immutable policy resources"
+            ) from exc
+        if not artifact.is_file():
+            raise SystemExit(
+                f"FAIL: missing assistant policy publication {field}: {artifact}"
+            )
 revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
 image_digest = ("sha256:" + source_digest.removeprefix("sha256:"))
 (package / "image.lock").write_text(
@@ -256,6 +288,104 @@ runtime_mount = next(
 )
 if not isinstance(runtime_mount, dict) or not str(runtime_mount.get("mountPath") or "").strip():
     raise SystemExit(f"FAIL: deployment {service} must mount runtime-config in its service container")
+
+if requires_policy_publication:
+    init_containers = deployment_document["spec"]["template"].setdefault("spec", {}).get(
+        "initContainers"
+    ) or []
+    policy_init = next(
+        (
+            item
+            for item in init_containers
+            if isinstance(item, dict) and item.get("name") == "policy-publish"
+        ),
+        None,
+    )
+    if not isinstance(policy_init, dict):
+        raise SystemExit(
+            "FAIL: assistant-service beta/gamma/prod deployment requires policy publication init container"
+        )
+    if policy_init.get("command") != ["/usr/local/bin/assistant-policy-publish"]:
+        raise SystemExit(
+            "FAIL: policy publication init container must invoke assistant-policy-publish"
+        )
+    policy_init["image"] = f"quwoquan/{service}@{image_digest}"
+    init_env = {
+        str(item.get("name") or ""): item
+        for item in policy_init.get("env") or []
+        if isinstance(item, dict)
+    }
+    if init_env.get("ASSISTANT_POLICY_RESOURCE_ROOT", {}).get("value") != "/app/resources/policies":
+        raise SystemExit(
+            "FAIL: policy publication init container must use immutable image policy resources"
+        )
+    init_mounts = policy_init.get("volumeMounts") or []
+    if not any(
+        isinstance(item, dict) and item.get("name") == "runtime-config"
+        for item in init_mounts
+    ):
+        raise SystemExit("FAIL: policy publication init container must mount runtime config")
+
+    policy_job = next(
+        (
+            document
+            for document in documents
+            if document.get("kind") == "Job"
+            and str((document.get("metadata") or {}).get("name") or "").startswith(
+                "assistant-policy-publish-"
+            )
+        ),
+        None,
+    )
+    if not isinstance(policy_job, dict):
+        raise SystemExit(
+            "FAIL: assistant-service beta/gamma/prod package requires policy publication Job"
+        )
+    policy_job_namespace = str((policy_job.get("metadata") or {}).get("namespace") or "")
+    if policy_job_namespace != expected_namespace:
+        raise SystemExit(
+            f"FAIL: policy publication Job namespace {policy_job_namespace!r} "
+            f"must equal {expected_namespace!r}"
+        )
+    job_template = (
+        policy_job.setdefault("spec", {})
+        .setdefault("template", {})
+    )
+    job_annotations = job_template.setdefault("metadata", {}).setdefault(
+        "annotations", {}
+    )
+    job_annotations["quwoquan.io/config-version"] = config_version
+    job_containers = job_template.setdefault("spec", {}).get("containers") or []
+    policy_container = next(
+        (
+            item
+            for item in job_containers
+            if isinstance(item, dict) and item.get("name") == "policy-publish"
+        ),
+        None,
+    )
+    if not isinstance(policy_container, dict):
+        raise SystemExit("FAIL: policy publication Job has no policy-publish container")
+    if policy_container.get("command") != ["/usr/local/bin/assistant-policy-publish"]:
+        raise SystemExit("FAIL: policy publication Job must invoke assistant-policy-publish")
+    policy_container["image"] = f"quwoquan/{service}@{image_digest}"
+    policy_env = {
+        str(item.get("name") or ""): item
+        for item in policy_container.get("env") or []
+        if isinstance(item, dict)
+    }
+    if policy_env.get("ASSISTANT_POLICY_RESOURCE_ROOT", {}).get("value") != "/app/resources/policies":
+        raise SystemExit(
+            "FAIL: policy publication Job must use the immutable image policy resource root"
+        )
+    policy_volumes = job_template["spec"].get("volumes") or []
+    if not any(
+        isinstance(item, dict)
+        and item.get("name") == "runtime-config"
+        and str((item.get("configMap") or {}).get("name") or "") == runtime_config_name
+        for item in policy_volumes
+    ):
+        raise SystemExit("FAIL: policy publication Job must mount the runtime config")
 
 if materialized_resources:
     resource_config_name = f"{service}-runtime-resources"

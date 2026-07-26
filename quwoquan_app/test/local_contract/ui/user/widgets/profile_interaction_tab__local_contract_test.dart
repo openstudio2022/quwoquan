@@ -108,6 +108,7 @@ class _RecordingChatRepository extends MockChatRepository {
     String? title,
     int? maxGroupSize,
     List<String>? initialMemberIds,
+    String? idempotencyKey,
   }) {
     createConversationCalls++;
     lastConversationType = type;
@@ -117,6 +118,7 @@ class _RecordingChatRepository extends MockChatRepository {
       title: title,
       maxGroupSize: maxGroupSize,
       initialMemberIds: initialMemberIds,
+      idempotencyKey: idempotencyKey,
     );
   }
 }

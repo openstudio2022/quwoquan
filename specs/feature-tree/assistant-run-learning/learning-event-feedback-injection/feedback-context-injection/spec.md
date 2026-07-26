@@ -67,5 +67,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：当前 Run 创建不读取 versioned feedback projection，模型请求也没有由 consent、threshold 和 field allowlist 驱动的 learning context；直接拼接画像或原始反馈会泄露敏感字段。
+- 影响或价值：仍缺获批 Prod Provider conformance 后对授权、撤权与真实模型请求的只读端到端回执；Run 已通过 account + persona scoped typed projection reader 构造 context，consent、最小样本与 policy allowlist 均 fail-closed，投影 definition v2 阻断跨 persona 聚合，模型 bridge 只接收脱敏 aggregate snapshot，Gamma 已证明冻结策略下的真实 Run 可执行。
 - 完成判定：Run 只读取 owner-scoped typed feedback context reader。policy 显式决定允许字段、最小样本阈值和用户撤销/opt-out。模型 bridge 仅接收 allowlisted summary，不接收原始 query/answer/correction，且 local/API/App 证明命中、低样本不注入、撤销后立即排除和跨 owner fail-closed。`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

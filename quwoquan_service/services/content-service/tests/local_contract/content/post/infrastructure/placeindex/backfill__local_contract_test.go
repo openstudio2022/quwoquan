@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"quwoquan_service/runtime/search/es"
+	"quwoquan_service/services/content-service/internal/content/post/application/searchprojection"
 	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 )
 
@@ -93,15 +94,50 @@ func TestBackfillListFailurePropagates(t *testing.T) {
 	}
 }
 
-func TestBackfillNilInputsNoOp(t *testing.T) {
-	if _, err := Backfill(context.Background(), nil, fakeReader{}, NewInMemoryPlaceStore(), 0); err != nil {
-		t.Fatalf("nil indexer must be a no-op, got %v", err)
+func TestBackfillDeletesPlacesWithoutLiveReferences(t *testing.T) {
+	store := NewInMemoryPlaceStore()
+	if err := store.Upsert(context.Background(), searchprojection.PlaceSnapshot{
+		PlaceID:    "place:obsolete",
+		Name:       "旧地点",
+		RefPostIDs: []string{"deleted-post"},
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := Backfill(context.Background(), &recordingBulk{}, nil, NewInMemoryPlaceStore(), 0); err != nil {
-		t.Fatalf("nil reader must be a no-op, got %v", err)
+	bulk := &recordingBulk{}
+	report, err := Backfill(
+		context.Background(),
+		bulk,
+		fakeReader{},
+		store,
+		10,
+	)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := Backfill(context.Background(), &recordingBulk{}, fakeReader{}, nil, 0); err != nil {
-		t.Fatalf("nil store must be a no-op, got %v", err)
+	if report.DeletedPlaces != 1 ||
+		len(bulk.events) != 1 ||
+		bulk.events[0].Op != es.OpDelete ||
+		bulk.events[0].Doc.ObjectID != "place:obsolete" {
+		t.Fatalf("obsolete place was not reconciled: report=%#v events=%#v", report, bulk.events)
+	}
+	places, err := store.ListAll(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(places) != 0 {
+		t.Fatalf("obsolete materialized snapshot remains: %#v", places)
+	}
+}
+
+func TestBackfillMissingInputsFailFast(t *testing.T) {
+	if _, err := Backfill(context.Background(), nil, fakeReader{}, NewInMemoryPlaceStore(), 0); err == nil {
+		t.Fatal("nil indexer must fail")
+	}
+	if _, err := Backfill(context.Background(), &recordingBulk{}, nil, NewInMemoryPlaceStore(), 0); err == nil {
+		t.Fatal("nil reader must fail")
+	}
+	if _, err := Backfill(context.Background(), &recordingBulk{}, fakeReader{}, nil, 0); err == nil {
+		t.Fatal("nil store must fail")
 	}
 }
 

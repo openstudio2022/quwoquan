@@ -106,7 +106,7 @@ type IncomingCallDeliveryStore interface {
 		version int64,
 		now time.Time,
 	) error
-	MarkIncomingCallSentUnconfirmed(
+	MarkIncomingCallExternalAccepted(
 		ctx context.Context,
 		jobID string,
 		version int64,
@@ -132,7 +132,7 @@ type IncomingCallDeliveryStore interface {
 		eventID string,
 		now time.Time,
 	) error
-	MarkIncomingCallCancellationPushSubmitted(
+	MarkIncomingCallCancellationExternalAccepted(
 		ctx context.Context,
 		jobID string,
 		version int64,
@@ -385,7 +385,7 @@ func (c *IncomingCallDeliveryCoordinator) ProcessDue(
 		)
 		return true, errors.Join(err, requeueErr)
 	}
-	if err := c.store.MarkIncomingCallSentUnconfirmed(
+	if err := c.store.MarkIncomingCallExternalAccepted(
 		ctx,
 		job.ID,
 		job.Version,
@@ -396,7 +396,7 @@ func (c *IncomingCallDeliveryCoordinator) ProcessDue(
 	}
 	c.observer.RecordIncomingCallTransition(
 		notification.IncomingCallStatusPushQueued,
-		notification.IncomingCallStatusSentUnconfirmed,
+		notification.IncomingCallStatusExternalAccepted,
 		"accepted",
 	)
 	return true, nil
@@ -444,7 +444,7 @@ func (c *IncomingCallDeliveryCoordinator) HandleCancellation(
 			errs = append(errs, err)
 			continue
 		}
-		if err := c.store.MarkIncomingCallCancellationPushSubmitted(
+		if err := c.store.MarkIncomingCallCancellationExternalAccepted(
 			ctx,
 			work.Job.ID,
 			work.Job.Version,

@@ -10,7 +10,6 @@ import (
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	accountports "quwoquan_service/services/user-service/internal/account/user_account/domain/ports"
 	usersettingsapp "quwoquan_service/services/user-service/internal/account/user_settings/application"
-	proposalapp "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/application"
 	followingapp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/application"
 	visitapp "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/application"
 	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
@@ -33,7 +32,6 @@ type UserHandler struct {
 	deviceRegistrationQueries  *registrationapp.QueryFacade
 	subAccount                 *application.SubAccountService
 	interestProfile            *application.InterestProfileService
-	profileProposal            *proposalapp.Facade
 	subjectFollow              *subjectfollowapp.SubjectFollowService
 	followedSubjectVisit       *visitapp.VisitService
 	followingSubjects          *followingapp.QueryService
@@ -108,14 +106,10 @@ func NewUserHandler(
 	deviceRegistrationQueries *registrationapp.QueryFacade,
 	subAccount *application.SubAccountService,
 	interestProfile *application.InterestProfileService,
-	profileProposal *proposalapp.Facade,
 	subjectFollow *subjectfollowapp.SubjectFollowService,
 	followedSubjectVisit *visitapp.VisitService,
 	followingSubjects *followingapp.QueryService,
 ) (*UserHandler, error) {
-	if profileProposal == nil {
-		return nil, errors.New("ProfileUpdateProposal Facade is required")
-	}
 	if settingsCommands == nil || settingsQueries == nil {
 		return nil, errors.New("UserSettings facades are required")
 	}
@@ -138,7 +132,6 @@ func NewUserHandler(
 		deviceRegistrationQueries:  deviceRegistrationQueries,
 		subAccount:                 subAccount,
 		interestProfile:            interestProfile,
-		profileProposal:            profileProposal,
 		subjectFollow:              subjectFollow,
 		followedSubjectVisit:       followedSubjectVisit,
 		followingSubjects:          followingSubjects,
@@ -181,7 +174,6 @@ func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /user/sub-accounts/{targetSubAccountId}/block", h.handleUnblock)
 	mux.HandleFunc("GET /user/blocked", h.handleListBlocked)
 
-	h.registerProfileProposalRoutes(mux)
 	h.registerSubjectFollowRoutes(mux)
 	h.registerAccountLifecycleRoutes(mux)
 	h.registerDeviceRegistrationRoutes(mux)

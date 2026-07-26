@@ -121,8 +121,14 @@ func (s *AssistantService) HandleAssistantMentioned(ctx context.Context, evt Ass
 		Input: assistant.AssistantTurnInput{
 			Text: summary,
 		},
-		Trigger:         assistant.AssistantTurnTrigger{Type: "chat_assistant_mentioned"},
+		Trigger: assistant.AssistantTurnTrigger{
+			Type:      "chat_assistant_mentioned",
+			MessageID: evt.MessageID,
+		},
 		ClientRequestID: mentionIdentity + ":turn",
+		RequestContext: assistant.AssistantRunRequestContext{
+			PersonaID: strings.TrimSpace(evt.SenderID),
+		},
 	})
 	if err != nil {
 		return err

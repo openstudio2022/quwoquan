@@ -17,6 +17,7 @@ services:
       CONFIG_VERSION: "${QWQ_COMPOSE_ASSISTANT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_ASSISTANT_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
       ASSISTANT_SERVICE_ADDR: ":18087"
+      ASSISTANT_POLICY_RESOURCE_ROOT: /app/resources/policies
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DATABASE: quwoquan_assistant
       POSTGRES_DSN: "${ASSISTANT_POSTGRES_DSN:-postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable}"

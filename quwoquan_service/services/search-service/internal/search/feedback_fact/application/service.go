@@ -45,29 +45,16 @@ type Observer interface {
 }
 
 type Service struct {
-	sink    Sink
-	signals signalapplication.Publisher
+	sink Sink
 }
 
-type Option func(*Service)
-
-func WithSignalPublisher(publisher signalapplication.Publisher) Option {
-	return func(service *Service) {
-		service.signals = publisher
-	}
+func NewService(sink Sink) *Service {
+	return &Service{sink: sink}
 }
 
-func NewService(sink Sink, options ...Option) *Service {
-	service := &Service{sink: sink}
-	for _, option := range options {
-		option(service)
-	}
-	return service
-}
-
-// Report persists the command receipt and semantic fact before publishing a
-// stable click signal. Retrying either the same key or a fresh key for the same
-// fact therefore converges to one downstream affinity update.
+// Report transactionally persists the command receipt, semantic fact, and—when
+// applicable—an independent signal-delivery row. The relay acknowledges only
+// that mutable row, so a feedback fact is never rewritten after commit.
 func (s *Service) Report(
 	ctx context.Context,
 	event Event,
@@ -85,19 +72,6 @@ func (s *Service) Report(
 	if err := s.sink.Record(ctx, event, meta); err != nil {
 		return err
 	}
-	if event.EventType != "click" || s.signals == nil {
-		return nil
-	}
-	if err := s.signals.PublishSearchSignal(ctx, signalapplication.Signal{
-		SignalID:         signalID(event),
-		SignalType:       "click",
-		SearchRequestID:  event.SearchRequestID,
-		UserID:           event.ViewerID,
-		EngagedObjectIDs: []string{event.ObjectID},
-		CreatedAt:        time.Now().UTC(),
-	}); err != nil {
-		return fmt.Errorf("%w: publish click signal: %v", ErrUnavailable, err)
-	}
 	return nil
 }
 
@@ -112,12 +86,36 @@ func normalize(event Event) Event {
 	return event
 }
 
-func signalID(event Event) string {
+// RecommendationSignal returns the stable downstream signal represented by a
+// committed feedback fact. Non-click facts deliberately produce no signal.
+func RecommendationSignal(
+	event Event,
+	createdAt time.Time,
+) (signalapplication.Signal, bool) {
+	event = normalize(event)
+	if event.EventType != "click" ||
+		event.SearchRequestID == "" ||
+		event.ObjectID == "" {
+		return signalapplication.Signal{}, false
+	}
+	if createdAt.IsZero() {
+		return signalapplication.Signal{}, false
+	}
 	semanticKey := strings.Join(
 		[]string{event.SearchRequestID, event.EventType, event.ObjectID},
 		"\x00",
 	)
-	return fmt.Sprintf("feedback:%x", sha256.Sum256([]byte(semanticKey)))
+	return signalapplication.Signal{
+		SignalID: fmt.Sprintf(
+			"feedback:%x",
+			sha256.Sum256([]byte(semanticKey)),
+		),
+		SignalType:       "click",
+		SearchRequestID:  event.SearchRequestID,
+		UserID:           event.ViewerID,
+		EngagedObjectIDs: []string{event.ObjectID},
+		CreatedAt:        createdAt.UTC(),
+	}, true
 }
 
 func validate(event Event, meta CommandMeta) error {
@@ -133,8 +131,14 @@ func validate(event Event, meta CommandMeta) error {
 		(event.ObjectID == "" || event.Target == "" || event.RankPosition <= 0) {
 		return fmt.Errorf("%w: click requires objectId, target and positive rankPosition", ErrInvalid)
 	}
-	if event.RankPosition < 0 || event.DwellMs < 0 {
-		return fmt.Errorf("%w: rankPosition and dwellMs must not be negative", ErrInvalid)
+	if event.RankPosition < 0 {
+		return fmt.Errorf("%w: rankPosition must not be negative", ErrInvalid)
+	}
+	if event.EventType == "dwell" && event.DwellMs <= 0 {
+		return fmt.Errorf("%w: dwell requires positive dwellMs", ErrInvalid)
+	}
+	if event.EventType != "dwell" && event.DwellMs != 0 {
+		return fmt.Errorf("%w: only dwell may include dwellMs", ErrInvalid)
 	}
 	if meta.IdempotencyKey == "" || meta.CommandDigest == "" {
 		return fmt.Errorf("%w: idempotency metadata is required", ErrInvalid)

@@ -58,11 +58,23 @@ collections:
         cancellationPushRequired: 1
         cancellationPushSubmittedAt: 1
       sparse: true
+    - name: uq_notification_incoming_call_external_interaction
+      keys:
+        externalInteractionId: 1
+      unique: true
+      sparse: true
+    - name: uq_notification_incoming_call_cancellation_external_interaction
+      keys:
+        cancellationExternalInteractionId: 1
+      unique: true
+      sparse: true
     description: 'Incoming Call 使用同一 NotificationDeliveryJob 权威集合；每 target endpoint
 
       以 deliveryKey+destinationRef 幂等。realtime_dispatched→realtime_presented
 
-      由 device ACK CAS；grace 超时才进入 push_queued。202 只写 sent_unconfirmed。
+      由 device ACK CAS；grace 超时才进入 push_queued。Integration 202 只写
+
+      external_accepted；provider result receipt 才写 sent_unconfirmed。
 
       已展示或已提交 ring 的 endpoint 进入终态时持久化 cancellationPushRequired，
 
@@ -81,4 +93,17 @@ collections:
     entity: NotificationDeliveryJob
     role: append_only
     description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
+  notification_external_interaction_result_inbox:
+    entity: ExternalInteractionResultInboxReceipt
+    role: append_only
+    indexes:
+    - name: idx_notification_external_result_request
+      keys:
+        requestId: 1
+        occurredAt: 1
+    - name: idx_notification_external_result_inbox_ttl
+      keys:
+        createdAt: 1
+      expireAfterSeconds: 2592000
+    description: 以 attemptId 为主键的 provider result receipt；只保存不可逆 providerRequestDigest，供幂等消费与 ring/cancel 完整时间线回读。
 role: authoritative

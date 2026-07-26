@@ -32,6 +32,32 @@
 - 影响 Story：[`zero-risk-production-readiness`](./zero-risk-production-readiness/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 灾备准出只信任 hosted 隔离恢复 receipt
+- 决策：灾备准出只接受由受控 data-plane 工作流生成、并绑定计划摘要与恢复目标的
+  hosted receipt；本机 dump、CI 合成文件和页面手工输入均不得作为生产证据。
+- 理由：备份文件存在无法证明加密、异地副本、可恢复性和 RPO/RTO。release 必须对
+  receipt 的内容摘要、KMS key version、远端副本状态、隔离恢复目标、恢复耗时和
+  容量成本水位 fail-closed。
+- 被否决方案：把 `/var/backups` 的 gzip dump、默认 localhost 连接或过期报告作为
+  release green 条件。
+- 约束与影响：receipt 仅保存引用、摘要和脱敏状态；签名或远端操作身份由 hosted
+  authority 证明。缺少受控 data-plane/KMS/云存储权限时，production workflow 必须阻断。
+- 关联要求：`REQ-005`
+- 影响 Story：同 DEC-001，约束 [`zero-risk-production-readiness`](./zero-risk-production-readiness/spec.md) 的灾备准出。
+- 关联验收：`SIT-005`
+
+<a id="dec-003"></a>
+### DEC-003 第一方容器预验证与正式 release transaction 物理分轨
+
+- 决策：预验证只使用独立 Compose project、远端目录和 rootless user systemd unit；只消费 Service Pipeline 不可变制品，不进入 rollout lock、SLO、正式 release ledger 或 receipt。
+- 理由：在 Provider、SFU、真实数据和公网入口尚未就绪时，仍需验证第一方容器可部署性，但该结果不能被误用为生产准出。
+- 被否决方案：使用 `latest`、远端临时构建、旧容器、裸 IP public base，或把容器启动成功写成正式发布成功。
+- 约束与影响：隔离数据使用重新摘要的不可提升配置投影和独立随机认证材料，unit 不得继承正式 credentials；报告必须并列输出 container runtime、Provider readiness 与 release eligibility，后两者在完整生产证据前固定为 `GATE_BLOCK`。
+- 关联要求：`REQ-009`
+- 影响 Story：在 [`zero-risk-production-readiness`](./zero-risk-production-readiness/spec.md) 中约束预验证与正式准出分轨。
+- 关联验收：`SIT-008`、`GWT-003`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

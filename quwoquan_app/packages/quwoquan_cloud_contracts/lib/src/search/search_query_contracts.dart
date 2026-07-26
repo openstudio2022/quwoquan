@@ -14,19 +14,29 @@ final class CanonicalSearchQuery {
     required String query,
     this.mode = CanonicalSearchMode.result,
     Iterable<String> objectTypes = const <String>[],
+    Iterable<String> ids = const <String>[],
     this.limit = 20,
   }) : query = _requiredText(query, 'query'),
        objectTypes = List<String>.unmodifiable(
-         objectTypes.map((item) => item.trim()).where((item) => item.isNotEmpty),
+         objectTypes
+             .map((item) => item.trim())
+             .where((item) => item.isNotEmpty),
+       ),
+       ids = List<String>.unmodifiable(
+         ids.map((item) => item.trim()).where((item) => item.isNotEmpty),
        ) {
     if (limit <= 0 || limit > 50) {
       throw ArgumentError.value(limit, 'limit', 'must be between 1 and 50');
+    }
+    if (this.ids.length > 20) {
+      throw ArgumentError.value(ids, 'ids', 'must contain at most 20 items');
     }
   }
 
   final String query;
   final CanonicalSearchMode mode;
   final List<String> objectTypes;
+  final List<String> ids;
   final int limit;
 }
 
@@ -174,15 +184,17 @@ CloudOperationRequestPayload encodeCanonicalSearchQuery(
     'query': query.query,
     'mode': query.mode.wireValue,
     'objectTypes': query.objectTypes,
+    'ids': query.ids,
     'limit': query.limit,
   },
 );
 
 CanonicalSearchResult decodeCanonicalSearchResult(Object? value) {
   final root = _object(value, 'CanonicalSearchResult');
-  final hits = _list(root['hits'], 'CanonicalSearchResult.hits')
-      .map(_decodeHit)
-      .toList(growable: false);
+  final hits = _list(
+    root['hits'],
+    'CanonicalSearchResult.hits',
+  ).map(_decodeHit).toList(growable: false);
   return CanonicalSearchResult(
     hits: hits,
     requestId: _requiredText(root['requestId'], 'requestId'),
@@ -225,14 +237,13 @@ CanonicalSearchHit _decodeHit(Object? value) {
     snippet: _optionalText(hit['snippet']),
     score: _optionalDouble(hit['score']) ?? 0,
     matchedField: matchedField,
-    rankReasons: _list(
-      hit['rankReasons'],
-      'rankReasons',
-      optional: true,
-    ).map((reason) {
-      final map = _object(reason, 'rank reason');
-  return _optionalText(map['label']) ?? '';
-    }).where((label) => label.isNotEmpty).toList(growable: false),
+    rankReasons: _list(hit['rankReasons'], 'rankReasons', optional: true)
+        .map((reason) {
+          final map = _object(reason, 'rank reason');
+          return _optionalText(map['label']) ?? '';
+        })
+        .where((label) => label.isNotEmpty)
+        .toList(growable: false),
     rankPosition: _optionalInt(hit['rankPosition']),
     coverWidth: _positiveDouble(hit['coverWidth'] ?? payload['coverWidth']),
     coverHeight: _positiveDouble(hit['coverHeight'] ?? payload['coverHeight']),
@@ -280,9 +291,9 @@ CanonicalSearchIntersectionReason? _decodeIntersectionReason(Object? value) {
 CanonicalSearchDegradeSignal _decodeDegradeSignal(Object? value) {
   final signal = _object(value, 'degradeSignal');
   return CanonicalSearchDegradeSignal(
-        code: _optionalText(signal['code']) ?? '',
-        message: _optionalText(signal['message']) ?? '',
-        objectType: _optionalText(signal['objectType']),
+    code: _optionalText(signal['code']) ?? '',
+    message: _optionalText(signal['message']) ?? '',
+    objectType: _optionalText(signal['objectType']),
   );
 }
 
@@ -300,11 +311,7 @@ Map<String, Object?> _optionalObject(Object? value, String context) {
   return _object(value, context);
 }
 
-List<Object?> _list(
-  Object? value,
-  String context, {
-  bool optional = false,
-}) {
+List<Object?> _list(Object? value, String context, {bool optional = false}) {
   if (value == null && optional) {
     return const <Object?>[];
   }

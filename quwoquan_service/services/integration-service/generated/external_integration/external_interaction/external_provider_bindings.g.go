@@ -46,6 +46,19 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 			RequiredRedisScenes: []string{
 			},
 		},
+		"runtime.message.transport": {
+			State: "enabled",
+			AdapterID: "infra.redis.message_transport_fixture",
+			EndpointRef: "",
+			EndpointEnvironmentKeys: map[string]string{
+			},
+			SecretEnvironmentKeys: []string{
+			},
+			TimeoutMilliseconds: 5000,
+			RequiredRedisScenes: []string{
+				"general",
+			},
+		},
 	},
 	"beta": {
 		"identity.sms.otp": {
@@ -76,6 +89,19 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 			RequiredRedisScenes: []string{
 			},
 		},
+		"runtime.message.transport": {
+			State: "enabled",
+			AdapterID: "infra.redis.message_transport",
+			EndpointRef: "",
+			EndpointEnvironmentKeys: map[string]string{
+			},
+			SecretEnvironmentKeys: []string{
+			},
+			TimeoutMilliseconds: 5000,
+			RequiredRedisScenes: []string{
+				"general",
+			},
+		},
 	},
 	"gamma": {
 		"identity.sms.otp": {
@@ -104,6 +130,19 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 			},
 			TimeoutMilliseconds: 1000,
 			RequiredRedisScenes: []string{
+			},
+		},
+		"runtime.message.transport": {
+			State: "enabled",
+			AdapterID: "infra.redis.message_transport",
+			EndpointRef: "",
+			EndpointEnvironmentKeys: map[string]string{
+			},
+			SecretEnvironmentKeys: []string{
+			},
+			TimeoutMilliseconds: 5000,
+			RequiredRedisScenes: []string{
+				"general",
 			},
 		},
 	},
@@ -144,6 +183,19 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 			},
 			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{
+			},
+		},
+		"runtime.message.transport": {
+			State: "enabled",
+			AdapterID: "infra.redis.message_transport",
+			EndpointRef: "",
+			EndpointEnvironmentKeys: map[string]string{
+			},
+			SecretEnvironmentKeys: []string{
+			},
+			TimeoutMilliseconds: 5000,
+			RequiredRedisScenes: []string{
+				"general",
 			},
 		},
 	},

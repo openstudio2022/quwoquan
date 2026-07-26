@@ -8,8 +8,8 @@ import (
 
 	runtimeconfig "quwoquan_service/runtime/config"
 	usergenerated "quwoquan_service/services/user-service/generated/account/user_account"
-	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	credentialmodel "quwoquan_service/services/user-service/internal/account/credential_binding/domain/model"
+	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	userintegration "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
 )
 
@@ -19,6 +19,13 @@ import (
 var ErrAuthRuntimeCapabilityBlocked = errors.New(
 	"user authentication external capability is blocked",
 )
+
+const nonPromotablePrevalidationEnv = "QWQ_NONPROMOTABLE_PREVALIDATION"
+
+func nonPromotableFirstPartyPrevalidation(appEnv string) bool {
+	return strings.EqualFold(strings.TrimSpace(appEnv), "prod") &&
+		strings.TrimSpace(os.Getenv(nonPromotablePrevalidationEnv)) == "first-party"
+}
 
 // federatedLoginBindings is the explicit production composition for every
 // published federated authorization route. Each field is bound once at
@@ -177,6 +184,16 @@ func resolveAuthRuntimeBinding(
 	appEnv := strings.TrimSpace(os.Getenv("APP_ENV"))
 	if appEnv == "" {
 		appEnv = "alpha"
+	}
+	if nonPromotableFirstPartyPrevalidation(appEnv) {
+		// prod-hosted first-party prevalidation deliberately has no commercial
+		// login Provider. Returning the existing typed blocked condition keeps
+		// those routes unavailable without selecting a fixture or Mock adapter.
+		return authRuntimeBinding{}, fmt.Errorf(
+			"%w: %s for non-promotable first-party prevalidation",
+			ErrAuthRuntimeCapabilityBlocked,
+			capabilityID,
+		)
 	}
 	descriptor, found := usergenerated.ExternalProviderBindingFor(appEnv, capabilityID)
 	if !found {

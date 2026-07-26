@@ -11,17 +11,22 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from core.codec import JsonObject, JsonObjectDecodeError
 from core.paths import CONTROL_PLANE_SHARED_ROOT, REPO_ROOT, recipe_path
 from core.runtime_policy import apply_runtime_policy, load_runtime_policy
 from core.control_types import TargetSelector
 from content.execution import store
+from content.execution.homepage_binding import published_homepage_target_names
+from content.execution.request import RuntimeExecutionRequest
 from governance.provider_policy import load_provider_policy
-from content.execution.workspace import execution_manifest_path, execution_root, load_execution_manifest
+from content.execution.workspace import (
+    execution_manifest_path,
+    execution_request_path,
+    execution_root,
+    load_execution_manifest,
+)
 
 _CLI_PATH = Path(__file__).resolve().parents[2] / "cli.py"
 InvokeCli = Callable[[list[str]], int]
@@ -31,128 +36,6 @@ SELECTION_QUOTA_FIELDS = (
     "imageWorksPerTarget",
     "videoWorksPerTarget",
 )
-
-
-@dataclass(frozen=True, slots=True)
-class RuntimeExecutionRequest:
-    """The public, immutable request recorded in ``0.plan/request.json``."""
-
-    family_ref: str
-    region_ref: str
-    selector: TargetSelector
-    count: int
-    topic: str | None
-    source_providers: tuple[str, ...]
-    homepage_execution_id: str | None
-    target_names: tuple[str, ...]
-
-    def __post_init__(self) -> None:
-        if not self.family_ref or not self.region_ref:
-            raise ValueError("familyRef and regionRef must be non-empty")
-        if not isinstance(self.selector, TargetSelector):
-            raise ValueError("selector must be TargetSelector")
-        if isinstance(self.count, bool) or self.count < 1:
-            raise ValueError("count must be a positive integer")
-        if any(not provider.strip() for provider in self.source_providers):
-            raise ValueError("sourceProviders must contain non-empty provider IDs")
-        if tuple(sorted(set(self.source_providers))) != self.source_providers:
-            raise ValueError("sourceProviders must be deduplicated and sorted")
-        if len(set(self.target_names)) != len(self.target_names):
-            raise ValueError("targetNames must be deduplicated")
-        if any(not name.strip() for name in self.target_names):
-            raise ValueError("targetNames must contain non-empty values")
-        if self.target_names and self.count != len(self.target_names):
-            raise ValueError("targetNames count must equal count")
-
-    @classmethod
-    def from_args(cls, args: argparse.Namespace) -> "RuntimeExecutionRequest":
-        count = getattr(args, "count", None)
-        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
-            raise SystemExit("[task execute] GATE_BLOCK --count must be a positive integer")
-        family_ref = str(getattr(args, "family", "") or "").strip()
-        region_ref = str(getattr(args, "region_ref", "") or "").strip().strip("/")
-        selector_raw = str(getattr(args, "selector", "") or "").strip()
-        if not family_ref or not region_ref:
-            raise SystemExit("[task execute] GATE_BLOCK --family and --region-ref are required")
-        try:
-            selector = TargetSelector(selector_raw)
-        except ValueError as exc:
-            choices = ", ".join(item.value for item in TargetSelector)
-            raise SystemExit(
-                f"[task execute] GATE_BLOCK --selector must be one of: {choices}"
-            ) from exc
-        topic = str(getattr(args, "topic", "") or "").strip() or None
-        homepage_execution_id = str(
-            getattr(args, "homepage_execution_id", "") or ""
-        ).strip() or None
-        providers = tuple(
-            sorted(
-                {
-                    str(value).strip()
-                    for value in (getattr(args, "source_providers", ()) or ())
-                    if str(value).strip()
-                }
-            )
-        )
-        target_names = tuple(
-            str(value).strip()
-            for value in (getattr(args, "target_names", ()) or ())
-            if str(value).strip()
-        )
-        return cls(
-            family_ref=family_ref,
-            region_ref=region_ref,
-            selector=selector,
-            count=count,
-            topic=topic,
-            source_providers=providers,
-            homepage_execution_id=homepage_execution_id,
-            target_names=target_names,
-        )
-
-    @classmethod
-    def from_document(cls, value: object) -> "RuntimeExecutionRequest":
-        try:
-            document = JsonObject.from_value(value, label="execution request")
-            expected = {
-                "familyRef",
-                "regionRef",
-                "selector",
-                "count",
-                "topic",
-                "sourceProviders",
-                "homepageExecutionId",
-                "targetNames",
-            }
-            if set(document.to_document()) != expected:
-                raise JsonObjectDecodeError(
-                    "execution request keys must be exactly "
-                    + ", ".join(sorted(expected))
-                )
-            return cls(
-                family_ref=document.string("familyRef"),
-                region_ref=document.string("regionRef").strip().strip("/"),
-                selector=TargetSelector(document.string("selector")),
-                count=document.integer("count"),
-                topic=document.optional_string("topic"),
-                source_providers=document.string_list("sourceProviders"),
-                homepage_execution_id=document.optional_string("homepageExecutionId"),
-                target_names=document.string_list("targetNames"),
-            )
-        except (JsonObjectDecodeError, ValueError) as exc:
-            raise SystemExit(f"[task execute] GATE_BLOCK invalid frozen request: {exc}") from exc
-
-    def to_document(self) -> dict[str, object]:
-        return {
-            "familyRef": self.family_ref,
-            "regionRef": self.region_ref,
-            "selector": self.selector.value,
-            "count": self.count,
-            "topic": self.topic,
-            "sourceProviders": list(self.source_providers),
-            "homepageExecutionId": self.homepage_execution_id,
-            "targetNames": list(self.target_names),
-        }
 
 
 def _default_invoke_cli(argv: list[str]) -> int:
@@ -330,6 +213,7 @@ def _runtime_preflight_argv(execution_id: str) -> list[str]:
         str(evidence),
     ]
 
+
 def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) -> None:
     invoke = invoke or _default_invoke_cli
     recover_stage = str(getattr(args, "recover_stage", "") or "").strip() or None
@@ -399,8 +283,6 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
                 f"[task execute] GATE_BLOCK execution={execution_id}: "
                 "resume may not change retryOf"
             )
-        from content.execution.workspace import execution_request_path
-
         frozen_request = RuntimeExecutionRequest.from_document(
             store.read_json(execution_request_path(execution_id))
         )
@@ -528,6 +410,19 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     homepage_execution_id = str(getattr(args, "homepage_execution_id", "") or "").strip()
     if identity.content_type.value != "homepage" and not homepage_execution_id:
         raise SystemExit("[task execute] GATE_BLOCK post families require --homepage-execution-id")
+    requested_target_names = tuple(getattr(args, "target_names", ()) or ())
+    if identity.content_type.value != "homepage" and requested_target_names:
+        raise SystemExit(
+            "[task execute] GATE_BLOCK post targets are derived from --homepage-execution-id; "
+            "--target is homepage-only"
+        )
+    target_names = (
+        requested_target_names
+        if identity.content_type.value == "homepage"
+        else published_homepage_target_names(
+            homepage_execution_id, region_ref=region_ref, count=count
+        )
+    )
     _run_execution(
         argparse.Namespace(
             execution_id=execution_id,
@@ -539,7 +434,7 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             homepage_execution_id=homepage_execution_id or None,
             region_ref=region_ref,
             selector=target_selector.value,
-            target_names=tuple(getattr(args, "target_names", ()) or ()),
+            target_names=target_names,
             topic=getattr(args, "topic", None),
             source_providers=tuple(getattr(args, "source_providers", ()) or ()),
             vertical=identity.vertical,

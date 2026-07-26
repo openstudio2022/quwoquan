@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata"
 SHARED = METADATA / "_shared" / "test_fixtures"
+CONTRACT_GRAPH = ROOT / "quwoquan_service" / "generated" / "contract_graph.json"
 MANIFESTS = {
     "alpha": SHARED / "app_alpha_seed_manifest.json",
     "beta": SHARED / "app_beta_seed_manifest.json",
@@ -48,6 +49,38 @@ def resolve_fixture_path(raw: str) -> Path:
     if not resolved.is_relative_to(ROOT.resolve()):
         fail(f"fixturePath escapes repository: {raw}")
     return resolved
+
+
+def matches_path_template(path: str, template: str) -> bool:
+    path_parts = path.strip("/").split("/")
+    template_parts = template.strip("/").split("/")
+    return len(path_parts) == len(template_parts) and all(
+        template_part.startswith("{") and template_part.endswith("}")
+        or template_part == path_part
+        for path_part, template_part in zip(path_parts, template_parts)
+    )
+
+
+def verify_content_endpoints_use_contract_paths(manifest: dict, manifest_path: Path) -> None:
+    graph = load_json(CONTRACT_GRAPH)
+    content_templates = [
+        str(operation.get("pathTemplate") or "").strip()
+        for operation in graph.get("operations", [])
+        if operation.get("domain") == "content"
+    ]
+    for item in manifest.get("seedRefs", []):
+        if item.get("domain") != "content":
+            continue
+        for raw_path in item.get("verifiedEndpoints", []):
+            endpoint = str(raw_path).split("?", 1)[0].strip()
+            if not endpoint or not any(
+                matches_path_template(endpoint, template)
+                for template in content_templates
+            ):
+                fail(
+                    f"{rel(manifest_path)} content verifiedEndpoint is not a "
+                    f"canonical ContractGraph path: {raw_path}"
+                )
 
 
 def verify_manifest(env: str, path: Path) -> None:
@@ -90,6 +123,8 @@ def verify_manifest(env: str, path: Path) -> None:
                 env_spec = envs.get(required_env, {})
                 if env_spec.get("repository") != expected_repo:
                     fail(f"{rel(fixture_path)} scenario {scenario.get('id')} has invalid {required_env} repository")
+
+    verify_content_endpoints_use_contract_paths(manifest, path)
 
     if env in ("beta", "gamma") and manifest.get("appAssets", {}).get("alphaOnlyFixtureAllowlist"):
         fail(f"{rel(path)} must not carry alphaOnlyFixtureAllowlist for {env}")

@@ -110,11 +110,20 @@ class RemoteChatRepository implements ChatRepository {
     String? title,
     int? maxGroupSize,
     List<String>? initialMemberIds,
+    String? idempotencyKey,
   }) async {
+    final suppliedIdempotencyKey = idempotencyKey?.trim();
+    if (suppliedIdempotencyKey != null && suppliedIdempotencyKey.isEmpty) {
+      throw ArgumentError.value(
+        idempotencyKey,
+        'idempotencyKey',
+        'must not be blank when supplied',
+      );
+    }
     final conversation = await _conversationCommandWriter.createConversation(
       ChatCreateConversationCommand(
         type: type,
-        idempotencyKey: _idempotencyKeyFactory(),
+        idempotencyKey: suppliedIdempotencyKey ?? _idempotencyKeyFactory(),
         title: title,
         maxGroupSize: maxGroupSize,
         initialMemberIds: initialMemberIds ?? const <String>[],
@@ -354,21 +363,17 @@ class RemoteChatRepository implements ChatRepository {
   // ── 联系人 ──────────────────────────────────────────────────────────────
 
   @override
-  Future<List<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    if ((cursor?.trim() ?? '').isNotEmpty) {
-      throw ArgumentError.value(
-        cursor,
-        'cursor',
-        'ListContacts canonical contract does not support cursor',
-      );
-    }
     final page = await _contactQuery.listContacts(
-      ChatListContactsQuery(limit: limit),
+      ChatListContactsQuery(cursor: cursor, limit: limit),
     );
-    return page.items.map(_mapper.toContact).toList(growable: false);
+    return CursorPage<ChatContactRowDto>(
+      items: page.items.map(_mapper.toContact).toList(growable: false),
+      nextCursor: page.nextCursor,
+    );
   }
 
   @override

@@ -6,7 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_event_record_errors.g.dart';
 
 void main() {
-  test('runApp 前配置失败转换为 metadata 驱动的可重试恢复语义', () {
+  test('runApp 前配置失败转换为 metadata 驱动的外部恢复语义', () {
     final failure = BootstrapFailure.fromError(
       CloudRuntimeConfigurationException(
         runtimeEnv: '',
@@ -21,7 +21,7 @@ void main() {
       failure.errorCode,
       OpsEventRecordErrorCode.startupConfigurationInvalid,
     );
-    expect(failure.runtimeFailure.recovery.action, 'retry');
+    expect(failure.runtimeFailure.recovery.action, 'externalRecovery');
     expect(
       failure.runtimeFailure.context.attributes.map(
         (attribute) => attribute.value,
@@ -41,8 +41,7 @@ void main() {
     );
   });
 
-  testWidgets('恢复根不依赖 Router 或远端 Provider 即可展示重试', (tester) async {
-    var retryCalls = 0;
+  testWidgets('恢复根不依赖 Router 或远端 Provider 即可展示网页版安全出口', (tester) async {
     await tester.pumpWidget(
       BootstrapRecoveryApp(
         failure: BootstrapFailure.fromError(
@@ -51,16 +50,12 @@ void main() {
             invalidKeys: const <String>['CLOUD_GATEWAY_BASE_URL'],
           ),
         ),
-        onRetry: () async {
-          retryCalls++;
-        },
       ),
     );
 
-    expect(find.text('重新尝试'), findsOneWidget);
-    await tester.tap(find.text('重新尝试'));
     await tester.pump();
-    expect(retryCalls, 1);
+    expect(find.text('使用网页版'), findsOneWidget);
+    expect(find.text('重新尝试'), findsNothing);
   });
 
   test('首帧前 Flutter、Platform 和 root isolate 错误都会调度恢复根', () {

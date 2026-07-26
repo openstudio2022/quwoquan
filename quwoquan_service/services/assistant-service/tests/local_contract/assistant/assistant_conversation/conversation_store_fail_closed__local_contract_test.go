@@ -20,7 +20,6 @@ func TestAssistantConversationStoreFailClosed(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	service := NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 	)
@@ -54,7 +53,6 @@ func TestAssistantConversationStoreFailClosed(t *testing.T) {
 func TestAssistantConversationAndRunRequireStableClientRequestID(t *testing.T) {
 	t.Parallel()
 	service := NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),

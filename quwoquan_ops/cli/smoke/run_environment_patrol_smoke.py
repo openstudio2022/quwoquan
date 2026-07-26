@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import base64
 import datetime as dt
+import fcntl
 import json
 import os
 import re
@@ -41,6 +43,9 @@ from quwoquan_ops.cli.lib.local_target_tls import (
     LocalTargetTlsError,
     install_ios_simulator_root_ca,
 )
+from quwoquan_ops.cli.lib.local_runtime_reservation import (
+    acquire_local_runtime_use_lock,
+)
 from quwoquan_ops.cli.lib.patrol_cli import resolve_patrol_cli
 from quwoquan_ops.cli.lib.flutter_android_device_proxy import (
     ANDROID_DEVICE_INVENTORY_ENV,
@@ -66,6 +71,14 @@ IOS_RUNTIME_VERSION_PATTERN = re.compile(r"^\d+\.\d+(?:\.\d+)?$")
 XCODE_IOS_SIMULATOR_SDK_PATTERN = re.compile(
     r"-sdk\s+iphonesimulator(\d+)(?:\.(\d+))?"
 )
+XCTEST_EXECUTION_SUMMARY_PATTERN = re.compile(
+    r"Executed\s+(?P<executed>\d+)\s+tests?,\s+with\s+(?P<failed>\d+)\s+failures?",
+)
+PATROL_EXECUTION_SUMMARY_PATTERN = re.compile(
+    r"📝\s+Total:\s*(?P<executed>\d+).*?"
+    r"❌\s+Failed:\s*(?P<failed>\d+)",
+    re.DOTALL,
+)
 XCODE_GLOBAL_PRODUCTS_DIR = Path.home() / "Library" / "Developer" / "Xcode" / "XcodeDerivedData" / "Build" / "Products"
 PATROL_IOS_PRODUCTS_DIR = APP_DIR / "build" / "ios_integ" / "Build" / "Products"
 LOCAL_TARGETS = {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
@@ -90,6 +103,15 @@ IOS_RELEASE_UAT_BUNDLE_IDS = (
 )
 ANDROID_RELEASE_UAT_PACKAGE = "com.quwoquan.quwoquan_app"
 PATROL_FLUTTER_COMMAND_ENV = "PATROL_FLUTTER_COMMAND"
+PATROL_EXECUTION_LOCK = (
+    REPO_ROOT
+    / ".qwq_output"
+    / "env"
+    / "repo"
+    / "local"
+    / "locks"
+    / "environment-patrol-smoke.lock"
+)
 ANDROID_DEVICE_PROXY = (
     REPO_ROOT / "quwoquan_ops" / "cli" / "lib" / "flutter_android_device_proxy.py"
 )
@@ -97,6 +119,35 @@ ANDROID_DEVICE_PROXY = (
 
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _acquire_patrol_execution_lock(
+    *,
+    env_name: str,
+    target: str,
+    lock_path: Path = PATROL_EXECUTION_LOCK,
+) -> Any:
+    """Serialize Patrol builds that share Flutter/Xcode build directories."""
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+", encoding="utf-8")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as error:
+        handle.seek(0)
+        holder = handle.read().strip() or "unknown"
+        handle.close()
+        raise RuntimeError(
+            f"Patrol build workspace is already in use: {holder}",
+        ) from error
+    handle.seek(0)
+    handle.truncate()
+    handle.write(
+        f"pid={os.getpid()} env={env_name.strip()} "
+        f"target={target.strip()} startedAt={utc_now()}\n",
+    )
+    handle.flush()
+    os.fsync(handle.fileno())
+    return handle
 
 
 def _runtime_env_for_alias(alias: str) -> str:
@@ -585,6 +636,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
     parser.add_argument("--target", default=DEFAULT_TARGET)
+    parser.add_argument(
+        "--remote-api-evidence-report",
+        default="",
+        help="已通过的 Remote API UAT report；写入同一设备 CaseResult 的 requestId/traceId 证据。",
+    )
     parser.add_argument("--timeout-seconds", type=int, default=1200)
     parser.add_argument("--env-name", "--environment-alias", dest="env_name", default="local-gamma")
     parser.add_argument(
@@ -745,6 +801,97 @@ def summarize_output(output: str, *, max_lines: int = 120) -> str:
             *lines[-max_lines:],
         ]
     )
+
+
+def patrol_test_execution_summary(output: str) -> dict[str, Any]:
+    """Prefer XCTest's executed-test record over Patrol's known zero summary."""
+
+    xctest = XCTEST_EXECUTION_SUMMARY_PATTERN.search(output)
+    if xctest is not None:
+        return {
+            "framework": "xctest",
+            "executed": int(xctest.group("executed")),
+            "failed": int(xctest.group("failed")),
+        }
+    patrol = PATROL_EXECUTION_SUMMARY_PATTERN.search(output)
+    if patrol is not None:
+        return {
+            "framework": "patrol",
+            "executed": int(patrol.group("executed")),
+            "failed": int(patrol.group("failed")),
+        }
+    return {"framework": "unknown", "executed": None, "failed": None}
+
+
+def load_remote_api_evidence(path_value: str) -> dict[str, Any]:
+    """Load only a passed search Remote UAT report; no raw query is accepted."""
+
+    normalized = path_value.strip()
+    if not normalized:
+        return {}
+    path = Path(normalized).expanduser()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        evidence = payload["cases"]["searchAndFeedbackRoundtrip"]["evidence"]
+        tag_filter = payload["cases"]["tagFilterPositiveAndNegative"]["evidence"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ValueError(
+            "remote API evidence report is unreadable or not a search Remote UAT report"
+        ) from exc
+    if (
+        payload.get("schema") != "search-remote-api-uat-report-v1"
+        or payload.get("status") != "passed"
+        or evidence.get("schema") != "search-remote-api-evidence-v1"
+        or evidence.get("status") != "passed"
+        or not str(evidence.get("searchRequestId") or "").strip()
+        or tag_filter.get("schema") != "search-tag-filter-remote-evidence-v1"
+        or tag_filter.get("status") != "passed"
+        or tag_filter.get("positiveHitCount") != 1
+        or tag_filter.get("negativeHitCount") != 0
+    ):
+        raise ValueError("remote API evidence report is not a passed search Remote UAT")
+    events = evidence.get("events")
+    if not isinstance(events, list) or any(
+        not isinstance(event, dict)
+        or not str(event.get("requestId") or "").strip()
+        or not str(event.get("traceId") or "").strip()
+        or event.get("succeeded") is not True
+        for event in events
+    ):
+        raise ValueError("remote API evidence report lacks successful requestId/traceId events")
+    feedback_events = evidence.get("feedbackEvents")
+    if not isinstance(feedback_events, list):
+        raise ValueError("remote API evidence report lacks typed feedback events")
+    click_events = [
+        event
+        for event in feedback_events
+        if isinstance(event, dict) and event.get("eventType") == "click"
+    ]
+    dwell_events = [
+        event
+        for event in feedback_events
+        if isinstance(event, dict) and event.get("eventType") == "dwell"
+    ]
+    if (
+        len(click_events) != 1
+        or not str(click_events[0].get("objectId") or "").strip()
+        or not str(click_events[0].get("target") or "").strip()
+        or not isinstance(click_events[0].get("rankPosition"), int)
+        or click_events[0]["rankPosition"] <= 0
+        or len(dwell_events) != 1
+        or not str(dwell_events[0].get("objectId") or "").strip()
+        or dwell_events[0].get("dwellMs") != 3000
+    ):
+        raise ValueError(
+            "remote API evidence report must assert one ranked click and 3-second dwell"
+        )
+    return {
+        "reportPath": _output_evidence_ref(path),
+        "searchRequestId": evidence["searchRequestId"],
+        "events": events,
+        "feedbackEvents": feedback_events,
+        "tagFilter": tag_filter,
+    }
 
 
 def run_command(
@@ -1372,6 +1519,28 @@ def main() -> int:
     report_path = Path(args.report)
     if not report_path.is_absolute():
         report_path = REPO_ROOT / report_path
+    execution_lock = None
+    runtime_use_lock = None
+    if not args.dry_run:
+        try:
+            execution_lock = _acquire_patrol_execution_lock(
+                env_name=args.env_name,
+                target=args.target,
+            )
+            atexit.register(execution_lock.close)
+            if _is_local_target(args.env_name):
+                runtime_use_lock = acquire_local_runtime_use_lock(
+                    target=_local_target_for_environment_alias(args.env_name),
+                    purpose="environment-patrol-smoke",
+                )
+                atexit.register(runtime_use_lock.close)
+        except RuntimeError as exc:
+            if runtime_use_lock is not None:
+                runtime_use_lock.close()
+            if execution_lock is not None:
+                execution_lock.close()
+            print(f"GATE_BLOCK: {exc}", file=sys.stderr)
+            return 2
 
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
     api_contract_env = args.api_contract_env.strip() or runtime_env
@@ -1405,12 +1574,24 @@ def main() -> int:
         "hasCurrentPersonaIdentity": bool(_resolved_sub_account_id(args)),
         "sessionSource": "",
         "releaseUatCasesPath": "",
+        "remoteApiEvidence": {},
         "devices": [],
         "runs": [],
+        "caseResults": [],
         "failureReason": "",
         "deviceInventoryPath": "",
         "evidenceRoot": "",
     }
+    try:
+        report["remoteApiEvidence"] = load_remote_api_evidence(
+            str(getattr(args, "remote_api_evidence_report", "") or "")
+        )
+    except ValueError as exc:
+        report["status"] = "gate_block"
+        report["failureReason"] = str(exc)
+        report["endedAt"] = utc_now()
+        write_report(report_path, report)
+        return 2
     if not args.dry_run:
         try:
             report["sessionSource"] = _prepare_execution_session(args)
@@ -1689,6 +1870,12 @@ def main() -> int:
             else {"status": "skipped", "reason": "command passed"}
         )
         result["device"] = device
+        raw_log_path = run_dir / "patrol.log"
+        result["testExecution"] = patrol_test_execution_summary(
+            raw_log_path.read_text(encoding="utf-8")
+            if raw_log_path.is_file()
+            else ""
+        )
         result["evidence"] = {
             "runDirectory": repo_relative(run_dir),
             "deviceManifestPath": device_manifest_path,
@@ -1705,6 +1892,21 @@ def main() -> int:
             "releaseUatStateReset": release_uat_state_reset,
         }
         report["runs"].append(result)
+        report["caseResults"].append(
+            {
+                "caseId": (
+                    f"patrol:{args.target}:{sanitize_device_id(str(device.get('id', '')))}"
+                ),
+                "status": "passed" if result["exitCode"] == 0 else "failed",
+                "deviceId": device.get("id", ""),
+                "testExecution": result["testExecution"],
+                "evidence": {
+                    "commandPath": command_path,
+                    "patrolLogPath": result.get("logPath", ""),
+                    "remoteApi": report["remoteApiEvidence"],
+                },
+            }
+        )
         failed = failed or result["exitCode"] != 0
 
     report["status"] = "gate_block" if gate_blocked else ("failed" if failed else "passed")

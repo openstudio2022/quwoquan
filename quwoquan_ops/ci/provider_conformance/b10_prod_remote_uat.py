@@ -24,6 +24,7 @@ SENSITIVE_VALUE_RE = re.compile(
     re.IGNORECASE,
 )
 RECEIPT_RE = re.compile(r"^receipt:[a-z0-9][a-z0-9._:-]{2,255}$")
+HOSTED_RECEIPT_RE = re.compile(r"^receipt:hosted:[a-f0-9]{64}$")
 SHA256_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 RELEASE_ASSERTIONS = frozenset(
     {
@@ -42,6 +43,10 @@ CAPABILITY_ASSERTIONS = {
     "integration.push.delivery": "provider.push_delivery",
     "runtime.message.transport": "provider.redis_message_transport",
 }
+SOURCE_OWNED_PATROL_COMMAND = (
+    "python3",
+    "quwoquan_ops/ci/provider_conformance/run_b10_prod_remote_patrol_uat.py",
+)
 
 
 def _required_env(name: str) -> str:
@@ -56,18 +61,13 @@ def _device_hash(device_id: str) -> str:
 
 
 def _load_command() -> list[str]:
-    raw = _required_env("QWQ_B10_REMOTE_UAT_COMMAND_JSON")
-    try:
-        command = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError("QWQ_B10_REMOTE_UAT_COMMAND_JSON must be a JSON argv") from exc
-    if (
-        not isinstance(command, list)
-        or not command
-        or not all(isinstance(item, str) and item for item in command)
-    ):
-        raise ValueError("QWQ_B10_REMOTE_UAT_COMMAND_JSON must contain a non-empty argv")
-    return command
+    """Return the only source-owned two-device B10 production harness."""
+    if os.environ.get("QWQ_B10_REMOTE_UAT_COMMAND_JSON", "").strip():
+        raise ValueError(
+            "QWQ_B10_REMOTE_UAT_COMMAND_JSON is forbidden; "
+            "B10 Remote UAT must run the source-owned Patrol harness"
+        )
+    return list(SOURCE_OWNED_PATROL_COMMAND)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -100,14 +100,19 @@ def _validate_observability(value: object) -> dict[str, list[str]]:
 
 
 def _validate_device_evidence(value: object) -> None:
+    ios_device_id = _required_env("QWQ_B10_IOS_DEVICE_ID")
+    android_device_id = _required_env("QWQ_B10_ANDROID_DEVICE_ID")
+    if ios_device_id == android_device_id:
+        raise ValueError("B10 Remote UAT requires distinct iOS and Android physical devices")
     expected_hashes = {
-        _device_hash(_required_env("QWQ_B10_IOS_DEVICE_ID")),
-        _device_hash(_required_env("QWQ_B10_ANDROID_DEVICE_ID")),
+        _device_hash(ios_device_id),
+        _device_hash(android_device_id),
     }
     if not isinstance(value, list) or len(value) != 2:
         raise ValueError("deviceEvidence must contain exactly the iOS and Android devices")
     observed_hashes: set[str] = set()
     platforms: set[str] = set()
+    directions: set[str] = set()
     for item in value:
         if not isinstance(item, Mapping) or set(item) != {
             "platform",
@@ -131,8 +136,13 @@ def _validate_device_evidence(value: object) -> None:
             raise ValueError("deviceEvidence.caseDirection is invalid")
         observed_hashes.add(device_hash)
         platforms.add(platform)
+        directions.add(str(item["caseDirection"]))
     if platforms != {"ios", "android"} or observed_hashes != expected_hashes:
         raise ValueError("deviceEvidence must match the configured physical device pair")
+    if directions != {"ios_to_android", "android_to_ios"}:
+        raise ValueError(
+            "deviceEvidence must prove both iOS-to-Android and Android-to-iOS call directions"
+        )
 
 
 def _validate_provider_receipts(capability_id: str, value: object) -> None:
@@ -170,8 +180,11 @@ def _validate_readback(
         "adapterId",
         "imageDigest",
         "configDigest",
+        "contractGraphDigest",
+        "adapterDigest",
         "deviceEvidence",
         "providerReceipts",
+        "deliveryTimelines",
         "pushReadback",
         "callReadback",
         "realtimeReadback",
@@ -199,6 +212,14 @@ def _validate_readback(
         raise ValueError("native-device patrol readback does not bind the active image")
     if payload.get("configDigest") != config_digest:
         raise ValueError("native-device patrol readback does not bind the selected config")
+    if payload.get("contractGraphDigest") != _required_env(
+        "QWQ_PROVIDER_CONFORMANCE_CONTRACT_GRAPH_DIGEST"
+    ):
+        raise ValueError("native-device patrol readback does not bind the ContractGraph")
+    if payload.get("adapterDigest") != _required_env(
+        "QWQ_PROVIDER_CONFORMANCE_ADAPTER_DIGEST"
+    ):
+        raise ValueError("native-device patrol readback does not bind the selected adapter")
     _validate_device_evidence(payload.get("deviceEvidence"))
     _validate_provider_receipts(capability_id, payload.get("providerReceipts"))
     push_readback = payload.get("pushReadback")
@@ -220,17 +241,47 @@ def _validate_readback(
             "callReadback must prove media, screen share, PiP hangup and cancel-race closure"
         )
     realtime_readback = payload.get("realtimeReadback")
-    if not isinstance(realtime_readback, Mapping) or not RECEIPT_RE.fullmatch(
-        str(realtime_readback.get("receiptRef"))
+    if (
+        not isinstance(realtime_readback, Mapping)
+        or set(realtime_readback) != {"callIdDigests", "receiptRefs"}
+        or not isinstance(realtime_readback.get("callIdDigests"), list)
+        or len(realtime_readback["callIdDigests"]) != 2
+        or not all(
+            isinstance(value, str) and SHA256_RE.fullmatch(value)
+            for value in realtime_readback["callIdDigests"]
+        )
+        or not isinstance(realtime_readback.get("receiptRefs"), list)
+        or len(realtime_readback["receiptRefs"]) != 2
+        or not all(
+            isinstance(value, str) and RECEIPT_RE.fullmatch(value)
+            for value in realtime_readback["receiptRefs"]
+        )
     ):
-        raise ValueError("realtimeReadback must contain a non-sensitive receipt")
+        raise ValueError("realtimeReadback must bind both calls to receipt references")
     chat_projection = payload.get("chatProjection")
-    if not isinstance(chat_projection, Mapping) or chat_projection != {
-        "systemCallLogCount": 1
-    }:
-        raise ValueError("chatProjection must prove exactly one system call log")
+    chat_logs = (
+        chat_projection.get("systemCallLogs")
+        if isinstance(chat_projection, Mapping)
+        else None
+    )
+    if (
+        not isinstance(chat_projection, Mapping)
+        or set(chat_projection) != {"systemCallLogs"}
+        or not isinstance(chat_logs, list)
+        or len(chat_logs) != 2
+        or not all(
+            isinstance(item, Mapping)
+            and set(item) == {"callIdDigest", "count"}
+            and isinstance(item.get("callIdDigest"), str)
+            and SHA256_RE.fullmatch(item["callIdDigest"])
+            and item.get("count") == 1
+            for item in chat_logs
+        )
+    ):
+        raise ValueError("chatProjection must prove exactly one system call log per call")
     qoe = payload.get("qoeReadback")
     if not isinstance(qoe, Mapping) or set(qoe) != {
+        "calls",
         "effectiveSampleCount",
         "alertReceiptRef",
         "rollbackReceiptRef",
@@ -242,6 +293,80 @@ def _validate_readback(
         str(qoe.get("rollbackReceiptRef"))
     ):
         raise ValueError("qoeReadback requires alert and rollback receipts")
+    qoe_calls = qoe.get("calls")
+    if (
+        not isinstance(qoe_calls, list)
+        or len(qoe_calls) != 2
+        or not all(
+            isinstance(item, Mapping)
+            and set(item)
+            == {
+                "callIdDigest",
+                "sessionDigest",
+                "terminalState",
+                "mediaConnected",
+                "connectLatencyMs",
+                "reconnectCount",
+            }
+            and isinstance(item.get("callIdDigest"), str)
+            and SHA256_RE.fullmatch(item["callIdDigest"])
+            and isinstance(item.get("sessionDigest"), str)
+            and SHA256_RE.fullmatch(item["sessionDigest"])
+            and item.get("terminalState") == "ended"
+            and item.get("mediaConnected") is True
+            and isinstance(item.get("connectLatencyMs"), int)
+            and item["connectLatencyMs"] >= 0
+            and isinstance(item.get("reconnectCount"), int)
+            and item["reconnectCount"] >= 0
+            for item in qoe_calls
+        )
+    ):
+        raise ValueError("qoeReadback must bind terminal QoE to both calls")
+    delivery_timelines = payload.get("deliveryTimelines")
+    if (
+        not isinstance(delivery_timelines, list)
+        or len(delivery_timelines) != 2
+        or not all(
+            isinstance(item, Mapping)
+            and set(item)
+            == {
+                "callIdDigest",
+                "deviceTimelineCount",
+                "ringExternalAccepted",
+                "ringProviderAccepted",
+                "presentationAcknowledged",
+                "cancelExternalAccepted",
+                "cancelProviderAccepted",
+            }
+            and isinstance(item.get("callIdDigest"), str)
+            and SHA256_RE.fullmatch(item["callIdDigest"])
+            and isinstance(item.get("deviceTimelineCount"), int)
+            and item["deviceTimelineCount"] >= 1
+            and all(
+                item.get(field) is True
+                for field in (
+                    "ringExternalAccepted",
+                    "ringProviderAccepted",
+                    "presentationAcknowledged",
+                    "cancelExternalAccepted",
+                    "cancelProviderAccepted",
+                )
+            )
+            for item in delivery_timelines
+        )
+    ):
+        raise ValueError("deliveryTimelines must prove per-device ring and cancel receipts")
+    delivery_call_digests = {str(item["callIdDigest"]) for item in delivery_timelines}
+    if len(delivery_call_digests) != 2:
+        raise ValueError("deliveryTimelines must contain distinct call digests")
+    if (
+        set(realtime_readback["callIdDigests"]) != delivery_call_digests
+        or {str(item["callIdDigest"]) for item in chat_logs} != delivery_call_digests
+        or {str(item["callIdDigest"]) for item in qoe_calls} != delivery_call_digests
+    ):
+        raise ValueError(
+            "delivery, realtime, chat, and QoE readback must bind the same calls"
+        )
     assertions = payload.get("assertions")
     if not isinstance(assertions, list) or len(assertions) != len(assertion_ids):
         raise ValueError("native-device patrol must report every source assertion")
@@ -303,6 +428,9 @@ def _validate_readback(
     } or not all(
         isinstance(value, str) and RECEIPT_RE.fullmatch(value)
         for value in release_readiness.values()
+    ) or any(
+        HOSTED_RECEIPT_RE.fullmatch(str(release_readiness[field])) is None
+        for field in ("lastGoodReceiptRef", "rollbackReceiptRef")
     ):
         raise ValueError("native-device patrol releaseReadiness is invalid")
     raw = json.dumps(payload, sort_keys=True)
@@ -315,6 +443,10 @@ def _validate_readback(
         observability_refs,
         dict(release_readiness),
     )
+
+
+def _readback_digest(path: Path) -> str:
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
 
 
 def run(capability_id: str, adapter_id: str) -> int:
@@ -389,6 +521,11 @@ def run(capability_id: str, adapter_id: str) -> int:
         "cleanupReceipt": cleanup_receipt,
         "observabilityRefs": observability_refs,
         "releaseReadiness": release_readiness,
+        "nativeReadback": {
+            "schema": READBACK_SCHEMA,
+            "artifactName": readback_path.name,
+            "artifactDigest": _readback_digest(readback_path),
+        },
     }
     result_path.write_text(
         json.dumps(case_result, ensure_ascii=False, sort_keys=True),

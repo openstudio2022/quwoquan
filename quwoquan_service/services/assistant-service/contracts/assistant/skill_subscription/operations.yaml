@@ -18,6 +18,12 @@ api_routes:
   description: owner 自己的订阅列表。
   commercial:
     status: ready
+  client_contract:
+    dart_import: ../assistant/assistant_contracts.dart
+    request_type: AssistantSkillSubscriptionListQuery
+    response_type: AssistantSkillSubscriptionListProjection
+    request_encoder: encodeAssistantSkillSubscriptionListQuery
+    response_decoder: decodeAssistantSkillSubscriptionList
   query_params:
   - limit
   - status
@@ -68,6 +74,12 @@ api_routes:
   description: 一次创建订阅；clientRequestId 为稳定 intent，重放返回首个结果。
   commercial:
     status: ready
+  client_contract:
+    dart_import: ../assistant/assistant_contracts.dart
+    request_type: CreateAssistantSkillSubscriptionCommand
+    response_type: AssistantSkillSubscriptionProjection
+    request_encoder: encodeCreateAssistantSkillSubscriptionCommand
+    response_decoder: decodeAssistantSkillSubscription
   request_fields:
   - skillId
   - domainId
@@ -127,6 +139,12 @@ api_routes:
   description: 读取 owner 自己的订阅；非 owner 返回 not_found 防枚举。
   commercial:
     status: ready
+  client_contract:
+    dart_import: ../assistant/assistant_contracts.dart
+    request_type: AssistantSkillSubscriptionByIdQuery
+    response_type: AssistantSkillSubscriptionProjection
+    request_encoder: encodeAssistantSkillSubscriptionByIdQuery
+    response_decoder: decodeAssistantSkillSubscription
   response_entity: SkillSubscription
   reliability:
     timeout_ms: 1500
@@ -175,6 +193,12 @@ api_routes:
   description: 命名状态迁移（active/paused/archived）；服务端内部 CAS，目标状态已满足时持久化 no-op receipt。
   commercial:
     status: ready
+  client_contract:
+    dart_import: ../assistant/assistant_contracts.dart
+    request_type: UpdateAssistantSkillSubscriptionStatusCommand
+    response_type: AssistantSkillSubscriptionProjection
+    request_encoder: encodeUpdateAssistantSkillSubscriptionStatusCommand
+    response_decoder: decodeAssistantSkillSubscription
   request_fields:
   - status
   response_entity: SkillSubscription

@@ -80,11 +80,11 @@ func NewProjector(indexer *es.Indexer, reader PostReader, opts ...Option) *Proje
 // index write must propagate to its relay rather than being acknowledged.
 func (p *Projector) Project(ctx context.Context, event ports.ProjectorEvent) error {
 	if p == nil || p.indexer == nil {
-		return nil
+		return fmt.Errorf("Post search projector is not configured")
 	}
 	postID := strings.TrimSpace(event.AggregateID)
 	if postID == "" {
-		return nil
+		return fmt.Errorf("Post search event has no aggregate id")
 	}
 	switch event.Type {
 	case postevent.PostDeleted:

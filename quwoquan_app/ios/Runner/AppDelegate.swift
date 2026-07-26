@@ -3,10 +3,12 @@ import CoreFoundation
 import CoreTelephony
 import CoreGraphics
 import CoreLocation
+import CryptoKit
 import Foundation
 import Flutter
 import MetricKit
 import PushKit
+import Security
 import UIKit
 
 /// 仅持久化已脱敏的原生未捕获异常类别，供下次 Dart 启动产出一条标准诊断事实。
@@ -50,6 +52,7 @@ private enum NativeCrashMarkerStore {
   }
 
   static func consume() -> [String: String]? {
+    guard !shouldRecoverCurrentBuild() else { return nil }
     guard let kind = UserDefaults.standard.string(forKey: nativeCrashMarkerKindKey),
           !kind.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     else {
@@ -57,6 +60,27 @@ private enum NativeCrashMarkerStore {
     }
     UserDefaults.standard.removeObject(forKey: nativeCrashMarkerKindKey)
     return ["kind": kind]
+  }
+
+  static func pendingFatal() -> [String: String]? {
+    guard shouldRecoverCurrentBuild(),
+          let kind = UserDefaults.standard.string(forKey: nativeCrashMarkerKindKey),
+          !kind.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+          let occurredAt = UserDefaults.standard.object(
+            forKey: startupHealthFatalAtKey
+          ) as? NSNumber
+    else {
+      return nil
+    }
+    let date = Date(timeIntervalSince1970: occurredAt.doubleValue)
+    return [
+      "errorType": kind,
+      "occurredAt": ISO8601DateFormatter().string(from: date),
+    ]
+  }
+
+  static func acknowledgePendingFatal() {
+    UserDefaults.standard.removeObject(forKey: nativeCrashMarkerKindKey)
   }
 
   static var currentBuild: String {
@@ -205,30 +229,22 @@ private final class NativeHangMetricStore: NSObject, MXMetricManagerSubscriber {
   }
 }
 
-/// 首帧前只落固定 schema 到本地，不做网络 IO，也不记录账号、异常文本或堆栈。
-///
-/// Flutter 成功装配后会从同一 UserDefaults 迁入可靠启动 journal；下一次成功启动会补传
-/// 本次 native watchdog 的终态。
+/// 清理旧版启动 journal 的兼容壳。恢复规格不再生成 attemptId/checkpoint。
 private final class StartupNativeTelemetryJournal {
   private static let eventsKey = "startup_telemetry_native_journal"
   private static let attemptKey = "startup_telemetry_native_attempt"
-  private static let maxEvents = 32
 
   private let defaults: UserDefaults
-  private var attemptId = ""
-  private var sequence = 0
-  private var lastElapsedMs = 0
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
-    beginAttempt()
+    defaults.removeObject(forKey: Self.attemptKey)
+    defaults.removeObject(forKey: Self.eventsKey)
   }
 
   func beginAttempt() {
-    attemptId = UUID().uuidString.replacingOccurrences(of: "-", with: "")
-    sequence = 0
-    lastElapsedMs = 0
-    defaults.set(attemptId, forKey: Self.attemptKey)
+    defaults.removeObject(forKey: Self.attemptKey)
+    defaults.removeObject(forKey: Self.eventsKey)
   }
 
   func record(
@@ -240,55 +256,100 @@ private final class StartupNativeTelemetryJournal {
     failureSource: String = "",
     deadlineOrigin: String = "ios_process"
   ) {
-    sequence += 1
-    let normalizedElapsedMs = max(0, elapsedMs)
-    let phaseDurationMs = max(0, normalizedElapsedMs - lastElapsedMs)
-    lastElapsedMs = max(lastElapsedMs, normalizedElapsedMs)
-    var event: [String: Any] = [
-      "eventId": "\(attemptId)_\(sequence)",
-      "attemptId": attemptId,
-      "sequence": sequence,
-      "phase": phase,
-      "phaseDurationMs": phaseDurationMs,
-      "elapsedMs": normalizedElapsedMs,
-      "outcome": outcome,
-      "occurredAt": ISO8601DateFormatter().string(from: Date()),
-      "platform": "ios",
-      "runtimeEnv": "unknown",
-    ]
-    if !recoverySurface.isEmpty {
-      event["recoverySurface"] = recoverySurface
-    }
-    if !failureCode.isEmpty {
-      event["failureCode"] = failureCode
-    }
-    if !failureSource.isEmpty {
-      event["failureSource"] = failureSource
-    }
-    if !deadlineOrigin.isEmpty {
-      event["deadlineOrigin"] = deadlineOrigin
-    }
-    guard let data = try? JSONSerialization.data(withJSONObject: event),
-          let encoded = String(data: data, encoding: .utf8)
-    else {
-      return
-    }
-    var events = defaults.stringArray(forKey: Self.eventsKey) ?? []
-    events.append(encoded)
-    if events.count > Self.maxEvents {
-      events.removeFirst(events.count - Self.maxEvents)
-    }
-    defaults.set(events, forKey: Self.eventsKey)
+    // Intentionally empty.
   }
 
-  var currentAttemptId: String { attemptId }
+  var currentAttemptId: String { "" }
 
   func events() -> [String] {
-    defaults.stringArray(forKey: Self.eventsKey) ?? []
+    []
   }
 
   func clearEvents() {
     defaults.removeObject(forKey: Self.eventsKey)
+    defaults.removeObject(forKey: Self.attemptKey)
+  }
+}
+
+/// Keychain-backed AES key plus a protected file keeps the queue available before
+/// Flutter plugins and the business container are initialized.
+private final class RecoveryFailureEncryptedStore {
+  private static let keyAccount = "recovery-failure-queue-key-v1"
+  private static let maximumEncryptedBytes = 2 << 20
+  private let keychain = IncomingCallKeychainStore(
+    service: "\(Bundle.main.bundleIdentifier ?? "com.quwoquan.app").recovery-failure"
+  )
+
+  func read() -> String? {
+    let file = queueFile
+    guard let encrypted = try? Data(contentsOf: file),
+          !encrypted.isEmpty,
+          encrypted.count <= Self.maximumEncryptedBytes,
+          let keyData = keychain.data(forKey: Self.keyAccount),
+          let box = try? AES.GCM.SealedBox(combined: encrypted),
+          let plaintext = try? AES.GCM.open(box, using: SymmetricKey(data: keyData)),
+          let value = String(data: plaintext, encoding: .utf8)
+    else {
+      clear()
+      return nil
+    }
+    return value
+  }
+
+  func write(_ value: String) -> Bool {
+    guard let plaintext = value.data(using: .utf8),
+          !plaintext.isEmpty,
+          plaintext.count <= Self.maximumEncryptedBytes,
+          let key = encryptionKey(),
+          let sealed = try? AES.GCM.seal(plaintext, using: key),
+          let combined = sealed.combined,
+          combined.count <= Self.maximumEncryptedBytes
+    else { return false }
+    do {
+      try FileManager.default.createDirectory(
+        at: queueFile.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
+      try combined.write(to: queueFile, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  @discardableResult
+  func clear() -> Bool {
+    guard FileManager.default.fileExists(atPath: queueFile.path) else { return true }
+    do {
+      try FileManager.default.removeItem(at: queueFile)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private var queueFile: URL {
+    let base = FileManager.default.urls(
+      for: .applicationSupportDirectory,
+      in: .userDomainMask
+    ).first ?? FileManager.default.temporaryDirectory
+    return base.appendingPathComponent("recovery_failures.v1.aesgcm", isDirectory: false)
+  }
+
+  private func encryptionKey() -> SymmetricKey? {
+    if let existing = keychain.data(forKey: Self.keyAccount), existing.count == 32 {
+      return SymmetricKey(data: existing)
+    }
+    var bytes = [UInt8](repeating: 0, count: 32)
+    let status = bytes.withUnsafeMutableBytes { buffer in
+      SecRandomCopyBytes(kSecRandomDefault, buffer.count, buffer.baseAddress!)
+    }
+    guard status == errSecSuccess else {
+      return nil
+    }
+    let data = Data(bytes)
+    guard keychain.set(data, forKey: Self.keyAccount) else { return nil }
+    return SymmetricKey(data: data)
   }
 }
 
@@ -304,6 +365,7 @@ private final class StartupNativeTelemetryJournal {
   let incomingCallPushCoordinator = IncomingCallPushCoordinator()
   private let cellularNetworkInfo = CTTelephonyNetworkInfo()
   private let startupTelemetryJournal = StartupNativeTelemetryJournal()
+  private let recoveryFailureEncryptedStore = RecoveryFailureEncryptedStore()
   private var flutterFirstFrameWatchdog: DispatchWorkItem?
   private var nativeRecoveryTerminalReconciliation: DispatchWorkItem?
   private var deferredPluginRegistry: FlutterPluginRegistry?
@@ -315,6 +377,8 @@ private final class StartupNativeTelemetryJournal {
   private var nativeRecoveryDeadlineReached = false
   private var confirmedPreviousBuildFatal = false
   private var recoveryExternalOpenInFlight = false
+  private var recoveryVersionCheckInFlight = false
+  private var recoveryVersionRefreshPending = false
   private var dartStartupAttemptStarted = false
   private var currentDartAttemptId = ""
   private var currentLaunchMode = "unknown"
@@ -322,6 +386,10 @@ private final class StartupNativeTelemetryJournal {
   private var firstFrameForegroundRemaining = AppDelegate.flutterFirstFrameDeadline
   private var foregroundStartedUptime: TimeInterval = 0
   private weak var startupRecoveryView: UIView?
+  private weak var startupRecoveryTitle: UILabel?
+  private weak var startupRecoveryMessage: UILabel?
+  private weak var startupRecoveryPrimary: RecoveryActionButton?
+  private weak var startupRecoveryWeb: RecoveryActionButton?
 
   override func application(
     _ application: UIApplication,
@@ -523,6 +591,10 @@ private final class StartupNativeTelemetryJournal {
           "platform": "ios",
           "appVersion": appVersion,
           "buildNumber": buildNumber,
+          "osVersion": UIDevice.current.systemVersion,
+          "deviceModel": UIDevice.current.model,
+          "recoveryBaseUrl": self.recoveryBaseURLString,
+          "publicWebUrl": self.publicWebURLString,
         ])
       case "openTrustedExternalUrl":
         guard let arguments = call.arguments as? [String: Any],
@@ -539,6 +611,27 @@ private final class StartupNativeTelemetryJournal {
       case "recordFatalStartup":
         NativeCrashMarkerStore.markFatalStartup()
         result(nil)
+      case "readPendingNativeStartupFatal":
+        result(NativeCrashMarkerStore.pendingFatal())
+      case "ackPendingNativeStartupFatal":
+        NativeCrashMarkerStore.acknowledgePendingFatal()
+        result(nil)
+      case "readRecoveryFailureQueue":
+        DispatchQueue.global(qos: .utility).async {
+          let value = self.recoveryFailureEncryptedStore.read()
+          DispatchQueue.main.async { result(value) }
+        }
+      case "writeRecoveryFailureQueue":
+        let value = (call.arguments as? [String: Any])?["value"] as? String ?? ""
+        DispatchQueue.global(qos: .utility).async {
+          let written = self.recoveryFailureEncryptedStore.write(value)
+          DispatchQueue.main.async { result(written) }
+        }
+      case "clearRecoveryFailureQueue":
+        DispatchQueue.global(qos: .utility).async {
+          let cleared = self.recoveryFailureEncryptedStore.clear()
+          DispatchQueue.main.async { result(cleared) }
+        }
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -822,6 +915,21 @@ private final class StartupNativeTelemetryJournal {
     if !appInForeground {
       appInForeground = true
       foregroundStartedUptime = ProcessInfo.processInfo.systemUptime
+    }
+    if recoveryVersionRefreshPending,
+       nativeRecoveryShown,
+       let title = startupRecoveryTitle,
+       let message = startupRecoveryMessage,
+       let primary = startupRecoveryPrimary,
+       let web = startupRecoveryWeb
+    {
+      recoveryVersionRefreshPending = false
+      checkNativeRecoveryVersion(
+        titleLabel: title,
+        messageLabel: message,
+        primaryButton: primary,
+        webButton: web
+      )
     }
     armFlutterFirstFrameWatchdog()
   }
@@ -1169,6 +1277,10 @@ private final class StartupNativeTelemetryJournal {
     ])
     window.addSubview(recovery)
     startupRecoveryView = recovery
+    startupRecoveryTitle = title
+    startupRecoveryMessage = message
+    startupRecoveryPrimary = primary
+    startupRecoveryWeb = web
     checkNativeRecoveryVersion(
       titleLabel: title,
       messageLabel: message,
@@ -1226,7 +1338,10 @@ private final class StartupNativeTelemetryJournal {
     primaryButton: RecoveryActionButton,
     webButton: RecoveryActionButton
   ) {
+    guard !recoveryVersionCheckInFlight else { return }
+    recoveryVersionCheckInFlight = true
     guard var components = URLComponents(string: recoveryBaseURLString) else {
+      recoveryVersionCheckInFlight = false
       applyNativeVersionUnavailable(
         titleLabel: titleLabel,
         messageLabel: messageLabel,
@@ -1245,7 +1360,10 @@ private final class StartupNativeTelemetryJournal {
       URLQueryItem(name: "appVersion", value: appVersion),
       URLQueryItem(name: "buildNumber", value: buildNumber),
     ]
-    guard let url = components.url else { return }
+    guard let url = components.url else {
+      recoveryVersionCheckInFlight = false
+      return
+    }
     var request = URLRequest(url: url)
     request.cachePolicy = .reloadIgnoringLocalCacheData
     request.timeoutInterval = 1.5
@@ -1253,6 +1371,11 @@ private final class StartupNativeTelemetryJournal {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 1.5
     URLSession(configuration: configuration).dataTask(with: request) { [weak self] data, response, _ in
+      defer {
+        DispatchQueue.main.async { [weak self] in
+          self?.recoveryVersionCheckInFlight = false
+        }
+      }
       guard let self,
             let http = response as? HTTPURLResponse,
             (200..<300).contains(http.statusCode),
@@ -1287,7 +1410,8 @@ private final class StartupNativeTelemetryJournal {
             self?.openRecoveryTarget(
               updateRaw,
               fallback: recoveryRaw,
-              failureMessage: "暂时无法打开更新页面，请稍后再试"
+              failureMessage: "暂时无法打开更新页面，请稍后再试",
+              recheckVersionOnReturn: true
             )
           }
           webButton.isHidden = false
@@ -1330,20 +1454,24 @@ private final class StartupNativeTelemetryJournal {
   private func openRecoveryTarget(
     _ target: String,
     fallback: String,
-    failureMessage: String
+    failureMessage: String,
+    recheckVersionOnReturn: Bool = false
   ) {
     guard !recoveryExternalOpenInFlight else { return }
     recoveryExternalOpenInFlight = true
     openTrustedRecoveryURL(target) { [weak self] opened in
       guard let self else { return }
       if opened {
+        self.recoveryVersionRefreshPending = recheckVersionOnReturn
         self.recoveryExternalOpenInFlight = false
         return
       }
       self.openTrustedRecoveryURL(fallback) { [weak self] fallbackOpened in
         guard let self else { return }
         self.recoveryExternalOpenInFlight = false
-        if !fallbackOpened {
+        if fallbackOpened {
+          self.recoveryVersionRefreshPending = recheckVersionOnReturn
+        } else {
           self.showRecoveryToast(failureMessage)
         }
       }

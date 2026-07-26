@@ -1,31 +1,35 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/app/recovery/recovery_failure_reporter.dart';
 import 'package:quwoquan_app/app/recovery/recovery_state_machine.dart';
 import 'package:quwoquan_app/app/recovery/recovery_version_client.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/platform/app_recovery_native_bridge.dart';
 
 final class StartupRecoveryController extends ChangeNotifier {
   StartupRecoveryController({
     RecoveryVersionClient? versionClient,
     AppRecoveryNativeBridge? nativeBridge,
+    RecoverySnapshot initialSnapshot = const RecoverySnapshot.startupChecking(),
+    this.onRuntimeReenter,
     this._visibleCheckBudget = const Duration(milliseconds: 1500),
-    String recoveryBaseUrl = CloudRuntimeConfig.gatewayBaseUrl,
+    this.recoveryBaseUrl = '',
   }) : _versionClient = versionClient ?? RecoveryVersionClient(),
        _nativeBridge = nativeBridge ?? AppRecoveryNativeBridge(),
-       _recoveryBaseUrl = recoveryBaseUrl;
+       _stateMachine = RecoveryStateMachine(initial: initialSnapshot);
 
   final RecoveryVersionClient _versionClient;
   final AppRecoveryNativeBridge _nativeBridge;
   final Duration _visibleCheckBudget;
-  final String _recoveryBaseUrl;
-  final RecoveryStateMachine _stateMachine = RecoveryStateMachine();
+  final String recoveryBaseUrl;
+  final RecoveryStateMachine _stateMachine;
+  final Future<void> Function()? onRuntimeReenter;
 
   Timer? _visibleCheckTimer;
   bool _started = false;
   bool _openingExternalTarget = false;
+  bool _updateTargetOpened = false;
+  AppRecoveryNativeContext? _nativeContext;
 
   RecoverySnapshot get snapshot => _stateMachine.snapshot;
   bool get openingExternalTarget => _openingExternalTarget;
@@ -33,6 +37,13 @@ final class StartupRecoveryController extends ChangeNotifier {
   void start() {
     if (_started) return;
     _started = true;
+    unawaited(RecoveryFailureReporter.instance.flush());
+    if (snapshot.phase == RecoveryPhase.runtimeUnavailable) return;
+    _startVersionCheck();
+  }
+
+  void _startVersionCheck() {
+    _visibleCheckTimer?.cancel();
     _visibleCheckTimer = Timer(_visibleCheckBudget, () {
       if (_stateMachine.markVersionUnavailable()) {
         notifyListeners();
@@ -41,12 +52,33 @@ final class StartupRecoveryController extends ChangeNotifier {
     unawaited(_checkVersion());
   }
 
+  Future<void> reenterRuntime() async {
+    if (!_stateMachine.beginRuntimeReentry()) return;
+    notifyListeners();
+    try {
+      final action = onRuntimeReenter;
+      if (action == null) throw StateError('runtime reentry is unavailable');
+      await action();
+    } catch (_) {
+      markRuntimeReentryFailed();
+    }
+  }
+
+  void markRuntimeReentryFailed() {
+    if (!_stateMachine.failRuntimeReentry()) return;
+    notifyListeners();
+    _startVersionCheck();
+  }
+
   Future<void> _checkVersion() async {
     try {
       final nativeContext = await _nativeBridge.context();
       if (nativeContext == null) return;
+      _nativeContext = nativeContext;
       final result = await _versionClient.fetch(
-        baseUrl: _recoveryBaseUrl,
+        baseUrl: recoveryBaseUrl.trim().isEmpty
+            ? nativeContext.recoveryBaseUrl
+            : recoveryBaseUrl,
         platform: nativeContext.platform,
         appVersion: nativeContext.appVersion,
         buildNumber: nativeContext.buildNumber,
@@ -70,19 +102,33 @@ final class StartupRecoveryController extends ChangeNotifier {
     _setOpeningExternalTarget(true);
     try {
       if (await _nativeBridge.openTrustedExternalUrl(snapshot.updateUrl)) {
+        _updateTargetOpened = true;
         return true;
       }
-      return _nativeBridge.openTrustedExternalUrl(snapshot.recoveryUrl);
+      final opened = await _nativeBridge.openTrustedExternalUrl(
+        snapshot.recoveryUrl,
+      );
+      _updateTargetOpened = opened;
+      return opened;
     } finally {
       _setOpeningExternalTarget(false);
     }
+  }
+
+  void refreshVersionAfterExternalReturn() {
+    if (!_updateTargetOpened) return;
+    _updateTargetOpened = false;
+    if (!_stateMachine.restartVersionCheckAfterUpdate()) return;
+    notifyListeners();
+    _startVersionCheck();
   }
 
   Future<bool> openWeb() async {
     if (_openingExternalTarget) return false;
     _setOpeningExternalTarget(true);
     try {
-      final webUrl = AppPublicContentLinks.publicWebBaseUrl;
+      final context = _nativeContext ?? await _nativeBridge.context();
+      final webUrl = context?.publicWebUrl ?? '';
       if (await _nativeBridge.openTrustedExternalUrl(webUrl)) {
         return true;
       }

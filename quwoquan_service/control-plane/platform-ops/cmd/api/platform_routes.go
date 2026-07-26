@@ -76,6 +76,9 @@ func newServerMux(service *platformService) *http.ServeMux {
 	mux.HandleFunc("/control-plane/platform/configs/resolve", func(w http.ResponseWriter, r *http.Request) {
 		service.configLayers.ServeHTTP(w, r)
 	})
+	mux.HandleFunc("/control-plane/platform/configs/resolve-for-instance", func(w http.ResponseWriter, r *http.Request) {
+		service.configLayers.ServeHTTP(w, r)
+	})
 	mux.HandleFunc("/control-plane/platform/configs/snapshot", func(w http.ResponseWriter, r *http.Request) {
 		service.configLayers.ServeHTTP(w, r)
 	})

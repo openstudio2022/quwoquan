@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"quwoquan_service/runtime/search/es"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
 	model "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
 )
 
@@ -44,14 +43,20 @@ type pagedLister struct {
 	circles []model.Circle
 }
 
-func (l pagedLister) List(_ context.Context, opts application.ListCirclesQuery) ([]model.Circle, string) {
+func (l pagedLister) ListForSearch(
+	_ context.Context,
+	afterID string,
+	limit int,
+) ([]model.Circle, error) {
 	start := 0
-	if opts.Cursor != "" {
-		if _, err := fmt.Sscanf(opts.Cursor, "off:%d", &start); err != nil {
-			start = 0
+	if afterID != "" {
+		for index := range l.circles {
+			if l.circles[index].ID == afterID {
+				start = index + 1
+				break
+			}
 		}
 	}
-	limit := opts.Limit
 	if limit <= 0 {
 		limit = len(l.circles)
 	}
@@ -60,11 +65,7 @@ func (l pagedLister) List(_ context.Context, opts application.ListCirclesQuery) 
 		end = len(l.circles)
 	}
 	page := l.circles[start:end]
-	next := ""
-	if end < len(l.circles) {
-		next = fmt.Sprintf("off:%d", end)
-	}
-	return page, next
+	return page, nil
 }
 
 func mkCircle(id, status, visibility string) model.Circle {
@@ -91,24 +92,23 @@ func TestBackfillIndexesEligibleOnly(t *testing.T) {
 	if !bulk.ensured {
 		t.Fatalf("backfill must ensure the index first")
 	}
-	if report.TotalCircles != 4 || report.IndexedCircles != 2 || report.SkippedCircles != 2 {
+	if report.TotalCircles != 4 ||
+		report.IndexedCircles != 2 ||
+		report.DeletedCircles != 2 {
 		t.Fatalf("unexpected report: %#v", report)
 	}
-	if len(bulk.events) != 2 {
-		t.Fatalf("expected 2 indexed events, got %d", len(bulk.events))
+	if len(bulk.events) != 4 {
+		t.Fatalf("expected 4 reconcile events, got %d", len(bulk.events))
 	}
 	gotIDs := map[string]bool{}
 	for _, ev := range bulk.events {
-		if ev.Op != es.OpUpsert {
-			t.Fatalf("backfill must upsert, got op=%s", ev.Op)
-		}
-		gotIDs[ev.Doc.ObjectID] = true
+		gotIDs[string(ev.Op)+":"+ev.Doc.ObjectID] = true
 	}
-	if !gotIDs["c_pub"] || !gotIDs["c_pub2"] {
+	if !gotIDs["upsert:c_pub"] || !gotIDs["upsert:c_pub2"] {
 		t.Fatalf("eligible circles missing from backfill: %#v", gotIDs)
 	}
-	if gotIDs["c_archived"] || gotIDs["c_priv"] {
-		t.Fatalf("ineligible circles leaked into backfill: %#v", gotIDs)
+	if !gotIDs["delete:c_archived"] || !gotIDs["delete:c_priv"] {
+		t.Fatalf("ineligible circles were not deleted: %#v", gotIDs)
 	}
 }
 
@@ -147,11 +147,11 @@ func TestBackfillEnsureIndexFailurePropagates(t *testing.T) {
 	}
 }
 
-func TestBackfillNilInputsNoOp(t *testing.T) {
-	if _, err := Backfill(context.Background(), nil, pagedLister{}, 0); err != nil {
-		t.Fatalf("nil indexer must be a no-op, got %v", err)
+func TestBackfillMissingInputsFailFast(t *testing.T) {
+	if _, err := Backfill(context.Background(), nil, pagedLister{}, 0); err == nil {
+		t.Fatal("nil indexer must fail")
 	}
-	if _, err := Backfill(context.Background(), &recordingBulk{}, nil, 0); err != nil {
-		t.Fatalf("nil lister must be a no-op, got %v", err)
+	if _, err := Backfill(context.Background(), &recordingBulk{}, nil, 0); err == nil {
+		t.Fatal("nil lister must fail")
 	}
 }

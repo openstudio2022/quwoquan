@@ -10,6 +10,12 @@ fields:
   type: string
 - name: source
   type: string
+- name: reason
+  type: string
+- name: evidenceRefs
+  type: array
+- name: impactScope
+  type: array
 - name: displayName
   type: string
   nullable: true

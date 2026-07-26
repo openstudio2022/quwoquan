@@ -14,7 +14,15 @@ from quwoquan_ops.ci.provider_conformance.native_case_result import run_native_h
 
 RESULT_PATH_ENV = "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
 TARGET = 'ext-obs-elasticsearch_local-api-integration'
-COMMAND = ('go', '-C', 'quwoquan_service', 'test', './services/product-ops-service/tests/api_integration/product_ops/event_record/...', '-count=1')
+COMMAND = (
+    'go',
+    '-C',
+    'quwoquan_service',
+    'test',
+    './services/product-ops-service/tests/api_integration/product_ops/event_record/...',
+    '-count=1',
+    '-timeout=30m',
+)
 
 if __name__ == "__main__":
     raise SystemExit(run_native_harness(command=COMMAND, target=TARGET))

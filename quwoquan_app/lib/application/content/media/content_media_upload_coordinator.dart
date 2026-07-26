@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
 import 'package:quwoquan_app/application/content/media/generated/content_media_upload_policy.g.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -54,7 +55,8 @@ final class ContentMediaUploadCancelledException implements Exception {
   const ContentMediaUploadCancelledException();
 }
 
-final class ContentMediaObjectUploadException implements Exception {
+final class ContentMediaObjectUploadException
+    implements Exception, RuntimeFailureBase {
   const ContentMediaObjectUploadException({
     required this.retryable,
     this.statusCode,
@@ -64,11 +66,69 @@ final class ContentMediaObjectUploadException implements Exception {
   final bool retryable;
   final int? statusCode;
   final Object? cause;
+  RuntimeFailure get _failure => _objectUploadFailure(statusCode: statusCode);
+
+  @override
+  String get code => _failure.code;
+
+  @override
+  RuntimeFailureContext get context => _failure.context;
+
+  @override
+  RuntimeFailureKind get kind => _failure.kind;
+
+  @override
+  RuntimeFailureLocation get location => _failure.location;
+
+  @override
+  RuntimeFailureNature get nature => _failure.nature;
+
+  @override
+  RuntimeFailureOrigin get origin => _failure.origin;
+
+  @override
+  RuntimeRecoveryDirective get recovery => _failure.recovery;
+
+  @override
+  String get semanticReason => _failure.semanticReason;
+
+  @override
+  int? get transportStatus => _failure.transportStatus;
 
   @override
   String toString() =>
       'ContentMediaObjectUploadException('
       'retryable: $retryable, statusCode: $statusCode)';
+}
+
+RuntimeFailure _objectUploadFailure({int? statusCode}) {
+  final error = ContentErrorCode.storageWriteFailed;
+  return RuntimeFailure(
+    code: error.code,
+    semanticReason: 'media_object_upload_failed',
+    transportStatus: error.httpStatus,
+    origin: RuntimeFailureOrigin.remoteDependency,
+    kind: RuntimeFailureKind.unavailable,
+    nature: RuntimeFailureNature.transient,
+    location: const RuntimeFailureLocation(
+      businessObject: 'content.media_upload_session',
+      functionModule: 'content_media_object_uploader',
+    ),
+    context: RuntimeFailureContext(
+      attributes: <RuntimeContextAttribute>[
+        if (statusCode != null)
+          RuntimeContextAttribute(
+            key: 'objectStorageStatus',
+            value: statusCode.toString(),
+          ),
+      ],
+    ),
+    recovery: RuntimeRecoveryDirective(
+      action: error.recoveryAction,
+      afterSeconds: error.recoveryAfterSeconds,
+      disruptionLevel: 'fullPage',
+    ),
+  );
 }
 
 final class PreparedContentMediaSource {
@@ -303,10 +363,15 @@ Future<PreparedContentMediaSource> prepareContentMediaSource({
 }
 
 final class UploadedContentMedia {
-  const UploadedContentMedia({required this.sessionId, required this.assetId});
+  const UploadedContentMedia({
+    required this.sessionId,
+    required this.assetId,
+    required this.assetProcessingStatus,
+  });
 
   final String sessionId;
   final String assetId;
+  final ContentMediaProcessingStatus? assetProcessingStatus;
 }
 
 /// Application coordinator for the upload-session aggregate and its external
@@ -564,10 +629,7 @@ final class ContentMediaUploadCoordinator {
       if (_checkpointGrantExpired(durable)) {
         await _reconcileAndAbortPendingSession(durable, onCheckpoint: persist);
         if (durable.phase == ContentMediaPreparationPhase.completed) {
-          return UploadedContentMedia(
-            sessionId: durable.sessionId,
-            assetId: durable.assetId,
-          );
+          return _uploadedFromAssetID(durable.sessionId, durable.assetId);
         }
         if (durable.phase == ContentMediaPreparationPhase.aborted) {
           await persist(durable.restartAfterAbort());
@@ -700,7 +762,7 @@ final class ContentMediaUploadCoordinator {
             'completed media upload session is missing recoverable assetId',
           );
         }
-        return UploadedContentMedia(sessionId: sessionId, assetId: assetId);
+        return _uploadedFromAssetID(sessionId, assetId);
       }
       if (session.status == ContentMediaUploadStatus.aborted) {
         Error.throwWithStackTrace(lastError, lastStackTrace);
@@ -725,7 +787,30 @@ final class ContentMediaUploadCoordinator {
     if (assetId.isEmpty) {
       throw StateError('completed media upload is missing assetId');
     }
-    return UploadedContentMedia(sessionId: sessionId, assetId: assetId);
+    return UploadedContentMedia(
+      sessionId: sessionId,
+      assetId: assetId,
+      assetProcessingStatus: completed.assetProcessingStatus,
+    );
+  }
+
+  Future<UploadedContentMedia> _uploadedFromAssetID(
+    String sessionId,
+    String assetId,
+  ) async {
+    final asset = await media.getMediaAsset(
+      GetContentMediaAssetQuery(mediaId: assetId),
+    );
+    if (asset.assetId != assetId) {
+      throw StateError(
+        'media asset reconciliation returned a mismatched asset',
+      );
+    }
+    return UploadedContentMedia(
+      sessionId: sessionId,
+      assetId: assetId,
+      assetProcessingStatus: asset.status,
+    );
   }
 
   Future<ContentMediaUploadSessionSlice?> _readUploadSessionForReconciliation(
@@ -752,10 +837,7 @@ final class ContentMediaUploadCoordinator {
     onCheckpoint,
   }) async {
     if (checkpoint.isCompleted) {
-      return UploadedContentMedia(
-        sessionId: checkpoint.sessionId,
-        assetId: checkpoint.assetId,
-      );
+      return _uploadedFromAssetID(checkpoint.sessionId, checkpoint.assetId);
     }
     final sessionId = checkpoint.sessionId.trim();
     if (sessionId.isEmpty) {
@@ -782,7 +864,7 @@ final class ContentMediaUploadCoordinator {
           phase: ContentMediaPreparationPhase.completed,
         ),
       );
-      return UploadedContentMedia(sessionId: sessionId, assetId: assetId);
+      return _uploadedFromAssetID(sessionId, assetId);
     }
     if (session.status == ContentMediaUploadStatus.aborted) {
       await onCheckpoint(checkpoint.restartAfterAbort());

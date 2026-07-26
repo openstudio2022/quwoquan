@@ -20,9 +20,9 @@ import (
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/environmentseed"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimewiring"
+	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
 	preferenceports "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/domain/ports"
 	preferencepersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/infrastructure/persistence"
 )
@@ -114,18 +114,6 @@ func run(parent context.Context, options commandOptions) error {
 	if err := router.PingAll(ctx); err != nil {
 		return runtimewiring.NewDependencyError("redis", "connectivity", err)
 	}
-	messageTransport, err := requireAssistantSeedMessageTransport(
-		ctx,
-		options.Environment,
-		router,
-		map[string]string{
-			"general": cfg.Redis.General.Mode,
-		},
-	)
-	if err != nil {
-		return runtimewiring.NewDependencyError("runtime.message.transport", "preflight", err)
-	}
-
 	deps, err := runtimewiring.OpenPersistentDependencies(ctx, cfg, func(db *mongo.Database) (preferenceports.Store, preferenceports.Reader, error) {
 		store := preferencepersistence.NewMongoStore(db)
 		if err := store.EnsureIndexes(ctx); err != nil {
@@ -144,17 +132,20 @@ func run(parent context.Context, options commandOptions) error {
 		}
 	}()
 
-	publisher := messaging.NewRedisEventPublisherWithTransport(
-		messageTransport,
-		assistantServiceName+"-seed",
-		nil,
+	learningProjector := learningprojection.NewMongoProjector(
+		deps.MongoClient.Database(cfg.MongoDB.Database),
 	)
+	if err := learningProjector.EnsureIndexes(ctx); err != nil {
+		return runtimewiring.NewDependencyError(
+			"mongodb.rm_assistant_learning_projection",
+			"indexes",
+			err,
+		)
+	}
 	service := application.NewAssistantService(
-		deps.EventStore,
 		deps.ConsentStore,
 		router.Scene("general"),
-		application.WithLearningProfileStore(deps.ProfileStore),
-		application.WithEventPublisher(publisher),
+		application.WithLearningProjectionReader(learningProjector),
 		application.WithSkillSubscriptionStore(deps.SubscriptionStore),
 	)
 	result, err := environmentseed.Apply(ctx, service, plan)

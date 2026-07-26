@@ -12,6 +12,7 @@ type TagNodeReader interface {
 	FindByReleaseAndTagRef(ctx context.Context, releaseID, tagRef string) (*model.TagNode, error)
 	ListChildrenInRelease(ctx context.Context, releaseID, parentTagRef string, limit int64) ([]model.TagNode, error)
 	CountActiveChildrenInRelease(ctx context.Context, releaseID, parentTagRef string) (int64, error)
+	ListDimensionsInRelease(ctx context.Context, releaseID string) ([]model.TagNode, error)
 	ListAllInRelease(ctx context.Context, releaseID string) ([]model.TagNode, error)
 	IsActiveLeaf(ctx context.Context, releaseID, tagRef string) (bool, error)
 }

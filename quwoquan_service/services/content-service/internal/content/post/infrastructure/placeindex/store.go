@@ -16,6 +16,7 @@ package placeindex
 import (
 	"context"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -50,6 +51,12 @@ type PlaceStore interface {
 	// Upsert replaces a place record wholesale with the given snapshot. It is the
 	// authoritative rebuild path used by backfill.
 	Upsert(ctx context.Context, snapshot searchprojection.PlaceSnapshot) error
+	// ListAll returns every materialized place so backfill can retract snapshots
+	// that no longer have an eligible source post.
+	ListAll(ctx context.Context) ([]searchprojection.PlaceSnapshot, error)
+	// Delete removes one obsolete materialized place. Backfill deletes the ES
+	// document first, then this marker, so an interrupted run remains retryable.
+	Delete(ctx context.Context, placeID string) error
 }
 
 // --- In-memory implementation (tests + non-mongo dev) ---
@@ -115,6 +122,31 @@ func (s *InMemoryPlaceStore) Upsert(_ context.Context, snapshot searchprojection
 	defer s.mu.Unlock()
 	rec := cloneSnapshot(snapshot)
 	s.places[snapshot.PlaceID] = &rec
+	return nil
+}
+
+func (s *InMemoryPlaceStore) ListAll(
+	_ context.Context,
+) ([]searchprojection.PlaceSnapshot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]searchprojection.PlaceSnapshot, 0, len(s.places))
+	for _, snapshot := range s.places {
+		out = append(out, cloneSnapshot(*snapshot))
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].PlaceID < out[j].PlaceID
+	})
+	return out, nil
+}
+
+func (s *InMemoryPlaceStore) Delete(
+	_ context.Context,
+	placeID string,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.places, placeID)
 	return nil
 }
 
@@ -244,6 +276,40 @@ func (s *MongoPlaceStore) Upsert(ctx context.Context, snapshot searchprojection.
 		UpdatedAt:  now,
 	}
 	_, err := s.coll.ReplaceOne(ctx, bson.M{"_id": snapshot.PlaceID}, rec, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *MongoPlaceStore) ListAll(
+	ctx context.Context,
+) ([]searchprojection.PlaceSnapshot, error) {
+	cursor, err := s.coll.Find(
+		ctx,
+		bson.D{},
+		options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	out := make([]searchprojection.PlaceSnapshot, 0)
+	for cursor.Next(ctx) {
+		var record placeRecord
+		if err := cursor.Decode(&record); err != nil {
+			return nil, err
+		}
+		out = append(out, record.toSnapshot())
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *MongoPlaceStore) Delete(
+	ctx context.Context,
+	placeID string,
+) error {
+	_, err := s.coll.DeleteOne(ctx, bson.M{"_id": placeID})
 	return err
 }
 

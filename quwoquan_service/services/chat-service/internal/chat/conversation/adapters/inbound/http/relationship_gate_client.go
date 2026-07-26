@@ -9,12 +9,14 @@ import (
 	"strings"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 )
 
 type UserRelationshipGate struct {
-	baseURL string
-	client  *http.Client
+	baseURL       string
+	client        *http.Client
+	authorization rtauth.DelegatedPersonaAuthorizationProvider
 }
 
 type relationshipCapabilityResponse struct {
@@ -32,6 +34,23 @@ func NewUserRelationshipGate(baseURL string, client *http.Client) *UserRelations
 		client = &http.Client{Timeout: 2 * time.Second}
 	}
 	return &UserRelationshipGate{baseURL: baseURL, client: client}
+}
+
+// NewAuthorizedUserRelationshipGate creates the production relationship
+// boundary. The delegated credential binds every capability check to the
+// caller's trusted persona; X-Client-User-Id alone is intentionally not a
+// trusted cross-service identity.
+func NewAuthorizedUserRelationshipGate(
+	baseURL string,
+	client *http.Client,
+	authorization rtauth.DelegatedPersonaAuthorizationProvider,
+) (*UserRelationshipGate, error) {
+	if authorization == nil {
+		return nil, fmt.Errorf("delegated relationship authorization is required")
+	}
+	gate := NewUserRelationshipGate(baseURL, client)
+	gate.authorization = authorization
+	return gate, nil
 }
 
 func (g *UserRelationshipGate) GetCapability(
@@ -52,6 +71,16 @@ func (g *UserRelationshipGate) GetCapability(
 		return application.RelationshipCapability{}, err
 	}
 	req.Header.Set("X-Client-User-Id", strings.TrimSpace(viewerID))
+	if g.authorization != nil {
+		header, err := g.authorization.AuthorizationHeaderForPersona(ctx, viewerID)
+		if err != nil {
+			return application.RelationshipCapability{}, fmt.Errorf(
+				"authorize relationship capability request: %w",
+				err,
+			)
+		}
+		req.Header.Set("Authorization", header)
+	}
 
 	resp, err := g.client.Do(req)
 	if err != nil {

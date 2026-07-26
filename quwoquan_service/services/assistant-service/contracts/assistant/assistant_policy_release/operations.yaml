@@ -1,0 +1,71 @@
+description: AssistantPolicyRelease 内部不可变发布命令。
+commercial_defaults:
+  status: blocked
+  block_reason: 未显式声明的策略发布操作默认阻断。
+  gap_id: ASSISTANT_POLICY_RELEASE_UNDECLARED_OPERATION
+  target_story: policy-template-routing
+api_routes:
+- method: POST
+  path: /internal/assistant/policy-releases
+  operation: StageAssistantPolicyRelease
+  actor: account
+  application:
+    kind: command
+    facet: AssistantPolicyReleaseCommandFacade
+    method: stage
+    aggregate_owner: AssistantPolicyRelease
+    mutation_target: AssistantPolicyRelease
+    invariant_target: AssistantPolicyRelease
+  authorization:
+    principal: service
+    scopes:
+    - assistant.policy.manage
+    ownership_policy: internal_policy_publish_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.policy_release_invalid
+  - ASSISTANT.USER.policy_release_digest_mismatch
+  - ASSISTANT.USER.policy_release_idempotency_conflict
+  - ASSISTANT.SYSTEM.policy_release_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_policy_release_stage
+    trace: true
+    attributes:
+    - outcome
+    - replayed
+    - template_count
+    - rule_count
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  description: 校验 canonical digest、默认模板和路由引用后只追加一次 immutable release。
+  request_entity: AssistantPolicyRelease
+  request_fields:
+  - policyId
+  - releaseVersion
+  - canonicalDigest
+  - defaultTemplateId
+  - templates
+  - routingRules
+  response_entity: AssistantPolicyRelease
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+consumers:
+- name: assistant-policy-publish-pipeline
+  capabilities:
+  - stage_assistant_policy_release

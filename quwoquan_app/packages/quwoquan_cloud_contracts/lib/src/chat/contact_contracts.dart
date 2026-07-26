@@ -74,18 +74,23 @@ abstract interface class ChatInboxQuery {
 }
 
 final class ChatListContactsQuery {
-  ChatListContactsQuery({this.limit = 20}) {
+  ChatListContactsQuery({this.cursor, this.limit = 20}) {
     _validateLimit(limit, 100);
   }
 
+  final String? cursor;
   final int limit;
 }
 
 CloudOperationRequestPayload encodeChatListContactsQuery(
   ChatListContactsQuery query,
 ) {
+  final cursor = _optionalNonBlankText(query.cursor);
   return CloudOperationRequestPayload(
-    queryParameters: <String, String>{'limit': '${query.limit}'},
+    queryParameters: <String, String>{
+      'limit': '${query.limit}',
+      if (cursor case final value?) 'cursor': value,
+    },
   );
 }
 

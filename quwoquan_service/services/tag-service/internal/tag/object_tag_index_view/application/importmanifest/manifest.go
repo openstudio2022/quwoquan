@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -168,6 +169,7 @@ func normalizeTagRefs(tagRefs []string) ([]string, error) {
 		seen[tagRef] = struct{}{}
 		normalized = append(normalized, tagRef)
 	}
+	sort.Strings(normalized)
 	return normalized, nil
 }
 

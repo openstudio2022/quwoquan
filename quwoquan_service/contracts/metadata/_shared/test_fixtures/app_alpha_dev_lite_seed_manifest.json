@@ -36,12 +36,12 @@
       "targetStore": "alpha-dev-lite:app-fixture-json",
       "verifiedEndpoints": [
         "/content/feed",
-        "/content/content/posts/fixture_photo_001/comments",
-        "/content/content/posts/fixture_photo_001/comments?sort=hot",
-        "/content/content/posts/fixture_photo_001/comments?sort=latest",
-        "/content/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
-        "/content/content/comments/fixture_comment_parent_001/reaction",
-        "/content/content/comments/fixture_comment_parent_001/media:bind",
+        "/content/posts/fixture_photo_001/comments",
+        "/content/posts/fixture_photo_001/comments?sort=hot",
+        "/content/posts/fixture_photo_001/comments?sort=latest",
+        "/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
+        "/content/comments/fixture_comment_parent_001/reaction",
+        "/content/comments/fixture_comment_parent_001/media:bind",
         "/content/sub-accounts/fixture_user_current/interactions/received?type=share",
         "/content/sub-accounts/fixture_user_current/interactions/sent?type=share"
       ],

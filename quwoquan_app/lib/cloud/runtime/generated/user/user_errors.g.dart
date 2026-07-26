@@ -74,6 +74,7 @@ enum UserErrorCode {
   profileProposalInvalidTransition('USER.PROFILE_PROPOSAL.invalid_transition', '提案状态已变化，请刷新后重试', 'Proposal state changed, please refresh and retry', 409, 'refresh', '', 0, ''),
   profileProposalVersionConflict('USER.PROFILE_PROPOSAL.version_conflict', '资料已更新，请刷新后重新确认', 'Profile data changed, please refresh and confirm again', 409, 'refresh', '', 0, ''),
   profileProposalIdempotencyConflict('USER.PROFILE_PROPOSAL.idempotency_conflict', '重复请求内容不一致，请重新操作', 'The repeated request differs from the original request', 409, 'surface', '', 0, ''),
+  profileProposalRollbackExpired('USER.PROFILE_PROPOSAL.rollback_expired', '提案回滚窗口已结束，请刷新资料', 'The proposal rollback window has expired', 409, 'refresh', '', 0, ''),
   contactDiscoveryRateLimited('USER.CONTACT.rate_limited', '今日通讯录发现次数已达上限，请明日再试', 'Daily contact discovery limit reached, please try again tomorrow', 429, 'retry', '', 86400, ''),
   tooManyContacts('USER.CONTACT.too_many_contacts', '通讯录条目过多，单次最多支持 5000 条', 'Too many contacts, maximum 5000 per request', 400, 'retry', '', 0, ''),
   contactDiscoveryNotFound('USER.CONTACT.not_found', '发现记录不存在或已过期', 'Discovery record not found or expired', 404, 'surface', '', 0, ''),

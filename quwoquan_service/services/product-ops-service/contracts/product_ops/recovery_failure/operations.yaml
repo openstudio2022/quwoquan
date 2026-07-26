@@ -7,8 +7,9 @@ api_routes:
     kind: command
     facet: RecoveryFailureCommandFacade
     method: reportRecoveryFailure
-    writer: ExistingRuntimeLogStore
-    slice: RecoveryFailure
+    append_sink: RecoveryFailure
+    mutation_target: RecoveryFailure
+    invariant_target: RecoveryFailure
   authorization:
     principal: public
     ownership_policy: anonymous_recovery_write
@@ -29,7 +30,7 @@ api_routes:
     log_policy: redacted
   telemetry:
     metric: ops_recovery_failure_ingest
-    trace: false
+    trace: true
     attributes: [platform, errorSource, outcome]
   slo:
     latency_p95_ms: 800

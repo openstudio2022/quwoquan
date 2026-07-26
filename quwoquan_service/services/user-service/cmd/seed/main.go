@@ -16,6 +16,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"log"
@@ -26,6 +28,9 @@ import (
 
 	"quwoquan_service/runtime/contractfixture"
 	model "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
+	personaseed "quwoquan_service/services/user-service/internal/persona_management/persona/application/environmentseed"
+	personaports "quwoquan_service/services/user-service/internal/persona_management/persona/domain/persona/ports"
+	personapersistence "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/persistence"
 )
 
 type userFixturePack struct {
@@ -143,6 +148,23 @@ func upsertProfile(ctx context.Context, pool *pgxpool.Pool, p *model.UserProfile
 	return err
 }
 
+func seedPrimaryPersona(
+	ctx context.Context,
+	store *personapersistence.PersonaCommandPostgresStore,
+	persona *model.Persona,
+) error {
+	payload, err := json.Marshal(persona)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(payload)
+	_, err = store.CommitCreate(ctx, persona, personaports.PersonaCommandMeta{
+		IdempotencyKey: "environment-seed:primary-persona:" + persona.SubAccountID,
+		CommandDigest:  hex.EncodeToString(sum[:]),
+	})
+	return err
+}
+
 func main() {
 	pgDSN := flag.String(
 		"pg-dsn",
@@ -168,13 +190,39 @@ func main() {
 		log.Fatalf("connect postgres: %v", err)
 	}
 	defer pool.Close()
+	personaStore, err := personapersistence.NewPersonaCommandPostgresStore(pool)
+	if err != nil {
+		log.Fatalf("open persona command store: %v", err)
+	}
 
-	// Reset previously seeded fixture rows so reseeding stays deterministic.
-	if _, err := pool.Exec(ctx, `DELETE FROM user_profiles WHERE user_id LIKE 'fixture_%'`); err != nil {
-		log.Fatalf("reset user_profiles: %v", err)
+	// Reset the complete fixture-owned command history before deleting profiles.
+	// Persona receipts/outbox records do not reference user_profiles, so leaving
+	// them behind would make the next deterministic seed replay a successful
+	// historical command without recreating the deleted aggregate.
+	for _, statement := range []struct {
+		name string
+		sql  string
+	}{
+		{
+			name: "personas_command_receipts",
+			sql:  `DELETE FROM personas_command_receipts WHERE aggregate_id LIKE 'fixture_%'`,
+		},
+		{
+			name: "personas_outbox",
+			sql:  `DELETE FROM personas_outbox WHERE aggregate_id LIKE 'fixture_%'`,
+		},
+		{
+			name: "user_profiles",
+			sql:  `DELETE FROM user_profiles WHERE user_id LIKE 'fixture_%'`,
+		},
+	} {
+		if _, err := pool.Exec(ctx, statement.sql); err != nil {
+			log.Fatalf("reset %s: %v", statement.name, err)
+		}
 	}
 
 	inserted := 0
+	personasInserted := 0
 	for _, ref := range strings.Split(*refsCSV, ",") {
 		ref = strings.TrimSpace(ref)
 		seedSet, ok := pack.SeedSets[ref]
@@ -189,10 +237,28 @@ func main() {
 			if err := upsertProfile(ctx, pool, profileFromFixture(fp)); err != nil {
 				log.Fatalf("upsert profile %s: %v", fp.UserID, err)
 			}
+			if err := seedPrimaryPersona(
+				ctx,
+				personaStore,
+				personaseed.BuildPrimaryPersona(personaseed.PrimaryPersonaInput{
+					UserID:        fp.UserID,
+					DisplayName:   fp.DisplayName,
+					AvatarURL:     fp.AvatarURL,
+					AvatarVersion: avatarVersion(fp),
+					Bio:           fp.Bio,
+				}),
+			); err != nil {
+				log.Fatalf("seed primary persona %s: %v", fp.UserID, err)
+			}
 			inserted++
+			personasInserted++
 		}
 	}
 
-	out, _ := json.Marshal(map[string]any{"insertedCount": inserted, "dsn": "postgres"})
+	out, _ := json.Marshal(map[string]any{
+		"insertedCount":       inserted,
+		"primaryPersonaCount": personasInserted,
+		"dsn":                 "postgres",
+	})
 	log.Printf("user seed done: %s", string(out))
 }

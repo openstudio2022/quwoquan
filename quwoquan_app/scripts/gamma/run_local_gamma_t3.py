@@ -23,8 +23,11 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.local_environment_auth import (  # noqa: E402
+    LocalEnvironmentHTTPError,
     LocalAcceptanceSession as LocalGammaAcceptanceSession,
     open_local_acceptance_session,
+    request_local_environment_json,
+    resolve_running_local_deployment_work_root,
 )
 from quwoquan_ops.cli.lib.output_paths import env_run_dir  # noqa: E402
 from quwoquan_ops.cli.lib.compose_layout import (  # noqa: E402
@@ -65,7 +68,14 @@ DISPLAY_STATEMENT_BANNED_FRAGMENTS = (
     "最近在看这些",
 )
 DISPLAY_OBJECT_TARGET_TYPES = {"user", "circle", "homepage", "post", "task"}
-DEFAULT_ENABLED_DOMAINS = ("content", "chat", "circle", "entity", "user")
+DEFAULT_ENABLED_DOMAINS = (
+    "assistant",
+    "content",
+    "chat",
+    "circle",
+    "entity",
+    "user",
+)
 _ACTIVE_SESSION: Optional[LocalGammaAcceptanceSession] = None
 
 
@@ -210,6 +220,13 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
         device_info.setdefault("imageHeight", height)
     if duration_ms > 0:
         device_info.setdefault("durationMs", duration_ms)
+    tags = post.get("tagRefs")
+    if not isinstance(tags, list):
+        tags = post.get("tags")
+    if not isinstance(tags, list):
+        tags = post.get("themeTags")
+    if not isinstance(tags, list):
+        tags = []
     revision_source = json.dumps(
         {
             "postId": post_id,
@@ -238,7 +255,7 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
         "contentIdentity": post.get("contentIdentity") or post.get("identity", ""),
         "title": post.get("title", ""),
         "body": post.get("body", ""),
-        "tags": post.get("tags") or [],
+        "tagRefs": [str(tag).strip() for tag in tags if str(tag).strip()],
         "mediaUrls": media_urls,
         "mediaItems": media_items,
         "coverUrl": post.get("coverUrl", ""),
@@ -314,6 +331,77 @@ def postgres_published_dsn() -> str:
     return f"postgres://quwoquan:quwoquan@localhost:{port}/quwoquan?sslmode=disable"
 
 
+def redis_published_addr() -> str:
+    port = os.environ.get("LOCAL_GAMMA_REDIS_PORT", "19420")
+    return f"127.0.0.1:{port}"
+
+
+def seed_assistant() -> Dict[str, Any]:
+    """Apply manifest-declared Assistant subscriptions and policy rollout."""
+    try:
+        fixture_rel, refs = gamma_domain_fixture_spec("assistant")
+    except RuntimeError as exc:
+        return {"status": "failed", "error": str(exc)}
+    report_path = GAMMA_RUN_ROOT / "assistant-seed-report.json"
+    config_root = os.environ.get(
+        "LOCAL_GAMMA_CONFIG_ROOT",
+        str(
+            Path(
+                os.environ.get(
+                    "QWQ_DEPLOY_WORK_ROOT",
+                    str(Path.home() / ".cache/quwoquan/deploy"),
+                )
+            )
+            / "gamma-local/rendered/config-root"
+        ),
+    )
+    command = [
+        "go",
+        "run",
+        "./services/assistant-service/cmd/seed",
+        "--env",
+        "gamma",
+        "--config-root",
+        config_root,
+        "--config-version",
+        os.environ.get("LOCAL_GAMMA_CONFIG_VERSION", "local-gamma-v1"),
+        "--refs",
+        ",".join(refs),
+        "--report",
+        str(report_path),
+    ]
+    seed_env = os.environ.copy()
+    seed_env.update(
+        {
+            "APP_ENV": "gamma",
+            "MONGODB_URI": (
+                f"mongodb://localhost:{mongo_published_port()}/"
+                "?directConnection=true"
+            ),
+            "MONGODB_DATABASE": "quwoquan_assistant",
+            "POSTGRES_DSN": postgres_published_dsn(),
+            "REDIS_GENERAL_ADDR": redis_published_addr(),
+            "REDIS_REC_ADDR": redis_published_addr(),
+        }
+    )
+    result = subprocess.run(
+        command,
+        cwd=ROOT / "quwoquan_service",
+        env=seed_env,
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    return {
+        "status": "passed" if result.returncode == 0 else "failed",
+        "fixture": fixture_rel,
+        "refs": refs,
+        "report": str(report_path),
+        "output": result.stdout[-2000:],
+    }
+
+
 def seed_user() -> Dict[str, Any]:
     """Seed user profile fixtures into the live user PostgreSQL store.
 
@@ -326,8 +414,9 @@ def seed_user() -> Dict[str, Any]:
         fixture_rel, refs = gamma_domain_fixture_spec("user")
     except RuntimeError as exc:
         return {"status": "failed", "error": str(exc)}
-    # Only user_profile_core backs the homepage reads; relationship/persona/feed
-    # refs require backend features (e.g. following-subjects) not yet served.
+    # The user seed command owns profiles and primary personas. Relationship
+    # facts are subsequently materialized through the public FollowUser
+    # command, so Gamma proves the same write and projection path as clients.
     profile_refs = [ref for ref in refs if ref == "user_profile_core"] or ["user_profile_core"]
     cmd = [
         "go",
@@ -353,6 +442,108 @@ def seed_user() -> Dict[str, Any]:
         "fixture": fixture_rel,
         "refs": profile_refs,
         "output": result.stdout[-2000:],
+    }
+
+
+def seed_relationships(base_url: str) -> Dict[str, Any]:
+    """Create manifest-declared mutual relations through the real API.
+
+    Group source selection consumes RelationshipCapability, not fixture claims.
+    Issuing local-only acceptance credentials per seeded persona preserves the
+    normal authorization, command, idempotency and projection boundaries.
+    """
+    try:
+        fixture_rel, refs = gamma_domain_fixture_spec("user")
+    except RuntimeError as exc:
+        return {"status": "failed", "error": str(exc)}
+    if "relationship_core" not in refs:
+        return {
+            "status": "failed",
+            "error": "gamma user seed is missing relationship_core",
+        }
+    fixture = json.loads((ROOT / fixture_rel).read_text(encoding="utf-8"))
+    seed_sets = fixture.get("seedSets") if isinstance(fixture, dict) else None
+    relationship_set = (
+        seed_sets.get("relationship_core")
+        if isinstance(seed_sets, dict)
+        else None
+    )
+    relationships = (
+        relationship_set.get("relationships")
+        if isinstance(relationship_set, dict)
+        else None
+    )
+    if not isinstance(relationships, list) or not relationships:
+        return {
+            "status": "failed",
+            "error": "relationship_core contains no relationship records",
+        }
+
+    # The stack can be launched from an explicit deployment workspace. Reuse
+    # its mounted JWT material for every seeded actor; otherwise these commands
+    # can be signed with a caller-local secret rather than the running
+    # user-service secret.
+    deployment_work_root = resolve_running_local_deployment_work_root("gamma-local")
+    applied_pairs: list[str] = []
+    try:
+        for record in relationships:
+            if not isinstance(record, dict):
+                raise ValueError("relationship_core record must be an object")
+            source = str(record.get("sourceUserId") or "").strip()
+            target = str(record.get("targetUserId") or "").strip()
+            if not source or not target:
+                raise ValueError("relationship_core record lacks sourceUserId or targetUserId")
+            follow_pairs = [(source, target)]
+            if bool(record.get("mutualFollow")):
+                follow_pairs.append((target, source))
+            for actor, followee in follow_pairs:
+                pair_digest = hashlib.sha256(
+                    f"{actor}\0{followee}".encode("utf-8")
+                ).hexdigest()[:16]
+                session_kwargs: dict[str, object] = {
+                    "environment": "gamma",
+                    "target_name": "gamma-local",
+                    "subject": actor,
+                }
+                if deployment_work_root is not None:
+                    session_kwargs["deployment_work_root"] = deployment_work_root
+                session = open_local_acceptance_session(base_url, **session_kwargs)
+                request_local_environment_json(
+                    base_url,
+                    path=f"/user/sub-accounts/{followee}/follow",
+                    session=session,
+                    method="POST",
+                    body={
+                        "actorSubAccountId": actor,
+                        "source": "gamma_environment_seed",
+                        "clientRequestId": f"gamma-seed-follow-{pair_digest}",
+                    },
+                    headers={
+                        "X-Client-Operation-Id": "FollowUser",
+                        "Idempotency-Key": f"gamma-seed-follow-{pair_digest}",
+                    },
+                )
+                applied_pairs.append(f"{actor}->{followee}")
+    except LocalEnvironmentHTTPError as exc:
+        return {
+            "status": "failed",
+            "fixture": fixture_rel,
+            "refs": ["relationship_core"],
+            "httpStatus": exc.status,
+        }
+    except (ValueError, RuntimeError) as exc:
+        return {
+            "status": "failed",
+            "fixture": fixture_rel,
+            "refs": ["relationship_core"],
+            "error": type(exc).__name__,
+        }
+    return {
+        "status": "passed",
+        "fixture": fixture_rel,
+        "refs": ["relationship_core"],
+        "appliedPairCount": len(applied_pairs),
+        "appliedPairs": applied_pairs,
     }
 
 
@@ -602,7 +793,7 @@ const feedDocs = docs.map((doc) => ({
   contentType: doc.contentType || "",
   contentIdentity: doc.contentIdentity || "",
   title: doc.title || "",
-  tagRefs: Array.isArray(doc.tags) ? doc.tags : [],
+  tagRefs: Array.isArray(doc.tagRefs) ? doc.tagRefs : [],
   coverUrl: doc.coverUrl || "",
   thumbnailUrl: doc.thumbnailUrl || "",
   videoUrl: doc.videoUrl || "",
@@ -848,7 +1039,7 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
     """
     try:
         status, body = http_request(
-            base_url.rstrip() + "/content/content/posts/fixture_photo_001/comments",
+            base_url.rstrip() + "/content/posts/fixture_photo_001/comments",
             method="POST",
             body={"content": "主评论示例"},
             timeout=8,
@@ -863,7 +1054,7 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
                 "error": "CreateComment did not return parent comment id",
             }
         reply_status, reply_body = http_request(
-            base_url.rstrip() + "/content/content/posts/fixture_photo_001/comments",
+            base_url.rstrip() + "/content/posts/fixture_photo_001/comments",
             method="POST",
             body={"content": "回复示例", "replyToCommentId": parent_id},
             timeout=8,
@@ -878,14 +1069,14 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
                 "error": "CreateComment did not return reply comment id",
             }
         reaction_status, _ = http_request(
-            base_url.rstrip() + f"/content/content/comments/{parent_id}/reaction",
+            base_url.rstrip() + f"/content/comments/{parent_id}/reaction",
             method="POST",
             body={"reaction": "like"},
             timeout=8,
             headers={"Idempotency-Key": gamma_probe_idempotency_key("comment-reaction")},
         )
         bind_status, bind_body = http_request(
-            base_url.rstrip() + f"/content/content/comments/{parent_id}/media:bind",
+            base_url.rstrip() + f"/content/comments/{parent_id}/media:bind",
             method="POST",
             body={"attachmentMediaIds": []},
             timeout=8,
@@ -1755,14 +1946,37 @@ def main() -> int:
             and "user" in enabled_domains
         ):
             report["domainSeeds"]["user"] = seed_user()
-        user_seed_failed = (
-            report["domainSeeds"].get("user", {}).get("status") == "failed"
+        if (
+            report["domainSeeds"].get("user", {}).get("status") == "passed"
+            and "user" in enabled_domains
+        ):
+            report["domainSeeds"]["relationship"] = seed_relationships(args.base_url)
+        if (
+            report["seed"].get("status") == "passed"
+            and "assistant" in enabled_domains
+        ):
+            report["domainSeeds"]["assistant"] = seed_assistant()
+        # gamma-local 的 release 级群聊探针读取既有普通群、圈子绑定群和
+        # 成员交集；只 seed 账号会让健康检查通过、实际群聊旅程却没有来源。
+        if (
+            report["seed"].get("status") == "passed"
+            and "circle" in enabled_domains
+        ):
+            report["domainSeeds"]["circle"] = seed_circle()
+        if (
+            report["seed"].get("status") == "passed"
+            and "chat" in enabled_domains
+        ):
+            report["domainSeeds"]["chat"] = seed_chat()
+        domain_seed_failed = any(
+            seed.get("status") == "failed"
+            for seed in report["domainSeeds"].values()
         )
         report["status"] = (
             "passed"
             if (
                 report["seed"].get("status") == "passed"
-                and not user_seed_failed
+                and not domain_seed_failed
             )
             else "failed"
         )
@@ -1783,10 +1997,18 @@ def main() -> int:
             report["status"] = "gate_block"
         else:
             try:
+                session_kwargs: dict[str, object] = {
+                    "environment": "gamma",
+                    "target_name": "gamma-local",
+                }
+                deployment_work_root = resolve_running_local_deployment_work_root(
+                    "gamma-local"
+                )
+                if deployment_work_root is not None:
+                    session_kwargs["deployment_work_root"] = deployment_work_root
                 _ACTIVE_SESSION = open_local_acceptance_session(
                     args.base_url,
-                    environment="gamma",
-                    target_name="gamma-local",
+                    **session_kwargs,
                 )
             except Exception as exc:  # noqa: BLE001
                 report["auth"] = {"status": "failed", "error": type(exc).__name__}
@@ -1810,6 +2032,8 @@ def main() -> int:
                     "fixture_comment_reply_001": str(setup.get("replyCommentId") or ""),
                     "{activePersonaId}": _ACTIVE_SESSION.persona_id,
                 }
+                if not args.skip_seed and "assistant" in enabled_domains:
+                    report["domainSeeds"]["assistant"] = seed_assistant()
                 if not args.skip_seed and "circle" in enabled_domains:
                     circle_seed = seed_circle()
                     report["domainSeeds"]["circle"] = circle_seed

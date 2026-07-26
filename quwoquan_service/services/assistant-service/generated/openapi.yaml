@@ -206,17 +206,17 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /assistant/learning/events:
+    /assistant/learning/facts:
         post:
-            operationId: ReportInteractionEvent
-            x-contract-operation-id: assistant.assistant_interaction_event.ReportInteractionEvent
-            x-object-id: assistant.assistant_interaction_event
+            operationId: AppendAssistantLearningFact
+            x-contract-operation-id: assistant.assistant_learning_fact.AppendAssistantLearningFact
+            x-object-id: assistant.assistant_learning_fact
             x-actor: persona
             x-application:
                 kind: command
-                facet: AssistantInteractionEventAppendSink
-                method: append
-                appendSink: AssistantInteractionEvent
+                facet: AssistantLearningFactAppendSink
+                method: appendUserFact
+                appendSink: AssistantLearningFact
             parameters:
                 - name: Idempotency-Key
                   in: header
@@ -229,10 +229,14 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/InteractionEvent'
+                            $ref: '#/components/schemas/AppendAssistantLearningFactRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantLearningFactReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -244,8 +248,8 @@ paths:
     /assistant/ops/learning-summary:
         get:
             operationId: GetLearningOpsSummary
-            x-contract-operation-id: assistant.assistant_run.GetLearningOpsSummary
-            x-object-id: assistant.assistant_run
+            x-contract-operation-id: assistant.assistant_learning_fact.GetLearningOpsSummary
+            x-object-id: assistant.assistant_learning_fact
             x-actor: account
             x-application:
                 kind: query
@@ -334,31 +338,6 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /assistant/policy:
-        get:
-            operationId: GetPolicy
-            x-contract-operation-id: assistant.assistant_run.GetPolicy
-            x-object-id: assistant.assistant_run
-            x-actor: none
-            x-application:
-                kind: query
-                facet: AssistantPolicyQueryFacade
-                method: getPolicy
-                reader: AssistantPolicyReader
-                slice: AssistantPolicyView
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/AssistantPolicyView'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
     /assistant/preferences:
         get:
             operationId: ListAssistantPreferences
@@ -957,17 +936,17 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /internal/assistant/learning/scorecards:
+    /internal/assistant/learning/facts:
         post:
-            operationId: ReportScorecard
-            x-contract-operation-id: assistant.assistant_scorecard_fact.ReportScorecard
-            x-object-id: assistant.assistant_scorecard_fact
+            operationId: AppendAssistantServiceLearningFact
+            x-contract-operation-id: assistant.assistant_learning_fact.AppendAssistantServiceLearningFact
+            x-object-id: assistant.assistant_learning_fact
             x-actor: account
             x-application:
                 kind: command
-                facet: AssistantScorecardFactAppendSink
-                method: append
-                appendSink: AssistantScorecardFact
+                facet: AssistantLearningFactAppendSink
+                method: appendServiceFact
+                appendSink: AssistantLearningFact
             parameters:
                 - name: Idempotency-Key
                   in: header
@@ -980,10 +959,141 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Scorecard'
+                            $ref: '#/components/schemas/AppendAssistantServiceLearningFactRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantLearningFactReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/assistant/policy-releases:
+        post:
+            operationId: StageAssistantPolicyRelease
+            x-contract-operation-id: assistant.assistant_policy_release.StageAssistantPolicyRelease
+            x-object-id: assistant.assistant_policy_release
+            x-actor: account
+            x-application:
+                kind: command
+                facet: AssistantPolicyReleaseCommandFacade
+                method: stage
+                aggregateOwner: AssistantPolicyRelease
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AssistantPolicyRelease'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantPolicyRelease'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/assistant/policy-rollouts/{policyId}/activate:
+        post:
+            operationId: ActivateAssistantPolicyRollout
+            x-contract-operation-id: assistant.assistant_policy_rollout.ActivateAssistantPolicyRollout
+            x-object-id: assistant.assistant_policy_rollout
+            x-actor: account
+            x-application:
+                kind: command
+                facet: AssistantPolicyRolloutCommandFacade
+                method: activate
+                aggregateOwner: AssistantPolicyRollout
+            parameters:
+                - name: policyId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AssistantPolicyRollout'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantPolicyRollout'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/assistant/policy-rollouts/{policyId}/rollback:
+        post:
+            operationId: RollbackAssistantPolicyRollout
+            x-contract-operation-id: assistant.assistant_policy_rollout.RollbackAssistantPolicyRollout
+            x-object-id: assistant.assistant_policy_rollout
+            x-actor: account
+            x-application:
+                kind: command
+                facet: AssistantPolicyRolloutCommandFacade
+                method: rollback
+                aggregateOwner: AssistantPolicyRollout
+            parameters:
+                - name: policyId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AssistantPolicyRollout'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantPolicyRollout'
                 default:
                     description: Runtime failure
                     content:
@@ -1036,6 +1146,16 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
+        AppendAssistantLearningFactRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AppendAssistantLearningFactRequest
+            x-contract-placeholder: true
+        AppendAssistantServiceLearningFactRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AppendAssistantServiceLearningFactRequest
+            x-contract-placeholder: true
         AssistantConversation:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1066,15 +1186,25 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantEntryPersonalizationView
             x-contract-placeholder: true
+        AssistantLearningFactReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AssistantLearningFactReceipt
+            x-contract-placeholder: true
         AssistantLearningOpsSummaryView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantLearningOpsSummaryView
             x-contract-placeholder: true
-        AssistantPolicyView:
+        AssistantPolicyRelease:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AssistantPolicyView
+            x-contract-entity: AssistantPolicyRelease
+            x-contract-placeholder: true
+        AssistantPolicyRollout:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AssistantPolicyRollout
             x-contract-placeholder: true
         AssistantPreferenceFact:
             type: object
@@ -1146,11 +1276,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GrantSkillConsentRequest
             x-contract-placeholder: true
-        InteractionEvent:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: InteractionEvent
-            x-contract-placeholder: true
         ListConsentsResponse:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1170,11 +1295,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RevokeAssistantPreferenceRequest
-            x-contract-placeholder: true
-        Scorecard:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: Scorecard
             x-contract-placeholder: true
         SetAssistantPreferenceRequest:
             type: object

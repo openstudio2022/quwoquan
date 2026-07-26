@@ -1,8 +1,0 @@
-backend: mongodb
-collections:
-  assistant_interaction_events:
-    entity: InteractionEvent
-    role: append_only
-    unique_constraints:
-    - - eventId
-role: append_only

@@ -82,6 +82,13 @@ type EventDrilldownItem struct {
 	DevicePlatform         string   `json:"devicePlatform"`
 	DurationMS             *int     `json:"durationMs,omitempty"`
 	Result                 *string  `json:"result,omitempty"`
+	CallType               *string  `json:"callType,omitempty"`
+	ParticipantCount       *int     `json:"participantCount,omitempty"`
+	ConnectTimeMS          *int     `json:"connectTimeMs,omitempty"`
+	MediaConnected         *bool    `json:"mediaConnected,omitempty"`
+	ReconnectCount         *int     `json:"reconnectCount,omitempty"`
+	DisconnectReason       *string  `json:"disconnectReason,omitempty"`
+	NetworkQuality         *string  `json:"networkQuality,omitempty"`
 	FailReasonCode         *string  `json:"failReasonCode,omitempty"`
 	ErrorCode              *string  `json:"errorCode,omitempty"`
 	OperationID            *string  `json:"operationId,omitempty"`

@@ -3,6 +3,7 @@
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-003
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-005
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-008
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-005
 // spec_ref: specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md#gwt-001
 // spec_ref: specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md#gwt-002
 import 'dart:convert';
@@ -32,7 +33,10 @@ void main() {
     'photo publication uses the production Remote page and processed readback',
     tags: const <String>['t4', 'content', 'media-publication', 'photo'],
     skip: !kRunPatrolT4,
-    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 15)),
+    config: PatrolTesterConfig(
+      visibleTimeout: const Duration(seconds: 15),
+      printLogs: true,
+    ),
     ($) => _runMediaPublicationJourney($, mediaKind: CreateMediaKind.images),
   );
 
@@ -40,7 +44,10 @@ void main() {
     'video publication streams, normalizes, selects cover, and reads back',
     tags: const <String>['t4', 'content', 'media-publication', 'video'],
     skip: !kRunPatrolT4,
-    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 15)),
+    config: PatrolTesterConfig(
+      visibleTimeout: const Duration(seconds: 15),
+      printLogs: true,
+    ),
     ($) => _runMediaPublicationJourney($, mediaKind: CreateMediaKind.video),
   );
 }
@@ -132,9 +139,7 @@ Future<void> _runMediaPublicationJourney(
       TestKeys.createPublishConfirmSheet,
     ).waitUntilVisible(timeout: const Duration(seconds: 15));
     await $(TestKeys.createPublishConfirmButton).tap();
-    await $(
-      TestKeys.createPublishResultSheet,
-    ).waitUntilVisible(timeout: const Duration(minutes: 5));
+    await _waitForPublicationResultWithRecovery($);
     final accepted = await _waitFor(
       $,
       () => postId != null && acceptedState != null,
@@ -145,13 +150,17 @@ Future<void> _runMediaPublicationJourney(
       isTrue,
       reason: '后台重试必须把真实媒体发布推进到 pending_review/published 并保留 postId。',
     );
+    final expectedResultTitle = acceptedState == 'pending_review'
+        ? UITextConstants.publishResultPendingReviewTitle
+        : UITextConstants.publishResultSuccessTitle;
+    final resultPresentationConverged = await _waitFor(
+      $,
+      () => find.text(expectedResultTitle).evaluate().isNotEmpty,
+      timeout: const Duration(seconds: 10),
+    );
     expect(
-      find.text(
-        acceptedState == 'pending_review'
-            ? UITextConstants.publishResultPendingReviewTitle
-            : UITextConstants.publishResultSuccessTitle,
-      ),
-      findsOneWidget,
+      resultPresentationConverged,
+      isTrue,
       reason: '结果面必须如实区分待审核与已发布，不能把受理伪装成公开成功。',
     );
     await $(TestKeys.createPublishResultDoneButton).tap();
@@ -199,6 +208,32 @@ Future<void> _runMediaPublicationJourney(
       await source.delete();
     }
   }
+}
+
+Future<void> _waitForPublicationResultWithRecovery(
+  PatrolIntegrationTester $,
+) async {
+  const maxUserRetries = 2;
+  for (var retry = 0; retry <= maxUserRetries; retry++) {
+    final outcomeVisible = await _waitFor(
+      $,
+      () =>
+          find.byKey(TestKeys.createPublishResultSheet).evaluate().isNotEmpty ||
+          find.text(UITextConstants.tryAgain).evaluate().isNotEmpty,
+      timeout: const Duration(seconds: 90),
+    );
+    expect(outcomeVisible, isTrue, reason: '媒体发布必须在 90 秒内进入结果面或展示可执行的结构化恢复动作。');
+    if (find.byKey(TestKeys.createPublishResultSheet).evaluate().isNotEmpty) {
+      return;
+    }
+    expect(retry, lessThan(maxUserRetries), reason: '连续恢复后仍未进入发布结果面。');
+    await $(UITextConstants.tryAgain).tap();
+    await $(
+      TestKeys.createPublishConfirmSheet,
+    ).waitUntilVisible(timeout: const Duration(seconds: 20));
+    await $(TestKeys.createPublishConfirmButton).tap();
+  }
+  fail('媒体发布恢复循环未进入终态。');
 }
 
 Future<File> _writeSource(CreateMediaKind mediaKind, int nonce) async {

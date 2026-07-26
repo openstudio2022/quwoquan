@@ -24,6 +24,102 @@ relayAccount:
 # gray-initial：取同集群一个实例验证，承接原远端 gamma 的真实远端集成验证职责。
 rolloutStages: [gray-initial, carry-on, full]
 
+# 第一方容器预验证是独立、不可提升的运行投影。它只证明 reviewed main 的
+# Service Pipeline 制品能在 prod-hosted 主机上以 rootless 容器运行；不得作为
+# 正式 rollout、Provider readiness、真实数据或 release receipt 的替代证据。
+prevalidation:
+  mode: prevalidate
+  promotable: false
+  namespace: quwoquan-prod-prevalidate
+  remoteRootSuffix: prevalidate
+  scopes: [first-party]
+  allowedDataModes: [isolated, external]
+  releaseEvidence:
+    eligible: false
+    writeLedger: false
+    writeReceipt: false
+  readinessPolicy:
+    requireContainerRunning: true
+    requireHealthyExceptProviderBound: true
+    providerBoundServices: [product-ops-service]
+    providerReadinessStatus: GATE_BLOCK
+  minimumHostResources:
+    cpuCores: 4
+    memoryBytes: 17179869184
+    containerFreeBytes: 42949672960
+    architectures: [x86_64, amd64]
+  planes:
+    service:
+      startupServices:
+        - recommendation-service
+        - content-service
+        - chat-service
+        - circle-service
+        - user-service
+        - assistant-service
+        - product-ops-service
+        - platform-ops-service
+        - search-service
+        - tag-service
+        - entity-service
+        - notification-service
+      imageAndConfigOnlyServices: [integration-service]
+      exposedPorts:
+        - 39000
+        - 39010
+        - 39100
+        - 32019
+        - 39200
+        - 39210
+        - 39220
+        - 39230
+        - 39240
+        - 39250
+        - 39270
+        - 39290
+        - 39320
+        - 39400
+        - 39410
+        - 39420
+        - 39430
+        - 39440
+    edge:
+      startupServices: [realtime-gateway, rtc-service]
+      imageAndConfigOnlyServices: []
+      exposedPorts: [39340, 39350]
+  isolatedData:
+    empty: true
+    seedAllowed: false
+    productionDataAllowed: false
+    releaseEvidenceEligible: false
+    services:
+      - postgres
+      - mongodb
+      - mongo-init
+      - redis
+      - object-storage
+      - object-storage-init
+      - elasticsearch
+    images:
+      postgres: docker.io/library/postgres@sha256:7a396fd264a2067788b6551122b50f162bf6136312c7fc9d74381cb92c648382
+      mongodb: docker.io/library/mongo@sha256:c8e9c92621124cd1da98f540c40157b9f6f338ba59babf296cf0f381ac8f60f4
+      mongo-init: docker.io/library/mongo@sha256:c8e9c92621124cd1da98f540c40157b9f6f338ba59babf296cf0f381ac8f60f4
+      redis: docker.io/library/redis@sha256:8d3740a7d506644b6553d6175e7a7e7028b9cda8493a6c9825a251b574426cf9
+      object-storage: docker.io/minio/minio@sha256:3f97c5651cb6662b880c787a232b6b34fec8d8922e08d6617b25d241a21164bb
+      object-storage-init: docker.io/minio/mc@sha256:68d8c80f43908b02daa285e55547131870a1d36b3ffe272c26d7d8f4d52d1e5c
+      elasticsearch: docker.elastic.co/elasticsearch/elasticsearch@sha256:f455c50fb82017dae23878c1b12fb2188dfb984723d62db2c5bd0c1f78e246f0
+  excluded:
+    workloads: [livekit, coturn]
+    capabilities:
+      - livekit-sfu
+      - turn
+      - apns
+      - fcm
+      - aliyun-sls
+      - commercial-login
+      - external-model-provider
+    reason: 外部 Provider、SFU/TURN 与正式数据面必须由独立受控证据验收。
+
 # 四平面 × 账号 × 固定路径 × 凭据 × 治理 workload（单一映射，禁止第二套）。
 planes:
   - plane: edge

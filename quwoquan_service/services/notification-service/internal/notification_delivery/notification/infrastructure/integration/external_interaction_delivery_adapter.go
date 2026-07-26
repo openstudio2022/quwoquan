@@ -160,7 +160,6 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 		Tenant:         "quwoquan",
 		Environment:    a.environment,
 		IdempotencyKey: requestID,
-		CallbackEvent:  "PushDeliverySucceeded",
 		PayloadRef:     "notification-delivery-job:" + notification.NotificationID,
 		PayloadDigest:  notificationDigest(notification, recipientID),
 		Sensitivity:    "private",
@@ -213,7 +212,6 @@ func (a *ExternalInteractionDeliveryAdapter) submitIncomingCallPush(
 		}
 	}
 	occurredAt := job.CreatedAt.UTC()
-	callbackEvent := "IncomingCallPushDeliveryResult"
 	if action == "cancel" {
 		if job.CancellationOccurredAt == nil ||
 			strings.TrimSpace(job.CancellationEventID) == "" {
@@ -224,7 +222,6 @@ func (a *ExternalInteractionDeliveryAdapter) submitIncomingCallPush(
 			}
 		}
 		occurredAt = job.CancellationOccurredAt.UTC()
-		callbackEvent = "IncomingCallCancellationPushDeliveryResult"
 	}
 	requestID := incomingCallExternalRequestID(
 		job.DeliveryKey,
@@ -250,7 +247,6 @@ func (a *ExternalInteractionDeliveryAdapter) submitIncomingCallPush(
 		Tenant:         "quwoquan",
 		Environment:    a.environment,
 		IdempotencyKey: requestID,
-		CallbackEvent:  callbackEvent,
 		PayloadRef:     "incoming-call-delivery-job:" + job.ID,
 		PayloadDigest:  incomingCallDigest(job, action, occurredAt),
 		Sensitivity:    "private",
@@ -366,7 +362,6 @@ type externalInteractionRequest struct {
 	Tenant         string            `json:"tenant"`
 	Environment    string            `json:"env"`
 	IdempotencyKey string            `json:"idempotencyKey"`
-	CallbackEvent  string            `json:"callbackEvent"`
 	PayloadRef     string            `json:"payloadRef"`
 	PayloadDigest  string            `json:"payloadDigest"`
 	Sensitivity    string            `json:"sensitivity"`

@@ -1,0 +1,40 @@
+version: 1
+service: user-service
+domain: user
+capability: profile-proposal-apply-loop
+
+metrics:
+  operation_total: user_profile_update_proposal_operation_total
+  outbox_drain_total: user_profile_update_proposal_outbox_drain_total
+  outbox_published_total: user_profile_update_proposal_outbox_published_total
+
+privacy:
+  permitted_labels: [operation, outcome, error_code, replayed]
+  prohibited_labels:
+    [account_id, persona_id, proposal_id, request_id, trace_id, reason, evidence_ref]
+
+slis:
+  - id: user_profile_proposal_command_availability
+    description: 合法提案 command 返回成功或幂等 receipt 的比例；输入拒绝不计依赖故障。
+    sli: sum(rate(user_profile_update_proposal_operation_total{outcome="succeeded"}[5m])) / sum(rate(user_profile_update_proposal_operation_total[5m]))
+    objective: 0.999
+  - id: user_profile_proposal_outbox_availability
+    description: ProfileUpdateProposal transactional outbox 到 durable event transport 的调度成功率。
+    sli: sum(rate(user_profile_update_proposal_outbox_drain_total{outcome="succeeded"}[5m])) / sum(rate(user_profile_update_proposal_outbox_drain_total[5m]))
+    objective: 0.999
+
+failure_semantics:
+  command_failed: retain_last_committed_proposal_and_persona_versions
+  apply_interrupted: retain_applying_checkpoint_for_idempotent_resume
+  rollback_interrupted: retain_rolling_back_checkpoint_for_idempotent_resume
+  outbox_failed: retain_transactional_outbox_record_and_fail_readiness
+
+alerts:
+  - id: profile_proposal_command_error_budget_burn
+    severity: page
+    condition: user_profile_proposal_command_availability_burn_rate_1h > 14.4
+    rollback: halt_profile_proposal_rollout
+  - id: profile_proposal_outbox_stalled
+    severity: page
+    condition: increase(user_profile_update_proposal_outbox_drain_total{outcome="failed"}[5m]) > 0
+    rollback: restore_transport_then_replay_transactional_outbox

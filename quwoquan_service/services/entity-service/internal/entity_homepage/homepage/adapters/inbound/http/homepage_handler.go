@@ -164,12 +164,18 @@ func (h *Handler) handleSuggestCandidate(w http.ResponseWriter, r *http.Request)
 		writeRuntimeNotFound(w, r)
 		return
 	}
-	var input application.HomepageInput
-	if err := decodeJSON(r, &input); err != nil {
+	var request struct {
+		application.HomepageInput
+		SourcePlaceID string `json:"sourcePlaceId"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
 		writeError(w, r, newBadRequest(err.Error()))
 		return
 	}
-	homepage, err := h.service.SuggestHomepageCandidate(r.Context(), input)
+	if sourcePlaceID := strings.TrimSpace(request.SourcePlaceID); sourcePlaceID != "" {
+		request.HomepageInput.LookupAliases = []string{sourcePlaceID}
+	}
+	homepage, err := h.service.SuggestHomepageCandidate(r.Context(), request.HomepageInput)
 	if err != nil {
 		writeError(w, r, err)
 		return

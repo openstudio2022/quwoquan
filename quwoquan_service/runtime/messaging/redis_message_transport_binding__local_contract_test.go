@@ -277,6 +277,68 @@ func TestRedisMessageTransportSeparatesEphemeralAndDurableDelivery(t *testing.T)
 	}
 }
 
+func TestRedisMessageTransportRetentionTrimsActiveStreamByAge(t *testing.T) {
+	ctx := context.Background()
+	durable := rtredis.NewMemoryClient()
+	transport, err := NewRedisMessageTransport(
+		rtredis.NewMemoryClient(),
+		durable,
+	)
+	if err != nil {
+		t.Fatalf("NewRedisMessageTransport() error = %v", err)
+	}
+	const stream = "events.search.recommendation_signals"
+	if _, err := transport.AppendDurable(ctx, DurableMessage{
+		Stream: stream,
+		Fields: []DurableField{
+			{Name: "signalId", Value: "old"},
+		},
+	}); err != nil {
+		t.Fatalf("append old message: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if _, err := transport.AppendDurable(ctx, DurableMessage{
+		Stream: stream,
+		Fields: []DurableField{
+			{Name: "signalId", Value: "recent"},
+		},
+	}); err != nil {
+		t.Fatalf("append recent message: %v", err)
+	}
+	if err := transport.SetDurableRetention(
+		ctx,
+		stream,
+		10*time.Millisecond,
+	); err != nil {
+		t.Fatalf("SetDurableRetention() error = %v", err)
+	}
+	if err := durable.XGroupCreateMkStream(
+		ctx,
+		stream,
+		"audit",
+		"0",
+	); err != nil {
+		t.Fatalf("create audit group: %v", err)
+	}
+	messages, err := transport.ReadDurable(ctx, StreamReadRequest{
+		Stream:   stream,
+		Group:    "audit",
+		Consumer: "audit-1",
+		Count:    10,
+		Block:    20 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("ReadDurable() error = %v", err)
+	}
+	if len(messages) != 1 ||
+		durableFieldValue(messages[0].Fields, "signalId") != "recent" {
+		t.Fatalf(
+			"retained messages = %+v, want only recent signal",
+			messages,
+		)
+	}
+}
+
 func durableFieldValue(fields []DurableField, name string) string {
 	for _, field := range fields {
 		if field.Name == name {

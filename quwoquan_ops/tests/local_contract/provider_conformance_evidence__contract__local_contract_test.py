@@ -4,11 +4,13 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
 
 from quwoquan_ops.ci.provider_conformance import b10_prod_remote_uat
+from quwoquan_ops.ci.provider_conformance import run_b10_prod_remote_patrol_uat
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 from quwoquan_ops.cli.lib import provider_conformance
 
@@ -161,6 +163,208 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             "b10-remote-runtime.message.transport",
         )
 
+    def test_b10_remote_readback_requires_both_device_directions(self) -> None:
+        environment = {
+            "QWQ_B10_IOS_DEVICE_ID": "ios-device",
+            "QWQ_B10_ANDROID_DEVICE_ID": "android-device",
+        }
+        evidence = [
+            {
+                "platform": "ios",
+                "deviceHash": b10_prod_remote_uat._device_hash("ios-device"),
+                "appVersion": "1.0",
+                "caseDirection": "ios_to_android",
+            },
+            {
+                "platform": "android",
+                "deviceHash": b10_prod_remote_uat._device_hash("android-device"),
+                "appVersion": "1.0",
+                "caseDirection": "ios_to_android",
+            },
+        ]
+        with mock.patch.dict(os.environ, environment, clear=True):
+            with self.assertRaisesRegex(ValueError, "both iOS-to-Android"):
+                b10_prod_remote_uat._validate_device_evidence(evidence)
+
+    def test_b10_remote_rejects_one_device_masquerading_as_two_platforms(self) -> None:
+        device_id = "physical-device"
+        evidence = [
+            {
+                "platform": "ios",
+                "deviceHash": b10_prod_remote_uat._device_hash(device_id),
+                "appVersion": "1.0",
+                "caseDirection": "ios_to_android",
+            },
+            {
+                "platform": "android",
+                "deviceHash": b10_prod_remote_uat._device_hash(device_id),
+                "appVersion": "1.0",
+                "caseDirection": "android_to_ios",
+            },
+        ]
+        with mock.patch.dict(
+            os.environ,
+            {
+                "QWQ_B10_IOS_DEVICE_ID": device_id,
+                "QWQ_B10_ANDROID_DEVICE_ID": device_id,
+            },
+            clear=True,
+        ):
+            with self.assertRaisesRegex(ValueError, "distinct iOS and Android"):
+                b10_prod_remote_uat._validate_device_evidence(evidence)
+
+    def test_b10_operator_readback_is_bound_to_active_candidate_digests(self) -> None:
+        digest = "sha256:" + "a" * 64
+        receipt_id = "b" * 64
+        call_id = "call-1"
+        call_digest = run_b10_prod_remote_patrol_uat._sha256(call_id.encode("utf-8"))
+        payload = {
+            "schema": "b10-prod-operator-readback",
+            "version": 1,
+            "imageDigest": digest,
+            "configDigest": digest,
+            "contractGraphDigest": digest,
+            "adapterDigest": digest,
+            "callIdDigests": [call_digest],
+            "providerReceipts": {},
+            "deliveryTimelines": [
+                {
+                    "callIdDigest": call_digest,
+                    "deviceTimelineCount": 1,
+                    "ringExternalAccepted": True,
+                    "ringProviderAccepted": True,
+                    "presentationAcknowledged": True,
+                    "cancelExternalAccepted": True,
+                    "cancelProviderAccepted": True,
+                }
+            ],
+            "realtimeReadback": {
+                "callIdDigests": [call_digest],
+                "receiptRefs": ["receipt:realtime-ok"],
+            },
+            "chatProjection": {
+                "systemCallLogs": [{"callIdDigest": call_digest, "count": 1}]
+            },
+            "qoeReadback": {
+                "calls": [
+                    {
+                        "callIdDigest": call_digest,
+                        "sessionDigest": digest,
+                        "terminalState": "ended",
+                        "mediaConnected": True,
+                        "connectLatencyMs": 100,
+                        "reconnectCount": 0,
+                    }
+                ],
+                "effectiveSampleCount": 50,
+                "alertReceiptRef": "receipt:alert-ok",
+                "rollbackReceiptRef": "receipt:rollback-ok",
+            },
+            "observabilityRefs": {},
+            "releaseReadiness": {
+                "bindingPreflightReceiptRef": "receipt:binding-preflight",
+                "adapterHealthReceiptRef": "receipt:adapter-health",
+                "switchCompatibilityReceiptRef": "receipt:switch-compatible",
+                "callbackDrainReceiptRef": "receipt:callback-drain",
+                "lastGoodReceiptRef": f"receipt:hosted:{receipt_id}",
+                "rollbackReceiptRef": f"receipt:hosted:{receipt_id}",
+            },
+            "cleanupReceipt": "receipt:cleanup-ok",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "operator-readback.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            environment = {
+                "QWQ_B10_OPERATOR_READBACK_PATH": str(path),
+                "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST": digest,
+                "QWQ_PROVIDER_CONFORMANCE_CONFIG_DIGEST": digest,
+                "QWQ_PROVIDER_CONFORMANCE_CONTRACT_GRAPH_DIGEST": digest,
+                "QWQ_PROVIDER_CONFORMANCE_ADAPTER_DIGEST": digest,
+            }
+            def hosted_receipt_readback(
+                command: list[str],
+                **_: object,
+            ) -> subprocess.CompletedProcess[str]:
+                purpose = command[command.index("--purpose") + 1]
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    stdout=json.dumps(
+                        {
+                            "receiptRef": f"receipt:hosted:{receipt_id}",
+                            "candidate": {
+                                "imageDigest": digest,
+                                "configDigest": digest,
+                                "contractGraphDigest": digest,
+                                "adapterDigest": digest,
+                            },
+                            "purpose": purpose,
+                        }
+                    ),
+                    stderr="",
+                )
+
+            with mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(
+                run_b10_prod_remote_patrol_uat.subprocess,
+                "run",
+                side_effect=hosted_receipt_readback,
+            ):
+                self.assertEqual(
+                    run_b10_prod_remote_patrol_uat._load_operator_receipts(
+                        call_ids=(call_id,),
+                    ),
+                    payload,
+                )
+                payload["adapterDigest"] = "sha256:" + "b" * 64
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "active image, config"):
+                    run_b10_prod_remote_patrol_uat._load_operator_receipts(
+                        call_ids=(call_id,),
+                    )
+                payload["adapterDigest"] = digest
+                payload["callIdDigests"] = [
+                    run_b10_prod_remote_patrol_uat._sha256(b"stale-call"),
+                ]
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "every executed call"):
+                    run_b10_prod_remote_patrol_uat._load_operator_receipts(
+                        call_ids=(call_id,),
+                    )
+
+    def test_b10_remote_rejects_dynamic_patrol_command(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"QWQ_B10_REMOTE_UAT_COMMAND_JSON": '["untrusted-runner"]'},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(ValueError, "source-owned Patrol"):
+                b10_prod_remote_uat._load_command()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                b10_prod_remote_uat._load_command(),
+                list(b10_prod_remote_uat.SOURCE_OWNED_PATROL_COMMAND),
+            )
+
+    def test_b10_remote_patrol_passes_only_role_required_dart_defines(self) -> None:
+        caller_command = run_b10_prod_remote_patrol_uat._patrol_command(
+            "ios",
+            role="caller",
+        )
+        callee_command = run_b10_prod_remote_patrol_uat._patrol_command(
+            "android",
+            role="callee",
+        )
+        self.assertIn("QWQ_PROVIDER_UAT_B10_CALL_ID", caller_command)
+        self.assertNotIn(
+            "QWQ_PROVIDER_UAT_B10_EXPECTED_CALLER_NAME",
+            caller_command,
+        )
+        self.assertIn(
+            "QWQ_PROVIDER_UAT_B10_EXPECTED_CALLER_NAME",
+            callee_command,
+        )
+        self.assertNotIn("QWQ_PROVIDER_UAT_B10_CALL_ID", callee_command)
+
     def test_source_coverage_gaps_are_preserved_in_release_readiness(self) -> None:
         compiled, compile_issues = governance.load_and_compile()
         self.assertEqual(compile_issues, [])
@@ -210,6 +414,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 "traces": ["trace:b10-uat"],
                 "metrics": ["metric:b10-uat"],
             }
+            call_digests = ["sha256:" + "d" * 64, "sha256:" + "e" * 64]
             readback = {
                 "schema": b10_prod_remote_uat.READBACK_SCHEMA,
                 "version": b10_prod_remote_uat.READBACK_VERSION,
@@ -218,6 +423,8 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 "adapterId": "infra.livekit_sfu",
                 "imageDigest": "sha256:" + "a" * 64,
                 "configDigest": "sha256:" + "b" * 64,
+                "contractGraphDigest": "sha256:" + "c" * 64,
+                "adapterDigest": "sha256:" + "f" * 64,
                 "deviceEvidence": [
                     {
                         "platform": "ios",
@@ -235,6 +442,18 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 "providerReceipts": [
                     {"providerKind": "livekit", "receiptRef": "receipt:livekit-ok"}
                 ],
+                "deliveryTimelines": [
+                    {
+                        "callIdDigest": call_digest,
+                        "deviceTimelineCount": 1,
+                        "ringExternalAccepted": True,
+                        "ringProviderAccepted": True,
+                        "presentationAcknowledged": True,
+                        "cancelExternalAccepted": True,
+                        "cancelProviderAccepted": True,
+                    }
+                    for call_digest in call_digests
+                ],
                 "pushReadback": {
                     "ios": "pushkit_callkit",
                     "android": "fcm_full_screen_or_heads_up",
@@ -247,9 +466,31 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                     "pipHangup": True,
                     "cancelRaceResolved": True,
                 },
-                "realtimeReadback": {"receiptRef": "receipt:realtime-ok"},
-                "chatProjection": {"systemCallLogCount": 1},
+                "realtimeReadback": {
+                    "callIdDigests": call_digests,
+                    "receiptRefs": [
+                        "receipt:realtime-one",
+                        "receipt:realtime-two",
+                    ],
+                },
+                "chatProjection": {
+                    "systemCallLogs": [
+                        {"callIdDigest": call_digest, "count": 1}
+                        for call_digest in call_digests
+                    ]
+                },
                 "qoeReadback": {
+                    "calls": [
+                        {
+                            "callIdDigest": call_digest,
+                            "sessionDigest": "sha256:" + ("1" if index == 0 else "2") * 64,
+                            "terminalState": "ended",
+                            "mediaConnected": True,
+                            "connectLatencyMs": 100,
+                            "reconnectCount": 0,
+                        }
+                        for index, call_digest in enumerate(call_digests)
+                    ],
                     "effectiveSampleCount": 50,
                     "alertReceiptRef": "receipt:alert-ok",
                     "rollbackReceiptRef": "receipt:rollback-ok",
@@ -272,8 +513,8 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                     "adapterHealthReceiptRef": "receipt:health-ok",
                     "switchCompatibilityReceiptRef": "receipt:switch-ok",
                     "callbackDrainReceiptRef": "receipt:drain-ok",
-                    "lastGoodReceiptRef": "receipt:last-good",
-                    "rollbackReceiptRef": "receipt:rollback-ok",
+                    "lastGoodReceiptRef": "receipt:hosted:" + "d" * 64,
+                    "rollbackReceiptRef": "receipt:hosted:" + "e" * 64,
                 },
             }
 
@@ -292,11 +533,12 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 "QWQ_PROVIDER_CONFORMANCE_ASSERTION_IDS": json.dumps(assertion_ids),
                 "QWQ_PROVIDER_CONFORMANCE_CONFIG_DIGEST": "sha256:" + "b" * 64,
                 "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST": "sha256:" + "a" * 64,
+                "QWQ_PROVIDER_CONFORMANCE_CONTRACT_GRAPH_DIGEST": "sha256:" + "c" * 64,
+                "QWQ_PROVIDER_CONFORMANCE_ADAPTER_DIGEST": "sha256:" + "f" * 64,
                 "QWQ_PROVIDER_CONFORMANCE_TYPED_PORT": "MediaTransportPort",
                 "QWQ_PROVIDER_CONFORMANCE_CONTRACT_REF": "quwoquan_service/services/rtc-service/contracts/rtc/call_session/operations.yaml",
                 "QWQ_B10_IOS_DEVICE_ID": "ios-device",
                 "QWQ_B10_ANDROID_DEVICE_ID": "android-device",
-                "QWQ_B10_REMOTE_UAT_COMMAND_JSON": '["native-device-patrol"]',
             }
             with (
                 mock.patch.dict(os.environ, environment, clear=True),
@@ -317,6 +559,16 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             self.assertEqual(case_result["status"], "passed")
             self.assertEqual(case_result["assertionIds"], assertion_ids)
             self.assertEqual(case_result["cleanupReceipt"], "receipt:cleanup-ok")
+            native_readback = dict(case_result["nativeReadback"])
+            self.assertEqual(
+                native_readback["schema"],
+                b10_prod_remote_uat.READBACK_SCHEMA,
+            )
+            self.assertTrue(
+                (
+                    result_path.parent / native_readback["artifactName"]
+                ).is_file()
+            )
             sources, issues = provider_conformance.discover_test_sources()
             self.assertEqual(issues, [])
             loaded, case_issues = provider_conformance.load_case_results(
@@ -333,6 +585,22 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             )
             self.assertEqual(case_issues, [])
             self.assertIsNotNone(loaded)
+            case_result["nativeReadback"]["artifactDigest"] = "sha256:" + "d" * 64
+            result_path.write_text(json.dumps(case_result), encoding="utf-8")
+            _, case_issues = provider_conformance.load_case_results(
+                result_path,
+                source=sources[
+                    (
+                        "rtc.room.transport",
+                        "infra.livekit_sfu",
+                        "user_acceptance",
+                    )
+                ],
+                environment="prod",
+                config_digest="sha256:" + "b" * 64,
+            )
+            self.assertTrue(any("native-device readback" in issue for issue in case_issues))
+            case_result["nativeReadback"] = native_readback
             case_result.pop("releaseReadiness")
             result_path.write_text(json.dumps(case_result), encoding="utf-8")
             _, case_issues = provider_conformance.load_case_results(

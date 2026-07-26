@@ -41,7 +41,8 @@
 - 正常启动优先进入登录页、首页、新用户流程或可安全运行的降级 Shell；启动等待超时本身不得被判定为致命异常。
 - 启动前发生已确认的根级致命异常时停止后续初始化，静默保存脱敏异常，并进入不依赖业务框架的恢复页；启动阶段不提供重复重试。
 - 运行中发生根级不可恢复异常时只允许一次受控主容器重建；成功直接替换路由进入首页，失败后不得形成恢复循环。
-- 恢复页在全部状态提供官方网页版；版本服务确认有新版后，iOS 进入 App Store，Android 进入趣我圈官网受信 APK 下载通道；只有版本服务确认后才能显示“需要更新”或“已是最新版本”。
+- 恢复页在全部状态提供官方网页版。
+- 版本服务确认有新版后，iOS 进入 App Store，Android 进入趣我圈官网受信 APK 下载通道。只有版本服务确认后才能显示“需要更新”或“已是最新版本”。
 - 页面只表达已确认事实、恢复状态和当前动作，不显示技术原因、诊断编号、日志进度、错误码或缺乏操作价值的不确定描述。
 
 <a id="req-004"></a>
@@ -95,9 +96,9 @@
 - 小趣回答后的赞/踩、采纳、撤销和引用打开能回流到 InteractionEvent，并携带 referralSource、triggerMessageId、assistantTurnId。
 
 <a id="req-009"></a>
-### REQ-009 十条跨对象 Journey 商用准出
+### REQ-009 当前全部跨对象 Journey 商用准出
 
-- 十条 Journey 的全部 page/surface/operation/object/store/event/behavior/metric 节点可正向追踪，且无反向孤儿。
+- 当前全部 Journey 的 page/surface/operation/object/store/event/behavior/metric 节点可正向追踪，且无反向孤儿。
 - command 经过 aggregate owner，query 读取 named Slice；App 只访问 generated Gateway operation。
 - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
@@ -583,11 +584,11 @@
 - THEN 小趣回答后的赞/踩、采纳、撤销和引用打开能回流到 InteractionEvent，并携带 referralSource、triggerMessageId、assistantTurnId。
 
 <a id="uat-009"></a>
-### UAT-009 十条跨对象 Journey 商用准出
+### UAT-009 当前全部跨对象 Journey 商用准出
 
-- GIVEN 执行“十条跨对象 Journey 商用准出”所需的身份、输入与上游事实均有效。
-- WHEN 参与者发起“十条跨对象 Journey 商用准出”对应动作。
-- THEN 十条 Journey 的全部 page/surface/operation/object/store/event/behavior/metric 节点可正向追踪，且无反向孤儿。
+- GIVEN 执行“当前全部跨对象 Journey 商用准出”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“当前全部跨对象 Journey 商用准出”对应动作。
+- THEN 当前全部 Journey 的 page/surface/operation/object/store/event/behavior/metric 节点可正向追踪，且无反向孤儿。
 - THEN command 经过 aggregate owner，query 读取 named Slice；App 只访问 generated Gateway operation。
 - THEN 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - THEN 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
@@ -602,69 +603,77 @@
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：游客关闭登录回安全首页不循环，登录成功继续进入写文字。
-- 完成判定：`UAT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 准出影响：`block`
+- 影响或价值：当前只有媒体发布 Remote UAT 直接引用 `UAT-002`，尚未在同一候选版本证明登录取消/续接、micro/article 分流、照片顺序、视频转码、重复 intent、拒绝不落 Post、pending_review 不公开及作者读模型回读的完整组合。
+- 完成判定：Alpha 的 Mock/Provider/Widget 覆盖与 Beta、Gamma 的真实 HTTP、对象存储、Mongo、worker 和 App user_acceptance 使用同一 intent 集合逐项通过；文字、照片、视频三条 CaseResult 均直接引用 `UAT-002`，并证明失败恢复后最多一个 Post。
+- 依赖：[`publish-comment-reaction`](./discovery-content/publish-comment-reaction/spec.md)、[`media-processing-helper-read`](./discovery-content/media-processing-helper-read/spec.md) 与 [`onboarding-and-identity-entry`](./user-identity-profile-relationship/onboarding-and-identity-entry/spec.md) 的最低节点 OPEN。
 
 <a id="open-002"></a>
 ### OPEN-002 应用安全进入与不可恢复异常真环境验收
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：正式 iOS App Store 产品页、Android 生产签名与官网 APK/CDN 发布、Prod 异常端点及 Android/iPhone 真机故障注入证据尚未共同闭合。
-- 完成判定：`UAT-003` 对应行为满足且真实测试 `spec_ref` 有效
+- 准出影响：`block`
+- 影响或价值：当前尚缺正式 iOS App Store 产品页、Android 生产签名与官网 APK/CDN 发布、Prod 异常端点及 Android/iPhone 真机故障注入证据的共同闭合。
+- 完成判定：仓内 local_contract 继续证明启动/运行时状态机、一次性根容器重建、静默异常队列和恢复页语义。Beta、Gamma 的 Android/iPhone 真机分别产生启动致命异常与运行时不可恢复异常的录像、脱敏日志和 AppRoot `UAT-003` CaseResult。Prod 仅在正式商店、签名 APK/CDN、异常端点获批后关闭。
+- 依赖：[`cold-start-performance`](./runtime/runtime-client-foundation/cold-start-performance/spec.md)、[`unrecoverable-runtime-recovery`](./runtime/runtime-client-foundation/unrecoverable-runtime-recovery/spec.md) 与 [`app-release-recovery-routing`](./product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md) 的正式回执。
 
 <a id="open-003"></a>
 ### OPEN-003 我的主页转发互动双向历史
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：互动保持两层导航且选中转发后可切换收到的/我发起的。
-- 完成判定：`UAT-004` 对应行为满足且真实测试 `spec_ref` 有效
+- 准出影响：`block`
+- 影响或价值：尚缺 AppRoot 直接 user_acceptance；需要以双账号真实数据证明 received/initiated 分页、未读与 impact、刷新/滚动恢复、子账号切换隔离、他人主页零请求、越权拒绝及八个归因事件。
+- 完成判定：App local_contract 覆盖 Mock/Provider/Widget 和页面六态，Beta、Gamma 以双账号真实 HTTP/存储执行 received 与 initiated 全路径；服务拒绝他人读取且观测 readback 字段完整，CaseResult 直接引用 `UAT-004`。
+- 依赖：[`owner-subaccount-homepage-unification`](./user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md) 与 Content `ProfileInteractionActivityView` 对象证据。
 
 <a id="open-004"></a>
 ### OPEN-004 iOS/Android 边缘滑动返回与退出保护
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：无底栏普通页面通过 iOS leading edge 或 Android 左/右边缘返回上一页。
-- 完成判定：`UAT-005` 对应行为满足且真实测试 `spec_ref` 有效
+- 准出影响：`block`
+- 影响或价值：尚缺 iOS/Android 真机对普通页面 interactive pop、沉浸媒体手势冲突、Android 根页首次提示/两秒内二次退出以及 iOS 根页不模拟退出的统一 UAT 回执；现有证据只覆盖原生 Page 工厂和返回策略 local_contract。
+- 完成判定：本地策略、路由工厂和 Widget 测试分别直接引用三个 L3 GWT；Beta、Gamma 的 iPhone/Android 真机执行普通页、沉浸页、根页矩阵并记录帧流畅度与结果，AppRoot CaseResult 直接引用 `UAT-005`。
+- 依赖：[`native-edge-gesture-navigation`](./runtime/native-edge-gesture-navigation/spec.md) 的三个 Story 与真实设备执行资源。
 
 <a id="open-005"></a>
 ### OPEN-005 对外引流与深链回流端到端价值闭环
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：5 类对象都能从统一分享面板分享到微信会话/朋友圈，并生成站外可点击的 HTTPS 落地链接。
-- 完成判定：`UAT-006` 对应行为满足且真实测试 `spec_ref` 有效
+- 准出影响：`block`
+- 影响或价值：尚未用正式域名和渠道证明五类对象卡片、微信会话/朋友圈、系统分享、海报二维码/口令、Universal Link/App Links、延迟深链、Web SEO 与 share_id/UTM 归因从站外回到 canonical 对象页的闭环。
+- 完成判定：local_contract 校验对象映射、隐私和归因契约。Beta/Gamma 验证受控 HTTPS 落地与 App 回流。Prod 使用正式域名、微信开放平台和商店安装链完成已安装/未安装矩阵，Product Ops readback 与 AppRoot `UAT-006` CaseResult 绑定同一 share_id。
+- 依赖：[`outbound-share-distribution`](./product-ops-growth/outbound-share-distribution/spec.md) 与正式域名、微信开放平台、商店及 CDN 外部资源。
 
 <a id="open-006"></a>
 ### OPEN-006 消息社交连接端到端价值闭环
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：互关用户从 TA 的主页点击消息，可创建或复用 direct conversation 并完成发送/接收。
-- 完成判定：`UAT-007` 对应行为满足且真实测试 `spec_ref` 有效
+- 准出影响：`block`
+- 影响或价值：尚缺同一候选版本的双账号 Remote Journey，覆盖互关私信、非互关 GreetingRequest 回复升级、三来源建群、圈子/组织/主页群绑定、@小趣、消息离线投递以及 RTC 接听/拒绝/取消/弱网/后台唤醒。
+- 完成判定：Chat/Circle/User/Assistant/Realtime/Notification/RTC 的对象 local_contract 与真实 API integration 全部通过。Beta、Gamma 双账号真机完成消息及通话矩阵，Gamma 使用 Port 对等替身、Prod 使用正式 APNs/FCM/LiveKit，CaseResult 直接引用 `UAT-007`。
+- 依赖：[`chat-conversation`](./chat-conversation/spec.md)、[`circle-community`](./circle-community/spec.md) 及离线来电 Provider 正式回执。
 
 <a id="open-007"></a>
 ### OPEN-007 无处不在的小趣私人助理商用主线
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：用户从首页、内容页、群聊、搜索页、个人页进入小趣时，入口语义和会话状态一致，不维护第二套助手体验。
-- 完成判定：`UAT-008` 对应行为满足且真实测试 `spec_ref` 有效
+- 准出影响：`block`
+- 影响或价值：尚缺 AppRoot Remote UAT；需要证明五入口跨入口会话续接、内容/搜索 grounding、群聊结构化 mention、stream/cancel/resume、consent、工具失败、引用打开、订阅投递及赞踩/采纳/撤销学习回流。
+- 完成判定：AssistantConversation/Run/Turn、InteractionEvent、LearningFact、PolicyRelease/Rollout 各自 local/API 合同全部通过。Alpha、Beta、Gamma 在五入口执行同一会话与失败矩阵，Behavior/Recommendation/Product Ops 可回读反馈，CaseResult 直接引用 `UAT-008`。正式模型 Provider receipt 由 Prod 单独关闭。
+- 依赖：[`assistant-run-learning`](./assistant-run-learning/spec.md)、[`recommendation-platform`](./recommendation-platform/spec.md) 与 14 类 Provider conformance。
 
 <a id="open-008"></a>
-### OPEN-008 十条跨对象 Journey 商用准出
+### OPEN-008 当前全部跨对象 Journey 商用准出
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：十条 Journey 的全部 page/surface/operation/object/store/event/behavior/metric 节点可正向追踪，且无反向孤儿。
-- 完成判定：`UAT-009` 对应行为满足且真实测试 `spec_ref` 有效
+- 准出影响：`block`
+- 影响或价值：当前 12 Journey、28 Scenario、9 UAT 尚未由同一候选版本的三层 CaseResult 和 Alpha/Beta/Gamma/Prod 回执闭合；任何孤立 page/surface/operation/object/store/event/behavior/metric 或未删除的当前发布 capability gap 都会阻断准出。
+- 完成判定：`UAT-009` 的派生覆盖图对全部验收锚点建立 direct `spec_ref`，每条 Journey 至少跨两个真实对象并覆盖权限、错误恢复、幂等、副作用、投影收敛和运营/推荐回流。Alpha/Beta/Gamma 全部通过且只剩正式凭据、法务和 Prod 基础设施 external blocker 时可形成候选准出，所有 Prod 回执及灰度回滚完成后才删除本 OPEN 并判定 `READY`。
+- 依赖：前七项 AppRoot OPEN、全部最低节点 block OPEN、14 类 Provider 九格、Data publish/release/import/readback 与四环境 `stackctl verify`。

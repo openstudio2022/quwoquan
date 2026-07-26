@@ -83,6 +83,26 @@ func TestRetrieveIDDirectHitReadsDetail(t *testing.T) {
 	}
 }
 
+func TestRetrieveIDAnchorResolvesPromotedPlaceToHomepage(t *testing.T) {
+	const placeID = "place_0123456789abcdef"
+	resp, err := Retrieve(context.Background(), RetrieveRequest{
+		Targets: []Target{TargetEntity},
+		IDs:     []string{placeID},
+	}, NewSliceBackend([]Document{{
+		ObjectType: ObjectTypeEntityHomepage,
+		ObjectID:   "homepage_broken_bridge",
+		Title:      "断桥残雪主页",
+		Visibility: "public",
+		Fields:     map[string]string{"placeId": placeID},
+	}}), Viewer{})
+	if err != nil {
+		t.Fatalf("retrieve err=%v", err)
+	}
+	if len(resp.Hits) != 1 || resp.Hits[0].ObjectID != "homepage_broken_bridge" {
+		t.Fatalf("expected promoted homepage from place alias, got %#v", resp.Hits)
+	}
+}
+
 func TestRetrieveMixedTargetsAreMerged(t *testing.T) {
 	resp, err := Retrieve(context.Background(), RetrieveRequest{
 		Targets: []Target{TargetArticle, TargetUser},

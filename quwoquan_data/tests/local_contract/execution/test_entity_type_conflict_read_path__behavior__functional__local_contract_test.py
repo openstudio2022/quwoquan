@@ -51,8 +51,25 @@ def _mixed_type_task(name: str = "类型冲突读路径批") -> str:
         region="中国/test-region-a/舟山市/嵊泗县",
         category="景区",
         targets=[
-            {"entityType": "地点/景区", "name": "嵊泗列岛", "aliases": ["嵊泗列岛风景名胜区"]},
-            {"entityType": "地点/自然景观", "name": "花鸟岛"},
+            {
+                "entityType": "地点/景区",
+                "name": "嵊泗列岛",
+                "aliases": ["嵊泗列岛风景名胜区"],
+                "qualifiedHomepageSource": {
+                    "provider": "wikipedia",
+                    "title": "嵊泗列岛",
+                    "url": "https://zh.wikipedia.org/wiki/嵊泗列岛",
+                },
+            },
+            {
+                "entityType": "地点/自然景观",
+                "name": "花鸟岛",
+                "qualifiedHomepageSource": {
+                    "provider": "wikipedia",
+                    "title": "花鸟岛",
+                    "url": "https://zh.wikipedia.org/wiki/花鸟岛",
+                },
+            },
         ],
         created_by="test",
         entity_articles_per_target=0,

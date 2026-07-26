@@ -354,6 +354,17 @@ func (c *instrumentedClient) XPendingCount(
 	return count, err
 }
 
+func (c *instrumentedClient) XTrimOlderThan(
+	ctx context.Context,
+	stream string,
+	maxAge time.Duration,
+) error {
+	t := time.Now()
+	err := c.inner.XTrimOlderThan(ctx, stream, maxAge)
+	c.record(t, err)
+	return err
+}
+
 func (c *instrumentedClient) Pipeline(ctx context.Context) Pipeliner {
 	return c.inner.Pipeline(ctx)
 }

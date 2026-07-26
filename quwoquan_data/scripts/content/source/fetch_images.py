@@ -13,7 +13,8 @@ from typing import Any
 from core.paths import DATA_ROOT
 from core.runtime_policy import active_runtime_policy
 from content.source.fetch_http import _http_get_bytes
-from content.source.fetch_image_candidates import candidate_image_urls
+from content.source.fetch_image_candidates import candidate_image_urls, page_image_candidate_urls
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 from content.source.image_payload import sniff_image_ext
 
 _RUNTIME_POLICY = active_runtime_policy()
@@ -305,7 +306,10 @@ def fetch_page_image_payload(
         )
     attempts = 0
     last: PageImageFetchResult | None = None
-    for candidate in candidate_image_urls(requested_url):
+    for candidate in page_image_candidate_urls(
+        requested_url,
+        rendition_width=MEDIA_PROCESSING_POLICY.page_image_rendition_width,
+    ):
         normalized_from_url = requested_url if candidate != requested_url else ""
         for retry_index in range(max(1, max_attempts)):
             attempts += 1

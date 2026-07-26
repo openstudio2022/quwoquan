@@ -44,7 +44,19 @@ void main() {
       expect(machine.snapshot.phase, RecoveryPhase.runtimeReentering);
       expect(machine.beginRuntimeReentry(), isFalse);
       expect(machine.failRuntimeReentry(), isTrue);
-      expect(machine.snapshot.phase, RecoveryPhase.startupChecking);
+      expect(machine.snapshot.phase, RecoveryPhase.runtimeVersionChecking);
+      expect(machine.markVersionUnavailable(), isTrue);
+      expect(machine.snapshot.phase, RecoveryPhase.runtimeVersionUnavailable);
+      expect(
+        machine.confirmVersion(
+          currentBuild: 18100,
+          latestBuild: 18201,
+          updateUrl: 'https://quwoquan.com/download/android',
+          recoveryUrl: 'https://quwoquan.com/recovery',
+        ),
+        isTrue,
+      );
+      expect(machine.snapshot.phase, RecoveryPhase.runtimeUpdateRequired);
       expect(machine.beginRuntimeReentry(), isFalse);
     },
   );

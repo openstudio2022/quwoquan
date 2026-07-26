@@ -116,20 +116,15 @@ def test_non_mediawiki_authority_title_is_available_to_the_shared_judge() -> Non
 
 def test_homepage_authority_qualification_rejects_unusable_resolved_page(monkeypatch):
     candidate = homepage_authority.HomepageAuthorityCandidate(
-        provider=HomepageAuthorityProvider.TOUTIAO_BAIKE,
+        provider=HomepageAuthorityProvider.WIKIPEDIA,
         title="测试实体",
-        url="https://www.baike.com/wikiid/test",
+        url="https://zh.wikipedia.org/wiki/测试实体",
     )
     discovery = homepage_authority.HomepageAuthorityDiscovery(
-        wikipedia_title="",
-        wikipedia_url="",
+        wikipedia_title=candidate.title,
+        wikipedia_url=candidate.url,
         baidu_baike=None,
-        toutiao_baike=BaikePageResolution(
-            title=candidate.title,
-            url=candidate.url,
-            matched_term="测试实体",
-            match_confidence=0.95,
-        ),
+        toutiao_baike=None,
     )
     monkeypatch.setattr(homepage_authority, "discover_homepage_authority", lambda *_args, **_kwargs: discovery)
     monkeypatch.setattr(

@@ -73,10 +73,10 @@
 ### REQ-002 Run 请求与响应契约必须与端侧 personalassistant 协议兼容
 
 - Run 请求与响应契约必须与端侧 personal_assistant 协议兼容。
-- 学习事件、评分卡、反馈统计必须进入 metadata 驱动口径。
+- `AssistantLearningFact`（用户反馈、交互结果与服务评分）及其反馈统计必须进入 metadata 驱动口径。
 - 助手策略发布必须支持灰度与回滚。
 - `learning-event-feedback-injection`（L2）：统一学习事件、反馈聚合、注入链路
-- `learning-event-ingestion`（L3）：InteractionEvent / Scorecard 上报与统一事件桥接
+- `learning-event-ingestion`（L3）：`AppendAssistantLearningFact` 单轨追加与统一事件桥接
 
 ## 6. 领域验收
 
@@ -90,12 +90,12 @@
 ## 7. 工程归属
 
 - App：`quwoquan_app/lib/ui/assistant`、`quwoquan_app/lib/cloud/services/assistant`
-- Contracts：`quwoquan_service/services/assistant-service/contracts`、`quwoquan_service/services/recommendation-service/contracts`
-- Service：`quwoquan_service/services/assistant-service`、`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime`
+- Contracts：`quwoquan_service/services/assistant-service/contracts`、`quwoquan_service/services/recommendation-service/contracts`、`quwoquan_service/services/user-service/contracts/persona_management/profile_update_proposal`
+- Service：`quwoquan_service/services/assistant-service`、`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime`、`quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal`
 - 测试：
-  - `local_contract`：`quwoquan_service/services/assistant-service/tests`
-  - `api_integration`：`quwoquan_service/services/assistant-service/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
+  - `local_contract`：`quwoquan_service/services/assistant-service/tests`、`quwoquan_service/services/user-service/tests/local_contract/persona_management/profile_update_proposal`
+  - `api_integration`：`quwoquan_service/services/assistant-service/tests`、`quwoquan_service/services/user-service/tests/api_integration/account/user_account/profile_update_proposal_store__api_integration_test.go`
+  - `user_acceptance`：`quwoquan_app/test/user_acceptance`
 
 ## 8. 开放事项
 
@@ -105,5 +105,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：领域边界、上下游依赖、工程映射和服务治理清晰。
+- 影响或价值：仍缺获批 Prod release 与全局外部 Provider conformance 回执；对象契约、可信主体、策略冻结、学习事实、反馈投影、画像提案与 durable relay 已有 local/API/Gamma Remote 直连证据，Alpha/Beta/Prod 环境包也可重建，但包验证不能替代商用准出。
 - 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效

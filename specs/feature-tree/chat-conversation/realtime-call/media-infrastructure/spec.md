@@ -38,6 +38,8 @@
 ### REQ-002 离线来电 provider 与平台唤醒
 
 - provider receipt、设备回调、来电 UI、Answer/Reject 与真实设备 readback 闭环。
+- Integration 的 `202 external_accepted`、厂商终态 result 与设备 `presentation ACK` 是三类独立事实：result 通过事务 outbox/Redis Stream 投递，Notification 以 `attemptId` 收件去重，并按 call/device 暴露仅含摘要的 ring/cancel 时间线。
+- `sent_unconfirmed` 只表示厂商成功受理；没有设备展示 ACK 时禁止写成 `delivered`。
 
 <a id="req-003"></a>
 ### REQ-003 媒体 QoE 黄金指标可查询并驱动灰度
@@ -85,7 +87,8 @@
 
 - GIVEN 被叫离线/后台/锁屏/被系统终止，且设备注册有效。
 - WHEN CallRinging 进入平台 push provider。
-- THEN iOS/Android 按 capability 唤醒或明确降级；Web 仅以前台 realtime 站内来电承载， 过期/重复/cancelled call 不重复响铃。
+- THEN iOS/Android 按 capability 唤醒或明确降级；Web 仅以前台 realtime 站内来电承载，过期/重复/cancelled call 不重复响铃。
+- THEN operator 能以 call/device 摘要复验 ring/cancel 的 external acceptance、provider result 与 presentation ACK；重放同一 `attemptId` 不产生第二条业务收件事实。
 
 <a id="gwt-003"></a>
 ### GWT-003 媒体 QoE 黄金指标可查询并驱动灰度
@@ -121,10 +124,10 @@
 <a id="open-002"></a>
 ### OPEN-002 离线来电 provider 与平台唤醒
 
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：provider receipt、设备回调、来电 UI、Answer/Reject 与真实设备 readback 闭环。
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：事务 result relay、设备级幂等收件与 operator 时间线已有直接 `spec_ref`；仍缺 Gamma/Prod 受控 APNs/FCM 凭据及 iOS/Android 真机产生的真实唤醒、展示 ACK 与取消竞态 readback，禁止用本地通知或 fixture 关闭。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-003"></a>
@@ -133,7 +136,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：缺少 emitter、去重、rollup、series、dashboard/alert、gamma/prod readback 与恢复演练的同版本完整证据。
+- 影响或价值：仍缺 Gamma/Prod 真实通话产生的有效 series、告警 firing/resolved 与回滚 receipt 的同版本运行证据；仓库内 emitter、终态去重、受控下钻与 B10 同候选绑定已具备。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-004"></a>
@@ -142,5 +145,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Alpha/Beta/Gamma/Prod 各自证据完整，且真实触发→通知→恢复→回滚链通过。
+- 影响或价值：当前仍缺 Gamma 受控 provider readiness、双真机和经批准的 Prod hosted rollout/rollback 实际回执；source-owned 双真机 Patrol 与 hosted receipt 摘要校验已成为准出合同。
 - 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效

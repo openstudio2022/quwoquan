@@ -12,6 +12,12 @@ func buildAppReleaseService(cfg config) (*apprelease.Service, error) {
 	if recoveryURL == "" && publicOrigin != "" {
 		recoveryURL = publicOrigin + "/download"
 	}
+	androidUpdateURL := ""
+	if strings.TrimSpace(cfg.AppRelease.Android.LatestVersion) != "" ||
+		strings.TrimSpace(cfg.AppRelease.Android.LatestBuild) != "" ||
+		strings.TrimSpace(cfg.AppRelease.Android.APKURL) != "" {
+		androidUpdateURL = publicOrigin + "/download/android"
+	}
 	return apprelease.NewService(apprelease.Catalog{
 		PublicOrigin: publicOrigin,
 		IOS: apprelease.Release{
@@ -23,7 +29,7 @@ func buildAppReleaseService(cfg config) (*apprelease.Service, error) {
 		Android: apprelease.Release{
 			LatestVersion:               cfg.AppRelease.Android.LatestVersion,
 			LatestBuild:                 cfg.AppRelease.Android.LatestBuild,
-			UpdateURL:                   publicOrigin + "/download/android",
+			UpdateURL:                   androidUpdateURL,
 			RecoveryURL:                 recoveryURL,
 			APKURL:                      cfg.AppRelease.Android.APKURL,
 			APKHostAllowlist:            cfg.AppRelease.Android.APKHostAllowlist,

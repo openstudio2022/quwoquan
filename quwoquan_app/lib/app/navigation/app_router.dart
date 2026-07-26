@@ -340,6 +340,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               address: extra?.address ?? '',
               snippet: extra?.snippet ?? '',
               referralSource: referralSource,
+              requiresCanonicalRead: extra == null,
             ),
           );
         },
@@ -364,11 +365,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.suggestHomepagePathTemplate,
         pageBuilder: (context, state) {
           final query = state.uri.queryParameters['query'] ?? '';
+          final sourcePlaceId =
+              state.uri.queryParameters['sourcePlaceId'] ?? '';
           return appRoutePage<void>(
             state: state,
             kind: AppRoutePageKind.fullscreenDialog,
             fullscreenDialog: true,
-            child: SuggestHomepagePage(initialQuery: query),
+            child: SuggestHomepagePage(
+              initialQuery: query,
+              sourcePlaceId: sourcePlaceId,
+            ),
           );
         },
       ),

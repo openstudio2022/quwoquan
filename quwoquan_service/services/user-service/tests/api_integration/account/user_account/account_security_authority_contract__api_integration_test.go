@@ -173,28 +173,35 @@ func TestReadAccountSecurity_MissingSubjectIsNotConflatedWithAuthorityFailure(t 
 
 func TestCheckAccountSecurityAuthority_VerifiesScopedReadinessWithoutSubject(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	response := doRequest(
-		t,
-		http.MethodGet,
-		"/internal/user/account-security/health",
-		"",
-		serviceHeadersFor(
-			"service:search-service",
-			"user.account.security.read",
-		),
-	)
-	if response.Code != http.StatusOK {
-		t.Fatalf(
-			"authority health: expected 200, got %d: %s",
-			response.Code,
-			response.Body.String(),
-		)
-	}
-	if cacheControl := response.Header().Get("Cache-Control"); !strings.Contains(cacheControl, "no-store") {
-		t.Fatalf("authority health must forbid caching, got %q", cacheControl)
-	}
-	body := parseJSON(t, response)
-	if len(body) != 1 || body["status"] != "ok" {
-		t.Fatalf("authority health must be data-free: %#v", body)
+	for _, servicePrincipal := range []string{
+		"service:search-service",
+		"service:tag-service",
+	} {
+		t.Run(servicePrincipal, func(t *testing.T) {
+			response := doRequest(
+				t,
+				http.MethodGet,
+				"/internal/user/account-security/health",
+				"",
+				serviceHeadersFor(
+					servicePrincipal,
+					"user.account.security.read",
+				),
+			)
+			if response.Code != http.StatusOK {
+				t.Fatalf(
+					"authority health: expected 200, got %d: %s",
+					response.Code,
+					response.Body.String(),
+				)
+			}
+			if cacheControl := response.Header().Get("Cache-Control"); !strings.Contains(cacheControl, "no-store") {
+				t.Fatalf("authority health must forbid caching, got %q", cacheControl)
+			}
+			body := parseJSON(t, response)
+			if len(body) != 1 || body["status"] != "ok" {
+				t.Fatalf("authority health must be data-free: %#v", body)
+			}
+		})
 	}
 }

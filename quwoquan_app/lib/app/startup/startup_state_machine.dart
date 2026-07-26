@@ -66,14 +66,14 @@ final class StartupStateMachine {
     return true;
   }
 
-  int beginRouterLoad() {
+  int beginRouterLoad({bool showWelcomeOverlay = true}) {
     if (_snapshot.phase == StartupRootPhase.routerShell) {
       return _routerAttempt;
     }
     _routerAttempt += 1;
     _snapshot = _snapshot.copyWith(
       phase: StartupRootPhase.routerLoading,
-      welcomeOverlayVisible: true,
+      welcomeOverlayVisible: showWelcomeOverlay,
       welcomeOverlayOpacity: 1,
       clearFailure: true,
     );
@@ -87,7 +87,7 @@ final class StartupStateMachine {
     }
     _snapshot = _snapshot.copyWith(
       phase: StartupRootPhase.routerShell,
-      welcomeOverlayVisible: true,
+      welcomeOverlayVisible: _snapshot.welcomeOverlayVisible,
       welcomeOverlayOpacity: 1,
       clearFailure: true,
     );

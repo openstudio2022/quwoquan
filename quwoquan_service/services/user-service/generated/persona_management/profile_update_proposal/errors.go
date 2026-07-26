@@ -16,6 +16,7 @@ var (
 	ErrProfileProposalInvalidTransition   = errors.New("USER.PROFILE_PROPOSAL.invalid_transition")
 	ErrProfileProposalVersionConflict     = errors.New("USER.PROFILE_PROPOSAL.version_conflict")
 	ErrProfileProposalIdempotencyConflict = errors.New("USER.PROFILE_PROPOSAL.idempotency_conflict")
+	ErrProfileProposalRollbackExpired     = errors.New("USER.PROFILE_PROPOSAL.rollback_expired")
 )
 
 // AppErrorFromProfileProposalNotFound returns *AppError for USER.PROFILE_PROPOSAL.not_found (user_message from errors.yaml).
@@ -46,4 +47,10 @@ func AppErrorFromProfileProposalVersionConflict(debugMessage string) *rerrors.Ap
 func AppErrorFromProfileProposalIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileProposalIdempotencyConflict.Error()))
 	return rerrors.NewAppError(code, "重复请求内容不一致，请重新操作", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("surface", 0)
+}
+
+// AppErrorFromProfileProposalRollbackExpired returns *AppError for USER.PROFILE_PROPOSAL.rollback_expired (user_message from errors.yaml).
+func AppErrorFromProfileProposalRollbackExpired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrProfileProposalRollbackExpired.Error()))
+	return rerrors.NewAppError(code, "提案回滚窗口已结束，请刷新资料", debugMessage).WithMetadata("rollback_expired", 409).WithRecovery("refresh", 0)
 }

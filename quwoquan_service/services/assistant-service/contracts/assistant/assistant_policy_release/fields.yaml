@@ -1,0 +1,262 @@
+description: AssistantPolicyRelease 不可变策略发布及其有界模板和路由规则。
+fields:
+- name: policyId
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: releaseVersion
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: aggregateVersion
+  type: int
+  constraints:
+  - NOT_NULL
+  - DEFAULT_1
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: canonicalDigest
+  type: string
+  constraints:
+  - NOT_NULL
+  - UNIQUE
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: defaultTemplateId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: templates
+  type: '[]AssistantPolicyTemplateDefinition'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: owned_value
+- name: routingRules
+  type: '[]AssistantPolicyRoutingRule'
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: owned_value
+- name: learningContextPolicy
+  type: AssistantPolicyLearningContextDefinition
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: owned_value
+- name: stagedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+members:
+  AssistantPolicyTemplateDefinition:
+    kind: owned_entity
+    fields:
+    - name: templateId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: skillId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: domainId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: promptPolicy
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: drop
+      ops_exposure: none
+      role: authoritative_state
+    - name: allowedTools
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: searchIntensity
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    description: Run 创建时复制的不可变执行模板。
+  AssistantPolicyRoutingRule:
+    kind: owned_entity
+    fields:
+    - name: ruleId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: priority
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: domainId
+      type: string
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: skillId
+      type: string
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: templateId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    description: 显式 skill/domain 匹配规则；未命中时只能使用 defaultTemplateId。
+  AssistantPolicyLearningContextDefinition:
+    kind: owned_entity
+    fields:
+    - name: enabled
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: allowedSignals
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: allowedMetricIds
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: allowedReasonCodes
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: minimumFeedbackSamples
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: windowDays
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    - name: snapshotTrainingEligible
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: authoritative_state
+    description: 经同意后允许在 Run 创建时冻结的聚合反馈上下文策略。

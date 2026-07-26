@@ -126,6 +126,7 @@ final class ContentMediaUploadSessionCommandResult {
     required this.uploadUrl,
     required this.expiresAt,
     required this.replayed,
+    this.assetProcessingStatus,
   });
 
   final String sessionId;
@@ -134,6 +135,7 @@ final class ContentMediaUploadSessionCommandResult {
   final Uri? uploadUrl;
   final DateTime expiresAt;
   final bool replayed;
+  final ContentMediaProcessingStatus? assetProcessingStatus;
 }
 
 final class ContentMediaUploadSessionSlice {
@@ -325,6 +327,10 @@ decodeContentMediaUploadSessionCommandResult(Object? value) {
     uploadUrl: _optionalUri(map, 'uploadUrl'),
     expiresAt: _timestamp(map, 'expiresAt'),
     replayed: _boolean(map, 'replayed'),
+    assetProcessingStatus: _optionalProcessingStatus(
+      map,
+      'assetProcessingStatus',
+    ),
   );
 }
 
@@ -506,6 +512,16 @@ ContentMediaProcessingStatus _processingStatus(
   Map<String, Object?> map,
   String key,
 ) => _enumValue(ContentMediaProcessingStatus.values, _string(map, key), key);
+
+ContentMediaProcessingStatus? _optionalProcessingStatus(
+  Map<String, Object?> map,
+  String key,
+) {
+  final raw = _optionalString(map, key);
+  return raw == null
+      ? null
+      : _enumValue(ContentMediaProcessingStatus.values, raw, key);
+}
 
 ContentMediaAccessPolicy _accessPolicy(Map<String, Object?> map, String key) {
   final raw = _string(map, key);

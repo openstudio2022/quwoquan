@@ -11,8 +11,8 @@
 # 维度与请求头对应（契约：contracts/metadata/_shared/openapi_common.yaml）：
 # - appVersions -> X-Client-App-Version（精确匹配，发布时列出目标灰度版本号）
 # - userIds     -> X-Client-User-Id（灰度白名单用户）
-# - provinces   -> X-Client-Region-Code（GB/T 2260 六位省级码，如 330000=浙江）
-# - carriers    -> X-Client-Carrier（chinamobile/chinaunicom/chinatelecom/chinabroadnet）
+# - provinces/carriers 必须等待可信 edge attestation（mTLS 或等价证明）后才可启用；
+#   当前 renderer/门禁拒绝这两个维度，绝不信任 App 自报 header。
 #
 # 头缺失 = 该维度不匹配；不做任何猜测或默认命中。
 policy:

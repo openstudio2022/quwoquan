@@ -42,9 +42,9 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 	service := application.NewAssistantService(
 		nil,
 		nil,
-		nil,
 		application.WithConversationRunStore(store),
 		application.WithPreferenceSnapshotReader(preferences),
+		testFrozenPolicyOption(),
 	)
 	conversationA, err := service.CreateConversation(
 		t.Context(),
@@ -79,6 +79,7 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 		assistant.CreateTurnInput{
 			Input:           assistant.AssistantTurnInput{Text: question},
 			ClientRequestID: "create-preference-turn-a",
+			RequestContext:  testRunRequestContext("persona-owner"),
 		},
 	)
 	if err != nil {
@@ -102,6 +103,7 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 		assistant.CreateTurnInput{
 			Input:           assistant.AssistantTurnInput{Text: question},
 			ClientRequestID: "create-preference-turn-b",
+			RequestContext:  testRunRequestContext("persona-owner"),
 		},
 	)
 	if err != nil {

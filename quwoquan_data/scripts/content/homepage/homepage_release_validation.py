@@ -26,7 +26,6 @@ from content.homepage.homepage_validation import (
 )
 from content.source.source_unit import resolve_entity_object_dir
 from core.article_package import sha256_file
-from core.entity_page_quality import entity_page_quality_issues
 from core.io import read_json, write_json
 from core.localization import fold_to_simplified
 from core.paths import execution_entity_object_dir, relative_execution_ref
@@ -84,10 +83,13 @@ def validate_entity_page(
     if not page.is_file():
         issues.append(f"{label}: page.md 缺失")
     else:
+        from content.homepage.commercial_gate import final_page_hard_issues
+
         chars = _page_char_count(page)
         if chars < MIN_PAGE_CHARS:
             issues.append(f"{label}: page.md 去空白 {chars} 字 < {MIN_PAGE_CHARS}")
-        issues.extend(entity_page_quality_issues(page, label=label))
+        page_text = page.read_text(encoding="utf-8")
+        issues.extend(final_page_hard_issues(page_text, entity_name=name, label=label))
         issues.extend(_homepage_authenticity_issues(execution_id, domain, etype, name, page, label))
     if not manifest.is_file():
         issues.append(f"{label}: manifest.json 缺失")

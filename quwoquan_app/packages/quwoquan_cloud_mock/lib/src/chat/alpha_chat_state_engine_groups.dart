@@ -171,8 +171,8 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
     }
   }
 
-  List<ChatFixtureObject> listContacts({int limit = 20}) =>
-      _take(_contacts, limit);
+  ChatFixtureCursorPage listContacts({String? cursor, int limit = 20}) =>
+      _fixtureCursorPage(_contacts, cursor: cursor, limit: limit);
 
   List<ChatFixtureObject> listContactHome({
     String filter = 'all',

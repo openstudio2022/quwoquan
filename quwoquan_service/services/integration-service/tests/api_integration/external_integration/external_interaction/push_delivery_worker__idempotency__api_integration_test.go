@@ -90,7 +90,6 @@ func TestPushDeliveryWorkerDispatchesIdempotentlyExactlyOnce(t *testing.T) {
 		integrationReliableStore,
 		map[string]reliabletask.ExternalProvider{"push_dispatch": dispatchProvider},
 		policies,
-		callbackRecorder{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +152,6 @@ func TestPushDeliveryWorkerDispatchesIdempotentlyExactlyOnce(t *testing.T) {
 		reopenedStore,
 		map[string]reliabletask.ExternalProvider{"push_dispatch": dispatchProvider},
 		policies,
-		callbackRecorder{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -198,6 +196,33 @@ func TestPushDeliveryWorkerDispatchesIdempotentlyExactlyOnce(t *testing.T) {
 	}
 	if strings.Contains(fmt.Sprint(attemptDocument), "api-integration-transient-token") {
 		t.Fatalf("attempt ledger leaked endpoint token: %+v", attemptDocument)
+	}
+	var resultOutbox bson.M
+	if err := integrationMongoDB.Collection(
+		"external_interaction_result_outbox",
+	).FindOne(
+		context.Background(),
+		bson.M{"_id": attempts[0].AttemptID},
+	).Decode(&resultOutbox); err != nil {
+		t.Fatalf("provider attempt must commit a result outbox row: %v", err)
+	}
+	if resultOutbox["deliveryStatus"] !=
+		reliabletask.ExternalInteractionResultOutboxPending ||
+		resultOutbox["providerRequestDigest"] == "" {
+		t.Fatalf("invalid provider result outbox: %+v", resultOutbox)
+	}
+	for _, forbidden := range []string{
+		"providerRequestId",
+		"api-integration-transient-token",
+		"endpointRef",
+	} {
+		if strings.Contains(fmt.Sprint(resultOutbox), forbidden) {
+			t.Fatalf(
+				"provider result outbox leaked %s: %+v",
+				forbidden,
+				resultOutbox,
+			)
+		}
 	}
 	taskCount, err := integrationMongoDB.Collection("reliable_async_task").CountDocuments(
 		context.Background(),

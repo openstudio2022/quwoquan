@@ -49,13 +49,24 @@ func fakeES(t *testing.T) *httptest.Server {
 	}))
 }
 
-func newServer(t *testing.T, cfg searchbackend.ESConfig, fallback rtsearch.RecallBackend) http.Handler {
+func newServer(
+	t *testing.T,
+	cfg searchbackend.ESConfig,
+	testBackend rtsearch.RecallBackend,
+) http.Handler {
 	t.Helper()
-	built, err := searchbackend.Build(cfg, fallback)
-	if err != nil {
-		t.Fatalf("Build err=%v", err)
+	backend := testBackend
+	if cfg.Enabled {
+		built, err := searchbackend.Build(cfg)
+		if err != nil {
+			t.Fatalf("Build err=%v", err)
+		}
+		backend = built.Backend
 	}
-	svc := application.NewSearchService(built.Backend)
+	if backend == nil {
+		t.Fatal("test server requires one explicit recall backend")
+	}
+	svc := application.NewSearchService(backend)
 	// nil TermHeatProvider => base ranking + empty relatedTerms; the AB bucket is
 	// still assigned so the envelope carries experimentBucket.
 	decorator := application.NewRankingDecorator(nil, application.NewExperiments(application.ExperimentConfig{}), 0, nil)
@@ -103,7 +114,7 @@ func TestSearchEndpointESBackedHits(t *testing.T) {
 	}
 }
 
-func TestSearchEndpointNativeFallbackWhenESDisabled(t *testing.T) {
+func TestSearchEndpointWithDeterministicContractBackend(t *testing.T) {
 	native := rtsearch.NewSliceBackend([]rtsearch.Document{{
 		ObjectType:  rtsearch.ObjectTypeContentPost,
 		ObjectID:    "post_native",
@@ -118,7 +129,7 @@ func TestSearchEndpointNativeFallbackWhenESDisabled(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if hitCount(parsed) == 0 {
-		t.Fatalf("expected native fallback hits, got: %s", rec.Body.String())
+		t.Fatalf("expected contract backend hits, got: %s", rec.Body.String())
 	}
 }
 
@@ -148,30 +159,40 @@ func TestSearchEndpointRecallsUserProfileObject(t *testing.T) {
 	}
 }
 
-func TestSearchEndpointESDownDegradesToNativeFallback(t *testing.T) {
-	// Production topology: ES primary + native fallback. ES is unroutable, so the
-	// FallbackBackend must transparently serve native results (no 5xx, no break).
+func TestSearchEndpointReadsLocationPlaceByCanonicalID(t *testing.T) {
 	native := rtsearch.NewSliceBackend([]rtsearch.Document{{
-		ObjectType:  rtsearch.ObjectTypeContentPost,
-		ObjectID:    "post_native",
-		Title:       "大理古城漫步",
-		ContentType: "article",
-		Visibility:  "public",
+		ObjectType: rtsearch.ObjectTypeLocation,
+		ObjectID:   "place_broken_bridge_lane",
+		Title:      "断桥小巷",
+		Visibility: "public",
+		Fields: map[string]string{
+			"address": "杭州 · 西湖区",
+		},
 	}})
-	handler := newServer(t, searchbackend.ESConfig{Enabled: true, Endpoints: []string{"http://127.0.0.1:1"}}, native)
+	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, native)
 
-	rec, parsed := postSearch(t, handler, `{"query":"大理","objectTypes":["article"]}`)
+	rec, parsed := postSearch(
+		t,
+		handler,
+		`{"query":"place_broken_bridge_lane","ids":["place_broken_bridge_lane"],"objectTypes":["location"]}`,
+	)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("ES outage with fallback must degrade to 200, got status=%d body=%s", rec.Code, rec.Body.String())
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if hitCount(parsed) == 0 {
-		t.Fatalf("expected native fallback hits on ES outage, got: %s", rec.Body.String())
+	hits, _ := parsed["hits"].([]any)
+	if len(hits) != 1 {
+		t.Fatalf("expected one location hit, got %d: %s", len(hits), rec.Body.String())
+	}
+	hit, _ := hits[0].(map[string]any)
+	if toString(hit["target"]) != string(rtsearch.TargetLocation) ||
+		toString(hit["objectId"]) != "place_broken_bridge_lane" {
+		t.Fatalf("unexpected exact location hit: %#v", hit)
 	}
 }
 
-func TestSearchEndpointPureESOutageReturns503(t *testing.T) {
-	// Pure ES with no fallback honestly surfaces unavailability (no silent empty
-	// success masking an outage).
+func TestSearchEndpointESOutageReturns503(t *testing.T) {
+	// The single production backend honestly surfaces unavailability instead of
+	// masking the outage with a second source of truth.
 	handler := newServer(t, searchbackend.ESConfig{Enabled: true, Endpoints: []string{"http://127.0.0.1:1"}}, nil)
 
 	rec, _ := postSearch(t, handler, `{"query":"大理","objectTypes":["article"]}`)
@@ -222,6 +243,50 @@ func TestSearchEndpointNearFilterPushesDownToRadius(t *testing.T) {
 	}
 }
 
+func TestSearchEndpointAppliesTagFilterWithPositiveAndNegativeCases(t *testing.T) {
+	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, rtsearch.NewSliceBackend([]rtsearch.Document{
+		{
+			ObjectType:  rtsearch.ObjectTypeContentPost,
+			ObjectID:    "post_camping",
+			Title:       "露营攻略",
+			ContentType: "article",
+			Visibility:  "public",
+			Tags:        []string{"Topic/旅行/露营"},
+		},
+		{
+			ObjectType:  rtsearch.ObjectTypeContentPost,
+			ObjectID:    "post_photography",
+			Title:       "摄影攻略",
+			ContentType: "article",
+			Visibility:  "public",
+			Tags:        []string{"Topic/旅行/摄影"},
+		},
+	}))
+
+	positive, parsed := postSearch(
+		t,
+		handler,
+		`{"query":"攻略","objectTypes":["article"],"filters":{"tags":["Topic/旅行/露营"]}}`,
+	)
+	if positive.Code != http.StatusOK || hitCount(parsed) != 1 {
+		t.Fatalf("tag positive case must return exactly one hit, status=%d body=%s", positive.Code, positive.Body.String())
+	}
+	hits, _ := parsed["hits"].([]any)
+	hit, _ := hits[0].(map[string]any)
+	if toString(hit["objectId"]) != "post_camping" {
+		t.Fatalf("tag positive case returned unexpected hit: %#v", hit)
+	}
+
+	negative, negativeParsed := postSearch(
+		t,
+		handler,
+		`{"query":"攻略","objectTypes":["article"],"filters":{"tags":["Topic/旅行/徒步"]}}`,
+	)
+	if negative.Code != http.StatusOK || hitCount(negativeParsed) != 0 {
+		t.Fatalf("tag negative case must return no hits, status=%d body=%s", negative.Code, negative.Body.String())
+	}
+}
+
 func TestSearchEndpointCarriesRankingEnvelope(t *testing.T) {
 	// The commercial envelope must surface experimentBucket + per-hit ranking
 	// transparency (rankReasons/rankPosition) so AB attribution + explanation
@@ -264,9 +329,9 @@ func TestSearchEndpointRejectsEmptyQuery(t *testing.T) {
 	}
 }
 
-func TestSearchEndpointRejectsLocalOnlyOrNonResultTarget(t *testing.T) {
+func TestSearchEndpointRejectsLocalOnlyOrUnknownTarget(t *testing.T) {
 	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, rtsearch.NewSliceBackend(nil))
-	for _, target := range []string{"chat", "group", "circle", "unknown"} {
+	for _, target := range []string{"chat", "unknown"} {
 		rec, _ := postSearch(
 			t,
 			handler,
@@ -274,6 +339,34 @@ func TestSearchEndpointRejectsLocalOnlyOrNonResultTarget(t *testing.T) {
 		)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("target %q must be rejected with 400, got %d body=%s", target, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestSearchEndpointAcceptsIndexedCircleTargets(t *testing.T) {
+	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, rtsearch.NewSliceBackend([]rtsearch.Document{
+		{
+			ObjectType: rtsearch.ObjectTypeCircle,
+			ObjectID:   "circle_travel",
+			Title:      "旅行圈",
+			Visibility: "public",
+		},
+		{
+			ObjectType: rtsearch.ObjectTypeCircleGroup,
+			ObjectID:   "group_travel",
+			Title:      "旅行讨论",
+			Visibility: "public",
+		},
+	}))
+
+	for _, target := range []string{"circle", "group"} {
+		rec, _ := postSearch(
+			t,
+			handler,
+			`{"query":"旅行","objectTypes":["`+target+`"]}`,
+		)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("target %q must be searchable when indexed, got %d body=%s", target, rec.Code, rec.Body.String())
 		}
 	}
 }

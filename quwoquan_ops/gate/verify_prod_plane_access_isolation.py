@@ -14,7 +14,8 @@
   5. 读写平面：composeProjectRoot 非空 + governedWorkloads 非空；data 平面 read-only-audit、composeProjectRoot=null、
      governedWorkloads 空、appliesToStages 空。
   6. governedWorkloads ⊆ environment topology 的 prod workload，且 plane == 本平面 workloadDeployPlane。
-  7. 退役断言：仓库不得在访问隔离层重新引入 PROD_KUBECONFIG 单一全权凭据或 gamma-hosted 远端目标。
+  7. prevalidation 必须不可提升、资源阈值充足、服务/端口归属唯一且隔离数据镜像全部 digest-pinned。
+  8. 退役断言：仓库不得在访问隔离层重新引入 PROD_KUBECONFIG 单一全权凭据或 gamma-hosted 远端目标。
 """
 from __future__ import annotations
 
@@ -203,7 +204,81 @@ def main() -> int:
                         "的运行投影别名，必须声明 runtimeRole"
                     )
 
-    # 7. 退役断言：访问隔离层不得重新引入单一全权 kube 凭据或远端 gamma
+    # 7. 不可提升的第一方容器预验证投影。
+    prevalidation = access.get("prevalidation") or {}
+    if (
+        prevalidation.get("mode") != "prevalidate"
+        or prevalidation.get("promotable") is not False
+        or prevalidation.get("scopes") != ["first-party"]
+        or prevalidation.get("allowedDataModes") != ["isolated", "external"]
+    ):
+        errors.append("prevalidation 必须为不可提升的 first-party isolated|external 投影")
+    release_evidence = prevalidation.get("releaseEvidence") or {}
+    if any(
+        release_evidence.get(key) is not False
+        for key in ("eligible", "writeLedger", "writeReceipt")
+    ):
+        errors.append("prevalidation 禁止获得 release 资格或写 ledger/receipt")
+    readiness = prevalidation.get("readinessPolicy") or {}
+    if not (
+        readiness.get("requireContainerRunning") is True
+        and readiness.get("requireHealthyExceptProviderBound") is True
+        and readiness.get("providerReadinessStatus") == "GATE_BLOCK"
+        and set(readiness.get("providerBoundServices") or [])
+        == {"product-ops-service"}
+    ):
+        errors.append(
+            "prevalidation 必须区分容器存活与外部 Provider readiness，且后者保持 GATE_BLOCK"
+        )
+    minimum = prevalidation.get("minimumHostResources") or {}
+    if (
+        int(minimum.get("cpuCores") or 0) < 4
+        or int(minimum.get("memoryBytes") or 0) < 16 * 1024**3
+        or int(minimum.get("containerFreeBytes") or 0) < 40 * 1024**3
+    ):
+        errors.append("prevalidation 主机阈值不得低于 4C/16GiB/40GiB free")
+    prevalidation_planes = prevalidation.get("planes") or {}
+    if set(prevalidation_planes) != {"service", "edge"}:
+        errors.append("prevalidation 只允许 service/edge 两个运行平面")
+    prevalidation_ports: list[int] = []
+    for plane_name, projection in prevalidation_planes.items():
+        plane_spec = next((item for item in planes if item.get("plane") == plane_name), {})
+        governed = set(plane_spec.get("rootlessGovernedComposeServices") or [])
+        startup = set(projection.get("startupServices") or [])
+        image_only = set(projection.get("imageAndConfigOnlyServices") or [])
+        if not startup or not (startup | image_only).issubset(governed):
+            errors.append(f"prevalidation {plane_name} 服务逃逸 rootless 平面归属")
+        if startup & image_only:
+            errors.append(f"prevalidation {plane_name} startup/image-only 重叠")
+        ports = [int(item) for item in projection.get("exposedPorts") or []]
+        if not ports or any(port < 1024 or port > 65535 for port in ports):
+            errors.append(f"prevalidation {plane_name} 暴露端口非法")
+        prevalidation_ports.extend(ports)
+    if len(prevalidation_ports) != len(set(prevalidation_ports)):
+        errors.append("prevalidation service/edge 目标端口必须全局唯一")
+    service_projection = prevalidation_planes.get("service") or {}
+    if service_projection.get("imageAndConfigOnlyServices") != ["integration-service"]:
+        errors.append("prevalidation integration-service 必须且只能 image/config-only")
+    isolated = prevalidation.get("isolatedData") or {}
+    if not (
+        isolated.get("empty") is True
+        and isolated.get("seedAllowed") is False
+        and isolated.get("productionDataAllowed") is False
+        and isolated.get("releaseEvidenceEligible") is False
+    ):
+        errors.append("prevalidation isolated data 必须空、无 seed、无正式数据且非 release evidence")
+    isolated_services = set(isolated.get("services") or [])
+    isolated_images = isolated.get("images") or {}
+    if isolated_services != set(isolated_images) or any(
+        re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", str(ref or "")) is None
+        for ref in isolated_images.values()
+    ):
+        errors.append("prevalidation isolated data 镜像必须逐项固定 digest")
+    excluded = prevalidation.get("excluded") or {}
+    if not {"livekit", "coturn"}.issubset(set(excluded.get("workloads") or [])):
+        errors.append("prevalidation 必须排除 LiveKit SFU 与 Coturn")
+
+    # 8. 退役断言：访问隔离层不得重新引入单一全权 kube 凭据或远端 gamma
     raw = ACCESS.read_text(encoding="utf-8")
     if re.search(r"\bPROD_KUBECONFIG\b", raw) and "已退役" not in raw:
         errors.append("访问隔离层不得重新引入 PROD_KUBECONFIG 单一全权凭据")
@@ -212,7 +287,7 @@ def main() -> int:
     if "/opt/quwoquan/gamma/.qwq_output" in raw:
         errors.append("prod 访问隔离层不得依赖 gamma-local 物理输出路径")
 
-    # 8. 控制面投影：control_plane.yaml 必须有只读 prod_plane_access_isolation 投影对象，
+    # 9. 控制面投影：control_plane.yaml 必须有只读 prod_plane_access_isolation 投影对象，
     #    且不得引入 config scope（不污染现有配置面）。
     if not CONTROL_PLANE.exists():
         errors.append(f"缺少控制面 metadata {CONTROL_PLANE}")

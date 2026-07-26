@@ -14,7 +14,6 @@ class AssistantApiMetadata {
     '/assistant/ops',
     '/assistant/page-context',
     '/assistant/personalization',
-    '/assistant/policy',
     '/assistant/preferences',
     '/assistant/runs',
     '/assistant/search',
@@ -26,6 +25,9 @@ class AssistantApiMetadata {
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'ActivateAssistantPolicyRollout': '/internal/assistant/policy-rollouts/{policyId}/activate',
+    'AppendAssistantLearningFact': '/assistant/learning/facts',
+    'AppendAssistantServiceLearningFact': '/internal/assistant/learning/facts',
     'CancelAssistantRun': '/assistant/runs/{runId}/cancel',
     'CreateAssistantConversation': '/assistant/conversations',
     'CreateSkillSubscription': '/assistant/skill-subscriptions',
@@ -33,7 +35,6 @@ class AssistantApiMetadata {
     'GetAssistantRun': '/assistant/runs/{runId}',
     'GetEntryPersonalization': '/assistant/personalization',
     'GetLearningOpsSummary': '/assistant/ops/learning-summary',
-    'GetPolicy': '/assistant/policy',
     'GetSkillSubscription': '/assistant/skill-subscriptions/{subscriptionId}',
     'GetSuggestedActions': '/assistant/suggested-actions',
     'GrantSkillConsent': '/assistant/skills/{skillId}/consent',
@@ -44,14 +45,14 @@ class AssistantApiMetadata {
     'ListConversationTurns': '/assistant/conversations/{conversationId}/turns',
     'ListSkillSubscriptions': '/assistant/skill-subscriptions',
     'ListSkills': '/assistant/skills',
-    'ReportInteractionEvent': '/assistant/learning/events',
     'ReportPageContext': '/assistant/page-context',
-    'ReportScorecard': '/internal/assistant/learning/scorecards',
     'RestoreAssistantPreference': '/assistant/preferences/{preferenceId}/restore',
     'RevokeAssistantPreference': '/assistant/preferences/{preferenceId}/revoke',
     'RevokeSkillConsent': '/assistant/skills/{skillId}/consent',
+    'RollbackAssistantPolicyRollout': '/internal/assistant/policy-rollouts/{policyId}/rollback',
     'SearchXiaoquResults': '/assistant/search/xiaoqu',
     'SetAssistantPreference': '/assistant/preferences',
+    'StageAssistantPolicyRelease': '/internal/assistant/policy-releases',
     'StartAssistantRun': '/assistant/conversations/{conversationId}/runs',
     'StreamAssistantRunEvents': '/assistant/runs/{runId}/events',
     'SuggestCreationAssistance': '/assistant/skills/creation-suggest',
@@ -60,6 +61,9 @@ class AssistantApiMetadata {
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'ActivateAssistantPolicyRollout': 'POST',
+    'AppendAssistantLearningFact': 'POST',
+    'AppendAssistantServiceLearningFact': 'POST',
     'CancelAssistantRun': 'POST',
     'CreateAssistantConversation': 'POST',
     'CreateSkillSubscription': 'POST',
@@ -67,7 +71,6 @@ class AssistantApiMetadata {
     'GetAssistantRun': 'GET',
     'GetEntryPersonalization': 'GET',
     'GetLearningOpsSummary': 'GET',
-    'GetPolicy': 'GET',
     'GetSkillSubscription': 'GET',
     'GetSuggestedActions': 'GET',
     'GrantSkillConsent': 'POST',
@@ -78,14 +81,14 @@ class AssistantApiMetadata {
     'ListConversationTurns': 'GET',
     'ListSkillSubscriptions': 'GET',
     'ListSkills': 'GET',
-    'ReportInteractionEvent': 'POST',
     'ReportPageContext': 'POST',
-    'ReportScorecard': 'POST',
     'RestoreAssistantPreference': 'POST',
     'RevokeAssistantPreference': 'POST',
     'RevokeSkillConsent': 'DELETE',
+    'RollbackAssistantPolicyRollout': 'POST',
     'SearchXiaoquResults': 'POST',
     'SetAssistantPreference': 'POST',
+    'StageAssistantPolicyRelease': 'POST',
     'StartAssistantRun': 'POST',
     'StreamAssistantRunEvents': 'GET',
     'SuggestCreationAssistance': 'POST',
@@ -95,6 +98,9 @@ class AssistantApiMetadata {
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
+    'ActivateAssistantPolicyRollout': 'required',
+    'AppendAssistantLearningFact': 'required',
+    'AppendAssistantServiceLearningFact': 'required',
     'CancelAssistantRun': 'required',
     'CreateAssistantConversation': 'required',
     'CreateSkillSubscription': 'required',
@@ -102,7 +108,6 @@ class AssistantApiMetadata {
     'GetAssistantRun': 'required',
     'GetEntryPersonalization': 'required',
     'GetLearningOpsSummary': 'required',
-    'GetPolicy': 'required',
     'GetSkillSubscription': 'required',
     'GetSuggestedActions': 'required',
     'GrantSkillConsent': 'required',
@@ -113,14 +118,14 @@ class AssistantApiMetadata {
     'ListConversationTurns': 'required',
     'ListSkillSubscriptions': 'required',
     'ListSkills': 'required',
-    'ReportInteractionEvent': 'required',
     'ReportPageContext': 'required',
-    'ReportScorecard': 'required',
     'RestoreAssistantPreference': 'required',
     'RevokeAssistantPreference': 'required',
     'RevokeSkillConsent': 'required',
+    'RollbackAssistantPolicyRollout': 'required',
     'SearchXiaoquResults': 'required',
     'SetAssistantPreference': 'required',
+    'StageAssistantPolicyRelease': 'required',
     'StartAssistantRun': 'required',
     'StreamAssistantRunEvents': 'required',
     'SuggestCreationAssistance': 'required',
@@ -136,6 +141,9 @@ class AssistantApiMetadata {
   static const Map<String, String> operationToResponseKind = <String, String>{
   };
 
+  static const String activateAssistantPolicyRolloutOperation = 'ActivateAssistantPolicyRollout';
+  static const String appendAssistantLearningFactOperation = 'AppendAssistantLearningFact';
+  static const String appendAssistantServiceLearningFactOperation = 'AppendAssistantServiceLearningFact';
   static const String cancelAssistantRunOperation = 'CancelAssistantRun';
   static const String createAssistantConversationOperation = 'CreateAssistantConversation';
   static const String createSkillSubscriptionOperation = 'CreateSkillSubscription';
@@ -143,7 +151,6 @@ class AssistantApiMetadata {
   static const String getAssistantRunOperation = 'GetAssistantRun';
   static const String getEntryPersonalizationOperation = 'GetEntryPersonalization';
   static const String getLearningOpsSummaryOperation = 'GetLearningOpsSummary';
-  static const String getPolicyOperation = 'GetPolicy';
   static const String getSkillSubscriptionOperation = 'GetSkillSubscription';
   static const String getSuggestedActionsOperation = 'GetSuggestedActions';
   static const String grantSkillConsentOperation = 'GrantSkillConsent';
@@ -154,20 +161,28 @@ class AssistantApiMetadata {
   static const String listConversationTurnsOperation = 'ListConversationTurns';
   static const String listSkillSubscriptionsOperation = 'ListSkillSubscriptions';
   static const String listSkillsOperation = 'ListSkills';
-  static const String reportInteractionEventOperation = 'ReportInteractionEvent';
   static const String reportPageContextOperation = 'ReportPageContext';
-  static const String reportScorecardOperation = 'ReportScorecard';
   static const String restoreAssistantPreferenceOperation = 'RestoreAssistantPreference';
   static const String revokeAssistantPreferenceOperation = 'RevokeAssistantPreference';
   static const String revokeSkillConsentOperation = 'RevokeSkillConsent';
+  static const String rollbackAssistantPolicyRolloutOperation = 'RollbackAssistantPolicyRollout';
   static const String searchXiaoquResultsOperation = 'SearchXiaoquResults';
   static const String setAssistantPreferenceOperation = 'SetAssistantPreference';
+  static const String stageAssistantPolicyReleaseOperation = 'StageAssistantPolicyRelease';
   static const String startAssistantRunOperation = 'StartAssistantRun';
   static const String streamAssistantRunEventsOperation = 'StreamAssistantRunEvents';
   static const String suggestCreationAssistanceOperation = 'SuggestCreationAssistance';
   static const String tickSkillSubscriptionCronOperation = 'TickSkillSubscriptionCron';
   static const String updateSkillSubscriptionStatusOperation = 'UpdateSkillSubscriptionStatus';
 
+  static const String activateAssistantPolicyRolloutPathTemplate = '/internal/assistant/policy-rollouts/{policyId}/activate';
+  static String activateAssistantPolicyRolloutPath({required String policyId}) {
+    return _fillPath(activateAssistantPolicyRolloutPathTemplate, <String, String>{
+      'policyId': policyId,
+    });
+  }
+  static const String appendAssistantLearningFactPath = '/assistant/learning/facts';
+  static const String appendAssistantServiceLearningFactPath = '/internal/assistant/learning/facts';
   static const String cancelAssistantRunPathTemplate = '/assistant/runs/{runId}/cancel';
   static String cancelAssistantRunPath({required String runId}) {
     return _fillPath(cancelAssistantRunPathTemplate, <String, String>{
@@ -190,7 +205,6 @@ class AssistantApiMetadata {
   }
   static const String getEntryPersonalizationPath = '/assistant/personalization';
   static const String getLearningOpsSummaryPath = '/assistant/ops/learning-summary';
-  static const String getPolicyPath = '/assistant/policy';
   static const String getSkillSubscriptionPathTemplate = '/assistant/skill-subscriptions/{subscriptionId}';
   static String getSkillSubscriptionPath({required String subscriptionId}) {
     return _fillPath(getSkillSubscriptionPathTemplate, <String, String>{
@@ -216,9 +230,7 @@ class AssistantApiMetadata {
   }
   static const String listSkillSubscriptionsPath = '/assistant/skill-subscriptions';
   static const String listSkillsPath = '/assistant/skills';
-  static const String reportInteractionEventPath = '/assistant/learning/events';
   static const String reportPageContextPath = '/assistant/page-context';
-  static const String reportScorecardPath = '/internal/assistant/learning/scorecards';
   static const String restoreAssistantPreferencePathTemplate = '/assistant/preferences/{preferenceId}/restore';
   static String restoreAssistantPreferencePath({required String preferenceId}) {
     return _fillPath(restoreAssistantPreferencePathTemplate, <String, String>{
@@ -237,8 +249,15 @@ class AssistantApiMetadata {
       'skillId': skillId,
     });
   }
+  static const String rollbackAssistantPolicyRolloutPathTemplate = '/internal/assistant/policy-rollouts/{policyId}/rollback';
+  static String rollbackAssistantPolicyRolloutPath({required String policyId}) {
+    return _fillPath(rollbackAssistantPolicyRolloutPathTemplate, <String, String>{
+      'policyId': policyId,
+    });
+  }
   static const String searchXiaoquResultsPath = '/assistant/search/xiaoqu';
   static const String setAssistantPreferencePath = '/assistant/preferences';
+  static const String stageAssistantPolicyReleasePath = '/internal/assistant/policy-releases';
   static const String startAssistantRunPathTemplate = '/assistant/conversations/{conversationId}/runs';
   static String startAssistantRunPath({required String conversationId}) {
     return _fillPath(startAssistantRunPathTemplate, <String, String>{

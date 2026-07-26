@@ -9,6 +9,10 @@ import (
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimewiring"
+	learningpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/persistence"
+	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
+	policyreleasepersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/infrastructure/persistence"
+	policyrolloutpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/infrastructure/persistence"
 	preferenceports "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/domain/ports"
 	preferencepersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/infrastructure/persistence"
 )
@@ -26,13 +30,16 @@ func validateRuntimeDependenciesConfig(cfg config) error {
 }
 
 type persistentDependencies struct {
-	eventStore           application.EventStore
-	profileStore         application.LearningProfileStore
 	subscriptionStore    application.SkillSubscriptionStore
 	consentStore         application.ConsentStore
 	conversationRunStore application.ConversationRunStore
 	preferenceStore      preferenceports.Store
 	preferenceReader     preferenceports.Reader
+	policyReleaseStore   *policyreleasepersistence.MongoStore
+	policyRolloutStore   *policyrolloutpersistence.MongoStore
+	learningFactStore    *learningpersistence.MongoStore
+	learningProjection   *learningprojection.MongoProjector
+	learningRunOwners    *learningpersistence.MongoRunOwnerReader
 	mongoClient          *mongo.Client
 	postgresPool         *pgxpool.Pool
 	inner                *runtimewiring.PersistentDependencies
@@ -49,14 +56,54 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	if err != nil {
 		return nil, err
 	}
+	database := inner.MongoClient.Database(strings.TrimSpace(cfg.MongoDB.Database))
+	policyReleaseStore := policyreleasepersistence.NewMongoStore(database)
+	if err := policyReleaseStore.EnsureIndexes(ctx); err != nil {
+		_ = inner.Close(ctx)
+		return nil, dependencyError(
+			"mongodb.assistant_policy_releases",
+			"indexes",
+			err,
+		)
+	}
+	policyRolloutStore := policyrolloutpersistence.NewMongoStore(database)
+	if err := policyRolloutStore.EnsureIndexes(ctx); err != nil {
+		_ = inner.Close(ctx)
+		return nil, dependencyError(
+			"mongodb.assistant_policy_rollouts",
+			"indexes",
+			err,
+		)
+	}
+	learningFactStore := learningpersistence.NewMongoStore(database)
+	if err := learningFactStore.EnsureIndexes(ctx); err != nil {
+		_ = inner.Close(ctx)
+		return nil, dependencyError(
+			"mongodb.assistant_learning_facts",
+			"indexes",
+			err,
+		)
+	}
+	learningProjector := learningprojection.NewMongoProjector(database)
+	if err := learningProjector.EnsureIndexes(ctx); err != nil {
+		_ = inner.Close(ctx)
+		return nil, dependencyError(
+			"mongodb.rm_assistant_learning_projection",
+			"indexes",
+			err,
+		)
+	}
 	return &persistentDependencies{
-		eventStore:           inner.EventStore,
-		profileStore:         inner.ProfileStore,
 		subscriptionStore:    inner.SubscriptionStore,
 		consentStore:         inner.ConsentStore,
 		conversationRunStore: inner.ConversationRunStore,
 		preferenceStore:      inner.PreferenceStore,
 		preferenceReader:     inner.PreferenceReader,
+		policyReleaseStore:   policyReleaseStore,
+		policyRolloutStore:   policyRolloutStore,
+		learningFactStore:    learningFactStore,
+		learningProjection:   learningProjector,
+		learningRunOwners:    learningpersistence.NewMongoRunOwnerReader(database),
 		mongoClient:          inner.MongoClient,
 		postgresPool:         inner.PostgresPool,
 		inner:                inner,

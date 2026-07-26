@@ -1,0 +1,25 @@
+events:
+- name: AssistantPolicyRolloutActivated
+  producer: assistant-service
+  consumers:
+  - platform-ops
+  channel: outbox
+  payload_entity: AssistantPolicyRollout
+  payload_fields:
+  - policyId
+  - revision
+  - status
+  - assignments
+  - activatedAt
+- name: AssistantPolicyRolloutRolledBack
+  producer: assistant-service
+  consumers:
+  - platform-ops
+  channel: outbox
+  payload_entity: AssistantPolicyRollout
+  payload_fields:
+  - policyId
+  - revision
+  - status
+  - assignments
+  - activatedAt

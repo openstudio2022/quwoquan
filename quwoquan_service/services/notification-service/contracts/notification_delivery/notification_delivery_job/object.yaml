@@ -81,7 +81,10 @@ business_rules:
 - 超过 attempt budget 或 recovery.action 非 retry 的错误进入 dead_letter，恢复创建新 attempt epoch
 - Incoming Call 每 targetPersonaId+endpointRef 只有一个幂等 Job，deliveryKey 在 realtime/push 全程不变
 - 在线设备只先投 realtime，750ms presentation ACK grace 内禁止同时入 push
-- realtime 未 ACK 或设备离线才进入 push_queued；202 Accepted 只迁移 sent_unconfirmed，不声明 delivered
+- realtime 未 ACK 或设备离线才进入 push_queued；Integration 202 Accepted 只迁移 external_accepted；
+  只有 provider result receipt 可迁移 sent_unconfirmed，二者均不声明 delivered
+- 每个 ExternalInteractionResultReported attemptId 只记录一次 provider receipt；provider request
+  identifier 仅保存不可逆 digest，取消 push 使用独立的同等时间线
 - CallAnswered/CallEnded 将同 callId 其它未完成 Job CAS 为 cancelled；过期 Job 不再外送
 lifecycle:
   states:
@@ -91,6 +94,7 @@ lifecycle:
   - realtime_dispatched
   - realtime_presented
   - push_queued
+  - external_accepted
   - sent_unconfirmed
   - delivered
   - retry_wait

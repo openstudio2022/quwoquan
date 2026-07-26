@@ -92,6 +92,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("[search-backfill] backfill failed (indexed=%d batches=%d): %v", report.IndexedHomepages, report.BatchesPushed, err)
 	}
-	log.Printf("[search-backfill] OK env=%s index=%s total=%d indexed=%d skipped=%d batches=%d",
-		*env, built.Client.IndexName(), report.TotalHomepages, report.IndexedHomepages, report.SkippedHomepages, report.BatchesPushed)
+	log.Printf("[search-backfill] OK env=%s index=%s total=%d indexed=%d deleted=%d batches=%d",
+		*env, built.Client.IndexName(), report.TotalHomepages, report.IndexedHomepages, report.DeletedHomepages, report.BatchesPushed)
 }

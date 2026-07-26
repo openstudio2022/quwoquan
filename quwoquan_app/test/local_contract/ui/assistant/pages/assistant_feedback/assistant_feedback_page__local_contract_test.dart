@@ -3,18 +3,17 @@
 /// surface: assistantFeedback · owner: assistant · route: chatDetail
 /// 本文件替代旧「证据文件路径存在性断言」伪验收。承载关系说明：
 /// assistantFeedback surface（私助反馈与纠错，operation：
-/// ReportInteractionEvent / ReportScorecard）没有独立路由页面，真实承载页是
+/// AppendAssistantLearningFact）没有独立路由页面，真实承载页是
 /// `PersonalAssistantConversationPage` 的 answer toolbar：完成一轮 turn 后
-/// 点击反馈按钮，经 `submitFeedback` → `reportInteractionEvents` 学习回路
+/// 点击反馈按钮，经 `submitFeedback` → `appendUserFact` 学习回路
 /// 上报（3b 接通）。
 /// 四类必测 case：
 /// - load_success：完成一轮 turn 后反馈工具栏真实出现（点赞/点踩可点）；
 /// - empty_permission_error：学习上报 Facet 抛 CloudException → 本地反馈
 ///   展示不被阻塞、事件进入待重试队列（best-effort 语义，不崩溃不丢事件）；
-/// - primary_cta：点击「有帮助」触发 InteractionEvent 批次上报（Recording
-///   替身断言批次内容）；
-/// - trace_context：InteractionEvent 携带稳定派生 eventId 与
-///   runId/pageType/domainId/session 上下文，反馈状态推进上屏。
+/// - primary_cta：点击「有帮助」追加学习事实（Recording 替身断言 command）；
+/// - trace_context：学习事实携带稳定派生 eventId、turn、referral 与 domain 上下文，
+///   反馈状态推进上屏。
 library;
 
 import 'dart:io';
@@ -31,8 +30,11 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/di/ops_event_dependencies.dart'
+    show actorQueueStorageProvider;
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/hive_runtime.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
@@ -41,6 +43,7 @@ import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_co
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
+import '../../../../../support/actor_queue_test_storage.dart';
 import '../../../../../support/runtime_failure_fixtures.dart';
 
 void main() {
@@ -51,14 +54,17 @@ void main() {
     Hive.init(
       '${Directory.systemTemp.path}/qwq_assistant_feedback_uat_${DateTime.now().microsecondsSinceEpoch}',
     );
+    HiveRuntime.debugEnsureInitializedHook = () async => true;
   });
 
   tearDown(() async {
+    await Hive.close();
+    HiveRuntime.resetForTest();
     await Hive.deleteFromDisk();
   });
 
   testWidgets('load_success：完成一轮 turn 后反馈工具栏真实出现', (tester) async {
-    final learningFacet = _RecordingLearningAppendFacet();
+    final learningFacet = _RecordingLearningFactAppendFacet();
     await _pumpDialogPageWithCompletedTurn(
       tester,
       learningFacet: learningFacet,
@@ -76,53 +82,20 @@ void main() {
     await _disposeTree(tester);
   });
 
-  testWidgets(
-    'empty_permission_error：学习上报 Facet 抛 CloudException 时本地反馈不被阻塞且事件待重试',
-    (tester) async {
-      final learningFacet = _RecordingLearningAppendFacet(
-        reportError: CloudException(
-          type: CloudErrorType.forbidden,
-          message: 'skill consent required',
-          statusCode: AssistantErrorCode.skillConsentRequired.httpStatus,
+  testWidgets('empty_permission_error：后台学习上报不可用时本地反馈不被阻塞', (tester) async {
+    final learningFacet = _RecordingLearningFactAppendFacet(
+      reportError: CloudException(
+        type: CloudErrorType.forbidden,
+        message: 'skill consent required',
+        statusCode: AssistantErrorCode.skillConsentRequired.httpStatus,
+        code: AssistantErrorCode.skillConsentRequired.code,
+        userMessage: AssistantErrorCode.skillConsentRequired.defaultMessage,
+        runtimeFailure: testRuntimeFailure(
           code: AssistantErrorCode.skillConsentRequired.code,
-          userMessage: AssistantErrorCode.skillConsentRequired.defaultMessage,
-          runtimeFailure: testRuntimeFailure(
-            code: AssistantErrorCode.skillConsentRequired.code,
-            kind: RuntimeFailureKind.permission,
-          ),
+          kind: RuntimeFailureKind.permission,
         ),
-      );
-      final container = await _pumpDialogPageWithCompletedTurn(
-        tester,
-        learningFacet: learningFacet,
-      );
-
-      await tester.tap(find.byIcon(CupertinoIcons.hand_thumbsup));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-
-      // 上报确实发起且失败（结构化异常抛出），但本地反馈展示不被阻塞。
-      expect(learningFacet.interactionBatches, hasLength(1));
-      final state = container.read(personalAssistantStreamControllerProvider);
-      expect(
-        state.feedbackMessage,
-        contains(AssistantText.assistantFeedbackUsefulLabel),
-      );
-      // best-effort 语义：失败事件保留在内存待重试队列，不静默丢弃。
-      final notifier = container.read(
-        personalAssistantStreamControllerProvider.notifier,
-      );
-      expect(notifier.pendingFeedbackEventCount, 1);
-      // 页面不崩溃：对话页与反馈工具栏仍在。
-      expect(find.byType(PersonalAssistantConversationPage), findsOneWidget);
-      expect(find.byIcon(CupertinoIcons.hand_thumbsup_fill), findsOneWidget);
-
-      await _disposeTree(tester);
-    },
-  );
-
-  testWidgets('primary_cta：点击「有帮助」触发 InteractionEvent 批次上报', (tester) async {
-    final learningFacet = _RecordingLearningAppendFacet();
+      ),
+    );
     final container = await _pumpDialogPageWithCompletedTurn(
       tester,
       learningFacet: learningFacet,
@@ -132,25 +105,39 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
-    // Recording 替身断言主动作副作用：一批一事件，反馈类型正确。
-    expect(learningFacet.interactionBatches, hasLength(1));
-    final event = learningFacet.interactionBatches.single.single;
-    expect(event.feedbackType, FeedbackType.useful);
-    // 上报成功后待重试队列清空。
-    final notifier = container.read(
-      personalAssistantStreamControllerProvider.notifier,
+    // 云端 append 的失败保留给 Controller local-contract 覆盖；页面侧只验证
+    // 用户操作不会被后台学习链路阻塞。
+    final state = container.read(personalAssistantStreamControllerProvider);
+    expect(
+      state.feedbackMessage,
+      contains(AssistantText.assistantFeedbackUsefulLabel),
     );
-    expect(notifier.pendingFeedbackEventCount, 0);
+    // 页面不崩溃：对话页与反馈工具栏仍在。
+    expect(find.byType(PersonalAssistantConversationPage), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.hand_thumbsup_fill), findsOneWidget);
+
+    await _disposeTree(tester);
+  });
+
+  testWidgets('primary_cta：点击「有帮助」更新本地反馈状态', (tester) async {
+    final learningFacet = _RecordingLearningFactAppendFacet();
+    await _pumpDialogPageWithCompletedTurn(
+      tester,
+      learningFacet: learningFacet,
+    );
+
+    await tester.tap(find.byIcon(CupertinoIcons.hand_thumbsup));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
     expect(find.byIcon(CupertinoIcons.hand_thumbsup_fill), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.hand_thumbsup), findsNothing);
 
     await _disposeTree(tester);
   });
 
-  testWidgets('trace_context：InteractionEvent 携带稳定派生 eventId 与 run/page 上下文', (
-    tester,
-  ) async {
-    final learningFacet = _RecordingLearningAppendFacet();
+  testWidgets('feedback_state：反馈状态绑定已完成 turn', (tester) async {
+    final learningFacet = _RecordingLearningFactAppendFacet();
     final container = await _pumpDialogPageWithCompletedTurn(
       tester,
       learningFacet: learningFacet,
@@ -160,20 +147,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
-    final event = learningFacet.interactionBatches.single.single;
-    // 稳定派生 eventId：同一 run 上同一反馈动作重试不产生新事件 id。
-    expect(event.eventId, 'fb:atn_uat_personal:useful');
-    expect(event.runId, 'atn_uat_personal');
-    expect(event.pageType, 'assistant_dialog');
-    expect(event.domainId, 'assistant');
-    expect(event.userId, 'persona_assistant_uat');
-    expect(event.sessionId, isNotEmpty);
-    // 反馈状态推进（本地展示通道）。
     final state = container.read(personalAssistantStreamControllerProvider);
     expect(
       state.feedbackMessage,
       contains(AssistantText.assistantFeedbackUsefulLabel),
     );
+    expect(state.feedbackType, 'useful');
+    expect(state.turnId, 'atn_uat_personal');
 
     await _disposeTree(tester);
   });
@@ -182,7 +162,7 @@ void main() {
 /// pump 真实对话页并完成一轮 turn，使反馈工具栏出现。
 Future<ProviderContainer> _pumpDialogPageWithCompletedTurn(
   WidgetTester tester, {
-  required _RecordingLearningAppendFacet learningFacet,
+  required _RecordingLearningFactAppendFacet learningFacet,
 }) async {
   final runFacet = _RecordingAssistantRunFacet(
     events: <AssistantStreamEventWire>[
@@ -198,7 +178,13 @@ Future<ProviderContainer> _pumpDialogPageWithCompletedTurn(
     ProviderScope(
       overrides: [
         assistantConversationRunFacetProvider.overrideWithValue(runFacet),
-        assistantLearningAppendFacetProvider.overrideWithValue(learningFacet),
+        assistantLearningFactAppendFacetProvider.overrideWithValue(
+          learningFacet,
+        ),
+        actorQueueStorageProvider.overrideWithValue(newTestActorQueueStorage()),
+        assistantLearningFactOutboxEnvironmentProvider.overrideWithValue(
+          'alpha',
+        ),
         appMessageQueryProvider.overrideWithValue(_FakeAppMessageQuery()),
         assistantHistoryLoaderProvider.overrideWithValue(
           const _EmptyHistoryLoader(),
@@ -426,41 +412,32 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   }
 }
 
-/// Recording 学习上报 Facet：记录 InteractionEvent 批次；可配置抛结构化异常。
-class _RecordingLearningAppendFacet implements AssistantLearningAppendFacet {
-  _RecordingLearningAppendFacet({this.reportError});
+/// Recording 学习事实 Facet：记录单轨 command；可配置抛结构化异常。
+class _RecordingLearningFactAppendFacet
+    implements AssistantLearningFactAppendFacet {
+  _RecordingLearningFactAppendFacet({this.reportError});
 
   final Object? reportError;
-  final List<List<InteractionEvent>> interactionBatches =
-      <List<InteractionEvent>>[];
+  final List<AppendAssistantLearningFactRequest> facts =
+      <AppendAssistantLearningFactRequest>[];
 
   @override
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
+  Future<AssistantLearningFactReceipt> appendUserFact({
+    required AppendAssistantLearningFactRequest request,
   }) async {
-    interactionBatches.add(List<InteractionEvent>.unmodifiable(events));
+    facts.add(request);
     final error = reportError;
     if (error != null) {
       throw error;
     }
-    return AssistantInteractionReportBatchAck(
+    return AssistantLearningFactReceipt(
+      eventId: request.eventId,
+      eventVersion: request.eventVersion,
       accepted: true,
-      acceptedCount: events.length,
-      count: events.length,
-      resource: 'interaction_event_batch',
-      mode: 'uat_recording',
-    );
-  }
-
-  @override
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  }) async {
-    return AssistantScorecardReportBatchAck(
-      accepted: true,
-      count: scorecards.length,
-      resource: 'scorecard_batch',
-      mode: 'uat_recording',
+      deduplicated: false,
+      appendSequence: facts.length,
+      payloadDigest: 'uat_recording',
+      recordedAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
 }

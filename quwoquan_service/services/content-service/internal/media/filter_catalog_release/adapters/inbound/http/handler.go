@@ -19,6 +19,22 @@ func NewHandler(facades *filtercatalogapp.Facades) *Handler {
 	return &Handler{facades: facades}
 }
 
+func (handler *Handler) Stage(writer http.ResponseWriter, request *http.Request) {
+	handler.handleStageFilterCatalogRelease(writer, request)
+}
+
+func (handler *Handler) Activate(writer http.ResponseWriter, request *http.Request) {
+	handler.handleActivateFilterCatalogRelease(writer, request)
+}
+
+func (handler *Handler) Rollback(writer http.ResponseWriter, request *http.Request) {
+	handler.handleRollbackFilterCatalogRelease(writer, request)
+}
+
+func (handler *Handler) GetActive(writer http.ResponseWriter, request *http.Request) {
+	handler.handleGetActiveFilterCatalog(writer, request)
+}
+
 // Route dispatches FilterCatalogRelease routes and delegates all other routes
 // to the service-level composition handler.
 func (handler *Handler) Route(next http.Handler) http.Handler {

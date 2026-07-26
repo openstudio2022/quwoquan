@@ -10,6 +10,7 @@ import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dar
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
@@ -887,19 +888,21 @@ class _NavigationChatRepository extends _ListInboxDrivenChatRepository {
   }
 
   @override
-  Future<List<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
-    return <ChatContactRowDto>[
-      ChatContactRowDto(
-        userId: 'user_navigation_contact',
-        displayName: '李明',
-        avatarUrl: 'https://example.com/contact.jpg',
-        bio: '篮球爱好者',
-        relationState: 'mutual',
-      ),
-    ];
+    return CursorPage<ChatContactRowDto>(
+      items: <ChatContactRowDto>[
+        ChatContactRowDto(
+          userId: 'user_navigation_contact',
+          displayName: '李明',
+          avatarUrl: 'https://example.com/contact.jpg',
+          bio: '篮球爱好者',
+          relationState: 'mutual',
+        ),
+      ],
+    );
   }
 }
 

@@ -10,8 +10,10 @@ class OpsApiMetadata {
   static const List<String> apiPrefixes = <String>[
     '/control-plane/platform',
     '/control-plane/product',
+    '/ops/app-recovery',
     '/ops/events',
     '/ops/experiments',
+    '/ops/recovery-failures',
     '/ops/runtime-logs',
     '/ops/startup-events',
     '/ops/visits',
@@ -19,6 +21,7 @@ class OpsApiMetadata {
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AssignExperimentVariant': '/ops/experiments/{experimentId}/assignment',
+    'GetAppRecoveryVersion': '/ops/app-recovery/version',
     'GetConfigSnapshot': '/control-plane/platform/configs/snapshot',
     'GetEventDrilldown': '/ops/events/drilldown',
     'GetEventSummary': '/ops/events/summary',
@@ -33,14 +36,17 @@ class OpsApiMetadata {
     'ListServiceConfigs': '/control-plane/platform/configs',
     'RecordVisit': '/ops/visits',
     'ReportEventBatch': '/ops/events',
+    'ReportRecoveryFailure': '/ops/recovery-failures',
     'ReportRuntimeLogBatch': '/ops/runtime-logs',
     'ReportStartupEventBatch': '/ops/startup-events',
     'ResolveEffectiveConfig': '/control-plane/platform/configs/resolve',
+    'ResolveEffectiveConfigForInstance': '/control-plane/platform/configs/resolve-for-instance',
     'UpdateExperimentRollout': '/control-plane/product/experiments/{experimentId}:rollout',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AssignExperimentVariant': 'POST',
+    'GetAppRecoveryVersion': 'GET',
     'GetConfigSnapshot': 'GET',
     'GetEventDrilldown': 'GET',
     'GetEventSummary': 'GET',
@@ -55,15 +61,18 @@ class OpsApiMetadata {
     'ListServiceConfigs': 'GET',
     'RecordVisit': 'POST',
     'ReportEventBatch': 'POST',
+    'ReportRecoveryFailure': 'POST',
     'ReportRuntimeLogBatch': 'POST',
     'ReportStartupEventBatch': 'POST',
     'ResolveEffectiveConfig': 'GET',
+    'ResolveEffectiveConfigForInstance': 'GET',
     'UpdateExperimentRollout': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'AssignExperimentVariant': 'required',
+    'GetAppRecoveryVersion': 'optional',
     'GetConfigSnapshot': 'required',
     'GetEventDrilldown': 'required',
     'GetEventSummary': 'required',
@@ -78,9 +87,11 @@ class OpsApiMetadata {
     'ListServiceConfigs': 'required',
     'RecordVisit': 'required',
     'ReportEventBatch': 'required',
+    'ReportRecoveryFailure': 'optional',
     'ReportRuntimeLogBatch': 'required',
     'ReportStartupEventBatch': 'optional',
     'ResolveEffectiveConfig': 'required',
+    'ResolveEffectiveConfigForInstance': 'required',
     'UpdateExperimentRollout': 'required',
   };
 
@@ -90,10 +101,12 @@ class OpsApiMetadata {
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
+    'GetEventDrilldown': 'object',
     'GetRtcMediaQoeSummary': 'object',
   };
 
   static const String assignExperimentVariantOperation = 'AssignExperimentVariant';
+  static const String getAppRecoveryVersionOperation = 'GetAppRecoveryVersion';
   static const String getConfigSnapshotOperation = 'GetConfigSnapshot';
   static const String getEventDrilldownOperation = 'GetEventDrilldown';
   static const String getEventSummaryOperation = 'GetEventSummary';
@@ -108,9 +121,11 @@ class OpsApiMetadata {
   static const String listServiceConfigsOperation = 'ListServiceConfigs';
   static const String recordVisitOperation = 'RecordVisit';
   static const String reportEventBatchOperation = 'ReportEventBatch';
+  static const String reportRecoveryFailureOperation = 'ReportRecoveryFailure';
   static const String reportRuntimeLogBatchOperation = 'ReportRuntimeLogBatch';
   static const String reportStartupEventBatchOperation = 'ReportStartupEventBatch';
   static const String resolveEffectiveConfigOperation = 'ResolveEffectiveConfig';
+  static const String resolveEffectiveConfigForInstanceOperation = 'ResolveEffectiveConfigForInstance';
   static const String updateExperimentRolloutOperation = 'UpdateExperimentRollout';
 
   static const String assignExperimentVariantPathTemplate = '/ops/experiments/{experimentId}/assignment';
@@ -119,6 +134,7 @@ class OpsApiMetadata {
       'experimentId': experimentId,
     });
   }
+  static const String getAppRecoveryVersionPath = '/ops/app-recovery/version';
   static const String getConfigSnapshotPath = '/control-plane/platform/configs/snapshot';
   static const String getEventDrilldownPath = '/ops/events/drilldown';
   static const String getEventSummaryPath = '/ops/events/summary';
@@ -143,9 +159,11 @@ class OpsApiMetadata {
   static const String listServiceConfigsPath = '/control-plane/platform/configs';
   static const String recordVisitPath = '/ops/visits';
   static const String reportEventBatchPath = '/ops/events';
+  static const String reportRecoveryFailurePath = '/ops/recovery-failures';
   static const String reportRuntimeLogBatchPath = '/ops/runtime-logs';
   static const String reportStartupEventBatchPath = '/ops/startup-events';
   static const String resolveEffectiveConfigPath = '/control-plane/platform/configs/resolve';
+  static const String resolveEffectiveConfigForInstancePath = '/control-plane/platform/configs/resolve-for-instance';
   static const String updateExperimentRolloutPathTemplate = '/control-plane/product/experiments/{experimentId}:rollout';
   static String updateExperimentRolloutPath({required String experimentId}) {
     return _fillPath(updateExperimentRolloutPathTemplate, <String, String>{

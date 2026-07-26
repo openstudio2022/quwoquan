@@ -14,7 +14,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 4));
 
-    expect(writer.calls, <String>['confirm:proposal-uat', 'apply:proposal-uat']);
+    expect(writer.calls, <String>[
+      'confirm:proposal-uat',
+      'apply:proposal-uat',
+    ]);
     expect(
       find.byKey(const ValueKey('profile-proposal-review-sheet')),
       findsNothing,
@@ -58,9 +61,16 @@ Future<void> _pumpProposalJourney(
             id: 'proposal-uat',
             personaId: 'persona-uat',
             source: ProfileUpdateProposalSource.assistant,
+            reason: 'assistant evidence',
+            evidenceRefs: const <String>['assistant-run:run-uat'],
+            impactScope: const <String>['bio', 'displayName'],
+            createdBy: 'persona-uat',
             status: ProfileUpdateProposalStatus.pending,
             changes: ProfileChangeSet(displayName: '商用昵称', bio: '商用简介'),
             reviewedBy: null,
+            applyAuditId: null,
+            rollbackDeadline: null,
+            rollbackAuditId: null,
             version: 1,
             createdAt: DateTime.utc(2026, 7, 19),
             updatedAt: DateTime.utc(2026, 7, 19),
@@ -114,6 +124,13 @@ final class _JourneyProposalWriter
       status: ProfileUpdateProposalStatus.applied,
       replayed: false,
     );
+  }
+
+  @override
+  Future<ProfileUpdateProposalCommandResult> rollback(
+    RollbackProfileUpdateProposalCommand command,
+  ) {
+    throw UnsupportedError('本旅程不回滚资料提案');
   }
 
   @override

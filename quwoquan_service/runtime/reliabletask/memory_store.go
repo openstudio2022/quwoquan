@@ -19,6 +19,7 @@ type MemoryStore struct {
 	notifications       map[string]NotificationOutboxRecord
 	ledgers             map[string]NotificationDeliveryLedgerRecord
 	attempts            map[string]ProviderAttemptRecord
+	resultOutboxes      map[string]ExternalInteractionResultOutboxRecord
 	leases              map[string]TaskLease
 }
 
@@ -32,6 +33,7 @@ func NewMemoryStore() *MemoryStore {
 		notifications:       map[string]NotificationOutboxRecord{},
 		ledgers:             map[string]NotificationDeliveryLedgerRecord{},
 		attempts:            map[string]ProviderAttemptRecord{},
+		resultOutboxes:      map[string]ExternalInteractionResultOutboxRecord{},
 		leases:              map[string]TaskLease{},
 	}
 }
@@ -604,6 +606,47 @@ func (s *MemoryStore) RecordProviderAttempt(ctx context.Context, record Provider
 	}
 	record.Attributes = CloneStringMap(record.Attributes)
 	s.attempts[record.AttemptID] = record
+	return record, nil
+}
+
+func (s *MemoryStore) RecordProviderAttemptWithResultOutbox(
+	ctx context.Context,
+	record ProviderAttemptRecord,
+) (ProviderAttemptRecord, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if strings.TrimSpace(record.AttemptID) == "" {
+		record.AttemptID = NewRecordID("attempt")
+	}
+	if record.CreatedAt.IsZero() {
+		record.CreatedAt = time.Now().UTC()
+	}
+	if strings.TrimSpace(record.ProviderRequestDigest) == "" {
+		record.ProviderRequestDigest = ProviderRequestDigest(record.ProviderRequestID)
+	}
+	if strings.TrimSpace(record.RecoveryAction) == "" {
+		record.RecoveryAction = "none"
+	}
+	if existing, found := s.attempts[record.AttemptID]; found {
+		return existing, nil
+	}
+	record.Attributes = CloneStringMap(record.Attributes)
+	s.attempts[record.AttemptID] = record
+	s.resultOutboxes[record.AttemptID] = ExternalInteractionResultOutboxRecord{
+		EventID:               record.AttemptID,
+		RequestID:             record.RequestID,
+		Operation:             record.Operation,
+		ResultStatus:          record.Status,
+		Provider:              record.Provider,
+		ProviderRequestDigest: record.ProviderRequestDigest,
+		NormalizedError:       record.NormalizedError,
+		RecoveryAction:        record.RecoveryAction,
+		OccurredAt:            record.CreatedAt,
+		DeliveryStatus:        ExternalInteractionResultOutboxPending,
+		CreatedAt:             record.CreatedAt,
+		UpdatedAt:             record.CreatedAt,
+	}
 	return record, nil
 }
 

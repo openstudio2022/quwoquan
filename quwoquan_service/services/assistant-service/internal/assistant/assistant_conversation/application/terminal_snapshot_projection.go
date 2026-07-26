@@ -15,7 +15,9 @@ const (
 	maxTerminalSnapshotReferences = 5
 )
 
-func projectAssistantRunTerminalSnapshot(
+// ProjectAssistantRunTerminalSnapshot deterministically reduces persisted run
+// events to the public terminal snapshot without exposing internal material.
+func ProjectAssistantRunTerminalSnapshot(
 	events []streaming.Envelope,
 	selectedPolicyRef *assistant.AssistantSelectedPolicyRef,
 ) assistant.AssistantRunTerminalSnapshot {

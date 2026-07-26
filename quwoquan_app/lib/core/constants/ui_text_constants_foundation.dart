@@ -218,6 +218,7 @@ abstract final class _UITextFoundation {
   static const String runtimeRecoveryEnteringTitle = '正在重新进入应用';
   static const String runtimeRecoveryEnteringMessage = '完成后将自动返回首页';
   static const String runtimeRecoveryEnteringAction = '正在重新进入…';
+  static const String runtimeRecoveryUpdateMessage = '更新后即可继续使用';
   static const String runtimeRecoveryCompleted = '已重新进入应用';
   static const String commentPlaceholder = '添加评论...';
   static const String commentTooLong = '评论过长';

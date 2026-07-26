@@ -647,7 +647,7 @@ func HTTPStatusFromError(err *AppError) int {
 		case "expired", "call_ended", "qr_token_expired":
 			return http.StatusGone
 		case "media_not_ready":
-			return http.StatusUnprocessableEntity
+			return http.StatusBadRequest
 		case "rate_limited", "original_access_rate_limited", "daily_limit_exceeded":
 			return http.StatusTooManyRequests
 		case "location_unavailable":

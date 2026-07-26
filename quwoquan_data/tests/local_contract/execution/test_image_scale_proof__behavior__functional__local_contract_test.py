@@ -52,7 +52,18 @@ def _make_task(
         title=name,
         region="中国/test-region-a",
         category="景区",
-        targets=[{"entityType": "地点/景区", "name": target} for target in targets],
+        targets=[
+            {
+                "entityType": "地点/景区",
+                "name": target,
+                "qualifiedHomepageSource": {
+                    "provider": "wikipedia",
+                    "title": target,
+                    "url": f"https://zh.wikipedia.org/wiki/{target}",
+                },
+            }
+            for target in targets
+        ],
         created_by="test",
         entity_articles_per_target=0,
         entity_homepages_per_target=0,
@@ -115,7 +126,18 @@ def _make_homepage_task(name: str, targets: list[str]) -> str:
         title=name,
         region="中国/test-region-a",
         category="景区",
-        targets=[{"entityType": "地点/景区", "name": target} for target in targets],
+        targets=[
+            {
+                "entityType": "地点/景区",
+                "name": target,
+                "qualifiedHomepageSource": {
+                    "provider": "wikipedia",
+                    "title": target,
+                    "url": f"https://zh.wikipedia.org/wiki/{target}",
+                },
+            }
+            for target in targets
+        ],
         created_by="test",
         entity_articles_per_target=0,
         entity_homepages_per_target=1,

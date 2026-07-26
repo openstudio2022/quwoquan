@@ -20,6 +20,7 @@ import (
 )
 
 const maxElasticsearchResponseBytes = 16 << 20
+const maxElasticsearchDailyIndexBaseBytes = 244
 
 var elasticsearchIndexNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
@@ -55,8 +56,8 @@ func NewElasticsearchEventLogStore(
 	config ElasticsearchConfig,
 ) (*ElasticsearchEventLogStore, error) {
 	config.Endpoint = strings.TrimRight(strings.TrimSpace(config.Endpoint), "/")
-	if config.Timeout <= 0 || config.Timeout > 10*time.Second {
-		return nil, fmt.Errorf("Elasticsearch timeout must be within 1ms..10s")
+	if config.Timeout <= 0 || config.Timeout > 30*time.Second {
+		return nil, fmt.Errorf("Elasticsearch timeout must be within 1ms..30s")
 	}
 	endpoint, err := url.Parse(config.Endpoint)
 	if err != nil ||
@@ -74,7 +75,8 @@ func NewElasticsearchEventLogStore(
 		"aggregate":          config.AggregateIndex,
 	} {
 		if !elasticsearchIndexNamePattern.MatchString(index) ||
-			strings.Contains(index, "..") {
+			strings.Contains(index, "..") ||
+			len(index) > maxElasticsearchDailyIndexBaseBytes {
 			return nil, fmt.Errorf("Elasticsearch %s index is invalid", role)
 		}
 	}
@@ -594,7 +596,7 @@ func (s *ElasticsearchEventLogStore) bulkIndex(
 	status, body, err := s.request(
 		ctx,
 		http.MethodPost,
-		"/_bulk",
+		"/_bulk?refresh=wait_for",
 		payload.Bytes(),
 		"application/x-ndjson",
 	)
@@ -1213,7 +1215,7 @@ func elasticsearchRawIndexDefinition() map[string]any {
 		"durationMismatch",
 		"mediaConnected",
 	} {
-		properties[field] = map[string]any{"type": "boolean", "coerce": true}
+		properties[field] = map[string]any{"type": "boolean"}
 	}
 	return map[string]any{
 		"settings": elasticsearchIndexSettings(elasticsearchRawRetentionPolicy),

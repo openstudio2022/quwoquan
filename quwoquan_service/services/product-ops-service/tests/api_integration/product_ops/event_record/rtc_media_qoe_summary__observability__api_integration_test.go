@@ -65,6 +65,41 @@ func TestPostgresRtcMediaQoeSummaryUsesRawPercentileAndCanonicalDenominators(
 	); err != nil {
 		t.Fatalf("report postgres rtc media QoE batch: %v", err)
 	}
+	drilldown, err := store.GetEventDrilldown(
+		ctx,
+		application.EventDrilldownQuery{
+			EventType: "rtc_media_qoe",
+			SessionID: events[0].SessionID,
+			From:      eventNow.Add(-time.Minute),
+			To:        eventNow.Add(time.Minute),
+			Limit:     20,
+		},
+	)
+	if err != nil {
+		t.Fatalf("get postgres rtc media QoE drilldown: %v", err)
+	}
+	var connectionLost *application.EventDrilldownItem
+	for index := range drilldown.Items {
+		item := &drilldown.Items[index]
+		if item.Result != nil && *item.Result == "connection_lost" {
+			connectionLost = item
+			break
+		}
+	}
+	if connectionLost == nil ||
+		connectionLost.CallType == nil || *connectionLost.CallType != "video" ||
+		connectionLost.ParticipantCount == nil || *connectionLost.ParticipantCount != 2 ||
+		connectionLost.ConnectTimeMS == nil || *connectionLost.ConnectTimeMS != 200 ||
+		connectionLost.MediaConnected == nil || !*connectionLost.MediaConnected ||
+		connectionLost.ReconnectCount == nil || *connectionLost.ReconnectCount != 2 ||
+		connectionLost.DisconnectReason == nil || *connectionLost.DisconnectReason != "unexpected_disconnect" ||
+		connectionLost.NetworkQuality == nil || *connectionLost.NetworkQuality != "good" {
+		t.Fatalf("postgres rtc media QoE drilldown lost terminal facts: %+v", connectionLost)
+	}
+	if connectionLost.SessionID == events[0].SessionID ||
+		!strings.HasPrefix(connectionLost.SessionID, "s.***.") {
+		t.Fatalf("postgres rtc media QoE sessionId must remain masked: %q", connectionLost.SessionID)
+	}
 
 	got, err := facade.Get24HourSummary(ctx)
 	if err != nil {

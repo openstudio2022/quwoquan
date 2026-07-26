@@ -1,0 +1,87 @@
+backend: mongodb
+collections:
+  assistant_learning_facts:
+    entity: AssistantLearningFact
+    description: 唯一不可变学习事实源；原始敏感文本只保留在此受控集合。
+    indexes:
+    - name: uq_assistant_learning_fact_identity
+      keys:
+        eventId: 1
+        eventVersion: 1
+      unique: true
+    - name: uq_assistant_learning_fact_sequence
+      keys:
+        appendSequence: 1
+      unique: true
+    - name: idx_assistant_learning_fact_owner_sequence
+      keys:
+        userId: 1
+        appendSequence: 1
+    - name: idx_assistant_learning_fact_turn
+      keys:
+        assistantTurnId: 1
+        appendSequence: 1
+    - name: idx_assistant_learning_fact_type
+      keys:
+        factType: 1
+        appendSequence: 1
+  assistant_learning_fact_receipts:
+    entity: AssistantLearningFact
+    description: durable append receipt；保存 identity、payload digest 与原始 append sequence。
+    indexes:
+    - name: uq_assistant_learning_fact_receipt_identity
+      keys:
+        eventId: 1
+        eventVersion: 1
+      unique: true
+  assistant_learning_fact_outbox:
+    entity: AssistantLearningFact
+    description: 脱敏 canonical learning fact outbox；禁止包含任何原始文本。
+    indexes:
+    - name: idx_assistant_learning_fact_outbox_pending
+      keys:
+        publishedAt: 1
+        appendSequence: 1
+    - name: idx_assistant_learning_fact_outbox_claimable
+      keys:
+        publishedAt: 1
+        claimUntil: 1
+        appendSequence: 1
+  assistant_learning_fact_sequences:
+    entity: AssistantLearningFact
+    description: 在 append transaction 内分配严格递增 server append sequence。
+    indexes:
+    - name: uq_assistant_learning_fact_sequence_name
+      keys:
+        _id: 1
+      unique: true
+  rm_assistant_learning_projection:
+    entity: AssistantLearningProjection
+    description: definition-versioned owner projection；只含脱敏聚合，revision 通过 CAS 递增。
+    indexes:
+    - name: idx_assistant_learning_projection_owner_updated
+      keys:
+        userId: 1
+        personaId: 1
+        updatedAt: -1
+    - name: idx_assistant_learning_projection_watermark
+      keys:
+        watermarkSequence: 1
+  assistant_learning_projection_receipts:
+    entity: AssistantLearningProjection
+    description: 每个 fact identity 与 definition version 的 durable projection receipt。
+    indexes:
+    - name: uq_assistant_learning_projection_receipt_sequence
+      keys:
+        generationId: 1
+        appendSequence: 1
+      unique: true
+  assistant_learning_projection_watermarks:
+    entity: AssistantLearningProjection
+    description: 全局 append sequence checkpoint 与 ready/rebuilding 状态；与 projection/receipt 同事务提交。
+    indexes:
+    - name: uq_assistant_learning_projection_watermark
+      keys:
+        _id: 1
+      unique: true
+role: append_only

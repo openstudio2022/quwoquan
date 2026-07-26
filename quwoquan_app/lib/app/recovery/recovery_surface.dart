@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:quwoquan_app/app/recovery/recovery_state_machine.dart';
 import 'package:quwoquan_app/app/recovery/startup_recovery_controller.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
 class StartupRecoveryPage extends StatefulWidget {
   const StartupRecoveryPage({super.key, this.controller});
@@ -13,7 +15,8 @@ class StartupRecoveryPage extends StatefulWidget {
   State<StartupRecoveryPage> createState() => _StartupRecoveryPageState();
 }
 
-class _StartupRecoveryPageState extends State<StartupRecoveryPage> {
+class _StartupRecoveryPageState extends State<StartupRecoveryPage>
+    with WidgetsBindingObserver {
   late final StartupRecoveryController _controller;
   late final bool _ownsController;
 
@@ -22,15 +25,24 @@ class _StartupRecoveryPageState extends State<StartupRecoveryPage> {
     super.initState();
     _ownsController = widget.controller == null;
     _controller = widget.controller ?? StartupRecoveryController();
+    WidgetsBinding.instance.addObserver(this);
     _controller.addListener(_onChanged);
     _controller.start();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_onChanged);
     if (_ownsController) _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _controller.refreshVersionAfterExternalReturn();
+    }
   }
 
   void _onChanged() {
@@ -50,7 +62,7 @@ class _StartupRecoveryPageState extends State<StartupRecoveryPage> {
         ),
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      child: Scaffold(
+      child: AppScaffold(
         backgroundColor: AppColorsFunctional.getColor(
           false,
           ColorType.surfaceMuted,
@@ -78,6 +90,7 @@ class _StartupRecoveryPageState extends State<StartupRecoveryPage> {
                     openingExternalTarget: _controller.openingExternalTarget,
                     onUpdate: _openUpdate,
                     onWeb: _openWeb,
+                    onReenter: _controller.reenterRuntime,
                   ),
                 ),
               ),
@@ -103,9 +116,7 @@ class _StartupRecoveryPageState extends State<StartupRecoveryPage> {
   }
 
   void _showTransientMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    AppToast.show(context, message);
   }
 }
 
@@ -116,6 +127,7 @@ class _RecoveryContent extends StatelessWidget {
     required this.openingExternalTarget,
     required this.onUpdate,
     required this.onWeb,
+    required this.onReenter,
   });
 
   final RecoverySnapshot snapshot;
@@ -123,6 +135,7 @@ class _RecoveryContent extends StatelessWidget {
   final bool openingExternalTarget;
   final VoidCallback onUpdate;
   final VoidCallback onWeb;
+  final VoidCallback onReenter;
 
   @override
   Widget build(BuildContext context) {
@@ -169,6 +182,7 @@ class _RecoveryContent extends StatelessWidget {
             openingExternalTarget: openingExternalTarget,
             onUpdate: onUpdate,
             onWeb: onWeb,
+            onReenter: onReenter,
           ),
         ),
       ],
@@ -211,28 +225,42 @@ class _RecoveryActions extends StatelessWidget {
     required this.openingExternalTarget,
     required this.onUpdate,
     required this.onWeb,
+    required this.onReenter,
   });
 
   final RecoverySnapshot snapshot;
   final bool openingExternalTarget;
   final VoidCallback onUpdate;
   final VoidCallback onWeb;
+  final VoidCallback onReenter;
 
   @override
   Widget build(BuildContext context) {
     final phase = snapshot.phase;
-    final checking = phase == RecoveryPhase.startupChecking;
-    final showsUpdate = phase == RecoveryPhase.startupUpdateRequired;
+    final checking =
+        phase == RecoveryPhase.startupChecking ||
+        phase == RecoveryPhase.runtimeVersionChecking;
+    final showsUpdate = snapshot.showsUpdate;
+    final runtimeUnavailable = phase == RecoveryPhase.runtimeUnavailable;
+    final runtimeReentering = phase == RecoveryPhase.runtimeReentering;
     final onlyWeb =
         phase == RecoveryPhase.startupLatest ||
-        phase == RecoveryPhase.startupVersionUnavailable;
-    final primaryLabel = checking
+        phase == RecoveryPhase.startupVersionUnavailable ||
+        phase == RecoveryPhase.runtimeLatest ||
+        phase == RecoveryPhase.runtimeVersionUnavailable;
+    final primaryLabel = runtimeUnavailable
+        ? UITextConstants.runtimeRecoveryAction
+        : runtimeReentering
+        ? UITextConstants.runtimeRecoveryEnteringAction
+        : checking
         ? UITextConstants.startupRecoveryCheckingAction
         : showsUpdate
         ? UITextConstants.startupRecoveryUpdateAction
         : UITextConstants.startupRecoveryWebAction;
-    final primaryAction = checking || openingExternalTarget
+    final primaryAction = checking || runtimeReentering || openingExternalTarget
         ? null
+        : runtimeUnavailable
+        ? onReenter
         : showsUpdate
         ? onUpdate
         : onWeb;
@@ -365,6 +393,26 @@ _RecoveryCopy _copyFor(RecoveryPhase phase) {
       return const _RecoveryCopy(
         UITextConstants.runtimeRecoveryEnteringTitle,
         UITextConstants.runtimeRecoveryEnteringMessage,
+      );
+    case RecoveryPhase.runtimeVersionChecking:
+      return const _RecoveryCopy(
+        UITextConstants.runtimeRecoveryTitle,
+        UITextConstants.startupRecoveryChecking,
+      );
+    case RecoveryPhase.runtimeUpdateRequired:
+      return const _RecoveryCopy(
+        UITextConstants.startupRecoveryUpdateTitle,
+        UITextConstants.runtimeRecoveryUpdateMessage,
+      );
+    case RecoveryPhase.runtimeLatest:
+      return const _RecoveryCopy(
+        UITextConstants.startupRecoveryLatestTitle,
+        UITextConstants.startupRecoveryWebMessage,
+      );
+    case RecoveryPhase.runtimeVersionUnavailable:
+      return const _RecoveryCopy(
+        UITextConstants.runtimeRecoveryTitle,
+        UITextConstants.startupRecoveryWebMessage,
       );
   }
 }

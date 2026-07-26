@@ -11,27 +11,11 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	rtobs "quwoquan_service/runtime/observability"
+	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_conversation"
+	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
 )
-
-func (s *AssistantService) GetPolicy(ctx context.Context, userID string) (_ assistant.AssistantPolicyView, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GetPolicy",
-		attribute.String("user.id", userID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	now := s.now()
-	return assistant.AssistantPolicyView{
-		Version: "assistant_policy_v1",
-		Values: map[string]any{
-			"learningSyncEnabled":     true,
-			"suggestedActionsEnabled": true,
-			"pageContextTtlSeconds":   int(pageContextTTL / time.Second),
-			"searchFallbackMode":      "summary_with_citations",
-			"defaultSearchIntensity":  "balanced",
-		},
-		UpdatedAt: &now,
-	}, nil
-}
 
 func (s *AssistantService) ReportPageContext(ctx context.Context, userID string, input assistant.PageContextInput) (_ assistant.PageContextAck, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ReportPageContext",
@@ -48,8 +32,23 @@ func (s *AssistantService) GetSuggestedActions(ctx context.Context, userID strin
 		attribute.String("page.type", pageType))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	if strings.TrimSpace(pageType) == "" {
-		return assistant.SuggestedActionListView{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "pageType 不能为空", "missing pageType")
+	pageContextType, parseErr := assistantgenerated.ParseAssistantPageContextType(
+		pageType,
+	)
+	if parseErr != nil ||
+		pageContextType == assistantgenerated.AssistantPageContextTypeUnknown {
+		return assistant.SuggestedActionListView{},
+			runerrors.AppErrorFromRunInvalidArgument(
+				"unsupported suggested-actions page type",
+			)
+	}
+	pageType = pageContextType.WireName()
+	if err := requireSuggestedActionsPageContext(
+		s.loadPageContext(ctx, userID),
+		pageContextType,
+		objectID,
+	); err != nil {
+		return assistant.SuggestedActionListView{}, err
 	}
 	cacheKey := fmt.Sprintf("suggested_actions:%s:%s:%s", fallbackUser(userID), pageType, strings.TrimSpace(objectID))
 	if s.cache != nil {
@@ -61,14 +60,51 @@ func (s *AssistantService) GetSuggestedActions(ctx context.Context, userID strin
 			}
 		}
 	}
-	items := buildSuggestedActions(pageType, objectID)
-	if s.profiles != nil && strings.TrimSpace(userID) != "" {
-		if profile, err := s.profiles.GetLearningProfile(ctx, userID); err == nil && profile != nil {
+	items, err := buildSuggestedActions(pageContextType, objectID)
+	if err != nil {
+		return assistant.SuggestedActionListView{}, err
+	}
+	if s.learningProjection != nil && strings.TrimSpace(userID) != "" {
+		profile, profileErr := s.learningProjection.GetLearningProjection(
+			ctx,
+			userID,
+		)
+		if profileErr != nil {
+			slog.WarnContext(
+				ctx,
+				"assistant suggested-actions profile read failed; serving page-context actions",
+				slog.String("userId", userID),
+				slog.String("error", profileErr.Error()),
+			)
+		} else if profile != nil {
 			if profile.NegativeFeedbackCount > 0 || profile.HighPriorityCount > 0 {
-				items = append(items, assistant.SuggestedAction{ActionID: "assistant.review_recent_feedback", Type: "review_feedback", Label: "复盘近期反馈", Icon: "thumb_down", Payload: map[string]any{"scope": "learning_profile", "userId": userID}})
+				items = append(items, assistant.SuggestedAction{
+					ActionID: "assistant.review_recent_feedback",
+					Type:     "review_feedback",
+					Label:    "复盘近期反馈",
+					Icon:     "thumb_down",
+					Payload: suggestedActionPayloadWith(
+						map[string]any{"scope": "learning_summary"},
+						pageType,
+						objectID,
+					),
+				})
 			}
 			if metricID, metricScore := selectLowestMetric(profile); metricID != "" && metricScore <= 3 {
-				items = append(items, assistant.SuggestedAction{ActionID: "assistant.inspect_metric", Type: "inspect_metric", Label: "检查低分指标", Icon: "monitor_heart", Payload: map[string]any{"metricId": metricID, "score": metricScore}})
+				items = append(items, assistant.SuggestedAction{
+					ActionID: "assistant.inspect_metric",
+					Type:     "inspect_metric",
+					Label:    "检查低分指标",
+					Icon:     "monitor_heart",
+					Payload: suggestedActionPayloadWith(
+						map[string]any{
+							"metricId": metricID,
+							"score":    metricScore,
+						},
+						pageType,
+						objectID,
+					),
+				})
 			}
 		}
 	}
@@ -76,6 +112,47 @@ func (s *AssistantService) GetSuggestedActions(ctx context.Context, userID strin
 		_ = s.cache.Set(ctx, cacheKey, encodeSuggestedActionCache(items), pageContextTTL)
 	}
 	return assistant.SuggestedActionListView{Items: dedupeSuggestedActions(items)}, nil
+}
+
+func requireSuggestedActionsPageContext(
+	snapshot *assistant.AssistantContextSnapshot,
+	pageType assistantgenerated.AssistantPageContextType,
+	objectID string,
+) error {
+	if snapshot == nil {
+		return runerrors.AppErrorFromRunInvalidArgument(
+			"fresh page context is required for suggested actions",
+		)
+	}
+	if snapshot.PageType != pageType.WireName() {
+		return runerrors.AppErrorFromRunInvalidArgument(
+			"suggested-actions page type does not match stored page context",
+		)
+	}
+	objectID = strings.TrimSpace(objectID)
+	if objectID == "" {
+		return nil
+	}
+	for _, pageObject := range snapshot.PageObjects {
+		if pageObject.ObjectID == objectID {
+			return nil
+		}
+	}
+	return runerrors.AppErrorFromRunInvalidArgument(
+		"suggested-actions object id is absent from stored page context",
+	)
+}
+
+func suggestedActionPayloadWith(
+	additional map[string]any,
+	pageType string,
+	objectID string,
+) map[string]any {
+	payload := suggestedActionPayload(pageType, objectID)
+	for key, value := range additional {
+		payload[key] = value
+	}
+	return payload
 }
 
 // GetEntryPersonalization 生成私助半屏入口的欢迎语、建议行与 chips。
@@ -99,10 +176,10 @@ func (s *AssistantService) GetEntryPersonalization(ctx context.Context, userID s
 		},
 		Personalized: false,
 	}
-	if s.profiles == nil || strings.TrimSpace(userID) == "" {
+	if s.learningProjection == nil || strings.TrimSpace(userID) == "" {
 		return view, nil
 	}
-	profile, profileErr := s.profiles.GetLearningProfile(ctx, userID)
+	profile, profileErr := s.learningProjection.GetLearningProjection(ctx, userID)
 	if profileErr != nil {
 		slog.WarnContext(ctx, "assistant entry personalization profile read failed; serving generic entry",
 			slog.String("userId", userID), slog.String("error", profileErr.Error()))
@@ -215,13 +292,19 @@ func (s *AssistantService) ListAssistantTasks(ctx context.Context, userID string
 	}
 	now := s.now()
 	items := []assistant.AssistantUserTaskView{}
-	if s.profiles != nil && strings.TrimSpace(userID) != "" {
-		projected, err := s.profiles.BuildTaskItems(ctx, userID, now)
-		if err != nil {
+	if s.learningProjection != nil && strings.TrimSpace(userID) != "" {
+		projection, readErr := s.learningProjection.GetLearningProjection(
+			ctx,
+			userID,
+		)
+		if readErr != nil {
 			slog.WarnContext(ctx, "assistant task projection read failed; returning projected-only list",
-				slog.String("userId", userID), slog.String("error", err.Error()))
-		} else {
-			items = append(items, projected...)
+				slog.String("userId", userID), slog.String("error", readErr.Error()))
+		} else if projection != nil {
+			items = append(
+				items,
+				buildLearningProjectionTasks(projection, now)...,
+			)
 		}
 	}
 	// 只返回学习画像投影出的真实待办；无数据即诚实空态，不合成演示任务。
@@ -236,42 +319,16 @@ func (s *AssistantService) GetLearningOpsSummary(ctx context.Context, userID str
 	if strings.TrimSpace(userID) == "" {
 		return assistant.AssistantLearningOpsSummaryView{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
 	}
-	var profile *assistant.AssistantLearningProfile
-	if s.profiles != nil {
-		loaded, err := s.profiles.GetLearningProfile(ctx, userID)
+	var profile *learningmodel.LearningProjection
+	if s.learningProjection != nil {
+		loaded, err := s.learningProjection.GetLearningProjection(ctx, userID)
 		if err != nil {
 			return assistant.AssistantLearningOpsSummaryView{}, err
 		}
 		profile = loaded
 	}
 	if profile == nil {
-		profile = &assistant.AssistantLearningProfile{UserID: userID}
-		if s.events != nil {
-			if items, err := s.events.ListLatestInteractionEvents(ctx, userID, 1); err == nil && len(items) > 0 {
-				profile.LastEventID = items[0].EventID
-				profile.LastRunID = items[0].RunID
-				profile.LastPageType = items[0].PageType
-				profile.LastFeedbackType = items[0].FeedbackType
-				profile.LastFeedbackScore = items[0].FeedbackScore
-				profile.LastFeedbackAt = items[0].CreatedAt
-			}
-			if scores, err := s.events.ListLatestScorecards(ctx, userID, 16); err == nil {
-				profile.MetricSampleCounts = map[string]int64{}
-				profile.MetricScoreSums = map[string]float64{}
-				profile.LatestMetricScores = map[string]float64{}
-				for _, score := range scores {
-					profile.MetricSampleCounts[score.MetricID]++
-					profile.MetricScoreSums[score.MetricID] += score.ScoreValue
-					if _, ok := profile.LatestMetricScores[score.MetricID]; !ok {
-						profile.LatestMetricScores[score.MetricID] = score.ScoreValue
-					}
-					if profile.LastMetricID == "" {
-						profile.LastMetricID = score.MetricID
-						profile.LastMetricScore = score.ScoreValue
-					}
-				}
-			}
-		}
+		profile = &learningmodel.LearningProjection{UserID: userID}
 	}
 	metricAverages := map[string]float64{}
 	for metricID, sampleCount := range profile.MetricSampleCounts {
@@ -303,6 +360,54 @@ func (s *AssistantService) GetLearningOpsSummary(ctx context.Context, userID str
 		summary.UpdatedAt = profile.UpdatedAt.Format(time.RFC3339)
 	}
 	return summary, nil
+}
+
+func buildLearningProjectionTasks(
+	projection *learningmodel.LearningProjection,
+	now time.Time,
+) []assistant.AssistantUserTaskView {
+	items := []assistant.AssistantUserTaskView{}
+	if projection == nil {
+		return items
+	}
+	if projection.NegativeFeedbackCount > 0 ||
+		projection.HighPriorityCount > 0 {
+		items = append(items, assistant.AssistantUserTaskView{
+			TaskID: "assistant-review-learning-projection",
+			Title:  "复盘近期负反馈",
+			Description: fmt.Sprintf(
+				"近期负反馈 %d 次，高优先级信号 %d 次。",
+				projection.NegativeFeedbackCount,
+				projection.HighPriorityCount,
+			),
+			Status:        "pending",
+			Priority:      "high",
+			SourceSkillID: "assistant_learning",
+			UpdatedAt:     now.Format(time.RFC3339),
+		})
+	}
+	if metricID, score := selectLowestMetric(projection); metricID != "" {
+		status := "in_progress"
+		priority := "medium"
+		if score <= 2 {
+			status = "pending"
+			priority = "high"
+		}
+		items = append(items, assistant.AssistantUserTaskView{
+			TaskID: "assistant-followup-metric-" + metricID,
+			Title:  "检查关键评分卡",
+			Description: fmt.Sprintf(
+				"指标 %s 当前最新分值 %.1f，建议继续跟踪。",
+				metricID,
+				score,
+			),
+			Status:        status,
+			Priority:      priority,
+			SourceSkillID: "assistant_learning",
+			UpdatedAt:     now.Format(time.RFC3339),
+		})
+	}
+	return items
 }
 
 func (s *AssistantService) ListSkills(ctx context.Context, userID string, limit int) (_ assistant.AssistantSkillCatalogListView, err error) {

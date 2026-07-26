@@ -10,6 +10,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
     this.failUploadSessionRead = false,
     this.failCompleteWithoutCommit = false,
     this.uploadExpirations = const <DateTime>[],
+    this.completedAssetStatus = ContentMediaProcessingStatus.ready,
   });
 
   final bool loseFirstCompleteResponse;
@@ -17,6 +18,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   final bool failUploadSessionRead;
   final bool failCompleteWithoutCommit;
   final List<DateTime> uploadExpirations;
+  final ContentMediaProcessingStatus completedAssetStatus;
   final List<InitContentMediaUploadCommand> initCommands =
       <InitContentMediaUploadCommand>[];
   final List<String> initIdempotencyKeys = <String>[];
@@ -64,6 +66,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
             : null,
         expiresAt: _expiresAtBySession[existingSessionId]!,
         replayed: true,
+        assetProcessingStatus: assetId == null ? null : completedAssetStatus,
       );
     }
     initCommands.add(command);
@@ -117,6 +120,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
       uploadUrl: null,
       expiresAt: _expiresAtBySession[command.sessionId]!,
       replayed: false,
+      assetProcessingStatus: completedAssetStatus,
     );
   }
 
@@ -192,7 +196,29 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaAssetSlice> getMediaAsset(
     GetContentMediaAssetQuery query,
-  ) => throw UnsupportedError('not used by this local-contract fixture');
+  ) async {
+    String? session;
+    for (final entry in _assetBySession.entries) {
+      if (entry.value == query.mediaId) {
+        session = entry.key;
+        break;
+      }
+    }
+    if (session == null) {
+      throw StateError('media asset not found');
+    }
+    final upload = _uploadBySession[session]!;
+    return ContentMediaAssetSlice(
+      assetId: query.mediaId,
+      version: 1,
+      mediaType: upload.mediaType,
+      contentType: upload.contentType,
+      fileSize: upload.fileSize,
+      status: completedAssetStatus,
+      accessPolicy: ContentMediaAccessPolicy.ownerOnly,
+      cdnUrl: Uri.parse('https://cdn.quwoquan.test/${query.mediaId}'),
+    );
+  }
 
   @override
   Future<ContentMediaAssetDiscardResult> discardMediaAsset(

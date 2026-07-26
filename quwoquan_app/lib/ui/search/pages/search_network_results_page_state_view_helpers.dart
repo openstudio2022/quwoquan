@@ -211,9 +211,11 @@ extension _SearchNetworkResultsPageStateViewHelpers
         _openHomepage(id);
       case _IntersectionTargetType.locationPlace:
         _openLocationPlace(
-          placeId: id,
-          placeName: model.title,
-          address: model.footerText,
+          SearchLocationPlaceHitView(
+            placeId: id,
+            name: model.title,
+            address: model.footerText,
+          ),
         );
       case _IntersectionTargetType.post:
         unawaited(_openPost(id));
@@ -229,12 +231,9 @@ extension _SearchNetworkResultsPageStateViewHelpers
     }
   }
 
-  void _openLocationPlace({
-    required String placeId,
-    required String placeName,
-    required String address,
-  }) {
-    if (placeId.trim().isEmpty) {
+  void _openLocationPlace(SearchLocationPlaceHitView place) {
+    final placeId = place.placeId.trim();
+    if (placeId.isEmpty) {
       return;
     }
     _reportSearchClick(
@@ -245,8 +244,8 @@ extension _SearchNetworkResultsPageStateViewHelpers
     context.push(
       AppRoutePaths.locationPlaceLanding(placeId: placeId),
       extra: LocationPlaceLandingPageRouteExtra(
-        placeName: placeName,
-        address: address,
+        placeName: place.name,
+        address: place.address ?? '',
         referralSource: ReferralSource.search,
       ),
     );

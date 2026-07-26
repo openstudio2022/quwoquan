@@ -7,6 +7,47 @@ import (
 	"strings"
 )
 
+type AssistantPageContextType string
+
+const (
+	AssistantPageContextTypeUnknown AssistantPageContextType = ""
+	AssistantPageContextTypeHome AssistantPageContextType = "home"
+	AssistantPageContextTypeDiscovery AssistantPageContextType = "discovery"
+	AssistantPageContextTypeCircles AssistantPageContextType = "circles"
+	AssistantPageContextTypeArticle AssistantPageContextType = "article"
+	AssistantPageContextTypeProfile AssistantPageContextType = "profile"
+	AssistantPageContextTypeChat AssistantPageContextType = "chat"
+	AssistantPageContextTypeCreate AssistantPageContextType = "create"
+	AssistantPageContextTypeSearch AssistantPageContextType = "search"
+)
+
+func ParseAssistantPageContextType(raw string) (AssistantPageContextType, error) {
+	switch strings.TrimSpace(raw) {
+	case "":
+		return AssistantPageContextTypeUnknown, nil
+	case "home":
+		return AssistantPageContextTypeHome, nil
+	case "discovery":
+		return AssistantPageContextTypeDiscovery, nil
+	case "circles":
+		return AssistantPageContextTypeCircles, nil
+	case "article":
+		return AssistantPageContextTypeArticle, nil
+	case "profile":
+		return AssistantPageContextTypeProfile, nil
+	case "chat":
+		return AssistantPageContextTypeChat, nil
+	case "create":
+		return AssistantPageContextTypeCreate, nil
+	case "search":
+		return AssistantPageContextTypeSearch, nil
+	default:
+		return "", fmt.Errorf("unknown AssistantPageContextType wire value %q", raw)
+	}
+}
+
+func (value AssistantPageContextType) WireName() string { return string(value) }
+
 type CitationDestinationKind string
 
 const (
@@ -96,6 +137,79 @@ func ParseSkillSubscriptionStatus(raw string) (SkillSubscriptionStatus, error) {
 }
 
 func (value SkillSubscriptionStatus) WireName() string { return string(value) }
+
+type AssistantLearningFactType string
+
+const (
+	AssistantLearningFactTypeUnknown AssistantLearningFactType = ""
+	AssistantLearningFactTypeUserFeedback AssistantLearningFactType = "user_feedback"
+	AssistantLearningFactTypeInteractionOutcome AssistantLearningFactType = "interaction_outcome"
+	AssistantLearningFactTypeServiceScorecard AssistantLearningFactType = "service_scorecard"
+)
+
+func ParseAssistantLearningFactType(raw string) (AssistantLearningFactType, error) {
+	switch strings.TrimSpace(raw) {
+	case "":
+		return AssistantLearningFactTypeUnknown, nil
+	case "user_feedback":
+		return AssistantLearningFactTypeUserFeedback, nil
+	case "interaction_outcome":
+		return AssistantLearningFactTypeInteractionOutcome, nil
+	case "service_scorecard":
+		return AssistantLearningFactTypeServiceScorecard, nil
+	default:
+		return "", fmt.Errorf("unknown AssistantLearningFactType wire value %q", raw)
+	}
+}
+
+func (value AssistantLearningFactType) WireName() string { return string(value) }
+
+type AssistantReferralSource string
+
+const (
+	AssistantReferralSourceUnknown AssistantReferralSource = ""
+	AssistantReferralSourceHome AssistantReferralSource = "home"
+	AssistantReferralSourceDiscovery AssistantReferralSource = "discovery"
+	AssistantReferralSourceCircles AssistantReferralSource = "circles"
+	AssistantReferralSourceArticle AssistantReferralSource = "article"
+	AssistantReferralSourceProfile AssistantReferralSource = "profile"
+	AssistantReferralSourceChat AssistantReferralSource = "chat"
+	AssistantReferralSourceCreate AssistantReferralSource = "create"
+	AssistantReferralSourceSearch AssistantReferralSource = "search"
+	AssistantReferralSourceAssistantConversation AssistantReferralSource = "assistant_conversation"
+	AssistantReferralSourceService AssistantReferralSource = "service"
+)
+
+func ParseAssistantReferralSource(raw string) (AssistantReferralSource, error) {
+	switch strings.TrimSpace(raw) {
+	case "":
+		return AssistantReferralSourceUnknown, nil
+	case "home":
+		return AssistantReferralSourceHome, nil
+	case "discovery":
+		return AssistantReferralSourceDiscovery, nil
+	case "circles":
+		return AssistantReferralSourceCircles, nil
+	case "article":
+		return AssistantReferralSourceArticle, nil
+	case "profile":
+		return AssistantReferralSourceProfile, nil
+	case "chat":
+		return AssistantReferralSourceChat, nil
+	case "create":
+		return AssistantReferralSourceCreate, nil
+	case "search":
+		return AssistantReferralSourceSearch, nil
+	case "assistant_conversation":
+		return AssistantReferralSourceAssistantConversation, nil
+	case "service":
+		return AssistantReferralSourceService, nil
+	default:
+		return "", fmt.Errorf("unknown AssistantReferralSource wire value %q", raw)
+	}
+}
+
+func (value AssistantReferralSource) WireName() string { return string(value) }
 
 type InteractionEventType string
 

@@ -230,11 +230,11 @@
         },
         "lastGoodReceiptRef": {
           "type": "string",
-          "pattern": "^receipt:[a-z0-9][a-z0-9._:-]{2,255}$"
+          "pattern": "^receipt:hosted:[a-f0-9]{64}$"
         },
         "rollbackReceiptRef": {
           "type": "string",
-          "pattern": "^receipt:[a-z0-9][a-z0-9._:-]{2,255}$"
+          "pattern": "^receipt:hosted:[a-f0-9]{64}$"
         }
       }
     },

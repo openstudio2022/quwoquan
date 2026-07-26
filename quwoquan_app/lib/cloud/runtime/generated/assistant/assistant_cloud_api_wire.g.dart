@@ -3,6 +3,160 @@
 
 import 'assistant_runtime_enums.g.dart';
 
+class AppendAssistantLearningFactRequest {
+  const AppendAssistantLearningFactRequest({
+    required this.eventId,
+    required this.eventVersion,
+    required this.factType,
+    required this.assistantTurnId,
+    this.triggerMessageId,
+    required this.referralSource,
+    required this.domainId,
+    this.eventType,
+    this.feedbackType,
+    this.feedbackScore,
+    this.reasonCodes = const [],
+    this.actionType,
+    this.suggestedActionId,
+    this.durationMs,
+    this.queryText,
+    this.answerText,
+    this.feedbackText,
+    this.correctionText,
+    required this.trainingEligible,
+    required this.occurredAt,
+  });
+
+  final String eventId;
+  final int eventVersion;
+  final AssistantLearningFactType factType;
+  final String assistantTurnId;
+  final String? triggerMessageId;
+  final AssistantReferralSource referralSource;
+  final String domainId;
+  final InteractionEventType? eventType;
+  final FeedbackType? feedbackType;
+  final double? feedbackScore;
+  final List<String>? reasonCodes;
+  final String? actionType;
+  final String? suggestedActionId;
+  final int? durationMs;
+  final String? queryText;
+  final String? answerText;
+  final String? feedbackText;
+  final String? correctionText;
+  final bool trainingEligible;
+  final String? occurredAt;
+
+  factory AppendAssistantLearningFactRequest.fromJson(Map<String, dynamic> json) {
+    return AppendAssistantLearningFactRequest(
+      eventId: (json['eventId'] ?? '').toString(),
+      eventVersion: (json['eventVersion'] as num?)?.toInt() ?? 0,
+      factType: parseAssistantLearningFactTypeStrict((json['factType'] ?? '').toString()),
+      assistantTurnId: (json['assistantTurnId'] ?? '').toString(),
+      triggerMessageId: json['triggerMessageId']?.toString(),
+      referralSource: parseAssistantReferralSourceStrict((json['referralSource'] ?? '').toString()),
+      domainId: (json['domainId'] ?? '').toString(),
+      eventType: json['eventType'] == null ? null : parseInteractionEventTypeStrict(json['eventType'].toString()),
+      feedbackType: json['feedbackType'] == null ? null : parseFeedbackTypeStrict(json['feedbackType'].toString()),
+      feedbackScore: (json['feedbackScore'] as num?)?.toDouble(),
+      reasonCodes: ((json['reasonCodes'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(growable: false),
+      actionType: json['actionType']?.toString(),
+      suggestedActionId: json['suggestedActionId']?.toString(),
+      durationMs: (json['durationMs'] as num?)?.toInt(),
+      queryText: json['queryText']?.toString(),
+      answerText: json['answerText']?.toString(),
+      feedbackText: json['feedbackText']?.toString(),
+      correctionText: json['correctionText']?.toString(),
+      trainingEligible: json['trainingEligible'] == true,
+      occurredAt: json['occurredAt']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'eventId': eventId,
+        'eventVersion': eventVersion,
+        'factType': factType.wireName,
+        'assistantTurnId': assistantTurnId,
+        'triggerMessageId': triggerMessageId,
+        'referralSource': referralSource.wireName,
+        'domainId': domainId,
+        'eventType': eventType?.wireName,
+        'feedbackType': feedbackType?.wireName,
+        'feedbackScore': feedbackScore,
+        'reasonCodes': reasonCodes,
+        'actionType': actionType,
+        'suggestedActionId': suggestedActionId,
+        'durationMs': durationMs,
+        'queryText': queryText,
+        'answerText': answerText,
+        'feedbackText': feedbackText,
+        'correctionText': correctionText,
+        'trainingEligible': trainingEligible,
+        'occurredAt': occurredAt,
+      };
+}
+
+class AppendAssistantServiceLearningFactRequest {
+  const AppendAssistantServiceLearningFactRequest({
+    required this.eventId,
+    required this.eventVersion,
+    required this.factType,
+    required this.assistantTurnId,
+    required this.referralSource,
+    required this.domainId,
+    required this.metricId,
+    required this.metricValue,
+    required this.metricSource,
+    required this.trainingEligible,
+    required this.occurredAt,
+  });
+
+  final String eventId;
+  final int eventVersion;
+  final AssistantLearningFactType factType;
+  final String assistantTurnId;
+  final AssistantReferralSource referralSource;
+  final String domainId;
+  final String metricId;
+  final double metricValue;
+  final String metricSource;
+  final bool trainingEligible;
+  final String? occurredAt;
+
+  factory AppendAssistantServiceLearningFactRequest.fromJson(Map<String, dynamic> json) {
+    return AppendAssistantServiceLearningFactRequest(
+      eventId: (json['eventId'] ?? '').toString(),
+      eventVersion: (json['eventVersion'] as num?)?.toInt() ?? 0,
+      factType: parseAssistantLearningFactTypeStrict((json['factType'] ?? '').toString()),
+      assistantTurnId: (json['assistantTurnId'] ?? '').toString(),
+      referralSource: parseAssistantReferralSourceStrict((json['referralSource'] ?? '').toString()),
+      domainId: (json['domainId'] ?? '').toString(),
+      metricId: (json['metricId'] ?? '').toString(),
+      metricValue: (json['metricValue'] as num?)?.toDouble() ?? 0.0,
+      metricSource: (json['metricSource'] ?? '').toString(),
+      trainingEligible: json['trainingEligible'] == true,
+      occurredAt: json['occurredAt']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'eventId': eventId,
+        'eventVersion': eventVersion,
+        'factType': factType.wireName,
+        'assistantTurnId': assistantTurnId,
+        'referralSource': referralSource.wireName,
+        'domainId': domainId,
+        'metricId': metricId,
+        'metricValue': metricValue,
+        'metricSource': metricSource,
+        'trainingEligible': trainingEligible,
+        'occurredAt': occurredAt,
+      };
+}
+
 class AssistantConsentMatrix {
   const AssistantConsentMatrix({
     required this.canReadCurrentPage,
@@ -372,43 +526,45 @@ class AssistantEntryPersonalizationView {
       };
 }
 
-class AssistantInteractionReportBatchAck {
-  const AssistantInteractionReportBatchAck({
+class AssistantLearningFactReceipt {
+  const AssistantLearningFactReceipt({
+    required this.eventId,
+    required this.eventVersion,
     required this.accepted,
-    this.acceptedCount,
-    this.acceptedIds = const [],
-    required this.count,
-    required this.resource,
-    this.mode,
+    required this.deduplicated,
+    required this.appendSequence,
+    required this.payloadDigest,
+    required this.recordedAt,
   });
 
+  final String eventId;
+  final int eventVersion;
   final bool accepted;
-  final int? acceptedCount;
-  final List<String>? acceptedIds;
-  final int count;
-  final String resource;
-  final String? mode;
+  final bool deduplicated;
+  final int appendSequence;
+  final String payloadDigest;
+  final String? recordedAt;
 
-  factory AssistantInteractionReportBatchAck.fromJson(Map<String, dynamic> json) {
-    return AssistantInteractionReportBatchAck(
-      accepted: json['accepted'] != false,
-      acceptedCount: (json['acceptedCount'] as num?)?.toInt(),
-      acceptedIds: ((json['acceptedIds'] as List?) ?? const [])
-            .map((e) => e.toString())
-            .toList(growable: false),
-      count: (json['count'] as num?)?.toInt() ?? 0,
-      resource: (json['resource'] ?? '').toString(),
-      mode: json['mode']?.toString(),
+  factory AssistantLearningFactReceipt.fromJson(Map<String, dynamic> json) {
+    return AssistantLearningFactReceipt(
+      eventId: (json['eventId'] ?? '').toString(),
+      eventVersion: (json['eventVersion'] as num?)?.toInt() ?? 0,
+      accepted: json['accepted'] == true,
+      deduplicated: json['deduplicated'] == true,
+      appendSequence: (json['appendSequence'] as num?)?.toInt() ?? 0,
+      payloadDigest: (json['payloadDigest'] ?? '').toString(),
+      recordedAt: json['recordedAt']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
+        'eventId': eventId,
+        'eventVersion': eventVersion,
         'accepted': accepted,
-        'acceptedCount': acceptedCount,
-        'acceptedIds': acceptedIds,
-        'count': count,
-        'resource': resource,
-        'mode': mode,
+        'deduplicated': deduplicated,
+        'appendSequence': appendSequence,
+        'payloadDigest': payloadDigest,
+        'recordedAt': recordedAt,
       };
 }
 
@@ -488,32 +644,6 @@ class AssistantLearningOpsSummaryView {
         'topReasonCodes': topReasonCodes,
         'metricAverages': metricAverages,
         'latestMetricScores': latestMetricScores,
-        'updatedAt': updatedAt,
-      };
-}
-
-class AssistantPolicyView {
-  const AssistantPolicyView({
-    required this.version,
-    this.values,
-    this.updatedAt,
-  });
-
-  final String version;
-  final Map<String, dynamic>? values;
-  final String? updatedAt;
-
-  factory AssistantPolicyView.fromJson(Map<String, dynamic> json) {
-    return AssistantPolicyView(
-      version: (json['version'] ?? '').toString(),
-      values: (json['values'] as Map?)?.cast<String, dynamic>(),
-      updatedAt: json['updatedAt']?.toString(),
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'version': version,
-        'values': values,
         'updatedAt': updatedAt,
       };
 }
@@ -874,40 +1004,6 @@ class AssistantRunTrigger {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'type': type,
-      };
-}
-
-class AssistantScorecardReportBatchAck {
-  const AssistantScorecardReportBatchAck({
-    required this.accepted,
-    this.acceptedCount,
-    required this.count,
-    required this.resource,
-    this.mode,
-  });
-
-  final bool accepted;
-  final int? acceptedCount;
-  final int count;
-  final String resource;
-  final String? mode;
-
-  factory AssistantScorecardReportBatchAck.fromJson(Map<String, dynamic> json) {
-    return AssistantScorecardReportBatchAck(
-      accepted: json['accepted'] != false,
-      acceptedCount: (json['acceptedCount'] as num?)?.toInt(),
-      count: (json['count'] as num?)?.toInt() ?? 0,
-      resource: (json['resource'] ?? '').toString(),
-      mode: json['mode']?.toString(),
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'accepted': accepted,
-        'acceptedCount': acceptedCount,
-        'count': count,
-        'resource': resource,
-        'mode': mode,
       };
 }
 
@@ -1308,132 +1404,6 @@ class AssistantUserTaskListView {
       };
 }
 
-class InteractionEvent {
-  const InteractionEvent({
-    required this.eventId,
-    required this.runId,
-    this.traceId,
-    required this.userId,
-    required this.sessionId,
-    required this.pageType,
-    required this.domainId,
-    this.queryText,
-    this.answerText,
-    this.userTags = const [],
-    this.durationMs,
-    this.explicitThumb,
-    this.explicitReasonCodes = const [],
-    required this.copiedAnswer,
-    required this.sharedAnswer,
-    required this.regeneratedAnswer,
-    required this.styleAdjusted,
-    required this.modelSwitched,
-    required this.referenceOpened,
-    required this.interrupted,
-    this.feedbackTargetMessageId,
-    this.correctionText,
-    this.eventType,
-    this.feedbackType,
-    this.feedbackScore,
-    this.feedbackText,
-    required this.createdAt,
-  });
-
-  final String eventId;
-  final String runId;
-  final String? traceId;
-  final String userId;
-  final String sessionId;
-  final String pageType;
-  final String domainId;
-  final String? queryText;
-  final String? answerText;
-  final List<String>? userTags;
-  final int? durationMs;
-  final String? explicitThumb;
-  final List<String>? explicitReasonCodes;
-  final bool copiedAnswer;
-  final bool sharedAnswer;
-  final bool regeneratedAnswer;
-  final bool styleAdjusted;
-  final bool modelSwitched;
-  final bool referenceOpened;
-  final bool interrupted;
-  final String? feedbackTargetMessageId;
-  final String? correctionText;
-  final InteractionEventType? eventType;
-  final FeedbackType? feedbackType;
-  final double? feedbackScore;
-  final String? feedbackText;
-  final String? createdAt;
-
-  factory InteractionEvent.fromJson(Map<String, dynamic> json) {
-    return InteractionEvent(
-      eventId: (json['eventId'] ?? '').toString(),
-      runId: (json['runId'] ?? '').toString(),
-      traceId: json['traceId']?.toString(),
-      userId: (json['userId'] ?? '').toString(),
-      sessionId: (json['sessionId'] ?? '').toString(),
-      pageType: (json['pageType'] ?? '').toString(),
-      domainId: (json['domainId'] ?? '').toString(),
-      queryText: json['queryText']?.toString(),
-      answerText: json['answerText']?.toString(),
-      userTags: ((json['userTags'] as List?) ?? const [])
-            .map((e) => e.toString())
-            .toList(growable: false),
-      durationMs: (json['durationMs'] as num?)?.toInt(),
-      explicitThumb: json['explicitThumb']?.toString(),
-      explicitReasonCodes: ((json['explicitReasonCodes'] as List?) ?? const [])
-            .map((e) => e.toString())
-            .toList(growable: false),
-      copiedAnswer: json['copiedAnswer'] == true,
-      sharedAnswer: json['sharedAnswer'] == true,
-      regeneratedAnswer: json['regeneratedAnswer'] == true,
-      styleAdjusted: json['styleAdjusted'] == true,
-      modelSwitched: json['modelSwitched'] == true,
-      referenceOpened: json['referenceOpened'] == true,
-      interrupted: json['interrupted'] == true,
-      feedbackTargetMessageId: json['feedbackTargetMessageId']?.toString(),
-      correctionText: json['correctionText']?.toString(),
-      eventType: json['eventType'] == null ? null : parseInteractionEventTypeStrict(json['eventType'].toString()),
-      feedbackType: json['feedbackType'] == null ? null : parseFeedbackTypeStrict(json['feedbackType'].toString()),
-      feedbackScore: (json['feedbackScore'] as num?)?.toDouble(),
-      feedbackText: json['feedbackText']?.toString(),
-      createdAt: json['createdAt']?.toString(),
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'eventId': eventId,
-        'runId': runId,
-        'traceId': traceId,
-        'userId': userId,
-        'sessionId': sessionId,
-        'pageType': pageType,
-        'domainId': domainId,
-        'queryText': queryText,
-        'answerText': answerText,
-        'userTags': userTags,
-        'durationMs': durationMs,
-        'explicitThumb': explicitThumb,
-        'explicitReasonCodes': explicitReasonCodes,
-        'copiedAnswer': copiedAnswer,
-        'sharedAnswer': sharedAnswer,
-        'regeneratedAnswer': regeneratedAnswer,
-        'styleAdjusted': styleAdjusted,
-        'modelSwitched': modelSwitched,
-        'referenceOpened': referenceOpened,
-        'interrupted': interrupted,
-        'feedbackTargetMessageId': feedbackTargetMessageId,
-        'correctionText': correctionText,
-        'eventType': eventType?.wireName,
-        'feedbackType': feedbackType?.wireName,
-        'feedbackScore': feedbackScore,
-        'feedbackText': feedbackText,
-        'createdAt': createdAt,
-      };
-}
-
 class PageContextAck {
   const PageContextAck({
     required this.accepted,
@@ -1457,56 +1427,6 @@ class PageContextAck {
         'accepted': accepted,
         'contextKey': contextKey,
         'expiresAt': expiresAt,
-      };
-}
-
-class Scorecard {
-  const Scorecard({
-    required this.scoreId,
-    required this.eventId,
-    this.runId,
-    required this.userId,
-    required this.domainId,
-    required this.metricId,
-    required this.scoreValue,
-    required this.scoreSource,
-    required this.createdAt,
-  });
-
-  final String scoreId;
-  final String eventId;
-  final String? runId;
-  final String userId;
-  final String domainId;
-  final String metricId;
-  final double scoreValue;
-  final String scoreSource;
-  final String? createdAt;
-
-  factory Scorecard.fromJson(Map<String, dynamic> json) {
-    return Scorecard(
-      scoreId: (json['scoreId'] ?? '').toString(),
-      eventId: (json['eventId'] ?? '').toString(),
-      runId: json['runId']?.toString(),
-      userId: (json['userId'] ?? '').toString(),
-      domainId: (json['domainId'] ?? '').toString(),
-      metricId: (json['metricId'] ?? '').toString(),
-      scoreValue: (json['scoreValue'] as num?)?.toDouble() ?? 0.0,
-      scoreSource: (json['scoreSource'] ?? '').toString(),
-      createdAt: json['createdAt']?.toString(),
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'scoreId': scoreId,
-        'eventId': eventId,
-        'runId': runId,
-        'userId': userId,
-        'domainId': domainId,
-        'metricId': metricId,
-        'scoreValue': scoreValue,
-        'scoreSource': scoreSource,
-        'createdAt': createdAt,
       };
 }
 

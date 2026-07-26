@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-002
 """Canonical CAS → immutable release media manifest 契约。"""
 from __future__ import annotations
 

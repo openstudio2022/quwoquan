@@ -33,6 +33,8 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/di/ops_event_dependencies.dart'
+    show actorQueueStorageProvider;
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
@@ -44,6 +46,7 @@ import 'package:quwoquan_app/ui/assistant/widgets/assistant_conversation_inline_
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
+import '../../../../../support/actor_queue_test_storage.dart';
 import '../../../../../support/runtime_failure_fixtures.dart';
 
 const _historyQuestion = '旧问题：深圳天气';
@@ -427,8 +430,12 @@ Future<ProviderContainer> _pumpDialogPage(
     ProviderScope(
       overrides: [
         assistantConversationRunFacetProvider.overrideWithValue(runFacet),
-        assistantLearningAppendFacetProvider.overrideWithValue(
-          _RecordingLearningAppendFacet(),
+        assistantLearningFactAppendFacetProvider.overrideWithValue(
+          _RecordingLearningFactAppendFacet(),
+        ),
+        actorQueueStorageProvider.overrideWithValue(newTestActorQueueStorage()),
+        assistantLearningFactOutboxEnvironmentProvider.overrideWithValue(
+          'alpha',
         ),
         appMessageQueryProvider.overrideWithValue(_FakeAppMessageQuery()),
         assistantHistoryLoaderProvider.overrideWithValue(historyLoader),
@@ -680,30 +687,21 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   }
 }
 
-/// Recording 学习上报 Facet：turn 完成后补发待重试反馈事件时使用。
-class _RecordingLearningAppendFacet implements AssistantLearningAppendFacet {
+/// Recording 学习事实 Facet：turn 完成后补发待重试事实时使用。
+class _RecordingLearningFactAppendFacet
+    implements AssistantLearningFactAppendFacet {
   @override
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
+  Future<AssistantLearningFactReceipt> appendUserFact({
+    required AppendAssistantLearningFactRequest request,
   }) async {
-    return AssistantInteractionReportBatchAck(
+    return AssistantLearningFactReceipt(
+      eventId: request.eventId,
+      eventVersion: request.eventVersion,
       accepted: true,
-      acceptedCount: events.length,
-      count: events.length,
-      resource: 'interaction_event_batch',
-      mode: 'uat_recording',
-    );
-  }
-
-  @override
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  }) async {
-    return AssistantScorecardReportBatchAck(
-      accepted: true,
-      count: scorecards.length,
-      resource: 'scorecard_batch',
-      mode: 'uat_recording',
+      deduplicated: false,
+      appendSequence: 1,
+      payloadDigest: 'uat_recording',
+      recordedAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
 }

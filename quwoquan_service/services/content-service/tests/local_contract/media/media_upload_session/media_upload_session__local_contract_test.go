@@ -72,7 +72,9 @@ func TestMediaUploadSessionLifecycleCreatesIndependentAssetAtomically(t *testing
 	if err != nil {
 		t.Fatalf("complete media upload: %v", err)
 	}
-	if completed.Status != sessionmodel.StatusCompleted || completed.AssetID == "" {
+	if completed.Status != sessionmodel.StatusCompleted ||
+		completed.AssetID == "" ||
+		completed.AssetProcessingStatus != "processing" {
 		t.Fatalf("unexpected completed result: %+v", completed)
 	}
 	if store.completedAssetID != completed.AssetID || store.completeEventCount != 2 {
@@ -90,7 +92,9 @@ func TestMediaUploadSessionLifecycleCreatesIndependentAssetAtomically(t *testing
 	if err != nil {
 		t.Fatalf("replay media upload completion: %v", err)
 	}
-	if !replayedCompletion.Replayed || replayedCompletion.AssetID != completed.AssetID {
+	if !replayedCompletion.Replayed ||
+		replayedCompletion.AssetID != completed.AssetID ||
+		replayedCompletion.AssetProcessingStatus != completed.AssetProcessingStatus {
 		t.Fatalf("completion replay must retain the committed asset: %+v", replayedCompletion)
 	}
 	if objects.completeCalls != 1 {
@@ -360,9 +364,10 @@ func (s *memoryStore) Complete(_ context.Context, commit sessionports.CompleteCo
 	s.completedAssetID = commit.Asset.ID
 	s.completeEventCount = len(commit.Events)
 	receipt := sessionports.Receipt{
-		Session:   commit.Session,
-		AssetID:   commit.Asset.ID,
-		ObjectKey: commit.Asset.ObjectKey,
+		Session:               commit.Session,
+		AssetID:               commit.Asset.ID,
+		AssetProcessingStatus: commit.Asset.ProcessingStatus,
+		ObjectKey:             commit.Asset.ObjectKey,
 	}
 	s.receipts[receiptKey(commit.IdempotencyKey, commit.CommandName, commit.CommandDigest)] = receipt
 	return receipt, nil

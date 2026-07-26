@@ -22,6 +22,7 @@ class NotificationApiMetadata {
     'CreateAppMessage': '/internal/app-messages',
     'GetAppMessage': '/app-messages/{messageId}',
     'GetAppMessageUnreadCount': '/app-messages/unread-count',
+    'GetIncomingCallDeliveryTimeline': '/internal/notifications/delivery-jobs/incoming-call-timeline',
     'GetNotificationDeliveryJobMetrics': '/internal/notifications/delivery-jobs/metrics',
     'ListAppMessages': '/app-messages',
     'ListNotificationDeliveryJobDeadLetters': '/internal/notifications/delivery-jobs/dead-letters',
@@ -36,6 +37,7 @@ class NotificationApiMetadata {
     'CreateAppMessage': 'POST',
     'GetAppMessage': 'GET',
     'GetAppMessageUnreadCount': 'GET',
+    'GetIncomingCallDeliveryTimeline': 'GET',
     'GetNotificationDeliveryJobMetrics': 'GET',
     'ListAppMessages': 'GET',
     'ListNotificationDeliveryJobDeadLetters': 'GET',
@@ -51,6 +53,7 @@ class NotificationApiMetadata {
     'CreateAppMessage': 'required',
     'GetAppMessage': 'required',
     'GetAppMessageUnreadCount': 'required',
+    'GetIncomingCallDeliveryTimeline': 'required',
     'GetNotificationDeliveryJobMetrics': 'required',
     'ListAppMessages': 'required',
     'ListNotificationDeliveryJobDeadLetters': 'required',
@@ -71,6 +74,7 @@ class NotificationApiMetadata {
     'AckIncomingCallPresentation': 'object',
     'GetAppMessage': 'object',
     'GetAppMessageUnreadCount': 'object',
+    'GetIncomingCallDeliveryTimeline': 'object',
     'GetNotificationDeliveryJobMetrics': 'object',
     'ListAppMessages': 'page',
     'ListNotificationDeliveryJobDeadLetters': 'page',
@@ -82,6 +86,7 @@ class NotificationApiMetadata {
   static const String createAppMessageOperation = 'CreateAppMessage';
   static const String getAppMessageOperation = 'GetAppMessage';
   static const String getAppMessageUnreadCountOperation = 'GetAppMessageUnreadCount';
+  static const String getIncomingCallDeliveryTimelineOperation = 'GetIncomingCallDeliveryTimeline';
   static const String getNotificationDeliveryJobMetricsOperation = 'GetNotificationDeliveryJobMetrics';
   static const String listAppMessagesOperation = 'ListAppMessages';
   static const String listNotificationDeliveryJobDeadLettersOperation = 'ListNotificationDeliveryJobDeadLetters';
@@ -104,6 +109,7 @@ class NotificationApiMetadata {
     });
   }
   static const String getAppMessageUnreadCountPath = '/app-messages/unread-count';
+  static const String getIncomingCallDeliveryTimelinePath = '/internal/notifications/delivery-jobs/incoming-call-timeline';
   static const String getNotificationDeliveryJobMetricsPath = '/internal/notifications/delivery-jobs/metrics';
   static const String listAppMessagesPath = '/app-messages';
   static const String listNotificationDeliveryJobDeadLettersPath = '/internal/notifications/delivery-jobs/dead-letters';

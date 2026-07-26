@@ -19,24 +19,41 @@ relationships:
   reference_fields:
   - personaId
   target_object: user.Persona
+local_identity_reasons:
+  applyActorPersonaId: immutable trusted actor audit snapshot; never used as aggregate identity
+  applyAuditId: immutable apply audit record correlation; never used as aggregate identity
+  applyRequestId: trusted request correlation for the applying checkpoint; never used as aggregate identity
+  applyTraceId: trusted trace correlation for the applying checkpoint; never used as aggregate identity
+  createdRequestId: trusted request correlation captured at creation; never used as aggregate identity
+  createdTraceId: trusted trace correlation captured at creation; never used as aggregate identity
+  rollbackActorPersonaId: immutable trusted actor audit snapshot; never used as aggregate identity
+  rollbackAuditId: immutable rollback audit record correlation; never used as aggregate identity
+  rollbackRequestId: trusted request correlation for the rolling_back checkpoint; never used as aggregate identity
+  rollbackTraceId: trusted trace correlation for the rolling_back checkpoint; never used as aggregate identity
 capabilities:
 - commandable
 - queryable
 - idempotent_commands
 - auditable
 business_rules:
-- target persona、source 与 proposedChanges 创建后不可变
+- target persona、source、proposedChanges、reason、evidenceRefs、impactScope 与创建归因创建后不可变
 - proposedChanges 必须是允许字段的强类型 change set，不接受动态 Map
+- evidenceRefs 必须是有界 typed reference；impactScope 必须与 proposedChanges 实际字段完全一致
 - 只有 target persona owner 可以确认或拒绝
 - apply 必须先持久化 applying 检查点，再以提案快照中的目标 Persona version 幂等调用 Persona Command Facade
 - applying 禁止 reject；进程崩溃后可从检查点安全续作，目标 Persona 版本失效则进入 expired
-- applied 与 rejected 为终态，重复命令返回同一 receipt
+- apply 完成时必须持久化 immutable pre/post snapshot、actor/request/trace、Persona 前后版本与 rollback deadline
+- rollback 只允许在 deadline 内从 applied 开始，先持久化 rolling_back 检查点，再按 apply audit 的 post version 幂等恢复 pre snapshot
+- rolling_back 可在响应丢失或进程重启后续作；Persona 已有后续版本时终止回滚并恢复 applied
+- rolled_back、rejected 与 expired 为终态，重复命令返回同一 receipt
 lifecycle:
   states:
   - pending
   - confirmed
   - applying
   - applied
+  - rolling_back
+  - rolled_back
   - rejected
   - expired
   optimistic_concurrency: version

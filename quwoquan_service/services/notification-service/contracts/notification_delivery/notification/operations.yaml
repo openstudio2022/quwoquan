@@ -36,6 +36,14 @@ privacy_contract:
     - raw_error
     recovery: source_stream_pending_reference_only
     logs: digest_only
+  external_interaction_result_consumer:
+    source_stream: events.integration.external_interaction
+    inbox_dedupe_key: attemptId
+    provider_request_policy: irreversible_digest_only
+    failure_persistence: irreversible_event_and_error_digests_only
+    dead_letter_shape: shared_reference_only
+    recovery: source_stream_pending_reference_only
+    logs: digest_only
 externalDependencies:
 - role: use
   capability: runtime.message.transport

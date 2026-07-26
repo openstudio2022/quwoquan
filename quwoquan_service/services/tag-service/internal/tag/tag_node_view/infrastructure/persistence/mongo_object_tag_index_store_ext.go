@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -15,6 +16,15 @@ import (
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 	ports "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/ports"
 )
+
+var ErrReleaseProjectionConflict = errors.New(
+	"object tag release projection conflicts with immutable identity or owner",
+)
+
+type ReleaseObjectIdentity struct {
+	ObjectID   string `bson:"objectId"`
+	ObjectType string `bson:"objectType"`
+}
 
 // MongoObjectTagIndexStore 是 ObjectTagIndex 的只读 Mongo 存储（embed codegen base）。
 type MongoObjectTagIndexStore struct {
@@ -115,13 +125,36 @@ func (s *MongoObjectTagIndexStore) UpsertObjectTagsFromRelease(
 	tagRefs []string,
 	releaseID, sourceOwner string,
 ) error {
+	objectID = strings.TrimSpace(objectID)
+	objectType = strings.TrimSpace(objectType)
+	releaseID = strings.TrimSpace(releaseID)
+	sourceOwner = strings.TrimSpace(sourceOwner)
+	if objectID == "" ||
+		objectType == "" ||
+		releaseID == "" ||
+		sourceOwner == "" {
+		return fmt.Errorf("%w: incomplete release projection", ErrReleaseProjectionConflict)
+	}
 	now := time.Now().UTC()
 	if tagRefs == nil {
 		tagRefs = []string{}
 	}
 	_, err := s.coll.UpdateOne(
 		ctx,
-		bson.M{"objectId": objectID, "objectType": objectType},
+		bson.M{
+			"objectId":   objectID,
+			"objectType": objectType,
+			"$and": bson.A{
+				bson.M{"$or": bson.A{
+					bson.M{"sourceOwner": sourceOwner},
+					bson.M{"sourceOwner": bson.M{"$exists": false}},
+				}},
+				bson.M{"$or": bson.A{
+					bson.M{"releaseId": bson.M{"$ne": releaseID}},
+					bson.M{"tagRefs": tagRefs},
+				}},
+			},
+		},
 		bson.M{
 			"$set": bson.M{
 				"tagRefs":          tagRefs,
@@ -138,7 +171,59 @@ func (s *MongoObjectTagIndexStore) UpsertObjectTagsFromRelease(
 		},
 		options.UpdateOne().SetUpsert(true),
 	)
+	if mongo.IsDuplicateKeyError(err) {
+		return fmt.Errorf(
+			"%w: %s/%s",
+			ErrReleaseProjectionConflict,
+			objectType,
+			objectID,
+		)
+	}
 	return err
+}
+
+func (s *MongoObjectTagIndexStore) ListReleaseObjectIdentities(
+	ctx context.Context,
+	sourceOwner, releaseID string,
+) ([]ReleaseObjectIdentity, error) {
+	cursor, err := s.coll.Find(
+		ctx,
+		bson.M{
+			"sourceOwner": sourceOwner,
+			"releaseId":   releaseID,
+		},
+		options.Find().SetProjection(bson.M{
+			"_id":        0,
+			"objectId":   1,
+			"objectType": 1,
+		}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	identities := make([]ReleaseObjectIdentity, 0)
+	if err := cursor.All(ctx, &identities); err != nil {
+		return nil, err
+	}
+	return identities, nil
+}
+
+// DeleteSupersededReleaseObjects completes mark-and-sweep only after every
+// desired row has been validated and upserted. A failed import never sweeps;
+// retrying the same immutable release converges without dropping old rows.
+func (s *MongoObjectTagIndexStore) DeleteSupersededReleaseObjects(
+	ctx context.Context,
+	sourceOwner, activeReleaseID string,
+) (int64, error) {
+	result, err := s.coll.DeleteMany(ctx, bson.M{
+		"sourceOwner": sourceOwner,
+		"releaseId":   bson.M{"$ne": activeReleaseID},
+	})
+	if err != nil {
+		return 0, err
+	}
+	return result.DeletedCount, nil
 }
 
 // ApplyUserProfileTagProjection 只允许更大的 profileVersion 覆盖当前投影。

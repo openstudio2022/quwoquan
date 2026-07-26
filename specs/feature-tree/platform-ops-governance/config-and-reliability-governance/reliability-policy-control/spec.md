@@ -29,6 +29,13 @@
 
 - 用 SLO、错误预算、kill-switch 和回滚阈值约束高风险配置与服务发布。
 
+<a id="req-002"></a>
+### REQ-002 托管发布 receipt 与提升
+
+- `prod-hosted` 的 apply、health、SLO、rollback 只能由托管 service-plane 的不可变 receipt 证明；本机输出仅可作 readback cache。
+- receipt 必须绑定 release manifest、image/config/ContractGraph/adapter digest、gray stage、post-check、last-good target 和 rollback outcome。
+- Provider Conformance 的 last-good/rollback ref 必须经 hosted fetch 与上述 candidate digest 同源校验；缺失托管凭据、真实前置条件或审批时发布保持 blocked。
+
 ## 4. 契约引用
 
 - 父能力公开契约：[`L2 spec`](../spec.md)。
@@ -42,6 +49,15 @@
 - WHEN 参与者执行“可靠性策略控制”对应的公开行为。
 - THEN 用 SLO、错误预算、kill-switch 和回滚阈值约束高风险配置与服务发布。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+<a id="gwt-002"></a>
+### GWT-002 Hosted release receipt 准出
+
+- GIVEN 运维提交具有 immutable manifest 和 image/config/ContractGraph/adapter digest 的候选发布。
+- WHEN `stackctl deploy --target prod-hosted` 执行 `gray-initial`、`carry-on`、`full` 或自动 rollback。
+- THEN service-plane 写入并回读同一不可变 receipt，CAS generation、stage、post-check、last-good target 与 rollback result 均可校验，且本机 cache 不参与 readiness 决定。
+- AND Provider Conformance 只接受经 `stackctl hosted-release-receipt` hosted fetch 校验的 `receipt:hosted:<sha256>` last-good 与 rollback ref。
+- AND rollback 成功与失败分别记录为 `rolled_back` 和 `rollback_failed`；任一读回、digest、SLO、health 或真实环境前置条件失败均不得提升 readiness。
 
 ## 6. 依赖
 

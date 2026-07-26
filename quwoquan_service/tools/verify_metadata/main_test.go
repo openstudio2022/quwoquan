@@ -6,10 +6,11 @@ import (
 
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 	"quwoquan_service/internal/metadata/validate"
+	"quwoquan_service/internal/testsupport/contractsview"
 )
 
 func TestRepositoryMetadataUsesObjectFirstSingleTrack(t *testing.T) {
-	metadataDir := filepath.Join("..", "..", "contracts", "metadata")
+	metadataDir := contractsview.Build(t)
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
 		t.Fatalf("compile metadata: %v", err)
@@ -24,8 +25,9 @@ func TestRepositoryMetadataUsesObjectFirstSingleTrack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scan object metadata: %v", err)
 	}
-	if len(objects) != 85 {
-		t.Fatalf("independent object roots = %d, want 85", len(objects))
+	wantObjects := len(source.Graph().Objects)
+	if len(objects) != wantObjects {
+		t.Fatalf("independent object roots = %d, want %d", len(objects), wantObjects)
 	}
 	for _, pattern := range []string{
 		filepath.Join(metadataDir, "*", "business_object_map.yaml"),

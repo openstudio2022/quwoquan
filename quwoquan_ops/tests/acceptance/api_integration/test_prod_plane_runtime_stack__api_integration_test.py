@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -23,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[4]
 
 
 class ProdPlaneRuntimeStackTest(unittest.TestCase):
+    """spec_ref: zero-risk-production-readiness/spec.md#GWT-003"""
     @staticmethod
     def _resolver_path(tmp: str, *segments: str) -> Path:
         root = Path(tmp)
@@ -210,6 +212,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 integration_env["INTEGRATION_PUSH_APNS_ENVIRONMENT"],
                 "production",
             )
+
             self.assertEqual(
                 integration["env_file"],
                 ["/home/prod-service-svc/credentials/integration/push.env"],
@@ -284,6 +287,133 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertFalse(
                 (out_dir / "runtime/config-root/quwoquan_service").exists()
             )
+
+    def test_prevalidate_render_is_isolated_digest_pinned_and_systemd_owned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = self._render_dir(tmp, "service-prevalidate")
+            env, _ = self._render_env(tmp)
+            result = subprocess.run(
+                [
+                    "python3",
+                    "quwoquan_ops/cli/prod/render_prod_plane_stack.py",
+                    "--plane",
+                    "service",
+                    "--instance",
+                    "prevalidate",
+                    "--prevalidate-scope",
+                    "first-party",
+                    "--data-mode",
+                    "isolated",
+                    "--config-version",
+                    "local-gamma-v1",
+                    "--image-version",
+                    "1.20260726.42",
+                    "--output-dir",
+                    str(out_dir),
+                ],
+                cwd=str(ROOT),
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads((out_dir / "provenance.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["instance"], "prevalidate")
+            self.assertEqual(report["dataMode"], "isolated")
+            self.assertEqual(report["imageAndConfigOnlyServices"], ["integration-service"])
+            self.assertNotIn("integration-service", report["startupServices"])
+            self.assertIsNone(report["observabilityRuntime"])
+            self.assertFalse(
+                report["configSources"]["prevalidationProjection"][
+                    "releaseEvidenceEligible"
+                ]
+            )
+
+            compose = yaml.safe_load(
+                (out_dir / "docker-compose.prod-hosted.yaml").read_text(encoding="utf-8")
+            )
+            services = compose["services"]
+            for name in (
+                "postgres",
+                "mongodb",
+                "mongo-init",
+                "redis",
+                "object-storage",
+                "object-storage-init",
+                "elasticsearch",
+            ):
+                self.assertRegex(services[name]["image"], r"@sha256:[0-9a-f]{64}$")
+            self.assertIn("integration-service", services)
+            self.assertNotIn("livekit", services)
+            self.assertNotIn("coturn", services)
+            self.assertEqual(
+                services["content-service"]["environment"]["MONGO_URI"],
+                "mongodb://mongodb:27017/?directConnection=true",
+            )
+            self.assertEqual(
+                services["entity-service"]["environment"]["SEARCH_ES_ENDPOINTS"],
+                "http://elasticsearch:9200",
+            )
+            self.assertEqual(
+                services["user-service"]["environment"]["APP_ENV"], "prod"
+            )
+            self.assertEqual(
+                services["user-service"]["environment"][
+                    "QWQ_NONPROMOTABLE_PREVALIDATION"
+                ],
+                "first-party",
+            )
+            self.assertEqual(
+                services["assistant-service"]["environment"][
+                    "ASSISTANT_MODEL_API_KEY"
+                ],
+                "provider-unavailable",
+            )
+            self.assertNotIn(
+                "./release-ledger:/var/lib/quwoquan/release-state:ro",
+                services["platform-ops-service"].get("volumes") or [],
+            )
+            self.assertNotIn("env_file", services["integration-service"])
+            unit = (
+                out_dir / "systemd/quwoquan-service-prevalidate.service"
+            ).read_text(encoding="utf-8")
+            self.assertIn(
+                "WorkingDirectory=/home/prod-service-svc/stack/prevalidate",
+                unit,
+            )
+            exec_start = next(
+                line for line in unit.splitlines() if line.startswith("ExecStart=")
+            )
+            self.assertNotIn("integration-service", exec_start)
+            self.assertIn("recommendation-service", exec_start)
+            self.assertNotIn("/credentials/runtime.env", unit)
+            self.assertIn("WantedBy=default.target", unit)
+            env_text = (out_dir / "stack.env").read_text(encoding="utf-8")
+            self.assertEqual((out_dir / "stack.env").stat().st_mode & 0o777, 0o600)
+            for key in (
+                "AUTH_JWT_SECRET",
+                "AUTH_DEVICE_TICKET_SECRET",
+                "OTP_CODE_REF_KEYS_JSON",
+                "QWQ_PUSH_TOKEN_ENCRYPTION_KEY",
+                "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET",
+                "QWQ_COMPOSE_OBJECT_STORAGE_ENDPOINT",
+            ):
+                self.assertRegex(env_text, rf"(?m)^{key}=.+$")
+            required = set(
+                re.findall(
+                    r"\$\{([A-Z0-9_]+):\?",
+                    (out_dir / "docker-compose.prod-hosted.yaml").read_text(
+                        encoding="utf-8"
+                    ),
+                )
+            )
+            available = {
+                line.split("=", 1)[0]
+                for line in env_text.splitlines()
+                if "=" in line
+            }
+            self.assertEqual(required - available, set())
 
     def test_render_gray_instance_uses_non_prod_ports(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

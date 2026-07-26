@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -19,6 +20,7 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(path))
 
 from content.execution import recipe  # noqa: E402
+from content.execution import homepage_binding  # noqa: E402
 from content.execution.identity import (  # noqa: E402
     build_execution_id,
     parse_execution_id,
@@ -228,6 +230,69 @@ def test_post_execute_requires_explicit_homepage_execution(monkeypatch, tmp_path
         raise AssertionError("post execution without homepage binding must block")
 
 
+def test_post_targets_derive_from_the_published_homepage_closure(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    parent_id = "20260722--travel-homepage-coverage--test-region-b--scale-001"
+    parent_root = tmp_path / parent_id
+    (parent_root / "0.plan").mkdir(parents=True)
+    (parent_root / "0.plan/request.json").write_text(
+        json.dumps(
+            {
+                "familyRef": "content/travel/homepage/homepage",
+                "regionRef": "test-region-b",
+                "selector": "source-ready-priority",
+                "count": 2,
+                "topic": None,
+                "sourceProviders": [],
+                "homepageExecutionId": None,
+                "targetNames": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (parent_root / "publish_ref.json").write_text(
+        json.dumps(
+            {
+                "schema": "quwoquan_data.execution_publish_ref",
+                "executionId": parent_id,
+                "canonicalPublishRoot": "quwoquan_data/publish",
+                "publishedRefs": {
+                    "entities": ["地点/景区/测试实体甲", "地点/景区/测试实体乙"],
+                    "posts": [],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(homepage_binding, "execution_root", lambda _execution_id: parent_root)
+    monkeypatch.setattr(
+        homepage_binding,
+        "execution_request_path",
+        lambda _execution_id: parent_root / "0.plan/request.json",
+    )
+    monkeypatch.setattr(homepage_binding, "load_execution_manifest", lambda _execution_id: {})
+    monkeypatch.setattr(
+        homepage_binding,
+        "load_frozen_target_set",
+        lambda _execution_id: {
+            "targets": [
+                {"name": "测试实体乙", "entityType": "地点/景区"},
+                {"name": "测试实体甲", "entityType": "地点/景区"},
+            ]
+        },
+    )
+
+    names = homepage_binding.published_homepage_target_names(
+        parent_id,
+        region_ref="test-region-b",
+        count=2,
+    )
+
+    assert names == ("测试实体乙", "测试实体甲")
+
+
 def test_homepage_execute_requires_source_ready_selection(monkeypatch, tmp_path: Path) -> None:
     reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-a"
     reference_root.mkdir(parents=True)
@@ -342,7 +407,7 @@ def test_task_facade_exposes_only_durable_commands() -> None:
     assert result.returncode == 0, result.stderr
     choices = re.search(r"^  \{([^}]+)\}$", result.stdout, flags=re.MULTILINE)
     assert choices is not None
-    assert choices.group(1).split(",") == ["preflight", "execute"]
+    assert choices.group(1).split(",") == ["preflight", "execute", "discard"]
 
 
 def test_execute_cli_accepts_only_explicit_generic_request_parameters() -> None:

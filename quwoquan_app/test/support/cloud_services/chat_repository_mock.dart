@@ -71,6 +71,7 @@ class MockChatRepository implements ChatRepository {
     String? title,
     int? maxGroupSize,
     List<String>? initialMemberIds,
+    String? idempotencyKey,
   }) async {
     return ChatConversationCreatedDto.fromMap(
       _appMap(
@@ -229,13 +230,18 @@ class MockChatRepository implements ChatRepository {
       _engine.removeAssistant(conversationId: conversationId);
 
   @override
-  Future<List<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
-  }) async => _engine
-      .listContacts(limit: limit)
-      .map((row) => ChatContactRowDto.fromMap(_appMap(row)))
-      .toList(growable: false);
+  }) async {
+    final page = _engine.listContacts(cursor: cursor, limit: limit);
+    return CursorPage<ChatContactRowDto>(
+      items: page.items
+          .map((row) => ChatContactRowDto.fromMap(_appMap(row)))
+          .toList(growable: false),
+      nextCursor: page.nextCursor,
+    );
+  }
 
   @override
   Future<List<ContactHomeRowDto>> listContactHome({

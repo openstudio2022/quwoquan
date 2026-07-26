@@ -1,4 +1,25 @@
 enums:
+  - name: AssistantPageContextType
+    values:
+      - name: unknown
+        wire: ''
+      - name: home
+        wire: home
+      - name: discovery
+        wire: discovery
+      - name: circles
+        wire: circles
+      - name: article
+        wire: article
+      - name: profile
+        wire: profile
+      - name: chat
+        wire: chat
+      - name: create
+        wire: create
+      - name: search
+        wire: search
+
   - name: CitationDestinationKind
     values:
       - name: unknown
@@ -39,6 +60,42 @@ enums:
         wire: paused
       - name: archived
         wire: archived
+
+  - name: AssistantLearningFactType
+    values:
+      - name: unknown
+        wire: ''
+      - name: userFeedback
+        wire: user_feedback
+      - name: interactionOutcome
+        wire: interaction_outcome
+      - name: serviceScorecard
+        wire: service_scorecard
+
+  - name: AssistantReferralSource
+    values:
+      - name: unknown
+        wire: ''
+      - name: home
+        wire: home
+      - name: discovery
+        wire: discovery
+      - name: circles
+        wire: circles
+      - name: article
+        wire: article
+      - name: profile
+        wire: profile
+      - name: chat
+        wire: chat
+      - name: create
+        wire: create
+      - name: search
+        wire: search
+      - name: assistantConversation
+        wire: assistant_conversation
+      - name: service
+        wire: service
 
   - name: InteractionEventType
     values:

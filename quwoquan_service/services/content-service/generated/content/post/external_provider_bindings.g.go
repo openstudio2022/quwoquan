@@ -111,12 +111,10 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"content.embedding.generation": {
 			State: "enabled",
 			AdapterID: "ext.embed.protocol_fixture",
-			EndpointRef: "environment_binding:content.embedding_fixture",
+			EndpointRef: "",
 			EndpointEnvironmentKeys: map[string]string{
-				"endpoint": "CONTENT_EMBEDDING_FIXTURE_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{
-				"CONTENT_EMBEDDING_FIXTURE_API_KEY",
 			},
 			TimeoutMilliseconds: 1000,
 			RequiredRedisScenes: []string{

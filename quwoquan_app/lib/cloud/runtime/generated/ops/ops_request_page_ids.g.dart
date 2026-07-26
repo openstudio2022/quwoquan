@@ -6,6 +6,7 @@ class OpsRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AssignExperimentVariant': 'ops.assign.experiment.variant',
+    'GetAppRecoveryVersion': 'ops.get.app.recovery.version',
     'GetConfigSnapshot': 'ops.get.config.snapshot',
     'GetEventDrilldown': 'ops.get.event.drilldown',
     'GetEventSummary': 'ops.get.event.summary',
@@ -20,13 +21,16 @@ class OpsRequestPageIds {
     'ListServiceConfigs': 'ops.list.service.configs',
     'RecordVisit': 'ops.record.visit',
     'ReportEventBatch': 'ops.report.event.batch',
+    'ReportRecoveryFailure': 'ops.report.recovery.failure',
     'ReportRuntimeLogBatch': 'ops.report.runtime.log.batch',
     'ReportStartupEventBatch': 'ops.report.startup.event.batch',
     'ResolveEffectiveConfig': 'ops.resolve.effective.config',
+    'ResolveEffectiveConfigForInstance': 'ops.resolve.effective.config.for.instance',
     'UpdateExperimentRollout': 'ops.update.experiment.rollout',
   };
 
   static const String assignExperimentVariant = 'ops.assign.experiment.variant';
+  static const String getAppRecoveryVersion = 'ops.get.app.recovery.version';
   static const String getConfigSnapshot = 'ops.get.config.snapshot';
   static const String getEventDrilldown = 'ops.get.event.drilldown';
   static const String getEventSummary = 'ops.get.event.summary';
@@ -41,8 +45,10 @@ class OpsRequestPageIds {
   static const String listServiceConfigs = 'ops.list.service.configs';
   static const String recordVisit = 'ops.record.visit';
   static const String reportEventBatch = 'ops.report.event.batch';
+  static const String reportRecoveryFailure = 'ops.report.recovery.failure';
   static const String reportRuntimeLogBatch = 'ops.report.runtime.log.batch';
   static const String reportStartupEventBatch = 'ops.report.startup.event.batch';
   static const String resolveEffectiveConfig = 'ops.resolve.effective.config';
+  static const String resolveEffectiveConfigForInstance = 'ops.resolve.effective.config.for.instance';
   static const String updateExperimentRollout = 'ops.update.experiment.rollout';
 }

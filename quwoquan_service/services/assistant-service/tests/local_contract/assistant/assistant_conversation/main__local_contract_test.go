@@ -11,7 +11,6 @@ import (
 // TestMigratedMain exercises the command's real application composition through public ports.
 func TestMigratedMainApplicationComposition(t *testing.T) {
 	service := application.NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 	)

@@ -338,6 +338,25 @@ final _assistantRemoteProvider = Provider<RemoteAssistantRepository>((ref) {
   );
 });
 
+CloudOperationInvocationContext _assistantOperationInvocationContext(
+  Ref ref, {
+  required String clientPageId,
+  String? idempotencyKey,
+}) {
+  final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
+  final personaId = ref.read(currentUserIdProvider).trim();
+  return CloudOperationInvocationContext(
+    surfaceId: AppUiSurfaces.personalAssistantDialog.id,
+    routeId: AppUiSurfaces.personalAssistantDialog.routeId,
+    clientPageId: clientPageId,
+    actor: CloudOperationActorContext(
+      accountId: accountId.isEmpty ? null : accountId,
+      personaId: personaId.isEmpty ? null : personaId,
+    ),
+    idempotencyKey: idempotencyKey,
+  );
+}
+
 /// Production composition is Remote-only. Alpha/test adapters must override
 /// these Facets from their physically separate composition root.
 final assistantConversationRunFacetProvider =
@@ -347,17 +366,144 @@ final assistantConversationRunFacetProvider =
 
 final assistantSkillSubscriptionFacetProvider =
     Provider<AssistantSkillSubscriptionFacet>(
-      (ref) => ref.watch(_assistantRemoteProvider),
+      (ref) => RemoteAssistantSkillSubscriptionAdapter(
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: (clientPageId, {idempotencyKey}) =>
+            _assistantOperationInvocationContext(
+              ref,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey,
+            ),
+      ),
     );
 
 final assistantSkillConsentFacetProvider = Provider<AssistantSkillConsentFacet>(
   (ref) => ref.watch(_assistantRemoteProvider),
 );
 
-final assistantLearningAppendFacetProvider =
-    Provider<AssistantLearningAppendFacet>(
-      (ref) => ref.watch(_assistantRemoteProvider),
+final assistantLearningFactAppendFacetProvider =
+    Provider<AssistantLearningFactAppendFacet>(
+      (ref) => RemoteAssistantLearningFactAppendAdapter(
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: (clientPageId, {required idempotencyKey}) =>
+            _assistantOperationInvocationContext(
+              ref,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey,
+            ),
+      ),
     );
+
+final assistantLearningFactOutboxEnvironmentProvider = Provider<String>(
+  (_) => CloudRuntimeConfig.appRuntimeEnv,
+);
+
+final assistantLearningFactOutboxProvider =
+    NotifierProvider<AssistantLearningFactOutboxNotifier, int>(
+      AssistantLearningFactOutboxNotifier.new,
+    );
+
+final class AssistantLearningFactOutboxNotifier extends Notifier<int> {
+  static const Duration _retryInterval = Duration(seconds: 15);
+
+  late AssistantLearningFactOutbox _outbox;
+  Timer? _retryTimer;
+
+  @override
+  int build() {
+    final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
+    final personaId = ref.watch(currentUserIdProvider).trim();
+    _outbox = AssistantLearningFactOutbox(
+      ActorQueuePartition(
+        environment: ref.watch(assistantLearningFactOutboxEnvironmentProvider),
+        accountId: accountId,
+        personaId: personaId,
+        deviceId: CloudRequestHeaders.deviceActorId ?? '',
+      ),
+      ref.watch(actorQueueStorageProvider),
+      ref.watch(assistantLearningFactAppendFacetProvider),
+    );
+    ref.onDispose(_outbox.dispose);
+    ref.onDispose(() => _retryTimer?.cancel());
+    unawaited(_restoreAndFlush());
+    return 0;
+  }
+
+  Future<bool> enqueue(AppendAssistantLearningFactRequest fact) async {
+    final persisted = await _outbox.enqueue(fact);
+    if (!ref.mounted) {
+      return persisted;
+    }
+    final pendingCount = await _outbox.pendingCount();
+    if (!ref.mounted) {
+      return persisted;
+    }
+    state = pendingCount;
+    _scheduleRetry(pendingCount);
+    if (persisted && ref.mounted) {
+      unawaited(flush());
+    }
+    return persisted;
+  }
+
+  Future<void> flush() async {
+    try {
+      await _outbox.flush();
+      if (!ref.mounted) {
+        return;
+      }
+      final pendingCount = await _outbox.pendingCount();
+      if (ref.mounted) {
+        state = pendingCount;
+        _scheduleRetry(pendingCount);
+      }
+    } catch (error, stackTrace) {
+      developer.log(
+        'assistant learning fact outbox flush failed',
+        name: 'assistant_learning_fact_outbox',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _restoreAndFlush() async {
+    try {
+      if (!ref.mounted) {
+        return;
+      }
+      final pendingCount = await _outbox.pendingCount();
+      if (!ref.mounted) {
+        return;
+      }
+      state = pendingCount;
+      _scheduleRetry(pendingCount);
+      if (pendingCount > 0) {
+        await flush();
+      }
+    } catch (error, stackTrace) {
+      developer.log(
+        'assistant learning fact outbox restore failed',
+        name: 'assistant_learning_fact_outbox',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _scheduleRetry(int pendingCount) {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    if (pendingCount <= 0 || !ref.mounted) {
+      return;
+    }
+    _retryTimer = Timer(_retryInterval, () {
+      if (ref.mounted) {
+        unawaited(flush());
+      }
+    });
+  }
+}
 
 final assistantPersonalizationFacetProvider =
     Provider<AssistantPersonalizationFacet>(

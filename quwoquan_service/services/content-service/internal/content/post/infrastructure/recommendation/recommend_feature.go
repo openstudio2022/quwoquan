@@ -660,6 +660,7 @@ func NewFeatureStore(db *mongo.Database) *FeatureStore {
 type UserFeatures struct {
 	UserID                   string             `bson:"userId"`
 	TagInteraction           map[string]int     `bson:"tagInteraction"`
+	ExplicitTagAffinities    map[string]float64 `bson:"explicitTagAffinities"`
 	AuthorInteraction        map[string]int     `bson:"authorInteraction"`
 	TotalEvents              int                `bson:"totalEvents"`
 	TotalLikes               int                `bson:"totalLikes"`
@@ -699,6 +700,7 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 		} `bson:"socialFeatures"`
 		UserFeatures struct {
 			TagInteraction           map[string]int     `bson:"tagInteraction"`
+			ExplicitTagAffinities    map[string]float64 `bson:"explicitTagAffinities"`
 			AuthorInteraction        map[string]int     `bson:"authorInteraction"`
 			TotalEvents              int                `bson:"totalEvents"`
 			TotalLikes               int                `bson:"totalLikes"`
@@ -760,6 +762,7 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 		Segments:                 doc.Segments,
 		IntersectionKindCounts:   doc.SocialFeatures.Intersection.KindCounts,
 		TagInteraction:           doc.UserFeatures.TagInteraction,
+		ExplicitTagAffinities:    doc.UserFeatures.ExplicitTagAffinities,
 		AuthorInteraction:        doc.UserFeatures.AuthorInteraction,
 		TotalEvents:              doc.UserFeatures.TotalEvents,
 		TotalLikes:               doc.UserFeatures.TotalLikes,
@@ -781,6 +784,16 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 		TypeImpressions:          doc.UserFeatures.TypeImpressions,
 		TypeEngagements:          doc.UserFeatures.TypeEngagements,
 	}, nil
+}
+
+// Invalidate removes one actor's cached vector after an asynchronous feature
+// projection commits. The projection itself remains Mongo-authoritative; this
+// only prevents the 60-second read cache from masking a fresh explicit choice.
+func (s *FeatureStore) Invalidate(userID string) {
+	if s == nil || s.cache == nil {
+		return
+	}
+	s.cache.delete(userID)
 }
 
 func weightedSearchAffinities(
@@ -816,6 +829,9 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 	tagAffinities := make(map[string]float64, len(raw.TagInteraction))
 	for tag, count := range raw.TagInteraction {
 		tagAffinities[tag] = float64(count)
+	}
+	for tag, weight := range raw.ExplicitTagAffinities {
+		tagAffinities[tag] += weight
 	}
 
 	authorAffinities := make(map[string]float64, len(raw.AuthorInteraction))
@@ -947,4 +963,10 @@ func (c *featureLRU) put(userID string, vec *rtrec.UserFeatureVector) {
 		}
 	}
 	c.entries[userID] = featureCacheEntry{vec: vec, expiresAt: time.Now().Add(c.ttl)}
+}
+
+func (c *featureLRU) delete(userID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.entries, userID)
 }

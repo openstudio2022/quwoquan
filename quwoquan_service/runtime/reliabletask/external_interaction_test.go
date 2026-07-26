@@ -77,7 +77,14 @@ func TestExternalInteractionDispatcherWorkerRecordsProviderAttempt(t *testing.T)
 	if len(attempts) != 1 {
 		t.Fatalf("attempts len = %d", len(attempts))
 	}
-	if attempts[0].Provider != "mock_sms" || attempts[0].Status != ExternalInteractionStatusDelivered {
+	if attempts[0].Provider != "mock_sms" || attempts[0].Status != ExternalInteractionStatusSentUnconfirmed {
 		t.Fatalf("unexpected attempt: %#v", attempts[0])
+	}
+	if len(store.resultOutboxes) != 1 {
+		t.Fatalf("provider result outboxes len = %d, want 1", len(store.resultOutboxes))
+	}
+	result := store.resultOutboxes[attempts[0].AttemptID]
+	if result.ProviderRequestDigest == "" || result.DeliveryStatus != ExternalInteractionResultOutboxPending {
+		t.Fatalf("unexpected provider result outbox: %#v", result)
 	}
 }

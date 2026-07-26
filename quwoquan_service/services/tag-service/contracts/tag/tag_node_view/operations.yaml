@@ -127,14 +127,14 @@ api_routes:
     request_encoder: encodeListTagChildrenQuery
     response_decoder: decodeTagChildrenSlice
 - method: GET
-  path: /tag/shared-tags
+  path: /internal/tag/shared-tags
   operation: SharedTags
-  actor: none
+  actor: account
   commercial:
     status: ready
   authorization:
-    principal: public
-    ownership_policy: public_taxonomy_read
+    principal: service
+    ownership_policy: internal_tag_graph_read
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -145,8 +145,8 @@ api_routes:
   - TAG.USER.invalid_argument
   - TAG.SYSTEM.storage_read_failed
   privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
     log_policy: metadata_only
   telemetry:
     metric: tag_shared_tags
@@ -157,11 +157,11 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   security:
-    auth_mode: optional
-    principal: public
+    auth_mode: required
+    principal: service
     token_transport: bearer
-    anonymous_policy: allow
-    visibility: public
+    anonymous_policy: deny
+    visibility: internal
   application:
     kind: query
     facet: TagGraphQueryFacade
@@ -182,14 +182,14 @@ api_routes:
   - strength
   - source
 - method: GET
-  path: /tag/inverted
+  path: /internal/tag/inverted
   operation: InvertedObjects
-  actor: none
+  actor: account
   commercial:
     status: ready
   authorization:
-    principal: public
-    ownership_policy: public_taxonomy_read
+    principal: service
+    ownership_policy: internal_tag_graph_read
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -200,8 +200,8 @@ api_routes:
   - TAG.USER.invalid_argument
   - TAG.SYSTEM.storage_read_failed
   privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
     log_policy: metadata_only
   telemetry:
     metric: tag_inverted_objects
@@ -213,11 +213,11 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   security:
-    auth_mode: optional
-    principal: public
+    auth_mode: required
+    principal: service
     token_transport: bearer
-    anonymous_policy: allow
-    visibility: public
+    anonymous_policy: deny
+    visibility: internal
   application:
     kind: query
     facet: TagGraphQueryFacade
@@ -449,14 +449,14 @@ api_routes:
   - label
   - score
 - method: GET
-  path: /tag/related
+  path: /internal/tag/related
   operation: RelatedTags
-  actor: none
+  actor: account
   commercial:
     status: ready
   authorization:
-    principal: public
-    ownership_policy: public_taxonomy_read
+    principal: service
+    ownership_policy: internal_tag_graph_read
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -467,8 +467,8 @@ api_routes:
   - TAG.USER.invalid_argument
   - TAG.SYSTEM.storage_read_failed
   privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
+    request_classification: INTERNAL
+    response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
     metric: tag_related
@@ -479,11 +479,11 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   security:
-    auth_mode: optional
-    principal: public
+    auth_mode: required
+    principal: service
     token_transport: bearer
-    anonymous_policy: allow
-    visibility: public
+    anonymous_policy: deny
+    visibility: internal
   application:
     kind: query
     facet: TagCatalogQueryFacade
@@ -500,14 +500,14 @@ api_routes:
   - label
   - cooccurCount
 - method: POST
-  path: /tag/search-by-tags
+  path: /internal/tag/search-by-tags
   operation: SearchByTags
-  actor: none
+  actor: account
   commercial:
     status: ready
   authorization:
-    principal: public
-    ownership_policy: public_taxonomy_read
+    principal: service
+    ownership_policy: internal_tag_graph_read
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -518,8 +518,8 @@ api_routes:
   - TAG.USER.invalid_argument
   - TAG.SYSTEM.storage_read_failed
   privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
     log_policy: metadata_only
   telemetry:
     metric: tag_search_by_tags
@@ -530,11 +530,11 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   security:
-    auth_mode: optional
-    principal: public
+    auth_mode: required
+    principal: service
     token_transport: bearer
-    anonymous_policy: allow
-    visibility: public
+    anonymous_policy: deny
+    visibility: internal
   application:
     kind: query
     facet: TagGraphQueryFacade
@@ -554,14 +554,14 @@ api_routes:
   - matchedTags
   - score
 - method: GET
-  path: /tag/graph/cooccurrence
+  path: /internal/tag/graph/cooccurrence
   operation: TagCooccurrence
-  actor: none
+  actor: account
   commercial:
     status: ready
   authorization:
-    principal: public
-    ownership_policy: public_taxonomy_read
+    principal: service
+    ownership_policy: internal_tag_graph_read
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -572,8 +572,8 @@ api_routes:
   - TAG.USER.invalid_argument
   - TAG.SYSTEM.storage_read_failed
   privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
+    request_classification: INTERNAL
+    response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
     metric: tag_cooccurrence
@@ -584,11 +584,11 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   security:
-    auth_mode: optional
-    principal: public
+    auth_mode: required
+    principal: service
     token_transport: bearer
-    anonymous_policy: allow
-    visibility: public
+    anonymous_policy: deny
+    visibility: internal
   application:
     kind: query
     facet: TagGraphQueryFacade
@@ -606,14 +606,14 @@ api_routes:
   - tagB
   - cooccurCount
 - method: GET
-  path: /tag/related-objects
+  path: /internal/tag/related-objects
   operation: RelatedObjects
-  actor: none
+  actor: account
   commercial:
     status: ready
   authorization:
-    principal: public
-    ownership_policy: public_taxonomy_read
+    principal: service
+    ownership_policy: internal_tag_graph_read
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -624,8 +624,8 @@ api_routes:
   - TAG.USER.invalid_argument
   - TAG.SYSTEM.storage_read_failed
   privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
     log_policy: metadata_only
   telemetry:
     metric: tag_related_objects
@@ -636,11 +636,11 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   security:
-    auth_mode: optional
-    principal: public
+    auth_mode: required
+    principal: service
     token_transport: bearer
-    anonymous_policy: allow
-    visibility: public
+    anonymous_policy: deny
+    visibility: internal
   application:
     kind: query
     facet: TagGraphQueryFacade
@@ -706,8 +706,9 @@ contract_test:
         - db.tag_nodes.FindOne({tagRef:'Topic/旅行'}) → exists
         - response.label non-empty
       - name: shared_tags_two_objects
-        route: GET /tag/shared-tags
+        route: GET /internal/tag/shared-tags
         assertions:
+        - service_principal_required
         - shared tagRefs ⊆ both objects' tagRefs
   coverage_requirements:
   - resolve subset tagRefs resolvable

@@ -30,6 +30,19 @@ def parse_entity_rel(entity_rel: str | Path) -> tuple[str, str, str] | None:
     return parts[0], parts[1], "/".join(parts[2:])
 
 
+def parse_entity_ref(value: str) -> tuple[str, str, str] | None:
+    """Decode the canonical entity identity used by execution jobs.
+
+    This is deliberately separate from filesystem-relative object paths:
+    callers that carry an entity reference must not infer identity from a
+    prompt, filename, or display text.
+    """
+    parts = str(value or "").strip().strip("/").split("/", 3)
+    if len(parts) != 4 or parts[0] != "entity" or not all(parts[1:]):
+        return None
+    return parts[1], parts[2], parts[3]
+
+
 def _scenic_location_conflict_key(domain: str, etype: str, name: str) -> tuple[str, str] | None:
     if domain == "地点" and etype in _SCENIC_LOCATION_ETYPES:
         return domain, name
@@ -236,6 +249,7 @@ def write_entity_object_index(
 __all__ = [
     "entity_rel_path",
     "parse_entity_rel",
+    "parse_entity_ref",
     "iter_execution_ids",
     "execution_entity_type_conflicts",
     "entity_type_conflict_issues_for_rows",

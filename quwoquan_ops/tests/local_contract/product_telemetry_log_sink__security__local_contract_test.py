@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib.common import ROOT, load_json_yaml
 from quwoquan_ops.cli.lib.product_telemetry_log_sink import (
     ProductTelemetryLogSink,
     load_product_telemetry_log_sink,
@@ -27,6 +28,22 @@ PROD_SLS_ENVIRONMENT = {
 
 
 class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
+    def test_gamma_profile_declares_elasticsearch_without_sls_secret(self) -> None:
+        specification = load_json_yaml(
+            ROOT
+            / "quwoquan_ops/environments/cloud-providers/aliyun/sls"
+            / "product_telemetry.yaml"
+        )
+        profiles = specification["spec"]["deploymentProfiles"]
+
+        self.assertEqual(specification["metadata"]["environments"], ["prod"])
+        for profile in ("integration", "release"):
+            gamma = profiles["gamma"][profile]
+            self.assertEqual(gamma["backend"], "elasticsearch_local")
+            self.assertFalse(gamma["requiresSecret"])
+        self.assertEqual(profiles["prod"]["backend"], "aliyun_sls")
+        self.assertTrue(profiles["prod"]["requiresSecret"])
+
     def test_gamma_uses_topology_elasticsearch_without_secrets(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             home = Path(temporary_dir) / "home"
@@ -187,6 +204,60 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 sort_keys=True,
             )
             self.assertNotIn("elasticsearch:9200", serialized)
+
+    def test_gamma_query_control_issues_least_privilege_local_session(self) -> None:
+        query_session = stackctl.LocalAcceptanceSession(
+            owner_id="fixture_telemetry_operator",
+            persona_id="fixture_telemetry_operator",
+            access_token="must-not-be-serialized",
+        )
+        with (
+            mock.patch.dict(
+                stackctl.os.environ,
+                {"PRODUCT_TELEMETRY_QUERY_TOKEN": ""},
+            ),
+            mock.patch.object(
+                stackctl,
+                "open_local_acceptance_session",
+                return_value=query_session,
+            ) as issue_session,
+        ):
+            resolved = stackctl._log_sink_control_query_session(
+                api_base="https://gamma-api.quwoquan-env.test:19000",
+                environment="gamma",
+                target_name="gamma-local",
+                resolve_host="127.0.0.1",
+            )
+
+        self.assertIs(resolved, query_session)
+        issue_session.assert_called_once_with(
+            "https://gamma-api.quwoquan-env.test:19000",
+            environment="gamma",
+            target_name="gamma-local",
+            profile="product-telemetry-query",
+            resolve_host="127.0.0.1",
+        )
+
+    def test_cold_start_reuses_package_bound_images(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as temporary_dir,
+            mock.patch.object(
+                stackctl,
+                "command_up",
+                return_value={"exitCode": 0},
+            ) as command_up,
+        ):
+            stackctl._run_product_telemetry_log_sink_control_action(
+                action="cold-start",
+                target_name="gamma-local",
+                environment="gamma",
+                report_dir=Path(temporary_dir),
+            )
+
+        args = command_up.call_args.args[0]
+        self.assertTrue(args.skip_build)
+        self.assertTrue(args.skip_app)
+        self.assertEqual(args.workload, "full")
 
     def test_control_parser_exposes_all_required_actions(self) -> None:
         parser = stackctl.build_parser()

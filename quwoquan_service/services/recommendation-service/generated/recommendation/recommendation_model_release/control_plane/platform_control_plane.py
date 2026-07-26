@@ -134,19 +134,28 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "config_instance_report",
       "operations": [
         {
+          "actor": "account",
+          "auth_mode": "required",
           "method": "GET",
           "operation": "ListConfigInstanceReports",
+          "ownership_policy": "operator_scope",
           "path": "/control-plane/platform/configs/instances",
+          "principal": "operator",
           "scopes": [
             "ops.platform.config.read"
           ]
         },
         {
+          "actor": "account",
+          "auth_mode": "required",
+          "idempotency": "payload_digest_server_side",
           "method": "POST",
           "operation": "ReportConfigInstance",
+          "ownership_policy": "service_instance_bound",
           "path": "/control-plane/platform/configs/instances/{instanceId}:report",
+          "principal": "service",
           "scopes": [
-            "ops.platform.config.write"
+            "ops.platform.config.ack"
           ]
         }
       ],

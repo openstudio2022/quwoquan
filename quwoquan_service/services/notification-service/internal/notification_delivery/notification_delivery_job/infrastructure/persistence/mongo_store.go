@@ -22,6 +22,7 @@ const (
 	notificationDeliveryJobCollection        = "notification_delivery_jobs"
 	notificationDeliveryJobReceiptCollection = "notification_delivery_jobs_command_receipts"
 	notificationDeliveryJobOutboxCollection  = "notification_delivery_jobs_outbox"
+	externalResultInboxCollection            = "notification_external_interaction_result_inbox"
 )
 
 type notificationDeliveryJobReceiptDocument struct {
@@ -47,19 +48,21 @@ type notificationDeliveryJobEventDocument struct {
 // 权威集合；state、command receipt 与 object outbox 始终在同一事务中提交。
 type MongoNotificationDeliveryJobStore struct {
 	*reliabletaskmongo.Store
-	db       *mongo.Database
-	jobs     *mongo.Collection
-	receipts *mongo.Collection
-	outbox   *mongo.Collection
+	db          *mongo.Database
+	jobs        *mongo.Collection
+	receipts    *mongo.Collection
+	outbox      *mongo.Collection
+	resultInbox *mongo.Collection
 }
 
 func NewMongoNotificationDeliveryJobStore(db *mongo.Database) *MongoNotificationDeliveryJobStore {
 	return &MongoNotificationDeliveryJobStore{
-		Store:    reliabletaskmongo.NewNotificationDeliveryJobs(db),
-		db:       db,
-		jobs:     db.Collection(notificationDeliveryJobCollection),
-		receipts: db.Collection(notificationDeliveryJobReceiptCollection),
-		outbox:   db.Collection(notificationDeliveryJobOutboxCollection),
+		Store:       reliabletaskmongo.NewNotificationDeliveryJobs(db),
+		db:          db,
+		jobs:        db.Collection(notificationDeliveryJobCollection),
+		receipts:    db.Collection(notificationDeliveryJobReceiptCollection),
+		outbox:      db.Collection(notificationDeliveryJobOutboxCollection),
+		resultInbox: db.Collection(externalResultInboxCollection),
 	}
 }
 
@@ -132,6 +135,22 @@ func (s *MongoNotificationDeliveryJobStore) EnsureIndexes(ctx context.Context) e
 				SetName("idx_notification_incoming_call_cancel_push").
 				SetSparse(true),
 		},
+		{
+			Keys: bson.D{{Key: "externalInteractionId", Value: 1}},
+			Options: options.Index().
+				SetName("uq_notification_incoming_call_external_interaction").
+				SetUnique(true).
+				SetSparse(true),
+		},
+		{
+			Keys: bson.D{{Key: "cancellationExternalInteractionId", Value: 1}},
+			Options: options.Index().
+				SetName(
+					"uq_notification_incoming_call_cancellation_external_interaction",
+				).
+				SetUnique(true).
+				SetSparse(true),
+		},
 	}); err != nil {
 		return err
 	}
@@ -139,6 +158,20 @@ func (s *MongoNotificationDeliveryJobStore) EnsureIndexes(ctx context.Context) e
 		{
 			Keys:    bson.D{{Key: "result.jobId", Value: 1}, {Key: "createdAt", Value: -1}},
 			Options: options.Index().SetName("idx_notification_delivery_job_receipts_job"),
+		},
+	}); err != nil {
+		return err
+	}
+	if _, err := s.resultInbox.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "requestId", Value: 1}, {Key: "occurredAt", Value: 1}},
+			Options: options.Index().SetName("idx_notification_external_result_request"),
+		},
+		{
+			Keys: bson.D{{Key: "createdAt", Value: 1}},
+			Options: options.Index().
+				SetName("idx_notification_external_result_inbox_ttl").
+				SetExpireAfterSeconds(int32((30 * 24 * time.Hour).Seconds())),
 		},
 	}); err != nil {
 		return err

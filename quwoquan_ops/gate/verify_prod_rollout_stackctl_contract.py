@@ -32,6 +32,8 @@ def main() -> int:
             "--release-manifest",
             "PROD_PROMETHEUS_URL",
             "PROD_RELEASE_STATE_DIR",
+            "PROD_BACKUP_RECOVERY_RECEIPT",
+            "--backup-recovery-receipt",
             "group: prod-hosted-release",
         ):
             if token not in text:

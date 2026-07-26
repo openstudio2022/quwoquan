@@ -473,8 +473,30 @@ func main() {
 	profileCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
 	profileClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 2 * time.Second}, profileCB)
 	profileResolver := httpadapter.NewUserProfileResolver(userServiceBaseURL, profileClient)
-	relationshipGate := httpadapter.NewUserRelationshipGate(userServiceBaseURL, profileClient)
-	socialContactResolver := httpadapter.NewUserSocialContactResolver(userServiceBaseURL, profileClient)
+	relationshipCredentials, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		accessTokenConfig,
+		"chat-service",
+		[]string{"user.relationship.read"},
+	)
+	if err != nil {
+		log.Fatalf("chat-service relationship credential init failed: %v", err)
+	}
+	relationshipGate, err := httpadapter.NewAuthorizedUserRelationshipGate(
+		userServiceBaseURL,
+		profileClient,
+		relationshipCredentials,
+	)
+	if err != nil {
+		log.Fatalf("chat-service relationship gate init failed: %v", err)
+	}
+	socialContactResolver, err := httpadapter.NewAuthorizedUserSocialContactResolver(
+		userServiceBaseURL,
+		profileClient,
+		relationshipCredentials,
+	)
+	if err != nil {
+		log.Fatalf("chat-service social contact resolver init failed: %v", err)
+	}
 	circleListResolver := httpadapter.NewCircleListResolverClient(circleServiceBaseURL, profileClient)
 	contentCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig,

@@ -24,6 +24,23 @@ class HomepageAssetDisposition(StrEnum):
     DUPLICATE_ALIAS = "duplicateAlias"
 
 
+class PageImageDropCode(StrEnum):
+    """Closed terminal outcomes for enumerated images not kept as assets."""
+
+    INVALID_PAYLOAD = "invalid_payload"
+    RIGHTS_POLICY = "rights_policy"
+    FETCH_FAILURE = "fetch_failure"
+    DECODE_POLICY = "decode_policy"
+    PIXEL_POLICY = "pixel_policy"
+    SAFETY_POLICY = "safety_policy"
+    RELEVANCE_POLICY = "relevance_policy"
+    DUPLICATE = "duplicate"
+
+    @property
+    def is_policy_outcome(self) -> bool:
+        return self is not PageImageDropCode.FETCH_FAILURE
+
+
 @dataclass(frozen=True, slots=True)
 class HomepageMediaDisposition:
     """A complete, typed disposition for one enumerated source-page image.
@@ -220,6 +237,7 @@ __all__ = [
     "DownloadedPageAsset",
     "PageImagePlacement",
     "PageImagePlacementType",
+    "PageImageDropCode",
     "is_image_dimension_token",
     "normalized_subject_key",
     "normalized_subject_core",

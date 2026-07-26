@@ -33,6 +33,8 @@
 ### REQ-002 策略变更必须版本化；域路由规则必须可灰度发布
 
 - 策略变更必须版本化；域路由规则必须可灰度发布。
+- `assistant-default` 的非 alpha 发布必须来自镜像内不可变 artifact：artifact 必须声明 command identity、canonical digest、默认模板、路由规则、learning-context allowlist 与 cohort assignment。publisher 必须在写入前校验 digest 和完整 schema，不得补写默认值，也不得从环境 seed、`cmd/api` 启动路径或静态 fallback 隐式创建 release/rollout。
+- beta、gamma、prod 必须经运行配置显式指向 release 与 rollout artifact，并由受控的 `assistant-policy-publish` Job 执行幂等 stage/activate；同一 publisher 还必须作为服务 init container 成功完成，API 才能接收真实 Run。alpha 继续使用 contract mock，不能进入 production 二进制或发布链路。发布报告仅可包含 policy/version/cohort/revision/digest 等 metadata，不能输出 prompt 内容。
 
 <a id="req-003"></a>
 ### REQ-003 未命中策略时必须走可解释的默认模板
@@ -52,20 +54,10 @@
 - WHEN 创建新的 AssistantRun 并解析策略模板。
 - THEN Run 冻结唯一 `policyId/version/cohort`，同一 actor 与 rollout 配置稳定命中；未命中规则时使用该 release 声明的可解释默认模板。
 - AND release activation 或 rollback 只影响后续 Run；配置无效或 resolver 失败时返回 canonical failure，不在 Run 生命周期内切换版本或写入伪成功选择。
+- AND 同一 publication command 的重试返回首次持久化结果；复用 command identity 但改变 digest、revision 或 assignment 必须失败关闭。
 
 ## 6. 依赖
 
 - 前置要求：[`run-stream-policy`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
-
-## 7. 开放事项
-
-<a id="open-001"></a>
-### OPEN-001 版本化策略路由与灰度回滚
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：当前仅按静态 Skill manifest 做粗粒度匹配和 fallback，未拥有可审计的 policy release、稳定 cohort、选中版本快照或 rollback 语义；因此不能证明版本化和灰度发布。
-- 完成判定：metadata-owned immutable policy release 声明 template/version/规则和默认模板。resolver 用稳定 actor bucket 选择 release 并将 `policyId/version/cohort` 写入 Run。一次 release activation 或 rollback 只改变后续 Run。local/API/App 证明命中、默认回退、cohort 稳定、回滚和失败不写成功事实。`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

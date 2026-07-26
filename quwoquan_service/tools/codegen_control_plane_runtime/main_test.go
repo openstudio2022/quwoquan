@@ -1,15 +1,15 @@
 package main
 
 import (
-	"path/filepath"
 	"testing"
 
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 	"quwoquan_service/internal/metadata/validate"
+	"quwoquan_service/internal/testsupport/contractsview"
 )
 
 func TestControlPlaneArtifactsExcludeManualDomainOnboarding(t *testing.T) {
-	metadataDir := filepath.Join("..", "..", "contracts", "metadata")
+	metadataDir := contractsview.Build(t)
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
 		t.Fatalf("compile metadata: %v", err)

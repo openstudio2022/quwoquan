@@ -159,6 +159,12 @@ class _EntityTopResultModel {
   final String? actionLabel;
 }
 
+class _LocationPlaceTopResultModel {
+  const _LocationPlaceTopResultModel({required this.place});
+
+  final SearchLocationPlaceHitView place;
+}
+
 class _GroupResultCardModel {
   const _GroupResultCardModel({
     required this.circleId,

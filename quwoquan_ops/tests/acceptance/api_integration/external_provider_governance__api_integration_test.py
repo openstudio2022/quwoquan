@@ -11,8 +11,8 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 
 
-def test_gamma_integration_uses_enabled_release_candidate_bindings() -> None:
-    """Gamma must bind enabled real adapters before runtime credential preflight."""
+def test_gamma_integration_uses_enabled_local_substitute_bindings() -> None:
+    """Gamma must bind enabled Port-equivalent local substitutes."""
     compiled, issues = governance.load_and_compile()
 
     assert issues == []
@@ -24,7 +24,7 @@ def test_gamma_integration_uses_enabled_release_candidate_bindings() -> None:
     assert required
     assert all(readiness["state"] == "enabled" for readiness in required.values())
     assert all(
-        not governance.is_prod_forbidden_adapter(readiness["adapter_id"])
+        governance.is_local_substitute_adapter(readiness["adapter_id"])
         for readiness in required.values()
         if readiness.get("adapter_id")
     )
@@ -32,4 +32,4 @@ def test_gamma_integration_uses_enabled_release_candidate_bindings() -> None:
 
 
 if __name__ == "__main__":
-    test_gamma_integration_uses_enabled_release_candidate_bindings()
+    test_gamma_integration_uses_enabled_local_substitute_bindings()

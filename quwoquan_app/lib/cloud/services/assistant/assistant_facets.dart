@@ -21,9 +21,9 @@ import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 
 export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
     show
-        AssistantInteractionReportBatchAck,
+        AppendAssistantLearningFactRequest,
         AssistantIntersectionEvidenceRef,
-        AssistantPolicyView,
+        AssistantLearningFactReceipt,
         AssistantPreferenceFact,
         AssistantPreferenceFactListView,
         AssistantEntryPersonalizationChipView,
@@ -42,7 +42,6 @@ export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_a
         AssistantSelectedPolicyRefView,
         AssistantRunTextInput,
         AssistantRunTrigger,
-        AssistantScorecardReportBatchAck,
         AssistantSearchCitationView,
         AssistantSearchResultView,
         AssistantStartRunRequest,
@@ -54,11 +53,9 @@ export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_a
         AssistantUserActionGroundingView,
         AssistantUserTaskView,
         CitationDestination,
-        InteractionEvent,
         PageContextAck,
         SuggestedAction,
-        SuggestedActionListView,
-        Scorecard;
+        SuggestedActionListView;
 export 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart'
     show AssistantConversationWire;
 export 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart'
@@ -70,7 +67,9 @@ export 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelo
         AssistantTurnTriggerWire;
 export 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart'
     show
+        SkillSubscriptionDeliveryStateWire,
         SkillSubscriptionDestinationWire,
+        SkillSubscriptionOwnerWire,
         SkillSubscriptionSearchQueryPlanWire,
         SkillSubscriptionTriggerWire,
         SkillSubscriptionWire;
@@ -80,6 +79,8 @@ export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
     show
         AssistantPreferenceKind,
         AssistantPreferenceKindX,
+        AssistantLearningFactType,
+        AssistantLearningFactTypeX,
         AssistantPreferenceScope,
         AssistantPreferenceScopeX,
         AssistantPreferenceSourceType,
@@ -88,12 +89,19 @@ export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
         AssistantPreferenceStatusX,
         AssistantStreamEventType,
         AssistantStreamEventTypeX,
+        AssistantReferralSource,
+        AssistantReferralSourceX,
         FeedbackType,
         FeedbackTypeX,
+        InteractionEventType,
+        InteractionEventTypeX,
         SkillSubscriptionStatus,
         SkillSubscriptionStatusX,
+        parseAssistantLearningFactTypeStrict,
+        parseAssistantReferralSourceStrict,
         parseAssistantStreamEventTypeStrict,
         parseFeedbackTypeStrict,
+        parseInteractionEventTypeStrict,
         parseSkillSubscriptionStatusStrict;
 
 const String kPersonalContentAccessSkillId = 'personal_content_access';
@@ -154,7 +162,7 @@ AssistantContextSnapshot assistantContextSnapshotFromOpenContext(
   final normalizedAction = userAction?.trim() ?? '';
   return AssistantContextSnapshot(
     capturedAt: now,
-    pageType: pageType,
+    pageType: pageType.wireName,
     pageObjects: <AssistantObjectGroundingView>[
       if (objectType.isNotEmpty && objectId.isNotEmpty)
         AssistantObjectGroundingView(
@@ -263,6 +271,10 @@ abstract class AssistantSkillSubscriptionFacet {
     String status = '',
   });
 
+  Future<SkillSubscriptionWire> getSkillSubscription({
+    required String subscriptionId,
+  });
+
   Future<SkillSubscriptionWire> createSkillSubscription({
     required String skillId,
     String domainId = 'assistant',
@@ -270,11 +282,13 @@ abstract class AssistantSkillSubscriptionFacet {
     required String rawText,
     List<String> queries = const <String>[],
     String cron = '0 8 * * *',
+    required String clientRequestId,
   });
 
   Future<SkillSubscriptionWire> updateSkillSubscriptionStatus({
     required String subscriptionId,
     required String status,
+    required String clientRequestId,
   });
 }
 
@@ -290,23 +304,15 @@ abstract class AssistantSkillConsentFacet {
   Future<void> revokeSkillConsent({required String skillId});
 }
 
-/// 学习信号 append-only 上报（交互事件与评分卡）。
-abstract class AssistantLearningAppendFacet {
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
-  });
-
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
+/// 用户学习事实的单轨 append command。
+abstract class AssistantLearningFactAppendFacet {
+  Future<AssistantLearningFactReceipt> appendUserFact({
+    required AppendAssistantLearningFactRequest request,
   });
 }
 
-/// 入口个性化（policy、页面上下文上报、欢迎语与建议动作）。
+/// 入口个性化（页面上下文上报、欢迎语与建议动作）。
 abstract class AssistantPersonalizationFacet {
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  });
-
   Future<PageContextAck> reportPageContext({
     required AssistantOpenContext context,
     String? userAction,

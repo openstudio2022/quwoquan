@@ -60,10 +60,14 @@ type View struct {
 }
 
 type Input struct {
-	Title                string              `json:"title"`
-	Subtitle             string              `json:"subtitle"`
-	HomepageType         string              `json:"homepageType"`
-	CanonicalEntityID    string              `json:"canonicalEntityId"`
+	Title             string `json:"title"`
+	Subtitle          string `json:"subtitle"`
+	HomepageType      string `json:"homepageType"`
+	CanonicalEntityID string `json:"canonicalEntityId"`
+	// LookupAliases is an internal projection identity set. The public suggest
+	// endpoint maps its single validated sourcePlaceId into this field; raw
+	// aliases are never accepted from the request body.
+	LookupAliases        []string            `json:"-"`
 	ObjectPageTemplate   string              `json:"objectPageTemplate"`
 	CategoryTags         []string            `json:"categoryTags"`
 	CoverURL             string              `json:"coverUrl"`

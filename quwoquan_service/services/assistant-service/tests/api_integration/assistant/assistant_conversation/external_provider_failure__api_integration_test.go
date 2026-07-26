@@ -36,7 +36,10 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 		nil,
 	)
 	handler := assistanthttp.NewHandler(
-		newIntegrationAssistantService(application.WithAgentLoop(loop)),
+		newIntegrationAssistantService(
+			application.WithAgentLoop(loop),
+			weatherFrozenPolicyOption(),
+		),
 	).Routes()
 	create := assistantAPIRequest(
 		t,
@@ -127,7 +130,10 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 		t.Fatalf("expire failed run journal: %v", err)
 	}
 	restarted := assistanthttp.NewHandler(
-		newIntegrationAssistantService(application.WithAgentLoop(loop)),
+		newIntegrationAssistantService(
+			application.WithAgentLoop(loop),
+			weatherFrozenPolicyOption(),
+		),
 	).Routes()
 	replayedFailure := assistantAPIRequest(
 		t,
@@ -149,6 +155,36 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 		)
 	}
 	assertNoExternalProviderMaterial(t, replayedFailure.Body.String())
+}
+
+func weatherFrozenPolicyOption() application.AssistantServiceOption {
+	return application.WithFrozenPolicyResolver(
+		application.FrozenPolicyResolverFunc(
+			func(
+				_ context.Context,
+				policyID string,
+				_ string,
+				_ string,
+				_ string,
+			) (assistant.AssistantFrozenPolicySelection, error) {
+				return assistant.AssistantFrozenPolicySelection{
+					PolicyID:        policyID,
+					ReleaseVersion:  "test-weather-release",
+					Cohort:          "control",
+					RolloutRevision: 1,
+					RuleID:          "test-weather",
+					Template: assistant.AssistantFrozenPolicyTemplate{
+						TemplateID:      "test-weather-template",
+						SkillID:         "weather",
+						DomainID:        "weather",
+						PromptPolicy:    "weather provider failure test",
+						AllowedTools:    []string{"web_search"},
+						SearchIntensity: "balanced",
+					},
+				}, nil
+			},
+		),
+	)
 }
 
 func assertNoExternalProviderMaterial(t *testing.T, payload string) {

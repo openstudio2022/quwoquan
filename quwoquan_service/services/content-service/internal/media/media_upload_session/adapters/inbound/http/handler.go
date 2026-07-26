@@ -92,18 +92,20 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 type response struct {
-	SessionID string    `json:"sessionId"`
-	AssetID   string    `json:"assetId,omitempty"`
-	Status    string    `json:"status"`
-	UploadURL string    `json:"uploadUrl,omitempty"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	Replayed  bool      `json:"replayed"`
+	SessionID             string    `json:"sessionId"`
+	AssetID               string    `json:"assetId,omitempty"`
+	AssetProcessingStatus string    `json:"assetProcessingStatus,omitempty"`
+	Status                string    `json:"status"`
+	UploadURL             string    `json:"uploadUrl,omitempty"`
+	ExpiresAt             time.Time `json:"expiresAt"`
+	Replayed              bool      `json:"replayed"`
 }
 
 func responseFromResult(result sessionapp.CommandResult) response {
 	return response{
 		SessionID: result.SessionID, AssetID: result.AssetID, Status: string(result.Status),
-		UploadURL: result.UploadURL, ExpiresAt: result.ExpiresAt, Replayed: result.Replayed,
+		AssetProcessingStatus: result.AssetProcessingStatus,
+		UploadURL:             result.UploadURL, ExpiresAt: result.ExpiresAt, Replayed: result.Replayed,
 	}
 }
 

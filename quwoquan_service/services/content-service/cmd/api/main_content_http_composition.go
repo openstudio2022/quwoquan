@@ -242,6 +242,12 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	if filterCatalogFacades == nil {
 		log.Fatal("content-service FilterCatalogRelease object composition is not configured")
 	}
+	handlerOpts = append(
+		handlerOpts,
+		httpadapter.WithFilterCatalogReleaseHandler(
+			filtercataloghttp.NewHandler(filterCatalogFacades),
+		),
+	)
 	if moderationFacades == nil {
 		log.Fatal("content-service PostModerationCase object composition is not configured")
 	}
@@ -290,7 +296,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 		handlerOpts...,
 	).Routes()
 
-	return filtercataloghttp.NewHandler(filterCatalogFacades).Route(contentHandler)
+	return contentHandler
 }
 
 func buildOnboardingInterestTaxonomyValidator(

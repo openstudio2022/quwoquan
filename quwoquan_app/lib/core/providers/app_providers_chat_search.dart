@@ -484,6 +484,16 @@ final searchRepositoryProvider = Provider<SearchRepository>((ref) {
   );
 });
 
+/// Direct `location.place` reads for deep links and process recovery.
+///
+/// Production delegates to the canonical remote Search operation; tests and
+/// alpha inject a typed object-level substitute through this provider.
+final locationPlaceReadQueryProvider = Provider<LocationPlaceReadQuery>((ref) {
+  return SearchLocationPlaceReadQuery(
+    search: ref.watch(searchRepositoryProvider),
+  );
+});
+
 /// RelationshipCapability Repository（关系能力位投影，用户主页五态按钮矩阵 + RTC 门禁）
 final relationshipCapabilityRepositoryProvider =
     Provider<RelationshipCapabilityRepository>((ref) {

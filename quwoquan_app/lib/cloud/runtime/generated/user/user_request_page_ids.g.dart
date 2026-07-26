@@ -76,6 +76,7 @@ class UserRequestPageIds {
     'ResolvePushEndpointSecret': 'user.resolve.push.endpoint.secret',
     'RestoreAccount': 'user.restore.account',
     'RetirePersona': 'user.personas.retire',
+    'RollbackProposal': 'user.rollback.proposal',
     'SearchSocialRelations': 'user.social.search',
     'SendGreetingRequest': 'user.send.greeting.request',
     'SendOtp': 'user.send.otp',
@@ -164,6 +165,7 @@ class UserRequestPageIds {
   static const String resolvePushEndpointSecret = 'user.resolve.push.endpoint.secret';
   static const String restoreAccount = 'user.restore.account';
   static const String retirePersona = 'user.personas.retire';
+  static const String rollbackProposal = 'user.rollback.proposal';
   static const String searchSocialRelations = 'user.social.search';
   static const String sendGreetingRequest = 'user.send.greeting.request';
   static const String sendOtp = 'user.send.otp';

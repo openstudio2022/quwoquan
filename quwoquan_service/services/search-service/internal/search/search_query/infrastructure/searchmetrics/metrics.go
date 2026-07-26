@@ -64,8 +64,8 @@ var (
 		Help:      "Successful searches that returned zero hits, by mode and bucket.",
 	}, []string{"mode", "bucket"})
 
-	// degraded counts searches whose response carried degrade signals (e.g. ES
-	// recall failed and native fallback served) — degradation-rate SLI source.
+	// degraded counts searches whose response carried a controlled dependency
+	// degradation signal. Production recall never switches to a second backend.
 	degraded = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: subsystem,
@@ -148,6 +148,20 @@ var (
 		Name:      "hits_total",
 		Help:      "Search hits requested or enriched by the intersection attachment stage.",
 	}, []string{"result"})
+
+	feedbackSignalRelay = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "feedback_signal_relay",
+		Name:      "outcomes_total",
+		Help:      "Durable feedback signal relay outcomes.",
+	}, []string{"outcome"})
+
+	feedbackSignalPendingAge = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Subsystem: "feedback_signal_relay",
+		Name:      "oldest_pending_age_seconds",
+		Help:      "Age in seconds of the oldest click awaiting durable signal publication.",
+	})
 )
 
 // ObserveSearch records latency + request + zero-result/degrade/term-heat SLIs
@@ -178,6 +192,17 @@ func (*Recorder) ObserveSearch(o application.SearchObservation) {
 // ObserveFeedback records one feedback intake event.
 func (*Recorder) ObserveFeedback(eventType string) {
 	feedback.WithLabelValues(normLabel(eventType)).Inc()
+}
+
+func (*Recorder) ObserveFeedbackSignalRelay(outcome string) {
+	feedbackSignalRelay.WithLabelValues(normLabel(outcome)).Inc()
+}
+
+func (*Recorder) SetFeedbackSignalPendingAge(seconds float64) {
+	if seconds < 0 {
+		seconds = 0
+	}
+	feedbackSignalPendingAge.Set(seconds)
 }
 
 // ObserveLoadShed records a request shed by the backpressure boundary.

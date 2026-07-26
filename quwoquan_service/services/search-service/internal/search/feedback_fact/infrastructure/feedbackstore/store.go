@@ -2,6 +2,7 @@ package feedbackstore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -14,23 +15,26 @@ import (
 )
 
 const (
-	feedbackCollection = "search_feedback_events"
-	receiptsCollection = "search_feedback_command_receipts"
+	feedbackCollection         = "search_feedback_events"
+	receiptsCollection         = "search_feedback_command_receipts"
+	signalDeliveriesCollection = "search_feedback_signal_deliveries"
 
 	FeedbackTTLSeconds = 7776000
 )
 
 type Store struct {
-	feedback *mongo.Collection
-	receipts *mongo.Collection
+	feedback         *mongo.Collection
+	receipts         *mongo.Collection
+	signalDeliveries *mongo.Collection
 }
 
 var _ feedbackapplication.Sink = (*Store)(nil)
 
 func NewStore(db *mongo.Database) *Store {
 	return &Store{
-		feedback: db.Collection(feedbackCollection),
-		receipts: db.Collection(receiptsCollection),
+		feedback:         db.Collection(feedbackCollection),
+		receipts:         db.Collection(receiptsCollection),
+		signalDeliveries: db.Collection(signalDeliveriesCollection),
 	}
 }
 
@@ -42,12 +46,25 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 	); err != nil {
 		return fmt.Errorf("drop retired feedback idempotency index: %w", err)
 	}
+	if err := dropIndexIfExists(
+		ctx,
+		s.feedback,
+		"idx_search_feedback_pending_signal",
+	); err != nil {
+		return fmt.Errorf("drop retired feedback signal index: %w", err)
+	}
 	if _, err := s.feedback.UpdateMany(
 		ctx,
-		bson.M{"idempotencyKey": bson.M{"$exists": true}},
-		bson.M{"$unset": bson.M{"idempotencyKey": ""}},
+		bson.M{"$or": []bson.M{
+			{"idempotencyKey": bson.M{"$exists": true}},
+			{"signalPublishedAt": bson.M{"$exists": true}},
+		}},
+		bson.M{"$unset": bson.M{
+			"idempotencyKey":    "",
+			"signalPublishedAt": "",
+		}},
 	); err != nil {
-		return fmt.Errorf("remove retired feedback idempotency field: %w", err)
+		return fmt.Errorf("remove retired feedback fields: %w", err)
 	}
 	feedbackIndexes := []mongo.IndexModel{
 		{
@@ -110,11 +127,34 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 				SetExpireAfterSeconds(0),
 		},
 	}
+	signalDeliveryIndexes := []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "status", Value: 1},
+				{Key: "leaseExpiresAt", Value: 1},
+				{Key: "createdAt", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_search_feedback_signal_delivery_pending"),
+		},
+		{
+			Keys: bson.D{{Key: "expiresAt", Value: 1}},
+			Options: options.Index().
+				SetName("idx_search_feedback_signal_delivery_expiry").
+				SetExpireAfterSeconds(0),
+		},
+	}
 	if _, err := s.feedback.Indexes().CreateMany(ctx, feedbackIndexes); err != nil {
 		return fmt.Errorf("ensure search feedback indexes: %w", err)
 	}
 	if _, err := s.receipts.Indexes().CreateMany(ctx, receiptIndexes); err != nil {
 		return fmt.Errorf("ensure search feedback receipt indexes: %w", err)
+	}
+	if _, err := s.signalDeliveries.Indexes().CreateMany(
+		ctx,
+		signalDeliveryIndexes,
+	); err != nil {
+		return fmt.Errorf("ensure search feedback signal delivery indexes: %w", err)
 	}
 	return nil
 }
@@ -139,17 +179,18 @@ func dropIndexIfExists(
 }
 
 type feedbackDoc struct {
-	SearchRequestID string    `bson:"searchRequestId"`
-	ViewerID        string    `bson:"viewerId,omitempty"`
-	CommandDigest   string    `bson:"commandDigest"`
-	EventType       string    `bson:"eventType"`
-	ObjectID        string    `bson:"objectId,omitempty"`
-	Target          string    `bson:"target,omitempty"`
-	RankPosition    int       `bson:"rankPosition,omitempty"`
-	ReferralSource  string    `bson:"referralSource,omitempty"`
-	FeedRequestID   string    `bson:"feedRequestId,omitempty"`
-	DwellMs         int       `bson:"dwellMs,omitempty"`
-	CreatedAt       time.Time `bson:"createdAt"`
+	ID              bson.ObjectID `bson:"_id,omitempty"`
+	SearchRequestID string        `bson:"searchRequestId"`
+	ViewerID        string        `bson:"viewerId,omitempty"`
+	CommandDigest   string        `bson:"commandDigest"`
+	EventType       string        `bson:"eventType"`
+	ObjectID        string        `bson:"objectId,omitempty"`
+	Target          string        `bson:"target,omitempty"`
+	RankPosition    int           `bson:"rankPosition,omitempty"`
+	ReferralSource  string        `bson:"referralSource,omitempty"`
+	FeedRequestID   string        `bson:"feedRequestId,omitempty"`
+	DwellMs         int           `bson:"dwellMs,omitempty"`
+	CreatedAt       time.Time     `bson:"createdAt"`
 }
 
 type feedbackCommandReceiptDoc struct {
@@ -165,10 +206,30 @@ type feedbackCommandReceiptDoc struct {
 	ExpiresAt       time.Time `bson:"expiresAt"`
 }
 
+// feedbackSignalDeliveryDoc is the mutable delivery state for one stable
+// recommendation signal. The associated feedbackDoc remains append-only.
+type feedbackSignalDeliveryDoc struct {
+	ID                string        `bson:"_id"`
+	FeedbackFactID    bson.ObjectID `bson:"feedbackFactId"`
+	SignalPayloadJSON string        `bson:"signalPayloadJson"`
+	Status            string        `bson:"status"`
+	LeaseOwner        string        `bson:"leaseOwner,omitempty"`
+	LeaseExpiresAt    *time.Time    `bson:"leaseExpiresAt,omitempty"`
+	LastAttemptAt     *time.Time    `bson:"lastAttemptAt,omitempty"`
+	PublishedAt       *time.Time    `bson:"publishedAt,omitempty"`
+	CreatedAt         time.Time     `bson:"createdAt"`
+	UpdatedAt         time.Time     `bson:"updatedAt"`
+	ExpiresAt         *time.Time    `bson:"expiresAt,omitempty"`
+}
+
 const (
 	receiptApplying  = "applying"
 	receiptCompleted = "completed"
 	receiptConflict  = "conflict"
+
+	signalDeliveryPending    = "pending"
+	signalDeliveryPublishing = "publishing"
+	signalDeliveryPublished  = "published"
 )
 
 func (s *Store) Record(
@@ -176,13 +237,70 @@ func (s *Store) Record(
 	event feedbackapplication.Event,
 	meta feedbackapplication.CommandMeta,
 ) error {
-	receipt, err := s.claimReceipt(ctx, event, meta)
+	session, err := s.feedback.Database().Client().StartSession()
 	if err != nil {
 		return err
 	}
-	if receipt.Status == receiptCompleted {
-		return nil
+	defer session.EndSession(ctx)
+
+	semanticConflict := false
+	_, err = session.WithTransaction(
+		ctx,
+		func(txCtx context.Context) (any, error) {
+			receipt, receiptErr := s.claimReceipt(txCtx, event, meta)
+			if receiptErr != nil {
+				return nil, receiptErr
+			}
+			if receipt.Status == receiptCompleted {
+				return nil, nil
+			}
+
+			document, conflict, documentErr := s.ensureFeedbackFact(
+				txCtx,
+				event,
+				meta,
+			)
+			if documentErr != nil {
+				return nil, documentErr
+			}
+			if conflict {
+				if markErr := s.markReceipt(
+					txCtx,
+					meta.IdempotencyKey,
+					receiptConflict,
+				); markErr != nil {
+					return nil, markErr
+				}
+				semanticConflict = true
+				return nil, nil
+			}
+			if deliveryErr := s.ensureSignalDelivery(txCtx, document); deliveryErr != nil {
+				return nil, deliveryErr
+			}
+			if markErr := s.markReceipt(
+				txCtx,
+				meta.IdempotencyKey,
+				receiptCompleted,
+			); markErr != nil {
+				return nil, markErr
+			}
+			return nil, nil
+		},
+	)
+	if err != nil {
+		return err
 	}
+	if semanticConflict {
+		return feedbackapplication.ErrIdempotencyConflict
+	}
+	return nil
+}
+
+func (s *Store) ensureFeedbackFact(
+	ctx context.Context,
+	event feedbackapplication.Event,
+	meta feedbackapplication.CommandMeta,
+) (feedbackDoc, bool, error) {
 	document := feedbackDoc{
 		SearchRequestID: event.SearchRequestID,
 		ViewerID:        event.ViewerID,
@@ -196,32 +314,86 @@ func (s *Store) Record(
 		DwellMs:         event.DwellMs,
 		CreatedAt:       time.Now().UTC(),
 	}
-	_, err = s.feedback.InsertOne(ctx, document)
-	if err != nil && !mongo.IsDuplicateKeyError(err) {
-		return err
-	}
-	if mongo.IsDuplicateKeyError(err) {
-		var existing feedbackDoc
-		if findErr := s.feedback.FindOne(ctx, bson.M{
+	var existing feedbackDoc
+	if err := s.feedback.FindOneAndUpdate(
+		ctx,
+		bson.M{
 			"searchRequestId": event.SearchRequestID,
 			"eventType":       event.EventType,
 			"objectId":        event.ObjectID,
-		}).Decode(&existing); findErr != nil {
-			return findErr
-		}
-		if existing.CommandDigest != meta.CommandDigest ||
-			existing.ViewerID != event.ViewerID {
-			if markErr := s.markReceipt(
-				ctx,
-				meta.IdempotencyKey,
-				receiptConflict,
-			); markErr != nil {
-				return markErr
-			}
-			return feedbackapplication.ErrIdempotencyConflict
-		}
+		},
+		bson.M{"$setOnInsert": document},
+		options.FindOneAndUpdate().
+			SetUpsert(true).
+			SetReturnDocument(options.After),
+	).Decode(&existing); err != nil {
+		return feedbackDoc{}, false, fmt.Errorf("upsert search feedback fact: %w", err)
 	}
-	return s.markReceipt(ctx, meta.IdempotencyKey, receiptCompleted)
+	if existing.CommandDigest != meta.CommandDigest ||
+		existing.ViewerID != event.ViewerID {
+		return feedbackDoc{}, true, nil
+	}
+	return existing, false, nil
+}
+
+func (s *Store) ensureSignalDelivery(
+	ctx context.Context,
+	document feedbackDoc,
+) error {
+	signal, ok := feedbackapplication.RecommendationSignal(
+		feedbackapplication.Event{
+			SearchRequestID: document.SearchRequestID,
+			ViewerID:        document.ViewerID,
+			EventType:       document.EventType,
+			ObjectID:        document.ObjectID,
+			Target:          document.Target,
+			RankPosition:    document.RankPosition,
+			ReferralSource:  document.ReferralSource,
+			FeedRequestID:   document.FeedRequestID,
+			DwellMs:         document.DwellMs,
+		},
+		document.CreatedAt,
+	)
+	if !ok {
+		if document.EventType == "click" {
+			return fmt.Errorf(
+				"committed click feedback cannot produce recommendation signal",
+			)
+		}
+		return nil
+	}
+	payload, err := json.Marshal(signal)
+	if err != nil {
+		return fmt.Errorf("serialize feedback recommendation signal: %w", err)
+	}
+	now := time.Now().UTC()
+	delivery := feedbackSignalDeliveryDoc{
+		ID:                signal.SignalID,
+		FeedbackFactID:    document.ID,
+		SignalPayloadJSON: string(payload),
+		Status:            signalDeliveryPending,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	var existing feedbackSignalDeliveryDoc
+	if err := s.signalDeliveries.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": signal.SignalID},
+		bson.M{"$setOnInsert": delivery},
+		options.FindOneAndUpdate().
+			SetUpsert(true).
+			SetReturnDocument(options.After),
+	).Decode(&existing); err != nil {
+		return fmt.Errorf("upsert search feedback signal delivery: %w", err)
+	}
+	if existing.FeedbackFactID != document.ID ||
+		existing.SignalPayloadJSON != delivery.SignalPayloadJSON {
+		return fmt.Errorf(
+			"feedback signal delivery invariant conflict for %s",
+			signal.SignalID,
+		)
+	}
+	return nil
 }
 
 func (s *Store) claimReceipt(
@@ -244,16 +416,16 @@ func (s *Store) claimReceipt(
 			time.Duration(FeedbackTTLSeconds) * time.Second,
 		),
 	}
-	if _, err := s.receipts.InsertOne(ctx, receipt); err == nil {
-		return receipt, nil
-	} else if !mongo.IsDuplicateKeyError(err) {
-		return feedbackCommandReceiptDoc{}, err
-	}
-	if err := s.receipts.FindOne(
+	if err := s.receipts.FindOneAndUpdate(
 		ctx,
 		bson.M{"_id": meta.IdempotencyKey},
+		bson.M{"$setOnInsert": receipt},
+		options.FindOneAndUpdate().
+			SetUpsert(true).
+			SetReturnDocument(options.After),
 	).Decode(&receipt); err != nil {
-		return feedbackCommandReceiptDoc{}, err
+		return feedbackCommandReceiptDoc{},
+			fmt.Errorf("upsert search feedback receipt: %w", err)
 	}
 	if receipt.CommandDigest != meta.CommandDigest ||
 		receipt.ViewerID != event.ViewerID ||
@@ -292,4 +464,106 @@ func (s *Store) markReceipt(
 		return fmt.Errorf("mark search feedback receipt %s: receipt missing", status)
 	}
 	return nil
+}
+
+func (s *Store) leaseNextSignalDelivery(
+	ctx context.Context,
+	leaseOwner string,
+	leaseDuration time.Duration,
+) (feedbackSignalDeliveryDoc, bool, error) {
+	now := time.Now().UTC()
+	leaseExpiresAt := now.Add(leaseDuration)
+	var delivery feedbackSignalDeliveryDoc
+	err := s.signalDeliveries.FindOneAndUpdate(
+		ctx,
+		bson.M{
+			"$or": []bson.M{
+				{"status": signalDeliveryPending},
+				{
+					"status":         signalDeliveryPublishing,
+					"leaseExpiresAt": bson.M{"$lte": now},
+				},
+			},
+		},
+		bson.M{"$set": bson.M{
+			"status":         signalDeliveryPublishing,
+			"leaseOwner":     leaseOwner,
+			"leaseExpiresAt": leaseExpiresAt,
+			"lastAttemptAt":  now,
+			"updatedAt":      now,
+		}},
+		options.FindOneAndUpdate().
+			SetSort(bson.D{
+				{Key: "createdAt", Value: 1},
+				{Key: "_id", Value: 1},
+			}).
+			SetReturnDocument(options.After),
+	).Decode(&delivery)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return feedbackSignalDeliveryDoc{}, false, nil
+	}
+	if err != nil {
+		return feedbackSignalDeliveryDoc{}, false, err
+	}
+	return delivery, true, nil
+}
+
+func (s *Store) acknowledgeSignalDelivery(
+	ctx context.Context,
+	deliveryID string,
+	leaseOwner string,
+) (bool, error) {
+	now := time.Now().UTC()
+	expiresAt := now.Add(time.Duration(FeedbackTTLSeconds) * time.Second)
+	result, err := s.signalDeliveries.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":        deliveryID,
+			"status":     signalDeliveryPublishing,
+			"leaseOwner": leaseOwner,
+		},
+		bson.M{
+			"$set": bson.M{
+				"status":      signalDeliveryPublished,
+				"publishedAt": now,
+				"updatedAt":   now,
+				"expiresAt":   expiresAt,
+			},
+			"$unset": bson.M{
+				"leaseOwner":     "",
+				"leaseExpiresAt": "",
+			},
+		},
+	)
+	if err != nil {
+		return false, err
+	}
+	return result.MatchedCount == 1, nil
+}
+
+func (s *Store) releaseSignalDelivery(
+	ctx context.Context,
+	deliveryID string,
+	leaseOwner string,
+) error {
+	now := time.Now().UTC()
+	_, err := s.signalDeliveries.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":        deliveryID,
+			"status":     signalDeliveryPublishing,
+			"leaseOwner": leaseOwner,
+		},
+		bson.M{
+			"$set": bson.M{
+				"status":    signalDeliveryPending,
+				"updatedAt": now,
+			},
+			"$unset": bson.M{
+				"leaseOwner":     "",
+				"leaseExpiresAt": "",
+			},
+		},
+	)
+	return err
 }

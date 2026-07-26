@@ -116,7 +116,6 @@ func TestExternalInteractionPersistsIdempotentlyAndRecordsProviderAttempt(t *tes
 		integrationReliableStore,
 		map[string]reliabletask.ExternalProvider{"aliyun_sms": smsProvider},
 		policies,
-		callbackRecorder{},
 		references,
 	)
 	if err != nil {
@@ -181,7 +180,6 @@ func TestExternalInteractionPersistsIdempotentlyAndRecordsProviderAttempt(t *tes
 		reopenedStore,
 		map[string]reliabletask.ExternalProvider{"aliyun_sms": smsProvider},
 		policies,
-		callbackRecorder{},
 		references,
 	)
 	if err != nil {

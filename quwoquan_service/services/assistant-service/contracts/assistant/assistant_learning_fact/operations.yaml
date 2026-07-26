@@ -1,0 +1,214 @@
+commercial_defaults:
+  status: blocked
+  block_reason: 未显式声明的学习事实操作默认阻断。
+  gap_id: ASSISTANT_LEARNING_FACT_UNDECLARED_OPERATION
+  target_story: feedback-aggregation
+description: AssistantLearningFact 唯一 append command；用户反馈与服务评分共享同一事实、receipt 和 outbox。
+api_routes:
+- method: POST
+  path: /assistant/learning/facts
+  operation: AppendAssistantLearningFact
+  actor: persona
+  commercial:
+    status: ready
+  client_contract:
+    dart_import: ../assistant/assistant_contracts.dart
+    request_type: AssistantLearningFactAppendCommand
+    response_type: AssistantLearningFactAppendReceipt
+    request_encoder: encodeAssistantLearningFactAppendCommand
+    response_decoder: decodeAssistantLearningFactAppendReceipt
+  application:
+    kind: command
+    facet: AssistantLearningFactAppendSink
+    method: appendUserFact
+    append_sink: AssistantLearningFact
+    mutation_target: AssistantLearningFact
+    invariant_target: AssistantLearningFact
+  request_entity: AppendAssistantLearningFactRequest
+  request_fields:
+  - eventId
+  - eventVersion
+  - factType
+  - assistantTurnId
+  - triggerMessageId
+  - referralSource
+  - domainId
+  - eventType
+  - feedbackType
+  - feedbackScore
+  - reasonCodes
+  - actionType
+  - suggestedActionId
+  - durationMs
+  - queryText
+  - answerText
+  - feedbackText
+  - correctionText
+  - trainingEligible
+  - occurredAt
+  response_entity: AssistantLearningFactReceipt
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 3
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.learning_fact_invalid
+  - ASSISTANT.USER.learning_fact_unauthorized
+  - ASSISTANT.USER.learning_fact_owner_mismatch
+  - ASSISTANT.USER.learning_fact_run_not_found
+  - ASSISTANT.USER.learning_fact_identity_conflict
+  - ASSISTANT.SYSTEM.learning_fact_sink_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_learning_fact_append
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - fact_type
+    - deduplicated
+    - training_eligible
+  slo:
+    latency_p95_ms: 800
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: requester_self
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+- method: POST
+  path: /internal/assistant/learning/facts
+  operation: AppendAssistantServiceLearningFact
+  actor: account
+  commercial:
+    status: ready
+  application:
+    kind: command
+    facet: AssistantLearningFactAppendSink
+    method: appendServiceFact
+    append_sink: AssistantLearningFact
+    mutation_target: AssistantLearningFact
+    invariant_target: AssistantLearningFact
+  request_entity: AppendAssistantServiceLearningFactRequest
+  request_fields:
+  - eventId
+  - eventVersion
+  - factType
+  - assistantTurnId
+  - referralSource
+  - domainId
+  - metricId
+  - metricValue
+  - metricSource
+  - trainingEligible
+  - occurredAt
+  response_entity: AssistantLearningFactReceipt
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 3
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.learning_fact_invalid
+  - ASSISTANT.USER.learning_fact_unauthorized
+  - ASSISTANT.USER.learning_fact_run_not_found
+  - ASSISTANT.USER.learning_fact_identity_conflict
+  - ASSISTANT.SYSTEM.learning_fact_sink_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_learning_fact_append
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - fact_type
+    - deduplicated
+  slo:
+    latency_p95_ms: 800
+    availability_percent: 99.9
+  authorization:
+    principal: service
+    ownership_policy: internal_service
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+- method: GET
+  path: /assistant/ops/learning-summary
+  operation: GetLearningOpsSummary
+  actor: account
+  query_params:
+  - userId
+  application:
+    kind: query
+    facet: AssistantLearningOpsQueryFacade
+    method: getLearningSummary
+    reader: AssistantLearningOpsReader
+    slice: AssistantLearningOpsSummaryView
+  description: operator 在显式读权限守卫下读取目标用户的 AssistantLearningFact 投影摘要与低分 metric 下钻摘要。
+  response_entity: AssistantLearningOpsSummaryView
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.unauthorized
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_learning_ops_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.5
+  authorization:
+    principal: operator
+    scopes:
+    - ops.assistant.learning.read
+    permissions:
+    - assistant.learning_summary.read
+    ownership_policy: operator_scope
+  security:
+    auth_mode: required
+    principal: operator
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+consumers:
+- name: app
+  capabilities:
+  - append_learning_facts
+- name: assistant-service
+  capabilities:
+  - append_service_learning_facts
+- name: platform-ops
+  capabilities:
+  - read_learning_summary
+- name: recommendation-engine
+  capabilities:
+  - read_learning_facts

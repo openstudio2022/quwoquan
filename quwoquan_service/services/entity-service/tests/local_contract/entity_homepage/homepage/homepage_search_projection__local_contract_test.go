@@ -51,3 +51,18 @@ func TestProjectHomepageWithoutLocationLeavesGeoNil(t *testing.T) {
 		t.Fatalf("placeName should still carry the city: %#v", got.Fields)
 	}
 }
+
+func TestProjectHomepageCarriesPromotedPlaceAsExactLookupAnchor(t *testing.T) {
+	hp := Homepage{
+		ID:                "hp_promoted",
+		Title:             "断桥残雪主页",
+		CanonicalEntityID: "entity:sight:broken-bridge",
+		Status:            "published",
+		LookupAliases:     []string{"entity:sight:broken-bridge", "place_0123456789abcdef"},
+	}
+
+	got := ProjectHomepageToSearchDocument(hp)
+	if got.Fields["placeId"] != "place_0123456789abcdef" {
+		t.Fatalf("placeId exact anchor=%q want promoted source place", got.Fields["placeId"])
+	}
+}

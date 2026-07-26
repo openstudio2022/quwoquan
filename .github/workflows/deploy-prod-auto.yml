@@ -319,6 +319,7 @@ jobs:
     env:
       PROMETHEUS_URL: ${{ vars.PROD_PROMETHEUS_URL }}
       QWQ_PROD_RELEASE_STATE_DIR: ${{ vars.PROD_RELEASE_STATE_DIR }}
+      QWQ_PROD_BACKUP_RECOVERY_RECEIPT: ${{ vars.PROD_BACKUP_RECOVERY_RECEIPT }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -338,6 +339,16 @@ jobs:
             echo "::error::resolved release artifact is required; local regeneration is forbidden"
             exit 1
           }
+      - name: Require fresh hosted backup and recovery receipt
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        run: |
+          python3 quwoquan_ops/cli/stackctl.py verify \
+            --env prod \
+            --target prod-hosted \
+            --kind all \
+            --profile release \
+            --backup-recovery-receipt "$QWQ_PROD_BACKUP_RECOVERY_RECEIPT" \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-backup-recovery-preflight"
       - name: Unpack service package config evidence
         if: ${{ hashFiles(format('{0}/env/repo/local/ci-packages/process/service/mainline/manifest.json', env.QWQ_OUTPUT_ROOT)) != '' }}
         run: |

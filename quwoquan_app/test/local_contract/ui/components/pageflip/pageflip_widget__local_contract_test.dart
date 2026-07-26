@@ -1372,10 +1372,10 @@ void main() {
     );
     expect(
       multiPlaneStates,
-      isEmpty,
+      isNotEmpty,
       reason:
-          'multi-plane back regression: BACK must not expose previous front '
-          'as the same moving sheet plane as sheetVersoBack.',
+          'BACK must expose recto and verso as slices of one moving previous '
+          'leaf, rather than replacing the current page with a separate front plane.',
     );
     final lateBackStates = backwardAnimationStates.where(
       (state) =>
@@ -1694,516 +1694,73 @@ void main() {
     },
   );
 
-  testWidgets('PageflipDiagnosticsApp backward verso samples semantic back surface', (
-    WidgetTester tester,
-  ) async {
-    final sample = await _renderBackwardVersoTextureProbeScene(tester);
-
-    expect(
-      sample.renderSceneReady,
-      isTrue,
-      reason:
-          'runtime semantic-back probe must only pass after the BACK scene is '
-          'texture-ready.',
-    );
-    expect(
-      sample.sessionHasBundle,
-      isTrue,
-      reason:
-          'runtime semantic-back probe must expose the actual BACK bundle state.',
-    );
-    expect(sample.activeRectoPageIndex, equals(2));
-    expect(sample.activeBottomPageIndex, equals(3));
-    expect(sample.versoDisplayState, equals('semanticSnapshot'));
-    expect(
-      sample.backBandWidth,
-      greaterThan(12),
-      reason:
-          'probe requires a visible BACK fold band to judge texture source.',
-    );
-    expect(
-      sample.backSurfaceStrategy,
-      equals('paperFoldBackMainlineSurface'),
-      reason: 'probe must run on the Route-B previous-back mainline surface.',
-    );
-    expect(
-      sample.activeVersoSurfaceKind,
-      equals('back'),
-      reason:
-          'BACK verso runtime snapshot must be marked as semantic back surface.',
-    );
-    expect(
-      sample.activeVersoPageIndex,
-      equals(2),
-      reason:
-          'BACK verso runtime snapshot must remain bound to the flipping leaf.',
-    );
-    expect(
-      sample.uvStrategy,
-      equals('materialLockedUv'),
-      reason:
-          'runtime probe must expose the UV strategy so screenshot diagnostics '
-          'can distinguish fixed material sampling from dynamic source-area scanning.',
-    );
-    expect(
-      sample.runtimeFailureReason,
-      BackwardVersoFailureReason.none,
-      reason:
-          'runtime probe must not report snapshot/mesh/probe-point failures in '
-          'the accepted BACK mainline pose.',
-    );
-    expect(
-      sample.probePointCount,
-      greaterThanOrEqualTo(1),
-      reason:
-          'runtime probe must expose at least one stable fold-band sample point; '
-          'direction discrimination is enforced by the dedicated pixel test.',
-    );
-    expect(
-      sample.frontBackOverlapWidth,
-      anyOf(isNull, greaterThanOrEqualTo(0)),
-      reason:
-          'runtime probe must report front/back overlap for visibility triage.',
-    );
-    expect(
-      sample.backVisibleUncoveredWidth,
-      greaterThan(0),
-      reason:
-          'BACK must leave at least one visible back-band region not covered by front/recto paint.',
-    );
-    expect(
-      _semanticBackVisiblePixels(
-        sample.framebufferColorCountsBySource['sheetVersoBack'] ??
-            const <_ProbeColor, int>{},
-      ),
-      greaterThan(0),
-      reason:
-          'source-mask oracle needs visible semantic-back pixels in the verso polygon.',
-    );
-    expect(
-      sample.framebufferColorCountsBySource['sheetVersoBack']?[_ProbeColor
-              .red] ??
-          0,
-      0,
-    );
-    expect(
-      sample.framebufferColorCountsBySource['sheetVersoBack']?[_ProbeColor
-              .green] ??
-          0,
-      0,
-    );
-    _expectVisibleBackMostlySemantic(sample, poseLabel: 'default_back_probe');
-    _expectVisibleBackHasSpatialTexture(
-      sample,
-      poseLabel: 'default_back_probe',
-    );
-    _expectProbeTextureAnchoredToPageLocal(
-      sample,
-      poseLabel: 'default_back_probe',
-    );
-  });
-
-  testWidgets('BACK visible-back oracle stays semantic across angled poses', (
-    WidgetTester tester,
-  ) async {
-    for (final (label, delta) in <(String, Offset)>[
-      ('angled_early', const Offset(180, -18)),
-      ('angled_mid', const Offset(300, -30)),
-      ('angled_late', const Offset(360, -36)),
-    ]) {
-      final sample = await _renderBackwardVersoTextureProbeScene(
-        tester,
-        backwardDragDelta: delta,
-      );
-      _expectVisibleBackMostlySemantic(sample, poseLabel: label);
-      _expectVisibleBackHasSpatialTexture(sample, poseLabel: label);
-      _expectProbeTextureAnchoredToPageLocal(sample, poseLabel: label);
-      _expectMovingSheetKeepsBackDominant(sample, poseLabel: label);
-    }
-  });
-
-  testWidgets('BACK visible-back oracle stays semantic in horizontal pose', (
-    WidgetTester tester,
-  ) async {
-    final sample = await _renderBackwardVersoTextureProbeScene(
-      tester,
-      backwardDragDelta: const Offset(360, 0),
-    );
-    _expectVisibleBackMostlySemantic(
-      sample,
-      poseLabel: 'horizontal_no_angle',
-      minSemanticRatio: 0.85,
-      maxFrontCurrentRatio: 0.05,
-      maxOtherRatio: 0.10,
-    );
-    _expectVisibleBackHasSpatialTexture(
-      sample,
-      poseLabel: 'horizontal_no_angle',
-    );
-    _expectProbeTextureAnchoredToPageLocal(
-      sample,
-      poseLabel: 'horizontal_no_angle',
-    );
-    _expectMovingSheetKeepsBackDominant(
-      sample,
-      poseLabel: 'horizontal_no_angle',
-    );
-  });
-
-  testWidgets('BACK horizontal source mask rejects multi-plane current leaks', (
-    WidgetTester tester,
-  ) async {
-    final sample = await _renderBackwardVersoTextureProbeScene(
-      tester,
-      backwardDragDelta: const Offset(540, 0),
-    );
-    final sourcesByLabel = <String, BackwardPaintSourceDiagnostic>{
-      for (final source in sample.paintSources) source.label: source,
-    };
-    final verso = sourcesByLabel['sheetVersoBack'];
-    final paintedUnion = sourcesByLabel['sheetPaintedUnion'];
-    expect(
-      sourcesByLabel['sheetRectoFront'],
-      isNull,
-      reason:
-          'multi-plane back regression: horizontal BACK must not expose a compressed sheetRectoFront plane.',
-    );
-    expect(verso?.viewportBounds, isNotNull);
-    expect(paintedUnion?.viewportBounds, isNotNull);
-
-    final versoWidth = verso!.viewportBounds!.width;
-    expect(
-      versoWidth,
-      greaterThan(sample.pageSize.width * 0.18),
-      reason:
-          'back curled band: horizontal BACK must keep a meaningful forward-equivalent back surface.',
-    );
-
-    final currentPixels = sample.movingSheetColorCounts[_ProbeColor.green] ?? 0;
-    final movingPixels = sample.movingSheetPixelCount;
-    expect(movingPixels, greaterThan(0));
-    expect(
-      currentPixels / movingPixels,
-      lessThan(0.08),
-      reason:
-          'horizontal BACK moving sheet must not be dominated by current-page '
-          'leakage from the bottom layer.',
-    );
-    final unionCounts =
-        sample.framebufferColorCountsBySource['sheetPaintedUnion'] ??
-        const <_ProbeColor, int>{};
-    final unionPixels = unionCounts.values.fold(0, (sum, count) => sum + count);
-    final unionCurrentPixels = unionCounts[_ProbeColor.green] ?? 0;
-    expect(unionPixels, greaterThan(0));
-    expect(
-      unionCurrentPixels / unionPixels,
-      lessThan(0.08),
-      reason:
-          'current leak: horizontal BACK painted union must cover the moving sheet; current '
-          'front inside this union is leaked underlay. counts=$unionCounts',
-    );
-    final frontPixels = sample.movingSheetColorCounts[_ProbeColor.red] ?? 0;
-    expect(
-      frontPixels / movingPixels,
-      lessThan(0.08),
-      reason:
-          'front compressed/current leak: horizontal BACK moving sheet must not be replaced by a front plane.',
-    );
-  });
-
-  testWidgets('BACK previous front replacement is page 2, not current leak', (
-    WidgetTester tester,
-  ) async {
-    final sample = await _renderBackwardVersoTextureProbeScene(
-      tester,
-      backwardDragDelta: const Offset(360, -36),
-    );
-    final sourcesByLabel = <String, BackwardPaintSourceDiagnostic>{
-      for (final source in sample.paintSources) source.label: source,
-    };
-    expect(
-      sourcesByLabel['previousFrontReplacement'],
-      isNotNull,
-      reason:
-          'previous front missing: BACK must expose a page-space page 2 front replacement source.',
-    );
-    expect(
-      sourcesByLabel['previousFrontReplacement']?.pageIndex,
-      2,
-      reason: 'previousFrontReplacement must bind to the previous page.',
-    );
-    final replacementCounts = sample.previousFrontReplacementVisibleColorCounts;
-    final replacementPixels = replacementCounts.values.fold(
-      0,
-      (sum, count) => sum + count,
-    );
-    final previousFrontPixels =
-        (replacementCounts[_ProbeColor.red] ?? 0) +
-        (replacementCounts[_ProbeColor.black] ?? 0);
-    final currentLeakPixels = replacementCounts[_ProbeColor.green] ?? 0;
-    expect(
-      replacementPixels,
-      greaterThan(120),
-      reason:
-          'previous front missing: previousFrontReplacement must have a measurable framebuffer region.',
-    );
-    expect(
-      previousFrontPixels / replacementPixels,
-      greaterThan(0.55),
-      reason:
-          'previous front missing: replacement must be dominated by page 2 front pixels. counts=$replacementCounts',
-    );
-    expect(
-      currentLeakPixels / replacementPixels,
-      lessThan(0.12),
-      reason:
-          'current leak in previous front replacement: page 3 must not occupy the replacement source. counts=$replacementCounts',
-    );
-    expect(
-      _semanticBackVisiblePixels(
-        sample.framebufferColorCountsBySource['sheetVersoBack'] ??
-            const <_ProbeColor, int>{},
-      ),
-      greaterThan(0),
-      reason:
-          'previous front repair must not remove the semantic previous-back surface.',
-    );
-  });
-
-  testWidgets('BACK single sheet source is previous back, not current underlay', (
-    WidgetTester tester,
-  ) async {
-    for (final (label, delta) in <(String, Offset)>[
-      ('high_overlap', const Offset(360, -36)),
-      ('horizontal_low', const Offset(360, 0)),
-      ('horizontal_late', const Offset(540, 0)),
-    ]) {
-      final sample = await _renderBackwardVersoTextureProbeScene(
-        tester,
-        backwardDragDelta: delta,
-      );
-      expect(
-        sample.paintSources.any((source) => source.label == 'sheetRectoFront'),
-        isFalse,
-        reason:
-            '$label must not expose compressed sheetRectoFront as a separate plane.',
-      );
-      final backCounts =
-          sample.framebufferColorCountsBySource['sheetVersoBack'] ??
-          const <_ProbeColor, int>{};
-      final semanticBackPixels = _semanticBackVisiblePixels(backCounts);
-      final currentFrontPixels = backCounts[_ProbeColor.green] ?? 0;
-      final backPixels = backCounts.values.fold(0, (sum, count) => sum + count);
-      expect(backPixels, greaterThan(0));
-      expect(
-        semanticBackPixels / backPixels,
-        greaterThan(0.60),
-        reason:
-            '$label sheetVersoBack must be previous-page back pixels. counts=$backCounts',
-      );
-      expect(
-        currentFrontPixels / backPixels,
-        lessThan(0.08),
-        reason:
-            '$label sheetVersoBack must not be current-page underlay leakage. counts=$backCounts',
-      );
-    }
-  });
-
-  testWidgets(
-    'BACK late dynamic moving sheet does not collapse into front contamination',
-    (WidgetTester tester) async {
-      for (final (label, delta) in <(String, Offset)>[
-        ('late_angled_user_pose', const Offset(480, -72)),
-        ('near_finish_user_pose', const Offset(500, -80)),
-      ]) {
-        final sample = await _renderBackwardVersoTextureProbeScene(
-          tester,
-          backwardDragDelta: delta,
-        );
-        _expectMovingSheetKeepsBackDominant(
-          sample,
-          poseLabel: label,
-          minSemanticSheetRatio: 0.56,
-          maxFrontCurrentSheetRatio: 0.30,
-        );
-        _expectVisibleBackMostlySemantic(
-          sample,
-          poseLabel: label,
-          minSemanticRatio: 0.82,
-          maxFrontCurrentRatio: 0.08,
-          maxOtherRatio: 0.12,
-        );
-        expect(
-          sample.visibleProbeCount,
-          greaterThanOrEqualTo(3),
-          reason:
-              '$label must not narrow sheetVersoBack so much that probes collapse to the screenshot samples=1 symptom.',
-        );
-        expect(
-          sample.backVisibleUncoveredWidth,
-          isNotNull,
-          reason: '$label must keep a measurable semantic-back band.',
-        );
-        expect(
-          sample.backVisibleUncoveredWidth!,
-          greaterThan(24),
-          reason:
-              '$label must not squeeze semantic back into the near-finish strip seen in the user screenshot.',
-        );
-      }
-    },
-  );
-
-  testWidgets('BACK angled verso texture scale stays stable while clipped', (
+  testWidgets('BACK middle pose paints current with recto and verso on one sheet', (
     WidgetTester tester,
   ) async {
     final samples = <_BackwardVersoTextureProbeSample>[];
-    for (final delta in <Offset>[
-      const Offset(300, -30),
-      const Offset(480, -72),
-      const Offset(540, -96),
+    for (final dragSteps in <List<Offset>>[
+      List<Offset>.filled(3, const Offset(64, 0)),
+      List<Offset>.filled(4, const Offset(64, 0)),
+      List<Offset>.filled(5, const Offset(64, 0)),
     ]) {
       samples.add(
         await _renderBackwardVersoTextureProbeScene(
           tester,
-          backwardDragDelta: delta,
+          surfaceSize: const Size(408, 916),
+          backwardDragSteps: dragSteps,
         ),
       );
     }
 
-    final scales = samples.map(_stableTextureScaleX).toList(growable: false);
-    expect(scales.every((scale) => scale.isFinite && scale > 0), isTrue);
-    for (final scale in scales) {
-      expect(
-        scale,
-        closeTo(1.0, 0.15),
-        reason:
-            'angled BACK must keep 1:1 source-paper texture scale instead of '
-            'the previous ~6.7x stable-band magnification. scales=$scales',
-      );
-    }
-    final minScale = scales.reduce(math.min);
-    final maxScale = scales.reduce(math.max);
+    final qualifyingSamples = samples
+        .where((sample) {
+          final sources = <String, BackwardPaintSourceDiagnostic>{
+            for (final source in sample.paintSources) source.label: source,
+          };
+          final recto = sources['sheetRectoFront'];
+          final verso = sources['sheetVersoBack'];
+          final current = sources['staticCurrentFront'];
+          final rectoBounds = recto?.viewportBounds;
+          final currentBounds = current?.viewportBounds;
+          final rectoCounts =
+              sample.framebufferColorCountsBySource['sheetRectoFront'] ??
+              const <_ProbeColor, int>{};
+          final versoCounts =
+              sample.framebufferColorCountsBySource['sheetVersoBack'] ??
+              const <_ProbeColor, int>{};
+          final currentCounts =
+              sample.framebufferColorCountsBySource['staticCurrentFront'] ??
+              const <_ProbeColor, int>{};
+          return recto?.pageIndex == 2 &&
+              verso?.pageIndex == 2 &&
+              current?.pageIndex == 3 &&
+              recto?.surfaceKind == 'front' &&
+              verso?.surfaceKind == 'back' &&
+              rectoBounds != null &&
+              currentBounds != null &&
+              rectoBounds.intersect(currentBounds).width > 1 &&
+              rectoBounds.intersect(currentBounds).height > 1 &&
+              (rectoCounts[_ProbeColor.red] ?? 0) > 0 &&
+              _semanticBackVisiblePixels(versoCounts) > 0 &&
+              (currentCounts[_ProbeColor.green] ?? 0) > 0;
+        })
+        .toList(growable: false);
+    final sourceDiagnostics = samples
+        .map(
+          (sample) => sample.paintSources
+              .map((source) => '${source.label}:${source.viewportBounds}')
+              .join(','),
+        )
+        .join(' | ');
+
     expect(
-      maxScale - minScale,
-      lessThan(0.01),
+      qualifyingSamples,
+      isNotEmpty,
       reason:
-          'angled BACK must keep semantic-back texture size stable; only the '
-          'polygon clip should change across the pullback sequence. scales=$scales',
+          'a late portrait BACK frame must paint current (L0), previous recto, '
+          'and previous verso (L1) together. The recto source must overlap the '
+          'visible current page in viewport space. samples=$sourceDiagnostics',
     );
-    expect(
-      samples.map((sample) => sample.backBandWidth).reduce(math.min),
-      lessThan(samples.map((sample) => sample.backBandWidth).reduce(math.max)),
-      reason:
-          'this oracle must cover visibly different back polygons rather than a static pose.',
-    );
-  });
-
-  testWidgets('BACK high-overlap pose still shows semantic back texture', (
-    WidgetTester tester,
-  ) async {
-    final sample = await _renderBackwardVersoTextureProbeScene(
-      tester,
-      backwardDragDelta: const Offset(360, -36),
-    );
-
-    expect(
-      sample.backBandWidth,
-      greaterThan(50),
-      reason: 'this oracle must cover the screenshot-like high-overlap pose.',
-    );
-    expect(
-      _semanticBackVisiblePixels(
-        sample.framebufferColorCountsBySource['sheetVersoBack'] ??
-            const <_ProbeColor, int>{},
-      ),
-      greaterThan(0),
-      reason:
-          'the fixed screenshot-like pose must show semantic-back source pixels.',
-    );
-    expect(
-      sample.framebufferColorCountsBySource['sheetVersoBack']?[_ProbeColor
-              .red] ??
-          0,
-      0,
-    );
-    expect(
-      sample.framebufferColorCountsBySource['sheetVersoBack']?[_ProbeColor
-              .green] ??
-          0,
-      0,
-    );
-  });
-
-  testWidgets('BACK verso samples the covered previous-page material side', (
-    WidgetTester tester,
-  ) async {
-    for (final (label, delta) in <(String, Offset)>[
-      ('early_angled', const Offset(180, -18)),
-      ('mid_angled', const Offset(300, -30)),
-      ('high_overlap', const Offset(360, -36)),
-      ('horizontal_zero_mid', const Offset(240, 0)),
-      ('horizontal_low', const Offset(360, 0)),
-    ]) {
-      final sample = await _renderBackwardVersoTextureProbeScene(
-        tester,
-        backwardDragDelta: delta,
-        debugBackPageSurfaceBuilder: _buildAsymmetricProbeBackPageSurface,
-      );
-      final versoCounts =
-          sample.framebufferColorCountsBySource['sheetVersoBack'] ??
-          const <_ProbeColor, int>{};
-      final semanticMaterialPixels = _semanticBackVisiblePixels(versoCounts);
-      _expectProbeTextureAnchoredToPageLocal(sample, poseLabel: label);
-
-      expect(
-        semanticMaterialPixels,
-        greaterThan(0),
-        reason:
-            '$label BACK verso must expose semantic previous-page back material. counts=$versoCounts',
-      );
-    }
-  });
-
-  testWidgets('BACK low-angle horizontal sweep stays back-dominant', (
-    WidgetTester tester,
-  ) async {
-    for (final (label, delta) in <(String, Offset)>[
-      ('horizontal_low_120', const Offset(120, 0)),
-      ('horizontal_low_180', const Offset(180, 0)),
-      ('horizontal_low_240', const Offset(240, 0)),
-      ('horizontal_low_300', const Offset(300, -8)),
-      ('horizontal_low_360', const Offset(360, 0)),
-      ('horizontal_low_420', const Offset(420, -12)),
-    ]) {
-      final sample = await _renderBackwardVersoTextureProbeScene(
-        tester,
-        backwardDragDelta: delta,
-      );
-      _expectMovingSheetKeepsBackDominant(
-        sample,
-        poseLabel: label,
-        minSemanticSheetRatio: 0.52,
-        maxFrontCurrentSheetRatio: 0.16,
-        minSheetPixels: 240,
-      );
-      _expectVisibleBackMostlySemantic(
-        sample,
-        poseLabel: label,
-        minSemanticRatio: 0.82,
-        maxFrontCurrentRatio: 0.08,
-        maxOtherRatio: 0.12,
-      );
-      expect(
-        sample.backBandWidth,
-        greaterThan(sample.pageSize.width * 0.18),
-        reason:
-            '$label zero/low-angle BACK must keep a meaningful forward-equivalent back surface. width=${sample.backBandWidth} '
-            'pageWidth=${sample.pageSize.width} '
-            'sources=${sample.paintSources.map((source) => source.label).toList()}',
-      );
-    }
   });
 
   testWidgets('BACK zero-angle iPhone17 pose keeps sheetVersoBack', (
@@ -2304,10 +1861,11 @@ void main() {
           return backBounds.right <= 0 || backBounds.left >= pageWidth;
         })
         .toList(growable: false);
-    final multiPlaneFrontSamples = samples
-        .where((sample) {
-          return sample.sheetRectoFrontBounds != null;
-        })
+    final rectoExpectedSamples = samples
+        .where((sample) => (sample.trace?.leafTotalRectoWidth ?? 0) > 0.05)
+        .toList(growable: false);
+    final rectoMissingSamples = rectoExpectedSamples
+        .where((sample) => sample.sheetRectoFrontBounds == null)
         .toList(growable: false);
     final jumpSamples = <_IPhone17ZeroAngleSample>[];
     for (var index = 1; index < samples.length; index += 1) {
@@ -2350,11 +1908,20 @@ void main() {
           '${jumpSamples.map((sample) => sample.describe()).join('\n')}',
     );
     expect(
-      multiPlaneFrontSamples,
+      rectoExpectedSamples,
+      isNotEmpty,
+      reason:
+          'the zero-angle sequence must contain a recto phase emitted by the '
+          'backward leaf frame.\n'
+          '${samples.map((sample) => sample.describe()).join('\n')}',
+    );
+    expect(
+      rectoMissingSamples,
       isEmpty,
       reason:
-          'iPhone17 zero-angle BACK must not reproduce a compressed sheetRectoFront plane.\n'
-          '${multiPlaneFrontSamples.map((sample) => sample.describe()).join('\n')}',
+          'every leaf-frame recto phase must be diagnosed as a slice of the '
+          'same moving sheet, not omitted as a page-space replacement.\n'
+          '${rectoMissingSamples.map((sample) => sample.describe()).join('\n')}',
     );
   });
 
@@ -2374,6 +1941,7 @@ void main() {
       containsAll(<String>[
         'staticCurrentFront',
         'bottomCurrentFront',
+        'sheetRectoFront',
         'sheetPaintedUnion',
         'sheetVersoBack',
         'foldOverlay',
@@ -2384,7 +1952,8 @@ void main() {
     );
     expect(sourcesByLabel['staticCurrentFront']?.pageIndex, 3);
     expect(sourcesByLabel['bottomCurrentFront']?.pageIndex, 3);
-    expect(sourcesByLabel['sheetRectoFront'], isNull);
+    expect(sourcesByLabel['sheetRectoFront']?.pageIndex, 2);
+    expect(sourcesByLabel['sheetRectoFront']?.surfaceKind, 'front');
     expect(sourcesByLabel['sheetVersoBack']?.pageIndex, 2);
     expect(sourcesByLabel['sheetVersoBack']?.surfaceKind, 'back');
     expect(sourcesByLabel, isNot(contains('previousFrontFlatUnifiedToBack')));
@@ -2411,28 +1980,20 @@ void main() {
           'source attribution is only useful when visible semantic-back pixels are proven.',
     );
     expect(
-      sample.framebufferColorCountsBySource['sheetVersoBack']?[_ProbeColor
+      sample.framebufferColorCountsBySource['sheetRectoFront']?[_ProbeColor
               .red] ??
           0,
-      0,
-      reason: 'the sheetVersoBack source must not be previous-front red.',
-    );
-    expect(
-      sample.framebufferColorCountsBySource['sheetVersoBack']?[_ProbeColor
-              .green] ??
-          0,
-      0,
+      greaterThan(0),
+      reason:
+          'the recto slice must expose previous-front pixels from the flipping '
+          'page in the same frame as the verso slice.',
     );
     expect(
       sourcesByLabel['sheetPaintedUnion']?.viewportPolygon.length ?? 0,
       greaterThanOrEqualTo(3),
       reason:
-          'the moving sheet painted union remains diagnosed even when recto is '
-          'not physically visible in this pose.',
-    );
-    expect(
-      sample.framebufferColorCountsBySource,
-      isNot(contains('sheetRectoFront')),
+          'the moving sheet painted union must cover both recto and verso '
+          'slices.',
     );
     expect(
       sample.framebufferColorCountsBySource['staticCurrentFront']?[_ProbeColor
@@ -2510,83 +2071,80 @@ void main() {
     },
   );
 
-  test(
-    'BACK material UV phase stays fixed when visible clip widens',
-      () async {
-        const pageSize = Size(400, 600);
-      const sheetPoint = Offset(230, 400);
-      const materialLocalPolygon = <Offset>[
-        Offset(60, 0),
-        Offset(460, 0),
-        Offset(460, 600),
-        Offset(60, 600),
-      ];
-      final snapshotImage = await _createSemanticBackSurfaceProbeImage(
+  test('BACK material UV phase stays fixed when visible clip widens', () async {
+    const pageSize = Size(400, 600);
+    const sheetPoint = Offset(230, 400);
+    const materialLocalPolygon = <Offset>[
+      Offset(60, 0),
+      Offset(460, 0),
+      Offset(460, 600),
+      Offset(60, 600),
+    ];
+    final snapshotImage = await _createSemanticBackSurfaceProbeImage(
+      pageSize: pageSize,
+      pageIndex: 2,
+    );
+    final snapshot = ArticlePageTextureSnapshot(
+      image: snapshotImage,
+      logicalSize: pageSize,
+      pixelRatio: 1,
+      semanticSurfaceKind: 'back',
+    );
+
+    Future<_ProbeColor> colorAtSheetPoint({
+      required List<Offset> polygon,
+    }) async {
+      final renderedImage = await renderBackwardLeafVersoProbeImage(
+        leafVersoSnapshot: snapshot,
         pageSize: pageSize,
-        pageIndex: 2,
+        polygon: polygon,
+        materialLocalPolygon: materialLocalPolygon,
       );
-      final snapshot = ArticlePageTextureSnapshot(
-        image: snapshotImage,
-        logicalSize: pageSize,
-        pixelRatio: 1,
-        semanticSurfaceKind: 'back',
+      expect(renderedImage, isNotNull);
+      final mesh = buildBackwardLeafVersoMaterialUvMesh(
+        pageSize: pageSize,
+        materialLocalPolygon: materialLocalPolygon,
       );
+      expect(mesh, isNotNull);
+      final bytes = await _rawRgbaBytes(renderedImage!);
+      final paintOrigin = _polygonBounds(polygon)!.inflate(1).topLeft;
+      final color = _classifyProbeColor(
+        _colorAtBytes(
+          renderedImage.width,
+          renderedImage.height,
+          bytes,
+          sheetPoint - paintOrigin,
+        ),
+      );
+      renderedImage.dispose();
+      return color;
+    }
 
-      Future<_ProbeColor> colorAtSheetPoint({
-        required List<Offset> polygon,
-      }) async {
-        final renderedImage = await renderBackwardLeafVersoProbeImage(
-          leafVersoSnapshot: snapshot,
-          pageSize: pageSize,
-          polygon: polygon,
-          materialLocalPolygon: materialLocalPolygon,
-        );
-        expect(renderedImage, isNotNull);
-        final mesh = buildBackwardLeafVersoMaterialUvMesh(
-          pageSize: pageSize,
-          materialLocalPolygon: materialLocalPolygon,
-        );
-        expect(mesh, isNotNull);
-        final bytes = await _rawRgbaBytes(renderedImage!);
-        final paintOrigin = _polygonBounds(polygon)!.inflate(1).topLeft;
-        final color = _classifyProbeColor(
-          _colorAtBytes(
-            renderedImage.width,
-            renderedImage.height,
-            bytes,
-            sheetPoint - paintOrigin,
-          ),
-        );
-        renderedImage.dispose();
-        return color;
-      }
-
-      final narrowColor = await colorAtSheetPoint(
-        polygon: const <Offset>[
-          Offset(300, 300),
-          Offset(240, 300),
-          Offset(240, 500),
-          Offset(120, 500),
-        ],
-      );
-      final wideColor = await colorAtSheetPoint(
-        polygon: const <Offset>[
-          Offset(300, 300),
-          Offset(360, 300),
-          Offset(360, 500),
-          Offset(120, 500),
-        ],
-      );
-      expect(narrowColor, equals(wideColor));
-      expect(
-        narrowColor,
-        isNot(_ProbeColor.other),
-        reason:
-            'widening the visible clip must not retarget BACK material UV sampling.',
-      );
-      snapshotImage.dispose();
-    },
-  );
+    final narrowColor = await colorAtSheetPoint(
+      polygon: const <Offset>[
+        Offset(300, 300),
+        Offset(240, 300),
+        Offset(240, 500),
+        Offset(120, 500),
+      ],
+    );
+    final wideColor = await colorAtSheetPoint(
+      polygon: const <Offset>[
+        Offset(300, 300),
+        Offset(360, 300),
+        Offset(360, 500),
+        Offset(120, 500),
+      ],
+    );
+    expect(narrowColor, equals(wideColor));
+    expect(
+      narrowColor,
+      isNot(_ProbeColor.other),
+      reason:
+          'widening the visible clip must not retarget BACK material UV sampling.',
+    );
+    snapshotImage.dispose();
+  });
 
   testWidgets(
     'a. mesh coverage keeps the fold band continuous across scanlines',
@@ -2825,34 +2383,15 @@ Widget _buildProbeBackPageSurface(
   );
 }
 
-Widget _buildAsymmetricProbeBackPageSurface(
-  BuildContext context,
-  int pageIndex,
-  Size pageSize,
-) {
-  final leftColor = pageIndex == 2
-      ? const Color(0xFF00E5FF)
-      : const Color(0xFF7C4DFF);
-  final rightColor = pageIndex == 2
-      ? const Color(0xFF000000)
-      : const Color(0xFFFFD600);
-  return Row(
-    key: ValueKey<String>('article_probe_back_asymmetric_page_$pageIndex'),
-    textDirection: TextDirection.ltr,
-    children: <Widget>[
-      Expanded(child: ColoredBox(color: leftColor)),
-      Expanded(child: ColoredBox(color: rightColor)),
-    ],
-  );
-}
-
 Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
   WidgetTester tester, {
   Offset backwardDragDelta = const Offset(120, -40),
+  Size surfaceSize = const Size(900, 1200),
+  List<Offset>? backwardDragSteps,
   Widget Function(BuildContext context, int pageIndex, Size pageSize)?
   debugBackPageSurfaceBuilder,
 }) async {
-  await tester.binding.setSurfaceSize(const Size(900, 1200));
+  await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final boundaryKey = GlobalKey();
   final debugStates = <ArticleReadOnlyBookDebugState>[];
@@ -2900,9 +2439,11 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
   final backwardGesture = await tester.startGesture(
     tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
   );
-  await backwardGesture.moveBy(backwardDragDelta);
-  for (var i = 0; i < 10; i += 1) {
-    await tester.pump(const Duration(milliseconds: 16));
+  for (final dragStep in backwardDragSteps ?? <Offset>[backwardDragDelta]) {
+    await backwardGesture.moveBy(dragStep);
+    for (var i = 0; i < 4; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
   }
 
   var probeState = debugStates.lastWhere(
@@ -3011,7 +2552,7 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
               bounds.bottomLeft,
             ]
           : source.viewportPolygon,
-      edgeInset: source.label == 'previousFrontReplacement' ? 0 : 6,
+      edgeInset: 6,
     );
   }
   final backSource = probeState.backwardPaintSources.firstWhere(
@@ -3043,27 +2584,6 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
       .map((source) => source.viewportPolygon)
       .where((polygon) => polygon.length >= 3)
       .toList(growable: false);
-  final replacementSource = probeState.backwardPaintSources.firstWhere(
-    (source) => source.label == 'previousFrontReplacement',
-    orElse: () => const BackwardPaintSourceDiagnostic(
-      label: 'previousFrontReplacement',
-      zOrder: 0,
-      pageIndex: null,
-      surfaceKind: 'front',
-      status: 'missing',
-      viewportBounds: null,
-      polygonSignature: '-',
-    ),
-  );
-  final movingSourcePolygons = probeState.backwardPaintSources
-      .where(
-        (source) =>
-            source.label == 'sheetPaintedUnion' ||
-            source.label == 'sheetVersoBack',
-      )
-      .map((source) => source.viewportPolygon)
-      .where((polygon) => polygon.length >= 3)
-      .toList(growable: false);
   final visibleBackColorCounts = _scanVisibleBackColors(
     imageWidth: framebufferImage.width,
     imageHeight: framebufferImage.height,
@@ -3072,18 +2592,6 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
     backBounds: backSource.viewportBounds,
     frontPolygon: frontSource.viewportPolygon,
     excludePolygons: currentSourcePolygons,
-  );
-  final previousFrontReplacementVisibleColorCounts = _scanVisibleBackColors(
-    imageWidth: framebufferImage.width,
-    imageHeight: framebufferImage.height,
-    bytes: framebufferBytes,
-    backPolygon: replacementSource.viewportPolygon,
-    backBounds: replacementSource.viewportBounds,
-    frontPolygon: const <Offset>[],
-    excludePolygons: <List<Offset>>[
-      ...currentSourcePolygons,
-      ...movingSourcePolygons,
-    ],
   );
   final movingSheetColorCounts = _scanMovingSheetColors(
     imageWidth: framebufferImage.width,
@@ -3121,8 +2629,6 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
     visibleProbeCount: framebufferProbeColors.length,
     paintSources: probeState.backwardPaintSources,
     framebufferColorCountsBySource: framebufferColorCountsBySource,
-    previousFrontReplacementVisibleColorCounts:
-        previousFrontReplacementVisibleColorCounts,
     visibleBackColorCounts: visibleBackColorCounts,
     visibleBackPixelCount: visibleBackColorCounts.values.fold(
       0,
@@ -3968,9 +3474,7 @@ Future<ui.Image> _createFrontSurfaceProbeImage({
   return image;
 }
 
-Future<_ForwardProbeSample> _renderForwardProbeScene(
-  WidgetTester _,
-) async {
+Future<_ForwardProbeSample> _renderForwardProbeScene(WidgetTester _) async {
   const probeSurfaceSize = Size(480, 720);
   const probeDragDelta = Offset(-140, -16);
   final engine = PageflipEngine(pageCount: 4, initialPage: 1);
@@ -4276,98 +3780,6 @@ List<Offset> _polygonOrRect(List<Offset> polygon, Rect? bounds) {
   ];
 }
 
-void _expectVisibleBackMostlySemantic(
-  _BackwardVersoTextureProbeSample sample, {
-  required String poseLabel,
-  double minSemanticRatio = 0.88,
-  double maxFrontCurrentRatio = 0.03,
-  double maxOtherRatio = 0.08,
-}) {
-  final visiblePixels = sample.visibleBackPixelCount;
-  final semanticPixels = _semanticBackVisiblePixels(
-    sample.visibleBackColorCounts,
-  );
-  final frontCurrentPixels = _frontCurrentVisiblePixels(
-    sample.visibleBackColorCounts,
-  );
-  final otherPixels = sample.visibleBackColorCounts[_ProbeColor.other] ?? 0;
-  expect(
-    visiblePixels,
-    greaterThan(200),
-    reason: '$poseLabel must expose a meaningful visible-back region.',
-  );
-  expect(
-    semanticPixels / visiblePixels,
-    greaterThan(minSemanticRatio),
-    reason:
-        '$poseLabel visible-back must remain dominated by semantic back pixels. '
-        'counts=${sample.visibleBackColorCounts}',
-  );
-  expect(
-    frontCurrentPixels / visiblePixels,
-    lessThan(maxFrontCurrentRatio),
-    reason:
-        '$poseLabel visible-back must not be visibly contaminated by '
-        'front/current colors. counts=${sample.visibleBackColorCounts}',
-  );
-  expect(
-    otherPixels / visiblePixels,
-    lessThan(maxOtherRatio),
-    reason:
-        '$poseLabel visible-back must not regress into a large blank/other region.',
-  );
-}
-
-void _expectVisibleBackHasSpatialTexture(
-  _BackwardVersoTextureProbeSample sample, {
-  required String poseLabel,
-}) {
-  final visiblePixels = sample.framebufferBackActualColors.length;
-  final actualCounts = _countProbeColors(sample.framebufferBackActualColors);
-  final expectedCounts = _countProbeColors(
-    sample.framebufferBackExpectedAllColors,
-  );
-  final cyanPixels = actualCounts[_ProbeColor.cyan] ?? 0;
-  final blackPixels = actualCounts[_ProbeColor.black] ?? 0;
-  final semanticInteriorPixels = cyanPixels + blackPixels;
-  final edgeMarkerPixels =
-      (actualCounts[_ProbeColor.white] ?? 0) +
-      (actualCounts[_ProbeColor.paperBack] ?? 0);
-  final semanticTexturePixels = semanticInteriorPixels + edgeMarkerPixels;
-  expect(
-    visiblePixels,
-    greaterThan(0),
-    reason: '$poseLabel must expose visible back pixels.',
-  );
-  expect(
-    sample.framebufferBackActualColors.every(
-      (color) =>
-          color == _ProbeColor.cyan ||
-          color == _ProbeColor.black ||
-          color == _ProbeColor.white ||
-          color == _ProbeColor.paperBack,
-    ),
-    isTrue,
-    reason:
-        '$poseLabel sampled BACK probe points must stay inside semantic-back texture markers. '
-        'actual=$actualCounts expected=$expectedCounts',
-  );
-  expect(
-    semanticTexturePixels,
-    greaterThan(0),
-    reason:
-        '$poseLabel must include semantic-back landmarks after source-paper UV clipping. '
-        'counts=$actualCounts expected=$expectedCounts',
-  );
-  expect(
-    edgeMarkerPixels / visiblePixels,
-    lessThanOrEqualTo(1.0),
-    reason:
-        '$poseLabel may expose edge markers when source-paper UV clips near the snapshot edge, '
-        'but it must still be semantic back texture.',
-  );
-}
-
 bool _semanticBackColorMatches(_ProbeColor actual, _ProbeColor expected) {
   if (actual == expected) {
     return true;
@@ -4375,116 +3787,11 @@ bool _semanticBackColorMatches(_ProbeColor actual, _ProbeColor expected) {
   return expected == _ProbeColor.white && actual == _ProbeColor.paperBack;
 }
 
-void _expectProbeTextureAnchoredToPageLocal(
-  _BackwardVersoTextureProbeSample sample, {
-  required String poseLabel,
-  double maxDrift = 1.0,
-}) {
-  final count = math.min(
-    sample.probeLocalPoints.length,
-    sample.probeTexturePoints.length,
-  );
-  expect(
-    count,
-    greaterThanOrEqualTo(1),
-    reason: '$poseLabel must expose probe texture points for UV anchoring.',
-  );
-  final drifts = <double>[];
-  for (var index = 0; index < count; index += 1) {
-    final expected = _expectedBackwardVersoTexturePoint(
-      sample.probeLocalPoints[index],
-    );
-    drifts.add((sample.probeTexturePoints[index] - expected).distance);
-  }
-  expect(
-    drifts.reduce(math.max),
-    lessThanOrEqualTo(maxDrift),
-    reason:
-        '$poseLabel BACK verso UV must stay anchored to page-local material '
-        'coordinates instead of dynamic source-area scanning. '
-        'local=${sample.probeLocalPoints.take(count).toList()} '
-        'texture=${sample.probeTexturePoints.take(count).toList()} '
-        'drifts=$drifts',
-  );
-}
-
-Offset _expectedBackwardVersoTexturePoint(Offset pageLocalPoint) {
-  return pageLocalPoint;
-}
-
-Map<_ProbeColor, int> _countProbeColors(List<_ProbeColor> colors) {
-  final counts = <_ProbeColor, int>{};
-  for (final color in colors) {
-    counts.update(color, (count) => count + 1, ifAbsent: () => 1);
-  }
-  return counts;
-}
-
-void _expectMovingSheetKeepsBackDominant(
-  _BackwardVersoTextureProbeSample sample, {
-  required String poseLabel,
-  double minSemanticSheetRatio = 0.50,
-  double maxFrontCurrentSheetRatio = 0.42,
-  int minSheetPixels = 400,
-}) {
-  final sheetPixels = sample.movingSheetPixelCount;
-  final semanticPixels = _semanticBackVisiblePixels(
-    sample.movingSheetColorCounts,
-  );
-  final frontCurrentPixels = _frontCurrentVisiblePixels(
-    sample.movingSheetColorCounts,
-  );
-  expect(
-    sheetPixels,
-    greaterThan(minSheetPixels),
-    reason: '$poseLabel must expose a meaningful moving sheet.',
-  );
-  expect(
-    semanticPixels / sheetPixels,
-    greaterThan(minSemanticSheetRatio),
-    reason:
-        '$poseLabel moving sheet must remain back-dominant instead of front-dominant. '
-        'counts=${sample.movingSheetColorCounts}',
-  );
-  expect(
-    frontCurrentPixels / sheetPixels,
-    lessThan(maxFrontCurrentSheetRatio),
-    reason:
-        '$poseLabel moving sheet must not be visually replaced by previous/current front.',
-  );
-}
-
-double _stableTextureScaleX(_BackwardVersoTextureProbeSample sample) {
-  final count = math.min(
-    sample.probeLocalPoints.length,
-    sample.probeTexturePoints.length,
-  );
-  if (count < 2) {
-    return double.nan;
-  }
-  final localSpan =
-      (sample.probeLocalPoints.take(count).last -
-              sample.probeLocalPoints.take(count).first)
-          .distance;
-  final textureSpan =
-      (sample.probeTexturePoints.take(count).last -
-              sample.probeTexturePoints.take(count).first)
-          .distance;
-  if (localSpan <= 0) {
-    return double.nan;
-  }
-  return textureSpan / localSpan;
-}
-
 int _semanticBackVisiblePixels(Map<_ProbeColor, int> counts) {
   return (counts[_ProbeColor.cyan] ?? 0) +
       (counts[_ProbeColor.black] ?? 0) +
       (counts[_ProbeColor.white] ?? 0) +
       (counts[_ProbeColor.paperBack] ?? 0);
-}
-
-int _frontCurrentVisiblePixels(Map<_ProbeColor, int> counts) {
-  return (counts[_ProbeColor.red] ?? 0) + (counts[_ProbeColor.green] ?? 0);
 }
 
 Rect? _polygonBounds(List<Offset> polygon) {
@@ -4620,7 +3927,6 @@ class _BackwardVersoTextureProbeSample {
     required this.visibleProbeCount,
     required this.paintSources,
     required this.framebufferColorCountsBySource,
-    required this.previousFrontReplacementVisibleColorCounts,
     required this.visibleBackColorCounts,
     required this.visibleBackPixelCount,
     required this.movingSheetColorCounts,
@@ -4653,7 +3959,6 @@ class _BackwardVersoTextureProbeSample {
   final int visibleProbeCount;
   final List<BackwardPaintSourceDiagnostic> paintSources;
   final Map<String, Map<_ProbeColor, int>> framebufferColorCountsBySource;
-  final Map<_ProbeColor, int> previousFrontReplacementVisibleColorCounts;
   final Map<_ProbeColor, int> visibleBackColorCounts;
   final int visibleBackPixelCount;
   final Map<_ProbeColor, int> movingSheetColorCounts;

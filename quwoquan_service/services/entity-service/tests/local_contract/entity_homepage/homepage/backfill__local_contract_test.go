@@ -89,24 +89,23 @@ func TestBackfillIndexesEligibleOnly(t *testing.T) {
 	if !bulk.ensured {
 		t.Fatalf("backfill must ensure the index first")
 	}
-	if report.TotalHomepages != 4 || report.IndexedHomepages != 2 || report.SkippedHomepages != 2 {
+	if report.TotalHomepages != 4 ||
+		report.IndexedHomepages != 2 ||
+		report.DeletedHomepages != 2 {
 		t.Fatalf("unexpected report: %#v", report)
 	}
-	if len(bulk.events) != 2 {
-		t.Fatalf("expected 2 indexed events, got %d", len(bulk.events))
+	if len(bulk.events) != 4 {
+		t.Fatalf("expected 4 reconcile events, got %d", len(bulk.events))
 	}
 	gotIDs := map[string]bool{}
 	for _, ev := range bulk.events {
-		if ev.Op != es.OpUpsert {
-			t.Fatalf("backfill must upsert, got op=%s", ev.Op)
-		}
-		gotIDs[ev.Doc.ObjectID] = true
+		gotIDs[string(ev.Op)+":"+ev.Doc.ObjectID] = true
 	}
-	if !gotIDs["hp_pub"] || !gotIDs["hp_pub2"] {
+	if !gotIDs["upsert:hp_pub"] || !gotIDs["upsert:hp_pub2"] {
 		t.Fatalf("eligible homepages missing from backfill: %#v", gotIDs)
 	}
-	if gotIDs["hp_draft"] || gotIDs["hp_off"] {
-		t.Fatalf("ineligible homepages leaked into backfill: %#v", gotIDs)
+	if !gotIDs["delete:hp_draft"] || !gotIDs["delete:hp_off"] {
+		t.Fatalf("ineligible homepages were not deleted: %#v", gotIDs)
 	}
 }
 
@@ -145,11 +144,11 @@ func TestBackfillEnsureIndexFailurePropagates(t *testing.T) {
 	}
 }
 
-func TestBackfillNilInputsNoOp(t *testing.T) {
-	if _, err := Backfill(context.Background(), nil, fakeLister{}, 0); err != nil {
-		t.Fatalf("nil indexer must be a no-op, got %v", err)
+func TestBackfillMissingInputsFailFast(t *testing.T) {
+	if _, err := Backfill(context.Background(), nil, fakeLister{}, 0); err == nil {
+		t.Fatal("nil indexer must fail")
 	}
-	if _, err := Backfill(context.Background(), &recordingBulk{}, nil, 0); err != nil {
-		t.Fatalf("nil lister must be a no-op, got %v", err)
+	if _, err := Backfill(context.Background(), &recordingBulk{}, nil, 0); err == nil {
+		t.Fatal("nil lister must fail")
 	}
 }

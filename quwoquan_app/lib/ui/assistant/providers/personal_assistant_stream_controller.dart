@@ -4,7 +4,6 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
@@ -17,6 +16,7 @@ import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dar
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
@@ -43,6 +43,9 @@ class PersonalAssistantStreamController
   String _retryConversationClientRequestId = '';
   List<AssistantIntersectionEvidenceRef> _pendingIntersectionEvidenceRefs =
       const <AssistantIntersectionEvidenceRef>[];
+  AssistantOpenContext? _openContext;
+  Future<void>? _pageContextReportFuture;
+  String _pendingSuggestedActionId = '';
 
   @override
   PersonalAssistantStreamState build() {
@@ -50,8 +53,13 @@ class PersonalAssistantStreamController
   }
 
   /// 页面入口设置的交集引用只消费给下一次 StartAssistantRun，避免后续手工对话继续
-  /// 携带已经过期的页面证据。
+  /// 携带已经过期的页面证据。所有带页面上下文的完整会话入口也必须在首个
+  /// StartAssistantRun 前完成同一份 PageContext 上报，不能绕过半弹层专属路径。
   void setOpenContext(AssistantOpenContext? context) {
+    _openContext = context;
+    _pageContextReportFuture = null;
+    _pendingSuggestedActionId =
+        context?.hints['suggestedActionId']?.toString().trim() ?? '';
     _pendingIntersectionEvidenceRefs =
         List<AssistantIntersectionEvidenceRef>.unmodifiable(
           context?.intersectionEvidenceRefs ??
@@ -285,7 +293,7 @@ class PersonalAssistantStreamController
         return;
       }
     }
-    unawaited(_reportRegenerateInteraction(option));
+    await _reportRegenerateInteraction(option);
     await send(lastQuestion);
   }
 
@@ -306,27 +314,20 @@ class PersonalAssistantStreamController
     if (runId.isEmpty) {
       return;
     }
-    final event = InteractionEvent(
+    final fact = AppendAssistantLearningFactRequest(
       eventId: 'regen:$runId:${option?.name ?? 'regenerate'}',
-      runId: runId,
-      userId: await _historySubAccountId(),
-      sessionId: AppTraceContextStore.instance.sessionId,
-      pageType: 'assistant_dialog',
+      eventVersion: 1,
+      factType: AssistantLearningFactType.interactionOutcome,
+      assistantTurnId: runId,
+      referralSource: assistantReferralSourceForOpenContext(_openContext),
       domainId: 'assistant',
+      eventType: InteractionEventType.actionClick,
       feedbackType: FeedbackType.regenerated,
-      copiedAnswer: false,
-      sharedAnswer: false,
-      regeneratedAnswer: true,
-      styleAdjusted: option != null && option != RegenerateOption.regenerate,
-      modelSwitched: false,
-      referenceOpened: false,
-      interrupted: false,
-      createdAt: DateTime.now().toUtc().toIso8601String(),
+      actionType: option?.name ?? 'regenerate',
+      trainingEligible: false,
+      occurredAt: DateTime.now().toUtc().toIso8601String(),
     );
-    _pendingFeedbackEvents
-      ..removeWhere((pending) => pending.eventId == event.eventId)
-      ..add(event);
-    await _flushPendingFeedbackEvents();
+    await _persistAndFlushLearningFact(fact);
   }
 
   Future<String> _historySubAccountId() async {
@@ -426,6 +427,32 @@ class PersonalAssistantStreamController
     return _send(text);
   }
 
+  Future<void> _ensureOpenPageContextReported() {
+    final context = _openContext;
+    if (context == null) {
+      return Future<void>.value();
+    }
+    final inFlight = _pageContextReportFuture;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final report = () async {
+      try {
+        await ref
+            .read(assistantPersonalizationFacetProvider)
+            .reportPageContext(
+              context: context,
+              userAction: 'open_assistant_conversation',
+            );
+      } catch (_) {
+        _pageContextReportFuture = null;
+        rethrow;
+      }
+    }();
+    _pageContextReportFuture = report;
+    return report;
+  }
+
   Future<void> _send(
     String text, {
     String runClientRequestId = '',
@@ -476,6 +503,7 @@ class PersonalAssistantStreamController
     final turnStartedAt = DateTime.now();
     var runStarted = false;
     try {
+      await _ensureOpenPageContextReported();
       var conversationId = state.conversationId;
       if (conversationId.isEmpty) {
         final conversation = await repository.createAssistantConversation(
@@ -540,6 +568,7 @@ class PersonalAssistantStreamController
           transcript,
         ),
       );
+      _reportPendingSuggestedAction(turn.turnId);
       await for (final event in repository.watchAssistantRunEvents(
         runId: turn.turnId,
       )) {
@@ -715,8 +744,8 @@ class PersonalAssistantStreamController
       }
       if (ref.mounted) {
         unawaited(refreshManagementSummary());
-        // turn 完成时补发上一轮反馈上报失败留下的待重试事件。
-        unawaited(_flushPendingFeedbackEvents());
+        // turn 完成时补发上一轮保存在 actor-scoped outbox 中的学习事实。
+        await ref.read(assistantLearningFactOutboxProvider.notifier).flush();
       }
       _clearRetry();
     } catch (error, stackTrace) {
@@ -869,27 +898,79 @@ class PersonalAssistantStreamController
     }());
   }
 
-  /// 反馈事件内存待重试队列：ack 全拒或请求失败时保留，下次
-  /// [submitFeedback] 或 turn 完成时补发；不建持久队列。
-  final List<InteractionEvent> _pendingFeedbackEvents = <InteractionEvent>[];
-
   @visibleForTesting
-  int get pendingFeedbackEventCount => _pendingFeedbackEvents.length;
+  int get pendingFeedbackEventCount =>
+      ref.read(assistantLearningFactOutboxProvider);
 
-  void submitFeedback(String feedbackType) {
+  Future<void> submitFeedback(String feedbackType) async {
     final normalized = feedbackType.trim();
+    if (normalized.isEmpty || state.feedbackType == normalized) {
+      return;
+    }
     final label = switch (normalized) {
       'useful' => AssistantText.assistantFeedbackUsefulLabel,
       'irrelevant' => AssistantText.assistantFeedbackIrrelevantLabel,
       'too_frequent' => AssistantText.assistantFeedbackTooFrequentLabel,
       _ => AssistantText.assistantFeedbackRecordedLabel,
     };
-    // 本地反馈展示先行；学习回路上报为 best-effort，失败不阻塞 UI。
+    // 本地反馈展示先行；学习事实先持久化到 actor-scoped outbox，再异步确认。
     state = state.copyWith(
       feedbackMessage: AssistantText.assistantFeedbackRecorded(label),
       feedbackType: normalized,
     );
-    unawaited(_reportFeedbackInteraction(normalized));
+    await _reportFeedbackInteraction(normalized);
+  }
+
+  /// 用户实际打开已验证的引用后，追加可审计的交互结果。
+  ///
+  /// 仅记录 internal/external 类型，不上传 URL、标题或引用正文。
+  void reportReferenceOpened({required bool external}) {
+    final assistantTurnId = state.turnId.trim();
+    if (assistantTurnId.isEmpty) {
+      return;
+    }
+    final referenceKind = external ? 'external' : 'internal';
+    unawaited(
+      _persistAndFlushLearningFact(
+        AppendAssistantLearningFactRequest(
+          eventId: 'reference-open:$assistantTurnId:$referenceKind',
+          eventVersion: 1,
+          factType: AssistantLearningFactType.interactionOutcome,
+          assistantTurnId: assistantTurnId,
+          referralSource: assistantReferralSourceForOpenContext(_openContext),
+          domainId: 'assistant',
+          eventType: InteractionEventType.actionClick,
+          actionType: 'open_${referenceKind}_reference',
+          trainingEligible: false,
+          occurredAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      ),
+    );
+  }
+
+  void _reportPendingSuggestedAction(String assistantTurnId) {
+    final suggestedActionId = _pendingSuggestedActionId;
+    if (suggestedActionId.isEmpty || assistantTurnId.trim().isEmpty) {
+      return;
+    }
+    _pendingSuggestedActionId = '';
+    unawaited(
+      _persistAndFlushLearningFact(
+        AppendAssistantLearningFactRequest(
+          eventId: 'suggested-action:$assistantTurnId:$suggestedActionId',
+          eventVersion: 1,
+          factType: AssistantLearningFactType.interactionOutcome,
+          assistantTurnId: assistantTurnId,
+          referralSource: assistantReferralSourceForOpenContext(_openContext),
+          domainId: 'assistant',
+          eventType: InteractionEventType.actionClick,
+          actionType: 'suggested_action',
+          suggestedActionId: suggestedActionId,
+          trainingEligible: false,
+          occurredAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      ),
+    );
   }
 
   Future<void> _reportFeedbackInteraction(String feedbackType) async {
@@ -897,61 +978,42 @@ class PersonalAssistantStreamController
     if (feedbackType.isEmpty || runId.isEmpty) {
       return;
     }
-    final event = InteractionEvent(
+    final fact = AppendAssistantLearningFactRequest(
       // 稳定派生 id：同一 run 上同一反馈动作重试不产生新事件。
       eventId: 'fb:$runId:$feedbackType',
-      runId: runId,
-      userId: await _historySubAccountId(),
-      sessionId: AppTraceContextStore.instance.sessionId,
-      pageType: 'assistant_dialog',
+      eventVersion: 1,
+      factType: AssistantLearningFactType.userFeedback,
+      assistantTurnId: runId,
+      referralSource: assistantReferralSourceForOpenContext(_openContext),
       domainId: 'assistant',
       feedbackType: parseFeedbackTypeStrict(feedbackType),
-      copiedAnswer: feedbackType == 'copied',
-      sharedAnswer: false,
-      regeneratedAnswer: false,
-      styleAdjusted: false,
-      modelSwitched: false,
-      referenceOpened: false,
-      interrupted: false,
-      createdAt: DateTime.now().toUtc().toIso8601String(),
+      actionType: feedbackType,
+      trainingEligible: false,
+      occurredAt: DateTime.now().toUtc().toIso8601String(),
     );
-    _pendingFeedbackEvents
-      ..removeWhere((pending) => pending.eventId == event.eventId)
-      ..add(event);
-    await _flushPendingFeedbackEvents();
+    await _persistAndFlushLearningFact(fact);
   }
 
-  Future<void> _flushPendingFeedbackEvents() async {
-    if (_pendingFeedbackEvents.isEmpty) {
-      return;
-    }
-    final batch = List<InteractionEvent>.unmodifiable(_pendingFeedbackEvents);
+  Future<void> _persistAndFlushLearningFact(
+    AppendAssistantLearningFactRequest fact,
+  ) async {
     try {
-      final ack = await ref
-          .read(assistantLearningAppendFacetProvider)
-          .reportInteractionEvents(events: batch);
-      final acceptedCount =
-          ack.acceptedCount ?? (ack.accepted ? batch.length : 0);
-      final acceptedIds = <String>{...?ack.acceptedIds};
-      // Older server releases may omit acceptedIds only when the whole batch
-      // was accepted. Treat every partial acknowledgement without identities as
-      // unacknowledged so a retry is idempotent rather than silently dropping
-      // feedback facts.
-      if (acceptedIds.isEmpty &&
-          ack.accepted &&
-          acceptedCount == batch.length) {
-        acceptedIds.addAll(batch.map((event) => event.eventId));
-      }
-      if (acceptedIds.isNotEmpty) {
-        _pendingFeedbackEvents.removeWhere(
-          (pending) => acceptedIds.contains(pending.eventId),
+      final persisted = await ref
+          .read(assistantLearningFactOutboxProvider.notifier)
+          .enqueue(fact);
+      if (!persisted) {
+        developer.log(
+          'learning fact encrypted outbox unavailable',
+          name: 'AssistantLearningFactOutbox',
+          error: 'persist_failed',
         );
+        return;
       }
+      await ref.read(assistantLearningFactOutboxProvider.notifier).flush();
     } catch (error) {
       developer.log(
-        'feedback interaction report failed; kept for retry '
-        '(pending=${_pendingFeedbackEvents.length})',
-        name: 'AssistantLearningAppend',
+        'learning fact remains pending for retry',
+        name: 'AssistantLearningFactOutbox',
         error: error,
       );
     }

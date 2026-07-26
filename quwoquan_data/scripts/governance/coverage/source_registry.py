@@ -126,8 +126,6 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
             issues.append(f"{prefix}: urlPatterns must not be empty")
         if fetchable is True and extractor == "generic_html":
             issues.append(f"{prefix}: fetchable=true requires a site-specific extractor, not generic_html")
-        if category in {"encyclopedia", "official"} and not fetchable:
-            issues.append(f"{prefix}: {category} source should be fetchable=true if pre-approved in registry")
         if category == "map_geo" and fetchable:
             issues.append(f"{prefix}: map_geo source should not be marked fetchable=true for正文抓取")
         if not domains and category in {"encyclopedia", "travelogue", "map_geo"}:

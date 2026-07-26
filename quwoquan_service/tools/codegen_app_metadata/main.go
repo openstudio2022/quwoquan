@@ -606,6 +606,20 @@ func main() {
 			renderSearchContractDart(searchContract),
 		)
 	}
+	if feedbackEventTypes := shared.Enums["SearchFeedbackEventType"]; len(feedbackEventTypes) > 0 {
+		writeFile(
+			filepath.Join(
+				appDir,
+				"packages",
+				"quwoquan_cloud_contracts",
+				"lib",
+				"src",
+				"generated",
+				"search_feedback_event_type.g.dart",
+			),
+			renderSearchFeedbackEventTypeDart(feedbackEventTypes),
+		)
+	}
 	if searchObjects != nil {
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "search", "search_registry.g.dart"),

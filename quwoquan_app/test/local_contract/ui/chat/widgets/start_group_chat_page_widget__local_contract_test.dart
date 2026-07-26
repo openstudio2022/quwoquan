@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/spec.md#gwt-001
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
@@ -122,8 +124,46 @@ class _RejectingCreateChatRepository extends MockChatRepository {
     String? title,
     int? maxGroupSize,
     List<String>? initialMemberIds,
+    String? idempotencyKey,
   }) async {
     throw _error;
+  }
+}
+
+/// 模拟服务端已提交、但首个 HTTP 响应在客户端丢失。重试必须使用同一幂等键，
+/// 才能由 Remote 返回首个已创建的会话。
+class _ResponseLostCreateChatRepository extends MockChatRepository {
+  final List<String?> receivedIdempotencyKeys = <String?>[];
+  bool _firstResponseLost = true;
+
+  @override
+  Future<ChatConversationCreatedDto> createConversation({
+    required String type,
+    String? title,
+    int? maxGroupSize,
+    List<String>? initialMemberIds,
+    String? idempotencyKey,
+  }) async {
+    receivedIdempotencyKeys.add(idempotencyKey);
+    if (_firstResponseLost) {
+      _firstResponseLost = false;
+      throw CloudException(
+        type: CloudErrorType.server,
+        message: 'response lost after the command committed',
+        runtimeFailure: testRuntimeFailure(
+          code: 'CHAT.SYSTEM.response_lost',
+          nature: RuntimeFailureNature.transient,
+          recovery: const RuntimeRecoveryDirective(
+            action: 'retry',
+            afterSeconds: 1,
+            disruptionLevel: 'silent',
+          ),
+        ),
+      );
+    }
+    return ChatConversationCreatedDto(
+      conversationId: 'conversation-replayed-after-response-loss',
+    );
   }
 }
 
@@ -131,12 +171,14 @@ class _SeededGroupCandidatesChatRepository extends MockChatRepository {
   _SeededGroupCandidatesChatRepository(this._rows);
 
   final List<ChatContactRowDto> _rows;
+  final List<int> requestedCandidateLimits = <int>[];
 
   @override
   Future<List<ChatContactRowDto>> listGroupCandidates({
     String? conversationId,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
+    requestedCandidateLimits.add(limit);
     return _rows.take(limit).toList(growable: false);
   }
 }
@@ -244,6 +286,7 @@ void main() {
     expect(find.text('空头像联系人'), findsOneWidget);
     expect(find.text('坏头像联系人'), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.person_fill), findsAtLeastNWidgets(2));
+    expect(repository.requestedCandidateLimits, <int>[100]);
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
@@ -285,6 +328,38 @@ void main() {
     expect(find.text(serverMessage), findsOneWidget);
     // 创建失败不应跳转到新会话路由
     expect(find.textContaining('chat:fixture_conv_created_'), findsNothing);
+  });
+
+  testWidgets('建群响应丢失后重试复用同一幂等键并进入首个会话', (tester) async {
+    _suppressImageErrors();
+
+    final repository = _ResponseLostCreateChatRepository();
+    final container = _buildContainer(repository);
+    await _pumpStartGroupChatPage(tester, container: container);
+
+    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
+    await tester.pumpAndSettle();
+
+    expect(repository.receivedIdempotencyKeys, hasLength(1));
+    expect(repository.receivedIdempotencyKeys.single, isNotEmpty);
+    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+
+    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.pumpAndSettle();
+
+    expect(repository.receivedIdempotencyKeys, hasLength(2));
+    expect(
+      repository.receivedIdempotencyKeys[1],
+      repository.receivedIdempotencyKeys[0],
+    );
+    expect(
+      find.text('chat:conversation-replayed-after-response-loss'),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('发起群聊曝光/加载/提交成功均上报页面观测事件', (tester) async {

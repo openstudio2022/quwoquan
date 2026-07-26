@@ -24,11 +24,36 @@ var userAccountOutboxTerminalFailures = prometheus.NewGauge(
 	},
 )
 
+var userProfileSearchOutboxDeliveries = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "user_profile_search_outbox_delivery_total",
+		Help: "UserProfile search projection outbox delivery outcomes.",
+	},
+	[]string{"result"},
+)
+
+var userProfileSearchOutboxReady = prometheus.NewGauge(
+	prometheus.GaugeOpts{
+		Name: "user_profile_search_outbox_ready",
+		Help: "Whether the UserProfile search projection outbox relay is ready (1=ready, 0=unready).",
+	},
+)
+
+var userProfileSearchOutboxPending = prometheus.NewGauge(
+	prometheus.GaugeOpts{
+		Name: "user_profile_search_outbox_pending",
+		Help: "Number of UserProfile search projection events awaiting Elasticsearch/OpenSearch acknowledgement.",
+	},
+)
+
 func init() {
 	prometheus.MustRegister(
 		closeOutboxDeliveries,
 		userAccountOutboxRelayReady,
 		userAccountOutboxTerminalFailures,
+		userProfileSearchOutboxDeliveries,
+		userProfileSearchOutboxReady,
+		userProfileSearchOutboxPending,
 	)
 }
 
@@ -48,4 +73,19 @@ func (CloseOutboxObserver) RecordReadiness(
 		userAccountOutboxRelayReady.Set(0)
 	}
 	userAccountOutboxTerminalFailures.Set(float64(terminalFailures))
+}
+
+type ProfileSearchOutboxObserver struct{}
+
+func (ProfileSearchOutboxObserver) RecordDelivery(result string) {
+	userProfileSearchOutboxDeliveries.WithLabelValues(result).Inc()
+}
+
+func (ProfileSearchOutboxObserver) RecordReadiness(ready bool, pending int) {
+	if ready {
+		userProfileSearchOutboxReady.Set(1)
+	} else {
+		userProfileSearchOutboxReady.Set(0)
+	}
+	userProfileSearchOutboxPending.Set(float64(pending))
 }

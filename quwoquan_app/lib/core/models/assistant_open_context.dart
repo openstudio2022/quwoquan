@@ -1,9 +1,11 @@
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
     show AssistantIntersectionEvidenceRef;
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 
 /// 打开私助时的来源。
 enum AssistantSource {
+  home,
   discovery,
   circles,
   article,
@@ -13,24 +15,46 @@ enum AssistantSource {
   search,
 }
 
-String assistantPageTypeForSource(AssistantSource? source) {
+AssistantPageContextType assistantPageTypeForSource(AssistantSource? source) {
   switch (source) {
+    case AssistantSource.home:
+      return AssistantPageContextType.home;
     case AssistantSource.discovery:
-      return 'discovery';
+      return AssistantPageContextType.discovery;
     case AssistantSource.circles:
-      return 'circles';
+      return AssistantPageContextType.circles;
     case AssistantSource.article:
+      return AssistantPageContextType.article;
     case AssistantSource.profile:
-      return 'home';
+      return AssistantPageContextType.profile;
     case AssistantSource.chat:
-      return 'chat';
+      return AssistantPageContextType.chat;
     case AssistantSource.create:
-      return 'create';
+      return AssistantPageContextType.create;
     case AssistantSource.search:
-      return 'search';
+      return AssistantPageContextType.search;
     case null:
-      return 'chat';
+      return AssistantPageContextType.home;
   }
+}
+
+/// 将页面入口显式投影为 Assistant 服务契约的转介来源。
+///
+/// 没有入口上下文时，来源为独立助手会话，不能伪造为首页入口。
+AssistantReferralSource assistantReferralSourceForOpenContext(
+  AssistantOpenContext? context,
+) {
+  return switch (context?.source) {
+    AssistantSource.home => AssistantReferralSource.home,
+    AssistantSource.discovery => AssistantReferralSource.discovery,
+    AssistantSource.circles => AssistantReferralSource.circles,
+    AssistantSource.article => AssistantReferralSource.article,
+    AssistantSource.profile => AssistantReferralSource.profile,
+    AssistantSource.chat => AssistantReferralSource.chat,
+    AssistantSource.create => AssistantReferralSource.create,
+    AssistantSource.search => AssistantReferralSource.search,
+    null => AssistantReferralSource.assistantConversation,
+  };
 }
 
 /// 打开私助时的上下文，供半弹窗与会话页共用。

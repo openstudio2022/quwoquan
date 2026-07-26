@@ -1,6 +1,7 @@
 /// Accepted ContractGraph 生成的纯 Dart ABI。
 library;
 
+export 'src/assistant/assistant_contracts.dart';
 export 'src/chat/conversation_contracts.dart';
 export 'src/chat/conversation_membership_contracts.dart';
 export 'src/chat/conversation_user_state_contracts.dart';
@@ -45,6 +46,7 @@ export 'src/operation_request_payload.dart';
 export 'src/rtc/call_session_contracts.dart';
 export 'src/search/hot_query_contracts.dart';
 export 'src/search/recent_search_contracts.dart';
+export 'src/generated/search_feedback_event_type.g.dart';
 export 'src/search/search_feedback_contracts.dart';
 export 'src/search/search_query_contracts.dart';
 export 'src/structured_value.dart';

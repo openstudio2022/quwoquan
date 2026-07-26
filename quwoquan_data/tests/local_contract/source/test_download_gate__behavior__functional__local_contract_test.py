@@ -45,6 +45,8 @@ from content.source.gate import (  # noqa: E402
     gate_download,
 )
 from content.execution.recovery.download_gate import _download_repair_active_issues  # noqa: E402
+from content.execution.recovery.download_research_gate import _download_research_lane_issues  # noqa: E402
+from content.execution.context import ExecutionContext  # noqa: E402
 from governance.content_supply_policy import load_content_supply_policy  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 from support.image_fixture import jpeg_bytes  # noqa: E402
@@ -73,6 +75,51 @@ def test_homepage_only_download_requires_one_verified_text_source(monkeypatch):
     assert requirements.min_homepage_sources == 1
     assert requirements.min_homepage_media == 0
     assert requirements.min_article_base_sources == 0
+
+
+def test_homepage_low_resolution_candidate_does_not_invalidate_text_source():
+    entity = "测试实体甲"
+    fixture = ExecutionFixtureBuilder(TASK)
+    obj = execution_entity_object_dir(TASK, "地点", "景区", entity)
+    write_json(
+        obj / "1.download" / "homepage_source_plan.json",
+        {
+            "payload": {
+                "sources": [
+                    {
+                        "source_id": "home_wikipedia",
+                        "sourceKind": "wikipedia",
+                        "platform": "维基百科",
+                        "category": "encyclopedia",
+                        "sourceRole": "primary",
+                        "url": "https://zh.wikipedia.org/wiki/test-entity-a",
+                        "extractor": "wikipedia_api",
+                        "policyRevision": "encyclopedia-primary",
+                        "imageUrls": [
+                            {
+                                "url": "https://upload.wikimedia.org/test-small.jpg",
+                                "width": 320,
+                                "height": 240,
+                                "caption": entity,
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+    )
+    context = ExecutionContext(
+        execution_id=TASK,
+        entity_ids=(entity,),
+        spec=fixture.spec(),
+    )
+
+    assert _download_research_lane_issues(
+        context,
+        entity,
+        "地点/景区",
+        "homepage",
+    ) == []
 
 
 def test_video_download_uses_source_frame_policy_not_rendered_segment_count(monkeypatch):

@@ -423,12 +423,26 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
             **creator_fields,
         },
     )
+    from content.homepage.commercial_gate import evaluate_commercial_page
+
+    commercial_result = evaluate_commercial_page(
+        obj,
+        entity_name=name,
+        source_text=base_text_for_gate,
+        source_use_mode=str(base.get("sourceUseMode") or "factual_reference_only"),
+        label=label,
+    )
+    commercial_issues = [
+        str(issue)
+        for issue in commercial_result.get("issues") or []
+        if str(issue).strip()
+    ]
     # Provenance describes the final object, so it must use the exact admitted
     # source closure already written to manifest/_entity/source_catalog. The
     # broader research candidate set belongs only to 2.quality evidence.
     source_paths = final_provenance_source_paths(source_refs)
     review_payload = _entity_review_payload(
-        issues=[],
+        issues=commercial_issues,
         source_paths=source_paths,
         base_draft_exists=bool(source_paths),
     )
@@ -440,7 +454,7 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         source_paths=source_paths,
         review_payload=review_payload,
     )
-    return []
+    return commercial_issues
 
 def materialize_entity_pages(execution_id: str, spec: dict[str, Any]) -> list[str]:
     """物化所有缺失或未过门的 coverage 实体主页，返回剩余物化问题。"""

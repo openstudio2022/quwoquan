@@ -83,7 +83,10 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       proposal.status == ProfileUpdateProposalStatus.pending ||
                       proposal.status ==
                           ProfileUpdateProposalStatus.confirmed ||
-                      proposal.status == ProfileUpdateProposalStatus.applying,
+                      proposal.status == ProfileUpdateProposalStatus.applying ||
+                      proposal.status == ProfileUpdateProposalStatus.applied ||
+                      proposal.status ==
+                          ProfileUpdateProposalStatus.rollingBack,
                 )
                 .toList(growable: false) ??
             const <ProfileUpdateProposalView>[];
@@ -480,7 +483,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
               (proposal) =>
                   proposal.status == ProfileUpdateProposalStatus.pending ||
                   proposal.status == ProfileUpdateProposalStatus.confirmed ||
-                  proposal.status == ProfileUpdateProposalStatus.applying,
+                  proposal.status == ProfileUpdateProposalStatus.applying ||
+                  proposal.status == ProfileUpdateProposalStatus.applied ||
+                  proposal.status == ProfileUpdateProposalStatus.rollingBack,
             )
             .toList(growable: false);
         _profileProposalLoadError = null;
@@ -603,14 +608,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             ),
                             title: UITextConstants.editProfileProposalTitle,
                             trailing: Text(
-                              switch (proposal.status) {
-                                ProfileUpdateProposalStatus.pending =>
-                                  UITextConstants.editProfileProposalPending,
-                                ProfileUpdateProposalStatus.applying =>
-                                  UITextConstants.editProfileProposalApplying,
-                                _ =>
-                                  UITextConstants.editProfileProposalConfirmed,
-                              },
+                              _profileProposalStatusLabel(proposal.status),
                               style: TextStyle(
                                 fontSize: AppTypography.iosSubheadline,
                                 color: AppColors.iosAccent(context),
@@ -766,3 +764,22 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     );
   }
 }
+
+String _profileProposalStatusLabel(ProfileUpdateProposalStatus status) =>
+    switch (status) {
+      ProfileUpdateProposalStatus.pending =>
+        UITextConstants.editProfileProposalPending,
+      ProfileUpdateProposalStatus.confirmed =>
+        UITextConstants.editProfileProposalConfirmed,
+      ProfileUpdateProposalStatus.applying =>
+        UITextConstants.editProfileProposalApplying,
+      ProfileUpdateProposalStatus.applied =>
+        UITextConstants.editProfileProposalAppliedStatus,
+      ProfileUpdateProposalStatus.rollingBack =>
+        UITextConstants.editProfileProposalRollingBackStatus,
+      ProfileUpdateProposalStatus.rolledBack =>
+        UITextConstants.editProfileProposalRolledBack,
+      ProfileUpdateProposalStatus.rejected ||
+      ProfileUpdateProposalStatus.expired =>
+        UITextConstants.editProfileProposalConfirmed,
+    };

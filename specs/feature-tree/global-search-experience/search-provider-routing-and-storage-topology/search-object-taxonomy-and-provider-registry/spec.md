@@ -41,6 +41,7 @@
 ### REQ-003 location.place 命中落地为临时地点卡并引导提升为 entity.homepage
 
 - location.place 点击落地体验定义并验证；未提升=location.place、已提升=entity.homepage 单一真相源在落地层一致。
+- 地点提升候选只能携带一个经过格式校验的 canonical `sourcePlaceId`；该值持久化为 Homepage 的内部精确 lookup alias，候选发布后随 `entity.homepage` 搜索投影的 `placeId` anchor 写入统一索引。任何普通用户提交的任意 alias 必须被拒绝。
 
 <a id="req-004"></a>
 ### REQ-004 searchable object 的统一命名
@@ -88,8 +89,9 @@
 - GIVEN search 结果页交集「已连接地点」承载 location.place 命中（未绑定 canonicalEntity）。
 - GIVEN route locationPlaceLanding 与 surface locationPlaceLanding 已 metadata-first 定义并 codegen。
 - WHEN 点击 location.place 命中，进入 /locations/{placeId} 落地页；点击「提升为实体主页」CTA。
-- THEN 落地页渲染临时地点卡（地名 + 地址 + 临时徽标），命中详情来自搜索结果 payload（route extra），无独立后端 operation。
-- THEN CTA 跳转 suggestHomepage（复用既有 surface），携带地名作为 query，不新造写路径。
+- THEN 落地页渲染临时地点卡（地名 + 地址 + 临时徽标）；冷启动、深链与进程恢复按 canonical `/search(ids:[placeId])` 重读，无独立地点详情 operation。
+- THEN CTA 跳转 suggestHomepage（复用既有 surface），携带地名 query 与 canonical `sourcePlaceId`，不新造写路径。
+- THEN 候选发布后 `/search(ids:[sourcePlaceId])` 返回该 `entity.homepage`（其 `placeId` anchor），而不是遗留 `location.place`；原地点路由因此可重定向主页且不产生双结果。
 - THEN 进入上报 location_place_landing.enter 曝光、CTA 上报 promote_click（JourneyEventTracker）。
 
 ## 6. 依赖

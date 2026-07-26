@@ -59,49 +59,68 @@ func (s *ProfileProposalPostgresStore) ApplyProfileProposal(
 	ctx context.Context,
 	command personaports.ApplyProfileProposalCommand,
 	commandDigest string,
-) error {
+) (personaports.ProfileProposalMutationResult, error) {
 	commandDigest = strings.TrimSpace(commandDigest)
 	if commandDigest == "" {
-		return errors.New("Persona command digest is required")
+		return personaports.ProfileProposalMutationResult{},
+			errors.New("Persona command digest is required")
 	}
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return err
+		return personaports.ProfileProposalMutationResult{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if replayed, err := personaProposalReplay(ctx, tx, command.ProposalID, commandDigest); err != nil || replayed {
-		return finishPersonaReplay(ctx, tx, replayed, err)
+	commandKey := personaProposalCommandKey(command.ProposalID, "apply")
+	if replayed, found, err := personaProposalReplay(ctx, tx, commandKey, commandDigest); err != nil || found {
+		return finishPersonaReplay(ctx, tx, replayed, found, err)
 	}
 
 	var (
-		currentVersion int64
-		status         string
+		before personamodel.ProfileSnapshot
+		status string
 	)
 	err = tx.QueryRow(ctx, `
-SELECT version, status
+SELECT display_name, bio, avatar_media_asset_id, COALESCE(avatar_url,''),
+       background_media_asset_id, COALESCE(background_url,''),
+       is_private, isolation_level, purpose_hint, version, status
 FROM personas
 WHERE sub_account_id=$1
-FOR UPDATE`, command.PersonaID).Scan(&currentVersion, &status)
+FOR UPDATE`, command.PersonaID).Scan(
+		&before.DisplayName,
+		&before.Bio,
+		&before.AvatarMediaAssetID,
+		&before.AvatarURL,
+		&before.BackgroundMediaAssetID,
+		&before.BackgroundURL,
+		&before.IsPrivate,
+		&before.IsolationLevel,
+		&before.PurposeHint,
+		&before.Version,
+		&status,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return personamodel.ErrNotFound
+		return personaports.ProfileProposalMutationResult{}, personamodel.ErrNotFound
 	}
 	if err != nil {
-		return err
+		return personaports.ProfileProposalMutationResult{}, err
 	}
 	// The row lock may have waited behind a transaction that committed the same
 	// proposal receipt. Re-read after locking before evaluating the version.
-	if replayed, err := personaProposalReplay(ctx, tx, command.ProposalID, commandDigest); err != nil || replayed {
-		return finishPersonaReplay(ctx, tx, replayed, err)
+	if replayed, found, err := personaProposalReplay(ctx, tx, commandKey, commandDigest); err != nil || found {
+		return finishPersonaReplay(ctx, tx, replayed, found, err)
 	}
 	if status == "retired" {
-		return personamodel.ErrRetired
+		return personaports.ProfileProposalMutationResult{}, personamodel.ErrRetired
 	}
-	if currentVersion != command.ExpectedPersonaVersion {
-		return personamodel.ErrVersionConflict
+	if before.Version != command.ExpectedPersonaVersion {
+		return personaports.ProfileProposalMutationResult{}, personamodel.ErrVersionConflict
 	}
 
 	changes := command.Changes
+	occurredAt := time.Now().UTC()
+	after := applyProfileChangeSet(before, changes)
+	after.Version = before.Version + 1
 	result, err := tx.Exec(ctx, `
 UPDATE personas SET
   display_name=CASE WHEN $3 THEN $4 ELSE display_name END,
@@ -117,7 +136,7 @@ UPDATE personas SET
   updated_at=$17
 WHERE sub_account_id=$1 AND version=$18`,
 		command.PersonaID,
-		currentVersion+1,
+		after.Version,
 		changes.DisplayName != nil,
 		stringValue(changes.DisplayName),
 		changes.Bio != nil,
@@ -132,66 +151,227 @@ WHERE sub_account_id=$1 AND version=$18`,
 		stringValue(changes.IsolationLevel),
 		changes.PurposeHint != nil,
 		stringValue(changes.PurposeHint),
-		time.Now().UTC(),
-		currentVersion,
+		occurredAt,
+		before.Version,
 	)
 	if err != nil {
-		return err
+		return personaports.ProfileProposalMutationResult{}, err
 	}
 	if result.RowsAffected() != 1 {
-		return personamodel.ErrVersionConflict
+		return personaports.ProfileProposalMutationResult{}, personamodel.ErrVersionConflict
 	}
 
+	mutation := personaports.ProfileProposalMutationResult{
+		Before: before, After: after, OccurredAt: occurredAt,
+	}
 	eventPayload, err := json.Marshal(struct {
-		ProposalID string                        `json:"proposalId"`
-		PersonaID  string                        `json:"personaId"`
-		Version    int64                         `json:"version"`
-		Changes    personamodel.ProfileChangeSet `json:"changes"`
-		AppliedAt  time.Time                     `json:"appliedAt"`
+		ProposalID string `json:"proposalId"`
+		PersonaID  string `json:"personaId"`
+		Version    int64  `json:"version"`
 	}{
 		ProposalID: command.ProposalID,
 		PersonaID:  command.PersonaID,
-		Version:    currentVersion + 1,
-		Changes:    changes,
-		AppliedAt:  time.Now().UTC(),
+		Version:    mutation.After.Version,
 	})
 	if err != nil {
-		return err
+		return personaports.ProfileProposalMutationResult{}, err
 	}
-	eventID := stablePersonaPacketID("event", command.ProposalID)
+	eventID := stablePersonaPacketID("apply-event", command.ProposalID)
 	if _, err := tx.Exec(ctx, `
 INSERT INTO personas_outbox(
   event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
-) VALUES ($1,$2,$3,'PersonaProfileProposalApplied',$4,NOW())`,
-		eventID, command.PersonaID, currentVersion+1, eventPayload,
+) VALUES ($1,$2,$3,'PersonaProfileProposalApplied',$4,$5)`,
+		eventID, command.PersonaID, after.Version, eventPayload, occurredAt,
 	); err != nil {
-		return err
+		return personaports.ProfileProposalMutationResult{}, err
 	}
-	resultJSON, err := json.Marshal(struct {
-		PersonaID string `json:"personaId"`
-		Version   int64  `json:"version"`
-	}{PersonaID: command.PersonaID, Version: currentVersion + 1})
+	resultJSON, err := json.Marshal(mutation)
 	if err != nil {
-		return err
+		return personaports.ProfileProposalMutationResult{}, err
 	}
 	if _, err := tx.Exec(ctx, `
 INSERT INTO personas_command_receipts(
   receipt_id, aggregate_id, idempotency_key, command_digest, aggregate_version, result_json
 ) VALUES ($1,$2,$3,$4,$5,$6)`,
-		stablePersonaPacketID("receipt", command.ProposalID),
+		stablePersonaPacketID("apply-receipt", command.ProposalID),
 		command.PersonaID,
-		command.ProposalID,
+		commandKey,
 		commandDigest,
-		currentVersion+1,
+		after.Version,
 		resultJSON,
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return personamodel.ErrIdempotencyConflict
+			return personaports.ProfileProposalMutationResult{}, personamodel.ErrIdempotencyConflict
 		}
-		return err
+		return personaports.ProfileProposalMutationResult{}, err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	return mutation, nil
+}
+
+func (s *ProfileProposalPostgresStore) RollbackProfileProposal(
+	ctx context.Context,
+	command personaports.RollbackProfileProposalCommand,
+	commandDigest string,
+) (personaports.ProfileProposalMutationResult, error) {
+	commandDigest = strings.TrimSpace(commandDigest)
+	if commandDigest == "" {
+		return personaports.ProfileProposalMutationResult{},
+			errors.New("Persona command digest is required")
+	}
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	commandKey := personaProposalCommandKey(command.ProposalID, "rollback")
+	if replayed, found, err := personaProposalReplay(
+		ctx,
+		tx,
+		commandKey,
+		commandDigest,
+	); err != nil || found {
+		return finishPersonaReplay(ctx, tx, replayed, found, err)
+	}
+
+	var (
+		before personamodel.ProfileSnapshot
+		status string
+	)
+	err = tx.QueryRow(ctx, `
+SELECT display_name, bio, avatar_media_asset_id, COALESCE(avatar_url,''),
+       background_media_asset_id, COALESCE(background_url,''),
+       is_private, isolation_level, purpose_hint, version, status
+FROM personas
+WHERE sub_account_id=$1
+FOR UPDATE`, command.PersonaID).Scan(
+		&before.DisplayName,
+		&before.Bio,
+		&before.AvatarMediaAssetID,
+		&before.AvatarURL,
+		&before.BackgroundMediaAssetID,
+		&before.BackgroundURL,
+		&before.IsPrivate,
+		&before.IsolationLevel,
+		&before.PurposeHint,
+		&before.Version,
+		&status,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return personaports.ProfileProposalMutationResult{}, personamodel.ErrNotFound
+	}
+	if err != nil {
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	if replayed, found, err := personaProposalReplay(
+		ctx,
+		tx,
+		commandKey,
+		commandDigest,
+	); err != nil || found {
+		return finishPersonaReplay(ctx, tx, replayed, found, err)
+	}
+	if status == "retired" {
+		return personaports.ProfileProposalMutationResult{}, personamodel.ErrRetired
+	}
+	if before.Version != command.ExpectedPersonaVersion {
+		return personaports.ProfileProposalMutationResult{}, personamodel.ErrVersionConflict
+	}
+
+	occurredAt := time.Now().UTC()
+	after := command.Snapshot
+	after.Version = before.Version + 1
+	result, err := tx.Exec(ctx, `
+UPDATE personas SET
+  display_name=$2,
+  bio=$3,
+  avatar_media_asset_id=$4,
+  avatar_url=$5,
+  background_media_asset_id=$6,
+  background_url=$7,
+  is_private=$8,
+  isolation_level=$9,
+  purpose_hint=$10,
+  version=$11,
+  updated_at=$12
+WHERE sub_account_id=$1 AND version=$13`,
+		command.PersonaID,
+		after.DisplayName,
+		after.Bio,
+		after.AvatarMediaAssetID,
+		after.AvatarURL,
+		after.BackgroundMediaAssetID,
+		after.BackgroundURL,
+		after.IsPrivate,
+		after.IsolationLevel,
+		after.PurposeHint,
+		after.Version,
+		occurredAt,
+		before.Version,
+	)
+	if err != nil {
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	if result.RowsAffected() != 1 {
+		return personaports.ProfileProposalMutationResult{}, personamodel.ErrVersionConflict
+	}
+
+	mutation := personaports.ProfileProposalMutationResult{
+		Before: before, After: after, OccurredAt: occurredAt,
+	}
+	eventPayload, err := json.Marshal(struct {
+		ProposalID string `json:"proposalId"`
+		PersonaID  string `json:"personaId"`
+		Version    int64  `json:"version"`
+	}{
+		ProposalID: command.ProposalID,
+		PersonaID:  command.PersonaID,
+		Version:    mutation.After.Version,
+	})
+	if err != nil {
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO personas_outbox(
+  event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
+) VALUES ($1,$2,$3,'PersonaProfileProposalRolledBack',$4,$5)`,
+		stablePersonaPacketID("rollback-event", command.ProposalID),
+		command.PersonaID,
+		after.Version,
+		eventPayload,
+		occurredAt,
+	); err != nil {
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	resultJSON, err := json.Marshal(mutation)
+	if err != nil {
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO personas_command_receipts(
+  receipt_id, aggregate_id, idempotency_key, command_digest, aggregate_version, result_json
+) VALUES ($1,$2,$3,$4,$5,$6)`,
+		stablePersonaPacketID("rollback-receipt", command.ProposalID),
+		command.PersonaID,
+		commandKey,
+		commandDigest,
+		after.Version,
+		resultJSON,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return personaports.ProfileProposalMutationResult{}, personamodel.ErrIdempotencyConflict
+		}
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	return mutation, nil
 }
 
 type personaQueryRower interface {
@@ -201,39 +381,89 @@ type personaQueryRower interface {
 func personaProposalReplay(
 	ctx context.Context,
 	querier personaQueryRower,
-	proposalID string,
+	commandKey string,
 	digest string,
-) (bool, error) {
+) (personaports.ProfileProposalMutationResult, bool, error) {
 	var storedDigest string
+	var resultJSON []byte
 	err := querier.QueryRow(ctx, `
-SELECT command_digest
+SELECT command_digest, result_json
 FROM personas_command_receipts
-WHERE idempotency_key=$1`, proposalID).Scan(&storedDigest)
+WHERE idempotency_key=$1`, commandKey).Scan(&storedDigest, &resultJSON)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
+		return personaports.ProfileProposalMutationResult{}, false, nil
 	}
 	if err != nil {
-		return false, err
+		return personaports.ProfileProposalMutationResult{}, false, err
 	}
 	if storedDigest != digest {
-		return false, personamodel.ErrIdempotencyConflict
+		return personaports.ProfileProposalMutationResult{}, false, personamodel.ErrIdempotencyConflict
 	}
-	return true, nil
+	var result personaports.ProfileProposalMutationResult
+	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		return personaports.ProfileProposalMutationResult{}, false, err
+	}
+	return result, true, nil
 }
 
-func finishPersonaReplay(ctx context.Context, tx pgx.Tx, replayed bool, err error) error {
+func finishPersonaReplay(
+	ctx context.Context,
+	tx pgx.Tx,
+	result personaports.ProfileProposalMutationResult,
+	found bool,
+	err error,
+) (personaports.ProfileProposalMutationResult, error) {
 	if err != nil {
-		return err
+		return personaports.ProfileProposalMutationResult{}, err
 	}
-	if !replayed {
-		return nil
+	if !found {
+		return personaports.ProfileProposalMutationResult{},
+			errors.New("Persona proposal replay result was not found")
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return personaports.ProfileProposalMutationResult{}, err
+	}
+	return result, nil
+}
+
+func personaProposalCommandKey(proposalID, action string) string {
+	return "profile-proposal:" + strings.TrimSpace(proposalID) + ":" + action
 }
 
 func stablePersonaPacketID(kind, proposalID string) string {
 	digest := sha256.Sum256([]byte(kind + "\x00" + proposalID))
 	return fmt.Sprintf("persona-%s-%x", kind, digest[:16])
+}
+
+func applyProfileChangeSet(
+	before personamodel.ProfileSnapshot,
+	changes personamodel.ProfileChangeSet,
+) personamodel.ProfileSnapshot {
+	after := before
+	if changes.DisplayName != nil {
+		after.DisplayName = strings.TrimSpace(*changes.DisplayName)
+	}
+	if changes.Bio != nil {
+		after.Bio = strings.TrimSpace(*changes.Bio)
+	}
+	if changes.AvatarMediaAssetID != nil {
+		after.AvatarMediaAssetID = strings.TrimSpace(*changes.AvatarMediaAssetID)
+		after.AvatarURL = ""
+	}
+	if changes.BackgroundMediaAssetID != nil {
+		after.BackgroundMediaAssetID = strings.TrimSpace(*changes.BackgroundMediaAssetID)
+		after.BackgroundURL = ""
+	}
+	if changes.IsPrivate != nil {
+		after.IsPrivate = *changes.IsPrivate
+	}
+	if changes.IsolationLevel != nil {
+		after.IsolationLevel = strings.TrimSpace(*changes.IsolationLevel)
+	}
+	if changes.PurposeHint != nil {
+		after.PurposeHint = strings.TrimSpace(*changes.PurposeHint)
+	}
+	return after
 }
 
 func stringValue(value *string) string {

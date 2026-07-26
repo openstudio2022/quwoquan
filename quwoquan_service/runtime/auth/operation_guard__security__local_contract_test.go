@@ -267,6 +267,11 @@ func TestGeneratedOperationGuardEnforcesIdempotencyAndVersionPolicy(t *testing.T
 			idempotencyKey:    "publish-intent-1",
 			wantStatus:        http.StatusNoContent,
 		},
+		{
+			name:              "server side payload digest needs no client key",
+			idempotencyPolicy: "payload_digest_server_side",
+			wantStatus:        http.StatusNoContent,
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			guard := RequireGeneratedOperationAuthorization(

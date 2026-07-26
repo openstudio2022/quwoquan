@@ -20,6 +20,7 @@
 - 公开版本查询、通用官网下载页、Android APK 下载端点和 iOS App Store 跳转。
 - User-Agent 平台识别、Build 数值比较、受信 URL 校验和下载失败终态。
 - Android APK 生产签名、不可变 CDN 对象、SHA-256 与 latest 指针发布门禁。
+- `stackctl package --kind app-release` 生成发布清单、Product Ops 版本事实环境配置，并可选对已上传 CDN 对象做全量摘要、大小、Content-Type 和 immutable 缓存校验。
 
 ### Out of Scope
 
@@ -34,13 +35,16 @@
 
 - 查询只接收 `platform`、`appVersion`、`buildNumber`，其中 platform 只允许 `ios` 或 `android`，Build 必须是正十进制整数。
 - 响应只包含 `latestVersion`、`latestBuild`、`updateUrl`、`recoveryUrl`。
-- 远端 Build 大于当前 Build 表示有新版；远端 Build 小于或等于当前 Build 表示当前已是最新；请求失败或响应非法不得生成版本结论。
+- 远端 Build 大于当前 Build 表示有新版；远端 Build 小于或等于当前 Build 表示当前已是最新。
+- 请求失败或响应非法不得生成版本结论。
+- iOS 与 Android 发布事实按平台独立校验和可用；一个平台的发布材料缺失不得使另一平台的官方通道下线。
 
 <a id="req-002"></a>
 ### REQ-002 官网按平台自动分流
 
 - 通用 `/download` 与 `/download/mobile` 根据 User-Agent 识别 iOS、Android/鸿蒙或桌面。
-- iOS 只重定向官方 App Store 产品页；Android/鸿蒙只重定向趣我圈官方 APK 下载端点；桌面显示两个明确入口。
+- iOS 只重定向官方 App Store 产品页，Android/鸿蒙只重定向趣我圈官方 APK 下载端点。
+- 桌面显示两个明确入口。
 - 无法可靠识别时显示平台选择，不自行猜测或下载。
 
 <a id="req-003"></a>
@@ -48,6 +52,7 @@
 
 - `/download/android` 只重定向当前发布事实中的 HTTPS APK URL，目标域名必须在服务端白名单。
 - APK 必须以不可变对象键发布，且发布记录的包名、Build、版本、签名证书摘要、文件大小和 SHA-256 与二进制一致。
+- Android release 构建在未提供生产 keystore 时必须失败，不得使用 debug 签名生成可发布包。
 - latest 指针只能在上传、可下载探测和签名/摘要校验全部通过后切换；发布失败继续保留上一已验证版本，不产生新版事实。
 
 <a id="req-004"></a>
@@ -93,6 +98,6 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：仓库当前 Android release 使用 debug signing，且没有生产 keystore Secret、正式 APK CDN 对象和 iOS App Store 产品 ID，无法形成可对外宣称的正式下载事实。
+- 影响或价值：仓库已禁止 Android release 回退 debug signing，但当前仍没有生产 keystore Secret、经正式域名/CDN 上传并校验的 APK 对象和 iOS App Store 产品 ID，无法形成可对外宣称的正式下载事实。
 - 完成判定：`GWT-002` 使用生产签名和官方 CDN 真文件通过，iOS 正式产品页可访问。
 - 依赖：移动端发布账号、CI Secret、官方 CDN 与 DNS/TLS。

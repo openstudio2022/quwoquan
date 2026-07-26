@@ -65,8 +65,10 @@ func main() {
 		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
 	}
 	errorPaths := []string{
+		"ops/product_ops/app_release/errors.yaml",
 		"ops/product_ops/experiment/errors.yaml",
 		"ops/product_ops/event_record/errors.yaml",
+		"ops/product_ops/recovery_failure/errors.yaml",
 	}
 	totalErrors := 0
 	for _, sourcePath := range errorPaths {

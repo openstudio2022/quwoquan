@@ -317,6 +317,33 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/notifications/delivery-jobs/incoming-call-timeline:
+        get:
+            operationId: GetIncomingCallDeliveryTimeline
+            x-contract-operation-id: notification.notification_delivery_job.GetIncomingCallDeliveryTimeline
+            x-object-id: notification.notification_delivery_job
+            x-actor: account
+            x-application:
+                kind: query
+                facet: NotificationDeliveryJobQueryFacade
+                method: getIncomingCallTimeline
+                reader: IncomingCallDeliveryTimelineReader
+                slice: IncomingCallDeliveryTimeline
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/IncomingCallDeliveryTimeline'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/notifications/delivery-jobs/metrics:
         get:
             operationId: GetNotificationDeliveryJobMetrics
@@ -422,6 +449,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CreateAppMessageRequest
+            x-contract-placeholder: true
+        IncomingCallDeliveryTimeline:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: IncomingCallDeliveryTimeline
             x-contract-placeholder: true
         ListAppMessagesPage:
             type: object

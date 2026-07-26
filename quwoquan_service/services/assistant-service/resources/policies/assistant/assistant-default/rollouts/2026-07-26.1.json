@@ -1,0 +1,19 @@
+{
+  "schema": "assistant.policy_rollout.v1",
+  "commandId": "policy-rollout:assistant-default:2026-07-26.1",
+  "policyId": "assistant-default",
+  "expectedRevision": 0,
+  "activatedBy": "service:assistant-policy-publisher",
+  "bucketDefinitions": [
+    {
+      "cohort": "stable",
+      "weightBasisPoints": 10000
+    }
+  ],
+  "assignments": [
+    {
+      "cohort": "stable",
+      "releaseVersion": "2026-07-26.1"
+    }
+  ]
+}

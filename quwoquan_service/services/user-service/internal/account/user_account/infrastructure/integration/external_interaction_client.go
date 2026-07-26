@@ -50,7 +50,6 @@ func (c *ExternalInteractionClient) SubmitSMSOTP(ctx context.Context, req applic
 		"tenant":         "quwoquan",
 		"env":            c.env,
 		"idempotencyKey": req.IdempotencyKey,
-		"callbackEvent":  "SmsOtpDeliverySucceeded",
 		"payloadRef":     "otp_challenge:" + req.ChallengeID,
 		"payloadDigest":  req.PhoneHash,
 		"sensitivity":    "secret",

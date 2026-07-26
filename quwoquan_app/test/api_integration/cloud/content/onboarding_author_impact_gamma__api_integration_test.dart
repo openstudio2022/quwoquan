@@ -40,6 +40,8 @@ void main() {
         queuePartition: ActorQueuePartition(
           environment: 'gamma',
           accountId: _personaID,
+          personaId: _personaID,
+          deviceId: 'gamma-uat-device',
         ),
       );
       addTearDown(() {
@@ -109,7 +111,10 @@ void main() {
           surfaceId: AppUiSurfaces.userProfile.id,
           routeId: AppUiSurfaces.userProfile.routeId,
           clientPageId: pageID,
-          actor: CloudOperationActorContext(deviceActorId: 'gamma-uat-device'),
+          actor: CloudOperationActorContext(
+            personaId: _personaID,
+            deviceActorId: 'gamma-uat-device',
+          ),
         ),
       );
 

@@ -1,4 +1,5 @@
 overrides:
+  sys.user-service.es.enabled: true
   sys.user-service.redis.general.addr: 127.0.0.1:6379
 secretRefs:
   sys.user-service.mongodb.uri: MONGODB_URI

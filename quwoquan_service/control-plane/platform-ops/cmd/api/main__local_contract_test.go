@@ -32,6 +32,22 @@ func requestAsScopedOperator(request *http.Request, actor string, scopes ...stri
 	}))
 }
 
+func requestAsConfigAckService(
+	request *http.Request,
+	service string,
+	environment string,
+) *http.Request {
+	return request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+		Claims: rtauth.Claims{
+			Roles: []string{"service"},
+			Scope: "ops.platform.config.read ops.platform.config.ack",
+		},
+		Actor: operation.ActorContext{
+			AccountID: "service:" + service + "@" + environment,
+		},
+	}))
+}
+
 func TestPlatformOperatorOIDCRequirementMatchesFourEnvironmentPolicy(t *testing.T) {
 	for _, appEnv := range []string{"alpha", "beta", "gamma"} {
 		if platformOperatorOIDCRequired(appEnv) {
@@ -411,9 +427,10 @@ func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 	reportReq := httptest.NewRequest(
 		http.MethodPost,
 		"/control-plane/platform/configs/instances/product-ops-service-beta-control-a-0:report",
-		bytes.NewBufferString(`{"environment":"beta","cluster":"beta-control-a","service":"product-ops-service","desiredHash":"hash-a","effectiveHash":"hash-b","source":"disk-fallback"}`),
+		bytes.NewBufferString(`{"environment":"beta","cluster":"beta-control-a","service":"product-ops-service","effectiveHash":"hash-b","source":"disk-fallback"}`),
 	)
 	reportReq.Header.Set("Content-Type", "application/json")
+	reportReq = requestAsConfigAckService(reportReq, "product-ops-service", "beta")
 	reportResp := httptest.NewRecorder()
 	server.ServeHTTP(reportResp, reportReq)
 	if reportResp.Code != http.StatusOK {

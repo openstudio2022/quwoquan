@@ -33,6 +33,14 @@ final class _PostPublicationPermanentException implements Exception {
   const _PostPublicationPermanentException();
 }
 
+final class _PostPublicationMediaProcessingException implements Exception {
+  const _PostPublicationMediaProcessingException();
+}
+
+final class _PostPublicationMediaRejectedException implements Exception {
+  const _PostPublicationMediaRejectedException();
+}
+
 enum LocalPostPublicationBlockReason {
   personaChanged,
   invalidReceipt,
@@ -348,6 +356,24 @@ final class PostPublicationIntentQueueNotifier
         blockReason: LocalPostPublicationBlockReason.invalidReceipt,
       );
       throw PostPublicationTaskBlockedException(intent.command.localDraftId);
+    } on _PostPublicationMediaProcessingException {
+      await _markFailed(
+        intent,
+        ContentErrorCode.mediaNotReady.code,
+        true,
+        retryAfter: Duration(
+          seconds: ContentErrorCode.mediaNotReady.recoveryAfterSeconds,
+        ),
+      );
+      throw PostPublicationQueuedException(intent.command.publishIntentId);
+    } on _PostPublicationMediaRejectedException {
+      await _markFailed(
+        intent,
+        ContentErrorCode.mediaProcessingRejected.code,
+        false,
+        blockReason: LocalPostPublicationBlockReason.rejected,
+      );
+      throw PostPublicationTaskBlockedException(intent.command.localDraftId);
     } on CloudException catch (error) {
       final retryable = _isRetryable(error);
       await _markFailed(
@@ -556,6 +582,22 @@ final class PostPublicationIntentQueueNotifier
             false,
             blockReason: LocalPostPublicationBlockReason.invalidReceipt,
           );
+        } on _PostPublicationMediaProcessingException {
+          await _markFailed(
+            intent,
+            ContentErrorCode.mediaNotReady.code,
+            true,
+            retryAfter: Duration(
+              seconds: ContentErrorCode.mediaNotReady.recoveryAfterSeconds,
+            ),
+          );
+        } on _PostPublicationMediaRejectedException {
+          await _markFailed(
+            intent,
+            ContentErrorCode.mediaProcessingRejected.code,
+            false,
+            blockReason: LocalPostPublicationBlockReason.rejected,
+          );
         } on CloudException catch (error) {
           final retryable = _isRetryable(error);
           await _markFailed(
@@ -631,6 +673,7 @@ final class PostPublicationIntentQueueNotifier
     if (activePersona.subAccountId.trim() != intent.authorPersonaId) {
       throw const _PostPublicationPersonaMismatchException();
     }
+    await _ensurePreparedMediaReady(intent);
     final receipt = await ref
         .read(createContentPostPublicationWriterProvider)
         .submitPostPublication(intent.command);
@@ -668,6 +711,37 @@ final class PostPublicationIntentQueueNotifier
       _scheduleRetry();
     }
     return receipt;
+  }
+
+  Future<void> _ensurePreparedMediaReady(
+    LocalPostPublicationIntent intent,
+  ) async {
+    if (intent.preparedMediaAssets.isEmpty) {
+      return;
+    }
+    final media = ref.read(createContentMediaFacetProvider);
+    for (final checkpoint in intent.preparedMediaAssets) {
+      final assetId = checkpoint.assetId.trim();
+      if (checkpoint.phase != ContentMediaPreparationPhase.completed ||
+          assetId.isEmpty) {
+        throw const _PostPublicationMediaProcessingException();
+      }
+      final asset = await media.getMediaAsset(
+        GetContentMediaAssetQuery(mediaId: assetId),
+      );
+      if (asset.assetId != assetId) {
+        throw const _PostPublicationPermanentException();
+      }
+      switch (asset.status) {
+        case ContentMediaProcessingStatus.ready:
+          continue;
+        case ContentMediaProcessingStatus.processing:
+          throw const _PostPublicationMediaProcessingException();
+        case ContentMediaProcessingStatus.rejected:
+        case ContentMediaProcessingStatus.deleted:
+          throw const _PostPublicationMediaRejectedException();
+      }
+    }
   }
 
   Future<void> _refreshPendingIntent(LocalPostPublicationIntent intent) async {

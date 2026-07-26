@@ -41,3 +41,16 @@ collections:
       keys:
         expiresAt: 1
       expireAfterSeconds: 0
+  search_feedback_signal_deliveries:
+    entity: SearchFeedbackSignalDelivery
+    role: authoritative
+    indexes:
+    - name: idx_search_feedback_signal_delivery_pending
+      keys:
+        status: 1
+        leaseExpiresAt: 1
+        createdAt: 1
+    - name: idx_search_feedback_signal_delivery_expiry
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0

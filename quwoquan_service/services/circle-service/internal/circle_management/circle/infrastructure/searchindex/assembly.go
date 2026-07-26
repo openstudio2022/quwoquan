@@ -2,12 +2,12 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"quwoquan_service/runtime/search/es"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
 )
 
 // ESConfig consumes the effective config rendered from the circle-service autonomous package. It is the same
@@ -38,12 +38,21 @@ type Built struct {
 	Projector *Projector
 }
 
-// Build assembles the write-time search index from config. When ES is disabled or
-// has no endpoints it returns an empty (no-op) Built so the circle write path is
-// unchanged. reader is the live circle store used to read circles back on events.
-func Build(cfg ESConfig, reader application.CircleReader, opts ...Option) (Built, error) {
-	if !cfg.Enabled || len(cfg.Endpoints) == 0 {
+// Build assembles the write-time search index from config. An explicitly
+// disabled projection returns an empty Built; an enabled but incomplete
+// configuration fails fast.
+func Build(
+	cfg ESConfig,
+	reader CircleReader,
+	opts ...Option,
+) (Built, error) {
+	if !cfg.Enabled {
 		return Built{}, nil
+	}
+	if len(cfg.Endpoints) == 0 || reader == nil {
+		return Built{}, fmt.Errorf(
+			"Circle search projection requires endpoints and reader",
+		)
 	}
 	client, err := es.NewClient(es.Config{
 		Endpoints:      cfg.Endpoints,

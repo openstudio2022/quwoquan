@@ -50,6 +50,8 @@ spec:
                   fieldPath: metadata.annotations['quwoquan.io/image-version']
             - name: ASSISTANT_RESOURCE_ROOT
               value: /app/resources/skills/assistant/assistant_conversation
+            - name: ASSISTANT_POLICY_RESOURCE_ROOT
+              value: /app/resources/policies
           volumeMounts:
             - name: runtime-config
               mountPath: /etc/qwq/config/assistant-service.yaml

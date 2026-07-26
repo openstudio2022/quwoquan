@@ -115,6 +115,7 @@ jobs:
       packages: read
     env:
       QWQ_PROD_RELEASE_STATE_DIR: ${{ vars.PROD_RELEASE_STATE_DIR }}
+      QWQ_PROD_BACKUP_RECOVERY_RECEIPT: ${{ vars.PROD_BACKUP_RECOVERY_RECEIPT }}
     # 去 root · 按平面 SSH 凭据（退役单一全权 PROD_KUBECONFIG）。
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -129,6 +130,16 @@ jobs:
             echo "::error::release artifact is required; local regeneration is forbidden"
             exit 1
           }
+      - name: Require fresh hosted backup and recovery receipt
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          python3 quwoquan_ops/cli/stackctl.py verify \
+            --env prod \
+            --target prod-hosted \
+            --kind all \
+            --profile release \
+            --backup-recovery-receipt "$QWQ_PROD_BACKUP_RECOVERY_RECEIPT" \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/manual-backup-recovery-preflight"
       - name: Checkout the governed release source
         run: |
           SOURCE_SHA="$(python3 - <<'PY'

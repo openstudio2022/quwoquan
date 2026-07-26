@@ -5,6 +5,26 @@ groups:
     rules:
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="DELETE",route=~"^/content/media/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.DiscardMediaAsset"
+          contract_metric: "content_media_asset_discard"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="DELETE",route=~"^/content/media/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_asset.DiscardMediaAsset"
+          contract_metric: "content_media_asset_discard"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
           sum by (status) (http_server_requests_total{service="content-service",method="GET",route=~"^/content/media/[^/]+$"})
         labels:
           service: "content-service"

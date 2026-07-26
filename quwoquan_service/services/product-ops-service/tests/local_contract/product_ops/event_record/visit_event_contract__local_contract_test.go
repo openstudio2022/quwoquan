@@ -58,6 +58,108 @@ func TestTelemetryServiceAcceptsStrictBatchAndMasksSession(t *testing.T) {
 	}
 }
 
+func TestTrustedRuntimeLogBatchUsesTheSameDurableIdempotencyLedger(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewRuntimeLogService(store, store)
+	occurredAt := time.Now().UTC().Add(-time.Minute)
+	fields := map[string]string{
+		"schema":             "observability.slim",
+		"recordId":           "runtime-log-ledger-test",
+		"occurredAt":         occurredAt.Format(time.RFC3339Nano),
+		"observedAt":         occurredAt.Format(time.RFC3339Nano),
+		"logKind":            "exception",
+		"severity":           "ERROR",
+		"signal":             "service.exception.runtime",
+		"message":            "dependency failure",
+		"resourceSourceType": "service",
+		"resourceService":    "product-ops-service",
+	}
+	batchKey := digestKey("trusted-runtime-log-batch")
+	ack, err := service.ReportTrustedRuntimeLogBatch(
+		context.Background(),
+		batchKey,
+		[]map[string]string{fields},
+	)
+	if err != nil || ack.AcceptedCount != 1 || ack.DuplicateBatch {
+		t.Fatalf("first trusted runtime batch ack=%+v err=%v", ack, err)
+	}
+	replayed, err := service.ReportTrustedRuntimeLogBatch(
+		context.Background(),
+		batchKey,
+		[]map[string]string{fields},
+	)
+	if err != nil || replayed.AcceptedCount != 1 || !replayed.DuplicateBatch {
+		t.Fatalf("replayed trusted runtime batch ack=%+v err=%v", replayed, err)
+	}
+	summary, err := service.GetRuntimeLogSummary(
+		context.Background(),
+		application.RuntimeLogSummaryQuery{
+			From: occurredAt.Add(-time.Minute),
+			To:   occurredAt.Add(time.Minute),
+		},
+	)
+	if err != nil || summary.TotalCount != 1 {
+		t.Fatalf("trusted runtime batch must write one record: summary=%+v err=%v", summary, err)
+	}
+}
+
+func TestRtcMediaQoeDrilldownPreservesSessionScopedTerminalFacts(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, store, store)
+	occurredAt := time.Now().UTC().Add(-time.Minute)
+	event := validEvent("rtc_media_qoe", "event", occurredAt)
+	callType, result := "video", "connection_lost"
+	participantCount, connectTimeMS, reconnectCount := 2, 842, 3
+	mediaConnected := true
+	disconnectReason, networkQuality := "unexpected_disconnect", "good"
+	event.CallType = &callType
+	event.Result = &result
+	event.ParticipantCount = &participantCount
+	event.ConnectTimeMS = &connectTimeMS
+	event.MediaConnected = &mediaConnected
+	event.ReconnectCount = &reconnectCount
+	event.DisconnectReason = &disconnectReason
+	event.NetworkQuality = &networkQuality
+	if _, err := service.ReportEventBatch(
+		context.Background(),
+		digestKey("rtc-media-qoe-drilldown"),
+		[]application.EventRecordInput{event},
+	); err != nil {
+		t.Fatalf("report rtc_media_qoe: %v", err)
+	}
+
+	drilldown, err := service.GetEventDrilldown(
+		context.Background(),
+		application.EventDrilldownQuery{
+			EventType: "rtc_media_qoe",
+			SessionID: event.SessionID,
+			From:      occurredAt.Add(-time.Minute),
+			To:        occurredAt.Add(time.Minute),
+			Limit:     1,
+		},
+	)
+	if err != nil {
+		t.Fatalf("session-scoped rtc_media_qoe drilldown: %v", err)
+	}
+	if len(drilldown.Items) != 1 {
+		t.Fatalf("drilldown items = %d; want 1", len(drilldown.Items))
+	}
+	item := drilldown.Items[0]
+	if item.Result == nil || *item.Result != result ||
+		item.CallType == nil || *item.CallType != callType ||
+		item.ParticipantCount == nil || *item.ParticipantCount != participantCount ||
+		item.ConnectTimeMS == nil || *item.ConnectTimeMS != connectTimeMS ||
+		item.MediaConnected == nil || *item.MediaConnected != mediaConnected ||
+		item.ReconnectCount == nil || *item.ReconnectCount != reconnectCount ||
+		item.DisconnectReason == nil || *item.DisconnectReason != disconnectReason ||
+		item.NetworkQuality == nil || *item.NetworkQuality != networkQuality {
+		t.Fatalf("rtc_media_qoe drilldown lost terminal facts: %+v", item)
+	}
+	if item.SessionID == event.SessionID || !strings.HasPrefix(item.SessionID, "s.***.") {
+		t.Fatalf("sessionId must remain masked: %q", item.SessionID)
+	}
+}
+
 func TestTelemetryServiceRejectsWholeBatchBeforeWrite(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
 	service := application.NewTelemetryService(store, store, store)

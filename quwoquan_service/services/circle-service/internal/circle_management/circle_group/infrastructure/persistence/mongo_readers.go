@@ -158,6 +158,39 @@ func (readers *MongoReaders) ListGroups(ctx context.Context, query groupports.Li
 	return readers.list(ctx, filter, query.Cursor, query.Limit)
 }
 
+// ListForSearch scans all CircleGroups by stable _id keyset. It intentionally
+// includes private and archived rows so backfill can delete stale public-index
+// documents rather than silently retaining them.
+func (readers *MongoReaders) ListForSearch(
+	ctx context.Context,
+	afterID string,
+	limit int,
+) ([]groupmodel.CircleGroup, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	filter := bson.M{}
+	if afterID = strings.TrimSpace(afterID); afterID != "" {
+		filter["_id"] = bson.M{"$gt": afterID}
+	}
+	cursor, err := readers.groups.Find(
+		ctx,
+		filter,
+		options.Find().
+			SetSort(bson.D{{Key: "_id", Value: 1}}).
+			SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list CircleGroups for search: %w", err)
+	}
+	defer cursor.Close(ctx)
+	var groups []groupmodel.CircleGroup
+	if err := cursor.All(ctx, &groups); err != nil {
+		return nil, fmt.Errorf("decode CircleGroups for search: %w", err)
+	}
+	return groups, nil
+}
+
 func (readers *MongoReaders) SearchGroups(ctx context.Context, query groupports.SearchQuery) (groupports.GroupPageSlice, error) {
 	pattern := regexp.QuoteMeta(strings.TrimSpace(query.Query))
 	filter := bson.M{

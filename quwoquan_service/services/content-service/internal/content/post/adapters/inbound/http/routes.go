@@ -12,6 +12,7 @@ import (
 	posttransport "quwoquan_service/services/content-service/generated/content/post/transport"
 	profileactivitytransport "quwoquan_service/services/content-service/generated/content/profile_interaction_activity_view/transport"
 	profilereadfacttransport "quwoquan_service/services/content-service/generated/content/profile_interaction_read_fact/transport"
+	filtercatalogtransport "quwoquan_service/services/content-service/generated/media/filter_catalog_release/transport"
 	mediaassettransport "quwoquan_service/services/content-service/generated/media/media_asset/transport"
 	mediareprocesstransport "quwoquan_service/services/content-service/generated/media/media_image_reprocess_run/transport"
 	mediaoriginaltransport "quwoquan_service/services/content-service/generated/media/media_original_access_fact/transport"
@@ -29,6 +30,7 @@ var generatedOperationResolvers = []func(*http.Request) (string, bool){
 	profileactivitytransport.ResolveOperation,
 	profilereadfacttransport.ResolveOperation,
 	mediaassettransport.ResolveOperation,
+	filtercatalogtransport.ResolveOperation,
 	mediareprocesstransport.ResolveOperation,
 	mediaoriginaltransport.ResolveOperation,
 	mediauploadtransport.ResolveOperation,
@@ -72,6 +74,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		})
 	case "BeginReportReview":
 		h.handleBeginReportReview(w, r)
+	case "ActivateFilterCatalogRelease":
+		h.handleActivateFilterCatalogRelease(w, r)
 	case "BindMediaAssetsToComment":
 		h.handleBindMediaAssetsToComment(
 			w,
@@ -115,6 +119,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetCurrentPostModerationCase(w, r)
 	case "GetEntityWishlistState":
 		h.handleGetEntityWishlistState(w, r)
+	case "GetActiveFilterCatalog":
+		h.handleGetActiveFilterCatalog(w, r)
 	case "GetFeed":
 		h.handleGetFeed(w, r)
 	case "GetHelperRead":
@@ -224,12 +230,16 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleReviewPostModerationCase(w, r)
 	case "RollbackMediaImageReprocessRun":
 		h.handleRollbackMediaImageReprocessRun(w, r)
+	case "RollbackFilterCatalogRelease":
+		h.handleRollbackFilterCatalogRelease(w, r)
 	case "SelectAutoVideoCover":
 		h.handleSelectAutoVideoCover(w, r)
 	case "SelectManualVideoCover":
 		h.handleSelectManualVideoCover(w, r)
 	case "StartMediaImageReprocessRun":
 		h.handleStartMediaImageReprocessRun(w, r)
+	case "StageFilterCatalogRelease":
+		h.handleStageFilterCatalogRelease(w, r)
 	case "SubmitPostPublication":
 		h.handleSubmitPostPublication(w, r)
 	case "SupersedePostModerationCase":
@@ -273,6 +283,50 @@ func (h *ContentHandler) dispatchMediaUploadSession(
 		return
 	}
 	dispatch(h.mediaUploadSessionHandler)
+}
+
+func (h *ContentHandler) dispatchFilterCatalogRelease(
+	w http.ResponseWriter,
+	r *http.Request,
+	dispatch func(filterCatalogReleaseHTTPHandler),
+) {
+	if h.filterCatalogReleaseHandler == nil {
+		writeHTTPError(
+			w,
+			r,
+			rterr.NewUnavailable(
+				rterr.ModuleContent,
+				"滤镜目录服务未配置",
+				"FilterCatalogRelease HTTP adapter is required",
+			),
+		)
+		return
+	}
+	dispatch(h.filterCatalogReleaseHandler)
+}
+
+func (h *ContentHandler) handleStageFilterCatalogRelease(w http.ResponseWriter, r *http.Request) {
+	h.dispatchFilterCatalogRelease(w, r, func(handler filterCatalogReleaseHTTPHandler) {
+		handler.Stage(w, r)
+	})
+}
+
+func (h *ContentHandler) handleActivateFilterCatalogRelease(w http.ResponseWriter, r *http.Request) {
+	h.dispatchFilterCatalogRelease(w, r, func(handler filterCatalogReleaseHTTPHandler) {
+		handler.Activate(w, r)
+	})
+}
+
+func (h *ContentHandler) handleRollbackFilterCatalogRelease(w http.ResponseWriter, r *http.Request) {
+	h.dispatchFilterCatalogRelease(w, r, func(handler filterCatalogReleaseHTTPHandler) {
+		handler.Rollback(w, r)
+	})
+}
+
+func (h *ContentHandler) handleGetActiveFilterCatalog(w http.ResponseWriter, r *http.Request) {
+	h.dispatchFilterCatalogRelease(w, r, func(handler filterCatalogReleaseHTTPHandler) {
+		handler.GetActive(w, r)
+	})
 }
 
 type GeneratedGetFeedParams = posttransport.GeneratedGetFeedParams

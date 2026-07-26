@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/content-service/internal/content/post/application/searchprojection"
 )
@@ -24,6 +25,7 @@ type BackfillReport struct {
 	ReferencedPosts int `json:"referencedPosts"`
 	SkippedPosts    int `json:"skippedPosts"`
 	IndexedPlaces   int `json:"indexedPlaces"`
+	DeletedPlaces   int `json:"deletedPlaces"`
 	BatchesPushed   int `json:"batchesPushed"`
 }
 
@@ -36,7 +38,9 @@ type BackfillReport struct {
 func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, store PlaceStore, batchSize int) (BackfillReport, error) {
 	var report BackfillReport
 	if indexer == nil || reader == nil || store == nil {
-		return report, nil
+		return report, fmt.Errorf(
+			"Place search backfill requires indexer, reader and store",
+		)
 	}
 	if batchSize <= 0 {
 		batchSize = defaultBackfillBatchSize
@@ -50,6 +54,10 @@ func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, store
 		return report, fmt.Errorf("list posts: %w", err)
 	}
 	report.TotalPosts = len(posts)
+	existingPlaces, err := store.ListAll(ctx)
+	if err != nil {
+		return report, fmt.Errorf("list existing place snapshots: %w", err)
+	}
 
 	// Aggregate posts → canonical place snapshots (preserving first-seen order
 	// so the rebuild is deterministic).
@@ -75,6 +83,7 @@ func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, store
 	}
 
 	batch := make([]es.ChangeEvent, 0, batchSize)
+	pendingPlaceDeletes := make([]string, 0, batchSize)
 	flush := func() error {
 		if len(batch) == 0 {
 			return nil
@@ -82,8 +91,19 @@ func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, store
 		if err := indexer.Bulk(ctx, "", batch); err != nil {
 			return err
 		}
+		for _, placeID := range pendingPlaceDeletes {
+			if err := store.Delete(ctx, placeID); err != nil {
+				return fmt.Errorf(
+					"delete obsolete place snapshot %s: %w",
+					placeID,
+					err,
+				)
+			}
+			report.DeletedPlaces++
+		}
 		report.BatchesPushed++
 		batch = batch[:0]
+		pendingPlaceDeletes = pendingPlaceDeletes[:0]
 		return nil
 	}
 
@@ -94,6 +114,27 @@ func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, store
 		}
 		batch = append(batch, es.ChangeEvent{Op: es.OpUpsert, Doc: searchprojection.ProjectPlaceToSearchDocument(snap)})
 		report.IndexedPlaces++
+		if len(batch) >= batchSize {
+			if err := flush(); err != nil {
+				return report, err
+			}
+		}
+	}
+	for _, existing := range existingPlaces {
+		if _, stillReferenced := agg[existing.PlaceID]; stillReferenced {
+			continue
+		}
+		batch = append(batch, es.ChangeEvent{
+			Op: es.OpDelete,
+			Doc: rtsearch.Document{
+				ObjectType: rtsearch.ObjectTypeLocation,
+				ObjectID:   existing.PlaceID,
+			},
+		})
+		pendingPlaceDeletes = append(
+			pendingPlaceDeletes,
+			existing.PlaceID,
+		)
 		if len(batch) >= batchSize {
 			if err := flush(); err != nil {
 				return report, err

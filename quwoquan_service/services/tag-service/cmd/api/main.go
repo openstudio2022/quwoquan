@@ -4,15 +4,18 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
-	configrelease "quwoquan_service/runtime/configrelease"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
 	rtmongo "quwoquan_service/internal/platform/mongodb"
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
+	configrelease "quwoquan_service/runtime/configrelease"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -20,6 +23,8 @@ import (
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
+	signalstream "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/infrastructure/messaging"
 	feedbackhttp "quwoquan_service/services/tag-service/internal/tag/tag_feedback/adapters/inbound/http"
 	"quwoquan_service/services/tag-service/internal/tag/tag_feedback/application/tagfeedback"
 	"quwoquan_service/services/tag-service/internal/tag/tag_feedback/infrastructure/tagfeedbackstore"
@@ -44,6 +49,11 @@ type config struct {
 		} `yaml:"http"`
 	} `yaml:"service"`
 
+	UserAccountSecurityAuthority struct {
+		BaseURL   string `yaml:"base_url"`
+		TimeoutMs int    `yaml:"timeout_ms"`
+	} `yaml:"user_account_security_authority"`
+
 	Mongo struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
@@ -67,6 +77,51 @@ func main() {
 	applyEnvOverrides(&cfg)
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("tag-service config compatibility failed: %v", err)
+	}
+
+	configProvider := runtimeconfig.EnvRuntimeConfigProvider{}
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(configProvider)
+	if err != nil {
+		log.Fatalf("tag-service access token config invalid: %v", err)
+	}
+	accountSecurityAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		serviceName,
+		[]string{"user.account.security.read"},
+	)
+	if err != nil {
+		log.Fatalf(
+			"tag-service account security authority credential init failed: %v",
+			err,
+		)
+	}
+	accountSecurityAuthorityTimeout := time.Duration(
+		cfg.UserAccountSecurityAuthority.TimeoutMs,
+	) * time.Millisecond
+	accountSecurityAuthority, err := rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL: cfg.UserAccountSecurityAuthority.BaseURL,
+			HTTPClient: &http.Client{
+				Timeout: accountSecurityAuthorityTimeout,
+			},
+			Credentials: accountSecurityAuthorityCredentials,
+			Timeout:     accountSecurityAuthorityTimeout,
+		},
+	)
+	if err != nil {
+		log.Fatalf("tag-service account security authority config invalid: %v", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("tag-service access token verifier invalid: %v", err)
+	}
+	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(configProvider)
+	if err != nil {
+		log.Fatalf("tag-service device ticket config invalid: %v", err)
+	}
+	deviceTicketVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
+	if err != nil {
+		log.Fatalf("tag-service device ticket verifier invalid: %v", err)
 	}
 
 	addr := getenvOrDefault("TAG_SERVICE_ADDR", cfg.Service.HTTP.Addr)
@@ -112,28 +167,87 @@ func main() {
 	}
 	feedbackSink := tagfeedbackstore.NewSink(db)
 	if err := feedbackSink.EnsureIndexes(ctx); err != nil {
-		log.Printf("WARN: tag-service ensure tag_feedback indexes: %v", err)
+		log.Fatalf("tag-service ensure tag_feedback indexes: %v", err)
 	}
 	feedbackFacade, err := tagfeedback.NewFacade(feedbackSink, tagService)
 	if err != nil {
 		log.Fatalf("tag-service tag feedback facade init failed: %v", err)
 	}
 
+	redisRouter, redisSceneModes := buildTagRedisRouter(cfg)
+	defer redisRouter.Close()
+	messageTransport, err := requireTagAPIMessageTransport(
+		ctx,
+		appEnv,
+		redisRouter,
+		redisSceneModes,
+	)
+	if err != nil {
+		log.Fatalf("tag-service message transport init failed: %v", err)
+	}
+	profileTagConsumer, err := signalstream.NewUserProfileTagConsumer(
+		messageTransport,
+		objectTagStore,
+		serviceName,
+		slog.Default(),
+	)
+	if err != nil {
+		log.Fatalf("tag-service user profile tag consumer init failed: %v", err)
+	}
+	go profileTagConsumer.Run(ctx)
+	feedbackEventPublisher, err := tagfeedbackstore.NewStreamEventPublisher(
+		messageTransport,
+	)
+	if err != nil {
+		log.Fatalf("tag-service feedback event publisher init failed: %v", err)
+	}
+	feedbackEventRelay, err := tagfeedbackstore.NewEventRelay(
+		feedbackSink,
+		feedbackEventPublisher,
+		slog.Default(),
+	)
+	if err != nil {
+		log.Fatalf("tag-service feedback event relay init failed: %v", err)
+	}
+	go feedbackEventRelay.Run(ctx)
+
 	routesMux := http.NewServeMux()
 	nodehttp.NewTagHandler(tagService).Register(routesMux)
 	releasehttp.NewTaxonomyReleaseHandler(releaseFacade).Register(routesMux)
 	feedbackhttp.NewTagFeedbackHandler(feedbackFacade).Register(routesMux)
-	var handler http.Handler = routesMux
+	generatedOperationGuard := rtauth.RequireGeneratedOperationAuthorization(
+		operationsecurity.ForDomain("tag"),
+	)(routesMux)
 
 	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("account-security-authority", func(hctx context.Context) error {
+		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
+	})
 	healthChecker.Register("mongodb", func(hctx context.Context) error {
 		return mongoClient.Ping(hctx, nil)
+	})
+	healthChecker.Register("taxonomy-projection", func(hctx context.Context) error {
+		releaseID, found, err := releaseStore.ActiveReleaseID(hctx)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("active taxonomy release is missing")
+		}
+		return tagNodeStore.ValidateReleaseProjection(hctx, releaseID)
+	})
+	healthChecker.Register("redis", redisRouter.PingAll)
+	healthChecker.Register("profile-tag-consumer", func(context.Context) error {
+		return profileTagConsumer.Healthy(15 * time.Second)
+	})
+	healthChecker.Register("feedback-event-relay", func(hctx context.Context) error {
+		return feedbackEventRelay.Healthy(hctx, 15*time.Second)
 	})
 
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle("/", handler)
+	outerMux.Handle("/", generatedOperationGuard)
 
 	instanceID, _ := os.Hostname()
 	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
@@ -170,8 +284,12 @@ func main() {
 	rateLimiter := rtgov.NewRateLimiter(1000)
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           rateLimited,
+		Addr: addr,
+		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
+			AccessTokenVerifier:      accessVerifier,
+			DeviceTicketVerifier:     deviceTicketVerifier,
+			AccountSecurityAuthority: accountSecurityAuthority,
+		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,

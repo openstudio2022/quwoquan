@@ -434,7 +434,7 @@ void main() {
   // e2e.yaml: media_not_ready_graceful_error [test_type: api_contract]
   group('media_not_ready_graceful_error', () {
     test(
-      'X-Test-Error-Inject 触发 media_not_ready → 422 + recovery_action=retry',
+      'X-Test-Error-Inject 触发 metadata media_not_ready → 400 + retry/3s',
       () async {
         if (!_apiAvailable) {
           return markTestSkipped('$_apiContractEnv unavailable');
@@ -462,7 +462,7 @@ void main() {
             .timeout(const Duration(seconds: 10));
 
         // 协议层
-        expect(resp.statusCode, 422);
+        expect(resp.statusCode, ContentErrorCode.mediaNotReady.httpStatus);
 
         // 结构层
         final body = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -471,6 +471,8 @@ void main() {
         final code = ContentErrorCode.fromCode(body['code'] as String);
         expect(code, ContentErrorCode.mediaNotReady);
         expect(ContentErrorMessages.zh[code], '媒体文件正在处理中，请稍后发布');
+        expect(code.recoveryAction, 'retry');
+        expect(code.recoveryAfterSeconds, 3);
       },
     );
   });

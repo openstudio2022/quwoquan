@@ -55,7 +55,7 @@
 - 决策：启动致命异常由不依赖业务 Router、登录和延迟插件的原生最小恢复层承接；Flutter 运行时恢复由业务 ProviderScope 外的固定宿主持有，运行时主容器最多重建一次。单纯超时、进程未留下成功标记、用户强制结束或系统回收均不得推断为致命崩溃。
 - 理由：恢复能力必须在故障业务框架不可用时仍可操作，同时避免无限重启、误判崩溃和第二套 Crash 体系。
 - 被否决方案：6 秒超时直接显示错误页、用户反复重启 Flutter Engine、以 pending 标记推断硬崩溃、新增远程 Crash SDK 或不安全 signal handler。
-- 约束与影响：异常日志严格十字段并静默后台化；版本与跳转由原生能力接口完成；Android 官网 APK 与 iOS App Store 分流由服务端受信 release contract 决定。
+- 约束与影响：异常日志严格十字段并静默后台化。版本与跳转由原生能力接口完成，Android 官网 APK 与 iOS App Store 分流由服务端受信 release contract 决定。
 - 关联要求：`REQ-001`
 - 影响 Story：[`cold-start-performance`](./cold-start-performance/spec.md)、[`unrecoverable-runtime-recovery`](./unrecoverable-runtime-recovery/spec.md)、[`public-content-web-entry`](./public-content-web-entry/spec.md)
 - 关联验收：`SIT-001`

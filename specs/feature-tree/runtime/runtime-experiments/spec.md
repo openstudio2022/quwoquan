@@ -49,7 +49,7 @@
 
 - 提供统一实验分桶与灰度策略运行时；`AssignBucket` 是推荐与搜索当前唯一商用分桶实现。
 - 分桶规则必须稳定可复现，且支持版本化。
-- 当前策略来源是各业务 metadata/codegen 配置，统一经 `runtime/experiments` 解析；禁止业务服务复制 hash 算法。
+- 当前策略来源是各业务 metadata/codegen 配置，统一经 `runtime/experiments` 解析；recommendation、search 与 assistant policy rollout 都必须复用 `AssignBucket`，禁止业务服务复制 hash 算法。
 - 统一分桶 API 可被服务直接集成。
 
 ## 6. 契约与依赖

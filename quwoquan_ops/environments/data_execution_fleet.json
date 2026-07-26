@@ -1,5 +1,5 @@
 {
-  "localTarget": "alpha-local",
+  "localTarget": "beta-local",
   "mongoPortRole": "mongodb",
   "redisPortRole": "redis"
 }

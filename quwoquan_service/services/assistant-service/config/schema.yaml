@@ -95,6 +95,18 @@ configs:
   rollout: progressive
   sensitive: false
   default: 5000
+- key: sys.assistant-service.policy_publication.release_artifact_ref
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.assistant-service.policy_publication.rollout_artifact_ref
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
 - key: sys.assistant-service.postgres.conn_max_lifetime_minutes
   type: int
   scope: workload

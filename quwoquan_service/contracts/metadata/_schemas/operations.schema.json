@@ -424,7 +424,8 @@
                 "enum": [
                   "none",
                   "optional",
-                  "required"
+                  "required",
+                  "payload_digest_server_side"
                 ]
               }
             }

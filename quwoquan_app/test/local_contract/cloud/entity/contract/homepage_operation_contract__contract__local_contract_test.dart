@@ -36,6 +36,22 @@ void main() {
       });
     });
 
+    test('地点提升候选将 canonical source place identity 送到命令', () {
+      final request = encodeSuggestHomepageCandidateCommand(
+        SuggestHomepageCandidateCommand(
+          title: '断桥残雪',
+          homepageType: 'sight',
+          sourcePlaceId: 'place_0123456789abcdef',
+        ),
+      );
+
+      expect(request.body, <String, Object?>{
+        'title': '断桥残雪',
+        'homepageType': 'sight',
+        'sourcePlaceId': 'place_0123456789abcdef',
+      });
+    });
+
     test('主页详情仅以 homepageId 为唯一主页身份并严格解码', () {
       final detail = decodeHomepageDetail(<String, Object?>{
         'homepageId': 'homepage-1',

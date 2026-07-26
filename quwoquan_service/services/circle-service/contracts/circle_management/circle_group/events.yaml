@@ -5,6 +5,7 @@ events:
   - circle-group-membership-projector
   - circle-group-stream
   - chat-circle-group-conversation-provisioner
+  - circle-group-search-index-projector
   channel: transactional_outbox
   payload_entity: CircleGroup
   payload_fields:
@@ -20,6 +21,7 @@ events:
   producer: circle-service
   consumers:
   - circle-group-stream
+  - circle-group-search-index-projector
   channel: event_store
   payload_entity: CircleGroup
   payload_fields:
@@ -33,6 +35,7 @@ events:
   - circle-group-membership-projector
   - circle-group-stream
   - chat-circle-group-conversation-provisioner
+  - circle-group-search-index-projector
   channel: transactional_outbox
   payload_entity: CircleGroup
   payload_fields:

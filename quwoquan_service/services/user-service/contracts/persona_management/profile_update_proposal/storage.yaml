@@ -23,6 +23,30 @@ tables:
       type: JSONB
       constraints:
       - NOT_NULL
+    - name: reason
+      type: TEXT
+      constraints:
+      - NOT_NULL
+    - name: evidence_refs
+      type: JSONB
+      constraints:
+      - NOT_NULL
+    - name: impact_scope
+      type: JSONB
+      constraints:
+      - NOT_NULL
+    - name: created_by
+      type: VARCHAR(96)
+      constraints:
+      - NOT_NULL
+    - name: created_request_id
+      type: VARCHAR(128)
+      constraints:
+      - NOT_NULL
+    - name: created_trace_id
+      type: VARCHAR(128)
+      constraints:
+      - NOT_NULL
     - name: status
       type: VARCHAR(16)
       constraints:
@@ -32,6 +56,24 @@ tables:
       type: VARCHAR(96)
     - name: target_persona_expected_version
       type: BIGINT
+    - name: apply_actor_persona_id
+      type: VARCHAR(96)
+    - name: apply_request_id
+      type: VARCHAR(128)
+    - name: apply_trace_id
+      type: VARCHAR(128)
+    - name: apply_audit_id
+      type: VARCHAR(96)
+    - name: rollback_deadline
+      type: TIMESTAMPTZ
+    - name: rollback_actor_persona_id
+      type: VARCHAR(96)
+    - name: rollback_request_id
+      type: VARCHAR(128)
+    - name: rollback_trace_id
+      type: VARCHAR(128)
+    - name: rollback_audit_id
+      type: VARCHAR(96)
     - name: version
       type: BIGINT
       constraints:
@@ -55,6 +97,74 @@ tables:
       - persona_id
       - status
       - created_at
+  profile_update_proposal_audits:
+    entity: ProfileUpdateProposal
+    role: append_only
+    infrastructure_only: true
+    description: apply/rollback 的 immutable pre/post Persona snapshot、可信 actor/request/trace 与版本证据。
+    pk: audit_id
+    columns:
+    - name: audit_id
+      type: VARCHAR(96)
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: proposal_id
+      type: VARCHAR(64)
+      constraints:
+      - NOT_NULL
+    - name: actor_persona_id
+      type: VARCHAR(96)
+      constraints:
+      - NOT_NULL
+    - name: action
+      type: VARCHAR(16)
+      constraints:
+      - NOT_NULL
+    - name: actor_persona_id
+      type: VARCHAR(96)
+      constraints:
+      - NOT_NULL
+    - name: request_id
+      type: VARCHAR(128)
+      constraints:
+      - NOT_NULL
+    - name: trace_id
+      type: VARCHAR(128)
+      constraints:
+      - NOT_NULL
+    - name: before_snapshot
+      type: JSONB
+      constraints:
+      - NOT_NULL
+    - name: after_snapshot
+      type: JSONB
+      constraints:
+      - NOT_NULL
+    - name: before_persona_version
+      type: BIGINT
+      constraints:
+      - NOT_NULL
+    - name: after_persona_version
+      type: BIGINT
+      constraints:
+      - NOT_NULL
+    - name: occurred_at
+      type: TIMESTAMPTZ
+      constraints:
+      - NOT_NULL
+    - name: rollback_deadline
+      type: TIMESTAMPTZ
+    unique_constraints:
+    - name: uq_profile_update_proposal_audit_action
+      columns:
+      - proposal_id
+      - action
+    indexes:
+    - name: idx_profile_update_proposal_audits_proposal
+      columns:
+      - proposal_id
+      - occurred_at
   profile_update_proposals_command_receipts:
     entity: ProfileUpdateProposal
     role: authoritative
@@ -93,9 +203,9 @@ tables:
       - NOT_NULL
       default: NOW()
     unique_constraints:
-    - name: uq_profile_proposal_receipt_key
+    - name: uq_profile_proposal_actor_receipt_key
       columns:
-      - proposal_id
+      - actor_persona_id
       - idempotency_key
   profile_update_proposals_outbox:
     entity: ProfileUpdateProposal
@@ -131,6 +241,10 @@ tables:
       - NOT_NULL
     - name: published_at
       type: TIMESTAMPTZ
+    - name: claim_owner
+      type: VARCHAR(160)
+    - name: claimed_at
+      type: TIMESTAMPTZ
     - name: retry_count
       type: INTEGER
       constraints:
@@ -150,6 +264,8 @@ tables:
     - name: idx_profile_proposal_outbox_ready
       columns:
       - published_at
+      - claim_owner
+      - claimed_at
       - next_attempt_at
       - occurred_at
     - name: idx_profile_proposal_outbox_version
@@ -164,9 +280,11 @@ codegen:
   domain_path: persona/profile_update_proposal
   tables:
   - profile_update_proposals
+  - profile_update_proposal_audits
   - profile_update_proposals_command_receipts
   - profile_update_proposals_outbox
   migration_skip_tables:
   - profile_update_proposals
+  - profile_update_proposal_audits
   - profile_update_proposals_command_receipts
   - profile_update_proposals_outbox

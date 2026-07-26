@@ -3,15 +3,16 @@ overrides:
   sys.integration-service.account_security_authority.timeout_ms: 300
   sys.integration-service.integration.external_interaction.push.apns.environment: production
   sys.integration-service.integration.external_interaction.sms.enabled: true
-  sys.integration-service.redis.rec.mode: cluster
-  sys.integration-service.redis.rec.tls: true
+  sys.integration-service.redis.general.addr: ${REDIS_ADDR}
+  sys.integration-service.redis.general.tls: true
 secretRefs:
-  sys.integration-service.integration.external_interaction.callback_secret: INTEGRATION_CALLBACK_SECRET
   sys.integration-service.integration.external_interaction.push.apns.key_file: INTEGRATION_PUSH_APNS_KEY_FILE
   sys.integration-service.integration.external_interaction.push.fcm.service_account_file: INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE
   sys.integration-service.integration.external_interaction.sms.token: INTEGRATION_SMS_TOKEN
   sys.integration-service.mongodb.uri: INTEGRATION_MONGO_URI
 externalBindings:
+  runtime.message.transport:
+    state: enabled
   identity.sms.otp:
     state: enabled
     adapter: ext.sms.aliyun

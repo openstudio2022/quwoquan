@@ -14,6 +14,8 @@ metrics:
   degraded_total: search_retrieve_degraded_total         # labels: mode, bucket
   term_heat_applied_total: search_retrieve_term_heat_applied_total # labels: bucket
   feedback_events_total: search_feedback_events_total    # labels: event_type
+  feedback_signal_relay_outcomes_total: search_feedback_signal_relay_outcomes_total # labels: outcome
+  feedback_signal_pending_age_seconds: search_feedback_signal_relay_oldest_pending_age_seconds
   load_shed_total: search_retrieve_load_shed_total       # labels: reason (背压熔断/限流退化)
   inflight_gauge: search_retrieve_inflight               # 当前在途并发（饱和度）
   related_terms_cache_total: search_retrieve_related_terms_cache_total # labels: result(hit|miss)
@@ -35,7 +37,7 @@ slis:
     sli: sum(rate(search_retrieve_zero_results_total[5m])) / sum(rate(search_retrieve_requests_total{status="ok"}[5m]))
     objective_max: 0.15
   - id: degrade_rate
-    description: 携带降级信号（如 ES 失败回退 native）的检索占比
+    description: 携带受控依赖降级信号的检索占比；生产召回不允许切换第二 backend
     sli: sum(rate(search_retrieve_degraded_total[5m])) / sum(rate(search_retrieve_requests_total{status="ok"}[5m]))
     objective_max: 0.05
   - id: load_shed_rate
@@ -50,6 +52,10 @@ slis:
     description: 相关词热点缓存命中率（Mongo 卸载效果，越高越省后端）
     sli: sum(rate(search_retrieve_related_terms_cache_total{result="hit"}[5m])) / sum(rate(search_retrieve_related_terms_cache_total[5m]))
     objective_min: 0.5
+  - id: feedback_signal_delivery_lag
+    description: 已提交 click 事实到 durable recommendation stream 的最老待投递时延
+    sli: max(search_feedback_signal_relay_oldest_pending_age_seconds)
+    objective_max_seconds: 30
   - id: effective_search_success_rate
     description: 有效搜索成功率 = 产生点击或结果页停留满 3 秒的去重 requestId / query_submit 去重 requestId
     source: aliyun_sls.app-product-telemetry-search-funnel-hourly
@@ -101,21 +107,21 @@ load_model:
       error_rate_max: 0.005
       degrade_rate_max: 0.05
     feedback:
-      description: 点击/曝光/停留反馈写入（非用户感知延迟、best-effort）
+      description: 点击/曝光/停留反馈先幂等提交 Mongo；click 由 durable relay 至少一次投递稳定 signalId
       path: POST /search/feedback
       target_rps: { baseline: 80, peak: 300, spike: 800 }
       max_concurrency_per_instance: 150
       server_latency_ms: { p50: 20, p95: 80, p99: 200 }
       timeout_ms: 1000
       error_rate_max: 0.01
-      delivery: best_effort
+      delivery: committed_fact_then_at_least_once_signal
     indexing:
       description: 写时投影增量 + 批量 backfill（异步侧路，不进用户感知延迟）
       target_docs_per_sec: { incremental: 50, backfill_bulk: 2000 }
       bulk_batch_docs: { default: 500, backfill: 1000 }
       index_freshness_seconds_max: 30   # index.refresh_interval 目标（高写入期可调高）
       redis_consumer_lag_max: 1000      # search→content 信号 stream consumer lag
-      delivery: best_effort
+      delivery: durable_outbox_at_least_once
   shared_objectives:
     redis_publish_latency_ms_p99_max: 50
     redis_signal_lag_max: 1000

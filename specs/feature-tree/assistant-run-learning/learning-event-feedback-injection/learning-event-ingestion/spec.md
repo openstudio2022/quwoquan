@@ -9,7 +9,7 @@
 ## 1. 用户价值
 
 作为使用小趣的用户或助手运营者，
-我希望`queryTextDigest`（不得直接以原始敏感文本进入公开分析层），
+我希望反馈、交互结果和服务评分通过同一份可幂等追加的学习事实进入受控投影，
 从而获得可解释、可恢复且可持续改进的助手结果。
 
 ## 2. 范围与非目标
@@ -25,19 +25,20 @@
 ## 3. 行为要求
 
 <a id="req-001"></a>
-### REQ-001 学习事件摄入
+### REQ-001 学习事实摄入
 
-- `queryTextDigest`（不得直接以原始敏感文本进入公开分析层）。
+- 用户反馈、交互结果和服务评分必须只通过 `AppendAssistantLearningFact` 写入 `AssistantLearningFact`。
+- 原始敏感文本不得进入公开分析层。
 
 <a id="req-002"></a>
 ### REQ-002 对下映射到统一 EventEnvelope、学习特征投影与运营分析视图
 
 - 对下映射到统一 EventEnvelope、学习特征投影与运营分析视图。
 - `queryTextDigest`（不得直接以原始敏感文本进入公开分析层）
-- `InteractionEvent` 与 `Scorecard` 进入统一 `learning` 域，不再作为 Assistant 独有的孤立上报体系长期存在。
+- `AssistantLearningFact` 根据 `factType` 投影到统一 `learning` 域，不保留 `InteractionEvent` 或 `Scorecard` 的独立上报体系。
 - `pageVisitId / surfaceId / routeId / experimentBucket` 必须在可用时进入学习事件 context，支撑页面、策略、实验与体验分析。
 - 需要训练的字段与仅可统计字段必须显式分离，遵守字段分级与 `trainingEligible` 语义。
-- 每个 InteractionEvent 与 Scorecard 必须拥有稳定幂等键。
+- 每个学习事实必须以 `eventId + eventVersion` 拥有稳定幂等身份。
 - 端侧重试与云侧重放不得重复计入同一训练样本或统计样本。
 - 事件上报成功率、字段完整性与策略注入命中率必须可复盘。
 - 事件必须支持幂等与去重；字段策略遵从 metadata。
@@ -50,9 +51,8 @@
 - 是否可进入训练必须由 `trainingEligible` 与字段分级共同决定。
 - `PII_RESTRICTED`：仅受控链路可见，不得进入公开分析与默认训练。
 - `PII_RESTRICTED` 字段默认不可训练。
-- InteractionEvent 与 Scorecard 必须具备稳定幂等键、去重窗口与补数兼容策略。
+- 学习事实必须具备稳定幂等身份、去重窗口与补数策略。
 - 同一 `eventId + eventVersion` 重放不得重复计数。
-- 同一 `scorecardId` 重报不得重复进入训练样本。
 - 端侧本地缓存重试、网络重放、批量补数必须保持口径一致。
 - 学习事件可稳定进入统一事件与反馈基础设施。
 
@@ -65,10 +65,11 @@
 <a id="gwt-001"></a>
 ### GWT-001 学习事件摄入
 
-- GIVEN 已授权主体提交带稳定 eventId、schema version 与可信运行上下文的 InteractionEvent 或 Scorecard。
-- WHEN 事件通过本领域公开 append contract 摄入。
+- GIVEN 已授权主体提交带稳定 `eventId + eventVersion` 与可信运行上下文的 `AssistantLearningFact` command。
+- WHEN 事实通过 `AppendAssistantLearningFact` 公开 append command 摄入。
 - THEN 事实以 typed learning envelope 只追加一次，并保留可追溯的 page/surface/route/operation/experiment 与 training eligibility 语义。
 - AND 同一 eventId 的幂等重放返回已确认结果，冲突版本、伪造主体或非法字段返回 canonical failure，且不产生成功事实或敏感原文分析副本。
+- AND 事务 outbox 仅向 `events.assistant.learning_facts` 发布带 canonical aggregate identity、可信归因上下文和脱敏 payload 的 durable domain event；不把学习事实伪装成 product-ops 产品遥测。
 
 ## 6. 依赖
 
@@ -84,5 +85,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺 `eventVersion`、`pageVisitId`、`surfaceId`、`routeId`、`experimentBucket`、`trainingEligible` 的 metadata-owned 统一 learning 契约，以及跨域消费者和环境运营证据。Mongo API integration 已证明敏感原文不进入学习画像的公开聚合字段、稳定 eventId 幂等与 canonical failure。
-- 完成判定：`GWT-001` 对应行为满足；InteractionEvent 与 Scorecard 进入 metadata-owned unified learning contract，字段分级、训练资格、重放幂等、跨域消费与四环境运营证据全部由真实测试和环境执行证明。
+- 影响或价值：仍缺获批 Prod release 的全局 Provider conformance 回执；`AppendAssistantLearningFact`、可信请求头归因、端侧 actor-scoped encrypted outbox、服务端幂等 append、脱敏投影与真实 Redis durable relay 已实现并有 local/API 证据，Gamma Remote 已同时证明 receipt、Redis stream ref 与 Mongo outbox published ref，Alpha/Beta 包可重建。
+- 完成判定：`GWT-001` 对应行为满足，且四环境回执均由真实测试和可用环境执行证明。

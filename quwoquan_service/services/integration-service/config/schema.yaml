@@ -26,12 +26,6 @@ configs:
   rollout: progressive
   sensitive: false
   default: 0.0.1
-- key: sys.integration-service.integration.external_interaction.callback_secret
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: true
 - key: sys.integration-service.integration.external_interaction.push.apns.environment
   type: string
   scope: workload

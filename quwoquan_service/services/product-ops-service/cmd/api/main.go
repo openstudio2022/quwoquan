@@ -39,8 +39,8 @@ import (
 	experimenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/adapters/inbound"
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
-	visitpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/infrastructure/persistence"
 	recoveryfailure "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/application"
+	visitpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/infrastructure/persistence"
 )
 
 type metricSnapshot struct {
@@ -61,15 +61,15 @@ type metricSnapshot struct {
 }
 
 type productService struct {
-	store           controlplane.StateStore
-	telemetry       *application.TelemetryService
-	runtimeLogs     *application.RuntimeLogService
-	runtimeLogStore application.RuntimeLogStore
-	growth          *application.GrowthService
-	prometheus      application.PrometheusQuery
-	experimentHTTP  *experimenthttp.Handler
-	publisher       runtimemessaging.EventPublisher
-	appRelease      *apprelease.Service
+	store            controlplane.StateStore
+	telemetry        *application.TelemetryService
+	runtimeLogs      *application.RuntimeLogService
+	runtimeLogStore  application.RuntimeLogStore
+	growth           *application.GrowthService
+	prometheus       application.PrometheusQuery
+	experimentHTTP   *experimenthttp.Handler
+	publisher        runtimemessaging.EventPublisher
+	appRelease       *apprelease.Service
 	recoveryFailures *recoveryfailure.Service
 }
 
@@ -430,8 +430,8 @@ func main() {
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", mux)
-	// 启动遥测是唯一允许匿名接收的 Ops 路径；handler 以固定 schema、proof 与
-	// 每来源 IP 配额收紧，绝不绕过通用 /ops/events 的已验证主体要求。
+	// 只有不能依赖登录态的启动/恢复入口允许匿名访问；它们分别以
+	// 固定 schema、严格大小和每来源 IP 配额收紧，不绕过通用 /ops/events 的鉴权要求。
 	outerMux.HandleFunc("/ops/startup-events", func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})

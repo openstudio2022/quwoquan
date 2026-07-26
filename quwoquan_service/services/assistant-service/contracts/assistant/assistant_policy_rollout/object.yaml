@@ -1,0 +1,62 @@
+kind: aggregate_root
+description: AssistantPolicyRollout 是每个 policy 的唯一可变 cohort 到 immutable release 映射。
+identity:
+  fields:
+  - policyId
+  version_field: revision
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: aggregate_root
+  cardinality: 1:N
+  consistency: strong
+  kind: owned
+  name: bucketDefinitions
+  on_delete: cascade
+  reference_fields: []
+  target_object: assistant.AssistantPolicyBucketDefinition
+- access: aggregate_root
+  cardinality: 1:N
+  consistency: strong
+  kind: owned
+  name: assignments
+  on_delete: cascade
+  reference_fields: []
+  target_object: assistant.AssistantPolicyCohortAssignment
+capabilities:
+- versioned
+- auditable
+- idempotent_commands
+business_rules:
+- cohort 名称唯一且权重总和必须为 10000 basis points
+- 每个 cohort 必须且只能映射到同 policyId 下已 staged 的 releaseVersion
+- activation 以单一 Mongo transaction 提交 current/previous mapping、revision、receipt 与 outbox
+- rollback 精确恢复 previousAssignments，不根据当前 release 推测历史
+- activation 或 rollback 只影响后续 Run，既有 Run 冻结选择不可改写
+lifecycle:
+  states:
+  - active
+  initial: active
+  transitions:
+  - - active
+    - active
+    - ActivateAssistantPolicyRollout
+  - - active
+    - active
+    - RollbackAssistantPolicyRollout
+  optimistic_concurrency: revision
+  idempotency: command_receipt
+members:
+  AssistantPolicyBucketDefinition:
+    kind: owned_entity
+    cardinality: 1:N
+    max_cardinality: 32
+    description: runtime/experiments 使用的稳定 cohort 权重。
+  AssistantPolicyCohortAssignment:
+    kind: owned_entity
+    cardinality: 1:N
+    max_cardinality: 32
+    description: cohort 到 immutable releaseVersion 的映射。

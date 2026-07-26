@@ -140,7 +140,7 @@
 
 ## 7. 工程归属
 
-- App：`quwoquan_app/lib/ui/circle`、`quwoquan_app/lib/cloud/services/circle`
+- App：`quwoquan_app/lib/ui/circle`、`quwoquan_app/lib/cloud/remote/circle`、`quwoquan_app/lib/cloud/runtime/generated/circle`
 - Service：`quwoquan_service/services/circle-service`
 - 测试：
   - `local_contract`：`quwoquan_service/services/circle-service/tests`

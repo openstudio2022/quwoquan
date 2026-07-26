@@ -1,5 +1,7 @@
 package auth
 
+// spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-002
+
 import (
 	"crypto"
 	crand "crypto/rand"
@@ -61,6 +63,47 @@ func TestOIDCVerifierChecksJWKSIssuerAudienceAndMFA(t *testing.T) {
 		!containsAll(principal.Roles, []string{"operator"}) ||
 		!containsAll(principal.Permissions, []string{"audit.inspect"}) {
 		t.Fatalf("unexpected operator principal: %+v", principal)
+	}
+
+	guard := RequireGeneratedOperationAuthorization([]OperationSecurityDescriptor{{
+		CanonicalOperationID: "ops.audit.ListAuditEvents",
+		ContractGraphSHA256:  "oidc-local-contract",
+		Method:               http.MethodGet,
+		PathTemplate:         "/control-plane/audit/events",
+		OperationKind:        "query",
+		AuthMode:             "required",
+		ActorRequirement:     "account",
+		Principal:            "operator",
+		Permissions:          []string{"audit.inspect"},
+		CommercialStatus:     "ready",
+	}})
+	handler := Middleware(MiddlewareConfig{OperatorOIDCVerifier: verifier})(guard(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			verified, ok := PrincipalFromContext(r.Context())
+			if !ok || verified.Actor.AccountID != "operator-1" {
+				t.Fatalf("verified OIDC principal missing: %+v ok=%v", verified, ok)
+			}
+			if got := r.Header.Get(untrustedActorHeader); got != "" {
+				t.Fatalf("forged actor header survived middleware: %q", got)
+			}
+			if got := r.Header.Get(untrustedUserIDHeader); got != "" {
+				t.Fatalf("forged user header survived middleware: %q", got)
+			}
+			if got := r.Header.Get(clientAccountIDHeader); got != "operator-1" {
+				t.Fatalf("trusted account header=%q", got)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	))
+	request := httptest.NewRequest(http.MethodGet, "/control-plane/audit/events", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set(untrustedActorHeader, "forged-operator")
+	request.Header.Set(untrustedUserIDHeader, "forged-user")
+	request.Header.Set(clientAccountIDHeader, "forged-account")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("OIDC protected operation status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

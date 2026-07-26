@@ -146,6 +146,15 @@ def test_write_auto_research_plans_no_progress_timeout_yields_resumable_outage(m
     monkeypatch.setattr(app, "prepare_source_plan", lambda *a, **k: None)
     started = time.monotonic()
     execution_id = "20260712--travel-homepage-outage--cn-test--pilot-001"
+    from support.execution_manifest_fixture import build_execution_fixture
+
+    build_execution_fixture(
+        execution_id,
+        targets=[
+            {"name": name, "entityType": "地点/景区"}
+            for name in ("实体甲", "实体乙", "实体丙")
+        ],
+    )
     report = app.write_auto_research_plans(
         execution_id,
         ["实体甲", "实体乙", "实体丙"],

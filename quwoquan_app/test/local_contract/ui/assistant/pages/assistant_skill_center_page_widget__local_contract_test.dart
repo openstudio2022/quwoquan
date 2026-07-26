@@ -56,6 +56,7 @@ class _FailingStatusAssistantFacets extends AlphaAssistantFacets {
   Future<SkillSubscriptionWire> updateSkillSubscriptionStatus({
     required String subscriptionId,
     required String status,
+    required String clientRequestId,
   }) {
     if (failStatusUpdates) {
       throw StateError('status update failed');
@@ -63,6 +64,7 @@ class _FailingStatusAssistantFacets extends AlphaAssistantFacets {
     return super.updateSkillSubscriptionStatus(
       subscriptionId: subscriptionId,
       status: status,
+      clientRequestId: clientRequestId,
     );
   }
 }
@@ -84,6 +86,7 @@ void main() {
       skillId: 'stock_sentinel',
       domainId: 'finance',
       rawText: '用户提交的订阅条件',
+      clientRequestId: 'create-stock-sentinel-widget',
     );
 
     await tester.pumpWidget(
@@ -186,6 +189,7 @@ void main() {
       skillId: 'stock_sentinel',
       domainId: 'finance',
       rawText: '用户提交的订阅条件',
+      clientRequestId: 'create-stock-sentinel-failure',
     );
     repository.failStatusUpdates = true;
     await tester.pumpWidget(

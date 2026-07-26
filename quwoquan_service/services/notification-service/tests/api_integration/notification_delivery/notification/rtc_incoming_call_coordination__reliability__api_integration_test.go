@@ -286,12 +286,13 @@ func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
 		t,
 		jobs,
 		"device-offline",
-		notification.IncomingCallStatusSentUnconfirmed,
+		notification.IncomingCallStatusExternalAccepted,
 	)
 	integrationMu.Lock()
 	if len(integrationRequests) != 1 {
 		t.Fatalf("integration requests=%d", len(integrationRequests))
 	}
+	externalRequestID, _ := integrationRequests[0]["requestId"].(string)
 	requestPayload, _ := integrationRequests[0]["payload"].(map[string]any)
 	integrationMu.Unlock()
 	for _, field := range []string{
@@ -313,6 +314,67 @@ func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
 	}
 	if requestPayload["action"] != "ring" {
 		t.Fatalf("initial integration action=%v", requestPayload["action"])
+	}
+	providerResult := notification.ExternalInteractionResultEvent{
+		AttemptID:             "attempt-incoming-ring-1",
+		RequestID:             externalRequestID,
+		Operation:             reliabletask.ExternalInteractionOperationPush,
+		Status:                reliabletask.ExternalInteractionStatusSentUnconfirmed,
+		Provider:              "apns_voip",
+		ProviderRequestDigest: "sha256:provider-request",
+		RecoveryAction:        "none",
+		OccurredAt:            now.Add(500 * time.Millisecond),
+	}
+	for replay := 0; replay < 2; replay++ {
+		if err := notificationReliableStore.ApplyExternalInteractionResult(
+			context.Background(),
+			providerResult,
+			now.Add(time.Second),
+		); err != nil {
+			t.Fatalf("apply provider result replay=%d: %v", replay, err)
+		}
+	}
+	jobs = loadIncomingCallJobs(t, callID)
+	assertIncomingStatus(
+		t,
+		jobs,
+		"device-offline",
+		notification.IncomingCallStatusSentUnconfirmed,
+	)
+	receiptCount, err := notificationMongoDB.Collection(
+		"notification_external_interaction_result_inbox",
+	).CountDocuments(context.Background(), bson.M{"_id": providerResult.AttemptID})
+	if err != nil || receiptCount != 1 {
+		t.Fatalf("provider result inbox count=%d err=%v", receiptCount, err)
+	}
+	timeline, err := notificationReliableStore.ReadIncomingCallDeliveryTimeline(
+		context.Background(),
+		callID,
+	)
+	if err != nil || len(timeline.Items) != 2 {
+		t.Fatalf("incoming call timeline items=%d err=%v", len(timeline.Items), err)
+	}
+	if want := now.Add(time.Second).UTC(); !timeline.UpdatedAt.Equal(want) {
+		t.Fatalf(
+			"incoming call timeline updatedAt=%s want persisted fact time %s",
+			timeline.UpdatedAt,
+			want,
+		)
+	}
+	timelineJSON, err := json.Marshal(timeline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rawIdentifier := range []string{
+		"device-online",
+		"device-offline",
+		deliveryKey,
+		providerResult.AttemptID,
+		externalRequestID,
+	} {
+		if bytes.Contains(timelineJSON, []byte(rawIdentifier)) {
+			t.Fatalf("operator timeline leaked raw identifier %q: %s", rawIdentifier, timelineJSON)
+		}
 	}
 
 	appendRTCStreamEvent(
@@ -354,6 +416,24 @@ func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
 	for _, job := range jobs {
 		if job.Status != notification.IncomingCallStatusCancelled {
 			t.Fatalf("cancellation did not converge job: %+v", job)
+		}
+	}
+	lateRingFailure := providerResult
+	lateRingFailure.AttemptID = "attempt-incoming-ring-late-failure"
+	lateRingFailure.Status = reliabletask.ExternalInteractionStatusFailed
+	lateRingFailure.RecoveryAction = "escalate"
+	lateRingFailure.OccurredAt = now.Add(2 * time.Second)
+	if err := notificationReliableStore.ApplyExternalInteractionResult(
+		context.Background(),
+		lateRingFailure,
+		now.Add(2*time.Second),
+	); err != nil {
+		t.Fatalf("record late ring provider result: %v", err)
+	}
+	jobs = loadIncomingCallJobs(t, callID)
+	for _, job := range jobs {
+		if job.Status != notification.IncomingCallStatusCancelled {
+			t.Fatalf("late ring result revived cancelled delivery: %+v", job)
 		}
 	}
 	select {

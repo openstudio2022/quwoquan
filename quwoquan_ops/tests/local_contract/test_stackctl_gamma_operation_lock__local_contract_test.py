@@ -13,17 +13,41 @@ from quwoquan_ops.cli import stackctl
 
 
 class StackctlGammaOperationLockContractTest(unittest.TestCase):
+    def setUp(self) -> None:
+        availability = mock.patch.object(
+            stackctl,
+            "assert_local_runtime_available",
+        )
+        self.availability = availability.start()
+        self.addCleanup(availability.stop)
+
+    def test_gamma_down_placeholders_cover_compose_source_and_aliases(self) -> None:
+        environment: dict[str, str] = {}
+
+        stackctl._bind_gamma_down_compose_placeholders(environment)
+
+        for suffix in (
+            "ENDPOINT",
+            "BUCKET",
+            "REGION",
+            "ACCESS_KEY_ID",
+            "ACCESS_KEY_SECRET",
+            "CDN_DOMAIN",
+            "CDN_SIGN_KEY",
+            "CA_FILE",
+            "TLS_DIR",
+        ):
+            source = environment[f"LOCAL_GAMMA_OBJECT_STORAGE_{suffix}"]
+            alias = environment[f"QWQ_COMPOSE_OBJECT_STORAGE_{suffix}"]
+            self.assertTrue(source)
+            self.assertEqual(alias, source)
+
     def test_gamma_down_materializes_compose_bindings_before_interpolation(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             report_dir = Path(temporary_dir)
             compose_environment = {"GAMMA_PORT": "19000"}
-
-            def bind(environment: dict[str, str]) -> None:
-                environment["LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID"] = (
-                    "local-access-key"
-                )
 
             with (
                 mock.patch.object(
@@ -48,14 +72,21 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 ),
                 mock.patch.object(
                     stackctl,
-                    "_bind_gamma_object_storage_environment",
-                    side_effect=bind,
+                    "_bind_gamma_down_compose_placeholders",
+                    side_effect=lambda environment: environment.update(
+                        {"QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID": "unused"}
+                    ),
                 ) as bind_environment,
                 mock.patch.object(
                     stackctl,
                     "run",
                     return_value=CompletedProcess([], 0, stdout="", stderr=""),
                 ) as run,
+                mock.patch.object(
+                    stackctl,
+                    "_local_stack_operation_lock",
+                    return_value=contextlib.nullcontext(),
+                ),
                 mock.patch.object(stackctl, "_write_summary_bundle"),
             ):
                 result = stackctl.command_down(
@@ -69,9 +100,61 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
         bind_environment.assert_called_once_with(compose_environment)
         self.assertEqual(
             run.call_args.kwargs["env"][
-                "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID"
+                "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID"
             ],
-            "local-access-key",
+            "unused",
+        )
+
+    def test_alpha_down_stops_mock_release_and_app_runtimes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            report_dir = Path(temporary_dir)
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "resolve_report_dir",
+                    return_value=report_dir,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "run",
+                    return_value=CompletedProcess([], 0, stdout="", stderr=""),
+                ) as run,
+                mock.patch.object(
+                    stackctl,
+                    "_local_stack_operation_lock",
+                    return_value=contextlib.nullcontext(),
+                ),
+                mock.patch.object(stackctl, "_write_summary_bundle"),
+            ):
+                result = stackctl.command_down(
+                    argparse.Namespace(
+                        target="alpha-local",
+                        report_dir="",
+                    )
+                )
+
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [
+                [
+                    "bash",
+                    "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh",
+                    "down",
+                ],
+                [
+                    "bash",
+                    "quwoquan_ops/cli/alpha/start_alpha_content_release_stack.sh",
+                    "down",
+                ],
+                [
+                    "bash",
+                    "quwoquan_app/scripts/device/stop_app_instance.sh",
+                    "--env",
+                    "alpha",
+                    "--quiet",
+                ],
+            ],
         )
 
     def test_gamma_startup_timeouts_come_only_from_target_topology(self) -> None:
@@ -191,15 +274,15 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             process_dir = Path(temporary_dir) / "process"
             with mock.patch.object(
                 stackctl,
-                "target_process_dir",
-                return_value=process_dir,
+                "local_runtime_operation_lock_path",
+                return_value=process_dir / ".stackctl-operation.lock",
             ):
                 with stackctl._local_stack_operation_lock("gamma-local"):
                     with self.assertRaisesRegex(
                         RuntimeError,
-                        "gamma-local stack operation is already running",
+                        "local stack operation is already running",
                     ):
-                        with stackctl._local_stack_operation_lock("gamma-local"):
+                        with stackctl._local_stack_operation_lock("beta-local"):
                             pass
 
             lock_path = process_dir / ".stackctl-operation.lock"
@@ -229,7 +312,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                     stackctl,
                     "_local_stack_operation_lock",
                     side_effect=RuntimeError(
-                        "beta-local stack operation is already running: pid=42",
+                        "local stack operation is already running: pid=42 target=gamma-local",
                     ),
                 ) as operation_lock,
                 mock.patch.object(stackctl, "_write_summary_bundle"),
@@ -241,10 +324,85 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
         self.assertEqual(result["exitCode"], 2)
         self.assertEqual(result["summary"], "stackctl up is GATE_BLOCK for beta")
         self.assertIn(
-            "wait for the active beta-local operation to finish",
+            "wait for the active operation or stop the conflicting local runtime",
             result["details"],
         )
         operation_lock.assert_called_once_with("beta-local")
+        run.assert_not_called()
+
+    def test_beta_down_rejects_active_patrol_runtime_lease(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            report_dir = Path(temporary_dir) / "report"
+            args = argparse.Namespace(target="beta-local", report_dir="")
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "resolve_report_dir",
+                    return_value=report_dir,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_local_stack_operation_lock",
+                    side_effect=RuntimeError(
+                        "local stack operation is already running: "
+                        "pid=42 target=beta-local purpose=environment-patrol-smoke"
+                    ),
+                ) as operation_lock,
+                mock.patch.object(stackctl, "_write_summary_bundle"),
+                mock.patch.object(stackctl, "relpath", side_effect=str),
+                mock.patch.object(stackctl, "run") as run,
+            ):
+                result = stackctl.command_down(args)
+
+        self.assertEqual(result["exitCode"], 2)
+        self.assertEqual(
+            result["summary"],
+            "stackctl down is GATE_BLOCK for beta-local",
+        )
+        self.assertIn(
+            "wait for the active Patrol/UAT runtime lease to finish",
+            result["details"],
+        )
+        operation_lock.assert_called_once_with("beta-local")
+        run.assert_not_called()
+
+    def test_beta_up_releases_operation_lock_when_alpha_is_active(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            report_dir = Path(temporary_dir) / "report"
+            args = argparse.Namespace(
+                env="beta",
+                target=None,
+                workload="content-release",
+                skip_app=True,
+                skip_build=False,
+                build_only=False,
+                build_services="",
+                device_id="",
+            )
+            operation_lock = mock.MagicMock()
+            operation_lock.__enter__.return_value = None
+            self.availability.side_effect = RuntimeError(
+                "beta-local cannot start while local runtime alpha-local is active"
+            )
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "resolve_report_dir",
+                    return_value=report_dir,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_local_stack_operation_lock",
+                    return_value=operation_lock,
+                ),
+                mock.patch.object(stackctl, "_write_summary_bundle"),
+                mock.patch.object(stackctl, "relpath", side_effect=str),
+                mock.patch.object(stackctl, "run") as run,
+            ):
+                result = stackctl.command_up(args)
+
+        self.assertEqual(result["exitCode"], 2)
+        operation_lock.__exit__.assert_called_once_with(None, None, None)
         run.assert_not_called()
 
     def test_beta_external_provider_environment_materializes_local_substitutes(self) -> None:
@@ -488,8 +646,6 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             host_endpoint="https://gamma-upload.quwoquan-env.test:19000",
         )
         values = {
-            "CONTENT_EMBEDDING_FIXTURE_ENDPOINT": "http://fixture.local/embed",
-            "CONTENT_EMBEDDING_FIXTURE_API_KEY": "fixture-key",
             "RTC_MEDIA_FIXTURE_CONNECTION_URL": "wss://fixture.local/rtc",
             "RTC_MEDIA_FIXTURE_API_KEY": "rtc-key",
             "RTC_MEDIA_FIXTURE_API_SECRET": "rtc-secret",
@@ -514,10 +670,6 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             target_name="gamma-local",
         )
         self.assertEqual(
-            environment["QWQ_COMPOSE_EMBEDDING_ENDPOINT"],
-            values["CONTENT_EMBEDDING_FIXTURE_ENDPOINT"],
-        )
-        self.assertEqual(
             environment["CONTENT_OSS_ENDPOINT"],
             storage.environment["LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT"],
         )
@@ -533,7 +685,10 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             environment["LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL"],
             storage.host_endpoint,
         )
-        self.assertIn("CONTENT_EMBEDDING_FIXTURE_API_KEY", environment)
+        self.assertNotIn("CONTENT_EMBEDDING_FIXTURE_ENDPOINT", environment)
+        self.assertNotIn("CONTENT_EMBEDDING_FIXTURE_API_KEY", environment)
+        self.assertNotIn("QWQ_COMPOSE_EMBEDDING_ENDPOINT", environment)
+        self.assertNotIn("QWQ_COMPOSE_EMBEDDING_API_KEY", environment)
         self.assertIn("RTC_MEDIA_FIXTURE_API_KEY", environment)
         self.assertNotIn("RTC_MEDIA_API_KEY", environment)
         self.assertEqual(environment["PRODUCT_OPS_SLS_ENDPOINT"], "")
@@ -644,6 +799,75 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             or any("start_local_gamma_mirror" in " ".join(argv) for argv in argv_calls)
         )
         bind_external_provider.assert_called_once()
+
+    def test_gamma_build_only_materializes_object_storage_for_compose_render(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            report_dir = Path(temporary_dir) / "report"
+            args = argparse.Namespace(
+                env="gamma",
+                target=None,
+                workload="full",
+                skip_app=True,
+                skip_build=False,
+                build_only=True,
+                build_services="assistant-service",
+                device_id="",
+                rollout_mode="",
+            )
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "resolve_report_dir",
+                    return_value=report_dir,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_gamma_env_from_port_manifest",
+                    return_value={},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_optional_product_telemetry_environment",
+                    return_value=({}, ""),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_local_stack_operation_lock",
+                    return_value=contextlib.nullcontext(),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_bind_gamma_object_storage_environment",
+                    return_value=None,
+                ) as bind_object_storage,
+                mock.patch.object(
+                    stackctl,
+                    "_bind_gamma_external_provider_environment",
+                ) as bind_external_provider,
+                mock.patch.object(
+                    stackctl,
+                    "_bind_gamma_packaged_service_image_refs",
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "run",
+                    return_value=CompletedProcess([], 0, stdout="", stderr=""),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_run_with_live_output",
+                    return_value=CompletedProcess([], 0, stdout="", stderr=""),
+                ),
+                mock.patch.object(stackctl, "_write_summary_bundle"),
+                mock.patch.object(stackctl, "relpath", side_effect=str),
+            ):
+                result = stackctl.command_up(args)
+
+        self.assertEqual(result["exitCode"], 0)
+        bind_object_storage.assert_called_once()
+        bind_external_provider.assert_not_called()
 
     def test_gamma_content_release_blocks_when_provider_materialization_fails(
         self,

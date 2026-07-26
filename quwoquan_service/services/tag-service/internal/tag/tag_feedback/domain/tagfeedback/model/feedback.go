@@ -23,14 +23,15 @@ var validActions = map[string]struct{}{
 
 // Feedback 是一条事实记录。
 type Feedback struct {
-	ID             string    `bson:"_id"`
-	ActorID        string    `bson:"actorId"`
-	ActorKind      string    `bson:"actorKind"`
-	TagRef         string    `bson:"tagRef"`
-	Action         string    `bson:"action"`
-	Context        string    `bson:"context,omitempty"`
-	IdempotencyKey string    `bson:"idempotencyKey"`
-	RecordedAt     time.Time `bson:"recordedAt"`
+	ID               string     `bson:"_id"`
+	ActorID          string     `bson:"actorId"`
+	ActorKind        string     `bson:"actorKind"`
+	TagRef           string     `bson:"tagRef"`
+	Action           string     `bson:"action"`
+	Context          string     `bson:"context,omitempty"`
+	IdempotencyKey   string     `bson:"idempotencyKey"`
+	RecordedAt       time.Time  `bson:"recordedAt"`
+	EventPublishedAt *time.Time `bson:"eventPublishedAt,omitempty"`
 }
 
 // NewFeedback 校验并构造事实。

@@ -2,7 +2,9 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 
+	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
 )
@@ -31,7 +33,7 @@ type BulkIndexer interface {
 type BackfillReport struct {
 	TotalHomepages   int `json:"totalHomepages"`
 	IndexedHomepages int `json:"indexedHomepages"`
-	SkippedHomepages int `json:"skippedHomepages"`
+	DeletedHomepages int `json:"deletedHomepages"`
 	BatchesPushed    int `json:"batchesPushed"`
 }
 
@@ -43,7 +45,9 @@ type BackfillReport struct {
 func Backfill(ctx context.Context, indexer BulkIndexer, lister HomepageLister, batchSize int) (BackfillReport, error) {
 	var report BackfillReport
 	if indexer == nil || lister == nil {
-		return report, nil
+		return report, fmt.Errorf(
+			"Homepage search backfill requires indexer and lister",
+		)
 	}
 	if batchSize <= 0 {
 		batchSize = defaultBackfillBatchSize
@@ -74,7 +78,19 @@ func Backfill(ctx context.Context, indexer BulkIndexer, lister HomepageLister, b
 		report.TotalHomepages += len(homepages)
 		for i := range homepages {
 			if !application.HomepageSearchEligible(homepages[i]) {
-				report.SkippedHomepages++
+				batch = append(batch, es.ChangeEvent{
+					Op: es.OpDelete,
+					Doc: rtsearch.Document{
+						ObjectType: rtsearch.ObjectTypeEntityHomepage,
+						ObjectID:   homepages[i].ID,
+					},
+				})
+				report.DeletedHomepages++
+				if len(batch) >= batchSize {
+					if err := flush(); err != nil {
+						return report, err
+					}
+				}
 				continue
 			}
 			doc := application.ProjectHomepageToSearchDocument(homepages[i])

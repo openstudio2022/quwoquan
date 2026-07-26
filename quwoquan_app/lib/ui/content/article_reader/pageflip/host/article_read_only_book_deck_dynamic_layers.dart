@@ -73,19 +73,6 @@ extension _ArticleReadOnlyBookDeckDynamicLayers
       return ArticleReadOnlyBookRenderBranch.paperFoldDynamic;
     }
     final textureBinding = _textureBindingForScene(scene);
-    final previousFrontPageIndex =
-        textureBinding?.rectoPageIndex ?? scene.flippingPageIndex!;
-
-    if (previousFrontPageIndex >= 0 &&
-        previousFrontPageIndex < _deck.pages.length) {
-      layers.add(
-        _buildBackwardPageSpaceReplacementLayer(
-          context: context,
-          pageIndex: previousFrontPageIndex,
-          pageRect: _backwardPageRect(scene),
-        ),
-      );
-    }
 
     if (scene.bottomPageIndex != null && frame.bottomClipArea.length >= 3) {
       layers.add(
@@ -132,22 +119,6 @@ extension _ArticleReadOnlyBookDeckDynamicLayers
       layers.add(_buildBackwardGeometryGuideLayer(scene));
     }
     return ArticleReadOnlyBookRenderBranch.paperFoldDynamic;
-  }
-
-  Widget _buildBackwardPageSpaceReplacementLayer({
-    required BuildContext context,
-    required int pageIndex,
-    required Rect pageRect,
-  }) {
-    return Positioned.fromRect(
-      rect: pageRect,
-      child: _buildCachedPageSurface(
-        context,
-        pageIndex,
-        pageRect.size,
-        kind: ArticlePageSurfaceKind.front,
-      ),
-    );
   }
 
   Widget _buildBackwardGeometryGuideLayer(StPageFlipScene scene) {

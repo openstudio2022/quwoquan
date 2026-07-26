@@ -22,7 +22,6 @@ func (LocalCaptureSMSProvider) Send(
 		Status:            reliabletask.ExternalInteractionStatusSentUnconfirmed,
 		Provider:          "ext.sms.local_capture",
 		ProviderRequestID: "local-capture-" + request.RequestID,
-		CallbackURL:       request.CallbackURL,
 		OccurredAt:        time.Now().UTC(),
 	}, nil
 }

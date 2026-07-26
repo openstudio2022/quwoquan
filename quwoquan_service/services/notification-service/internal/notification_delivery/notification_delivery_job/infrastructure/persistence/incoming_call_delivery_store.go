@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,18 @@ const (
 	incomingCallLeasedStatus  = "leased"
 	incomingCallPushLeaseTime = 30 * time.Second
 )
+
+type externalInteractionResultInboxDocument struct {
+	AttemptID             string    `bson:"_id"`
+	RequestID             string    `bson:"requestId"`
+	Operation             string    `bson:"operation"`
+	Status                string    `bson:"status"`
+	Provider              string    `bson:"provider"`
+	ProviderRequestDigest string    `bson:"providerRequestDigest"`
+	NormalizedError       string    `bson:"normalizedError,omitempty"`
+	RecoveryAction        string    `bson:"recoveryAction"`
+	OccurredAt            time.Time `bson:"occurredAt"`
+}
 
 func (s *MongoNotificationDeliveryJobStore) EnsureIncomingCallJob(
 	ctx context.Context,
@@ -333,7 +346,7 @@ func (s *MongoNotificationDeliveryJobStore) RequeueIncomingCallPush(
 	return err
 }
 
-func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallSentUnconfirmed(
+func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallExternalAccepted(
 	ctx context.Context,
 	jobID string,
 	version int64,
@@ -351,10 +364,10 @@ func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallSentUnconfirmed(
 			},
 			bson.M{
 				"$set": bson.M{
-					"status":                notification.IncomingCallStatusSentUnconfirmed,
-					"externalInteractionId": strings.TrimSpace(externalInteractionID),
-					"sentUnconfirmedAt":     now.UTC(),
-					"updatedAt":             now.UTC(),
+					"status":                        notification.IncomingCallStatusExternalAccepted,
+					"externalInteractionId":         strings.TrimSpace(externalInteractionID),
+					"externalInteractionAcceptedAt": now.UTC(),
+					"updatedAt":                     now.UTC(),
 				},
 				"$inc": bson.M{"version": 1},
 			},
@@ -369,9 +382,116 @@ func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallSentUnconfirmed(
 		return s.appendIncomingCallEvent(
 			txCtx,
 			job,
-			"IncomingCallSentUnconfirmed",
+			"IncomingCallExternalInteractionAccepted",
 			now,
 		)
+	})
+}
+
+func (s *MongoNotificationDeliveryJobStore) ApplyExternalInteractionResult(
+	ctx context.Context,
+	event notification.ExternalInteractionResultEvent,
+	now time.Time,
+) error {
+	event.AttemptID = strings.TrimSpace(event.AttemptID)
+	event.RequestID = strings.TrimSpace(event.RequestID)
+	event.Operation = strings.TrimSpace(event.Operation)
+	event.Status = strings.TrimSpace(event.Status)
+	event.Provider = strings.TrimSpace(event.Provider)
+	event.ProviderRequestDigest = strings.TrimSpace(event.ProviderRequestDigest)
+	event.RecoveryAction = strings.TrimSpace(event.RecoveryAction)
+	if event.AttemptID == "" || event.RequestID == "" ||
+		event.Operation != reliabletask.ExternalInteractionOperationPush ||
+		event.Status == "" || event.Provider == "" ||
+		event.ProviderRequestDigest == "" || event.RecoveryAction == "" ||
+		event.OccurredAt.IsZero() {
+		return errors.New("external interaction result event is incomplete")
+	}
+	return s.RunInTransaction(ctx, func(txCtx context.Context) error {
+		var existing externalInteractionResultInboxDocument
+		existingErr := s.resultInbox.FindOne(
+			txCtx,
+			bson.M{"_id": event.AttemptID},
+		).Decode(&existing)
+		if existingErr == nil {
+			if existing.RequestID != event.RequestID ||
+				existing.Operation != event.Operation ||
+				existing.Status != event.Status ||
+				existing.Provider != event.Provider ||
+				existing.ProviderRequestDigest != event.ProviderRequestDigest ||
+				existing.NormalizedError != event.NormalizedError ||
+				existing.RecoveryAction != event.RecoveryAction ||
+				!existing.OccurredAt.Equal(event.OccurredAt.UTC()) {
+				return errors.New("external interaction result attemptId conflicts with immutable receipt")
+			}
+			return nil
+		}
+		if !errors.Is(existingErr, mongo.ErrNoDocuments) {
+			return existingErr
+		}
+
+		var current notification.IncomingCallDeliveryJob
+		if err := s.jobs.FindOne(
+			txCtx,
+			bson.M{"$or": bson.A{
+				bson.M{"externalInteractionId": event.RequestID},
+				bson.M{"cancellationExternalInteractionId": event.RequestID},
+			}},
+		).Decode(&current); err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				return deliverydomain.ErrDeliveryJobNotFound
+			}
+			return err
+		}
+		if _, err := s.resultInbox.InsertOne(txCtx, bson.M{
+			"_id":                   event.AttemptID,
+			"requestId":             event.RequestID,
+			"operation":             event.Operation,
+			"status":                event.Status,
+			"provider":              event.Provider,
+			"providerRequestDigest": event.ProviderRequestDigest,
+			"normalizedError":       event.NormalizedError,
+			"recoveryAction":        event.RecoveryAction,
+			"occurredAt":            event.OccurredAt.UTC(),
+			"createdAt":             now.UTC(),
+		}); err != nil {
+			return err
+		}
+
+		set := bson.M{"updatedAt": now.UTC()}
+		eventType := "IncomingCallProviderResultRecorded"
+		if current.ExternalInteractionID == event.RequestID {
+			set["provider"] = event.Provider
+			set["providerRequestDigest"] = event.ProviderRequestDigest
+			set["providerResultStatus"] = event.Status
+			set["providerResultAt"] = event.OccurredAt.UTC()
+			if event.Status == reliabletask.ExternalInteractionStatusSentUnconfirmed &&
+				current.Status == notification.IncomingCallStatusExternalAccepted {
+				set["status"] = notification.IncomingCallStatusSentUnconfirmed
+				set["sentUnconfirmedAt"] = event.OccurredAt.UTC()
+				eventType = "IncomingCallSentUnconfirmed"
+			} else if event.Status == reliabletask.ExternalInteractionStatusFailed &&
+				event.RecoveryAction != "retry" &&
+				current.Status == notification.IncomingCallStatusExternalAccepted {
+				set["status"] = reliabletask.NotificationStatusDead
+			}
+		} else {
+			set["cancellationProvider"] = event.Provider
+			set["cancellationProviderRequestDigest"] = event.ProviderRequestDigest
+			set["cancellationProviderResultStatus"] = event.Status
+			set["cancellationProviderResultAt"] = event.OccurredAt.UTC()
+			eventType = "IncomingCallCancellationProviderResultRecorded"
+		}
+		var updated notification.IncomingCallDeliveryJob
+		if err := s.jobs.FindOneAndUpdate(
+			txCtx,
+			bson.M{"_id": current.ID, "version": current.Version},
+			bson.M{"$set": set, "$inc": bson.M{"version": 1}},
+			options.FindOneAndUpdate().SetReturnDocument(options.After),
+		).Decode(&updated); err != nil {
+			return err
+		}
+		return s.appendIncomingCallEvent(txCtx, updated, eventType, now)
 	})
 }
 
@@ -563,7 +683,7 @@ func (s *MongoNotificationDeliveryJobStore) CancelIncomingCallJobs(
 	return works, err
 }
 
-func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallCancellationPushSubmitted(
+func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallCancellationExternalAccepted(
 	ctx context.Context,
 	jobID string,
 	version int64,
@@ -583,9 +703,10 @@ func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallCancellationPushSubm
 			},
 			bson.M{
 				"$set": bson.M{
-					"cancellationExternalInteractionId": strings.TrimSpace(externalInteractionID),
-					"cancellationPushSubmittedAt":       now.UTC(),
-					"updatedAt":                         now.UTC(),
+					"cancellationExternalInteractionId":         strings.TrimSpace(externalInteractionID),
+					"cancellationExternalInteractionAcceptedAt": now.UTC(),
+					"cancellationPushSubmittedAt":               now.UTC(),
+					"updatedAt":                                 now.UTC(),
 				},
 				"$inc": bson.M{"version": 1},
 			},
@@ -608,7 +729,7 @@ func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallCancellationPushSubm
 		return s.appendIncomingCallEvent(
 			txCtx,
 			job,
-			"IncomingCallCancellationPushSubmitted",
+			"IncomingCallCancellationExternalInteractionAccepted",
 			now,
 		)
 	})
@@ -690,6 +811,7 @@ func incomingCallCancellationPushRequired(
 	case notification.IncomingCallStatusRealtimeDispatched,
 		notification.IncomingCallStatusRealtimePresented,
 		incomingCallLeasedStatus,
+		notification.IncomingCallStatusExternalAccepted,
 		notification.IncomingCallStatusSentUnconfirmed:
 		return true
 	default:
@@ -728,6 +850,110 @@ func (s *MongoNotificationDeliveryJobStore) appendIncomingCallEvent(
 	return err
 }
 
+func (s *MongoNotificationDeliveryJobStore) ReadIncomingCallDeliveryTimeline(
+	ctx context.Context,
+	callID string,
+) (deliverydomain.IncomingCallDeliveryTimeline, error) {
+	callID = strings.TrimSpace(callID)
+	if callID == "" {
+		return deliverydomain.IncomingCallDeliveryTimeline{}, errors.New("callId is required")
+	}
+	cursor, err := s.jobs.Find(ctx, bson.M{"callId": callID})
+	if err != nil {
+		return deliverydomain.IncomingCallDeliveryTimeline{}, err
+	}
+	defer cursor.Close(ctx)
+	var jobs []notification.IncomingCallDeliveryJob
+	if err := cursor.All(ctx, &jobs); err != nil {
+		return deliverydomain.IncomingCallDeliveryTimeline{}, err
+	}
+	requestIDs := make([]string, 0, len(jobs)*2)
+	for _, job := range jobs {
+		if job.ExternalInteractionID != "" {
+			requestIDs = append(requestIDs, job.ExternalInteractionID)
+		}
+		if job.CancellationExternalInteractionID != "" {
+			requestIDs = append(requestIDs, job.CancellationExternalInteractionID)
+		}
+	}
+	receiptsByRequest := map[string][]externalInteractionResultInboxDocument{}
+	if len(requestIDs) > 0 {
+		receiptCursor, err := s.resultInbox.Find(
+			ctx,
+			bson.M{"requestId": bson.M{"$in": requestIDs}},
+		)
+		if err != nil {
+			return deliverydomain.IncomingCallDeliveryTimeline{}, err
+		}
+		defer receiptCursor.Close(ctx)
+		var receipts []externalInteractionResultInboxDocument
+		if err := receiptCursor.All(ctx, &receipts); err != nil {
+			return deliverydomain.IncomingCallDeliveryTimeline{}, err
+		}
+		for _, receipt := range receipts {
+			receiptsByRequest[receipt.RequestID] = append(
+				receiptsByRequest[receipt.RequestID],
+				receipt,
+			)
+		}
+	}
+	timeline := deliverydomain.IncomingCallDeliveryTimeline{
+		CallDigest: incomingCallTimelineDigest(callID),
+		Items:      make([]deliverydomain.IncomingCallDeliveryTimelineItem, 0, len(jobs)),
+	}
+	for _, job := range jobs {
+		if job.UpdatedAt.After(timeline.UpdatedAt) {
+			timeline.UpdatedAt = job.UpdatedAt.UTC()
+		}
+		item := deliverydomain.IncomingCallDeliveryTimelineItem{
+			JobDigest:                      incomingCallTimelineDigest(job.ID),
+			DeviceDigest:                   incomingCallTimelineDigest(job.DeviceID),
+			DeliveryKeyDigest:              incomingCallTimelineDigest(job.DeliveryKey),
+			Status:                         job.Status,
+			ExternalInteractionAcceptedAt:  job.ExternalInteractionAcceptedAt,
+			PresentedAt:                    job.PresentedAt,
+			CancelledAt:                    job.CancelledAt,
+			CancellationExternalAcceptedAt: job.CancellationExternalInteractionAcceptedAt,
+			Receipts:                       []deliverydomain.IncomingCallProviderReceipt{},
+		}
+		for _, actionRequest := range []struct {
+			action    string
+			requestID string
+		}{
+			{action: "ring", requestID: job.ExternalInteractionID},
+			{action: "cancel", requestID: job.CancellationExternalInteractionID},
+		} {
+			for _, receipt := range receiptsByRequest[actionRequest.requestID] {
+				if receipt.OccurredAt.After(timeline.UpdatedAt) {
+					timeline.UpdatedAt = receipt.OccurredAt.UTC()
+				}
+				item.Receipts = append(item.Receipts, deliverydomain.IncomingCallProviderReceipt{
+					AttemptDigest:         incomingCallTimelineDigest(receipt.AttemptID),
+					Action:                actionRequest.action,
+					Status:                receipt.Status,
+					Provider:              receipt.Provider,
+					ProviderRequestDigest: receipt.ProviderRequestDigest,
+					RecoveryAction:        receipt.RecoveryAction,
+					OccurredAt:            receipt.OccurredAt.UTC(),
+				})
+			}
+		}
+		sort.Slice(item.Receipts, func(left, right int) bool {
+			return item.Receipts[left].OccurredAt.Before(item.Receipts[right].OccurredAt)
+		})
+		timeline.Items = append(timeline.Items, item)
+	}
+	sort.Slice(timeline.Items, func(left, right int) bool {
+		return timeline.Items[left].DeviceDigest < timeline.Items[right].DeviceDigest
+	})
+	return timeline, nil
+}
+
+func incomingCallTimelineDigest(value string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(value)))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
 func incomingCallEndpointDedupeKey(
 	deliveryKey string,
 	endpointRef string,
@@ -746,6 +972,7 @@ func activeIncomingCallStatuses() []string {
 		notification.IncomingCallStatusRealtimePresented,
 		notification.IncomingCallStatusPushQueued,
 		incomingCallLeasedStatus,
+		notification.IncomingCallStatusExternalAccepted,
 		notification.IncomingCallStatusSentUnconfirmed,
 	}
 }

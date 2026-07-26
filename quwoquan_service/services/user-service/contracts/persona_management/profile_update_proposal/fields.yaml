@@ -43,6 +43,69 @@ fields:
   ops_exposure: read
   description: ProfileChangeSet typed value object 的持久化编码；领域层禁止动态 Map。
   role: authoritative_state
+- name: reason
+  source: reason
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: mask
+  api_exposure: read
+  ops_exposure: read
+  description: 创建者提交的可审核变更理由。
+  role: authoritative_state
+- name: evidenceRefs
+  source: evidenceRefs
+  type: jsonb
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  description: 有界、去重且稳定排序的 typed source evidence references。
+  role: authoritative_state
+- name: impactScope
+  source: impactScope
+  type: jsonb
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 必须与 ProfileChangeSet 实际字段完全一致的有界影响范围。
+  role: authoritative_state
+- name: createdBy
+  source: createdBy
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: createdRequestId
+  source: createdRequestId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: createdTraceId
+  source: createdTraceId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
 - name: status
   source: status
   type: enum
@@ -74,6 +137,96 @@ fields:
   api_exposure: drop
   ops_exposure: read
   description: apply 时调用 Persona Command Facade 的乐观锁版本。
+  role: authoritative_state
+- name: applyActorPersonaId
+  source: applyActorPersonaId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: applyRequestId
+  source: applyRequestId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: applyTraceId
+  source: applyTraceId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: applyAuditId
+  source: applyAuditId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: rollbackDeadline
+  source: rollbackDeadline
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: rollbackActorPersonaId
+  source: rollbackActorPersonaId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: rollbackRequestId
+  source: rollbackRequestId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: rollbackTraceId
+  source: rollbackTraceId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: rollbackAuditId
+  source: rollbackAuditId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
   role: authoritative_state
 - name: version
   source: version

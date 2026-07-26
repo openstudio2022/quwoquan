@@ -3,7 +3,7 @@ kind: AliyunSLSProductTelemetry
 metadata:
   name: app-product-telemetry
   owner: product-ops-growth
-  environments: [beta, gamma, prod]
+  environments: [prod]
 spec:
   deploymentProfiles:
     alpha:
@@ -17,18 +17,18 @@ spec:
         evidenceClass: api_integration
         requiresSecret: false
       release:
-        backend: aliyun_sls
-        evidenceClass: api_integration
-        requiresSecret: true
-    gamma:
-      integration:
         backend: postgres_telemetry_local
         evidenceClass: api_integration
         requiresSecret: false
-      release:
-        backend: aliyun_sls
+    gamma:
+      integration:
+        backend: elasticsearch_local
         evidenceClass: api_integration
-        requiresSecret: true
+        requiresSecret: false
+      release:
+        backend: elasticsearch_local
+        evidenceClass: api_integration
+        requiresSecret: false
     prod:
       backend: aliyun_sls
       evidenceClass: api_integration

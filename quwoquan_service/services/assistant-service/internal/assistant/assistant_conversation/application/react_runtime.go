@@ -101,7 +101,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 	stopReason := "max_iterations"
 	for iteration := 1; iteration <= budget.MaxIterations; iteration++ {
 		reasoning := fmt.Sprintf("第 %d 轮：根据 skill=%s 规划工具、评估观察，再决定是否重规划。", iteration, skill.SkillID)
-		reasoningResp, err := model.Complete(ctx, ModelRequest{
+		reasoningResp, err := model.Complete(ctx, frozenPolicyModelRequest(turn, skill, ModelRequest{
 			TurnID:               turn.TurnID,
 			TraceID:              turn.TraceID,
 			SkillID:              skill.SkillID,
@@ -111,7 +111,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			ContextTurns:         turn.ContextTurns,
 			PageContext:          turn.PageContext,
 			IntersectionEvidence: turn.IntersectionEvidence,
-		})
+		}))
 		if err != nil {
 			return ReactResult{}, err
 		}
@@ -217,7 +217,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			"observation":  map[string]any{"summary": observation.Summary, "empty": observation.Empty},
 			"userQuestion": turn.Input.Text,
 		}
-		evidenceResp, err := model.Complete(ctx, ModelRequest{
+		evidenceResp, err := model.Complete(ctx, frozenPolicyModelRequest(turn, skill, ModelRequest{
 			TurnID:               turn.TurnID,
 			TraceID:              turn.TraceID,
 			SkillID:              skill.SkillID,
@@ -228,7 +228,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			ContextTurns:         turn.ContextTurns,
 			PageContext:          turn.PageContext,
 			IntersectionEvidence: turn.IntersectionEvidence,
-		})
+		}))
 		if err != nil {
 			return ReactResult{}, err
 		}
@@ -266,7 +266,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 		}
 		stopReason = "replan_budget_exhausted"
 	}
-	finalRequest := ModelRequest{
+	finalRequest := frozenPolicyModelRequest(turn, skill, ModelRequest{
 		TurnID:                  turn.TurnID,
 		TraceID:                 turn.TraceID,
 		SkillID:                 skill.SkillID,
@@ -279,7 +279,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 		IntersectionEvidence:    turn.IntersectionEvidence,
 		SessionPreferenceFacts:  turn.SessionPreferenceFacts,
 		LongTermPreferenceFacts: turn.LongTermPreferenceFacts,
-	}
+	})
 	finalResp, finalStreamed, err := completeFinalModelResponse(ctx, model, finalRequest, finalTextSink)
 	if err != nil {
 		return ReactResult{}, err
@@ -288,7 +288,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 		if finalStreamed {
 			return ReactResult{}, fmt.Errorf("streamed final answer is not displayable")
 		}
-		finalResp, err = model.Complete(ctx, ModelRequest{
+		finalResp, err = model.Complete(ctx, frozenPolicyModelRequest(turn, skill, ModelRequest{
 			TurnID:                  turn.TurnID,
 			TraceID:                 turn.TraceID,
 			SkillID:                 skill.SkillID,
@@ -301,7 +301,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			IntersectionEvidence:    turn.IntersectionEvidence,
 			SessionPreferenceFacts:  turn.SessionPreferenceFacts,
 			LongTermPreferenceFacts: turn.LongTermPreferenceFacts,
-		})
+		}))
 		if err != nil {
 			return ReactResult{}, err
 		}
@@ -323,6 +323,33 @@ func (r ReactRuntime) RunWithFinalTextSink(
 		StopReason:       stopReason,
 		FinalClientTrace: finalResp.ClientModelInteraction,
 	}, nil
+}
+
+func frozenPolicyModelRequest(
+	turn assistant.AssistantTurn,
+	skill SkillSelection,
+	request ModelRequest,
+) ModelRequest {
+	frozen := turn.FrozenPolicySelection
+	request.PolicyID = frozen.PolicyID
+	request.PolicyReleaseVersion = frozen.ReleaseVersion
+	request.PolicyCohort = frozen.Cohort
+	request.PolicyRolloutRevision = frozen.RolloutRevision
+	request.PolicyRuleID = frozen.RuleID
+	request.PolicyTemplateID = frozen.Template.TemplateID
+	request.SearchIntensity = skill.SearchIntensity
+	request.FeedbackContext = turn.FeedbackContextSnapshot
+	policyPrompt := strings.TrimSpace(skill.PromptPolicy)
+	stagePrompt := strings.TrimSpace(request.Prompt)
+	switch {
+	case policyPrompt == "":
+		request.Prompt = stagePrompt
+	case stagePrompt == "":
+		request.Prompt = policyPrompt
+	default:
+		request.Prompt = policyPrompt + "\n\nStage instruction:\n" + stagePrompt
+	}
+	return request
 }
 
 func completeFinalModelResponse(

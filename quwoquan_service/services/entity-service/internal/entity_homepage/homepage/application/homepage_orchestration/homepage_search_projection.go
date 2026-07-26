@@ -64,6 +64,13 @@ func ProjectHomepageToSearchDocument(homepage Homepage) rtsearch.Document {
 	if v := strings.TrimSpace(homepage.Address); v != "" {
 		fields["address"] = v
 	}
+	// A user suggestion opened from a first-party location.place carries its
+	// validated immutable place id in the internal lookup aliases. Once the
+	// candidate is published this anchor lets canonical /search(ids:[placeId])
+	// resolve the promoted homepage without resurrecting a duplicate place doc.
+	if placeID := sourcePlaceAlias(homepage.LookupAliases); placeID != "" {
+		fields["placeId"] = placeID
+	}
 	doc := rtsearch.Document{
 		ObjectType:   rtsearch.ObjectTypeEntityHomepage,
 		ObjectID:     homepage.ID,
@@ -85,6 +92,27 @@ func ProjectHomepageToSearchDocument(homepage Homepage) rtsearch.Document {
 		doc.Geo = &rtsearch.GeoPoint{Lat: homepage.Location.Latitude, Lng: homepage.Location.Longitude}
 	}
 	return doc
+}
+
+func sourcePlaceAlias(aliases []string) string {
+	const prefix = "place_"
+	for _, raw := range aliases {
+		id := strings.TrimSpace(raw)
+		if len(id) != len(prefix)+16 || !strings.HasPrefix(id, prefix) {
+			continue
+		}
+		valid := true
+		for _, char := range id[len(prefix):] {
+			if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f')) {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			return id
+		}
+	}
+	return ""
 }
 
 // ListHomepagesForIndex 直接 cursor 扫描权威 homepages 集合。

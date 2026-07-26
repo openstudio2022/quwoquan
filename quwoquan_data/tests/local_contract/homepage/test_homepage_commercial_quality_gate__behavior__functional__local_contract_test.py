@@ -19,7 +19,9 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 import json
+import inspect
 
+from content.homepage import homepage_release, homepage_release_validation
 from content.homepage.commercial_gate import (
     FACTUAL_REFERENCE_MAX_FIDELITY,
     copyright_mode_issues,
@@ -97,6 +99,15 @@ def test_missing_h1_and_shell_pages_are_rejected():
     shell = _GOOD_PAGE + "\n有用+1\n登录后查看更多\n"
     issues2 = final_page_hard_issues(shell, entity_name="示例景区")
     assert any("有用+1" in i for i in issues2)
+
+
+def test_commercial_gate_is_bound_to_materialization_and_validation() -> None:
+    materialize_source = inspect.getsource(homepage_release.materialize_entity_page)
+    validation_source = inspect.getsource(homepage_release_validation.validate_entity_page)
+
+    assert "evaluate_commercial_page" in materialize_source
+    assert "issues=commercial_issues" in materialize_source
+    assert "final_page_hard_issues" in validation_source
 
 
 def test_html_entity_footnote_and_mojibake_rejected():

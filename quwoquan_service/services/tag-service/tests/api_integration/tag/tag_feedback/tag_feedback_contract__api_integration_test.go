@@ -10,6 +10,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
 	httpadapter "quwoquan_service/services/tag-service/internal/tag/tag_feedback/adapters/inbound/http"
 	"quwoquan_service/services/tag-service/internal/tag/tag_feedback/application/tagfeedback"
 	"quwoquan_service/services/tag-service/internal/tag/tag_feedback/infrastructure/tagfeedbackstore"
@@ -39,7 +41,13 @@ func feedbackRequest(t *testing.T, handler http.Handler, persona, idemKey string
 	request := httptest.NewRequest(http.MethodPost, "/tag/feedback", strings.NewReader(string(payload)))
 	request.Header.Set("Content-Type", "application/json")
 	if persona != "" {
-		request.Header.Set("X-Client-Sub-Account-Id", persona)
+		request.Header.Set("X-Client-Sub-Account-Id", "forged-"+persona)
+		request = request.WithContext(rtauth.WithPrincipal(
+			request.Context(),
+			rtauth.Principal{Actor: operation.ActorContext{
+				PersonaID: persona,
+			}},
+		))
 	}
 	if idemKey != "" {
 		request.Header.Set("Idempotency-Key", idemKey)
@@ -78,6 +86,24 @@ func TestTagFeedbackAppendDedupe(t *testing.T) {
 		map[string]any{"tagRef": "Topic/旅行", "action": "click"})
 	if conflict.Code != http.StatusConflict {
 		t.Fatalf("digest conflict status=%d body=%s", conflict.Code, conflict.Body.String())
+	}
+	contextConflict := feedbackRequest(
+		t,
+		handler,
+		"persona-fb-1",
+		"fb-key-1",
+		map[string]any{
+			"tagRef":  "Topic/旅行",
+			"action":  "ignore",
+			"context": "different-placement",
+		},
+	)
+	if contextConflict.Code != http.StatusConflict {
+		t.Fatalf(
+			"context conflict status=%d body=%s",
+			contextConflict.Code,
+			contextConflict.Body.String(),
+		)
 	}
 
 	// 非法 action 与未知 tagRef。

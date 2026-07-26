@@ -196,7 +196,7 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
             if capability["capability_id"] == "runtime.message.transport"
         )
         self.assertEqual(runtime_transport["owner"], "chat.chat.conversation")
-        self.assertEqual(len(runtime_transport["binding_roots"]), 12)
+        self.assertEqual(len(runtime_transport["binding_roots"]), 13)
         self.assertEqual(
             {
                 root["descriptor_owner"]
@@ -208,6 +208,7 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
                 "circle-service",
                 "content-service",
                 "entity-service",
+                "integration-service",
                 "notification-service",
                 "product-ops-service",
                 "realtime-gateway",

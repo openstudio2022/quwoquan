@@ -2211,6 +2211,50 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /user/profile/proposals/{id}/rollback:
+        post:
+            operationId: RollbackProposal
+            x-contract-operation-id: user.profile_update_proposal.RollbackProposal
+            x-object-id: user.profile_update_proposal
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: ProfileProposalCommandFacade
+                method: rollbackProposal
+                aggregateOwner: ProfileUpdateProposal
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RollbackProposalRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProfileUpdateProposalCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /user/profile/qr-card:
         get:
             operationId: GetProfileQrCard
@@ -3294,6 +3338,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RetirePersonaRequest
+            x-contract-placeholder: true
+        RollbackProposalRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RollbackProposalRequest
             x-contract-placeholder: true
         SendGreetingRequestRequest:
             type: object

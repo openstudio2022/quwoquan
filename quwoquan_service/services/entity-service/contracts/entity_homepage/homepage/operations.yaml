@@ -228,6 +228,7 @@ api_routes:
   - address
   - city
   - location
+  - sourcePlaceId
   client_contract:
     dart_import: ../entity/homepage_commands.dart
     request_type: SuggestHomepageCandidateCommand

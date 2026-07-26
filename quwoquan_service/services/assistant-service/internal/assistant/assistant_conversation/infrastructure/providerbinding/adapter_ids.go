@@ -5,10 +5,10 @@ const (
 	ModelAdapterXiaomiMimo      = "ext.llm.xiaomi_mimo"
 	ModelAdapterProtocolFixture = "ext.llm.protocol_fixture"
 
-	SearchAdapterDuckDuckGoHTML   = "ext.search.duckduckgo_html"
-	SearchAdapterProtocolFixture  = "ext.search.protocol_fixture"
+	SearchAdapterDuckDuckGoHTML  = "ext.search.duckduckgo_html"
+	SearchAdapterProtocolFixture = "ext.search.protocol_fixture"
 
-	WeatherAdapterOpenMeteo      = "ext.weather.open_meteo"
+	WeatherAdapterOpenMeteo       = "ext.weather.open_meteo"
 	WeatherAdapterProtocolFixture = "ext.weather.protocol_fixture"
 
 	FinanceAdapterYahooChart      = "ext.finance.yahoo_chart"

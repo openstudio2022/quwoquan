@@ -92,8 +92,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("[search-backfill] backfill failed (indexed=%d batches=%d): %v", report.IndexedPosts, report.BatchesPushed, err)
 	}
-	log.Printf("[search-backfill] OK env=%s index=%s total=%d indexed=%d skipped=%d batches=%d",
-		*env, built.Client.IndexName(), report.TotalPosts, report.IndexedPosts, report.SkippedPosts, report.BatchesPushed)
+	log.Printf("[search-backfill] OK env=%s index=%s total=%d indexed=%d deleted=%d batches=%d",
+		*env, built.Client.IndexName(), report.TotalPosts, report.IndexedPosts, report.DeletedPosts, report.BatchesPushed)
 
 	// Rebuild first-party place snapshots (location.place) from the same posts
 	// into the same shared index (R-S05e): aggregate free-text locations not yet
@@ -103,6 +103,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("[search-backfill] place backfill failed (places=%d batches=%d): %v", placeReport.IndexedPlaces, placeReport.BatchesPushed, err)
 	}
-	log.Printf("[search-backfill] places OK env=%s index=%s posts=%d referenced=%d places=%d batches=%d",
-		*env, built.Client.IndexName(), placeReport.TotalPosts, placeReport.ReferencedPosts, placeReport.IndexedPlaces, placeReport.BatchesPushed)
+	log.Printf("[search-backfill] places OK env=%s index=%s posts=%d referenced=%d indexed=%d deleted=%d batches=%d",
+		*env, built.Client.IndexName(), placeReport.TotalPosts, placeReport.ReferencedPosts, placeReport.IndexedPlaces, placeReport.DeletedPlaces, placeReport.BatchesPushed)
 }

@@ -118,27 +118,109 @@ def _execution_context(execution_id: str) -> ExecutionContext:
     )
 
 
-def _normalized_ref(value: str) -> str:
-    text = str(value or "").strip().strip("/")
-    if text.startswith("entity/"):
-        return "entities/" + text.removeprefix("entity/")
-    return text
-
-
-def _author_prompt(ctx: ExecutionContext, job: QueueJob) -> tuple[str, str]:
-    from content.execution.agent.checkpoint_prompts import _checkpoint_prompts
-    from content.execution.agent.managed_checkpoint import _managed_checkpoint_ref
-
-    checkpoint = "build_homepage" if job.carrier and job.carrier.value == "homepage" else "post_author"
-    prompts = _checkpoint_prompts(ctx, checkpoint)
-    expected_ref = _normalized_ref(job.ref)
-    for prompt in prompts:
-        prompt_ref = _normalized_ref(_managed_checkpoint_ref(ctx, checkpoint, prompt))
-        if prompt_ref == expected_ref:
-            return checkpoint, prompt
-    raise ValueError(
-        f"ReliableTask author job 未找到唯一待执行 prompt：{job.ref} ({checkpoint})"
+def _homepage_repair_addendum(job: QueueJob, object_dir: Path) -> str:
+    """Render only a validated typed homepage repair report for an author retry."""
+    from core.data_issue import (
+        DataIssue,
+        DataIssueCode,
+        DataIssueLane,
+        DataIssueStage,
+        DataRecoveryAction,
     )
+
+    report_path = object_dir / "5.review" / "repair_report.json"
+    if not report_path.is_file():
+        return ""
+    report = read_json(report_path)
+    if not isinstance(report, Mapping):
+        raise ValueError(f"ReliableTask homepage repair report must be object: {job.ref}")
+    expected = {
+        "schema": "quwoquan_data.repair_report",
+        "executionId": job.execution_id,
+        "command": "homepage",
+        "ref": job.ref,
+        "failedStage": DataIssueStage.BUILD_HOMEPAGE.value,
+        "failedGate": "homepage_materialization",
+        "fallbackStage": DataIssueStage.BUILD_HOMEPAGE.value,
+    }
+    mismatches = [
+        field
+        for field, expected_value in expected.items()
+        if str(report.get(field) or "").strip() != expected_value
+    ]
+    if report.get("rerunChain") != ["author", "materialize"]:
+        mismatches.append("rerunChain")
+    if mismatches:
+        raise ValueError(
+            "ReliableTask homepage repair report binding mismatch: "
+            + ", ".join(sorted(mismatches))
+        )
+    raw_issues = report.get("issues")
+    if not isinstance(raw_issues, list) or not raw_issues:
+        raise ValueError(f"ReliableTask homepage repair report issues invalid: {job.ref}")
+    issues = tuple(DataIssue.from_dict(item) for item in raw_issues)
+    expected_issue_values = (
+        DataIssueCode.QUALITY_FAILED,
+        DataIssueStage.BUILD_HOMEPAGE,
+        DataIssueLane.HOMEPAGE,
+        DataRecoveryAction.RETRY_AGENT,
+    )
+    if any(
+        (issue.code, issue.stage, issue.lane, issue.recovery) != expected_issue_values
+        for issue in issues
+    ):
+        raise ValueError(f"ReliableTask homepage repair report issue contract invalid: {job.ref}")
+    rendered_issues = "\n".join(f"- [{issue.code.value}] {issue.message}" for issue in issues)
+    return (
+        "\n\n## 确定性质量门修复反馈\n"
+        "上一次正文未通过确定性质量门。请在现有 page.md 基础上逐项修订，"
+        "保留已通过的底稿和图片占位符，不得从零重写：\n"
+        f"{rendered_issues}\n"
+    )
+
+
+def _author_prompt(_ctx: ExecutionContext, job: QueueJob) -> tuple[str, str]:
+    """Read the single frozen prompt bound to a ReliableTask author job.
+
+    A deterministic review can require a second author attempt after the first
+    draft has replaced its placeholder. Re-enumerating checkpoint prompts at
+    that point is incorrect because that enumeration intentionally excludes
+    non-placeholder drafts. The job packet is the frozen author input and
+    remains the sole retry lookup source.
+    """
+    checkpoint = (
+        "build_homepage"
+        if job.carrier and job.carrier.value == "homepage"
+        else "post_author"
+    )
+    content_object_dir = str(job.content_object_dir or "").strip()
+    if not content_object_dir:
+        raise ValueError(f"ReliableTask author job 缺 contentObjectDir：{job.job_id}")
+    object_dir = execution_root(job.execution_id) / content_object_dir
+    draft_dir = object_dir / "4.draft"
+    packet_path = draft_dir / "author_job_packet.json"
+    if not packet_path.is_file():
+        raise ValueError(f"ReliableTask author packet missing: {job.ref}")
+    packet = read_json(packet_path)
+    if not isinstance(packet, Mapping):
+        raise ValueError(f"ReliableTask author packet must be object: {job.ref}")
+    if str(packet.get("executionId") or "").strip() != job.execution_id:
+        raise ValueError(f"ReliableTask author packet executionId mismatch: {job.ref}")
+    packet_ref = str(packet.get("objectRef") or packet.get("ref") or "").strip()
+    if packet_ref != job.ref:
+        raise ValueError(f"ReliableTask author packet objectRef mismatch: {job.ref}")
+    prompt_ref = str(packet.get("promptRef") or "").strip()
+    if prompt_ref != "4.draft/prompt.md":
+        raise ValueError(f"ReliableTask author packet promptRef invalid: {job.ref}")
+    prompt_path = draft_dir / "prompt.md"
+    if not prompt_path.is_file():
+        raise ValueError(f"ReliableTask author prompt missing: {job.ref}")
+    prompt = prompt_path.read_text(encoding="utf-8").strip()
+    if not prompt:
+        raise ValueError(f"ReliableTask author prompt empty: {job.ref}")
+    if checkpoint == "build_homepage":
+        prompt += _homepage_repair_addendum(job, object_dir)
+    return checkpoint, prompt
 
 
 def _default_agent_runner(ctx: ExecutionContext, prompt: str) -> AgentRunOutcome:

@@ -257,13 +257,13 @@ func TestPlaceProjectorReadFailureKeepsCheckpointReplayable(t *testing.T) {
 	}
 }
 
-func TestPlaceProjectorNilIsNoOp(t *testing.T) {
+func TestPlaceProjectorMissingDependenciesFailFast(t *testing.T) {
 	var proj *PlaceProjector
-	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
-		t.Fatalf("nil projector must be a no-op, got %v", err)
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err == nil {
+		t.Fatal("nil projector must fail")
 	}
 	proj = NewProjector(nil, fakeReader{}, NewInMemoryPlaceStore())
-	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
-		t.Fatalf("nil indexer must be a no-op, got %v", err)
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err == nil {
+		t.Fatal("nil indexer must fail")
 	}
 }

@@ -51,7 +51,9 @@ type VersionResult struct {
 }
 
 type Service struct {
-	catalog Catalog
+	catalog          Catalog
+	iosAvailable     bool
+	androidAvailable bool
 }
 
 func NewService(catalog Catalog) (*Service, error) {
@@ -59,13 +61,28 @@ func NewService(catalog Catalog) (*Service, error) {
 	if err := validateHTTPSURL(catalog.PublicOrigin, nil); err != nil {
 		return nil, fmt.Errorf("public origin: %w", err)
 	}
-	if err := validateRelease(PlatformIOS, catalog.IOS); err != nil {
-		return nil, err
+	publicURL, _ := url.Parse(catalog.PublicOrigin)
+	publicHosts := []string{publicURL.Hostname()}
+	iosAvailable := releaseConfigured(catalog.IOS)
+	androidAvailable := releaseConfigured(catalog.Android)
+	if !iosAvailable && !androidAvailable {
+		return nil, ErrReleaseUnavailable
 	}
-	if err := validateRelease(PlatformAndroid, catalog.Android); err != nil {
-		return nil, err
+	if iosAvailable {
+		if err := validateRelease(PlatformIOS, catalog.IOS, publicHosts); err != nil {
+			return nil, err
+		}
 	}
-	return &Service{catalog: catalog}, nil
+	if androidAvailable {
+		if err := validateRelease(PlatformAndroid, catalog.Android, publicHosts); err != nil {
+			return nil, err
+		}
+	}
+	return &Service{
+		catalog:          catalog,
+		iosAvailable:     iosAvailable,
+		androidAvailable: androidAvailable,
+	}, nil
 }
 
 func (s *Service) Version(query VersionQuery) (VersionResult, error) {
@@ -93,12 +110,19 @@ func (s *Service) Version(query VersionQuery) (VersionResult, error) {
 func (s *Service) Release(platform string) (Release, bool) {
 	switch NormalizePlatform(platform) {
 	case PlatformIOS:
-		return s.catalog.IOS, true
+		return s.catalog.IOS, s.iosAvailable
 	case PlatformAndroid:
-		return s.catalog.Android, true
+		return s.catalog.Android, s.androidAvailable
 	default:
 		return Release{}, false
 	}
+}
+
+func releaseConfigured(release Release) bool {
+	return strings.TrimSpace(release.LatestVersion) != "" ||
+		strings.TrimSpace(release.LatestBuild) != "" ||
+		strings.TrimSpace(release.UpdateURL) != "" ||
+		strings.TrimSpace(release.APKURL) != ""
 }
 
 func (s *Service) PublicOrigin() string { return s.catalog.PublicOrigin }
@@ -142,13 +166,13 @@ func CompareBuild(left, right string) (int, error) {
 	}
 }
 
-func validateRelease(platform string, release Release) error {
+func validateRelease(platform string, release Release, publicHosts []string) error {
 	release.LatestVersion = strings.TrimSpace(release.LatestVersion)
 	release.LatestBuild = strings.TrimSpace(release.LatestBuild)
 	if release.LatestVersion == "" || !isPositiveDecimal(release.LatestBuild) {
 		return fmt.Errorf("%s release version/build is invalid", platform)
 	}
-	if err := validateHTTPSURL(release.RecoveryURL, nil); err != nil {
+	if err := validateHTTPSURL(release.RecoveryURL, publicHosts); err != nil {
 		return fmt.Errorf("%s recovery url: %w", platform, err)
 	}
 	if platform == PlatformIOS {
@@ -157,7 +181,7 @@ func validateRelease(platform string, release Release) error {
 		}
 		return nil
 	}
-	if err := validateHTTPSURL(release.UpdateURL, nil); err != nil {
+	if err := validateHTTPSURL(release.UpdateURL, publicHosts); err != nil {
 		return fmt.Errorf("android update url: %w", err)
 	}
 	if err := validateHTTPSURL(release.APKURL, release.APKHostAllowlist); err != nil {

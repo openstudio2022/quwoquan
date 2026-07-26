@@ -129,16 +129,17 @@ type sessionDocument struct {
 }
 
 type receiptDocument struct {
-	ID               string          `bson:"_id"`
-	AggregateID      string          `bson:"aggregateId"`
-	AggregateVersion int64           `bson:"aggregateVersion"`
-	CommandName      string          `bson:"commandName"`
-	CommandDigest    string          `bson:"commandDigest"`
-	Result           sessionDocument `bson:"result"`
-	AssetID          string          `bson:"assetId,omitempty"`
-	AssetObjectKey   string          `bson:"assetObjectKey,omitempty"`
-	CreatedAt        time.Time       `bson:"createdAt"`
-	ExpiresAt        time.Time       `bson:"expiresAt"`
+	ID                    string          `bson:"_id"`
+	AggregateID           string          `bson:"aggregateId"`
+	AggregateVersion      int64           `bson:"aggregateVersion"`
+	CommandName           string          `bson:"commandName"`
+	CommandDigest         string          `bson:"commandDigest"`
+	Result                sessionDocument `bson:"result"`
+	AssetID               string          `bson:"assetId,omitempty"`
+	AssetProcessingStatus string          `bson:"assetProcessingStatus,omitempty"`
+	AssetObjectKey        string          `bson:"assetObjectKey,omitempty"`
+	CreatedAt             time.Time       `bson:"createdAt"`
+	ExpiresAt             time.Time       `bson:"expiresAt"`
 }
 
 type outboxDocument struct {
@@ -202,7 +203,13 @@ func (s *MongoStore) FindReceipt(ctx context.Context, key, name, digest string) 
 	if err != nil {
 		return ports.Receipt{}, false, err
 	}
-	return ports.Receipt{Session: session, AssetID: document.AssetID, ObjectKey: document.AssetObjectKey, Replayed: true}, true, nil
+	return ports.Receipt{
+		Session:               session,
+		AssetID:               document.AssetID,
+		AssetProcessingStatus: document.AssetProcessingStatus,
+		ObjectKey:             document.AssetObjectKey,
+		Replayed:              true,
+	}, true, nil
 }
 
 func (s *MongoStore) Commit(ctx context.Context, commit ports.Commit) (ports.Receipt, error) {
@@ -285,15 +292,17 @@ func (s *MongoStore) Complete(ctx context.Context, commit ports.CompleteCommit) 
 		if _, err := s.receipts.InsertOne(txCtx, receiptDocument{
 			ID: commit.IdempotencyKey, AggregateID: sessionDocument.ID, AggregateVersion: sessionDocument.Version,
 			CommandName: commit.CommandName, CommandDigest: commit.CommandDigest, Result: sessionDocument,
-			AssetID: commit.Asset.ID, AssetObjectKey: commit.Asset.ObjectKey,
-			CreatedAt: time.Now().UTC(), ExpiresAt: expiresAt,
+			AssetID: commit.Asset.ID, AssetProcessingStatus: commit.Asset.ProcessingStatus,
+			AssetObjectKey: commit.Asset.ObjectKey,
+			CreatedAt:      time.Now().UTC(), ExpiresAt: expiresAt,
 		}); err != nil {
 			return nil, err
 		}
 		result = ports.Receipt{
-			Session:   commit.Session,
-			AssetID:   commit.Asset.ID,
-			ObjectKey: commit.Asset.ObjectKey,
+			Session:               commit.Session,
+			AssetID:               commit.Asset.ID,
+			AssetProcessingStatus: commit.Asset.ProcessingStatus,
+			ObjectKey:             commit.Asset.ObjectKey,
 		}
 		return nil, nil
 	})

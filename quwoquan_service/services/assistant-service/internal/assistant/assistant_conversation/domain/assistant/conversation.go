@@ -29,7 +29,8 @@ type AssistantTurnInput struct {
 }
 
 type AssistantTurnTrigger struct {
-	Type string `json:"type" bson:"type"`
+	Type      string `json:"type" bson:"type"`
+	MessageID string `json:"-" bson:"messageId,omitempty"`
 }
 
 // AssistantRunRequestContext captures trusted transport metadata at the
@@ -44,6 +45,7 @@ type AssistantRunRequestContext struct {
 	RouteID     string `json:"-" bson:"routeId,omitempty"`
 	OperationID string `json:"-" bson:"operationId,omitempty"`
 	TraceID     string `json:"-" bson:"traceId,omitempty"`
+	PersonaID   string `json:"-" bson:"personaId"`
 }
 
 func (c AssistantRunRequestContext) Normalized() AssistantRunRequestContext {
@@ -54,6 +56,7 @@ func (c AssistantRunRequestContext) Normalized() AssistantRunRequestContext {
 		RouteID:     strings.TrimSpace(c.RouteID),
 		OperationID: strings.TrimSpace(c.OperationID),
 		TraceID:     strings.TrimSpace(c.TraceID),
+		PersonaID:   strings.TrimSpace(c.PersonaID),
 	}
 }
 
@@ -164,6 +167,76 @@ type AssistantSelectedPolicyRef struct {
 	Cohort   string `json:"cohort" bson:"cohort"`
 }
 
+type AssistantFrozenPolicyTemplate struct {
+	TemplateID      string   `json:"-" bson:"templateId"`
+	SkillID         string   `json:"-" bson:"skillId"`
+	DomainID        string   `json:"-" bson:"domainId"`
+	PromptPolicy    string   `json:"-" bson:"promptPolicy"`
+	AllowedTools    []string `json:"-" bson:"allowedTools"`
+	SearchIntensity string   `json:"-" bson:"searchIntensity"`
+}
+
+type AssistantFrozenLearningContextPolicy struct {
+	Enabled                  bool     `json:"-" bson:"enabled"`
+	AllowedSignals           []string `json:"-" bson:"allowedSignals"`
+	AllowedMetricIDs         []string `json:"-" bson:"allowedMetricIds"`
+	AllowedReasonCodes       []string `json:"-" bson:"allowedReasonCodes"`
+	MinimumFeedbackSamples   int      `json:"-" bson:"minimumFeedbackSamples"`
+	WindowDays               int      `json:"-" bson:"windowDays"`
+	SnapshotTrainingEligible bool     `json:"-" bson:"snapshotTrainingEligible"`
+}
+
+type AssistantFeedbackMetricSummary struct {
+	MetricID    string  `json:"-" bson:"metricId"`
+	SampleCount int64   `json:"-" bson:"sampleCount"`
+	Average     float64 `json:"-" bson:"average"`
+	Latest      float64 `json:"-" bson:"latest"`
+}
+
+type AssistantFeedbackReasonSummary struct {
+	ReasonCode string `json:"-" bson:"reasonCode"`
+	Count      int64  `json:"-" bson:"count"`
+}
+
+type AssistantFeedbackContextSnapshot struct {
+	Decision                 string                           `json:"-" bson:"decision"`
+	ConsentID                string                           `json:"-" bson:"consentId,omitempty"`
+	ConsentGrantedAt         time.Time                        `json:"-" bson:"consentGrantedAt,omitempty"`
+	DefinitionVersion        string                           `json:"-" bson:"definitionVersion,omitempty"`
+	SourceWatermarkSequence  int64                            `json:"-" bson:"sourceWatermarkSequence,omitempty"`
+	WindowDays               int                              `json:"-" bson:"windowDays,omitempty"`
+	FeedbackSampleCount      int64                            `json:"-" bson:"feedbackSampleCount,omitempty"`
+	PositiveFeedbackCount    int64                            `json:"-" bson:"positiveFeedbackCount,omitempty"`
+	NegativeFeedbackCount    int64                            `json:"-" bson:"negativeFeedbackCount,omitempty"`
+	TextFeedbackCount        int64                            `json:"-" bson:"textFeedbackCount,omitempty"`
+	Metrics                  []AssistantFeedbackMetricSummary `json:"-" bson:"metrics,omitempty"`
+	Reasons                  []AssistantFeedbackReasonSummary `json:"-" bson:"reasons,omitempty"`
+	SnapshotTrainingEligible bool                             `json:"-" bson:"snapshotTrainingEligible"`
+}
+
+type AssistantFrozenPolicySelection struct {
+	PolicyID              string                               `json:"-" bson:"policyId"`
+	ReleaseVersion        string                               `json:"-" bson:"releaseVersion"`
+	Cohort                string                               `json:"-" bson:"cohort"`
+	RolloutRevision       int                                  `json:"-" bson:"rolloutRevision"`
+	RuleID                string                               `json:"-" bson:"ruleId"`
+	Template              AssistantFrozenPolicyTemplate        `json:"-" bson:"template"`
+	LearningContextPolicy AssistantFrozenLearningContextPolicy `json:"-" bson:"learningContextPolicy"`
+}
+
+func (selection AssistantFrozenPolicySelection) PublicRef() *AssistantSelectedPolicyRef {
+	if strings.TrimSpace(selection.PolicyID) == "" ||
+		strings.TrimSpace(selection.ReleaseVersion) == "" ||
+		strings.TrimSpace(selection.Cohort) == "" {
+		return nil
+	}
+	return &AssistantSelectedPolicyRef{
+		PolicyID: strings.TrimSpace(selection.PolicyID),
+		Version:  strings.TrimSpace(selection.ReleaseVersion),
+		Cohort:   strings.TrimSpace(selection.Cohort),
+	}
+}
+
 // AssistantRunTerminalSnapshot is the non-TTL source for GetRun, terminal SSE
 // replay and conversation-history recovery.
 type AssistantRunTerminalSnapshot struct {
@@ -192,6 +265,8 @@ type AssistantTurn struct {
 	TerminalSnapshot        *AssistantRunTerminalSnapshot      `json:"terminalSnapshot,omitempty" bson:"terminalSnapshot,omitempty"`
 	ClientRequestID         string                             `json:"clientRequestId,omitempty" bson:"clientRequestId,omitempty"`
 	RequestContext          AssistantRunRequestContext         `json:"-" bson:"requestContext,omitempty"`
+	FrozenPolicySelection   AssistantFrozenPolicySelection     `json:"-" bson:"frozenPolicySelection"`
+	FeedbackContextSnapshot AssistantFeedbackContextSnapshot   `json:"-" bson:"feedbackContextSnapshot"`
 	TraceID                 string                             `json:"traceId" bson:"traceId"`
 	CreatedAt               time.Time                          `json:"createdAt" bson:"createdAt"`
 	CompletedAt             *time.Time                         `json:"completedAt,omitempty" bson:"completedAt,omitempty"`

@@ -90,6 +90,15 @@ func TestListContacts_Empty(t *testing.T) {
 	_ = items
 }
 
+func TestListContacts_RejectsMalformedCursor(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	code, _ := doGet(t, "/chat/contacts?cursor=not-a-contact-cursor", "user_test_001")
+	if code != http.StatusBadRequest {
+		t.Fatalf("malformed contacts cursor status=%d want=%d", code, http.StatusBadRequest)
+	}
+}
+
 func TestListGroupCandidates_Empty(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 

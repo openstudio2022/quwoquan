@@ -88,6 +88,16 @@ errors:
   user_message:
     zh: 该消息请求标识已用于不同内容，请重新发送
     en: This message request identifier was already used for different content
+- code: CHAT.USER.conversation_idempotency_conflict
+  kind: USER
+  reason: idempotency_conflict
+  http_status: 409
+  recovery_action: surface
+  dart_const: conversationIdempotencyConflict
+  go_const: ErrConversationIdempotencyConflict
+  user_message:
+    zh: 该建群请求标识已用于不同内容，请重新发起
+    en: This conversation request identifier was already used for different content
 - code: CHAT.USER.message_too_long
   kind: USER
   reason: invalid_argument

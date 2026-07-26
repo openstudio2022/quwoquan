@@ -2,8 +2,8 @@ package runtimeexperiments
 
 import (
 	"context"
-	"hash/fnv"
 	"fmt"
+	"hash/fnv"
 	"sync"
 )
 
@@ -41,15 +41,16 @@ func (r StaticResolver) Resolve(_ context.Context, experimentID string, _ string
 
 // Experiment defines the configuration for a single experiment.
 type Experiment struct {
-	ID             string
-	Buckets        []BucketDef
-	PolicyVersion  string
-	Enabled        bool
+	ID            string
+	Buckets       []BucketDef
+	PolicyVersion string
+	Enabled       bool
 }
 
 type BucketDef struct {
-	Name       string
-	WeightPct  int
+	Name              string
+	WeightPct         int
+	WeightBasisPoints int
 }
 
 // HashResolver is the canonical runtime bucketing implementation shared by
@@ -102,11 +103,22 @@ func AssignBucket(expID, subjectKey string, buckets []BucketDef) string {
 	h := fnv.New32a()
 	h.Write([]byte(expID + ":" + subjectKey))
 	hash := h.Sum32()
-	position := int(hash % 100)
+	scale := 100
+	for _, bucket := range buckets {
+		if bucket.WeightBasisPoints > 0 {
+			scale = 10000
+			break
+		}
+	}
+	position := int(hash % uint32(scale))
 
 	cumulative := 0
 	for _, b := range buckets {
-		cumulative += b.WeightPct
+		weight := b.WeightPct
+		if scale == 10000 {
+			weight = b.WeightBasisPoints
+		}
+		cumulative += weight
 		if position < cumulative {
 			return b.Name
 		}

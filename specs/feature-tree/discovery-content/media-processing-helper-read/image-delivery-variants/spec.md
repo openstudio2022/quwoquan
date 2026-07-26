@@ -121,46 +121,6 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 图片只有在完整交付 descriptor 可验证后才能 ready
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：损坏、超限、descriptor 缺字段或 CDN baseline 不可读全部进入 rejected 或保持 processing 重试，不能发布。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-002"></a>
-### OPEN-002 所有消费者只使用 metadata 生成的图片 profile
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：读取页只经 generated ImageUrlResolver/AppImage 消费 display profile，沉浸页只消费 full profile。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-003"></a>
-### OPEN-003 原图访问按 Post 可见性授权并可靠限流
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：授权服务经 Post named visibility reader，不以 ViewerID 伪装 owner 查询。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-004"></a>
-### OPEN-004 策略升级与历史资产重处理可停止、恢复和回滚
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：cursor、idempotency、旧新 descriptor、清理候选和 rollback target 都可审计。
-- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效
-
 <a id="open-005"></a>
 ### OPEN-005 图片四环境设备矩阵以真实 Remote 主线闭环
 

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/core/services/hive_runtime.dart';
 import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 
 void main() {
@@ -15,11 +16,13 @@ void main() {
       'actor_queue_storage_test_',
     );
     Hive.init(tempDirectory.path);
+    HiveRuntime.debugEnsureInitializedHook = () async => true;
     keyStore = _MemoryActorQueueKeyStore();
     storage = ActorQueueStorage(keyStore: keyStore);
   });
 
   tearDown(() async {
+    HiveRuntime.resetForTest();
     await Hive.deleteFromDisk();
     if (await tempDirectory.exists()) {
       await tempDirectory.delete(recursive: true);
@@ -81,6 +84,48 @@ void main() {
     expect(reopened, isNull);
     expect(signals.single.kind, ActorQueueSignalKind.dropped);
     expect(signals.single.reason, 'invalid_encryption_key');
+  });
+
+  test(
+    'concurrent opens for one actor queue share one encrypted box',
+    () async {
+      final partition = ActorQueuePartition(
+        environment: 'alpha',
+        accountId: 'account-a',
+        personaId: 'persona-a',
+      );
+
+      final opened = await Future.wait(
+        List<Future<Box<String>?>>.generate(
+          3,
+          (_) => storage.open(partition, 'events'),
+        ),
+      );
+
+      expect(opened, everyElement(isNotNull));
+      expect(identical(opened[0], opened[1]), isTrue);
+      expect(identical(opened[1], opened[2]), isTrue);
+      await opened.first!.put('event-1', 'encrypted-event');
+      expect(opened.last!.get('event-1'), 'encrypted-event');
+    },
+  );
+
+  testWidgets('widget binding can open an encrypted actor queue', (
+    tester,
+  ) async {
+    final partition = ActorQueuePartition(
+      environment: 'alpha',
+      accountId: 'account-widget',
+      personaId: 'persona-widget',
+    );
+
+    await tester.runAsync(() async {
+      final queue = await storage.open(partition, 'widget-events');
+
+      expect(queue, isNotNull);
+      await queue!.put('event-1', 'encrypted-event');
+      expect(queue.get('event-1'), 'encrypted-event');
+    });
   });
 }
 

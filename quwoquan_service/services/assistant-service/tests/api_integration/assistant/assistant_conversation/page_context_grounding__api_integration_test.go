@@ -27,7 +27,7 @@ func TestPageContextCrossesHTTPRedisAndTurnBoundary(t *testing.T) {
 		map[string]any{
 			"contextSnapshot": map[string]any{
 				"capturedAt": now.Format(time.RFC3339Nano),
-				"pageType":   "content_detail",
+				"pageType":   "article",
 				"pageObjects": []map[string]any{{
 					"objectTypeRef": "content.post",
 					"objectId":      "post-grounding-api",
@@ -61,7 +61,7 @@ func TestPageContextCrossesHTTPRedisAndTurnBoundary(t *testing.T) {
 		"/assistant/page-context",
 		userID,
 		map[string]any{
-			"pageType":        "content_detail",
+			"pageType":        "article",
 			"businessObjects": []map[string]any{},
 		},
 	)
@@ -82,7 +82,7 @@ func TestPageContextCrossesHTTPRedisAndTurnBoundary(t *testing.T) {
 	if err := json.Unmarshal([]byte(stored), &storedSnapshot); err != nil {
 		t.Fatalf("decode stored page context: %v", err)
 	}
-	if storedSnapshot.PageType != "content_detail" ||
+	if storedSnapshot.PageType != "article" ||
 		len(storedSnapshot.PageObjects) != 1 ||
 		storedSnapshot.PageObjects[0].ObjectID != "post-grounding-api" {
 		t.Fatalf("stored page context=%+v", storedSnapshot)
@@ -140,7 +140,7 @@ func TestPageContextCrossesHTTPRedisAndTurnBoundary(t *testing.T) {
 		t.Fatalf("load persisted turn found=%v err=%v", found, err)
 	}
 	if turn.PageContext == nil ||
-		turn.PageContext.PageType != "content_detail" ||
+		turn.PageContext.PageType != "article" ||
 		len(turn.PageContext.UserActions) != 1 ||
 		turn.PageContext.UserActions[0].Action != "open_assistant_entry" {
 		t.Fatalf("turn page context=%+v", turn.PageContext)

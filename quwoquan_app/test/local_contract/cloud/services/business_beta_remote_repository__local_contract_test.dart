@@ -234,17 +234,19 @@ void main() {
     );
     expect(messages.map((item) => item.id), contains('fixture_msg_direct_1'));
     final contacts = await chatRepository.listContacts(limit: 20);
-    expect(contacts.length, greaterThanOrEqualTo(6));
+    expect(contacts.items.length, greaterThanOrEqualTo(6));
     expect(
-      contacts.map((item) => item.userId),
+      contacts.items.map((item) => item.userId),
       contains('fixture_user_friend'),
     );
-    final contactStates = contacts.map((item) => item.relationState).toSet();
+    final contactStates = contacts.items
+        .map((item) => item.relationState)
+        .toSet();
     expect(contactStates, contains('mutual'));
     expect(contactStates, isNot(contains('not_following')));
-    expect(contacts.every((item) => item.source.isNotEmpty), isTrue);
+    expect(contacts.items.every((item) => item.source.isNotEmpty), isTrue);
     expect(
-      contacts.every(
+      contacts.items.every(
         (item) => item.avatarUrl.toLowerCase().startsWith('media/avatar/'),
       ),
       isTrue,
@@ -285,7 +287,7 @@ void main() {
       conversationId: 'fixture_conv_group',
       limit: 20,
     );
-    final contactIds = contacts.map((item) => item.userId).toSet();
+    final contactIds = contacts.items.map((item) => item.userId).toSet();
     expect(
       groupMembers
           .where((member) => !member.isCurrentUser)

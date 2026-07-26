@@ -1,7 +1,10 @@
-import 'package:flutter/widgets.dart';
+// spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/spec.md#gwt-001
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../support/app/web_shell_test_harness.dart';
@@ -88,6 +91,29 @@ void main() {
 
       // 去掉「小趣创作助手」上下文标题（不再出现）。
       expect(find.text('小趣创作助手'), findsNothing);
+    });
+
+    testWidgets('游客从网页发起群聊先登录，关闭后不回环', (tester) async {
+      AuthGate.resetDebounce();
+      WebShellTestHarness.suppressExpectedErrors();
+      WebShellTestHarness.useWideViewport(tester);
+
+      await tester.pumpWidget(WebShellTestHarness.build(authenticated: false));
+      await WebShellTestHarness.enterToolbar(tester);
+      await WebShellTestHarness.tapPrimary(tester, 'create');
+      await tester.tap(
+        find.byKey(const ValueKey<String>('web-create-card-group-chat')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsOneWidget);
+
+      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsNothing);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(LoginPage), findsNothing);
     });
   });
 }

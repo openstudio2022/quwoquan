@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_update_proposal_review_sheet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -14,6 +15,19 @@ void main() {
       final writer = _RecordingWriter();
       await _pumpReview(tester, writer: writer, proposal: _proposal());
 
+      expect(
+        find.text(UITextConstants.editProfileProposalReviewBasis),
+        findsOneWidget,
+      );
+      expect(find.text('assistant evidence'), findsOneWidget);
+      expect(find.text('assistant-run:run-1'), findsOneWidget);
+      expect(
+        find.text(
+          '${UITextConstants.editProfileBioLabel}, '
+          '${UITextConstants.editProfileNicknameLabel}',
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('profile-proposal-approve')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 4));
@@ -78,6 +92,31 @@ void main() {
 
     expect(writer.calls, <String>['apply:proposal-1']);
   });
+
+  testWidgets('applied proposal exposes auditable rollback action', (
+    tester,
+  ) async {
+    final writer = _RecordingWriter();
+    await _pumpReview(
+      tester,
+      writer: writer,
+      proposal: _proposal(status: ProfileUpdateProposalStatus.applied),
+    );
+
+    expect(
+      find.byKey(const ValueKey('profile-proposal-rollback')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('profile-proposal-approve')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const ValueKey('profile-proposal-rollback')));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(writer.calls, <String>['rollback:proposal-1']);
+  });
 }
 
 Future<void> _pumpReview(
@@ -109,9 +148,20 @@ ProfileUpdateProposalView _proposal({
   id: 'proposal-1',
   personaId: 'persona-1',
   source: ProfileUpdateProposalSource.assistant,
+  reason: 'assistant evidence',
+  evidenceRefs: const <String>['assistant-run:run-1'],
+  impactScope: const <String>['bio', 'displayName'],
+  createdBy: 'persona-1',
   status: status,
   changes: ProfileChangeSet(displayName: 'new name', bio: ''),
   reviewedBy: null,
+  applyAuditId: status == ProfileUpdateProposalStatus.applied
+      ? 'audit-apply-1'
+      : null,
+  rollbackDeadline: status == ProfileUpdateProposalStatus.applied
+      ? DateTime.utc(2026, 7, 23)
+      : null,
+  rollbackAuditId: null,
   version: 1,
   createdAt: DateTime.utc(2026, 7, 16),
   updatedAt: DateTime.utc(2026, 7, 16),
@@ -153,6 +203,20 @@ final class _RecordingWriter implements ProfileUpdateProposalCommandWriter {
       proposalId: 'proposal-1',
       version: 3,
       status: ProfileUpdateProposalStatus.applied,
+      replayed: false,
+    );
+  }
+
+  @override
+  Future<ProfileUpdateProposalCommandResult> rollback(
+    RollbackProfileUpdateProposalCommand command,
+  ) async {
+    calls.add('rollback:${command.proposalId}');
+    _throwIfNeeded();
+    return const ProfileUpdateProposalCommandResult(
+      proposalId: 'proposal-1',
+      version: 4,
+      status: ProfileUpdateProposalStatus.rolledBack,
       replayed: false,
     );
   }

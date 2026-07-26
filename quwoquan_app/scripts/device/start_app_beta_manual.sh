@@ -1325,6 +1325,7 @@ beta_manual_start_entity_service() {
       ENTITY_MONGO_DATABASE=quwoquan_entity \
       ENTITY_REDIS_ADDR="127.0.0.1:${BETA_REDIS_PORT}" \
       ENTITY_USER_ACCOUNT_SECURITY_AUTHORITY_BASE_URL="http://127.0.0.1:${USER_PORT}" \
+      SEARCH_ES_ENABLED=false \
       go run ./cmd/api
 
   # 首次启动时 `go run` 需要编译依赖图；content-release 不能在编译尚未

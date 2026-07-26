@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	configapp "quwoquan_service/control-plane/platform-ops/internal/ops/platform_ops/config_snapshot/application/platform_ops/config_layer"
 	platformgenerated "quwoquan_service/control-plane/platform-ops/generated/platform_ops/config_snapshot"
+	configapp "quwoquan_service/control-plane/platform-ops/internal/ops/platform_ops/config_snapshot/application/platform_ops/config_layer"
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 )
@@ -38,6 +38,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/control-plane/platform/configs":
 		h.listConfigKeys(w, r)
 	case "/control-plane/platform/configs/resolve":
+		h.resolve(w, r)
+	case "/control-plane/platform/configs/resolve-for-instance":
 		h.resolve(w, r)
 	case "/control-plane/platform/configs/snapshot":
 		h.snapshot(w, r)

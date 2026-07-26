@@ -1,8 +1,0 @@
-backend: mongodb
-collections:
-  assistant_scorecard_facts:
-    entity: Scorecard
-    role: append_only
-    unique_constraints:
-    - - scoreId
-role: append_only

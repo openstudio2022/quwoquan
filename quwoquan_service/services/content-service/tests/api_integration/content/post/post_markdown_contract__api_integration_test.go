@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-003
 package api_integration
 
 import (

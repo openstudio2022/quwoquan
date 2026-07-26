@@ -1,6 +1,7 @@
 overrides:
-  sys.tag-service.redis.rec.mode: cluster
-  sys.tag-service.redis.rec.tls: true
+  sys.tag-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.tag-service.redis.general.mode: cluster
+  sys.tag-service.redis.general.tls: true
 secretRefs: {}
 externalBindings:
   runtime.message.transport:

@@ -21,6 +21,7 @@ var (
 	ErrRunIdempotencyConflict          = errors.New("ASSISTANT.USER.run_idempotency_conflict")
 	ErrRunInvalidArgument              = errors.New("ASSISTANT.USER.run_invalid_argument")
 	ErrRunNotFound                     = errors.New("ASSISTANT.USER.run_not_found")
+	ErrRunPolicyUnavailable            = errors.New("ASSISTANT.SYSTEM.run_policy_unavailable")
 	ErrRunStorageUnavailable           = errors.New("ASSISTANT.SYSTEM.run_storage_unavailable")
 	ErrSkillConsentRequired            = errors.New("ASSISTANT.USER.skill_consent_required")
 	ErrStreamUnavailable               = errors.New("ASSISTANT.SYSTEM.stream_unavailable")
@@ -101,6 +102,12 @@ func AppErrorFromRunInvalidArgument(debugMessage string) *rterr.AppError {
 func AppErrorFromRunNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.run_not_found")
 	return rterr.NewAppError(code, "本次执行不存在或已失效", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+}
+
+// AppErrorFromRunPolicyUnavailable returns *AppError for ASSISTANT.SYSTEM.run_policy_unavailable (user_message from errors.yaml).
+func AppErrorFromRunPolicyUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.run_policy_unavailable")
+	return rterr.NewAppError(code, "助手策略暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
 }
 
 // AppErrorFromRunStorageUnavailable returns *AppError for ASSISTANT.SYSTEM.run_storage_unavailable (user_message from errors.yaml).

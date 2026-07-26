@@ -245,6 +245,68 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: private
+- method: POST
+  path: /user/profile/proposals/{id}/rollback
+  operation: RollbackProposal
+  actor: persona
+  application:
+    kind: command
+    facet: ProfileProposalCommandFacade
+    method: rollbackProposal
+    aggregate_owner: ProfileUpdateProposal
+    mutation_target: ProfileUpdateProposal
+    invariant_target: ProfileUpdateProposal
+  request_fields: []
+  response_entity: ProfileUpdateProposalCommandResult
+  response_body: ProfileUpdateProposalCommandResult
+  response_body_kind: object
+  client_contract:
+    dart_import: ../user/profile_update_proposal_contracts.dart
+    request_type: RollbackProfileUpdateProposalCommand
+    response_type: ProfileUpdateProposalCommandResult
+    request_encoder: encodeRollbackProfileUpdateProposalCommand
+    response_decoder: decodeProfileUpdateProposalCommandResult
+  description: owner 在受控窗口内按 immutable apply audit 幂等回滚已应用提案
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - USER.PROFILE_PROPOSAL.not_found
+  - USER.PROFILE_PROPOSAL.invalid_argument
+  - USER.PROFILE_PROPOSAL.invalid_transition
+  - USER.PROFILE_PROPOSAL.version_conflict
+  - USER.PROFILE_PROPOSAL.idempotency_conflict
+  - USER.PROFILE_PROPOSAL.rollback_expired
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_profile_proposal_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - replayed
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: target_persona_owner
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
 - method: GET
   path: /user/profile/proposals/{id}
   operation: GetProfileUpdateProposal
@@ -367,8 +429,13 @@ consumers:
   - create_profile_proposal
   - confirm_profile_proposal
   - apply_profile_proposal
+  - rollback_profile_proposal
   - reject_profile_proposal
   - read_profile_proposal
+- name: assistant-service
+  capabilities:
+  - create_profile_proposal
+  - consume_profile_proposal_events
 contract_test:
   scenarios:
   - name: owner_and_bola
@@ -386,3 +453,10 @@ contract_test:
     assertions:
     - state_receipt_outbox_same_transaction
     - one_event_per_version
+  - name: audit_and_controlled_rollback
+    assertions:
+    - immutable_apply_audit
+    - applying_response_loss_recovery
+    - rollback_window_enforced
+    - rollback_requires_unchanged_persona_version
+    - rollback_receipt_replay

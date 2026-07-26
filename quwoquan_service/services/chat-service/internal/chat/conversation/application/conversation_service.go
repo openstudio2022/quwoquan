@@ -2,7 +2,9 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -112,8 +114,8 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		return nil, err
 	}
 	var replayed model.Conversation
-	if found, err := replayChatCommand(
-		ctx, s.conversationCommands, scopedKey, "CreateConversation", digest, &replayed,
+	if found, err := s.replayCreateConversation(
+		ctx, scopedKey, digest, &replayed,
 	); err != nil {
 		return nil, err
 	} else if found {
@@ -125,9 +127,43 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		CommandDigest: digest,
 	})
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrAggregateIdempotencyKeyTaken) {
+			if found, replayErr := s.replayCreateConversation(
+				ctx, scopedKey, digest, &replayed,
+			); replayErr != nil {
+				return nil, replayErr
+			} else if found {
+				return &replayed, nil
+			}
+		}
+		return nil, mapConversationCreateIdempotencyError(err)
 	}
 	return created, nil
+}
+
+// replayCreateConversation reads the command receipt with the operation's
+// conflict mapping. It is also used after a concurrent receipt insertion:
+// retrying the exact command returns the first conversation, while a different
+// payload receives the declared conversation idempotency conflict.
+func (s *ConversationService) replayCreateConversation(
+	ctx context.Context,
+	scopedKey string,
+	commandDigest string,
+	result *model.Conversation,
+) (bool, error) {
+	raw, found, err := s.conversationCommands.FindAggregateCommandReceipt(
+		ctx, scopedKey, "CreateConversation", commandDigest,
+	)
+	if err != nil {
+		return false, mapConversationCreateIdempotencyError(err)
+	}
+	if !found {
+		return false, nil
+	}
+	if err := json.Unmarshal(raw, result); err != nil {
+		return false, fmt.Errorf("decode replayed CreateConversation result: %w", err)
+	}
+	return true, nil
 }
 
 // CircleGroupConversationProvisioningRequest 是 CircleGroupCreated durable event
@@ -464,6 +500,10 @@ func (s *ConversationService) createDirectConversation(
 			if commitErr := s.conversationCommands.CommitAggregateCommand(
 				txCtx, receipt, outboxEvents,
 			); commitErr != nil {
+				if receiptSpec.CommandName == "CreateConversation" &&
+					errors.Is(commitErr, ErrAggregateIdempotencyKeyTaken) {
+					return commitErr
+				}
 				return mapChatIdempotencyError(commitErr)
 			}
 		} else if err := s.conversationCommands.AppendAggregateOutboxEvents(

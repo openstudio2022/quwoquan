@@ -2,9 +2,7 @@
 from __future__ import annotations
 from core.control_types import ExecutionStage, StageStatus
 from core.data_issue import DataIssue
-from content.execution.support import AUTO, Any, DataIssueCode, DataIssueLane, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, Path, StageResult, _active_spec, _entity_homepages_per_target, _prune_inactive_entity_homepage_artifacts, data_issue, execution_root, hashlib, issue_messages, json, os, re, read_json, require_domain_etype, stage_issues, store, write_json
-
-_SERIAL_DOWNLOAD_WORKER_COUNT = 1
+from content.execution.support import AUTO, Any, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, StageResult, _active_spec, _entity_homepages_per_target, _prune_inactive_entity_homepage_artifacts, data_issue, issue_messages, stage_issues
 
 _MEDIA_RECOVERY_BY_CODE = {
     DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE: DataRecoveryAction.REWIND_DOWNLOAD,
@@ -239,6 +237,7 @@ def _run_build_prepare(ctx: ExecutionContext) -> StageResult:
     return StageResult(ExecutionStage.BUILD_PREPARE, AUTO, StageStatus.DONE, f"下发 {len(refs)} 个主页产出契约 -> {inputs_dir}")
 
 def _run_build_validate(ctx: ExecutionContext) -> StageResult:
+    from content.execution.controller.homepage_review_stage import run_homepage_independent_reviews
     from content.homepage.homepage import homepage_runtime_spec
     from content.homepage.homepage_release_validation import validate_entity_pages
     from verify.verify_homepage_media_completeness import homepage_media_completeness_report
@@ -281,7 +280,7 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
                 code=DataIssueCode.CONTRACT_INVALID,
             ),
         )
-    review_issues = _run_homepage_independent_reviews(ctx, runtime_spec)
+    review_issues = run_homepage_independent_reviews(ctx, runtime_spec)
     if review_issues:
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,
@@ -297,221 +296,3 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
             ),
         )
     return StageResult(ExecutionStage.BUILD_VALIDATE, AUTO, StageStatus.DONE, "所有 coverage 实体主页及独立审阅达标")
-
-def _run_homepage_independent_reviews(
-    ctx: ExecutionContext,
-    runtime_spec: dict[str, Any],
-) -> list[str]:
-    """Run one read-only Cursor reviewer per finalized homepage when evidence is pending."""
-    from content.execution.agent.agent_runner import _redact_managed_secret
-    from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated
-    from content.execution.agent.outcome import AgentRunOutcome
-    from content.execution.controller.homepage_authoring import _homepage_independent_review_issues
-    from governance.coverage.entity_extract import entity_ref
-    from core.prompt_render import render as render_prompt
-    from content.source.source_unit import resolve_entity_object_dir
-    from content.homepage.homepage_review import (
-        apply_independent_homepage_review,
-        homepage_asset_file_evidence,
-        homepage_media_review_dispositions,
-    )
-
-    from content.execution.model_contract import execution_model_pair_for_execution
-
-    model_pair = execution_model_pair_for_execution(ctx.execution_id)
-    review_model = model_pair.reviewer.model_id
-    review_model_family = model_pair.reviewer.family.value
-    author_model = model_pair.author.model_id
-    author_model_family = model_pair.author.family.value
-    if review_model == author_model or review_model_family == author_model_family:
-        return ["independent reviewer model family must differ from author model family"]
-    issues: list[str] = []
-
-    def _valid_payload(payload: Any, *, object_ref: str) -> bool:
-        if not isinstance(payload, dict):
-            return False
-        if payload.get("executionId") != ctx.execution_id or payload.get("objectRef") != object_ref:
-            return False
-        try:
-            from core.schema import assert_valid
-
-            assert_valid(
-                payload,
-                "content",
-                "homepage_reviewer_response",
-                label=f"homepage_reviewer_response:{object_ref}",
-            )
-        except ValueError:
-            return False
-        return True
-
-    def _payload_from_outcome(outcome: AgentRunOutcome, *, object_ref: str) -> dict[str, Any] | None:
-        text = outcome.result_text.strip()
-        candidates = [text]
-        fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.S)
-        if fenced:
-            candidates.insert(0, fenced.group(1))
-        first = text.find("{")
-        last = text.rfind("}")
-        if first >= 0 and last > first:
-            candidates.append(text[first : last + 1])
-        for candidate in candidates:
-            try:
-                payload = json.loads(candidate)
-            except (TypeError, ValueError):
-                continue
-            if _valid_payload(payload, object_ref=object_ref):
-                return payload
-        return None
-    for target in ((runtime_spec.get("scope") or {}).get("coverageTargets") or []):
-        if not isinstance(target, Mapping):
-            continue
-        name = str(target.get("name") or "").strip()
-        if not name:
-            continue
-        domain, etype = require_domain_etype(target.get("entityType"), context=name)
-        obj = resolve_entity_object_dir(ctx.execution_id, name, etype_hint=etype)
-        review_dir = obj / "5.review"
-        attestation_path = review_dir / "attestation.json"
-        if not attestation_path.is_file():
-            issues.append(f"{name}: review attestation missing")
-            continue
-        attestation = read_json(attestation_path)
-        if str((attestation.get("independentReviewer") or {}).get("status") or "") == "passed":
-            recorded_issues = _homepage_independent_review_issues(ctx, domain, etype, name)
-            if not recorded_issues:
-                continue
-            issues.extend(recorded_issues)
-            continue
-        output_path = review_dir / "reviewer_response.pending.json"
-        output_path.unlink(missing_ok=True)
-        object_ref = entity_ref(domain, etype, name)
-        manifest = read_json(obj / "manifest.json")
-        from governance.coverage.license import rights_enforcement_mode
-
-        vertical = str(manifest.get("vertical") or ctx.spec.vertical).strip()
-        rights_mode = rights_enforcement_mode(vertical)
-        media_policy = json.dumps(
-            {
-                "vertical": vertical,
-                "rightsEnforcementMode": rights_mode.value,
-                "rightsDecisionRule": (
-                    "record rights audit gaps as findings; do not add them to issues"
-                    if rights_mode.value == "audit_only"
-                    else "missing rights proof is a blocking issue"
-                ),
-                "assets": homepage_media_review_dispositions(manifest),
-                "assetFileEvidence": homepage_asset_file_evidence(obj, manifest),
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-        )
-        prompt = render_prompt(
-            "homepage_independent_review",
-            task_vars={
-                "object_ref": object_ref,
-                "object_dir": str(obj),
-                "output_path": str(output_path),
-                "media_policy": media_policy,
-            },
-        )
-        review_ctx = ExecutionContext(
-            execution_id=ctx.execution_id,
-            entity_ids=[name],
-            spec=ctx.spec.to_dict(),
-            managed=True,
-            runtime=ctx.runtime,
-            max_workers=_SERIAL_DOWNLOAD_WORKER_COUNT,
-            model=review_model,
-            model_parameters=model_pair.reviewer.parameters,
-            agent_provider=ctx.agent_provider,
-            release_only=ctx.release_only,
-        )
-
-        def _complete(path: Path = output_path) -> bool:
-            if not path.is_file():
-                return False
-            try:
-                payload = read_json(path)
-            except Exception:  # noqa: BLE001
-                return False
-            return _valid_payload(payload, object_ref=object_ref)
-
-        # The review response file is only a response transport.  The canonical
-        # attestation must retain the Cursor SDK run identity, so this isolated
-        # worker must finish normally rather than taking the contract-output
-        # shortcut used by non-attested helper stages.
-        outcome = _default_managed_agent_runner_isolated(review_ctx, prompt)
-        payload: dict[str, Any] | None = read_json(output_path) if _complete() else None
-        if payload is None and outcome.succeeded:
-            payload = _payload_from_outcome(outcome, object_ref=object_ref)
-            if payload is not None:
-                write_json(output_path, payload)
-        if not outcome.succeeded or payload is None:
-            outcome_status = outcome.status.value
-            error_text = _redact_managed_secret(outcome.message or "invalid reviewer output")
-            issue_code = (
-                DataIssueCode.AGENT_REVIEW_INVALID
-                if outcome.succeeded
-                else DataIssueCode.AGENT_REVIEW_UNAVAILABLE
-            )
-            review_issue = data_issue(
-                issue_code,
-                stage=DataIssueStage.REVIEW,
-                ref=object_ref,
-                lane=DataIssueLane.HOMEPAGE,
-                recovery=DataRecoveryAction.STOP,
-                message=(
-                    "independent reviewer returned invalid response"
-                    if issue_code == DataIssueCode.AGENT_REVIEW_INVALID
-                    else "independent reviewer model did not finish"
-                ),
-                attributes={
-                    "model": review_model,
-                    "modelFamily": review_model_family,
-                    "outcomeStatus": outcome_status,
-                    "errorCode": outcome.error_code,
-                },
-            )
-            failure_root = (
-                execution_root(ctx.execution_id)
-                / "evidence/reviewer_failures"
-            )
-            failure_root.mkdir(parents=True, exist_ok=True)
-            failure_path = failure_root / (
-                hashlib.sha256(object_ref.encode("utf-8")).hexdigest()[:20] + ".json"
-            )
-            write_json(
-                failure_path,
-                {
-                    "schema": "quwoquan_data.homepage_review_failure",
-                    "executionId": ctx.execution_id,
-                    "objectRef": object_ref,
-                    "model": review_model,
-                    "modelFamily": review_model_family,
-                    "status": outcome_status,
-                    "issue": review_issue.as_dict(),
-                    "runId": outcome.run_id,
-                    "agentId": outcome.agent_id,
-                    "requestId": outcome.request_id,
-                    "durationMs": outcome.duration_ms,
-                    "errorCode": outcome.error_code,
-                    "error": error_text,
-                    "result": _redact_managed_secret(outcome.result_text)[:4000],
-                    "recordedAt": store.now_iso(),
-                },
-            )
-            output_path.unlink(missing_ok=True)
-            issues.append(str(review_issue))
-            continue
-        output_path.unlink(missing_ok=True)
-        bound = apply_independent_homepage_review(
-            review_dir=review_dir,
-            provider="cursor_sdk",
-            model=review_model,
-            model_family=review_model_family,
-            run_id=outcome.run_id,
-            result_payload=payload,
-        )
-        issues.extend(f"{name}: {item}" for item in bound)
-    return issues

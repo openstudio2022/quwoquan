@@ -121,9 +121,44 @@ final class _ProfileUpdateProposalReviewSheetState
     }
   }
 
+  Future<void> _rollback() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _errorMessage = null;
+    });
+    try {
+      await ref
+          .read(profileEditProposalCommandWriterProvider)
+          .rollback(
+            RollbackProfileUpdateProposalCommand(
+              proposalId: widget.proposal.id,
+            ),
+          );
+      if (!mounted) return;
+      _track('rollback', result: 'succeeded');
+      AppToast.show(context, UITextConstants.editProfileProposalRolledBack);
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      final semantic = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.dialog,
+      );
+      setState(() {
+        _busy = false;
+        _errorMessage = semantic.message;
+      });
+      _track('rollback', result: 'failed', failReasonCode: semantic.sourceCode);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final changes = _changeRows(widget.proposal.changes);
+    final reviewBasis = _reviewBasisRows(widget.proposal);
     final canApprove =
         widget.proposal.status == ProfileUpdateProposalStatus.pending ||
         widget.proposal.status == ProfileUpdateProposalStatus.confirmed ||
@@ -131,89 +166,154 @@ final class _ProfileUpdateProposalReviewSheetState
     final canReject =
         widget.proposal.status == ProfileUpdateProposalStatus.pending ||
         widget.proposal.status == ProfileUpdateProposalStatus.confirmed;
+    final canRollback =
+        widget.proposal.status == ProfileUpdateProposalStatus.applied;
     return AppBottomModalSurface(
       panelKey: const ValueKey<String>('profile-proposal-review-sheet'),
       onDismiss: _busy ? () {} : () => Navigator.of(context).pop(false),
       maxHeightRatio: 0.86,
       child: SafeArea(
         top: false,
-        child: ListView(
-          shrinkWrap: true,
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            0,
-            AppSpacing.containerMd,
-            AppSpacing.containerMd,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(
-              UITextConstants.editProfileProposalTitle,
-              style: TextStyle(
-                fontSize: AppTypography.iosTitle2,
-                fontWeight: AppTypography.semiBold,
-                color: AppColors.iosLabel(context),
-              ),
-            ),
-            SizedBox(height: AppSpacing.intraGroupSm),
-            Text(
-              _sourceLabel(widget.proposal.source),
-              style: TextStyle(
-                fontSize: AppTypography.iosSubheadline,
-                color: AppColors.iosSecondaryLabel(context),
-              ),
-            ),
-            SizedBox(height: AppSpacing.interGroupMd),
-            Text(
-              UITextConstants.editProfileProposalChanges,
-              style: TextStyle(
-                fontSize: AppTypography.iosBody,
-                fontWeight: FontWeight.w600,
-                color: AppColors.iosLabel(context),
-              ),
-            ),
-            SizedBox(height: AppSpacing.intraGroupSm),
-            ProfileIosGroupedSection(showDividers: true, children: changes),
-            if (_errorMessage != null) ...<Widget>[
-              SizedBox(height: AppSpacing.containerSm),
-              AppFormErrorCard(
-                key: const ValueKey<String>('profile-proposal-error'),
-                density: AppFormErrorCardDensity.compact,
-                semantic: UiErrorSemantic(
-                  category: UiErrorCategory.submit,
-                  scope: UiErrorScope.dialog,
-                  title: '',
-                  message: _errorMessage!,
-                  presentation: UiErrorPresentation.formInlineCard,
+            Flexible(
+              fit: FlexFit.loose,
+              child: ListView(
+                shrinkWrap: true,
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.containerMd,
+                  0,
+                  AppSpacing.containerMd,
+                  AppSpacing.containerSm,
                 ),
+                children: <Widget>[
+                  Text(
+                    UITextConstants.editProfileProposalTitle,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosTitle2,
+                      fontWeight: AppTypography.semiBold,
+                      color: AppColors.iosLabel(context),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  Text(
+                    _sourceLabel(widget.proposal.source),
+                    style: TextStyle(
+                      fontSize: AppTypography.iosSubheadline,
+                      color: AppColors.iosSecondaryLabel(context),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.interGroupMd),
+                  Text(
+                    UITextConstants.editProfileProposalReviewBasis,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosBody,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.iosLabel(context),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  ProfileIosGroupedSection(
+                    showDividers: true,
+                    children: reviewBasis,
+                  ),
+                  SizedBox(height: AppSpacing.interGroupMd),
+                  Text(
+                    UITextConstants.editProfileProposalChanges,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosBody,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.iosLabel(context),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  ProfileIosGroupedSection(
+                    showDividers: true,
+                    children: changes,
+                  ),
+                ],
               ),
-            ],
-            if (canApprove) ...<Widget>[
-              SizedBox(height: AppSpacing.interGroupMd),
-              ProfileIosActionButton(
-                key: const ValueKey<String>('profile-proposal-approve'),
-                label:
-                    widget.proposal.status ==
-                        ProfileUpdateProposalStatus.applying
-                    ? UITextConstants.editProfileProposalResumeApply
-                    : UITextConstants.editProfileProposalApprove,
-                style: ProfileIosActionStyle.filled,
-                onPressed: _busy ? null : _approve,
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerMd,
+                0,
+                AppSpacing.containerMd,
+                AppSpacing.containerMd,
               ),
-              if (canReject) ...<Widget>[
-                SizedBox(height: AppSpacing.containerSm),
-                ProfileIosActionButton(
-                  key: const ValueKey<String>('profile-proposal-reject'),
-                  label: UITextConstants.editProfileProposalReject,
-                  style: ProfileIosActionStyle.outlined,
-                  onPressed: _busy ? null : _reject,
-                ),
-              ],
-            ],
+              child: Column(
+                children: <Widget>[
+                  if (_errorMessage != null) ...<Widget>[
+                    AppFormErrorCard(
+                      key: const ValueKey<String>('profile-proposal-error'),
+                      density: AppFormErrorCardDensity.compact,
+                      semantic: UiErrorSemantic(
+                        category: UiErrorCategory.submit,
+                        scope: UiErrorScope.dialog,
+                        title: '',
+                        message: _errorMessage!,
+                        presentation: UiErrorPresentation.formInlineCard,
+                      ),
+                    ),
+                    SizedBox(height: AppSpacing.containerSm),
+                  ],
+                  if (canApprove) ...<Widget>[
+                    ProfileIosActionButton(
+                      key: const ValueKey<String>('profile-proposal-approve'),
+                      label:
+                          widget.proposal.status ==
+                              ProfileUpdateProposalStatus.applying
+                          ? UITextConstants.editProfileProposalResumeApply
+                          : UITextConstants.editProfileProposalApprove,
+                      style: ProfileIosActionStyle.filled,
+                      onPressed: _busy ? null : _approve,
+                    ),
+                    if (canReject) ...<Widget>[
+                      SizedBox(height: AppSpacing.containerSm),
+                      ProfileIosActionButton(
+                        key: const ValueKey<String>('profile-proposal-reject'),
+                        label: UITextConstants.editProfileProposalReject,
+                        style: ProfileIosActionStyle.outlined,
+                        onPressed: _busy ? null : _reject,
+                      ),
+                    ],
+                  ],
+                  if (canRollback)
+                    ProfileIosActionButton(
+                      key: const ValueKey<String>('profile-proposal-rollback'),
+                      label: UITextConstants.editProfileProposalRollback,
+                      style: ProfileIosActionStyle.outlined,
+                      onPressed: _busy ? null : _rollback,
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+List<Widget> _reviewBasisRows(ProfileUpdateProposalView proposal) {
+  return <Widget>[
+    ProfileIosGroupedCell(
+      title: UITextConstants.editProfileProposalReason,
+      subtitle: proposal.reason,
+      showChevron: false,
+    ),
+    ProfileIosGroupedCell(
+      title: UITextConstants.editProfileProposalEvidence,
+      subtitle: proposal.evidenceRefs.join('\n'),
+      showChevron: false,
+    ),
+    ProfileIosGroupedCell(
+      title: UITextConstants.editProfileProposalImpactScope,
+      subtitle: proposal.impactScope.map(_profileChangeFieldLabel).join(', '),
+      showChevron: false,
+    ),
+  ];
 }
 
 List<Widget> _changeRows(ProfileChangeSet changes) {
@@ -246,6 +346,17 @@ List<Widget> _changeRows(ProfileChangeSet changes) {
   add(UITextConstants.editProfileProposalPurposeField, changes.purposeHint);
   return rows;
 }
+
+String _profileChangeFieldLabel(String field) => switch (field) {
+  'displayName' => UITextConstants.editProfileNicknameLabel,
+  'bio' => UITextConstants.editProfileBioLabel,
+  'avatarMediaAssetId' => UITextConstants.editProfileAvatarLabel,
+  'backgroundMediaAssetId' => UITextConstants.editProfileCoverLabel,
+  'isPrivate' => UITextConstants.editProfileProposalPrivateField,
+  'isolationLevel' => UITextConstants.editProfileProposalIsolationField,
+  'purposeHint' => UITextConstants.editProfileProposalPurposeField,
+  _ => UITextConstants.editProfileProposalImpactScope,
+};
 
 String _sourceLabel(ProfileUpdateProposalSource source) => switch (source) {
   ProfileUpdateProposalSource.assistant =>
