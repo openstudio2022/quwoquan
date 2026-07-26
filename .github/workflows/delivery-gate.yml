@@ -155,6 +155,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
+    env:
+      PUB_HOSTED_URL: https://pub.flutter-io.cn
+      FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:

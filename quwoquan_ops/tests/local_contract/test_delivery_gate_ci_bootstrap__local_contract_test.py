@@ -23,6 +23,8 @@ def test_delivery_gate_bootstrap_uses_pinned_cache_and_portal_lockfile() -> None
     assert "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830" in workflow
     assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve" in workflow
     assert "quwoquan_app/.flutter-version" in workflow
+    assert "PUB_HOSTED_URL: https://pub.flutter-io.cn" in workflow
+    assert "FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn" in workflow
     assert "flutter pub get --enforce-lockfile" in workflow
     assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
     assert "QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy" in workflow
