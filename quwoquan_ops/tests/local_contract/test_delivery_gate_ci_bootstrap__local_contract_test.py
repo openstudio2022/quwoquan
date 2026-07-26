@@ -30,6 +30,23 @@ def test_delivery_gate_bootstrap_uses_pinned_cache_and_portal_lockfile() -> None
     assert "QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy" in workflow
 
 
+def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    gate = (ROOT / "quwoquan_ops/gate/gate_repo.sh").read_text(encoding="utf-8")
+
+    assert "quwoquan_app_tests_ui:" in workflow
+    assert "quwoquan_app_tests_runtime:" in workflow
+    assert "QWQ_APP_GATE_PHASE: static" in workflow
+    assert "QWQ_APP_TEST_SHARD: ui" in workflow
+    assert "QWQ_APP_TEST_SHARD: runtime" in workflow
+    assert 'local app_gate_phase="${QWQ_APP_GATE_PHASE:-all}"' in gate
+    assert 'local app_test_shard="${QWQ_APP_TEST_SHARD:-all}"' in gate
+    assert 'flutter_test_targets=("test/local_contract/")' in gate
+    assert "test/local_contract/ui/" in gate
+    for runtime_root in ("app", "cloud", "core", "quality"):
+        assert f'"test/local_contract/{runtime_root}/"' in gate
+
+
 def test_contract_metadata_bootstrap_creates_cache_parent_before_mktemp() -> None:
     script = (
         ROOT / "quwoquan_service/scripts/contract/verify_contract_metadata.sh"

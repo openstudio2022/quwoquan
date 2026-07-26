@@ -146,16 +146,25 @@ python3 quwoquan_ops/gate/verify_environment_assembly.py
 
 run_app() {
   echo "[gate] quwoquan_app"
+  local app_gate_phase="${QWQ_APP_GATE_PHASE:-all}"
+  case "$app_gate_phase" in
+    all|static|tests) ;;
+    *)
+      echo "[gate] FAIL: invalid QWQ_APP_GATE_PHASE: $app_gate_phase (expected all|static|tests)" >&2
+      return 2
+      ;;
+  esac
   command -v flutter >/dev/null 2>&1 || { echo "[gate] FAIL: flutter not found in PATH" 1>&2; exit 1; }
   command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
-  dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
-  dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
-  (cd quwoquan_app && flutter pub get --offline)
-  # 仅分析主 App 业务代码与测试；vendor/plugins/** 属于 path overrides 的第三方依赖，
-  # 其 example/test/pigeons 不应作为 quwoquan_app 主工程门禁输入。
-  (cd quwoquan_app && flutter analyze lib test)
-  # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
-  if command -v python3 >/dev/null 2>&1; then
+  if [[ "$app_gate_phase" != "tests" ]]; then
+    dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
+    dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
+    (cd quwoquan_app && flutter pub get --offline)
+    # 仅分析主 App 业务代码与测试；vendor/plugins/** 属于 path overrides 的第三方依赖，
+    # 其 example/test/pigeons 不应作为 quwoquan_app 主工程门禁输入。
+    (cd quwoquan_app && flutter analyze lib test)
+    # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
+    if command -v python3 >/dev/null 2>&1; then
     python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_concept_naming.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_cloud_tag_strict_typing.py || exit 1
@@ -265,18 +274,48 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_file_line_budget.py || exit 1
     # R02 Repository 接口方法数预算（ratchet；伞组合接口免登记）
     python3 quwoquan_app/scripts/runtime/verify_repository_interface_method_budget.py || exit 1
-  else
-    echo "[gate] FAIL: python3 is required for App static verification" >&2
-    exit 1
+    else
+      echo "[gate] FAIL: python3 is required for App static verification" >&2
+      exit 1
+    fi
+  fi
+  if [[ "$app_gate_phase" == "static" ]]; then
+    return 0
   fi
   # local_contract tests — fast, no external deps. Canonical App entry is test/local_contract/.
   # 使用 tee 边跑边输出：原先整段输出进变量，长时间无日志易被误判为「卡住」。
+  # CI 在独立 runner 上按目录分片，但本地 `--scope app` 仍默认一次跑完整目录；
+  # 分片不改变测试全集，也不放宽每个分片内部的 concurrency=1 契约。
+  local app_test_shard="${QWQ_APP_TEST_SHARD:-all}"
+  local run_pa_core="true"
+  local -a flutter_test_targets
+  case "$app_test_shard" in
+    all)
+      flutter_test_targets=("test/local_contract/")
+      ;;
+    ui)
+      flutter_test_targets=("test/local_contract/ui/")
+      run_pa_core="false"
+      ;;
+    runtime)
+      flutter_test_targets=(
+        "test/local_contract/app/"
+        "test/local_contract/cloud/"
+        "test/local_contract/core/"
+        "test/local_contract/quality/"
+      )
+      ;;
+    *)
+      echo "[gate] FAIL: invalid QWQ_APP_TEST_SHARD: $app_test_shard (expected all|ui|runtime)" >&2
+      return 2
+      ;;
+  esac
   local flutter_log
   flutter_log="$(mktemp -t quwoquan_gate_flutter_l1.XXXXXX)"
   local flutter_status=0
   set +e
   set -o pipefail
-  python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/ 2>&1 | tee "$flutter_log"
+  python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py "${flutter_test_targets[@]}" 2>&1 | tee "$flutter_log"
   flutter_status=${PIPESTATUS[0]:-1}
   set +o pipefail
   set -e
@@ -311,9 +350,11 @@ run_app() {
     return 1
   fi
   rm -f "$flutter_log"
-  # PA Core（桶 A 协议契约 + 桶 B 引擎集成 + 桶 C UI 契约）默认全部阻断。
-  # 桶 A 覆盖降级响应根因/消息记录协议/可观测字段，失败即退。
-  bash quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/run_pa_core_tests.sh
+  if [[ "$run_pa_core" == "true" ]]; then
+    # PA Core（桶 A 协议契约 + 桶 B 引擎集成 + 桶 C UI 契约）默认全部阻断。
+    # 桶 A 覆盖降级响应根因/消息记录协议/可观测字段，失败即退。
+    bash quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/run_pa_core_tests.sh
+  fi
   # Skip in CI: test/user_acceptance/patrol/ (needs real device/Patrol, run via FTL).
 
 }
