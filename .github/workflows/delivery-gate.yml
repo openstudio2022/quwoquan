@@ -170,7 +170,9 @@ jobs:
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Resolve Flutter SDK
         id: flutter
-        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve \
+            --version "$(tr -d '[:space:]' < quwoquan_app/.flutter-version)"
       - name: Cache Flutter SDK
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:

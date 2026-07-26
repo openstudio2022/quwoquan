@@ -29,44 +29,60 @@ def _download_json(url: str) -> dict[str, Any]:
 
 
 def select_current_release(
-    manifest: Mapping[str, Any], *, channel: str, architecture: str
+    manifest: Mapping[str, Any],
+    *,
+    channel: str,
+    architecture: str,
+    version: str | None = None,
 ) -> dict[str, str]:
     current_release = manifest.get("current_release")
     releases = manifest.get("releases")
     if not isinstance(current_release, Mapping) or not isinstance(releases, list):
         raise ValueError("Flutter release manifest is missing current_release/releases")
     release_hash = str(current_release.get(channel, "")).strip()
-    if not release_hash:
+    if version is None and not release_hash:
         raise ValueError(f"Flutter release manifest has no current {channel} hash")
 
     selected: Mapping[str, Any] | None = None
     for candidate in releases:
-        if not isinstance(candidate, Mapping) or candidate.get("hash") != release_hash:
+        if not isinstance(candidate, Mapping):
+            continue
+        if version is None and candidate.get("hash") != release_hash:
+            continue
+        if version is not None and (
+            str(candidate.get("version", "")).strip() != version
+            or str(candidate.get("channel", "")).strip() != channel
+        ):
             continue
         candidate_arch = str(candidate.get("dart_sdk_arch") or "x64")
         if candidate_arch == architecture:
             selected = candidate
             break
     if selected is None:
+        release_label = version or release_hash
         raise ValueError(
-            f"Flutter release {release_hash} has no archive for architecture {architecture}"
+            f"Flutter release {release_label} has no {channel} archive "
+            f"for architecture {architecture}"
         )
 
     archive = str(selected.get("archive", "")).strip()
     checksum = str(selected.get("sha256", "")).strip().lower()
-    version = str(selected.get("version", "")).strip()
+    selected_version = str(selected.get("version", "")).strip()
+    selected_hash = str(selected.get("hash", "")).strip()
     archive_path = PurePosixPath(archive)
     if not archive or archive_path.is_absolute() or ".." in archive_path.parts:
         raise ValueError("Flutter release archive must be a safe relative path")
     if not SHA256_RE.fullmatch(checksum):
         raise ValueError("Flutter release archive has no canonical sha256")
-    if not version:
+    if not selected_version:
         raise ValueError("Flutter release archive has no version")
+    if not selected_hash:
+        raise ValueError("Flutter release archive has no hash")
     return {
         "archive": archive,
-        "hash": release_hash,
+        "hash": selected_hash,
         "sha256": checksum,
-        "version": version,
+        "version": selected_version,
     }
 
 
@@ -87,7 +103,10 @@ def resolve(args: argparse.Namespace) -> int:
         )
     manifest_url = f"{MANIFEST_BASE_URL}/releases_{runner_os}.json"
     release = select_current_release(
-        _download_json(manifest_url), channel=args.channel, architecture=architecture
+        _download_json(manifest_url),
+        channel=args.channel,
+        architecture=architecture,
+        version=args.version,
     )
     tool_cache = Path(args.tool_cache).resolve()
     cache_path = tool_cache / "quwoquan-flutter" / f"{release['hash']}-{architecture}"
@@ -164,6 +183,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     resolve_parser = subparsers.add_parser("resolve")
     resolve_parser.add_argument("--channel", default="stable")
+    resolve_parser.add_argument("--version")
     resolve_parser.add_argument("--os", default=os.environ.get("RUNNER_OS", sys.platform))
     resolve_parser.add_argument(
         "--architecture", default=os.environ.get("RUNNER_ARCH", "x64")
