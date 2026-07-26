@@ -159,7 +159,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
     def test_constrained_host_policy_never_removes_volumes(self) -> None:
         spec, _ = prevalidate.load_projection()
         self.assertEqual(spec["capacityStrategy"], "constrained-single-host")
-        reclaim = spec["legacyReclaimPolicy"]
+        reclaim = spec["staleRuntimeReclaimPolicy"]
         self.assertTrue(reclaim["enabled"])
         self.assertFalse(reclaim["removeVolumes"])
         self.assertIn("quwoquan-data-recovery-mongodb", reclaim["preservedContainers"])

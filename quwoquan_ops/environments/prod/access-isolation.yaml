@@ -51,7 +51,7 @@ prevalidation:
     containerEffectiveFreeBytes: 6442450944
     postReclaimContainerFreeBytes: 6442450944
     architectures: [x86_64, amd64]
-  legacyReclaimPolicy:
+  staleRuntimeReclaimPolicy:
     enabled: true
     plane: service
     containerNamePrefixes: [quwoquan-service-prod_]
