@@ -23,6 +23,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.output_paths import deployment_target_path
+from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
 
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
@@ -74,13 +75,10 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def _resolve_prod_host(override: str | None) -> str:
-    if override:
-        return override
-    access = _load_yaml(ACCESS_MANIFEST)
-    host = str(access.get("sshHost") or "").strip()
-    if not host:
-        raise SystemExit("FAIL: prod access-isolation 缺少独立 sshHost")
-    return host
+    try:
+        return prod_management_ssh_host(override=override)
+    except RuntimeError as error:
+        raise SystemExit(f"FAIL: {error}") from error
 
 
 def _load_account_specs(key_dir: Path) -> list[ProdAccountSpec]:
@@ -569,7 +567,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--host",
         default=None,
-        help="覆盖 prod-hosted SSH host；默认读取 prod/access-isolation.yaml sshHost",
+        help="覆盖 prod-hosted SSH host；默认读取 prod/access-isolation.yaml management.sshHost",
     )
     parser.add_argument(
         "--include-relay",

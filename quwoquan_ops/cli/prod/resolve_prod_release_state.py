@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
+from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
+
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 
 
@@ -38,17 +41,12 @@ def _load_yaml(path: Path) -> dict:
     return payload
 
 
-def _resolve_prod_host(access: dict) -> str:
-    env_host = os.environ.get("PROD_SSH_HOST", "").strip()
-    if env_host:
-        return env_host
-    host = str(access.get("sshHost") or "").strip()
-    if not host:
-        raise RuntimeError("访问隔离映射缺少 sshHost，请设置 PROD_SSH_HOST")
-    return host
+def _resolve_prod_host(topology: dict) -> str:
+    del topology
+    return prod_management_ssh_host()
 
 
-def _resolve_service_plane(access: dict, instance_suffix: str) -> ServicePlaneAccess:
+def _resolve_service_plane(access: dict, topology: dict, instance_suffix: str) -> ServicePlaneAccess:
     planes = access.get("planes") or []
     service_plane = None
     for plane in planes:
@@ -69,7 +67,7 @@ def _resolve_service_plane(access: dict, instance_suffix: str) -> ServicePlaneAc
     if not services:
         raise RuntimeError("service 平面缺少 governed compose services")
     return ServicePlaneAccess(
-        host=_resolve_prod_host(access),
+        host=_resolve_prod_host(topology),
         account=account,
         ssh_key_secret=ssh_key_secret,
         instance_suffix=instance_suffix,
@@ -192,6 +190,7 @@ def main() -> int:
     try:
         access = _resolve_service_plane(
             _load_yaml(ACCESS_MANIFEST),
+            load_environment_topology(),
             args.instance_suffix,
         )
         payload = _run_remote_probe(access)

@@ -17,6 +17,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
+
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh" / "quwoquan-prod"
 
@@ -51,14 +53,10 @@ def _resolve_plane_spec(plane_name: str) -> dict:
 
 
 def _resolve_host(override: str) -> str:
-    explicit = override or os.environ.get("PROD_SSH_HOST", "").strip()
-    if explicit:
-        return explicit
-    access = _load_yaml(ACCESS_MANIFEST)
-    host = str(access.get("sshHost") or "").strip()
-    if not host:
-        raise SystemExit("FAIL: prod access-isolation is missing sshHost")
-    return host
+    try:
+        return prod_management_ssh_host(override=override)
+    except RuntimeError as error:
+        raise SystemExit(f"FAIL: {error}") from error
 
 
 def _resolve_key_source(secret_name: str, account: str, key_dir: Path) -> tuple[list[str], str]:

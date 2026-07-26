@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,11 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
+
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh/quwoquan-prod"
 OCI_DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
@@ -29,13 +35,6 @@ class PlaneSpec:
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-
-
-def _default_host() -> str:
-    host = str(_load_yaml(ACCESS_MANIFEST).get("sshHost") or "").strip()
-    if not host:
-        raise SystemExit("FAIL: prod access-isolation is missing sshHost")
-    return host
 
 
 def _plane_spec(plane_name: str) -> PlaneSpec:
@@ -262,7 +261,7 @@ def parse_args() -> argparse.Namespace:
         description="Load local Docker service images into a prod plane rootless Podman store.",
     )
     parser.add_argument("--plane", default="service")
-    parser.add_argument("--host", default="")
+    parser.add_argument("--host", default=prod_management_ssh_host())
     parser.add_argument("--key-dir", type=Path, default=DEFAULT_KEY_DIR)
     parser.add_argument("--services", default="")
     parser.add_argument(
@@ -285,7 +284,6 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    args.host = args.host.strip() or _default_host()
     plane = _plane_spec(args.plane)
     requested = [item.strip() for item in args.services.split(",") if item.strip()]
     governed = list(plane.governed_services)
