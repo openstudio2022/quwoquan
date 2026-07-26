@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,6 +29,16 @@ def load_policy() -> tuple[set[str], set[str]]:
     allowed_local = {str(name).strip() for name in payload.get("allowed_local_branches", []) if str(name).strip()}
     allowed_remote = {str(name).strip() for name in payload.get("allowed_remote_branches", []) if str(name).strip()}
     return allowed_local, allowed_remote
+
+
+def pull_request_branch_from_environment(environment: dict[str, str]) -> str | None:
+    """Return the reviewed source branch for GitHub's detached PR merge checkout."""
+    if environment.get("GITHUB_ACTIONS") != "true":
+        return None
+    if environment.get("GITHUB_EVENT_NAME") != "pull_request":
+        return None
+    head_ref = environment.get("GITHUB_HEAD_REF", "").strip()
+    return head_ref or None
 
 
 def branch_policy_issues(
@@ -65,7 +76,7 @@ def current_repo_issues() -> list[str]:
     try:
         current_branch = _run_git("symbolic-ref", "--quiet", "--short", "HEAD")[0]
     except (subprocess.CalledProcessError, IndexError):
-        current_branch = None
+        current_branch = pull_request_branch_from_environment(dict(os.environ))
     return branch_policy_issues(
         allowed_local=allowed_local,
         allowed_remote=allowed_remote,
