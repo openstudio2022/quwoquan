@@ -231,8 +231,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.portal == 'true' }}
-    env:
-      QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -249,6 +247,8 @@ jobs:
           cache: npm
           cache-dependency-path: quwoquan_ops/portal/package-lock.json
       - name: Gate (ops-portal)
+        env:
+          QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope portal
       - id: finish
