@@ -23,6 +23,24 @@ func newFilterCatalogAPI(
 	t *testing.T,
 ) (http.Handler, *filtercatalogpersistence.MongoStore) {
 	t.Helper()
+	handler, store := newFilterCatalogObjectHandler(t)
+	base := handler.Route(http.NotFoundHandler())
+	return requireFilterCatalogAuthorization(base), store
+}
+
+func newFilterCatalogDirectStageAPI(
+	t *testing.T,
+) (http.Handler, *filtercatalogpersistence.MongoStore) {
+	t.Helper()
+	handler, store := newFilterCatalogObjectHandler(t)
+	base := http.HandlerFunc(handler.Stage)
+	return requireFilterCatalogAuthorization(base), store
+}
+
+func newFilterCatalogObjectHandler(
+	t *testing.T,
+) (*filtercataloghttp.Handler, *filtercatalogpersistence.MongoStore) {
+	t.Helper()
 	cleanFilterCatalogCollections(t)
 	t.Cleanup(func() { cleanFilterCatalogCollections(t) })
 	store := filtercatalogpersistence.NewMongoStore(requireFilterCatalogMongoDB(t))
@@ -33,12 +51,16 @@ func newFilterCatalogAPI(
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := filtercataloghttp.NewHandler(
+	handler := filtercataloghttp.NewHandler(
 		filtercatalogapp.BindFacades(service),
-	).Route(http.NotFoundHandler())
+	)
+	return handler, store
+}
+
+func requireFilterCatalogAuthorization(base http.Handler) http.Handler {
 	return rtauth.RequireGeneratedOperationAuthorization(
 		operationsecurity.ForDomain("content"),
-	)(base), store
+	)(base)
 }
 
 func validFilterCatalogStageFixture(
