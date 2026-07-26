@@ -9,6 +9,7 @@ from unittest import mock
 
 from quwoquan_ops.cli.prod import collect_mainline_image_descriptors as collector
 from quwoquan_ops.cli.prod import fetch_mainline_release_artifact as fetcher
+from quwoquan_ops.cli.prod import load_prod_plane_images as image_loader
 
 
 class MainlineReleaseOCITransportContractTest(unittest.TestCase):
@@ -85,6 +86,76 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
         with mock.patch.object(fetcher, "run", side_effect=results):
             resolved = fetcher.discover("owner/repo", "c" * 40)
         self.assertEqual(resolved, digest_ref)
+
+    def test_release_transport_pins_linux_amd64_on_arm_hosts(self) -> None:
+        digest_ref = (
+            "ghcr.io/owner/repo/release-artifact@sha256:" + ("d" * 64)
+        )
+        calls: list[list[str]] = []
+
+        def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+            calls.append(argv)
+            if argv[1:3] == ["image", "inspect"]:
+                return subprocess.CompletedProcess(
+                    argv,
+                    0,
+                    stdout=json.dumps([digest_ref]),
+                    stderr="",
+                )
+            if argv[1] == "create":
+                return subprocess.CompletedProcess(
+                    argv,
+                    0,
+                    stdout="release-container\n",
+                    stderr="",
+                )
+            if argv[1] == "cp":
+                Path(argv[-1]).joinpath("manifest.json").write_text(
+                    "{}",
+                    encoding="utf-8",
+                )
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            fetcher,
+            "run",
+            side_effect=fake_run,
+        ):
+            fetcher.fetch(digest_ref, Path(tmp) / "release")
+
+        self.assertIn(
+            ["docker", "pull", "--platform", "linux/amd64", digest_ref],
+            calls,
+        )
+        self.assertIn(
+            ["docker", "create", "--platform", "linux/amd64", digest_ref],
+            calls,
+        )
+
+    def test_service_image_pull_pins_linux_amd64(self) -> None:
+        source_ref = "ghcr.io/owner/repo/content-service@sha256:" + ("e" * 64)
+        target_ref = "localhost/quwoquan_service_content-service:1.2.3"
+        completed = subprocess.CompletedProcess(
+            ["docker"],
+            0,
+            stdout="",
+            stderr="",
+        )
+        with mock.patch.object(
+            image_loader.subprocess,
+            "run",
+            return_value=completed,
+        ) as run_mock:
+            image_loader._pull_and_tag_release_image(
+                source_ref,
+                target_ref,
+                platform="linux/amd64",
+            )
+
+        self.assertEqual(
+            run_mock.call_args_list[0].args[0],
+            ["docker", "pull", "--platform", "linux/amd64", source_ref],
+        )
 
 
 if __name__ == "__main__":
