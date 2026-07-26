@@ -300,13 +300,14 @@ void main() {
           splitSurfaceEnd,
         );
         for (final marker in <String>[
-          'coveredWidthNormalized',
-          'totalRectoVisibleWidthNormalized',
+          'sheetRectoCoverageNormalized',
+          'resolveBackwardCanonicalSheetFaces(',
           "'article_backward_flipping_recto_slice'",
           "'article_backward_flipping_verso_slice'",
           'ArticlePageSurfaceKind.front',
           'ArticlePageSurfaceKind.back',
-          '_buildBackwardSheetFaceSlice(',
+          '_buildBackwardSheetFacePolygon(',
+          'ArticlePolygonClipper(polygon)',
         ]) {
           expect(
             splitSurfaceSource,
@@ -350,7 +351,7 @@ void main() {
         );
         expect(
           backwardSoftLayerSource,
-          contains('_buildBackwardSheetFaceSlice('),
+          contains('_buildBackwardSheetFacePolygon('),
           reason: 'BACK host must paint both faces within one moving sheet.',
         );
         expect(

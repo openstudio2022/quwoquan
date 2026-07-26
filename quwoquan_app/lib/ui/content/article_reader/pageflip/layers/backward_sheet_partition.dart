@@ -30,6 +30,7 @@ class BackwardCanonicalSheetInput {
     required this.sheetLocalFoldLine,
     required this.sheetLocalFreeEdgeLine,
     required this.currentResidualPagePolygon,
+    this.rectoCoverageNormalized = 0.5,
   });
 
   final Size pageSize;
@@ -38,6 +39,12 @@ class BackwardCanonicalSheetInput {
   final BackwardPageLine? sheetLocalFoldLine;
   final BackwardPageLine? sheetLocalFreeEdgeLine;
   final List<Offset> currentResidualPagePolygon;
+
+  /// Moving-sheet fraction owned by the previous-page recto, measured from
+  /// the fold-facing edge toward the free edge. The leaf frame owns this
+  /// semantic progression; this resolver only orients the split along the
+  /// canonical fold/free-edge geometry.
+  final double rectoCoverageNormalized;
 }
 
 @immutable
@@ -192,6 +199,7 @@ BackwardCanonicalSheetFaces resolveBackwardCanonicalSheetFaces(
     sheetLocalPolygon: sheetLocalPolygon,
     foldLine: foldLine,
     freeEdgeLine: rawFreeEdgeLine,
+    rectoCoverageNormalized: input.rectoCoverageNormalized,
   );
   final versoProbe = _farthestSheetPointTowardFree(
     sheetLocalPolygon: sheetLocalPolygon,
@@ -213,18 +221,26 @@ BackwardCanonicalSheetFaces resolveBackwardCanonicalSheetFaces(
     keepPositiveSide: keepVersoSide,
   );
 
-  final rectoFailure = _isVisibleFace(recto.localPolygon)
+  final rectoVisible = _isVisibleFace(recto.localPolygon);
+  final versoVisible = _isVisibleFace(verso.localPolygon);
+  final rectoFailure = rectoVisible
       ? BackwardCanonicalFaceFailureReason.none
       : BackwardCanonicalFaceFailureReason.faceEmpty;
-  final versoFailure = _isVisibleFace(verso.localPolygon)
+  final versoFailure = versoVisible
       ? BackwardCanonicalFaceFailureReason.none
       : BackwardCanonicalFaceFailureReason.faceEmpty;
-  final paintedUnion =
-      recto.localPolygon.isNotEmpty || verso.localPolygon.isNotEmpty
+  final rectoLocalPolygon = rectoVisible
+      ? recto.localPolygon
+      : const <Offset>[];
+  final rectoAreaPolygon = rectoVisible ? recto.areaPolygon : const <Offset>[];
+  final versoLocalPolygon = versoVisible
+      ? verso.localPolygon
+      : const <Offset>[];
+  final versoAreaPolygon = versoVisible ? verso.areaPolygon : const <Offset>[];
+  final paintedUnion = rectoVisible || versoVisible
       ? sheetLocalPolygon
       : const <Offset>[];
-  final paintedUnionArea =
-      recto.areaPolygon.isNotEmpty || verso.areaPolygon.isNotEmpty
+  final paintedUnionArea = rectoVisible || versoVisible
       ? sheetAreaPolygon
       : const <Offset>[];
 
@@ -236,30 +252,26 @@ BackwardCanonicalSheetFaces resolveBackwardCanonicalSheetFaces(
           pageSize: input.pageSize,
           currentResidualPagePolygon: currentResidualPagePolygon,
         ),
-    previousBackVersoSheetPolygon: List<Offset>.unmodifiable(
-      verso.localPolygon,
-    ),
+    previousBackVersoSheetPolygon: List<Offset>.unmodifiable(versoLocalPolygon),
     previousBackVersoSheetAreaPolygon: List<Offset>.unmodifiable(
-      verso.areaPolygon,
+      versoAreaPolygon,
     ),
     previousFrontRectoLocalPolygon: List<Offset>.unmodifiable(
-      recto.localPolygon,
+      rectoLocalPolygon,
     ),
-    previousFrontRectoAreaPolygon: List<Offset>.unmodifiable(recto.areaPolygon),
-    previousBackVersoLocalPolygon: List<Offset>.unmodifiable(
-      verso.localPolygon,
-    ),
-    previousBackVersoAreaPolygon: List<Offset>.unmodifiable(verso.areaPolygon),
+    previousFrontRectoAreaPolygon: List<Offset>.unmodifiable(rectoAreaPolygon),
+    previousBackVersoLocalPolygon: List<Offset>.unmodifiable(versoLocalPolygon),
+    previousBackVersoAreaPolygon: List<Offset>.unmodifiable(versoAreaPolygon),
     paintedUnionLocalPolygon: List<Offset>.unmodifiable(paintedUnion),
     paintedUnionAreaPolygon: List<Offset>.unmodifiable(paintedUnionArea),
     currentResidualPagePolygon: currentResidualPagePolygon,
     sheetLocalFoldLine: foldLine,
     sheetLocalFreeEdgeLine: rawFreeEdgeLine,
-    rectoArea: _polygonArea(recto.localPolygon),
-    versoArea: _polygonArea(verso.localPolygon),
+    rectoArea: _polygonArea(rectoLocalPolygon),
+    versoArea: _polygonArea(versoLocalPolygon),
     rectoVersoOverlap: _polygonIntersectionArea(
-      recto.localPolygon,
-      verso.localPolygon,
+      rectoLocalPolygon,
+      versoLocalPolygon,
     ),
     failureReason: BackwardCanonicalSheetFailureReason.none,
     rectoFailureReason: rectoFailure,
@@ -293,6 +305,7 @@ BackwardPageLine _resolveCanonicalFaceSplitLine({
   required List<Offset> sheetLocalPolygon,
   required BackwardPageLine foldLine,
   required BackwardPageLine freeEdgeLine,
+  required double rectoCoverageNormalized,
 }) {
   final bounds = polygonBounds(sheetLocalPolygon);
   if (bounds == null || bounds.width <= 0.0001 || bounds.height <= 0.0001) {
@@ -319,7 +332,8 @@ BackwardPageLine _resolveCanonicalFaceSplitLine({
   if (span <= 0.0001) {
     return foldLine;
   }
-  final splitDistance = ((minDistance + maxDistance) / 2)
+  final rectoCoverage = rectoCoverageNormalized.clamp(0.0, 1.0).toDouble();
+  final splitDistance = (minDistance + span * rectoCoverage)
       .clamp(minDistance, maxDistance)
       .toDouble();
   return _offsetLineToward(

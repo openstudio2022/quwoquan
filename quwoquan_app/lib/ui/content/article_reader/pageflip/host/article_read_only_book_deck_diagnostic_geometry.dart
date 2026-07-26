@@ -389,7 +389,10 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
     final positionViewport = convertBookPointToViewport(
       surfaceOrigin,
       bounds,
-      direction: softLayerViewportDirection(direction),
+      // Diagnostics must consume the exact Route-B geometry projection used
+      // by paint. Semantic BACK still owns page binding; its portrait visual
+      // anchor is forward-isomorphic.
+      direction: softLayerViewportDirection(geometryDirection),
     );
     final localClipPolygon = _localPolygonFromArea(
       area: area,
@@ -484,33 +487,53 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
     final angle = frame.angle;
     final visualGeometryDirection = frame.visualGeometryDirection;
     final projected = frame.backwardProjectedFrame;
-    final sheetMaterialLocalPolygon = pageRectPolygon(pageSize);
+    final sheetMaterialLocalPolygon = pageRectPolygon(
+      pageSize,
+    ).map((point) => point - softGeometry.paintOrigin).toList(growable: false);
     final currentResidualPagePolygon = frame.bottomClipArea.length >= 3
         ? List<Offset>.unmodifiable(frame.bottomClipArea)
         : const <Offset>[];
     final sheetContentLocalPolygon = sheetLocalPolygon
         .map((point) => point - softGeometry.paintOrigin)
         .toList(growable: false);
-    final coveredWidth = (leafFrame.coveredWidthNormalized * pageSize.width)
-        .clamp(0.0, pageSize.width)
-        .toDouble();
-    final rectoWidth =
-        (leafFrame.totalRectoVisibleWidthNormalized * pageSize.width)
-            .clamp(0.0, coveredWidth)
-            .toDouble();
-    final rectoLocalPolygon = _clipBackwardSheetLocalSlice(
-      sheetContentLocalPolygon,
-      pageSize: pageSize,
-      left: 0,
-      right: rectoWidth,
+    _PageLine? toContentLocalLine(_PageLine? line) {
+      if (line == null) {
+        return null;
+      }
+      return (
+        _localPointFromAreaPoint(
+              point: line.$1,
+              anchor: softGeometry.surfaceOrigin,
+              angle: angle,
+              direction: visualGeometryDirection,
+            ) -
+            softGeometry.paintOrigin,
+        _localPointFromAreaPoint(
+              point: line.$2,
+              anchor: softGeometry.surfaceOrigin,
+              angle: angle,
+              direction: visualGeometryDirection,
+            ) -
+            softGeometry.paintOrigin,
+      );
+    }
+
+    final faces = resolveBackwardCanonicalSheetFaces(
+      BackwardCanonicalSheetInput(
+        pageSize: pageSize,
+        sheetLocalPolygon: sheetContentLocalPolygon,
+        sheetAreaPolygon: sheetContentLocalPolygon,
+        sheetLocalFoldLine: toContentLocalLine(projected?.foldLine),
+        sheetLocalFreeEdgeLine: toContentLocalLine(
+          projected?.projectedRightEdgeLine,
+        ),
+        currentResidualPagePolygon: currentResidualPagePolygon,
+        rectoCoverageNormalized: leafFrame.sheetRectoCoverageNormalized,
+      ),
     );
-    final versoLocalPolygon = _clipBackwardSheetLocalSlice(
-      sheetContentLocalPolygon,
-      pageSize: pageSize,
-      left: rectoWidth,
-      right: coveredWidth,
-    );
-    final paintedUnionLocalPolygon = sheetContentLocalPolygon;
+    final rectoLocalPolygon = faces.previousFrontRectoLocalPolygon;
+    final versoLocalPolygon = faces.previousBackVersoLocalPolygon;
+    final paintedUnionLocalPolygon = faces.paintedUnionLocalPolygon;
     final pageViewportOrigin = _backwardPageRect(scene).topLeft;
     final rectoViewportPolygon = transformSoftLayerContentLocalPolygon(
       polygon: rectoLocalPolygon,
@@ -574,27 +597,6 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
       currentResidualViewportBounds: polygonBounds(
         currentResidualViewportPolygon,
       ),
-    );
-  }
-
-  List<Offset> _clipBackwardSheetLocalSlice(
-    List<Offset> sheetLocalPolygon, {
-    required Size pageSize,
-    required double left,
-    required double right,
-  }) {
-    if (right - left <= 0.001) {
-      return const <Offset>[];
-    }
-    final clippedAtRight = clipPolygonByLine(
-      polygon: sheetLocalPolygon,
-      line: (Offset(right, 0), Offset(right, pageSize.height)),
-      keepPositiveSide: true,
-    );
-    return clipPolygonByLine(
-      polygon: clippedAtRight,
-      line: (Offset(left, 0), Offset(left, pageSize.height)),
-      keepPositiveSide: false,
     );
   }
 

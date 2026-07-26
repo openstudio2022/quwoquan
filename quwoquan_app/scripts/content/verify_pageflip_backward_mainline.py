@@ -17,8 +17,8 @@ This script enforces the architectural rules in
 4. `_localPolygonFromArea` MUST contain the StPageFlip BACK drawSoft formula
    `anchor.dx - point.dx`, while forward keeps `point.dx - anchor.dx`.
 5. BACK flipping sheet must split recto/front and verso/back inside the same
-   soft surface from StPageFlip F/E/clip geometry; diagnostics must expose
-   both polygons from the same geometry.
+   soft surface through the canonical StPageFlip F/E polygon resolver;
+   diagnostics must expose both polygons from the same geometry.
 6. `_resolveBackwardDisplayPosition` and the `pageViewportRect` parameter on
    the deprecated soft helper MUST NOT exist anywhere in pageflip code.
 7. `ArticlePageBackwardProjectedFrame` must NOT re-introduce polygon fields.
@@ -471,9 +471,11 @@ def _check_recto_verso_split_in_host() -> list[str]:
         )
     else:
         for marker in (
-            "coveredWidthNormalized",
-            "totalRectoVisibleWidthNormalized",
-            "_buildBackwardSheetFaceSlice(",
+            "resolveBackwardCanonicalSheetFaces(",
+            "BackwardCanonicalSheetInput(",
+            "rectoCoverageNormalized:",
+            "sheetRectoCoverageNormalized",
+            "_buildBackwardSheetFacePolygon(",
             "ArticlePageSurfaceKind.front",
             "ArticlePageSurfaceKind.back",
             "article_backward_flipping_recto_slice",

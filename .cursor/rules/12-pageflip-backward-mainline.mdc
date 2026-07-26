@@ -46,9 +46,9 @@ alwaysApply: true
 
 L1 内部分段是同一张纸的分段，不是新增独立平面：
 
-- **recto/front**：来自 `ArticlePageBackwardLeafFrame.totalRectoVisibleWidthNormalized`，在 spine side 显示 `pages[flippingPageIndex]` front。
-- **verso/back**：来自 `ArticlePageBackwardLeafFrame.coveredWidthNormalized - totalRectoVisibleWidthNormalized`，显示 `pages[flippingPageIndex]` back。
-- 两者必须共享同一个外层 `Positioned + Transform.rotate + ClipPath(frame.flippingClipArea)`；内部 slice 使用正向 sheet-local 区间 `[0, rectoW]` / `[rectoW, coveredW]`，禁止把 BACK `anchor.dx - p.dx` 的负 X 结果直接当作 `Positioned` 子块裁掉。
+- **recto/front**：来自 `ArticlePageBackwardLeafFrame.sheetRectoCoverageNormalized`，由 canonical fold/free-edge 几何沿 material-space 方向切分，在 spine side 显示 `pages[flippingPageIndex]` front。
+- **verso/back**：来自同一 canonical moving-sheet polygon 的互补分区，显示 `pages[flippingPageIndex]` back。
+- 两者必须共享同一个外层 `Positioned + Transform.rotate + ClipPath(frame.flippingClipArea)`；内部必须通过 `resolveBackwardCanonicalSheetFaces` 对同一 sheet-local polygon 做互补 `ClipPath`，禁止把 page-space 宽度直接当作独立 `Positioned` 子块或把 BACK `anchor.dx - p.dx` 的负 X 结果裁掉。
 
 `bottomLayerPageIndex == currentPageIndex`，`flippingLayerPageIndex == currentPageIndex - 1`。
 
@@ -70,7 +70,7 @@ L1 内部分段是同一张纸的分段，不是新增独立平面：
 | BACK viewport position | `convertBookPointToViewport(anchor, bounds, direction: back)` | `_buildSoftPageLayer` / diagnostics |
 | BACK local clip | `Offset(anchor.dx - point.dx, point.dy - anchor.dy)` | `_localPolygonFromArea` / diagnostics |
 | `foldLine` / `projectedRightEdgeLine` | BACK calc `canonicalFoldGeometry` | `ArticlePageBackwardProjectedFrame`（诊断） |
-| recto/verso 分段宽度 | `ArticlePageBackwardLeafFrame` | `_buildSoftFlippingPageSurface` / `_resolveBackwardDiagnosticGeometry` |
+| recto/verso material 分区 | `ArticlePageBackwardLeafFrame.sheetRectoCoverageNormalized` + `resolveBackwardCanonicalSheetFaces` | `_buildSoftFlippingPageSurface` / `_resolveBackwardDiagnosticGeometry` |
 
 ## 禁止（一旦违反，门禁 BLOCK）
 
@@ -85,7 +85,7 @@ L1 内部分段是同一张纸的分段，不是新增独立平面：
 - 禁止 BACK flipping sheet 的投影位置根据 `rectoCoverageNormalized` 或 recto 是否出现发生离散切换；否则会出现背面消失、正面跳出的非折纸效果。
 - 禁止 `_singlePageBackwardFlippingDisplayOffset` 或等价 screen-space display offset 参与 BACK 真实渲染/diagnostics；刚开始后翻的可见性必须来自 BACK calculation 输入点和 clip area。
 - 禁止 `article_backward_previous_front_baseline` / `_buildBackwardPreviousFrontBaselineLayer` 回归；它会在后翻开始阶段用前一页正面替换当前页。
-- 禁止用独立 `Positioned` 平面铺 front/back 两块；front/back 必须在同一个 moving sheet surface 内通过 clip 分段。
+- 禁止用独立外层 `Positioned` 平面铺 front/back 两块；front/back 必须在同一个 moving sheet surface 内通过 canonical polygon clip 分段。
 - 禁止把任何旁路推导出来的 polygon / rect / line 当作 BACK 视觉的"真相源"用于诊断或测试断言。
 
 ## 必须
@@ -97,7 +97,7 @@ L1 内部分段是同一张纸的分段，不是新增独立平面：
 - BACK 方向的 `backwardFoldX` 推进、layer 角色稳定（`bottomLayer = current`、`flippingLayer = current-1`）必须由 `ArticleReadOnlyBookDebugState.backward*` 字段承载；contract / widget / visual 测试必须断言这些字段。
 - host soft layer 必须按 `visualGeometryDirection` 消费 `clip/anchor/angle`，但页面绑定、suppression 和 texture binding 必须按 semantic `direction == back`。
 - `_localPolygonFromArea` 必须同时包含 `anchor.dx - point.dx`（BACK）与 `point.dx - anchor.dx`（forward）。
-- `_buildSoftFlippingPageSurface` 的 BACK 分支必须接收 `ArticlePageBackwardLeafFrame` 并调用同一 sheet 内 recto/verso split；diagnostics 的 `previousFrontLocalPolygon` / `previousBackLocalPolygon` 必须同源输出。
+- `_buildSoftFlippingPageSurface` 的 BACK 分支必须接收 `ArticlePageBackwardLeafFrame`，并调用 `resolveBackwardCanonicalSheetFaces` 完成同一 sheet 内 recto/verso polygon split；diagnostics 的 `previousFrontLocalPolygon` / `previousBackLocalPolygon` 必须调用同一 resolver 同源输出。
 - BACK texture binding 必须为 `recto=flippingPageIndex`、`verso=flippingPageIndex`、`bottom=currentPageIndex`；current page 不得进入 BACK static suppression。
 - 新增 BACK 测试必须断言：single-page portrait 的 previous moving sheet 与 visible current page 有正面积交集，且不能整体落在当前页左边界外；后段还必须同时观测到 front/back/current 三段。
 

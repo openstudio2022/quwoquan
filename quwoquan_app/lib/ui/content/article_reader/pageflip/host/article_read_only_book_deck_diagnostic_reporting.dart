@@ -282,11 +282,24 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
       pageRect,
     );
 
-    final backBoundsViewport =
-        backwardDiagnosticGeometry?.versoViewportBounds ??
-        (backwardSurfaceShowsBack ? backwardFoldSurfaceBounds : null);
+    final visibleBackViewportPolygon = _clipDiagnosticPolygonToRect(
+      backwardDiagnosticGeometry?.versoViewportPolygon ?? const <Offset>[],
+      pageRect,
+    );
+    final visibleFrontViewportPolygon = _clipDiagnosticPolygonToRect(
+      backwardDiagnosticGeometry?.rectoViewportPolygon ?? const <Offset>[],
+      pageRect,
+    );
+    final paintedUnionViewportPolygon = _clipDiagnosticPolygonToRect(
+      backwardDiagnosticGeometry?.paintedUnionViewportPolygon ??
+          const <Offset>[],
+      pageRect,
+    );
+    final backBoundsViewport = backwardDiagnosticGeometry != null
+        ? polygonBounds(visibleBackViewportPolygon)
+        : (backwardSurfaceShowsBack ? backwardFoldSurfaceBounds : null);
     final backwardBackFoldBounds = backBoundsViewport;
-    final frontBoundsViewport = backwardDiagnosticGeometry?.rectoViewportBounds;
+    final frontBoundsViewport = polygonBounds(visibleFrontViewportPolygon);
     final backwardFrontFoldVisible = frontBoundsViewport != null;
     final backwardFrontFoldBounds = backwardFrontFoldVisible
         ? frontBoundsViewport
@@ -367,17 +380,10 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
       );
     }
 
-    final visibleFrontViewportPolygon =
-        backwardDiagnosticGeometry?.rectoViewportPolygon ?? const <Offset>[];
     final visibleFrontViewportBounds = polygonBounds(
       visibleFrontViewportPolygon,
     );
-    final visibleBackViewportPolygon =
-        backwardDiagnosticGeometry?.versoViewportPolygon ?? const <Offset>[];
     final visibleBackViewportBounds = polygonBounds(visibleBackViewportPolygon);
-    final paintedUnionViewportPolygon =
-        backwardDiagnosticGeometry?.paintedUnionViewportPolygon ??
-        const <Offset>[];
     final paintedUnionViewportBounds = polygonBounds(
       paintedUnionViewportPolygon,
     );
@@ -469,7 +475,7 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
         ? const <Offset>[]
         : backwardVersoProbe.localPoints
               .map(
-                (point) => transformSoftLayerLocalPoint(
+                (point) => transformSoftLayerContentLocalPoint(
                   point: point,
                   geometry: backwardDiagnosticGeometry.softGeometry,
                 ),
@@ -499,6 +505,8 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
         ? null
         : backwardVisibleBackProbePoints.isEmpty
         ? 0.0
+        : backwardVisibleBackProbePoints.length == 1
+        ? backwardBackBounds.width
         : polygonBounds(backwardVisibleBackProbePoints)?.width ??
               backwardBackBounds.width;
     final backwardBackVisibleProbeCount = backwardBackBounds == null
@@ -801,6 +809,32 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
           : null,
       backwardFoldDirection: backwardFoldDirection,
       guideX: _resolveDiagnosticGuideX(pageRect: pageRect, scene: scene),
+    );
+  }
+
+  List<Offset> _clipDiagnosticPolygonToRect(List<Offset> polygon, Rect rect) {
+    if (polygon.length < 3 || rect.isEmpty) {
+      return const <Offset>[];
+    }
+    var clipped = clipPolygonByLine(
+      polygon: polygon,
+      line: (rect.topLeft, rect.bottomLeft),
+      keepPositiveSide: false,
+    );
+    clipped = clipPolygonByLine(
+      polygon: clipped,
+      line: (rect.topRight, rect.bottomRight),
+      keepPositiveSide: true,
+    );
+    clipped = clipPolygonByLine(
+      polygon: clipped,
+      line: (rect.topLeft, rect.topRight),
+      keepPositiveSide: true,
+    );
+    return clipPolygonByLine(
+      polygon: clipped,
+      line: (rect.bottomLeft, rect.bottomRight),
+      keepPositiveSide: false,
     );
   }
 }

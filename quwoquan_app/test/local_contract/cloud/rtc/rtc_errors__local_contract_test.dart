@@ -101,8 +101,8 @@ void main() {
       expect(code, isNull);
     });
 
-    test('enum 总数 = 18（含 media_transport_unavailable 与 account_security_*）', () {
-      expect(RtcErrorCode.values.length, 18);
+    test('enum 总数 = 19（含 invalid_call_action 与 account_security_*）', () {
+      expect(RtcErrorCode.values.length, 19);
     });
 
     test('关系门禁错误码已贯通端侧', () {
