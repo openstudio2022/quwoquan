@@ -167,7 +167,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           channel: stable
-          cache: true
+          cache: false
       - name: Gate (quwoquan_app)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope app
@@ -223,7 +223,6 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "20.19.0"
-          cache: npm
       - name: Gate (ops-portal)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope portal
@@ -325,7 +324,7 @@ jobs:
           fi
           echo "result=success" >> "$GITHUB_OUTPUT"
       - name: Upload delivery gate timing summary
-        if: always()
+        if: ${{ always() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -333,3 +332,4 @@ jobs:
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/delivery-gate-summary.json
           if-no-files-found: error
           compression-level: 0
+          retention-days: 3

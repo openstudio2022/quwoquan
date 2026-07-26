@@ -47,6 +47,32 @@ def test_branch_policy_rejects_local_main_branch() -> None:
     assert any("unexpected local branches: main" in issue for issue in issues)
 
 
+def test_branch_policy_accepts_github_pr_merge_checkout_for_dev1_source() -> None:
+    issues = branch_policy_issues(
+        allowed_local={"dev1.0"},
+        allowed_remote={"dev1.0", "main"},
+        local_branches=["dev1.0"],
+        remote_branches=["dev1.0", "main"],
+        current_branch=None,
+        ci_head_branch="dev1.0",
+    )
+
+    assert issues == []
+
+
+def test_branch_policy_rejects_detached_checkout_without_dev1_ci_source() -> None:
+    issues = branch_policy_issues(
+        allowed_local={"dev1.0"},
+        allowed_remote={"dev1.0", "main"},
+        local_branches=["dev1.0"],
+        remote_branches=["dev1.0", "main"],
+        current_branch=None,
+        ci_head_branch="feature/unsafe",
+    )
+
+    assert any("detached HEAD" in issue for issue in issues)
+
+
 def test_branch_policy_rejects_extra_remote_branch() -> None:
     issues = branch_policy_issues(
         allowed_local={"dev1.0"},
