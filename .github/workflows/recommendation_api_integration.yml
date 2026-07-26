@@ -62,8 +62,9 @@ jobs:
             fi
           done
       - name: Upload log
-        if: always()
+        if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: recommendation-api-integration-log
           path: quwoquan_service/api_integration.log
+          retention-days: 3

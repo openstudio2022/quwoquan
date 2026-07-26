@@ -190,12 +190,13 @@ jobs:
           fi
           make verify-ml-model-quality ML_DRY_RUN="$DRY_RUN_FLAG"
       - name: Upload report
-        if: always()
+        if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: eval-report
           path: |
             .qwq_output/env/repo/runs/ml/eval_report_*.json
+          retention-days: 14
 
   promote:
     name: "4. Promote Models"
@@ -260,13 +261,14 @@ jobs:
             exit 1
           fi
       - name: Upload monitoring reports
-        if: always()
+        if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: rec-monitoring-reports
           path: |
             quwoquan_service/guardrail_report.json
             quwoquan_service/drift_report.json
+          retention-days: 14
 
   notify:
     name: "6. Summary"

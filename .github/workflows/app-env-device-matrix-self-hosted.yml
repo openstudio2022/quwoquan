@@ -831,16 +831,18 @@ jobs:
           fi
       - name: Upload mobile matrix report
         id: upload_mobile_matrix_report
-        if: always()
+        if: ${{ always() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
           path: |
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/*/runs/device-matrix/**
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/**
+            ${{ env.QWQ_OUTPUT_ROOT }}/env/*/runs/device-matrix/**/*.json
+            ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/**/summary.json
+            ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/**/report.json
           if-no-files-found: ignore
           compression-level: 0
+          retention-days: 7
       - name: Teardown beta-local stack after mainline auto prod
         if: ${{ always() && needs.discover_devices.outputs.profile == 'mainline_auto_prod' }}
         continue-on-error: true
@@ -850,16 +852,18 @@ jobs:
             --target beta-local \
             --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-down"
       - name: Retry mobile matrix report upload
-        if: always() && steps.upload_mobile_matrix_report.outcome == 'failure'
+        if: ${{ always() && !cancelled() && steps.upload_mobile_matrix_report.outcome == 'failure' }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
           path: |
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/*/runs/device-matrix/**
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/**
+            ${{ env.QWQ_OUTPUT_ROOT }}/env/*/runs/device-matrix/**/*.json
+            ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/**/summary.json
+            ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/**/report.json
           if-no-files-found: ignore
           compression-level: 0
+          retention-days: 7
           overwrite: true
       - id: finish
         if: always()
@@ -961,7 +965,7 @@ jobs:
             --report-glob "**/*-android.json" \
             --report-glob "**/*-ios.json"
       - name: Upload app env timing summary
-        if: always()
+        if: ${{ always() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -969,3 +973,4 @@ jobs:
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/app-env-device-matrix-summary.json
           if-no-files-found: error
           compression-level: 0
+          retention-days: 3
