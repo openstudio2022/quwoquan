@@ -242,7 +242,7 @@ def main() -> int:
         errors.append(
             "prevalidation 受限单机门不得低于 2C/1.75GiB/2GiB current/6GiB effective+post-reclaim"
         )
-    reclaim = prevalidation.get("legacyReclaimPolicy") or {}
+    reclaim = prevalidation.get("staleRuntimeReclaimPolicy") or {}
     if not (
         reclaim.get("enabled") is True
         and reclaim.get("plane") == "service"
