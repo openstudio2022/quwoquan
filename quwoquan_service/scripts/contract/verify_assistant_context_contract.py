@@ -77,6 +77,20 @@ def assert_field(
         )
 
 
+def assert_absent_field(
+    failures: list[str],
+    entities: dict,
+    entity_name: str,
+    field_name: str,
+) -> None:
+    entity = entities.get(entity_name)
+    if not isinstance(entity, dict):
+        failures.append(f"missing entity {entity_name}")
+        return
+    if field_name in field_map(entity):
+        failures.append(f"{entity_name}: retired field still present: {field_name}")
+
+
 def main() -> int:
     failures: list[str] = []
     fields = load_yaml(FIELDS_PATH)
@@ -89,12 +103,10 @@ def main() -> int:
 
     required_entities = [
         "AssistantContextSnapshot",
-        "AssistantConversationGroundingView",
-        "AssistantConversationGroundingMessage",
-        "AssistantConversationGroundingMember",
         "AssistantObjectGroundingView",
         "AssistantUserActionGroundingView",
         "AssistantConsentMatrix",
+        "AssistantIntersectionEvidenceRef",
     ]
     for entity_name in required_entities:
         if entity_name not in entities:
@@ -105,15 +117,22 @@ def main() -> int:
         failures,
         entities,
         "AssistantContextSnapshot",
-        "conversationGrounding",
-        "AssistantConversationGroundingView",
+        "userActions",
+        "[]AssistantUserActionGroundingView",
+    )
+    assert_field(
+        failures,
+        entities,
+        "AssistantContextSnapshot",
+        "intersectionEvidenceRefs",
+        "[]AssistantIntersectionEvidenceRef",
     )
     assert_field(failures, entities, "AssistantContextSnapshot", "consentMatrix", "AssistantConsentMatrix")
-    assert_field(failures, entities, "AssistantConversationGroundingView", "recentMessages", "[]AssistantConversationGroundingMessage")
-    assert_field(failures, entities, "AssistantConversationGroundingView", "members", "[]AssistantConversationGroundingMember")
     assert_field(failures, entities, "AssistantObjectGroundingView", "objectTypeRef", "string")
-    assert_field(failures, entities, "AssistantConsentMatrix", "canReadConversation", "bool")
-    assert_field(failures, entities, "AssistantConsentMatrix", "canDeliverProactively", "bool")
+    assert_field(failures, entities, "AssistantConsentMatrix", "canReadCurrentPage", "bool")
+    assert_absent_field(failures, entities, "AssistantContextSnapshot", "conversationGrounding")
+    assert_absent_field(failures, entities, "AssistantConsentMatrix", "canReadConversation")
+    assert_absent_field(failures, entities, "AssistantConsentMatrix", "canDeliverProactively")
 
     for citation_field in ("destination", "score", "recallSource", "objectTypeRef"):
         assert_field(failures, entities, "AssistantSearchCitationView", citation_field)
