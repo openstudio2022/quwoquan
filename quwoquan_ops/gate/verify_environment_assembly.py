@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -56,6 +57,27 @@ def validate_service_build_image_contract() -> list[str]:
             issues.append(f"{dockerfile.relative_to(ROOT)} must not default GO_BASE_IMAGE")
         if "ARG ALPINE_BASE_IMAGE\n" not in dockerfile_text:
             issues.append(f"{dockerfile.relative_to(ROOT)} must not default ALPINE_BASE_IMAGE")
+
+    service_pipeline = (
+        ROOT / ".github/workflows/service_pipeline.yml"
+    ).read_text(encoding="utf-8")
+    for image_variable in (
+        "GO_BASE_IMAGE",
+        "ALPINE_BASE_IMAGE",
+        "PYTHON_BASE_IMAGE",
+    ):
+        if not re.search(
+            rf"^  {image_variable}: [^\s]+@sha256:[0-9a-f]{{64}}$",
+            service_pipeline,
+            re.MULTILINE,
+        ):
+            issues.append(
+                f"service pipeline must pin {image_variable} to an immutable digest"
+            )
+        if f"{image_variable}=${{{{ env.{image_variable} }}}}" not in service_pipeline:
+            issues.append(
+                f"service pipeline must pass {image_variable} to release image builds"
+            )
     return issues
 
 

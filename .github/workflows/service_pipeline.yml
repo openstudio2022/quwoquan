@@ -31,6 +31,9 @@ env:
   QWQ_OUTPUT_ROOT: .qwq_output
   GOCACHE: ${{ github.workspace }}/.qwq_output/env/repo/local/ci/cache/go/build
   GOMODCACHE: ${{ github.workspace }}/.qwq_output/env/repo/local/ci/cache/go/mod
+  GO_BASE_IMAGE: docker.io/library/golang:1.24-bookworm@sha256:98d673f18a1aac43da744209873cb79323e11706f909251bcfb131828b95559d
+  ALPINE_BASE_IMAGE: docker.io/library/debian:bookworm-slim@sha256:63a496b5d3b99214b39f5ed70eb71a61e590a77979c79cbee4faf991f8c0783e
+  PYTHON_BASE_IMAGE: docker.io/library/python:3.11@sha256:143c7a1877acd77bd323d544cb7b39ba0a975288a7204f47586c2597130d80ad
 
 jobs:
   prepare-release:
@@ -200,6 +203,10 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
+          build-args: |
+            GO_BASE_IMAGE=${{ env.GO_BASE_IMAGE }}
+            ALPINE_BASE_IMAGE=${{ env.ALPINE_BASE_IMAGE }}
+            PYTHON_BASE_IMAGE=${{ env.PYTHON_BASE_IMAGE }}
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare-release.outputs.image_version }}
           sbom: true
