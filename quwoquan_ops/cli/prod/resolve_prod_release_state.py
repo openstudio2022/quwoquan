@@ -10,7 +10,6 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
 
 import yaml
 
@@ -45,12 +44,12 @@ def _resolve_prod_host(topology: dict) -> str:
     env_host = os.environ.get("PROD_SSH_HOST", "").strip()
     if env_host:
         return env_host
-    api_base = (
-        ((topology.get("targets") or {}).get("prod-hosted") or {}).get("publicBases") or {}
-    ).get("api", "")
-    host = urlparse(str(api_base)).hostname or ""
+    host = str(
+        ((topology.get("targets") or {}).get("prod-hosted") or {}).get("sshHost")
+        or ""
+    ).strip()
     if not host:
-        raise RuntimeError("无法从 topology 解析 prod SSH host，请设置 PROD_SSH_HOST")
+        raise RuntimeError("topology 缺少 prod-hosted.sshHost，请设置 PROD_SSH_HOST")
     return host
 
 

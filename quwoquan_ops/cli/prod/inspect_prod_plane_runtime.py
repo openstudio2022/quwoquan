@@ -7,7 +7,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 try:
     import yaml
@@ -58,10 +57,12 @@ def _resolve_host(override: str) -> str:
     if explicit:
         return explicit
     topology = load_environment_topology()
-    api = (((topology.get("targets") or {}).get("prod-hosted") or {}).get("publicBases") or {}).get("api", "")
-    host = urlparse(str(api)).hostname or ""
+    host = str(
+        ((topology.get("targets") or {}).get("prod-hosted") or {}).get("sshHost")
+        or ""
+    ).strip()
     if not host:
-        raise SystemExit("FAIL: unable to resolve prod-hosted hostname from topology")
+        raise SystemExit("FAIL: prod-hosted target is missing sshHost")
     return host
 
 

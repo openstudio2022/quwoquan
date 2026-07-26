@@ -98,6 +98,7 @@
     "prod-hosted": {
       "env": "prod",
       "backend": "ssh-hosted",
+      "sshHost": "118.31.239.122",
       "portProfile": null,
       "sharedClusterNote": "gray-initial and full share the same physical cluster because of current cost constraints; gamma is local-only and has no remote target",
       "publicBases": {

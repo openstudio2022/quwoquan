@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import yaml
 
@@ -80,10 +79,9 @@ def _resolve_prod_host(override: str | None) -> str:
         return override
     topology = load_environment_topology()
     target = get_target(topology, "prod-hosted")
-    api_base = str((target.get("publicBases") or {}).get("api", "")).strip()
-    host = urlparse(api_base).hostname
+    host = str(target.get("sshHost") or "").strip()
     if not host:
-        raise SystemExit(f"FAIL: 无法从 prod-hosted api 地址解析 hostname: {api_base}")
+        raise SystemExit("FAIL: prod-hosted target 缺少独立 sshHost")
     return host
 
 
@@ -573,7 +571,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--host",
         default=None,
-        help="覆盖 prod-hosted 目标 host；默认从 prod/runtime.yaml 解析",
+        help="覆盖 prod-hosted SSH host；默认读取 prod/runtime.yaml targets.prod-hosted.sshHost",
     )
     parser.add_argument(
         "--include-relay",
