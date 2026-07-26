@@ -186,6 +186,9 @@ jobs:
             --archive-url "${FLUTTER_ARCHIVE_URL}" \
             --cache-path "${FLUTTER_CACHE_PATH}" \
             --sha256 "${FLUTTER_SHA256}"
+      - name: Materialize locked Flutter dependencies
+        working-directory: quwoquan_app
+        run: flutter pub get --enforce-lockfile
       - name: Gate (quwoquan_app)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope app
@@ -228,6 +231,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.portal == 'true' }}
+    env:
+      QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
