@@ -341,7 +341,13 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: 设置 Node
+      - name: 设置 Node（PR 不写入 Actions cache）
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20.19.0"
+      - name: 设置 Node（非 PR 可复用默认分支缓存）
+        if: ${{ github.event_name != 'pull_request' }}
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "20.19.0"

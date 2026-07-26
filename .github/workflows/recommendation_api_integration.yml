@@ -45,6 +45,9 @@ jobs:
           key: go-mod-api-integration-${{ runner.os }}-${{ hashFiles('quwoquan_service/go.sum') }}
           restore-keys: |
             go-mod-api-integration-${{ runner.os }}-
+          # Pull-request cache scopes are isolated by GitHub. They may restore
+          # the default-branch cache, but must not create a new per-PR copy.
+          lookup-only: ${{ github.event_name == 'pull_request' }}
       - name: Run content-service api_integration
         run: |
           go test ./services/content-service/tests/api_integration/content/post/ -count=1 -timeout 30m -v 2>&1 | tee api_integration.log

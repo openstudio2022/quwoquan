@@ -64,6 +64,24 @@ def main() -> int:
             if forbidden in text:
                 issues.append(f"{rel} still contains legacy rollout entry: {forbidden}")
 
+    controlled_rollout = (
+        ROOT / ".github" / "workflows" / "deploy-prod-auto.yml"
+    ).read_text(encoding="utf-8")
+    if "workflow_run:" in controlled_rollout:
+        issues.append(
+            ".github/workflows/deploy-prod-auto.yml must not automatically promote a main merge"
+        )
+    for token in (
+        "name: 07. Deploy To Prod (Controlled)",
+        "release_run_id must reference a successful main Service Pipeline",
+        "default: true",
+    ):
+        if token not in controlled_rollout:
+            issues.append(
+                ".github/workflows/deploy-prod-auto.yml missing controlled rollout token: "
+                + token
+            )
+
     access = yaml.safe_load(ACCESS_MANIFEST.read_text(encoding="utf-8")) or {}
     expected_images = {
         str(service)

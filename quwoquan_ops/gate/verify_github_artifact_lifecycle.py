@@ -101,6 +101,8 @@ def verify() -> list[str]:
             "--failed-retention-days 3",
             "workflow_run:",
             "--run-id",
+            "github.event.workflow_run.name == '02. Service Pipeline'",
+            "github.event.workflow_run.conclusion != 'success'",
         ):
             if token not in lifecycle:
                 issues.append(f"artifact lifecycle workflow missing {token!r}")

@@ -120,3 +120,25 @@ def test_completed_run_cleanup_queries_only_its_exact_artifacts() -> None:
 
 def test_repository_artifact_policy_rejects_implicit_go_cache() -> None:
     assert verify() == []
+
+
+def test_pr_workflows_do_not_create_isolated_dependency_cache_copies() -> None:
+    recommendation = (
+        ROOT / ".github/workflows/recommendation_api_integration.yml"
+    ).read_text(encoding="utf-8")
+    delivery = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "lookup-only: ${{ github.event_name == 'pull_request' }}" in recommendation
+    assert "设置 Node（PR 不写入 Actions cache）" in delivery
+    assert "设置 Node（非 PR 可复用默认分支缓存）" in delivery
+
+
+def test_lifecycle_only_spends_a_runner_for_failures_or_service_build_record_audit() -> None:
+    lifecycle = (ROOT / ".github/workflows/artifact-lifecycle.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "github.event.workflow_run.name == '02. Service Pipeline'" in lifecycle
+    assert "github.event.workflow_run.conclusion != 'success'" in lifecycle

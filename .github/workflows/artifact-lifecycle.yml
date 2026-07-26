@@ -11,7 +11,7 @@ on:
       - 03. Delivery Gate
       - 04. Pre-Release Gate
       - 05. App Env Device Matrix
-      - 07. Deploy To Prod (Auto)
+      - 07. Deploy To Prod (Controlled)
       - ML Training Pipeline
       - Recommendation API Integration
     types:
@@ -32,7 +32,13 @@ jobs:
     if: >-
       ${{
         github.event_name != 'workflow_run' ||
-        github.event.workflow_run.name != '00. Artifact Lifecycle'
+        (
+          github.event.workflow_run.name != '00. Artifact Lifecycle' &&
+          (
+            github.event.workflow_run.name == '02. Service Pipeline' ||
+            github.event.workflow_run.conclusion != 'success'
+          )
+        )
       }}
     runs-on: ubuntu-latest
     permissions:
