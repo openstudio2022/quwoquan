@@ -11,7 +11,7 @@ on:
       - 03. Delivery Gate
       - 04. Pre-Release Gate
       - 05. App Env Device Matrix
-      - 07. Deploy To Prod (Auto)
+      - 07. Deploy To Prod (Controlled)
       - ML Training Pipeline
       - Recommendation API Integration
     types:
@@ -25,6 +25,8 @@ on:
         required: true
         default: true
         type: boolean
+  pull_request:
+    types: [closed]
 
 jobs:
   cleanup:
@@ -32,7 +34,13 @@ jobs:
     if: >-
       ${{
         github.event_name != 'workflow_run' ||
-        github.event.workflow_run.name != '00. Artifact Lifecycle'
+        (
+          github.event.workflow_run.name != '00. Artifact Lifecycle' &&
+          (
+            github.event.workflow_run.name == '02. Service Pipeline' ||
+            github.event.workflow_run.conclusion != 'success'
+          )
+        )
       }}
     runs-on: ubuntu-latest
     permissions:
@@ -40,7 +48,9 @@ jobs:
       actions: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        if: ${{ github.event_name != 'pull_request' }}
       - name: Audit and reclaim expired diagnostics
+        if: ${{ github.event_name != 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -57,3 +67,19 @@ jobs:
             args+=(--apply)
           fi
           python3 quwoquan_ops/ci/manage_actions_artifacts.py "${args[@]}"
+      - name: Reclaim closed pull-request caches
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CACHE_REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          set -euo pipefail
+          cache_ids="$(gh cache list --repo "$GITHUB_REPOSITORY" --ref "$CACHE_REF" --limit 100 --json id --jq '.[].id')"
+          if [[ -z "$cache_ids" ]]; then
+            echo "No isolated pull-request caches to reclaim."
+            exit 0
+          fi
+          while IFS= read -r cache_id; do
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/caches/${cache_id}"
+            echo "Reclaimed closed pull-request cache ${cache_id}."
+          done <<< "$cache_ids"

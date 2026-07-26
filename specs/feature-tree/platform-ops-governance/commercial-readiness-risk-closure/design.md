@@ -56,7 +56,10 @@
   - 预验证不得进入 rollout lock、SLO、正式 release ledger 或 receipt。
   - 受限单机使用声明式容器内存和 PID 上限。空间门同时校验当前可用量、可回收量与回收后实测量。
   - Actions Artifact 只保存短生命周期失败诊断，且诊断上传不得影响原始门禁结论。
+  - Actions cache 不是发布输入：PR 只读默认分支的依赖缓存，不得写入按 PR ref 隔离的副本；历史或未来遗留的 PR merge-ref 缓存在 PR 关闭时按精确 ref 自动删除；Service Pipeline 继续审计成功运行中的意外 Build Record。
+  - main 只触发 OCI 制品生产，不自动启动正式 rollout；正式 rollout 必须由人工 dispatch 绑定成功 main Service Pipeline run，且默认 dry-run。第一方 prevalidate 继续只经 stackctl deploy mode=prevalidate 执行。
   - SSH 管理 endpoint 只在 `access-isolation.yaml.management` 声明；`runtime.yaml` 及其 App package 投影只含 canonical HTTPS/WSS public base，禁止携带管理 IP。
+  - 主线 Service Pipeline 固定使用仓库注册的 `self-hosted/macOS/ARM64` runner；linux/amd64 镜像由 pin 到 commit 的 QEMU 与 Buildx 生成。GitHub-hosted 预算不可用不得改变 GHCR digest、SBOM、provenance 或 manifest 契约。
 - 理由：在 Provider、SFU、真实数据和公网入口尚未就绪时，仍需验证第一方容器可部署性，但该结果不能被误用为生产准出。
 - 被否决方案：使用 `latest`、远端临时构建、旧容器、裸 IP public base，或把容器启动成功写成正式发布成功。
 - 约束与影响如下。

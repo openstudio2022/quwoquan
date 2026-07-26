@@ -28,11 +28,13 @@
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 main 后只允许一条权威主链
-- 决策：main 后只允许一条权威主链。
+### DEC-001 main 后只允许一条权威受控主链
+- 决策：main 后只允许一条权威受控主链。
 - 理由：以 `alpha-local`、`beta-local`、`gamma` 本地镜像和 `prod-hosted` 为环境边界，由 `stackctl` 与 GitHub Actions 统一完成打包、启动、健康检查、端云验证、灰度发布与回滚。
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- main 只完成不可变 OCI release artifact 生产；正式 rollout 不由 workflow_run 自动触发，必须由人工 dispatch 绑定成功 main Service Pipeline run，默认 dry-run。
+- 第一方容器 prevalidate 经 stackctl 独立执行，不能取得正式 rollout、ledger、receipt 或 Provider readiness。
 - 本地镜像重用 package 时必须校验来源 image；Caddyfile、服务内部端口与 non-prod control-plane policy 均由 canonical 装配消费，禁止临时 symlink、手工重标记或脚本旁路。
 - 关联要求：`REQ-001`
 - 影响 Story：[`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)、[`gray-release-to-prod`](./gray-release-to-prod/spec.md)、[`local-gamma-mirror`](./local-gamma-mirror/spec.md)、[`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)、[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)、[`workflow-naming-consolidation`](./workflow-naming-consolidation/spec.md)
@@ -47,7 +49,7 @@
 
 ## 6. 质量与观测
 
-- `prod-hosted` 已有自动灰度 workflow，但仍保留人工 approval，且 post-deploy probe 置信度偏低。
+- `prod-hosted` 的正式灰度 workflow 必须人工 dispatch 并保留 approval；在 Provider、SFU、真实数据、观测、灾备或回滚证据缺失时只允许不可提升 prevalidate，且 post-deploy probe 置信度仍须单独验收。
 - 运行装配从各服务 `environments/<env>/deploy`、Ops 同名环境入口和真实 Compose/Kustomize 扫描推导；本地端口保留 `local_env_port_manifest`，prod rollout 保留 `gray_rollout_stages`，服务配置由自治 package 的 provenance 摘要证明。
 - `prod initial` 后必须执行 `stackctl health + inspect + doctor + integration probes + slo gate`。
 - 独立可观测：每域 `service.name` + 指标维度独立，使“逻辑独立”在合并部署时依然成立，并为拆分提供数据依据。

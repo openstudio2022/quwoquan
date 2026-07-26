@@ -12,7 +12,7 @@
 
 ### In Scope
 
-- main 后单一自动 promotion 主链与统一证据归档
+- main 后单一受控 promotion 主链、OCI 制品归档与不可提升预验证
 - prod-hosted ACK single-cluster + modular-monolith-first + 独立 Deployment + 托管数据面
 - Strangler split-ready 拆分与契约不变
 - gamma-local 与 prod-hosted 工作负载图谱同构
@@ -46,9 +46,11 @@
 <a id="req-001"></a>
 ### REQ-001 deliver deploy prod pipeline 能力 SIT
 
-- `main` 入库后存在单一自动 promotion workflow，按 `alpha-local -> beta-local -> prod-hosted(gray-initial -> carry-on -> full)` 固定顺序执行；gamma 只用于本地左移验证，远端复验由 prod `gray-initial` 承接。
+- `main` 入库后只生成带 digest 的 OCI release artifact。
+- 第一方容器预验证由显式 `stackctl deploy --mode prevalidate` 在独立 namespace 执行，不属于正式 rollout。
+- 正式 promotion 只能由人工 dispatch 绑定成功的 main Service Pipeline run，按 `alpha-local -> beta-local -> prod-hosted(gray-initial -> carry-on -> full)` 固定顺序执行。gamma 只用于本地左移验证，远端复验由 prod `gray-initial` 承接。
 - `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
-- `prod initial -> prod checks -> prod full` 之间的健康检查、只读集成探针、SLO gate 与 auto rollback 可验证。
+- `prod initial -> prod checks -> prod full` 之间的健康检查、只读集成探针、SLO gate 与 rollback 可验证；Provider、SFU、真实数据、观测和灾备证据未齐时不得自动启动该链路。
 
 <a id="req-002"></a>
 ### REQ-002 ACK 集群部署形态（modular-monolith-first + split-ready）SIT
@@ -63,7 +65,7 @@
 ### REQ-003 统一验证 profile：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`
 
 - **统一验证 profile**：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`。
-- **统一证据归档**：每个 promotion 阶段必须落 `.qwq_output/env/<env>/runs/<run-id>/report.json` 与 `summary.md`，workflow 同步上传 artifact。
+- **统一证据归档**：每个 promotion 阶段必须落 `.qwq_output/env/<env>/runs/<run-id>/report.json` 与 `summary.md`；发布输入为 GHCR OCI digest，Actions Artifact 只保留短期失败诊断且不得作为阶段传递。
 - 真实远端复验：仓库不定义 `gamma-hosted` 环境；云侧真实集成、nightly 与发布前高置信度回归统一在 prod `gray-initial` rollout stage 完成。
 - `03/04/05` 名称与 required-check 语义必须保持稳定。
 - `prod` 灰度是 `prod` 语义下的 rollout stage，不得再引入独立环境枚举。
@@ -86,7 +88,9 @@
 
 - GIVEN 执行“deliver deploy prod pipeline 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“deliver deploy prod pipeline 能力”对应动作。
-- THEN `main` 入库后由单一 promotion workflow 按 `alpha-local -> beta-local -> prod-hosted(gray-initial -> carry-on -> full)` 执行；gamma 只用于本地左移验证，远端复验由 prod `gray-initial` 承接。
+- THEN `main` 入库后生成可验证 OCI release artifact，只有显式受控动作才能发起正式 promotion。
+- THEN 第一方 prevalidate 不写正式 rollout、ledger 或 receipt。
+- THEN 正式 promotion 按 `alpha-local -> beta-local -> prod-hosted(gray-initial -> carry-on -> full)` 执行。gamma 只用于本地左移验证，远端复验由 prod `gray-initial` 承接。
 - THEN `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
 - THEN `prod initial -> prod checks -> prod full` 之间的健康检查、只读集成探针、SLO gate 与 auto rollback 可验证。
 

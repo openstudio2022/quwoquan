@@ -1,6 +1,8 @@
-# main 后多环境自动 promotion 主链
+# 受控正式 prod rollout：仅人工 dispatch，绝不由 main 合入自动提升。
+# 当前阶段 main 只生成 GHCR OCI digest；第一方容器预验证由 stackctl 的
+# mode=prevalidate 独立执行，不能写入正式 rollout、ledger 或 receipt。
 # 设计见 specs/feature-tree/runtime/deliver-deploy-prod-pipeline/design.md
-name: 07. Deploy To Prod (Auto)
+name: 07. Deploy To Prod (Controlled)
 
 permissions:
   contents: read
@@ -10,11 +12,6 @@ env:
   QWQ_OUTPUT_ROOT: .qwq_output
 
 on:
-  workflow_run:
-    workflows:
-      - 02. Service Pipeline
-    types:
-      - completed
   workflow_dispatch:
     inputs:
       release_run_id:
@@ -25,9 +22,9 @@ on:
         required: false
         default: 'aliyun'
       dry_run:
-        description: 'Dry run'
+        description: 'Formal rollout dry run; set false only after all release gates and approvals are valid'
         required: false
-        default: false
+        default: true
         type: boolean
 
 concurrency:
@@ -43,15 +40,6 @@ jobs:
       actions: read
       packages: read
       pull-requests: read
-    if: >-
-      ${{
-        github.event_name != 'workflow_run' ||
-        (
-          github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.event == 'push' &&
-          github.event.workflow_run.head_branch == 'main'
-        )
-      }}
     env:
       PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
       PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
@@ -75,19 +63,46 @@ jobs:
       service_pipeline_elapsed_seconds: ${{ steps.service_pipeline_timing.outputs.elapsed_seconds }}
     steps:
       - id: context
-        name: Resolve workflow context
+        name: Resolve reviewed main Service Pipeline context
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ github.event.inputs.release_run_id }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            echo "checkout_ref=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
-            echo "base_sha=" >> "$GITHUB_OUTPUT"
-            echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
-            echo "release_run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "checkout_ref=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-            echo "base_sha=" >> "$GITHUB_OUTPUT"
-            echo "head_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-            echo "release_run_id=${{ github.event.inputs.release_run_id }}" >> "$GITHUB_OUTPUT"
-          fi
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import re
+          import urllib.request
+
+          run_id = os.environ["RELEASE_RUN_ID"].strip()
+          token = os.environ["GITHUB_TOKEN"].strip()
+          if not run_id.isdigit() or not token:
+              raise SystemExit("release_run_id and GitHub token are required")
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/${{ github.repository }}/actions/runs/{run_id}",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {token}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              run = json.load(response)
+          sha = str(run.get("head_sha") or "")
+          if (
+              run.get("name") != "02. Service Pipeline"
+              or run.get("event") != "push"
+              or run.get("head_branch") != "main"
+              or run.get("status") != "completed"
+              or run.get("conclusion") != "success"
+              or re.fullmatch(r"[0-9a-f]{40}", sha) is None
+          ):
+              raise SystemExit("release_run_id must reference a successful main Service Pipeline")
+          print(f"checkout_ref={sha}")
+          print("base_sha=")
+          print(f"head_sha={sha}")
+          print(f"release_run_id={run_id}")
+          PY
       - id: service_pipeline_timing
         name: Read completed Service Pipeline elapsed time
         env:

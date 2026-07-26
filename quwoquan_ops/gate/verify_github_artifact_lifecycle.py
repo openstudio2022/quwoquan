@@ -100,7 +100,14 @@ def verify() -> list[str]:
             "--apply",
             "--failed-retention-days 3",
             "workflow_run:",
+            "pull_request:",
+            "types: [closed]",
             "--run-id",
+            "github.event.workflow_run.name == '02. Service Pipeline'",
+            "github.event.workflow_run.conclusion != 'success'",
+            "Reclaim closed pull-request caches",
+            "refs/pull/${{ github.event.pull_request.number }}/merge",
+            "actions/caches/${cache_id}",
         ):
             if token not in lifecycle:
                 issues.append(f"artifact lifecycle workflow missing {token!r}")
