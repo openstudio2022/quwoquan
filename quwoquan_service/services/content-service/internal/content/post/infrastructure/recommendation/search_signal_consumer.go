@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -20,6 +21,7 @@ const (
 	searchSignalDedupTTL             = 24 * time.Hour
 	searchSignalStreamTTL            = 24 * time.Hour
 	searchSignalRetryMinIdle         = 30 * time.Second
+	searchSignalProcessingLease      = 2 * searchSignalRetryMinIdle
 )
 
 // SearchSignalConsumer reads search-service Redis Stream signals and projects
@@ -90,15 +92,36 @@ func (c *SearchSignalConsumer) ProcessOnce(ctx context.Context) (int, error) {
 	for _, msg := range messages {
 		dedupKey := searchSignalDedupKey(msg)
 		if dedupKey != "" {
-			claimed, err := c.redis.SetNX(ctx, dedupKey, msg.ID, searchSignalDedupTTL)
-			if err != nil {
-				return processed, err
-			}
-			if !claimed {
+			state, stateErr := c.redis.Get(ctx, dedupKey)
+			switch {
+			case stateErr == nil && state == "completed":
 				if err := c.redis.XAck(ctx, SearchRecommendationSignalStream, SearchSignalConsumerGroup, msg.ID); err != nil {
 					return processed, err
 				}
 				processed++
+				continue
+			case stateErr == nil && strings.HasPrefix(state, "processing:"):
+				// Another delivery still owns the short lease. Keep this source
+				// pending; it may only be ACKed after a completed marker exists.
+				continue
+			case stateErr == nil:
+				return processed, fmt.Errorf(
+					"unsupported search signal dedup state %q",
+					state,
+				)
+			case !errors.Is(stateErr, rtredis.ErrKeyNotFound):
+				return processed, stateErr
+			}
+			claimed, claimErr := c.redis.SetNX(
+				ctx,
+				dedupKey,
+				"processing:"+msg.ID,
+				searchSignalProcessingLease,
+			)
+			if claimErr != nil {
+				return processed, claimErr
+			}
+			if !claimed {
 				continue
 			}
 		}
@@ -115,8 +138,31 @@ func (c *SearchSignalConsumer) ProcessOnce(ctx context.Context) (int, error) {
 				); dlqErr != nil {
 					return processed, fmt.Errorf("search signal dlq: %w", dlqErr)
 				}
+				if trimErr := c.redis.XTrimOlderThan(
+					ctx,
+					SearchRecommendationSignalDLQ,
+					searchSignalStreamTTL,
+				); trimErr != nil {
+					return processed, fmt.Errorf(
+						"trim search signal dlq: %w",
+						trimErr,
+					)
+				}
 				if expErr := c.redis.Expire(ctx, SearchRecommendationSignalDLQ, searchSignalStreamTTL); expErr != nil {
 					return processed, fmt.Errorf("search signal dlq expire: %w", expErr)
+				}
+				if dedupKey != "" {
+					if completeErr := c.redis.Set(
+						ctx,
+						dedupKey,
+						"completed",
+						searchSignalDedupTTL,
+					); completeErr != nil {
+						return processed, fmt.Errorf(
+							"complete malformed search signal dedup marker: %w",
+							completeErr,
+						)
+					}
 				}
 				if ackErr := c.redis.XAck(
 					ctx,
@@ -130,9 +176,29 @@ func (c *SearchSignalConsumer) ProcessOnce(ctx context.Context) (int, error) {
 				continue
 			}
 			if dedupKey != "" {
-				_ = c.redis.Del(ctx, dedupKey)
+				if releaseErr := c.redis.Del(ctx, dedupKey); releaseErr != nil {
+					c.logger.WarnContext(
+						ctx,
+						"search signal processing lease release failed",
+						slog.String("streamId", msg.ID),
+						slog.String("err", releaseErr.Error()),
+					)
+				}
 			}
 			return processed, err
+		}
+		if dedupKey != "" {
+			if err := c.redis.Set(
+				ctx,
+				dedupKey,
+				"completed",
+				searchSignalDedupTTL,
+			); err != nil {
+				return processed, fmt.Errorf(
+					"complete search signal dedup marker: %w",
+					err,
+				)
+			}
 		}
 		if err := c.redis.XAck(ctx, SearchRecommendationSignalStream, SearchSignalConsumerGroup, msg.ID); err != nil {
 			return processed, err

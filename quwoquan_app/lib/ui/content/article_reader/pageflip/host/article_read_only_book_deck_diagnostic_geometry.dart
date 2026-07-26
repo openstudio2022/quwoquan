@@ -2,24 +2,22 @@ part of 'article_read_only_book_deck.dart';
 
 typedef _PageLine = (Offset, Offset);
 
-/// 后翻 diagnostic 几何 record。BACK 背面继续来自 native soft sheet；
-/// previous front 则与 forward bottom 一样是 page-space reveal。
+/// 后翻 diagnostic 几何 record。recto/verso 与真实 moving sheet 共用同一个
+/// native soft geometry；两者只按 [ArticlePageBackwardLeafFrame] 的 sheet-local
+/// 宽度区间分段。
 typedef _BackwardDiagnosticGeometry = ({
   SoftPageLayerGeometry softGeometry,
   List<Offset> sheetLocalPolygon,
   List<Offset> sheetMaterialLocalPolygon,
   Rect? sheetLocalBounds,
   Rect? sheetViewportBounds,
-  List<Offset> previousBackLocalPolygon,
-  List<Offset> previousBackAreaPolygon,
-  List<Offset> previousBackViewportPolygon,
-  Rect? previousBackViewportBounds,
-  List<Offset> previousFrontLocalPolygon,
-  List<Offset> previousFrontAreaPolygon,
-  List<Offset> previousFrontViewportPolygon,
-  Rect? previousFrontViewportBounds,
+  List<Offset> rectoLocalPolygon,
+  List<Offset> rectoViewportPolygon,
+  Rect? rectoViewportBounds,
+  List<Offset> versoLocalPolygon,
+  List<Offset> versoViewportPolygon,
+  Rect? versoViewportBounds,
   List<Offset> paintedUnionLocalPolygon,
-  List<Offset> paintedUnionAreaPolygon,
   List<Offset> paintedUnionViewportPolygon,
   Rect? paintedUnionViewportBounds,
   (Offset, Offset)? foldLineViewport,
@@ -82,59 +80,6 @@ class _BackwardGeometryGuidePainter extends CustomPainter {
   bool shouldRepaint(covariant _BackwardGeometryGuidePainter oldDelegate) {
     return oldDelegate.foldLine != foldLine ||
         oldDelegate.freeEdgeLine != freeEdgeLine;
-  }
-}
-
-class _BackwardLeafVersoUvPainter extends CustomPainter {
-  const _BackwardLeafVersoUvPainter({
-    required this.leafVersoSnapshot,
-    required this.pageSize,
-    required this.polygon,
-    required this.materialLocalPolygon,
-    required this.paintOrigin,
-  });
-
-  final ArticlePageTextureSnapshot leafVersoSnapshot;
-  final Size pageSize;
-  final List<Offset> polygon;
-  final List<Offset> materialLocalPolygon;
-  final Offset paintOrigin;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (leafVersoSnapshot.image.width <= 0 ||
-        leafVersoSnapshot.image.height <= 0) {
-      return;
-    }
-    paintBackwardLeafVersoSurface(
-      canvas: canvas,
-      leafVersoSnapshot: leafVersoSnapshot,
-      pageSize: pageSize,
-      polygon: polygon,
-      materialLocalPolygon: materialLocalPolygon,
-      paintOrigin: paintOrigin,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _BackwardLeafVersoUvPainter oldDelegate) {
-    return oldDelegate.leafVersoSnapshot != leafVersoSnapshot ||
-        oldDelegate.pageSize != pageSize ||
-        oldDelegate.paintOrigin != paintOrigin ||
-        !_samePolygon(oldDelegate.polygon, polygon) ||
-        !_samePolygon(oldDelegate.materialLocalPolygon, materialLocalPolygon);
-  }
-
-  bool _samePolygon(List<Offset> previous, List<Offset> next) {
-    if (previous.length != next.length) {
-      return false;
-    }
-    for (var index = 0; index < previous.length; index += 1) {
-      if ((previous[index] - next[index]).distance > 0.01) {
-        return false;
-      }
-    }
-    return true;
   }
 }
 
@@ -393,8 +338,8 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
       'frontSheetId=${frontSheetId ?? "none"}',
       'backSheetId=${backSheetId ?? "none"}',
       'frontBackSameLeaf=${frontSheetId != null && frontSheetId == backSheetId}',
-      'frontLayer=frontFlatPreviousFront',
-      'backLayer=rotatingFoldBand',
+      'frontLayer=rectoSliceOnMovingSheet',
+      'backLayer=versoSliceOnMovingSheet',
       'currentLayerPresent=$currentLayerPresent',
       'multiSliceViolation=$multiSliceViolation',
       'frontLayers=${frontPaintBounds == null ? 0 : 1}',
@@ -444,7 +389,7 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
     final positionViewport = convertBookPointToViewport(
       surfaceOrigin,
       bounds,
-      direction: softLayerViewportDirection(geometryDirection),
+      direction: softLayerViewportDirection(direction),
     );
     final localClipPolygon = _localPolygonFromArea(
       area: area,
@@ -452,6 +397,11 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
       angle: angle,
       direction: geometryDirection,
     );
+    final paintBounds = resolveSoftLayerPaintBounds(
+      pageSize: pageSize,
+      polygon: localClipPolygon,
+    );
+    final paintOrigin = paintBounds.topLeft;
     final viewportClipPolygon = area
         .map((point) {
           final translated = geometryDirection == StPageFlipDirection.back
@@ -487,6 +437,10 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
           0,
           1,
         ),
+      contentPositionViewport:
+          positionViewport + rotatePointForCanvasTransform(paintOrigin, angle),
+      paintBounds: paintBounds,
+      paintOrigin: paintOrigin,
     );
   }
 
@@ -522,6 +476,11 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
       scene.layout.bounds.pageWidth,
       scene.layout.bounds.height,
     );
+    final leafFrame =
+        frame.backwardLeafFrame ?? _resolveBackwardLeafFrame(scene);
+    if (leafFrame == null) {
+      return null;
+    }
     final angle = frame.angle;
     final visualGeometryDirection = frame.visualGeometryDirection;
     final projected = frame.backwardProjectedFrame;
@@ -529,35 +488,39 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
     final currentResidualPagePolygon = frame.bottomClipArea.length >= 3
         ? List<Offset>.unmodifiable(frame.bottomClipArea)
         : const <Offset>[];
-    final pageLocalPolygon = pageRectPolygon(pageSize);
-    final pageRect = _backwardPageRect(scene);
-    final pageViewportPolygon = <Offset>[
-      pageRect.topLeft,
-      pageRect.topRight,
-      pageRect.bottomRight,
-      pageRect.bottomLeft,
-    ];
-    final showsBackside = angle.abs() <= math.pi / 2;
-    final previousFrontLocalPolygon = pageLocalPolygon;
-    final previousBackLocalPolygon = showsBackside
-        ? sheetLocalPolygon
-        : const <Offset>[];
-    final previousFrontAreaPolygon = pageLocalPolygon;
-    final previousBackAreaPolygon = showsBackside
-        ? frame.flippingClipArea
-        : const <Offset>[];
-    final paintedUnionLocalPolygon = sheetLocalPolygon;
-    final paintedUnionAreaPolygon = frame.flippingClipArea;
+    final sheetContentLocalPolygon = sheetLocalPolygon
+        .map((point) => point - softGeometry.paintOrigin)
+        .toList(growable: false);
+    final coveredWidth = (leafFrame.coveredWidthNormalized * pageSize.width)
+        .clamp(0.0, pageSize.width)
+        .toDouble();
+    final rectoWidth =
+        (leafFrame.totalRectoVisibleWidthNormalized * pageSize.width)
+            .clamp(0.0, coveredWidth)
+            .toDouble();
+    final rectoLocalPolygon = _clipBackwardSheetLocalSlice(
+      sheetContentLocalPolygon,
+      pageSize: pageSize,
+      left: 0,
+      right: rectoWidth,
+    );
+    final versoLocalPolygon = _clipBackwardSheetLocalSlice(
+      sheetContentLocalPolygon,
+      pageSize: pageSize,
+      left: rectoWidth,
+      right: coveredWidth,
+    );
+    final paintedUnionLocalPolygon = sheetContentLocalPolygon;
     final pageViewportOrigin = _backwardPageRect(scene).topLeft;
-    final previousFrontViewportPolygon = pageViewportPolygon;
-    final previousBackViewportPolygon = transformSoftLayerLocalPolygon(
-      polygon: previousBackLocalPolygon,
+    final rectoViewportPolygon = transformSoftLayerContentLocalPolygon(
+      polygon: rectoLocalPolygon,
       geometry: softGeometry,
     );
-    final previousBackViewportBounds = polygonBounds(
-      previousBackViewportPolygon,
+    final versoViewportPolygon = transformSoftLayerContentLocalPolygon(
+      polygon: versoLocalPolygon,
+      geometry: softGeometry,
     );
-    final paintedUnionViewportPolygon = transformSoftLayerLocalPolygon(
+    final paintedUnionViewportPolygon = transformSoftLayerContentLocalPolygon(
       polygon: paintedUnionLocalPolygon,
       geometry: softGeometry,
     );
@@ -595,16 +558,13 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
       sheetMaterialLocalPolygon: sheetMaterialLocalPolygon,
       sheetLocalBounds: polygonBounds(sheetLocalPolygon),
       sheetViewportBounds: polygonBounds(sheetViewportPolygon),
-      previousBackLocalPolygon: previousBackLocalPolygon,
-      previousBackAreaPolygon: previousBackAreaPolygon,
-      previousBackViewportPolygon: previousBackViewportPolygon,
-      previousBackViewportBounds: previousBackViewportBounds,
-      previousFrontLocalPolygon: previousFrontLocalPolygon,
-      previousFrontAreaPolygon: previousFrontAreaPolygon,
-      previousFrontViewportPolygon: previousFrontViewportPolygon,
-      previousFrontViewportBounds: polygonBounds(previousFrontViewportPolygon),
+      rectoLocalPolygon: rectoLocalPolygon,
+      rectoViewportPolygon: rectoViewportPolygon,
+      rectoViewportBounds: polygonBounds(rectoViewportPolygon),
+      versoLocalPolygon: versoLocalPolygon,
+      versoViewportPolygon: versoViewportPolygon,
+      versoViewportBounds: polygonBounds(versoViewportPolygon),
       paintedUnionLocalPolygon: paintedUnionLocalPolygon,
-      paintedUnionAreaPolygon: paintedUnionAreaPolygon,
       paintedUnionViewportPolygon: paintedUnionViewportPolygon,
       paintedUnionViewportBounds: polygonBounds(paintedUnionViewportPolygon),
       foldLineViewport: toViewportLine(projected?.foldLine),
@@ -614,6 +574,27 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
       currentResidualViewportBounds: polygonBounds(
         currentResidualViewportPolygon,
       ),
+    );
+  }
+
+  List<Offset> _clipBackwardSheetLocalSlice(
+    List<Offset> sheetLocalPolygon, {
+    required Size pageSize,
+    required double left,
+    required double right,
+  }) {
+    if (right - left <= 0.001) {
+      return const <Offset>[];
+    }
+    final clippedAtRight = clipPolygonByLine(
+      polygon: sheetLocalPolygon,
+      line: (Offset(right, 0), Offset(right, pageSize.height)),
+      keepPositiveSide: true,
+    );
+    return clipPolygonByLine(
+      polygon: clippedAtRight,
+      line: (Offset(left, 0), Offset(left, pageSize.height)),
+      keepPositiveSide: false,
     );
   }
 

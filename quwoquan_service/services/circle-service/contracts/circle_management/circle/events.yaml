@@ -6,6 +6,7 @@ events:
   - recommendation-engine
   - notification-service
   - chat-service
+  - circle-search-index-projector
   channel: event_store
   payload_entity: Circle
   payload_fields:
@@ -24,6 +25,7 @@ events:
   producer: circle-service
   consumers:
   - recommendation-engine
+  - circle-search-index-projector
   channel: event_store
   payload_entity: Circle
   payload_fields:
@@ -42,6 +44,7 @@ events:
   consumers:
   - recommendation-engine
   - notification-service
+  - circle-search-index-projector
   channel: event_store
   payload_fields:
   - _id

@@ -16,6 +16,24 @@ final class _UnavailableCloudHttpClient extends CloudHttpClient {
   }) async => http.Response('', 503);
 }
 
+final class _CapturingCloudHttpClient extends CloudHttpClient {
+  _CapturingCloudHttpClient() : super(client: http.Client());
+
+  Map<String, String>? lastHeaders;
+  final headersHistory = <Map<String, String>>[];
+
+  @override
+  Future<http.Response> postBytes(
+    Uri uri, {
+    required Map<String, String> headers,
+    required List<int> body,
+  }) async {
+    lastHeaders = Map<String, String>.from(headers);
+    headersHistory.add(lastHeaders!);
+    return http.Response('', 204);
+  }
+}
+
 void main() {
   group('BehaviorRepository — 常规契约', () {
     late MockBehaviorRepository repo;
@@ -82,6 +100,55 @@ void main() {
         expect(
           event.toJson()['taxonomyReleaseId'],
           'tag-taxonomy-20260723-001',
+        );
+      },
+    );
+
+    test(
+      'remote batch binds the queue owner actor to request headers',
+      () async {
+        final httpClient = _CapturingCloudHttpClient();
+        final remote = RemoteBehaviorRepository(
+          httpClient: httpClient,
+          baseUrl: 'https://api.example.com',
+          queuePartition: ActorQueuePartition(
+            environment: 'gamma',
+            accountId: 'account-1',
+            personaId: 'persona-1',
+            deviceId: 'device-1',
+          ),
+        );
+        addTearDown(() {
+          remote.dispose();
+          httpClient.close();
+        });
+
+        await remote.submitOnboardingInterest(
+          clientEventId: 'onboarding:actor-bound',
+          catalogVersion: 'v1',
+          taxonomyReleaseId: 'tag-taxonomy-20260723-001',
+          tagRefs: const <String>['Topic/兴趣/旅行'],
+        );
+
+        expect(httpClient.lastHeaders, isNotNull);
+        expect(httpClient.lastHeaders!['X-Client-User-Id'], 'account-1');
+        expect(httpClient.lastHeaders!['X-Client-Sub-Account-Id'], 'persona-1');
+        expect(httpClient.lastHeaders!['X-Client-Device-Actor-Id'], 'device-1');
+        expect(
+          httpClient.lastHeaders!['Idempotency-Key'],
+          matches(RegExp(r'^behavior-batch-[0-9a-f]{64}$')),
+        );
+
+        await remote.submitOnboardingInterest(
+          clientEventId: 'onboarding:actor-bound',
+          catalogVersion: 'v1',
+          taxonomyReleaseId: 'tag-taxonomy-20260723-001',
+          tagRefs: const <String>['Topic/兴趣/旅行'],
+        );
+
+        expect(
+          httpClient.headersHistory.last['Idempotency-Key'],
+          httpClient.headersHistory.first['Idempotency-Key'],
         );
       },
     );

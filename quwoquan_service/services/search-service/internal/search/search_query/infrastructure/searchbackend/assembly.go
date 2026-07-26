@@ -1,9 +1,10 @@
-// Package searchbackend assembles the recall backend for search-service from
-// configuration: ES/OpenSearch as primary with an optional native fallback.
+// Package searchbackend assembles the single production recall backend for
+// search-service from the autonomous Elasticsearch/OpenSearch configuration.
 package searchbackend
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	rtsearch "quwoquan_service/runtime/search"
@@ -27,23 +28,24 @@ type ESConfig struct {
 }
 
 // Built holds the assembled backend plus the optional ES client (nil when ES is
-// disabled) so the caller can EnsureIndex and register a health ping.
+// configured) so the caller can EnsureIndex and register a health ping.
 type Built struct {
 	Backend rtsearch.RecallBackend
 	Client  *es.Client
 }
 
-// Build assembles the recall backend. When ES is enabled it is the primary
-// backend (with native fallback when provided); otherwise the native fallback is
-// used directly. ES failures degrade transparently via rtsearch.Retrieve.
-func Build(cfg ESConfig, fallback rtsearch.RecallBackend) (Built, error) {
-	if !cfg.Enabled || len(cfg.Endpoints) == 0 {
-		if fallback == nil {
-			// No ES and no domain sources here: serve an empty native backend so
-			// queries return empty + degrade instead of crashing.
-			fallback = rtsearch.NewSliceBackend(nil)
-		}
-		return Built{Backend: fallback}, nil
+// Build assembles the only production recall backend. Disabled or incomplete ES
+// configuration is rejected instead of selecting another source of truth.
+func Build(cfg ESConfig) (Built, error) {
+	if !cfg.Enabled {
+		return Built{}, fmt.Errorf(
+			"search Elasticsearch recall backend is disabled",
+		)
+	}
+	if len(cfg.Endpoints) == 0 {
+		return Built{}, fmt.Errorf(
+			"search Elasticsearch is enabled without endpoints",
+		)
 	}
 
 	client, err := es.NewClient(es.Config{
@@ -65,12 +67,7 @@ func Build(cfg ESConfig, fallback rtsearch.RecallBackend) (Built, error) {
 		return Built{}, err
 	}
 
-	var backend rtsearch.RecallBackend
-	if fallback != nil {
-		backend = es.NewRecallBackend(client, fallback)
-	} else {
-		backend = es.NewBackend(client, client.IndexName())
-	}
+	backend := es.NewBackend(client, client.IndexName())
 	return Built{Backend: backend, Client: client}, nil
 }
 

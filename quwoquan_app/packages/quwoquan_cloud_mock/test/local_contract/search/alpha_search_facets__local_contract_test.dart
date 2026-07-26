@@ -66,7 +66,7 @@ void main() {
     final writer = AlphaSearchFeedbackWriter();
     final command = ReportSearchFeedbackCommand(
       searchRequestId: 'req-1',
-      eventType: 'click',
+      eventType: SearchFeedbackEventType.click,
       objectId: 'post-1',
     );
 

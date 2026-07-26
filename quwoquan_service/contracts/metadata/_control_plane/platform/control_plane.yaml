@@ -76,10 +76,19 @@ object_types:
         method: GET
         path: /control-plane/platform/configs/instances
         scopes: [ops.platform.config.read]
+        actor: account
+        principal: operator
+        auth_mode: required
+        ownership_policy: operator_scope
       - operation: ReportConfigInstance
         method: POST
         path: /control-plane/platform/configs/instances/{instanceId}:report
-        scopes: [ops.platform.config.write]
+        scopes: [ops.platform.config.ack]
+        actor: account
+        principal: service
+        auth_mode: required
+        ownership_policy: service_instance_bound
+        idempotency: payload_digest_server_side
 
   - object_type: config_release
     view_kind: release

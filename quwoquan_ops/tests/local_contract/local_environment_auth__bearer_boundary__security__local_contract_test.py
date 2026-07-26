@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -183,6 +184,65 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
             gamma.environment["CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET"],
             "account-closure",
         )
+
+    def test_explicit_workspace_scopes_gamma_auth_material(self) -> None:
+        values = {
+            "jwt_secret": "jwt",
+            "device_ticket_secret": "device",
+            "otp_code_ref_key_b64": "code-ref",
+            "push_token_encryption_key_b64": "push-token",
+            "account_closure_subject_hmac_secret": "account-closure",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary) / "deploy-work"
+            with mock.patch.object(
+                local_environment_auth,
+                "_load_or_create_secrets",
+                return_value=values,
+            ):
+                auth = local_environment_auth.prepare_local_environment_auth(
+                    "gamma",
+                    "gamma-local",
+                    deployment_work_root=workspace,
+                )
+
+        self.assertEqual(
+            auth.secret_path,
+            (workspace / "gamma-local" / "secrets" / "auth.env").resolve(),
+        )
+
+    def test_running_gamma_workspace_comes_from_config_mount(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary) / "deploy-work"
+            config_root = workspace / "gamma-local" / "rendered" / "config-root"
+            config_root.mkdir(parents=True)
+            inspected = [
+                {
+                    "Mounts": [
+                        {
+                            "Destination": "/etc/qwq-config",
+                            "Source": str(config_root),
+                        }
+                    ]
+                }
+            ]
+            completed = mock.Mock(
+                returncode=0,
+                stdout=json.dumps(inspected),
+                stderr="",
+            )
+            with mock.patch.object(
+                local_environment_auth.subprocess,
+                "run",
+                return_value=completed,
+            ):
+                resolved = (
+                    local_environment_auth.resolve_running_local_deployment_work_root(
+                        "gamma-local"
+                    )
+                )
+
+        self.assertEqual(resolved, workspace.resolve())
 
     def test_rejects_cross_environment_target_pair(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported local environment target"):

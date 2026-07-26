@@ -16,5 +16,10 @@ func otpExternalInteractionClientForEnvironment(
 	if _, err := otpCodeGeneratorForMode(appEnv, mode); err != nil {
 		return nil, err
 	}
+	if nonPromotableFirstPartyPrevalidation(appEnv) {
+		// The application layer maps a nil client to the canonical provider
+		// unavailable error. Do not load mTLS material or fall back to a fixture.
+		return nil, nil
+	}
 	return newRemoteOTPExternalInteractionClient(baseURL, appEnv, signer)
 }

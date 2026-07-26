@@ -26,6 +26,10 @@ type Config struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
 	} `yaml:"mongodb"`
+	Redis struct {
+		General RedisSceneConfig `yaml:"general"`
+		Rec     RedisSceneConfig `yaml:"rec"`
+	} `yaml:"redis"`
 	Integration struct {
 		Location struct {
 			NearbyDefaultRadiusMeters int     `yaml:"nearby_default_radius_meters"`
@@ -35,9 +39,8 @@ type Config struct {
 			DefaultLongitude          float64 `yaml:"default_longitude"`
 		} `yaml:"location"`
 		ExternalInteraction struct {
-			CallbackSecret string                     `yaml:"callback_secret"`
-			SMS            ExternalProviderConfig     `yaml:"sms"`
-			Push           PushDeliveryProviderConfig `yaml:"push"`
+			SMS  ExternalProviderConfig     `yaml:"sms"`
+			Push PushDeliveryProviderConfig `yaml:"push"`
 		} `yaml:"external_interaction"`
 	} `yaml:"integration"`
 }
@@ -71,6 +74,22 @@ type PushDeliveryProviderConfig struct {
 		ServiceAccountFile string `yaml:"service_account_file"`
 		ProjectID          string `yaml:"project_id"`
 	} `yaml:"fcm"`
+}
+
+type RedisSceneConfig struct {
+	Mode     string   `yaml:"mode"`
+	Addr     string   `yaml:"addr"`
+	Addrs    []string `yaml:"addrs"`
+	Password string   `yaml:"password"`
+	DB       int      `yaml:"db"`
+	TLS      bool     `yaml:"tls"`
+	Pool     struct {
+		Size           int `yaml:"size"`
+		MinIdle        int `yaml:"min_idle"`
+		ReadTimeoutMs  int `yaml:"read_timeout_ms"`
+		WriteTimeoutMs int `yaml:"write_timeout_ms"`
+		DialTimeoutMs  int `yaml:"dial_timeout_ms"`
+	} `yaml:"pool"`
 }
 
 func Load() (Config, error) {
@@ -178,9 +197,23 @@ func NormalizeDefaults(cfg *Config) {
 	if cfg.Integration.ExternalInteraction.Push.TimeoutMs <= 0 {
 		cfg.Integration.ExternalInteraction.Push.TimeoutMs = 5000
 	}
+	if strings.TrimSpace(cfg.Redis.General.Mode) == "" {
+		if cfg.Environment == "alpha" {
+			cfg.Redis.General.Mode = "memory"
+		} else {
+			cfg.Redis.General.Mode = "standalone"
+		}
+	}
+	if strings.TrimSpace(cfg.Redis.Rec.Mode) == "" {
+		cfg.Redis.Rec.Mode = "standalone"
+	}
 }
 
 func Validate(cfg Config) error {
+	// Callers of the public config validator include contract tests and startup
+	// composition. Normalize here as well as at startup so both paths enforce
+	// the same fail-closed Redis policy.
+	NormalizeDefaults(&cfg)
 	if invalidRequiredConfigValue(cfg.MongoDB.URI) {
 		return fmt.Errorf("mongodb.uri is required (INTEGRATION_MONGO_URI or MONGO_URI)")
 	}
@@ -219,6 +252,35 @@ func Validate(cfg Config) error {
 	}
 	if err := validatePushDeliveryConfig(cfg.Environment, cfg.Integration.ExternalInteraction.Push); err != nil {
 		return err
+	}
+	return nil
+}
+
+func ValidateResultRelayRedis(environment string, cfg RedisSceneConfig) error {
+	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
+	if environment == "alpha" && mode == "memory" {
+		return nil
+	}
+	switch mode {
+	case "standalone":
+		if invalidRequiredConfigValue(cfg.Addr) {
+			return fmt.Errorf(
+				"redis.general.addr is required for external result relay when APP_ENV=%s",
+				environment,
+			)
+		}
+	case "cluster":
+		if len(cfg.Addrs) == 0 {
+			return fmt.Errorf(
+				"redis.general.addrs is required for external result relay when APP_ENV=%s",
+				environment,
+			)
+		}
+	default:
+		return fmt.Errorf(
+			"redis.general.mode must be memory in alpha or standalone/cluster, got %q",
+			cfg.Mode,
+		)
 	}
 	return nil
 }
@@ -329,6 +391,18 @@ func ApplyEnvOverrides(cfg *Config) error {
 	if value := strings.TrimSpace(os.Getenv("INTEGRATION_MONGO_DATABASE")); value != "" {
 		cfg.MongoDB.Database = value
 	}
+	if err := applyRedisSceneEnv(
+		"INTEGRATION_REDIS_GENERAL",
+		&cfg.Redis.General,
+	); err != nil {
+		return err
+	}
+	if err := applyRedisSceneEnv(
+		"INTEGRATION_REDIS_REC",
+		&cfg.Redis.Rec,
+	); err != nil {
+		return err
+	}
 	if value := os.Getenv("INTEGRATION_SERVICE_ADDR"); value != "" {
 		cfg.Service.HTTP.Addr = value
 	}
@@ -357,8 +431,40 @@ func ApplyEnvOverrides(cfg *Config) error {
 	); err != nil {
 		return err
 	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_CALLBACK_SECRET")); value != "" {
-		cfg.Integration.ExternalInteraction.CallbackSecret = value
+	return nil
+}
+
+func applyRedisSceneEnv(prefix string, cfg *RedisSceneConfig) error {
+	if value := strings.TrimSpace(os.Getenv(prefix + "_MODE")); value != "" {
+		cfg.Mode = value
+	}
+	if value := strings.TrimSpace(os.Getenv(prefix + "_ADDR")); value != "" {
+		cfg.Addr = value
+	}
+	if value := strings.TrimSpace(os.Getenv(prefix + "_ADDRS")); value != "" {
+		cfg.Addrs = nil
+		for _, raw := range strings.Split(value, ",") {
+			if addr := strings.TrimSpace(raw); addr != "" {
+				cfg.Addrs = append(cfg.Addrs, addr)
+			}
+		}
+	}
+	if value := strings.TrimSpace(os.Getenv(prefix + "_PASSWORD")); value != "" {
+		cfg.Password = value
+	}
+	if value := strings.TrimSpace(os.Getenv(prefix + "_DB")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 0 {
+			return fmt.Errorf("%s_DB must be a non-negative integer", prefix)
+		}
+		cfg.DB = parsed
+	}
+	if value := strings.TrimSpace(os.Getenv(prefix + "_TLS")); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("%s_TLS must be boolean", prefix)
+		}
+		cfg.TLS = parsed
 	}
 	return nil
 }

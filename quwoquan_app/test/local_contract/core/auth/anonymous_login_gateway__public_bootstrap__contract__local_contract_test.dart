@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,30 @@ void main() {
 
     expect(contract.timeoutMilliseconds, 10000);
     expect(contract.maxAttempts, 2);
+  });
+
+  test('Patrol Remote setup 仅按结构化恢复语义重放同一匿名登录命令', () {
+    final direct = File('lib/core/testing/patrol_test_support.dart');
+    final source =
+        (direct.existsSync()
+                ? direct
+                : File(
+                    'quwoquan_app/lib/core/testing/patrol_test_support.dart',
+                  ))
+            .readAsStringSync();
+    final commandIndex = source.indexOf(
+      'final command = LoginAnonymousCommand(',
+    );
+    final loopIndex = source.indexOf(
+      'attempt <= _patrolAnonymousLoginSetupAttempts',
+    );
+
+    expect(source, contains('_patrolAnonymousLoginSetupAttempts = 3'));
+    expect(source, contains('const Duration(seconds: 45)'));
+    expect(source, contains('runtimeFailure.recovery.action'));
+    expect(source, contains('.loginAnonymous(command)'));
+    expect(commandIndex, greaterThanOrEqualTo(0));
+    expect(loopIndex, greaterThan(commandIndex));
   });
 
   test(

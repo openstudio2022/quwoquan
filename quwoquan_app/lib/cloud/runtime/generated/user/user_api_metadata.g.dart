@@ -108,6 +108,7 @@ class UserApiMetadata {
     'ResolvePushEndpointSecret': '/internal/user/push-endpoints/{endpointRef}/secret',
     'RestoreAccount': '/internal/user/accounts/{userId}/restore',
     'RetirePersona': '/user/personas/{subAccountId}/retire',
+    'RollbackProposal': '/user/profile/proposals/{id}/rollback',
     'SearchSocialRelations': '/user/search/social-relations',
     'SendGreetingRequest': '/user/greeting-request',
     'SendOtp': '/auth/otp/send',
@@ -197,6 +198,7 @@ class UserApiMetadata {
     'ResolvePushEndpointSecret': 'GET',
     'RestoreAccount': 'POST',
     'RetirePersona': 'POST',
+    'RollbackProposal': 'POST',
     'SearchSocialRelations': 'GET',
     'SendGreetingRequest': 'POST',
     'SendOtp': 'POST',
@@ -287,6 +289,7 @@ class UserApiMetadata {
     'ResolvePushEndpointSecret': 'required',
     'RestoreAccount': 'required',
     'RetirePersona': 'required',
+    'RollbackProposal': 'required',
     'SearchSocialRelations': 'required',
     'SendGreetingRequest': 'required',
     'SendOtp': 'public',
@@ -320,6 +323,7 @@ class UserApiMetadata {
     'ListProfileUpdateProposals': 'page',
     'LoginAnonymous': 'object',
     'RejectProposal': 'object',
+    'RollbackProposal': 'object',
   };
 
   static const String acceptInvitationOperation = 'AcceptInvitation';
@@ -393,6 +397,7 @@ class UserApiMetadata {
   static const String resolvePushEndpointSecretOperation = 'ResolvePushEndpointSecret';
   static const String restoreAccountOperation = 'RestoreAccount';
   static const String retirePersonaOperation = 'RetirePersona';
+  static const String rollbackProposalOperation = 'RollbackProposal';
   static const String searchSocialRelationsOperation = 'SearchSocialRelations';
   static const String sendGreetingRequestOperation = 'SendGreetingRequest';
   static const String sendOtpOperation = 'SendOtp';
@@ -656,6 +661,12 @@ class UserApiMetadata {
   static String retirePersonaPath({required String subAccountId}) {
     return _fillPath(retirePersonaPathTemplate, <String, String>{
       'subAccountId': subAccountId,
+    });
+  }
+  static const String rollbackProposalPathTemplate = '/user/profile/proposals/{id}/rollback';
+  static String rollbackProposalPath({required String id}) {
+    return _fillPath(rollbackProposalPathTemplate, <String, String>{
+      'id': id,
     });
   }
   static const String searchSocialRelationsPath = '/user/search/social-relations';

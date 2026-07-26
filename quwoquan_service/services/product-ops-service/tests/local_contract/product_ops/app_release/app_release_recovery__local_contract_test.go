@@ -100,6 +100,33 @@ func TestAppReleaseRejectsUntrustedAndroidAPKAndIncompleteProof(t *testing.T) {
 	if _, err := apprelease.NewService(catalog); err == nil {
 		t.Fatal("missing apk sha256 must be rejected")
 	}
+
+	catalog = appReleaseCatalog()
+	catalog.Android.UpdateURL = "https://attacker.example/download/android"
+	if _, err := apprelease.NewService(catalog); err == nil {
+		t.Fatal("android update url outside the official web host must be rejected")
+	}
+
+	catalog = appReleaseCatalog()
+	catalog.IOS.RecoveryURL = "https://attacker.example/recovery"
+	if _, err := apprelease.NewService(catalog); err == nil {
+		t.Fatal("recovery url outside the official web host must be rejected")
+	}
+}
+
+func TestAndroidOfficialReleaseRemainsAvailableWithoutIOSRelease(t *testing.T) {
+	catalog := appReleaseCatalog()
+	catalog.IOS = apprelease.Release{}
+	service, err := apprelease.NewService(catalog)
+	if err != nil {
+		t.Fatalf("android-only release service: %v", err)
+	}
+	if _, ok := service.Release(apprelease.PlatformAndroid); !ok {
+		t.Fatal("android release must remain available")
+	}
+	if _, ok := service.Release(apprelease.PlatformIOS); ok {
+		t.Fatal("unconfigured ios release must stay unavailable")
+	}
 }
 
 func TestUnknownDeviceGetsChoicePageWithoutThirdPartyNavigation(t *testing.T) {

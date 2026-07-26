@@ -33,7 +33,8 @@ func isAuthorizedAccountSecurityAuthorityCaller(accountID string) bool {
 		"service:product-ops-service",
 		"service:realtime-gateway",
 		"service:rtc-service",
-		"service:search-service":
+		"service:search-service",
+		"service:tag-service":
 		return true
 	default:
 		return false

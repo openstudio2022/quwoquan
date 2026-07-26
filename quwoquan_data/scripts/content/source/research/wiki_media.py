@@ -14,7 +14,6 @@ from content.source.research.source_quality import (
     _ARTICLE_BASE_CATEGORIES,
     _evidence_reason,
     _image_pixel_issue,
-    _license_allows_app_publish,
 )
 from content.source.research.source_registry import _known_image_search_hints
 from content.source.research.text_match import (
@@ -140,14 +139,8 @@ def _mediawiki_page_images(
         meta = info.get("extmetadata") or {}
         license_name = _strip_html(((meta.get("LicenseShortName") or {}).get("value") or ""))
         license_url = _strip_html(((meta.get("LicenseUrl") or {}).get("value") or ""))
-        # 许可可发布性以 _license_allows_app_publish 为唯一真相源：公有领域(PD/CC0)即便
-        # extmetadata 无 LicenseUrl 也合规可发布，不再用 `not license_url` 误丢真实底稿图。
-        if not _license_allows_app_publish(license_name, license_url):
-            continue
         width = int(info.get("width") or 0)
         height = int(info.get("height") or 0)
-        if width < 640 or height < 426 or max(width, height) < 800:
-            continue
         seen_urls.add(url)
         credit = _strip_html(
             ((meta.get("Artist") or {}).get("value") or "")

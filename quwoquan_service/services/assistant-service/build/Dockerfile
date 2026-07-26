@@ -20,6 +20,10 @@ RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOMAXPROCS=1 GOGC=10 GOMEMLIMIT=1024MiB \
     go build ${GO_BUILD_FLAGS} -o /assistant-service ./services/assistant-service/cmd/api
+RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
+    --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOMAXPROCS=1 GOGC=10 GOMEMLIMIT=1024MiB \
+    go build ${GO_BUILD_FLAGS} -o /assistant-policy-publish ./services/assistant-service/cmd/policy-publish
 
 FROM ${ALPINE_BASE_IMAGE}
 RUN if command -v apk >/dev/null 2>&1; then \
@@ -37,6 +41,7 @@ RUN if command -v apk >/dev/null 2>&1; then \
     fi
 WORKDIR /app
 COPY --from=builder /assistant-service /usr/local/bin/assistant-service
+COPY --from=builder /assistant-policy-publish /usr/local/bin/assistant-policy-publish
 COPY services/assistant-service/resources/ /app/resources/
 EXPOSE 18087
 CMD ["assistant-service"]

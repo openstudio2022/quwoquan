@@ -3,7 +3,9 @@ package persistence
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -27,18 +29,69 @@ func NewMongoCircleStore(coll *mongo.Collection) *MongoCircleStore {
 }
 
 func (s *MongoCircleStore) FindByID(ctx context.Context, id string) (*model.Circle, bool) {
-	var c model.Circle
-	err := s.coll.FindOne(ctx, bson.M{"_id": id}).Decode(&c)
-	if errors.Is(err, mongo.ErrNoDocuments) {
+	circle, found, err := s.LoadForSearch(ctx, id)
+	if err != nil {
+		s.logger.Error(
+			"circle FindByID storage failure",
+			"circleId",
+			id,
+			"error",
+			err,
+		)
 		return nil, false
+	}
+	return circle, found
+}
+
+// LoadForSearch preserves storage failures for durable search projection.
+func (s *MongoCircleStore) LoadForSearch(
+	ctx context.Context,
+	id string,
+) (*model.Circle, bool, error) {
+	var c model.Circle
+	err := s.coll.FindOne(
+		ctx,
+		bson.M{"_id": strings.TrimSpace(id)},
+	).Decode(&c)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, false, nil
 	}
 	if err != nil {
-		// 读端口签名保持 (value, bool)；存储故障与 not-found 在日志层面区分，
-		// 避免把基础设施错误静默成业务空态却无观测痕迹。
-		s.logger.Error("circle FindByID storage failure", "circleId", id, "error", err)
-		return nil, false
+		return nil, false, fmt.Errorf("load Circle %s: %w", id, err)
 	}
-	return &c, true
+	return &c, true, nil
+}
+
+// ListForSearch scans every Circle by stable _id keyset, including archived and
+// private records so reconcile can actively delete stale search documents.
+func (s *MongoCircleStore) ListForSearch(
+	ctx context.Context,
+	afterID string,
+	limit int,
+) ([]model.Circle, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	filter := bson.M{}
+	if afterID = strings.TrimSpace(afterID); afterID != "" {
+		filter["_id"] = bson.M{"$gt": afterID}
+	}
+	cursor, err := s.coll.Find(
+		ctx,
+		filter,
+		options.Find().
+			SetSort(bson.D{{Key: "_id", Value: 1}}).
+			SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list Circles for search: %w", err)
+	}
+	defer cursor.Close(ctx)
+	var circles []model.Circle
+	if err := cursor.All(ctx, &circles); err != nil {
+		return nil, fmt.Errorf("decode Circles for search: %w", err)
+	}
+	return circles, nil
 }
 
 func (s *MongoCircleStore) List(ctx context.Context, opts application.ListCirclesQuery) ([]model.Circle, string) {

@@ -16,6 +16,10 @@ _POLICY_ARGUMENT = re.compile(
     r"(?:timeout|timeout_seconds|retry_limit|max_retries|max_workers|concurrency|stagger_seconds|backoff_seconds)$",
     re.IGNORECASE,
 )
+_POLICY_ASSIGNMENT = re.compile(
+    r"(?:timeout|retry|worker|concurrency|stagger|backoff)",
+    re.IGNORECASE,
+)
 _RETIRED_PHASE = re.compile(r"\b(?:canary|m[1-3]|h10k)\b", re.IGNORECASE)
 _RETIRED_TASK_TOKEN = re.compile(r"(?:two[_ -]?province|rolloutMilestone)", re.IGNORECASE)
 _RETIRED_TASK_IDENTIFIER = re.compile(
@@ -69,6 +73,26 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
                 issues.append(
                     f"{label}:{node.lineno}: {argument.arg} numeric default belongs to runtime policy"
                 )
+    for node in tree.body:
+        names: list[str] = []
+        value: ast.expr | None = None
+        if isinstance(node, ast.Assign):
+            names = [target.id for target in node.targets if isinstance(target, ast.Name)]
+            value = node.value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names = [node.target.id]
+            value = node.value
+        if (
+            value is not None
+            and isinstance(value, ast.Constant)
+            and isinstance(value.value, (int, float))
+            and not isinstance(value.value, bool)
+        ):
+            for name in names:
+                if _POLICY_ASSIGNMENT.search(name):
+                    issues.append(
+                        f"{label}:{node.lineno}: module control {name!r} belongs to runtime policy"
+                    )
     issues.extend(text_control_literal_issues(source, label=label))
     return issues
 
@@ -81,7 +105,12 @@ def control_literal_issues() -> list[str]:
         issues.append(f"runtime policy is invalid: {exc}")
         return issues
     for path in sorted(SCRIPTS_ROOT.rglob("*.py")):
-        if path == Path(__file__).resolve() or "__pycache__" in path.parts or "verify" in path.parts:
+        if (
+            path == Path(__file__).resolve()
+            or "__pycache__" in path.parts
+            or "generated" in path.parts
+            or "verify" in path.parts
+        ):
             continue
         issues.extend(
             source_control_literal_issues(

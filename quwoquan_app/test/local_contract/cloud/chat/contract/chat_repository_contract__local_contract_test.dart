@@ -279,13 +279,12 @@ void main() {
     // ── 联系人 ──────────────────────────────────────────────────────────
 
     test('listContacts 返回联系人列表', () async {
-      final contacts = await repo.listContacts();
-      expect(contacts, isList);
-      expect(contacts, isNotEmpty);
-      expect(contacts.first.relationState, isNotEmpty);
-      expect(contacts.first.source, isNotEmpty);
+      final page = await repo.listContacts();
+      expect(page.items, isNotEmpty);
+      expect(page.items.first.relationState, isNotEmpty);
+      expect(page.items.first.source, isNotEmpty);
       expect(
-        contacts.where((contact) => contact.relationState == 'mutual'),
+        page.items.where((contact) => contact.relationState == 'mutual'),
         isNotEmpty,
       );
     });

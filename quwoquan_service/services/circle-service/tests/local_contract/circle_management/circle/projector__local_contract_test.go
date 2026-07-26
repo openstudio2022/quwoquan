@@ -3,6 +3,7 @@ package local_contract
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -96,28 +97,40 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // fakeReader is an in-memory CircleReader for projector tests.
 type fakeReader struct {
 	byID map[string]model.Circle
+	err  error
 }
 
-func (r fakeReader) FindByID(_ context.Context, id string) (*model.Circle, bool) {
+func (r fakeReader) LoadForSearch(
+	_ context.Context,
+	id string,
+) (*model.Circle, bool, error) {
+	if r.err != nil {
+		return nil, false, r.err
+	}
 	c, ok := r.byID[id]
 	if !ok {
-		return nil, false
+		return nil, false, nil
 	}
 	cp := c
-	return &cp, true
+	return &cp, true, nil
 }
 
 func publicCircle() model.Circle {
 	return model.Circle{
 		ID: "circle_1", Name: "洱海骑行圈", Description: "环湖骑行与露营交流",
 		Category: "outdoor", DomainID: "travel", Kind: model.CircleKindInterest,
-		Tags: []string{"骑行", "洱海"}, MemberCount: 120, PostCount: 30,
+		CoverUrl: "https://cdn.example/circle.webp",
+		Tags:     []string{"骑行", "洱海"}, MemberCount: 120, PostCount: 30,
 		Status: model.CircleStatusActive, Visibility: model.CircleVisibilityPublic,
 		UpdatedAt: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
 	}
 }
 
-func newProjectorWithFakeES(t *testing.T, f *fakeES, reader application.CircleReader) *Projector {
+func newProjectorWithFakeES(
+	t *testing.T,
+	f *fakeES,
+	reader CircleReader,
+) *Projector {
 	t.Helper()
 	srv := httptest.NewServer(f.handler())
 	t.Cleanup(srv.Close)
@@ -147,6 +160,14 @@ func TestProjectorUpsertsOnCreate(t *testing.T) {
 	}
 	if doc["objectId"] != "circle_1" || doc["target"] != string(rtsearch.TargetCircle) {
 		t.Fatalf("bad indexed doc: %#v", doc)
+	}
+	payload, ok := doc["payload"].(map[string]any)
+	if !ok ||
+		payload["circleName"] != circle.Name ||
+		payload["coverUrl"] != circle.CoverUrl ||
+		payload["memberCount"] != "120" ||
+		payload["postCount"] != "30" {
+		t.Fatalf("circle presentation payload incomplete: %#v", doc["payload"])
 	}
 }
 
@@ -236,9 +257,7 @@ func TestProjectorIgnoresCounterOnlyEvents(t *testing.T) {
 	}
 }
 
-// TestProjectorESOutageDoesNotBlock asserts an ES write failure is swallowed
-// (recorded, returns nil) so the primary circle write path is never blocked.
-func TestProjectorESOutageDoesNotBlock(t *testing.T) {
+func TestProjectorESOutageKeepsOutboxCheckpointRetryable(t *testing.T) {
 	circle := publicCircle()
 	f := newFakeES()
 	f.writeFailStatus = http.StatusServiceUnavailable
@@ -246,18 +265,39 @@ func TestProjectorESOutageDoesNotBlock(t *testing.T) {
 
 	if err := proj.Publish(context.Background(), messaging.DomainEvent{
 		Type: "CircleCreated", AggregateID: circle.ID,
-	}); err != nil {
-		t.Fatalf("ES outage must not propagate to the write path, got err=%v", err)
+	}); err == nil {
+		t.Fatal("ES outage must propagate to the dedicated outbox relay")
 	}
 }
 
-func TestProjectorNilIndexerIsNoOp(t *testing.T) {
+func TestProjectorReadFailureNeverDeletesOrAcknowledges(t *testing.T) {
+	f := newFakeES()
+	proj := newProjectorWithFakeES(
+		t,
+		f,
+		fakeReader{err: errors.New("mongo unavailable")},
+	)
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{
+		Type: "CircleUpdated", AggregateID: "circle_1",
+	}); err == nil {
+		t.Fatal("storage failure must keep the outbox checkpoint retryable")
+	}
+	if len(f.upserts) != 0 || len(f.deletes) != 0 {
+		t.Fatalf(
+			"storage failure must not mutate index: upserts=%#v deletes=%#v",
+			f.upserts,
+			f.deletes,
+		)
+	}
+}
+
+func TestProjectorMissingIndexerFailsFast(t *testing.T) {
 	var proj *Projector // nil receiver
-	if err := proj.Publish(context.Background(), messaging.DomainEvent{Type: "CircleCreated", AggregateID: "x"}); err != nil {
-		t.Fatalf("nil projector must be a no-op, got %v", err)
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{Type: "CircleCreated", AggregateID: "x"}); err == nil {
+		t.Fatal("nil projector must fail")
 	}
 	proj = NewProjector(nil, fakeReader{}) // nil indexer
-	if err := proj.Publish(context.Background(), messaging.DomainEvent{Type: "CircleCreated", AggregateID: "x"}); err != nil {
-		t.Fatalf("nil indexer must be a no-op, got %v", err)
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{Type: "CircleCreated", AggregateID: "x"}); err == nil {
+		t.Fatal("nil indexer must fail")
 	}
 }

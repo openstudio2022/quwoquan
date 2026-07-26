@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -165,7 +166,7 @@ def _result_from_text(
     return None
 
 
-def run_post_independent_reviews(
+def _run_post_independent_reviews_serial(
     ctx: ExecutionContext,
     refs: list[str],
 ) -> list[DataIssue]:
@@ -329,6 +330,20 @@ def run_post_independent_reviews(
             for issue in bound
         )
     return issues
+
+
+def run_post_independent_reviews(
+    ctx: ExecutionContext,
+    refs: list[str],
+) -> list[DataIssue]:
+    """Review posts concurrently, preserving input-order issue reporting."""
+    reviewer_workers = active_runtime_policy().reviewer_workers
+    with ThreadPoolExecutor(max_workers=reviewer_workers) as executor:
+        futures = [
+            executor.submit(_run_post_independent_reviews_serial, ctx, [ref])
+            for ref in refs
+        ]
+        return [issue for future in futures for issue in future.result()]
 
 
 __all__ = ["run_post_independent_reviews"]

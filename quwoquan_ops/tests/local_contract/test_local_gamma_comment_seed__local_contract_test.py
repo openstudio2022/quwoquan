@@ -28,6 +28,22 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
             r"^sha256:[0-9a-f]{64}$",
         )
 
+    def test_fixture_post_preserves_canonical_tag_refs_for_search_backfill(self) -> None:
+        document = local_gamma_t3.fixture_post_to_doc(
+            {
+                "postId": "fixture_photo_search_tags",
+                "contentType": "image",
+                "title": "带标签的 Gamma 搜索内容",
+                "tagRefs": ["fixture", "photography", "fixture"],
+                "tags": ["must-not-override-canonical-tag-refs"],
+            }
+        )
+
+        self.assertEqual(
+            document["tagRefs"],
+            ["fixture", "photography", "fixture"],
+        )
+
     def test_content_seed_does_not_write_comment_aggregate_documents(
         self,
     ) -> None:
@@ -39,6 +55,7 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
                             "postId": "fixture_photo_001",
                             "contentType": "image",
                             "createdAt": "2026-06-05T11:00:00Z",
+                            "tagRefs": ["fixture", "photography"],
                         }
                     ],
                     "comments": [
@@ -96,6 +113,10 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
             "dbh.posts.deleteMany({_id: {$in: ids}})",
             seed_script,
         )
+        self.assertIn(
+            'tagRefs: Array.isArray(doc.tagRefs) ? doc.tagRefs : [],',
+            seed_script,
+        )
         self.assertNotIn("dbh.comments", seed_script)
 
     def test_comment_thread_setup_uses_public_commands_without_expected_version(
@@ -131,8 +152,13 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
         self.assertEqual(result["replyCommentId"], "comment-reply")
         self.assertEqual(len(calls), 4)
         self.assertEqual(
-            calls[0][0],
-            "https://gamma.example/content/content/posts/fixture_photo_001/comments",
+            [call[0] for call in calls],
+            [
+                "https://gamma.example/content/posts/fixture_photo_001/comments",
+                "https://gamma.example/content/posts/fixture_photo_001/comments",
+                "https://gamma.example/content/comments/comment-parent/reaction",
+                "https://gamma.example/content/comments/comment-parent/media:bind",
+            ],
         )
         self.assertEqual(calls[0][1]["body"], {"content": "主评论示例"})
         self.assertEqual(

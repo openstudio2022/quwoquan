@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -410,6 +411,76 @@ void main() {
     expect(intent.lastErrorCode, 'CONTENT.USER.media_not_ready');
   });
 
+  test('上传完成的 processing asset 在提交前入队，不依赖发布失败探测', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final media = RecordingContentMediaFacet(
+      completedAssetStatus: ContentMediaProcessingStatus.processing,
+    );
+    final writer = _SuccessfulPublicationWriter();
+    final container = _container(
+      writer: writer,
+      drafts: _RecordingDraftRepository(),
+      media: media,
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(
+      postPublicationIntentQueueProvider.notifier,
+    );
+    final command = _command(contentType: ContentPostType.image);
+    await _recordCompletedMedia(
+      notifier: notifier,
+      media: media,
+      command: command,
+    );
+
+    await expectLater(
+      notifier.submit(command: command, authorPersonaId: 'persona-publication'),
+      throwsA(isA<PostPublicationQueuedException>()),
+    );
+
+    final intent = container
+        .read(postPublicationIntentQueueProvider)
+        .intents
+        .single;
+    expect(writer.commands, isEmpty);
+    expect(intent.blocked, isFalse);
+    expect(intent.lastErrorCode, ContentErrorCode.mediaNotReady.code);
+  });
+
+  test('上传完成的 rejected asset 阻断发布并保留草稿', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final media = RecordingContentMediaFacet(
+      completedAssetStatus: ContentMediaProcessingStatus.rejected,
+    );
+    final writer = _SuccessfulPublicationWriter();
+    final drafts = _RecordingDraftRepository();
+    final container = _container(writer: writer, drafts: drafts, media: media);
+    addTearDown(container.dispose);
+    final notifier = container.read(
+      postPublicationIntentQueueProvider.notifier,
+    );
+    final command = _command(contentType: ContentPostType.image);
+    await _recordCompletedMedia(
+      notifier: notifier,
+      media: media,
+      command: command,
+    );
+
+    await expectLater(
+      notifier.submit(command: command, authorPersonaId: 'persona-publication'),
+      throwsA(isA<PostPublicationTaskBlockedException>()),
+    );
+
+    final intent = container
+        .read(postPublicationIntentQueueProvider)
+        .intents
+        .single;
+    expect(writer.commands, isEmpty);
+    expect(intent.blocked, isTrue);
+    expect(intent.lastErrorCode, ContentErrorCode.mediaProcessingRejected.code);
+    expect(drafts.deletedDraftIds, isEmpty);
+  });
+
   test('未授权即使 HTTP 分类曾可重试也按 reauthenticate 永久阻断', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final writer = _CloudFailingPublicationWriter(
@@ -593,6 +664,48 @@ Future<void> _waitForPublication(_SuccessfulPublicationWriter writer) async {
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
   fail('publication queue did not replay');
+}
+
+Future<void> _recordCompletedMedia({
+  required PostPublicationIntentQueueNotifier notifier,
+  required RecordingContentMediaFacet media,
+  required SubmitContentPostPublicationCommand command,
+}) async {
+  await notifier.beginMediaPreparation(
+    command: command,
+    authorPersonaId: 'persona-publication',
+  );
+  final checkpoint = ContentMediaPreparationCheckpoint.forSource(
+    preparationIdentity: command.localDraftId,
+    slot: 'image:0',
+    mediaType: ContentMediaType.image,
+    sha256Digest: 'sha256:$_pendingVideoDigest',
+  );
+  final initialized = await media.initUpload(
+    InitContentMediaUploadCommand(
+      mediaType: ContentMediaType.image,
+      contentType: 'image/jpeg',
+      fileSize: 4,
+      expectedSha256: 'sha256:$_pendingVideoDigest',
+    ),
+    ContentMediaUploadCommandContext(
+      idempotencyKey: checkpoint.initIdempotencyKey,
+    ),
+  );
+  final completed = await media.completeUpload(
+    CompleteContentMediaUploadCommand(sessionId: initialized.sessionId),
+    ContentMediaUploadCommandContext(
+      idempotencyKey: checkpoint.completeIdempotencyKey,
+    ),
+  );
+  await notifier.recordPreparedMediaAsset(
+    command.localDraftId,
+    checkpoint.copyWith(
+      sessionId: initialized.sessionId,
+      assetId: completed.assetId!,
+      phase: ContentMediaPreparationPhase.completed,
+    ),
+  );
 }
 
 SubmitContentPostPublicationCommand _command({

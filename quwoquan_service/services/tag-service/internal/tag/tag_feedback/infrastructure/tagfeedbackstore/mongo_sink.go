@@ -34,6 +34,14 @@ func (s *Sink) EnsureIndexes(ctx context.Context) error {
 			Keys:    bson.D{{Key: "tagRef", Value: 1}, {Key: "recordedAt", Value: -1}},
 			Options: options.Index().SetName("idx_tag_feedback_tag_recorded"),
 		},
+		{
+			Keys: bson.D{
+				{Key: "eventPublishedAt", Value: 1},
+				{Key: "recordedAt", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_tag_feedback_pending_event"),
+		},
 	})
 	return err
 }
@@ -59,7 +67,10 @@ func (s *Sink) Append(ctx context.Context, feedback model.Feedback) (model.Feedb
 	if findErr != nil {
 		return model.Feedback{}, false, findErr
 	}
-	if existing.TagRef != feedback.TagRef || existing.Action != feedback.Action {
+	if existing.ActorKind != feedback.ActorKind ||
+		existing.TagRef != feedback.TagRef ||
+		existing.Action != feedback.Action ||
+		existing.Context != feedback.Context {
 		return model.Feedback{}, false, model.ErrIdempotencyConflict
 	}
 	return existing, true, nil

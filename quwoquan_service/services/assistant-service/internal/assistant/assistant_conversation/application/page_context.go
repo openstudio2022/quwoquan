@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	rtredis "quwoquan_service/runtime/redis"
+	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_conversation"
 	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 )
@@ -118,12 +119,16 @@ func normalizePageContextSnapshot(
 	raw assistant.AssistantContextSnapshot,
 	now time.Time,
 ) (assistant.AssistantContextSnapshot, error) {
-	pageType := strings.TrimSpace(raw.PageType)
-	if !validContextIdentifier(pageType, 96) {
+	pageContextType, parseErr := assistantgenerated.ParseAssistantPageContextType(
+		raw.PageType,
+	)
+	if parseErr != nil ||
+		pageContextType == assistantgenerated.AssistantPageContextTypeUnknown {
 		return assistant.AssistantContextSnapshot{}, fmt.Errorf(
 			"page context pageType is invalid",
 		)
 	}
+	pageType := pageContextType.WireName()
 	capturedAt := raw.CapturedAt.UTC()
 	if capturedAt.IsZero() ||
 		capturedAt.After(now.Add(time.Minute)) ||

@@ -115,6 +115,8 @@
 ### REQ-010 离线来电必须由真实 provider、设备和发布证据准出，不得以本地通知或固定成功代替
 
 - 离线来电必须由真实 provider、设备和发布证据准出，不得以本地通知或固定成功代替。
+- Provider 请求、厂商结果与设备展示分别以事务 outbox、幂等 inbox 和 presentation ACK 记账；B10 必须把两次反向真机呼叫的 delivery timeline、Realtime、唯一 Chat 通话记录和终态 QoE 绑定到同一组 call digest。
+- last-good/rollback 只接受从 `prod-hosted` service-plane 回读并重算 digest 的不可变 receipt；本地 `.qwq_output` 只可保存副本，不能提升 readiness。
 - 端到端媒体加密不在现行范围；建立该能力前必须先定义 metadata 对象/operation、隐私和密钥生命周期。
 - 以 P2P 作为 SFU 的临时 fallback；当前媒体路径统一为 LiveKit SFU。
 - 30 秒未接的 1v1 呼叫以 `no_answer` 结束；系统超时与业务无应答不得混写。
@@ -308,6 +310,6 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：rtc_media_qoe 有生产 emitter、去重终态与有界维度，且不会把 callId/userId 放进 Prometheus label。
+- 影响或价值：缺少受控 Gamma/Prod 凭据、两台真机、真实 QoE series 与获批发布/回滚运行证据；代码与 source-owned B10 已覆盖 emitter、终态去重、默认遮罩、同 call digest 关联和 hosted receipt 校验。
+- 目标：在同一候选上完成双向真机呼叫、弱网/重连、告警恢复与 hosted rollback readback。
 - 完成判定：`SIT-009` 对应行为满足且真实测试 `spec_ref` 有效

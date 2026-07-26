@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -51,11 +54,26 @@ final class RemoteAccountSessionCommandWriter
       );
 
   @override
-  Future<AuthSessionGrant> loginAnonymous(LoginAnonymousCommand command) =>
-      client.userAccountSessionLoginAnonymous(
-        command,
-        context: invocationContext(UserRequestPageIds.loginAnonymous),
-      );
+  Future<AuthSessionGrant> loginAnonymous(LoginAnonymousCommand command) {
+    final base = invocationContext(UserRequestPageIds.loginAnonymous);
+    return client.userAccountSessionLoginAnonymous(
+      command,
+      context: CloudOperationInvocationContext(
+        surfaceId: base.surfaceId,
+        clientPageId: base.clientPageId,
+        actor: base.actor,
+        routeId: base.routeId,
+        referralSource: base.referralSource,
+        feedRequestId: base.feedRequestId,
+        shareId: base.shareId,
+        modelId: base.modelId,
+        experimentBucket: base.experimentBucket,
+        idempotencyKey: _anonymousLoginIdempotencyKey(command),
+        deadlineAt: base.deadlineAt,
+        cancellation: base.cancellation,
+      ),
+    );
+  }
 
   @override
   Future<TokenRefreshGrant> refreshToken(RefreshTokenCommand command) =>
@@ -70,4 +88,15 @@ final class RemoteAccountSessionCommandWriter
         command,
         context: invocationContext(UserRequestPageIds.logout),
       );
+}
+
+String _anonymousLoginIdempotencyKey(LoginAnonymousCommand command) {
+  final canonicalCommand = jsonEncode(<String, String>{
+    'installId': command.installId,
+    'deviceFingerprintHash': command.deviceFingerprintHash,
+    'platform': command.platform,
+    'appVersion': command.appVersion,
+  });
+  final digest = sha256.convert(utf8.encode(canonicalCommand));
+  return 'login-anonymous-$digest';
 }

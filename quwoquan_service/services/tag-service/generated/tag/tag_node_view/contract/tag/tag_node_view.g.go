@@ -8,13 +8,17 @@ import (
 type TagNodeView struct {
 	TagRef          string    `json:"tagRef" bson:"tagRef"`
 	Group           string    `json:"group" bson:"group"`
+	NodeKind        string    `json:"nodeKind" bson:"nodeKind"`
 	Label           string    `json:"label" bson:"label"`
 	DisplayLabel    string    `json:"displayLabel" bson:"displayLabel"`
 	LabelEn         string    `json:"labelEn" bson:"labelEn"`
+	Description     string    `json:"description" bson:"description"`
 	Aliases         []string  `json:"aliases" bson:"aliases"`
 	Ancestors       []string  `json:"ancestors" bson:"ancestors"`
 	ParentTagRef    string    `json:"parentTagRef" bson:"parentTagRef"`
 	Depth           int       `json:"depth" bson:"depth"`
+	MaxDepth        int       `json:"maxDepth" bson:"maxDepth"`
+	PathPolicy      string    `json:"pathPolicy" bson:"pathPolicy"`
 	ReleaseID       string    `json:"releaseId" bson:"releaseId"`
 	LifecycleStatus string    `json:"lifecycleStatus" bson:"lifecycleStatus"`
 	CreatedAt       time.Time `json:"createdAt" bson:"createdAt"`

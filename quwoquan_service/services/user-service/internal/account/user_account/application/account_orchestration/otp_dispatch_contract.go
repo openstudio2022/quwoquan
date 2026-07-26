@@ -21,7 +21,6 @@ type SMSOTPDispatchRequest struct {
 	MaskedPhone    string
 	CodeRef        string
 	IdempotencyKey string
-	CallbackURL    string
 	ExpiresAt      time.Time
 }
 

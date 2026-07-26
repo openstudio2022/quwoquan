@@ -60,7 +60,7 @@ class ReadinessCapability(StrEnum):
     CONTENT_MEDIA = "content_media"
     CONTENT_SERVICES = "content_services"
     APP_CONSUMER = "app_consumer"
-    TELEMETRY_SLS = "telemetry_sls"
+    TELEMETRY_LOG_SINK = "telemetry_log_sink"
     TRACE_QUERY = "trace_query"
     SLO_QUERY = "slo_query"
     LEGAL_APPROVAL = "legal_approval"
@@ -77,6 +77,7 @@ class ProbeSource(StrEnum):
 
     HEALTH_SCOPE = "healthScope"
     COMMERCIAL_DOCTOR = "doctor"
+    LOG_SINK_CONTROL = "logSinkControl"
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +85,7 @@ class CapabilityProbeBinding:
     capability: ReadinessCapability
     source: ProbeSource
     health_scope: str | None
+    control_action: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,22 +167,37 @@ def _parse_probe_bindings(
         binding = _mapping(raw_binding, label=f"capabilityProbes.{capability.value}")
         health_scope = binding.get("healthScope")
         doctor = binding.get("doctor")
+        control_action = binding.get("logSinkControl")
         if isinstance(health_scope, str) and health_scope.strip() and doctor is None:
             bindings[capability] = CapabilityProbeBinding(
                 capability=capability,
                 source=ProbeSource.HEALTH_SCOPE,
                 health_scope=health_scope.strip(),
+                control_action=None,
             )
         elif doctor is True and health_scope is None:
             bindings[capability] = CapabilityProbeBinding(
                 capability=capability,
                 source=ProbeSource.COMMERCIAL_DOCTOR,
                 health_scope=None,
+                control_action=None,
+            )
+        elif (
+            isinstance(control_action, str)
+            and control_action in {"all", "cold-start", "health", "send-query", "permission-failure"}
+            and health_scope is None
+            and doctor is None
+        ):
+            bindings[capability] = CapabilityProbeBinding(
+                capability=capability,
+                source=ProbeSource.LOG_SINK_CONTROL,
+                health_scope=None,
+                control_action=control_action,
             )
         else:
             raise ValueError(
                 f"capabilityProbes.{capability.value} must declare exactly one of "
-                "healthScope: <scope> or doctor: true"
+                "healthScope: <scope>, doctor: true or logSinkControl: <action>"
             )
     missing = [capability.value for capability in ReadinessCapability if capability not in bindings]
     if missing:
@@ -225,12 +242,13 @@ def load_content_release_readiness_policy(
             for capability in capabilities:
                 binding = probe_bindings[capability]
                 if (
-                    binding.source is ProbeSource.COMMERCIAL_DOCTOR
+                    binding.source
+                    in {ProbeSource.COMMERCIAL_DOCTOR, ProbeSource.LOG_SINK_CONTROL}
                     and phase is not ReadinessPhase.COMMERCIAL
                 ):
                     raise ValueError(
                         f"{phase.value}/{environment} requires {capability.value}, "
-                        "but doctor-bound capabilities are commercial-only"
+                        "but commercial control capabilities are commercial-only"
                     )
             key = (phase, environment)
             if key in seen:

@@ -6,7 +6,6 @@ import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/app/startup/startup_telemetry.dart';
-import 'package:quwoquan_app/app/startup/startup_telemetry_support.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
@@ -39,7 +38,6 @@ final class AppStartupRuntime {
   bool _nativeSegmentsHydrated = false;
   bool _productStartupReported = false;
   String _startupFailureCode = '';
-  String _startupAttemptId = '';
   AppTelemetryRecorder? _productTelemetry;
   Future<void>? _nativeSegmentsHydration;
 
@@ -86,7 +84,6 @@ final class AppStartupRuntime {
     _nativeSegmentsHydration = null;
     _productStartupReported = false;
     _startupFailureCode = '';
-    _startupAttemptId = '';
     _productTelemetry = null;
     _runAppMs = null;
     _firstFrameMs = null;
@@ -113,7 +110,6 @@ final class AppStartupRuntime {
       return;
     }
     _bootstrapStarted = true;
-    _startupAttemptId = StartupTelemetrySupport.randomUrlSafeToken(24);
     _stopwatch.start();
     _recordPlatformStartupEvent(
       eventName: 'startup_attempt_started',
@@ -658,7 +654,6 @@ final class AppStartupRuntime {
     final missingDefineKeys = runtimeSummary['missingKeys'] ?? '';
     return <String, dynamic>{
       'phase': phase,
-      'attemptId': _startupAttemptId,
       'runtimeEnv': runtimeSummary['runtimeEnv'],
       'launchMode': runtimeSummary['launchMode'],
       'configurationState': runtimeSummary['configurationState'],

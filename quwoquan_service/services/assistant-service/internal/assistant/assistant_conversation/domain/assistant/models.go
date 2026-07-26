@@ -2,85 +2,6 @@ package assistant
 
 import "time"
 
-type InteractionEvent struct {
-	EventID                 string    `bson:"_id" json:"eventId"`
-	RunID                   string    `bson:"runId" json:"runId"`
-	TraceID                 string    `bson:"traceId,omitempty" json:"traceId,omitempty"`
-	UserID                  string    `bson:"userId" json:"userId"`
-	SessionID               string    `bson:"sessionId" json:"sessionId"`
-	PageType                string    `bson:"pageType" json:"pageType"`
-	DomainID                string    `bson:"domainId" json:"domainId"`
-	PageID                  string    `bson:"pageId,omitempty" json:"pageId,omitempty"`
-	SurfaceID               string    `bson:"surfaceId,omitempty" json:"surfaceId,omitempty"`
-	RouteID                 string    `bson:"routeId,omitempty" json:"routeId,omitempty"`
-	OperationID             string    `bson:"operationId,omitempty" json:"operationId,omitempty"`
-	ExperimentBucket        string    `bson:"experimentBucket,omitempty" json:"experimentBucket,omitempty"`
-	ClientSentAt            string    `bson:"clientSentAt,omitempty" json:"clientSentAt,omitempty"`
-	QueryText               string    `bson:"queryText,omitempty" json:"queryText,omitempty"`
-	AnswerText              string    `bson:"answerText,omitempty" json:"answerText,omitempty"`
-	UserTags                []string  `bson:"userTags,omitempty" json:"userTags,omitempty"`
-	DurationMs              int       `bson:"durationMs,omitempty" json:"durationMs,omitempty"`
-	ExplicitThumb           string    `bson:"explicitThumb,omitempty" json:"explicitThumb,omitempty"`
-	ExplicitReasonCodes     []string  `bson:"explicitReasonCodes,omitempty" json:"explicitReasonCodes,omitempty"`
-	CopiedAnswer            bool      `bson:"copiedAnswer" json:"copiedAnswer"`
-	SharedAnswer            bool      `bson:"sharedAnswer" json:"sharedAnswer"`
-	RegeneratedAnswer       bool      `bson:"regeneratedAnswer" json:"regeneratedAnswer"`
-	StyleAdjusted           bool      `bson:"styleAdjusted" json:"styleAdjusted"`
-	ModelSwitched           bool      `bson:"modelSwitched" json:"modelSwitched"`
-	ReferenceOpened         bool      `bson:"referenceOpened" json:"referenceOpened"`
-	Interrupted             bool      `bson:"interrupted" json:"interrupted"`
-	FeedbackTargetMessageID string    `bson:"feedbackTargetMessageId,omitempty" json:"feedbackTargetMessageId,omitempty"`
-	CorrectionText          string    `bson:"correctionText,omitempty" json:"correctionText,omitempty"`
-	EventType               string    `bson:"eventType,omitempty" json:"eventType,omitempty"`
-	FeedbackType            string    `bson:"feedbackType,omitempty" json:"feedbackType,omitempty"`
-	FeedbackScore           float64   `bson:"feedbackScore,omitempty" json:"feedbackScore,omitempty"`
-	FeedbackText            string    `bson:"feedbackText,omitempty" json:"feedbackText,omitempty"`
-	CreatedAt               time.Time `bson:"createdAt" json:"createdAt"`
-}
-
-type Scorecard struct {
-	ScoreID          string    `bson:"_id" json:"scoreId"`
-	EventID          string    `bson:"eventId" json:"eventId"`
-	RunID            string    `bson:"runId,omitempty" json:"runId,omitempty"`
-	UserID           string    `bson:"userId" json:"userId"`
-	DomainID         string    `bson:"domainId" json:"domainId"`
-	PageID           string    `bson:"pageId,omitempty" json:"pageId,omitempty"`
-	SurfaceID        string    `bson:"surfaceId,omitempty" json:"surfaceId,omitempty"`
-	RouteID          string    `bson:"routeId,omitempty" json:"routeId,omitempty"`
-	OperationID      string    `bson:"operationId,omitempty" json:"operationId,omitempty"`
-	ExperimentBucket string    `bson:"experimentBucket,omitempty" json:"experimentBucket,omitempty"`
-	MetricID         string    `bson:"metricId" json:"metricId"`
-	ScoreValue       float64   `bson:"scoreValue" json:"scoreValue"`
-	ScoreSource      string    `bson:"scoreSource" json:"scoreSource"`
-	CreatedAt        time.Time `bson:"createdAt" json:"createdAt"`
-}
-
-type AssistantLearningProfile struct {
-	UserID                string             `bson:"userId" json:"userId"`
-	LastRunID             string             `bson:"lastRunId,omitempty" json:"lastRunId,omitempty"`
-	LastEventID           string             `bson:"lastEventId,omitempty" json:"lastEventId,omitempty"`
-	LastPageType          string             `bson:"lastPageType,omitempty" json:"lastPageType,omitempty"`
-	LastFeedbackType      string             `bson:"lastFeedbackType,omitempty" json:"lastFeedbackType,omitempty"`
-	LastFeedbackText      string             `bson:"lastFeedbackText,omitempty" json:"lastFeedbackText,omitempty"`
-	LastFeedbackScore     float64            `bson:"lastFeedbackScore,omitempty" json:"lastFeedbackScore,omitempty"`
-	LastFeedbackAt        time.Time          `bson:"lastFeedbackAt,omitempty" json:"lastFeedbackAt,omitempty"`
-	LastQueryTextDigest   string             `bson:"lastQueryTextDigest,omitempty" json:"lastQueryTextDigest,omitempty"`
-	LastAnswerTextDigest  string             `bson:"lastAnswerTextDigest,omitempty" json:"lastAnswerTextDigest,omitempty"`
-	LastMetricID          string             `bson:"lastMetricId,omitempty" json:"lastMetricId,omitempty"`
-	LastMetricScore       float64            `bson:"lastMetricScore,omitempty" json:"lastMetricScore,omitempty"`
-	TotalFeedbackCount    int64              `bson:"totalFeedbackCount,omitempty" json:"totalFeedbackCount,omitempty"`
-	PositiveFeedbackCount int64              `bson:"positiveFeedbackCount,omitempty" json:"positiveFeedbackCount,omitempty"`
-	NegativeFeedbackCount int64              `bson:"negativeFeedbackCount,omitempty" json:"negativeFeedbackCount,omitempty"`
-	TextFeedbackCount     int64              `bson:"textFeedbackCount,omitempty" json:"textFeedbackCount,omitempty"`
-	HighPriorityCount     int64              `bson:"highPriorityCount,omitempty" json:"highPriorityCount,omitempty"`
-	MediumPriorityCount   int64              `bson:"mediumPriorityCount,omitempty" json:"mediumPriorityCount,omitempty"`
-	MetricSampleCounts    map[string]int64   `bson:"metricSampleCounts,omitempty" json:"metricSampleCounts,omitempty"`
-	MetricScoreSums       map[string]float64 `bson:"metricScoreSums,omitempty" json:"metricScoreSums,omitempty"`
-	LatestMetricScores    map[string]float64 `bson:"latestMetricScores,omitempty" json:"latestMetricScores,omitempty"`
-	ReasonCodeCounts      map[string]int64   `bson:"reasonCodeCounts,omitempty" json:"reasonCodeCounts,omitempty"`
-	UpdatedAt             time.Time          `bson:"updatedAt,omitempty" json:"updatedAt,omitempty"`
-}
-
 type SkillConsent struct {
 	ID           string     `json:"id"`
 	UserID       string     `json:"userId"`
@@ -88,12 +9,6 @@ type SkillConsent struct {
 	GrantedScope string     `json:"grantedScope"`
 	GrantedAt    time.Time  `json:"grantedAt"`
 	RevokedAt    *time.Time `json:"revokedAt,omitempty"`
-}
-
-type AssistantPolicyView struct {
-	Version   string         `json:"version"`
-	Values    map[string]any `json:"values,omitempty"`
-	UpdatedAt *time.Time     `json:"updatedAt,omitempty"`
 }
 
 type AssistantEntryPersonalizationChipView struct {

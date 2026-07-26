@@ -93,7 +93,7 @@ class SearchCommercialObservabilityContractTest(unittest.TestCase):
         )
         self.assertIn("search_contract_smoke:", delivery)
         self.assertIn(
-            "go test ./services/search-service/tests/api_integration/search/search/search_query -count=1",
+            "go test ./services/search-service/tests/api_integration/search/search_query -count=1",
             delivery,
         )
         self.assertIn(

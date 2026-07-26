@@ -43,6 +43,9 @@
 ### REQ-003 保存后进入交集索引
 
 - 写时投影与离线 backfill 都使用 object_tag_index 同一结构。
+- `objectType + objectId` 是倒排投影的复合身份；不同对象类型不得因同名 ID 合并。
+- 数据发布导入以 source owner 的 immutable release 收敛：同 release 不接受不同内容重写，完整新 release 成功后才删除该 owner 的 superseded rows。
+- shared-tags、related-objects 等对象关联查询是 service-only 内部能力；端侧只消费公开目录、校验和用户资料结果。
 
 <a id="req-004"></a>
 ### REQ-004 我的资料页职业与兴趣管理旅程
@@ -92,6 +95,8 @@
 - THEN 超过 30 个兴趣被拒绝
 - THEN Topic/兴趣 与非法职业/兴趣根被 USER.PROFILE.invalid_tag_ref 拒绝
 - THEN 标签添加/移除分别以 click/ignore 经 TagFeedbackCommandWriter 追加事实；失败不阻断编辑并进入结构化观测。
+- THEN 认证 persona/device 是反馈事实唯一 actor，客户端伪造身份 header 不可写入；事实提交后以稳定 feedback id 至少一次投递 TagFeedbackRecorded，投递失败保留待确认事实并可重试。
+- THEN `content-service` 以 `eventId` durable inbox 幂等消费 `TagFeedbackRecorded`：click 写入显式标签亲和度、ignore 移除该显式亲和度、correct 因未携带替换标签仅保留事实而不得臆测偏好；receipt 与特征更新原子提交后才确认流消息，非法信封进入脱敏 DLQ。
 
 <a id="gwt-003"></a>
 ### GWT-003 保存后进入交集索引
@@ -100,6 +105,7 @@
 - WHEN user-service 发布 UserProfileUpdated
 - THEN object_tag_index 中 objectType=user 的 tagRefs 包含职业与兴趣
 - THEN shared-tags 可用同一 tagRef 计算共同职业/共同兴趣
+- THEN 标签发布包完整投影 group/dimension/definition metadata；目录与 dimension 面板只读取 active taxonomy release，不维护应用内维度常量。
 
 <a id="gwt-004"></a>
 ### GWT-004 我的资料页职业与兴趣管理旅程

@@ -22,6 +22,14 @@ final class ActorQueuePartition {
   final String _personaId;
   final String _deviceId;
 
+  /// The authenticated actor dimensions that own this queue partition.
+  ///
+  /// They are never part of a queue name; the Remote adapter uses them only to
+  /// disclose the same verified actor context with a request.
+  String get accountId => _accountId;
+  String get personaId => _personaId;
+  String get deviceId => _deviceId;
+
   bool get canPersist =>
       _environment.isNotEmpty &&
       (_accountId.isNotEmpty || _personaId.isNotEmpty || _deviceId.isNotEmpty);

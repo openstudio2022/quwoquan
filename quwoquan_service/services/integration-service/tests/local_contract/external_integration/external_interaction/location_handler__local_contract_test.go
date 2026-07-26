@@ -51,14 +51,12 @@ func (testExternalProvider) Send(
 	return reliabletask.ExternalInteractionResult{
 		RequestID:         request.RequestID,
 		Operation:         request.Operation,
-		Status:            reliabletask.ExternalInteractionStatusDelivered,
+		Status:            reliabletask.ExternalInteractionStatusSentUnconfirmed,
 		Provider:          "test_sms",
 		ProviderRequestID: "test-provider-" + request.RequestID,
 		OccurredAt:        time.Now().UTC(),
 	}, nil
 }
-
-type testCallbackSender struct{}
 
 type testOTPReferenceStore struct{}
 
@@ -67,13 +65,6 @@ func (testOTPReferenceStore) Get(context.Context, string, string) (otpseal.Store
 	return otpseal.StoredReference{}, otpseal.ErrReferenceNotFound
 }
 func (testOTPReferenceStore) Delete(context.Context, string, string) error { return nil }
-
-func (testCallbackSender) SendExternalInteractionResult(
-	context.Context,
-	reliabletask.ExternalInteractionResult,
-) error {
-	return nil
-}
 
 func TestSubmitExternalInteractionReturnsAcceptedAndRecordsAttempt(t *testing.T) {
 	store := reliabletask.NewMemoryStore()
@@ -89,7 +80,6 @@ func TestSubmitExternalInteractionReturnsAcceptedAndRecordsAttempt(t *testing.T)
 				RetryPolicy: reliabletask.DefaultRetryPolicy(),
 			},
 		},
-		testCallbackSender{},
 		testOTPReferenceStore{},
 	)
 	if err != nil {

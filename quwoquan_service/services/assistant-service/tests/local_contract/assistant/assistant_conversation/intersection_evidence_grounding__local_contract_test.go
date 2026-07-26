@@ -45,9 +45,9 @@ func TestCreateTurnAuthorizesIntersectionEvidenceBeforePersistence(t *testing.T)
 	service := application.NewAssistantService(
 		nil,
 		nil,
-		nil,
 		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		application.WithIntersectionEvidenceReader(reader),
+		testFrozenPolicyOption(),
 	)
 	conversation, err := service.CreateConversation(
 		t.Context(),
@@ -74,6 +74,7 @@ func TestCreateTurnAuthorizesIntersectionEvidenceBeforePersistence(t *testing.T)
 			ContextSnapshot: assistant.AssistantContextSnapshot{
 				IntersectionEvidenceRefs: []assistant.AssistantIntersectionEvidenceRef{ref},
 			},
+			RequestContext: testRunRequestContext("persona-owner"),
 		},
 	)
 	if err != nil {
@@ -104,9 +105,9 @@ func TestCreateTurnFailsClosedForMissingIntersectionEvidence(t *testing.T) {
 	service := application.NewAssistantService(
 		nil,
 		nil,
-		nil,
 		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		application.WithIntersectionEvidenceReader(reader),
+		testFrozenPolicyOption(),
 	)
 	conversation, err := service.CreateConversation(
 		t.Context(),
@@ -132,6 +133,7 @@ func TestCreateTurnFailsClosedForMissingIntersectionEvidence(t *testing.T) {
 					ObjectID:       "other-persona-post",
 				}},
 			},
+			RequestContext: testRunRequestContext("persona-owner"),
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "ASSISTANT.USER.intersection_evidence_not_found") {

@@ -87,14 +87,15 @@ type GetQuery struct {
 }
 
 type CommandResult struct {
-	SessionID string
-	Version   int64
-	Status    model.Status
-	AssetID   string
-	ObjectKey string
-	UploadURL string
-	ExpiresAt time.Time
-	Replayed  bool
+	SessionID             string
+	Version               int64
+	Status                model.Status
+	AssetID               string
+	AssetProcessingStatus string
+	ObjectKey             string
+	UploadURL             string
+	ExpiresAt             time.Time
+	Replayed              bool
 }
 
 type Slice struct {
@@ -416,7 +417,8 @@ func resultFromReceipt(receipt ports.Receipt) CommandResult {
 	return CommandResult{
 		SessionID: receipt.Session.ID(), Version: receipt.Session.Version(),
 		Status: receipt.Session.Status(), AssetID: receipt.Session.AssetID(),
-		ObjectKey: receipt.Session.ObjectKey(), ExpiresAt: receipt.Session.ExpiresAt(),
+		AssetProcessingStatus: receipt.AssetProcessingStatus,
+		ObjectKey:             receipt.Session.ObjectKey(), ExpiresAt: receipt.Session.ExpiresAt(),
 		Replayed: receipt.Replayed,
 	}
 }

@@ -46,14 +46,15 @@ fields:
   role: append_only_fact
 - name: eventType
   source: eventType
-  type: string
+  type: enum
+  enum_ref: SearchFeedbackEventType
   constraints:
   - NOT_NULL
   classification: PUBLIC
   log_policy: allow
   api_exposure: read_write
   ops_exposure: read
-  description: impression | click | dwell | refine | zero_result | degrade
+  description: SearchFeedbackEventType canonical wire value
   role: append_only_fact
 - name: objectId
   source: objectId
@@ -223,3 +224,110 @@ types:
       log_policy: allow
       api_exposure: none
       ops_exposure: read
+  SearchFeedbackSignalDelivery:
+    description: click FeedbackFact 的权威投递状态；relay 只能租约和更新此对象，永不改写事实。
+    fields:
+    - name: _id
+      source: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+      description: 等于确定性 recommendation signalId，同一语义 click 仅有一行。
+    - name: feedbackFactId
+      source: feedbackFactId
+      type: ObjectId
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: signalPayloadJson
+      source: signalPayloadJson
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PII
+      log_policy: drop
+      api_exposure: none
+      ops_exposure: none
+      description: 已提交事实派生的稳定信号载荷；只允许 relay 读取，不写入日志或 API。
+    - name: status
+      source: status
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+      description: pending | publishing | published
+    - name: leaseOwner
+      source: leaseOwner
+      type: string
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: none
+    - name: leaseExpiresAt
+      source: leaseExpiresAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: lastAttemptAt
+      source: lastAttemptAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: publishedAt
+      source: publishedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: createdAt
+      source: createdAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: updatedAt
+      source: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: expiresAt
+      source: expiresAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+      description: 仅成功发布后的保留清理时间；pending 行不得设置，避免未投递信号静默丢失。

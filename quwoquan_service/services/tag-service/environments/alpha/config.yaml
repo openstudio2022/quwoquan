@@ -1,5 +1,6 @@
 overrides:
-  sys.tag-service.redis.rec.addr: 127.0.0.1:6379
+  sys.tag-service.user_account_security_authority.base_url: http://127.0.0.1:18081
+  sys.tag-service.redis.general.addr: 127.0.0.1:6379
 secretRefs: {}
 externalBindings:
   runtime.message.transport:

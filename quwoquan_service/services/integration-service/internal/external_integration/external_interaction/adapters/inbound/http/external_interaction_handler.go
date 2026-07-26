@@ -11,8 +11,8 @@ import (
 
 	rerrors "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/reliabletask"
-	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
 	"quwoquan_service/services/integration-service/generated/external_integration/external_interaction"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
 )
 
 // submitExternalRequestWire 是 SubmitExternalInteractionRequest 的强类型
@@ -23,8 +23,6 @@ type submitExternalRequestWire struct {
 	Tenant         string            `json:"tenant"`
 	Env            string            `json:"env"`
 	IdempotencyKey string            `json:"idempotencyKey"`
-	CallbackURL    string            `json:"callbackUrl"`
-	CallbackEvent  string            `json:"callbackEvent"`
 	PayloadRef     string            `json:"payloadRef"`
 	PayloadDigest  string            `json:"payloadDigest"`
 	Sensitivity    string            `json:"sensitivity"`
@@ -105,8 +103,6 @@ func (h *Handler) handleSubmitExternalRequest(w http.ResponseWriter, r *http.Req
 		Tenant:         nonEmpty(body.Tenant, "quwoquan"),
 		Env:            nonEmpty(body.Env, "alpha"),
 		IdempotencyKey: idempotencyKey,
-		CallbackURL:    strings.TrimSpace(body.CallbackURL),
-		CallbackEvent:  strings.TrimSpace(body.CallbackEvent),
 		PayloadRef:     strings.TrimSpace(body.PayloadRef),
 		PayloadDigest:  strings.TrimSpace(body.PayloadDigest),
 		Sensitivity:    nonEmpty(body.Sensitivity, "private"),

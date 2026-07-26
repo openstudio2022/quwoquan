@@ -15,7 +15,7 @@ import (
 
 type ExternalInteractionStore interface {
 	reliabletask.Store
-	reliabletask.ProviderAttemptLedgerStore
+	reliabletask.ProviderAttemptResultOutboxStore
 	reliabletask.DLQRecoveryStore
 	reliabletask.RetentionCleanupStore
 	reliabletask.MetricsStore
@@ -38,7 +38,6 @@ func NewExternalInteractionService(
 	store ExternalInteractionStore,
 	providers map[string]reliabletask.ExternalProvider,
 	policies map[string]reliabletask.ProviderPolicy,
-	callback reliabletask.ExternalInteractionCallbackSender,
 	referenceStores ...otpseal.ReferenceStore,
 ) (*ExternalInteractionService, error) {
 	if isNilDependency(store) {
@@ -49,9 +48,6 @@ func NewExternalInteractionService(
 	}
 	if len(policies) == 0 {
 		return nil, fmt.Errorf("external interaction provider policies are required")
-	}
-	if isNilDependency(callback) {
-		return nil, fmt.Errorf("external interaction callback sender is required")
 	}
 	var references otpseal.ReferenceStore
 	if len(referenceStores) > 0 {
@@ -127,7 +123,6 @@ func NewExternalInteractionService(
 			Providers: providers,
 			Policies:  normalizedPolicies,
 			Ledger:    store,
-			Callback:  callback,
 			Now:       now,
 		},
 		policies:   normalizedPolicies,

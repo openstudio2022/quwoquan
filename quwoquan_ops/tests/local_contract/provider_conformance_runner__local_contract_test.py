@@ -45,7 +45,12 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
                 (
                     "import json",
                     "import os",
+                    "from pathlib import Path",
                     "assertion_ids = json.loads(os.environ['QWQ_PROVIDER_CONFORMANCE_ASSERTION_IDS'])",
+                    "Path(os.environ['QWQ_PROVIDER_CONFORMANCE_RESULT_PATH']).with_suffix('.runner-env.json').write_text(json.dumps({",
+                    "  'contractGraphDigest': os.environ['QWQ_PROVIDER_CONFORMANCE_CONTRACT_GRAPH_DIGEST'],",
+                    "  'adapterDigest': os.environ['QWQ_PROVIDER_CONFORMANCE_ADAPTER_DIGEST'],",
+                    "}), encoding='utf-8')",
                     "payload = {",
                     "  'schema': 'provider-conformance-case-results',",
                     "  'version': 1,",
@@ -143,6 +148,14 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
                     / Path(*Path(evidence["artifactRef"]).parts[1:])
                 ).read_text(encoding="utf-8")
             )
+            case_result_path = output_root / Path(
+                *Path(execution_report["testArtifactRef"]).parts[1:]
+            )
+            runner_environment = json.loads(
+                case_result_path.with_suffix(".runner-env.json").read_text(
+                    encoding="utf-8"
+                )
+            )
         finally:
             if previous_output_root is None:
                 os.environ.pop("QWQ_OUTPUT_ROOT", None)
@@ -175,6 +188,8 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
         binding_root_records,
     )
     assert execution_report["configDigest"] == evidence["configDigest"]
+    assert runner_environment["contractGraphDigest"] == evidence["contractGraphDigest"]
+    assert runner_environment["adapterDigest"] == evidence["adapterDigest"]
     assert evidence["testTarget"] == "assistant-model-real-adapter-harness"
     assert evidence["observabilityRefs"]["metrics"] == ["metric:provider-test"]
 

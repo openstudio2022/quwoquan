@@ -99,6 +99,7 @@ func resetReliableTaskCollections(t *testing.T) {
 		"notification_outbox",
 		"notification_delivery_ledger",
 		"external_provider_attempt_ledger",
+		"external_interaction_result_outbox",
 		"otp_code_reference_vault",
 		"reliable_task_leases",
 	} {

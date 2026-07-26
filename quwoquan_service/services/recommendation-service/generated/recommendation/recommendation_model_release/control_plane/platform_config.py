@@ -128,6 +128,22 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
+      "key": "sys.assistant-service.policy_publication.release_artifact_ref",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.assistant-service.policy_publication.rollout_artifact_ref",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": 30,
       "key": "sys.assistant-service.postgres.conn_max_lifetime_minutes",
       "reload": "restart",
@@ -2058,14 +2074,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "key": "sys.integration-service.integration.external_interaction.callback_secret",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
-    },
-    {
       "default": "",
       "key": "sys.integration-service.integration.external_interaction.push.apns.environment",
       "reload": "restart",
@@ -2543,6 +2551,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "default": "notification-external-result-projector",
+      "key": "sys.notification-service.notification.consumers.external_interaction_result",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": "notification-incoming-call-worker",
       "key": "sys.notification-service.notification.consumers.incoming_call",
       "reload": "restart",
@@ -2710,6 +2727,123 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "int"
+    },
+    {
+      "default": [],
+      "key": "sys.product-ops-service.app_release.android.apk_host_allowlist",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "list"
+    },
+    {
+      "default": "com.quwoquan.quwoquan_app",
+      "key": "sys.product-ops-service.app_release.android.apk_package_name",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.android.apk_sha256",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.android.apk_signing_certificate_sha256",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 0,
+      "key": "sys.product-ops-service.app_release.android.apk_size_bytes",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.android.apk_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.android.latest_build",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.android.latest_version",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.ios.app_store_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.ios.latest_build",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.ios.latest_version",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.public_origin",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.recovery_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
     },
     {
       "default": "9.9.9",
@@ -4058,6 +4192,23 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
+    },
+    {
+      "key": "sys.tag-service.user_account_security_authority.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 300,
+      "key": "sys.tag-service.user_account_security_authority.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
     },
     {
       "default": "9.9.9",

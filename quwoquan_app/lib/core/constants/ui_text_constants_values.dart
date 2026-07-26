@@ -470,6 +470,7 @@ class UITextConstants {
       _UITextFoundation.runtimeRecoveryEnteringMessage,
   runtimeRecoveryEnteringAction =
       _UITextFoundation.runtimeRecoveryEnteringAction,
+  runtimeRecoveryUpdateMessage = _UITextFoundation.runtimeRecoveryUpdateMessage,
   runtimeRecoveryCompleted = _UITextFoundation.runtimeRecoveryCompleted;
   static const String commentPlaceholder = _UITextFoundation.commentPlaceholder,
       commentTooLong = _UITextFoundation.commentTooLong,
@@ -1767,15 +1768,28 @@ class UITextConstants {
   static const String
   editProfileProposalConfirmed = _UITextProfile.editProfileProposalConfirmed,
   editProfileProposalApplying = _UITextProfile.editProfileProposalApplying,
+  editProfileProposalAppliedStatus =
+      _UITextProfile.editProfileProposalAppliedStatus,
+  editProfileProposalRollingBackStatus =
+      _UITextProfile.editProfileProposalRollingBackStatus,
   editProfileProposalLoadFailed = _UITextProfile.editProfileProposalLoadFailed,
   editProfileProposalApprove = _UITextProfile.editProfileProposalApprove;
   static const String editProfileProposalResumeApply =
           _UITextProfile.editProfileProposalResumeApply,
+      editProfileProposalRollback = _UITextProfile.editProfileProposalRollback,
+      editProfileProposalRolledBack =
+          _UITextProfile.editProfileProposalRolledBack,
       editProfileProposalReject = _UITextProfile.editProfileProposalReject,
       editProfileProposalApplied = _UITextProfile.editProfileProposalApplied,
       editProfileProposalRejected = _UITextProfile.editProfileProposalRejected;
   static const String
   editProfileProposalChanges = _UITextProfile.editProfileProposalChanges,
+  editProfileProposalReviewBasis =
+      _UITextProfile.editProfileProposalReviewBasis,
+  editProfileProposalReason = _UITextProfile.editProfileProposalReason,
+  editProfileProposalEvidence = _UITextProfile.editProfileProposalEvidence,
+  editProfileProposalImpactScope =
+      _UITextProfile.editProfileProposalImpactScope,
   editProfileProposalEmptyValue = _UITextProfile.editProfileProposalEmptyValue,
   editProfileProposalPrivateField =
       _UITextProfile.editProfileProposalPrivateField,

@@ -18,6 +18,7 @@ import (
 	"quwoquan_service/runtime/operation"
 	rtrec "quwoquan_service/runtime/recommendation"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	mediaasseterrors "quwoquan_service/services/content-service/generated/media/media_asset"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
@@ -41,24 +42,25 @@ import (
 )
 
 type ContentHandler struct {
-	feedService                *feedapp.FeedService
-	postService                *postapp.Facades
-	postQueryService           *postapp.PostQueryFacade
-	commentService             *commentapp.Facades
-	reactionService            *reactionapp.Facades
-	reportService              *reportapp.Facades
-	moderationService          *moderationapp.Facades
-	outboundShareService       *outboundshareapp.Facades
-	profileInteractionService  *profileinteractionapp.Facades
-	mediaService               *mediaapp.Facades
-	mediaUploadSessionHandler  mediaUploadSessionHTTPHandler
-	mediaImageReprocessService *mediareprocessapp.Service
-	behaviorService            *behaviorapp.BehaviorService
-	importService              *importerapp.BulkImportService
-	intersectionService        *intersectionapp.IntersectionService
-	authorImpactStore          ports.AuthorImpactStore
-	authorImpactEvidenceStore  ports.AuthorImpactEvidenceStore
-	healthChecker              *rthealth.Checker
+	feedService                 *feedapp.FeedService
+	postService                 *postapp.Facades
+	postQueryService            *postapp.PostQueryFacade
+	commentService              *commentapp.Facades
+	reactionService             *reactionapp.Facades
+	reportService               *reportapp.Facades
+	moderationService           *moderationapp.Facades
+	outboundShareService        *outboundshareapp.Facades
+	profileInteractionService   *profileinteractionapp.Facades
+	mediaService                *mediaapp.Facades
+	mediaUploadSessionHandler   mediaUploadSessionHTTPHandler
+	filterCatalogReleaseHandler filterCatalogReleaseHTTPHandler
+	mediaImageReprocessService  *mediareprocessapp.Service
+	behaviorService             *behaviorapp.BehaviorService
+	importService               *importerapp.BulkImportService
+	intersectionService         *intersectionapp.IntersectionService
+	authorImpactStore           ports.AuthorImpactStore
+	authorImpactEvidenceStore   ports.AuthorImpactEvidenceStore
+	healthChecker               *rthealth.Checker
 }
 
 // postDetailClientWire is the explicit GET /content/content/posts/{postId} contract.
@@ -209,6 +211,16 @@ type mediaUploadSessionHTTPHandler interface {
 	Get(http.ResponseWriter, *http.Request)
 }
 
+// filterCatalogReleaseHTTPHandler keeps FilterCatalogRelease wire parsing and
+// response projection in its object-owned inbound adapter while the service
+// composition root owns the single generated route table.
+type filterCatalogReleaseHTTPHandler interface {
+	Stage(http.ResponseWriter, *http.Request)
+	Activate(http.ResponseWriter, *http.Request)
+	Rollback(http.ResponseWriter, *http.Request)
+	GetActive(http.ResponseWriter, *http.Request)
+}
+
 func WithBulkImportService(svc *importerapp.BulkImportService) ContentHandlerOption {
 	return func(h *ContentHandler) { h.importService = svc }
 }
@@ -240,6 +252,14 @@ func WithMediaUploadSessionHandler(
 ) ContentHandlerOption {
 	return func(contentHandler *ContentHandler) {
 		contentHandler.mediaUploadSessionHandler = handler
+	}
+}
+
+func WithFilterCatalogReleaseHandler(
+	handler filterCatalogReleaseHTTPHandler,
+) ContentHandlerOption {
+	return func(contentHandler *ContentHandler) {
+		contentHandler.filterCatalogReleaseHandler = handler
 	}
 }
 
@@ -475,11 +495,13 @@ func (h *ContentHandler) handleSubmitPostPublication(
 	r *http.Request,
 ) {
 	if shouldHonorTestErrorInject(r, "CONTENT.USER.media_not_ready") {
-		writeHTTPError(w, r, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_ready"),
-			"媒体文件正在处理中，请稍后发布",
-			"test injected media_not_ready",
-		))
+		writeHTTPError(
+			w,
+			r,
+			mediaasseterrors.AppErrorFromMediaNotReady(
+				"test injected media_not_ready",
+			),
+		)
 		return
 	}
 	payload, err := BindGeneratedWritableBodyFromRequest(

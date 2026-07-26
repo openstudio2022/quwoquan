@@ -5,7 +5,7 @@ import 'assistant_facets_mock.dart';
 
 export 'assistant_facets_mock.dart';
 
-/// 把同一个替身实例绑定到全部 8 个 assistant Facet provider。
+/// 把同一个替身实例绑定到全部 assistant Facet provider。
 /// 对应旧 `assistantRepositoryProvider.overrideWithValue(...)` 的等价语义。
 ///
 /// 这是测试容器 wiring，不是业务 Repository 聚合或 App 运行时 Provider。
@@ -14,7 +14,7 @@ List<Override> alphaAssistantFacetOverrides(AlphaAssistantFacets facets) {
     assistantConversationRunFacetProvider.overrideWithValue(facets),
     assistantSkillSubscriptionFacetProvider.overrideWithValue(facets),
     assistantSkillConsentFacetProvider.overrideWithValue(facets),
-    assistantLearningAppendFacetProvider.overrideWithValue(facets),
+    assistantLearningFactAppendFacetProvider.overrideWithValue(facets),
     assistantPersonalizationFacetProvider.overrideWithValue(facets),
     assistantPersonalDataFacetProvider.overrideWithValue(facets),
     assistantPreferenceFactFacetProvider.overrideWithValue(facets),

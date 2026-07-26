@@ -1,3 +1,5 @@
+# spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-004
+# spec_ref: specs/feature-tree/chat-conversation/realtime-call/media-infrastructure/spec.md#gwt-004
 from __future__ import annotations
 
 import json
@@ -5,12 +7,14 @@ import os
 import subprocess
 import tempfile
 import unittest
+import argparse
 from pathlib import Path
 from unittest.mock import patch
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli.prod import generate_mainline_release_artifact as generator
+from quwoquan_ops.cli.prod import hosted_release_ledger
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -125,73 +129,61 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
     def test_release_ledger_is_cas_ordered_and_receipted(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             state_dir = Path(temporary).resolve()
-            with patch.dict(
-                os.environ,
-                {"QWQ_PROD_RELEASE_STATE_DIR": str(state_dir)},
-                clear=False,
-            ):
-                action, generation = stackctl._validate_release_transition(
-                    {},
-                    from_image="1.0.0",
-                    to_image="1.1.0",
-                    from_config="v1",
-                    to_config="v2",
-                    stage="gray-initial",
-                    manifest_digest="sha256:" + ("a" * 64),
-                )
-                self.assertEqual((action, generation), ("advance", 0))
-                state, receipt = stackctl._commit_release_transition(
-                    service="prod-stack",
-                    from_image="1.0.0",
-                    to_image="1.1.0",
-                    from_config="v1",
-                    to_config="v2",
-                    step="5",
-                    stage="gray-initial",
-                    decision="continue",
-                    manifest_digest="sha256:" + ("a" * 64),
-                    expected_generation=0,
-                    receipt_id="receipt-1",
-                    slo_readback={"source": "prometheus"},
-                )
-                self.assertEqual(state["generation"], "1")
-                self.assertTrue(receipt.is_file())
+            digest = "sha256:" + ("a" * 64)
+            request = {
+                "schema": hosted_release_ledger.REQUEST_SCHEMA,
+                "service": "prod-stack",
+                "fromImage": "1.0.0",
+                "toImage": "1.1.0",
+                "fromConfig": "v1",
+                "toConfig": "v2",
+                "step": "5",
+                "stage": "gray-initial",
+                "decision": "continue",
+                "rollbackOutcome": "not_triggered",
+                "manifestDigest": digest,
+                "imageDigest": digest,
+                "configDigest": digest,
+                "contractGraphDigest": digest,
+                "adapterDigest": digest,
+                "expectedGeneration": 0,
+                "sloReadback": {"source": "prometheus"},
+                "postChecks": [
+                    {
+                        "name": "health",
+                        "status": "passed",
+                        "receiptDigest": digest,
+                    }
+                ],
+                "lastGoodTarget": {"image": "1.0.0", "config": "v1"},
+                "verifiedAt": "2026-07-26T00:00:00+00:00",
+            }
+            readback = hosted_release_ledger.commit(state_dir, request)
+            self.assertEqual(readback["state"]["generation"], "1")
+            self.assertRegex(readback["receiptRef"], r"^receipt:hosted:[0-9a-f]{64}$")
+            self.assertEqual(
+                hosted_release_ledger.fetch(state_dir, "prod-stack"),
+                readback,
+            )
+            action, generation = stackctl._validate_release_transition(
+                readback["state"],
+                from_image="1.0.0",
+                to_image="1.1.0",
+                from_config="v1",
+                to_config="v2",
+                stage="carry-on",
+                manifest_digest=digest,
+            )
+            self.assertEqual((action, generation), ("advance", 1))
+            with self.assertRaisesRegex(RuntimeError, "CAS conflict"):
+                hosted_release_ledger.commit(state_dir, request)
 
-                action, generation = stackctl._validate_release_transition(
-                    stackctl._load_release_state("prod-stack"),
-                    from_image="1.0.0",
-                    to_image="1.1.0",
-                    from_config="v1",
-                    to_config="v2",
-                    stage="gray-initial",
-                    manifest_digest="sha256:" + ("a" * 64),
-                )
-                self.assertEqual((action, generation), ("replay", 1))
-
-                action, generation = stackctl._validate_release_transition(
-                    stackctl._load_release_state("prod-stack"),
-                    from_image="1.0.0",
-                    to_image="1.1.0",
-                    from_config="v1",
-                    to_config="v2",
-                    stage="carry-on",
-                    manifest_digest="sha256:" + ("a" * 64),
-                )
-                self.assertEqual((action, generation), ("advance", 1))
-                with self.assertRaisesRegex(RuntimeError, "CAS conflict"):
-                    stackctl._update_release_state(
-                        "prod-stack",
-                        from_image="1.0.0",
-                        to_image="1.1.0",
-                        from_config="v1",
-                        to_config="v2",
-                        step="25",
-                        stage="carry-on",
-                        decision="continue",
-                        manifest_digest="sha256:" + ("a" * 64),
-                        expected_generation=0,
-                        receipt_id="stale",
-                    )
+            receipt_path = state_dir / "receipts" / (
+                readback["receipt"]["receiptId"] + ".json"
+            )
+            receipt_path.write_text("{}\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "digest or ledger binding"):
+                hosted_release_ledger.fetch(state_dir, "prod-stack")
 
     def test_warning_slo_pauses_gray_but_rolls_back_full(self) -> None:
         self.assertEqual(
@@ -201,6 +193,99 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             ),
             ("pause", "slo gate decision=pause"),
         )
+
+    def test_operator_receipt_readback_accepts_only_hosted_candidate_binding(self) -> None:
+        digest = "sha256:" + ("a" * 64)
+        receipt = {
+            "schema": hosted_release_ledger.RECEIPT_SCHEMA,
+            "authority": hosted_release_ledger.AUTHORITY,
+            "service": "prod-stack",
+            "fromImage": "1.0.0",
+            "toImage": "1.1.0",
+            "fromConfig": "v1",
+            "toConfig": "v2",
+            "step": "100",
+            "stage": "full",
+            "decision": "continue",
+            "rollbackOutcome": "not_triggered",
+            "manifestDigest": digest,
+            "imageDigest": digest,
+            "configDigest": digest,
+            "contractGraphDigest": digest,
+            "adapterDigest": digest,
+            "expectedGeneration": 2,
+            "committedGeneration": 3,
+            "sloReadback": {},
+            "postChecks": [],
+            "lastGoodTarget": {"image": "1.1.0", "config": "v2"},
+            "verifiedAt": "2026-07-26T00:00:00+00:00",
+        }
+        receipt_id = hosted_release_ledger._receipt_id(receipt)
+        receipt["receiptId"] = receipt_id
+        readback = {
+            "schema": hosted_release_ledger.RECEIPT_READBACK_SCHEMA,
+            "authority": hosted_release_ledger.AUTHORITY,
+            "receipt": receipt,
+            "receiptRef": f"receipt:hosted:{receipt_id}",
+        }
+        args = argparse.Namespace(
+            service="prod-stack",
+            receipt_id=receipt_id,
+            purpose="last-good",
+            image_digest=digest,
+            config_digest=digest,
+            contract_graph_digest=digest,
+            adapter_digest=digest,
+        )
+        with patch.object(
+            stackctl,
+            "_run_hosted_release_ledger",
+            return_value=readback,
+        ):
+            result = stackctl.command_hosted_release_receipt(args)
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["receiptRef"], f"receipt:hosted:{receipt_id}")
+
+        rollback_receipt = dict(receipt)
+        rollback_receipt.update(
+            {
+                "fromImage": "1.1.0",
+                "toImage": "1.0.0",
+                "fromConfig": "v2",
+                "toConfig": "v1",
+                "decision": "rolled_back",
+                "rollbackOutcome": "rolled_back",
+                "lastGoodTarget": {"image": "1.0.0", "config": "v1"},
+            }
+        )
+        rollback_id = hosted_release_ledger._receipt_id(rollback_receipt)
+        rollback_receipt["receiptId"] = rollback_id
+        rollback_readback = {
+            "schema": hosted_release_ledger.RECEIPT_READBACK_SCHEMA,
+            "authority": hosted_release_ledger.AUTHORITY,
+            "receipt": rollback_receipt,
+            "receiptRef": f"receipt:hosted:{rollback_id}",
+        }
+        args.receipt_id = rollback_id
+        args.purpose = "rollback"
+        with patch.object(
+            stackctl,
+            "_run_hosted_release_ledger",
+            return_value=rollback_readback,
+        ):
+            result = stackctl.command_hosted_release_receipt(args)
+        self.assertEqual(result["exitCode"], 0)
+
+        args.receipt_id = receipt_id
+        args.purpose = "last-good"
+        args.adapter_digest = "sha256:" + ("b" * 64)
+        with patch.object(
+            stackctl,
+            "_run_hosted_release_ledger",
+            return_value=readback,
+        ):
+            result = stackctl.command_hosted_release_receipt(args)
+        self.assertEqual(result["exitCode"], 2)
         self.assertEqual(
             stackctl._decision_from_slo_output(
                 "decision=pause reason=warning_threshold",

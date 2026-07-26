@@ -19,18 +19,32 @@
 
 - 上游能力：[`assistant-run-learning`](../spec.md) 声明的领域入口。
 - 下游能力：本目录直接 Story 及其公开结果。
-- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+- App 先把 `AppendAssistantLearningFact` command 写入 account/persona/device 分区的加密 pending-confirmation outbox；只有服务端返回同一 `eventId + eventVersion` receipt 后才删除。
+- assistant-service 在同一 Mongo transaction 内提交 canonical fact、durable receipt、严格递增 append sequence 与脱敏 outbox event；原始文本不得进入 outbox 或投影。
+- versioned projector 按 append sequence 消费唯一事实流，并在同一 transaction 内提交 persona-scoped projection、projection receipt 与 generation watermark。
+- 重建写入 shadow generation；只有 shadow 追平 canonical fact stream 后才原子切换 active generation，读取方不观察半完成重建。
+- Run 创建时先冻结 immutable policy release，再按当前 owner consent、最小样本与字段 allowlist 读取 persona-scoped projection；结果连同 consent、definition 与 watermark 证据冻结到 Run。
 
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 学习事件只追加写入并由可重建投影聚合
-- 决策：学习事件只追加写入并由可重建投影聚合。
+### DEC-001 学习事实只追加写入并由可重建投影聚合
+- 决策：`AssistantLearningFact` 只通过 `AppendAssistantLearningFact` 追加写入，并由可重建投影聚合。
 - 理由：统一学习事件上报、反馈聚合与运行时上下文注入链路。
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - 关联要求：`REQ-001`
 - 影响 Story：[`feedback-aggregation`](./feedback-aggregation/spec.md)、[`feedback-context-injection`](./feedback-context-injection/spec.md)、[`learning-event-ingestion`](./learning-event-ingestion/spec.md)
+- 关联验收：`SIT-001`
+
+<a id="dec-002"></a>
+### DEC-002 反馈上下文以 consent 与 immutable policy 双重授权
+- 决策：模型只接收当前 account/persona 的脱敏聚合摘要；policy release 冻结允许的 signal、metric、reason、窗口与最小样本，Run 同时冻结 consent identity、projection definition 与 source watermark。
+- 理由：用户同意决定“能否使用”，不可变 policy 决定“允许使用什么”；两者缺一不可，且执行期不能因 rollout 或投影更新发生漂移。
+- 被否决方案：直接拼接原始反馈、读取 account 下其他 persona、在模型 bridge 临时过滤、或 consent/reader 失败时使用旧缓存。
+- 约束与影响：opt-out、reader 失败、样本不足、owner 不匹配都产生明确 no-injection decision；不得本地合成或回退旧画像。
+- 关联要求：`REQ-002`
+- 影响 Story：[`feedback-context-injection`](./feedback-context-injection/spec.md)
 - 关联验收：`SIT-001`
 
 ## 5. 失败与恢复

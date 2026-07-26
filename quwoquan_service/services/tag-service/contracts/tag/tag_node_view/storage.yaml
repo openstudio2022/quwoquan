@@ -32,6 +32,19 @@ collections:
       - parentTagRef
       - lifecycleStatus
       - tagRef
+    - name: idx_tag_nodes_release_kind_group_tagref
+      keys:
+        releaseId: 1
+        lifecycleStatus: 1
+        nodeKind: 1
+        group: 1
+        tagRef: 1
+      key_order:
+      - releaseId
+      - lifecycleStatus
+      - nodeKind
+      - group
+      - tagRef
 role: projection
 codegen:
   enabled: true

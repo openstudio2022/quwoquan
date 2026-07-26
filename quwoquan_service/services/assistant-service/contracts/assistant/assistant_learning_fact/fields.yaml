@@ -1,0 +1,713 @@
+description: AssistantLearningFact 唯一 typed learning envelope。
+fields:
+- name: eventId
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: eventVersion
+  type: int
+  constraints:
+  - PK
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: factType
+  type: enum
+  enum_ref: AssistantLearningFactType
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: payloadDigest
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: appendSequence
+  type: int64
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: userId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: mask
+  api_exposure: read
+  ops_exposure: mask
+  role: append_only_fact
+  reference: true
+- name: personaId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PII
+  log_policy: mask
+  api_exposure: read
+  ops_exposure: mask
+  role: append_only_fact
+  reference: true
+- name: assistantTurnId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+  reference: true
+- name: triggerMessageId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+  reference: true
+- name: referralSource
+  type: enum
+  enum_ref: AssistantReferralSource
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: traceId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: sessionId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: pageVisitId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: pageId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: surfaceId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: routeId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: operationId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: experimentBucket
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: domainId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: eventType
+  type: enum
+  enum_ref: InteractionEventType
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: feedbackType
+  type: enum
+  enum_ref: FeedbackType
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: feedbackScore
+  type: float
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: reasonCodes
+  type: '[]string'
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: actionType
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: suggestedActionId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: durationMs
+  type: int
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: metricId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: metricValue
+  type: float
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: metricSource
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: queryText
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: deny
+  api_exposure: read
+  ops_exposure: none
+  role: append_only_fact
+- name: queryTextDigest
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: answerText
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: deny
+  api_exposure: read
+  ops_exposure: none
+  role: append_only_fact
+- name: feedbackText
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: deny
+  api_exposure: read
+  ops_exposure: none
+  role: append_only_fact
+- name: correctionText
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: deny
+  api_exposure: read
+  ops_exposure: none
+  role: append_only_fact
+- name: trainingEligible
+  type: bool
+  constraints:
+  - NOT_NULL
+  - DEFAULT_FALSE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: occurredAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: clientSentAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: recordedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+types:
+  AppendAssistantLearningFactRequest:
+    description: 用户可提交的唯一学习事实命令；身份与运行页面上下文由可信请求边界注入。
+    fields:
+    - name: eventId
+      source: eventId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: eventVersion
+      source: eventVersion
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: factType
+      source: factType
+      type: enum
+      enum_ref: AssistantLearningFactType
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: assistantTurnId
+      source: assistantTurnId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: triggerMessageId
+      source: triggerMessageId
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: referralSource
+      source: referralSource
+      type: enum
+      enum_ref: AssistantReferralSource
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: domainId
+      source: domainId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: eventType
+      source: eventType
+      type: enum
+      enum_ref: InteractionEventType
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: feedbackType
+      source: feedbackType
+      type: enum
+      enum_ref: FeedbackType
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: feedbackScore
+      source: feedbackScore
+      type: float
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: reasonCodes
+      source: reasonCodes
+      type: '[]string'
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: metadata_only
+      api_exposure: write
+      ops_exposure: read
+    - name: actionType
+      source: actionType
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: suggestedActionId
+      source: suggestedActionId
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: durationMs
+      source: durationMs
+      type: int
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: queryText
+      source: queryText
+      type: string
+      constraints:
+      - NULLABLE
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: write
+      ops_exposure: none
+    - name: answerText
+      source: answerText
+      type: string
+      constraints:
+      - NULLABLE
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: write
+      ops_exposure: none
+    - name: feedbackText
+      source: feedbackText
+      type: string
+      constraints:
+      - NULLABLE
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: write
+      ops_exposure: none
+    - name: correctionText
+      source: correctionText
+      type: string
+      constraints:
+      - NULLABLE
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: write
+      ops_exposure: none
+    - name: trainingEligible
+      source: trainingEligible
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+    - name: occurredAt
+      source: occurredAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
+  AppendAssistantServiceLearningFactRequest:
+    description: 仅内部 service principal 可提交的服务评分事实命令。
+    fields:
+    - name: eventId
+      source: eventId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: eventVersion
+      source: eventVersion
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: factType
+      source: factType
+      type: enum
+      enum_ref: AssistantLearningFactType
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: assistantTurnId
+      source: assistantTurnId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: referralSource
+      source: referralSource
+      type: enum
+      enum_ref: AssistantReferralSource
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: domainId
+      source: domainId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: metricId
+      source: metricId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: metricValue
+      source: metricValue
+      type: float
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: metricSource
+      source: metricSource
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: trainingEligible
+      source: trainingEligible
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: occurredAt
+      source: occurredAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+  AssistantLearningFactReceipt:
+    description: 学习事实 append 的幂等确认。
+    fields:
+    - name: eventId
+      source: eventId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: eventVersion
+      source: eventVersion
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: accepted
+      source: accepted
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: deduplicated
+      source: deduplicated
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: appendSequence
+      source: appendSequence
+      type: int64
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: payloadDigest
+      source: payloadDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: read
+    - name: recordedAt
+      source: recordedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read

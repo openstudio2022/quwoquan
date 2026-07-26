@@ -1,6 +1,7 @@
 overrides:
   sys.circle-service.user_account_security_authority.base_url: http://127.0.0.1:18081
   sys.circle-service.user_account_security_authority.timeout_ms: 300
+  sys.circle-service.es.enabled: true
   sys.circle-service.mongo.database: quwoquan_circle_local
 secretRefs:
   sys.circle-service.mongo.uri: CIRCLE_MONGO_URI

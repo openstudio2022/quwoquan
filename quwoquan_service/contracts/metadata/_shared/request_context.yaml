@@ -4,9 +4,7 @@ domain_operation_page_ids:
     SearchXiaoquResults: assistant.search.xiaoqu
     ReportPageContext: assistant.page_context.report
     GetSuggestedActions: assistant.suggested_actions.get
-    ReportInteractionEvent: assistant.learning.events.report
-    ReportScorecard: assistant.learning.scorecards.report
-    GetPolicy: assistant.policy.get
+    AppendAssistantLearningFact: assistant.learning.facts.append
     ListSkills: assistant.skills.list
     GrantSkillConsent: assistant.skills.consent.grant
     RevokeSkillConsent: assistant.skills.consent.revoke

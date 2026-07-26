@@ -353,9 +353,22 @@ compose_file='docker-compose.prod-hosted.yaml'
 env_file='stack.env'
 export IMAGE_VERSION='${IMAGE_VERSION}' CONFIG_VERSION='${CONFIG_VERSION}' ROLLOUT_STAGE='${ROLLOUT_STAGE}'
 ${runtime_credential_preflight}
-podman compose --env-file \"\$env_file\" -f \"\$compose_file\" -p '${project}' up -d --force-recreate --no-deps ${startup_services}
+unit='quwoquan-${plane}-${INSTANCE_SUFFIX}.service'
+unit_source=\"systemd/\$unit\"
+unit_dir=\"\${XDG_CONFIG_HOME:-\$HOME/.config}/systemd/user\"
+if [[ ! -f \"\$unit_source\" || -L \"\$unit_source\" || ! -r \"\$unit_source\" ]]; then
+  echo \"FAIL: rootless runtime systemd unit is missing or unsafe: \$unit_source\" >&2
+  exit 2
+fi
+install -d -m 700 \"\$unit_dir\"
+install -m 600 \"\$unit_source\" \"\$unit_dir/\$unit\"
+systemctl --user daemon-reload
+systemctl --user enable \"\$unit\"
+systemctl --user restart \"\$unit\"
+systemctl --user is-enabled --quiet \"\$unit\"
+systemctl --user is-active --quiet \"\$unit\"
 ${image_retention}
-echo \"[plane ${plane}] rollout ok project=${project} services=[${startup_services}]\""
+echo \"[plane ${plane}] rollout ok project=${project} unit=\$unit services=[${startup_services}]\""
 
   echo "----- plane=${plane} account=${account} project=${project} -----"
   if [[ "$DRY_RUN" == "true" ]]; then
@@ -583,7 +596,8 @@ PY
     --source-dir "$render_dir"
   local remote_cmd="set -euo pipefail
 cd '${service_root}'
-podman compose --env-file stack.env -f docker-compose.prod-hosted.yaml -p quwoquan-service-prod up -d --force-recreate --no-deps gamma-proxy
+systemctl --user restart quwoquan-service-prod.service
+systemctl --user is-active --quiet quwoquan-service-prod.service
 echo '[plane service] stable Caddy gray routing updated for ${ROLLOUT_STAGE}'"
   run_remote_bash "$service_account" "$service_secret" "$remote_cmd"
 }
@@ -594,7 +608,10 @@ cleanup_gray_stacks() {
     local project="quwoquan-${plane}-gray"
     local remote_cmd="set -euo pipefail
 cd '${compose_root}'
-podman compose --env-file stack.env -f docker-compose.prod-hosted.yaml -p '${project}' down --remove-orphans
+unit='quwoquan-${plane}-gray.service'
+if systemctl --user list-unit-files \"\$unit\" --no-legend 2>/dev/null | grep -q \"\$unit\"; then
+  systemctl --user disable --now \"\$unit\"
+fi
 echo '[plane ${plane}] removed completed gray stack ${project}'"
     run_remote_bash "$account" "$secret_name" "$remote_cmd"
   done <<< "$PLANE_PLAN"

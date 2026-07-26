@@ -1,0 +1,2 @@
+backend: observability_log_sink
+role: append_only

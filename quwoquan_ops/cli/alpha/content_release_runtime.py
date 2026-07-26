@@ -34,6 +34,9 @@ from quwoquan_ops.cli.lib.local_environment_auth import (
 from quwoquan_ops.cli.lib.local_provider_credentials import (
     prepare_local_provider_credentials,
 )
+from quwoquan_ops.cli.lib.local_runtime_reservation import (
+    assert_local_runtime_available,
+)
 from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
@@ -393,6 +396,7 @@ def _stop_process(record: Mapping[str, object]) -> None:
 def up() -> None:
     if subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False).returncode:
         raise RuntimeError("Docker daemon is unavailable for Alpha content-release")
+    assert_local_runtime_available(load_environment_topology(), TARGET)
     down()
     paths = _paths()
     ports = profile_ports(load_port_manifest(), TARGET)

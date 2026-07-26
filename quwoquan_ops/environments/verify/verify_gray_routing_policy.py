@@ -65,6 +65,10 @@ def main() -> int:
                     failures.append(
                         f"{label}.provinces value {text!r} must be a GB/T 2260 six-digit code"
                     )
+                elif key in {"provinces", "carriers"}:
+                    failures.append(
+                        f"{label}.{key} cannot be enabled until trusted edge attestation is implemented"
+                    )
                 elif key == "appVersions" and not APP_VERSION_PATTERN.match(text):
                     failures.append(
                         f"{label}.appVersions value {text!r} must be a semver version"

@@ -158,6 +158,52 @@ func TestHomepageOutboxRelayProjectsCommittedState(t *testing.T) {
 	}
 }
 
+func TestSuggestedHomepageKeepsOnlyValidatedSourcePlaceAlias(t *testing.T) {
+	ctx := context.Background()
+	store, err := homepagepersistence.NewMemoryHomepageStore()
+	if err != nil {
+		t.Fatalf("new homepage store: %v", err)
+	}
+	service := application.NewHomepageServiceWithStore(ctx, store)
+
+	created, err := service.SuggestHomepageCandidate(ctx, application.HomepageInput{
+		Title:         "断桥残雪",
+		HomepageType:  "sight",
+		LookupAliases: []string{"place_0123456789abcdef"},
+	})
+	if err != nil {
+		t.Fatalf("suggest promoted place homepage: %v", err)
+	}
+	if len(created.LookupAliases) == 0 {
+		t.Fatal("suggested homepage must retain its source place lookup alias")
+	}
+	found := false
+	for _, alias := range created.LookupAliases {
+		if alias == "place_0123456789abcdef" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("source place alias missing: %#v", created.LookupAliases)
+	}
+	published, err := service.PublishHomepageCandidate(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("publish promoted place homepage: %v", err)
+	}
+	if got := application.ProjectHomepageToSearchDocument(*published).Fields["placeId"]; got != "place_0123456789abcdef" {
+		t.Fatalf("published search projection place anchor=%q", got)
+	}
+
+	if _, err := service.SuggestHomepageCandidate(ctx, application.HomepageInput{
+		Title:         "错误别名",
+		HomepageType:  "sight",
+		LookupAliases: []string{"homepage_other"},
+	}); err == nil {
+		t.Fatal("user suggestion must reject non-place lookup aliases")
+	}
+}
+
 type claimProjectorSource struct {
 	aggregate  *claimmodel.HomepageClaimRequest
 	events     []claimports.OutboxEvent

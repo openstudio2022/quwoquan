@@ -147,7 +147,7 @@ final class AlphaSearchFeedbackWriter implements SearchFeedbackCommandWriter {
     ReportSearchFeedbackCommand command,
   ) async {
     final key =
-        '${command.searchRequestId}\u0000${command.eventType}\u0000'
+        '${command.searchRequestId}\u0000${command.eventType.wireValue}\u0000'
         '${command.objectId ?? ''}';
     _records.putIfAbsent(key, () => command);
     return const SearchFeedbackAck(accepted: true);
@@ -182,9 +182,12 @@ final class AlphaCanonicalSearchFacet implements CanonicalSearchQueryFacet {
       final summary = _text(post['summary']);
       final body = _text(post['body']);
       final author = _text(post['authorDisplayName']);
-      final matched = <String>[title, summary, body, author].any(
-        (value) => value.toLowerCase().contains(normalized),
-      );
+      final matched = <String>[
+        title,
+        summary,
+        body,
+        author,
+      ].any((value) => value.toLowerCase().contains(normalized));
       if (!matched) {
         continue;
       }
@@ -225,7 +228,9 @@ final class AlphaCanonicalSearchFacet implements CanonicalSearchQueryFacet {
         break;
       }
     }
-    final digest = sha256.convert(utf8.encode('${query.mode.wireValue}:$normalized'));
+    final digest = sha256.convert(
+      utf8.encode('${query.mode.wireValue}:$normalized'),
+    );
     return CanonicalSearchResult(
       hits: hits,
       requestId: 'alpha_${digest.toString().substring(0, 16)}',

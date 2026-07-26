@@ -54,11 +54,11 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   security:
-    auth_mode: optional
+    auth_mode: required
     principal: public
     token_transport: bearer
-    anonymous_policy: allow
-    visibility: public
+    anonymous_policy: deny
+    visibility: private
   description: '追加一条标签反馈事实（action ∈ click / ignore / correct）。
 
     同一 actor 的相同 Idempotency-Key 重放返回首次结果。

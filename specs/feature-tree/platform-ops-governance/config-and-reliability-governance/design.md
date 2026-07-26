@@ -32,6 +32,17 @@
 - 影响 Story：[`config-source-governance`](./config-source-governance/spec.md)、[`reliability-policy-control`](./reliability-policy-control/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 Hosted receipt 是生产发布的唯一可提升事实
+- 决策：`prod-hosted` 发布先写入 service-plane 的不可变 receipt，再从同一受控平面回读并校验；本机 `.qwq_output` 或 runner 目录只允许保存 readback cache，不得作为 rollout、rollback 或 readiness 的事实来源。
+- receipt：绑定 release manifest、候选 image/config/ContractGraph/adapter digest、CAS generation、gray stage、SLO 与 post-check 摘要、last-good target 和 rollback outcome；`gray-initial → carry-on → full`、`rolled_back` 与 `rollback_failed` 是互斥的状态事实。
+- 理由：本机缓存、日志和人工 ref 无法证明托管环境实际应用了候选版本，也无法在多 runner 下可靠阻止陈旧状态提升。
+- 被否决方案：只同步本地 ledger 后立即宣称成功、仅凭 operator sidecar 的任意 `receipt:*` 字符串，或把回滚成功与回滚失败折叠为同一状态。
+- 约束与影响：Provider Conformance 仅接受 `receipt:hosted:<sha256>` 的 last-good/rollback ref，并由 `stackctl hosted-release-receipt` 从 hosted service plane 拉取、校验 candidate digest 后确认。SSH 凭据、托管平面、真实 Provider/设备或审批缺失时必须失败且不得写 ready。
+- 关联要求：`REQ-002`
+- 影响 Story：[`reliability-policy-control`](./reliability-policy-control/spec.md)
+- 关联验收：`SIT-001`、`GWT-002`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

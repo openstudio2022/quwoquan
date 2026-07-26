@@ -45,9 +45,9 @@
 ### REQ-002 统一学习事件上报、反馈聚合与运行时上下文注入链路
 
 - 统一学习事件上报、反馈聚合与运行时上下文注入链路。
-- 事件 schema 必须统一并具备版本兼容策略。
+- `AppendAssistantLearningFact` 必须是用户反馈、交互结果与服务评分唯一的 append command；`eventId + eventVersion` 定义幂等身份，不保留旧 wire 或双轨上报。
 - 反馈注入只能读取通过策略校验的数据，不得直接拼接原始未校验字段。
-- `learning-event-ingestion`：统一学习事件与评分卡上报、落库标准、与统一事件体系桥接
+- `learning-event-ingestion`：统一学习事实追加、落库标准、与统一事件体系桥接
 - 通过 `product-ops-growth/event-ingestion-and-analytics` 共享统一事件字典、schema 治理、实验与分析维度
 
 ## 6. 契约与依赖
@@ -73,5 +73,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：统一学习事件上报、反馈聚合与运行时上下文注入链路。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺 Prod 获批 Provider conformance 与发布回执；三条代码链路已由 `AssistantLearningFact` append sink、definition-versioned projection 和 policy-filtered feedback context 收敛，local/API 合同已直连 Story `spec_ref`，Gamma Remote 已证明真实 append、幂等 receipt 与 durable relay，且不得在生产环境执行破坏性学习事实探针。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效，并在可用 alpha/beta/gamma/prod 环境中复验。

@@ -17,8 +17,8 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 	productopsgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 )
 
 const maxTelemetryRequestBytes = 128 << 10
@@ -325,10 +325,12 @@ func (s *productService) handleGetEventDrilldown(w http.ResponseWriter, r *http.
 		writeEventAppError(w, r, productopsgenerated.AppErrorFromQueryWindowInvalid(err.Error()))
 		return
 	}
+	sessionID := strings.TrimSpace(r.URL.Query().Get("sessionId"))
 	revealRequested := strings.EqualFold(r.URL.Query().Get("revealSession"), "true")
-	revealAllowed := revealRequested && hasTelemetrySensitivePermission(r)
-	if revealRequested && !revealAllowed {
-		writeEventAppError(w, r, productopsgenerated.AppErrorFromEventDrilldownForbidden("sensitive session reveal permission is required"))
+	sensitiveQuery := revealRequested || sessionID != ""
+	sensitiveAllowed := hasTelemetrySensitivePermission(r)
+	if sensitiveQuery && !sensitiveAllowed {
+		writeEventAppError(w, r, productopsgenerated.AppErrorFromEventDrilldownForbidden("sensitive session query permission is required"))
 		return
 	}
 	query := application.EventDrilldownQuery{
@@ -339,20 +341,28 @@ func (s *productService) handleGetEventDrilldown(w http.ResponseWriter, r *http.
 		NetworkClass:  strings.TrimSpace(r.URL.Query().Get("networkClass")),
 		Result:        strings.TrimSpace(r.URL.Query().Get("result")),
 		ErrorCode:     strings.TrimSpace(r.URL.Query().Get("errorCode")),
-		SessionID:     strings.TrimSpace(r.URL.Query().Get("sessionId")),
+		SessionID:     sessionID,
 		From:          from,
 		To:            to,
 		Limit:         limit,
-		RevealSession: revealAllowed,
+		RevealSession: revealRequested && sensitiveAllowed,
 	}
 	out, err := s.telemetry.GetEventDrilldown(r.Context(), query)
 	if err != nil {
 		writeEventAppError(w, r, productopsgenerated.AppErrorFromQueryWindowInvalid(err.Error()))
 		return
 	}
-	if revealAllowed {
+	if sensitiveQuery {
 		principal, _ := rtauth.PrincipalFromContext(r.Context())
-		log.Printf("audit telemetry_sensitive_drilldown actor=%s from=%s to=%s rows=%d", principal.Actor.AccountID, out.ActualFrom, out.ActualTo, len(out.Items))
+		log.Printf(
+			"audit telemetry_sensitive_drilldown actor=%s exact_session=%t reveal_session=%t from=%s to=%s rows=%d",
+			principal.Actor.AccountID,
+			sessionID != "",
+			revealRequested,
+			out.ActualFrom,
+			out.ActualTo,
+			len(out.Items),
+		)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

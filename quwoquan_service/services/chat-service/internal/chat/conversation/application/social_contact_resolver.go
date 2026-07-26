@@ -16,13 +16,33 @@ type SocialContactSeed struct {
 	IsStarred       bool
 }
 
+type SocialContactPage struct {
+	Items      []SocialContactSeed
+	NextCursor string
+}
+
 // SocialContactResolver 负责从 user-service 聚合 follow / discovery 等社交来源。
 type SocialContactResolver interface {
 	ListContacts(ctx context.Context, userID string, limit int) ([]SocialContactSeed, error)
+	ListContactPage(
+		ctx context.Context,
+		userID string,
+		limit int,
+		cursor string,
+	) (SocialContactPage, error)
 }
 
 type noopSocialContactResolver struct{}
 
 func (noopSocialContactResolver) ListContacts(context.Context, string, int) ([]SocialContactSeed, error) {
 	return nil, nil
+}
+
+func (noopSocialContactResolver) ListContactPage(
+	context.Context,
+	string,
+	int,
+	string,
+) (SocialContactPage, error) {
+	return SocialContactPage{}, nil
 }

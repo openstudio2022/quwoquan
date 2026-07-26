@@ -1,4 +1,4 @@
-"""Auto-generate Alpha/Beta substitute credentials under QWQ_DEPLOY_WORK_ROOT."""
+"""Auto-generate non-production substitute credentials outside the repository."""
 
 from __future__ import annotations
 
@@ -73,11 +73,12 @@ def prepare_local_provider_credentials(
     environment: str,
     target_name: str,
 ) -> dict[str, str]:
-    """Materialize Alpha/Beta substitute secrets under the deploy work root."""
+    """Materialize local substitute credentials under the deploy work root."""
     if environment not in SUBSTITUTE_ENVIRONMENTS:
         raise ValueError(
-            "auto-generated local Provider credentials are only for Alpha/Beta "
-            f"substitute environments, got {environment}"
+            "auto-generated local Provider credentials are only for "
+            "Alpha/Beta/Gamma substitute environments, got "
+            f"{environment}"
         )
     if not target_name.endswith("-local"):
         raise ValueError(f"local provider target must end with -local: {target_name}")
@@ -119,12 +120,16 @@ def _required_keys_for_environment(environment: str) -> list[str]:
                     keys.add(key)
             endpoint_envs = binding.get("endpointEnvs") or {}
             if isinstance(endpoint_envs, Mapping):
+                endpoint_ref = str(binding.get("endpointRef") or "")
+                if endpoint_ref.startswith("local_topology:"):
+                    # A topology-owned endpoint is supplied by the local stack
+                    # materializer. Generating a fixture URL here would replace
+                    # the running substitute with a non-routable secret value.
+                    continue
                 for env_key in endpoint_envs.values():
                     key = str(env_key)
                     if key not in _PLATFORM_OWNED_KEYS:
                         keys.add(key)
-    # Include fixture defaults referenced by Alpha/Beta templates.
-    keys.update(_DEFAULT_VALUES)
     return sorted(keys)
 
 

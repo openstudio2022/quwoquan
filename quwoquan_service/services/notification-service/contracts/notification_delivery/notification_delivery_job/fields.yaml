@@ -84,6 +84,51 @@ fields:
   ops_exposure: read
   role: authoritative_state
   reference: true
+- name: externalInteractionAcceptedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: provider
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: providerRequestDigest
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: providerResultStatus
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: providerResultAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
 - name: eventId
   type: string
   constraints:
@@ -304,6 +349,51 @@ fields:
   ops_exposure: read
   role: authoritative_state
   reference: true
+- name: cancellationExternalInteractionAcceptedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: cancellationProvider
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: cancellationProviderRequestDigest
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: cancellationProviderResultStatus
+  type: string
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: cancellationProviderResultAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
 - name: cancellationPushSubmittedAt
   type: timestamp
   constraints:
@@ -359,6 +449,121 @@ fields:
   ops_exposure: read
   role: authoritative_state
 types:
+  ExternalInteractionResultInboxReceipt:
+    description: Notification 拥有的 provider result 幂等 inbox receipt；原始 provider request identifier 与 payload 禁止写入。
+    fields:
+    - name: attemptId
+      type: string
+      constraints: [PK, NOT_NULL]
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: requestId
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: operation
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: provider
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: providerRequestDigest
+      type: string
+      constraints: [NOT_NULL]
+      classification: SENSITIVE
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: normalizedError
+      type: string
+      constraints: [NULLABLE]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: none
+      ops_exposure: read
+    - name: recoveryAction
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: status
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: occurredAt
+      type: timestamp
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: createdAt
+      type: timestamp
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+  IncomingCallProviderReceipt:
+    description: provider attempt 的 operator-safe receipt；attempt 与 provider request 均只暴露摘要。
+    fields:
+    - {name: attemptDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: action, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: status, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: provider, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: providerRequestDigest, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: recoveryAction, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  IncomingCallDeliveryTimelineItem:
+    description: 一个受信设备 endpoint 的脱敏 ring/cancel/presentation 时间线。
+    fields:
+    - {name: jobDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: deviceDigest, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: deliveryKeyDigest, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: status, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: externalInteractionAcceptedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: presentedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: cancelledAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: cancellationExternalInteractionAcceptedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - name: receipts
+      type: array
+      item_type: IncomingCallProviderReceipt
+      constraints: [NOT_NULL]
+      classification: SENSITIVE
+      log_policy: redacted
+      api_exposure: read
+      ops_exposure: read
+  IncomingCallDeliveryTimeline:
+    description: 同一 call 的 operator-safe per-device 投递时间线。
+    fields:
+    - {name: callDigest, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - name: items
+      type: array
+      item_type: IncomingCallDeliveryTimelineItem
+      constraints: [NOT_NULL]
+      classification: SENSITIVE
+      log_policy: redacted
+      api_exposure: read
+      ops_exposure: read
+    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
   AckIncomingCallPresentationCommand:
     description: App 表示指定 deliveryKey 已在当前 trusted device 展示来电 UI
     fields:

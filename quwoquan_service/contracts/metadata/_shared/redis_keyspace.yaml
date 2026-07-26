@@ -48,6 +48,7 @@ scene_routing:
         - "events.circle."
         - "events.search."
         - "events.chat."
+        - "events.integration."
         - "page_ctx:"
         - "assistant:"
         - "content_analysis:"
@@ -393,6 +394,22 @@ key_patterns:
     ttl_seconds: 604800
     type: stream
     description: CircleBehaviorFact Mongo outbox 的可重放传输副本；推荐消费者必须使用 durable inbox、checkpoint 与 DLQ。
+
+  - pattern: "events.integration.external_interaction"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: |
+      integration-service 从不可变 provider attempt ledger 以独立 checkpoint 投递的外部交互结果事实。
+      request 202、provider 接受和终端展示属于不同时间线；notification-service 必须使用独立
+      consumer group、Mongo inbox 与 DLQ，不得把 Redis 或 provider receipt 当成 delivered。
+
+  - pattern: "events.integration.external_interaction.notification-dlq"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: NotificationDeliveryJob 消费外部交互结果时的隔离死信；保存 source stream
+      坐标、eventId、不可逆错误摘要与隔离时间，受控恢复后才从源 PEL 重放。
 
   - pattern: "cache:rtask_ready:{taskType}"
     redis_scene: general

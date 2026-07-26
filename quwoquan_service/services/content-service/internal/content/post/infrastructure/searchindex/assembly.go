@@ -2,6 +2,7 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -37,13 +38,17 @@ type Built struct {
 	Projector *Projector
 }
 
-// Build assembles the write-time search index from config. When ES is disabled or
-// has no endpoints it returns an empty (no-op) Built so the content write path is
-// unchanged. reader is the live post store used to read posts back on events and
-// during backfill.
+// Build assembles the write-time search index from config. An explicitly
+// disabled projection returns an empty Built; an enabled but incomplete
+// configuration fails fast.
 func Build(cfg ESConfig, reader PostReader, opts ...Option) (Built, error) {
-	if !cfg.Enabled || len(cfg.Endpoints) == 0 {
+	if !cfg.Enabled {
 		return Built{}, nil
+	}
+	if len(cfg.Endpoints) == 0 || reader == nil {
+		return Built{}, fmt.Errorf(
+			"Post search projection requires endpoints and reader",
+		)
 	}
 	client, err := es.NewClient(es.Config{
 		Endpoints:      cfg.Endpoints,

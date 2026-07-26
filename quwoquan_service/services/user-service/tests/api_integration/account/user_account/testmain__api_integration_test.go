@@ -52,7 +52,9 @@ import (
 	usersettingspersistence "quwoquan_service/services/user-service/internal/account/user_settings/infrastructure/persistence"
 	personaapp "quwoquan_service/services/user-service/internal/persona_management/persona/application/persona"
 	personapersistence "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/persistence"
+	proposalhttp "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/adapters/inbound/http"
 	proposalapp "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/application"
+	proposalmessaging "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/infrastructure/messaging"
 	proposalpersistence "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/infrastructure/persistence"
 	followingapp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/application"
 	contacthttp "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/adapters/inbound/http"
@@ -490,6 +492,18 @@ func rebuildTestHandler(ctx context.Context) error {
 		defer integrationRelayRunners.Done()
 		_ = greetingRelay.Run(relationshipRelayContext, 10*time.Millisecond)
 	}()
+	profileProposalRelay, err := proposalapp.NewOutboxRelay(
+		profileProposalStore,
+		proposalmessaging.NewEventPublisher(messageTransport),
+	)
+	if err != nil {
+		return err
+	}
+	integrationRelayRunners.Add(1)
+	go func() {
+		defer integrationRelayRunners.Done()
+		_ = profileProposalRelay.Run(relationshipRelayContext, 10*time.Millisecond)
+	}()
 	accountEnforcementStore, err := useraccountpersistence.NewEnforcementStore(pgPool)
 	if err != nil {
 		return err
@@ -597,11 +611,14 @@ func rebuildTestHandler(ctx context.Context) error {
 		deviceRegistrationCommands, deviceRegistrationQueries,
 		subAccountService,
 		interestProfileService,
-		profileProposalFacade,
 		subjectFollowService,
 		followedSubjectVisitService,
 		followingSubjectQueryService,
 	)
+	if err != nil {
+		return err
+	}
+	profileProposalHandler, err := proposalhttp.NewHandler(profileProposalFacade)
 	if err != nil {
 		return err
 	}
@@ -639,6 +656,7 @@ func rebuildTestHandler(ctx context.Context) error {
 	)
 	serviceMux := http.NewServeMux()
 	userHandler.RegisterRoutes(serviceMux)
+	profileProposalHandler.RegisterRoutes(serviceMux)
 	invitationHandler.RegisterRoutes(serviceMux)
 	greetingHandler.RegisterRoutes(serviceMux)
 	contactDiscoveryHandler.RegisterRoutes(serviceMux)

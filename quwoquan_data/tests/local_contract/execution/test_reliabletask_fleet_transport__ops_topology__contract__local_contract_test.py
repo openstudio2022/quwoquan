@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 import sys
 from pathlib import Path
 
@@ -21,8 +22,13 @@ def test_reliabletask_fleet_transport__ignores_caller_endpoint_variables__contra
     monkeypatch.setenv("QWQ_DATA_FLEET_REDIS_ADDR", "caller.invalid:6379")
 
     transport = resolve_reliabletask_fleet_transport()
+    policy = json.loads(
+        (DATA_ROOT.parent / "quwoquan_ops/environments/data_execution_fleet.json").read_text(
+            encoding="utf-8"
+        )
+    )
 
-    assert transport.target == "gamma-local"
+    assert transport.target == policy["localTarget"]
     assert "caller.invalid" not in transport.mongo_uri
     assert "caller.invalid" not in transport.redis_addr
     assert os.environ["QWQ_DATA_FLEET_MONGO_URI"] == "mongodb://caller.invalid:27017"

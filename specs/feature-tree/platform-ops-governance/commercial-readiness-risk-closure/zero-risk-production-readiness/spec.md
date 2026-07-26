@@ -33,6 +33,14 @@
 
 - stackctl release report、health/inspect/doctor、rollback/restore receipt 均可复验。
 
+<a id="req-003"></a>
+### REQ-003 第一方容器预验证不可提升为生产发布证据
+
+- `prod-hosted` 可在独立 namespace 消费 reviewed main 的 Service Pipeline digest 制品，验证第一方容器、隔离空数据栈和 rootless user systemd 持久运行。
+- 预验证不得接受 rollout/SLO/rollback 参数，不得读取或写入正式 release ledger/receipt；容器部署结果与正式发布资格必须分别报告。
+- 隔离投影不得继承正式 credentials；商业登录、Push、模型、SLS 与 RTC Provider 只能明确 unavailable，禁止切到非生产 fixture 或 Mock。
+- 缺 Provider、SFU/TURN、正式数据、观测、灾备、DNS/TLS 或灰度回滚证据时，正式发布资格始终保持 `GATE_BLOCK`。
+
 ## 4. 契约引用
 
 - canonical：`specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md`
@@ -59,6 +67,17 @@
 - THEN 三阶段使用同一 ReleaseManifest digest。
 - THEN 真实 Prometheus SLO、锁/CAS、双签、config ACK、告警与恢复证据完整。
 - THEN 本 Story 范围内所有阻断级 `OPEN` 均达到完成判定，且不存在未归属风险。
+
+<a id="gwt-003"></a>
+### GWT-003 不可提升的第一方容器预验证
+
+- GIVEN reviewed main 的 deployable ReleaseManifest、GHCR digest、四平面 SSH key 与满足阈值的 prod-hosted 主机。
+- WHEN 执行 `stackctl deploy --target prod-hosted --mode prevalidate --prevalidate-scope first-party`。
+- THEN 镜像传输前硬校验账号隔离、CPU、内存、容器空间、架构与端口，任一不足即 `GATE_BLOCK`。
+- THEN `integration-service` 只校验镜像和配置而不启动，LiveKit SFU、Coturn 与外部 Provider 不进入运行投影。
+- THEN service/edge user systemd unit 为 enabled/active，运行容器 digest 与 manifest 交付内容一致；隔离数据无 seed、无正式数据且不构成发布证据。
+- THEN container runtime 与 Provider readiness 分轴输出；被排除的 SLS 等 readiness 保持 `GATE_BLOCK`，不得污染第一方镜像/进程部署结论。
+- THEN 报告可将第一方容器部署标为 passed，但正式发布资格仍为 `GATE_BLOCK`，且 hosted release ledger/receipt 均未写入。
 
 ## 6. 依赖
 

@@ -129,7 +129,14 @@
               "cancellation": { "enum": ["supported", "none"] },
               "retryMode": { "enum": ["none", "idempotent"] },
               "maxAttempts": { "type": "integer", "minimum": 1 },
-              "idempotency": { "enum": ["none", "optional", "required"] }
+              "idempotency": {
+                "enum": [
+                  "none",
+                  "optional",
+                  "required",
+                  "payload_digest_server_side"
+                ]
+              }
             }
           },
           "concurrency": {

@@ -4,6 +4,181 @@ info:
     title: quwoquan tag API
     version: v1
 paths:
+    /internal/tag/graph/cooccurrence:
+        get:
+            operationId: TagCooccurrence
+            x-contract-operation-id: tag.tag_node_view.TagCooccurrence
+            x-object-id: tag.tag_node_view
+            x-actor: account
+            x-application:
+                kind: query
+                facet: TagGraphQueryFacade
+                method: getCooccurrence
+                reader: TagCooccurrenceReader
+                slice: TagCooccurrenceSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TagCooccurrenceView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/tag/inverted:
+        get:
+            operationId: InvertedObjects
+            x-contract-operation-id: tag.tag_node_view.InvertedObjects
+            x-object-id: tag.tag_node_view
+            x-actor: account
+            x-application:
+                kind: query
+                facet: TagGraphQueryFacade
+                method: findInvertedObjects
+                reader: TagInvertedObjectReader
+                slice: InvertedObjectsSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/InvertedObjectsView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/tag/related:
+        get:
+            operationId: RelatedTags
+            x-contract-operation-id: tag.tag_node_view.RelatedTags
+            x-object-id: tag.tag_node_view
+            x-actor: account
+            x-application:
+                kind: query
+                facet: TagCatalogQueryFacade
+                method: listRelatedTags
+                reader: RelatedTagReader
+                slice: RelatedTagsSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RelatedTagView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/tag/related-objects:
+        get:
+            operationId: RelatedObjects
+            x-contract-operation-id: tag.tag_node_view.RelatedObjects
+            x-object-id: tag.tag_node_view
+            x-actor: account
+            x-application:
+                kind: query
+                facet: TagGraphQueryFacade
+                method: listRelatedObjects
+                reader: RelatedObjectReader
+                slice: RelatedObjectsSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RelatedObjectView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/tag/search-by-tags:
+        post:
+            operationId: SearchByTags
+            x-contract-operation-id: tag.tag_node_view.SearchByTags
+            x-object-id: tag.tag_node_view
+            x-actor: account
+            x-application:
+                kind: query
+                facet: TagGraphQueryFacade
+                method: searchObjectsByTags
+                reader: TagObjectSearchReader
+                slice: TagObjectMatchesSlice
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchByTagsRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TagObjectMatchView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/tag/shared-tags:
+        get:
+            operationId: SharedTags
+            x-contract-operation-id: tag.tag_node_view.SharedTags
+            x-object-id: tag.tag_node_view
+            x-actor: account
+            x-application:
+                kind: query
+                facet: TagGraphQueryFacade
+                method: findSharedTags
+                reader: ObjectTagIntersectionReader
+                slice: SharedTagsSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SharedTagView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/tag/taxonomy-releases:
         post:
             operationId: StageTagTaxonomyRelease
@@ -182,119 +357,6 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-                - {}
-    /tag/graph/cooccurrence:
-        get:
-            operationId: TagCooccurrence
-            x-contract-operation-id: tag.tag_node_view.TagCooccurrence
-            x-object-id: tag.tag_node_view
-            x-actor: none
-            x-application:
-                kind: query
-                facet: TagGraphQueryFacade
-                method: getCooccurrence
-                reader: TagCooccurrenceReader
-                slice: TagCooccurrenceSlice
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/TagCooccurrenceView'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-                - {}
-    /tag/inverted:
-        get:
-            operationId: InvertedObjects
-            x-contract-operation-id: tag.tag_node_view.InvertedObjects
-            x-object-id: tag.tag_node_view
-            x-actor: none
-            x-application:
-                kind: query
-                facet: TagGraphQueryFacade
-                method: findInvertedObjects
-                reader: TagInvertedObjectReader
-                slice: InvertedObjectsSlice
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/InvertedObjectsView'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-                - {}
-    /tag/related:
-        get:
-            operationId: RelatedTags
-            x-contract-operation-id: tag.tag_node_view.RelatedTags
-            x-object-id: tag.tag_node_view
-            x-actor: none
-            x-application:
-                kind: query
-                facet: TagCatalogQueryFacade
-                method: listRelatedTags
-                reader: RelatedTagReader
-                slice: RelatedTagsSlice
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/RelatedTagView'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-                - {}
-    /tag/related-objects:
-        get:
-            operationId: RelatedObjects
-            x-contract-operation-id: tag.tag_node_view.RelatedObjects
-            x-object-id: tag.tag_node_view
-            x-actor: none
-            x-application:
-                kind: query
-                facet: TagGraphQueryFacade
-                method: listRelatedObjects
-                reader: RelatedObjectReader
-                slice: RelatedObjectsSlice
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/RelatedObjectView'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-                - {}
     /tag/resolve:
         get:
             operationId: ResolveTag
@@ -342,75 +404,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/TagSearchResultView'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-                - {}
-    /tag/search-by-tags:
-        post:
-            operationId: SearchByTags
-            x-contract-operation-id: tag.tag_node_view.SearchByTags
-            x-object-id: tag.tag_node_view
-            x-actor: none
-            x-application:
-                kind: query
-                facet: TagGraphQueryFacade
-                method: searchObjectsByTags
-                reader: TagObjectSearchReader
-                slice: TagObjectMatchesSlice
-            parameters:
-                - name: Idempotency-Key
-                  in: header
-                  required: false
-                  description: Stable business replay identity; distinct from X-Request-Id.
-                  schema:
-                    type: string
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/SearchByTagsRequest'
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/TagObjectMatchView'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-                - {}
-    /tag/shared-tags:
-        get:
-            operationId: SharedTags
-            x-contract-operation-id: tag.tag_node_view.SharedTags
-            x-object-id: tag.tag_node_view
-            x-actor: none
-            x-application:
-                kind: query
-                facet: TagGraphQueryFacade
-                method: findSharedTags
-                reader: ObjectTagIntersectionReader
-                slice: SharedTagsSlice
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/SharedTagView'
                 default:
                     description: Runtime failure
                     content:

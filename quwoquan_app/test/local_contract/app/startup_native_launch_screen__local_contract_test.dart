@@ -354,12 +354,16 @@ void main() {
       );
       expect(androidJournal, contains('startup_telemetry_native_attempt'));
       expect(androidJournal, isNot(contains('_v1')));
-      expect(androidJournal, contains('lastElapsedMs'));
-      expect(androidJournal, contains('phaseDurationMs'));
+      expect(
+        androidJournal,
+        contains('remove(ATTEMPT_KEY).remove(EVENTS_KEY)'),
+      );
+      expect(androidJournal, isNot(contains('lastElapsedMs')));
+      expect(androidJournal, isNot(contains('phaseDurationMs')));
       expect(ios, contains('StartupNativeTelemetryJournal'));
       expect(ios, contains('readStartupJournal'));
       expect(ios, contains('clearStartupJournal'));
-      expect(ios, contains('lastElapsedMs'));
+      expect(ios, isNot(contains('private var lastElapsedMs')));
       expect(web, contains('__qwqStartupNativeLastElapsedMs'));
       expect(ios, contains('registerGeneratedPluginsAfterFirstFrame'));
       for (final source in <String>[android, ios, bridge]) {

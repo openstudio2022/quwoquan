@@ -8,6 +8,7 @@ library;
 
 import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 
 final class AssistantPrototypeTaskRow {
@@ -103,7 +104,7 @@ class AlphaAssistantFacets
         AssistantConversationRunFacet,
         AssistantSkillSubscriptionFacet,
         AssistantSkillConsentFacet,
-        AssistantLearningAppendFacet,
+        AssistantLearningFactAppendFacet,
         AssistantPersonalizationFacet,
         AssistantPersonalDataFacet,
         AssistantPreferenceFactFacet,
@@ -119,44 +120,17 @@ class AlphaAssistantFacets
       <AssistantPreferenceFact>[];
 
   @override
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
+  Future<AssistantLearningFactReceipt> appendUserFact({
+    required AppendAssistantLearningFactRequest request,
   }) async {
-    return AssistantPolicyView(
-      version: policyVersionHint.trim().isEmpty
-          ? 'assistant_policy_local_mock_v1'
-          : policyVersionHint.trim(),
-      values: <String, dynamic>{
-        'learningSyncEnabled': false,
-        'suggestedActionsEnabled': true,
-        'pageContextTtlSeconds': 300,
-        'searchFallbackMode': 'local_mock',
-        'defaultSearchIntensity': 'balanced',
-      },
-    );
-  }
-
-  @override
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
-  }) async {
-    return AssistantInteractionReportBatchAck(
+    return AssistantLearningFactReceipt(
+      eventId: request.eventId,
+      eventVersion: request.eventVersion,
       accepted: true,
-      count: events.length,
-      resource: 'interaction_event_batch',
-      mode: 'local_mock',
-    );
-  }
-
-  @override
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  }) async {
-    return AssistantScorecardReportBatchAck(
-      accepted: true,
-      count: scorecards.length,
-      resource: 'scorecard_batch',
-      mode: 'local_mock',
+      deduplicated: false,
+      appendSequence: 1,
+      payloadDigest: 'alpha_mock',
+      recordedAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
 
@@ -211,7 +185,7 @@ class AlphaAssistantFacets
   }) async {
     return PageContextAck(
       accepted: true,
-      contextKey: 'mock:${assistantPageTypeForSource(context.source)}',
+      contextKey: 'mock:${assistantPageTypeForSource(context.source).wireName}',
       expiresAt: DateTime.now()
           .toUtc()
           .add(const Duration(minutes: 5))
@@ -252,10 +226,10 @@ class AlphaAssistantFacets
   ) {
     final pageType = assistantPageTypeForSource(context.source);
     final welcome = switch (pageType) {
-      'chat' => '我可以结合当前会话帮你整理话题、找资料或写回复。',
-      'search' => '我可以把站内结果、网页线索和你的上下文串起来。',
-      'create' => '我可以帮你找灵感、配文案或整理发布计划。',
-      'home' => '我可以结合当前主页、关系和交集帮你解释信息。',
+      AssistantPageContextType.chat => '我可以结合当前会话帮你整理话题、找资料或写回复。',
+      AssistantPageContextType.search => '我可以把站内结果、网页线索和你的上下文串起来。',
+      AssistantPageContextType.create => '我可以帮你找灵感、配文案或整理发布计划。',
+      AssistantPageContextType.home => '我可以结合当前主页、关系和交集帮你解释信息。',
       _ => '有什么想让我帮忙的？',
     };
     return AssistantEntryPersonalizationView(
@@ -569,6 +543,16 @@ class AlphaAssistantFacets
   }
 
   @override
+  Future<SkillSubscriptionWire> getSkillSubscription({
+    required String subscriptionId,
+  }) async {
+    return _subscriptions.singleWhere(
+      (item) => item.subscriptionId == subscriptionId.trim(),
+      orElse: () => throw StateError('skill subscription not found'),
+    );
+  }
+
+  @override
   Future<SkillSubscriptionWire> createSkillSubscription({
     required String skillId,
     String domainId = 'assistant',
@@ -576,7 +560,11 @@ class AlphaAssistantFacets
     required String rawText,
     List<String> queries = const <String>[],
     String cron = '0 8 * * *',
+    required String clientRequestId,
   }) async {
+    if (clientRequestId.trim().isEmpty) {
+      throw ArgumentError.value(clientRequestId, 'clientRequestId', 'required');
+    }
     final now = DateTime.now().toUtc().toIso8601String();
     final subscription = SkillSubscriptionWire(
       subscriptionId: 'sub_mock_${_subscriptions.length + 1}',
@@ -604,7 +592,11 @@ class AlphaAssistantFacets
   Future<SkillSubscriptionWire> updateSkillSubscriptionStatus({
     required String subscriptionId,
     required String status,
+    required String clientRequestId,
   }) async {
+    if (clientRequestId.trim().isEmpty) {
+      throw ArgumentError.value(clientRequestId, 'clientRequestId', 'required');
+    }
     final idx = _subscriptions.indexWhere(
       (item) => item.subscriptionId == subscriptionId,
     );

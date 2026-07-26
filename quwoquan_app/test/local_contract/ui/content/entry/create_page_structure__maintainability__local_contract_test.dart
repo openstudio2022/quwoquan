@@ -56,6 +56,25 @@ void main() {
     expect(failure.recovery.disruptionLevel, 'surface');
   });
 
+  test('发布失败恢复在上一轮 finally 清理后串行重新进入', () {
+    final source = _readAppFile(
+      'lib/ui/content/entry/pages/create_page_state_media_helpers.dart',
+    );
+    final actionBody = RegExp(
+      r'onAction: \(action\) async \{(?<body>.*?)\n\s+\},',
+      dotAll: true,
+    ).firstMatch(source)?.namedGroup('body');
+
+    expect(actionBody, isNotNull);
+    expect(actionBody, contains('retryRequested = true;'));
+    expect(actionBody, isNot(contains('_publish()')));
+    expect(
+      source.indexOf('if (retryRequested && mounted)'),
+      greaterThan(source.indexOf('} finally {')),
+      reason: '重试必须等上一轮发布 finally 完成，禁止两个 _publish 共享并覆盖上传状态。',
+    );
+  });
+
   test('文章编辑器不暴露未实现的列表与层级假入口', () {
     final stylePanel = _readAppFile(
       'lib/ui/content/entry/widgets/article_editor_accessory_style_panels.dart',

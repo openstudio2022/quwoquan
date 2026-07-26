@@ -76,27 +76,6 @@ type TagValidationResultView struct {
 	Invalid           []string `json:"invalid"`
 }
 
-var tagDimensionCatalog = []TagDimensionView{
-	{Group: "Topic", DimensionID: "Topic/主题", Label: "主题垂类", LabelEn: "Topic Vertical", MaxDepth: 4, PathPolicy: "any-depth"},
-	{Group: "Topic", DimensionID: "Topic/场景", Label: "场景", LabelEn: "Scene", MaxDepth: 3, PathPolicy: "prefer-leaf"},
-	{Group: "Topic", DimensionID: "Topic/事件话题", Label: "事件话题", LabelEn: "Trending Topics", MaxDepth: 3, PathPolicy: "any-depth"},
-	{Group: "Topic", DimensionID: "Topic/时间", Label: "时间", LabelEn: "Time Dimension", MaxDepth: 3, PathPolicy: "prefer-leaf"},
-	{Group: "Topic", DimensionID: "Topic/地理", Label: "地理", LabelEn: "Geography", MaxDepth: 5, PathPolicy: "any-depth"},
-	{Group: "Audience", DimensionID: "Audience/用户", Label: "用户画像", LabelEn: "User Profile", MaxDepth: 4, PathPolicy: "leaf-only"},
-	{Group: "Audience", DimensionID: "Audience/创作者", Label: "创作者", LabelEn: "Creator", MaxDepth: 3, PathPolicy: "any-depth"},
-	{Group: "Audience", DimensionID: "Audience/商品", Label: "商品画像", LabelEn: "Product Profile", MaxDepth: 3, PathPolicy: "any-depth"},
-	{Group: "Audience", DimensionID: "Audience/圈子", Label: "圈子画像", LabelEn: "Circle Profile", MaxDepth: 3, PathPolicy: "any-depth"},
-	{Group: "Format", DimensionID: "Format/内容载体", Label: "内容载体", LabelEn: "Content Medium", MaxDepth: 3, PathPolicy: "prefer-leaf"},
-	{Group: "Format", DimensionID: "Format/内容角度", Label: "内容角度", LabelEn: "Content Angle", MaxDepth: 3, PathPolicy: "any-depth"},
-	{Group: "Format", DimensionID: "Format/表现手法", Label: "表现手法", LabelEn: "Production Technique", MaxDepth: 3, PathPolicy: "any-depth"},
-	{Group: "Format", DimensionID: "Format/视觉风格", Label: "视觉风格", LabelEn: "Visual Style", MaxDepth: 3, PathPolicy: "any-depth"},
-	{Group: "Entity", DimensionID: "Entity/地点", Label: "地点", LabelEn: "Place", MaxDepth: 3, PathPolicy: "any-depth"},
-	{Group: "Entity", DimensionID: "Entity/机构", Label: "机构", LabelEn: "Organization", MaxDepth: 2, PathPolicy: "any-depth"},
-	{Group: "Entity", DimensionID: "Entity/活动", Label: "活动", LabelEn: "Event", MaxDepth: 2, PathPolicy: "any-depth"},
-	{Group: "Entity", DimensionID: "Entity/人物", Label: "人物", LabelEn: "Person", MaxDepth: 3, PathPolicy: "any-depth"},
-	{Group: "Entity", DimensionID: "Entity/品牌", Label: "品牌", LabelEn: "Brand", MaxDepth: 3, PathPolicy: "any-depth"},
-}
-
 // TagService 提供交集核心与创作打标只读用例。
 type TagService struct {
 	nodes    ports.TagNodeReader
@@ -195,11 +174,31 @@ func (s *TagService) ListChildren(ctx context.Context, parentTagRef string, limi
 	return out, nil
 }
 
-// ListDimensions 返回创作标签面板的固定维度目录。
+// ListDimensions returns dimensions from the active immutable taxonomy
+// snapshot, keeping control-plane metadata as the only catalog source.
 func (s *TagService) ListDimensions(ctx context.Context) ([]TagDimensionView, error) {
-	_ = ctx
-	out := make([]TagDimensionView, len(tagDimensionCatalog))
-	copy(out, tagDimensionCatalog)
+	releaseID, found, err := s.activeReleaseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return []TagDimensionView{}, nil
+	}
+	nodes, err := s.nodes.ListDimensionsInRelease(ctx, releaseID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TagDimensionView, 0, len(nodes))
+	for _, node := range nodes {
+		out = append(out, TagDimensionView{
+			Group:       node.Group,
+			DimensionID: node.TagRef,
+			Label:       node.Label,
+			LabelEn:     node.LabelEn,
+			MaxDepth:    node.MaxDepth,
+			PathPolicy:  node.PathPolicy,
+		})
+	}
 	return out, nil
 }
 

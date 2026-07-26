@@ -30,6 +30,7 @@ import (
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/providerbinding"
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/resultrelay"
 	locationapplication "quwoquan_service/services/integration-service/internal/external_integration/location/application"
 )
 
@@ -107,6 +108,31 @@ func run() error {
 
 	ctx, cancelRuntime := context.WithCancel(context.Background())
 	defer cancelRuntime()
+
+	redisRouter, redisSceneModes, err := buildIntegrationRedisRouter(cfg)
+	if err != nil {
+		return fmt.Errorf("integration message transport config invalid: %w", err)
+	}
+	defer func() {
+		if err := redisRouter.Close(); err != nil {
+			log.Printf("integration-service Redis close failed: %v", err)
+		}
+	}()
+	redisProbeCtx, cancelRedisProbe := context.WithTimeout(ctx, 10*time.Second)
+	if err := redisRouter.PingAll(redisProbeCtx); err != nil {
+		cancelRedisProbe()
+		return fmt.Errorf("integration-service Redis unavailable: %w", err)
+	}
+	cancelRedisProbe()
+	messageTransport, err := requireIntegrationMessageTransport(
+		ctx,
+		cfg.Environment,
+		redisRouter,
+		redisSceneModes,
+	)
+	if err != nil {
+		return fmt.Errorf("integration message transport preflight failed: %w", err)
+	}
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "integration-service", SamplingRatio: 0.1})
 	defer otelShutdown()
@@ -206,6 +232,22 @@ func run() error {
 	if indexErr != nil {
 		return fmt.Errorf("reliable-task EnsureIndexes failed: %w", indexErr)
 	}
+	externalResultRelay, err := resultrelay.New(
+		reliableStore,
+		messageTransport,
+		slog.Default(),
+	)
+	if err != nil {
+		return fmt.Errorf("external interaction result relay init failed: %w", err)
+	}
+	if _, err := externalResultRelay.ProcessOnce(ctx); err != nil {
+		return fmt.Errorf("external interaction result relay preflight failed: %w", err)
+	}
+	resultRelayDone := make(chan struct{})
+	go func() {
+		defer close(resultRelayDone)
+		externalResultRelay.Run(ctx)
+	}()
 	if cfg.Integration.ExternalInteraction.SMS.Enabled {
 		otpIndexCtx, cancelOTPIndexes := context.WithTimeout(ctx, 30*time.Second)
 		otpIndexErr := otpCodeReferenceStore.EnsureIndexes(otpIndexCtx)
@@ -242,18 +284,10 @@ func run() error {
 	var externalService *application.ExternalInteractionService
 	externalLoopDone := make(chan struct{})
 	if len(policies) > 0 {
-		callbackSender, err := provider.NewHTTPCallbackSender(
-			externalObservedClient,
-			cfg.Integration.ExternalInteraction.CallbackSecret,
-		)
-		if err != nil {
-			return fmt.Errorf("external callback sender init failed: %w", err)
-		}
 		externalService, err = application.NewExternalInteractionService(
 			reliableStore,
 			externalProviders,
 			policies,
-			callbackSender,
 			otpCodeReferenceStore,
 		)
 		if err != nil {
@@ -281,6 +315,15 @@ func run() error {
 	healthChecker.Register("account_security_authority", func(hctx context.Context) error {
 		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
 	})
+	healthChecker.Register("redis", func(hctx context.Context) error {
+		return redisRouter.PingAll(hctx)
+	})
+	healthChecker.Register(
+		"external_interaction_result_relay",
+		func(hctx context.Context) error {
+			return externalResultRelay.Healthy(hctx, 10*time.Second)
+		},
+	)
 	rootMux.HandleFunc("/healthz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
 	rootMux.Handle(
@@ -325,10 +368,12 @@ func run() error {
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		cancelRuntime()
 		waitForWorkerShutdown(externalLoopDone, "external interaction")
+		waitForWorkerShutdown(resultRelayDone, "external interaction result relay")
 		return err
 	}
 	cancelRuntime()
 	waitForWorkerShutdown(externalLoopDone, "external interaction")
+	waitForWorkerShutdown(resultRelayDone, "external interaction result relay")
 	return nil
 }
 

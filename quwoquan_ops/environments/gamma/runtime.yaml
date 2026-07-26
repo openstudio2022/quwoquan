@@ -7,6 +7,8 @@
     "realtime": "wss://gamma-api.quwoquan-env.test:19000",
     "rtc": "wss://gamma-rtc.quwoquan-env.test:19000",
     "productOps": "https://gamma-product-ops.quwoquan-env.test:19010",
+    "publicWeb": "https://gamma-api.quwoquan-env.test:19000",
+    "appDownload": "https://gamma-image.quwoquan-env.test:19100",
     "mediaAvatar": "https://gamma-avatar.quwoquan-env.test:19100",
     "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
     "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",
@@ -62,12 +64,13 @@
     "gamma-local": {
       "env": "gamma",
       "backend": "local",
+      "localResourceGroup": "workstation-commercial-runtime",
       "portProfile": "gamma-local",
       "startup": {
         "dockerProbeTimeoutSeconds": 30,
         "composeBuildTimeoutSeconds": 3600,
         "composeBuildNoProgressTimeoutSeconds": 1200,
-        "composeUpTimeoutSeconds": 900
+        "composeUpTimeoutSeconds": 1800
       },
       "buildImages": {
         "goBaseImage": "golang:1.24-bookworm",
@@ -78,6 +81,8 @@
         "realtime": "wss://gamma-api.quwoquan-env.test:19000",
         "rtc": "wss://gamma-rtc.quwoquan-env.test:19000",
         "productOps": "https://gamma-product-ops.quwoquan-env.test:19010",
+        "publicWeb": "https://gamma-api.quwoquan-env.test:19000",
+        "appDownload": "https://gamma-image.quwoquan-env.test:19100",
         "mediaAvatar": "https://gamma-avatar.quwoquan-env.test:19100",
         "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
         "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",

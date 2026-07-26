@@ -547,6 +547,33 @@ func main() {
 		if err := recommendProjector.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service recommend feature projection startup failed: %v", err)
 		}
+		featureStore := recinfra.NewFeatureStore(db)
+		tagFeedbackProjector, err := recinfra.NewTagFeedbackFeatureProjector(
+			db,
+			featureStore.Invalidate,
+		)
+		if err != nil {
+			log.Fatalf("content-service TagFeedbackRecorded projector assembly failed: %v", err)
+		}
+		if err := tagFeedbackProjector.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service TagFeedbackRecorded inbox indexes init failed: %v", err)
+		}
+		tagFeedbackConsumer, err := recinfra.NewTagFeedbackConsumer(
+			messageTransport,
+			tagFeedbackProjector,
+			instanceID,
+			logger,
+		)
+		if err != nil {
+			log.Fatalf("content-service TagFeedbackRecorded consumer assembly failed: %v", err)
+		}
+		if err := tagFeedbackConsumer.EnsureGroup(ctx); err != nil {
+			log.Fatalf("content-service TagFeedbackRecorded consumer startup failed: %v", err)
+		}
+		go tagFeedbackConsumer.Run(ctx)
+		healthChecker.Register("tag-feedback-consumer", func(hctx context.Context) error {
+			return tagFeedbackConsumer.Healthy(30 * time.Second)
+		})
 		relationshipProjection := recinfra.NewPersonaRelationshipProjection(db)
 		if err := relationshipProjection.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service persona relationship projection startup failed: %v", err)
@@ -686,7 +713,7 @@ func main() {
 		// decay each day. Read-time freshness decay (ComputeInterestProfile) is
 		// separate; this decays the stored affinity counters themselves.
 		startDailyAffinityDecay(ctx, interestAgg, router.Scene("general"), logger)
-		recOpts = append(recOpts, rtrec.WithFeatureProvider(recinfra.NewFeatureStore(db)))
+		recOpts = append(recOpts, rtrec.WithFeatureProvider(featureStore))
 
 		// Multi-channel recall sources
 		tagSource := recinfra.NewTagRecallSource(db)

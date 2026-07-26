@@ -794,7 +794,15 @@ func (s *PostgresTelemetryStore) GetEventDrilldown(
 		if err := json.Unmarshal(row.payload, &input); err != nil {
 			return application.EventDrilldown{}, err
 		}
-		out.Items = append(out.Items, eventDrilldownItemFromInput(row.rowKey, row.ingestedAt, input))
+		out.Items = append(
+			out.Items,
+			eventDrilldownItemFromInput(
+				row.rowKey,
+				row.ingestedAt,
+				input,
+				query.RevealSession,
+			),
+		)
 	}
 	return out, nil
 }
@@ -803,15 +811,24 @@ func eventDrilldownItemFromInput(
 	rowKey string,
 	ingestedAt time.Time,
 	input application.EventRecordInput,
+	revealSession bool,
 ) application.EventDrilldownItem {
+	sessionID := input.SessionID
+	if !revealSession {
+		sessionID = maskSessionID(sessionID)
+	}
 	return application.EventDrilldownItem{
 		RowKey: rowKey, LogType: input.LogType, EventType: input.EventType,
-		SessionID: input.SessionID, PageName: input.PageName, OccurredAt: input.OccurredAt,
+		SessionID: sessionID, PageName: input.PageName, OccurredAt: input.OccurredAt,
 		DeviceManufacturer: input.DeviceManufacturer, DeviceModel: input.DeviceModel,
 		AppVersion: input.AppVersion, NetworkClass: input.NetworkClass,
 		DevicePlatform: input.DevicePlatform,
 		DurationMS:     input.DurationMS, Result: input.Result, FailReasonCode: input.FailReasonCode,
-		ErrorCode: input.ErrorCode, OperationID: input.OperationID,
+		CallType: input.CallType, ParticipantCount: input.ParticipantCount,
+		ConnectTimeMS: input.ConnectTimeMS, MediaConnected: input.MediaConnected,
+		ReconnectCount: input.ReconnectCount, DisconnectReason: input.DisconnectReason,
+		NetworkQuality: input.NetworkQuality,
+		ErrorCode:      input.ErrorCode, OperationID: input.OperationID,
 		RequestID: input.RequestID, TraceID: input.TraceID,
 		RecoveryAction: input.RecoveryAction, SurfaceID: input.SurfaceID,
 		DetectionSource: input.DetectionSource, TerminalState: input.TerminalState,

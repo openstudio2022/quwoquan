@@ -418,6 +418,13 @@ export interface ProductEventDrilldownItem {
   networkClass: ProductTelemetryNetworkClass;
   durationMs?: number;
   result?: string;
+  callType?: string;
+  participantCount?: number;
+  connectTimeMs?: number;
+  mediaConnected?: boolean;
+  reconnectCount?: number;
+  disconnectReason?: string;
+  networkQuality?: string;
   failReasonCode?: string;
   errorCode?: string;
   operationId?: string;

@@ -40,6 +40,13 @@ type NotificationDeadLetterReader interface {
 	) ([]reliabletask.DeadNotificationRecord, error)
 }
 
+type IncomingCallDeliveryTimelineReader interface {
+	ReadIncomingCallDeliveryTimeline(
+		context.Context,
+		string,
+	) (notification.IncomingCallDeliveryTimeline, error)
+}
+
 type NotificationDeliveryJobRecoveryStore interface {
 	RecoverDeliveryJob(
 		ctx context.Context,
@@ -52,6 +59,7 @@ type NotificationDeliveryJobRecoveryStore interface {
 type NotificationDeliveryJobQueryFacade struct {
 	metricsReader    NotificationDeliveryMetricsReader
 	deadLetterReader NotificationDeadLetterReader
+	timelineReader   IncomingCallDeliveryTimelineReader
 }
 
 type NotificationDeliveryJobCommandFacade struct {
@@ -62,6 +70,7 @@ type NotificationDeliveryJobCommandFacade struct {
 func NewNotificationDeliveryJobQueryFacade(
 	metricsReader NotificationDeliveryMetricsReader,
 	deadLetterReader NotificationDeadLetterReader,
+	timelineReaders ...IncomingCallDeliveryTimelineReader,
 ) (*NotificationDeliveryJobQueryFacade, error) {
 	if isNilDependency(metricsReader) {
 		return nil, fmt.Errorf("notification delivery metrics reader is required")
@@ -69,10 +78,36 @@ func NewNotificationDeliveryJobQueryFacade(
 	if isNilDependency(deadLetterReader) {
 		return nil, fmt.Errorf("notification dead-letter reader is required")
 	}
+	var timelineReader IncomingCallDeliveryTimelineReader
+	if len(timelineReaders) > 0 {
+		timelineReader = timelineReaders[0]
+	}
 	return &NotificationDeliveryJobQueryFacade{
 		metricsReader:    metricsReader,
 		deadLetterReader: deadLetterReader,
+		timelineReader:   timelineReader,
 	}, nil
+}
+
+func (f *NotificationDeliveryJobQueryFacade) GetIncomingCallTimeline(
+	ctx context.Context,
+	callID string,
+) (notification.IncomingCallDeliveryTimeline, error) {
+	callID = strings.TrimSpace(callID)
+	if callID == "" {
+		return notification.IncomingCallDeliveryTimeline{},
+			generated.AppErrorFromInvalidArgument("callId is required")
+	}
+	if isNilDependency(f.timelineReader) {
+		return notification.IncomingCallDeliveryTimeline{},
+			generated.AppErrorFromStorageReadFailed("incoming call timeline reader is unavailable")
+	}
+	timeline, err := f.timelineReader.ReadIncomingCallDeliveryTimeline(ctx, callID)
+	if err != nil {
+		return notification.IncomingCallDeliveryTimeline{},
+			generated.AppErrorFromStorageReadFailed(err.Error())
+	}
+	return timeline, nil
 }
 
 func NewNotificationDeliveryJobCommandFacade(

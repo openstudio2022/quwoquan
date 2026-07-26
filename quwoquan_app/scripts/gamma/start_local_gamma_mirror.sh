@@ -296,6 +296,18 @@ export LOCAL_GAMMA_MINIO_IMAGE="${LOCAL_GAMMA_MINIO_IMAGE:-minio/minio:RELEASE.2
 export LOCAL_GAMMA_MINIO_MC_IMAGE="${LOCAL_GAMMA_MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-03-12T17-29-24Z}"
 # ES 镜像来自 elastic 官方 registry（非 docker.io/library），不经 library_image 前缀。
 export LOCAL_GAMMA_ELASTICSEARCH_IMAGE="${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:8.13.4}"
+case "$(uname -m)" in
+  arm64|aarch64)
+    # Apple Silicon 的 Colima/VZ 会向 bundled JDK 报告 guest 无法执行的
+    # SVE；ES CLI bootstrap 与运行时都必须在 Elasticsearch 启动前禁用它。
+    export LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:--XX:UseSVE=0}"
+    export LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--XX:UseSVE=0 -Xms512m -Xmx512m}"
+    ;;
+  *)
+    export LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:-}"
+    export LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}"
+    ;;
+esac
 export LOCAL_GAMMA_GO_BASE_IMAGE="${LOCAL_GAMMA_GO_BASE_IMAGE:?LOCAL_GAMMA_GO_BASE_IMAGE is required}"
 export LOCAL_GAMMA_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_ALPINE_BASE_IMAGE:?LOCAL_GAMMA_ALPINE_BASE_IMAGE is required}"
 export LOCAL_GAMMA_PYTHON_BASE_IMAGE="${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-$(library_image python:3.11-slim)}"
@@ -981,8 +993,6 @@ PY
 run_compose_build() {
   local build_log="${QWQ_RUN_ROOT}/attachments/docker-build.log"
   local build_status=0
-  local build_embedding_endpoint="${LOCAL_GAMMA_EMBEDDING_ENDPOINT:-https://build-only.invalid}"
-  local build_embedding_api_key="${LOCAL_GAMMA_EMBEDDING_API_KEY:-build-only-not-a-runtime-secret}"
   mkdir -p "$(dirname "$build_log")"
   : >"$build_log"
   if ! preflight_docker_daemon; then
@@ -991,13 +1001,7 @@ run_compose_build() {
   fi
   ensure_local_gamma_base_images
   echo "[local-gamma] building services: ${compose_build_services[*]}"
-  # Compose interpolates every service environment before selecting build
-  # targets. Scope inert values to this build subprocess only; compose-up
-  # still receives the real binding and rejects a missing runtime secret.
-  run_compose_build_with_timeout \
-    "$build_log" \
-    "$build_embedding_endpoint" \
-    "$build_embedding_api_key" || build_status=$?
+  run_compose_build_with_timeout "$build_log" || build_status=$?
   if [[ "$build_status" -eq 0 && "${podman_compose:-0}" == "1" ]]; then
     if podman_build_log_has_nonzero_exit_codes "$build_log"; then
       echo "[local-gamma] FAIL: podman-compose build reported non-zero inner exit codes." >&2
@@ -1032,8 +1036,6 @@ PY
 
 run_compose_build_with_timeout() {
   local build_log="$1"
-  local build_embedding_endpoint="$2"
-  local build_embedding_api_key="$3"
   local compose_pid=""
   local deadline=""
   local last_progress_seconds=""
@@ -1060,8 +1062,6 @@ run_compose_build_with_timeout() {
 
   env \
     COMPOSE_PARALLEL_LIMIT="$compose_parallel_limit" \
-    LOCAL_GAMMA_EMBEDDING_ENDPOINT="$build_embedding_endpoint" \
-    LOCAL_GAMMA_EMBEDDING_API_KEY="$build_embedding_api_key" \
     "${compose_cmd[@]}" build "${compose_build_services[@]}" >"$build_log" 2>&1 &
   compose_pid="$!"
   LOCAL_GAMMA_ACTIVE_CHILD_PID="$compose_pid"
@@ -1167,6 +1167,7 @@ mkdir -p \
   "${LOCAL_GAMMA_MODEL_CACHE_ROOT}" \
   "${GAMMA_RUN_ROOT}" \
   "${LOCAL_GAMMA_LEGAL_STATIC_ROOT}" \
+  "${LOCAL_GAMMA_PORTAL_ROOT}" \
   "${QWQ_OUTPUT_ROOT}/env/repo/local/control-plane/process/platform-ops-service"
 validate_caddyfile_source
 
@@ -1447,12 +1448,12 @@ if [[ "$podman_compose" == "1" ]]; then
     "$LOCAL_GAMMA_REDIS_IMAGE" redis-server --appendonly yes >/dev/null
 
   podman run --pull=never --name quwoquan_service_elasticsearch_1 -d \
-    --platform=linux/amd64 \
     --net "$network_name" --network-alias elasticsearch \
     -e discovery.type=single-node \
     -e xpack.security.enabled=false \
     -e xpack.security.http.ssl.enabled=false \
-    -e ES_JAVA_OPTS='-Xms512m -Xmx512m' \
+    -e CLI_JAVA_OPTS="$LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS" \
+    -e ES_JAVA_OPTS="$LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS" \
     -v quwoquan_service_local-gamma-es:/usr/share/elasticsearch/data \
     -p "${LOCAL_GAMMA_ES_PORT:-19430}:9200" \
     --healthcheck-command "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s' || exit 1" \
@@ -1544,8 +1545,6 @@ if [[ "$podman_compose" == "1" ]]; then
     -e MONGO_URI=mongodb://mongodb:27017 \
     -e REPORT_DATABASE_URL='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
     -e CONTENT_REDIS_REC_ADDR=redis:6379 -e CONTENT_REDIS_GENERAL_ADDR=redis:6379 -e CONTENT_REDIS_REALTIME_ADDR=redis:6379 \
-    -e CONTENT_EMBEDDING_FIXTURE_ENDPOINT \
-    -e CONTENT_EMBEDDING_FIXTURE_API_KEY \
     -e CONTENT_OSS_ENDPOINT \
     -e CONTENT_OSS_ACCESS_KEY_ID \
     -e CONTENT_OSS_ACCESS_KEY_SECRET \
@@ -1703,6 +1702,15 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e TAG_SERVICE_ADDR=:18092 \
     -e TAG_MONGO_URI=mongodb://mongodb:27017 -e TAG_MONGO_DATABASE=quwoquan_tag \
+    -e TAG_REDIS_GENERAL_ADDR=redis:6379 \
+    -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
+    -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
+    -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
+    -e AUTH_JWT_TOKEN_VERSION="${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}" \
+    -e AUTH_DEVICE_TICKET_SECRET="${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}" \
+    -e AUTH_DEVICE_TICKET_ISSUER="${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}" \
+    -e AUTH_DEVICE_TICKET_AUDIENCE="${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}" \
+    -e AUTH_DEVICE_TICKET_TOKEN_VERSION="${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}" \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -p "${LOCAL_GAMMA_TAG_PORT:-19270}:18092" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18092/healthz >/dev/null 2>&1" \
@@ -1976,6 +1984,7 @@ wait_local_gamma_host_ready() {
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
   local integration_port="${LOCAL_GAMMA_INTEGRATION_PORT:-19310}"
   local notification_port="${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}"
+  local tag_port="${LOCAL_GAMMA_TAG_PORT:-19270}"
   local deadline=$(( $(date +%s) + HOST_READY_TIMEOUT_SECONDS ))
   local last_gamma_proxy_retry=0
   echo "[local-gamma] waiting for host probes (${HOST_READY_TIMEOUT_SECONDS}s): ${gw}/healthz + ${PRODUCT_OPS_BASE_URL%/}/healthz + ${MEDIA_BASE_URL%/}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png + ${MEDIA_VIDEO_BASE_URL%/}/media/video/s/video-primary-0001/post/video-content-0001/source.mp4(Range 206/video/*) + internal health"
@@ -1992,7 +2001,8 @@ wait_local_gamma_host_ready() {
       && gamma_platform_ops_ready \
       && curl -fsS "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
       && curl -fsS "http://127.0.0.1:${integration_port}/healthz" >/dev/null 2>&1 \
-      && curl -fsS "http://127.0.0.1:${notification_port}/healthz" >/dev/null 2>&1
+      && curl -fsS "http://127.0.0.1:${notification_port}/healthz" >/dev/null 2>&1 \
+      && { [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]] || curl -fsS "http://127.0.0.1:${tag_port}/healthz" >/dev/null 2>&1; }
     then
       return 0
     fi
@@ -2141,8 +2151,24 @@ seed_tag_service_data() {
       --mongo-uri "$mongo_uri" --db "$LOCAL_GAMMA_TAG_DB" \
       --release-id "$data_release_id" --source-owner gamma_seed_manifest )
 }
+
+wait_tag_service_taxonomy_ready() {
+  local tag_port="${LOCAL_GAMMA_TAG_PORT:-19270}"
+  local deadline=$(( $(date +%s) + HOST_READY_TIMEOUT_SECONDS ))
+  while (( $(date +%s) < deadline )); do
+    if curl -fsS "http://127.0.0.1:${tag_port}/healthz" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "[local-gamma] FAIL: tag-service taxonomy projection did not become healthy after canonical import" >&2
+  curl -fsS "http://127.0.0.1:${tag_port}/healthz" >&2 || true
+  return 1
+}
+
 if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
   seed_tag_service_data
+  wait_tag_service_taxonomy_ready
 else
   echo "[local-gamma] skip tag seed because STAGE=${STAGE} uses persisted/host data"
 fi
@@ -2383,20 +2409,26 @@ fi
 
 seed_gamma_premium_pool_data() {
   local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
+  local redis_port="${LOCAL_GAMMA_REDIS_PORT:-}"
   local gateway="${GATEWAY_BASE_URL%/}"
   local report="${GAMMA_RUN_ROOT}/premium-pool-seed-report.json"
   if [[ -z "$mongo_port" ]]; then
     echo "[local-gamma] GATE_BLOCK: premium pool seed requires LOCAL_GAMMA_MONGO_PORT" >&2
     return 1
   fi
+  if [[ -z "$redis_port" ]]; then
+    echo "[local-gamma] GATE_BLOCK: premium pool seed requires LOCAL_GAMMA_REDIS_PORT" >&2
+    return 1
+  fi
   echo "[local-gamma] seeding premium pool projection and recall proof ..."
-  if ! python3 - "$ROOT" "$mongo_port" "$gateway" "$report" <<'PY'
+  if ! python3 - "$ROOT" "$mongo_port" "$redis_port" "$gateway" "$report" <<'PY'
 import json
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-root, mongo_port, gateway, report_path = sys.argv[1:5]
+root, mongo_port, redis_port, gateway, report_path = sys.argv[1:6]
 sys.path.insert(0, root)
 
 from quwoquan_ops.cli.lib.local_environment_auth import (
@@ -2404,12 +2436,10 @@ from quwoquan_ops.cli.lib.local_environment_auth import (
     request_local_environment_json,
 )
 
-run_id = Path(report_path).parent.name
 session = open_local_acceptance_session(
     gateway,
     environment="gamma",
     target_name="gamma-local",
-    subject=f"premium-pool-seed-{run_id}",
 )
 eligible = "gamma_premium_pool_eligible_post"
 expired = "gamma_premium_pool_expired_post"
@@ -2557,6 +2587,41 @@ if seed.returncode != 0:
     print(seed.stderr, file=sys.stderr)
     raise SystemExit(seed.returncode)
 
+# 精品池证明使用固定验收 actor 和内容 ID，以便 Gamma 多次运行的报告可比。每次
+# 发起新请求前，只删除本证明历史的 served/impressed/negative membership；
+# 否则上一次有效运行会由重复曝光门禁隐藏本次自身的证据。
+acceptance_actor = "fixture_user_current"
+today = datetime.now(timezone.utc).date()
+reset_keys = [f"rec:negative:{{{acceptance_actor}}}"]
+reset_keys.extend(
+    f"rec:served:{{{acceptance_actor}}}:{(today - timedelta(days=offset)).strftime('%Y%m%d')}"
+    for offset in range(2)
+)
+reset_keys.extend(
+    f"rec:impressed:{{{acceptance_actor}}}:{(today - timedelta(days=offset)).strftime('%Y%m%d')}"
+    for offset in range(7)
+)
+for key in reset_keys:
+    reset = subprocess.run(
+        [
+            "redis-cli",
+            "-h",
+            "127.0.0.1",
+            "-p",
+            redis_port,
+            "SREM",
+            key,
+            *all_ids,
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if reset.returncode != 0:
+        print(reset.stderr, file=sys.stderr)
+        raise SystemExit("reset premium proof recommendation state failed")
+
 body = request_local_environment_json(
     gateway,
     path="/content/feed?type=premium&limit=5",
@@ -2609,8 +2674,9 @@ fi
 seed_search_index() {
   local es_port="${LOCAL_GAMMA_ES_PORT:-}"
   local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
-  if [[ -z "$es_port" || -z "$mongo_port" ]]; then
-    echo "[local-gamma] FAIL: search backfill requires LOCAL_GAMMA_ES_PORT and LOCAL_GAMMA_MONGO_PORT" >&2
+  local postgres_port="${LOCAL_GAMMA_POSTGRES_PORT:-}"
+  if [[ -z "$es_port" || -z "$mongo_port" || -z "$postgres_port" ]]; then
+    echo "[local-gamma] FAIL: search backfill requires LOCAL_GAMMA_ES_PORT, LOCAL_GAMMA_MONGO_PORT and LOCAL_GAMMA_POSTGRES_PORT" >&2
     return 1
   fi
   echo "[local-gamma] waiting for ES host port ${es_port} (yellow) before search backfill ..."
@@ -2642,7 +2708,7 @@ PY
     echo "[local-gamma] FAIL: ES host port ${es_port} is not ready for search backfill" >&2
     return 1
   fi
-  echo "[local-gamma] backfilling search index (quwoquan_content.posts -> ES quwoquan_objects) ..."
+  echo "[local-gamma] backfilling all search projections into ES quwoquan_objects ..."
   # batch-size 100：本地 ES 跑在 linux/amd64 模拟（Apple Silicon 无原生 8.x JDK），
   # 单节点写入吞吐受限；ES client RequestTimeout 默认 5s，500-doc 默认批的单次 _bulk
   # 会超时（服务端仍写入但 client 报 context deadline exceeded）。按 100/批切分后每个
@@ -2653,10 +2719,31 @@ PY
       --mongo-uri "mongodb://127.0.0.1:${mongo_port}/?directConnection=true" \
       --posts-db quwoquan_content --env gamma --batch-size 100 \
       --request-timeout "$LOCAL_GAMMA_SEARCH_BACKFILL_REQUEST_TIMEOUT" ); then
-    echo "[local-gamma] FAIL: search backfill failed; gamma startup is blocked because /search would be incomplete" >&2
+    echo "[local-gamma] FAIL: content/place search backfill failed; gamma startup is blocked because /search would be incomplete" >&2
     return 1
   fi
-  echo "[local-gamma] search index backfill completed"
+  if ! ( cd "$ROOT/quwoquan_service" && SEARCH_ES_ENDPOINTS="http://127.0.0.1:${es_port}" \
+      go run ./services/entity-service/cmd/search-backfill \
+      --mongo-uri "mongodb://127.0.0.1:${mongo_port}/?directConnection=true" \
+      --entity-db quwoquan_entity --env gamma --batch-size 100 ); then
+    echo "[local-gamma] FAIL: entity homepage search backfill failed; gamma startup is blocked because /search would be incomplete" >&2
+    return 1
+  fi
+  if ! ( cd "$ROOT/quwoquan_service" && SEARCH_ES_ENDPOINTS="http://127.0.0.1:${es_port}" \
+      go run ./services/circle-service/cmd/search-backfill \
+      --mongo-uri "mongodb://127.0.0.1:${mongo_port}/?directConnection=true" \
+      --circle-db quwoquan_circle --env gamma --batch-size 100 ); then
+    echo "[local-gamma] FAIL: circle/group search backfill failed; gamma startup is blocked because /search would be incomplete" >&2
+    return 1
+  fi
+  if ! ( cd "$ROOT/quwoquan_service" && SEARCH_ES_ENDPOINTS="http://127.0.0.1:${es_port}" \
+      go run ./services/user-service/cmd/search-backfill \
+      --postgres-dsn "postgres://quwoquan:quwoquan@127.0.0.1:${postgres_port}/quwoquan?sslmode=disable" \
+      --env gamma --batch-size 100 ); then
+    echo "[local-gamma] FAIL: user profile search backfill failed; gamma startup is blocked because /search would be incomplete" >&2
+    return 1
+  fi
+  echo "[local-gamma] all search index backfills completed (content/place, entity, circle/group, user)"
 }
 if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
   seed_search_index

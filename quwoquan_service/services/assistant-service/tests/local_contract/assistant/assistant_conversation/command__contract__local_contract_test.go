@@ -11,7 +11,6 @@ import (
 // TestMigratedCommandContract exercises the command's real application composition through public ports.
 func TestMigratedCommandContractApplicationComposition(t *testing.T) {
 	service := application.NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 	)

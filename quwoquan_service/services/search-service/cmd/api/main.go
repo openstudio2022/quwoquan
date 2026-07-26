@@ -156,7 +156,7 @@ func main() {
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: serviceName, SamplingRatio: 0.1})
 	defer otelShutdown()
 
-	built, err := searchbackend.Build(cfg.ES, nil)
+	built, err := searchbackend.Build(cfg.ES)
 	if err != nil {
 		log.Fatalf("%s backend assembly failed: %v", serviceName, err)
 	}
@@ -164,9 +164,7 @@ func main() {
 		if errors.Is(err, searchruntimees.ErrIndexSchemaIncompatible) {
 			log.Fatalf("%s search index schema migration failed: %v", serviceName, err)
 		}
-		// Non-fatal: the service still boots; queries degrade via Retrieve until
-		// ES recovers. The failure is surfaced through /healthz.
-		log.Printf("%s WARN: ensure ES index failed: %v", serviceName, err)
+		log.Fatalf("%s search index initialization failed: %v", serviceName, err)
 	}
 
 	logger := slog.Default()
@@ -183,23 +181,26 @@ func main() {
 		log.Fatalf("%s message transport construction failed: %v", serviceName, err)
 	}
 	if err := redisRouter.PingAll(ctx); err != nil {
-		log.Printf("%s WARN: redis ping: %v", serviceName, err)
+		log.Fatalf("%s redis unavailable: %v", serviceName, err)
 	}
 	searchSignalPublisher, err := searchsignals.NewStreamPublisher(messageTransport, logger)
 	if err != nil {
 		log.Fatalf("%s search signal publisher init failed: %v", serviceName, err)
 	}
 
-	// Persistence + heat read model are optional: without Mongo the service still
-	// serves searches (base ranking, no query log, no related terms). With Mongo
-	// it closes the feedback loop (query log -> heat -> ranking + relatedTerms)
-	// and enables the RecentSearchState packet.
+	// Mongo is authoritative for query logs, feedback facts, term heat,
+	// RecentSearchState, and privacy cleanup checkpoints. Every environment uses
+	// the same complete production composition.
 	var feedbackSink feedbackapplication.Sink
 	var termHeat application.TermHeatProvider
 	var queryLogSink application.QueryLogSink
 	var recentFacade *recentsearch.Facade
 	var accountClosureConsumer *mqadapter.UserAccountClosedConsumer
-	if strings.TrimSpace(cfg.Mongo.URI) != "" {
+	var feedbackSignalRelay *feedbackstore.SignalRelay
+	if strings.TrimSpace(cfg.Mongo.URI) == "" {
+		log.Fatalf("%s mongo.uri is required", serviceName)
+	}
+	{
 		client := rtmongodb.MustConnect(ctx, rtmongodb.ConnectConfig{
 			URI: cfg.Mongo.URI, Database: cfg.Mongo.Database,
 		}, serviceName)
@@ -217,6 +218,20 @@ func main() {
 		}
 		indexCancel()
 		feedbackSink = feedbackStore
+		feedbackSignalRelay, err = feedbackstore.NewSignalRelay(
+			feedbackStore,
+			searchSignalPublisher,
+			metricsRecorder,
+			logger,
+		)
+		if err != nil {
+			log.Fatalf(
+				"%s feedback signal relay init failed: %v",
+				serviceName,
+				err,
+			)
+		}
+		go feedbackSignalRelay.Run(ctx)
 		queryLogSink = queryStore
 		heatStore := queryheatstore.NewStore(db, queryheat.Config{}, logger)
 		// Hot-query related-terms cache: collapses the per-search Mongo read for
@@ -229,7 +244,11 @@ func main() {
 		startHeatRebuildLoop(ctx, heatStore, logger)
 		recentStore := recentsearchstore.NewStore(db)
 		if err := recentStore.EnsureIndexes(ctx); err != nil {
-			log.Printf("%s WARN: ensure recent search indexes failed: %v", serviceName, err)
+			log.Fatalf(
+				"%s recent search index initialization failed: %v",
+				serviceName,
+				err,
+			)
 		}
 		recentFacade, err = recentsearch.NewFacade(recentStore)
 		if err != nil {
@@ -274,25 +293,13 @@ func main() {
 		}
 		go accountClosureConsumer.Run(ctx)
 		log.Printf("%s feedback/query-log + term-heat + recent-search enabled (db=%s)", serviceName, cfg.Mongo.Database)
-	} else {
-		switch getenvOrDefault("APP_ENV", "alpha") {
-		case "beta", "gamma", "prod":
-			log.Fatalf(
-				"%s mongo.uri is required for UserAccountClosed compliance",
-				serviceName,
-			)
-		}
-		log.Printf("%s WARN: mongo.uri unset; query logging + term-heat + recent-search disabled (base ranking only)", serviceName)
 	}
 
 	searchSvc := application.NewSearchService(built.Backend,
 		application.WithQueryLogSink(queryLogSink),
 		application.WithSearchSignalPublisher(searchSignalPublisher),
 		application.WithLogger(logger))
-	feedbackSvc := feedbackapplication.NewService(
-		feedbackSink,
-		feedbackapplication.WithSignalPublisher(searchSignalPublisher),
-	)
+	feedbackSvc := feedbackapplication.NewService(feedbackSink)
 	decorator := application.NewRankingDecorator(termHeat, application.NewExperiments(experimentConfig(cfg)), cfg.Ranking.TermHeatBoost, logger)
 	contentBaseURL := strings.TrimSpace(cfg.ContentService.BaseURL)
 	if override, ok := configProvider.GetString("CONTENT_SERVICE_BASE_URL"); ok {
@@ -391,6 +398,17 @@ func main() {
 	})
 	if ping := built.HealthPing(); ping != nil {
 		healthChecker.Register("elasticsearch", ping)
+	}
+	if feedbackSignalRelay != nil {
+		healthChecker.Register(
+			"feedback-signal-relay",
+			func(hctx context.Context) error {
+				return feedbackSignalRelay.Healthy(
+					hctx,
+					15*time.Second,
+				)
+			},
+		)
 	}
 	if accountClosureConsumer != nil {
 		healthChecker.Register(

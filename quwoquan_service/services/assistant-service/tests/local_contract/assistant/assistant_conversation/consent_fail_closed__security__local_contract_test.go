@@ -14,7 +14,6 @@ func TestAssistantConsentFailsClosedWithoutStore(t *testing.T) {
 	t.Parallel()
 
 	service := NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		nil,
 		rtredis.NewMemoryClient(),
 	)
@@ -44,7 +43,6 @@ func TestAssistantConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 	t.Parallel()
 
 	service := NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 	)

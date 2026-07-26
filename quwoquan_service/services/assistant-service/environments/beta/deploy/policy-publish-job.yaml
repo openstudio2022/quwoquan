@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: assistant-policy-publish-202607261
+  labels:
+    app.kubernetes.io/name: assistant-service
+    app.kubernetes.io/component: policy-publication
+  annotations:
+    quwoquan.io/policy-artifact: assistant-default/2026-07-26.1
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: assistant-service
+        app.kubernetes.io/component: policy-publication
+      annotations:
+        quwoquan.io/config-version: package-required
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: policy-publish
+          image: quwoquan/assistant-service:package-required
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/assistant-policy-publish"]
+          envFrom:
+            - secretRef:
+                name: assistant-service-runtime-secrets
+          env:
+            - name: SERVICE_NAME
+              value: assistant-service
+            - name: APP_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['quwoquan.io/environment']
+            - name: CONFIG_ROOT
+              value: /etc/qwq/config
+            - name: CONFIG_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['quwoquan.io/config-version']
+            - name: ASSISTANT_POLICY_RESOURCE_ROOT
+              value: /app/resources/policies
+          volumeMounts:
+            - name: runtime-config
+              mountPath: /etc/qwq/config/assistant-service.yaml
+              subPath: assistant-service.yaml
+              readOnly: true
+      volumes:
+        - name: runtime-config
+          configMap:
+            name: assistant-service-runtime-config

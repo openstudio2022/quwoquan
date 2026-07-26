@@ -95,10 +95,20 @@ func (l *sourceLimiter) allow(key string, now time.Time) bool {
 	window.count++
 	l.windows[key] = window
 	if len(l.windows) > 2048 {
+		var oldestKey string
+		var oldestAt time.Time
 		for existing, candidate := range l.windows {
 			if now.Sub(candidate.startedAt) >= time.Minute {
 				delete(l.windows, existing)
+				continue
 			}
+			if oldestKey == "" || candidate.startedAt.Before(oldestAt) {
+				oldestKey = existing
+				oldestAt = candidate.startedAt
+			}
+		}
+		if len(l.windows) > 2048 && oldestKey != "" {
+			delete(l.windows, oldestKey)
 		}
 	}
 	return true

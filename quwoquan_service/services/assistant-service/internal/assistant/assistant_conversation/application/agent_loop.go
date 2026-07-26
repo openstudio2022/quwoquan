@@ -63,8 +63,9 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 		return nil
 	}
 	if err := appendEvent(projector.Event(AssistantStreamEventRunStarted, map[string]any{
-		"status":    "running",
-		"restarted": afterSeq > 0,
+		"status":            "running",
+		"restarted":         afterSeq > 0,
+		"policyAttribution": boundedPolicyAttribution(turn),
 	})); err != nil {
 		return nil, nil, err
 	}
@@ -83,7 +84,7 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 		return events, &failure, nil
 	}
 	skillStartedAt := time.Now()
-	skill, err := l.skills().SelectSkill(ctx, turn)
+	skill, err := skillSelectionFromFrozenPolicy(turn)
 	skillDurationMs := time.Since(skillStartedAt).Milliseconds()
 	if err != nil {
 		log.Printf("assistant agent skill_select_failed turnId=%s durationMs=%d err=%v", turn.TurnID, skillDurationMs, err)
@@ -222,9 +223,10 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 		}
 	}
 	if err := appendEvent(projector.Event(AssistantStreamEventCompleted, map[string]any{
-		"status":      "completed",
-		"finalAnswer": result.FinalText,
-		"emergedTags": collectEmergedTags(result),
+		"status":            "completed",
+		"finalAnswer":       result.FinalText,
+		"emergedTags":       collectEmergedTags(result),
+		"policyAttribution": boundedPolicyAttribution(turn),
 	})); err != nil {
 		return nil, nil, err
 	}
@@ -233,6 +235,46 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 	log.Printf("assistant agent latency_summary turnId=%s skillMs=%d reactMs=%d answerStreamMs=%d totalMs=%d modelInteractions=%d steps=%d", turn.TurnID, skillDurationMs, reactDurationMs, answerStreamDurationMs, totalDurationMs, resultModelInteractionCount(result), len(result.Steps))
 	log.Printf("assistant agent run_completed conversationId=%s turnId=%s events=%d answerLen=%d", turn.ConversationID, turn.TurnID, len(events), len([]rune(result.FinalText)))
 	return events, nil, nil
+}
+
+func skillSelectionFromFrozenPolicy(
+	turn assistant.AssistantTurn,
+) (SkillSelection, error) {
+	frozen := turn.FrozenPolicySelection
+	template := frozen.Template
+	if strings.TrimSpace(frozen.PolicyID) == "" ||
+		strings.TrimSpace(frozen.ReleaseVersion) == "" ||
+		strings.TrimSpace(frozen.Cohort) == "" ||
+		frozen.RolloutRevision <= 0 ||
+		strings.TrimSpace(template.TemplateID) == "" ||
+		strings.TrimSpace(template.SkillID) == "" ||
+		strings.TrimSpace(template.DomainID) == "" ||
+		strings.TrimSpace(template.PromptPolicy) == "" {
+		return SkillSelection{}, fmt.Errorf(
+			"turn %s has no complete frozen policy selection",
+			turn.TurnID,
+		)
+	}
+	return SkillSelection{
+		SkillID:         strings.TrimSpace(template.SkillID),
+		DomainID:        strings.TrimSpace(template.DomainID),
+		DisplayName:     displaySkillName(template.SkillID),
+		ToolPolicy:      append([]string(nil), template.AllowedTools...),
+		PromptPolicy:    strings.TrimSpace(template.PromptPolicy),
+		SearchIntensity: strings.TrimSpace(template.SearchIntensity),
+	}, nil
+}
+
+func boundedPolicyAttribution(turn assistant.AssistantTurn) map[string]any {
+	frozen := turn.FrozenPolicySelection
+	return map[string]any{
+		"policyId":        frozen.PolicyID,
+		"releaseVersion":  frozen.ReleaseVersion,
+		"cohort":          frozen.Cohort,
+		"rolloutRevision": frozen.RolloutRevision,
+		"ruleId":          frozen.RuleID,
+		"templateId":      frozen.Template.TemplateID,
+	}
 }
 
 func resultModelInteractionCount(result ReactResult) int {

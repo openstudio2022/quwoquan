@@ -1,0 +1,30 @@
+read_model: EventDrilldownSlice
+description: 三天内原始 EventRecord 的受限查询结果。sessionId 精确筛选仅用于有审计权限的
+  诊断；响应仍默认掩码。rtc_media_qoe 项返回端侧已上报的 QoE 终态，不合成或暴露 RTC callId。
+storage_backend: aliyun_sls
+projection_mode: authoritative_query
+source_entities:
+- EventRecord
+consumers:
+- product-ops-service
+- ops-portal
+- provider-conformance
+fields:
+- name: totalCount
+  type: int64
+- name: items
+  type: '[]EventDrilldownItem'
+- name: sourceKind
+  type: string
+- name: freshness
+  type: string
+- name: generatedThrough
+  type: timestamp
+  nullable: true
+- name: lagSeconds
+  type: int64
+  nullable: true
+- name: actualFrom
+  type: timestamp
+- name: actualTo
+  type: timestamp

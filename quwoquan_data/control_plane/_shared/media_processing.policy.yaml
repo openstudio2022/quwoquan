@@ -1,5 +1,6 @@
 policyId: media_processing
 sourceAssetMaxBytes: 25165824
+pageImageRenditionWidth: 1920
 maxPublishableImagePixels: 80000000
 maxAssessmentImagePixels: 2000000
 assessmentJpegQuality: 85

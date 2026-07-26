@@ -23,6 +23,7 @@ func TestLoadBindingMaterializesMinIOLocalSubstitute(t *testing.T) {
 				"CONTENT_OSS_ENDPOINT":          "https://gamma-upload.quwoquan-env.test:19130",
 				"CONTENT_OSS_ACCESS_KEY_ID":     "fixture-access",
 				"CONTENT_OSS_ACCESS_KEY_SECRET": "fixture-secret",
+				"CONTENT_CDN_SIGN_KEY":          "fixture-cdn-sign-key",
 			},
 		},
 	)

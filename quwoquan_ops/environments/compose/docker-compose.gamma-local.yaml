@@ -61,7 +61,9 @@ services:
     volumes:
       - local-gamma-redis:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # `redis-cli ping` returns a zero process exit status for `LOADING`; make
+      # Compose dependents wait until Redis can serve commands.
+      test: ["CMD-SHELL", "redis-cli --raw ping | grep -qx PONG"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -124,10 +126,9 @@ services:
 
   elasticsearch:
     image: "${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:8.13.4}"
-    # Apple Silicon/Colima 下 ES 8.x 自带 arm64 JDK 会在 JVM 初始化期 SIGILL（非法指令）崩溃，
-    # 与 quwoquan_ops/observability/es/docker-compose.yml 参考一致，固定 amd64 由 VM 翻译层运行；
-    # 模拟启动较慢（~3min），故 start_period 放宽；该限制不代表托管环境容量。
-    platform: linux/amd64
+    # 使用宿主原生镜像架构。Apple Silicon 的 ES 8.13 JVM 在 Colima/VZ 中须由
+    # 启动器注入 arm64 专用的 UseSVE=0；不要强制 amd64 模拟，否则 ES 启动会
+    # 抢占 Docker VM 并使 Gamma 健康检查不可复现。
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
@@ -136,7 +137,8 @@ services:
       # 托管 Gamma 集群容量。关闭本地 allocation threshold 会解除历史
       # read_only_allow_delete block，同时 Search backfill 仍然失败关闭。
       cluster.routing.allocation.disk.threshold_enabled: "false"
-      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      CLI_JAVA_OPTS: "${LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:-}"
+      ES_JAVA_OPTS: "${LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}"
     ports:
       - "${LOCAL_GAMMA_ES_PORT:-19430}:9200"
     volumes:
@@ -144,11 +146,11 @@ services:
     healthcheck:
       test:
         - "CMD-SHELL"
-        - "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s' || exit 1"
+        - "curl -fsS 'http://localhost:9200/_ilm/status' >/dev/null || exit 1"
       interval: 10s
       timeout: 5s
-      start_period: 240s
-      retries: 40
+      start_period: 1200s
+      retries: 60
 
   # Elasticsearch 是 gamma-local 基础设施而非 content-service 的通用必需物。
   # beta 的 content-release 切片显式关闭 SEARCH_ES_ENABLED，不能因为不存在
@@ -171,7 +173,10 @@ services:
         condition: service_healthy
         required: false
       tag-service:
-        condition: service_healthy
+        # Gamma fixture 在 Mongo 拓扑可用后才重建 taxonomy snapshot。启动脚本会在
+        # 导入完成后等待 tag-service 的严格投影健康，因此 Caddy 可随进程启动，
+        # 但最终拓扑仍不能在 taxonomy 有效前宣告 ready。
+        condition: service_started
       search-service:
         condition: service_healthy
       entity-service:

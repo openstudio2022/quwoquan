@@ -8,10 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/assistant/config/assistant_prompt_config.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 
 final assistantHalfSheetPersonalizationProvider = FutureProvider.autoDispose
@@ -32,29 +32,13 @@ final assistantHalfSheetPersonalizationProvider = FutureProvider.autoDispose
         context: openContext,
       );
       return AssistantHalfSheetPersonalization(
-        welcomeMessage: personalization.welcomeMessage.trim().isEmpty
-            ? AssistantPromptConfig.getWelcomeMessage(openContext)
-            : personalization.welcomeMessage.trim(),
-        chips: personalization.chips.isEmpty
-            ? AssistantPromptConfig.getChips(openContext)
-            : personalization.chips
-                  .map(
-                    (chip) => AssistantChipEntry(
-                      label: chip.label,
-                      actionType: chip.actionType,
-                      value: chip.value,
-                    ),
-                  )
-                  .toList(growable: false),
-        suggestionLines: suggestedActions.items.isEmpty
-            ? (personalization.suggestionLines.isEmpty
-                  ? AssistantPromptConfig.getSuggestionLines(openContext)
-                  : personalization.suggestionLines)
-            : suggestedActions.items
-                  .map((item) => item.label.trim())
-                  .where((label) => label.isNotEmpty)
-                  .take(2)
-                  .toList(growable: false),
+        welcomeMessage: personalization.welcomeMessage.trim(),
+        chips: personalization.chips,
+        suggestionLines: personalization.suggestionLines
+            .map((line) => line.trim())
+            .where((line) => line.isNotEmpty)
+            .toList(growable: false),
+        suggestedActions: suggestedActions.items,
       );
     });
 
@@ -63,11 +47,13 @@ class AssistantHalfSheetPersonalization {
     required this.welcomeMessage,
     required this.chips,
     required this.suggestionLines,
+    required this.suggestedActions,
   });
 
   final String welcomeMessage;
-  final List<AssistantChipEntry> chips;
+  final List<AssistantEntryPersonalizationChipView> chips;
   final List<String> suggestionLines;
+  final List<SuggestedAction> suggestedActions;
 }
 
 /// 私助半弹窗：约 50% 屏高、可拖拽，展示欢迎句、推荐 chips、「当前适合干啥」、输入框与「进入完整对话」。
@@ -136,7 +122,10 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
   /// chip 点击真实分发：按 actionType 落地真实指令或跳转。
   /// command → 进入会话页并携带指令；route → 跳转目标路由；setting → 打开设置。
   /// 仅在用户主动打开半弹窗时出现，无自动弹窗骚扰（克制出现）。
-  void _dispatchChip(BuildContext context, AssistantChipEntry chip) {
+  void _dispatchChip(
+    BuildContext context,
+    AssistantEntryPersonalizationChipView chip,
+  ) {
     switch (chip.actionType) {
       case 'route':
         switch (chip.value) {
@@ -163,6 +152,19 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
           ),
         );
     }
+  }
+
+  void _dispatchSuggestedAction(SuggestedAction action) {
+    _closeAndPush(
+      AppRoutePaths.assistantPersonal,
+      extra: widget.openContext.copyWith(
+        hints: <String, dynamic>{
+          ...widget.openContext.hints,
+          'autoSendQuery': action.label,
+          'suggestedActionId': action.actionId,
+        },
+      ),
+    );
   }
 
   void _openFullConversation() {
@@ -210,27 +212,26 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
             .intraGroup]?[DesignSemanticConstants.sm] ??
         AppSpacing.intraGroupSm;
 
-    final fallback = AssistantHalfSheetPersonalization(
-      welcomeMessage: AssistantPromptConfig.getWelcomeMessage(
-        widget.openContext,
-      ),
-      chips: AssistantPromptConfig.getChips(widget.openContext),
-      suggestionLines: AssistantPromptConfig.getSuggestionLines(
-        widget.openContext,
-      ),
-    );
     final personalizationAsync = ref.watch(
       assistantHalfSheetPersonalizationProvider(widget.openContext),
     );
     final personalization = personalizationAsync.maybeWhen(
       data: (value) => value,
-      orElse: () => fallback,
+      orElse: () => null,
     );
     final showLoadingSkeleton =
         personalizationAsync.isLoading && !personalizationAsync.hasValue;
-    final welcome = personalization.welcomeMessage;
-    final chips = personalization.chips;
-    final suggestions = personalization.suggestionLines;
+    final welcome = personalization?.welcomeMessage ?? '';
+    final chips =
+        personalization?.chips ??
+        const <AssistantEntryPersonalizationChipView>[];
+    final suggestionLines =
+        personalization?.suggestionLines ?? const <String>[];
+    final suggestedActions =
+        personalization?.suggestedActions ?? const <SuggestedAction>[];
+    final errorMessage = personalizationAsync.hasError
+        ? runtimeErrorDisplayMessage(personalizationAsync.error!).trim()
+        : '';
 
     return Container(
       decoration: BoxDecoration(
@@ -283,16 +284,30 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
               ],
             ),
             SizedBox(height: containerMd),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: containerMd),
-              child: Text(
-                welcome,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  color: fgPrimary,
+            if (welcome.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: containerMd),
+                child: Text(
+                  welcome,
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    color: fgPrimary,
+                  ),
                 ),
               ),
-            ),
+            if (errorMessage.isNotEmpty) ...[
+              SizedBox(height: intraSm),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: containerMd),
+                child: Text(
+                  errorMessage,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: fgSecondary,
+                  ),
+                ),
+              ),
+            ],
             if (showLoadingSkeleton) ...[
               SizedBox(height: containerMd),
               _AssistantHalfSheetLoadingSkeleton(
@@ -313,7 +328,7 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
                     .toList(),
               ),
             ],
-            if (suggestions.isNotEmpty) ...[
+            if (suggestedActions.isNotEmpty || suggestionLines.isNotEmpty) ...[
               SizedBox(height: containerMd),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: containerMd),
@@ -330,7 +345,23 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
                 ),
               ),
               SizedBox(height: intraSm),
-              ...suggestions.map(
+              if (suggestedActions.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: containerMd),
+                  child: Wrap(
+                    spacing: intraSm,
+                    runSpacing: intraSm,
+                    children: suggestedActions
+                        .map(
+                          (action) => ActionChip(
+                            label: action.label,
+                            onPressed: () => _dispatchSuggestedAction(action),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                ),
+              ...suggestionLines.map(
                 (s) => Padding(
                   padding: EdgeInsets.symmetric(horizontal: containerMd),
                   child: Align(

@@ -60,24 +60,23 @@ func TestBackfillIndexesEligibleOnly(t *testing.T) {
 	if !bulk.ensured {
 		t.Fatalf("backfill must ensure the index first")
 	}
-	if report.TotalPosts != 4 || report.IndexedPosts != 2 || report.SkippedPosts != 2 {
+	if report.TotalPosts != 4 ||
+		report.IndexedPosts != 2 ||
+		report.DeletedPosts != 2 {
 		t.Fatalf("unexpected report: %#v", report)
 	}
-	if len(bulk.events) != 2 {
-		t.Fatalf("expected 2 indexed events, got %d", len(bulk.events))
+	if len(bulk.events) != 4 {
+		t.Fatalf("expected 4 reconcile events, got %d", len(bulk.events))
 	}
 	gotIDs := map[string]bool{}
 	for _, ev := range bulk.events {
-		if ev.Op != es.OpUpsert {
-			t.Fatalf("backfill must upsert, got op=%s", ev.Op)
-		}
-		gotIDs[ev.Doc.ObjectID] = true
+		gotIDs[string(ev.Op)+":"+ev.Doc.ObjectID] = true
 	}
-	if !gotIDs["post_pub"] || !gotIDs["post_pub2"] {
+	if !gotIDs["upsert:post_pub"] || !gotIDs["upsert:post_pub2"] {
 		t.Fatalf("eligible posts missing from backfill: %#v", gotIDs)
 	}
-	if gotIDs["post_draft"] || gotIDs["post_priv"] {
-		t.Fatalf("ineligible posts leaked into backfill: %#v", gotIDs)
+	if !gotIDs["delete:post_draft"] || !gotIDs["delete:post_priv"] {
+		t.Fatalf("ineligible posts were not deleted: %#v", gotIDs)
 	}
 }
 
@@ -126,11 +125,11 @@ func TestBackfillListFailurePropagates(t *testing.T) {
 	}
 }
 
-func TestBackfillNilInputsNoOp(t *testing.T) {
-	if _, err := Backfill(context.Background(), nil, fakeReader{}, 0); err != nil {
-		t.Fatalf("nil indexer must be a no-op, got %v", err)
+func TestBackfillMissingInputsFailFast(t *testing.T) {
+	if _, err := Backfill(context.Background(), nil, fakeReader{}, 0); err == nil {
+		t.Fatal("nil indexer must fail")
 	}
-	if _, err := Backfill(context.Background(), &recordingBulk{}, nil, 0); err != nil {
-		t.Fatalf("nil reader must be a no-op, got %v", err)
+	if _, err := Backfill(context.Background(), &recordingBulk{}, nil, 0); err == nil {
+		t.Fatal("nil reader must fail")
 	}
 }

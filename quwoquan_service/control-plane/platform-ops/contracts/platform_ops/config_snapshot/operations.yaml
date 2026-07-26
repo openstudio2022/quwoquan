@@ -94,6 +94,55 @@ api_routes:
     reader: ConfigSnapshotReader
     slice: EffectiveConfigSlice
 - method: GET
+  path: /control-plane/platform/configs/resolve-for-instance
+  operation: ResolveEffectiveConfigForInstance
+  actor: account
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    visibility: internal
+  response_entity: EffectiveConfigSlice
+  authorization:
+    principal: service
+    scopes:
+    - ops.platform.config.read
+    ownership_policy: service_instance_bound
+  reliability:
+    timeout_ms: 1200
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - OPS.USER.unauthorized
+  - OPS.USER.forbidden
+  - OPS.USER.config_invalid
+  - OPS.SYSTEM.config_storage_read_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_platform_config_resolve_instance
+    trace: true
+    attributes:
+    - operation
+    - environment
+    - service
+    - outcome
+  slo:
+    latency_p95_ms: 700
+    availability_percent: 99.9
+  commercial:
+    status: ready
+  application:
+    kind: query
+    facet: ConfigSnapshotQueryFacade
+    method: resolveEffectiveConfigForInstance
+    reader: ConfigSnapshotReader
+    slice: EffectiveConfigSlice
+- method: GET
   path: /control-plane/platform/configs/snapshot
   operation: GetConfigSnapshot
   actor: account

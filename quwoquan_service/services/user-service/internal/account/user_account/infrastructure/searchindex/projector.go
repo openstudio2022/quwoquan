@@ -16,7 +16,6 @@ package searchindex
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	rtsearch "quwoquan_service/runtime/search"
@@ -37,54 +36,45 @@ type ProfileReader interface {
 // implements application.UserEventPublisher so it can be composed onto the user
 // service's event publisher fan-out.
 //
-// Indexing failures are recorded structurally (logged with event/user context)
-// but never propagate: the search index is a derived read store, so a transient
-// ES outage must not block or fail the primary profile write path.
+// Projection failures propagate to the durable profile-search relay. The relay
+// owns retry and only advances its PostgreSQL checkpoint after this method
+// succeeds, so ES outages never block profile writes or silently lose updates.
 type Projector struct {
 	indexer *es.Indexer
 	reader  ProfileReader
-	logger  *slog.Logger
 }
 
 var _ application.UserEventPublisher = (*Projector)(nil)
 
-// Option configures a Projector.
-type Option func(*Projector)
-
-// WithLogger sets the structured logger used to record indexing failures.
-func WithLogger(logger *slog.Logger) Option {
-	return func(p *Projector) {
-		if logger != nil {
-			p.logger = logger
-		}
-	}
-}
-
 // NewProjector builds a write-time search-index projector.
-func NewProjector(indexer *es.Indexer, reader ProfileReader, opts ...Option) *Projector {
-	p := &Projector{
+func NewProjector(indexer *es.Indexer, reader ProfileReader) *Projector {
+	return &Projector{
 		indexer: indexer,
 		reader:  reader,
-		logger:  slog.Default(),
 	}
-	for _, opt := range opts {
-		opt(p)
-	}
-	return p
 }
 
-// PublishUserEvent reconciles a profile lifecycle event into the index. Profile /
-// avatar / registration events reconcile the profile against its current
-// eligibility (upsert when discoverable, delete otherwise). Relationship / block /
-// counter events do not change the searchable surface and are ignored. 普通资料
-// 更新保持 best-effort；UserAccountClosed 删除失败必须返回，使 durable outbox 重试。
+// PublishUserEvent adapts the generic user-event boundary used by the
+// UserAccount lifecycle relay. Its caller is responsible for durable retry.
 func (p *Projector) PublishUserEvent(ctx context.Context, eventType, userID, _ string, _ map[string]any) error {
-	if p == nil || p.indexer == nil {
-		return nil
+	return p.ProjectUserProfileSearch(ctx, eventType, userID)
+}
+
+// ProjectUserProfileSearch reconciles one durable profile projection
+// coordinate. Profile/avatar/registration events reconcile against current
+// eligibility (upsert when discoverable, delete otherwise); counter-only events
+// are intentionally ignored.
+func (p *Projector) ProjectUserProfileSearch(
+	ctx context.Context,
+	eventType string,
+	userID string,
+) error {
+	if p == nil || p.indexer == nil || p.reader == nil {
+		return fmt.Errorf("UserProfile search projector is not configured")
 	}
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		return nil
+		return fmt.Errorf("UserProfile search projection user ID is empty")
 	}
 	switch eventType {
 	case event.UserAccountClosed:
@@ -92,21 +82,11 @@ func (p *Projector) PublishUserEvent(ctx context.Context, eventType, userID, _ s
 		// longer search eligible, so the read-back drops it from the index.
 		return p.reconcile(ctx, userID, eventType)
 	case event.UserProfileUpdated, event.UserAvatarUpdated, event.UserRegistered:
-		if err := p.reconcile(ctx, userID, eventType); err != nil {
-			p.logger.Warn(
-				"search index reconcile failed",
-				"event",
-				eventType,
-				"userId",
-				userID,
-				"err",
-				err,
-			)
-		}
+		return p.reconcile(ctx, userID, eventType)
 	default:
 		// Non-profile / counter-only events: nothing searchable changed.
+		return nil
 	}
-	return nil
 }
 
 // reconcile reads the profile back and upserts it when discoverable, else removes

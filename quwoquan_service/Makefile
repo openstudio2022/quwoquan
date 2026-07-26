@@ -15,7 +15,9 @@ FLYWHEEL_REQUIRE_CLOSED ?= false
 FLYWHEEL_OUT ?=
 REPO_ROOT ?= $(abspath ..)
 QWQ_OUTPUT_ROOT := $(REPO_ROOT)/.qwq_output
-CONTRACT_VIEW ?= $(QWQ_OUTPUT_ROOT)/env/repo/local/service-contract-view/cache
+# 每个 Make 进程独占可删除编译视图，避免并发 codegen 在 ContractGraph 编译和对象
+# 生成之间删除另一进程的输入。
+CONTRACT_VIEW ?= $(QWQ_OUTPUT_ROOT)/env/repo/local/service-contract-view/cache-$(shell printf %s "$$PPID")
 ML_REPORT_ROOT ?= $(QWQ_OUTPUT_ROOT)/env/repo/runs/ml
 QWQ_PYTHON_CACHE_ROOT ?= $(HOME)/.cache/quwoquan/python-envs
 DATA_PYTHON ?= $(QWQ_PYTHON_CACHE_ROOT)/quwoquan-data/bin/python
@@ -161,6 +163,17 @@ codegen-openapi: service-contract-view
 
 codegen-contract-graph: codegen-openapi
 	go run ./tools/qwq_contract generate --metadata-dir "$(CONTRACT_VIEW)" --profile commercial --output generated/contract_graph.json --go-security-output generated/operationsecurity/descriptors.g.go
+
+codegen-observability-catalog codegen-rec-intersection codegen-impact \
+codegen-ops-portal codegen-control-plane-runtime \
+codegen-assistant-service-errors codegen-assistant-runtime-enums \
+codegen-assistant-citation-destinations codegen-content-service \
+codegen-circle-service codegen-entity-service codegen-notification-service \
+codegen-rtc-service codegen-realtime-gateway codegen-integration-service \
+codegen-product-ops-service codegen-platform-ops-service codegen-user-service \
+codegen-chat-domain-events codegen-rec-model-python codegen-storage: service-contract-view
+
+codegen-app: codegen-contract-graph
 
 codegen-observability-catalog:
 	go run ./tools/codegen_observability_catalog --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"

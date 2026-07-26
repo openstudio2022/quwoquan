@@ -28,21 +28,24 @@ events:
   - normalizedError
   - recoveryAction
 - name: ExternalInteractionResultReported
-  description: 外部交互结果已归一化，供业务服务回调或事件消费。
+  description: 已记录的 provider attempt 通过 durable event relay 输出；只表示 provider
+    接受或拒绝，不表示终端设备已展示或已送达。
   producer: integration-service
   consumers:
   - user-service
   - notification-service
   - platform-ops
-  channel: callback_or_event
+  channel: event_store
   payload_fields:
+  - attemptId
   - requestId
   - operation
   - status
   - provider
-  - providerRequestId
+  - providerRequestDigest
   - normalizedError
   - recoveryAction
+  - occurredAt
 - name: ExternalInteractionDeadLettered
   description: 外部交互超过重试上限或不可恢复失败，进入死信。
   producer: integration-service

@@ -13,6 +13,8 @@ import 'package:quwoquan_app/app/bootstrap_recovery.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/recovery/recovery_surface.dart';
+import 'package:quwoquan_app/app/recovery/recovery_failure_reporter.dart';
+import 'package:quwoquan_app/app/recovery/runtime_recovery_host.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
@@ -49,6 +51,7 @@ class QuWoQuanAppRoot extends ConsumerStatefulWidget {
   const QuWoQuanAppRoot({
     super.key,
     this.autoCompleteStartupWelcomeForTest = false,
+    this.skipStartupWelcome = false,
     this.postFirstFrameTasks,
     this.authNetworkPrerequisites,
   });
@@ -57,6 +60,9 @@ class QuWoQuanAppRoot extends ConsumerStatefulWidget {
   ///
   /// 默认入口始终为 false；生产欢迎动效与完成时序不受此测试注入影响。
   final bool autoCompleteStartupWelcomeForTest;
+
+  /// R1 受控重建时恢复层已经承担可见过渡，不再播放欢迎序列。
+  final bool skipStartupWelcome;
 
   /// 首帧已实际绘制后才创建的非关键水合任务。
   ///
@@ -110,7 +116,15 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppStartupRuntime.instance.markFirstFramePainted();
     });
-    if (widget.autoCompleteStartupWelcomeForTest) {
+    if (widget.skipStartupWelcome) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        scheduleMicrotask(() {
+          if (!mounted) return;
+          _onWelcomeVisible();
+          _completeStartupWelcome();
+        });
+      });
+    } else if (widget.autoCompleteStartupWelcomeForTest) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         scheduleMicrotask(() {
           if (mounted) {
@@ -562,7 +576,9 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         _startupStateMachine.snapshot.phase == StartupRootPhase.routerShell) {
       return;
     }
-    final attempt = _startupStateMachine.beginRouterLoad();
+    final attempt = _startupStateMachine.beginRouterLoad(
+      showWelcomeOverlay: !widget.skipStartupWelcome,
+    );
     setState(() {
       // 状态已经在 StartupStateMachine 中推进。
     });
@@ -612,6 +628,14 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         failureCode: failure.runtimeFailure.code,
         failureSource: 'router',
       );
+      unawaited(
+        RecoveryFailureReporter.instance.record(
+          errorSource: 'flutter',
+          errorType: error.runtimeType.toString(),
+          errorMessage: error.toString(),
+          stackTrace: stack.toString(),
+        ),
+      );
       _showSafeRecovery();
     }
   }
@@ -645,6 +669,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     _startupDeadlineTimer = null;
     AppStartupRuntime.instance.markShellFirstPainted();
     _startupInitScheduler.onSafeTerminal();
+    RuntimeRecoveryCoordinator.instance.markSafeShellReady();
     _recordStartupPhase(
       phase: 'main_shell_first_paint',
       result: degraded ? 'degraded' : 'entered',

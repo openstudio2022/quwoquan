@@ -203,11 +203,14 @@ func TestFFmpegInvalidNALDiagnosticIsRejectedAfterSuccessfulProbe(t *testing.T) 
 	processor := &FFmpegMediaProcessor{
 		Objects: runtimeObjectStoreStub{},
 		Config: Config{
-			Bucket:              "media-bucket",
-			FFmpegPath:          transcoder,
-			FFprobePath:         probe,
-			WorkDir:             tempDir,
-			JobTimeout:          time.Second,
+			Bucket:      "media-bucket",
+			FFmpegPath:  transcoder,
+			FFprobePath: probe,
+			WorkDir:     tempDir,
+			// This case verifies diagnostic classification, not the timeout path.
+			// Leave enough scheduling headroom when the full local-contract suite
+			// launches many Go packages concurrently.
+			JobTimeout:          10 * time.Second,
 			MinWorkDirFreeBytes: 1,
 		},
 	}

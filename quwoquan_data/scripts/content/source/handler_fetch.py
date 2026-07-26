@@ -416,12 +416,14 @@ def _fetch_download_entity(
         source_drop_categories = source_image_funnel.get("dropReasonCounts")
         if isinstance(source_drop_categories, Mapping):
             category_map = {
-                "fetch": "fetch_or_non_image",
-                "pixel": "pixel_too_small",
-                "safety": "safety_or_watermark",
-                "rights": "rights",
-                "relevance": "other",
-                "invalidPayload": "other",
+                "fetch_failure": "fetch_or_non_image",
+                "pixel_policy": "pixel_too_small",
+                "decode_policy": "safety_or_watermark",
+                "safety_policy": "safety_or_watermark",
+                "rights_policy": "rights",
+                "relevance_policy": "other",
+                "invalid_payload": "other",
+                "duplicate": "other",
             }
             for category, count in source_drop_categories.items():
                 target_category = category_map.get(str(category), "other")

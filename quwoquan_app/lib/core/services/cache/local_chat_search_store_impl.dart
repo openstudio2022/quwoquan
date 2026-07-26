@@ -44,59 +44,119 @@ class LocalChatSearchStore implements LocalChatSearchReader {
     final now = DateTime.now().toIso8601String();
     _upsertNamespace(batch, namespace, updatedAt: now);
     for (final contact in contacts) {
-      final contactId = contact.contactId.trim();
-      if (contactId.isEmpty) {
-        continue;
-      }
-      final displayNameRaw = contact.displayName.trim();
-      final displayName = displayNameRaw.isNotEmpty
-          ? displayNameRaw
-          : contactId;
-      final nickname = contact.nickname.trim();
-      final username = contact.username.trim();
-      final subtitle = contact.subtitle.trim();
-      final headline = contact.headline.trim();
-      final remark = contact.remark.trim();
-      final conversationId = contact.conversationId.trim();
-      final payload = <String, Object?>{
-        ...contact.toWireMap(),
-        'displayName': displayName,
-      };
-      final searchableText = _searchableText(<Object?>[
-        displayName,
-        nickname,
-        username,
-        subtitle,
-        headline,
-        remark,
-        contactId,
-      ]);
-      batch.insert('chat_contacts', <String, Object?>{
-        'namespace_key': namespace.key,
-        'contact_id': contactId,
-        'display_name': displayName,
-        'nickname': nickname,
-        'username': username,
-        'subtitle': subtitle,
-        'headline': headline,
-        'remark': remark,
-        'conversation_id': conversationId,
-        'searchable_text': searchableText,
-        'payload_json': jsonEncode(payload),
-        'updated_at': now,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      _queueContactUpsert(
+        batch: batch,
+        namespace: namespace,
+        contact: contact,
+        updatedAt: now,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  /// Applies a completed remote contact snapshot atomically: rows absent from
+  /// [contacts] are removed only after every page has been read successfully.
+  Future<void> replaceContacts({
+    required LocalSearchNamespace namespace,
+    required List<LocalChatSearchContactRecord> contacts,
+  }) async {
+    final database = await _database;
+    final existingRows = await database.query(
+      'chat_contacts',
+      columns: const <String>['contact_id'],
+      where: 'namespace_key = ?',
+      whereArgs: <Object?>[namespace.key],
+    );
+    final remoteIDs = contacts
+        .map((contact) => contact.contactId.trim())
+        .where((contactId) => contactId.isNotEmpty)
+        .toSet();
+    final staleIDs = existingRows
+        .map((row) => _string(row['contact_id']))
+        .where((contactId) => !remoteIDs.contains(contactId))
+        .toList(growable: false);
+
+    final batch = database.batch();
+    final now = DateTime.now().toIso8601String();
+    _upsertNamespace(batch, namespace, updatedAt: now);
+    for (final contact in contacts) {
+      _queueContactUpsert(
+        batch: batch,
+        namespace: namespace,
+        contact: contact,
+        updatedAt: now,
+      );
+    }
+    for (final contactId in staleIDs) {
+      batch.delete(
+        'chat_contacts',
+        where: 'namespace_key = ? AND contact_id = ?',
+        whereArgs: <Object?>[namespace.key, contactId],
+      );
       batch.delete(
         'chat_contacts_fts',
         where: 'namespace_key = ? AND contact_id = ?',
         whereArgs: <Object?>[namespace.key, contactId],
       );
-      batch.insert('chat_contacts_fts', <String, Object?>{
-        'namespace_key': namespace.key,
-        'contact_id': contactId,
-        'searchable_text': searchableText,
-      });
     }
     await batch.commit(noResult: true);
+  }
+
+  void _queueContactUpsert({
+    required Batch batch,
+    required LocalSearchNamespace namespace,
+    required LocalChatSearchContactRecord contact,
+    required String updatedAt,
+  }) {
+    final contactId = contact.contactId.trim();
+    if (contactId.isEmpty) {
+      return;
+    }
+    final displayNameRaw = contact.displayName.trim();
+    final displayName = displayNameRaw.isNotEmpty ? displayNameRaw : contactId;
+    final nickname = contact.nickname.trim();
+    final username = contact.username.trim();
+    final subtitle = contact.subtitle.trim();
+    final headline = contact.headline.trim();
+    final remark = contact.remark.trim();
+    final conversationId = contact.conversationId.trim();
+    final payload = <String, Object?>{
+      ...contact.toWireMap(),
+      'displayName': displayName,
+    };
+    final searchableText = _searchableText(<Object?>[
+      displayName,
+      nickname,
+      username,
+      subtitle,
+      headline,
+      remark,
+      contactId,
+    ]);
+    batch.insert('chat_contacts', <String, Object?>{
+      'namespace_key': namespace.key,
+      'contact_id': contactId,
+      'display_name': displayName,
+      'nickname': nickname,
+      'username': username,
+      'subtitle': subtitle,
+      'headline': headline,
+      'remark': remark,
+      'conversation_id': conversationId,
+      'searchable_text': searchableText,
+      'payload_json': jsonEncode(payload),
+      'updated_at': updatedAt,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    batch.delete(
+      'chat_contacts_fts',
+      where: 'namespace_key = ? AND contact_id = ?',
+      whereArgs: <Object?>[namespace.key, contactId],
+    );
+    batch.insert('chat_contacts_fts', <String, Object?>{
+      'namespace_key': namespace.key,
+      'contact_id': contactId,
+      'searchable_text': searchableText,
+    });
   }
 
   @override

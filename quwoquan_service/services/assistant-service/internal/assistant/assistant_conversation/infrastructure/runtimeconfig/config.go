@@ -73,6 +73,10 @@ type Config struct {
 	ChatService              ServiceEgressConfig `yaml:"chat_service"`
 	NotificationService      ServiceEgressConfig `yaml:"notification_service"`
 	AccountSecurityAuthority ServiceEgressConfig `yaml:"account_security_authority"`
+	PolicyPublication        struct {
+		ReleaseArtifactRef string `yaml:"release_artifact_ref"`
+		RolloutArtifactRef string `yaml:"rollout_artifact_ref"`
+	} `yaml:"policy_publication"`
 }
 
 func ResolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {

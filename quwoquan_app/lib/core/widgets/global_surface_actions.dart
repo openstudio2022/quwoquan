@@ -105,6 +105,9 @@ class GlobalAssistantLauncher {
   }
 
   static AssistantSource _sourceForRoute(String route) {
+    if (route == AppRoutePaths.home) {
+      return AssistantSource.home;
+    }
     if (route == AppRoutePaths.circles || route.startsWith('/circle/')) {
       return AssistantSource.circles;
     }
@@ -457,6 +460,20 @@ class GlobalQuickActionSheet {
     context.push(AppRoutePaths.startGroupChat);
   }
 
+  /// 从非快捷动作面板的账号态入口进入发起群聊，保持与面板入口同一登录续接。
+  static Future<void> openGatedStartGroupChat(
+    BuildContext context,
+    WidgetRef ref,
+  ) {
+    return _runGatedSheetAction(
+      context,
+      ref,
+      reason: AuthGateReason.startGroupChat,
+      sheet: AuthContinuationSheet.startGroupChat,
+      openNow: () => openStartGroupChat(context),
+    );
+  }
+
   /// 进入「添加联系人」主页（账号态强入口）。路由门负责未登录拦截与登录后回源。
   static void openAddContact(BuildContext context) {
     context.push(AppRoutePaths.addContact);
@@ -522,13 +539,7 @@ class GlobalQuickActionSheet {
       case _QuickActionIntentKind.continueFromDraft:
         await _openContinueFromDraft(context, ref);
       case _QuickActionIntentKind.startGroupChat:
-        await _runGatedSheetAction(
-          context,
-          ref,
-          reason: AuthGateReason.startGroupChat,
-          sheet: AuthContinuationSheet.startGroupChat,
-          openNow: () => openStartGroupChat(context),
-        );
+        await openGatedStartGroupChat(context, ref);
       case _QuickActionIntentKind.addContact:
         await _runGatedSheetAction(
           context,

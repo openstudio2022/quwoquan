@@ -75,6 +75,16 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
+- name: eventPublishedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  description: TagFeedbackRecorded 已成功追加到 durable stream 的确认时间；为空表示待投递
+  role: append_only_fact
 types:
   TagFeedbackRequest:
     description: 标签推荐反馈命令 payload

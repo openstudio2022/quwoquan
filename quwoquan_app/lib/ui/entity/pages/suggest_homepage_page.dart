@@ -12,9 +12,14 @@ import 'package:quwoquan_app/ui/entity/models/homepage_type_labels.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_write_access.dart';
 
 class SuggestHomepagePage extends ConsumerStatefulWidget {
-  const SuggestHomepagePage({super.key, this.initialQuery = ''});
+  const SuggestHomepagePage({
+    super.key,
+    this.initialQuery = '',
+    this.sourcePlaceId = '',
+  });
 
   final String initialQuery;
+  final String sourcePlaceId;
 
   @override
   ConsumerState<SuggestHomepagePage> createState() =>
@@ -467,6 +472,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
                   ? _addressController.text.trim()
                   : '',
               categoryTags: _buildCategoryTags(),
+              sourcePlaceId: widget.sourcePlaceId,
             ),
           );
       if (!mounted) {

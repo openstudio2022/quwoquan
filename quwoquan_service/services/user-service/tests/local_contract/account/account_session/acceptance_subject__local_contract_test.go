@@ -41,6 +41,26 @@ func TestAcceptanceSubjectModerationOperatorUsesLeastPrivilegeClaims(t *testing.
 	}
 }
 
+func TestAcceptanceSubjectTelemetryQueryUsesReadOnlyScope(t *testing.T) {
+	subject, err := accountsession.Subject(
+		"product-telemetry-query",
+		"fixture_telemetry_operator",
+		"fixture_telemetry_operator",
+	)
+	if err != nil {
+		t.Fatalf("Subject returned error: %v", err)
+	}
+	if !reflect.DeepEqual(subject.Scopes, []string{"ops.telemetry.read"}) {
+		t.Fatalf("unexpected telemetry query scopes: %#v", subject.Scopes)
+	}
+	if !reflect.DeepEqual(subject.Permissions, []string(nil)) {
+		t.Fatalf("telemetry query must not grant permissions: %#v", subject.Permissions)
+	}
+	if !reflect.DeepEqual(subject.Roles, []string{"operator"}) {
+		t.Fatalf("unexpected telemetry query roles: %#v", subject.Roles)
+	}
+}
+
 func TestAcceptanceSessionTargetsIncludeOnlyDeclaredLocalTopologies(t *testing.T) {
 	want := map[string]string{
 		"alpha": "alpha-local",

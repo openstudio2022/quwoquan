@@ -51,9 +51,7 @@ class HomepageCanonicalReference {
 
   factory HomepageCanonicalReference.fromMap(Map<String, dynamic> map) {
     return HomepageCanonicalReference(
-      id: (map['homepageId'] ?? '')
-          .toString()
-          .trim(),
+      id: (map['homepageId'] ?? '').toString().trim(),
       homepageType: (map['homepageType'] ?? '').toString().trim(),
       title: (map['title'] ?? '').toString().trim(),
       subtitle: (map['subtitle'] ?? '').toString().trim().isEmpty
@@ -133,9 +131,7 @@ class HomepageSummary extends HomepageCanonicalReference {
 
   factory HomepageSummary.fromMap(Map<String, dynamic> map) {
     return HomepageSummary(
-      id: (map['homepageId'] ?? '')
-          .toString()
-          .trim(),
+      id: (map['homepageId'] ?? '').toString().trim(),
       homepageType: (map['homepageType'] ?? '').toString().trim(),
       title: (map['title'] ?? '').toString().trim(),
       subtitle: HomepageWireCodec.optionalTrimmedString(map['subtitle']),
@@ -231,9 +227,7 @@ class HomepageDetail extends HomepageCanonicalReference {
 
   factory HomepageDetail.fromMap(Map<String, dynamic> map) {
     return HomepageDetail(
-      id: (map['homepageId'] ?? '')
-          .toString()
-          .trim(),
+      id: (map['homepageId'] ?? '').toString().trim(),
       homepageType: (map['homepageType'] ?? '').toString().trim(),
       title: (map['title'] ?? '').toString().trim(),
       subtitle: HomepageWireCodec.optionalTrimmedString(map['subtitle']),
@@ -413,6 +407,7 @@ class HomepageSuggestionDraft {
     this.coverUrl = '',
     this.address = '',
     this.city = '',
+    this.sourcePlaceId = '',
     this.location,
   });
 
@@ -423,6 +418,7 @@ class HomepageSuggestionDraft {
   final String coverUrl;
   final String address;
   final String city;
+  final String sourcePlaceId;
   final HomepageGeoPoint? location;
 
   Map<String, dynamic> toMap() => <String, dynamic>{
@@ -433,6 +429,7 @@ class HomepageSuggestionDraft {
     if (coverUrl.trim().isNotEmpty) 'coverUrl': coverUrl.trim(),
     if (address.trim().isNotEmpty) 'address': address.trim(),
     if (city.trim().isNotEmpty) 'city': city.trim(),
+    if (sourcePlaceId.trim().isNotEmpty) 'sourcePlaceId': sourcePlaceId.trim(),
     if (location != null) 'location': location!.toMap(),
   };
 }

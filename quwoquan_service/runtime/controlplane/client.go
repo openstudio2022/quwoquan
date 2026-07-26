@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	rtauth "quwoquan_service/runtime/auth"
 )
 
 type ConfigResolveResponse struct {
@@ -38,8 +40,9 @@ type InstanceConfigReport struct {
 }
 
 type Client struct {
-	BaseURL    string
-	HTTPClient *http.Client
+	BaseURL              string
+	HTTPClient           *http.Client
+	ServiceAuthorization rtauth.ServiceAuthorizationProvider
 }
 
 func NewClient(baseURL string, httpClient *http.Client) *Client {
@@ -52,11 +55,41 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
 	}
 }
 
+func (c *Client) WithServiceAuthorization(
+	provider rtauth.ServiceAuthorizationProvider,
+) *Client {
+	if c == nil {
+		return nil
+	}
+	c.ServiceAuthorization = provider
+	return c
+}
+
+func (c *Client) applyServiceAuthorization(request *http.Request) error {
+	if c == nil || c.ServiceAuthorization == nil {
+		return fmt.Errorf("control-plane service authorization is required")
+	}
+	header, err := c.ServiceAuthorization.AuthorizationHeader(request.Context())
+	if err != nil {
+		return fmt.Errorf("control-plane service authorization: %w", err)
+	}
+	if strings.TrimSpace(header) == "" {
+		return fmt.Errorf("control-plane service authorization is empty")
+	}
+	request.Header.Set("Authorization", header)
+	return nil
+}
+
 func (c *Client) Resolve(ctx context.Context, scope ConfigResolutionScope) (ConfigResolveResponse, error) {
 	if c == nil || strings.TrimSpace(c.BaseURL) == "" {
 		return ConfigResolveResponse{}, fmt.Errorf("control plane base url is required")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/control-plane/platform/configs/resolve", nil)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		c.BaseURL+"/control-plane/platform/configs/resolve-for-instance",
+		nil,
+	)
 	if err != nil {
 		return ConfigResolveResponse{}, err
 	}
@@ -71,6 +104,9 @@ func (c *Client) Resolve(ctx context.Context, scope ConfigResolutionScope) (Conf
 		query.Set("service", scope.Service)
 	}
 	req.URL.RawQuery = query.Encode()
+	if err := c.applyServiceAuthorization(req); err != nil {
+		return ConfigResolveResponse{}, err
+	}
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return ConfigResolveResponse{}, err
@@ -114,6 +150,9 @@ func (c *Client) ReportInstance(ctx context.Context, report InstanceConfigReport
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Environment", report.Environment)
+	if err := c.applyServiceAuthorization(req); err != nil {
+		return err
+	}
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return err

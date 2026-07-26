@@ -727,7 +727,9 @@ class _WebCreateWorkspace extends ConsumerWidget {
         icon: CupertinoIcons.chat_bubble_2,
         title: ChatText.webPcCreateGroupChatTitle,
         subtitle: ChatText.webPcCreateGroupChatSubtitle,
-        action: () => GlobalQuickActionSheet.openStartGroupChat(context),
+        action: () => unawaited(
+          GlobalQuickActionSheet.openGatedStartGroupChat(context, ref),
+        ),
       ),
       _CreateCardSpec(
         id: 'create-circle',

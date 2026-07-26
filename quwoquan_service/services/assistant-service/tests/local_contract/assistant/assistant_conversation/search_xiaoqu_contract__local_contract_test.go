@@ -35,7 +35,6 @@ func (fixedSearchReader) Retrieve(
 
 func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 	service := application.NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 		application.WithXiaoquSearchReader(fixedSearchReader{}),

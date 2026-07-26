@@ -229,9 +229,7 @@ func TestProjectorIgnoresUnrelatedEvents(t *testing.T) {
 	}
 }
 
-// TestProjectorESOutageDoesNotBlock asserts an ES write failure is swallowed
-// (recorded, returns nil) so the primary homepage write path is never blocked.
-func TestProjectorESOutageDoesNotBlock(t *testing.T) {
+func TestProjectorESOutageKeepsOutboxCheckpointRetryable(t *testing.T) {
 	hp := publishedHomepage()
 	f := newFakeES()
 	f.writeFailStatus = http.StatusServiceUnavailable
@@ -239,18 +237,18 @@ func TestProjectorESOutageDoesNotBlock(t *testing.T) {
 
 	if err := proj.Project(context.Background(), application.ProjectorEvent{
 		Type: application.ProjectorEventHomepageUpserted, HomepageID: hp.ID, Homepage: &hp,
-	}); err != nil {
-		t.Fatalf("ES outage must not propagate to the write path, got err=%v", err)
+	}); err == nil {
+		t.Fatal("ES outage must propagate to the durable relay")
 	}
 }
 
-func TestProjectorNilIndexerIsNoOp(t *testing.T) {
+func TestProjectorMissingIndexerFailsFast(t *testing.T) {
 	var proj *Projector // nil receiver
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: application.ProjectorEventHomepageUpserted, HomepageID: "x"}); err != nil {
-		t.Fatalf("nil projector must be a no-op, got %v", err)
+	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: application.ProjectorEventHomepageUpserted, HomepageID: "x"}); err == nil {
+		t.Fatal("nil projector must fail")
 	}
 	proj = NewProjector(nil) // nil indexer
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: application.ProjectorEventHomepageUpserted, HomepageID: "x"}); err != nil {
-		t.Fatalf("nil indexer must be a no-op, got %v", err)
+	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: application.ProjectorEventHomepageUpserted, HomepageID: "x"}); err == nil {
+		t.Fatal("nil indexer must fail")
 	}
 }

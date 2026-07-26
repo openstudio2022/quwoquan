@@ -29,7 +29,10 @@ final actorQueueSessionBoundaryProvider = Provider<ActorQueueSessionBoundary>((
 ) {
   return ActorQueueSessionBoundary(
     storage: ref.watch(actorQueueStorageProvider),
-    queueNames: const <String>[kBehaviorPendingQueueBoxName],
+    queueNames: const <String>[
+      kBehaviorPendingQueueBoxName,
+      kAssistantLearningFactOutboxName,
+    ],
   );
 });
 

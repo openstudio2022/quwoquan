@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,17 +11,25 @@ import (
 	"strings"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 )
 
 type UserSocialContactResolver struct {
-	baseURL string
-	client  *http.Client
+	baseURL       string
+	client        *http.Client
+	authorization rtauth.DelegatedPersonaAuthorizationProvider
 }
 
 type socialContactPage struct {
 	Items  []socialContactItem `json:"items"`
 	Cursor string              `json:"cursor"`
+}
+
+type socialContactPageCursor struct {
+	Source string `json:"s"`
+	Cursor string `json:"c,omitempty"`
+	Offset int    `json:"o,omitempty"`
 }
 
 type socialContactItem struct {
@@ -44,6 +53,22 @@ func NewUserSocialContactResolver(baseURL string, client *http.Client) *UserSoci
 		client = &http.Client{Timeout: 2 * time.Second}
 	}
 	return &UserSocialContactResolver{baseURL: baseURL, client: client}
+}
+
+// NewAuthorizedUserSocialContactResolver creates the production relationship
+// source boundary. The user service derives the viewer only from the signed
+// delegated persona, never from X-Client-User-Id.
+func NewAuthorizedUserSocialContactResolver(
+	baseURL string,
+	client *http.Client,
+	authorization rtauth.DelegatedPersonaAuthorizationProvider,
+) (*UserSocialContactResolver, error) {
+	if authorization == nil {
+		return nil, fmt.Errorf("delegated social contact authorization is required")
+	}
+	resolver := NewUserSocialContactResolver(baseURL, client)
+	resolver.authorization = authorization
+	return resolver, nil
 }
 
 func (r *UserSocialContactResolver) ListContacts(
@@ -95,6 +120,125 @@ func (r *UserSocialContactResolver) ListContacts(
 	return out, nil
 }
 
+func (r *UserSocialContactResolver) ListContactPage(
+	ctx context.Context,
+	userID string,
+	limit int,
+	cursor string,
+) (application.SocialContactPage, error) {
+	if r == nil || r.client == nil || r.baseURL == "" {
+		return application.SocialContactPage{}, nil
+	}
+	limit = clampSocialContactLimit(limit)
+	state, err := decodeSocialContactPageCursor(cursor)
+	if err != nil {
+		return application.SocialContactPage{},
+			fmt.Errorf("%w: %v", application.ErrInvalidContactCursor, err)
+	}
+
+	switch state.Source {
+	case "following", "followers":
+		page, err := r.fetchFollowPage(
+			ctx,
+			userID,
+			state.Source,
+			state.Cursor,
+			limit,
+		)
+		if err != nil {
+			return application.SocialContactPage{}, err
+		}
+		if state.Offset >= len(page.Items) {
+			if next := strings.TrimSpace(page.Cursor); next != "" {
+				return application.SocialContactPage{
+					NextCursor: encodeSocialContactPageCursor(socialContactPageCursor{
+						Source: state.Source,
+						Cursor: next,
+					}),
+				}, nil
+			}
+			return r.nextSocialContactSource(state.Source), nil
+		}
+		end := state.Offset + limit
+		if end > len(page.Items) {
+			end = len(page.Items)
+		}
+		items := make([]application.SocialContactSeed, 0, end-state.Offset)
+		for _, item := range page.Items[state.Offset:end] {
+			if seed, ok := socialContactItemToSeed(item); ok {
+				items = append(items, seed)
+			}
+		}
+		if end < len(page.Items) {
+			return application.SocialContactPage{
+				Items: items,
+				NextCursor: encodeSocialContactPageCursor(socialContactPageCursor{
+					Source: state.Source,
+					Cursor: state.Cursor,
+					Offset: end,
+				}),
+			}, nil
+		}
+		if next := strings.TrimSpace(page.Cursor); next != "" {
+			return application.SocialContactPage{
+				Items:      items,
+				NextCursor: encodeSocialContactPageCursor(socialContactPageCursor{Source: state.Source, Cursor: next}),
+			}, nil
+		}
+		nextPage := r.nextSocialContactSource(state.Source)
+		nextPage.Items = items
+		return nextPage, nil
+	case "discovery":
+		items, err := r.discoveryContactSeeds(ctx, userID)
+		if err != nil {
+			return application.SocialContactPage{}, err
+		}
+		if state.Offset >= len(items) {
+			return application.SocialContactPage{}, nil
+		}
+		end := state.Offset + limit
+		if end > len(items) {
+			end = len(items)
+		}
+		nextCursor := ""
+		if end < len(items) {
+			nextCursor = encodeSocialContactPageCursor(socialContactPageCursor{
+				Source: "discovery",
+				Offset: end,
+			})
+		}
+		return application.SocialContactPage{
+			Items:      items[state.Offset:end],
+			NextCursor: nextCursor,
+		}, nil
+	default:
+		return application.SocialContactPage{}, fmt.Errorf("unsupported social contact source")
+	}
+}
+
+func (r *UserSocialContactResolver) nextSocialContactSource(
+	source string,
+) application.SocialContactPage {
+	if source == "following" {
+		return application.SocialContactPage{
+			NextCursor: encodeSocialContactPageCursor(socialContactPageCursor{Source: "followers"}),
+		}
+	}
+	return application.SocialContactPage{
+		NextCursor: encodeSocialContactPageCursor(socialContactPageCursor{Source: "discovery"}),
+	}
+}
+
+func clampSocialContactLimit(limit int) int {
+	if limit <= 0 {
+		return 20
+	}
+	if limit > 100 {
+		return 100
+	}
+	return limit
+}
+
 func (r *UserSocialContactResolver) collectFollowContacts(
 	ctx context.Context,
 	userID string,
@@ -112,18 +256,9 @@ func (r *UserSocialContactResolver) collectFollowContacts(
 			break
 		}
 		for _, item := range page.Items {
-			id := strings.TrimSpace(item.SubAccountID)
-			if id == "" {
+			seed, ok := socialContactItemToSeed(item)
+			if !ok {
 				continue
-			}
-			seed := application.SocialContactSeed{
-				UserID:          id,
-				DisplayName:     strings.TrimSpace(item.DisplayName),
-				AvatarURL:       strings.TrimSpace(item.AvatarURL),
-				MetFrom:         "关注",
-				LastInteraction: strings.TrimSpace(item.FollowedAt),
-				RelationState:   normalizeSocialRelationState(item.RelationState),
-				Source:          socialContactSource(item.RelationState),
 			}
 			mergeSocialContactSeed(merged, seed)
 		}
@@ -133,6 +268,24 @@ func (r *UserSocialContactResolver) collectFollowContacts(
 		}
 	}
 	return nil
+}
+
+func socialContactItemToSeed(
+	item socialContactItem,
+) (application.SocialContactSeed, bool) {
+	id := strings.TrimSpace(item.SubAccountID)
+	if id == "" {
+		return application.SocialContactSeed{}, false
+	}
+	return application.SocialContactSeed{
+		UserID:          id,
+		DisplayName:     strings.TrimSpace(item.DisplayName),
+		AvatarURL:       strings.TrimSpace(item.AvatarURL),
+		MetFrom:         "关注",
+		LastInteraction: strings.TrimSpace(item.FollowedAt),
+		RelationState:   normalizeSocialRelationState(item.RelationState),
+		Source:          socialContactSource(item.RelationState),
+	}, true
 }
 
 func (r *UserSocialContactResolver) fetchFollowPage(
@@ -156,6 +309,9 @@ func (r *UserSocialContactResolver) fetchFollowPage(
 		return nil, err
 	}
 	req.Header.Set("X-Client-User-Id", strings.TrimSpace(userID))
+	if err := r.authorizeUserRequest(ctx, req, userID); err != nil {
+		return nil, err
+	}
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -176,27 +332,44 @@ func (r *UserSocialContactResolver) collectDiscoveryContacts(
 	userID string,
 	merged map[string]application.SocialContactSeed,
 ) error {
+	items, err := r.discoveryContactSeeds(ctx, userID)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		mergeSocialContactSeed(merged, item)
+	}
+	return nil
+}
+
+func (r *UserSocialContactResolver) discoveryContactSeeds(
+	ctx context.Context,
+	userID string,
+) ([]application.SocialContactSeed, error) {
 	requestURL := fmt.Sprintf("%s/user/contact-discovery/latest", r.baseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("X-Client-User-Id", strings.TrimSpace(userID))
+	if err := r.authorizeUserRequest(ctx, req, userID); err != nil {
+		return nil, err
+	}
 	resp, err := r.client.Do(req)
 	if err != nil {
 		// Contact discovery is best-effort; absence should not block contacts.
-		return nil
+		return nil, nil
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return nil
+		return nil, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("get latest contact discovery: status %d", resp.StatusCode)
+		return nil, fmt.Errorf("get latest contact discovery: status %d", resp.StatusCode)
 	}
 	var payload contactDiscoveryResponse
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return err
+		return nil, err
 	}
 	lastInteraction := ""
 	if payload.CompletedAt != nil {
@@ -204,12 +377,13 @@ func (r *UserSocialContactResolver) collectDiscoveryContacts(
 	} else if !payload.CreatedAt.IsZero() {
 		lastInteraction = payload.CreatedAt.UTC().Format(time.RFC3339)
 	}
+	byID := make(map[string]application.SocialContactSeed)
 	for _, rawID := range payload.MatchedSubAccountIds {
 		id := strings.TrimSpace(rawID)
 		if id == "" {
 			continue
 		}
-		mergeSocialContactSeed(merged, application.SocialContactSeed{
+		mergeSocialContactSeed(byID, application.SocialContactSeed{
 			UserID:          id,
 			MetFrom:         "通讯录匹配",
 			LastInteraction: lastInteraction,
@@ -217,7 +391,64 @@ func (r *UserSocialContactResolver) collectDiscoveryContacts(
 			Source:          "contact_discovery",
 		})
 	}
+	ids := make([]string, 0, len(byID))
+	for id := range byID {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	items := make([]application.SocialContactSeed, 0, len(ids))
+	for _, id := range ids {
+		items = append(items, byID[id])
+	}
+	return items, nil
+}
+
+func (r *UserSocialContactResolver) authorizeUserRequest(
+	ctx context.Context,
+	request *http.Request,
+	userID string,
+) error {
+	if r == nil || r.authorization == nil {
+		return nil
+	}
+	header, err := r.authorization.AuthorizationHeaderForPersona(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("authorize social contact request: %w", err)
+	}
+	request.Header.Set("Authorization", header)
 	return nil
+}
+
+func decodeSocialContactPageCursor(raw string) (socialContactPageCursor, error) {
+	if strings.TrimSpace(raw) == "" {
+		return socialContactPageCursor{Source: "following"}, nil
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return socialContactPageCursor{}, fmt.Errorf("invalid social contacts cursor: %w", err)
+	}
+	var cursor socialContactPageCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil {
+		return socialContactPageCursor{}, fmt.Errorf("invalid social contacts cursor: %w", err)
+	}
+	switch cursor.Source {
+	case "following", "followers":
+		if cursor.Offset < 0 {
+			return socialContactPageCursor{}, fmt.Errorf("invalid social contacts cursor")
+		}
+	case "discovery":
+		if cursor.Offset < 0 || cursor.Cursor != "" {
+			return socialContactPageCursor{}, fmt.Errorf("invalid social contacts cursor")
+		}
+	default:
+		return socialContactPageCursor{}, fmt.Errorf("invalid social contacts cursor")
+	}
+	return cursor, nil
+}
+
+func encodeSocialContactPageCursor(cursor socialContactPageCursor) string {
+	payload, _ := json.Marshal(cursor)
+	return base64.RawURLEncoding.EncodeToString(payload)
 }
 
 func mergeSocialContactSeed(

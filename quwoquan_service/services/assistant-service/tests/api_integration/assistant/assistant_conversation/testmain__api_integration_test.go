@@ -23,9 +23,11 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/projection"
+	learningapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/application"
+	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
+	learningpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/persistence"
+	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
 	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/application"
 	preferencepersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/infrastructure/persistence"
 )
@@ -39,11 +41,11 @@ var (
 	integrationRedisServer          *testinfra.RealRedis
 	integrationRedisRouter          *rtredis.Router
 	integrationRedisClient          rtredis.Client
-	integrationEventStore           *persistence.MongoEventStore
 	integrationConsentStore         *persistence.PgConsentStore
-	integrationProfileStore         *projection.LearningProfileStore
 	integrationSubscriptionStore    *persistence.MongoSkillSubscriptionStore
 	integrationConversationRunStore *persistence.MongoConversationRunStore
+	integrationLearningFactStore    *learningpersistence.MongoStore
+	integrationLearningProjector    *learningprojection.MongoProjector
 	integrationPreferenceStore      *preferencepersistence.MongoStore
 )
 
@@ -188,14 +190,6 @@ func startIntegrationPostgres(ctx context.Context) {
 }
 
 func initializeIntegrationStores(ctx context.Context) {
-	integrationEventStore = persistence.NewMongoEventStore(integrationMongoDB)
-	if err := integrationEventStore.EnsureIndexes(ctx); err != nil {
-		panic("assistant-service api_integration ensure event indexes: " + err.Error())
-	}
-	integrationProfileStore = projection.NewLearningProfileStore(integrationMongoDB)
-	if err := integrationProfileStore.EnsureIndexes(ctx); err != nil {
-		panic("assistant-service api_integration ensure profile indexes: " + err.Error())
-	}
 	integrationSubscriptionStore = persistence.NewMongoSkillSubscriptionStore(integrationMongoDB)
 	if err := integrationSubscriptionStore.EnsureIndexes(ctx); err != nil {
 		panic("assistant-service api_integration ensure subscription indexes: " + err.Error())
@@ -208,6 +202,18 @@ func initializeIntegrationStores(ctx context.Context) {
 	if err := integrationConversationRunStore.EnsureIndexes(ctx); err != nil {
 		panic("assistant-service api_integration ensure conversation/run indexes: " + err.Error())
 	}
+	integrationLearningFactStore = learningpersistence.NewMongoStore(
+		integrationMongoDB,
+	)
+	if err := integrationLearningFactStore.EnsureIndexes(ctx); err != nil {
+		panic("assistant-service api_integration ensure learning fact indexes: " + err.Error())
+	}
+	integrationLearningProjector = learningprojection.NewMongoProjector(
+		integrationMongoDB,
+	)
+	if err := integrationLearningProjector.EnsureIndexes(ctx); err != nil {
+		panic("assistant-service api_integration ensure learning projection indexes: " + err.Error())
+	}
 	integrationPreferenceStore = preferencepersistence.NewMongoStore(integrationMongoDB)
 	if err := integrationPreferenceStore.EnsureIndexes(ctx); err != nil {
 		panic("assistant-service api_integration ensure preference indexes: " + err.Error())
@@ -215,25 +221,80 @@ func initializeIntegrationStores(ctx context.Context) {
 }
 
 func newIntegrationAssistantService(opts ...application.AssistantServiceOption) *application.AssistantService {
-	messageTransport := newIntegrationMessageTransport()
+	learningFactService := learningapplication.NewService(
+		integrationLearningFactStore,
+		learningpersistence.NewMongoRunOwnerReader(integrationMongoDB),
+		nil,
+	)
 	baseOptions := []application.AssistantServiceOption{
-		application.WithLearningProfileStore(integrationProfileStore),
+		application.WithLearningFactWriter(
+			application.LearningFactWriterFunc(
+				func(
+					ctx context.Context,
+					command application.ServiceScorecardFactCommand,
+				) error {
+					_, err := learningFactService.AppendServiceFact(
+						ctx,
+						learningmodel.AppendCommand{
+							EventID:          command.EventID,
+							EventVersion:     1,
+							FactType:         learningmodel.FactTypeServiceScorecard,
+							AssistantTurnID:  command.AssistantTurnID,
+							ReferralSource:   "service",
+							DomainID:         command.DomainID,
+							MetricID:         command.MetricID,
+							MetricValue:      command.MetricValue,
+							MetricSource:     command.MetricSource,
+							TrainingEligible: false,
+							OccurredAt:       command.OccurredAt,
+						},
+					)
+					return err
+				},
+			),
+		),
+		application.WithLearningProjectionReader(integrationLearningProjector),
 		application.WithSkillSubscriptionStore(integrationSubscriptionStore),
 		application.WithConversationRunStore(integrationConversationRunStore),
+		application.WithFrozenPolicyResolver(
+			application.FrozenPolicyResolverFunc(
+				func(
+					_ context.Context,
+					policyID string,
+					_ string,
+					skillID string,
+					domainID string,
+				) (assistant.AssistantFrozenPolicySelection, error) {
+					if strings.TrimSpace(skillID) == "" {
+						skillID = "fallback_general_search"
+					}
+					if strings.TrimSpace(domainID) == "" {
+						domainID = "assistant"
+					}
+					return assistant.AssistantFrozenPolicySelection{
+						PolicyID:        policyID,
+						ReleaseVersion:  "test-release-v1",
+						Cohort:          "control",
+						RolloutRevision: 1,
+						RuleID:          "test-default",
+						Template: assistant.AssistantFrozenPolicyTemplate{
+							TemplateID:      "test-template",
+							SkillID:         skillID,
+							DomainID:        domainID,
+							PromptPolicy:    "test frozen prompt",
+							AllowedTools:    []string{},
+							SearchIntensity: "balanced",
+						},
+					}, nil
+				},
+			),
+		),
 		application.WithPreferenceSnapshotReader(
 			preferencefact.NewQueryFacade(integrationPreferenceStore),
-		),
-		application.WithEventPublisher(
-			messaging.NewRedisEventPublisherWithTransport(
-				messageTransport,
-				"assistant-service-api-integration",
-				nil,
-			),
 		),
 	}
 	baseOptions = append(baseOptions, opts...)
 	return application.NewAssistantService(
-		integrationEventStore,
 		integrationConsentStore,
 		integrationRedisClient,
 		baseOptions...,
@@ -259,12 +320,22 @@ func resetIntegrationState(t *testing.T) {
 	defer cancel()
 
 	for _, collection := range []string{
-		"assistant_interaction_events",
-		"assistant_scorecard_facts",
 		"assistant_conversations",
 		"assistant_runs",
 		"assistant_run_events",
-		"rm_assistant_learning_profile",
+		"assistant_learning_facts",
+		"assistant_learning_fact_receipts",
+		"assistant_learning_fact_outbox",
+		"assistant_learning_fact_sequences",
+		"assistant_learning_projection_receipts",
+		"assistant_learning_projection_watermarks",
+		"rm_assistant_learning_projection",
+		"assistant_policy_releases",
+		"assistant_policy_release_receipts",
+		"assistant_policy_release_outbox",
+		"assistant_policy_rollouts",
+		"assistant_policy_rollout_receipts",
+		"assistant_policy_rollout_outbox",
 		"skill_subscriptions",
 		"assistant_preference_facts",
 	} {
@@ -284,12 +355,12 @@ func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
 	resetIntegrationState(t)
 	ctx := context.Background()
 
-	assertMongoIndex(t, "assistant_interaction_events", "idx_ie_user_created")
-	assertMongoIndex(t, "assistant_scorecard_facts", "idx_score_user_created")
-	assertMongoIndex(t, "rm_assistant_learning_profile", "idx_alp_user")
 	assertMongoIndex(t, "skill_subscriptions", "idx_skill_subscriptions_status_updated")
 	assertMongoIndex(t, "assistant_preference_facts", "uq_assistant_preference_identity")
 	assertMongoIndex(t, "assistant_run_events", "uq_run_events_run_seq")
+	assertMongoIndex(t, "assistant_learning_facts", "uq_assistant_learning_fact_identity")
+	assertMongoIndex(t, "assistant_learning_facts", "idx_assistant_learning_fact_turn")
+	assertMongoIndex(t, "rm_assistant_learning_projection", "idx_assistant_learning_projection_owner_updated")
 
 	var migrationApplied bool
 	if err := integrationPostgresPool.QueryRow(
@@ -314,25 +385,6 @@ func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	event := assistant.InteractionEvent{
-		EventID:   "event-storage-topology",
-		RunID:     "run-storage-topology",
-		UserID:    "user-storage-topology",
-		DomainID:  "assistant",
-		EventType: "answer_viewed",
-		CreatedAt: now,
-	}
-	if err := integrationEventStore.InsertInteractionEvent(ctx, event); err != nil {
-		t.Fatalf("insert MongoDB interaction event: %v", err)
-	}
-	events, err := integrationEventStore.ListLatestInteractionEvents(ctx, event.UserID, 10)
-	if err != nil {
-		t.Fatalf("list MongoDB interaction events: %v", err)
-	}
-	if len(events) != 1 || events[0].EventID != event.EventID {
-		t.Fatalf("MongoDB interaction events=%+v", events)
-	}
-
 	consent := assistant.SkillConsent{
 		ID:           "user-storage-topology:personal_content_access",
 		UserID:       "user-storage-topology",

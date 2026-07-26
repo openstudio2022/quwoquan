@@ -1,0 +1,13 @@
+events:
+- name: AssistantPolicyReleaseStaged
+  producer: assistant-service
+  consumers:
+  - platform-ops
+  channel: outbox
+  payload_entity: AssistantPolicyRelease
+  payload_fields:
+  - policyId
+  - releaseVersion
+  - canonicalDigest
+  - defaultTemplateId
+  - stagedAt

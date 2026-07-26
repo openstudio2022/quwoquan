@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -77,6 +78,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 		nil,
 		nil,
 		groupAvatarSchedulerForContractTest(),
+		application.WithRelationshipGate(application.AllowRelationshipGateForTest()),
 		application.WithSocialContactResolver(
 			chathttp.NewUserSocialContactResolver(socialServer.URL, socialServer.Client()),
 		),
@@ -115,7 +117,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 		if !ok {
 			t.Fatalf("unexpected row type: %T", raw)
 		}
-		id, _ := row["contactId"].(string)
+		id, _ := row["userId"].(string)
 		byID[id] = row
 	}
 
@@ -136,6 +138,57 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 	}
 	if got := byID["user_c"]["bio"]; got != "Bio_user_c" {
 		t.Fatalf("expected user_c bio from profile snapshot, got %v", got)
+	}
+
+	cursor := ""
+	seenCursors := map[string]struct{}{}
+	pagedIDs := map[string]struct{}{}
+	for pageNumber := 0; pageNumber < 8; pageNumber++ {
+		req := httptest.NewRequest(
+			http.MethodGet,
+			"/chat/contacts?limit=1&cursor="+url.QueryEscape(cursor),
+			nil,
+		)
+		req.Header.Set("X-Client-User-Id", "viewer_1")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("paged contacts request failed: %d %s", rec.Code, rec.Body.String())
+		}
+		var page map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+			t.Fatalf("decode paged contacts response: %v", err)
+		}
+		rows, ok := page["items"].([]any)
+		if !ok || len(rows) > 1 {
+			t.Fatalf("contacts page must contain at most one row: %#v", page)
+		}
+		for _, raw := range rows {
+			row, ok := raw.(map[string]any)
+			if !ok {
+				t.Fatalf("unexpected paged row type: %T", raw)
+			}
+			if userID, _ := row["userId"].(string); userID != "" {
+				pagedIDs[userID] = struct{}{}
+			}
+		}
+		next, _ := page["nextCursor"].(string)
+		if next == "" {
+			break
+		}
+		if _, exists := seenCursors[next]; exists {
+			t.Fatalf("contacts cursor repeated: %q", next)
+		}
+		seenCursors[next] = struct{}{}
+		cursor = next
+		if pageNumber == 7 {
+			t.Fatal("contacts cursor did not terminate")
+		}
+	}
+	for _, expectedID := range []string{"user_a", "user_b", "user_c"} {
+		if _, exists := pagedIDs[expectedID]; !exists {
+			t.Fatalf("paged contacts omitted %s: %#v", expectedID, pagedIDs)
+		}
 	}
 }
 

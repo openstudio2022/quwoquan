@@ -6,7 +6,7 @@
 
 ## 1. 能力目标
 
-SuggestedActionsGenerator：根据 PageContext + 内容分析 + 画像，按 8 种页面场景生成差异化建议操作。
+SuggestedActionsGenerator：根据服务端核验的 `PageContext`（页面类型、canonical 对象引用与当前页读取授权）和学习画像，按 8 种页面场景生成可执行且可追踪的差异化建议操作。
 
 ## 2. 范围与非目标
 
@@ -22,15 +22,15 @@ SuggestedActionsGenerator：根据 PageContext + 内容分析 + 画像，按 8 �
 
 - [`JNY-009 / SCN-017`](../../spec.md#scn-017)
   - 本能力处理：组合本目录 Story 的可观察行为。
-  - 本能力输出：SuggestedActionsGenerator：根据 PageContext + 内容分析 + 画像，按 8 种页面场景生成差异化建议操作，并将可观察结果交给下游。
+  - 本能力输出：SuggestedActionsGenerator：根据服务端核验的 PageContext 与学习画像，按 8 种页面场景生成差异化建议操作，并将可观察结果交给下游。
   - 失败时终态：可解释、可恢复且不伪造成功。
 - [`JNY-009 / SCN-018`](../../spec.md#scn-018)
   - 本能力处理：组合本目录 Story 的可观察行为。
-  - 本能力输出：SuggestedActionsGenerator：根据 PageContext + 内容分析 + 画像，按 8 种页面场景生成差异化建议操作，并将可观察结果交给下游。
+  - 本能力输出：SuggestedActionsGenerator：根据服务端核验的 PageContext 与学习画像，按 8 种页面场景生成差异化建议操作，并将可观察结果交给下游。
   - 失败时终态：可解释、可恢复且不伪造成功。
 - [`JNY-009 / SCN-020`](../../spec.md#scn-020)
   - 本能力处理：组合本目录 Story 的可观察行为。
-  - 本能力输出：SuggestedActionsGenerator：根据 PageContext + 内容分析 + 画像，按 8 种页面场景生成差异化建议操作，并将可观察结果交给下游。
+  - 本能力输出：SuggestedActionsGenerator：根据服务端核验的 PageContext 与学习画像，按 8 种页面场景生成差异化建议操作，并将可观察结果交给下游。
   - 失败时终态：可解释、可恢复且不伪造成功。
 
 ## 4. Story
@@ -46,7 +46,17 @@ SuggestedActionsGenerator：根据 PageContext + 内容分析 + 画像，按 8 �
 <a id="req-001"></a>
 ### REQ-001 runtime assistant 能力 SIT
 
-- 本能力必须组合直属 Story 与公开契约，交付“SuggestedActionsGenerator：根据 PageContext + 内容分析 + 画像，按 8 种页面场景生成差异化建议操作”所定义的业务结果；失败终态必须可区分且不得伪造成功。
+- 本能力必须组合直属 Story 与公开契约，交付“SuggestedActionsGenerator：根据服务端核验的
+  PageContext 与学习画像，按 8 种页面场景生成差异化建议操作”所定义的业务结果；失败终态
+  必须可区分且不得伪造成功。
+- canonical 页面场景固定为 `discovery`、`circles`、`article`、`profile`、`chat`、
+  `create`、`search` 与 `home`。每个场景必须返回基础追问动作和至少两个页面专属动作。
+- `GetSuggestedActions` 必须先验证缓存中的新鲜 `PageContext` 与请求的 `pageType` 一致；
+  传入 `objectId` 时，该对象必须存在于已核验的 `pageObjects`。缺失或不匹配一律返回
+  结构化参数错误，不能回退为通用或客户端伪造的建议。
+- 建议动作缓存必须完整保留 `actionId`、`type`、`label`、`icon` 与 `payload`，使缓存命中
+  与首次计算具备相同的执行语义；学习画像不可用时记录可观测告警，并仅返回仍由页面上下文
+  支撑的基础与页面专属动作。
 
 <a id="req-002"></a>
 ### REQ-002 QA Runner 过程抽屉必须保留最终答案生成阶段叙事
@@ -66,15 +76,5 @@ SuggestedActionsGenerator：根据 PageContext + 内容分析 + 画像，按 8 �
 
 - GIVEN 执行“runtime assistant 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“runtime assistant 能力”对应动作。
-- THEN 直属 Story 共同交付“SuggestedActionsGenerator：根据 PageContext + 内容分析 + 画像，按 8 种页面场景生成差异化建议操作”，失败终态可区分且不产生伪成功事实。
-
-## 8. 开放事项
-
-<a id="open-001"></a>
-### OPEN-001 runtime assistant 能力 SIT
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：SuggestedActionsGenerator：根据 PageContext + 内容分析 + 画像，按 8 种页面场景生成差异化建议操作。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- THEN 直属 Story 共同交付八类页面的可执行 SuggestedActions；首算与缓存命中保留相同
+  payload，页面上下文缺失或不匹配时可区分地失败且不产生伪成功事实。

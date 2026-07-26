@@ -12,33 +12,27 @@ class TagApiMetadata {
     '/tag/children',
     '/tag/dimensions',
     '/tag/feedback',
-    '/tag/graph',
-    '/tag/inverted',
-    '/tag/related',
-    '/tag/related-objects',
     '/tag/resolve',
     '/tag/search',
-    '/tag/search-by-tags',
-    '/tag/shared-tags',
     '/tag/suggest',
     '/tag/validate',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'ActivateTagTaxonomyRelease': '/internal/tag/taxonomy-releases/{releaseId}:activate',
-    'InvertedObjects': '/tag/inverted',
+    'InvertedObjects': '/internal/tag/inverted',
     'ListDimensions': '/tag/dimensions',
     'ListTagChildren': '/tag/children',
-    'RelatedObjects': '/tag/related-objects',
-    'RelatedTags': '/tag/related',
+    'RelatedObjects': '/internal/tag/related-objects',
+    'RelatedTags': '/internal/tag/related',
     'ReportTagFeedback': '/tag/feedback',
     'ResolveTag': '/tag/resolve',
-    'SearchByTags': '/tag/search-by-tags',
+    'SearchByTags': '/internal/tag/search-by-tags',
     'SearchTags': '/tag/search',
-    'SharedTags': '/tag/shared-tags',
+    'SharedTags': '/internal/tag/shared-tags',
     'StageTagTaxonomyRelease': '/internal/tag/taxonomy-releases',
     'SuggestTags': '/tag/suggest',
-    'TagCooccurrence': '/tag/graph/cooccurrence',
+    'TagCooccurrence': '/internal/tag/graph/cooccurrence',
     'ValidateTagRefs': '/tag/validate',
   };
 
@@ -63,19 +57,19 @@ class TagApiMetadata {
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'ActivateTagTaxonomyRelease': 'required',
-    'InvertedObjects': 'optional',
+    'InvertedObjects': 'required',
     'ListDimensions': 'optional',
     'ListTagChildren': 'optional',
-    'RelatedObjects': 'optional',
-    'RelatedTags': 'optional',
-    'ReportTagFeedback': 'optional',
+    'RelatedObjects': 'required',
+    'RelatedTags': 'required',
+    'ReportTagFeedback': 'required',
     'ResolveTag': 'optional',
-    'SearchByTags': 'optional',
+    'SearchByTags': 'required',
     'SearchTags': 'optional',
-    'SharedTags': 'optional',
+    'SharedTags': 'required',
     'StageTagTaxonomyRelease': 'required',
     'SuggestTags': 'optional',
-    'TagCooccurrence': 'optional',
+    'TagCooccurrence': 'required',
     'ValidateTagRefs': 'optional',
   };
 
@@ -109,19 +103,19 @@ class TagApiMetadata {
       'releaseId': releaseId,
     });
   }
-  static const String invertedObjectsPath = '/tag/inverted';
+  static const String invertedObjectsPath = '/internal/tag/inverted';
   static const String listDimensionsPath = '/tag/dimensions';
   static const String listTagChildrenPath = '/tag/children';
-  static const String relatedObjectsPath = '/tag/related-objects';
-  static const String relatedTagsPath = '/tag/related';
+  static const String relatedObjectsPath = '/internal/tag/related-objects';
+  static const String relatedTagsPath = '/internal/tag/related';
   static const String reportTagFeedbackPath = '/tag/feedback';
   static const String resolveTagPath = '/tag/resolve';
-  static const String searchByTagsPath = '/tag/search-by-tags';
+  static const String searchByTagsPath = '/internal/tag/search-by-tags';
   static const String searchTagsPath = '/tag/search';
-  static const String sharedTagsPath = '/tag/shared-tags';
+  static const String sharedTagsPath = '/internal/tag/shared-tags';
   static const String stageTagTaxonomyReleasePath = '/internal/tag/taxonomy-releases';
   static const String suggestTagsPath = '/tag/suggest';
-  static const String tagCooccurrencePath = '/tag/graph/cooccurrence';
+  static const String tagCooccurrencePath = '/internal/tag/graph/cooccurrence';
   static const String validateTagRefsPath = '/tag/validate';
 
   static String _fillPath(String template, Map<String, String> params) {

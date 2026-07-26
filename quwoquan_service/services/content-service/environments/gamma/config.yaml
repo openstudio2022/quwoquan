@@ -21,11 +21,6 @@ externalBindings:
   content.embedding.generation:
     state: enabled
     adapter: ext.embed.protocol_fixture
-    endpointRef: environment_binding:content.embedding_fixture
-    endpointEnvs:
-      endpoint: CONTENT_EMBEDDING_FIXTURE_ENDPOINT
-    secretRefs:
-    - CONTENT_EMBEDDING_FIXTURE_API_KEY
     timeoutMs: 1000
   runtime.object.storage:
     state: enabled

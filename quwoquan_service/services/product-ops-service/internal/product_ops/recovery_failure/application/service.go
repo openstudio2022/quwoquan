@@ -17,31 +17,31 @@ import (
 )
 
 var (
-	ErrInvalidRecoveryFailure = errors.New("invalid recovery failure")
+	ErrInvalidRecoveryFailure  = errors.New("invalid recovery failure")
 	ErrRecoverySinkUnavailable = errors.New("recovery failure sink unavailable")
 )
 
 var (
-	appVersionPattern = regexp.MustCompile(`^v?[0-9]+(?:\.[0-9]+){1,3}(?:[-.][A-Za-z0-9]+)*$`)
-	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
+	appVersionPattern          = regexp.MustCompile(`^v?[0-9]+(?:\.[0-9]+){1,3}(?:[-.][A-Za-z0-9]+)*$`)
+	identifierPattern          = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 	sensitiveAssignmentPattern = regexp.MustCompile(`(?i)(access[_-]?token|refresh[_-]?token|authorization|cookie)\s*[:=]\s*[^\s,;]+`)
-	emailPattern = regexp.MustCompile(`(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}`)
-	phonePattern = regexp.MustCompile(`(?:\+?86[- ]?)?1[3-9][0-9]{9}`)
-	userPathPattern = regexp.MustCompile(`(?i)(/Users/|/home/|\\Users\\)[^/\\\s]+`)
-	urlQueryPattern = regexp.MustCompile(`(https://[^\s?#]+)\?[^\s#]*`)
+	emailPattern               = regexp.MustCompile(`(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}`)
+	phonePattern               = regexp.MustCompile(`(?:\+?86[- ]?)?1[3-9][0-9]{9}`)
+	userPathPattern            = regexp.MustCompile(`(?i)(/Users/|/home/|\\Users\\)[^/\\\s]+`)
+	urlQueryPattern            = regexp.MustCompile(`(https://[^\s?#]+)\?[^\s#]*`)
 )
 
 type Failure struct {
 	OccurredAt   string `json:"occurredAt"`
-	AppVersion  string `json:"appVersion"`
-	BuildNumber string `json:"buildNumber"`
-	Platform    string `json:"platform"`
-	OSVersion   string `json:"osVersion"`
-	DeviceModel string `json:"deviceModel"`
-	ErrorSource string `json:"errorSource"`
-	ErrorType   string `json:"errorType"`
+	AppVersion   string `json:"appVersion"`
+	BuildNumber  string `json:"buildNumber"`
+	Platform     string `json:"platform"`
+	OSVersion    string `json:"osVersion"`
+	DeviceModel  string `json:"deviceModel"`
+	ErrorSource  string `json:"errorSource"`
+	ErrorType    string `json:"errorType"`
 	ErrorMessage string `json:"errorMessage"`
-	StackTrace  string `json:"stackTrace"`
+	StackTrace   string `json:"stackTrace"`
 }
 
 type Reporter interface {

@@ -99,15 +99,37 @@ def _require_target_scoped_path(path: Path, *, target_root: Path) -> Path:
     return resolved
 
 
-def deployment_target_path(target: str, *segments: str) -> Path:
-    """Return a real path below exactly one validated deployment target."""
-    target_root = deployment_work_root(target)
+def deployment_target_path_in_work_root(
+    work_root: str | Path,
+    target: str,
+    *segments: str,
+) -> Path:
+    """Return a validated target path below an explicit external workspace."""
+    base = Path(work_root).expanduser().resolve()
+    _require_external_deployment_base(base)
+    target_segment = _deployment_segment(target, label="target", fallback="local")
+    target_root = (base / target_segment).resolve()
+    if not _is_within(target_root, base):
+        raise ValueError(
+            "deployment target cannot escape explicit deployment workspace: "
+            f"{target_root}"
+        )
+    _require_external_deployment_base(target_root)
     normalized_segments = tuple(
         _deployment_segment(segment, label="path segment")
         for segment in segments
     )
     candidate = target_root.joinpath(*normalized_segments)
     return _require_target_scoped_path(candidate, target_root=target_root)
+
+
+def deployment_target_path(target: str, *segments: str) -> Path:
+    """Return a real path below exactly one validated deployment target."""
+    return deployment_target_path_in_work_root(
+        deployment_work_root(target).parent,
+        target,
+        *segments,
+    )
 
 
 def resolve_deployment_target_path(

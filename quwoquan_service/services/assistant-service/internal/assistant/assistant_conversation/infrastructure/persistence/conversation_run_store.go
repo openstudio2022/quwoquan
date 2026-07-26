@@ -267,6 +267,27 @@ func (s *MongoConversationRunStore) GetTurn(
 	return turn, true, nil
 }
 
+func (s *MongoConversationRunStore) GetTurnByClientRequest(
+	ctx context.Context,
+	userID string,
+	conversationID string,
+	clientRequestID string,
+) (assistant.AssistantTurn, bool, error) {
+	var turn assistant.AssistantTurn
+	err := s.runs.FindOne(ctx, bson.M{
+		"userId":          strings.TrimSpace(userID),
+		"conversationId":  strings.TrimSpace(conversationID),
+		"clientRequestId": strings.TrimSpace(clientRequestID),
+	}).Decode(&turn)
+	if err == mongo.ErrNoDocuments {
+		return assistant.AssistantTurn{}, false, nil
+	}
+	if err != nil {
+		return assistant.AssistantTurn{}, false, err
+	}
+	return turn, true, nil
+}
+
 // CompleteTurn 以内部 CAS 把 running turn 推进到终态；已终态时幂等返回存量。
 func (s *MongoConversationRunStore) CompleteTurn(
 	ctx context.Context,
@@ -289,7 +310,17 @@ func (s *MongoConversationRunStore) CompleteTurn(
 		return assistant.AssistantTurn{}, err
 	}
 	if result.MatchedCount == 1 {
-		return turn, nil
+		// MongoDB persists DateTime at millisecond precision. Return the
+		// canonical stored aggregate so a command response and a retry expose
+		// the same terminal timestamp and snapshot.
+		stored, found, getErr := s.GetTurn(ctx, turn.TurnID)
+		if getErr != nil {
+			return assistant.AssistantTurn{}, getErr
+		}
+		if !found {
+			return assistant.AssistantTurn{}, mongo.ErrNoDocuments
+		}
+		return stored, nil
 	}
 	stored, found, err := s.GetTurn(ctx, turn.TurnID)
 	if err != nil {
@@ -657,6 +688,27 @@ func (s *MemoryConversationRunStore) GetTurn(
 	defer s.mu.RUnlock()
 	turn, ok := s.turns[strings.TrimSpace(turnID)]
 	return turn, ok, nil
+}
+
+func (s *MemoryConversationRunStore) GetTurnByClientRequest(
+	_ context.Context,
+	userID string,
+	conversationID string,
+	clientRequestID string,
+) (assistant.AssistantTurn, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	userID = strings.TrimSpace(userID)
+	conversationID = strings.TrimSpace(conversationID)
+	clientRequestID = strings.TrimSpace(clientRequestID)
+	for _, turn := range s.turns {
+		if turn.UserID == userID &&
+			turn.ConversationID == conversationID &&
+			turn.ClientRequestID == clientRequestID {
+			return turn, true, nil
+		}
+	}
+	return assistant.AssistantTurn{}, false, nil
 }
 
 func (s *MemoryConversationRunStore) CompleteTurn(

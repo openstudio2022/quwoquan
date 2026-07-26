@@ -467,6 +467,96 @@ class _EntityTopResultCard extends StatelessWidget {
   }
 }
 
+class _LocationPlaceTopResultCard extends StatelessWidget {
+  const _LocationPlaceTopResultCard({
+    required this.place,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final SearchLocationPlaceHitView place;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceElevated,
+    );
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    );
+    final primary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final secondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(
+          AppSpacing.contentPreviewCornerRadius,
+        ),
+        border: Border.all(color: border),
+      ),
+      child: CupertinoButton(
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        minimumSize: Size.zero,
+        onPressed: onTap,
+        child: Row(
+          children: <Widget>[
+            Icon(
+              CupertinoIcons.location_solid,
+              size: AppSpacing.iconMedium,
+              color: AppColors.primaryColor,
+            ),
+            SizedBox(width: AppSpacing.containerSm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    place.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosBody,
+                      fontWeight: AppTypography.semiBold,
+                      color: primary,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.two),
+                  Text(
+                    place.address?.trim().isNotEmpty == true
+                        ? place.address!
+                        : UITextConstants.searchCategoryLocation,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      color: secondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              CupertinoIcons.chevron_forward,
+              size: AppSpacing.iconSmall,
+              color: secondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RelatedSearchCard extends StatelessWidget {
   const _RelatedSearchCard({
     required this.card,

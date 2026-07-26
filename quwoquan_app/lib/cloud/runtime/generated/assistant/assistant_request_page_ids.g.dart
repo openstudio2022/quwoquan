@@ -5,6 +5,9 @@ class AssistantRequestPageIds {
   const AssistantRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
+    'ActivateAssistantPolicyRollout': 'assistant.activate.assistant.policy.rollout',
+    'AppendAssistantLearningFact': 'assistant.learning.facts.append',
+    'AppendAssistantServiceLearningFact': 'assistant.append.assistant.service.learning.fact',
     'CancelAssistantRun': 'assistant.cancel.assistant.run',
     'CreateAssistantConversation': 'assistant.create.assistant.conversation',
     'CreateSkillSubscription': 'assistant.create.skill.subscription',
@@ -12,7 +15,6 @@ class AssistantRequestPageIds {
     'GetAssistantRun': 'assistant.get.assistant.run',
     'GetEntryPersonalization': 'assistant.get.entry.personalization',
     'GetLearningOpsSummary': 'assistant.get.learning.ops.summary',
-    'GetPolicy': 'assistant.policy.get',
     'GetSkillSubscription': 'assistant.get.skill.subscription',
     'GetSuggestedActions': 'assistant.suggested_actions.get',
     'GrantSkillConsent': 'assistant.skills.consent.grant',
@@ -23,14 +25,14 @@ class AssistantRequestPageIds {
     'ListConversationTurns': 'assistant.list.conversation.turns',
     'ListSkillSubscriptions': 'assistant.list.skill.subscriptions',
     'ListSkills': 'assistant.skills.list',
-    'ReportInteractionEvent': 'assistant.learning.events.report',
     'ReportPageContext': 'assistant.page_context.report',
-    'ReportScorecard': 'assistant.learning.scorecards.report',
     'RestoreAssistantPreference': 'assistant.restore.assistant.preference',
     'RevokeAssistantPreference': 'assistant.revoke.assistant.preference',
     'RevokeSkillConsent': 'assistant.skills.consent.revoke',
+    'RollbackAssistantPolicyRollout': 'assistant.rollback.assistant.policy.rollout',
     'SearchXiaoquResults': 'assistant.search.xiaoqu',
     'SetAssistantPreference': 'assistant.set.assistant.preference',
+    'StageAssistantPolicyRelease': 'assistant.stage.assistant.policy.release',
     'StartAssistantRun': 'assistant.start.assistant.run',
     'StreamAssistantRunEvents': 'assistant.stream.assistant.run.events',
     'SuggestCreationAssistance': 'assistant.suggest.creation.assistance',
@@ -38,6 +40,9 @@ class AssistantRequestPageIds {
     'UpdateSkillSubscriptionStatus': 'assistant.update.skill.subscription.status',
   };
 
+  static const String activateAssistantPolicyRollout = 'assistant.activate.assistant.policy.rollout';
+  static const String appendAssistantLearningFact = 'assistant.learning.facts.append';
+  static const String appendAssistantServiceLearningFact = 'assistant.append.assistant.service.learning.fact';
   static const String cancelAssistantRun = 'assistant.cancel.assistant.run';
   static const String createAssistantConversation = 'assistant.create.assistant.conversation';
   static const String createSkillSubscription = 'assistant.create.skill.subscription';
@@ -45,7 +50,6 @@ class AssistantRequestPageIds {
   static const String getAssistantRun = 'assistant.get.assistant.run';
   static const String getEntryPersonalization = 'assistant.get.entry.personalization';
   static const String getLearningOpsSummary = 'assistant.get.learning.ops.summary';
-  static const String getPolicy = 'assistant.policy.get';
   static const String getSkillSubscription = 'assistant.get.skill.subscription';
   static const String getSuggestedActions = 'assistant.suggested_actions.get';
   static const String grantSkillConsent = 'assistant.skills.consent.grant';
@@ -56,14 +60,14 @@ class AssistantRequestPageIds {
   static const String listConversationTurns = 'assistant.list.conversation.turns';
   static const String listSkillSubscriptions = 'assistant.list.skill.subscriptions';
   static const String listSkills = 'assistant.skills.list';
-  static const String reportInteractionEvent = 'assistant.learning.events.report';
   static const String reportPageContext = 'assistant.page_context.report';
-  static const String reportScorecard = 'assistant.learning.scorecards.report';
   static const String restoreAssistantPreference = 'assistant.restore.assistant.preference';
   static const String revokeAssistantPreference = 'assistant.revoke.assistant.preference';
   static const String revokeSkillConsent = 'assistant.skills.consent.revoke';
+  static const String rollbackAssistantPolicyRollout = 'assistant.rollback.assistant.policy.rollout';
   static const String searchXiaoquResults = 'assistant.search.xiaoqu';
   static const String setAssistantPreference = 'assistant.set.assistant.preference';
+  static const String stageAssistantPolicyRelease = 'assistant.stage.assistant.policy.release';
   static const String startAssistantRun = 'assistant.start.assistant.run';
   static const String streamAssistantRunEvents = 'assistant.stream.assistant.run.events';
   static const String suggestCreationAssistance = 'assistant.suggest.creation.assistance';

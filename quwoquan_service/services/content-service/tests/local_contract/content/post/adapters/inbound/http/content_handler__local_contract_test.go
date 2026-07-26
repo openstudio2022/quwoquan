@@ -320,6 +320,34 @@ func TestSubmitPostPublicationRequiresTransportIdempotencyHeader(t *testing.T) {
 	}
 }
 
+func TestSubmitPostPublicationHonorsNonProductionMediaNotReadyInjection(t *testing.T) {
+	t.Setenv("APP_ENV", "gamma")
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/content/posts:publish",
+		bytes.NewBufferString(`{"publishIntentId":"intent-media-not-ready","localDraftId":"draft-media-not-ready","contentType":"text","body":"test injection"}`),
+	)
+	req.Header.Set("X-Test-Error-Inject", "CONTENT.USER.media_not_ready")
+	rec := httptest.NewRecorder()
+
+	newTestHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected injected media_not_ready status 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode injected media_not_ready response: %v", err)
+	}
+	if body["code"] != "CONTENT.USER.media_not_ready" {
+		t.Fatalf("unexpected injected media_not_ready code: %+v", body)
+	}
+	recovery, _ := body["recovery"].(map[string]any)
+	if recovery["action"] != "retry" || recovery["afterSeconds"] != float64(3) {
+		t.Fatalf("unexpected injected media_not_ready recovery: %+v", recovery)
+	}
+}
+
 func TestSubmitPostPublicationBodyBindingAcceptsWritableFields(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",

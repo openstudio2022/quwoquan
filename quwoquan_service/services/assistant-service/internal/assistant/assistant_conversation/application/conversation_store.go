@@ -38,6 +38,12 @@ type ConversationRunStore interface {
 		ctx context.Context,
 		turnID string,
 	) (assistant.AssistantTurn, bool, error)
+	GetTurnByClientRequest(
+		ctx context.Context,
+		userID string,
+		conversationID string,
+		clientRequestID string,
+	) (assistant.AssistantTurn, bool, error)
 	CompleteTurn(
 		ctx context.Context,
 		turn assistant.AssistantTurn,

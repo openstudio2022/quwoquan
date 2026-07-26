@@ -12,7 +12,6 @@ import (
 func assertMigratedAssistantApplicationPort(t *testing.T) {
 	t.Helper()
 	service := application.NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 	)

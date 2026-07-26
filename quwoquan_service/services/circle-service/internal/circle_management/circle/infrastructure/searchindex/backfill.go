@@ -2,9 +2,12 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 
+	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
+	model "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
 )
 
 // defaultBackfillBatchSize bounds how many circles are pulled (and pushed) per
@@ -18,11 +21,19 @@ type BulkIndexer interface {
 	Bulk(ctx context.Context, index string, events []es.ChangeEvent) error
 }
 
+type CircleLister interface {
+	ListForSearch(
+		ctx context.Context,
+		afterID string,
+		limit int,
+	) ([]model.Circle, error)
+}
+
 // BackfillReport summarizes a full rebuild for logging / cold-start audit.
 type BackfillReport struct {
 	TotalCircles   int `json:"totalCircles"`
 	IndexedCircles int `json:"indexedCircles"`
-	SkippedCircles int `json:"skippedCircles"`
+	DeletedCircles int `json:"deletedCircles"`
 	BatchesPushed  int `json:"batchesPushed"`
 }
 
@@ -31,10 +42,17 @@ type BackfillReport struct {
 // ones through the shared projection, and bulk-upserts them per page. It is the
 // cold-start / reconcile entry for the circle search index. batchSize <= 0 uses
 // the default.
-func Backfill(ctx context.Context, indexer BulkIndexer, lister application.CircleLister, batchSize int) (BackfillReport, error) {
+func Backfill(
+	ctx context.Context,
+	indexer BulkIndexer,
+	lister CircleLister,
+	batchSize int,
+) (BackfillReport, error) {
 	var report BackfillReport
 	if indexer == nil || lister == nil {
-		return report, nil
+		return report, fmt.Errorf(
+			"Circle search backfill requires indexer and lister",
+		)
 	}
 	if batchSize <= 0 {
 		batchSize = defaultBackfillBatchSize
@@ -43,14 +61,27 @@ func Backfill(ctx context.Context, indexer BulkIndexer, lister application.Circl
 		return report, err
 	}
 
-	cursor := ""
+	afterID := ""
 	for {
-		page, next := lister.List(ctx, application.ListCirclesQuery{Cursor: cursor, Limit: batchSize})
+		page, err := lister.ListForSearch(ctx, afterID, batchSize)
+		if err != nil {
+			return report, err
+		}
+		if len(page) == 0 {
+			break
+		}
 		report.TotalCircles += len(page)
 		batch := make([]es.ChangeEvent, 0, len(page))
 		for i := range page {
 			if !application.CircleSearchEligible(page[i]) {
-				report.SkippedCircles++
+				batch = append(batch, es.ChangeEvent{
+					Op: es.OpDelete,
+					Doc: rtsearch.Document{
+						ObjectType: rtsearch.ObjectTypeCircle,
+						ObjectID:   page[i].ID,
+					},
+				})
+				report.DeletedCircles++
 				continue
 			}
 			batch = append(batch, es.ChangeEvent{
@@ -59,18 +90,20 @@ func Backfill(ctx context.Context, indexer BulkIndexer, lister application.Circl
 			})
 			report.IndexedCircles++
 		}
-		if len(batch) > 0 {
-			if err := indexer.Bulk(ctx, "", batch); err != nil {
-				return report, err
-			}
-			report.BatchesPushed++
+		if err := indexer.Bulk(ctx, "", batch); err != nil {
+			return report, err
 		}
-		// Stop when pagination is exhausted; guard against a store that fails to
-		// advance the cursor so backfill cannot spin forever.
-		if next == "" || next == cursor || len(page) == 0 {
+		report.BatchesPushed++
+		nextID := page[len(page)-1].ID
+		if nextID == "" || nextID == afterID {
+			return report, fmt.Errorf(
+				"Circle search backfill cursor did not advance",
+			)
+		}
+		afterID = nextID
+		if len(page) < batchSize {
 			break
 		}
-		cursor = next
 	}
 	return report, nil
 }

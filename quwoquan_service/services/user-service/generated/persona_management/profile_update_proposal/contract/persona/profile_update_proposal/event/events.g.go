@@ -2,10 +2,13 @@
 package event
 
 const (
-	ProfileUpdateProposalCreated      = "ProfileUpdateProposalCreated"
-	ProfileUpdateProposalConfirmed    = "ProfileUpdateProposalConfirmed"
-	ProfileUpdateProposalApplyStarted = "ProfileUpdateProposalApplyStarted"
-	ProfileUpdateProposalApplied      = "ProfileUpdateProposalApplied"
-	ProfileUpdateProposalRejected     = "ProfileUpdateProposalRejected"
-	ProfileUpdateProposalExpired      = "ProfileUpdateProposalExpired"
+	ProfileUpdateProposalCreated         = "ProfileUpdateProposalCreated"
+	ProfileUpdateProposalConfirmed       = "ProfileUpdateProposalConfirmed"
+	ProfileUpdateProposalApplyStarted    = "ProfileUpdateProposalApplyStarted"
+	ProfileUpdateProposalApplied         = "ProfileUpdateProposalApplied"
+	ProfileUpdateProposalRollbackStarted = "ProfileUpdateProposalRollbackStarted"
+	ProfileUpdateProposalRollbackAborted = "ProfileUpdateProposalRollbackAborted"
+	ProfileUpdateProposalRolledBack      = "ProfileUpdateProposalRolledBack"
+	ProfileUpdateProposalRejected        = "ProfileUpdateProposalRejected"
+	ProfileUpdateProposalExpired         = "ProfileUpdateProposalExpired"
 )

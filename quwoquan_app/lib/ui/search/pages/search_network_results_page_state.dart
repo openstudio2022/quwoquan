@@ -44,8 +44,11 @@ class _SearchNetworkResultsPageState
   // 响应无 requestId 时不上报（fail-closed，不合成伪 id）。
   String? _searchRequestId;
   final Set<String> _searchImpressionReported = <String>{};
+  final Set<String> _searchZeroResultFeedbackReported = <String>{};
+  final Set<String> _searchDwellFeedbackReported = <String>{};
   Map<String, int> _searchRankByObjectId = const <String, int>{};
   late final AppTelemetryRecorder _appTelemetry;
+  late final SearchFeedbackCommandWriter _searchFeedbackWriter;
   final Set<String> _searchTelemetrySubmitted = <String>{};
   String? _telemetryResultRequestId;
   DateTime? _telemetryResultShownAt;
@@ -68,6 +71,7 @@ class _SearchNetworkResultsPageState
     super.initState();
     _pageEnteredAt = DateTime.now();
     _appTelemetry = ref.read(appTelemetryReporterProvider);
+    _searchFeedbackWriter = ref.read(searchFeedbackCommandWriterProvider);
     _query = widget.launchContext.prefilledQuery.trim();
     _controller = TextEditingController(text: _query);
     _focusNode = FocusNode();
@@ -90,7 +94,7 @@ class _SearchNetworkResultsPageState
 
   @override
   void dispose() {
-    _recordSearchResultDwellIfNeeded();
+    _recordSearchResultDwellIfNeeded(reportFeedback: true);
     _trackPageDwell();
     _debounceTimer?.cancel();
     _requestToken += 1;
@@ -124,7 +128,10 @@ class _SearchNetworkResultsPageState
     if (requestId == null || !_searchImpressionReported.add(requestId)) {
       return;
     }
-    _reportSearchFeedbackEvent(requestId: requestId, eventType: 'impression');
+    _reportSearchFeedbackEvent(
+      requestId: requestId,
+      eventType: SearchFeedbackEventType.impression,
+    );
   }
 
   /// 条目 click 反馈（携带 rankPosition 归因）；fire-and-forget 不阻断跳转。
@@ -139,7 +146,7 @@ class _SearchNetworkResultsPageState
     }
     _reportSearchFeedbackEvent(
       requestId: requestId,
-      eventType: 'click',
+      eventType: SearchFeedbackEventType.click,
       objectId: objectId,
       target: target,
     );
@@ -161,7 +168,10 @@ class _SearchNetworkResultsPageState
     if (requestId == null || action.trim().isEmpty) {
       return;
     }
-    _reportSearchFeedbackEvent(requestId: requestId, eventType: 'refine');
+    _reportSearchFeedbackEvent(
+      requestId: requestId,
+      eventType: SearchFeedbackEventType.refine,
+    );
     _recordSearchTelemetry(
       AppTelemetryPayload.searchRefine(
         requestId: requestId,
@@ -181,7 +191,7 @@ class _SearchNetworkResultsPageState
     }
     _reportSearchFeedbackEvent(
       requestId: requestId,
-      eventType: 'degrade',
+      eventType: SearchFeedbackEventType.degrade,
       objectId: objectId,
       target: target,
     );
@@ -189,13 +199,13 @@ class _SearchNetworkResultsPageState
 
   void _reportSearchFeedbackEvent({
     required String requestId,
-    required String eventType,
+    required SearchFeedbackEventType eventType,
     String? objectId,
     String? target,
+    int? dwellMs,
   }) {
     unawaited(
-      ref
-          .read(searchFeedbackCommandWriterProvider)
+      _searchFeedbackWriter
           .reportSearchFeedback(
             ReportSearchFeedbackCommand(
               searchRequestId: requestId,
@@ -207,11 +217,14 @@ class _SearchNetworkResultsPageState
                   : _searchRankByObjectId[objectId],
               referralSource: ReferralSource.search.value,
               feedRequestId: _feedRequestIdAtEnter,
+              dwellMs: dwellMs,
             ),
           )
           .catchError((Object error) {
             if (kDebugMode) {
-              debugPrint('search $eventType feedback degraded: $error');
+              debugPrint(
+                'search ${eventType.wireValue} feedback degraded: $error',
+              );
             }
             return const SearchFeedbackAck(accepted: false);
           }),
@@ -247,6 +260,7 @@ class _SearchNetworkResultsPageState
           action: action,
         ),
       );
+      _reportSearchZeroResultIfNeeded(requestId);
       return;
     }
     _recordSearchTelemetry(
@@ -263,7 +277,17 @@ class _SearchNetworkResultsPageState
     _telemetryResultAction = action;
   }
 
-  void _recordSearchResultDwellIfNeeded() {
+  void _reportSearchZeroResultIfNeeded(String requestId) {
+    if (!_searchZeroResultFeedbackReported.add(requestId)) {
+      return;
+    }
+    _reportSearchFeedbackEvent(
+      requestId: requestId,
+      eventType: SearchFeedbackEventType.zeroResult,
+    );
+  }
+
+  void _recordSearchResultDwellIfNeeded({bool reportFeedback = false}) {
     final requestId = _telemetryResultRequestId;
     final shownAt = _telemetryResultShownAt;
     if (requestId == null || shownAt == null || _telemetryResultCount <= 0) {
@@ -276,14 +300,24 @@ class _SearchNetworkResultsPageState
     _telemetryResultShownAt = null;
     _telemetryResultCount = 0;
     _telemetryResultAction = null;
+    final durationMs = elapsed < 0 ? 0 : elapsed;
     _recordSearchTelemetry(
       AppTelemetryPayload.searchResultDwell(
         requestId: requestId,
-        durationMs: elapsed < 0 ? 0 : elapsed,
+        durationMs: durationMs,
         resultCount: resultCount,
         action: action,
       ),
     );
+    if (reportFeedback &&
+        durationMs > 0 &&
+        _searchDwellFeedbackReported.add(requestId)) {
+      _reportSearchFeedbackEvent(
+        requestId: requestId,
+        eventType: SearchFeedbackEventType.dwell,
+        dwellMs: durationMs,
+      );
+    }
   }
 
   void _recordSearchTelemetry(

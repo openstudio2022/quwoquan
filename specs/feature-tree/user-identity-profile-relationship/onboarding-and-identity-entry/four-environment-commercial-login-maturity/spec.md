@@ -114,7 +114,7 @@
 - canonical：`quwoquan_service/services/user-service/environments/prod/config.yaml`
 - canonical：`quwoquan_service/scripts/verify/verify_login_dependency_config.py`
 - canonical：`quwoquan_service/services/user-service/tests/local_contract/account/authentication_challenge/command_facade__local_contract_test.go`
-- canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/helpers.go`
+- canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/helpers__support__api_integration_test.go`
 - canonical：`quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/external_interaction_mongo_provider__reliability__api_integration_test.go`
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/operations.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/errors.yaml`

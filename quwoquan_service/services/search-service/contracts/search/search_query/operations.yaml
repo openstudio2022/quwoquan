@@ -7,7 +7,8 @@ description: '云侧统一搜索服务。承载 canonical search(request) 的 PO
 
   （mode=suggest|result）与 POST /search/feedback，复用 runtime/search.Retrieve
 
-  单趟跨类型排序；召回后端 ES 主 + native 透明回退（FallbackBackend）。
+  单趟跨类型排序；生产召回只使用 Elasticsearch/OpenSearch 派生读库。
+  ES 不可用时返回结构化不可用，不得回退到第二召回后端。
 
   '
 externalDependencies:
@@ -155,14 +156,15 @@ contract_test:
         - status_202
         - feedback_accepted
     service_side:
-      description: 使用 ES httptest 替身 + native 回退；不 mock runtime/search 排序
+      description: 使用 ES HTTP 契约替身验证 wire adapter，确定性内存 backend 仅验证 runtime/search 排序；生产组合只允许 ES 单轨
       real_engines:
         elasticsearch: httptest fake (search_test)
       spy_targets:
       - event_publisher
       scenarios:
-      - name: retrieve_with_es_then_fallback
-        command: SearchQuery(es_ok) -> SearchQuery(es_down -> native fallback)
+      - name: retrieve_with_single_es_backend
+        command: SearchQuery(es_ok) -> SearchQuery(es_down)
         assertions:
         - es-backed hits returned when ES healthy
-        - native fallback hits returned when ES unavailable
+        - structured 503 returned when ES unavailable
+        - no secondary recall backend selected

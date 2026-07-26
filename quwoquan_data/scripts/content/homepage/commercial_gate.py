@@ -403,7 +403,7 @@ def evaluate_commercial_page(
     if manifest_path.is_file():
         try:
             manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
+        except (OSError, TypeError, json.JSONDecodeError):
             issues.append(f"{tag}: manifest.json 不可解析")
     else:
         issues.append(f"{tag}: manifest.json 缺失")

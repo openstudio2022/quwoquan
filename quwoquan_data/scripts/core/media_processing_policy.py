@@ -16,6 +16,7 @@ MEDIA_PROCESSING_POLICY_PATH = CONTROL_PLANE_SHARED_ROOT / "media_processing.pol
 @dataclass(frozen=True, slots=True)
 class MediaProcessingPolicy:
     source_asset_max_bytes: int
+    page_image_rendition_width: int
     max_publishable_image_pixels: int
     max_assessment_image_pixels: int
     assessment_jpeg_quality: int
@@ -52,6 +53,7 @@ def media_processing_policy() -> MediaProcessingPolicy:
     )
     return MediaProcessingPolicy(
         source_asset_max_bytes=_required_int(raw, "sourceAssetMaxBytes"),
+        page_image_rendition_width=_required_int(raw, "pageImageRenditionWidth"),
         max_publishable_image_pixels=_required_int(raw, "maxPublishableImagePixels"),
         max_assessment_image_pixels=_required_int(raw, "maxAssessmentImagePixels"),
         assessment_jpeg_quality=_required_int(raw, "assessmentJpegQuality"),

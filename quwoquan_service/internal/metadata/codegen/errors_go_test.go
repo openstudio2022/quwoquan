@@ -31,3 +31,20 @@ func TestRenderGoErrorsFile_emitsStableHelperFromContractGraph(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderGoErrorsFile_omitsUnusedImportsForEmptyContract(t *testing.T) {
+	output := RenderGoErrorsFile(&ErrorsFile{}, GoErrorsFileOptions{
+		Generator:    "tools/codegen_product_ops_service",
+		SourcePath:   "ops/product_ops/app_release/errors.yaml",
+		CommentLines: []string{"Object-owned ProductOps errors."},
+	})
+
+	for _, unexpected := range []string{"import (", `"errors"`, "rerrors", "var ("} {
+		if strings.Contains(output, unexpected) {
+			t.Fatalf("empty generated Go errors contains %q:\n%s", unexpected, output)
+		}
+	}
+	if !strings.Contains(output, "// Object-owned ProductOps errors.") {
+		t.Fatalf("empty generated Go errors lost ownership comment:\n%s", output)
+	}
+}

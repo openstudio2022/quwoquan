@@ -19,10 +19,11 @@ type Event struct {
 }
 
 type Receipt struct {
-	Session   *model.Session
-	AssetID   string
-	ObjectKey string
-	Replayed  bool
+	Session               *model.Session
+	AssetID               string
+	AssetProcessingStatus string
+	ObjectKey             string
+	Replayed              bool
 }
 
 // CompleteCommit is the session-owned atomic boundary. The persistence adapter

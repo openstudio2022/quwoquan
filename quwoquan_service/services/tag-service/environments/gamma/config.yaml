@@ -1,4 +1,5 @@
-overrides: {}
+overrides:
+  sys.tag-service.user_account_security_authority.base_url: http://user-service:18081
 secretRefs: {}
 externalBindings:
   runtime.message.transport:

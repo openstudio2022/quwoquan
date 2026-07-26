@@ -1,0 +1,115 @@
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-003
+package local_contract
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	eventrecord "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
+	httpadapter "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/adapters/inbound/http"
+	recoveryfailure "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/application"
+)
+
+func TestRecoveryFailureAcceptsOnlyTenFieldsAndSanitizes(t *testing.T) {
+	reporter := &captureRecoveryReporter{}
+	handler := httpadapter.NewHandler(recoveryfailure.NewService(reporter), writeTestError)
+	mux := http.NewServeMux()
+	handler.Register(mux)
+	payload := recoveryPayload()
+	payload["errorMessage"] = "authorization=secret user@example.com"
+	payload["stackTrace"] = "at /Users/alice/app.dart https://quwoquan.com/p?token=secret"
+
+	response := postRecoveryFailure(t, mux, payload)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if reporter.fields["errorMessage"] != "" {
+		t.Fatal("internal runtime record must use message, not duplicate errorMessage")
+	}
+	combined := reporter.fields["message"] + reporter.fields["stackTrace"]
+	for _, forbidden := range []string{"secret", "user@example.com", "/Users/alice", "token=secret"} {
+		if strings.Contains(combined, forbidden) {
+			t.Fatalf("sanitized record still contains %q: %s", forbidden, combined)
+		}
+	}
+}
+
+func TestRecoveryFailureRejectsUnknownOrOversizedFields(t *testing.T) {
+	handler := httpadapter.NewHandler(
+		recoveryfailure.NewService(&captureRecoveryReporter{}),
+		writeTestError,
+	)
+	mux := http.NewServeMux()
+	handler.Register(mux)
+
+	withForbidden := recoveryPayload()
+	withForbidden["startupAttemptId"] = "forbidden"
+	if response := postRecoveryFailure(t, mux, withForbidden); response.Code != http.StatusBadRequest {
+		t.Fatalf("unknown field status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	oversized := recoveryPayload()
+	oversized["stackTrace"] = strings.Repeat("x", 33<<10)
+	if response := postRecoveryFailure(t, mux, oversized); response.Code != http.StatusBadRequest {
+		t.Fatalf("oversized field status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func recoveryPayload() map[string]any {
+	return map[string]any{
+		"occurredAt":   time.Now().UTC().Format(time.RFC3339Nano),
+		"appVersion":   "1.8.2",
+		"buildNumber":  "18201",
+		"platform":     "android",
+		"osVersion":    "15",
+		"deviceModel":  "Pixel",
+		"errorSource":  "flutter",
+		"errorType":    "DatabaseOpenException",
+		"errorMessage": "Failed to open local database",
+		"stackTrace":   "Database.open database.dart:10",
+	}
+}
+
+func postRecoveryFailure(t *testing.T, handler http.Handler, payload map[string]any) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/ops/recovery-failures", bytes.NewReader(body))
+	request.RemoteAddr = "192.0.2.1:1234"
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
+}
+
+func writeTestError(
+	w http.ResponseWriter,
+	_ *http.Request,
+	status int,
+	userMessage string,
+	_ string,
+) {
+	http.Error(w, userMessage, status)
+}
+
+type captureRecoveryReporter struct {
+	batchKey string
+	fields   map[string]string
+}
+
+func (r *captureRecoveryReporter) ReportRecoveryFailure(
+	_ context.Context,
+	batchKey string,
+	fields map[string]string,
+) (eventrecord.EventBatchAck, error) {
+	r.batchKey = batchKey
+	r.fields = fields
+	return eventrecord.EventBatchAck{AcceptedCount: 1}, nil
+}

@@ -58,7 +58,6 @@ func (f *migratedChatMentionServiceFakeChatGroundingClient) SendMessage(_ contex
 func TestHandleAssistantMentionedReadsConversationContextAndReplies(t *testing.T) {
 	chat := &migratedChatMentionServiceFakeChatGroundingClient{}
 	service := NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		nil,
 		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
@@ -68,6 +67,7 @@ func TestHandleAssistantMentionedReadsConversationContextAndReplies(t *testing.T
 			nil,
 		)),
 		WithChatGroundingClient(chat),
+		testFrozenPolicyOption(),
 	)
 
 	err := service.HandleAssistantMentioned(context.Background(), AssistantMentionedEvent{
@@ -112,7 +112,6 @@ func TestHandleAssistantMentionedDropsEventWhenAssistantWasRemoved(t *testing.T)
 		membershipDenied: true,
 	}
 	service := NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		nil,
 		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
@@ -122,6 +121,7 @@ func TestHandleAssistantMentionedDropsEventWhenAssistantWasRemoved(t *testing.T)
 			nil,
 		)),
 		WithChatGroundingClient(chat),
+		testFrozenPolicyOption(),
 	)
 
 	err := service.HandleAssistantMentioned(context.Background(), AssistantMentionedEvent{

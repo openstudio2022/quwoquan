@@ -5,11 +5,19 @@ class AppRecoveryNativeContext {
     required this.platform,
     required this.appVersion,
     required this.buildNumber,
+    required this.osVersion,
+    required this.deviceModel,
+    required this.recoveryBaseUrl,
+    required this.publicWebUrl,
   });
 
   final String platform;
   final String appVersion;
   final int buildNumber;
+  final String osVersion;
+  final String deviceModel;
+  final String recoveryBaseUrl;
+  final String publicWebUrl;
 }
 
 /// 启动恢复的最小原生能力；不依赖登录、业务 Router 或普通插件注册。
@@ -27,16 +35,28 @@ final class AppRecoveryNativeBridge {
       final platform = raw?['platform']?.toString().trim() ?? '';
       final appVersion = raw?['appVersion']?.toString().trim() ?? '';
       final buildNumber = int.tryParse(raw?['buildNumber']?.toString() ?? '');
+      final osVersion = raw?['osVersion']?.toString().trim() ?? '';
+      final deviceModel = raw?['deviceModel']?.toString().trim() ?? '';
+      final recoveryBaseUrl = raw?['recoveryBaseUrl']?.toString().trim() ?? '';
+      final publicWebUrl = raw?['publicWebUrl']?.toString().trim() ?? '';
       if ((platform != 'ios' && platform != 'android') ||
           appVersion.isEmpty ||
           buildNumber == null ||
-          buildNumber <= 0) {
+          buildNumber <= 0 ||
+          osVersion.isEmpty ||
+          deviceModel.isEmpty ||
+          !_isTrustedHttps(recoveryBaseUrl) ||
+          !_isTrustedHttps(publicWebUrl)) {
         return null;
       }
       return AppRecoveryNativeContext(
         platform: platform,
         appVersion: appVersion,
         buildNumber: buildNumber,
+        osVersion: osVersion,
+        deviceModel: deviceModel,
+        recoveryBaseUrl: recoveryBaseUrl,
+        publicWebUrl: publicWebUrl,
       );
     } on PlatformException {
       return null;
@@ -74,5 +94,77 @@ final class AppRecoveryNativeBridge {
     } on MissingPluginException {
       // 原生桥不可用时仍展示 Flutter 恢复页。
     }
+  }
+
+  Future<Map<String, Object?>?> readPendingNativeStartupFatal() async {
+    try {
+      return await _channel.invokeMapMethod<String, Object?>(
+        'readPendingNativeStartupFatal',
+      );
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  Future<void> acknowledgePendingNativeStartupFatal() async {
+    try {
+      await _channel.invokeMethod<void>('ackPendingNativeStartupFatal');
+    } on PlatformException {
+      // ACK 失败保留原生 marker，下一次仍可补报。
+    } on MissingPluginException {
+      // 原生桥不可用时不清理 marker。
+    }
+  }
+
+  Future<String?> readRecoveryFailureQueue() async {
+    try {
+      return await _channel.invokeMethod<String>('readRecoveryFailureQueue');
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  Future<bool> writeRecoveryFailureQueue(String value) async {
+    try {
+      return await _channel.invokeMethod<bool>(
+            'writeRecoveryFailureQueue',
+            <String, String>{'value': value},
+          ) ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  Future<bool> clearRecoveryFailureQueue() async {
+    try {
+      return await _channel.invokeMethod<bool>('clearRecoveryFailureQueue') ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  static bool _isTrustedHttps(String rawUrl) {
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null ||
+        uri.scheme.toLowerCase() != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      return false;
+    }
+    final host = uri.host.toLowerCase();
+    return host == 'quwoquan.com' ||
+        host.endsWith('.quwoquan.com') ||
+        host == 'quwoquan-env.test' ||
+        host.endsWith('.quwoquan-env.test');
   }
 }

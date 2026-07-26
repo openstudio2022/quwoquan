@@ -22,6 +22,15 @@ collections:
       keys:
         nextAttemptAt: 1
         status: 1
+  external_interaction_result_outbox:
+    entity: ExternalInteractionResultOutbox
+    role: authoritative
+    indexes:
+    - name: idx_ext_result_outbox_pending
+      keys:
+        deliveryStatus: 1
+        leaseExpiresAt: 1
+        createdAt: 1
 redis_cache:
 - key: ready:integration:external_interaction:{taskType}
   ttl_seconds: 60

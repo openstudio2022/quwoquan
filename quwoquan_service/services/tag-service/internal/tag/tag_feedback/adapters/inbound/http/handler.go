@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterrors "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/tag-service/internal/tag/tag_feedback/application/tagfeedback"
 	feedbackmodel "quwoquan_service/services/tag-service/internal/tag/tag_feedback/domain/tagfeedback/model"
@@ -55,13 +56,14 @@ func (h *TagFeedbackHandler) handleAppend(w http.ResponseWriter, r *http.Request
 }
 
 func feedbackActor(r *http.Request) (string, string) {
-	if persona := strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")); persona != "" {
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok {
+		return "", ""
+	}
+	if persona := strings.TrimSpace(principal.Actor.PersonaID); persona != "" {
 		return persona, "persona"
 	}
-	if user := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); user != "" {
-		return user, "persona"
-	}
-	if device := strings.TrimSpace(r.Header.Get("X-Client-Device-Id")); device != "" {
+	if device := strings.TrimSpace(principal.Actor.DeviceActorID); device != "" {
 		return device, "device"
 	}
 	return "", ""

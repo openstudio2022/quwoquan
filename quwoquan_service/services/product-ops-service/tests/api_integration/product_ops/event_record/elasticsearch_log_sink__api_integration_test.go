@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ import (
 func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 	t *testing.T,
 ) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	endpoint, terminate := integrationElasticsearchEndpoint(t, ctx)
 	defer terminate()
@@ -35,7 +36,7 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 		StartupDiagnosticIndex: "qwq-telemetry-startup-" + suffix,
 		RuntimeLogIndex:        "qwq-telemetry-runtime-" + suffix,
 		AggregateIndex:         "qwq-telemetry-hourly-" + suffix,
-		Timeout:                5 * time.Second,
+		Timeout:                30 * time.Second,
 	}
 	store, err := telemetrypersistence.NewElasticsearchEventLogStore(config)
 	if err != nil {
@@ -214,10 +215,55 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 	if len(drilldown.Items) != len(records) {
 		t.Fatalf("GetEventDrilldown() items = %d; want %d", len(drilldown.Items), len(records))
 	}
+	rawSessionIDs := make(map[string]struct{}, len(eventInputs))
+	for _, input := range eventInputs {
+		rawSessionIDs[input.SessionID] = struct{}{}
+	}
 	for _, item := range drilldown.Items {
-		if strings.HasPrefix(item.SessionID, "s.") {
-			t.Fatalf("GetEventDrilldown() leaked sessionId: %+v", item)
+		_, rawSessionLeaked := rawSessionIDs[item.SessionID]
+		if item.SessionID == "" ||
+			rawSessionLeaked ||
+			!strings.HasPrefix(item.SessionID, "s.***.") {
+			t.Fatalf(
+				"GetEventDrilldown() sessionId = %q; want masked value",
+				item.SessionID,
+			)
 		}
+	}
+	qoeDrilldown, err := store.GetEventDrilldown(
+		ctx,
+		application.EventDrilldownQuery{
+			EventType: "rtc_media_qoe",
+			SessionID: eventInputs[3].SessionID,
+			From:      from,
+			To:        to,
+			Limit:     1,
+		},
+	)
+	if err != nil {
+		t.Fatalf("GetEventDrilldown() for rtc_media_qoe session: %v", err)
+	}
+	if len(qoeDrilldown.Items) != 1 {
+		t.Fatalf(
+			"rtc_media_qoe session drilldown items = %d; want 1",
+			len(qoeDrilldown.Items),
+		)
+	}
+	qoeItem := qoeDrilldown.Items[0]
+	if qoeItem.Result == nil || *qoeItem.Result != "connection_lost" ||
+		qoeItem.CallType == nil || *qoeItem.CallType != "video" ||
+		qoeItem.ParticipantCount == nil || *qoeItem.ParticipantCount != 2 ||
+		qoeItem.ConnectTimeMS == nil || *qoeItem.ConnectTimeMS != 200 ||
+		qoeItem.MediaConnected == nil || !*qoeItem.MediaConnected ||
+		qoeItem.ReconnectCount == nil || *qoeItem.ReconnectCount != 2 ||
+		qoeItem.DisconnectReason == nil ||
+		*qoeItem.DisconnectReason != "unexpected_disconnect" ||
+		qoeItem.NetworkQuality == nil || *qoeItem.NetworkQuality != "good" {
+		t.Fatalf("rtc_media_qoe drilldown lost terminal facts: %+v", qoeItem)
+	}
+	if qoeItem.SessionID == eventInputs[3].SessionID ||
+		!strings.HasPrefix(qoeItem.SessionID, "s.***.") {
+		t.Fatalf("rtc_media_qoe drilldown must mask sessionId: %+v", qoeItem)
 	}
 
 	pageStats, err := store.GetPageExperienceStats(
@@ -295,26 +341,28 @@ func integrationElasticsearchEndpoint(
 		return strings.TrimRight(endpoint, "/"), func() {}
 	}
 	ensureDockerHostForTestcontainers(t)
+	environment := map[string]string{
+		"discovery.type":                                    "single-node",
+		"xpack.security.enabled":                            "false",
+		"xpack.security.http.ssl.enabled":                   "false",
+		"cluster.routing.allocation.disk.threshold_enabled": "false",
+		"ES_JAVA_OPTS":                                      "-Xms512m -Xmx512m",
+	}
+	if runtime.GOARCH == "arm64" {
+		environment["CLI_JAVA_OPTS"] = "-XX:UseSVE=0"
+		environment["ES_JAVA_OPTS"] = "-XX:UseSVE=0 -Xms512m -Xmx512m"
+	}
 	container, err := testcontainers.GenericContainer(
 		ctx,
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: testcontainers.ContainerRequest{
-				Image:           "docker.elastic.co/elasticsearch/elasticsearch:8.13.4",
-				ImagePlatform:   "linux/amd64",
-				AlwaysPullImage: true,
-				SkipReaper:      true,
-				AutoRemove:      true,
-				Env: map[string]string{
-					"discovery.type":                                    "single-node",
-					"xpack.security.enabled":                            "false",
-					"xpack.security.http.ssl.enabled":                   "false",
-					"cluster.routing.allocation.disk.threshold_enabled": "false",
-					"ES_JAVA_OPTS":                                      "-Xms512m -Xmx512m",
-				},
+				Image:        "docker.elastic.co/elasticsearch/elasticsearch:8.13.4",
+				SkipReaper:   true,
+				Env:          environment,
 				ExposedPorts: []string{"9200/tcp"},
-				WaitingFor: wait.ForHTTP("/_cluster/health?wait_for_status=yellow&timeout=1s").
+				WaitingFor: wait.ForHTTP("/_ilm/status").
 					WithPort(nat.Port("9200/tcp")).
-					WithStartupTimeout(15 * time.Minute),
+					WithStartupTimeout(25 * time.Minute),
 			},
 			Started: true,
 		},
@@ -333,7 +381,8 @@ func integrationElasticsearchEndpoint(
 			time.Minute,
 		)
 		defer terminateCancel()
-		if err := container.Terminate(terminateCtx); err != nil {
+		if err := container.Terminate(terminateCtx); err != nil &&
+			!strings.Contains(err.Error(), "removal of container") {
 			t.Errorf("terminate Elasticsearch testcontainer: %v", err)
 		}
 	}

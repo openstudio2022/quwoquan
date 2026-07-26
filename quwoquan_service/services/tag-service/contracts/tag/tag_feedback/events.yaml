@@ -2,9 +2,9 @@ events:
 - name: TagFeedbackRecorded
   producer: tag-service
   consumers:
-  - recommendation-engine
-  - platform-ops
-  channel: event_store
+  - content-service
+  channel: redis_stream
+  stream: events.tag.feedback
   payload_entity: TagFeedback
   payload_fields:
   - id

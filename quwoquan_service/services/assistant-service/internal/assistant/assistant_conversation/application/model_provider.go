@@ -16,6 +16,13 @@ type ModelRequest struct {
 	TurnID                  string
 	TraceID                 string
 	SkillID                 string
+	PolicyID                string
+	PolicyReleaseVersion    string
+	PolicyCohort            string
+	PolicyRolloutRevision   int
+	PolicyRuleID            string
+	PolicyTemplateID        string
+	SearchIntensity         string
 	Prompt                  string
 	Stage                   string
 	Observation             map[string]any
@@ -25,6 +32,7 @@ type ModelRequest struct {
 	IntersectionEvidence    []assistant.AuthorizedIntersectionEvidence
 	SessionPreferenceFacts  []preferencemodel.Snapshot
 	LongTermPreferenceFacts []preferencemodel.Snapshot
+	FeedbackContext         assistant.AssistantFeedbackContextSnapshot
 	SkillCatalog            []skillpkg.Manifest
 }
 
@@ -54,7 +62,7 @@ type DeterministicModelProvider struct{}
 
 func deterministicClientTrace(req ModelRequest, responseText string) map[string]any {
 	prompt := fmt.Sprintf(
-		"%s%s%s%s%s\n用户问题：%s",
+		"%s%s%s%s%s%s\n用户问题：%s",
 		req.Prompt,
 		FormatModelContextForPrompt(req.ContextTurns),
 		FormatPageContextForPrompt(req.PageContext),
@@ -63,6 +71,7 @@ func deterministicClientTrace(req ModelRequest, responseText string) map[string]
 			req.SessionPreferenceFacts,
 			req.LongTermPreferenceFacts,
 		),
+		FormatFeedbackContextForPrompt(req.FeedbackContext),
 		req.UserQuestion,
 	)
 	return map[string]any{
@@ -76,6 +85,46 @@ func deterministicClientTrace(req ModelRequest, responseText string) map[string]
 		"finishReason":            "stop",
 		"contentRedactionApplied": true,
 	}
+}
+
+func FormatFeedbackContextForPrompt(
+	snapshot assistant.AssistantFeedbackContextSnapshot,
+) string {
+	if snapshot.Decision != "injected" {
+		return "\n反馈上下文：未注入（" +
+			strings.TrimSpace(snapshot.Decision) + "）。"
+	}
+	var builder strings.Builder
+	builder.WriteString("\n反馈上下文（仅聚合、已授权）：")
+	fmt.Fprintf(
+		&builder,
+		"定义=%s，窗口=%d天，样本=%d，正向=%d，负向=%d，文本=%d。",
+		snapshot.DefinitionVersion,
+		snapshot.WindowDays,
+		snapshot.FeedbackSampleCount,
+		snapshot.PositiveFeedbackCount,
+		snapshot.NegativeFeedbackCount,
+		snapshot.TextFeedbackCount,
+	)
+	for _, metric := range snapshot.Metrics {
+		fmt.Fprintf(
+			&builder,
+			" 指标[%s]:样本=%d,均值=%.2f,最新=%.2f。",
+			metric.MetricID,
+			metric.SampleCount,
+			metric.Average,
+			metric.Latest,
+		)
+	}
+	for _, reason := range snapshot.Reasons {
+		fmt.Fprintf(
+			&builder,
+			" 原因[%s]:%d。",
+			reason.ReasonCode,
+			reason.Count,
+		)
+	}
+	return builder.String()
 }
 
 func FormatModelPreferencesForPrompt(

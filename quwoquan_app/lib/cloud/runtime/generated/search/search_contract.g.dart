@@ -136,6 +136,7 @@ class SearchToolFieldNames {
   static const String query = 'query';
   static const String mode = 'mode';
   static const String objectTypes = 'objectTypes';
+  static const String ids = 'ids';
   static const String limit = 'limit';
   static const String conversationType = 'conversationType';
   static const String contentTypes = 'contentTypes';
@@ -156,7 +157,7 @@ class SearchToolContract {
   static const String name = 'search';
   static const String description = '统一检索网页与趣我圈对象的 query-first tool';
   static const List<String> requiredFields = <String>['query'];
-  static const List<String> optionalFields = <String>['mode', 'objectTypes', 'limit', 'conversationType', 'contentTypes', 'categoryId', 'subCategory', 'filters', 'sortHints', 'launchContext'];
+  static const List<String> optionalFields = <String>['mode', 'objectTypes', 'ids', 'limit', 'conversationType', 'contentTypes', 'categoryId', 'subCategory', 'filters', 'sortHints', 'launchContext'];
   static const List<String> internalOptionalFields = <String>['queryVariants', 'searchPlans', 'acceptedSearchPlans'];
   static const List<String> conversationTypes = <String>['direct', 'group'];
   static const List<String> contentTypes = <String>['article', 'image', 'video', 'micro'];

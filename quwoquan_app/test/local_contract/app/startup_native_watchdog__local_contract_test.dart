@@ -25,7 +25,7 @@ void main() {
       );
     });
 
-    test('deadline 仅在 renderer 首帧缺失时展示 native recovery', () {
+    test('deadline 仅记录首帧性能超时，不把等待超时判为致命异常', () {
       final activity = _readAppFile(
         'android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java',
       );
@@ -38,7 +38,11 @@ void main() {
       expect(deadline, contains('flutterFirstFrameConfirmed'));
       expect(
         deadline,
-        contains('showNativeStartupRecovery(elapsedMs, false);'),
+        isNot(contains('showNativeStartupRecovery(elapsedMs, false);')),
+      );
+      expect(
+        deadline,
+        contains('recordNativeStartupDeadline(elapsedMs, true);'),
       );
       expect(
         _section(
@@ -50,7 +54,7 @@ void main() {
       );
     });
 
-    test('safe terminal 后才注册启动后插件，重试不伪装为冷进程重启', () {
+    test('safe terminal 后才注册启动后插件，启动恢复不提供重试', () {
       final scheduler = _readAppFile('lib/app/startup_init_scheduler.dart');
       final shell = _readAppFile('lib/quwoquan_app_shell.dart');
       final activity = _readAppFile(
@@ -66,9 +70,11 @@ void main() {
       expect(scheduler, contains('void onSafeTerminal()'));
       expect(shell, contains('_startupInitScheduler.onSafeTerminal();'));
 
-      expect(activity, contains('private void requestNewStartupAttempt()'));
-      expect(activity, contains('startActivity(launchIntent);'));
-      expect(activity, contains('finish();'));
+      expect(
+        activity,
+        isNot(contains('private void requestNewStartupAttempt()')),
+      );
+      expect(activity, isNot(contains('startActivity(launchIntent);')));
       expect(activity, isNot(contains('recreate();')));
     });
 

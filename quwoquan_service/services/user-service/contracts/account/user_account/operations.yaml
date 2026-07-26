@@ -1090,7 +1090,7 @@ api_routes:
     method: readAccountSecurity
     reader: AccountSecurityReader
     slice: AccountSecuritySnapshot
-  description: 仅供已登记的 assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search
+  description: 仅供已登记的 assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search/tag
     资源服务在验签后同步读取终端用户的权威账号状态和安全代次；其他 service principal 即使持有同 scope 也必须拒绝。
     响应绝不含 Persona、资料、设备、凭证、审核 case 或其他可识别信息；调用失败或响应无效时调用方必须 fail-closed，
     禁止缓存、降级或沿用旧快照。

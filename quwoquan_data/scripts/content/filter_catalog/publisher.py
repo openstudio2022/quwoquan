@@ -17,9 +17,9 @@ from content.filter_catalog.environment_import import (
 )
 from content.filter_catalog.codec import canonical_json_bytes
 from content.filter_catalog.contract import CatalogContractError
+from core.runtime_policy import active_runtime_policy
 
 
-PUBLISH_REQUEST_TIMEOUT_SECONDS = 3.0
 _LOCAL_TLS_HOST_SUFFIX = ".quwoquan-env.test"
 _LOCAL_TLS_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -67,6 +67,7 @@ class UrllibFilterCatalogHttpTransport:
     ) -> FilterCatalogHttpResponse:
         parsed = urlsplit(url)
         host = (parsed.hostname or "").lower()
+        request_timeout_seconds = active_runtime_policy().api_request_timeout_seconds
         context = (
             ssl._create_unverified_context()
             if self._insecure_local_tls
@@ -93,12 +94,12 @@ class UrllibFilterCatalogHttpTransport:
                     )
                     response = opener.open(
                         response_request,
-                        timeout=PUBLISH_REQUEST_TIMEOUT_SECONDS,
+                        timeout=request_timeout_seconds,
                     )
                 else:
                     response = request.urlopen(
                         response_request,
-                        timeout=PUBLISH_REQUEST_TIMEOUT_SECONDS,
+                        timeout=request_timeout_seconds,
                         context=context,
                     )
                 with response:

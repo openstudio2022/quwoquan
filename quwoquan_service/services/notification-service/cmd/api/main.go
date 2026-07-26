@@ -436,6 +436,36 @@ func run() error {
 		return fmt.Errorf("interaction notification consumer init failed: %w", err)
 	}
 	go interactionConsumer.Run(ctx, 250*time.Millisecond)
+	externalResultRecorder, err := deliveryapplication.NewExternalInteractionResultRecorder(
+		store,
+	)
+	if err != nil {
+		return fmt.Errorf("external interaction result recorder init failed: %w", err)
+	}
+	externalResultConsumer, err := streamadapter.NewExternalInteractionResultConsumer(
+		messageTransport,
+		externalResultRecorder,
+		interactionFailures,
+		getenvOrDefault(
+			"NOTIFICATION_EXTERNAL_RESULT_CONSUMER_NAME",
+			"notification-external-result-projector",
+		),
+		slog.Default(),
+	)
+	if err != nil {
+		return fmt.Errorf("external interaction result consumer init failed: %w", err)
+	}
+	externalResultSetupCtx, cancelExternalResultSetup := context.WithTimeout(ctx, 10*time.Second)
+	externalResultSetupErr := externalResultConsumer.EnsureGroup(externalResultSetupCtx)
+	cancelExternalResultSetup()
+	if externalResultSetupErr != nil {
+		return fmt.Errorf("external interaction result consumer group setup failed: %w", externalResultSetupErr)
+	}
+	externalResultConsumerDone := make(chan struct{})
+	go func() {
+		defer close(externalResultConsumerDone)
+		externalResultConsumer.Run(ctx)
+	}()
 	accountClosureConsumer, err := streamadapter.NewUserAccountClosedConsumer(
 		messageTransport,
 		accountClosureProjection,
@@ -509,7 +539,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("app message query facade init failed: %w", err)
 	}
-	deliveryQueries, err := deliveryapplication.NewNotificationDeliveryJobQueryFacade(store, store)
+	deliveryQueries, err := deliveryapplication.NewNotificationDeliveryJobQueryFacade(store, store, store)
 	if err != nil {
 		return fmt.Errorf("notification delivery query facade init failed: %w", err)
 	}
@@ -581,6 +611,10 @@ func run() error {
 			writeNotificationReadinessError(w, r, "rtc consumer unavailable")
 			return
 		}
+		if err := externalResultConsumer.Healthy(10 * time.Second); err != nil {
+			writeNotificationReadinessError(w, r, "external result consumer unavailable")
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
@@ -640,12 +674,14 @@ func run() error {
 		waitForWorkerShutdown(workerDone)
 		waitForWorkerShutdown(incomingWorkerDone)
 		waitForWorkerShutdown(accountClosureConsumerDone)
+		waitForWorkerShutdown(externalResultConsumerDone)
 		return err
 	}
 	cancelRuntime()
 	waitForWorkerShutdown(workerDone)
 	waitForWorkerShutdown(incomingWorkerDone)
 	waitForWorkerShutdown(accountClosureConsumerDone)
+	waitForWorkerShutdown(externalResultConsumerDone)
 	return nil
 }
 

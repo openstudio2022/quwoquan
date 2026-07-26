@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/remote/content/media/content_media_object_uploader.dart';
 
 void main() {
@@ -33,7 +34,7 @@ void main() {
   );
 
   test(
-    'retryable object-storage status remains typed for coordinator retry',
+    'object-storage failures keep retry policy and canonical failure semantics',
     () async {
       final client = _RecordingStreamClient(statusCode: 503);
       final uploader = RemoteContentMediaObjectUploader(client: client);
@@ -49,11 +50,80 @@ void main() {
         throwsA(
           isA<ContentMediaObjectUploadException>()
               .having((error) => error.retryable, 'retryable', isTrue)
-              .having((error) => error.statusCode, 'statusCode', 503),
+              .having((error) => error.statusCode, 'statusCode', 503)
+              .having(
+                (error) => error.code,
+                'canonical code',
+                ContentErrorCode.storageWriteFailed.code,
+              )
+              .having(
+                (error) => error.recovery.action,
+                'recovery action',
+                ContentErrorCode.storageWriteFailed.recoveryAction,
+              ),
         ),
       );
     },
   );
+
+  test(
+    '403 remains a storage failure instead of an assumed expired grant',
+    () async {
+      final uploader = RemoteContentMediaObjectUploader(
+        client: _RecordingStreamClient(statusCode: 403),
+      );
+
+      await expectLater(
+        uploader.stream(
+          Uri.parse('https://upload.example.test/forbidden'),
+          Stream<List<int>>.value(const <int>[5]),
+          contentLength: 1,
+          contentType: 'image/jpeg',
+          expectedSha256: digest,
+        ),
+        throwsA(
+          isA<ContentMediaObjectUploadException>()
+              .having((error) => error.retryable, 'retryable', isFalse)
+              .having((error) => error.statusCode, 'statusCode', 403)
+              .having(
+                (error) => error.code,
+                'canonical code',
+                ContentErrorCode.storageWriteFailed.code,
+              )
+              .having(
+                (error) => error.semanticReason,
+                'semantic reason',
+                'media_object_upload_failed',
+              ),
+        ),
+      );
+    },
+  );
+
+  test('transport exceptions use the same canonical storage failure', () async {
+    final uploader = RemoteContentMediaObjectUploader(
+      client: _FailingStreamClient(),
+    );
+
+    await expectLater(
+      uploader.stream(
+        Uri.parse('https://upload.example.test/unreachable'),
+        Stream<List<int>>.value(const <int>[6]),
+        contentLength: 1,
+        contentType: 'image/jpeg',
+        expectedSha256: digest,
+      ),
+      throwsA(
+        isA<ContentMediaObjectUploadException>()
+            .having((error) => error.statusCode, 'statusCode', isNull)
+            .having(
+              (error) => error.code,
+              'canonical code',
+              ContentErrorCode.storageWriteFailed.code,
+            ),
+      ),
+    );
+  });
 }
 
 final class _RecordingStreamClient extends http.BaseClient {
@@ -68,5 +138,13 @@ final class _RecordingStreamClient extends http.BaseClient {
     this.request = request;
     body = await request.finalize().toBytes();
     return http.StreamedResponse(const Stream<List<int>>.empty(), statusCode);
+  }
+}
+
+final class _FailingStreamClient extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    await request.finalize().drain<void>();
+    throw http.ClientException('object storage unreachable', request.url);
   }
 }

@@ -191,7 +191,61 @@ class _DiscardClient:
         raise AssertionError(f"unexpected request: {method} {path}")
 
 
+class _RetryTransportClient:
+    def __init__(self, statuses: list[int]) -> None:
+        self.statuses = list(statuses)
+        self.calls: list[tuple[str, str, object, object, object]] = []
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        **kwargs: object,
+    ) -> tuple[int, dict[str, object] | None]:
+        self.calls.append(
+            (
+                method,
+                path,
+                kwargs.get("operation_id"),
+                kwargs.get("idempotency_key"),
+                kwargs.get("expected_statuses"),
+            )
+        )
+        status = self.statuses.pop(0)
+        if status == 200:
+            return status, {"data": {"status": "completed"}}
+        return status, None
+
+
 class MediaPublicationLifecycleProbeContractTest(unittest.TestCase):
+    def test_idempotent_media_command_retries_transient_gateway_status(self) -> None:
+        client = _RetryTransportClient([503, 200])
+
+        with mock.patch.object(probe.time, "sleep", return_value=None) as sleep:
+            status, payload = probe._request_with_transport_retry(
+                client,
+                "POST",
+                "/content/media/uploads/session-1:complete",
+                operation_id="CompleteMediaUpload",
+                body={"accessPolicy": "owner_only"},
+                idempotency_key="complete-key",
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, {"data": {"status": "completed"}})
+        self.assertEqual(len(client.calls), 2)
+        self.assertEqual(
+            {call[3] for call in client.calls},
+            {"complete-key"},
+        )
+        self.assertTrue(
+            all(
+                isinstance(call[4], frozenset) and 503 in call[4]
+                for call in client.calls
+            )
+        )
+        sleep.assert_called_once_with(1.0)
+
     def test_unreferenced_media_discard_replays_and_disappears_from_owner_read(
         self,
     ) -> None:

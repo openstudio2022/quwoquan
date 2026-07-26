@@ -63,6 +63,30 @@ func main() {
 		log.Fatalf("ensure indexes: %v", err)
 	}
 
+	desiredIdentities := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		desiredIdentities[entry.ObjectType+"\x00"+entry.ObjectID] = struct{}{}
+	}
+	existingIdentities, err := store.ListReleaseObjectIdentities(
+		ctx,
+		resolvedSourceOwner,
+		resolvedReleaseID,
+	)
+	if err != nil {
+		log.Fatalf("read existing release projection: %v", err)
+	}
+	for _, existing := range existingIdentities {
+		identity := existing.ObjectType + "\x00" + existing.ObjectID
+		if _, desired := desiredIdentities[identity]; !desired {
+			log.Fatalf(
+				"release %s is immutable but omits existing %s/%s",
+				resolvedReleaseID,
+				existing.ObjectType,
+				existing.ObjectID,
+			)
+		}
+	}
+
 	count := 0
 	for _, e := range entries {
 		if err := store.UpsertObjectTagsFromRelease(
@@ -77,7 +101,20 @@ func main() {
 		}
 		count++
 	}
-	log.Printf("OK: upserted %d object_tag_index docs into %s.object_tag_index", count, *dbName)
+	deleted, err := store.DeleteSupersededReleaseObjects(
+		ctx,
+		resolvedSourceOwner,
+		resolvedReleaseID,
+	)
+	if err != nil {
+		log.Fatalf("delete superseded object tag projections: %v", err)
+	}
+	log.Printf(
+		"OK: reconciled %d object_tag_index docs and deleted %d superseded docs from %s.object_tag_index",
+		count,
+		deleted,
+		*dbName,
+	)
 }
 
 func splitCSV(value string) []string {

@@ -1,4 +1,5 @@
 overrides:
+  sys.entity-service.es.enabled: true
   sys.entity-service.redis.rec.addr: 127.0.0.1:6379
 secretRefs:
   sys.entity-service.mongo.uri: ENTITY_MONGO_URI

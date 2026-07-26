@@ -278,6 +278,12 @@ func TestUpdateProfile_StaleVersionCannotOverwriteCommittedProfile(t *testing.T)
 		context.Background(),
 		first,
 		nil,
+		[]userports.UserProfileSearchProjection{{
+			UserID:         first.UserID,
+			ProfileVersion: int64(first.ProfileVersion),
+			EventType:      "UserProfileUpdated",
+			OccurredAt:     first.UpdatedAt,
+		}},
 		userports.UserProfileCommandMeta{
 			IdempotencyKey: "persona-cmd:profile-version-first",
 			CommandDigest:  strings.Repeat("a", 64),
@@ -289,6 +295,12 @@ func TestUpdateProfile_StaleVersionCannotOverwriteCommittedProfile(t *testing.T)
 		context.Background(),
 		stale,
 		nil,
+		[]userports.UserProfileSearchProjection{{
+			UserID:         stale.UserID,
+			ProfileVersion: int64(stale.ProfileVersion),
+			EventType:      "UserProfileUpdated",
+			OccurredAt:     stale.UpdatedAt,
+		}},
 		userports.UserProfileCommandMeta{
 			IdempotencyKey: "persona-cmd:profile-version-stale",
 			CommandDigest:  strings.Repeat("b", 64),

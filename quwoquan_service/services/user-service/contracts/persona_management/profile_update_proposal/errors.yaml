@@ -51,3 +51,13 @@ errors:
   user_message:
     zh: 重复请求内容不一致，请重新操作
     en: The repeated request differs from the original request
+- code: USER.PROFILE_PROPOSAL.rollback_expired
+  kind: PROFILE_PROPOSAL
+  reason: rollback_expired
+  http_status: 409
+  recovery_action: refresh
+  dart_const: profileProposalRollbackExpired
+  go_const: ErrProfileProposalRollbackExpired
+  user_message:
+    zh: 提案回滚窗口已结束，请刷新资料
+    en: The proposal rollback window has expired

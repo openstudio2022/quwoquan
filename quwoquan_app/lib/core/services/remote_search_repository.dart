@@ -41,6 +41,7 @@ final class RemoteSearchRepository implements SearchRepository {
             ? CanonicalSearchMode.suggest
             : CanonicalSearchMode.result,
         objectTypes: targets.map((target) => target.wireValue),
+        ids: normalized.ids,
         limit: normalized.limit,
       ),
       cancellation: cancellation,

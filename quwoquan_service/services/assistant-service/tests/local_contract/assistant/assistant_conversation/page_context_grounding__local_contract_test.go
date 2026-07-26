@@ -16,11 +16,11 @@ func TestReportedPageContextEntersTheNextTurnPrompt(t *testing.T) {
 	cache := rtredis.NewMemoryClient()
 	service := application.NewAssistantService(
 		nil,
-		nil,
 		cache,
 		application.WithConversationRunStore(
 			persistence.NewMemoryConversationRunStore(),
 		),
+		testFrozenPolicyOption(),
 	)
 	ctx := t.Context()
 	_, err := service.ReportPageContext(
@@ -29,7 +29,7 @@ func TestReportedPageContextEntersTheNextTurnPrompt(t *testing.T) {
 		assistant.PageContextInput{
 			ContextSnapshot: assistant.AssistantContextSnapshot{
 				CapturedAt: time.Now().UTC(),
-				PageType:   "content_detail",
+				PageType:   "article",
 				PageObjects: []assistant.AssistantPageObjectRef{{
 					ObjectTypeRef: "content.post",
 					ObjectID:      "post-1",
@@ -65,13 +65,14 @@ func TestReportedPageContextEntersTheNextTurnPrompt(t *testing.T) {
 		assistant.CreateTurnInput{
 			Input:           assistant.AssistantTurnInput{Text: "结合当前页面回答"},
 			ClientRequestID: "page-context-turn",
+			RequestContext:  testRunRequestContext("persona-page-context"),
 		},
 	)
 	if err != nil {
 		t.Fatalf("CreateTurn() error = %v", err)
 	}
 	if turn.PageContext == nil ||
-		turn.PageContext.PageType != "content_detail" ||
+		turn.PageContext.PageType != "article" ||
 		len(turn.PageContext.PageObjects) != 1 {
 		t.Fatalf("turn page context = %#v", turn.PageContext)
 	}
@@ -88,7 +89,7 @@ func TestReportPageContextFailsClosedForUnknownObjectsAndMissingCache(
 	input := assistant.PageContextInput{
 		ContextSnapshot: assistant.AssistantContextSnapshot{
 			CapturedAt: time.Now().UTC(),
-			PageType:   "content_detail",
+			PageType:   "article",
 			PageObjects: []assistant.AssistantPageObjectRef{{
 				ObjectTypeRef: "unknown.object",
 				ObjectID:      "object-1",
@@ -98,7 +99,7 @@ func TestReportPageContextFailsClosedForUnknownObjectsAndMissingCache(
 			},
 		},
 	}
-	service := application.NewAssistantService(nil, nil, rtredis.NewMemoryClient())
+	service := application.NewAssistantService(nil, rtredis.NewMemoryClient())
 	_, err := service.ReportPageContext(
 		t.Context(),
 		"persona-page-context",
@@ -143,7 +144,7 @@ func TestReportPageContextFailsClosedForUnknownObjectsAndMissingCache(
 	}
 
 	input.ContextSnapshot.UserActions = nil
-	service = application.NewAssistantService(nil, nil, nil)
+	service = application.NewAssistantService(nil, nil)
 	_, err = service.ReportPageContext(
 		t.Context(),
 		"persona-page-context",
@@ -159,11 +160,11 @@ func TestMissingOrStalePageContextCannotEnterPrompt(t *testing.T) {
 	cache := rtredis.NewMemoryClient()
 	service := application.NewAssistantService(
 		nil,
-		nil,
 		cache,
 		application.WithConversationRunStore(
 			persistence.NewMemoryConversationRunStore(),
 		),
+		testFrozenPolicyOption(),
 	)
 	ctx := t.Context()
 	conversation, err := service.CreateConversation(
@@ -183,6 +184,9 @@ func TestMissingOrStalePageContextCannotEnterPrompt(t *testing.T) {
 		assistant.CreateTurnInput{
 			Input:           assistant.AssistantTurnInput{Text: "回答问题"},
 			ClientRequestID: "missing-page-context-turn",
+			RequestContext: testRunRequestContext(
+				"persona-without-page-context",
+			),
 		},
 	)
 	if err != nil {
@@ -198,7 +202,7 @@ func TestMissingOrStalePageContextCannotEnterPrompt(t *testing.T) {
 		assistant.PageContextInput{
 			ContextSnapshot: assistant.AssistantContextSnapshot{
 				CapturedAt: time.Now().UTC().Add(-6 * time.Minute),
-				PageType:   "content_detail",
+				PageType:   "article",
 				ConsentMatrix: &assistant.AssistantContextConsent{
 					CanReadCurrentPage: true,
 				},
@@ -207,5 +211,22 @@ func TestMissingOrStalePageContextCannotEnterPrompt(t *testing.T) {
 	)
 	if err == nil || !strings.Contains(err.Error(), "ASSISTANT.USER.run_invalid_argument") {
 		t.Fatalf("stale page context error = %v", err)
+	}
+
+	_, err = service.ReportPageContext(
+		ctx,
+		"persona-with-unknown-page-context",
+		assistant.PageContextInput{
+			ContextSnapshot: assistant.AssistantContextSnapshot{
+				CapturedAt: time.Now().UTC(),
+				PageType:   "content_detail",
+				ConsentMatrix: &assistant.AssistantContextConsent{
+					CanReadCurrentPage: true,
+				},
+			},
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "ASSISTANT.USER.run_invalid_argument") {
+		t.Fatalf("unknown page context error = %v", err)
 	}
 }

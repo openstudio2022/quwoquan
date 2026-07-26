@@ -283,11 +283,10 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
     );
 
     final backBoundsViewport =
-        backwardDiagnosticGeometry?.previousBackViewportBounds ??
+        backwardDiagnosticGeometry?.versoViewportBounds ??
         (backwardSurfaceShowsBack ? backwardFoldSurfaceBounds : null);
     final backwardBackFoldBounds = backBoundsViewport;
-    final frontBoundsViewport =
-        backwardDiagnosticGeometry?.previousFrontViewportBounds;
+    final frontBoundsViewport = backwardDiagnosticGeometry?.rectoViewportBounds;
     final backwardFrontFoldVisible = frontBoundsViewport != null;
     final backwardFrontFoldBounds = backwardFrontFoldVisible
         ? frontBoundsViewport
@@ -312,7 +311,7 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
         ? 'mainlineLeaf:${scene.flippingPageIndex}'
         : null;
     final backwardFrontSheetId = backwardFrontFoldVisible
-        ? 'laidFront:${scene.flippingPageIndex}'
+        ? backwardLeafSheetId
         : null;
     final backwardBackSheetId = direction == StPageFlipDirection.back
         ? backwardLeafSheetId
@@ -340,11 +339,10 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
         dynamicFlippingGeometry?.localClipPolygon ??
         const <Offset>[];
     final backwardBackLocalPolygon =
-        backwardDiagnosticGeometry?.previousBackLocalPolygon ??
+        backwardDiagnosticGeometry?.versoLocalPolygon ??
         backwardLocalClipPolygon;
     final backwardFrontLocalPolygon =
-        backwardDiagnosticGeometry?.previousFrontLocalPolygon ??
-        const <Offset>[];
+        backwardDiagnosticGeometry?.rectoLocalPolygon ?? const <Offset>[];
     final backwardCurrentResidualPolygon =
         backwardDiagnosticGeometry?.currentResidualViewportPolygon ??
         rectToPolygon(backwardCurrentResidualBounds);
@@ -370,14 +368,12 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
     }
 
     final visibleFrontViewportPolygon =
-        backwardDiagnosticGeometry?.previousFrontViewportPolygon ??
-        const <Offset>[];
+        backwardDiagnosticGeometry?.rectoViewportPolygon ?? const <Offset>[];
     final visibleFrontViewportBounds = polygonBounds(
       visibleFrontViewportPolygon,
     );
     final visibleBackViewportPolygon =
-        backwardDiagnosticGeometry?.previousBackViewportPolygon ??
-        const <Offset>[];
+        backwardDiagnosticGeometry?.versoViewportPolygon ?? const <Offset>[];
     final visibleBackViewportBounds = polygonBounds(visibleBackViewportPolygon);
     final paintedUnionViewportPolygon =
         backwardDiagnosticGeometry?.paintedUnionViewportPolygon ??
@@ -396,29 +392,29 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
               viewportBounds: pageRect,
               viewportPolygon: rectToPolygon(pageRect),
             ),
-            if (visibleFrontViewportBounds != null)
-              sourceDiagnostic(
-                label: 'previousFrontReplacement',
-                zOrder: 2,
-                pageIndex: scene.flippingPageIndex,
-                surfaceKind: ArticlePageSurfaceKind.front,
-                status: 'pageSpaceReplacement',
-                viewportBounds: visibleFrontViewportBounds,
-                viewportPolygon: visibleFrontViewportPolygon,
-              ),
             if (dynamicBottomBounds != null)
               sourceDiagnostic(
                 label: 'bottomCurrentFront',
-                zOrder: 3,
+                zOrder: 1,
                 pageIndex: scene.bottomPageIndex,
                 surfaceKind: ArticlePageSurfaceKind.bottom,
                 viewportBounds: dynamicBottomBounds,
                 viewportPolygon: backwardCurrentResidualPolygon,
               ),
+            if (visibleFrontViewportBounds != null)
+              sourceDiagnostic(
+                label: 'sheetRectoFront',
+                zOrder: 2,
+                pageIndex: scene.flippingPageIndex,
+                surfaceKind: ArticlePageSurfaceKind.front,
+                status: 'sheetLocalSlice',
+                viewportBounds: visibleFrontViewportBounds,
+                viewportPolygon: visibleFrontViewportPolygon,
+              ),
             if (paintedUnionViewportBounds != null)
               sourceDiagnostic(
                 label: 'sheetPaintedUnion',
-                zOrder: 5,
+                zOrder: 2,
                 pageIndex: scene.flippingPageIndex,
                 surfaceKind: ArticlePageSurfaceKind.back,
                 status: 'coverage',
@@ -428,7 +424,7 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
             if (visibleBackViewportBounds != null)
               sourceDiagnostic(
                 label: 'sheetVersoBack',
-                zOrder: 6,
+                zOrder: 2,
                 pageIndex: scene.flippingPageIndex,
                 surfaceKind: ArticlePageSurfaceKind.back,
                 status: 'visible',
@@ -438,7 +434,7 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
             if (backwardFoldLine != null)
               sourceDiagnostic(
                 label: 'foldOverlay',
-                zOrder: 7,
+                zOrder: 3,
                 pageIndex: scene.flippingPageIndex,
                 surfaceKind: ArticlePageSurfaceKind.back,
                 viewportBounds: Rect.fromPoints(
@@ -458,7 +454,7 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
     );
     final activeVersoSnapshot = requestedBinding?.versoPageIndex == null
         ? null
-        : _peekBackPageTextureSnapshotForIndex(
+        : _validBackPageTextureSnapshotForIndex(
             requestedBinding!.versoPageIndex,
             expectedSize: backwardPageSize,
           );
@@ -487,7 +483,7 @@ extension _ArticleReadOnlyBookDeckDiagnosticReporting
         ? backwardVersoProbeViewportPoints
               .where((point) {
                 final backPolygon =
-                    backwardDiagnosticGeometry?.previousBackViewportPolygon ??
+                    backwardDiagnosticGeometry?.versoViewportPolygon ??
                     const <Offset>[];
                 if (!_polygonContainsPoint(
                   polygon: backPolygon,

@@ -17,7 +17,12 @@ void main() {
     final repository = _TrackingHomepageRepository();
 
     await tester.pumpWidget(
-      _buildApp(repository: repository, child: const _SuggestHomepageHarness()),
+      _buildApp(
+        repository: repository,
+        child: const _SuggestHomepageHarness(
+          sourcePlaceId: 'place_0123456789abcdef',
+        ),
+      ),
     );
     await tester.tap(find.text('打开添加主页'));
     await tester.pumpAndSettle();
@@ -66,7 +71,12 @@ void main() {
     final repository = _TrackingHomepageRepository();
 
     await tester.pumpWidget(
-      _buildApp(repository: repository, child: const _SuggestHomepageHarness()),
+      _buildApp(
+        repository: repository,
+        child: const _SuggestHomepageHarness(
+          sourcePlaceId: 'place_0123456789abcdef',
+        ),
+      ),
     );
     await tester.tap(find.text('打开添加主页'));
     await tester.pumpAndSettle();
@@ -91,6 +101,7 @@ void main() {
     expect(repository.lastDraft?.city, isEmpty);
     expect(repository.lastDraft?.address, isEmpty);
     expect(repository.lastDraft?.categoryTags, <String>['丰田']);
+    expect(repository.lastDraft?.sourcePlaceId, 'place_0123456789abcdef');
   });
 
   testWidgets('游客关闭添加主页登录页回首页且不会循环', (tester) async {
@@ -167,7 +178,9 @@ Widget _buildApp({
 }
 
 class _SuggestHomepageHarness extends StatefulWidget {
-  const _SuggestHomepageHarness();
+  const _SuggestHomepageHarness({this.sourcePlaceId = ''});
+
+  final String sourcePlaceId;
 
   @override
   State<_SuggestHomepageHarness> createState() =>
@@ -188,7 +201,9 @@ class _SuggestHomepageHarnessState extends State<_SuggestHomepageHarness> {
               onPressed: () async {
                 final result = await Navigator.of(context).push<bool>(
                   MaterialPageRoute<bool>(
-                    builder: (_) => const SuggestHomepagePage(),
+                    builder: (_) => SuggestHomepagePage(
+                      sourcePlaceId: widget.sourcePlaceId,
+                    ),
                   ),
                 );
                 if (!mounted) {

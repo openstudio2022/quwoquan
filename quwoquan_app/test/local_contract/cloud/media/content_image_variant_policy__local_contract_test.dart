@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-002
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/media/generated/content_image_variant_policy.g.dart';
 

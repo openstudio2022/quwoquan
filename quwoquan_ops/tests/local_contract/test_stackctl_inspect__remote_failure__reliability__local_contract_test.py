@@ -43,11 +43,14 @@ class StackctlInspectRemoteFailureTest(unittest.TestCase):
             )
             summary = json.loads((report_dir / "summary.json").read_text(encoding="utf-8"))
 
-        expected_issue = "prod service plane rootless runtime inspect failed"
+        expected_issues = [
+            "prod service plane rootless runtime inspect failed",
+            "prod edge plane rootless runtime inspect failed",
+        ]
         self.assertEqual(result["exitCode"], 1)
-        self.assertEqual(result["details"], [expected_issue])
-        self.assertEqual(report["findings"], [expected_issue])
-        self.assertEqual(findings["issues"], [expected_issue])
+        self.assertEqual(result["details"], expected_issues)
+        self.assertEqual(report["findings"], expected_issues)
+        self.assertEqual(findings["issues"], expected_issues)
         self.assertEqual(summary["status"], "failed")
 
 

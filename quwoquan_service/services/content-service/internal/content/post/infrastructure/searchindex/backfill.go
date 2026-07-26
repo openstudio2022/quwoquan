@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/content-service/internal/content/post/application/searchprojection"
 )
@@ -22,7 +23,7 @@ type BulkIndexer interface {
 type BackfillReport struct {
 	TotalPosts    int `json:"totalPosts"`
 	IndexedPosts  int `json:"indexedPosts"`
-	SkippedPosts  int `json:"skippedPosts"`
+	DeletedPosts  int `json:"deletedPosts"`
 	BatchesPushed int `json:"batchesPushed"`
 }
 
@@ -34,7 +35,9 @@ type BackfillReport struct {
 func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, batchSize int) (BackfillReport, error) {
 	var report BackfillReport
 	if indexer == nil || reader == nil {
-		return report, nil
+		return report, fmt.Errorf(
+			"Post search backfill requires indexer and reader",
+		)
 	}
 	if batchSize <= 0 {
 		batchSize = defaultBackfillBatchSize
@@ -63,7 +66,19 @@ func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, batch
 
 	for i := range posts {
 		if !searchEligible(&posts[i]) {
-			report.SkippedPosts++
+			batch = append(batch, es.ChangeEvent{
+				Op: es.OpDelete,
+				Doc: rtsearch.Document{
+					ObjectType: rtsearch.ObjectTypeContentPost,
+					ObjectID:   posts[i].ID,
+				},
+			})
+			report.DeletedPosts++
+			if len(batch) >= batchSize {
+				if err := flush(); err != nil {
+					return report, err
+				}
+			}
 			continue
 		}
 		doc := searchprojection.ProjectPostToSearchDocument(posts[i])

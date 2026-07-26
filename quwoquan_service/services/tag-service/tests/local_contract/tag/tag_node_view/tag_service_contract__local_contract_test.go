@@ -37,6 +37,21 @@ func (r migratedTagNodeReader) CountActiveChildrenInRelease(ctx context.Context,
 	return int64(len(children)), err
 }
 
+func (r migratedTagNodeReader) ListDimensionsInRelease(
+	_ context.Context,
+	releaseID string,
+) ([]model.TagNode, error) {
+	out := make([]model.TagNode, 0)
+	for _, node := range r.nodes {
+		if node.ReleaseID == releaseID &&
+			node.LifecycleStatus == "active" &&
+			node.NodeKind == "dimension" {
+			out = append(out, *node)
+		}
+	}
+	return out, nil
+}
+
 func (r migratedTagNodeReader) ListAllInRelease(_ context.Context, releaseID string) ([]model.TagNode, error) {
 	out := make([]model.TagNode, 0, len(r.nodes))
 	for _, node := range r.nodes {
@@ -113,6 +128,48 @@ func TestTagNodeViewResolvesThroughApplicationPorts(t *testing.T) {
 	view, err := service.Resolve(context.Background(), "Topic/旅行")
 	if err != nil || view == nil || view.Label != "旅行" {
 		t.Fatalf("Resolve() = %#v, %v", view, err)
+	}
+}
+
+func TestListDimensionsUsesActiveTaxonomyProjection(t *testing.T) {
+	service := application.NewTagService(
+		migratedTagNodeReader{nodes: map[string]*model.TagNode{
+			"Topic/旅行/玩法": {
+				TagRef:          "Topic/旅行/玩法",
+				Group:           "Topic",
+				NodeKind:        "dimension",
+				Label:           "玩法",
+				LabelEn:         "Activities",
+				MaxDepth:        2,
+				PathPolicy:      "any-depth",
+				ReleaseID:       "release-current",
+				LifecycleStatus: "active",
+			},
+			"Topic/legacy": {
+				TagRef:          "Topic/legacy",
+				Group:           "Topic",
+				NodeKind:        "dimension",
+				Label:           "旧维度",
+				ReleaseID:       "release-old",
+				LifecycleStatus: "active",
+			},
+		}},
+		migratedObjectTagIndexReader{},
+		migratedActiveReleaseReader{
+			releaseID: "release-current",
+			found:     true,
+		},
+	)
+
+	got, err := service.ListDimensions(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 ||
+		got[0].DimensionID != "Topic/旅行/玩法" ||
+		got[0].MaxDepth != 2 ||
+		got[0].PathPolicy != "any-depth" {
+		t.Fatalf("ListDimensions() = %#v", got)
 	}
 }
 

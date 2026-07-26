@@ -192,6 +192,7 @@ api_routes:
   - CHAT.USER.group_member_not_mutual
   - CHAT.USER.group_member_blocked
   - CHAT.USER.group_full
+  - CHAT.USER.conversation_idempotency_conflict
   - CHAT.SYSTEM.internal_error
   security:
     auth_mode: required
@@ -771,6 +772,9 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   description: 联系人列表
+  query_params:
+  - cursor
+  - limit
   response_entity: ChatContactListRow
   response_body: ChatContactListRow
   response_body_kind: page

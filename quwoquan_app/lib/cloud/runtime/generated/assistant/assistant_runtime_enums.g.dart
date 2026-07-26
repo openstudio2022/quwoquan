@@ -19,6 +19,91 @@ final class AssistantRuntimeEnumParseFailure implements FormatException {
   String toString() => 'Unknown $enumName wire value: $wireValue';
 }
 
+enum AssistantPageContextType {
+  unknown,
+  home,
+  discovery,
+  circles,
+  article,
+  profile,
+  chat,
+  create,
+  search,
+}
+
+AssistantPageContextType parseAssistantPageContextTypeStrict(String raw) {
+  switch (raw.trim()) {
+    case "":
+      return AssistantPageContextType.unknown;
+    case "home":
+      return AssistantPageContextType.home;
+    case "discovery":
+      return AssistantPageContextType.discovery;
+    case "circles":
+      return AssistantPageContextType.circles;
+    case "article":
+      return AssistantPageContextType.article;
+    case "profile":
+      return AssistantPageContextType.profile;
+    case "chat":
+      return AssistantPageContextType.chat;
+    case "create":
+      return AssistantPageContextType.create;
+    case "search":
+      return AssistantPageContextType.search;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantPageContextType", raw.trim());
+  }
+}
+
+AssistantPageContextType parseAssistantPageContextType(String raw) {
+  switch (raw.trim()) {
+    case "home":
+      return AssistantPageContextType.home;
+    case "discovery":
+      return AssistantPageContextType.discovery;
+    case "circles":
+      return AssistantPageContextType.circles;
+    case "article":
+      return AssistantPageContextType.article;
+    case "profile":
+      return AssistantPageContextType.profile;
+    case "chat":
+      return AssistantPageContextType.chat;
+    case "create":
+      return AssistantPageContextType.create;
+    case "search":
+      return AssistantPageContextType.search;
+    default:
+      return AssistantPageContextType.unknown;
+  }
+}
+
+extension AssistantPageContextTypeX on AssistantPageContextType {
+  String get wireName {
+    switch (this) {
+      case AssistantPageContextType.unknown:
+        return "";
+      case AssistantPageContextType.home:
+        return "home";
+      case AssistantPageContextType.discovery:
+        return "discovery";
+      case AssistantPageContextType.circles:
+        return "circles";
+      case AssistantPageContextType.article:
+        return "article";
+      case AssistantPageContextType.profile:
+        return "profile";
+      case AssistantPageContextType.chat:
+        return "chat";
+      case AssistantPageContextType.create:
+        return "create";
+      case AssistantPageContextType.search:
+        return "search";
+    }
+  }
+}
+
 enum CitationDestinationKind {
   unknown,
   internal,
@@ -193,6 +278,155 @@ extension SkillSubscriptionStatusX on SkillSubscriptionStatus {
         return "paused";
       case SkillSubscriptionStatus.archived:
         return "archived";
+    }
+  }
+}
+
+enum AssistantLearningFactType {
+  unknown,
+  userFeedback,
+  interactionOutcome,
+  serviceScorecard,
+}
+
+AssistantLearningFactType parseAssistantLearningFactTypeStrict(String raw) {
+  switch (raw.trim()) {
+    case "":
+      return AssistantLearningFactType.unknown;
+    case "user_feedback":
+      return AssistantLearningFactType.userFeedback;
+    case "interaction_outcome":
+      return AssistantLearningFactType.interactionOutcome;
+    case "service_scorecard":
+      return AssistantLearningFactType.serviceScorecard;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantLearningFactType", raw.trim());
+  }
+}
+
+AssistantLearningFactType parseAssistantLearningFactType(String raw) {
+  switch (raw.trim()) {
+    case "user_feedback":
+      return AssistantLearningFactType.userFeedback;
+    case "interaction_outcome":
+      return AssistantLearningFactType.interactionOutcome;
+    case "service_scorecard":
+      return AssistantLearningFactType.serviceScorecard;
+    default:
+      return AssistantLearningFactType.unknown;
+  }
+}
+
+extension AssistantLearningFactTypeX on AssistantLearningFactType {
+  String get wireName {
+    switch (this) {
+      case AssistantLearningFactType.unknown:
+        return "";
+      case AssistantLearningFactType.userFeedback:
+        return "user_feedback";
+      case AssistantLearningFactType.interactionOutcome:
+        return "interaction_outcome";
+      case AssistantLearningFactType.serviceScorecard:
+        return "service_scorecard";
+    }
+  }
+}
+
+enum AssistantReferralSource {
+  unknown,
+  home,
+  discovery,
+  circles,
+  article,
+  profile,
+  chat,
+  create,
+  search,
+  assistantConversation,
+  service,
+}
+
+AssistantReferralSource parseAssistantReferralSourceStrict(String raw) {
+  switch (raw.trim()) {
+    case "":
+      return AssistantReferralSource.unknown;
+    case "home":
+      return AssistantReferralSource.home;
+    case "discovery":
+      return AssistantReferralSource.discovery;
+    case "circles":
+      return AssistantReferralSource.circles;
+    case "article":
+      return AssistantReferralSource.article;
+    case "profile":
+      return AssistantReferralSource.profile;
+    case "chat":
+      return AssistantReferralSource.chat;
+    case "create":
+      return AssistantReferralSource.create;
+    case "search":
+      return AssistantReferralSource.search;
+    case "assistant_conversation":
+      return AssistantReferralSource.assistantConversation;
+    case "service":
+      return AssistantReferralSource.service;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantReferralSource", raw.trim());
+  }
+}
+
+AssistantReferralSource parseAssistantReferralSource(String raw) {
+  switch (raw.trim()) {
+    case "home":
+      return AssistantReferralSource.home;
+    case "discovery":
+      return AssistantReferralSource.discovery;
+    case "circles":
+      return AssistantReferralSource.circles;
+    case "article":
+      return AssistantReferralSource.article;
+    case "profile":
+      return AssistantReferralSource.profile;
+    case "chat":
+      return AssistantReferralSource.chat;
+    case "create":
+      return AssistantReferralSource.create;
+    case "search":
+      return AssistantReferralSource.search;
+    case "assistant_conversation":
+      return AssistantReferralSource.assistantConversation;
+    case "service":
+      return AssistantReferralSource.service;
+    default:
+      return AssistantReferralSource.unknown;
+  }
+}
+
+extension AssistantReferralSourceX on AssistantReferralSource {
+  String get wireName {
+    switch (this) {
+      case AssistantReferralSource.unknown:
+        return "";
+      case AssistantReferralSource.home:
+        return "home";
+      case AssistantReferralSource.discovery:
+        return "discovery";
+      case AssistantReferralSource.circles:
+        return "circles";
+      case AssistantReferralSource.article:
+        return "article";
+      case AssistantReferralSource.profile:
+        return "profile";
+      case AssistantReferralSource.chat:
+        return "chat";
+      case AssistantReferralSource.create:
+        return "create";
+      case AssistantReferralSource.search:
+        return "search";
+      case AssistantReferralSource.assistantConversation:
+        return "assistant_conversation";
+      case AssistantReferralSource.service:
+        return "service";
     }
   }
 }

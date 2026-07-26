@@ -30,6 +30,8 @@ import (
 
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/searchindex"
+	groupersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/persistence"
+	groupsearchindex "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/searchindex"
 )
 
 func main() {
@@ -73,7 +75,8 @@ func main() {
 		_ = client.Disconnect(shutdownCtx)
 	}()
 
-	store := persistence.NewMongoCircleStore(client.Database(*circleDB).Collection(*circleColl))
+	database := client.Database(*circleDB)
+	store := persistence.NewMongoCircleStore(database.Collection(*circleColl))
 
 	built, err := searchindex.Build(esCfg, store)
 	if err != nil {
@@ -87,6 +90,31 @@ func main() {
 	if err != nil {
 		log.Fatalf("[search-backfill] backfill failed (indexed=%d batches=%d): %v", report.IndexedCircles, report.BatchesPushed, err)
 	}
-	log.Printf("[search-backfill] OK env=%s index=%s total=%d indexed=%d skipped=%d batches=%d",
-		*env, built.Client.IndexName(), report.TotalCircles, report.IndexedCircles, report.SkippedCircles, report.BatchesPushed)
+	log.Printf("[search-backfill] OK env=%s index=%s total=%d indexed=%d deleted=%d batches=%d",
+		*env, built.Client.IndexName(), report.TotalCircles, report.IndexedCircles, report.DeletedCircles, report.BatchesPushed)
+
+	groupReport, err := groupsearchindex.Backfill(
+		ctx,
+		built.Client,
+		groupersistence.NewMongoReaders(database),
+		*batchSize,
+	)
+	if err != nil {
+		log.Fatalf(
+			"[search-backfill] CircleGroup backfill failed (indexed=%d deleted=%d batches=%d): %v",
+			groupReport.IndexedGroups,
+			groupReport.DeletedGroups,
+			groupReport.BatchesPushed,
+			err,
+		)
+	}
+	log.Printf(
+		"[search-backfill] groups OK env=%s index=%s total=%d indexed=%d deleted=%d batches=%d",
+		*env,
+		built.Client.IndexName(),
+		groupReport.TotalGroups,
+		groupReport.IndexedGroups,
+		groupReport.DeletedGroups,
+		groupReport.BatchesPushed,
+	)
 }

@@ -330,7 +330,6 @@ func (p *PushDispatchProvider) Send(
 		Status:            reliabletask.ExternalInteractionStatusSentUnconfirmed,
 		Provider:          secret.EndpointKind,
 		ProviderRequestID: receipt.ProviderRequestID,
-		CallbackURL:       request.CallbackURL,
 		OccurredAt:        time.Now().UTC(),
 	}, nil
 }
@@ -359,7 +358,6 @@ func (LocalRecorderPushProvider) Send(
 		Status:            reliabletask.ExternalInteractionStatusSentUnconfirmed,
 		Provider:          PushProviderLocalRecorder,
 		ProviderRequestID: "local-" + request.RequestID,
-		CallbackURL:       request.CallbackURL,
 		OccurredAt:        time.Now().UTC(),
 	}, nil
 }
@@ -466,7 +464,6 @@ func failedPushResult(
 		Operation:       request.Operation,
 		Status:          reliabletask.ExternalInteractionStatusFailed,
 		Provider:        provider,
-		CallbackURL:     request.CallbackURL,
 		NormalizedError: code,
 		Retryable:       retryable,
 		OccurredAt:      time.Now().UTC(),

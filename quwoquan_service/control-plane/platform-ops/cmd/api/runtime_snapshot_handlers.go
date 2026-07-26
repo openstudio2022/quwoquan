@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/controlplane"
 )
 
@@ -23,25 +25,52 @@ func (s *platformService) handleListConfigInstanceReports(w http.ResponseWriter,
 
 func (s *platformService) handleReportConfigInstance(w http.ResponseWriter, r *http.Request) {
 	instanceID := segmentBetween(r.URL.Path, "/control-plane/platform/configs/instances/", ":report")
+	principal, hasPrincipal := rtauth.PrincipalFromContext(r.Context())
+	if !hasPrincipal {
+		writeControlPlaneUnauthorized(w, r, "config instance report requires a verified service principal")
+		return
+	}
 	current, _, _ := s.store.GetDocument("config_instance_reports", instanceID)
 	before := cloneMap(current)
 	var body map[string]any
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "invalid config instance report: "+err.Error())
+		return
+	}
 	if body == nil {
-		body = map[string]any{}
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "config instance report body is required")
+		return
+	}
+	reportedService := strings.TrimSpace(stringifyDocumentValue(body["service"]))
+	reportedEnvironment := strings.TrimSpace(stringifyDocumentValue(body["environment"]))
+	if err := validateConfigInstanceReportPrincipal(principal, instanceID, reportedService, reportedEnvironment); err != nil {
+		writeControlPlaneUnauthorized(w, r, err.Error())
+		return
 	}
 	body["id"] = instanceID
 	body["instanceId"] = instanceID
 	body["updatedAt"] = nowRFC3339()
-	if stringifyDocumentValue(body["desiredHash"]) == "" && s.configLayer != nil {
-		// desiredHash 缺省时以发布包快照的有效配置 hash 为唯一真相源回填。
+	if s.configLayer != nil {
+		// desiredHash 始终由控制面发布包快照回填，机器上报的 hash 只能用于
+		// 交叉校验，不能伪造与 effectiveHash 相等的期望值来隐藏漂移。
 		resolved, err := s.configLayer.Resolve(r.Context(), controlplane.ConfigResolutionScope{
-			Environment: stringifyDocumentValue(body["environment"]),
-			Service:     stringifyDocumentValue(body["service"]),
+			Environment: reportedEnvironment,
+			Service:     reportedService,
 		})
-		if err == nil && resolved.DesiredHash != "" {
-			body["desiredHash"] = resolved.DesiredHash
+		if err != nil {
+			writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "resolve config report desired hash: "+err.Error())
+			return
 		}
+		if resolved.DesiredHash == "" {
+			writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "resolved desired hash is required")
+			return
+		}
+		reportedDesiredHash := strings.TrimSpace(stringifyDocumentValue(body["desiredHash"]))
+		if reportedDesiredHash != "" && reportedDesiredHash != resolved.DesiredHash {
+			writeRuntimeError(w, r, http.StatusConflict, "请求处理失败", "reported desired hash differs from control-plane snapshot")
+			return
+		}
+		body["desiredHash"] = resolved.DesiredHash
 	}
 	body["inSync"] = body["desiredHash"] == body["effectiveHash"]
 	if err := s.store.PutDocument("config_instance_reports", instanceID, body); err != nil {
@@ -50,6 +79,46 @@ func (s *platformService) handleReportConfigInstance(w http.ResponseWriter, r *h
 	}
 	_ = s.appendAudit("config_instance_report", instanceID, "config_instance_reported", before, body, r)
 	writeJSON(w, http.StatusOK, body)
+}
+
+func validateConfigInstanceReportPrincipal(
+	principal rtauth.Principal,
+	instanceID string,
+	reportedService string,
+	reportedEnvironment string,
+) error {
+	const servicePrefix = "service:"
+	subject := strings.TrimSpace(principal.Actor.AccountID)
+	if !containsRole(principal.Roles, "service") || !strings.HasPrefix(subject, servicePrefix) {
+		return errConfigReportIdentity("service principal is required")
+	}
+	identity := strings.TrimPrefix(subject, servicePrefix)
+	serviceName, environment, found := strings.Cut(identity, "@")
+	if !found || strings.TrimSpace(serviceName) == "" || strings.TrimSpace(environment) == "" {
+		return errConfigReportIdentity("config ACK principal must bind service and environment")
+	}
+	if reportedService != serviceName || reportedEnvironment != environment {
+		return errConfigReportIdentity("config ACK report service/environment does not match principal")
+	}
+	if !strings.HasPrefix(instanceID, serviceName+"-") {
+		return errConfigReportIdentity("config ACK instance id is outside the service identity namespace")
+	}
+	return nil
+}
+
+type errConfigReportIdentity string
+
+func (err errConfigReportIdentity) Error() string {
+	return string(err)
+}
+
+func containsRole(roles []string, expected string) bool {
+	for _, role := range roles {
+		if strings.TrimSpace(role) == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func filterConfigInstanceReports(reports []controlplane.Document, scope controlplane.ConfigResolutionScope) []controlplane.Document {

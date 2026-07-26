@@ -12,11 +12,12 @@ import (
 )
 
 type SkillSelection struct {
-	SkillID      string
-	DomainID     string
-	DisplayName  string
-	ToolPolicy   []string
-	PromptPolicy string
+	SkillID         string
+	DomainID        string
+	DisplayName     string
+	ToolPolicy      []string
+	PromptPolicy    string
+	SearchIntensity string
 }
 
 type SkillRuntime interface {
@@ -77,6 +78,7 @@ func (r ModelDrivenSkillRuntime) SelectSkill(ctx context.Context, turn assistant
 			ContextTurns:         turn.ContextTurns,
 			PageContext:          turn.PageContext,
 			IntersectionEvidence: turn.IntersectionEvidence,
+			FeedbackContext:      turn.FeedbackContextSnapshot,
 			SkillCatalog:         catalog,
 		})
 		if err == nil {

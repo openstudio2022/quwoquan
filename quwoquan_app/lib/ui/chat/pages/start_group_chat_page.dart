@@ -38,6 +38,7 @@ import 'package:quwoquan_app/ui/chat/providers/start_group_from_group_provider.d
 import 'package:quwoquan_app/ui/chat/utils/chat_contact_initials.dart';
 import 'package:quwoquan_app/ui/chat/utils/chat_pinyin_match.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
+import 'package:uuid/uuid.dart';
 
 part 'start_group_chat_page_widgets.dart';
 part 'start_group_chat_member_sheet.dart';
@@ -46,6 +47,10 @@ part 'start_group_chat_group_picker_sheet.dart';
 /// 与云侧 CreateConversation 默认 maxGroupSize 对齐的前置上限；超限由服务端
 /// 二次校验并通过结构化错误回传，客户端仅做即时拦截。
 const int _kStartGroupChatMaxMembers = 1000;
+
+/// ListGroupCandidates 的 canonical 单页上限。群聊成员容量与候选读取容量是
+/// 不同的服务端约束；候选读取不得把 1000 人容量透传为无效 query 参数。
+const int _kStartGroupChatCandidatePageLimit = 100;
 
 /// 发起群聊 / 添加成员两种模式的可观测命名（埋点事件属性，非路由/surface 契约）。
 const String _kCreateModePageName = PageNames.startGroupChat;
@@ -88,6 +93,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   bool _isLoading = true;
   UiErrorSemantic? _pageErrorSemantic;
   int _lastSelectedCount = 0;
+  String? _createIntentFingerprint;
+  String? _createIdempotencyKey;
 
   String get _analyticsPageName =>
       widget.isCreateMode ? _kCreateModePageName : _kAddMemberModePageName;
@@ -145,7 +152,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       final chatRepo = ref.read(chatContactRepositoryProvider);
       final contacts = await chatRepo.listGroupCandidates(
         conversationId: widget.conversationId,
-        limit: _kStartGroupChatMaxMembers,
+        limit: _kStartGroupChatCandidatePageLimit,
       );
       if (mounted) {
         ref
@@ -415,16 +422,21 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     try {
       final repo = ref.read(chatConversationRepositoryProvider);
       if (widget.isCreateMode) {
+        final title = wizardState.selectedMembers.values
+            .map((member) => member.displayName)
+            .where((name) => name.isNotEmpty)
+            .take(3)
+            .join('、');
         final ChatConversationCreatedDto created = await repo
             .createConversation(
               type: 'group',
-              title: wizardState.selectedMembers.values
-                  .map((member) => member.displayName)
-                  .where((name) => name.isNotEmpty)
-                  .take(3)
-                  .join('、'),
+              title: title,
               maxGroupSize: _kStartGroupChatMaxMembers,
               initialMemberIds: selectedIds,
+              idempotencyKey: _idempotencyKeyForCreateIntent(
+                title: title,
+                initialMemberIds: selectedIds,
+              ),
             );
         final conversationId = created.conversationId;
         _recordSubmitOutcome(success: true, memberCount: selectedIds.length);
@@ -464,6 +476,27 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  /// 同一组建群意图的可重试提交必须复用键；一旦命令语义变化则签发新键。
+  ///
+  /// 标题和成员顺序均在服务端命令摘要中，因此二者都是 intent 的一部分。
+  String _idempotencyKeyForCreateIntent({
+    required String title,
+    required List<String> initialMemberIds,
+  }) {
+    final fingerprint = <String>[
+      'group',
+      title,
+      _kStartGroupChatMaxMembers.toString(),
+      ...initialMemberIds,
+    ].join('\u0000');
+    if (_createIntentFingerprint != fingerprint ||
+        _createIdempotencyKey == null) {
+      _createIntentFingerprint = fingerprint;
+      _createIdempotencyKey = const Uuid().v4();
+    }
+    return _createIdempotencyKey!;
   }
 
   /// 按首字母分组：A-Z, #，返回有序 keys 与 map。

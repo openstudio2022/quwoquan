@@ -1,14 +1,13 @@
-kind: aggregate_root
-description: iOS 与 Android 当前已发布应用版本、受信恢复地址和 Android 正式 APK 校验事实的唯一发布根。
+kind: external_reference
+description: iOS 与 Android 当前已发布应用版本、受信恢复地址和 Android 正式 APK 校验事实的只读发布配置引用；唯一真相源是随环境发布包进入运行态的 product-ops 配置。
 identity:
   fields:
   - platform
-  version_field: latestBuild
-  version_source: field
+  version_source: external
 access:
-  commands: aggregate_facade
+  commands: none
   cross_context: public_contract_only
-  queries: named_reader
+  queries: external_port
 relationships: []
 capabilities:
 - queryable
@@ -21,6 +20,6 @@ business_rules:
 - Android latest 指针只能在生产签名、包名、Build、证书摘要、文件大小和 SHA-256 全部验证后切换
 lifecycle:
   states:
-  - current
-  optimistic_concurrency: compare_and_swap
-  idempotency: release_build
+  - published
+  transitions: []
+  notes: 发布配置没有在线写路径；版本变更仅由新的环境发布包原子替换，回滚即切回经验证的上一发布包。

@@ -37,7 +37,10 @@ def _verify_args(environment: str, report_dir: Path) -> argparse.Namespace:
     return argparse.Namespace(
         command="verify",
         env=environment,
-        target="",
+        # Provider readiness is independent from the hosted backup receipt gate.
+        # Use prod-sim here so this contract verifies only the provider preflight;
+        # prod-hosted disaster-recovery evidence has its own acceptance coverage.
+        target="prod-sim" if environment == "prod" else "",
         kind="all",
         profile="release",
         output_format="json",

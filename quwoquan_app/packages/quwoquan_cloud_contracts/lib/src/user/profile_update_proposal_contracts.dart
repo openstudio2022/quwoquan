@@ -7,6 +7,8 @@ enum ProfileUpdateProposalStatus {
   confirmed,
   applying,
   applied,
+  rollingBack,
+  rolledBack,
   rejected,
   expired,
 }
@@ -68,6 +70,19 @@ final class ProfileChangeSet {
   final String? isolationLevel;
   final String? purposeHint;
 
+  List<String> get changedFields {
+    final fields = <String>[
+      if (displayName != null) 'displayName',
+      if (bio != null) 'bio',
+      if (avatarMediaAssetId != null) 'avatarMediaAssetId',
+      if (backgroundMediaAssetId != null) 'backgroundMediaAssetId',
+      if (isPrivate != null) 'isPrivate',
+      if (isolationLevel != null) 'isolationLevel',
+      if (purposeHint != null) 'purposeHint',
+    ]..sort();
+    return fields;
+  }
+
   Map<String, Object?> toWire() => <String, Object?>{
     if (displayName != null) 'displayName': displayName,
     if (bio != null) 'bio': bio,
@@ -86,13 +101,46 @@ final class CreateProfileUpdateProposalCommand {
     required String proposalId,
     required this.source,
     required this.changes,
+    required String reason,
+    required List<String> evidenceRefs,
+    required List<String> impactScope,
   }) : personaId = _required(personaId, 'personaId'),
-       proposalId = _required(proposalId, 'proposalId');
+       proposalId = _required(proposalId, 'proposalId'),
+       reason = _required(reason, 'reason'),
+       evidenceRefs = _requiredStringSet(evidenceRefs, 'evidenceRefs'),
+       impactScope = _requiredStringSet(impactScope, 'impactScope') {
+    if (this.reason.runes.length > 1000) {
+      throw ArgumentError.value(reason, 'reason', 'max 1000 runes');
+    }
+    if (this.evidenceRefs.any(
+      (reference) =>
+          !reference.contains(':') ||
+          reference.startsWith(':') ||
+          reference.endsWith(':') ||
+          reference.contains(RegExp(r'\s')),
+    )) {
+      throw ArgumentError.value(
+        evidenceRefs,
+        'evidenceRefs',
+        'must contain typed kind:id references',
+      );
+    }
+    if (!_sameStrings(this.impactScope, changes.changedFields)) {
+      throw ArgumentError.value(
+        impactScope,
+        'impactScope',
+        'must exactly match ProfileChangeSet fields',
+      );
+    }
+  }
 
   final String personaId;
   final String proposalId;
   final ProfileUpdateProposalSource source;
   final ProfileChangeSet changes;
+  final String reason;
+  final List<String> evidenceRefs;
+  final List<String> impactScope;
 }
 
 final class ConfirmProfileUpdateProposalCommand {
@@ -104,6 +152,13 @@ final class ConfirmProfileUpdateProposalCommand {
 
 final class ApplyProfileUpdateProposalCommand {
   ApplyProfileUpdateProposalCommand({required String proposalId})
+    : proposalId = _required(proposalId, 'proposalId');
+
+  final String proposalId;
+}
+
+final class RollbackProfileUpdateProposalCommand {
+  RollbackProfileUpdateProposalCommand({required String proposalId})
     : proposalId = _required(proposalId, 'proposalId');
 
   final String proposalId;
@@ -159,9 +214,16 @@ final class ProfileUpdateProposalView {
     required this.id,
     required this.personaId,
     required this.source,
+    required this.reason,
+    required this.evidenceRefs,
+    required this.impactScope,
+    required this.createdBy,
     required this.status,
     required this.changes,
     required this.reviewedBy,
+    required this.applyAuditId,
+    required this.rollbackDeadline,
+    required this.rollbackAuditId,
     required this.version,
     required this.createdAt,
     required this.updatedAt,
@@ -171,9 +233,16 @@ final class ProfileUpdateProposalView {
   final String id;
   final String personaId;
   final ProfileUpdateProposalSource source;
+  final String reason;
+  final List<String> evidenceRefs;
+  final List<String> impactScope;
+  final String createdBy;
   final ProfileUpdateProposalStatus status;
   final ProfileChangeSet changes;
   final String? reviewedBy;
+  final String? applyAuditId;
+  final DateTime? rollbackDeadline;
+  final String? rollbackAuditId;
   final int version;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -197,6 +266,9 @@ abstract interface class ProfileUpdateProposalCommandWriter {
   Future<ProfileUpdateProposalCommandResult> apply(
     ApplyProfileUpdateProposalCommand command,
   );
+  Future<ProfileUpdateProposalCommandResult> rollback(
+    RollbackProfileUpdateProposalCommand command,
+  );
   Future<ProfileUpdateProposalCommandResult> reject(
     RejectProfileUpdateProposalCommand command,
   );
@@ -214,6 +286,9 @@ CloudOperationRequestPayload encodeCreateProfileUpdateProposalCommand(
   body: <String, Object?>{
     'proposalId': command.proposalId,
     'source': command.source.name,
+    'reason': command.reason,
+    'evidenceRefs': command.evidenceRefs,
+    'impactScope': command.impactScope,
     ...command.changes.toWire(),
   },
 );
@@ -226,6 +301,12 @@ CloudOperationRequestPayload encodeConfirmProfileUpdateProposalCommand(
 
 CloudOperationRequestPayload encodeApplyProfileUpdateProposalCommand(
   ApplyProfileUpdateProposalCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'id': command.proposalId},
+);
+
+CloudOperationRequestPayload encodeRollbackProfileUpdateProposalCommand(
+  RollbackProfileUpdateProposalCommand command,
 ) => CloudOperationRequestPayload(
   pathParameters: <String, String>{'id': command.proposalId},
 );
@@ -289,6 +370,10 @@ ProfileUpdateProposalView _view(Object? value) {
     'id',
     'personaId',
     'source',
+    'reason',
+    'evidenceRefs',
+    'impactScope',
+    'createdBy',
     'status',
     'displayName',
     'bio',
@@ -298,6 +383,9 @@ ProfileUpdateProposalView _view(Object? value) {
     'isolationLevel',
     'purposeHint',
     'reviewedBy',
+    'applyAuditId',
+    'rollbackDeadline',
+    'rollbackAuditId',
     'version',
     'createdAt',
     'updatedAt',
@@ -321,9 +409,16 @@ ProfileUpdateProposalView _view(Object? value) {
     id: _string(map, 'id'),
     personaId: _string(map, 'personaId'),
     source: _source(map['source']),
+    reason: _string(map, 'reason'),
+    evidenceRefs: _stringList(map, 'evidenceRefs'),
+    impactScope: _stringList(map, 'impactScope'),
+    createdBy: _string(map, 'createdBy'),
     status: _status(map['status']),
     changes: changes,
     reviewedBy: _optionalString(map['reviewedBy']),
+    applyAuditId: _optionalString(map['applyAuditId']),
+    rollbackDeadline: _optionalDate(map['rollbackDeadline']),
+    rollbackAuditId: _optionalString(map['rollbackAuditId']),
     version: _positiveInt(map, 'version'),
     createdAt: _date(map, 'createdAt'),
     updatedAt: _date(map, 'updatedAt'),
@@ -379,6 +474,21 @@ bool? _nullableBool(Map<String, Object?> map, String key) {
   return value;
 }
 
+List<String> _stringList(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is! List<Object?>) {
+    throw FormatException('$key must be a list');
+  }
+  return value
+      .map((item) {
+        if (item is! String || item.trim().isEmpty) {
+          throw FormatException('$key items must be non-empty strings');
+        }
+        return item.trim();
+      })
+      .toList(growable: false);
+}
+
 DateTime _date(Map<String, Object?> map, String key) {
   final parsed = DateTime.tryParse(_string(map, key));
   if (parsed == null) throw FormatException('$key must be RFC3339');
@@ -403,11 +513,17 @@ ProfileUpdateProposalSource _source(Object? value) =>
       orElse: () => throw FormatException('unknown proposal source $value'),
     );
 
-ProfileUpdateProposalStatus _status(Object? value) =>
-    ProfileUpdateProposalStatus.values.firstWhere(
-      (item) => item.name == value,
-      orElse: () => throw FormatException('unknown proposal status $value'),
-    );
+ProfileUpdateProposalStatus _status(Object? value) => switch (value) {
+  'pending' => ProfileUpdateProposalStatus.pending,
+  'confirmed' => ProfileUpdateProposalStatus.confirmed,
+  'applying' => ProfileUpdateProposalStatus.applying,
+  'applied' => ProfileUpdateProposalStatus.applied,
+  'rolling_back' => ProfileUpdateProposalStatus.rollingBack,
+  'rolled_back' => ProfileUpdateProposalStatus.rolledBack,
+  'rejected' => ProfileUpdateProposalStatus.rejected,
+  'expired' => ProfileUpdateProposalStatus.expired,
+  _ => throw FormatException('unknown proposal status $value'),
+};
 
 String _required(String value, String name) {
   final normalized = value.trim();
@@ -418,6 +534,25 @@ String _required(String value, String name) {
 String? _optional(String? value) {
   final normalized = value?.trim() ?? '';
   return normalized.isEmpty ? null : normalized;
+}
+
+List<String> _requiredStringSet(List<String> values, String name) {
+  final normalized = values.map((value) => value.trim()).toSet().toList()
+    ..sort();
+  if (normalized.isEmpty ||
+      normalized.length != values.length ||
+      normalized.any((value) => value.isEmpty)) {
+    throw ArgumentError.value(values, name, 'must be a non-empty unique set');
+  }
+  return List<String>.unmodifiable(normalized);
+}
+
+bool _sameStrings(List<String> left, List<String> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
 }
 
 String? _optionalPreservingEmpty(String? value) =>

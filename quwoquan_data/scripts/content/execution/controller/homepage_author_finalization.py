@@ -1,20 +1,61 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from content.execution.coverage import coverage_entity_type
 from content.execution.support import Any, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, Mapping, Path, _IMAGE_SOURCE_TEXT_NOISE_PATTERNS, _IMAGE_SOURCE_TEXT_NOISE_TOKENS, _active_spec, _is_homepage_only_execution, data_issue, execution_root, load_execution_state, os, re, read_json, require_domain_etype, save_execution_state, shutil, store, write_json
 from content.execution.controller.homepage_author_evidence import (
     _homepage_finalization_unexpected_issue,
     _write_homepage_author_evidence,
 )
+
+
+def _write_homepage_repair_report(
+    ctx: ExecutionContext,
+    *,
+    object_dir: Path,
+    ref: str,
+    materialization_messages: tuple[str, ...],
+) -> Path:
+    """Persist typed, object-scoped feedback for the next homepage author run."""
+    from content.execution.stage_reports import build_repair_report
+
+    issues = tuple(
+        data_issue(
+            DataIssueCode.QUALITY_FAILED,
+            stage=DataIssueStage.BUILD_HOMEPAGE,
+            lane=DataIssueLane.HOMEPAGE,
+            recovery=DataRecoveryAction.RETRY_AGENT,
+            ref=ref,
+            message=message,
+        )
+        for message in materialization_messages
+    )
+    if not issues:
+        raise ValueError("homepage repair report requires materialization issues")
+    report_path = object_dir / "5.review" / "repair_report.json"
+    write_json(
+        report_path,
+        build_repair_report(
+            execution_id=ctx.execution_id,
+            command="homepage",
+            ref=ref,
+            failed_stage=DataIssueStage.BUILD_HOMEPAGE.value,
+            failed_gate="homepage_materialization",
+            issues=issues,
+            fallback_stage=DataIssueStage.BUILD_HOMEPAGE.value,
+            rerun_chain=["author", "materialize"],
+        ),
+    )
+    return report_path
+
+
 def _finalize_managed_homepage_outputs(
     ctx: ExecutionContext,
-    prompts: list[str],
+    _prompts: list[str],
     outcomes: list["ManagedAgentJobOutcome"],
 ) -> tuple["ManagedAgentJobOutcome", ...]:
     """Finalize a completed homepage author run before materializing its page."""
-    from content.execution.agent.agent_checkpoint import _managed_prompt_entity
     from content.execution.agent.outcome import ManagedAgentJobOutcome
     from core.article_package import compute_document_sha256
+    from core.entity_object import parse_entity_ref
     from content.post.article.draft_io import is_placeholder
     from core.schema import assert_valid
     from content.homepage.homepage_review import _entity_draft_dir
@@ -24,12 +65,15 @@ def _finalize_managed_homepage_outputs(
         if not job_outcome.succeeded:
             finalized.append(job_outcome)
             continue
-        prompt = prompts[job_outcome.job_index] if job_outcome.job_index < len(prompts) else ""
-        entity = _managed_prompt_entity(prompt)
-        if not entity:
-            finalized.append(job_outcome)
+        coordinates = parse_entity_ref(job_outcome.ref)
+        if coordinates is None:
+            finalized.append(
+                job_outcome.with_gate_issues(
+                    ("homepage author outcome missing canonical entity ref",)
+                )
+            )
             continue
-        etype = coverage_entity_type(ctx.spec)
+        domain, et, entity = coordinates
         target = next(
             (
                 row
@@ -39,9 +83,23 @@ def _finalize_managed_homepage_outputs(
             None,
         )
         if not target:
-            finalized.append(job_outcome)
+            finalized.append(
+                job_outcome.with_gate_issues(
+                    ("homepage author outcome entity is outside frozen target set",)
+                )
+            )
             continue
-        domain, et = require_domain_etype(target.entity_type, context=entity)
+        target_domain, target_type = require_domain_etype(
+            target.entity_type,
+            context=entity,
+        )
+        if (domain, et) != (target_domain, target_type):
+            finalized.append(
+                job_outcome.with_gate_issues(
+                    ("homepage author outcome entity ref type mismatches frozen target",)
+                )
+            )
+            continue
         draft_dir = _entity_draft_dir(ctx.execution_id, domain, et, entity)
         draft_dir.mkdir(parents=True, exist_ok=True)
         meta_path = draft_dir / "draft_meta.json"
@@ -101,12 +159,20 @@ def _finalize_managed_homepage_outputs(
             finalized.append(job_outcome.with_gate_issues((issue.message,)))
             continue
         if materialize_issues:
+            messages = tuple(str(item) for item in materialize_issues)
+            _write_homepage_repair_report(
+                ctx,
+                object_dir=draft_dir.parent,
+                ref=job_outcome.ref,
+                materialization_messages=messages,
+            )
             finalized.append(
                 job_outcome.with_gate_issues(
-                    tuple(str(item) for item in materialize_issues[:20]),
+                    messages,
                 )
             )
             continue
+        (draft_dir.parent / "5.review" / "repair_report.json").unlink(missing_ok=True)
         finalized.append(job_outcome)
     return tuple(finalized)
 

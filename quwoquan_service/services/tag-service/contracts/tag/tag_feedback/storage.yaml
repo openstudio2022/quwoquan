@@ -13,4 +13,8 @@ collections:
       keys:
         tagRef: 1
         recordedAt: -1
+    - name: idx_tag_feedback_pending_event
+      keys:
+        eventPublishedAt: 1
+        recordedAt: 1
 role: append_only

@@ -119,9 +119,13 @@ extension _SearchNetworkResultsPageStateHelpers
     }
 
     final entity = _entityTopResult();
+    final locationPlace = _locationPlaceTopResult();
     final relatedSearchCard = _buildRelatedSearchCard(isDark: isDark);
     final hasPrimaryResults =
-        entity != null || _userResults.isNotEmpty || _contentResults.isNotEmpty;
+        entity != null ||
+        locationPlace != null ||
+        _userResults.isNotEmpty ||
+        _contentResults.isNotEmpty;
     if (!hasPrimaryResults) {
       return <Widget>[
         _CategorySummaryCard(
@@ -149,6 +153,14 @@ extension _SearchNetworkResultsPageStateHelpers
           entity: entity,
           isDark: isDark,
           onTap: () => _openHomepage(entity.homepageId),
+        ),
+      );
+    } else if (locationPlace != null) {
+      sections.add(
+        _LocationPlaceTopResultCard(
+          place: locationPlace.place,
+          isDark: isDark,
+          onTap: () => _openLocationPlace(locationPlace.place),
         ),
       );
     }

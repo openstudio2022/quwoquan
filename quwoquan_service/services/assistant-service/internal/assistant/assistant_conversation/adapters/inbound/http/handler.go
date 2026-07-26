@@ -17,10 +17,8 @@ import (
 	"quwoquan_service/runtime/streaming"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
-	interactionapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_interaction_event/application"
 	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/application"
 	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
-	scorecardapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_scorecard_fact/application"
 	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
 )
 
@@ -28,8 +26,6 @@ type Handler struct {
 	service            *application.AssistantService
 	preferenceCommands *preferencefact.CommandFacade
 	preferenceQueries  *preferencefact.QueryFacade
-	interactionEvents  *interactionapplication.Ingestion
-	scorecards         *scorecardapplication.Ingestion
 	runs               *runapplication.UseCases
 	subscriptions      *subscriptionapplication.UseCases
 }
@@ -54,8 +50,6 @@ func NewHandler(
 		service:            service,
 		preferenceCommands: preferencefact.NewCommandFacade(nil, nil),
 		preferenceQueries:  preferencefact.NewQueryFacade(nil),
-		interactionEvents:  interactionapplication.NewIngestion(service),
-		scorecards:         scorecardapplication.NewIngestion(service),
 		runs:               runapplication.NewUseCases(service),
 		subscriptions:      subscriptionapplication.NewUseCases(service),
 	}
@@ -70,8 +64,6 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /healthz", h.handleHealthz)
 	mux.HandleFunc("GET /livez", h.handleHealthz)
 	mux.HandleFunc("GET /startupz", h.handleHealthz)
-	mux.HandleFunc("POST /assistant/learning/events", h.handleReportInteractionEvent)
-	mux.HandleFunc("POST /internal/assistant/learning/scorecards", h.handleReportScorecard)
 	mux.HandleFunc("POST /assistant/search/xiaoqu", h.handleSearchXiaoqu)
 	mux.HandleFunc("POST /assistant/conversations/{conversationId}/runs", h.handleStartRun)
 	mux.HandleFunc("GET /assistant/runs/{runId}", h.handleGetRun)
@@ -81,7 +73,6 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /assistant/page-context", h.handleReportPageContext)
 	mux.HandleFunc("GET /assistant/personalization", h.handleGetEntryPersonalization)
 	mux.HandleFunc("GET /assistant/suggested-actions", h.handleGetSuggestedActions)
-	mux.HandleFunc("GET /assistant/policy", h.handleGetPolicy)
 	mux.HandleFunc("GET /assistant/skills", h.handleListSkills)
 	mux.HandleFunc("POST /assistant/skills/creation-suggest", h.handleSuggestCreationAssistance)
 	mux.HandleFunc("GET /assistant/tasks", h.handleListTasks)
@@ -107,15 +98,6 @@ func (h *Handler) Routes() http.Handler {
 
 func (h *Handler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *Handler) handleGetPolicy(w http.ResponseWriter, r *http.Request) {
-	view, err := h.service.GetPolicy(r.Context(), resolveUserID(r))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
 }
 
 func (h *Handler) handleReportPageContext(w http.ResponseWriter, r *http.Request) {
@@ -148,50 +130,6 @@ func (h *Handler) handleGetSuggestedActions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
-}
-
-func (h *Handler) handleReportInteractionEvent(w http.ResponseWriter, r *http.Request) {
-	payload, err := readJSONObject(r)
-	if err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	events, err := decodeInteractionEvents(payload)
-	if err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	for i := range events {
-		applyInteractionRequestContext(&events[i], r)
-	}
-	resp, err := h.interactionEvents.Append(r.Context(), events)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
-func (h *Handler) handleReportScorecard(w http.ResponseWriter, r *http.Request) {
-	payload, err := readJSONObject(r)
-	if err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	scores, err := decodeScorecards(payload)
-	if err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	for i := range scores {
-		applyScorecardRequestContext(&scores[i], r)
-	}
-	resp, err := h.scorecards.Append(r.Context(), scores)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) handleSearchXiaoqu(w http.ResponseWriter, r *http.Request) {
@@ -848,72 +786,6 @@ func readJSON(r *http.Request, v any) error {
 	return nil
 }
 
-func readJSONObject(r *http.Request) (map[string]any, error) {
-	var payload map[string]any
-	if err := readJSON(r, &payload); err != nil {
-		return nil, err
-	}
-	return payload, nil
-}
-
-func decodeInteractionEvents(payload map[string]any) ([]assistant.InteractionEvent, error) {
-	if rawEvents, ok := payload["events"]; ok {
-		list, ok := rawEvents.([]any)
-		if !ok {
-			return nil, fmt.Errorf("events must be an array")
-		}
-		out := make([]assistant.InteractionEvent, 0, len(list))
-		for _, item := range list {
-			obj, ok := item.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf("events item must be an object")
-			}
-			encoded, _ := json.Marshal(obj)
-			var event assistant.InteractionEvent
-			if err := json.Unmarshal(encoded, &event); err != nil {
-				return nil, err
-			}
-			out = append(out, event)
-		}
-		return out, nil
-	}
-	encoded, _ := json.Marshal(payload)
-	var event assistant.InteractionEvent
-	if err := json.Unmarshal(encoded, &event); err != nil {
-		return nil, err
-	}
-	return []assistant.InteractionEvent{event}, nil
-}
-
-func decodeScorecards(payload map[string]any) ([]assistant.Scorecard, error) {
-	if rawScores, ok := payload["scorecards"]; ok {
-		list, ok := rawScores.([]any)
-		if !ok {
-			return nil, fmt.Errorf("scorecards must be an array")
-		}
-		out := make([]assistant.Scorecard, 0, len(list))
-		for _, item := range list {
-			obj, ok := item.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf("scorecards item must be an object")
-			}
-			encoded, _ := json.Marshal(obj)
-			var score assistant.Scorecard
-			if err := json.Unmarshal(encoded, &score); err != nil {
-				return nil, err
-			}
-			out = append(out, score)
-		}
-		return out, nil
-	}
-	encoded, _ := json.Marshal(payload)
-	var score assistant.Scorecard
-	if err := json.Unmarshal(encoded, &score); err != nil {
-		return nil, err
-	}
-	return []assistant.Scorecard{score}, nil
-}
-
 func applyRunRequestContext(input *assistant.CreateTurnInput, r *http.Request) {
 	if input == nil {
 		return
@@ -925,58 +797,8 @@ func applyRunRequestContext(input *assistant.CreateTurnInput, r *http.Request) {
 		RouteID:     resolveRouteID(r),
 		OperationID: resolveOperationID(r),
 		TraceID:     resolveTraceID(r),
+		PersonaID:   resolvePersonaID(r),
 	}.Normalized()
-}
-
-func applyInteractionRequestContext(event *assistant.InteractionEvent, r *http.Request) {
-	if strings.TrimSpace(event.UserID) == "" {
-		event.UserID = resolveUserID(r)
-	}
-	if strings.TrimSpace(event.SessionID) == "" {
-		event.SessionID = resolveSessionID(r)
-	}
-	if strings.TrimSpace(event.TraceID) == "" {
-		event.TraceID = resolveTraceID(r)
-	}
-	if strings.TrimSpace(event.PageID) == "" {
-		event.PageID = resolvePageID(r)
-	}
-	if strings.TrimSpace(event.SurfaceID) == "" {
-		event.SurfaceID = resolveSurfaceID(r)
-	}
-	if strings.TrimSpace(event.RouteID) == "" {
-		event.RouteID = resolveRouteID(r)
-	}
-	if strings.TrimSpace(event.OperationID) == "" {
-		event.OperationID = resolveOperationID(r)
-	}
-	if strings.TrimSpace(event.ExperimentBucket) == "" {
-		event.ExperimentBucket = resolveExperimentBucket(r)
-	}
-	if strings.TrimSpace(event.ClientSentAt) == "" {
-		event.ClientSentAt = resolveClientSentAt(r)
-	}
-}
-
-func applyScorecardRequestContext(score *assistant.Scorecard, r *http.Request) {
-	if strings.TrimSpace(score.UserID) == "" {
-		score.UserID = resolveUserID(r)
-	}
-	if strings.TrimSpace(score.PageID) == "" {
-		score.PageID = resolvePageID(r)
-	}
-	if strings.TrimSpace(score.SurfaceID) == "" {
-		score.SurfaceID = resolveSurfaceID(r)
-	}
-	if strings.TrimSpace(score.RouteID) == "" {
-		score.RouteID = resolveRouteID(r)
-	}
-	if strings.TrimSpace(score.OperationID) == "" {
-		score.OperationID = resolveOperationID(r)
-	}
-	if strings.TrimSpace(score.ExperimentBucket) == "" {
-		score.ExperimentBucket = resolveExperimentBucket(r)
-	}
 }
 
 func parseLimit(r *http.Request, fallback int) int {
@@ -995,6 +817,11 @@ func parseLimit(r *http.Request, fallback int) int {
 }
 
 func resolveUserID(r *http.Request) string {
+	if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+		if accountID := strings.TrimSpace(principal.Actor.AccountID); accountID != "" {
+			return accountID
+		}
+	}
 	if uid := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); uid != "" {
 		return uid
 	}
@@ -1002,6 +829,11 @@ func resolveUserID(r *http.Request) string {
 }
 
 func resolvePersonaID(r *http.Request) string {
+	if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+		if personaID := strings.TrimSpace(principal.Actor.PersonaID); personaID != "" {
+			return personaID
+		}
+	}
 	return strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
 }
 
@@ -1026,20 +858,6 @@ func resolveRouteID(r *http.Request) string {
 
 func resolveOperationID(r *http.Request) string {
 	return strings.TrimSpace(r.Header.Get("X-Client-Operation-Id"))
-}
-
-func resolveExperimentBucket(r *http.Request) string {
-	if bucket := strings.TrimSpace(r.Header.Get("X-Client-Experiment-Bucket")); bucket != "" {
-		return bucket
-	}
-	if bucket := strings.TrimSpace(r.URL.Query().Get("experimentBucket")); bucket != "" {
-		return bucket
-	}
-	return ""
-}
-
-func resolveClientSentAt(r *http.Request) string {
-	return strings.TrimSpace(r.Header.Get("X-Client-Sent-At"))
 }
 
 func resolveTraceID(r *http.Request) string {

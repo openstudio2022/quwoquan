@@ -2,6 +2,7 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -38,13 +39,17 @@ type Built struct {
 	Projector *Projector
 }
 
-// Build assembles the write-time search index from config. When ES is disabled or
-// has no endpoints it returns an empty (no-op) Built so the user write path is
-// unchanged. reader is the live profile store used to read profiles back on
-// events.
-func Build(cfg ESConfig, reader ProfileReader, opts ...Option) (Built, error) {
-	if !cfg.Enabled || len(cfg.Endpoints) == 0 {
+// Build assembles the write-time search index from config. An explicitly
+// disabled projection returns an empty Built; an enabled but incomplete
+// configuration fails fast.
+func Build(cfg ESConfig, reader ProfileReader) (Built, error) {
+	if !cfg.Enabled {
 		return Built{}, nil
+	}
+	if len(cfg.Endpoints) == 0 || reader == nil {
+		return Built{}, fmt.Errorf(
+			"UserProfile search projection requires endpoints and reader",
+		)
 	}
 	client, err := es.NewClient(es.Config{
 		Endpoints:      cfg.Endpoints,
@@ -68,7 +73,7 @@ func Build(cfg ESConfig, reader ProfileReader, opts ...Option) (Built, error) {
 	return Built{
 		Client:    client,
 		Indexer:   indexer,
-		Projector: NewProjector(indexer, reader, opts...),
+		Projector: NewProjector(indexer, reader),
 	}, nil
 }
 
@@ -88,17 +93,17 @@ func (b Built) HealthPing() func(context.Context) error {
 	return b.Client.Ping
 }
 
-// composedPublisher fans a user event out to several publishers. The primary
-// (domain MQ) publisher runs first and its error is the one returned, preserving
-// the existing write-path semantics; the search projector runs best-effort and
-// swallows its own ES failures.
+// composedPublisher fans a user event out to several publishers. Every
+// projection error is returned to the caller; callers that need retry must use
+// their object-owned durable outbox rather than swallowing a derived-store
+// failure.
 type composedPublisher struct {
 	publishers []application.UserEventPublisher
 }
 
 // ComposePublisher fans events out to all non-nil publishers in order, returning
-// the first error encountered (the primary publisher's, in practice). The search
-// projector always returns nil, so wrapping it never changes error propagation.
+// the first error encountered while allowing later projections to observe the
+// same event.
 func ComposePublisher(publishers ...application.UserEventPublisher) application.UserEventPublisher {
 	live := make([]application.UserEventPublisher, 0, len(publishers))
 	for _, p := range publishers {

@@ -37,7 +37,12 @@ from content.source.source_unit import (
 from core.image_rules import MIN_ENTITY_IMAGES, pixel_size_issue, relevance_issue
 from core.image_safety import assess_image, assess_image_cached, dedupe_image_payloads
 from core.image_decode import probe_image_bytes
-from core.page_media import DownloadedPageAsset, PageImagePlacement, PageImagePlacementType
+from core.page_media import (
+    DownloadedPageAsset,
+    PageImageDropCode,
+    PageImagePlacement,
+    PageImagePlacementType,
+)
 from content.execution.stage_reports import write_gate_report, write_stage_result
 from content.source.gate import download_requirements, gate_download
 from content.source.source_inputs import (
@@ -93,10 +98,29 @@ def _download_source_unit_images(
     drops: list[dict[str, object]] = []
     fetch_failures: list[dict[str, object]] = []
 
+    def _record_drop(
+        code: PageImageDropCode,
+        *,
+        slug: str,
+        reason: str,
+        url: str = "",
+        status_code: int | None = None,
+    ) -> None:
+        row: dict[str, object] = {
+            "slug": slug,
+            "code": code.value,
+            "reason": reason,
+        }
+        if url:
+            row["url"] = url
+        if status_code is not None:
+            row["statusCode"] = status_code
+        drops.append(row)
+
     def _funnel(candidate_count: int, dedupe_removed: int) -> dict[str, Any]:
         reason_counts: dict[str, int] = {}
         for drop in drops:
-            key = str(drop.get("reason") or "unknown").split(":", 1)[0]
+            key = str(drop.get("code") or "unknown")
             reason_counts[key] = reason_counts.get(key, 0) + 1
         return {
             "candidateCount": candidate_count,
@@ -122,7 +146,11 @@ def _download_source_unit_images(
         candidate_group = str(raw.get("groupId") or "") if isinstance(raw, Mapping) else ""
         if not isinstance(raw, Mapping):
             issues.append(f"{source_id} image[{idx_img}] invalid payload")
-            drops.append({"slug": f"{source_id}#{idx_img}", "reason": "invalidPayload"})
+            _record_drop(
+                PageImageDropCode.INVALID_PAYLOAD,
+                slug=f"{source_id}#{idx_img}",
+                reason="image candidate payload is not an object",
+            )
             continue
         spec = {
             **{
@@ -157,12 +185,11 @@ def _download_source_unit_images(
         blocking_rights_issues = validate_image_rights(admission_spec, vertical=vertical)
         if blocking_rights_issues:
             issues.extend(f"{label}: {issue}" for issue in blocking_rights_issues)
-            drops.append(
-                {
-                    "slug": label,
-                    "url": spec_url,
-                    "reason": f"rights: {blocking_rights_issues[0]}",
-                }
+            _record_drop(
+                PageImageDropCode.RIGHTS_POLICY,
+                slug=label,
+                url=spec_url,
+                reason=blocking_rights_issues[0],
             )
             continue
         payload = _cached_source_image_payload(
@@ -190,13 +217,12 @@ def _download_source_unit_images(
                         f"{label}: page image fetch {page_fetch.failure.value} "
                         f"(status={page_fetch.status_code}, attempts={page_fetch.attempt_count})"
                     )
-                    drops.append(
-                        {
-                            "slug": label,
-                            "url": spec_url,
-                            "reason": f"fetch:{page_fetch.failure.value}",
-                            "statusCode": page_fetch.status_code,
-                        }
+                    _record_drop(
+                        PageImageDropCode.FETCH_FAILURE,
+                        slug=label,
+                        url=spec_url,
+                        reason=page_fetch.failure.value,
+                        status_code=page_fetch.status_code,
                     )
                     fetch_failures.append(
                         page_fetch.as_failure_evidence(
@@ -216,19 +242,34 @@ def _download_source_unit_images(
                 else ""
             )
             issues.append(f"{label}: imageFetch failed/non-image/too small{size_note} ({spec.get('url')})")
-            drops.append({"slug": label, "url": spec_url, "reason": "fetch: 抓取失败/非图片/视频/过小或过大"})
+            _record_drop(
+                PageImageDropCode.FETCH_FAILURE,
+                slug=label,
+                url=spec_url,
+                reason="generic image fetch failed",
+            )
             continue
         image_probe = probe_image_bytes(payload["bytes"])
         if not image_probe.succeeded:
             reason = f"image_decode:{image_probe.failure.value}"
             issues.append(f"{label}: {reason}")
-            drops.append({"slug": label, "url": spec_url, "reason": f"safety:{reason}"})
+            _record_drop(
+                PageImageDropCode.DECODE_POLICY,
+                slug=label,
+                url=spec_url,
+                reason=reason,
+            )
             continue
         width, height = image_probe.width, image_probe.height
         px_issue = pixel_size_issue(width, height, asset_id=label)
         if px_issue:
             issues.append(px_issue)
-            drops.append({"slug": label, "url": spec_url, "reason": f"pixel: {px_issue}"})
+            _record_drop(
+                PageImageDropCode.PIXEL_POLICY,
+                slug=label,
+                url=spec_url,
+                reason=px_issue,
+            )
             continue
         temp_file = _write_image_check_temp_file(
             execution_id,
@@ -241,13 +282,23 @@ def _download_source_unit_images(
             _cleanup_image_check_temp_file(temp_file)
         if verdict.blocks_image_publish:
             issues.append(f"{label}: imageSafety blocked ({verdict.status}) reasons={list(verdict.reasons)}")
-            drops.append({"slug": label, "url": spec_url, "reason": f"safety: {verdict.status} {list(verdict.reasons)}"})
+            _record_drop(
+                PageImageDropCode.SAFETY_POLICY,
+                slug=label,
+                url=spec_url,
+                reason=f"{verdict.status} {list(verdict.reasons)}",
+            )
             continue
         relevance = str(spec.get("relevance") or spec.get("caption") or "")
         rel_issue = relevance_issue(relevance, entity_id=entity_id, asset_id=label)
         if rel_issue:
             issues.append(rel_issue)
-            drops.append({"slug": label, "url": spec_url, "reason": f"relevance: {rel_issue}"})
+            _record_drop(
+                PageImageDropCode.RELEVANCE_POLICY,
+                slug=label,
+                url=spec_url,
+                reason=rel_issue,
+            )
             continue
         rights = normalize_rights_payload(spec)
         asset_payload = {
@@ -335,9 +386,18 @@ def _download_source_unit_images(
             )
             asset_payload.update(typed_asset.as_dict())
         images.append(asset_payload)
-    images, duplicates = dedupe_image_payloads(images)
+    downloaded_images = images
+    images, duplicates = dedupe_image_payloads(downloaded_images)
     if duplicates:
         issues.append(f"{source_id}: source image dedupe removed {len(duplicates)} near-duplicate image(s)")
+        for duplicate_index in duplicates:
+            duplicate = downloaded_images[duplicate_index]
+            _record_drop(
+                PageImageDropCode.DUPLICATE,
+                slug=str(duplicate.get("slug") or f"{source_id}#duplicate-{duplicate_index + 1}"),
+                url=str(duplicate.get("url") or ""),
+                reason="near-duplicate source image",
+            )
     funnel = _funnel(candidate_count, len(duplicates))
     structured_page_images = any(
         str(spec.get("placementType") or "")
@@ -346,7 +406,9 @@ def _download_source_unit_images(
         if isinstance(spec, Mapping)
     )
     incomplete_downloads = [
-        row for row in drops if str(row.get("reason") or "").startswith("fetch:")
+        row
+        for row in drops
+        if str(row.get("code") or "") == PageImageDropCode.FETCH_FAILURE.value
     ]
     if structured_page_images and incomplete_downloads:
         return (

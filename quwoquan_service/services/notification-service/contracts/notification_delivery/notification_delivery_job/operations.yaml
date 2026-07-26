@@ -132,6 +132,54 @@ api_routes:
     anonymous_policy: deny
     visibility: internal
 - method: GET
+  path: /internal/notifications/delivery-jobs/incoming-call-timeline
+  operation: GetIncomingCallDeliveryTimeline
+  actor: account
+  application:
+    kind: query
+    facet: NotificationDeliveryJobQueryFacade
+    method: getIncomingCallTimeline
+    reader: IncomingCallDeliveryTimelineReader
+    slice: IncomingCallDeliveryTimeline
+  authorization:
+    principal: operator
+    scopes: [ops.notification.read]
+    permissions: [notification.delivery.read]
+    ownership_policy: operator_delivery_plane
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - NOTIFICATION.USER.unauthorized
+  - NOTIFICATION.USER.invalid_argument
+  - NOTIFICATION.SYSTEM.storage_read_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: notification_incoming_call_timeline_read
+    trace: true
+    attributes: [outcome, result_count]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  query_params: [callId]
+  response_body: IncomingCallDeliveryTimeline
+  response_body_kind: object
+  description: operator 按 callId 读取设备摘要、202 acceptance、provider receipt、presentation ACK 与 cancel 时间线；响应不暴露原始 deviceId、deliveryKey、attemptId 或 provider request identifier。
+  security:
+    auth_mode: required
+    principal: operator
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+- method: GET
   path: /internal/notifications/delivery-jobs/dead-letters
   operation: ListNotificationDeliveryJobDeadLetters
   actor: account

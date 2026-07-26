@@ -212,6 +212,37 @@ def test_journey_scenario_requires_exact_l1_handoff_reference(
     assert any("AppRoot 不存在" in error for error in errors)
 
 
+def test_last_journey_does_not_consume_links_from_following_approot_sections(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = build_tree(tmp_path)
+    tree = root / "specs" / "feature-tree"
+    write(
+        tree / "spec.md",
+        "# AppRoot Spec：演示\n\n"
+        "### JNY-001 演示旅程\n\n"
+        "- 参与领域：\n"
+        "  - [domain](./domain/spec.md)\n\n"
+        "#### SCN-001 演示场景\n\n"
+        "- 领域交接：domain\n\n"
+        "## 5. 全局验收\n\n"
+        "- [unrelated](./unrelated/spec.md)\n",
+    )
+    write(
+        tree / "domain" / "spec.md",
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "- [`JNY-001 / SCN-001`](../spec.md#scn-001)\n",
+    )
+    write(
+        tree / "unrelated" / "spec.md",
+        "# L1 Domain Service：无关领域 (`unrelated`)\n",
+    )
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "TREE_ROOT", tree)
+
+    assert feature_tree.validate_journey_bidirection(feature_tree.discover_nodes()) == []
+
+
 def test_semantic_anchor_changes_detects_added_and_removed_ids(
     tmp_path: Path, monkeypatch
 ) -> None:

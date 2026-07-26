@@ -7,7 +7,7 @@ fields:
   log_policy: allow
   api_exposure: read
   ops_exposure: read
-  role: authoritative_state
+  role: projection
 - name: latestVersion
   source: latestVersion
   type: string
@@ -16,7 +16,7 @@ fields:
   log_policy: allow
   api_exposure: read
   ops_exposure: read
-  role: authoritative_state
+  role: projection
 - name: latestBuild
   source: latestBuild
   type: string
@@ -25,7 +25,7 @@ fields:
   log_policy: allow
   api_exposure: read
   ops_exposure: read
-  role: authoritative_state
+  role: projection
 - name: updateUrl
   source: updateUrl
   type: string
@@ -34,7 +34,7 @@ fields:
   log_policy: metadata_only
   api_exposure: read
   ops_exposure: read
-  role: derived_projection
+  role: projection
 - name: recoveryUrl
   source: recoveryUrl
   type: string
@@ -43,7 +43,7 @@ fields:
   log_policy: metadata_only
   api_exposure: read
   ops_exposure: read
-  role: derived_projection
+  role: projection
 - name: androidApkUrl
   source: androidApkUrl
   type: string
@@ -52,7 +52,7 @@ fields:
   log_policy: metadata_only
   api_exposure: drop
   ops_exposure: read
-  role: authoritative_state
+  role: projection
 - name: androidApkSha256
   source: androidApkSha256
   type: string
@@ -61,7 +61,7 @@ fields:
   log_policy: allow
   api_exposure: drop
   ops_exposure: read
-  role: authoritative_state
+  role: projection
 - name: androidApkSizeBytes
   source: androidApkSizeBytes
   type: int
@@ -70,7 +70,7 @@ fields:
   log_policy: allow
   api_exposure: drop
   ops_exposure: read
-  role: authoritative_state
+  role: projection
 - name: androidPackageName
   source: androidPackageName
   type: string
@@ -79,7 +79,7 @@ fields:
   log_policy: allow
   api_exposure: drop
   ops_exposure: read
-  role: authoritative_state
+  role: projection
 - name: androidSigningCertificateSha256
   source: androidSigningCertificateSha256
   type: string
@@ -88,4 +88,4 @@ fields:
   log_policy: mask
   api_exposure: drop
   ops_exposure: read
-  role: authoritative_state
+  role: projection

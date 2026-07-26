@@ -4,7 +4,6 @@ package generated
 import (
 	"context"
 	"errors"
-
 	rerrors "quwoquan_service/runtime/errors"
 )
 

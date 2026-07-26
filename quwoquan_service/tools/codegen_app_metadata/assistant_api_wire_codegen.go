@@ -10,9 +10,7 @@ import (
 )
 
 // generateAssistantCloudApiWireDart emits strongly-typed AssistantRepository wire views from
-// every assistant aggregate consumed by the App. A route can submit an event
-// aggregate while its command packet lives in assistant_run, so those fields
-// must be merged before rendering rather than recreated as hand-written Dart.
+// every assistant aggregate and projection consumed by the App.
 func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 	path := filepath.Join(metadataDir, "assistant", "assistant", "assistant_run", "fields.yaml")
 	ff, err := readFields(path)
@@ -33,9 +31,8 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 		return err
 	}
 	for _, relativePath := range []string{
-		"assistant/assistant/assistant_interaction_event/fields.yaml",
+		"assistant/assistant/assistant_learning_fact/fields.yaml",
 		"assistant/assistant/assistant_preference_fact/fields.yaml",
-		"assistant/assistant/assistant_scorecard_fact/fields.yaml",
 	} {
 		additional, readErr := readFields(filepath.Join(metadataDir, relativePath))
 		if readErr != nil {
@@ -47,12 +44,6 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 			}
 			ff.Entities[name] = entity
 		}
-	}
-	if interaction, exists := ff.Entities["AssistantInteractionEvent"]; exists {
-		ff.Entities["InteractionEvent"] = interaction
-	}
-	if scorecard, exists := ff.Entities["AssistantScorecardFact"]; exists {
-		ff.Entities["Scorecard"] = scorecard
 	}
 	conversationFields, err := readFields(filepath.Join(
 		metadataDir,
@@ -90,6 +81,17 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 		return err
 	}
 	svc.APIRoutes = append(svc.APIRoutes, preferenceService.APIRoutes...)
+	learningService, err := readService(filepath.Join(
+		metadataDir,
+		"assistant",
+		"assistant",
+		"assistant_learning_fact",
+		"operations.yaml",
+	))
+	if err != nil {
+		return err
+	}
+	svc.APIRoutes = append(svc.APIRoutes, learningService.APIRoutes...)
 	conversationService, err := readService(filepath.Join(
 		metadataDir,
 		"assistant",
@@ -141,13 +143,6 @@ func collectAssistantWireEntities(ff *fieldsFile, svc *serviceFile) []string {
 		add(route.RequestEntity)
 		add(route.ResponseEntity)
 	}
-	// Request/response bodies used by repository batch helpers but not yet declared
-	// as request_entity in metadata still need stable wire output.
-	add("InteractionEvent")
-	add("Scorecard")
-	add("AssistantInteractionReportBatchAck")
-	add("AssistantScorecardReportBatchAck")
-
 	expanded := map[string]bool{}
 	var visit func(string)
 	visit = func(name string) {
@@ -544,18 +539,6 @@ func assistantWireFromJsonExpr(
 	case "requiresConsent":
 		if entityName == "AssistantSkillCatalogItemView" {
 			return `json['requiresConsent'] == true`
-		}
-	case "accepted":
-		if entityName == "AssistantInteractionReportBatchAck" || entityName == "AssistantScorecardReportBatchAck" {
-			return `json['accepted'] != false`
-		}
-	case "count":
-		if entityName == "AssistantInteractionReportBatchAck" || entityName == "AssistantScorecardReportBatchAck" {
-			return `(json['count'] as num?)?.toInt() ?? 0`
-		}
-	case "resource":
-		if entityName == "AssistantInteractionReportBatchAck" || entityName == "AssistantScorecardReportBatchAck" {
-			return `(json['resource'] ?? '').toString()`
 		}
 	case "status":
 		if entityName == "AssistantUserTaskView" {

@@ -61,6 +61,8 @@
 - 领域边界、上下游依赖、工程映射和服务治理清晰；search-service（domain=search，18095）为云侧 canonical 入口。
 - `content.post`、`entity.homepage`、`circle.circle`、`circle.group`、`user.profile` 与第一方 `location.place` 必须投影到统一索引 `quwoquan_objects`。
 - App 的 `RemoteSearchRepository` 必须通过 `CloudHttpClient` 与生成的 path 调用 `/search`，并透传 canonical 商用字段。
+- `location.place` 的直达路由、冷启动与进程恢复必须经 canonical `/search` 的受控 `ids` 精确匹配重新读取；App 只消费 `SearchLocationPlaceHitView`，不得用 route extra 或裸 Map 伪造详情。
+- 精确读取返回 `entity.homepage` 时，地点落地页必须跳转该主页；无命中时显示结构化不可用恢复态并回到搜索，不得保留泛化标题或过期地址。
 - 搜索反馈、热力与排序信号必须回流推荐 Feed，结果排序必须能解释 `termHeat` 的贡献。
 - gamma 环境的网关必须使 `/search` 成功返回查询结果，并使 `/search/feedback` 接受反馈；执行证据只保存在测试与运行产物中。
 - 两阶段商用合同成立：suggest 本地对象即时，result 云侧最终结果不混入本地对象。
@@ -90,6 +92,7 @@
 - search-service（domain=search，18095）为云侧 canonical 入口。
 - `content.post`、`entity.homepage`、`circle.circle`、`circle.group`、`user.profile` 与第一方 `location.place` 可从统一索引 `quwoquan_objects` 检索。
 - App 通过 `RemoteSearchRepository`、`CloudHttpClient` 与生成的 path 完成 `/search` 请求并保留 canonical 字段。
+- `location.place` 可由其 canonical `placeId` 精确重新读取；已提升到 `entity.homepage` 的结果跳转主页，不存在的结果进入可恢复不可用态。
 - 搜索反馈、热力与排序信号进入推荐 Feed。
 - 结果页排序 term-heat 已闭环。
 - gamma 环境经网关调用 `/search` 返回 200、调用 `/search/feedback` 返回 202。

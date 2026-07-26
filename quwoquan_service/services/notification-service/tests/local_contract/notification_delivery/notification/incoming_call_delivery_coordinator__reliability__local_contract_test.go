@@ -99,7 +99,7 @@ func TestIncomingCallCoordinatorOnlineAckNoAckOfflineExpiryAndCancellation(
 	if processed, err := coordinator.ProcessDue(context.Background()); err != nil || !processed {
 		t.Fatalf("no-ACK call must push after grace: %v %v", processed, err)
 	}
-	if status := store.status(noAckEvent.DeliveryKey, "device-noack"); status != notification.IncomingCallStatusSentUnconfirmed {
+	if status := store.status(noAckEvent.DeliveryKey, "device-noack"); status != notification.IncomingCallStatusExternalAccepted {
 		t.Fatalf("no-ACK status=%s", status)
 	}
 
@@ -573,7 +573,7 @@ func (s *incomingCallStoreFake) ExpireIncomingCallJobs(
 	for id, job := range s.jobs {
 		if !job.ExpiresAt.After(now) &&
 			job.Status != notification.IncomingCallStatusCancelled &&
-			job.Status != notification.IncomingCallStatusSentUnconfirmed {
+			job.Status != notification.IncomingCallStatusExternalAccepted {
 			job.Status = notification.IncomingCallStatusExpired
 			job.Version++
 			s.jobs[id] = job
@@ -625,7 +625,7 @@ func (s *incomingCallStoreFake) RequeueIncomingCallPush(
 	return nil
 }
 
-func (s *incomingCallStoreFake) MarkIncomingCallSentUnconfirmed(
+func (s *incomingCallStoreFake) MarkIncomingCallExternalAccepted(
 	_ context.Context,
 	jobID string,
 	version int64,
@@ -638,7 +638,7 @@ func (s *incomingCallStoreFake) MarkIncomingCallSentUnconfirmed(
 	if job.Version != version || job.Status != "leased" {
 		return errors.New("lease mismatch")
 	}
-	job.Status = notification.IncomingCallStatusSentUnconfirmed
+	job.Status = notification.IncomingCallStatusExternalAccepted
 	job.ExternalInteractionID = externalInteractionID
 	job.SentUnconfirmedAt = &now
 	job.Version++
@@ -740,7 +740,7 @@ func (s *incomingCallStoreFake) CancelIncomingCallJobs(
 	return works, nil
 }
 
-func (s *incomingCallStoreFake) MarkIncomingCallCancellationPushSubmitted(
+func (s *incomingCallStoreFake) MarkIncomingCallCancellationExternalAccepted(
 	_ context.Context,
 	jobID string,
 	version int64,
@@ -823,6 +823,7 @@ func fakeCancellationPushRequired(status string) bool {
 	case notification.IncomingCallStatusRealtimeDispatched,
 		notification.IncomingCallStatusRealtimePresented,
 		"leased",
+		notification.IncomingCallStatusExternalAccepted,
 		notification.IncomingCallStatusSentUnconfirmed:
 		return true
 	default:

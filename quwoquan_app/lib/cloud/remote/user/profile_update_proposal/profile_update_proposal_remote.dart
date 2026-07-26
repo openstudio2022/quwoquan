@@ -52,6 +52,17 @@ final class RemoteProfileUpdateProposalFacet
   );
 
   @override
+  Future<ProfileUpdateProposalCommandResult> rollback(
+    RollbackProfileUpdateProposalCommand command,
+  ) => client.userProfileUpdateProposalRollbackProposal(
+    command,
+    context: invocationContext(
+      UserRequestPageIds.rollbackProposal,
+      command: true,
+    ),
+  );
+
+  @override
   Future<ProfileUpdateProposalCommandResult> reject(
     RejectProfileUpdateProposalCommand command,
   ) => client.userProfileUpdateProposalRejectProposal(

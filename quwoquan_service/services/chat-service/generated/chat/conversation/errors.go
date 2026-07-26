@@ -19,6 +19,7 @@ var (
 	ErrMessageRecallForbidden            = errors.New("CHAT.USER.message_recall_forbidden")
 	ErrMessageRecallExpired              = errors.New("CHAT.USER.message_recall_expired")
 	ErrMessageIdempotencyConflict        = errors.New("CHAT.USER.message_idempotency_conflict")
+	ErrConversationIdempotencyConflict   = errors.New("CHAT.USER.conversation_idempotency_conflict")
 	ErrMessageTooLong                    = errors.New("CHAT.USER.message_too_long")
 	ErrMessageInvalid                    = errors.New("CHAT.USER.message_invalid")
 	ErrMessageMediaInvalid               = errors.New("CHAT.USER.message_media_invalid")
@@ -84,6 +85,12 @@ func AppErrorFromMessageRecallExpired(debugMessage string) *rerrors.AppError {
 func AppErrorFromMessageIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMessageIdempotencyConflict.Error()))
 	return rerrors.NewAppError(code, "该消息请求标识已用于不同内容，请重新发送", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+}
+
+// AppErrorFromConversationIdempotencyConflict returns *AppError for CHAT.USER.conversation_idempotency_conflict (user_message from errors.yaml).
+func AppErrorFromConversationIdempotencyConflict(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrConversationIdempotencyConflict.Error()))
+	return rerrors.NewAppError(code, "该建群请求标识已用于不同内容，请重新发起", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("surface", 0)
 }
 
 // AppErrorFromMessageTooLong returns *AppError for CHAT.USER.message_too_long (user_message from errors.yaml).

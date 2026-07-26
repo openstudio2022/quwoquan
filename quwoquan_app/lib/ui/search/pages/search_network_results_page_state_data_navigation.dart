@@ -41,8 +41,7 @@ extension _SearchNetworkResultsPageStateDataNavigation
       )
       .toList(growable: false);
 
-  // 命中实体置顶卡：只取云侧 entity.homepage（绑定实体主页），按搜索词标题匹配；
-  // 一方地点 location.place 不进顶卡（落地体验见 _connectedLocations 与 location 落地页）。
+  // 命中实体置顶卡：只取云侧 entity.homepage（绑定实体主页），按搜索词标题匹配。
   SearchHit? get _intersectionEntityHit {
     final query = _query.trim();
     for (final hit in _locationResults) {
@@ -96,6 +95,18 @@ extension _SearchNetworkResultsPageStateDataNavigation
             hit.snippet ?? UITextConstants.searchOpenHomepageDescription,
         meta: _SearchNetworkResultsPageState._entityMetaFromHit(hit),
       );
+    }
+    return null;
+  }
+
+  _LocationPlaceTopResultModel? _locationPlaceTopResult() {
+    final query = _query.trim();
+    for (final hit in _locationResults) {
+      final place = hit.asLocationPlaceItem;
+      if (place == null || !_entityTitleMatchesQuery(place.name, query)) {
+        continue;
+      }
+      return _LocationPlaceTopResultModel(place: place);
     }
     return null;
   }
@@ -256,10 +267,7 @@ extension _SearchNetworkResultsPageStateDataNavigation
       case InternalCitationDestination():
         context.push(destination.routePath);
       case ExternalCitationDestination():
-        await launchUrl(
-          destination.uri,
-          mode: LaunchMode.externalApplication,
-        );
+        await launchUrl(destination.uri, mode: LaunchMode.externalApplication);
       case null:
         // 未知对象、无链接与非法 URL 均 fail-closed，绝不回退打开 post。
         return;

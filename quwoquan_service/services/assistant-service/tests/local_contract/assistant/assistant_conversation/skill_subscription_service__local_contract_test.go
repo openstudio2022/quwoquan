@@ -98,9 +98,9 @@ func newProactiveDeliveryService(
 			persistence.NewMemoryConversationRunStore(),
 		),
 		application.WithAgentLoop(loop),
+		testFrozenPolicyOption(),
 	)
 	return application.NewAssistantService(
-		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		cache,
 		options...,

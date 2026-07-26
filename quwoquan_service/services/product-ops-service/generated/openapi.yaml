@@ -85,6 +85,33 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /control-plane/platform/configs/resolve-for-instance:
+        get:
+            operationId: ResolveEffectiveConfigForInstance
+            x-contract-operation-id: ops.config_snapshot.ResolveEffectiveConfigForInstance
+            x-object-id: ops.config_snapshot
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigSnapshotQueryFacade
+                method: resolveEffectiveConfigForInstance
+                reader: ConfigSnapshotReader
+                slice: EffectiveConfigSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EffectiveConfigSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /control-plane/platform/configs/snapshot:
         get:
             operationId: GetConfigSnapshot
@@ -189,6 +216,34 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /ops/app-recovery/version:
+        get:
+            operationId: GetAppRecoveryVersion
+            x-contract-operation-id: ops.app_release.GetAppRecoveryVersion
+            x-object-id: ops.app_release
+            x-actor: device
+            x-application:
+                kind: query
+                facet: AppReleaseRecoveryQueryFacade
+                method: getRecoveryVersion
+                reader: AppReleaseRecoveryReader
+                slice: AppReleaseRecoveryView
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetAppRecoveryVersionResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /ops/events:
         post:
             operationId: ReportEventBatch
@@ -242,7 +297,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetEventDrilldownResponse'
+                                $ref: '#/components/schemas/EventDrilldownSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -414,6 +469,35 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /ops/recovery-failures:
+        post:
+            operationId: ReportRecoveryFailure
+            x-contract-operation-id: ops.recovery_failure.ReportRecoveryFailure
+            x-object-id: ops.recovery_failure
+            x-actor: device
+            x-application:
+                kind: command
+                facet: RecoveryFailureCommandFacade
+                method: reportRecoveryFailure
+                appendSink: RecoveryFailure
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReportRecoveryFailureRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /ops/runtime-logs:
         post:
             operationId: ReportRuntimeLogBatch
@@ -626,6 +710,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: EffectiveConfigSlice
             x-contract-placeholder: true
+        EventDrilldownSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: EventDrilldownSlice
+            x-contract-placeholder: true
         ExperimentAssignmentFact:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -641,10 +730,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ExperimentStatsSlice
             x-contract-placeholder: true
-        GetEventDrilldownResponse:
+        GetAppRecoveryVersionResponse:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GetEventDrilldownResponse
+            x-contract-entity: GetAppRecoveryVersionResponse
             x-contract-placeholder: true
         GetEventSummaryResponse:
             type: object
@@ -675,6 +764,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReportEventBatchRequest
+            x-contract-placeholder: true
+        ReportRecoveryFailureRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReportRecoveryFailureRequest
             x-contract-placeholder: true
         ReportRuntimeLogBatchRequest:
             type: object

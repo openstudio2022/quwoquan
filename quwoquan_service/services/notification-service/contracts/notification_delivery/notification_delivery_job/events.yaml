@@ -68,6 +68,19 @@ events:
   - deviceId
   - deliveryKey
   - expiresAt
+- name: IncomingCallExternalInteractionAccepted
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - deviceId
+  - deliveryKey
+  - externalInteractionId
+  - externalInteractionAcceptedAt
 - name: IncomingCallSentUnconfirmed
   producer: notification-service
   consumers:
@@ -80,6 +93,27 @@ events:
   - deviceId
   - deliveryKey
   - externalInteractionId
+  - provider
+  - providerRequestDigest
+  - providerResultStatus
+  - providerResultAt
+- name: IncomingCallProviderResultRecorded
+  description: ring provider 的失败或可重试 receipt 已按 attemptId 幂等记录；不表示设备展示。
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - deviceId
+  - deliveryKey
+  - externalInteractionId
+  - provider
+  - providerRequestDigest
+  - providerResultStatus
+  - providerResultAt
 - name: IncomingCallDeliveryCancelled
   producer: notification-service
   consumers:
@@ -105,6 +139,35 @@ events:
   - deliveryKey
   - cancellationExternalInteractionId
   - cancellationPushSubmittedAt
+- name: IncomingCallCancellationExternalInteractionAccepted
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - deviceId
+  - deliveryKey
+  - cancellationExternalInteractionId
+  - cancellationExternalInteractionAcceptedAt
+- name: IncomingCallCancellationProviderResultRecorded
+  producer: notification-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: NotificationDeliveryJob
+  payload_fields:
+  - id
+  - callId
+  - deviceId
+  - deliveryKey
+  - cancellationExternalInteractionId
+  - cancellationProvider
+  - cancellationProviderRequestDigest
+  - cancellationProviderResultStatus
+  - cancellationProviderResultAt
 - name: IncomingCallCancellationRealtimeDispatched
   producer: notification-service
   consumers:

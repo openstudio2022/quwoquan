@@ -1,0 +1,218 @@
+// spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/io_client.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/remote/user/profile_update_proposal/profile_update_proposal_remote.dart';
+import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
+import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
+import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:uuid/uuid.dart';
+
+import '../../../support/recording_cloud_operation_telemetry_sink.dart';
+
+const _gatewayUrl = String.fromEnvironment(
+  'CLOUD_GATEWAY_BASE_URL',
+  defaultValue: 'https://gamma-api.quwoquan-env.test:19000',
+);
+const _gatewayResolveHost = String.fromEnvironment(
+  'GAMMA_GATEWAY_RESOLVE_HOST',
+);
+const _definedAccessToken = String.fromEnvironment('TEST_AUTH_TOKEN');
+const _personaId = String.fromEnvironment('TEST_PERSONA_ID');
+const _definedEvidencePath = String.fromEnvironment(
+  'PROFILE_PROPOSAL_REMOTE_EVIDENCE_PATH',
+);
+final _accessToken = _definedAccessToken.trim().isNotEmpty
+    ? _definedAccessToken
+    : Platform.environment['TEST_AUTH_TOKEN']?.trim() ?? '';
+final _evidencePath = _definedEvidencePath.trim().isNotEmpty
+    ? _definedEvidencePath
+    : Platform.environment['PROFILE_PROPOSAL_REMOTE_EVIDENCE_PATH']?.trim() ??
+          '';
+
+final class _GammaProfileProposalClientContext
+    implements CloudClientContextProvider {
+  const _GammaProfileProposalClientContext();
+
+  @override
+  CloudClientContextSnapshot snapshot() {
+    return const CloudClientContextSnapshot(
+      sessionId: 'gppi',
+      deviceActorId: 'gamma-profile-proposal-device',
+      platform: 'test',
+      appVersion: 'api-integration',
+      locale: 'zh-CN',
+    );
+  }
+}
+
+void main() {
+  setUpAll(() {
+    if (_accessToken.isEmpty || _personaId.trim().isEmpty) {
+      fail(
+        'Profile proposal Remote API verification requires '
+        'TEST_AUTH_TOKEN and TEST_PERSONA_ID from the local Gamma '
+        'acceptance-session issuer.',
+      );
+    }
+  });
+
+  test(
+    'generated profile proposal Remote applies and rolls back atomically',
+    () async {
+      final httpClient = _buildGammaHttpClient();
+      final telemetry = RecordingCloudOperationTelemetrySink();
+      addTearDown(httpClient.close);
+      final generatedClient = buildGeneratedCloudOperationClient(
+        httpClient: httpClient,
+        clientContextProvider: const _GammaProfileProposalClientContext(),
+        telemetrySink: telemetry,
+        environment: CloudRuntimeEnvironment(
+          environment: CloudEnvironment.gamma,
+          gatewayBaseUri: Uri.parse(_gatewayUrl),
+        ),
+      );
+      final identity = const Uuid().v4();
+      final proposalId = 'proposal-$identity';
+      final remote = RemoteProfileUpdateProposalFacet(
+        client: generatedClient,
+        invocationContext: (clientPageId, {required command}) {
+          final surface =
+              clientPageId == UserRequestPageIds.createProfileUpdateProposal
+              ? AppUiSurfaces.personalAssistantDialog
+              : AppUiSurfaces.profileEdit;
+          return CloudOperationInvocationContext(
+            surfaceId: surface.id,
+            routeId: surface.routeId,
+            clientPageId: clientPageId,
+            actor: const CloudOperationActorContext(
+              personaId: _personaId,
+              deviceActorId: 'gamma-profile-proposal-device',
+            ),
+            idempotencyKey: command ? '$proposalId:$clientPageId' : null,
+          );
+        },
+      );
+      final createCommand = CreateProfileUpdateProposalCommand(
+        personaId: _personaId,
+        proposalId: proposalId,
+        source: ProfileUpdateProposalSource.assistant,
+        reason: 'Gamma Assistant profile proposal verification',
+        evidenceRefs: <String>['assistant-run:$identity'],
+        impactScope: const <String>['bio'],
+        changes: ProfileChangeSet(bio: 'Gamma proposal $identity'),
+      );
+
+      final created = await remote.create(createCommand);
+      final createReplay = await remote.create(createCommand);
+      final confirmed = await remote.confirm(
+        ConfirmProfileUpdateProposalCommand(proposalId: proposalId),
+      );
+      final applied = await remote.apply(
+        ApplyProfileUpdateProposalCommand(proposalId: proposalId),
+      );
+      final appliedView = await remote.get(
+        ProfileUpdateProposalQuery(proposalId: proposalId),
+      );
+      final rolledBack = await remote.rollback(
+        RollbackProfileUpdateProposalCommand(proposalId: proposalId),
+      );
+      final rollbackReplay = await remote.rollback(
+        RollbackProfileUpdateProposalCommand(proposalId: proposalId),
+      );
+      final rolledBackView = await remote.get(
+        ProfileUpdateProposalQuery(proposalId: proposalId),
+      );
+
+      expect(created.status, ProfileUpdateProposalStatus.pending);
+      expect(createReplay.replayed, isTrue);
+      expect(confirmed.status, ProfileUpdateProposalStatus.confirmed);
+      expect(applied.status, ProfileUpdateProposalStatus.applied);
+      expect(appliedView.applyAuditId, isNotEmpty);
+      expect(appliedView.rollbackDeadline, isNotNull);
+      expect(rolledBack.status, ProfileUpdateProposalStatus.rolledBack);
+      expect(rollbackReplay.replayed, isTrue);
+      expect(rolledBackView.status, ProfileUpdateProposalStatus.rolledBack);
+      expect(rolledBackView.rollbackAuditId, isNotEmpty);
+      expect(telemetry.events.every((event) => event.succeeded), isTrue);
+
+      await _writeRemoteEvidence(<String, Object?>{
+        'schema': 'profile-proposal-remote-api-evidence-v1',
+        'status': 'passed',
+        'proposalId': proposalId,
+        'createReplayed': createReplay.replayed,
+        'applyAuditId': appliedView.applyAuditId,
+        'rollbackAuditId': rolledBackView.rollbackAuditId,
+        'rollbackReplayed': rollbackReplay.replayed,
+        'finalStatus': rolledBackView.status.name,
+        'operations': telemetry.events
+            .map(
+              (event) => <String, Object?>{
+                'operationId': event.canonicalOperationId,
+                'requestId': event.requestId,
+                'traceId': event.traceId,
+                'succeeded': event.succeeded,
+              },
+            )
+            .toList(growable: false),
+      });
+    },
+  );
+}
+
+Future<void> _writeRemoteEvidence(Map<String, Object?> evidence) async {
+  if (_evidencePath.isEmpty) return;
+  final output = File(_evidencePath);
+  await output.parent.create(recursive: true);
+  await output.writeAsString('${jsonEncode(evidence)}\n');
+}
+
+CloudHttpClient _buildGammaHttpClient() {
+  if (_gatewayResolveHost.isEmpty) {
+    return CloudHttpClient(
+      authTokenProvider: _StaticTokenProvider(_accessToken),
+    );
+  }
+  final gateway = Uri.parse(_gatewayUrl);
+  final nativeClient = HttpClient();
+  nativeClient.findProxy = (_) => 'DIRECT';
+  nativeClient.badCertificateCallback = (_, host, _) => host == gateway.host;
+  nativeClient.connectionFactory = (uri, proxyHost, proxyPort) {
+    if (uri.host != gateway.host) {
+      throw StateError(
+        'gamma profile proposal integration client rejected unexpected host '
+        '${uri.host}',
+      );
+    }
+    return Socket.startConnect(_gatewayResolveHost, uri.port).then((task) {
+      final secureSocket = task.socket.then<Socket>(
+        (socket) => SecureSocket.secure(
+          socket,
+          host: uri.host,
+          onBadCertificate: (_) => uri.host == gateway.host,
+        ),
+      );
+      return ConnectionTask.fromSocket<Socket>(secureSocket, task.cancel);
+    });
+  };
+  return CloudHttpClient(
+    client: IOClient(nativeClient),
+    authTokenProvider: _StaticTokenProvider(_accessToken),
+  );
+}
+
+final class _StaticTokenProvider implements CloudAuthTokenProvider {
+  const _StaticTokenProvider(this.token);
+
+  final String token;
+
+  @override
+  Future<String?> getAccessToken() async => token;
+}

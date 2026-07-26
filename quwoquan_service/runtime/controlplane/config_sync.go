@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	rterr "quwoquan_service/runtime/errors"
 )
 
@@ -36,7 +39,16 @@ func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 		return
 	}
 
-	client := NewClient(baseURL, &http.Client{Timeout: 4 * time.Second})
+	authorization, err := newConfigSyncServiceAuthorization(opts)
+	if err != nil {
+		if isProductionConfigSyncEnvironment(opts.AppEnv) {
+			panic("controlplane config sync authorization: " + err.Error())
+		}
+		log.Printf("WARN: controlplane config sync disabled: %v", err)
+		return
+	}
+	client := NewClient(baseURL, &http.Client{Timeout: 4 * time.Second}).
+		WithServiceAuthorization(authorization)
 	snapshotPath := defaultSnapshotPath(opts.ConfigRoot, opts.ServiceName, opts.InstanceID)
 
 	// 注册运营态错误提示语 override 解析器：闭包持有 HotStore 引用，每次错误出口实时查表，
@@ -66,6 +78,11 @@ func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 	}
 
 	allowDiskFallback := func() bool {
+		if isProductionConfigSyncEnvironment(opts.AppEnv) {
+			// 生产 ACK 只能证明控制面当前发布包已真实下发；本地磁盘快照
+			// 无法证明新 release 生效，故禁止作为 prod 的回退来源。
+			return false
+		}
 		if opts.HotStore == nil {
 			return true
 		}
@@ -131,6 +148,29 @@ func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 		timer.Stop()
 		syncOnce()
 	}
+}
+
+func newConfigSyncServiceAuthorization(
+	opts ConfigSyncLoopOptions,
+) (rtauth.ServiceAuthorizationProvider, error) {
+	serviceName := strings.TrimSpace(opts.ServiceName)
+	environment := strings.TrimSpace(opts.AppEnv)
+	if serviceName == "" || environment == "" {
+		return nil, fmt.Errorf("config sync service and environment are required")
+	}
+	config, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		return nil, fmt.Errorf("load config sync service credentials: %w", err)
+	}
+	return rtauth.NewHS256ServiceAuthorizationProvider(
+		config,
+		serviceName+"@"+environment,
+		[]string{"ops.platform.config.read", "ops.platform.config.ack"},
+	)
+}
+
+func isProductionConfigSyncEnvironment(appEnv string) bool {
+	return strings.EqualFold(strings.TrimSpace(appEnv), "prod")
 }
 
 func defaultSnapshotPath(configRoot, serviceName, instanceID string) string {

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 	ports "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/ports"
+	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
 )
 
 // seedLaunchSubset 导入首发（校园+旅游）只读子集，对齐 operations.yaml contract_test。
@@ -61,6 +63,48 @@ func tagNode(tagRef, label, labelEn string) *model.TagNode {
 		ReleaseID:       "test-release",
 		LifecycleStatus: "active",
 	}
+}
+
+func seedDimensionSnapshot(t *testing.T) {
+	t.Helper()
+	cleanCollections(t)
+	ctx := context.Background()
+	nodes := []*model.TagNode{
+		{
+			TagRef:          "Entity/机构",
+			Group:           "Entity",
+			NodeKind:        "dimension",
+			Label:           "机构",
+			DisplayLabel:    "机构",
+			LabelEn:         "Organization",
+			ParentTagRef:    "Entity",
+			Depth:           1,
+			MaxDepth:        2,
+			PathPolicy:      "any-depth",
+			ReleaseID:       "dimension-release",
+			LifecycleStatus: "active",
+		},
+		{
+			TagRef:          "Topic/主题",
+			Group:           "Topic",
+			NodeKind:        "dimension",
+			Label:           "主题垂类",
+			DisplayLabel:    "主题垂类",
+			LabelEn:         "Topic Vertical",
+			ParentTagRef:    "Topic",
+			Depth:           1,
+			MaxDepth:        4,
+			PathPolicy:      "any-depth",
+			ReleaseID:       "dimension-release",
+			LifecycleStatus: "active",
+		},
+	}
+	for _, node := range nodes {
+		if _, err := tagNodeStore.Create(ctx, node); err != nil {
+			t.Fatalf("seed dimension %s: %v", node.TagRef, err)
+		}
+	}
+	activateReleaseForSeed(t, "dimension-release", len(nodes))
 }
 
 func seedAdminRegionSubset(t *testing.T) {
@@ -154,6 +198,7 @@ func TestResolveUnknownReturns404(t *testing.T) {
 }
 
 func TestListDimensions(t *testing.T) {
+	seedDimensionSnapshot(t)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/tag/dimensions", nil)
 	testHandler.ServeHTTP(rec, req)
@@ -163,15 +208,41 @@ func TestListDimensions(t *testing.T) {
 	var dims []struct {
 		Group       string `json:"group"`
 		DimensionID string `json:"dimensionId"`
+		MaxDepth    int    `json:"maxDepth"`
+		PathPolicy  string `json:"pathPolicy"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &dims); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(dims) != 18 {
-		t.Fatalf("expected 18 dimensions, got %d", len(dims))
+	if len(dims) != 2 {
+		t.Fatalf("expected dimensions from active snapshot, got %d", len(dims))
 	}
-	if dims[0].Group != "Topic" || dims[0].DimensionID != "Topic/主题" {
-		t.Fatalf("unexpected first dimension: %+v", dims[0])
+	byID := make(map[string]struct {
+		Group       string
+		DimensionID string
+		MaxDepth    int
+		PathPolicy  string
+	}, len(dims))
+	for _, dimension := range dims {
+		byID[dimension.DimensionID] = struct {
+			Group       string
+			DimensionID string
+			MaxDepth    int
+			PathPolicy  string
+		}{
+			Group:       dimension.Group,
+			DimensionID: dimension.DimensionID,
+			MaxDepth:    dimension.MaxDepth,
+			PathPolicy:  dimension.PathPolicy,
+		}
+	}
+	if got, ok := byID["Topic/主题"]; !ok ||
+		got.Group != "Topic" || got.MaxDepth != 4 || got.PathPolicy != "any-depth" {
+		t.Fatalf("missing Topic dimension from active snapshot: %+v", dims)
+	}
+	if got, ok := byID["Entity/机构"]; !ok ||
+		got.Group != "Entity" || got.MaxDepth != 2 || got.PathPolicy != "any-depth" {
+		t.Fatalf("missing Entity dimension from active snapshot: %+v", dims)
 	}
 }
 
@@ -336,7 +407,7 @@ func TestSharedTagsTwoObjects(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet,
-		"/tag/shared-tags?objectAId=u1&objectAType=user&objectBId=u2&objectBType=user", nil)
+		"/internal/tag/shared-tags?objectAId=u1&objectAType=user&objectBId=u2&objectBType=user", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -363,7 +434,7 @@ func TestSharedTagsTwoObjects(t *testing.T) {
 func TestInvertedObjects(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/tag/inverted?tagRef=Topic/摄影", nil)
+	req := httptest.NewRequest(http.MethodGet, "/internal/tag/inverted?tagRef=Topic/摄影", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -385,7 +456,7 @@ func TestInvertedObjects(t *testing.T) {
 func TestInvertedFilterByType(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/tag/inverted?tagRef=Topic/旅行&objectType=post", nil)
+	req := httptest.NewRequest(http.MethodGet, "/internal/tag/inverted?tagRef=Topic/旅行&objectType=post", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -429,7 +500,7 @@ func TestSearchTags(t *testing.T) {
 func TestRelatedTags(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/tag/related?tagRef=Topic/摄影", nil)
+	req := httptest.NewRequest(http.MethodGet, "/internal/tag/related?tagRef=Topic/摄影", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -452,7 +523,7 @@ func TestRelatedTags(t *testing.T) {
 func TestSearchByTags(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/tag/search-by-tags",
+	req := httptest.NewRequest(http.MethodPost, "/internal/tag/search-by-tags",
 		bytes.NewBufferString(`{"tagRefs":["Topic/摄影","Entity/机构/学校/北京大学"]}`))
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -475,11 +546,149 @@ func TestSearchByTags(t *testing.T) {
 	}
 }
 
+func TestObjectTagQueriesPreserveCompositeObjectIdentity(t *testing.T) {
+	seedLaunchSubset(t)
+	if _, err := objStore.Create(t.Context(), &model.ObjectTagIndex{
+		ObjectID:   "u1",
+		ObjectType: "post",
+		TagRefs: []string{
+			"Topic/摄影",
+			"Entity/机构/学校/北京大学",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	searchRecorder := httptest.NewRecorder()
+	searchRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/tag/search-by-tags",
+		bytes.NewBufferString(
+			`{"tagRefs":["Topic/摄影","Entity/机构/学校/北京大学"]}`,
+		),
+	)
+	testHandler.ServeHTTP(searchRecorder, searchRequest)
+	if searchRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"search status=%d body=%s",
+			searchRecorder.Code,
+			searchRecorder.Body.String(),
+		)
+	}
+	var matches []struct {
+		ObjectID   string `json:"objectId"`
+		ObjectType string `json:"objectType"`
+	}
+	if err := json.Unmarshal(searchRecorder.Body.Bytes(), &matches); err != nil {
+		t.Fatal(err)
+	}
+	identities := map[string]bool{}
+	for _, match := range matches {
+		identities[match.ObjectType+"\x00"+match.ObjectID] = true
+	}
+	if !identities["user\x00u1"] || !identities["post\x00u1"] {
+		t.Fatalf("composite identities collapsed: %#v", matches)
+	}
+
+	relatedRecorder := httptest.NewRecorder()
+	relatedRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/internal/tag/related-objects?objectId=u1&objectType=user",
+		nil,
+	)
+	testHandler.ServeHTTP(relatedRecorder, relatedRequest)
+	if relatedRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"related status=%d body=%s",
+			relatedRecorder.Code,
+			relatedRecorder.Body.String(),
+		)
+	}
+	var related []struct {
+		ObjectID   string `json:"objectId"`
+		ObjectType string `json:"objectType"`
+	}
+	if err := json.Unmarshal(relatedRecorder.Body.Bytes(), &related); err != nil {
+		t.Fatal(err)
+	}
+	foundPostWithSameID := false
+	for _, object := range related {
+		if object.ObjectID == "u1" && object.ObjectType == "post" {
+			foundPostWithSameID = true
+		}
+	}
+	if !foundPostWithSameID {
+		t.Fatalf("related objects dropped post/u1: %#v", related)
+	}
+}
+
+func TestObjectTagReleaseImportReconcilesWithoutRewritingIdentity(t *testing.T) {
+	cleanCollections(t)
+	ctx := t.Context()
+	for _, objectID := range []string{"keep", "remove"} {
+		if err := objStore.UpsertObjectTagsFromRelease(
+			ctx,
+			objectID,
+			"post",
+			[]string{"Topic/旅行"},
+			"release-1",
+			"data-pipeline",
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := objStore.UpsertObjectTagsFromRelease(
+		ctx,
+		"keep",
+		"post",
+		[]string{"Topic/摄影"},
+		"release-2",
+		"data-pipeline",
+	); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := objStore.DeleteSupersededReleaseObjects(
+		ctx,
+		"data-pipeline",
+		"release-2",
+	)
+	if err != nil || deleted != 1 {
+		t.Fatalf("deleted=%d err=%v", deleted, err)
+	}
+	if removed, err := objStore.FindByObject(ctx, "remove", "post"); err != nil ||
+		removed != nil {
+		t.Fatalf("superseded object=%#v err=%v", removed, err)
+	}
+
+	err = objStore.UpsertObjectTagsFromRelease(
+		ctx,
+		"keep",
+		"post",
+		[]string{"Topic/旅行"},
+		"release-2",
+		"data-pipeline",
+	)
+	if !errors.Is(err, persistence.ErrReleaseProjectionConflict) {
+		t.Fatalf("same release payload rewrite err=%v", err)
+	}
+	err = objStore.UpsertObjectTagsFromRelease(
+		ctx,
+		"keep",
+		"post",
+		[]string{"Topic/摄影"},
+		"release-3",
+		"another-owner",
+	)
+	if !errors.Is(err, persistence.ErrReleaseProjectionConflict) {
+		t.Fatalf("cross-owner takeover err=%v", err)
+	}
+}
+
 // T3：cooccurrence 共现图谱（>= minCount）。
 func TestTagCooccurrence(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/tag/graph/cooccurrence?tagRef=Topic/摄影&minCount=2", nil)
+	req := httptest.NewRequest(http.MethodGet, "/internal/tag/graph/cooccurrence?tagRef=Topic/摄影&minCount=2", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -502,7 +711,7 @@ func TestTagCooccurrence(t *testing.T) {
 func TestRelatedObjects(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/tag/related-objects?objectId=u1&objectType=user", nil)
+	req := httptest.NewRequest(http.MethodGet, "/internal/tag/related-objects?objectId=u1&objectType=user", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -530,7 +739,7 @@ func TestObjectTagReleaseUpsertKeepsFirstVisibleRelease(t *testing.T) {
 		"user",
 		[]string{"Topic/摄影"},
 		"release-1",
-		"gamma_seed_manifest",
+		"qwq_data",
 	); err != nil {
 		t.Fatalf("upsert first release: %v", err)
 	}

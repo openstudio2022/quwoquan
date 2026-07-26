@@ -82,6 +82,13 @@
 - Portal 页面不得以 seed、hardcode 或合成趋势冒充生产数据。
 - 测试中的 `spec_ref` 必须指向现存规格与验收锚点。
 
+<a id="req-009"></a>
+### REQ-009 第一方容器预验证不得提升生产资格
+
+- prod-hosted 第一方容器预验证只消费 reviewed main 的不可变 Service Pipeline 制品，并在镜像传输前执行主机硬门禁。
+- 预验证与正式 rollout transaction、ledger/receipt 和 Provider readiness 分轨；容器验证通过不能改变 release `GATE_BLOCK`。
+- 隔离数据模式使用重新摘要的不可提升配置投影与独立随机认证材料；不得继承正式 credentials 文件。Provider 绑定只能返回 unavailable，禁止切到 fixture/Mock。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`platform-ops-governance`](../spec.md) 声明的领域入口。
@@ -130,6 +137,7 @@
 - THEN 并发发布被拒绝，stage 只能按 CAS 顺序推进。
 - THEN SLO 只从 Prometheus 读取且满足最小样本/窗口。
 - THEN 超阈值自动回滚并生成不可变 receipt。
+- THEN release receipt 在托管 service-plane 内以 generation CAS 原子提交，绑定 manifest、RTC image、Provider binding config、ContractGraph、adapter、post-check 与 last-good target；CI 必须按 receipt ID 从 hosted authority 回读并重算 digest。
 
 <a id="sit-005"></a>
 ### SIT-005 观测、灾备和容量闭环
@@ -160,6 +168,15 @@
 - THEN 已支持验收均有真实测试或可执行门直接追踪，未支持验收均由同节点 OPEN 明确完成判定。
 - THEN 本能力范围不存在未关闭的 `block` OPEN；外部前置条件缺失则 release 保持 GATE_BLOCK。
 
+<a id="sit-008"></a>
+### SIT-008 不可提升的 prod-hosted 第一方容器预验证
+
+- GIVEN deployable ReleaseManifest、GHCR digest、隔离 SSH key 与受控主机。
+- WHEN stackctl 在唯一 prevalidate namespace 执行 first-party scope。
+- THEN host 资源/端口、隔离空数据、integration image-only、service/edge systemd 和容器 digest 均可机读复验。
+- THEN 容器进程存活与 Provider readiness 分开判定；SLS 等被排除能力可使对应服务 readiness 保持阻断，但不得伪装为容器未部署或正式健康。
+- THEN 报告分别给出容器部署与正式发布资格；不写 ledger/receipt，正式发布仍为 `GATE_BLOCK`。
+
 ## 8. 开放事项
 
 <a id="open-001"></a>
@@ -172,13 +189,17 @@
 - 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
 
 <a id="open-002"></a>
-### OPEN-002 Portal 无 OIDC/RBAC，actor 可由客户端 header 伪造
+### OPEN-002 正式 Portal IdP/RBAC 绑定与双账号登录回执未取得
 
-- 类型：`risk`
+- 类型：`external_blocker`
 - 优先级：`P0`
-- 准出影响：`track`
-- 影响或价值：Portal 无 OIDC/RBAC，actor 可由客户端 header 伪造
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 准出影响：`block`
+- 影响或价值：仓内已实现 OIDC Authorization Code + PKCE、RS256/JWKS/issuer/audience/MFA
+  校验、generated permission scope 与伪造身份头清除，但尚未绑定正式企业 IdP，也没有两个
+  真实 operator principal 完成菜单/API 权限分离和危险动作双签的发布回执。
+- 完成判定：正式 IdP issuer/audience/JWKS 与 Portal client 配置由仓外受控注入；IdP group/role
+  到 canonical permission scope 的映射经安全审批；两个不同 MFA principal 分别完成允许、拒绝、
+  伪造 `X-Actor`/`X-User-Id` 失败及同 digest 双签，API audit/outbox/receipt 与 Portal 展示一致。
 
 <a id="open-003"></a>
 ### OPEN-003 mutation 与审批/审计非原子，单人自批可执行
@@ -211,10 +232,14 @@
 ### OPEN-007 无注册备份恢复演练、RPO/RTO 与容量成本水位
 
 - 类型：`risk`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：无注册备份恢复演练、RPO/RTO 与容量成本水位
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：没有受控备份、隔离恢复、RPO/RTO、远端加密副本与容量成本水位时，任何生产
+  发布都无法证明可恢复，不能以本机 dump 或合成报告替代。
+- 完成判定：`stackctl verify --env prod --target prod-hosted --profile release` 只能接受摘要、
+  KMS key version、远端副本状态、隔离恢复目标、RPO/RTO 和容量成本水位全部有效的新鲜
+  receipt；任一缺失、过期、未加密或摘要不一致必须 GATE_BLOCK。真实生产恢复演练需由受控
+  data-plane 权限执行并保留 hosted receipt。
 
 <a id="open-008"></a>
 ### OPEN-008 服务结构化日志没有统一 collector 上云
@@ -244,12 +269,12 @@
 - 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
 
 <a id="open-011"></a>
-### OPEN-011 灰度无真实流量、release-state 分脑且无生产锁
+### OPEN-011 缺少获批 Prod 发布与真实灰度回滚回执
 
-- 类型：`risk`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：灰度无真实流量、release-state 分脑且无生产锁
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：仓库已将本地 release-state 降为缓存，并由 hosted service-plane CAS/不可变 receipt 裁决；仍缺受控 Prod SSH、发布审批与真实 gray traffic/rollback 执行，当前不能生成 last-good 或 rollback 运行回执。
 - 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
 
 <a id="open-012"></a>
@@ -312,7 +337,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：本地失败注入和 prod-hosted 真实流量/回滚演练均有 report。
+- 影响或价值：仍须在获批 Prod 环境执行 gray-initial→carry-on→full、阈值回滚与 rollback failure 演练并保留 hosted receipt；本地合同已覆盖 hosted receipt CAS、摘要回读和候选绑定。
 - 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-019"></a>
@@ -328,10 +353,12 @@
 ### OPEN-020 配置 ACK、可信灰度维度与真实 Portal 数据
 
 - 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：缺少四维分流、ACK 矩阵与 Portal 真实数据源对账的 UAT 证据。
-- 完成判定：`SIT-006` 对应行为满足且真实测试 `spec_ref` 有效
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前仍缺全部 governed workload 的 authenticated ACK 与可信 edge attestation；ACK 未绑定机器身份或未覆盖全部实例时无法证明配置收敛，province/carrier 信任客户端头还会允许伪造分流，因此当前仅允许 appVersion/userId。
+- 完成判定：`SIT-006` 对应行为满足；所有 governed workload 对本次 release 的
+  service/environment/instance/config digest 有新鲜、鉴权 ACK，drift=0；伪造
+  province/carrier 不能命中，可信边缘上下文的 hosted UAT 证据有效。
 
 <a id="open-021"></a>
 ### OPEN-021 验收路径和风险台账零漂移

@@ -22,6 +22,7 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';
 import 'package:quwoquan_app/core/services/assistant_chat_store.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
+import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 import 'package:quwoquan_app/infrastructure/local/onboarding/secure_interest_onboarding_draft_store.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_send_outbox.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
@@ -115,6 +116,10 @@ AccountClosureLocalDataPurger _createAccountClosureLocalDataPurger(
         queueStorage.purge(closureQueuePartition, kBehaviorPendingQueueBoxName),
     clearTelemetryQueue: () => Future.wait<void>(<Future<void>>[
       queueStorage.purge(closureQueuePartition, kAppTelemetryOutboxName),
+      queueStorage.purge(
+        closureQueuePartition,
+        kAssistantLearningFactOutboxName,
+      ),
       runtimeLogBuffer.clear(),
     ]),
     clearRebuildableUserData: cacheManagement.clearForTerminalAccountClosure,

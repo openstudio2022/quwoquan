@@ -292,6 +292,7 @@ def _execute_cell(
     adapter_digest = provider_conformance.implementation_digest(adapter_path)
     if adapter_digest is None:
         raise ValueError(f"adapter implementation path is missing: {adapter_path}")
+    contract_graph_digest = _contract_graph_digest()
     run_dir = env_run_dir(
         args.environment,
         "provider-conformance",
@@ -314,6 +315,8 @@ def _execute_cell(
         "QWQ_PROVIDER_CONFORMANCE_CONTRACT_REF": str(source["contractRef"]),
         "QWQ_PROVIDER_CONFORMANCE_CONFIG_DIGEST": config_digest,
         "QWQ_PROVIDER_CONFORMANCE_ASSERTION_IDS": json.dumps(source["assertionIds"]),
+        "QWQ_PROVIDER_CONFORMANCE_CONTRACT_GRAPH_DIGEST": contract_graph_digest,
+        "QWQ_PROVIDER_CONFORMANCE_ADAPTER_DIGEST": adapter_digest,
     }
     result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, env=environment)
     if result.returncode != 0:
@@ -350,7 +353,7 @@ def _execute_cell(
         "commit": _current_commit(),
         "imageDigest": image_digest,
         "configDigest": config_digest,
-        "contractGraphDigest": _contract_graph_digest(),
+        "contractGraphDigest": contract_graph_digest,
         "adapterDigest": adapter_digest,
         "testArtifactRef": _evidence_ref(case_result_path),
         "testArtifactDigest": _digest_bytes(case_result_bytes),

@@ -134,7 +134,7 @@ def test_homepage_auto_research_discovers_runtime_wikipedia_source():
     assert source["sourceRole"] == "primary"
 
 
-def test_homepage_auto_research_uses_frozen_toutiao_authority_without_reselection():
+def test_homepage_auto_research_rejects_provider_without_repeatable_fetch_contract():
     import content.source.research.auto_plan_writer as research_mod
 
     task = "20260724--travel-homepage-source-recovery--test-region-a--scale-001"
@@ -204,7 +204,12 @@ def test_homepage_auto_research_uses_frozen_toutiao_authority_without_reselectio
         / "homepage_source_plan.json"
     )
     sources = read_json(plan)["payload"]["sources"]
-    assert [source["source_id"] for source in sources] == ["home_toutiao_baike"]
+    assert sources == []
+    assert any(
+        row["ref"] == entity
+        and row["code"] == DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING.value
+        for row in report["sourceUnavailable"]
+    )
 
 
 

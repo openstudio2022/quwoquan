@@ -14,9 +14,9 @@ type CandidateSource interface {
 	SourceName() string
 }
 
-// NativeStoreBackend is the launch-default backend. It fans out to per-domain
-// CandidateSources (backed by existing MongoDB/PG indexes + Redis cache) and
-// returns candidates for the shared CrossTypeRanker. No new infrastructure.
+// NativeStoreBackend supports domain-local retrieval and deterministic
+// contracts. It fans out to per-domain CandidateSources and returns candidates
+// for the shared CrossTypeRanker; unified search production does not bind it.
 type NativeStoreBackend struct {
 	sources []CandidateSource
 }

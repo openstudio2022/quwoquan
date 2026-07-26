@@ -93,6 +93,17 @@ fields:
   ops_exposure: read
   role: authoritative_state
   reference: true
+- name: assetProcessingStatus
+  source: assetProcessingStatus
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: Complete 响应从同一原子事务中新建的 MediaAsset 投影的处理状态；仅 assetId 存在时返回，用于区分会话 completed 与资产 processing。
+  role: authoritative_state
 - name: status
   source: status
   type: enum

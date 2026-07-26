@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
@@ -35,7 +36,7 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
       <String, DateTime>{};
   String? _activeNamespaceKey;
   static const _minSyncInterval = Duration(seconds: 30);
-  static const _contactPageSize = 200;
+  static const _contactPageSize = 100;
   static const _conversationBatchSize = 40;
   static const _messagePageSize = 200;
   static const _maxMessagePages = 20;
@@ -74,12 +75,32 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
         return false;
       }
       await _store.ensureReady();
-      final contactDtos = await _chatRepository.listContacts(
-        limit: _contactPageSize,
-      );
-      await _store.upsertContacts(
+      final contactDtosByID = <String, ChatContactRowDto>{};
+      final seenContactCursors = <String>{};
+      String? contactCursor;
+      while (true) {
+        if (contactCursor != null && !seenContactCursors.add(contactCursor)) {
+          throw StateError('ListContacts returned a repeated cursor');
+        }
+        final page = await _chatRepository.listContacts(
+          cursor: contactCursor,
+          limit: _contactPageSize,
+        );
+        for (final contact in page.items) {
+          final contactID = contact.userId.trim();
+          if (contactID.isNotEmpty) {
+            contactDtosByID[contactID] = contact;
+          }
+        }
+        final nextCursor = page.nextCursor?.trim();
+        if (nextCursor == null || nextCursor.isEmpty) {
+          break;
+        }
+        contactCursor = nextCursor;
+      }
+      await _store.replaceContacts(
         namespace: namespace,
-        contacts: contactDtos
+        contacts: contactDtosByID.values
             .map(LocalChatSearchContactRecord.fromChatContactRowDto)
             .toList(growable: false),
       );

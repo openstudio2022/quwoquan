@@ -114,8 +114,8 @@ class _CallParticipantPickerPageState
           if (!widget.allowsCrossContextSources) {
             return const <CallPickerParticipantRow>[];
           }
-          final rows = await contactRepo.listContacts(limit: 200);
-          return rows
+          final page = await contactRepo.listContacts(limit: 100);
+          return page.items
               .map(CallPickerParticipantRow.fromContact)
               .toList(growable: false);
         }
@@ -128,8 +128,8 @@ class _CallParticipantPickerPageState
             .map(CallPickerParticipantRow.fromMember)
             .toList(growable: false);
       case _ParticipantSource.sameInterest:
-        final contacts = await contactRepo.listContacts(limit: 200);
-        return contacts
+        final page = await contactRepo.listContacts(limit: 100);
+        return page.items
             .where((c) => c.userId != currentUserId)
             .map(CallPickerParticipantRow.fromContact)
             .toList(growable: false);

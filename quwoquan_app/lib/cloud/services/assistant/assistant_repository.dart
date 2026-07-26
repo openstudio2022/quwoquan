@@ -5,8 +5,8 @@
 /// `test/support/cloud_services/assistant_facets_mock.dart`，production 不可达。
 ///
 /// B8 阶段 3b 错误单轨：读接口失败一律抛经 [CloudErrorMapper] 收口的
-/// `CloudException`，不再本地合成 fallback 结果；批量学习上报保留部分成功
-/// 语义但不静默单条失败；遥测类上报（页面上下文）保留结构化降级 ack。
+/// `CloudException`，不再本地合成 fallback 结果；学习事实以单条幂等 command
+/// 追加；遥测类上报（页面上下文）保留结构化降级 ack。
 library;
 
 import 'dart:convert';
@@ -23,6 +23,7 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/runtime/transport/cloud_retry_policy.dart';
@@ -37,10 +38,8 @@ export 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 part 'assistant_repository_consent.dart';
 part 'assistant_repository_conversation_run.dart';
 part 'assistant_repository_experience.dart';
-part 'assistant_repository_learning.dart';
 part 'assistant_repository_preferences.dart';
 part 'assistant_repository_search.dart';
-part 'assistant_repository_subscriptions.dart';
 
 String _requireAssistantCommandRequestId(
   String value, {
@@ -64,17 +63,13 @@ String _requireAssistantCommandRequestId(
 class RemoteAssistantRepository extends _RemoteAssistantRepositoryBase
     with
         _RemoteAssistantConversationRun,
-        _RemoteAssistantSkillSubscription,
         _RemoteAssistantSkillConsent,
-        _RemoteAssistantLearningAppend,
         _RemoteAssistantExperience,
         _RemoteAssistantPreferenceFact,
         _RemoteAssistantXiaoquSearch
     implements
         AssistantConversationRunFacet,
-        AssistantSkillSubscriptionFacet,
         AssistantSkillConsentFacet,
-        AssistantLearningAppendFacet,
         AssistantPersonalizationFacet,
         AssistantPersonalDataFacet,
         AssistantPreferenceFactFacet,

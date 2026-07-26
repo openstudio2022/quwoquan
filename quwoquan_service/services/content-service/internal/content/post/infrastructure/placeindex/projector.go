@@ -64,11 +64,11 @@ func NewProjector(indexer *es.Indexer, reader PostReader, store PlaceStore, opts
 // acknowledge a partial projection.
 func (p *PlaceProjector) Project(ctx context.Context, event ports.ProjectorEvent) error {
 	if p == nil || p.indexer == nil || p.store == nil || p.reader == nil {
-		return nil
+		return fmt.Errorf("Place search projector is not configured")
 	}
 	postID := strings.TrimSpace(event.AggregateID)
 	if postID == "" {
-		return nil
+		return fmt.Errorf("Place search event has no aggregate id")
 	}
 	switch event.Type {
 	case postevent.PostDeleted:

@@ -1,0 +1,72 @@
+kind: aggregate_root
+description: 助手运行策略的一次不可变发布；模板、路由规则和默认模板只能在 Stage 时整体写入。
+identity:
+  fields:
+  - policyId
+  - releaseVersion
+  version_field: aggregateVersion
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: aggregate_root
+  cardinality: 1:N
+  consistency: strong
+  kind: owned
+  name: templates
+  on_delete: cascade
+  reference_fields: []
+  target_object: assistant.AssistantPolicyTemplateDefinition
+- access: aggregate_root
+  cardinality: 1:N
+  consistency: strong
+  kind: owned
+  name: routingRules
+  on_delete: cascade
+  reference_fields: []
+  target_object: assistant.AssistantPolicyRoutingRule
+- access: aggregate_root
+  cardinality: 1:1
+  consistency: strong
+  kind: owned
+  name: learningContextPolicy
+  on_delete: cascade
+  reference_fields: []
+  target_object: assistant.AssistantPolicyLearningContextDefinition
+capabilities:
+- versioned
+- auditable
+- idempotent_commands
+business_rules:
+- policyId、releaseVersion、canonicalDigest、templates、routingRules、learningContextPolicy 和 defaultTemplateId 在 Stage 后不可变
+- templateId 与 ruleId 在 release 内唯一，defaultTemplateId 必须引用同 release 内模板
+- 每条 routing rule 必须引用同 release 内模板，priority 在 release 内唯一
+- canonicalDigest 必须等于 canonical policy payload 的 SHA-256
+- learningContextPolicy 启用时必须声明受控 signal allowlist、1..90 天窗口和最小样本；原始事实不得进入 Run
+local_identity_reasons:
+  defaultTemplateId: 同一 AssistantPolicyRelease 内模板选择器，由聚合完整性校验，不是跨对象引用
+lifecycle:
+  states:
+  - staged
+  initial: staged
+  transitions: []
+  optimistic_concurrency: aggregateVersion
+  idempotency: command_receipt
+members:
+  AssistantPolicyTemplateDefinition:
+    kind: owned_entity
+    cardinality: 1:N
+    max_cardinality: 128
+    description: release 内不可变的执行模板。
+  AssistantPolicyRoutingRule:
+    kind: owned_entity
+    cardinality: 1:N
+    max_cardinality: 256
+    description: release 内按优先级求值的强类型路由规则。
+  AssistantPolicyLearningContextDefinition:
+    kind: owned_entity
+    cardinality: 1:1
+    max_cardinality: 1
+    description: release 内不可变的聚合反馈注入边界。

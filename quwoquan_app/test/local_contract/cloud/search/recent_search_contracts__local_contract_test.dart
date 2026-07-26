@@ -106,7 +106,7 @@ void main() {
       final payload = encodeReportSearchFeedbackCommand(
         ReportSearchFeedbackCommand(
           searchRequestId: 'req-1',
-          eventType: 'click',
+          eventType: SearchFeedbackEventType.click,
           objectId: 'post-9',
           target: 'posts',
           rankPosition: 2,
@@ -128,16 +128,34 @@ void main() {
         isEmpty,
       );
       expect(body['rankPosition'], 2);
+      expect(body['eventType'], 'click');
     });
 
-    test('非法 eventType 构造期拒绝', () {
+    test('dwell 仅接受正整数 duration', () {
       expect(
         () => ReportSearchFeedbackCommand(
           searchRequestId: 'req-1',
-          eventType: 'smash',
+          eventType: SearchFeedbackEventType.dwell,
         ),
         throwsArgumentError,
       );
+      expect(
+        () => ReportSearchFeedbackCommand(
+          searchRequestId: 'req-1',
+          eventType: SearchFeedbackEventType.dwell,
+          dwellMs: 0,
+        ),
+        throwsArgumentError,
+      );
+      final payload = encodeReportSearchFeedbackCommand(
+        ReportSearchFeedbackCommand(
+          searchRequestId: 'req-1',
+          eventType: SearchFeedbackEventType.dwell,
+          dwellMs: 1,
+        ),
+      );
+      expect(payload.body, containsPair('eventType', 'dwell'));
+      expect(payload.body, containsPair('dwellMs', 1));
     });
 
     test('ack 解码', () {

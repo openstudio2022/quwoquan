@@ -51,26 +51,6 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
-- name: callbackUrl
-  source: callbackUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PRIVATE
-  log_policy: hash
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: callbackEvent
-  source: callbackEvent
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
 - name: payloadRef
   source: payloadRef
   type: string
@@ -308,6 +288,16 @@ types:
       log_policy: mask
       api_exposure: read
       ops_exposure: read
+    - name: providerRequestDigest
+      source: providerRequestDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: read
+      ops_exposure: read
+      description: providerRequestId 的不可逆 SHA-256 摘要；跨服务 result event 只能传递此字段。
     - name: maskedRecipient
       source: maskedRecipient
       type: string
@@ -354,6 +344,15 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
+    - name: recoveryAction
+      source: recoveryAction
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
     - name: attributes
       source: attributes
       type: object
@@ -371,6 +370,150 @@ types:
       classification: PUBLIC
       log_policy: allow
       api_exposure: read
+      ops_exposure: read
+  ExternalInteractionResultOutbox:
+    description: provider attempt 与同一 Mongo transaction 提交的结果事件 outbox；relay 只租约和更新该对象。
+    fields:
+    - name: eventId
+      source: eventId
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+      description: 等于 immutable attemptId；一个 provider attempt 至多产生一个业务 result receipt。
+    - name: requestId
+      source: requestId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: operation
+      source: operation
+      type: enum
+      enum_ref: ExternalInteractionOperation
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: status
+      source: status
+      type: enum
+      enum_ref: ExternalInteractionStatus
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: provider
+      source: provider
+      type: enum
+      enum_ref: ExternalInteractionProvider
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: providerRequestDigest
+      source: providerRequestDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: normalizedError
+      source: normalizedError
+      type: string
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: none
+      ops_exposure: read
+    - name: recoveryAction
+      source: recoveryAction
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: occurredAt
+      source: occurredAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: deliveryStatus
+      source: deliveryStatus
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+      description: pending | publishing | published
+    - name: leaseOwner
+      source: leaseOwner
+      type: string
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: none
+    - name: leaseExpiresAt
+      source: leaseExpiresAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: publishedAt
+      source: publishedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: createdAt
+      source: createdAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: updatedAt
+      source: updatedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
       ops_exposure: read
   ExternalInteractionDeadLetter:
     description: 不可恢复失败的 Provider 投递尝试投影。

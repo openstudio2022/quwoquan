@@ -52,6 +52,8 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
     final cancellationSignal = ContentMediaUploadCancellationSignal();
     final publishStopwatch = Stopwatch()..start();
     LocalPostPublicationIntent? mediaPreparationIntent;
+    String? publicationDraftId;
+    var retryRequested = false;
     ref.read(createEditorProvider.notifier).setSettings(confirmedSettings);
     _setMountedState(() {
       _isPublishing = true;
@@ -71,6 +73,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       if (localDraftId == null) {
         throw StateError('local draft id unavailable');
       }
+      publicationDraftId = localDraftId;
       final activePersona = await ref.read(activePersonaContextProvider.future);
       final publicationQueue = ref.read(
         postPublicationIntentQueueProvider.notifier,
@@ -173,7 +176,11 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       if (resultState == CreatePublishResultState.published) {
         ref.read(contentPublicationEpochProvider.notifier).notifyCommitted();
       }
-      await _showPublicationResult(state: resultState, postId: postId);
+      await _showPublicationResult(
+        state: resultState,
+        postId: postId,
+        localDraftId: localDraftId,
+      );
     } on ContentMediaUploadCancelledException {
       await reportCreateEditorSurfaceEvent(
         ref,
@@ -204,7 +211,10 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       if (!mounted) {
         return;
       }
-      await _showPublicationResult(state: CreatePublishResultState.queued);
+      await _showPublicationResult(
+        state: CreatePublishResultState.queued,
+        localDraftId: publicationDraftId,
+      );
     } catch (error) {
       final failure = runtimeFailureFromError(error);
       await reportCreateEditorSurfaceEvent(
@@ -246,7 +256,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
           onAction: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
-              await _publish();
+              retryRequested = true;
             }
           },
         );
@@ -260,6 +270,9 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         });
       }
     }
+    if (retryRequested && mounted) {
+      await _publish();
+    }
   }
 
   void _cancelPublicationUpload() {
@@ -269,36 +282,81 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
   Future<void> _showPublicationResult({
     required CreatePublishResultState state,
     String? postId,
+    String? localDraftId,
   }) async {
-    final action = await showCreatePublishResultSheet(
-      context,
-      state: state,
-      postId: postId,
+    final presentation = ValueNotifier<CreatePublishResultPresentation>(
+      CreatePublishResultPresentation(state: state, postId: postId),
     );
-    if (!mounted) {
-      return;
-    }
-    final normalizedPostId = postId?.trim() ?? '';
-    if (action == CreatePublishResultAction.viewWork &&
-        normalizedPostId.isNotEmpty &&
-        GoRouter.maybeOf(context) != null) {
-      context.pushReplacement(
-        AppRoutePaths.workBrowser(
-          workId: normalizedPostId,
-          source: ReferralSource.publishResult.value,
-        ),
-        extra: const WorkBrowserEntryRouteExtra(
-          referralSource: ReferralSource.publishResult,
-        ),
+    final normalizedDraftId = localDraftId?.trim() ?? '';
+    final subscription = normalizedDraftId.isEmpty
+        ? null
+        : ref.listenManual<PostPublicationIntentQueueState>(
+            postPublicationIntentQueueProvider,
+            (_, next) {
+              for (final intent in next.intents) {
+                if (intent.command.localDraftId != normalizedDraftId) {
+                  continue;
+                }
+                final publicationState = intent.publicationState;
+                final resolvedPostId = intent.postId?.trim() ?? '';
+                if (resolvedPostId.isEmpty) {
+                  return;
+                }
+                switch (publicationState) {
+                  case ContentPostPublicationState.pendingReview:
+                    presentation.value = CreatePublishResultPresentation(
+                      state: CreatePublishResultState.pendingReview,
+                      postId: resolvedPostId,
+                    );
+                  case ContentPostPublicationState.published:
+                    presentation.value = CreatePublishResultPresentation(
+                      state: CreatePublishResultState.published,
+                      postId: resolvedPostId,
+                    );
+                  case ContentPostPublicationState.rejected:
+                  case null:
+                    return;
+                }
+                return;
+              }
+            },
+            fireImmediately: true,
+          );
+    try {
+      final action = await showCreatePublishResultSheet(
+        context,
+        state: state,
+        postId: postId,
+        presentationListenable: presentation,
       );
-      return;
+      if (!mounted) {
+        return;
+      }
+      final normalizedPostId = presentation.value.postId?.trim() ?? '';
+      if (action == CreatePublishResultAction.viewWork &&
+          normalizedPostId.isNotEmpty &&
+          GoRouter.maybeOf(context) != null) {
+        context.pushReplacement(
+          AppRoutePaths.workBrowser(
+            workId: normalizedPostId,
+            source: ReferralSource.publishResult.value,
+          ),
+          extra: const WorkBrowserEntryRouteExtra(
+            referralSource: ReferralSource.publishResult,
+          ),
+        );
+        return;
+      }
+      if (action == CreatePublishResultAction.viewPublicationTasks &&
+          GoRouter.maybeOf(context) != null) {
+        context.pushReplacement(AppRoutePaths.localDrafts);
+        return;
+      }
+      _doClose();
+    } finally {
+      subscription?.close();
+      presentation.dispose();
     }
-    if (action == CreatePublishResultAction.viewPublicationTasks &&
-        GoRouter.maybeOf(context) != null) {
-      context.pushReplacement(AppRoutePaths.localDrafts);
-      return;
-    }
-    _doClose();
   }
 
   Widget _buildTextEditor(CreateEditorState state) {

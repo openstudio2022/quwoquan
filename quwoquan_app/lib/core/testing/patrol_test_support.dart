@@ -21,7 +21,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show LoginAnonymousCommand;
+    show AuthSessionGrant, LoginAnonymousCommand;
 
 /// Patrol user_acceptance tests should only run under `patrol test`.
 ///
@@ -45,6 +45,7 @@ const String _patrolRuntimeInstallId = String.fromEnvironment(
   'QWQ_PATROL_INSTALL_ID',
   defaultValue: 'patrol-local-remote-acceptance',
 );
+const int _patrolAnonymousLoginSetupAttempts = 3;
 
 Future<void>? _patrolAppLaunch;
 Completer<void>? _runtimeAnonymousSessionReady;
@@ -90,7 +91,7 @@ Future<void> launchPatrolAppOnce(
   if (_usesRuntimeAnonymousSession) {
     await _startRuntimeAnonymousSessionFromMountedApp();
     await _runtimeAnonymousSessionGate().future.timeout(
-      const Duration(seconds: 30),
+      const Duration(seconds: 45),
       onTimeout: () => throw StateError(
         'Patrol local Remote anonymous session did not become ready'
         '${_runtimeAnonymousSessionFailure.isEmpty ? '' : ': $_runtimeAnonymousSessionFailure'}',
@@ -150,16 +151,7 @@ Future<void> _authenticateLocalRuntimeAnonymously(
 ) async {
   final gate = _runtimeAnonymousSessionGate();
   try {
-    final result = await container
-        .read(accountSessionLoginCommandWriterProvider)
-        .loginAnonymous(
-          LoginAnonymousCommand(
-            installId: _patrolRuntimeInstallId,
-            deviceFingerprintHash: _patrolRuntimeInstallId,
-            platform: CloudRequestHeaders.platform(),
-            appVersion: 'local-e2e',
-          ),
-        );
+    final result = await _loginAnonymousForPatrolWithRetry(container);
     final controller = container.read(authSessionControllerProvider.notifier);
     await controller.applyLoginGrant(result);
     final session = container.read(authSessionControllerProvider);
@@ -188,6 +180,39 @@ Future<void> _authenticateLocalRuntimeAnonymously(
       );
     }
   }
+}
+
+Future<AuthSessionGrant> _loginAnonymousForPatrolWithRetry(
+  ProviderContainer container,
+) async {
+  final command = LoginAnonymousCommand(
+    installId: _patrolRuntimeInstallId,
+    deviceFingerprintHash: _patrolRuntimeInstallId,
+    platform: CloudRequestHeaders.platform(),
+    appVersion: 'local-e2e',
+  );
+  for (
+    var attempt = 1;
+    attempt <= _patrolAnonymousLoginSetupAttempts;
+    attempt++
+  ) {
+    try {
+      return await container
+          .read(accountSessionLoginCommandWriterProvider)
+          .loginAnonymous(command);
+    } on CloudException catch (error) {
+      _runtimeAnonymousSessionFailure = _describeRuntimeAnonymousSessionFailure(
+        error,
+      );
+      final retryable =
+          error.runtimeFailure.recovery.action.trim().toLowerCase() == 'retry';
+      if (!retryable || attempt == _patrolAnonymousLoginSetupAttempts) {
+        rethrow;
+      }
+      await Future<void>.delayed(Duration(seconds: attempt));
+    }
+  }
+  throw StateError('Patrol anonymous login retry loop exhausted');
 }
 
 Future<void> patrolGoTo(

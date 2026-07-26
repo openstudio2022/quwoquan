@@ -14,6 +14,11 @@ externalDependencies:
   port: PushDeliveryPort
   operations: [deliver]
   conformance: push_delivery
+- capability: runtime.message.transport
+  role: use
+  port: MessageTransportPort
+  operations: [appendDurable]
+  scenes: [general]
 response_list_key: items
 api_routes:
 - method: POST
@@ -31,7 +36,7 @@ api_routes:
     principal: service
     scopes:
     - integration.external_interaction.submit
-    ownership_policy: caller_service_owns_callback_and_idempotency_scope
+    ownership_policy: caller_service_owns_idempotency_scope
   commercial:
     status: ready
   reliability:
@@ -84,7 +89,7 @@ api_routes:
     principal: service
     scopes:
     - integration.external_interaction.read
-    ownership_policy: caller_service_owns_callback_and_idempotency_scope
+    ownership_policy: caller_service_owns_idempotency_scope
   reliability:
     timeout_ms: 1500
     cancellation: supported

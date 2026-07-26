@@ -16,6 +16,7 @@ import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:uuid/uuid.dart';
 
 part 'assistant_skill_center_models.dart';
 part 'assistant_skill_center_sections.dart';
@@ -415,6 +416,7 @@ class _AssistantSkillCenterPageState
     await repo.updateSkillSubscriptionStatus(
       subscriptionId: subscription.subscriptionId,
       status: enabled ? 'active' : 'paused',
+      clientRequestId: const Uuid().v4(),
     );
   }
 

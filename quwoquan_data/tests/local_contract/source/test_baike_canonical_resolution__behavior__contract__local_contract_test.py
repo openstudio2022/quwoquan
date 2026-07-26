@@ -267,7 +267,7 @@ def test_geo_context_terms_are_derived_from_canonical_tag_ref():
     assert geo_context_terms_from_ref("地域/未知") == ()
 
 
-def test_verified_wikiid_resolution_enters_homepage_source_plan(tmp_path: Path):
+def test_non_fetchable_authority_does_not_enter_homepage_source_plan(tmp_path: Path):
     qualified_source = QualifiedHomepageSource(
         provider=HomepageAuthorityProvider.TOUTIAO_BAIKE,
         title="古堰画乡景区",
@@ -293,9 +293,4 @@ def test_verified_wikiid_resolution_enters_homepage_source_plan(tmp_path: Path):
         force=True,
     ))
 
-    source = next(row for row in sources if row["source_id"] == "home_toutiao_baike")
-    assert [row["source_id"] for row in sources] == ["home_toutiao_baike"]
-    assert source["url"] == qualified_source.url
-    assert source["sourceKind"] == "toutiao_baike"
-    assert source["extractor"] == "toutiao_baike_html"
-    assert source["policyRevision"] == "encyclopedia-primary"
+    assert sources == []

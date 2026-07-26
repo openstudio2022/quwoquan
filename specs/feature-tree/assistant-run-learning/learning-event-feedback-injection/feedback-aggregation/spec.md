@@ -62,5 +62,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：当前画像计数在写入路径直接 `$inc`，缺少 event version、watermark、projection version 和 replay receipt，不能在迟到事件、重放或口径变更后可靠复算。
+- 影响或价值：仍缺获批 Prod 发布后对 shadow rebuild 与原子切换的只读运营回执；append-only `AssistantLearningFact`、带 receipt/watermark 的 versioned projector 与 replay 已实现，definition v2 已将投影 owner 收敛为 account + persona，并在运行时检测旧 definition 后从 canonical fact stream 原子重建，Gamma 已验证真实事实追加与运行时 projector 健康。
 - 完成判定：append-only typed learning event 是唯一输入。versioned projector 以 eventId/eventVersion 幂等消费并保存 watermark 与 aggregate definition version。同一回放不重复计数、清空投影后可从事实重建，且 API/运营视图只读该投影。`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

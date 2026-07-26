@@ -25,7 +25,6 @@ func TestPushDeliverySubmitRejectsInvalidTypedPayload(t *testing.T) {
 				RetryPolicy: reliabletask.DefaultRetryPolicy(),
 			},
 		},
-		contractCallback{},
 	)
 	if err != nil {
 		t.Fatal(err)

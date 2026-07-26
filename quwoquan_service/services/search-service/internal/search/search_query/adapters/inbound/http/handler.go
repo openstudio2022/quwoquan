@@ -151,6 +151,7 @@ type searchRequestWire struct {
 	Query       string   `json:"query"`
 	Mode        string   `json:"mode"`
 	ObjectTypes []string `json:"objectTypes"`
+	IDs         []string `json:"ids"`
 	Limit       int      `json:"limit"`
 	Filters     struct {
 		Tags      []string `json:"tags"`
@@ -200,6 +201,7 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		Query:       body.Query,
 		Mode:        body.Mode,
 		ObjectTypes: body.ObjectTypes,
+		IDs:         body.IDs,
 		Limit:       body.Limit,
 		Tags:        body.Filters.Tags,
 		TimeRange:   parseTimeRange(body),

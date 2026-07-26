@@ -104,7 +104,7 @@ void main() {
     expect(runtime.deadlineElapsedSinceProcessStart, isA<Duration>());
   });
 
-  test('每个 Dart 启动 attempt 记录环境摘要与脱敏缺失键', () async {
+  test('Dart 启动只记录环境摘要与脱敏缺失键', () async {
     final events = <Map<String, dynamic>>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_startupTimingsChannel, (call) async {
@@ -121,16 +121,16 @@ void main() {
     runtime.markBootstrapStarted();
     await Future<void>.delayed(Duration.zero);
 
-    final attempt = events.singleWhere(
+    final started = events.singleWhere(
       (event) => event['eventName'] == 'startup_attempt_started',
     );
     final summary = CloudRuntimeConfig.runtimeDefineSummary;
-    expect(attempt['attemptId'], matches(RegExp(r'^[A-Za-z0-9_-]{16,128}$')));
-    expect(attempt['runtimeEnv'], summary['runtimeEnv']);
-    expect(attempt['launchMode'], summary['launchMode']);
-    expect(attempt['configurationState'], summary['configurationState']);
-    expect(attempt['missingDefineKeys'] ?? '', summary['missingKeys']);
-    expect(attempt.containsKey('CLOUD_GATEWAY_BASE_URL'), isFalse);
+    expect(started.containsKey('attemptId'), isFalse);
+    expect(started['runtimeEnv'], summary['runtimeEnv']);
+    expect(started['launchMode'], summary['launchMode']);
+    expect(started['configurationState'], summary['configurationState']);
+    expect(started['missingDefineKeys'] ?? '', summary['missingKeys']);
+    expect(started.containsKey('CLOUD_GATEWAY_BASE_URL'), isFalse);
   });
 
   test('安全终态首帧会通知平台 watchdog，而欢迎首帧不会提前取消', () async {

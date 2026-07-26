@@ -17,6 +17,7 @@ from core.data_issue import DataIssue, DataIssueCode, DataIssueStage, DataRecove
 from core.io import read_json, write_json
 from core.page_media import (
     HomepageAssetDisposition,
+    PageImageDropCode,
     is_image_dimension_token,
     normalized_subject_core,
     normalized_subject_key,
@@ -26,12 +27,6 @@ from core.page_media import (
 
 _ASSET_REF_RE = re.compile(r"asset://([^\s,\"')]+)")
 _CAP_REASON_RE = re.compile(r"capReached|maxKeptPerSource|group_aware", re.IGNORECASE)
-_POLICY_REASON_RE = re.compile(
-    r"license|rights|pixel|dimension|map|locator|unsupported|format|mime|duplicate|dedupe|safety|watermark|relevance",
-    re.IGNORECASE,
-)
-
-
 def _issue(
     code: DataIssueCode,
     message: str,
@@ -163,10 +158,11 @@ def _funnel_issues(
 ) -> list[DataIssue]:
     issues: list[DataIssue] = []
     funnel = meta.get("assetFunnel") if isinstance(meta.get("assetFunnel"), Mapping) else {}
-    candidate_count = int(funnel.get("candidateCount") or len(placements))
-    kept_count = int(funnel.get("keptCount") or len(index_assets))
+    candidate_count = int(funnel.get("candidateCount") or 0)
+    kept_count = int(funnel.get("keptCount") or 0)
     drops = _mapping_rows(funnel.get("drops"))
-    dropped_count = int(funnel.get("droppedCount") or len(drops))
+    dropped_count = int(funnel.get("droppedCount") or 0)
+    dedupe_removed = int(funnel.get("dedupeRemoved") or 0)
     serialized_funnel = json.dumps(funnel, ensure_ascii=False)
     if _CAP_REASON_RE.search(serialized_funnel):
         issues.append(
@@ -199,15 +195,50 @@ def _funnel_issues(
                 attrs={"keptCount": kept_count, "indexCount": len(index_assets)},
             )
         )
+    if dropped_count != len(drops) or dedupe_removed > dropped_count:
+        issues.append(
+            _issue(
+                DataIssueCode.CONTRACT_INVALID,
+                "asset funnel 丢弃计数与终态记录不一致",
+                ref=source_ref,
+                attrs={
+                    "droppedCount": dropped_count,
+                    "dropRecordCount": len(drops),
+                    "dedupeRemoved": dedupe_removed,
+                },
+            )
+        )
     for drop in drops:
+        raw_code = str(drop.get("code") or "")
         reason = str(drop.get("reason") or "")
-        if not _POLICY_REASON_RE.search(reason):
+        try:
+            code = PageImageDropCode(raw_code)
+        except ValueError:
+            issues.append(
+                _issue(
+                    DataIssueCode.CONTRACT_INVALID,
+                    "图片丢弃缺少稳定闭集代码",
+                    ref=source_ref,
+                    attrs={"code": raw_code, "reason": reason[:240]},
+                )
+            )
+            continue
+        if not reason:
+            issues.append(
+                _issue(
+                    DataIssueCode.CONTRACT_INVALID,
+                    "图片丢弃缺少可审计说明",
+                    ref=source_ref,
+                    attrs={"code": code.value},
+                )
+            )
+        if not code.is_policy_outcome:
             issues.append(
                 _issue(
                     DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE,
-                    "图片下载失败没有稳定策略归因",
+                    "页面图片下载未闭合",
                     ref=source_ref,
-                    attrs={"reason": reason[:240]},
+                    attrs={"code": code.value, "reason": reason[:240]},
                 )
             )
     return issues

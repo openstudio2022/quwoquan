@@ -123,8 +123,11 @@ func publishedPost() postmodel.Post {
 	return postmodel.Post{
 		ID: "post_1", Title: "洱海骑行攻略", Summary: "环湖一日", Body: "正文",
 		ContentType: "video", Status: "published", Visibility: "public", ModerationStatus: "approved",
+		ContentIdentity: "work", CoverUrl: "https://cdn.example/post.webp",
+		Width: 1280, Height: 720,
 		AuthorId: "user_9", AuthorDisplayNameSnapshot: "alice",
-		TagRefs: []string{"骑行", "洱海"}, EntityRefs: []string{"洱海"},
+		AuthorAvatarUrlSnapshot: "https://cdn.example/alice.webp",
+		TagRefs:                 []string{"骑行", "洱海"}, EntityRefs: []string{"洱海"},
 		LikeCount: 3, CommentCount: 1,
 		PublishedAt: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
 	}
@@ -163,6 +166,17 @@ func TestProjectorUpsertsOnPublish(t *testing.T) {
 	}
 	if doc["authorId"] != "user_9" {
 		t.Fatalf("author anchor missing: %#v", doc)
+	}
+	payload, ok := doc["payload"].(map[string]any)
+	if !ok ||
+		payload["authorAvatarUrl"] != post.AuthorAvatarUrlSnapshot ||
+		payload["contentIdentity"] != "work" ||
+		payload["coverUrl"] != post.CoverUrl ||
+		payload["coverWidth"] != "1280" ||
+		payload["coverHeight"] != "720" ||
+		payload["likeCount"] != "3" ||
+		payload["publishedAt"] != post.PublishedAt.Format(time.RFC3339Nano) {
+		t.Fatalf("post presentation payload incomplete: %#v", doc["payload"])
 	}
 }
 
@@ -302,13 +316,13 @@ func TestProjectorESOutageKeepsOutboxConsumerReplayable(t *testing.T) {
 	}
 }
 
-func TestProjectorNilIndexerIsNoOp(t *testing.T) {
+func TestProjectorMissingIndexerFailsFast(t *testing.T) {
 	var proj *Projector // nil receiver
-	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
-		t.Fatalf("nil projector must be a no-op, got %v", err)
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err == nil {
+		t.Fatal("nil projector must fail")
 	}
 	proj = NewProjector(nil, fakeReader{}) // nil indexer
-	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
-		t.Fatalf("nil indexer must be a no-op, got %v", err)
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err == nil {
+		t.Fatal("nil indexer must fail")
 	}
 }

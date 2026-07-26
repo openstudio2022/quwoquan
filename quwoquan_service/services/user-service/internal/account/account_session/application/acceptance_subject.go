@@ -66,6 +66,15 @@ func Subject(
 			},
 			Roles: []string{"service"},
 		}, nil
+	case "product-telemetry-query":
+		return rtauth.TokenSubject{
+			AccountID: ownerID,
+			PersonaID: personaID,
+			Scopes: []string{
+				"ops.telemetry.read",
+			},
+			Roles: []string{"operator"},
+		}, nil
 	default:
 		return rtauth.TokenSubject{}, fmt.Errorf(
 			"unsupported local acceptance profile %q",

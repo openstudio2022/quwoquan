@@ -79,6 +79,8 @@ alerts:
       - RecommendationAttributionCTRByRecallPathLow
       - RecommendationScenarioConsumptionRateLow
       - RecommendationSupplySourceShareImbalance
+      - TagFeedbackConsumerLagHigh
+      - TagFeedbackConsumerFailuresSustained
 
 metrics:
   http_requests_total: http_server_requests_total
@@ -125,6 +127,9 @@ metrics:
   behavior_ingest_dropped_total: recommendation_behavior_ingest_dropped_total
   behavior_by_attribution_total: recommendation_behavior_by_attribution_total
   hotpath_dropped_total: rec_hotpath_dropped_total
+  tag_feedback_consumer_total: content_tag_feedback_consumer_total
+  tag_feedback_consumer_lag_seconds: content_tag_feedback_consumer_lag_seconds
+  tag_feedback_consumer_last_success_unixtime: content_tag_feedback_consumer_last_success_unixtime
   exposure_filter_smembers_fallback_total: recommendation_exposure_filter_smembers_fallback_total
   exposure_redis_payload_bytes: recommendation_exposure_redis_payload_bytes
   model_score_cache_hit_total: rec_model_score_cache_hit_total
@@ -347,6 +352,19 @@ slis:
     description: 行为入口 FeedbackIngestor 限流/背压丢弃占比；衡量端侧上报抗冲击对云侧的影响。
     source: recommendation_behavior_ingest_dropped_total / recommendation_behavior_ingest_total
     objective_max: 0.01
+    measured: true
+
+  - id: tag_feedback_delivery_lag
+    description: TagFeedbackRecorded 从 tag-service 已提交事实到 content-service 显式标签亲和度提交的时延；消费者在 Mongo inbox 与特征更新原子成功后才 ACK。
+    source: content_tag_feedback_consumer_lag_seconds
+    objectives:
+      p95_seconds: 30
+    measured: true
+
+  - id: tag_feedback_consumer_failure_rate
+    description: TagFeedbackRecorded 消费扫描失败率；暂态故障保留 Redis PEL 以供 reclaim，持续失败必须告警。
+    source: content_tag_feedback_consumer_total{result="failed"} / content_tag_feedback_consumer_total
+    objective_max: 0
     measured: true
 
   - id: hotpath_buffer_drop_total

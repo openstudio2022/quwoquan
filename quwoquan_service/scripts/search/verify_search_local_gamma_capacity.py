@@ -96,7 +96,7 @@ def post_search(query: str = "成都", limit: int = 5) -> dict:
         {
             "query": query,
             "mode": "result",
-            "objectTypes": ["content.post", "entity.homepage", "location.place"],
+            "objectTypes": ["article", "entity", "location"],
             "limit": limit,
         },
         ensure_ascii=False,
@@ -125,7 +125,7 @@ def post_search(query: str = "成都", limit: int = 5) -> dict:
                     f"{h.get('target') or h.get('objectType')}:{h.get('objectId')}"
                     for h in hits
                 ],
-                "provider": (payload.get("provenance") or {}).get("Provider"),
+                "provider": (payload.get("provenance") or {}).get("provider"),
                 "rankingVersion": payload.get("rankingVersion"),
                 "experimentBucket": payload.get("experimentBucket"),
             }

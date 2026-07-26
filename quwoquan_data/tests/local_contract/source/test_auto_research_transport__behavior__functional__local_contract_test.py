@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 
@@ -12,11 +14,9 @@ from content.source.research import network_io as network_io_mod  # noqa: E402
 def test_auto_research_transport_requires_provider_owned_timeout():
     with pytest.raises(TypeError):
         network_io_mod.curl_json("https://example.test/api")
-    assert network_io_mod._CURL_RETRIES >= 1
+    assert network_io_mod.active_runtime_policy().curl_retries >= 1
 
-def test_auto_research_curl_json_preserves_call_timeout_and_retry_floor():
-    original_retries = network_io_mod._CURL_RETRIES
-    original_run = network_io_mod.subprocess.run
+def test_auto_research_curl_json_preserves_call_timeout_and_retry_floor(monkeypatch):
     calls: list[list[str]] = []
 
     class _Proc:
@@ -30,13 +30,14 @@ def test_auto_research_curl_json_preserves_call_timeout_and_retry_floor():
         calls.append(list(cmd))
         return _Proc()
 
-    try:
-        network_io_mod._CURL_RETRIES = 0
-        network_io_mod.subprocess.run = _fake_run
-        assert network_io_mod.curl_json("https://example.test/api", timeout=25) == {"ok": True}
-    finally:
-        network_io_mod._CURL_RETRIES = original_retries
-        network_io_mod.subprocess.run = original_run
+    policy = network_io_mod.active_runtime_policy()
+    monkeypatch.setattr(
+        network_io_mod,
+        "active_runtime_policy",
+        lambda: replace(policy, curl_retries=0),
+    )
+    monkeypatch.setattr(network_io_mod.subprocess, "run", _fake_run)
+    assert network_io_mod.curl_json("https://example.test/api", timeout=25) == {"ok": True}
 
     cmd = calls[0]
     assert cmd[cmd.index("--max-time") + 1] == "25"

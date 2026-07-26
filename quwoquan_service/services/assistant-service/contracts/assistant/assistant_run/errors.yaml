@@ -86,6 +86,18 @@ errors:
   user_message:
     zh: 助手执行服务暂不可用，请稍后重试
     en: Assistant run service is temporarily unavailable
+- code: ASSISTANT.SYSTEM.run_policy_unavailable
+  kind: SYSTEM
+  reason: unavailable
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: runPolicyUnavailable
+  go_const: ErrRunPolicyUnavailable
+  l10n_key: assistant.error.run_policy_unavailable
+  user_message:
+    zh: 助手策略暂不可用，请稍后重试
+    en: Assistant policy is temporarily unavailable
 - code: ASSISTANT.USER.skill_consent_required
   kind: USER
   reason: forbidden

@@ -3,6 +3,8 @@ package persistence
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -53,6 +55,17 @@ func (s *MongoTagNodeStore) EnsureIndexes(ctx context.Context) error {
 				{Key: "tagRef", Value: 1},
 			},
 			Options: options.Index().SetName("idx_tag_nodes_release_parent_lifecycle_tagref"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "releaseId", Value: 1},
+				{Key: "lifecycleStatus", Value: 1},
+				{Key: "nodeKind", Value: 1},
+				{Key: "group", Value: 1},
+				{Key: "tagRef", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_tag_nodes_release_kind_group_tagref"),
 		},
 	})
 	return err
@@ -127,6 +140,35 @@ func (s *MongoTagNodeStore) ListAllInRelease(ctx context.Context, releaseID stri
 	return out, nil
 }
 
+// ListDimensionsInRelease reads dimension metadata from the active immutable
+// taxonomy snapshot; no application-owned dimension catalog is maintained.
+func (s *MongoTagNodeStore) ListDimensionsInRelease(
+	ctx context.Context,
+	releaseID string,
+) ([]model.TagNode, error) {
+	cursor, err := s.coll.Find(
+		ctx,
+		bson.M{
+			"releaseId":       releaseID,
+			"lifecycleStatus": "active",
+			"nodeKind":        "dimension",
+		},
+		options.Find().SetSort(bson.D{
+			{Key: "group", Value: 1},
+			{Key: "tagRef", Value: 1},
+		}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	out := make([]model.TagNode, 0)
+	if err := cursor.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IsActiveLeaf verifies a node and its direct children in one Mongo aggregate
 // request so ValidateTagRefs needs at most one storage query per distinct tagRef.
 func (s *MongoTagNodeStore) IsActiveLeaf(ctx context.Context, releaseID, tagRef string) (bool, error) {
@@ -183,4 +225,42 @@ func (s *MongoTagNodeStore) HasCompleteSnapshot(
 		return false, err
 	}
 	return count == int64(expectedNodeCount), nil
+}
+
+// ValidateReleaseProjection rejects incomplete legacy snapshots instead of
+// silently falling back to an application-owned taxonomy catalog.
+func (s *MongoTagNodeStore) ValidateReleaseProjection(
+	ctx context.Context,
+	releaseID string,
+) error {
+	releaseID = strings.TrimSpace(releaseID)
+	if releaseID == "" {
+		return errors.New("taxonomy release id is required")
+	}
+	total, err := s.coll.CountDocuments(ctx, bson.M{"releaseId": releaseID})
+	if err != nil {
+		return err
+	}
+	if total == 0 {
+		return errors.New("taxonomy release snapshot is empty")
+	}
+	invalid, err := s.coll.CountDocuments(ctx, bson.M{
+		"releaseId": releaseID,
+		"nodeKind": bson.M{"$nin": bson.A{
+			"group",
+			"dimension",
+			"definition",
+		}},
+	})
+	if err != nil {
+		return err
+	}
+	if invalid != 0 {
+		return fmt.Errorf(
+			"taxonomy release %s has %d incomplete projected nodes",
+			releaseID,
+			invalid,
+		)
+	}
+	return nil
 }

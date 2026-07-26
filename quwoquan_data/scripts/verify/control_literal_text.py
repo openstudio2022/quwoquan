@@ -32,6 +32,7 @@ VERSION_FIELD_PATTERN = re.compile(
     re.IGNORECASE,
 )
 RETIRED_WORKFLOW_TOKENS = (
+    "source_digest_at_git_revision",
     "abandoned" + "Objects",
     "abandonedContent" + "Objects",
     "replacement" + "Objects",

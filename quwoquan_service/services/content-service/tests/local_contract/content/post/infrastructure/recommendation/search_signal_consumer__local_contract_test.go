@@ -156,6 +156,53 @@ func TestSearchSignalConsumerLeavesTransientProjectionFailurePending(t *testing.
 	}
 }
 
+func TestSearchSignalConsumerNeverAcksUncompletedLeaseAfterReleaseFailure(t *testing.T) {
+	ctx := context.Background()
+	memory := rtredis.NewMemoryClient()
+	redis := &deleteFailingRedis{
+		Client: memory,
+		err:    errors.New("redis delete unavailable"),
+	}
+	projector := &recordingSearchProjector{err: errors.New("mongo unavailable")}
+	consumer := NewSearchSignalConsumer(redis, projector, "worker-release-failure", nil)
+	if err := consumer.EnsureGroup(ctx); err != nil {
+		t.Fatalf("EnsureGroup: %v", err)
+	}
+	if _, err := redis.XAdd(ctx, SearchRecommendationSignalStream, map[string]string{
+		"signalId":         "query:req-release-failure",
+		"signalType":       "query",
+		"searchRequestId":  "req-release-failure",
+		"userId":           "user-1",
+		"normalizedQuery":  "成都",
+		"relatedTerms":     `[]`,
+		"engagedObjectIds": `[]`,
+		"resultCount":      "1",
+		"createdAt":        time.Now().UTC().Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("XAdd: %v", err)
+	}
+	if _, err := consumer.ProcessOnce(ctx); err == nil {
+		t.Fatal("transient projection failure must propagate")
+	}
+
+	projector.err = nil
+	processed, err := consumer.ProcessOnce(ctx)
+	if err != nil {
+		t.Fatalf("processing lease must remain retryable: %v", err)
+	}
+	if processed != 0 {
+		t.Fatalf("uncompleted processing lease must not be acked: processed=%d", processed)
+	}
+	pending, err := memory.XPendingCount(
+		ctx,
+		SearchRecommendationSignalStream,
+		SearchSignalConsumerGroup,
+	)
+	if err != nil || pending != 1 {
+		t.Fatalf("uncompleted source must remain pending: pending=%d err=%v", pending, err)
+	}
+}
+
 type recordingSearchProjector struct {
 	events []ProjectorEvent
 	err    error
@@ -164,4 +211,13 @@ type recordingSearchProjector struct {
 func (r *recordingSearchProjector) Project(_ context.Context, event ProjectorEvent) error {
 	r.events = append(r.events, event)
 	return r.err
+}
+
+type deleteFailingRedis struct {
+	rtredis.Client
+	err error
+}
+
+func (f *deleteFailingRedis) Del(context.Context, ...string) error {
+	return f.err
 }

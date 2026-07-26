@@ -290,7 +290,6 @@ func (p *HTTPExternalProvider) Send(
 		Status:            status,
 		Provider:          p.name,
 		ProviderRequestID: providerRequestID,
-		CallbackURL:       request.CallbackURL,
 		Retryable:         false,
 		OccurredAt:        time.Now().UTC(),
 	}, nil
@@ -327,7 +326,6 @@ func (p *HTTPExternalProvider) failedResult(
 		Operation:       request.Operation,
 		Status:          reliabletask.ExternalInteractionStatusFailed,
 		Provider:        p.name,
-		CallbackURL:     request.CallbackURL,
 		NormalizedError: code,
 		Retryable:       retryable,
 		OccurredAt:      time.Now().UTC(),
@@ -437,7 +435,10 @@ func normalizeProviderStatus(raw string, explicitRetryable *bool) (string, bool,
 	case "", "accepted", "queued", "pending", "sent", "sent_unconfirmed":
 		return reliabletask.ExternalInteractionStatusSentUnconfirmed, false, nil
 	case "delivered":
-		return reliabletask.ExternalInteractionStatusDelivered, false, nil
+		// A provider's terminal label can only establish that the provider
+		// accepted its own handoff. Device presentation remains a separate
+		// NotificationDeliveryJob fact, so integration never emits delivered.
+		return reliabletask.ExternalInteractionStatusSentUnconfirmed, false, nil
 	case "failed", "rejected":
 		retryable := false
 		if explicitRetryable != nil {

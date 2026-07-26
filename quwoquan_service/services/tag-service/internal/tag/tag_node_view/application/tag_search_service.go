@@ -264,6 +264,7 @@ func (s *TagService) SearchByTags(ctx context.Context, tagRefs []string, objectT
 		return out, nil
 	}
 	type agg struct {
+		objectID   string
 		objectType string
 		matched    []string
 	}
@@ -274,19 +275,23 @@ func (s *TagService) SearchByTags(ctx context.Context, tagRefs []string, objectT
 			return nil, err
 		}
 		for _, idx := range idxs {
-			a, ok := byObject[idx.ObjectID]
+			identity := objectIdentityKey(idx.ObjectType, idx.ObjectID)
+			a, ok := byObject[identity]
 			if !ok {
-				a = &agg{objectType: idx.ObjectType}
-				byObject[idx.ObjectID] = a
+				a = &agg{
+					objectID:   idx.ObjectID,
+					objectType: idx.ObjectType,
+				}
+				byObject[identity] = a
 			}
 			a.matched = append(a.matched, t)
 		}
 	}
 	total := float64(len(uniq))
-	for id, a := range byObject {
+	for _, a := range byObject {
 		sort.Strings(a.matched)
 		out = append(out, TagObjectMatchView{
-			ObjectID:    id,
+			ObjectID:    a.objectID,
 			ObjectType:  a.objectType,
 			MatchedTags: a.matched,
 			Score:       float64(len(a.matched)) / total,
@@ -295,6 +300,9 @@ func (s *TagService) SearchByTags(ctx context.Context, tagRefs []string, objectT
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Score != out[j].Score {
 			return out[i].Score > out[j].Score
+		}
+		if out[i].ObjectType != out[j].ObjectType {
+			return out[i].ObjectType < out[j].ObjectType
 		}
 		return out[i].ObjectID < out[j].ObjectID
 	})
@@ -329,6 +337,7 @@ func (s *TagService) RelatedObjects(ctx context.Context, objectID, objectType st
 		return out, nil
 	}
 	type agg struct {
+		objectID   string
 		objectType string
 		shared     []string
 	}
@@ -349,21 +358,25 @@ func (s *TagService) RelatedObjects(ctx context.Context, objectID, objectType st
 			return nil, err
 		}
 		for _, idx := range idxs {
-			if idx.ObjectID == objectID {
+			if idx.ObjectID == objectID && idx.ObjectType == objectType {
 				continue
 			}
-			a, ok := byObject[idx.ObjectID]
+			identity := objectIdentityKey(idx.ObjectType, idx.ObjectID)
+			a, ok := byObject[identity]
 			if !ok {
-				a = &agg{objectType: idx.ObjectType}
-				byObject[idx.ObjectID] = a
+				a = &agg{
+					objectID:   idx.ObjectID,
+					objectType: idx.ObjectType,
+				}
+				byObject[identity] = a
 			}
 			a.shared = append(a.shared, t)
 		}
 	}
-	for id, a := range byObject {
+	for _, a := range byObject {
 		sort.Strings(a.shared)
 		out = append(out, RelatedObjectView{
-			ObjectID:    id,
+			ObjectID:    a.objectID,
 			ObjectType:  a.objectType,
 			SharedTags:  a.shared,
 			SharedCount: len(a.shared),
@@ -373,12 +386,19 @@ func (s *TagService) RelatedObjects(ctx context.Context, objectID, objectType st
 		if out[i].SharedCount != out[j].SharedCount {
 			return out[i].SharedCount > out[j].SharedCount
 		}
+		if out[i].ObjectType != out[j].ObjectType {
+			return out[i].ObjectType < out[j].ObjectType
+		}
 		return out[i].ObjectID < out[j].ObjectID
 	})
 	if len(out) > limit {
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+func objectIdentityKey(objectType, objectID string) string {
+	return strings.TrimSpace(objectType) + "\x00" + strings.TrimSpace(objectID)
 }
 
 func sortRelatedTags(out []RelatedTagView) {

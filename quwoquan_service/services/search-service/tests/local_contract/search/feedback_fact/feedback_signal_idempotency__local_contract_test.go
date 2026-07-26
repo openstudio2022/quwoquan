@@ -3,9 +3,9 @@ package local_contract
 import (
 	"context"
 	"testing"
+	"time"
 
 	feedbackapplication "quwoquan_service/services/search-service/internal/search/feedback_fact/application"
-	signalapplication "quwoquan_service/services/search-service/internal/search/recommendation_signal_fact/application"
 )
 
 type feedbackSinkRecorder struct {
@@ -23,25 +23,9 @@ func (recorder *feedbackSinkRecorder) Record(
 	return nil
 }
 
-type searchSignalRecorder struct {
-	signals []signalapplication.Signal
-}
-
-func (recorder *searchSignalRecorder) PublishSearchSignal(
-	_ context.Context,
-	signal signalapplication.Signal,
-) error {
-	recorder.signals = append(recorder.signals, signal)
-	return nil
-}
-
 func TestFeedbackReplayWithFreshTransportKeyKeepsOneSemanticSignalID(t *testing.T) {
 	sink := &feedbackSinkRecorder{}
-	signals := &searchSignalRecorder{}
-	service := feedbackapplication.NewService(
-		sink,
-		feedbackapplication.WithSignalPublisher(signals),
-	)
+	service := feedbackapplication.NewService(sink)
 	event := feedbackapplication.Event{
 		SearchRequestID: " request-1 ",
 		ViewerID:        " persona-1 ",
@@ -58,18 +42,36 @@ func TestFeedbackReplayWithFreshTransportKeyKeepsOneSemanticSignalID(t *testing.
 			t.Fatalf("report feedback: %v", err)
 		}
 	}
-	if len(signals.signals) != 2 {
-		t.Fatalf("signals=%d want=2 retry attempts", len(signals.signals))
+	createdAt := time.Date(
+		2026,
+		time.July,
+		26,
+		12,
+		0,
+		0,
+		0,
+		time.UTC,
+	)
+	firstSignal, firstOK := feedbackapplication.RecommendationSignal(
+		sink.events[0],
+		createdAt,
+	)
+	secondSignal, secondOK := feedbackapplication.RecommendationSignal(
+		sink.events[1],
+		createdAt,
+	)
+	if !firstOK || !secondOK {
+		t.Fatal("canonical click feedback must produce a signal")
 	}
-	if signals.signals[0].SignalID != signals.signals[1].SignalID {
+	if firstSignal.SignalID != secondSignal.SignalID {
 		t.Fatalf(
 			"semantic replay changed signal id: %q != %q",
-			signals.signals[0].SignalID,
-			signals.signals[1].SignalID,
+			firstSignal.SignalID,
+			secondSignal.SignalID,
 		)
 	}
-	if len(signals.signals[0].EngagedObjectIDs) != 1 ||
-		signals.signals[0].EngagedObjectIDs[0] != "post-1" ||
+	if len(firstSignal.EngagedObjectIDs) != 1 ||
+		firstSignal.EngagedObjectIDs[0] != "post-1" ||
 		sink.events[0].SearchRequestID != "request-1" ||
 		sink.events[0].ViewerID != "persona-1" ||
 		sink.metas[0].IdempotencyKey != "transport-key-1" {
@@ -77,7 +79,35 @@ func TestFeedbackReplayWithFreshTransportKeyKeepsOneSemanticSignalID(t *testing.
 			"feedback was not canonicalized: event=%+v meta=%+v signal=%+v",
 			sink.events[0],
 			sink.metas[0],
-			signals.signals[0],
+			firstSignal,
 		)
+	}
+}
+
+func TestDwellFeedbackRequiresPositiveDuration(t *testing.T) {
+	sink := &feedbackSinkRecorder{}
+	service := feedbackapplication.NewService(sink)
+	meta := feedbackapplication.CommandMeta{
+		IdempotencyKey: "dwell-key",
+		CommandDigest:  "dwell-digest",
+	}
+	if err := service.Report(context.Background(), feedbackapplication.Event{
+		SearchRequestID: "request-dwell",
+		EventType:       "dwell",
+		DwellMs:         1,
+	}, meta); err != nil {
+		t.Fatalf("positive dwell feedback rejected: %v", err)
+	}
+	if len(sink.events) != 1 || sink.events[0].DwellMs != 1 {
+		t.Fatalf("positive dwell feedback was not persisted: %+v", sink.events)
+	}
+	if err := service.Report(context.Background(), feedbackapplication.Event{
+		SearchRequestID: "request-dwell-invalid",
+		EventType:       "dwell",
+	}, feedbackapplication.CommandMeta{
+		IdempotencyKey: "dwell-invalid-key",
+		CommandDigest:  "dwell-invalid-digest",
+	}); err == nil {
+		t.Fatal("dwell feedback without a positive duration must be rejected")
 	}
 }

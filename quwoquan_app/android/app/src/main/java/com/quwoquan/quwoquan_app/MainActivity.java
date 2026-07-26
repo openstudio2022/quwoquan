@@ -34,10 +34,14 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -92,6 +96,7 @@ public class MainActivity extends FlutterFragmentActivity {
   private CommercialAuthPlugin commercialAuthPlugin;
   private AliyunOneTapPlugin aliyunOneTapPlugin;
   private CellularNetworkProbePlugin cellularNetworkProbePlugin;
+  private RecoveryFailureEncryptedStore recoveryFailureEncryptedStore;
   private ScheduledFuture<?> flutterFirstFrameWatchdog;
   private ScheduledFuture<?> nativeRecoveryTerminalReconciliation;
   private FlutterEngine startupFlutterEngine;
@@ -103,15 +108,22 @@ public class MainActivity extends FlutterFragmentActivity {
   private volatile boolean nativeRecoveryDeadlineReached;
   private volatile boolean confirmedPreviousBuildFatal;
   private volatile boolean recoveryExternalOpenInFlight;
+  private volatile boolean recoveryVersionCheckInFlight;
+  private volatile boolean recoveryVersionRefreshPending;
   private volatile boolean dartStartupAttemptStarted;
   private volatile String currentDartAttemptId = "";
   private volatile String currentLaunchMode = "unknown";
   private long firstFrameForegroundRemainingMs = FLUTTER_FIRST_FRAME_DEADLINE_MS;
   private long foregroundStartedElapsedMs;
+  private TextView startupRecoveryTitle;
+  private TextView startupRecoveryMessage;
+  private Button startupRecoveryPrimary;
+  private Button startupRecoveryWeb;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     installNativeCrashMarker();
+    promoteConfirmedPlatformStartupCrash();
     confirmedPreviousBuildFatal = shouldRecoverConfirmedStartupFatal();
     markCurrentBuildStarting();
     activityOnCreateElapsedMs = SystemClock.elapsedRealtime() - processStartElapsedMs;
@@ -246,6 +258,10 @@ public class MainActivity extends FlutterFragmentActivity {
                   context.put("platform", "android");
                   context.put("appVersion", BuildConfig.VERSION_NAME);
                   context.put("buildNumber", BuildConfig.VERSION_CODE);
+                  context.put("osVersion", Build.VERSION.RELEASE);
+                  context.put("deviceModel", Build.MANUFACTURER + " " + Build.MODEL);
+                  context.put("recoveryBaseUrl", BuildConfig.QWQ_RECOVERY_BASE_URL);
+                  context.put("publicWebUrl", BuildConfig.QWQ_PUBLIC_WEB_URL);
                   result.success(context);
                   break;
                 case "openTrustedExternalUrl":
@@ -254,6 +270,35 @@ public class MainActivity extends FlutterFragmentActivity {
                 case "recordFatalStartup":
                   markCurrentBuildFatal();
                   result.success(null);
+                  break;
+                case "readPendingNativeStartupFatal":
+                  result.success(readPendingNativeStartupFatal());
+                  break;
+                case "ackPendingNativeStartupFatal":
+                  acknowledgePendingNativeStartupFatal();
+                  result.success(null);
+                  break;
+                case "readRecoveryFailureQueue":
+                  startupWatchdogExecutor.execute(
+                      () -> {
+                        String value = recoveryFailureEncryptedStore().read();
+                        startupHandler.post(() -> result.success(value));
+                      });
+                  break;
+                case "writeRecoveryFailureQueue":
+                  String queue = stringArgument(call, "value");
+                  startupWatchdogExecutor.execute(
+                      () -> {
+                        boolean written = recoveryFailureEncryptedStore().write(queue);
+                        startupHandler.post(() -> result.success(written));
+                      });
+                  break;
+                case "clearRecoveryFailureQueue":
+                  startupWatchdogExecutor.execute(
+                      () -> {
+                        boolean cleared = recoveryFailureEncryptedStore().clear();
+                        startupHandler.post(() -> result.success(cleared));
+                      });
                   break;
                 default:
                   result.notImplemented();
@@ -365,6 +410,13 @@ public class MainActivity extends FlutterFragmentActivity {
     return cellularNetworkProbePlugin;
   }
 
+  private RecoveryFailureEncryptedStore recoveryFailureEncryptedStore() {
+    if (recoveryFailureEncryptedStore == null) {
+      recoveryFailureEncryptedStore = new RecoveryFailureEncryptedStore(getApplicationContext());
+    }
+    return recoveryFailureEncryptedStore;
+  }
+
   private void installNativeCrashMarker() {
     synchronized (MainActivity.class) {
       if (nativeCrashMarkerInstalled) {
@@ -409,6 +461,56 @@ public class MainActivity extends FlutterFragmentActivity {
       return false;
     }
     return true;
+  }
+
+  private void promoteConfirmedPlatformStartupCrash() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      return;
+    }
+    android.content.SharedPreferences preferences =
+        getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE);
+    String currentBuild = String.valueOf(BuildConfig.VERSION_CODE);
+    String previousBuild = preferences.getString(STARTUP_HEALTH_BUILD_KEY, "");
+    boolean previousSafeShell =
+        preferences.getBoolean(STARTUP_HEALTH_SAFE_SHELL_KEY, true);
+    if (!currentBuild.equals(previousBuild) || previousSafeShell) {
+      return;
+    }
+
+    ActivityManager manager =
+        (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+    if (manager == null) {
+      return;
+    }
+    ApplicationExitInfo latestExit = null;
+    try {
+      for (ApplicationExitInfo exit :
+          manager.getHistoricalProcessExitReasons(getPackageName(), 0, 5)) {
+        if (latestExit == null || exit.getTimestamp() > latestExit.getTimestamp()) {
+          latestExit = exit;
+        }
+      }
+    } catch (RuntimeException ignored) {
+      return;
+    }
+    if (latestExit == null) {
+      return;
+    }
+    int reason = latestExit.getReason();
+    if (reason != ApplicationExitInfo.REASON_CRASH
+        && reason != ApplicationExitInfo.REASON_CRASH_NATIVE) {
+      return;
+    }
+    String kind =
+        reason == ApplicationExitInfo.REASON_CRASH_NATIVE
+            ? "AndroidNativeCrash"
+            : "AndroidProcessCrash";
+    preferences
+        .edit()
+        .putString(STARTUP_HEALTH_FATAL_BUILD_KEY, currentBuild)
+        .putLong(STARTUP_HEALTH_FATAL_AT_KEY, latestExit.getTimestamp())
+        .putString(RUNTIME_CRASH_MARKER_KIND_KEY, kind)
+        .commit();
   }
 
   private void markCurrentBuildStarting() {
@@ -467,6 +569,9 @@ public class MainActivity extends FlutterFragmentActivity {
   }
 
   private Map<String, Object> consumePreviousNativeCrashMarker() {
+    if (confirmedPreviousBuildFatal) {
+      return null;
+    }
     String kind =
         getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
             .getString(RUNTIME_CRASH_MARKER_KIND_KEY, "");
@@ -480,6 +585,33 @@ public class MainActivity extends FlutterFragmentActivity {
     Map<String, Object> marker = new HashMap<>();
     marker.put("kind", kind);
     return marker;
+  }
+
+  private Map<String, Object> readPendingNativeStartupFatal() {
+    if (!confirmedPreviousBuildFatal) {
+      return null;
+    }
+    android.content.SharedPreferences preferences =
+        getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE);
+    String kind = preferences.getString(RUNTIME_CRASH_MARKER_KIND_KEY, "");
+    long occurredAtMs = preferences.getLong(STARTUP_HEALTH_FATAL_AT_KEY, 0L);
+    if (kind == null || kind.trim().isEmpty() || occurredAtMs <= 0L) {
+      return null;
+    }
+    SimpleDateFormat formatter =
+        new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+    formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
+    Map<String, Object> marker = new HashMap<>();
+    marker.put("errorType", kind);
+    marker.put("occurredAt", formatter.format(new Date(occurredAtMs)));
+    return marker;
+  }
+
+  private void acknowledgePendingNativeStartupFatal() {
+    getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+        .edit()
+        .remove(RUNTIME_CRASH_MARKER_KIND_KEY)
+        .apply();
   }
 
   private Map<String, Object> readPreviousNativeAnrMarker() {
@@ -605,6 +737,19 @@ public class MainActivity extends FlutterFragmentActivity {
       appInForeground = true;
       foregroundStartedElapsedMs = SystemClock.elapsedRealtime();
     }
+    if (recoveryVersionRefreshPending
+        && nativeRecoveryShown
+        && startupRecoveryTitle != null
+        && startupRecoveryMessage != null
+        && startupRecoveryPrimary != null
+        && startupRecoveryWeb != null) {
+      recoveryVersionRefreshPending = false;
+      checkNativeRecoveryVersion(
+          startupRecoveryTitle,
+          startupRecoveryMessage,
+          startupRecoveryPrimary,
+          startupRecoveryWeb);
+    }
     armFlutterFirstFrameWatchdog();
   }
 
@@ -633,6 +778,10 @@ public class MainActivity extends FlutterFragmentActivity {
     if (cellularNetworkProbePlugin != null) {
       cellularNetworkProbePlugin.dispose();
     }
+    startupRecoveryTitle = null;
+    startupRecoveryMessage = null;
+    startupRecoveryPrimary = null;
+    startupRecoveryWeb = null;
     startupWatchdogExecutor.shutdownNow();
     super.onDestroy();
   }
@@ -1180,11 +1329,19 @@ public class MainActivity extends FlutterFragmentActivity {
         recovery,
         new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    startupRecoveryTitle = title;
+    startupRecoveryMessage = message;
+    startupRecoveryPrimary = primary;
+    startupRecoveryWeb = web;
     checkNativeRecoveryVersion(title, message, primary, web);
   }
 
   private void checkNativeRecoveryVersion(
       TextView title, TextView message, Button primary, Button web) {
+    if (recoveryVersionCheckInFlight) {
+      return;
+    }
+    recoveryVersionCheckInFlight = true;
     startupWatchdogExecutor.execute(
         () -> {
           HttpURLConnection connection = null;
@@ -1227,7 +1384,8 @@ public class MainActivity extends FlutterFragmentActivity {
                             openRecoveryTarget(
                                 updateUrl,
                                 recoveryUrl,
-                                "暂时无法打开更新页面，请稍后再试"));
+                                "暂时无法打开更新页面，请稍后再试",
+                                true));
                     web.setVisibility(View.VISIBLE);
                     return;
                   }
@@ -1257,6 +1415,7 @@ public class MainActivity extends FlutterFragmentActivity {
                   web.setVisibility(View.GONE);
                 });
           } finally {
+            recoveryVersionCheckInFlight = false;
             if (connection != null) {
               connection.disconnect();
             }
@@ -1300,6 +1459,11 @@ public class MainActivity extends FlutterFragmentActivity {
   }
 
   private void openRecoveryTarget(String target, String fallback, String failureMessage) {
+    openRecoveryTarget(target, fallback, failureMessage, false);
+  }
+
+  private void openRecoveryTarget(
+      String target, String fallback, String failureMessage, boolean recheckVersionOnReturn) {
     if (recoveryExternalOpenInFlight) {
       return;
     }
@@ -1310,6 +1474,8 @@ public class MainActivity extends FlutterFragmentActivity {
     }
     if (!opened) {
       Toast.makeText(this, failureMessage, Toast.LENGTH_SHORT).show();
+    } else if (recheckVersionOnReturn) {
+      recoveryVersionRefreshPending = true;
     }
     recoveryExternalOpenInFlight = false;
   }

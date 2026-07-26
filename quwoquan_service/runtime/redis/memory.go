@@ -2,7 +2,10 @@ package redis
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -21,7 +24,8 @@ type memoryClient struct {
 }
 
 type memStream struct {
-	next    int64
+	lastMS  int64
+	nextSeq int64
 	groups  map[string]*memStreamGroup
 	entries []StreamMessage
 }
@@ -506,8 +510,15 @@ func (m *memoryClient) XAdd(_ context.Context, stream string, values map[string]
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	ms := m.ensureStream(stream)
-	ms.next++
-	id := intToStr(ms.next) + "-0"
+	nowMS := time.Now().UnixMilli()
+	if nowMS <= ms.lastMS {
+		nowMS = ms.lastMS
+		ms.nextSeq++
+	} else {
+		ms.lastMS = nowMS
+		ms.nextSeq = 0
+	}
+	id := intToStr(nowMS) + "-" + intToStr(ms.nextSeq)
 	copied := make(map[string]string, len(values))
 	for key, value := range values {
 		copied[key] = value
@@ -624,6 +635,65 @@ func (m *memoryClient) XPendingCount(_ context.Context, stream string, group str
 		return int64(len(currentGroup.pending)), nil
 	}
 	return 0, nil
+}
+
+func (m *memoryClient) XTrimOlderThan(
+	_ context.Context,
+	stream string,
+	maxAge time.Duration,
+) error {
+	if maxAge <= 0 {
+		return fmt.Errorf("Redis stream max age must be positive")
+	}
+	minID := fmt.Sprintf("%d-0", time.Now().Add(-maxAge).UnixMilli())
+	minimumMS, minimumSequence, err := parseMemoryStreamID(minID)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ms := m.ensureStream(stream)
+	removed := 0
+	for removed < len(ms.entries) {
+		entryMS, entrySequence, parseErr := parseMemoryStreamID(
+			ms.entries[removed].ID,
+		)
+		if parseErr != nil {
+			return parseErr
+		}
+		if entryMS > minimumMS ||
+			(entryMS == minimumMS && entrySequence >= minimumSequence) {
+			break
+		}
+		removed++
+	}
+	if removed == 0 {
+		return nil
+	}
+	ms.entries = append([]StreamMessage(nil), ms.entries[removed:]...)
+	for _, group := range ms.groups {
+		group.lastDelivered -= removed
+		if group.lastDelivered < 0 {
+			group.lastDelivered = 0
+		}
+	}
+	return nil
+}
+
+func parseMemoryStreamID(id string) (int64, int64, error) {
+	parts := strings.Split(strings.TrimSpace(id), "-")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("invalid Redis stream ID %q", id)
+	}
+	milliseconds, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || milliseconds < 0 {
+		return 0, 0, fmt.Errorf("invalid Redis stream ID %q", id)
+	}
+	sequence, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil || sequence < 0 {
+		return 0, 0, fmt.Errorf("invalid Redis stream ID %q", id)
+	}
+	return milliseconds, sequence, nil
 }
 
 func (m *memoryClient) ensureStream(stream string) *memStream {

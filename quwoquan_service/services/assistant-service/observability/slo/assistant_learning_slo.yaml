@@ -1,0 +1,37 @@
+version: 1
+service: assistant-service
+domain: assistant
+capability: learning-event-feedback-injection
+
+metrics:
+  append_total: assistant_learning_fact_append_total
+  relay_tick_total: assistant_learning_outbox_relay_tick_total
+  relay_published_total: assistant_learning_outbox_published_total
+  projection_tick_total: assistant_learning_projection_tick_total
+  projection_events_total: assistant_learning_projection_events_total
+  context_decision_total: assistant_feedback_context_decision_total
+
+privacy:
+  permitted_labels: [source, fact_type, outcome, decision]
+  prohibited_labels:
+    [account_id, persona_id, event_id, turn_id, feedback_text, query_text]
+
+slis:
+  - id: assistant_learning_append_availability
+    description: 合法 user/service 学习事实在 canonical Mongo transaction 中提交成功或命中 durable receipt 的比例；输入拒绝不计依赖故障。
+    sli: sum(rate(assistant_learning_fact_append_total{outcome=~"accepted|deduplicated"}[5m])) / sum(rate(assistant_learning_fact_append_total{outcome=~"accepted|deduplicated|store_failed"}[5m]))
+    objective: 0.999
+  - id: assistant_learning_outbox_relay_availability
+    description: 脱敏 transactional outbox 到 durable event transport 的调度成功率。
+    sli: sum(rate(assistant_learning_outbox_relay_tick_total{outcome="succeeded"}[5m])) / sum(rate(assistant_learning_outbox_relay_tick_total[5m]))
+    objective: 0.999
+  - id: assistant_learning_projection_availability
+    description: active generation projector 调度成功率；失败不得推进 watermark。
+    sli: sum(rate(assistant_learning_projection_tick_total{outcome=~"succeeded|rebuilt"}[5m])) / sum(rate(assistant_learning_projection_tick_total[5m]))
+    objective: 0.999
+
+failure_semantics:
+  append_store_failed: retain_app_pending_confirmation_record
+  relay_failed: retain_transactional_outbox_record
+  projection_failed: retain_previous_watermark_and_active_generation
+  context_dependency_failed: freeze_no_injection_decision

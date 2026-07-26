@@ -93,7 +93,6 @@ func handleExternalInteractionRequest(writer http.ResponseWriter, request *http.
 		Tenant         string            `json:"tenant"`
 		Environment    string            `json:"env"`
 		IdempotencyKey string            `json:"idempotencyKey"`
-		CallbackEvent  string            `json:"callbackEvent"`
 		PayloadRef     string            `json:"payloadRef"`
 		PayloadDigest  string            `json:"payloadDigest"`
 		Sensitivity    string            `json:"sensitivity"`
@@ -108,7 +107,6 @@ func handleExternalInteractionRequest(writer http.ResponseWriter, request *http.
 		payload.Tenant != "quwoquan" ||
 		payload.Environment != "beta" ||
 		strings.TrimSpace(payload.IdempotencyKey) == "" ||
-		payload.CallbackEvent != "SmsOtpDeliverySucceeded" ||
 		!strings.HasPrefix(payload.PayloadRef, "otp_challenge:") ||
 		len(payload.PayloadDigest) != 64 ||
 		payload.Sensitivity != "secret" ||

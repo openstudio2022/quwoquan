@@ -26,9 +26,10 @@ type notificationRuntimeConfig struct {
 			RetryPerSecond    int `yaml:"retry_per_second"`
 		} `yaml:"delivery"`
 		Consumers struct {
-			Interaction    string `yaml:"interaction"`
-			AccountClosure string `yaml:"account_closure"`
-			IncomingCall   string `yaml:"incoming_call"`
+			Interaction               string `yaml:"interaction"`
+			AccountClosure            string `yaml:"account_closure"`
+			IncomingCall              string `yaml:"incoming_call"`
+			ExternalInteractionResult string `yaml:"external_interaction_result"`
 		} `yaml:"consumers"`
 	} `yaml:"notification"`
 	Mongo struct {
@@ -88,6 +89,7 @@ func applyNotificationRuntimeConfig(cfg notificationRuntimeConfig) error {
 		"NOTIFICATION_CONSUMER_NAME":                       cfg.Notification.Consumers.Interaction,
 		"NOTIFICATION_USER_ACCOUNT_CLOSED_CONSUMER_NAME":   cfg.Notification.Consumers.AccountClosure,
 		"NOTIFICATION_RTC_CONSUMER_NAME":                   cfg.Notification.Consumers.IncomingCall,
+		"NOTIFICATION_EXTERNAL_RESULT_CONSUMER_NAME":       cfg.Notification.Consumers.ExternalInteractionResult,
 	}
 	for key, value := range values {
 		if os.Getenv(key) != "" || value == "" {

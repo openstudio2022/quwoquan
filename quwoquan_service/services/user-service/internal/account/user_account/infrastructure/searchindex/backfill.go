@@ -2,7 +2,9 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 
+	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
@@ -29,7 +31,7 @@ type BulkIndexer interface {
 type BackfillReport struct {
 	TotalProfiles   int `json:"totalProfiles"`
 	IndexedProfiles int `json:"indexedProfiles"`
-	SkippedProfiles int `json:"skippedProfiles"`
+	DeletedProfiles int `json:"deletedProfiles"`
 	BatchesPushed   int `json:"batchesPushed"`
 }
 
@@ -41,7 +43,9 @@ type BackfillReport struct {
 func Backfill(ctx context.Context, indexer BulkIndexer, lister ProfileLister, batchSize int) (BackfillReport, error) {
 	var report BackfillReport
 	if indexer == nil || lister == nil {
-		return report, nil
+		return report, fmt.Errorf(
+			"UserProfile search backfill requires indexer and lister",
+		)
 	}
 	if batchSize <= 0 {
 		batchSize = defaultBackfillBatchSize
@@ -63,7 +67,14 @@ func Backfill(ctx context.Context, indexer BulkIndexer, lister ProfileLister, ba
 		batch := make([]es.ChangeEvent, 0, len(page))
 		for i := range page {
 			if !application.UserProfileSearchEligible(page[i]) {
-				report.SkippedProfiles++
+				batch = append(batch, es.ChangeEvent{
+					Op: es.OpDelete,
+					Doc: rtsearch.Document{
+						ObjectType: rtsearch.ObjectTypeUserProfile,
+						ObjectID:   page[i].UserID,
+					},
+				})
+				report.DeletedProfiles++
 				continue
 			}
 			batch = append(batch, es.ChangeEvent{

@@ -71,7 +71,10 @@ final class HybridSearchRepository implements SearchRepository {
 
   Future<void> _syncLocalChatIndex() async {
     try {
-      await _localChatSync.sync();
+      final synced = await _localChatSync.sync();
+      if (!synced) {
+        throw StateError('Local chat index did not complete sync');
+      }
     } on Object catch (error) {
       _recordDegrade('local_sync', error);
     }

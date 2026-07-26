@@ -170,12 +170,10 @@ surfaces:
       - ReadAppMessage
       - CreateProfileUpdateProposal
       - GetAppMessageUnreadCount
-      - ReportInteractionEvent
-      - ReportScorecard
+      - AppendAssistantLearningFact
       - ReportPageContext
       - GetEntryPersonalization
       - GetSuggestedActions
-      - GetPolicy
       - ListSkills
       - ListAssistantTasks
       - SetAssistantPreference
@@ -196,7 +194,6 @@ surfaces:
     path_template: /chat/{id}
     description: 私助会话设置
     operation_ids:
-      - GetPolicy
       - ListSkills
       - ListAssistantTasks
       - SetAssistantPreference
@@ -222,8 +219,7 @@ surfaces:
     path_template: /chat/{id}
     description: 私助反馈与纠错
     operation_ids:
-      - ReportInteractionEvent
-      - ReportScorecard
+      - AppendAssistantLearningFact
 
   - id: globalSearchLanding
     owner: search
@@ -856,6 +852,7 @@ surfaces:
       - AbortMediaUpload
       - ConfirmProposal
       - ApplyProposal
+      - RollbackProposal
       - RejectProposal
       - GetProfileUpdateProposal
       - ListProfileUpdateProposals

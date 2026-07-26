@@ -131,6 +131,29 @@ void main() {
     expect(telemetry.events, contains('search_hybrid_degraded'));
   });
 
+  test('suggest 同步返回 false 时记录 typed degrade telemetry', () async {
+    final telemetry = _TelemetrySpy();
+    final repository = HybridSearchRepository(
+      _RecordingRemoteRepository(),
+      _LocalReader(),
+      _SyncSpy(result: false),
+      _CircleGroupIndexSpy(),
+      _personaContext,
+      telemetry,
+    );
+
+    await repository.search(
+      const SearchRequest(
+        query: '摄影',
+        mode: SearchMode.suggest,
+        objectTypes: <SearchObjectType>{SearchObjectType.chatContact},
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(telemetry.events, contains('search_hybrid_degraded'));
+  });
+
   test('Remote suggest 不可用时仅本地讨论标记 typed local_fallback', () async {
     final telemetry = _TelemetrySpy();
     final repository = HybridSearchRepository(
@@ -337,9 +360,10 @@ final class _LocalReader implements LocalChatSearchReader {
 }
 
 final class _SyncSpy implements LocalChatSearchSynchronizer {
-  _SyncSpy({this.failure});
+  _SyncSpy({this.failure, this.result = true});
 
   final Object? failure;
+  final bool result;
   int calls = 0;
 
   @override
@@ -348,7 +372,7 @@ final class _SyncSpy implements LocalChatSearchSynchronizer {
     if (failure != null) {
       throw failure!;
     }
-    return true;
+    return result;
   }
 }
 

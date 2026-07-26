@@ -160,10 +160,11 @@ class AppRoutePaths {
   static const String homepagePickerSegment = 'picker';
 
   static const String suggestHomepagePathTemplate = '/homepages/suggest';
-  static String suggestHomepage({String? query}) {
+  static String suggestHomepage({String? query, String? sourcePlaceId}) {
     return _buildPath(suggestHomepagePathTemplate, <String, String>{
     }, <String, String?>{
       'query': query,
+      'sourcePlaceId': sourcePlaceId,
     });
   }
   static const String suggestHomepageSegment = 'suggest';

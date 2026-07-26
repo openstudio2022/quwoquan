@@ -44,6 +44,7 @@ import (
 	filepersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/persistence"
 	groupapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group/application"
 	groupersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/persistence"
+	groupsearchindex "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/searchindex"
 	groupmembershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/application"
 	groupmembershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/infrastructure/persistence"
 	membershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/application"
@@ -242,7 +243,7 @@ func run() error {
 	// reads circles back through the same (cached) store the service writes
 	// through, so reconciles see the just-written state.
 	searchindex.ApplyESEnvOverrides(&cfg.ES)
-	searchBuilt, err := searchindex.Build(cfg.ES, circleStorage.Records)
+	searchBuilt, err := searchindex.Build(cfg.ES, circleStore)
 	if err != nil {
 		log.Fatalf("circle-service search index build failed: %v", err)
 	}
@@ -378,6 +379,15 @@ func run() error {
 		groupmembershipapp.NewCircleGroupOwnerProjector(groupMembershipCommands),
 		"circle-group-owner-membership",
 	)
+	var groupSearchRelay *groupapp.OutboxRelay
+	if searchBuilt.Indexer != nil {
+		groupSearchRelay = groupapp.NewOutboxRelay(
+			groupStore,
+			groupStore,
+			groupsearchindex.NewProjector(searchBuilt.Indexer, groupStore),
+			"circle-group-search-index",
+		)
+	}
 	groupMembershipStreamRelay := groupmembershipapp.NewOutboxRelay(
 		groupMembershipStore, groupMembershipStore,
 		messaging.NewCircleGroupMembershipStreamPublisher(messageTransport),
@@ -475,6 +485,11 @@ func run() error {
 	healthChecker.Register("circle-group-owner-membership", func(_ context.Context) error {
 		return groupOwnerMembershipRelay.Healthy(5 * time.Second)
 	})
+	if groupSearchRelay != nil {
+		healthChecker.Register("circle-group-search-index-relay", func(_ context.Context) error {
+			return groupSearchRelay.Healthy(5 * time.Second)
+		})
+	}
 	healthChecker.Register("circle-group-membership-stream", func(_ context.Context) error {
 		return groupMembershipStreamRelay.Healthy(5 * time.Second)
 	})
@@ -537,6 +552,13 @@ func run() error {
 			log.Printf("circle group owner-membership relay stopped: %v", err)
 		}
 	}()
+	if groupSearchRelay != nil {
+		go func() {
+			if err := groupSearchRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+				log.Printf("circle group search-index relay stopped: %v", err)
+			}
+		}()
+	}
 	go func() {
 		if err := groupMembershipStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
 			log.Printf("circle group membership stream relay stopped: %v", err)

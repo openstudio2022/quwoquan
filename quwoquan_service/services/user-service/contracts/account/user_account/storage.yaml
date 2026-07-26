@@ -471,6 +471,68 @@ tables:
       columns:
       - failed_at
       - event_id
+  user_profile_search_outbox:
+    entity: UserAccount
+    infrastructure_only: true
+    description: UserProfileUpdated、UserAvatarUpdated 与 UserRegistered 的 search projection durable outbox；资料事实与投影坐标在同一事务提交，租约 relay 只在 Elasticsearch/OpenSearch 幂等 upsert 或 delete 成功后确认 checkpoint，失败保留为可重放记录。
+    columns:
+    - name: event_id
+      type: VARCHAR(64)
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: user_id
+      type: VARCHAR(96)
+      constraints:
+      - NOT_NULL
+    - name: profile_version
+      type: BIGINT
+      constraints:
+      - NOT_NULL
+    - name: event_type
+      type: VARCHAR(96)
+      constraints:
+      - NOT_NULL
+    - name: occurred_at
+      type: TIMESTAMPTZ
+      constraints:
+      - NOT_NULL
+    - name: published_at
+      type: TIMESTAMPTZ
+    - name: retry_count
+      type: INTEGER
+      constraints:
+      - NOT_NULL
+    - name: next_attempt_at
+      type: TIMESTAMPTZ
+      constraints:
+      - NOT_NULL
+    - name: last_failure_code
+      type: VARCHAR(64)
+      constraints:
+      - NOT_NULL
+    - name: last_failure_digest
+      type: CHAR(64)
+      constraints:
+      - NOT_NULL
+    - name: last_failed_at
+      type: TIMESTAMPTZ
+    - name: lease_owner
+      type: VARCHAR(96)
+    - name: lease_until
+      type: TIMESTAMPTZ
+    indexes:
+    - name: idx_user_profile_search_outbox_claim_ready
+      columns:
+      - next_attempt_at
+      - lease_until
+      - occurred_at
+      - event_id
+    - name: idx_user_profile_search_outbox_unpublished_order
+      columns:
+      - user_id
+      - occurred_at
+      - event_id
 redis_cache:
 - key: cache:user_profile:{userId}
   ttl_seconds: 600

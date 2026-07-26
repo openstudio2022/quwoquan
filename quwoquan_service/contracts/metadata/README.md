@@ -72,7 +72,7 @@ contracts/metadata/
 python3 scripts/contracts/build_service_contract_view.py
 ```
 
-视图仅位于 `.qwq_output/env/repo/local/service-contract-view/cache`，不得被业务代码、运行服务或下一次构建当作唯一输入。
+视图仅位于 `.qwq_output/env/repo/local/service-contract-view/cache-*`，每个 Make 或验证进程独占一个可删除目录。不得被业务代码、运行服务或下一次构建当作唯一输入。
 
 ## 验证
 

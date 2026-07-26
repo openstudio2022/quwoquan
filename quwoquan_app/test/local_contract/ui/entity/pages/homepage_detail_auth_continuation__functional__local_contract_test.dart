@@ -457,6 +457,7 @@ final class _RecordingConversationRepository extends Fake
     String? title,
     int? maxGroupSize,
     List<String>? initialMemberIds,
+    String? idempotencyKey,
   }) async {
     createCalls += 1;
     lastInitialMemberIds = initialMemberIds;

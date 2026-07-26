@@ -18,7 +18,7 @@ func TestSeedManifestImportsOnlyExplicitRefs(t *testing.T) {
 				"object_tag_index": [{
 					"objectId": "user-1",
 					"objectType": "user",
-					"tagRefs": ["Topic/摄影", "Topic/摄影"]
+					"tagRefs": ["Topic/旅行", "Topic/摄影", "Topic/摄影"]
 				}]
 			},
 			"undeclared": {
@@ -38,8 +38,13 @@ func TestSeedManifestImportsOnlyExplicitRefs(t *testing.T) {
 	if len(entries) != 1 || entries[0].ObjectID != "user-1" {
 		t.Fatalf("unexpected selected entries: %+v", entries)
 	}
-	if len(entries[0].TagRefs) != 1 || entries[0].TagRefs[0] != "Topic/摄影" {
-		t.Fatalf("tag refs must be canonical and deduplicated: %+v", entries[0].TagRefs)
+	if len(entries[0].TagRefs) != 2 ||
+		entries[0].TagRefs[0] != "Topic/摄影" ||
+		entries[0].TagRefs[1] != "Topic/旅行" {
+		t.Fatalf(
+			"tag refs must be canonical, sorted, and deduplicated: %+v",
+			entries[0].TagRefs,
+		)
 	}
 }
 

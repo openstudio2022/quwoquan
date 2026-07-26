@@ -50,9 +50,24 @@ func (r Runner) Run(ctx context.Context, replay assistant.ReplayCase) (Transcrip
 		Trigger:        assistant.AssistantTurnTrigger{Type: "replay"},
 		TraceID:        "trace_" + replay.ReplayCaseID,
 		CreatedAt:      now,
+		FrozenPolicySelection: assistant.AssistantFrozenPolicySelection{
+			PolicyID:        "assistant-replay",
+			ReleaseVersion:  "replay-v1",
+			Cohort:          "replay",
+			RolloutRevision: 1,
+			RuleID:          "replay",
+			Template: assistant.AssistantFrozenPolicyTemplate{
+				TemplateID:      "replay",
+				SkillID:         "general_qa",
+				DomainID:        "assistant",
+				PromptPolicy:    "m6.replay",
+				AllowedTools:    replayToolPolicy(replay.FakeToolScript),
+				SearchIntensity: "balanced",
+			},
+		},
 	}
 	loop := app.NewAgentLoop(
-		replaySkillRuntime{toolSteps: replay.FakeToolScript},
+		nil,
 		app.ReactRuntime{
 			Model: scriptedModelProvider{steps: replay.FakeModelScript},
 			Tools: scriptedToolExecutor{
@@ -105,24 +120,14 @@ func (p scriptedModelProvider) Complete(_ context.Context, req app.ModelRequest)
 	return app.ModelResponse{}, fmt.Errorf("replay script has no response for stage %q", req.Stage)
 }
 
-type replaySkillRuntime struct {
-	toolSteps []assistant.ReplayToolStep
-}
-
-func (r replaySkillRuntime) SelectSkill(_ context.Context, turn assistant.AssistantTurn) (app.SkillSelection, error) {
+func replayToolPolicy(steps []assistant.ReplayToolStep) []string {
 	toolPolicy := []string{}
-	for _, step := range r.toolSteps {
+	for _, step := range steps {
 		if strings.TrimSpace(step.ToolName) != "" {
 			toolPolicy = append(toolPolicy, strings.TrimSpace(step.ToolName))
 		}
 	}
-	return app.SkillSelection{
-		SkillID:      turn.SkillID,
-		DomainID:     turn.DomainID,
-		DisplayName:  "Replay skill",
-		ToolPolicy:   toolPolicy,
-		PromptPolicy: "m6.replay",
-	}, nil
+	return toolPolicy
 }
 
 type scriptedToolExecutor struct {

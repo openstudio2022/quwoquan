@@ -1,13 +1,18 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/spec.md#sit-001
 // spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/di/ops_event_dependencies.dart'
+    show actorQueueStorageProvider;
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
@@ -17,10 +22,14 @@ import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart
 import 'package:quwoquan_app/ui/assistant/providers/assistant_history_loader.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/regenerate_options_popup.dart';
+import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../support/cloud_services/assistant_facet_overrides.dart';
+import '../../../support/actor_queue_test_storage.dart';
 import '../../../support/fixtures/assistant/assistant_scenario_fixtures.dart';
 import '../../../support/recording_app_telemetry_recorder.dart';
+
+late ActorQueueStorage _actorQueueStorage;
 
 class _EmptyAssistantHistoryLoader implements AssistantHistoryLoader {
   const _EmptyAssistantHistoryLoader();
@@ -35,6 +44,23 @@ class _EmptyAssistantHistoryLoader implements AssistantHistoryLoader {
 }
 
 void main() {
+  late Directory hiveDirectory;
+
+  setUp(() async {
+    hiveDirectory = Directory.systemTemp.createTempSync(
+      'qwq_assistant_learning_controller_',
+    );
+    Hive.init(hiveDirectory.path);
+    _actorQueueStorage = newTestActorQueueStorage();
+  });
+
+  tearDown(() async {
+    await Hive.close();
+    if (await hiveDirectory.exists()) {
+      await hiveDirectory.delete(recursive: true);
+    }
+  });
+
   group('PersonalAssistantStreamController', () {
     test('显式 alpha facet override 投影 scenario stream', () async {
       final scenarioPack = loadAssistantScenarioPack();
@@ -48,6 +74,10 @@ void main() {
           ),
           assistantHistoryLoaderProvider.overrideWithValue(
             const _EmptyAssistantHistoryLoader(),
+          ),
+          actorQueueStorageProvider.overrideWithValue(_actorQueueStorage),
+          assistantLearningFactOutboxEnvironmentProvider.overrideWithValue(
+            'alpha',
           ),
         ],
       );
@@ -264,6 +294,72 @@ void main() {
       expect(
         repository.startedIntersectionEvidenceRefs.single.objectId,
         'post-1',
+      );
+    });
+
+    test('完整会话入口在首个 StartAssistantRun 前上报同一份页面上下文', () async {
+      final repository = _FakeAssistantRepository(
+        events: <AssistantStreamEventWire>[
+          _event(seq: 1, eventType: 'run_started'),
+          _event(
+            seq: 2,
+            eventType: 'completed',
+            payload: const <String, dynamic>{'text': '已整理页面上下文。'},
+          ),
+        ],
+      );
+      final container = _containerWith(assistantRepository: repository);
+      addTearDown(container.dispose);
+      final controller = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+      controller.setOpenContext(
+        const AssistantOpenContext(
+          source: AssistantSource.search,
+          entityId: 'query-001',
+          objectType: 'search.query',
+          visitTarget: VisitTarget.page('search'),
+          experienceLevel: ExperienceLevel.returning,
+        ),
+      );
+
+      await controller.send('帮我解释当前搜索结果');
+
+      expect(
+        repository.callOrder,
+        containsAllInOrder(<String>['reportPageContext', 'startAssistantRun']),
+      );
+      expect(repository.reportedPageContext?.source, AssistantSource.search);
+      expect(repository.reportedPageContextActions, <String>[
+        'open_assistant_conversation',
+      ]);
+    });
+
+    test('页面上下文上报失败时完整会话不得启动 Run', () async {
+      final repository = _FakeAssistantRepository(
+        events: const <AssistantStreamEventWire>[],
+      )..failPageContextReport = true;
+      final container = _containerWith(assistantRepository: repository);
+      addTearDown(container.dispose);
+      final controller = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+      controller.setOpenContext(
+        const AssistantOpenContext(
+          source: AssistantSource.article,
+          entityId: 'post-001',
+          objectType: 'content.post',
+          visitTarget: VisitTarget.page('article'),
+          experienceLevel: ExperienceLevel.returning,
+        ),
+      );
+
+      await controller.send('解释当前内容');
+
+      expect(repository.startedRunTexts, isEmpty);
+      expect(
+        container.read(personalAssistantStreamControllerProvider).errorMessage,
+        isNotEmpty,
       );
     });
 
@@ -876,6 +972,7 @@ void main() {
           skillId: 'stock_sentinel',
           domainId: 'finance',
           rawText: '每天开盘前提醒我关注的股票重大消息',
+          clientRequestId: 'create-stock-sentinel',
         );
         container.invalidate(assistantSkillCenterProvider);
         items = await container.read(assistantSkillCenterProvider.future);
@@ -895,18 +992,18 @@ void main() {
       final container = _containerWith(assistantRepository: repository);
       addTearDown(container.dispose);
 
-      container
+      await container
           .read(personalAssistantStreamControllerProvider.notifier)
           .submitFeedback('too_frequent');
       await pumpEventQueue();
 
       final state = container.read(personalAssistantStreamControllerProvider);
       expect(state.feedbackMessage, contains('太频繁'));
-      expect(repository.interactionEventBatches, isEmpty);
+      expect(repository.learningFacts, isEmpty);
     });
 
-    // ── C. 学习回路：submitFeedback → reportInteractionEvents ──
-    test('submitFeedback 产生一次学习上报且 eventId 稳定派生', () async {
+    // ── C. 学习回路：submitFeedback → AppendAssistantLearningFact ──
+    test('submitFeedback 追加学习事实且 eventId 稳定派生', () async {
       final repository = _FakeAssistantRepository(
         events: <AssistantStreamEventWire>[
           _event(
@@ -923,26 +1020,28 @@ void main() {
       );
 
       await controller.send('反馈用问题');
-      controller.submitFeedback('useful');
+      await controller.submitFeedback('useful');
       await pumpEventQueue();
 
-      expect(repository.interactionEventBatches, hasLength(1));
-      final event = repository.interactionEventBatches.single.single;
-      expect(event.eventId, 'fb:atn_test_personal:useful');
-      expect(event.runId, 'atn_test_personal');
-      expect(event.pageType, 'assistant_dialog');
-      expect(event.domainId, 'assistant');
-      expect(event.feedbackType, FeedbackType.useful);
+      expect(repository.learningFacts, hasLength(1));
+      final fact = repository.learningFacts.single;
+      expect(fact.eventId, 'fb:atn_test_personal:useful');
+      expect(fact.eventVersion, 1);
+      expect(fact.assistantTurnId, 'atn_test_personal');
+      expect(fact.factType, AssistantLearningFactType.userFeedback);
+      expect(
+        fact.referralSource,
+        AssistantReferralSource.assistantConversation,
+      );
+      expect(fact.domainId, 'assistant');
+      expect(fact.feedbackType, FeedbackType.useful);
+      expect(fact.trainingEligible, isFalse);
       expect(controller.pendingFeedbackEventCount, 0);
 
-      // 同一动作重试：稳定派生 id 不产生新事件 id。
-      controller.submitFeedback('useful');
+      // 同一反馈重复点击是本地 no-op，不生成同 identity、不同 occurredAt 的冲突事实。
+      await controller.submitFeedback('useful');
       await pumpEventQueue();
-      expect(repository.interactionEventBatches, hasLength(2));
-      expect(
-        repository.interactionEventBatches.last.single.eventId,
-        'fb:atn_test_personal:useful',
-      );
+      expect(repository.learningFacts, hasLength(1));
 
       final state = container.read(personalAssistantStreamControllerProvider);
       expect(
@@ -962,7 +1061,7 @@ void main() {
           ),
         ],
       );
-      repository.failInteractionReport = true;
+      repository.failLearningFactAppend = true;
       final container = _containerWith(assistantRepository: repository);
       addTearDown(container.dispose);
       final controller = container.read(
@@ -970,10 +1069,10 @@ void main() {
       );
 
       await controller.send('第一轮');
-      controller.submitFeedback('irrelevant');
+      await controller.submitFeedback('irrelevant');
       await pumpEventQueue();
 
-      // UI 展示不被上报失败阻塞；事件保留在内存待重试队列。
+      // UI 展示不被上报失败阻塞；事件保留在加密持久待重试队列。
       var state = container.read(personalAssistantStreamControllerProvider);
       expect(
         state.feedbackMessage,
@@ -982,13 +1081,13 @@ void main() {
       expect(state.feedbackType, 'irrelevant');
       expect(controller.pendingFeedbackEventCount, 1);
 
-      repository.failInteractionReport = false;
+      repository.failLearningFactAppend = false;
       await controller.send('第二轮');
       await pumpEventQueue();
 
       expect(controller.pendingFeedbackEventCount, 0);
       expect(
-        repository.interactionEventBatches.last.map((event) => event.eventId),
+        repository.learningFacts.map((fact) => fact.eventId),
         contains('fb:atn_test_personal:irrelevant'),
       );
       state = container.read(personalAssistantStreamControllerProvider);
@@ -1005,7 +1104,7 @@ void main() {
             payload: const <String, dynamic>{'text': '第一轮回答'},
           ),
         ],
-      )..failInteractionReport = true;
+      )..failLearningFactAppend = true;
       final container = _containerWith(assistantRepository: repository);
       addTearDown(container.dispose);
       final controller = container.read(
@@ -1013,41 +1112,36 @@ void main() {
       );
 
       await controller.send('第一轮');
-      controller.submitFeedback('useful');
-      controller.submitFeedback('irrelevant');
+      await controller.submitFeedback('useful');
+      await controller.submitFeedback('irrelevant');
       await pumpEventQueue();
       expect(controller.pendingFeedbackEventCount, 2);
 
       repository
-        ..failInteractionReport = false
-        ..interactionBatchAccepted = false
-        ..interactionAcceptedCount = 1
-        ..interactionAcceptedIds = const <String>[
-          'fb:atn_test_personal:useful',
-        ];
+        ..failLearningFactAppend = false
+        ..rejectedLearningFactIds.add('fb:atn_test_personal:irrelevant');
       await controller.send('第二轮');
+      await _flushLearningFactOutbox(container);
       await pumpEventQueue();
 
       expect(controller.pendingFeedbackEventCount, 1);
       expect(
-        repository.interactionEventBatches.last.map((event) => event.eventId),
+        repository.learningFacts.map((fact) => fact.eventId),
         containsAll(<String>[
           'fb:atn_test_personal:useful',
           'fb:atn_test_personal:irrelevant',
         ]),
       );
 
-      repository
-        ..interactionBatchAccepted = true
-        ..interactionAcceptedCount = null
-        ..interactionAcceptedIds = null;
+      repository.rejectedLearningFactIds.clear();
       await controller.send('第三轮');
+      await _flushLearningFactOutbox(container);
       await pumpEventQueue();
 
       expect(controller.pendingFeedbackEventCount, 0);
       expect(
-        repository.interactionEventBatches.last.map((event) => event.eventId),
-        <String>['fb:atn_test_personal:irrelevant'],
+        repository.learningFacts.last.eventId,
+        'fb:atn_test_personal:irrelevant',
       );
     });
 
@@ -1319,6 +1413,7 @@ void main() {
       await notifier.send('原始问题');
       await notifier.regenerateLastAnswer();
       await notifier.regenerateLastAnswer(option: RegenerateOption.concise);
+      await _flushLearningFactOutbox(container);
 
       expect(repository.startedRunTexts, <String>['原始问题', '原始问题', '原始问题']);
       final preferences = await repository.listAssistantPreferences(
@@ -1327,10 +1422,13 @@ void main() {
       expect(preferences, hasLength(1));
       expect(preferences.single.kind, AssistantPreferenceKind.replyLength);
       expect(preferences.single.value, 'concise');
-      // 学习信号：regenerated 事实上报（含风格调整标记）。
-      final regenerated = repository.interactionEventBatches
-          .expand((batch) => batch)
-          .where((event) => event.regeneratedAnswer)
+      // 学习信号：regenerate 以 interaction_outcome 事实追加。
+      final regenerated = repository.learningFacts
+          .where(
+            (fact) =>
+                fact.factType == AssistantLearningFactType.interactionOutcome &&
+                fact.feedbackType == FeedbackType.regenerated,
+          )
           .toList();
       expect(regenerated, isNotEmpty);
     });
@@ -1366,6 +1464,10 @@ ProviderContainer _containerWith({
   return ProviderContainer(
     overrides: [
       ...alphaAssistantFacetOverrides(assistantRepository),
+      actorQueueStorageProvider.overrideWithValue(_actorQueueStorage),
+      assistantLearningFactOutboxEnvironmentProvider.overrideWithValue('alpha'),
+      currentUserIdProvider.overrideWithValue('persona_test'),
+      resolvedOwnerUserIdProvider.overrideWithValue('user_test'),
       appMessageQueryProvider.overrideWithValue(
         appMessageQuery ?? _FakeAppMessageQuery(),
       ),
@@ -1387,6 +1489,9 @@ ProviderContainer _containerWith({
     ],
   );
 }
+
+Future<void> _flushLearningFactOutbox(ProviderContainer container) =>
+    container.read(assistantLearningFactOutboxProvider.notifier).flush();
 
 Future<AssistantHistorySnapshot> _buildAssistantHistorySnapshot() async {
   // 云端历史恢复真相源：CloudAssistantHistoryLoader 消费 List conversations/turns
@@ -1481,33 +1586,50 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
   int _turnCounter = 0;
   int createConversationFailuresRemaining = 0;
   int startRunFailuresRemaining = 0;
+  bool failPageContextReport = false;
   final List<String> createdConversationRequestIds = <String>[];
   final List<String> startedRunClientRequestIds = <String>[];
-
-  /// 记录 submitFeedback 学习回路的上报批次；[failInteractionReport] 为 true
-  /// 时模拟 Remote 全批失败（抛结构化异常）。
-  final List<List<InteractionEvent>> interactionEventBatches =
-      <List<InteractionEvent>>[];
-  bool failInteractionReport = false;
-  bool? interactionBatchAccepted;
-  int? interactionAcceptedCount;
-  List<String>? interactionAcceptedIds;
+  final List<String> callOrder = <String>[];
+  final List<String> reportedPageContextActions = <String>[];
+  AssistantOpenContext? reportedPageContext;
 
   @override
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
+  Future<PageContextAck> reportPageContext({
+    required AssistantOpenContext context,
+    String? userAction,
   }) async {
-    interactionEventBatches.add(List<InteractionEvent>.unmodifiable(events));
-    if (failInteractionReport) {
+    callOrder.add('reportPageContext');
+    reportedPageContext = context;
+    reportedPageContextActions.add(userAction ?? '');
+    if (failPageContextReport) {
+      throw StateError('page context unavailable (test)');
+    }
+    return const PageContextAck(accepted: true, contextKey: 'ctx_test');
+  }
+
+  /// 记录单轨学习事实 command；可按 eventId 模拟失败以覆盖重试语义。
+  final List<AppendAssistantLearningFactRequest> learningFacts =
+      <AppendAssistantLearningFactRequest>[];
+  bool failLearningFactAppend = false;
+  final Set<String> rejectedLearningFactIds = <String>{};
+
+  @override
+  Future<AssistantLearningFactReceipt> appendUserFact({
+    required AppendAssistantLearningFactRequest request,
+  }) async {
+    learningFacts.add(request);
+    if (failLearningFactAppend ||
+        rejectedLearningFactIds.contains(request.eventId)) {
       throw StateError('learning append unavailable (test)');
     }
-    return AssistantInteractionReportBatchAck(
-      accepted: interactionBatchAccepted ?? true,
-      acceptedCount: interactionAcceptedCount ?? events.length,
-      acceptedIds: interactionAcceptedIds,
-      count: events.length,
-      resource: 'interaction_event_batch',
-      mode: 'local_mock',
+    return AssistantLearningFactReceipt(
+      eventId: request.eventId,
+      eventVersion: request.eventVersion,
+      accepted: true,
+      deduplicated: false,
+      appendSequence: learningFacts.length,
+      payloadDigest: 'test',
+      recordedAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
 
@@ -1545,6 +1667,7 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
     List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs =
         const <AssistantIntersectionEvidenceRef>[],
   }) async {
+    callOrder.add('startAssistantRun');
     _turnCounter += 1;
     startedRunTexts.add(text);
     startedRunClientRequestIds.add(clientRequestId);

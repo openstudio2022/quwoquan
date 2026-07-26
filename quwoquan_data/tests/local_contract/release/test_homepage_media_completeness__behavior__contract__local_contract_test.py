@@ -25,7 +25,17 @@ def _write_execution(root: Path, *, capped: bool) -> None:
         ],
     ]
     kept = 4 if capped else 5
-    drops = [{"slug": "home_wikipedia#5", "reason": "capReached: old limit"}] if capped else []
+    drops = (
+        [
+            {
+                "slug": "home_wikipedia#5",
+                "code": "pixel_policy",
+                "reason": "capReached: old limit",
+            }
+        ]
+        if capped
+        else []
+    )
     write_json(
         source / "meta.json",
         {
@@ -148,7 +158,8 @@ def test_homepage_media_completeness_rejects_typed_fetch_failure(tmp_path: Path,
         "drops": [
             {
                 "slug": "测试实体乙/home_wikipedia#5",
-                "reason": "fetch:rate_limited",
+                "code": "fetch_failure",
+                "reason": "rate_limited",
                 "statusCode": 429,
             }
         ],

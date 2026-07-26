@@ -109,6 +109,13 @@ configs:
   rollout: progressive
   sensitive: false
   default: notification-incoming-call-worker
+- key: sys.notification-service.notification.consumers.external_interaction_result
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: notification-external-result-projector
 - key: sys.notification-service.redis.addr
   type: string
   scope: workload

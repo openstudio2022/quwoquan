@@ -2,6 +2,8 @@ package reliabletask
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -29,8 +31,6 @@ type ExternalInteractionRequest struct {
 	Tenant         string
 	Env            string
 	IdempotencyKey string
-	CallbackURL    string
-	CallbackEvent  string
 	PayloadRef     string
 	PayloadDigest  string
 	Sensitivity    string
@@ -50,7 +50,6 @@ type ExternalInteractionResult struct {
 	Status            string
 	Provider          string
 	ProviderRequestID string
-	CallbackURL       string
 	NormalizedError   string
 	Retryable         bool
 	OccurredAt        time.Time
@@ -63,32 +62,65 @@ type ProviderPolicy struct {
 }
 
 type ProviderAttemptRecord struct {
-	AttemptID         string            `bson:"_id" json:"attemptId"`
-	RequestID         string            `bson:"requestId" json:"requestId"`
-	TaskID            string            `bson:"taskId" json:"taskId"`
-	Operation         string            `bson:"operation" json:"operation"`
-	Provider          string            `bson:"provider" json:"provider"`
-	ProviderRequestID string            `bson:"providerRequestId,omitempty" json:"providerRequestId,omitempty"`
-	MaskedRecipient   string            `bson:"maskedRecipient,omitempty" json:"maskedRecipient,omitempty"`
-	LatencyMs         int64             `bson:"latencyMs" json:"latencyMs"`
-	Status            string            `bson:"status" json:"status"`
-	NormalizedError   string            `bson:"normalizedError,omitempty" json:"normalizedError,omitempty"`
-	Retryable         bool              `bson:"retryable" json:"retryable"`
-	Attributes        map[string]string `bson:"attributes,omitempty" json:"attributes,omitempty"`
-	CreatedAt         time.Time         `bson:"createdAt" json:"createdAt"`
+	AttemptID             string            `bson:"_id" json:"attemptId"`
+	RequestID             string            `bson:"requestId" json:"requestId"`
+	TaskID                string            `bson:"taskId" json:"taskId"`
+	Operation             string            `bson:"operation" json:"operation"`
+	Provider              string            `bson:"provider" json:"provider"`
+	ProviderRequestID     string            `bson:"providerRequestId,omitempty" json:"providerRequestId,omitempty"`
+	ProviderRequestDigest string            `bson:"providerRequestDigest" json:"providerRequestDigest"`
+	MaskedRecipient       string            `bson:"maskedRecipient,omitempty" json:"maskedRecipient,omitempty"`
+	LatencyMs             int64             `bson:"latencyMs" json:"latencyMs"`
+	Status                string            `bson:"status" json:"status"`
+	NormalizedError       string            `bson:"normalizedError,omitempty" json:"normalizedError,omitempty"`
+	Retryable             bool              `bson:"retryable" json:"retryable"`
+	RecoveryAction        string            `bson:"recoveryAction" json:"recoveryAction"`
+	Attributes            map[string]string `bson:"attributes,omitempty" json:"attributes,omitempty"`
+	CreatedAt             time.Time         `bson:"createdAt" json:"createdAt"`
 }
+
+type ExternalInteractionResultOutboxRecord struct {
+	EventID               string     `bson:"_id" json:"eventId"`
+	RequestID             string     `bson:"requestId" json:"requestId"`
+	Operation             string     `bson:"operation" json:"operation"`
+	ResultStatus          string     `bson:"resultStatus" json:"resultStatus"`
+	Provider              string     `bson:"provider" json:"provider"`
+	ProviderRequestDigest string     `bson:"providerRequestDigest" json:"providerRequestDigest"`
+	NormalizedError       string     `bson:"normalizedError,omitempty" json:"normalizedError,omitempty"`
+	RecoveryAction        string     `bson:"recoveryAction" json:"recoveryAction"`
+	OccurredAt            time.Time  `bson:"occurredAt" json:"occurredAt"`
+	DeliveryStatus        string     `bson:"deliveryStatus" json:"deliveryStatus"`
+	LeaseOwner            string     `bson:"leaseOwner,omitempty" json:"leaseOwner,omitempty"`
+	LeaseExpiresAt        *time.Time `bson:"leaseExpiresAt,omitempty" json:"leaseExpiresAt,omitempty"`
+	PublishedAt           *time.Time `bson:"publishedAt,omitempty" json:"publishedAt,omitempty"`
+	CreatedAt             time.Time  `bson:"createdAt" json:"createdAt"`
+	UpdatedAt             time.Time  `bson:"updatedAt" json:"updatedAt"`
+}
+
+const (
+	ExternalInteractionResultOutboxPending    = "pending"
+	ExternalInteractionResultOutboxPublishing = "publishing"
+	ExternalInteractionResultOutboxPublished  = "published"
+)
 
 type ProviderAttemptLedgerStore interface {
 	RecordProviderAttempt(ctx context.Context, record ProviderAttemptRecord) (ProviderAttemptRecord, error)
 	ListProviderAttempts(ctx context.Context, requestID string) ([]ProviderAttemptRecord, error)
 }
 
-type ExternalProvider interface {
-	Send(ctx context.Context, request ExternalInteractionRequest, task ReliableAsyncTask) (ExternalInteractionResult, error)
+// ProviderAttemptResultOutboxStore atomically records one immutable provider
+// attempt and its separately mutable result-relay outbox row. A transport retry
+// must never invoke the provider again.
+type ProviderAttemptResultOutboxStore interface {
+	ProviderAttemptLedgerStore
+	RecordProviderAttemptWithResultOutbox(
+		ctx context.Context,
+		record ProviderAttemptRecord,
+	) (ProviderAttemptRecord, error)
 }
 
-type ExternalInteractionCallbackSender interface {
-	SendExternalInteractionResult(ctx context.Context, result ExternalInteractionResult) error
+type ExternalProvider interface {
+	Send(ctx context.Context, request ExternalInteractionRequest, task ReliableAsyncTask) (ExternalInteractionResult, error)
 }
 
 type ExternalInteractionDispatcher struct {
@@ -142,8 +174,7 @@ type ExternalInteractionWorker struct {
 	Worker    Worker
 	Providers map[string]ExternalProvider
 	Policies  map[string]ProviderPolicy
-	Ledger    ProviderAttemptLedgerStore
-	Callback  ExternalInteractionCallbackSender
+	Ledger    ProviderAttemptResultOutboxStore
 	Now       func() time.Time
 }
 
@@ -177,11 +208,22 @@ func (w ExternalInteractionWorker) handleTask(ctx context.Context, task Reliable
 		if result.Provider == "" {
 			result.Provider = providerName
 		}
-		if result.CallbackURL == "" {
-			result.CallbackURL = req.CallbackURL
-		}
 		if result.OccurredAt.IsZero() {
 			result.OccurredAt = w.now()
+		}
+		if err != nil && result.Status == "" {
+			result.Status = ExternalInteractionStatusFailed
+		}
+		if err != nil && result.NormalizedError == "" {
+			result.NormalizedError = err.Error()
+		}
+		if err == nil && result.Status == "" {
+			result.Status = ExternalInteractionStatusSentUnconfirmed
+		}
+		// Provider synchronous responses prove acceptance only. Terminal device
+		// delivery is a separate Notification presentation fact.
+		if result.Status == ExternalInteractionStatusDelivered {
+			result.Status = ExternalInteractionStatusSentUnconfirmed
 		}
 		record := ProviderAttemptRecord{
 			AttemptID:         NewRecordID("attempt"),
@@ -190,16 +232,23 @@ func (w ExternalInteractionWorker) handleTask(ctx context.Context, task Reliable
 			Operation:         req.Operation,
 			Provider:          result.Provider,
 			ProviderRequestID: result.ProviderRequestID,
-			MaskedRecipient:   task.Payload["maskedRecipient"],
-			LatencyMs:         latency.Milliseconds(),
-			Status:            result.Status,
-			NormalizedError:   result.NormalizedError,
-			Retryable:         result.Retryable,
-			Attributes:        map[string]string{"idempotencyKey": req.IdempotencyKey},
-			CreatedAt:         w.now(),
+			ProviderRequestDigest: ProviderRequestDigest(
+				result.ProviderRequestID,
+			),
+			MaskedRecipient: task.Payload["maskedRecipient"],
+			LatencyMs:       latency.Milliseconds(),
+			Status:          result.Status,
+			NormalizedError: result.NormalizedError,
+			Retryable:       result.Retryable,
+			RecoveryAction:  providerRecoveryAction(result),
+			Attributes:      map[string]string{"idempotencyKey": req.IdempotencyKey},
+			CreatedAt:       result.OccurredAt.UTC(),
 		}
 		if w.Ledger != nil {
-			if _, ledgerErr := w.Ledger.RecordProviderAttempt(ctx, record); ledgerErr != nil {
+			if _, ledgerErr := w.Ledger.RecordProviderAttemptWithResultOutbox(
+				ctx,
+				record,
+			); ledgerErr != nil {
 				return ledgerErr
 			}
 		}
@@ -210,13 +259,15 @@ func (w ExternalInteractionWorker) handleTask(ctx context.Context, task Reliable
 			}
 			continue
 		}
-		if result.Status == "" {
-			result.Status = ExternalInteractionStatusDelivered
-		}
-		if w.Callback != nil {
-			if callbackErr := w.Callback.SendExternalInteractionResult(ctx, result); callbackErr != nil {
-				return callbackErr
+		if result.Status == ExternalInteractionStatusFailed {
+			lastErr = fmt.Errorf(
+				"external provider %s rejected request",
+				result.Provider,
+			)
+			if result.Retryable {
+				continue
 			}
+			break
 		}
 		return nil
 	}
@@ -224,6 +275,21 @@ func (w ExternalInteractionWorker) handleTask(ctx context.Context, task Reliable
 		lastErr = fmt.Errorf("external interaction %s has no provider", req.Operation)
 	}
 	return lastErr
+}
+
+func ProviderRequestDigest(providerRequestID string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(providerRequestID)))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func providerRecoveryAction(result ExternalInteractionResult) string {
+	if result.Retryable {
+		return "retry"
+	}
+	if result.Status == ExternalInteractionStatusFailed {
+		return "escalate"
+	}
+	return "none"
 }
 
 func (w ExternalInteractionWorker) policyForOperation(operation string) ProviderPolicy {
@@ -275,8 +341,6 @@ func (r ExternalInteractionRequest) TaskPayload() map[string]string {
 	payload["tenant"] = r.Tenant
 	payload["env"] = r.Env
 	payload["idempotencyKey"] = r.IdempotencyKey
-	payload["callbackUrl"] = r.CallbackURL
-	payload["callbackEvent"] = r.CallbackEvent
 	payload["payloadRef"] = r.PayloadRef
 	payload["payloadDigest"] = r.PayloadDigest
 	payload["sensitivity"] = r.Sensitivity
@@ -293,8 +357,6 @@ func ExternalInteractionRequestFromTask(task ReliableAsyncTask) ExternalInteract
 		Tenant:         task.Payload["tenant"],
 		Env:            task.Payload["env"],
 		IdempotencyKey: task.Payload["idempotencyKey"],
-		CallbackURL:    task.Payload["callbackUrl"],
-		CallbackEvent:  task.Payload["callbackEvent"],
 		PayloadRef:     task.Payload["payloadRef"],
 		PayloadDigest:  task.Payload["payloadDigest"],
 		Sensitivity:    task.Payload["sensitivity"],
@@ -314,8 +376,6 @@ func DefaultExternalInteractionPayloadAllowlist() []string {
 		"tenant",
 		"env",
 		"idempotencyKey",
-		"callbackUrl",
-		"callbackEvent",
 		"payloadRef",
 		"payloadDigest",
 		"sensitivity",

@@ -212,32 +212,38 @@
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_interaction_event.ReportInteractionEvent",
-      "clientContract": null,
+      "canonicalOperationId": "assistant.assistant_learning_fact.AppendAssistantLearningFact",
+      "clientContract": {
+        "dartImport": "../assistant/assistant_contracts.dart",
+        "requestEncoder": "encodeAssistantLearningFactAppendCommand",
+        "requestType": "AssistantLearningFactAppendCommand",
+        "responseDecoder": "decodeAssistantLearningFactAppendReceipt",
+        "responseType": "AssistantLearningFactAppendReceipt"
+      },
       "commercial": {
-        "blockReason": "append sink、encrypted actor partition 与 outbox 尚未完成生产装配",
         "explicit": true,
-        "gapId": "ASSISTANT_INTERACTION_EVENT_WIRING",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "assistant",
       "errorCodes": [
-        "ASSISTANT.USER.learning_event_invalid",
-        "ASSISTANT.USER.unauthorized",
-        "ASSISTANT.SYSTEM.learning_sink_unavailable"
+        "ASSISTANT.USER.learning_fact_invalid",
+        "ASSISTANT.USER.learning_fact_unauthorized",
+        "ASSISTANT.USER.learning_fact_owner_mismatch",
+        "ASSISTANT.USER.learning_fact_run_not_found",
+        "ASSISTANT.USER.learning_fact_identity_conflict",
+        "ASSISTANT.SYSTEM.learning_fact_sink_unavailable"
       ],
-      "facadeMethod": "append",
-      "facet": "AssistantInteractionEventAppendSink",
-      "invariantTarget": "AssistantInteractionEvent",
+      "facadeMethod": "appendUserFact",
+      "facet": "AssistantLearningFactAppendSink",
+      "invariantTarget": "AssistantLearningFact",
       "kind": "command",
-      "localOperationId": "ReportInteractionEvent",
+      "localOperationId": "AppendAssistantLearningFact",
       "method": "POST",
-      "mutationTarget": "AssistantInteractionEvent",
-      "objectId": "assistant.assistant_interaction_event",
+      "mutationTarget": "AssistantLearningFact",
+      "objectId": "assistant.assistant_learning_fact",
       "ownershipPolicy": "requester_self",
-      "pathTemplate": "/assistant/learning/events",
+      "pathTemplate": "/assistant/learning/facts",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -253,16 +259,16 @@
         "timeoutMilliseconds": 3000
       },
       "requestBodyKind": "",
-      "requestEntity": "InteractionEvent",
+      "requestEntity": "AppendAssistantLearningFactRequest",
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "",
+      "responseEntity": "AssistantLearningFactReceipt",
       "scopes": [],
       "slo": {
-        "availabilityPercent": 99.5,
+        "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 800
       },
-      "sourcePath": "assistant/assistant/assistant_interaction_event/operations.yaml",
+      "sourcePath": "assistant/assistant/assistant_learning_fact/operations.yaml",
       "surfaceIds": [
         "assistantFeedback",
         "personalAssistantDialog"
@@ -272,9 +278,11 @@
           "operation",
           "outcome",
           "error_code",
-          "deduped"
+          "fact_type",
+          "deduplicated",
+          "training_eligible"
         ],
-        "metric": "assistant_learning_event_append",
+        "metric": "assistant_learning_fact_append",
         "trace": true
       }
     },
@@ -768,73 +776,6 @@
       }
     },
     {
-      "actorRequirement": "none",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_run.GetPolicy",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "canonical operation awaits object-centered commercial migration",
-        "explicit": true,
-        "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
-      },
-      "concurrency": {},
-      "domain": "assistant",
-      "errorCodes": [
-        "ASSISTANT.SYSTEM.run_storage_unavailable"
-      ],
-      "facadeMethod": "getPolicy",
-      "facet": "AssistantPolicyQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "GetPolicy",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "assistant.assistant_run",
-      "ownershipPolicy": "",
-      "pathTemplate": "/assistant/policy",
-      "permissions": [],
-      "principal": "",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "PUBLIC",
-        "responseClassification": "PUBLIC"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBodyKind": "",
-      "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "AssistantPolicyView",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 300
-      },
-      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
-      "surfaceIds": [
-        "assistantSettings",
-        "personalAssistantDialog"
-      ],
-      "telemetry": {
-        "attributes": [
-          "operation",
-          "outcome",
-          "error_code"
-        ],
-        "metric": "assistant_policy_query",
-        "trace": true
-      }
-    },
-    {
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
@@ -850,7 +791,8 @@
       "concurrency": {},
       "domain": "assistant",
       "errorCodes": [
-        "ASSISTANT.USER.unauthorized"
+        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.run_invalid_argument"
       ],
       "facadeMethod": "getSuggestedActions",
       "facet": "AssistantSuggestionQueryFacade",
@@ -1265,6 +1207,7 @@
         "ASSISTANT.USER.intersection_evidence_not_found",
         "ASSISTANT.USER.unauthorized",
         "ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable",
+        "ASSISTANT.SYSTEM.run_policy_unavailable",
         "ASSISTANT.SYSTEM.run_storage_unavailable"
       ],
       "facadeMethod": "startRun",
@@ -1384,76 +1327,6 @@
           "resumed"
         ],
         "metric": "assistant_run_stream",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "account",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_scorecard_fact.ReportScorecard",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "append sink、metric registry 校验和 outbox 尚未完成生产装配",
-        "explicit": true,
-        "gapId": "ASSISTANT_SCORECARD_FACT_WIRING",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
-      },
-      "concurrency": {},
-      "domain": "assistant",
-      "errorCodes": [
-        "ASSISTANT.USER.scorecard_invalid",
-        "ASSISTANT.USER.unauthorized",
-        "ASSISTANT.SYSTEM.scorecard_sink_unavailable"
-      ],
-      "facadeMethod": "append",
-      "facet": "AssistantScorecardFactAppendSink",
-      "invariantTarget": "AssistantScorecardFact",
-      "kind": "command",
-      "localOperationId": "ReportScorecard",
-      "method": "POST",
-      "mutationTarget": "AssistantScorecardFact",
-      "objectId": "assistant.assistant_scorecard_fact",
-      "ownershipPolicy": "internal_service",
-      "pathTemplate": "/internal/assistant/learning/scorecards",
-      "permissions": [],
-      "principal": "service",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "SENSITIVE",
-        "responseClassification": "INTERNAL"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "required",
-        "maxAttempts": 3,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 3000
-      },
-      "requestBodyKind": "",
-      "requestEntity": "Scorecard",
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.5,
-        "latencyP95Milliseconds": 800
-      },
-      "sourcePath": "assistant/assistant/assistant_scorecard_fact/operations.yaml",
-      "surfaceIds": [
-        "assistantFeedback",
-        "personalAssistantDialog"
-      ],
-      "telemetry": {
-        "attributes": [
-          "operation",
-          "outcome",
-          "error_code",
-          "deduped"
-        ],
-        "metric": "assistant_scorecard_append",
         "trace": true
       }
     },
@@ -1673,7 +1546,13 @@
       "aggregateOwner": "SkillSubscription",
       "authMode": "required",
       "canonicalOperationId": "assistant.skill_subscription.CreateSkillSubscription",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../assistant/assistant_contracts.dart",
+        "requestEncoder": "encodeCreateAssistantSkillSubscriptionCommand",
+        "requestType": "CreateAssistantSkillSubscriptionCommand",
+        "responseDecoder": "decodeAssistantSkillSubscription",
+        "responseType": "AssistantSkillSubscriptionProjection"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -1742,7 +1621,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "assistant.skill_subscription.GetSkillSubscription",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../assistant/assistant_contracts.dart",
+        "requestEncoder": "encodeAssistantSkillSubscriptionByIdQuery",
+        "requestType": "AssistantSkillSubscriptionByIdQuery",
+        "responseDecoder": "decodeAssistantSkillSubscription",
+        "responseType": "AssistantSkillSubscriptionProjection"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -1807,7 +1692,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "assistant.skill_subscription.ListSkillSubscriptions",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../assistant/assistant_contracts.dart",
+        "requestEncoder": "encodeAssistantSkillSubscriptionListQuery",
+        "requestType": "AssistantSkillSubscriptionListQuery",
+        "responseDecoder": "decodeAssistantSkillSubscriptionList",
+        "responseType": "AssistantSkillSubscriptionListProjection"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -1871,7 +1762,13 @@
       "aggregateOwner": "SkillSubscription",
       "authMode": "required",
       "canonicalOperationId": "assistant.skill_subscription.UpdateSkillSubscriptionStatus",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../assistant/assistant_contracts.dart",
+        "requestEncoder": "encodeUpdateAssistantSkillSubscriptionStatusCommand",
+        "requestType": "UpdateAssistantSkillSubscriptionStatusCommand",
+        "responseDecoder": "decodeAssistantSkillSubscription",
+        "responseType": "AssistantSkillSubscriptionProjection"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2032,6 +1929,7 @@
         "CHAT.USER.group_member_not_mutual",
         "CHAT.USER.group_member_blocked",
         "CHAT.USER.group_full",
+        "CHAT.USER.conversation_idempotency_conflict",
         "CHAT.SYSTEM.internal_error"
       ],
       "facadeMethod": "createConversation",
@@ -13551,7 +13449,7 @@
     {
       "actorRequirement": "persona_or_device",
       "aggregateOwner": "",
-      "authMode": "optional",
+      "authMode": "required",
       "canonicalOperationId": "tag.tag_feedback.ReportTagFeedback",
       "clientContract": {
         "dartImport": "../tag/tag_feedback_contracts.dart",
@@ -17396,6 +17294,82 @@
     },
     {
       "actorRequirement": "persona",
+      "aggregateOwner": "ProfileUpdateProposal",
+      "authMode": "required",
+      "canonicalOperationId": "user.profile_update_proposal.RollbackProposal",
+      "clientContract": {
+        "dartImport": "../user/profile_update_proposal_contracts.dart",
+        "requestEncoder": "encodeRollbackProfileUpdateProposalCommand",
+        "requestType": "RollbackProfileUpdateProposalCommand",
+        "responseDecoder": "decodeProfileUpdateProposalCommandResult",
+        "responseType": "ProfileUpdateProposalCommandResult"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "user",
+      "errorCodes": [
+        "USER.PROFILE_PROPOSAL.not_found",
+        "USER.PROFILE_PROPOSAL.invalid_argument",
+        "USER.PROFILE_PROPOSAL.invalid_transition",
+        "USER.PROFILE_PROPOSAL.version_conflict",
+        "USER.PROFILE_PROPOSAL.idempotency_conflict",
+        "USER.PROFILE_PROPOSAL.rollback_expired",
+        "USER.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "rollbackProposal",
+      "facet": "ProfileProposalCommandFacade",
+      "invariantTarget": "ProfileUpdateProposal",
+      "kind": "command",
+      "localOperationId": "RollbackProposal",
+      "method": "POST",
+      "mutationTarget": "ProfileUpdateProposal",
+      "objectId": "user.profile_update_proposal",
+      "ownershipPolicy": "target_persona_owner",
+      "pathTemplate": "/user/profile/proposals/{id}/rollback",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "ProfileUpdateProposalCommandResult",
+      "responseBodyKind": "object",
+      "responseEntity": "ProfileUpdateProposalCommandResult",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "user/persona_management/profile_update_proposal/operations.yaml",
+      "surfaceIds": [
+        "profileEdit"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code",
+          "replayed"
+        ],
+        "metric": "user_profile_proposal_command",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
       "aggregateOwner": "SubjectFollow",
       "authMode": "required",
       "canonicalOperationId": "user.subject_follow.FollowSubject",
@@ -18958,13 +18932,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "87aded4f70e119df9c2eea35c92b38f033a6ce258f739c01f8e9cd6a7d8cc2b0"
+    "sha256": "40da80f66892cbbefc5a01e0c5335fd066c2554f76295ac2563277464827057f"
   },
   "contractGraph": {
     "compilerHash": "sha256:e62c2129a8940fd8d5e68e1899761ddc9cd787c0a038d5f687ba0cfc6a0b24be",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "845b506d386a9c53fcb8698cc57e47b340399cbbd1cbcac6563bce7cf07d9ad6",
-    "sourceDigestSetSha256": "0287a0f1a4c61425cd6994d75ccb28144a3646c787b9e08a424f11b4dc4d4533"
+    "sha256": "ee18fd9d9078525728eabf12f330b47c3b8c4c4e5612872926bbb2998462274b",
+    "sourceDigestSetSha256": "0ec4eb95970c42d3496d396666cf7fc5a7b12941d7e8f222a739f7654bba7f85"
   },
   "generator": "app-cloud-handoff"
 }

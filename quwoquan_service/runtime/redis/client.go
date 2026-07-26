@@ -58,6 +58,10 @@ type Client interface {
 	XAck(ctx context.Context, stream string, group string, ids ...string) error
 	XAutoClaim(ctx context.Context, stream string, group string, consumer string, minIdle time.Duration, start string, count int64) ([]StreamMessage, string, error)
 	XPendingCount(ctx context.Context, stream string, group string) (int64, error)
+	// XTrimOlderThan removes stream entries older than maxAge. Production
+	// adapters derive the cutoff from Redis server time so host clock skew
+	// cannot silently extend or shorten retention.
+	XTrimOlderThan(ctx context.Context, stream string, maxAge time.Duration) error
 
 	// ── Pipeline ────────────────────────────────────────────
 	Pipeline(ctx context.Context) Pipeliner

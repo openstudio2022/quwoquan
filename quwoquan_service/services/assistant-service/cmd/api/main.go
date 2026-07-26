@@ -22,6 +22,7 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 	httpadapter "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/adapters/inbound/http"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	assistantdomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/creationgrounding"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/intersectionclient"
@@ -30,12 +31,24 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/scheduling"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/searchclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/userprofile"
+	learninghttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/adapters/inbound/http"
+	learningapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/application"
+	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
+	learningmessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/messaging"
+	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
+	policyreleasehttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/adapters/inbound/http"
+	policyreleaseapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/application"
+	policymessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/infrastructure/messaging"
+	policyrollouthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/adapters/inbound/http"
+	policyrolloutapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/application"
 	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/application"
 )
 
 const (
 	dependencyHealthResponseDrainLimitBytes = 4 << 10
 	skillSubscriptionCronInterval           = time.Minute
+	learningProjectionInterval              = time.Second
+	learningOutboxRelayInterval             = time.Second
 )
 
 func main() {
@@ -181,7 +194,7 @@ func run() error {
 		return deps.postgresPool.Ping(ctx)
 	})
 	log.Printf("assistant-service events storage=mongodb db=%s", cfg.MongoDB.Database)
-	log.Printf("assistant-service learning profile storage=mongodb db=%s", cfg.MongoDB.Database)
+	log.Printf("assistant-service learning projection storage=mongodb db=%s", cfg.MongoDB.Database)
 	log.Printf("assistant-service skill subscription storage=mongodb db=%s", cfg.MongoDB.Database)
 	log.Printf("assistant-service consent storage=postgres")
 
@@ -335,7 +348,6 @@ func run() error {
 		return dependencyError("assistant-agent-loop", "initialization", err)
 	}
 
-	publisher := messaging.NewRedisEventPublisherWithTransport(messageTransport, serviceName, nil)
 	if deps.preferenceStore == nil || deps.preferenceReader == nil {
 		return dependencyError(
 			"mongodb.assistant_preference_facts",
@@ -357,8 +369,7 @@ func run() error {
 	)
 	preferenceQueries := preferencefact.NewQueryFacade(deps.preferenceReader)
 	assistantOpts := []application.AssistantServiceOption{
-		application.WithLearningProfileStore(deps.profileStore),
-		application.WithEventPublisher(publisher),
+		application.WithLearningProjectionReader(deps.learningProjection),
 		application.WithNotificationAppMessageCommandWriter(notificationWriter),
 		application.WithSkillSubscriptionStore(deps.subscriptionStore),
 		application.WithAssistantDeliveryPolicyReader(deliveryPolicyReader),
@@ -419,8 +430,99 @@ func run() error {
 		return checkServiceHealth(ctx, chatHTTPClient, chatBase)
 	})
 	log.Printf("assistant-service chat grounding client enabled base=%s", chatBase)
+	policyReleaseService := policyreleaseapplication.NewService(
+		deps.policyReleaseStore,
+		nil,
+	)
+	policyRolloutService := policyrolloutapplication.NewService(
+		deps.policyRolloutStore,
+		policyReleaseService,
+		nil,
+	)
+	learningFactService := learningapplication.NewService(
+		deps.learningFactStore,
+		deps.learningRunOwners,
+		nil,
+	)
+	assistantOpts = append(
+		assistantOpts,
+		application.WithLearningFactWriter(
+			application.LearningFactWriterFunc(func(
+				ctx context.Context,
+				command application.ServiceScorecardFactCommand,
+			) error {
+				_, appendErr := learningFactService.AppendServiceFact(
+					ctx,
+					learningmodel.AppendCommand{
+						EventID:          command.EventID,
+						EventVersion:     1,
+						FactType:         learningmodel.FactTypeServiceScorecard,
+						AssistantTurnID:  command.AssistantTurnID,
+						ReferralSource:   "service",
+						DomainID:         command.DomainID,
+						MetricID:         command.MetricID,
+						MetricValue:      command.MetricValue,
+						MetricSource:     command.MetricSource,
+						TrainingEligible: false,
+						OccurredAt:       command.OccurredAt,
+					},
+				)
+				return appendErr
+			}),
+		),
+	)
+	assistantOpts = append(
+		assistantOpts,
+		application.WithFrozenPolicyResolver(
+			application.FrozenPolicyResolverFunc(
+				func(
+					ctx context.Context,
+					policyID string,
+					personaID string,
+					skillID string,
+					domainID string,
+				) (assistantdomain.AssistantFrozenPolicySelection, error) {
+					resolved, resolveErr :=
+						policyRolloutService.ResolveFrozenSelection(
+							ctx,
+							policyID,
+							personaID,
+							skillID,
+							domainID,
+						)
+					if resolveErr != nil {
+						return assistantdomain.AssistantFrozenPolicySelection{},
+							resolveErr
+					}
+					return assistantdomain.AssistantFrozenPolicySelection{
+						PolicyID:        resolved.PolicyID,
+						ReleaseVersion:  resolved.ReleaseVersion,
+						Cohort:          resolved.Cohort,
+						RolloutRevision: resolved.RolloutRevision,
+						RuleID:          resolved.RuleID,
+						Template: assistantdomain.AssistantFrozenPolicyTemplate{
+							TemplateID:      resolved.Template.TemplateID,
+							SkillID:         resolved.Template.SkillID,
+							DomainID:        resolved.Template.DomainID,
+							PromptPolicy:    resolved.Template.PromptPolicy,
+							AllowedTools:    append([]string(nil), resolved.Template.AllowedTools...),
+							SearchIntensity: resolved.Template.SearchIntensity,
+						},
+						LearningContextPolicy: assistantdomain.AssistantFrozenLearningContextPolicy{
+							Enabled:                  resolved.LearningContextPolicy.Enabled,
+							AllowedSignals:           append([]string(nil), resolved.LearningContextPolicy.AllowedSignals...),
+							AllowedMetricIDs:         append([]string(nil), resolved.LearningContextPolicy.AllowedMetricIDs...),
+							AllowedReasonCodes:       append([]string(nil), resolved.LearningContextPolicy.AllowedReasonCodes...),
+							MinimumFeedbackSamples:   resolved.LearningContextPolicy.MinimumFeedbackSamples,
+							WindowDays:               resolved.LearningContextPolicy.WindowDays,
+							SnapshotTrainingEligible: resolved.LearningContextPolicy.SnapshotTrainingEligible,
+						},
+					}, nil
+				},
+			),
+		),
+	)
 	service := application.NewAssistantService(
-		deps.eventStore,
 		deps.consentStore,
 		router.Scene("general"),
 		assistantOpts...,
@@ -444,6 +546,133 @@ func run() error {
 		"assistant-service skill subscription scheduler enabled interval=%s",
 		skillSubscriptionCronInterval,
 	)
+	if deps.learningProjection == nil {
+		return dependencyError(
+			"mongodb.rm_assistant_learning_projection",
+			"wiring",
+			errors.New("assistant learning projection is required"),
+		)
+	}
+	learningProjectionScheduler, err := learningprojection.NewScheduler(
+		deps.learningProjection,
+		learningProjectionInterval,
+		256,
+		slog.Default(),
+	)
+	if err != nil {
+		return dependencyError(
+			"assistant-learning-projection-scheduler",
+			"initialization",
+			err,
+		)
+	}
+	if err := messageTransport.SetDurableRetention(
+		serviceCtx,
+		learningmessaging.LearningFactStream,
+		learningmessaging.LearningFactStreamRetention,
+	); err != nil {
+		return dependencyError(
+			"assistant-learning-fact-event-stream",
+			"retention",
+			err,
+		)
+	}
+	healthChecker.Register(
+		"assistant_learning_projection_scheduler",
+		func(ctx context.Context) error {
+			return learningProjectionScheduler.Healthy(
+				ctx,
+				3*learningProjectionInterval,
+			)
+		},
+	)
+	go learningProjectionScheduler.Run(serviceCtx)
+	log.Printf(
+		"assistant-service learning projection scheduler enabled interval=%s",
+		learningProjectionInterval,
+	)
+	learningOutboxRelay, err := learningmessaging.NewOutboxRelay(
+		deps.learningFactStore,
+		messageTransport,
+		learningOutboxRelayInterval,
+		128,
+		slog.Default(),
+	)
+	if err != nil {
+		return dependencyError(
+			"assistant-learning-fact-outbox-relay",
+			"initialization",
+			err,
+		)
+	}
+	healthChecker.Register(
+		"assistant_learning_fact_outbox_relay",
+		func(ctx context.Context) error {
+			return learningOutboxRelay.Healthy(
+				ctx,
+				3*learningOutboxRelayInterval,
+			)
+		},
+	)
+	go learningOutboxRelay.Run(serviceCtx)
+	log.Printf(
+		"assistant-service learning fact outbox relay enabled interval=%s",
+		learningOutboxRelayInterval,
+	)
+	policyReleaseOutboxRelay, err := policymessaging.NewOutboxRelay(
+		"release",
+		deps.policyReleaseStore,
+		messageTransport,
+		learningOutboxRelayInterval,
+		128,
+		slog.Default(),
+	)
+	if err != nil {
+		return dependencyError(
+			"assistant-policy-release-outbox-relay",
+			"initialization",
+			err,
+		)
+	}
+	policyRolloutOutboxRelay, err := policymessaging.NewOutboxRelay(
+		"rollout",
+		deps.policyRolloutStore,
+		messageTransport,
+		learningOutboxRelayInterval,
+		128,
+		slog.Default(),
+	)
+	if err != nil {
+		return dependencyError(
+			"assistant-policy-rollout-outbox-relay",
+			"initialization",
+			err,
+		)
+	}
+	healthChecker.Register(
+		"assistant_policy_release_outbox_relay",
+		func(ctx context.Context) error {
+			return policyReleaseOutboxRelay.Healthy(
+				ctx,
+				3*learningOutboxRelayInterval,
+			)
+		},
+	)
+	healthChecker.Register(
+		"assistant_policy_rollout_outbox_relay",
+		func(ctx context.Context) error {
+			return policyRolloutOutboxRelay.Healthy(
+				ctx,
+				3*learningOutboxRelayInterval,
+			)
+		},
+	)
+	go policyReleaseOutboxRelay.Run(serviceCtx)
+	go policyRolloutOutboxRelay.Run(serviceCtx)
+	log.Printf(
+		"assistant-service policy outbox relays enabled interval=%s",
+		learningOutboxRelayInterval,
+	)
 	consumer := messaging.NewAssistantMentionedConsumerWithTransport(
 		messageTransport,
 		service,
@@ -459,10 +688,16 @@ func run() error {
 			preferenceQueries,
 		),
 	).Routes()
+	serviceMux := http.NewServeMux()
+	policyreleasehttp.NewHandler(policyReleaseService).RegisterRoutes(serviceMux)
+	policyrollouthttp.NewHandler(policyRolloutService).RegisterRoutes(serviceMux)
+	learninghttp.NewHandler(learningFactService).RegisterRoutes(serviceMux)
+	serviceMux.Handle("/", baseHandler)
+	baseHandler = serviceMux
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle("/", baseHandler)
+	outerMux.Handle("/", httpadapter.GeneratedPrivilegedOperationHandler(baseHandler))
 	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "assistant-service",
 		ServiceName:       "assistant-service",

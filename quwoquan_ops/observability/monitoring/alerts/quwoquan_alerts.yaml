@@ -735,6 +735,29 @@ groups:
           summary: "推荐负反馈率 > 8%"
           description: "dislike/report/hide 等负反馈 / impressed 占比 {{ $value | humanizePercentage }}，超出 SLO（negative_feedback_rate<=0.08）。"
 
+      - alert: TagFeedbackConsumerLagHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(content_tag_feedback_consumer_lag_seconds_bucket[10m])) by (le)
+          ) > 30
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "显式标签反馈投影 P95 时延 > 30s"
+          description: "TagFeedbackRecorded 从 tag-service 到 content-service 特征提交的 P95 时延为 {{ $value | humanizeDuration }}；检查 Redis PEL、Mongo inbox 与消费者健康。"
+
+      - alert: TagFeedbackConsumerFailuresSustained
+        expr: sum(rate(content_tag_feedback_consumer_total{result="failed"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "显式标签反馈消费者持续失败"
+          description: "TagFeedbackRecorded 消费扫描持续失败；事实保留在 Redis PEL 以供 reclaim，但必须在 stream 保留期前恢复。"
+
       - alert: RecommendationAttributionUnknownRateHigh
         expr: |
           sum(rate(recommendation_behavior_by_attribution_total{channel="unknown",recall_path="unknown"}[10m]))
@@ -836,7 +859,7 @@ groups:
           layer: l2
         annotations:
           summary: "搜索降级率 > 5%"
-          description: "携带降级信号（如 ES 失败回退 native）的检索占比 {{ $value | humanizePercentage }}，超出 SLO（degrade_rate<=0.05）。"
+          description: "携带受控依赖降级信号的检索占比 {{ $value | humanizePercentage }}，超出 SLO（degrade_rate<=0.05）；生产召回不允许切换第二 backend。"
 
       - alert: SearchAvailabilityLow
         expr: |
@@ -876,6 +899,27 @@ groups:
         annotations:
           summary: "搜索在途并发持续逼近上限（>230/256）"
           description: "search-service 在途并发 {{ $value }} 持续 > 230（上限 256，≈90%），即将触发 load-shed，应提前扩容。"
+
+      - alert: SearchFeedbackSignalDeliveryLagHigh
+        expr: max(search_feedback_signal_relay_oldest_pending_age_seconds) > 30
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "搜索点击推荐信号待投递时延 > 30s"
+          description: "已提交 click 事实到 durable recommendation stream 的最老待投递时延为 {{ $value | humanizeDuration }}；检查 Mongo relay checkpoint 与 Redis stream。"
+
+      - alert: SearchFeedbackSignalRelayFailuresSustained
+        expr: |
+          sum(rate(search_feedback_signal_relay_outcomes_total{outcome=~"read_error|publish_error|ack_error|invalid_fact"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "搜索反馈信号 relay 持续失败"
+          description: "反馈事实 relay 持续出现读取、发布、确认或事实校验失败；稳定 signalId 可重放，但需在保留期前恢复。"
 
   - name: quwoquan_intersection
     # 交集统一体验 SLO 告警（SLI/SLO 真相源：quwoquan_service/services/content-service/

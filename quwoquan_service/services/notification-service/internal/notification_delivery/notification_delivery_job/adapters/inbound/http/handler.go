@@ -32,8 +32,21 @@ func NewHandler(
 
 func (handler *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /internal/notifications/delivery-jobs/metrics", handler.metrics)
+	mux.HandleFunc("GET /internal/notifications/delivery-jobs/incoming-call-timeline", handler.incomingCallTimeline)
 	mux.HandleFunc("GET /internal/notifications/delivery-jobs/dead-letters", handler.listDeadLetters)
 	mux.HandleFunc("POST /internal/notifications/delivery-jobs/{jobAction}", handler.recover)
+}
+
+func (handler *Handler) incomingCallTimeline(w http.ResponseWriter, r *http.Request) {
+	timeline, err := handler.queries.GetIncomingCallTimeline(
+		r.Context(),
+		r.URL.Query().Get("callId"),
+	)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, timeline)
 }
 
 func (handler *Handler) Routes() http.Handler {

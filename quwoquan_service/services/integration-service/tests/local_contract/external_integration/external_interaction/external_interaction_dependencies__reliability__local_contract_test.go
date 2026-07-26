@@ -22,14 +22,12 @@ func (p contractProvider) Send(
 	return reliabletask.ExternalInteractionResult{
 		RequestID:         request.RequestID,
 		Operation:         request.Operation,
-		Status:            reliabletask.ExternalInteractionStatusDelivered,
+		Status:            reliabletask.ExternalInteractionStatusSentUnconfirmed,
 		Provider:          p.name,
 		ProviderRequestID: "contract-request",
 		OccurredAt:        time.Now().UTC(),
 	}, nil
 }
-
-type contractCallback struct{}
 
 type contractOTPReferenceStore struct{}
 
@@ -38,13 +36,6 @@ func (contractOTPReferenceStore) Get(context.Context, string, string) (otpseal.S
 	return otpseal.StoredReference{}, otpseal.ErrReferenceNotFound
 }
 func (contractOTPReferenceStore) Delete(context.Context, string, string) error { return nil }
-
-func (contractCallback) SendExternalInteractionResult(
-	context.Context,
-	reliabletask.ExternalInteractionResult,
-) error {
-	return nil
-}
 
 func TestExternalInteractionConstructorRequiresExplicitDependencies(t *testing.T) {
 	policies := map[string]reliabletask.ProviderPolicy{
@@ -61,7 +52,6 @@ func TestExternalInteractionConstructorRequiresExplicitDependencies(t *testing.T
 		nil,
 		providers,
 		policies,
-		contractCallback{},
 	); err == nil {
 		t.Fatal("nil store must be rejected")
 	}
@@ -70,7 +60,6 @@ func TestExternalInteractionConstructorRequiresExplicitDependencies(t *testing.T
 		typedNilStore,
 		providers,
 		policies,
-		contractCallback{},
 	); err == nil {
 		t.Fatal("typed nil store must be rejected")
 	}
@@ -79,15 +68,13 @@ func TestExternalInteractionConstructorRequiresExplicitDependencies(t *testing.T
 		store,
 		providers,
 		policies,
-		nil,
 	); err == nil {
-		t.Fatal("nil callback sender must be rejected")
+		t.Fatal("sms policy without an OTP reference store must be rejected")
 	}
 	service, err := application.NewExternalInteractionService(
 		store,
 		providers,
 		policies,
-		contractCallback{},
 		contractOTPReferenceStore{},
 	)
 	if err != nil {
@@ -112,7 +99,6 @@ func TestExternalInteractionConstructorRejectsMockProviderPolicy(t *testing.T) {
 				RetryPolicy: reliabletask.DefaultRetryPolicy(),
 			},
 		},
-		contractCallback{},
 	)
 	if err == nil {
 		t.Fatal("mock provider policy must be rejected")

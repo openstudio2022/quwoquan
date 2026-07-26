@@ -169,6 +169,11 @@ CASE_RESULT_REQUIRED_FIELDS = frozenset(
     }
 )
 CASE_RESULT_RELEASE_FIELDS = frozenset({"releaseReadiness"})
+B10_REMOTE_READBACK_SCHEMA = "b10-remote-uat-readback"
+CASE_RESULT_B10_REMOTE_FIELDS = frozenset({"nativeReadback"})
+NATIVE_READBACK_ARTIFACT_RE = re.compile(
+    r"^[a-z0-9][a-z0-9._-]*\.native-device-readback\.json$"
+)
 SOURCE_METADATA_RE = re.compile(
     r"^\s*(?:#|//)\s*provider_conformance:\s*(\{.+\})\s*$"
 )
@@ -782,6 +787,37 @@ def _observability_refs_valid(value: object) -> bool:
     )
 
 
+def _b10_native_readback_valid(
+    value: object,
+    *,
+    case_result_path: Path,
+) -> bool:
+    """Verify the B10 device readback sidecar is present and content-bound."""
+    if not isinstance(value, Mapping) or set(value) != {
+        "schema",
+        "artifactName",
+        "artifactDigest",
+    }:
+        return False
+    if value.get("schema") != B10_REMOTE_READBACK_SCHEMA:
+        return False
+    artifact_name = value.get("artifactName")
+    artifact_digest = value.get("artifactDigest")
+    if (
+        not isinstance(artifact_name, str)
+        or not NATIVE_READBACK_ARTIFACT_RE.fullmatch(artifact_name)
+        or not isinstance(artifact_digest, str)
+        or not SHA256_PATTERN.fullmatch(artifact_digest)
+    ):
+        return False
+    artifact_path = case_result_path.parent / artifact_name
+    try:
+        actual_digest = f"sha256:{hashlib.sha256(artifact_path.read_bytes()).hexdigest()}"
+    except OSError:
+        return False
+    return hmac.compare_digest(artifact_digest, actual_digest)
+
+
 def load_case_results(
     artifact_path: Path,
     *,
@@ -801,8 +837,13 @@ def load_case_results(
         environment,
         str(source.get("testLayer") or ""),
     )
+    is_b10_remote_case = is_release_case and str(source.get("target") or "").startswith(
+        "b10-remote-"
+    )
     expected_fields = (
-        CASE_RESULT_REQUIRED_FIELDS | CASE_RESULT_RELEASE_FIELDS
+        CASE_RESULT_REQUIRED_FIELDS
+        | CASE_RESULT_RELEASE_FIELDS
+        | (CASE_RESULT_B10_REMOTE_FIELDS if is_b10_remote_case else frozenset())
         if is_release_case
         else CASE_RESULT_REQUIRED_FIELDS
     )
@@ -942,6 +983,17 @@ def load_case_results(
                 str(artifact_path),
                 "release Provider CaseResult must contain test-owned release "
                 "readiness receipts",
+            )
+        )
+    if is_b10_remote_case and not _b10_native_readback_valid(
+        result.get("nativeReadback"),
+        case_result_path=artifact_path,
+    ):
+        issues.append(
+            _issue(
+                str(artifact_path),
+                "B10 Remote CaseResult must bind an existing native-device readback "
+                "sidecar with a matching digest",
             )
         )
     if re.search(

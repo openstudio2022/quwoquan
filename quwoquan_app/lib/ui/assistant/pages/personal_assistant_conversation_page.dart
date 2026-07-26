@@ -164,8 +164,14 @@ class _PersonalAssistantConversationPageState
     final destination = citation.resolvedDestination;
     switch (destination) {
       case InternalCitationDestination():
+        ref
+            .read(personalAssistantStreamControllerProvider.notifier)
+            .reportReferenceOpened(external: false);
         context.push(destination.routePath);
       case ExternalCitationDestination():
+        ref
+            .read(personalAssistantStreamControllerProvider.notifier)
+            .reportReferenceOpened(external: true);
         await Navigator.of(context).push(
           CupertinoPageRoute<void>(
             // 携带 metadata 登记的 internal location，pageAccess observer 据此
@@ -418,32 +424,42 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
                                   .regenerateLastAnswer(option: option)
                             : null,
                         onFeedbackHelpful: isAssistantMessage
-                            ? () => ref
-                                  .read(
-                                    personalAssistantStreamControllerProvider
-                                        .notifier,
-                                  )
-                                  .submitFeedback('useful')
+                            ? () {
+                                unawaited(
+                                  ref
+                                      .read(
+                                        personalAssistantStreamControllerProvider
+                                            .notifier,
+                                      )
+                                      .submitFeedback('useful'),
+                                );
+                              }
                             : null,
                         onFeedbackUnhelpful: isAssistantMessage
-                            ? () => ref
-                                  .read(
-                                    personalAssistantStreamControllerProvider
-                                        .notifier,
-                                  )
-                                  .submitFeedback('irrelevant')
+                            ? () {
+                                unawaited(
+                                  ref
+                                      .read(
+                                        personalAssistantStreamControllerProvider
+                                            .notifier,
+                                      )
+                                      .submitFeedback('irrelevant'),
+                                );
+                              }
                             : null,
                         onCopyAnswer: isAssistantMessage
                             ? () {
                                 final text = _assistantRowText(row);
                                 if (text.isNotEmpty) {
                                   Clipboard.setData(ClipboardData(text: text));
-                                  ref
-                                      .read(
-                                        personalAssistantStreamControllerProvider
-                                            .notifier,
-                                      )
-                                      .submitFeedback('copied');
+                                  unawaited(
+                                    ref
+                                        .read(
+                                          personalAssistantStreamControllerProvider
+                                              .notifier,
+                                        )
+                                        .submitFeedback('copied'),
+                                  );
                                 }
                               }
                             : null,

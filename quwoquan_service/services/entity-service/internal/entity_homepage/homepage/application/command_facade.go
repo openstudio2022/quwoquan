@@ -11,9 +11,9 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
 	homepageports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports"
-	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 )
 
 const receiptTTL = 24 * time.Hour
@@ -84,6 +84,9 @@ func (f *CommandFacade) SuggestCandidate(
 	meta CommandMeta,
 	input Input,
 ) (View, error) {
+	if err := validateSuggestionLookupAliases(input.LookupAliases); err != nil {
+		return View{}, err
+	}
 	return f.intake(ctx, meta, input, "user_suggested", false)
 }
 
@@ -118,6 +121,7 @@ func (f *CommandFacade) intake(
 		Subtitle:             input.Subtitle,
 		HomepageType:         input.HomepageType,
 		CanonicalEntityID:    input.CanonicalEntityID,
+		LookupAliases:        input.LookupAliases,
 		ObjectPageTemplate:   input.ObjectPageTemplate,
 		SourceType:           strings.TrimSpace(sourceType),
 		CategoryTags:         input.CategoryTags,
@@ -445,6 +449,38 @@ func validateInput(input Input) error {
 		return generated.AppErrorFromInvalidHomepageType("unsupported homepage type")
 	}
 	return nil
+}
+
+// validateSuggestionLookupAliases narrows a user suggestion's persisted lookup
+// identity to the one first-party location.place it was opened from. General
+// aliases are controlled by internal import/intake flows and must never be
+// client-supplied, otherwise a suggestion could hijack another homepage's
+// redirect identity.
+func validateSuggestionLookupAliases(aliases []string) error {
+	if len(aliases) > 1 {
+		return generated.AppErrorFromInvalidArgument("homepage suggestion accepts at most one source place id")
+	}
+	if len(aliases) == 0 {
+		return nil
+	}
+	if !isCanonicalPlaceID(aliases[0]) {
+		return generated.AppErrorFromInvalidArgument("homepage suggestion source place id is invalid")
+	}
+	return nil
+}
+
+func isCanonicalPlaceID(raw string) bool {
+	const prefix = "place_"
+	id := strings.TrimSpace(raw)
+	if len(id) != len(prefix)+16 || !strings.HasPrefix(id, prefix) {
+		return false
+	}
+	for _, char := range id[len(prefix):] {
+		if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 func commandDigest(name string, command any) (string, error) {

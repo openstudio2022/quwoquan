@@ -25,6 +25,8 @@ services:
       REDIS_ADDR: redis:6379
       CHAT_SERVICE_BASE_URL: http://chat-service:18081
       TAG_SERVICE_BASE_URL: http://tag-service:18092
+      SEARCH_ES_ENABLED: "${QWQ_COMPOSE_SEARCH_ES_ENABLED:-true}"
+      SEARCH_ES_ENDPOINTS: "${QWQ_COMPOSE_SEARCH_ES_ENDPOINTS:-http://elasticsearch:9200}"
       # local-gamma 使用本地验收身份；外部 OAuth/号码认证不伪造凭据，
       # 对应端点按 user-service 合同返回结构化 unavailable。
       USER_AUTH_EXTERNAL_PROVIDER_MODE: anonymous_only

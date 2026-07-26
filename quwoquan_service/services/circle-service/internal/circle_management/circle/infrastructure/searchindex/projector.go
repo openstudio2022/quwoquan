@@ -16,6 +16,7 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -23,18 +24,26 @@ import (
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
+	model "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
 )
+
+type CircleReader interface {
+	LoadForSearch(
+		ctx context.Context,
+		circleID string,
+	) (*model.Circle, bool, error)
+}
 
 // Projector applies circle lifecycle events to the unified ES index. It
 // implements messaging.EventPublisher so it can be wired as the circle service's
 // event publisher (or composed onto an existing one).
 //
-// Indexing failures are recorded structurally (logged with event/circle context)
-// but never propagate: the search index is a derived read store, so a transient
-// ES outage must not block or fail the primary circle write path.
+// Indexing failures are recorded structurally and returned to the dedicated
+// outbox relay. The aggregate transaction has already committed, so this keeps
+// the relay checkpoint retryable without coupling the primary write to ES.
 type Projector struct {
 	indexer *es.Indexer
-	reader  application.CircleReader
+	reader  CircleReader
 	logger  *slog.Logger
 }
 
@@ -53,7 +62,11 @@ func WithLogger(logger *slog.Logger) Option {
 }
 
 // NewProjector builds a write-time search-index projector.
-func NewProjector(indexer *es.Indexer, reader application.CircleReader, opts ...Option) *Projector {
+func NewProjector(
+	indexer *es.Indexer,
+	reader CircleReader,
+	opts ...Option,
+) *Projector {
 	p := &Projector{
 		indexer: indexer,
 		reader:  reader,
@@ -69,21 +82,21 @@ func NewProjector(indexer *es.Indexer, reader application.CircleReader, opts ...
 // events reconcile the circle against its current eligibility (upsert when
 // searchable, delete otherwise); archival removes the doc. Membership / behavior
 // / counter-only events do not change the searchable surface and are ignored. It
-// always returns nil so a failing index write cannot break the publish path or
-// the primary circle write path.
+// returns failures to the dedicated outbox relay so its checkpoint remains
+// retryable; the aggregate transaction has already committed.
 func (p *Projector) Publish(ctx context.Context, event messaging.DomainEvent) error {
 	if p == nil || p.indexer == nil {
-		return nil
+		return fmt.Errorf("Circle search projector is not configured")
 	}
 	circleID := strings.TrimSpace(event.AggregateID)
 	if circleID == "" {
-		return nil
+		return fmt.Errorf("Circle search event has no aggregate id")
 	}
 	switch event.Type {
 	case "CircleArchived":
-		p.delete(ctx, circleID, event.Type)
+		return p.delete(ctx, circleID, event.Type)
 	case "CircleCreated", "CircleUpdated":
-		p.reconcile(ctx, circleID, event.Type)
+		return p.reconcile(ctx, circleID, event.Type)
 	default:
 		// Membership / behavior / counter-only events: nothing searchable changed.
 	}
@@ -94,29 +107,44 @@ func (p *Projector) Publish(ctx context.Context, event messaging.DomainEvent) er
 // (e.g. archived, turned private, or vanished). Keeping the index aligned with the
 // same eligibility the native source uses avoids a second discoverability truth
 // source.
-func (p *Projector) reconcile(ctx context.Context, circleID, eventType string) {
-	circle, ok := p.reader.FindByID(ctx, circleID)
+func (p *Projector) reconcile(
+	ctx context.Context,
+	circleID, eventType string,
+) error {
+	circle, ok, err := p.reader.LoadForSearch(ctx, circleID)
+	if err != nil {
+		return fmt.Errorf(
+			"load Circle %s for search reconciliation: %w",
+			circleID,
+			err,
+		)
+	}
 	if !ok || circle == nil {
-		p.delete(ctx, circleID, eventType)
-		return
+		return p.delete(ctx, circleID, eventType)
 	}
 	if !application.CircleSearchEligible(*circle) {
-		p.delete(ctx, circleID, eventType)
-		return
+		return p.delete(ctx, circleID, eventType)
 	}
 	doc := application.ProjectCircleToSearchDocument(*circle)
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: doc}); err != nil {
 		p.logger.Warn("search index upsert failed",
 			"event", eventType, "circleId", circleID, "err", err)
+		return fmt.Errorf("search index upsert Circle %s: %w", circleID, err)
 	}
+	return nil
 }
 
 // delete removes the circle's doc from the index. Replayed deletes are
 // idempotent.
-func (p *Projector) delete(ctx context.Context, circleID, eventType string) {
+func (p *Projector) delete(
+	ctx context.Context,
+	circleID, eventType string,
+) error {
 	doc := rtsearch.Document{ObjectType: rtsearch.ObjectTypeCircle, ObjectID: circleID}
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpDelete, Doc: doc}); err != nil {
 		p.logger.Warn("search index delete failed",
 			"event", eventType, "circleId", circleID, "err", err)
+		return fmt.Errorf("search index delete Circle %s: %w", circleID, err)
 	}
+	return nil
 }

@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 
 	rterr "quwoquan_service/runtime/errors"
-	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 	generated "quwoquan_service/services/chat-service/generated/chat/conversation"
+	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 )
 
 // 「从群聊中选择联系人」用例（图四群列表 + 图五群成员多选）。
@@ -49,6 +50,7 @@ const (
 	selectableGroupMemberPageLimit = 100
 	selectableGroupScanBatchSize   = 100
 	maxGroupSizeForCandidateScan   = 1000
+	relationshipGateWorkerCount    = 16
 )
 
 // mutualContactIDSet 返回 viewer 的权威互关联系人 userId 集合（已排除屏蔽与自身）。
@@ -63,25 +65,84 @@ func (s *MemberService) mutualContactIDSet(
 		"",
 		limit,
 		maxGroupSizeForCandidateScan,
+		false,
 	)
 	if err != nil {
 		return nil, err
 	}
 	viewer := strings.TrimSpace(userID)
-	mutual := make(map[string]struct{}, len(hits))
+	contactIDs := make([]string, 0, len(hits))
+	seen := make(map[string]struct{}, len(hits))
 	for _, hit := range hits {
 		contactID := strings.TrimSpace(hit.ContactID)
 		if contactID == "" || contactID == viewer {
 			continue
 		}
-		if _, ok := mutual[contactID]; ok {
+		if _, ok := seen[contactID]; ok {
 			continue
 		}
-		relationState, blocked := s.resolveCandidateRelation(ctx, userID, contactID, hit.RelationState)
-		if blocked || relationState != "mutual" {
+		seen[contactID] = struct{}{}
+		contactIDs = append(contactIDs, contactID)
+	}
+	if len(contactIDs) == 0 {
+		return map[string]struct{}{}, nil
+	}
+
+	type relationResult struct {
+		contactID string
+		mutual    bool
+		err       error
+	}
+	workerCount := relationshipGateWorkerCount
+	if len(contactIDs) < workerCount {
+		workerCount = len(contactIDs)
+	}
+	requestCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	jobs := make(chan string)
+	results := make(chan relationResult, len(contactIDs))
+	var workers sync.WaitGroup
+	for worker := 0; worker < workerCount; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for contactID := range jobs {
+				relationState, blocked, err := s.resolveCandidateRelation(
+					requestCtx,
+					userID,
+					contactID,
+				)
+				results <- relationResult{
+					contactID: contactID,
+					mutual:    err == nil && !blocked && relationState == "mutual",
+					err:       err,
+				}
+			}
+		}()
+	}
+	go func() {
+		for _, contactID := range contactIDs {
+			jobs <- contactID
+		}
+		close(jobs)
+		workers.Wait()
+		close(results)
+	}()
+
+	mutual := make(map[string]struct{}, len(contactIDs))
+	var firstErr error
+	for result := range results {
+		if result.err != nil && firstErr == nil {
+			firstErr = result.err
+			cancel()
 			continue
 		}
-		mutual[contactID] = struct{}{}
+		if result.mutual {
+			mutual[result.contactID] = struct{}{}
+		}
+	}
+	if firstErr != nil {
+		return nil, firstErr
 	}
 	return mutual, nil
 }

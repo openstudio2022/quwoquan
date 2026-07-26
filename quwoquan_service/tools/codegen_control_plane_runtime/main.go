@@ -22,13 +22,17 @@ type artifact struct {
 }
 
 type generatedOperationSecurity struct {
-	domain      string
-	objectType  string
-	operation   string
-	method      string
-	path        string
-	scopes      []string
-	idempotency string
+	domain          string
+	objectType      string
+	operation       string
+	method          string
+	path            string
+	scopes          []string
+	idempotency     string
+	actor           string
+	principal       string
+	authMode        string
+	ownershipPolicy string
 }
 
 var compileContractSource = contractcodegen.NewSource
@@ -205,7 +209,8 @@ func collectOperationSecurity(artifacts []artifact) []generatedOperationSecurity
 				if textValue(operation["contract_operation_id"]) != "" {
 					continue
 				}
-				if authMode := textValue(operation["auth_mode"]); authMode != "" && authMode != "operator_oidc" {
+				if authMode := textValue(operation["auth_mode"]); authMode != "" &&
+					authMode != "operator_oidc" && authMode != "required" {
 					continue
 				}
 				path := textValue(operation["path"])
@@ -214,11 +219,15 @@ func collectOperationSecurity(artifacts []artifact) []generatedOperationSecurity
 				}
 				out = append(out, generatedOperationSecurity{
 					domain: domain, objectType: objectType,
-					operation:   textValue(operation["operation"]),
-					method:      strings.ToUpper(textValue(operation["method"])),
-					path:        path,
-					scopes:      stringSlice(operation["scopes"]),
-					idempotency: textValue(operation["idempotency"]),
+					operation:       textValue(operation["operation"]),
+					method:          strings.ToUpper(textValue(operation["method"])),
+					path:            path,
+					scopes:          stringSlice(operation["scopes"]),
+					idempotency:     textValue(operation["idempotency"]),
+					actor:           textValue(operation["actor"]),
+					principal:       textValue(operation["principal"]),
+					authMode:        textValue(operation["auth_mode"]),
+					ownershipPolicy: textValue(operation["ownership_policy"]),
 				})
 			}
 		}
@@ -263,6 +272,22 @@ func writeGoOperationSecurity(path string, operations []generatedOperationSecuri
 			if idempotency == "" {
 				idempotency = "none"
 			}
+			actor := operation.actor
+			if actor == "" {
+				actor = "account"
+			}
+			principal := operation.principal
+			if principal == "" {
+				principal = "operator"
+			}
+			authMode := operation.authMode
+			if authMode == "" {
+				authMode = "required"
+			}
+			ownershipPolicy := operation.ownershipPolicy
+			if ownershipPolicy == "" {
+				ownershipPolicy = "operator_scope"
+			}
 			if operation.method != "GET" {
 				kind = "command"
 				mutationTarget = operation.objectType
@@ -279,11 +304,11 @@ func writeGoOperationSecurity(path string, operations []generatedOperationSecuri
 			fmt.Fprintf(&content, "\t\tOperationKind: %q,\n", kind)
 			fmt.Fprintf(&content, "\t\tMutationTarget: %q,\n", mutationTarget)
 			fmt.Fprintf(&content, "\t\tInvariantTarget: %q,\n", mutationTarget)
-			fmt.Fprintf(&content, "\t\tAuthMode: %q,\n", "required")
-			fmt.Fprintf(&content, "\t\tActorRequirement: %q,\n", "account")
-			fmt.Fprintf(&content, "\t\tPrincipal: %q,\n", "operator")
+			fmt.Fprintf(&content, "\t\tAuthMode: %q,\n", authMode)
+			fmt.Fprintf(&content, "\t\tActorRequirement: %q,\n", actor)
+			fmt.Fprintf(&content, "\t\tPrincipal: %q,\n", principal)
 			fmt.Fprintf(&content, "\t\tScopes: %#v,\n", operation.scopes)
-			fmt.Fprintf(&content, "\t\tOwnershipPolicy: %q,\n", "operator_scope")
+			fmt.Fprintf(&content, "\t\tOwnershipPolicy: %q,\n", ownershipPolicy)
 			fmt.Fprintf(&content, "\t\tTimeoutMilliseconds: %d,\n", 5000)
 			fmt.Fprintf(&content, "\t\tIdempotency: %q,\n", idempotency)
 			fmt.Fprintf(&content, "\t\tCommercialStatus: %q,\n", "ready")

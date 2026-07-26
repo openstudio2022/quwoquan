@@ -10,12 +10,34 @@ import (
 	"testing"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 )
 
 func TestUserSocialContactResolverListContactsMergesSources(t *testing.T) {
 	t.Helper()
+	tokenConfig := rtauth.TokenConfig{
+		Secret:       []byte("0123456789abcdef0123456789abcdef"),
+		Issuer:       "https://auth.quwoquan.test",
+		Audience:     "quwoquan-api",
+		Type:         rtauth.TokenTypeAccess,
+		TokenVersion: 1,
+		TTL:          5 * time.Minute,
+		ClockSkew:    5 * time.Second,
+	}
+	credentials, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		tokenConfig,
+		"chat-service",
+		[]string{"user.relationship.read"},
+	)
+	if err != nil {
+		t.Fatalf("new delegated credentials: %v", err)
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.TrimSpace(r.Header.Get("Authorization")) == "" {
+			http.Error(w, "missing delegated authorization", http.StatusUnauthorized)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/following"):
@@ -71,7 +93,14 @@ func TestUserSocialContactResolverListContactsMergesSources(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resolver := NewUserSocialContactResolver(server.URL, server.Client())
+	resolver, err := NewAuthorizedUserSocialContactResolver(
+		server.URL,
+		server.Client(),
+		credentials,
+	)
+	if err != nil {
+		t.Fatalf("new authorized social contact resolver: %v", err)
+	}
 	items, err := resolver.ListContacts(context.Background(), "viewer_1", 10)
 	if err != nil {
 		t.Fatalf("ListContacts failed: %v", err)

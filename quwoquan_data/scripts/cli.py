@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 sys.dont_write_bytecode = True
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
 
 SCRIPTS_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPTS_ROOT.parent.parent

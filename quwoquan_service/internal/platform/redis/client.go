@@ -375,6 +375,22 @@ func (c *client) XPendingCount(
 	return pending.Count, nil
 }
 
+func (c *client) XTrimOlderThan(
+	ctx context.Context,
+	stream string,
+	maxAge time.Duration,
+) error {
+	if maxAge <= 0 {
+		return fmt.Errorf("Redis stream max age must be positive")
+	}
+	serverTime, err := c.raw.Time(ctx).Result()
+	if err != nil {
+		return fmt.Errorf("read Redis server time: %w", err)
+	}
+	minID := fmt.Sprintf("%d-0", serverTime.Add(-maxAge).UnixMilli())
+	return c.raw.XTrimMinID(ctx, stream, minID).Err()
+}
+
 func (c *client) Pipeline(context.Context) rtredis.Pipeliner {
 	return &pipeline{raw: c.raw.Pipeline()}
 }

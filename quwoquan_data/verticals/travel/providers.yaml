@@ -94,11 +94,11 @@ sites:
     urlPatterns:
       - https://www.baike.com/wikiid/*
       - https://baike.com/wikiid/*
-    fetchable: true
+    fetchable: false
     extractor: toutiao_baike_html
     licensePolicy: factual_citation_only
     qualityTier: B
-    notes: 百科主页候选源；只准入公开解析到 wikiid 且通过实体标题与地域上下文校验的正文页。
+    notes: 搜索元数据可用于发现，但公开正文会返回动态验证码，不能作为可重复执行的主页正文源。
   - siteId: scenic_official
     platform: 景区官网
     category: official

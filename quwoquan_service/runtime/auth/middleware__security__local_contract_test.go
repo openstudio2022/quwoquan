@@ -1,5 +1,7 @@
 package auth
 
+// spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-002
+
 import (
 	"net/http"
 	"net/http/httptest"

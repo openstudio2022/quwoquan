@@ -14,6 +14,7 @@ import (
 	rtid "quwoquan_service/runtime/id"
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/streaming"
+	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/domain/model"
 )
@@ -232,7 +233,10 @@ func (s *AssistantService) CancelRun(ctx context.Context, userID, turnID string)
 	if err != nil {
 		return assistant.AssistantTurn{}, err
 	}
-	terminalSnapshot := projectAssistantRunTerminalSnapshot(events, nil)
+	terminalSnapshot := ProjectAssistantRunTerminalSnapshot(
+		events,
+		turn.FrozenPolicySelection.PublicRef(),
+	)
 	cancelled.TerminalSnapshot = &terminalSnapshot
 	lastSeq := turn.StreamState.LastSeq
 	if len(events) > 0 && events[len(events)-1].Seq > lastSeq {
@@ -294,9 +298,45 @@ func (s *AssistantService) CreateTurn(ctx context.Context, userID, conversationI
 	if !found || conversation.UserID != userID {
 		return assistant.AssistantTurn{}, assistantConversationNotFound()
 	}
+	existing, found, err := store.GetTurnByClientRequest(
+		ctx,
+		userID,
+		conversationID,
+		input.ClientRequestID,
+	)
+	if err != nil {
+		return assistant.AssistantTurn{}, assistantRunStorageUnavailable(err.Error())
+	}
+	if found {
+		return existing, nil
+	}
 	// 敏感技能在创建点即拒绝（执行点仍有兜底 gate）。
 	if err := s.requireSkillConsent(ctx, userID, input.SkillID); err != nil {
 		return assistant.AssistantTurn{}, err
+	}
+	requestContext := input.RequestContext.Normalized()
+	if requestContext.PersonaID == "" {
+		return assistant.AssistantTurn{},
+			runerrors.AppErrorFromRunPolicyUnavailable(
+				"verified persona is required before policy selection",
+			)
+	}
+	if s.frozenPolicies == nil {
+		return assistant.AssistantTurn{},
+			runerrors.AppErrorFromRunPolicyUnavailable(
+				"frozen policy resolver is not configured",
+			)
+	}
+	frozenPolicy, err := s.frozenPolicies.ResolveFrozenPolicy(
+		ctx,
+		"assistant-default",
+		requestContext.PersonaID,
+		strings.TrimSpace(input.SkillID),
+		strings.TrimSpace(input.DomainID),
+	)
+	if err != nil {
+		return assistant.AssistantTurn{},
+			runerrors.AppErrorFromRunPolicyUnavailable(err.Error())
 	}
 	intersectionEvidence, err := s.resolveAuthorizedIntersectionEvidence(
 		ctx,
@@ -318,10 +358,10 @@ func (s *AssistantService) CreateTurn(ctx context.Context, userID, conversationI
 	}
 	trigger := input.Trigger
 	trigger.Type = strings.TrimSpace(trigger.Type)
+	trigger.MessageID = strings.TrimSpace(trigger.MessageID)
 	if trigger.Type == "" {
 		trigger.Type = "user_message"
 	}
-	requestContext := input.RequestContext.Normalized()
 	var sessionPreferences, longTermPreferences []preferencemodel.Snapshot
 	if s.preferenceSnapshots != nil {
 		sessionPreferences, longTermPreferences, err =
@@ -334,14 +374,21 @@ func (s *AssistantService) CreateTurn(ctx context.Context, userID, conversationI
 			return assistant.AssistantTurn{}, err
 		}
 	}
+	feedbackContext := s.ResolveFeedbackContextSnapshot(
+		ctx,
+		userID,
+		requestContext.PersonaID,
+		frozenPolicy.LearningContextPolicy,
+		now,
+	)
 	turn := assistant.AssistantTurn{
 		TurnID:                  turnID,
 		ConversationID:          conversationID,
 		UserID:                  userID,
 		TurnType:                turnType,
 		Status:                  "running",
-		SkillID:                 strings.TrimSpace(input.SkillID),
-		DomainID:                strings.TrimSpace(input.DomainID),
+		SkillID:                 frozenPolicy.Template.SkillID,
+		DomainID:                frozenPolicy.Template.DomainID,
 		PageContext:             pageContext,
 		IntersectionEvidence:    intersectionEvidence,
 		SessionPreferenceFacts:  sessionPreferences,
@@ -349,11 +396,13 @@ func (s *AssistantService) CreateTurn(ctx context.Context, userID, conversationI
 		Input: assistant.AssistantTurnInput{
 			Text: strings.TrimSpace(input.Input.Text),
 		},
-		Trigger:         trigger,
-		ClientRequestID: strings.TrimSpace(input.ClientRequestID),
-		RequestContext:  requestContext,
-		TraceID:         requestContext.TraceID,
-		CreatedAt:       now,
+		Trigger:                 trigger,
+		ClientRequestID:         strings.TrimSpace(input.ClientRequestID),
+		RequestContext:          requestContext,
+		FrozenPolicySelection:   frozenPolicy,
+		FeedbackContextSnapshot: feedbackContext,
+		TraceID:                 requestContext.TraceID,
+		CreatedAt:               now,
 	}
 	if turn.TraceID == "" {
 		turn.TraceID = turnID
@@ -526,7 +575,10 @@ func (s *AssistantService) executeTurn(ctx context.Context, userID, turnID strin
 	if err != nil {
 		return nil, err
 	}
-	terminalSnapshot := projectAssistantRunTerminalSnapshot(snapshotEvents, nil)
+	terminalSnapshot := ProjectAssistantRunTerminalSnapshot(
+		snapshotEvents,
+		turn.FrozenPolicySelection.PublicRef(),
+	)
 	if failure != nil && terminalSnapshot.Failure == nil {
 		projectedFailure := publicTerminalFailure(*failure)
 		terminalSnapshot.Failure = &projectedFailure
@@ -833,7 +885,10 @@ func (s *AssistantService) updateCancelledStreamState(
 	if err != nil {
 		return err
 	}
-	terminalSnapshot := projectAssistantRunTerminalSnapshot(events, nil)
+	terminalSnapshot := ProjectAssistantRunTerminalSnapshot(
+		events,
+		turn.FrozenPolicySelection.PublicRef(),
+	)
 	turn.TerminalSnapshot = &terminalSnapshot
 	turn.StreamState = assistant.AssistantTurnStreamState{
 		LastSeq:     lastSeq,
@@ -893,7 +948,10 @@ func (s *AssistantService) failTurnExecution(
 	if err != nil {
 		return
 	}
-	terminalSnapshot := projectAssistantRunTerminalSnapshot(events, nil)
+	terminalSnapshot := ProjectAssistantRunTerminalSnapshot(
+		events,
+		turn.FrozenPolicySelection.PublicRef(),
+	)
 	if terminalSnapshot.Failure == nil {
 		projectedFailure := publicTerminalFailure(failure)
 		terminalSnapshot.Failure = &projectedFailure
@@ -915,29 +973,27 @@ func (s *AssistantService) failTurnExecution(
 	s.recordRunScorecard(ctx, stored)
 }
 
-// recordRunScorecard 在 run 终态时由服务端自评落 scorecard fact。
-// scoreId 派生自 turnId，ReportScorecards 的 dedupe 天然保证重复完成幂等；
+// recordRunScorecard 在 run 终态时写入唯一 AssistantLearningFact。
+// eventId 派生自 turnId，durable receipt 保证重复完成幂等；
 // 落盘失败只结构化告警，不阻塞用户回答。
 func (s *AssistantService) recordRunScorecard(ctx context.Context, turn assistant.AssistantTurn) {
-	if s.events == nil {
+	if s.learningFacts == nil {
 		return
 	}
 	scoreValue := 1.0
 	if turn.Status == "failed" {
 		scoreValue = 0.0
 	}
-	score := assistant.Scorecard{
-		ScoreID:     "run:" + turn.TurnID,
-		EventID:     turn.TurnID,
-		RunID:       turn.TurnID,
-		UserID:      turn.UserID,
-		DomainID:    turn.DomainID,
-		MetricID:    "run_completion",
-		ScoreValue:  scoreValue,
-		ScoreSource: "service_auto",
-		CreatedAt:   s.now(),
+	score := ServiceScorecardFactCommand{
+		EventID:         "turn:" + turn.TurnID + ":completion",
+		AssistantTurnID: turn.TurnID,
+		DomainID:        turn.DomainID,
+		MetricID:        "turn_completion",
+		MetricValue:     scoreValue,
+		MetricSource:    "service_auto",
+		OccurredAt:      s.now(),
 	}
-	if _, err := s.ReportScorecards(ctx, []assistant.Scorecard{score}); err != nil {
+	if err := s.learningFacts.AppendServiceScorecard(ctx, score); err != nil {
 		slog.WarnContext(ctx, "assistant run scorecard record failed",
 			slog.String("turnId", turn.TurnID), slog.String("error", err.Error()))
 	}

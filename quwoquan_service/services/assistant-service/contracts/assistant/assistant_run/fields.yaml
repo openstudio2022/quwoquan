@@ -166,6 +166,28 @@ fields:
   ops_exposure: read
   description: 服务端从可信请求头提取的 session/page/surface/route/operation/trace 审计上下文；不接受或回显为公开 command 字段
   role: authoritative_state
+- name: frozenPolicySelection
+  source: frozenPolicySelection
+  type: AssistantFrozenPolicySelection
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  description: StartRun 在首次 InsertTurn 前冻结的 rollout revision、cohort、rule 与不可变执行模板；重放和执行只能消费该值
+  role: authoritative_state
+- name: feedbackContextSnapshot
+  source: feedbackContextSnapshot
+  type: AssistantFeedbackContextSnapshot
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  description: StartRun 经 owner consent 与 release policy 求值后冻结的脱敏聚合反馈上下文或明确 no-injection decision
+  role: authoritative_state
 - name: responseType
   source: responseType
   type: enum
@@ -569,6 +591,384 @@ types:
       - NULLABLE
       classification: INTERNAL
       log_policy: drop
+      api_exposure: drop
+      ops_exposure: read
+    - name: personaId
+      source: personaId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: drop
+      api_exposure: drop
+      ops_exposure: read
+  AssistantFrozenPolicySelection:
+    description: Run 私有的策略冻结值；promptPolicy 不进入 public response 或 telemetry。
+    fields:
+    - name: policyId
+      source: policyId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: releaseVersion
+      source: releaseVersion
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: cohort
+      source: cohort
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: rolloutRevision
+      source: rolloutRevision
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: ruleId
+      source: ruleId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: template
+      source: template
+      type: AssistantFrozenPolicyTemplate
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: drop
+      ops_exposure: none
+    - name: learningContextPolicy
+      source: learningContextPolicy
+      type: AssistantFrozenLearningContextPolicy
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+  AssistantFrozenPolicyTemplate:
+    description: 从 immutable policy release 复制到 Run 的执行模板。
+    fields:
+    - name: templateId
+      source: templateId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: skillId
+      source: skillId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: domainId
+      source: domainId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: promptPolicy
+      source: promptPolicy
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: drop
+      ops_exposure: none
+    - name: allowedTools
+      source: allowedTools
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: searchIntensity
+      source: searchIntensity
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+  AssistantFrozenLearningContextPolicy:
+    description: 从 immutable policy release 复制到 Run 的学习上下文边界。
+    fields:
+    - name: enabled
+      source: enabled
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: allowedSignals
+      source: allowedSignals
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: allowedMetricIds
+      source: allowedMetricIds
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: allowedReasonCodes
+      source: allowedReasonCodes
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: minimumFeedbackSamples
+      source: minimumFeedbackSamples
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: windowDays
+      source: windowDays
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: snapshotTrainingEligible
+      source: snapshotTrainingEligible
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+  AssistantFeedbackContextSnapshot:
+    description: 仅包含 allowlisted 聚合统计；原始事实、query、answer、feedback 与 correction 永不进入该值。
+    fields:
+    - name: decision
+      source: decision
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: consentId
+      source: consentId
+      type: string
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: consentGrantedAt
+      source: consentGrantedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: definitionVersion
+      source: definitionVersion
+      type: string
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: sourceWatermarkSequence
+      source: sourceWatermarkSequence
+      type: int64
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: windowDays
+      source: windowDays
+      type: int
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: feedbackSampleCount
+      source: feedbackSampleCount
+      type: int64
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: positiveFeedbackCount
+      source: positiveFeedbackCount
+      type: int64
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: negativeFeedbackCount
+      source: negativeFeedbackCount
+      type: int64
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: textFeedbackCount
+      source: textFeedbackCount
+      type: int64
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: metrics
+      source: metrics
+      type: '[]AssistantFeedbackMetricSummary'
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: reasons
+      source: reasons
+      type: '[]AssistantFeedbackReasonSummary'
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: snapshotTrainingEligible
+      source: snapshotTrainingEligible
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+  AssistantFeedbackMetricSummary:
+    description: allowlisted metric 的窗口聚合。
+    fields:
+    - name: metricId
+      source: metricId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: sampleCount
+      source: sampleCount
+      type: int64
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: average
+      source: average
+      type: float
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: latest
+      source: latest
+      type: float
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+  AssistantFeedbackReasonSummary:
+    description: allowlisted reason code 的窗口聚合。
+    fields:
+    - name: reasonCode
+      source: reasonCode
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: count
+      source: count
+      type: int64
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
       api_exposure: drop
       ops_exposure: read
   AssistantRunTextInput:
@@ -1238,6 +1638,7 @@ types:
       log_policy: allow
       api_exposure: read_write
       ops_exposure: read
+      description: 必须为 assistant/_shared/enums.yaml 中 AssistantPageContextType 的 canonical wire 值。
     - name: pageObjects
       source: pageObjects
       type: '[]AssistantObjectGroundingView'
@@ -2002,36 +2403,6 @@ types:
       log_policy: metadata_only
       api_exposure: read
       ops_exposure: read
-  AssistantPolicyView:
-    description: 助手策略拉取快照
-    fields:
-    - name: version
-      source: version
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: values
-      source: values
-      type: object
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
   AssistantEntryPersonalizationChipView:
     description: 私助半屏入口推荐 chip
     fields:
@@ -2227,306 +2598,8 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
-  AssistantLearningProfile:
-    description: 助手学习画像聚合读模型
-    fields:
-    - name: userId
-      source: userId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastRunId
-      source: lastRunId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastEventId
-      source: lastEventId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastPageType
-      source: lastPageType
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastFeedbackType
-      source: lastFeedbackType
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastFeedbackText
-      source: lastFeedbackText
-      type: string
-      constraints:
-      - NULLABLE
-      classification: SENSITIVE
-      log_policy: mask
-      api_exposure: drop
-      ops_exposure: read
-    - name: lastFeedbackScore
-      source: lastFeedbackScore
-      type: float
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastFeedbackAt
-      source: lastFeedbackAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastMetricId
-      source: lastMetricId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastMetricScore
-      source: lastMetricScore
-      type: float
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: totalFeedbackCount
-      source: totalFeedbackCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: positiveFeedbackCount
-      source: positiveFeedbackCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: negativeFeedbackCount
-      source: negativeFeedbackCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: textFeedbackCount
-      source: textFeedbackCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: highPriorityCount
-      source: highPriorityCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: mediumPriorityCount
-      source: mediumPriorityCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: metricSampleCounts
-      source: metricSampleCounts
-      type: object
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: metricScoreSums
-      source: metricScoreSums
-      type: object
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: latestMetricScores
-      source: latestMetricScores
-      type: object
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: reasonCodeCounts
-      source: reasonCodeCounts
-      type: object
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  AssistantInteractionReportBatchAck:
-    description: 客户端批量上报交互事件后的汇总响应（与 AssistantRepository.reportInteractionEvents 对齐）
-    fields:
-    - name: accepted
-      source: accepted
-      type: bool
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: acceptedCount
-      source: acceptedCount
-      type: int
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: acceptedIds
-      source: acceptedIds
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 本批真正持久化或已确认幂等重放的 eventId；客户端只能据此删除对应 pending outbox item。
-    - name: count
-      source: count
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: resource
-      source: resource
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: mode
-      source: mode
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  AssistantScorecardReportBatchAck:
-    description: 客户端批量上报评分卡后的汇总响应（与 AssistantRepository.reportScorecards 对齐）
-    fields:
-    - name: accepted
-      source: accepted
-      type: bool
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: acceptedCount
-      source: acceptedCount
-      type: int
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: count
-      source: count
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: resource
-      source: resource
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: mode
-      source: mode
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
   AssistantLearningOpsSummaryView:
-    description: 运营侧学习画像摘要（GetLearningOpsSummary 响应，与 assistant-service domain 模型对齐）
+    description: 运营侧学习投影摘要（GetLearningOpsSummary 响应，由 AssistantLearningFact 重建）
     fields:
     - name: userId
       source: userId

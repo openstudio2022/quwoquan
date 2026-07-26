@@ -181,7 +181,11 @@ def qualify_homepage_authority_content(
 
     def attempt(candidates_to_check: tuple[HomepageAuthorityCandidate, ...]) -> QualifiedHomepageSource | None:
         nonlocal readable_candidate_seen
+        from content.source.research.source_registry import _travel_registry_url_fetchable
+
         for candidate in candidates_to_check:
+            if not _travel_registry_url_fetchable(candidate.url):
+                continue
             try:
                 payload = fetch_source_payload(
                     candidate.url,

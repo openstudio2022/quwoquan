@@ -5,15 +5,25 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/operation"
+	generated "quwoquan_service/services/chat-service/generated/chat/conversation"
 )
 
 const chatCommandReceiptTTL = 24 * time.Hour
+
+// ErrAggregateIdempotencyKeyTaken is returned by persistence when a concurrent
+// transaction commits a receipt for the same scoped key before this transaction.
+// The command owner must re-read that receipt to distinguish a replay from a
+// different payload using the same key.
+var ErrAggregateIdempotencyKeyTaken = errors.New(
+	"aggregate idempotency key already committed",
+)
 
 // scopedChatIdempotencyKey 把 transport 层 Idempotency-Key 与 actor 绑定，
 // 不同 actor 复用同一外部 key 互不影响。
@@ -110,4 +120,13 @@ func mapChatIdempotencyError(err error) error {
 		)
 	}
 	return err
+}
+
+func mapConversationCreateIdempotencyError(err error) error {
+	if errors.Is(err, ErrAggregateIdempotencyKeyTaken) {
+		return generated.AppErrorFromConversationIdempotencyConflict(
+			"conversation idempotency receipt was committed but could not be replayed",
+		)
+	}
+	return mapChatIdempotencyError(err)
 }

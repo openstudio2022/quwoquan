@@ -6,12 +6,14 @@ import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.d
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
@@ -302,6 +304,55 @@ void main() {
       expect(await service.sync(force: true), isTrue);
       expect(await store.listConversationIds(namespace: namespace), isEmpty);
     });
+
+    test(
+      'sync pages every contact then atomically removes stale contacts',
+      () async {
+        final repo = _PagedContactsChatRepository();
+        final service = LocalChatSearchSyncService(
+          chatRepository: repo,
+          conversationCache: cache,
+          store: store,
+          personaContextLoader: () async => currentContext,
+          telemetrySink: const NoopCacheTelemetrySink(),
+        );
+        final namespace = LocalSearchNamespace.fromActivePersonaContext(
+          currentContext,
+        );
+        await store.upsertContacts(
+          namespace: namespace,
+          contacts: const <LocalChatSearchContactRecord>[
+            LocalChatSearchContactRecord(
+              contactId: 'stale-contact',
+              displayName: 'Stale contact',
+            ),
+          ],
+        );
+
+        expect(await service.sync(force: true), isTrue);
+        expect(repo.requestedCursors, <String?>[null, 'contacts-2']);
+        expect(repo.requestedLimits, everyElement(100));
+        expect(
+          (await store.searchContacts(
+            namespace: namespace,
+            query: 'friend',
+            limit: 200,
+          )).map((contact) => contact.contactId),
+          hasLength(100),
+        );
+        expect(
+          (await store.searchContacts(
+            namespace: namespace,
+            query: 'survivor',
+          )).single.contactId,
+          'survivor-contact',
+        );
+        expect(
+          await store.searchContacts(namespace: namespace, query: 'Stale'),
+          isEmpty,
+        );
+      },
+    );
   });
 }
 
@@ -309,7 +360,7 @@ class _CountingChatRepository extends MockChatRepository {
   int listContactsCalls = 0;
 
   @override
-  Future<List<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
@@ -332,7 +383,7 @@ class _FlakyChatRepository extends MockChatRepository {
   bool _shouldFail = true;
 
   @override
-  Future<List<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
@@ -380,11 +431,65 @@ class _StableChatRepository extends MockChatRepository {
 
 class _EmptyTimelineChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
-    return const <ChatContactRowDto>[];
+    return const CursorPage<ChatContactRowDto>(items: <ChatContactRowDto>[]);
+  }
+
+  @override
+  Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
+    return const <ChatConversationTimestampDto>[];
+  }
+}
+
+class _PagedContactsChatRepository extends MockChatRepository {
+  final List<String?> requestedCursors = <String?>[];
+  final List<int> requestedLimits = <int>[];
+
+  @override
+  Future<CursorPage<ChatContactRowDto>> listContacts({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    requestedCursors.add(cursor);
+    requestedLimits.add(limit);
+    return switch (cursor) {
+      null => CursorPage<ChatContactRowDto>(
+        items: List<ChatContactRowDto>.generate(
+          100,
+          (index) => ChatContactRowDto(
+            userId: 'friend-$index',
+            displayName: 'friend $index',
+            avatarUrl: '',
+            bio: '',
+            metFrom: '',
+            lastInteraction: '',
+            relationState: 'mutual',
+            source: 'mutual',
+            isStarred: false,
+          ),
+        ),
+        nextCursor: 'contacts-2',
+      ),
+      'contacts-2' => CursorPage<ChatContactRowDto>(
+        items: <ChatContactRowDto>[
+          ChatContactRowDto(
+            userId: 'survivor-contact',
+            displayName: 'survivor',
+            avatarUrl: '',
+            bio: '',
+            metFrom: '',
+            lastInteraction: '',
+            relationState: 'mutual',
+            source: 'mutual',
+            isStarred: false,
+          ),
+        ],
+      ),
+      _ => throw StateError('unexpected contacts cursor: $cursor'),
+    };
   }
 
   @override

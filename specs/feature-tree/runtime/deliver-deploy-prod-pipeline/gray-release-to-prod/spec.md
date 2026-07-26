@@ -83,7 +83,7 @@
 
 - 类型：`external_blocker`
 - 优先级：`P0`
-- 准出影响：`track`
+- 准出影响：`block`
 - 影响或价值：CI 与 stackctl 接线不能替代真实 ACK 灰度、SLO gate 和回滚证据。
 - 完成判定：通过 `stackctl deploy --target prod-hosted`，使用按 `edge / media / service / data` 平面隔离的 `PROD_*_SSH_KEY` 与发布 secrets，完成 `gray-initial -> carry-on -> full`、故障注入、SLO 阻断和自动回滚；全部证据绑定同一候选版本。
 - 依赖：生产托管主机账号、各平面 SSH 凭据、渠道/数据面 secrets 与发布审批。

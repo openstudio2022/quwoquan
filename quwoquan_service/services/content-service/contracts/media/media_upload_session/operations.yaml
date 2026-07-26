@@ -118,6 +118,7 @@ api_routes:
   response_fields:
   - sessionId
   - assetId
+  - assetProcessingStatus
   - status
   - expiresAt
   - replayed
@@ -131,7 +132,7 @@ api_routes:
     auth_mode: required
     token_transport: bearer
     visibility: private
-  description: 校验 owner、过期时间和 SHA-256 后，原子完成会话并物化独立 MediaAsset。
+  description: 校验 owner、过期时间和 SHA-256 后，原子完成会话并物化独立 MediaAsset；session completed 与 assetProcessingStatus 必须同时返回，避免端侧把会话终态误判为资产 ready。
 - method: POST
   path: /content/media/uploads/{sessionId}:abort
   operation: AbortMediaUpload

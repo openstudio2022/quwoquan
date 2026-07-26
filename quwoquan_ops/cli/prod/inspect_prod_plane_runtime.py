@@ -26,7 +26,12 @@ DEFAULT_KEY_DIR = Path.home() / ".ssh" / "quwoquan-prod"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Inspect prod plane rootless runtime.")
-    parser.add_argument("--plane", default="service", choices=["service"])
+    parser.add_argument("--plane", default="service", choices=["service", "edge"])
+    parser.add_argument(
+        "--instance",
+        default="prod",
+        choices=["prod", "gray", "prevalidate"],
+    )
     parser.add_argument("--host", default="")
     parser.add_argument("--key-dir", default=os.environ.get("PROD_SSH_KEY_DIR", ""))
     parser.add_argument("--output", default="")
@@ -49,8 +54,9 @@ def _resolve_plane_spec(plane_name: str) -> dict:
 
 
 def _resolve_host(override: str) -> str:
-    if override:
-        return override
+    explicit = override or os.environ.get("PROD_SSH_HOST", "").strip()
+    if explicit:
+        return explicit
     topology = load_environment_topology()
     api = (((topology.get("targets") or {}).get("prod-hosted") or {}).get("publicBases") or {}).get("api", "")
     host = urlparse(str(api)).hostname or ""
@@ -101,6 +107,8 @@ import subprocess
 compose_root = pathlib.Path(os.environ["COMPOSE_ROOT"])
 compose_file = compose_root / os.environ.get("COMPOSE_FILE_NAME", "docker-compose.prod-hosted.yaml")
 env_file = compose_root / os.environ.get("ENV_FILE_NAME", "stack.env")
+project = os.environ["COMPOSE_PROJECT"]
+unit_name = os.environ["SYSTEMD_UNIT"]
 
 def run(argv):
     result = subprocess.run(
@@ -117,7 +125,7 @@ def run(argv):
         "stderr": result.stderr,
     }
 
-ps_result = run(["podman", "ps", "--format", "json"])
+ps_result = run(["podman", "ps", "--all", "--format", "json"])
 containers = []
 if ps_result["returncode"] == 0 and ps_result["stdout"].strip():
     try:
@@ -138,6 +146,38 @@ else:
     inspect_result = {"argv": ["podman", "inspect"], "returncode": 0, "stdout": "[]", "stderr": ""}
 
 listener_result = run(["bash", "-lc", "ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null || true"])
+unit_enabled = run(["systemctl", "--user", "is-enabled", unit_name])
+unit_active = run(["systemctl", "--user", "is-active", unit_name])
+
+selected_inspect = []
+for item in inspect_payload:
+    labels = ((item.get("Config") or {}).get("Labels") or {})
+    names = item.get("Name") or ""
+    if (
+        labels.get("com.docker.compose.project") == project
+        or labels.get("io.podman.compose.project") == project
+        or str(names).lstrip("/").startswith(project + "-")
+    ):
+        selected_inspect.append(item)
+
+runtime_containers = []
+for item in selected_inspect:
+    state = item.get("State") or {}
+    health = state.get("Health") or {}
+    runtime_containers.append({
+        "id": item.get("Id"),
+        "name": str(item.get("Name") or "").lstrip("/"),
+        "composeService": (
+            ((item.get("Config") or {}).get("Labels") or {}).get("com.docker.compose.service")
+            or ((item.get("Config") or {}).get("Labels") or {}).get("io.podman.compose.service")
+        ),
+        "image": (item.get("Config") or {}).get("Image"),
+        "imageId": item.get("Image"),
+        "status": state.get("Status"),
+        "running": bool(state.get("Running")),
+        "exitCode": state.get("ExitCode"),
+        "health": health.get("Status") or "not-configured",
+    })
 
 payload = {
     "account": subprocess.run(
@@ -152,9 +192,17 @@ payload = {
     "composeFileExists": compose_file.is_file(),
     "envFile": str(env_file),
     "envFileExists": env_file.is_file(),
-    "containerCount": len(containers),
-    "containers": containers,
-    "inspect": inspect_payload,
+    "project": project,
+    "unit": {
+        "name": unit_name,
+        "enabled": unit_enabled["returncode"] == 0 and unit_enabled["stdout"].strip() == "enabled",
+        "active": unit_active["returncode"] == 0 and unit_active["stdout"].strip() == "active",
+        "enabledReadback": unit_enabled,
+        "activeReadback": unit_active,
+    },
+    "containerCount": len(runtime_containers),
+    "containers": runtime_containers,
+    "inspect": selected_inspect,
     "listeners": listener_result["stdout"],
     "podmanPs": ps_result,
     "podmanInspect": inspect_result,
@@ -175,6 +223,8 @@ def main() -> int:
     )
     layout = plane.get("rootlessRuntimeLayout") or {}
     compose_root = str(plane.get("composeProjectRoot"))
+    if args.instance == "prevalidate":
+        compose_root = f"{compose_root.rstrip('/')}/prevalidate"
     compose_file_name = str(layout.get("composeFile") or "docker-compose.prod-hosted.yaml")
     env_file_name = str(layout.get("envFile") or "stack.env")
 
@@ -191,6 +241,8 @@ def main() -> int:
                 f"COMPOSE_ROOT={json.dumps(compose_root)} "
                 f"COMPOSE_FILE_NAME={json.dumps(compose_file_name)} "
                 f"ENV_FILE_NAME={json.dumps(env_file_name)} "
+                f"COMPOSE_PROJECT={json.dumps(f'quwoquan-{args.plane}-{args.instance}')} "
+                f"SYSTEMD_UNIT={json.dumps(f'quwoquan-{args.plane}-{args.instance}.service')} "
                 "python3 -"
             ),
         ],
@@ -206,6 +258,7 @@ def main() -> int:
 
     payload = json.loads(result.stdout)
     payload["plane"] = args.plane
+    payload["instance"] = args.instance
     payload["host"] = host
     payload["keySource"] = key_source
     if args.output:

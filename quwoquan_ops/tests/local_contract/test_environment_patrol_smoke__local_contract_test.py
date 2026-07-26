@@ -59,6 +59,34 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         values.update(overrides)
         return argparse.Namespace(**values)
 
+    def test_patrol_build_workspace_rejects_overlapping_runners(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            lock_path = Path(temporary_dir) / "patrol.lock"
+            first = smoke._acquire_patrol_execution_lock(
+                env_name="local-beta",
+                target=smoke.DEFAULT_TARGET,
+                lock_path=lock_path,
+            )
+            try:
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "Patrol build workspace is already in use",
+                ):
+                    smoke._acquire_patrol_execution_lock(
+                        env_name="local-gamma",
+                        target=smoke.DEFAULT_TARGET,
+                        lock_path=lock_path,
+                    )
+            finally:
+                first.close()
+
+            replacement = smoke._acquire_patrol_execution_lock(
+                env_name="local-gamma",
+                target=smoke.DEFAULT_TARGET,
+                lock_path=lock_path,
+            )
+            replacement.close()
+
     def test_default_target_is_the_video_playback_canary(self) -> None:
         self.assertEqual(
             smoke.DEFAULT_TARGET,
@@ -815,6 +843,87 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         terminate.assert_called_once_with(process)
 
+    def test_patrol_test_execution_prefers_xctest_over_zero_patrol_summary(self) -> None:
+        summary = smoke.patrol_test_execution_summary(
+            "Executed 1 test, with 0 failures (0 unexpected)\n"
+            "📝 Total: 0\n❌ Failed: 0\n"
+        )
+
+        self.assertEqual(
+            summary,
+            {"framework": "xctest", "executed": 1, "failed": 0},
+        )
+
+    def test_remote_api_evidence_requires_ids_and_effective_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            path = Path(temporary_dir) / "search-report.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "schema": "search-remote-api-uat-report-v1",
+                        "status": "passed",
+                        "cases": {
+                            "searchAndFeedbackRoundtrip": {
+                                "evidence": {
+                                    "schema": "search-remote-api-evidence-v1",
+                                    "status": "passed",
+                                    "searchRequestId": "search.req.1",
+                                    "events": [
+                                        {
+                                            "requestId": "search.req.1",
+                                            "traceId": "trace.1",
+                                            "succeeded": True,
+                                        }
+                                    ],
+                                    "feedbackEvents": [
+                                        {
+                                            "eventType": "impression",
+                                            "objectId": "post.1",
+                                            "target": None,
+                                            "rankPosition": 1,
+                                            "dwellMs": None,
+                                        },
+                                        {
+                                            "eventType": "click",
+                                            "objectId": "post.1",
+                                            "target": "posts",
+                                            "rankPosition": 1,
+                                            "dwellMs": None,
+                                        },
+                                        {
+                                            "eventType": "dwell",
+                                            "objectId": "post.1",
+                                            "target": "posts",
+                                            "rankPosition": 1,
+                                            "dwellMs": 3000,
+                                        },
+                                    ],
+                                }
+                            },
+                            "tagFilterPositiveAndNegative": {
+                                "evidence": {
+                                    "schema": "search-tag-filter-remote-evidence-v1",
+                                    "status": "passed",
+                                    "positiveHitCount": 1,
+                                    "negativeHitCount": 0,
+                                }
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            evidence = smoke.load_remote_api_evidence(str(path))
+
+        self.assertEqual(evidence["searchRequestId"], "search.req.1")
+        self.assertEqual(evidence["events"][0]["traceId"], "trace.1")
+        self.assertEqual(
+            [event["eventType"] for event in evidence["feedbackEvents"]],
+            ["impression", "click", "dwell"],
+        )
+        self.assertEqual(evidence["tagFilter"]["positiveHitCount"], 1)
+
     @mock.patch.object(smoke.subprocess, "run")
     def test_release_bound_ios_uat_resets_app_and_test_runner_state(
         self,
@@ -1270,7 +1379,12 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 / "deploy"
                 / "compose.yaml"
             ).read_text(encoding="utf-8")
-            for service in ("recommendation-service", "content-service")
+            for service in (
+                "recommendation-service",
+                "content-service",
+                "user-service",
+                "entity-service",
+            )
         )
         beta_gateway = (
             ROOT
@@ -1337,6 +1451,18 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertIn(
             'CONTENT_EMBEDDING_API_KEY: "${QWQ_COMPOSE_EMBEDDING_API_KEY:-}"',
             beta_service_compose,
+        )
+        self.assertIn(
+            'SEARCH_ES_ENABLED: "${QWQ_COMPOSE_SEARCH_ES_ENABLED:-true}"',
+            beta_service_compose,
+        )
+        self.assertIn(
+            "export QWQ_COMPOSE_SEARCH_ES_ENABLED=false",
+            beta_manual,
+        )
+        self.assertIn(
+            "SEARCH_ES_ENABLED=false",
+            beta_manual,
         )
         self.assertIn(
             "beta_manual_require_content_embedding_binding",
@@ -1525,10 +1651,24 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         preflight_index = names.index("gamma-local-video-range-mime-preflight")
         media_surface_index = names.index("seeded-media-surface")
         patrol_index = names.index("gamma-local-environment-page-smoke")
+        search_patrol_index = names.index("gamma-local-search-remote-patrol")
         self.assertLess(preflight_index, media_surface_index)
         self.assertLess(media_surface_index, patrol_index)
+        self.assertLess(patrol_index, search_patrol_index)
         self.assertTrue(commands[preflight_index]["stopOnFailure"])
         self.assertTrue(commands[media_surface_index]["stopOnFailure"])
+
+        search_patrol = commands[search_patrol_index]
+        self.assertEqual(
+            search_patrol["argv"][
+                search_patrol["argv"].index("--target") + 1
+            ],
+            (
+                "test/user_acceptance/patrol/search/"
+                "cross_domain_search_journey__user_acceptance_test.dart"
+            ),
+        )
+        self.assertNotIn("--video-playback-canary-work-id", search_patrol["argv"])
 
     def test_prod_hosted_patrol_requires_release_video_canary_preflight(self) -> None:
         command = stackctl._target_media_preflight_profile_command(
@@ -1863,6 +2003,39 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart",
         )
         self.assertNotIn("env", command)
+
+    def test_gamma_release_profile_binds_search_remote_api_evidence(self) -> None:
+        command = stackctl._search_remote_api_integration_profile_command(
+            "gamma-local",
+            VerificationProfile.RELEASE,
+            Path("/tmp/gamma-release"),
+        )
+
+        self.assertIsNotNone(command)
+        self.assertEqual(
+            command["name"],
+            "gamma-local-search-remote-api-integration",
+        )
+        self.assertEqual(
+            command["argv"],
+            [
+                "bash",
+                "quwoquan_app/scripts/gamma/run_local_gamma_search_api_uat.sh",
+            ],
+        )
+        self.assertTrue(command["stopOnFailure"])
+        self.assertEqual(
+            command["reportPath"],
+            "/tmp/gamma-release/search-remote-api-integration/"
+            "search_remote_api_uat_report.json",
+        )
+        self.assertIsNone(
+            stackctl._search_remote_api_integration_profile_command(
+                "gamma-local",
+                VerificationProfile.INTEGRATION,
+                Path("/tmp/gamma-release"),
+            )
+        )
 
     def test_content_uat_uses_topology_and_release_runtime_cases(self) -> None:
         target = {

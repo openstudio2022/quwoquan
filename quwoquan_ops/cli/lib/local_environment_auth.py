@@ -17,7 +17,10 @@ from typing import Any
 from urllib import error, request
 from urllib.parse import urlparse
 
-from .output_paths import deployment_target_path
+from .output_paths import (
+    deployment_target_path,
+    deployment_target_path_in_work_root,
+)
 
 
 _SECRET_KEYS = (
@@ -67,13 +70,96 @@ class LocalEnvironmentHTTPError(RuntimeError):
         return f"local environment request {self.method} {self.path} failed with HTTP {self.status}"
 
 
+def resolve_running_local_deployment_work_root(target_name: str) -> Path | None:
+    """Resolve the non-secret workspace mounted by a running local user service.
+
+    A local stack may intentionally use a workspace other than the caller's
+    default ``QWQ_DEPLOY_WORK_ROOT``. The mounted config root is the runtime
+    truth for the JWT material used by that stack. This helper returns only the
+    validated parent workspace and never reads or exposes a secret value.
+    """
+
+    normalized_target = str(target_name).strip()
+    if normalized_target not in set(_LOCAL_TARGETS.values()):
+        raise ValueError(f"unsupported local environment target: {target_name}")
+
+    for engine in ("docker", "podman"):
+        for container_name in (
+            "quwoquan_service-user-service-1",
+            "quwoquan_service_user-service_1",
+        ):
+            try:
+                result = subprocess.run(
+                    [engine, "inspect", container_name],
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    timeout=3.0,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+            if result.returncode != 0:
+                continue
+            try:
+                inspected = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(inspected, list) or not inspected:
+                continue
+            container = inspected[0]
+            if not isinstance(container, dict):
+                continue
+            mounts = container.get("Mounts")
+            if not isinstance(mounts, list):
+                continue
+            for mount in mounts:
+                if not isinstance(mount, dict):
+                    continue
+                if mount.get("Destination") != "/etc/qwq-config":
+                    continue
+                source = mount.get("Source")
+                if not isinstance(source, str) or not source.strip():
+                    continue
+                config_root = Path(source).expanduser().resolve()
+                if (
+                    config_root.name != "config-root"
+                    or config_root.parent.name != "rendered"
+                    or config_root.parent.parent.name != normalized_target
+                ):
+                    continue
+                work_root = config_root.parents[2]
+                try:
+                    deployment_target_path_in_work_root(
+                        work_root,
+                        normalized_target,
+                        "secrets",
+                        "auth.env",
+                    )
+                except ValueError:
+                    continue
+                return work_root
+    return None
+
+
 def prepare_local_environment_auth(
     environment: str,
     target_name: str,
+    *,
+    deployment_work_root: str | Path | None = None,
 ) -> LocalEnvironmentAuth:
     """Create target-isolated auth material in the external deploy workspace."""
     _require_local_environment(environment, target_name)
-    secret_path = deployment_target_path(target_name, "secrets", "auth.env")
+    secret_path = (
+        deployment_target_path(target_name, "secrets", "auth.env")
+        if deployment_work_root is None
+        else deployment_target_path_in_work_root(
+            deployment_work_root,
+            target_name,
+            "secrets",
+            "auth.env",
+        )
+    )
     values = _load_or_create_secrets(secret_path)
     key_version = f"local-{environment}-k1"
     return LocalEnvironmentAuth(
@@ -111,6 +197,7 @@ def open_local_acceptance_session(
     subject: str | None = None,
     resolve_host: str = "127.0.0.1",
     timeout_seconds: float = 30.0,
+    deployment_work_root: str | Path | None = None,
 ) -> LocalAcceptanceSession:
     """Issue a local-only session with the user-service canonical JWT signer.
 
@@ -141,7 +228,11 @@ def open_local_acceptance_session(
         owner_id = canonical_subject
         persona_id = canonical_subject
     profile_value = _canonical_acceptance_profile(profile)
-    auth = prepare_local_environment_auth(environment, target_name)
+    auth = prepare_local_environment_auth(
+        environment,
+        target_name,
+        deployment_work_root=deployment_work_root,
+    )
     process_env = os.environ.copy()
     process_env.update(auth.environment)
     process_env.update(

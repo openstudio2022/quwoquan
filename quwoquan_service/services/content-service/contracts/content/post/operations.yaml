@@ -16,7 +16,7 @@ externalDependencies:
 - role: use
   capability: runtime.message.transport
   port: MessageTransportPort
-  operations: [appendDurable]
+  operations: [appendDurable, consumeDurable]
   scenes: [general, realtime]
 api_routes:
 - method: GET

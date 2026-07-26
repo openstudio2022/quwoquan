@@ -1,0 +1,17 @@
+read_model: IncomingCallDeliveryTimeline
+description: operator 按 call 读取的脱敏 per-device ring、provider result、presentation ACK 与 cancel 时间线。
+storage_backend: mongodb
+collection: notification_delivery_jobs
+projection_mode: authoritative_query
+source_entities:
+- NotificationDeliveryJob
+consumers:
+- notification-service
+- platform-ops
+fields:
+- name: callDigest
+  type: string
+- name: items
+  type: list<IncomingCallDeliveryTimelineItem>
+- name: updatedAt
+  type: timestamp

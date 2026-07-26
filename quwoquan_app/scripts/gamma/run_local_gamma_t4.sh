@@ -59,6 +59,7 @@ unset TEST_AUTH_TOKEN TEST_REFRESH_TOKEN APP_CURRENT_OWNER_ID APP_CURRENT_SUB_AC
 PATROL_TARGET="${LOCAL_GAMMA_T4_TARGET:-test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart}"
 PATROL_INSTALL_ID="${QWQ_PATROL_INSTALL_ID:-}"
 RELEASE_UAT_CASES=""
+REMOTE_API_EVIDENCE_REPORT="${LOCAL_GAMMA_REMOTE_API_EVIDENCE_REPORT:-}"
 TARGET_EXPLICIT=0
 DEVICE_ID="${LOCAL_GAMMA_T4_DEVICE_ID:-}"
 PLATFORM="${LOCAL_GAMMA_T4_PLATFORM:-all}"
@@ -74,6 +75,7 @@ Options:
   --target <path>           Patrol target file or directory.
   --patrol-install-id <tpl> One-run install identity template; account closure requires {device}.
   --release-uat-cases <path> Gamma data-release generated homepage_verification_cases.json.
+  --remote-api-evidence-report <path> Passed Remote API UAT report to attach request/trace evidence.
   --report <path>           Write the Patrol report to this runtime evidence path.
   --gateway-base-url <url>  Mirror gateway URL.
   --product-ops-base-url <url>
@@ -94,6 +96,7 @@ while [[ $# -gt 0 ]]; do
     --target) PATROL_TARGET="${2:-}"; TARGET_EXPLICIT=1; shift 2 ;;
     --patrol-install-id) PATROL_INSTALL_ID="${2:-}"; shift 2 ;;
     --release-uat-cases) RELEASE_UAT_CASES="${2:-}"; shift 2 ;;
+    --remote-api-evidence-report) REMOTE_API_EVIDENCE_REPORT="${2:-}"; shift 2 ;;
     --report) REPORT="${2:-}"; shift 2 ;;
     --gateway-base-url) GATEWAY_BASE_URL="${2:-}"; shift 2 ;;
     --product-ops-base-url) PRODUCT_OPS_BASE_URL="${2:-}"; shift 2 ;;
@@ -169,6 +172,9 @@ if [[ -n "$DEVICE_ID" ]]; then
 fi
 if [[ -n "$RELEASE_UAT_CASES" ]]; then
   cmd+=(--release-uat-cases "$RELEASE_UAT_CASES")
+fi
+if [[ -n "$REMOTE_API_EVIDENCE_REPORT" ]]; then
+  cmd+=(--remote-api-evidence-report "$REMOTE_API_EVIDENCE_REPORT")
 fi
 if [[ -n "$PATROL_INSTALL_ID" ]]; then
   cmd+=(--patrol-install-id "$PATROL_INSTALL_ID")

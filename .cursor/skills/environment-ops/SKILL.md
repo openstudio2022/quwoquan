@@ -18,6 +18,8 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 - `python3 quwoquan_ops/cli/stackctl.py doctor --target <target>`
 - `python3 quwoquan_ops/cli/stackctl.py repair --target <target> --fix <rebuild-packages|restart-stack|reclaim-ports>`
 - `python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>`
+- `python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted --mode prevalidate --ssh-host <ssh-host> --data-mode <isolated|external> --prevalidate-scope first-party --release-manifest <manifest.json>`
+- `python3 quwoquan_ops/cli/stackctl.py inspect --target prod-hosted --scope all --ssh-host <ssh-host>`
 
 ## Rules
 
@@ -27,6 +29,8 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 4. 需要环境打包、纯度、URL 契约或 artifact 隔离时，先跑 `stackctl package`，再按证明边界选择 profile：无环境依赖为 `baseline`，Alpha mock 投影为 `smoke`，Beta/Gamma 内容数据平面为 `integration`，Gamma 商业观测和 Prod 为 `release`。
 5. 需要诊断时，先 `health`，再 `inspect`，最后 `doctor`。只有白名单问题才执行 `repair`。
 6. 远端/hosted 目标只有 `prod-hosted`（backend SSH 托管，gray 与 full 共享同一集群）；`gamma` 仅本地（`gamma-local`），不存在远端 gamma。`prod-hosted` 只通过 `stackctl deploy --target prod-hosted` 驱动 `gray-initial / carry-on / full` rollout stage，真实远端集成与 curated 媒体路由复验在 `gray-initial` 阶段完成；不要跳回旧脚本，除非是在修 `stackctl` 本身。
+7. `mode=prevalidate` 是不可提升的第一方容器验证：公网 IP 只允许作为 `--ssh-host`，必须消费 clean reviewed main 的 Service Pipeline digest 制品；不得接受 rollout/SLO/rollback 参数，不得写正式 release ledger/receipt，且 release eligibility 始终保持 `GATE_BLOCK`。
+8. prod-hosted 的 `inspect/doctor --ssh-host` 只用于隔离账号 SSH 巡检；该值不得写入 runtime public base，巡检必须同时报告 user systemd enabled/active、容器状态和镜像 identity。
 
 ## Recommended Flows
 
@@ -57,6 +61,13 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 3. `prod-hosted` 走 `gray-initial / carry-on / full` rollout stage；真实远端集成与 curated 媒体路由复验在 `gray-initial` 阶段完成（不再有独立的远端 gamma-hosted 阶段）。
 4. 每步运行证据以 `.qwq_output/env/prod/runs/**` 为准；prod 发布状态固定为 `QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/<service>.state`。
 
+### prod-hosted 第一方容器预验证（不可提升）
+
+1. 先取得 reviewed main 成功 Service Pipeline 生成的 deployable `manifest.json`、GHCR digest、SBOM 与 provenance；本地工作区必须 clean 且 HEAD 与 manifest source 一致。
+2. 执行 `stackctl deploy --target prod-hosted --mode prevalidate --ssh-host <ssh-host> --data-mode isolated --prevalidate-scope first-party --release-manifest <manifest.json>`。
+3. stackctl 在任何镜像传输前检查 service/edge 隔离账号、rootless Podman、user systemd/linger、架构、CPU、内存、容器空间和目标端口；不满足阈值即停止。
+4. 报告分别读取 `containerDeployment` 与 `releaseEligibility`；即使前者 passed，后者在 Provider/SFU/真实数据/观测/灾备/灰度回滚证据齐全前仍为 `GATE_BLOCK`。
+
 ## Stop Conditions
 
 遇到以下情况必须停下并请求人工确认：
@@ -64,6 +75,7 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 - 生产审批、受保护环境放量、回滚前版本选择不明确
 - 缺少密钥、token、SSH 凭据或 hosted base URL
 - `prod-hosted` 缺少 `service / image / config / step / SLO` 任一必填输入
+- prevalidate 缺不可变 manifest、工作区非 clean/reviewed main、主机低于 4C/16GiB/40GiB 可用空间，或目标端口冲突
 - 计划对 `prod-hosted` 执行 restart / rollout / cold-build 三模式，但当前实现并未开放对应命令面
 - `repair` 需要超出白名单的破坏性动作
 - 发现环境配置、artifact 或 host 污染与用户当前目标矛盾

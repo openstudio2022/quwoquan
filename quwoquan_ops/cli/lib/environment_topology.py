@@ -378,6 +378,20 @@ def validate_environment_topology(
             issues.append(
                 f"{target_name}: backend must be local or ssh-hosted"
             )
+        local_resource_group = str(
+            target.get("localResourceGroup", "")
+        ).strip()
+        if backend == "local" and not re.fullmatch(
+            r"[a-z][a-z0-9-]{2,63}",
+            local_resource_group,
+        ):
+            issues.append(
+                f"{target_name}: local targets require a canonical localResourceGroup"
+            )
+        if backend != "local" and local_resource_group:
+            issues.append(
+                f"{target_name}: localResourceGroup is reserved for local targets"
+            )
         profile = target.get("portProfile")
         role_ports: dict[str, int] = {}
         if backend == "local" and not profile:

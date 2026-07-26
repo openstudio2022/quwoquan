@@ -194,9 +194,9 @@ type RetrieveResponse struct {
 	Provenance     Provenance      `json:"provenance"`
 }
 
-// RecallBackend abstracts the recall engine. NativeStoreBackend is the launch
-// default; ESBackend is the traffic-driven upgrade. Selection is transparent to
-// callers.
+// RecallBackend abstracts a caller-owned recall engine. search-service binds
+// this port to one Elasticsearch backend; domain-local readers may bind their
+// own native store without creating a cross-backend fallback.
 type RecallBackend interface {
 	Recall(ctx context.Context, plan RetrievePlan) ([]RecallCandidate, error)
 	Name() string

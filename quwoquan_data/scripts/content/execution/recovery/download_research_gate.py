@@ -74,8 +74,9 @@ def _download_research_lane_issues(
     )
     from core.image_rules import relevance_issue
     from core.source_catalog import platform_category
-    from governance.coverage.license import validate_image_rights
+    from governance.coverage.license import rights_proof_required, validate_image_rights
     requirements = download_requirements(ctx.execution_id)
+    enforce_rights = rights_proof_required(ctx.spec.vertical)
     try:
         issue_lane = DataIssueLane(lane)
     except ValueError:
@@ -144,50 +145,23 @@ def _download_research_lane_issues(
                     f"homepage source {source.get('source_id')}: "
                     f"entity homepage cannot use author/guide/review source category {category}"
                 )
-        for issue in source_plan_rights_issues(
-                ctx.execution_id,
-                eid,
-                etype,
-                require_explicit=True,
-                research_lane="homepage",
-        ):
-            add(
-                DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                f"homepage: {issue}",
-                stage=DataIssueStage.IMAGE_RIGHTS,
-                recovery=DataRecoveryAction.REPLACE_MEDIA,
-            )
-        for index, image in enumerate(images, start=1):
-            for issue in validate_image_rights(
-                    image, vertical=ctx.spec.vertical
+        if enforce_rights:
+            for issue in source_plan_rights_issues(
+                    ctx.execution_id,
+                    eid,
+                    etype,
+                    require_explicit=True,
+                    research_lane="homepage",
             ):
                 add(
                     DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                    f"homepage image[{index}]: {issue}",
+                    f"homepage: {issue}",
                     stage=DataIssueStage.IMAGE_RIGHTS,
                     recovery=DataRecoveryAction.REPLACE_MEDIA,
                 )
-            relevance = str(image.get("relevance") or image.get("caption") or "")
-            rel_issue = relevance_issue(
-                relevance,
-                entity_id=eid,
-                asset_id=f"{eid}#homepage#{index}",
-            )
-            if rel_issue:
-                add(
-                    DataIssueCode.SOURCE_ENTITY_MISMATCH,
-                    f"homepage image[{index}]: {rel_issue}",
-                    stage=DataIssueStage.IMAGE_RIGHTS,
-                    recovery=DataRecoveryAction.REPLACE_MEDIA,
-                )
-            px_issue = _planned_pixel_issue(image, asset_id=f"{eid}#homepage#{index}")
-            if px_issue:
-                add(
-                    DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-                    f"homepage image[{index}]: {px_issue}",
-                    stage=DataIssueStage.IMAGE_RIGHTS,
-                    recovery=DataRecoveryAction.REPLACE_MEDIA,
-                )
+        # Page-owned media is enumerated here, then every candidate receives a
+        # typed disposition in the download funnel. One excluded image must not
+        # invalidate an otherwise readable primary encyclopedia source.
         return issues
     if lane == "article":
         sources = curated_sources_for_entity(
@@ -257,36 +231,6 @@ def _download_research_lane_issues(
                         f"article source {source.get('source_id')}: base source category "
                         f"must be article-quality, got {source_category or 'unknown'}"
                     )
-            for img_index, image in enumerate(source.get("imageUrls") or [], start=1):
-                for issue in validate_image_rights(
-                        image, vertical=ctx.spec.vertical
-                ):
-                    add(
-                        DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                        f"article source {source.get('source_id')} image[{img_index}]: {issue}",
-                        stage=DataIssueStage.IMAGE_RIGHTS,
-                        recovery=DataRecoveryAction.REPLACE_MEDIA,
-                    )
-                relevance = str(image.get("relevance") or image.get("caption") or "")
-                rel_issue = relevance_issue(
-                    relevance,
-                    entity_id=eid,
-                    asset_id=f"{eid}#{source.get('source_id')}#{img_index}",
-                )
-                if rel_issue:
-                    add(
-                        DataIssueCode.SOURCE_ENTITY_MISMATCH,
-                        f"article source {source.get('source_id')} image[{img_index}]: {rel_issue}"
-                    )
-                px_issue = _planned_pixel_issue(
-                    image,
-                    asset_id=f"{eid}/{source.get('source_id')}#{img_index}",
-                )
-                if px_issue:
-                    add(
-                        DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-                        f"article source {source.get('source_id')} image[{img_index}]: {px_issue}"
-                    )
         for source in sources:
             for code, message in _article_source_identity_issues(
                 source,
@@ -309,19 +253,20 @@ def _download_research_lane_issues(
                 "article sources must be independent from homepage lane; duplicate urls="
                 + ", ".join(sorted(duplicate_urls)[:3])
             )
-        for issue in source_plan_rights_issues(
-                ctx.execution_id,
-                eid,
-                etype,
-                require_explicit=True,
-                research_lane="article",
-        ):
-            add(
-                DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                f"article: {issue}",
-                stage=DataIssueStage.IMAGE_RIGHTS,
-                recovery=DataRecoveryAction.REPLACE_MEDIA,
-            )
+        if enforce_rights:
+            for issue in source_plan_rights_issues(
+                    ctx.execution_id,
+                    eid,
+                    etype,
+                    require_explicit=True,
+                    research_lane="article",
+            ):
+                add(
+                    DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
+                    f"article: {issue}",
+                    stage=DataIssueStage.IMAGE_RIGHTS,
+                    recovery=DataRecoveryAction.REPLACE_MEDIA,
+                )
         return issues
     if lane == "image":
         images = [
@@ -351,14 +296,15 @@ def _download_research_lane_issues(
                     DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
                     f"image {image.get('url') or '?'} missing collection rights {missing_fields}"
                 )
-            for issue in validate_image_rights(
-                image,
-                vertical=ctx.spec.vertical,
-            ):
-                add(
-                    DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                    f"image {image.get('url') or '?'}: {issue}",
-                )
+            if enforce_rights:
+                for issue in validate_image_rights(
+                    image,
+                    vertical=ctx.spec.vertical,
+                ):
+                    add(
+                        DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
+                        f"image {image.get('url') or '?'}: {issue}",
+                    )
             if str(image.get("generationModel") or "").strip() and not allow_generated_images:
                 add(
                     DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
@@ -409,15 +355,6 @@ def _download_research_lane_issues(
         for index, image in enumerate(images, start=1):
             if not require_publishable_images:
                 continue
-            for issue in validate_image_rights(
-                    image, vertical=ctx.spec.vertical
-            ):
-                add(
-                    DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                    f"image[{index}]: {issue}",
-                    stage=DataIssueStage.IMAGE_RIGHTS,
-                    recovery=DataRecoveryAction.REPLACE_MEDIA,
-                )
             relevance = str(image.get("relevance") or image.get("caption") or "")
             rel_issue = relevance_issue(relevance, entity_id=eid, asset_id=f"{eid}#{index}")
             if rel_issue:

@@ -42,3 +42,31 @@ type RecoverNotificationDeliveryJobResult struct {
 	RecoveredAt    time.Time `bson:"recoveredAt" json:"recoveredAt"`
 	Replayed       bool      `bson:"-" json:"replayed"`
 }
+
+type IncomingCallProviderReceipt struct {
+	AttemptDigest         string    `json:"attemptDigest"`
+	Action                string    `json:"action"`
+	Status                string    `json:"status"`
+	Provider              string    `json:"provider"`
+	ProviderRequestDigest string    `json:"providerRequestDigest"`
+	RecoveryAction        string    `json:"recoveryAction"`
+	OccurredAt            time.Time `json:"occurredAt"`
+}
+
+type IncomingCallDeliveryTimelineItem struct {
+	JobDigest                      string                        `json:"jobDigest"`
+	DeviceDigest                   string                        `json:"deviceDigest"`
+	DeliveryKeyDigest              string                        `json:"deliveryKeyDigest"`
+	Status                         string                        `json:"status"`
+	ExternalInteractionAcceptedAt  *time.Time                    `json:"externalInteractionAcceptedAt,omitempty"`
+	PresentedAt                    *time.Time                    `json:"presentedAt,omitempty"`
+	CancelledAt                    *time.Time                    `json:"cancelledAt,omitempty"`
+	CancellationExternalAcceptedAt *time.Time                    `json:"cancellationExternalInteractionAcceptedAt,omitempty"`
+	Receipts                       []IncomingCallProviderReceipt `json:"receipts"`
+}
+
+type IncomingCallDeliveryTimeline struct {
+	CallDigest string                             `json:"callDigest"`
+	Items      []IncomingCallDeliveryTimelineItem `json:"items"`
+	UpdatedAt  time.Time                          `json:"updatedAt"`
+}

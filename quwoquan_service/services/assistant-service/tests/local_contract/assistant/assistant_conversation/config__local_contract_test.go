@@ -37,6 +37,23 @@ func TestProactiveDeliveryDependenciesAreConfiguredInEveryEnvironment(
 	t *testing.T,
 ) {
 	root := assistantServiceRoot(t)
+	var schema struct {
+		Configs []struct {
+			Key     string `yaml:"key"`
+			Default any    `yaml:"default"`
+		} `yaml:"configs"`
+	}
+	readAssistantAuthorityYAML(
+		t,
+		filepath.Join(root, "config", "schema.yaml"),
+		&schema,
+	)
+	defaults := map[string]string{}
+	for _, item := range schema.Configs {
+		if value, ok := item.Default.(string); ok {
+			defaults[item.Key] = value
+		}
+	}
 	expected := map[string]map[string]string{
 		"alpha": {
 			"sys.assistant-service.chat_service.base_url": "http://127.0.0.1:18082",
@@ -71,7 +88,11 @@ func TestProactiveDeliveryDependenciesAreConfiguredInEveryEnvironment(
 				&config,
 			)
 			for key, want := range values {
-				if got := config.Overrides[key]; got != want {
+				got := defaults[key]
+				if override, ok := config.Overrides[key]; ok {
+					got = override
+				}
+				if got != want {
 					t.Fatalf("%s=%q, want %q", key, got, want)
 				}
 			}

@@ -138,7 +138,7 @@ jobs:
           go-version-file: quwoquan_service/go.mod
       - name: Verify canonical /search response contract
         working-directory: quwoquan_service
-        run: go test ./services/search-service/tests/api_integration/search/search/search_query -count=1
+        run: go test ./services/search-service/tests/api_integration/search/search_query -count=1
       - name: Verify four-environment search probe contract
         run: |
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \

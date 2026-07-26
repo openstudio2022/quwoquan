@@ -1,0 +1,27 @@
+schema: quwoquan-prod-backup-recovery-plan
+receiptMaxAgeHours: 26
+datasets:
+  - id: postgres
+    rpoMinutes: 15
+    rtoMinutes: 120
+    requiredRemoteCopy: true
+    requiredIsolationTarget: true
+  - id: mongodb
+    rpoMinutes: 15
+    rtoMinutes: 120
+    requiredRemoteCopy: true
+    requiredIsolationTarget: true
+  - id: object-media
+    rpoMinutes: 60
+    rtoMinutes: 240
+    requiredRemoteCopy: true
+    requiredIsolationTarget: true
+  - id: sls-archive
+    rpoMinutes: 60
+    rtoMinutes: 240
+    requiredRemoteCopy: true
+    requiredIsolationTarget: true
+capacityCost:
+  sourceUsagePercentMax: 80
+  replicaUsagePercentMax: 80
+  monthlyCostBudgetCny: 50000

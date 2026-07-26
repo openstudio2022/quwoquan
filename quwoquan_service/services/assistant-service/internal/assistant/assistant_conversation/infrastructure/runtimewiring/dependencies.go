@@ -15,7 +15,6 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/projection"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig"
 	preferenceports "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/domain/ports"
 )
@@ -108,8 +107,6 @@ func BuildRedisRouter(cfg runtimeconfig.Config) (*rtredis.Router, error) {
 }
 
 type PersistentDependencies struct {
-	EventStore           application.EventStore
-	ProfileStore         application.LearningProfileStore
 	SubscriptionStore    application.SkillSubscriptionStore
 	ConsentStore         application.ConsentStore
 	ConversationRunStore application.ConversationRunStore
@@ -153,18 +150,6 @@ func OpenPersistentDependencies(
 	}
 	deps.MongoClient = mongoClient
 	db := mongoClient.Database(strings.TrimSpace(cfg.MongoDB.Database))
-
-	mongoEvents := persistence.NewMongoEventStore(db)
-	if err := mongoEvents.EnsureIndexes(ctx); err != nil {
-		return nil, NewDependencyError("mongodb.interaction_events", "indexes", err)
-	}
-	deps.EventStore = mongoEvents
-
-	mongoProfiles := projection.NewLearningProfileStore(db)
-	if err := mongoProfiles.EnsureIndexes(ctx); err != nil {
-		return nil, NewDependencyError("mongodb.rm_assistant_learning_profile", "indexes", err)
-	}
-	deps.ProfileStore = mongoProfiles
 
 	mongoSubscriptions := persistence.NewMongoSkillSubscriptionStore(db)
 	if err := mongoSubscriptions.EnsureIndexes(ctx); err != nil {
