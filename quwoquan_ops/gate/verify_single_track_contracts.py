@@ -259,6 +259,18 @@ def _is_test_path(rel: str) -> bool:
     )
 
 
+def _is_elasticsearch_bulk_metadata_context(
+    rel: str, lines: list[str], line_number: int
+) -> bool:
+    """Allow provider-owned Bulk API `_id`, never an App/HTTP DTO `_id`."""
+    if not _is_test_path(rel) or "elasticsearch" not in Path(rel).name.lower():
+        return False
+    start = max(0, line_number - 8)
+    end = min(len(lines), line_number + 8)
+    context = "\n".join(lines[start:end])
+    return 'json:"_index"' in context and 'json:"index"' in context
+
+
 def _is_governance_scanner(rel: str) -> bool:
     """Separate policy implementation from runtime contract sources."""
     path = Path(rel)
@@ -501,6 +513,8 @@ def scan_file(path: Path, inv: Inventory) -> None:
                 continue
             if GO_JSON_ID_TAG.search(line):
                 if _is_test_path(rel) and NEGATIVE_ID_TEST_LINE.search(line):
+                    continue
+                if _is_elasticsearch_bulk_metadata_context(rel, lines, lineno):
                     continue
                 inv.add("T3_wire_id_key", path, f"L{lineno}: {line.strip()[:140]}")
                 continue

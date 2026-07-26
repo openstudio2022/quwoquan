@@ -113,6 +113,34 @@ class SingleTrackContractsContractTest(unittest.TestCase):
         self.assertIsNotNone(module.GO_JSON_ID_TAG.search('Id string `json:"_id"`'))
         self.assertIsNone(module.GO_JSON_ID_TAG.search('Id string `bson:"_id"`'))
 
+    def test_allows_elasticsearch_bulk_metadata_id_only_in_provider_harness(self) -> None:
+        module = _load_verifier()
+        lines = [
+            "var metadata struct {",
+            "  Index struct {",
+            '    Index string `json:"_index"`',
+            '    ID string `json:"_id"`',
+            '  } `json:"index"`',
+            "}",
+        ]
+
+        self.assertTrue(
+            module._is_elasticsearch_bulk_metadata_context(
+                "quwoquan_service/services/product-ops-service/tests/local_contract/"
+                "product_ops/event_record/elasticsearch_log_sink__local_contract_test.go",
+                lines,
+                4,
+            )
+        )
+        self.assertFalse(
+            module._is_elasticsearch_bulk_metadata_context(
+                "quwoquan_service/services/product-ops-service/tests/local_contract/"
+                "product_ops/event_record/http_event_dto__local_contract_test.go",
+                lines,
+                4,
+            )
+        )
+
     def test_detects_multi_key_helper_with_id(self) -> None:
         module = _load_verifier()
         self.assertIsNotNone(
