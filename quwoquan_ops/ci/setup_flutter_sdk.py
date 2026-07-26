@@ -18,8 +18,21 @@ from typing import Any, Mapping
 
 MANIFEST_BASE_URL = "https://storage.googleapis.com/flutter_infra_release/releases"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-OS_NAMES = {"linux": "linux", "Linux": "linux"}
-ARCH_NAMES = {"x64": "x64", "X64": "x64", "amd64": "x64", "AMD64": "x64"}
+OS_NAMES = {
+    "linux": "linux",
+    "Linux": "linux",
+    "darwin": "macos",
+    "macOS": "macos",
+}
+ARCH_NAMES = {
+    "x64": "x64",
+    "X64": "x64",
+    "amd64": "x64",
+    "AMD64": "x64",
+    "arm64": "arm64",
+    "ARM64": "arm64",
+    "aarch64": "arm64",
+}
 
 
 def _download_json(url: str) -> dict[str, Any]:

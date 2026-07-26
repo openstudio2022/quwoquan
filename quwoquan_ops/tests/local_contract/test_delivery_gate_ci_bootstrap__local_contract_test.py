@@ -72,6 +72,10 @@ def test_ff_config_contract_uses_portable_grep() -> None:
 
 def test_flutter_release_resolution_requires_official_checksum_and_architecture() -> None:
     setup = _load_setup_module()
+    assert setup.OS_NAMES["macOS"] == "macos"
+    assert setup.OS_NAMES["darwin"] == "macos"
+    assert setup.ARCH_NAMES["ARM64"] == "arm64"
+    assert setup.ARCH_NAMES["aarch64"] == "arm64"
     manifest = {
         "current_release": {"stable": "abc123"},
         "releases": [
