@@ -9,6 +9,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.ci.manage_actions_artifacts import build_run_report, classify_artifact
+from quwoquan_ops.gate.verify_github_artifact_lifecycle import verify
 
 
 NOW = datetime(2026, 7, 27, tzinfo=UTC)
@@ -96,3 +97,7 @@ def test_completed_run_cleanup_queries_only_its_exact_artifacts() -> None:
 
     assert report["scope"] == {"workflowRunId": 42}
     assert [item.reason for item in decisions] == ["invalid-run-cancelled"]
+
+
+def test_repository_artifact_policy_rejects_implicit_go_cache() -> None:
+    assert verify() == []

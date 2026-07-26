@@ -467,6 +467,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: quwoquan_service/go.mod
+          cache: false
       - name: Install Flutter (PATH)
         run: |
           command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }

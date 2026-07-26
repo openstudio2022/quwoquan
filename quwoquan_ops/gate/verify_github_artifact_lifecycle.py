@@ -16,11 +16,15 @@ UPLOAD_PATTERN = re.compile(
     re.MULTILINE,
 )
 DOWNLOAD_PATTERN = re.compile(
-    r"^\s*uses:\s*actions/download-artifact@[0-9a-f]{40}\s$",
+    r"^\s*uses:\s*actions/download-artifact@[0-9a-f]{40}\s*$",
     re.MULTILINE,
 )
 CACHE_PATTERN = re.compile(
-    r"^(?P<indent>\s*)uses:\s*actions/cache@[0-9a-f]{40}\s$",
+    r"^(?P<indent>\s*)uses:\s*actions/cache@[0-9a-f]{40}\s*$",
+    re.MULTILINE,
+)
+SETUP_GO_PATTERN = re.compile(
+    r"^(?P<indent>\s*)uses:\s*actions/setup-go@[0-9a-f]{40}\s*$",
     re.MULTILINE,
 )
 FAILURE_ONLY_CONDITION = "failure() && !cancelled()"
@@ -74,6 +78,14 @@ def verify() -> list[str]:
                 issues.append(
                     f"{workflow.relative_to(ROOT)}:{line}: Actions cache must not retain "
                     "an SDK/toolchain tree; install the checksum-verified toolchain on the runner"
+                )
+        for match in SETUP_GO_PATTERN.finditer(text):
+            block = _upload_block(text, match)
+            if "cache: false" not in block:
+                line = text.count("\n", 0, match.start()) + 1
+                issues.append(
+                    f"{workflow.relative_to(ROOT)}:{line}: setup-go must disable its implicit "
+                    "cache; use a reviewed explicit Go module cache when one is justified"
                 )
     if not LIFECYCLE_SCRIPT.is_file():
         issues.append("missing quwoquan_ops/ci/manage_actions_artifacts.py")

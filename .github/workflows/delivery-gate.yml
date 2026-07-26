@@ -99,6 +99,7 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: quwoquan_service/go.mod
+          cache: false
       - name: 设置 Dart
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
       - name: 安装 kustomize
@@ -139,6 +140,7 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: quwoquan_service/go.mod
+          cache: false
       - name: Verify canonical /search response contract
         working-directory: quwoquan_service
         run: go test ./services/search-service/tests/api_integration/search/search_query -count=1
