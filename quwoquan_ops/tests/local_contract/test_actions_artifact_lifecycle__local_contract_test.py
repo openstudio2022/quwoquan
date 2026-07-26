@@ -15,10 +15,16 @@ from quwoquan_ops.gate.verify_github_artifact_lifecycle import verify
 NOW = datetime(2026, 7, 27, tzinfo=UTC)
 
 
-def _artifact(*, artifact_id: int = 1, created_at: str = "2026-05-01T00:00:00Z", expired: bool = False) -> dict[str, object]:
+def _artifact(
+    *,
+    artifact_id: int = 1,
+    name: str = "device-matrix-report",
+    created_at: str = "2026-05-01T00:00:00Z",
+    expired: bool = False,
+) -> dict[str, object]:
     return {
         "id": artifact_id,
-        "name": "device-matrix-report",
+        "name": name,
         "size_in_bytes": 1024,
         "created_at": created_at,
         "expires_at": "2026-08-01T00:00:00Z",
@@ -73,6 +79,19 @@ def test_recent_successful_artifact_is_not_preserved() -> None:
 
     assert decision is not None
     assert decision.reason == "invalid-success-artifact"
+
+
+def test_automatic_docker_build_record_is_immediately_invalid_even_on_failure() -> None:
+    decision = classify_artifact(
+        _artifact(name="record.dockerbuild", created_at="2026-07-27T00:00:00Z"),
+        {"conclusion": "failure"},
+        now=NOW,
+        failed_retention_days=3,
+        success_retention_days=1,
+    )
+
+    assert decision is not None
+    assert decision.reason == "invalid-automatic-build-record"
 
 
 def test_completed_run_cleanup_queries_only_its_exact_artifacts() -> None:

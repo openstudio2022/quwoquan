@@ -89,6 +89,11 @@ def main() -> int:
         "finalize_mainline_release_artifact.py",
         "collect_mainline_image_descriptors.py",
         "/release-artifact:sha-${{ github.sha }}",
+        'DOCKER_BUILD_RECORD_UPLOAD: "false"',
+        "id: base_images",
+        "GO_BASE_IMAGE=${{ steps.base_images.outputs.go_base_image }}",
+        "ALPINE_BASE_IMAGE=${{ steps.base_images.outputs.alpine_base_image }}",
+        "PYTHON_BASE_IMAGE=${{ steps.base_images.outputs.python_base_image }}",
     ):
         if token not in pipeline_text:
             issues.append(
@@ -99,11 +104,17 @@ def main() -> int:
         "name: mainline-release-input",
         "name: mainline-release-artifact",
         "pattern: mainline-image-*",
+        "cache-from: type=gha",
+        "cache-to: type=gha",
     ):
         if forbidden in pipeline_text:
             issues.append(
-                f"{SERVICE_PIPELINE.relative_to(ROOT)} still depends on Actions Artifact transport: {forbidden}"
+                f"{SERVICE_PIPELINE.relative_to(ROOT)} still permits ungoverned Actions storage: {forbidden}"
             )
+    if "recommendation-service\n            image_name: recommendation-service\n            context: quwoquan_service" not in pipeline_text:
+        issues.append(
+            f"{SERVICE_PIPELINE.relative_to(ROOT)} must build recommendation-service from quwoquan_service context"
+        )
 
     if issues:
         print("[verify_prod_rollout_stackctl_contract] FAIL")

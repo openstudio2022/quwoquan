@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 LIFECYCLE_WORKFLOW = WORKFLOWS / "artifact-lifecycle.yml"
 LIFECYCLE_SCRIPT = ROOT / "quwoquan_ops" / "ci" / "manage_actions_artifacts.py"
+SERVICE_PIPELINE = WORKFLOWS / "service_pipeline.yml"
 UPLOAD_PATTERN = re.compile(
     r"^(?P<indent>\s*)uses:\s*actions/upload-artifact@[0-9a-f]{40}\s*$",
     re.MULTILINE,
@@ -115,6 +116,18 @@ def verify() -> list[str]:
                     "artifact lifecycle workflow must observe every artifact-producing "
                     f"workflow: {workflow_name!r}"
                 )
+    if not SERVICE_PIPELINE.is_file():
+        issues.append("missing .github/workflows/service_pipeline.yml")
+    else:
+        service_pipeline = SERVICE_PIPELINE.read_text(encoding="utf-8")
+        if 'DOCKER_BUILD_RECORD_UPLOAD: "false"' not in service_pipeline:
+            issues.append(
+                "service pipeline must disable automatic docker build record artifact uploads"
+            )
+        if "cache-from: type=gha" in service_pipeline or "cache-to: type=gha" in service_pipeline:
+            issues.append(
+                "service pipeline must not consume or export unbounded Buildx GHA layer caches"
+            )
     return issues
 
 

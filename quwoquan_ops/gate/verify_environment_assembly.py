@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -61,20 +60,17 @@ def validate_service_build_image_contract() -> list[str]:
     service_pipeline = (
         ROOT / ".github/workflows/service_pipeline.yml"
     ).read_text(encoding="utf-8")
-    for image_variable in (
-        "GO_BASE_IMAGE",
-        "ALPINE_BASE_IMAGE",
-        "PYTHON_BASE_IMAGE",
+    if 'runtime["targets"]["prod-hosted"]["buildImages"]' not in service_pipeline:
+        issues.append("service pipeline must read prod-hosted governed build images")
+    for image_variable, output in (
+        ("GO_BASE_IMAGE", "go_base_image"),
+        ("ALPINE_BASE_IMAGE", "alpine_base_image"),
+        ("PYTHON_BASE_IMAGE", "python_base_image"),
     ):
-        if not re.search(
-            rf"^  {image_variable}: [^\s]+@sha256:[0-9a-f]{{64}}$",
-            service_pipeline,
-            re.MULTILINE,
+        if (
+            f"{image_variable}=${{{{ steps.base_images.outputs.{output} }}}}"
+            not in service_pipeline
         ):
-            issues.append(
-                f"service pipeline must pin {image_variable} to an immutable digest"
-            )
-        if f"{image_variable}=${{{{ env.{image_variable} }}}}" not in service_pipeline:
             issues.append(
                 f"service pipeline must pass {image_variable} to release image builds"
             )

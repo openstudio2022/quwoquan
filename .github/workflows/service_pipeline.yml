@@ -31,9 +31,10 @@ env:
   QWQ_OUTPUT_ROOT: .qwq_output
   GOCACHE: ${{ github.workspace }}/.qwq_output/env/repo/local/ci/cache/go/build
   GOMODCACHE: ${{ github.workspace }}/.qwq_output/env/repo/local/ci/cache/go/mod
-  GO_BASE_IMAGE: docker.io/library/golang:1.24-bookworm@sha256:98d673f18a1aac43da744209873cb79323e11706f909251bcfb131828b95559d
-  ALPINE_BASE_IMAGE: docker.io/library/debian:bookworm-slim@sha256:63a496b5d3b99214b39f5ed70eb71a61e590a77979c79cbee4faf991f8c0783e
-  PYTHON_BASE_IMAGE: docker.io/library/python:3.11@sha256:143c7a1877acd77bd323d544cb7b39ba0a975288a7204f47586c2597130d80ad
+  # docker/build-push-action otherwise uploads one .dockerbuild Actions Artifact
+  # for every matrix image. The immutable GHCR digest is the release input;
+  # Build records are neither a deploy dependency nor useful durable evidence.
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
 
 jobs:
   prepare-release:
@@ -125,7 +126,7 @@ jobs:
         include:
           - service: recommendation-service
             image_name: recommendation-service
-            context: .
+            context: quwoquan_service
             dockerfile: quwoquan_service/services/recommendation-service/build/Dockerfile
           - service: content-service
             image_name: content-service
@@ -188,6 +189,30 @@ jobs:
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - id: base_images
+        name: Resolve governed builder base images
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          runtime = json.loads(
+              Path("quwoquan_ops/environments/prod/runtime.yaml").read_text(
+                  encoding="utf-8"
+              )
+          )
+          images = runtime["targets"]["prod-hosted"]["buildImages"]
+          for output, key in (
+              ("go_base_image", "goBaseImage"),
+              ("alpine_base_image", "alpineBaseImage"),
+              ("python_base_image", "pythonBaseImage"),
+          ):
+              value = str(images.get(key) or "").strip()
+              repository, separator, digest = value.rpartition("@sha256:")
+              if not separator or not repository or len(digest) != 64:
+                  raise SystemExit(f"governed build image {key} must use sha256 digest")
+              print(f"{output}={value}")
+          PY
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
       - name: 登录镜像仓库
@@ -203,16 +228,14 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
-          build-args: |
-            GO_BASE_IMAGE=${{ env.GO_BASE_IMAGE }}
-            ALPINE_BASE_IMAGE=${{ env.ALPINE_BASE_IMAGE }}
-            PYTHON_BASE_IMAGE=${{ env.PYTHON_BASE_IMAGE }}
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare-release.outputs.image_version }}
+          build-args: |
+            GO_BASE_IMAGE=${{ steps.base_images.outputs.go_base_image }}
+            ALPINE_BASE_IMAGE=${{ steps.base_images.outputs.alpine_base_image }}
+            PYTHON_BASE_IMAGE=${{ steps.base_images.outputs.python_base_image }}
           sbom: true
           provenance: mode=max
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   validate-deploy:
     name: 校验 Kustomize 部署

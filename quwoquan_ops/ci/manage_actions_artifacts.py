@@ -27,6 +27,7 @@ API_ROOT = "https://api.github.com"
 TERMINAL_RUN_CONCLUSIONS = frozenset(
     {"cancelled", "startup_failure", "timed_out", "action_required", "skipped"}
 )
+AUTOMATIC_BUILD_RECORD_SUFFIX = ".dockerbuild"
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,11 @@ def classify_artifact(
     }
     if artifact.get("expired") is True:
         return CleanupDecision(reason="github-expired", **base)
+    if name.lower().endswith(AUTOMATIC_BUILD_RECORD_SUFFIX):
+        # docker/build-push-action build records are not approved failure
+        # diagnostics or release evidence. This also cleans any record made
+        # before the workflow-level upload switch was introduced.
+        return CleanupDecision(reason="invalid-automatic-build-record", **base)
     if conclusion in TERMINAL_RUN_CONCLUSIONS:
         return CleanupDecision(reason=f"invalid-run-{conclusion}", **base)
     if conclusion == "success":
