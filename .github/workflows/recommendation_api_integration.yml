@@ -46,7 +46,7 @@ jobs:
             go-mod-api-integration-${{ runner.os }}-
       - name: Run content-service api_integration
         run: |
-          go test ./services/content-service/tests/api_integration/content/content/post/ -count=1 -timeout 30m -v 2>&1 | tee api_integration.log
+          go test ./services/content-service/tests/api_integration/content/post/ -count=1 -timeout 30m -v 2>&1 | tee api_integration.log
       - name: Assert recommendation-critical tests executed
         run: |
           # 防回归：premium 事件链与 behavior 契约必须真实执行（不是被 skip）。
@@ -62,8 +62,10 @@ jobs:
             fi
           done
       - name: Upload log
-        if: always()
+        if: ${{ failure() && !cancelled() }}
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: recommendation-api-integration-log
           path: quwoquan_service/api_integration.log
+          retention-days: 3

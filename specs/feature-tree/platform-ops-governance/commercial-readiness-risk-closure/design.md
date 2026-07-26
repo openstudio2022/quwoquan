@@ -50,10 +50,11 @@
 <a id="dec-003"></a>
 ### DEC-003 第一方容器预验证与正式 release transaction 物理分轨
 
-- 决策：预验证只使用独立 Compose project、远端目录和 rootless user systemd unit；只消费 Service Pipeline 发布到 GHCR 的 OCI digest 制品，不进入 rollout lock、SLO、正式 release ledger 或 receipt。受限单机使用声明式容器内存/PID 上限；空间门同时校验当前可用量、可回收量与回收后实测量。
+- 决策：预验证只使用独立 Compose project、远端目录和 rootless user systemd unit；只消费 Service Pipeline 发布到 GHCR 的 OCI digest 制品，不进入 rollout lock、SLO、正式 release ledger 或 receipt。受限单机使用声明式容器内存/PID 上限；空间门同时校验当前可用量、可回收量与回收后实测量。Actions Artifact 仅可保存短生命周期失败诊断，诊断上传不得影响原始门禁结论。
 - 理由：在 Provider、SFU、真实数据和公网入口尚未就绪时，仍需验证第一方容器可部署性，但该结果不能被误用为生产准出。
 - 被否决方案：使用 `latest`、远端临时构建、旧容器、裸 IP public base，或把容器启动成功写成正式发布成功。
 - 约束与影响：隔离数据使用重新摘要的不可提升配置投影和独立随机认证材料，unit 不得继承正式 credentials；Actions Artifact 只可作为非必需兼容输出，ReleaseManifest 配置包和镜像均以 GHCR digest 消费。旧运行面回收仅允许匹配声明前缀且处于 `Created/Exited` 的容器和未使用镜像，禁止删除任何 volume 或恢复容器。报告必须并列输出 container runtime、Provider readiness 与 release eligibility，后两者在完整生产证据前固定为 `GATE_BLOCK`。
+- 制品生命周期补充：Actions Artifact 仅可保存有明确保留期的短期 job 传递或诊断报告，路径只能包含需要复验的 `summary.json`、`report.json` 或失败日志；取消运行不得上传，超过诊断窗口的失败和成功对象由受控生命周期任务逐个删除。不可变发布包、SBOM、provenance 与回滚所需镜像保持 GHCR digest 引用，并按已引用 release manifest 保留，不能以 Actions Artifact 代替。
 - 关联要求：`REQ-009`
 - 影响 Story：在 [`zero-risk-production-readiness`](./zero-risk-production-readiness/spec.md) 中约束预验证与正式准出分轨。
 - 关联验收：`SIT-008`、`GWT-003`

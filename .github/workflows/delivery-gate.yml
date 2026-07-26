@@ -351,7 +351,7 @@ jobs:
           fi
           echo "result=success" >> "$GITHUB_OUTPUT"
       - name: Upload delivery gate timing summary
-        if: always()
+        if: ${{ always() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -359,3 +359,4 @@ jobs:
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/delivery-gate-summary.json
           if-no-files-found: error
           compression-level: 0
+          retention-days: 3

@@ -41,7 +41,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           channel: stable
-          cache: true
+          cache: false
 
       - name: 安装依赖
         working-directory: quwoquan_app
@@ -56,10 +56,12 @@ jobs:
         with:
           name: macos-build-${{ github.ref_name }}
           path: quwoquan_app/build/macos/Build/Products/Release/
+          retention-days: 14
 
       - name: 上传构建失败日志
-        if: failure()
+        if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: macos-build-fail-logs
           path: quwoquan_app/build/
+          retention-days: 3

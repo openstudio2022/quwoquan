@@ -48,10 +48,17 @@ def branch_policy_issues(
     local_branches: list[str],
     remote_branches: list[str],
     current_branch: str | None,
+    ci_head_branch: str | None = None,
 ) -> list[str]:
     issues: list[str] = []
     if not current_branch:
-        issues.append("detached HEAD is forbidden; work on dev1.0 and merge to main explicitly")
+        if ci_head_branch in allowed_local:
+            # GitHub pull_request checks out the synthetic merge commit detached.
+            # The source branch is still required to be the sole allowed local
+            # development branch; arbitrary detached local work stays forbidden.
+            pass
+        else:
+            issues.append("detached HEAD is forbidden; work on dev1.0 and merge to main explicitly")
     elif current_branch not in allowed_local:
         issues.append(f"current branch '{current_branch}' is not allowed; only {sorted(allowed_local)} may receive commits")
 

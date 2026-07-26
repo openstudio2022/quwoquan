@@ -42,6 +42,7 @@ fi
 bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
 python3 quwoquan_ops/gate/verify_github_supply_chain.py
+python3 quwoquan_ops/gate/verify_github_artifact_lifecycle.py
 python3 quwoquan_ops/gate/verify_agent_context_contract.py
 python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
 python3 quwoquan_ops/gate/verify_single_track_contracts.py

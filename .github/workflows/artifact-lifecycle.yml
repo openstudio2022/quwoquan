@@ -1,0 +1,40 @@
+name: 00. Artifact Lifecycle
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Delete lifecycle-expired Actions artifacts'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  cleanup:
+    name: Reclaim invalid Actions artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Audit and reclaim expired diagnostics
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          args=(
+            --repository "${GITHUB_REPOSITORY}"
+            --token-env GITHUB_TOKEN
+            --failed-retention-days 7
+            --success-retention-days 14
+            --output ".qwq_output/env/repo/runs/artifact-lifecycle/report.json"
+          )
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" || "${{ inputs.apply }}" = "true" ]]; then
+            args+=(--apply)
+          fi
+          python3 quwoquan_ops/ci/manage_actions_artifacts.py "${args[@]}"
