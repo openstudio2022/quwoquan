@@ -51,6 +51,7 @@
 
 - same-digest、Action pin、SBOM/provenance 和缺制品 fail-closed 必须由可执行门禁直接证明。
 - GHCR digest 是成功构建的唯一交付输入；CI 必须关闭自动 Docker build record 上传和未受控的 GHA layer cache，不能以成功 Actions Artifact 或无限增长缓存承担发布传递。
+- 主线 Service Pipeline 使用仓库已注册、在线且标签受控的 self-hosted macOS ARM64 runner；跨架构镜像只能通过固定 Action 的 QEMU/Buildx 生成 linux/amd64 OCI，不得因 GitHub-hosted 计费预算不可用而回退本地临时构建或放弃 attestation。
 
 <a id="req-004"></a>
 ### REQ-004 灰度发布串行、真实 SLO 回读并可回滚
@@ -127,10 +128,12 @@
 ### SIT-003 构建一次与不可变制品
 
 - GIVEN CI action 固定 commit SHA，工作流最小权限和 CODEOWNERS 已声明。
+- GIVEN GitHub-hosted runner 计费预算不可用，但受控 self-hosted macOS ARM64 runner 在线且 Docker daemon 可用。
 - WHEN service/app/portal/config 进入 pre-release 与生产 rollout。
 - THEN ReleaseManifest 绑定 git commit、OCI/config/portal/SBOM/provenance/signature/test evidence digest。
 - THEN gray-initial/carry-on/full 只消费同一 manifest，禁止 latest 与部署时重建。
 - THEN ReleaseManifest 配置包以 GHCR OCI digest 交付；Actions Artifact 无容量时仍 fail-closed 地消费同一 OCI 内容，不允许在部署 job 重生 manifest。
+- THEN Service Pipeline 在受控 runner 上通过 QEMU/Buildx 构建 linux/amd64，仍生成相同 SBOM/provenance 与 release manifest；runner 或跨架构前置缺失时硬失败。
 - THEN Docker build record 与无界 Buildx GHA layer cache 不进入 Actions 存储；失败诊断仍按短保留期、单次运行范围保留。
 
 <a id="sit-004"></a>

@@ -505,15 +505,20 @@ def validate_environment_topology(
             if not isinstance(build_images, dict):
                 issues.append(f"{target_name}: buildImages must be a mapping")
             else:
-                for image_key in (
-                    "goBaseImage",
-                    "alpineBaseImage",
-                    "pythonBaseImage",
-                ):
+                governed_image_prefixes = {
+                    "goBaseImage": "docker.io/library/golang:",
+                    "alpineBaseImage": "docker.io/library/alpine:",
+                    "pythonBaseImage": "docker.io/library/python:",
+                }
+                for image_key, repository_prefix in governed_image_prefixes.items():
                     image = str(build_images.get(image_key) or "").strip()
                     if not re.fullmatch(r"\S+@sha256:[0-9a-f]{64}", image):
                         issues.append(
                             f"{target_name}: buildImages.{image_key} must use an immutable sha256 digest"
+                        )
+                    elif not image.startswith(repository_prefix):
+                        issues.append(
+                            f"{target_name}: buildImages.{image_key} must use {repository_prefix}"
                         )
         if backend == "ssh-hosted" and isinstance(public_bases, dict):
             env_allowlist = {

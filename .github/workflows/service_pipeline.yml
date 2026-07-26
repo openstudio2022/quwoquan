@@ -39,7 +39,7 @@ env:
 jobs:
   prepare-release:
     name: Prepare mainline release coordinates
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     permissions:
       contents: read
       actions: read
@@ -73,7 +73,7 @@ jobs:
 
   build-go:
     name: Go 构建与测试
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     needs: [prepare-release]
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
@@ -92,16 +92,6 @@ jobs:
           go-version-file: quwoquan_service/go.mod
           cache: false
 
-      - name: 缓存 Go 模块
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            ~/go/pkg/mod
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/cache/go
-          key: go-mod-${{ runner.os }}-${{ hashFiles('quwoquan_service/go.sum') }}
-          restore-keys: |
-            go-mod-${{ runner.os }}-
-
       - name: Go 构建
         run: make build
 
@@ -115,7 +105,7 @@ jobs:
   build-release-images:
     name: 构建 ${{ matrix.service }} 不可变镜像
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     needs: [prepare-release]
     permissions:
       contents: read
@@ -213,8 +203,17 @@ jobs:
                   raise SystemExit(f"governed build image {key} must use sha256 digest")
               print(f"{output}={value}")
           PY
+      - name: 设置 linux/amd64 QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+        with:
+          image: docker.io/tonistiigi/binfmt@sha256:b4c6a09270133b3c5b4dff94f83067df4dd27eced195fc6a1dbad102999e24dd
+          platforms: amd64
+          cache-image: false
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.35.0
+          cache-binary: false
       - name: 登录镜像仓库
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
@@ -244,7 +243,7 @@ jobs:
       - prepare-release
       - build-go
       - build-release-images
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     permissions:
       contents: read
       packages: write
@@ -259,6 +258,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.35.0
+          cache-binary: false
       - name: 登录镜像仓库
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
@@ -373,7 +375,7 @@ jobs:
       - build-release-images
       - validate-deploy
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     outputs:
       critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
     steps:
