@@ -93,12 +93,8 @@ def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:
     assert workflow.count("version: v0.35.0") == 2
     assert workflow.count("cache-binary: false") == 2
     assert workflow.count("clean: false") == 5
-    assert (
-        "${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-build"
-        in workflow
-    )
-    assert (
-        "${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-mod"
-        in workflow
-    )
+    assert 'cache_root="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}"' in workflow
+    assert 'echo "GOCACHE=${cache_root}/go-build" >> "$GITHUB_ENV"' in workflow
+    assert 'echo "GOMODCACHE=${cache_root}/go-mod" >> "$GITHUB_ENV"' in workflow
+    assert "${{ runner.temp }}" not in workflow
     assert "github.workspace }}/.qwq_output/env/repo/local/ci/cache/go" not in workflow

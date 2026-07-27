@@ -136,7 +136,7 @@
 - THEN gray-initial/carry-on/full 只消费同一 manifest，禁止 latest 与部署时重建。
 - THEN ReleaseManifest 配置包以 GHCR OCI digest 交付；Actions Artifact 无容量时仍 fail-closed 地消费同一 OCI 内容，不允许在部署 job 重生 manifest。
 - THEN Service Pipeline 在受控 runner 上以原生 ARM64 Go builder 交叉编译 linux/amd64 二进制，QEMU/Buildx 只装配目标运行层，仍生成相同 SBOM/provenance 与 release manifest；runner、多架构 builder 索引或跨架构前置缺失时硬失败。
-- THEN Go module cache 按 job 隔离在 `runner.temp`，不进入 checkout 工作区或 GitHub Actions cache；后续矩阵 job 不得因另一 job 的只读 module cache 失败。
+- THEN Go module cache 在 runner 启动后的 step 通过 `RUNNER_TEMP` 按 job 隔离，不进入 checkout 工作区或 GitHub Actions cache；job-level `env` 不得引用不可用的 `runner` context，后续矩阵 job 不得因另一 job 的只读 module cache 失败。
 - THEN Prod 的受控 Alpine runtime 通过签名包索引安装运行依赖；包索引签名不可信时不得使用 `--allow-untrusted` 继续构建。
 - THEN Docker build record 与无界 Buildx GHA layer cache 不进入 Actions 存储；失败诊断仍按短保留期、单次运行范围保留。
 
