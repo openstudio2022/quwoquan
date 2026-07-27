@@ -61,6 +61,7 @@
   - SSH 管理 endpoint 只在 `access-isolation.yaml.management` 声明；`runtime.yaml` 及其 App package 投影只含 canonical HTTPS/WSS public base，禁止携带管理 IP。
   - 主线 Service Pipeline 固定使用仓库注册的 `self-hosted/macOS/ARM64` runner；Go builder 基镜像固定为多架构 OCI index digest，以 `BUILDPLATFORM` 原生执行工具链并显式向 `TARGETOS/TARGETARCH` 交叉编译，QEMU 只执行 linux/amd64 最终运行层装配，避免模拟 Go runtime 的不稳定性。GitHub-hosted 预算不可用不得改变 GHCR digest、SBOM、provenance 或 manifest 契约；每个 Go job 在 runner 启动后的 step 使用 `RUNNER_TEMP` 设置可变 cache，禁止在 job-level `env` 引用尚不可用的 `runner` context，checkout 不清理未受版本控制的运行输出。
   - Prod runtime 基镜像固定为仍受支持的 Alpine 3.22 digest，依赖安装必须保留包索引签名校验；不得以 `--allow-untrusted` 绕过供应链失败。
+  - Recommendation 使用固定 digest 的官方 Python 3.11 slim-bookworm 多架构索引；Dockerfile 已显式安装唯一缺失的 `libgomp1`，不需要携带完整 Python 开发基镜像及其 236 MB 单层。
 - 理由：在 Provider、SFU、真实数据和公网入口尚未就绪时，仍需验证第一方容器可部署性，但该结果不能被误用为生产准出。
 - 被否决方案：使用 `latest`、远端临时构建、旧容器、裸 IP public base，或把容器启动成功写成正式发布成功。
 - 约束与影响如下。

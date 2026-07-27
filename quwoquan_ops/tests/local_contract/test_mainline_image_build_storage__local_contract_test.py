@@ -37,7 +37,10 @@ def test_prod_hosted_build_images_match_their_governed_repositories() -> None:
         build_images["alpineBaseImage"]
         == "docker.io/library/alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce"
     )
-    assert build_images["pythonBaseImage"].startswith("docker.io/library/python:")
+    assert build_images["pythonBaseImage"] == (
+        "docker.io/library/python:3.11-slim-bookworm@sha256:"
+        "b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba"
+    )
 
     dockerfiles = sorted(
         (ROOT / "quwoquan_service/services").glob("*/build/Dockerfile")
